@@ -1,0 +1,165 @@
+/**
+ * Initiative routes.
+ *
+ * @packageDocumentation
+ */
+
+import { Hono } from 'hono';
+import { eq, and } from 'drizzle-orm';
+import { db } from '../db/index.js';
+import { initiatives } from '../db/schema/index.js';
+import { requireAuth, getUserId } from '../middleware/auth.js';
+
+const initiativeRoutes = new Hono();
+
+// All initiative routes require authentication
+initiativeRoutes.use('*', requireAuth);
+
+/**
+ * List all initiatives for the authenticated user.
+ * GET /api/initiatives
+ */
+initiativeRoutes.get('/', async (c) => {
+  const userId = getUserId(c);
+
+  const result = await db.query.initiatives.findMany({
+    where: eq(initiatives.ownerId, userId),
+    with: {
+      parent: true,
+      children: true,
+      projects: true,
+    },
+    orderBy: (initiatives, { desc }) => [desc(initiatives.createdAt)],
+  });
+
+  return c.json({ data: result });
+});
+
+/**
+ * Get a single initiative by ID.
+ * GET /api/initiatives/:id
+ */
+initiativeRoutes.get('/:id', async (c) => {
+  const userId = getUserId(c);
+  const id = c.req.param('id');
+
+  const result = await db.query.initiatives.findFirst({
+    where: and(eq(initiatives.id, id), eq(initiatives.ownerId, userId)),
+    with: {
+      parent: true,
+      children: true,
+      projects: {
+        with: {
+          tasks: true,
+        },
+      },
+    },
+  });
+
+  if (!result) {
+    return c.json({ error: 'Initiative not found' }, 404);
+  }
+
+  return c.json({ data: result });
+});
+
+/**
+ * Create a new initiative.
+ * POST /api/initiatives
+ */
+initiativeRoutes.post('/', async (c) => {
+  const userId = getUserId(c);
+  const body = await c.req.json<{
+    name: string;
+    description?: string;
+    status?: 'draft' | 'active' | 'completed' | 'archived';
+    parentId?: string;
+  }>();
+
+  const id = crypto.randomUUID();
+  const now = new Date();
+
+  await db.insert(initiatives).values({
+    id,
+    name: body.name,
+    description: body.description,
+    status: body.status ?? 'draft',
+    parentId: body.parentId,
+    ownerId: userId,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  const result = await db.query.initiatives.findFirst({
+    where: eq(initiatives.id, id),
+    with: {
+      parent: true,
+    },
+  });
+
+  return c.json({ data: result }, 201);
+});
+
+/**
+ * Update an initiative.
+ * PATCH /api/initiatives/:id
+ */
+initiativeRoutes.patch('/:id', async (c) => {
+  const userId = getUserId(c);
+  const id = c.req.param('id');
+  const body = await c.req.json<{
+    name?: string;
+    description?: string;
+    status?: 'draft' | 'active' | 'completed' | 'archived';
+    parentId?: string | null;
+  }>();
+
+  const existing = await db.query.initiatives.findFirst({
+    where: and(eq(initiatives.id, id), eq(initiatives.ownerId, userId)),
+  });
+
+  if (!existing) {
+    return c.json({ error: 'Initiative not found' }, 404);
+  }
+
+  await db
+    .update(initiatives)
+    .set({
+      ...body,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(initiatives.id, id), eq(initiatives.ownerId, userId)));
+
+  const result = await db.query.initiatives.findFirst({
+    where: eq(initiatives.id, id),
+    with: {
+      parent: true,
+      children: true,
+    },
+  });
+
+  return c.json({ data: result });
+});
+
+/**
+ * Delete an initiative.
+ * DELETE /api/initiatives/:id
+ */
+initiativeRoutes.delete('/:id', async (c) => {
+  const userId = getUserId(c);
+  const id = c.req.param('id');
+
+  const existing = await db.query.initiatives.findFirst({
+    where: and(eq(initiatives.id, id), eq(initiatives.ownerId, userId)),
+  });
+
+  if (!existing) {
+    return c.json({ error: 'Initiative not found' }, 404);
+  }
+
+  await db.delete(initiatives).where(and(eq(initiatives.id, id), eq(initiatives.ownerId, userId)));
+
+  return c.json({ success: true });
+});
+
+export { initiativeRoutes };

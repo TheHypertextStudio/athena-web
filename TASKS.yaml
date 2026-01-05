@@ -174,28 +174,33 @@ tasks:
 
   WEB-002:
     title: 'Task Management UI'
-    status: backlog
+    status: completed
     priority: p1
+    completed_at: '2026-01-04'
     dependencies: [WEB-001]
     subtasks:
       - id: task-list
         title: 'Task list view with filtering'
-        status: backlog
+        status: completed
       - id: task-detail
         title: 'Task detail view'
-        status: backlog
+        status: completed
       - id: task-create
         title: 'Task creation form'
-        status: backlog
+        status: completed
       - id: task-edit
         title: 'Task editing'
-        status: backlog
+        status: completed
       - id: task-tags
         title: 'Tag management'
         status: backlog
     deliverables:
-      - apps/web/src/app/tasks/
-      - apps/web/src/components/tasks/
+      - apps/web/src/app/(protected)/tasks/page.tsx
+      - apps/web/src/app/(protected)/tasks/new/page.tsx
+      - apps/web/src/app/(protected)/tasks/[id]/page.tsx
+      - apps/web/src/app/(protected)/tasks/[id]/edit/page.tsx
+      - apps/web/src/components/tasks/task-form.tsx
+      - apps/web/src/components/tasks/index.ts
 
   WEB-003:
     title: 'Project Management UI'

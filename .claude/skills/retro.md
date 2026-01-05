@@ -1,0 +1,51 @@
+# /retro
+
+Conduct a retrospective on completed work.
+
+## Description
+
+Perform a retrospective analysis of recently completed work. This follows the RETROSPECTING state in the agent state machine.
+
+## Usage
+
+```
+/retro              # Retrospective on last completed task
+/retro <task-id>    # Retrospective on specific task
+```
+
+## Actions
+
+1. Read the completed task from WORKLOG.md
+2. Analyze what was accomplished
+3. Identify what went well
+4. Identify what could improve
+5. Document learnings
+6. Suggest process improvements if warranted
+7. Update WORKLOG.md with retrospective notes
+
+## Retrospective Structure
+
+```markdown
+### Retrospective: [Task ID]
+
+**What went well:**
+- Point 1
+- Point 2
+
+**What could improve:**
+- Point 1
+- Point 2
+
+**Learnings:**
+- Learning 1
+- Learning 2
+
+**Process changes (if any):**
+- Suggested change
+```
+
+## Notes
+
+- Be honest about difficulties encountered
+- Document solutions that worked for future reference
+- Consider if AGENTS.md should be updated based on learnings

@@ -65,64 +65,21 @@ tasks:
   # ============================================================================
   DATA-001:
     title: 'Core Data Models'
-    status: active
+    status: completed
     priority: p0
-    started_at: '2026-01-04'
+    completed_at: '2026-01-04'
     dependencies: []
-    subtasks:
-      - id: schema-enums
-        title: 'Define database enums'
-        status: completed
-      - id: schema-tables
-        title: 'Create all entity tables'
-        status: completed
-      - id: schema-relations
-        title: 'Define table relations'
-        status: completed
-      - id: schema-export
-        title: 'Export from index'
-        status: completed
-      - id: commit
-        title: 'Commit changes'
-        status: active
     deliverables:
       - apps/api/src/db/schema/core.ts
-    files_changed:
-      - apps/api/src/db/schema/core.ts
-      - apps/api/src/db/schema/index.ts
-      - apps/api/src/lib/auth.ts
 
   API-001:
     title: 'Core REST Endpoints'
-    status: backlog
+    status: completed
     priority: p0
+    completed_at: '2026-01-04'
     dependencies: [DATA-001]
-    subtasks:
-      - id: initiatives-crud
-        title: 'Initiatives CRUD endpoints'
-        status: backlog
-      - id: projects-crud
-        title: 'Projects CRUD endpoints'
-        status: backlog
-      - id: tasks-crud
-        title: 'Tasks CRUD endpoints'
-        status: backlog
-      - id: events-crud
-        title: 'Events CRUD endpoints'
-        status: backlog
-      - id: moments-crud
-        title: 'Moments CRUD endpoints'
-        status: backlog
-      - id: activities-crud
-        title: 'Activity streams CRUD endpoints'
-        status: backlog
-      - id: tags-crud
-        title: 'Tags CRUD endpoints'
-        status: backlog
-      - id: openapi-docs
-        title: 'OpenAPI/Scalar documentation'
-        status: backlog
     deliverables:
+      - apps/api/src/middleware/auth.ts
       - apps/api/src/routes/initiatives.ts
       - apps/api/src/routes/projects.ts
       - apps/api/src/routes/tasks.ts
@@ -131,40 +88,21 @@ tasks:
       - apps/api/src/routes/activities.ts
       - apps/api/src/routes/tags.ts
 
-  API-002:
-    title: 'Input/Output Validation'
-    status: backlog
-    priority: p0
-    dependencies: [API-001]
-    subtasks:
-      - id: zod-schemas
-        title: 'Zod schemas for all entities'
-        status: backlog
-      - id: response-types
-        title: 'Typed response wrappers'
-        status: backlog
-    deliverables:
-      - apps/api/src/schemas/
-
   DB-001:
     title: 'Database Migrations'
-    status: backlog
+    status: completed
     priority: p0
+    completed_at: '2026-01-04'
     dependencies: [DATA-001]
-    subtasks:
-      - id: initial-migration
-        title: 'Generate initial migration'
-        status: backlog
-      - id: migration-scripts
-        title: 'Migration CLI scripts'
-        status: backlog
     deliverables:
+      - apps/api/drizzle.config.ts
       - apps/api/drizzle/
 
   TEST-001:
     title: 'API Unit Tests'
-    status: backlog
+    status: active
     priority: p0
+    started_at: '2026-01-04'
     dependencies: [API-001]
     acceptance_criteria:
       - '80% code coverage minimum'

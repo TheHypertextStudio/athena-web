@@ -82,7 +82,7 @@ export const auth = betterAuth({
   },
 
   advanced: {
-    generateId: () => crypto.randomUUID(),
+    useSecureCookies: process.env['NODE_ENV'] === 'production',
   },
 });
 

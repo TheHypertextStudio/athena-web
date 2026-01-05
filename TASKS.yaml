@@ -1,0 +1,494 @@
+# Project Athena Task Registry
+# Source of truth for all work. Programmatically readable/writable by agents.
+# Last Updated: 2026-01-04
+
+metadata:
+  version: '1.0.0'
+  project: 'Project Athena'
+  last_synced: '2026-01-04T00:00:00Z'
+
+# Task statuses: backlog | active | blocked | review | completed
+# Priority: p0 (critical) | p1 (high) | p2 (medium) | p3 (low)
+
+tasks:
+  # ============================================================================
+  # Phase 0: Foundation (Completed)
+  # ============================================================================
+  INIT-001:
+    title: 'Agent Guidelines & Documentation'
+    status: completed
+    priority: p0
+    completed_at: '2026-01-04'
+    deliverables:
+      - AGENTS.md
+      - CLAUDE.md symlink
+
+  INIT-002:
+    title: 'Monorepo Scaffolding'
+    status: completed
+    priority: p0
+    completed_at: '2026-01-04'
+    deliverables:
+      - Turborepo configuration
+      - pnpm workspaces
+      - apps/api (Hono)
+      - apps/web (Next.js)
+      - packages/types
+      - packages/shared
+      - packages/test-utils
+
+  INIT-003:
+    title: 'CI/CD Pipeline'
+    status: completed
+    priority: p0
+    completed_at: '2026-01-04'
+    deliverables:
+      - GitHub Actions CI workflow
+      - Semantic release workflow
+      - Dependabot configuration
+
+  AUTH-001:
+    title: 'Authentication System'
+    status: completed
+    priority: p0
+    completed_at: '2026-01-04'
+    deliverables:
+      - Better Auth server configuration
+      - OAuth providers (Google, Apple, Microsoft)
+      - Passkey/WebAuthn support
+      - Auth database schema
+      - Client-side auth hooks
+      - Login/signup forms
+
+  # ============================================================================
+  # Phase 1: Core Platform (P0)
+  # ============================================================================
+  DATA-001:
+    title: 'Core Data Models'
+    status: active
+    priority: p0
+    started_at: '2026-01-04'
+    dependencies: []
+    subtasks:
+      - id: schema-enums
+        title: 'Define database enums'
+        status: completed
+      - id: schema-tables
+        title: 'Create all entity tables'
+        status: completed
+      - id: schema-relations
+        title: 'Define table relations'
+        status: completed
+      - id: schema-export
+        title: 'Export from index'
+        status: completed
+      - id: commit
+        title: 'Commit changes'
+        status: active
+    deliverables:
+      - apps/api/src/db/schema/core.ts
+    files_changed:
+      - apps/api/src/db/schema/core.ts
+      - apps/api/src/db/schema/index.ts
+      - apps/api/src/lib/auth.ts
+
+  API-001:
+    title: 'Core REST Endpoints'
+    status: backlog
+    priority: p0
+    dependencies: [DATA-001]
+    subtasks:
+      - id: initiatives-crud
+        title: 'Initiatives CRUD endpoints'
+        status: backlog
+      - id: projects-crud
+        title: 'Projects CRUD endpoints'
+        status: backlog
+      - id: tasks-crud
+        title: 'Tasks CRUD endpoints'
+        status: backlog
+      - id: events-crud
+        title: 'Events CRUD endpoints'
+        status: backlog
+      - id: moments-crud
+        title: 'Moments CRUD endpoints'
+        status: backlog
+      - id: activities-crud
+        title: 'Activity streams CRUD endpoints'
+        status: backlog
+      - id: tags-crud
+        title: 'Tags CRUD endpoints'
+        status: backlog
+      - id: openapi-docs
+        title: 'OpenAPI/Scalar documentation'
+        status: backlog
+    deliverables:
+      - apps/api/src/routes/initiatives.ts
+      - apps/api/src/routes/projects.ts
+      - apps/api/src/routes/tasks.ts
+      - apps/api/src/routes/events.ts
+      - apps/api/src/routes/moments.ts
+      - apps/api/src/routes/activities.ts
+      - apps/api/src/routes/tags.ts
+
+  API-002:
+    title: 'Input/Output Validation'
+    status: backlog
+    priority: p0
+    dependencies: [API-001]
+    subtasks:
+      - id: zod-schemas
+        title: 'Zod schemas for all entities'
+        status: backlog
+      - id: response-types
+        title: 'Typed response wrappers'
+        status: backlog
+    deliverables:
+      - apps/api/src/schemas/
+
+  DB-001:
+    title: 'Database Migrations'
+    status: backlog
+    priority: p0
+    dependencies: [DATA-001]
+    subtasks:
+      - id: initial-migration
+        title: 'Generate initial migration'
+        status: backlog
+      - id: migration-scripts
+        title: 'Migration CLI scripts'
+        status: backlog
+    deliverables:
+      - apps/api/drizzle/
+
+  TEST-001:
+    title: 'API Unit Tests'
+    status: backlog
+    priority: p0
+    dependencies: [API-001]
+    acceptance_criteria:
+      - '80% code coverage minimum'
+      - 'All endpoints have tests'
+      - 'Error cases covered'
+    deliverables:
+      - apps/api/src/**/*.test.ts
+
+  TEST-002:
+    title: 'Integration Tests'
+    status: backlog
+    priority: p0
+    dependencies: [TEST-001]
+    subtasks:
+      - id: test-db-setup
+        title: 'Test database configuration'
+        status: backlog
+      - id: integration-suite
+        title: 'Integration test suite'
+        status: backlog
+    deliverables:
+      - apps/api/tests/integration/
+
+  # ============================================================================
+  # Phase 2: Web Application (P1)
+  # ============================================================================
+  WEB-001:
+    title: 'Dashboard UI'
+    status: backlog
+    priority: p1
+    dependencies: [API-001]
+    subtasks:
+      - id: dashboard-layout
+        title: 'Dashboard layout and navigation'
+        status: backlog
+      - id: overview-widgets
+        title: 'Overview widgets (tasks, events, activity)'
+        status: backlog
+      - id: quick-actions
+        title: 'Quick action buttons'
+        status: backlog
+    deliverables:
+      - apps/web/src/app/dashboard/
+
+  WEB-002:
+    title: 'Task Management UI'
+    status: backlog
+    priority: p1
+    dependencies: [WEB-001]
+    subtasks:
+      - id: task-list
+        title: 'Task list view with filtering'
+        status: backlog
+      - id: task-detail
+        title: 'Task detail view'
+        status: backlog
+      - id: task-create
+        title: 'Task creation form'
+        status: backlog
+      - id: task-edit
+        title: 'Task editing'
+        status: backlog
+      - id: task-tags
+        title: 'Tag management'
+        status: backlog
+    deliverables:
+      - apps/web/src/app/tasks/
+      - apps/web/src/components/tasks/
+
+  WEB-003:
+    title: 'Project Management UI'
+    status: backlog
+    priority: p1
+    dependencies: [WEB-002]
+    subtasks:
+      - id: project-list
+        title: 'Project list view'
+        status: backlog
+      - id: project-detail
+        title: 'Project detail with tasks'
+        status: backlog
+      - id: project-create
+        title: 'Project creation'
+        status: backlog
+    deliverables:
+      - apps/web/src/app/projects/
+      - apps/web/src/components/projects/
+
+  WEB-004:
+    title: 'Initiative Management UI'
+    status: backlog
+    priority: p1
+    dependencies: [WEB-003]
+    subtasks:
+      - id: initiative-hierarchy
+        title: 'Initiative hierarchy visualization'
+        status: backlog
+      - id: initiative-crud
+        title: 'Initiative CRUD'
+        status: backlog
+    deliverables:
+      - apps/web/src/app/initiatives/
+      - apps/web/src/components/initiatives/
+
+  WEB-005:
+    title: 'Calendar/Events UI'
+    status: backlog
+    priority: p1
+    dependencies: [WEB-001]
+    subtasks:
+      - id: calendar-view
+        title: 'Calendar view (month/week/day)'
+        status: backlog
+      - id: event-crud
+        title: 'Event creation and editing'
+        status: backlog
+      - id: event-participants
+        title: 'Participant management'
+        status: backlog
+    deliverables:
+      - apps/web/src/app/calendar/
+      - apps/web/src/components/calendar/
+
+  WEB-006:
+    title: 'Moments UI'
+    status: backlog
+    priority: p1
+    dependencies: [WEB-001]
+    subtasks:
+      - id: moments-timeline
+        title: 'Timeline visualization'
+        status: backlog
+      - id: moments-crud
+        title: 'Moment creation and editing'
+        status: backlog
+    deliverables:
+      - apps/web/src/app/moments/
+      - apps/web/src/components/moments/
+
+  # ============================================================================
+  # Phase 3: MCP Integration (P1)
+  # ============================================================================
+  MCP-001:
+    title: 'MCP Server Foundation'
+    status: backlog
+    priority: p1
+    dependencies: [API-001]
+    subtasks:
+      - id: mcp-server-setup
+        title: 'MCP server scaffolding'
+        status: backlog
+      - id: task-tools
+        title: 'Task operation tools'
+        status: backlog
+      - id: project-tools
+        title: 'Project operation tools'
+        status: backlog
+      - id: event-tools
+        title: 'Event operation tools'
+        status: backlog
+      - id: context-tools
+        title: 'Context retrieval tools'
+        status: backlog
+    deliverables:
+      - packages/mcp-server/
+
+  MCP-002:
+    title: 'MCP Client SDK'
+    status: backlog
+    priority: p1
+    dependencies: [MCP-001]
+    deliverables:
+      - packages/mcp-client/
+
+  # ============================================================================
+  # Phase 4: Advanced Features (P2)
+  # ============================================================================
+  SYNC-001:
+    title: 'Real-time Updates'
+    status: backlog
+    priority: p2
+    dependencies: [API-001]
+    subtasks:
+      - id: websocket-server
+        title: 'WebSocket server setup'
+        status: backlog
+      - id: client-subscriptions
+        title: 'Client subscription hooks'
+        status: backlog
+    deliverables:
+      - apps/api/src/ws/
+      - apps/web/src/hooks/use-realtime.ts
+
+  NOTIF-001:
+    title: 'Notification System'
+    status: backlog
+    priority: p2
+    dependencies: [WEB-001]
+    subtasks:
+      - id: notification-service
+        title: 'Notification service'
+        status: backlog
+      - id: push-notifications
+        title: 'Push notification support'
+        status: backlog
+      - id: notification-ui
+        title: 'Notification UI'
+        status: backlog
+    deliverables:
+      - apps/api/src/services/notifications/
+      - apps/web/src/components/notifications/
+
+  SEARCH-001:
+    title: 'Full-text Search'
+    status: backlog
+    priority: p2
+    dependencies: [API-001]
+    deliverables:
+      - apps/api/src/routes/search.ts
+
+  REPORT-001:
+    title: 'Analytics & Reporting'
+    status: backlog
+    priority: p2
+    dependencies: [WEB-001]
+    deliverables:
+      - apps/web/src/app/analytics/
+
+  INTEG-001:
+    title: 'Calendar Integrations'
+    status: backlog
+    priority: p2
+    dependencies: [WEB-005]
+    subtasks:
+      - id: google-calendar
+        title: 'Google Calendar sync'
+        status: backlog
+      - id: apple-calendar
+        title: 'Apple Calendar sync'
+        status: backlog
+    deliverables:
+      - apps/api/src/integrations/calendar/
+
+  INTEG-002:
+    title: 'Third-party Integrations'
+    status: backlog
+    priority: p2
+    dependencies: [NOTIF-001]
+    subtasks:
+      - id: slack-integration
+        title: 'Slack integration'
+        status: backlog
+      - id: discord-integration
+        title: 'Discord integration'
+        status: backlog
+    deliverables:
+      - apps/api/src/integrations/
+
+  # ============================================================================
+  # Phase 5: Production Readiness (P2)
+  # ============================================================================
+  PERF-001:
+    title: 'Performance Optimization'
+    status: backlog
+    priority: p2
+    dependencies: []
+    subtasks:
+      - id: query-optimization
+        title: 'Database query optimization'
+        status: backlog
+      - id: caching
+        title: 'Response caching'
+        status: backlog
+      - id: cdn
+        title: 'CDN configuration'
+        status: backlog
+
+  SEC-001:
+    title: 'Security Audit'
+    status: backlog
+    priority: p2
+    dependencies: [AUTH-001, API-001]
+    subtasks:
+      - id: security-review
+        title: 'Code security review'
+        status: backlog
+      - id: dependency-audit
+        title: 'Dependency vulnerability audit'
+        status: backlog
+
+  OPS-001:
+    title: 'Production Infrastructure'
+    status: backlog
+    priority: p2
+    dependencies: []
+    subtasks:
+      - id: docker-config
+        title: 'Docker configuration'
+        status: backlog
+      - id: k8s-manifests
+        title: 'Kubernetes manifests'
+        status: backlog
+      - id: monitoring
+        title: 'Monitoring setup (Sentry)'
+        status: backlog
+      - id: logging
+        title: 'Logging infrastructure (Pino)'
+        status: backlog
+
+  DOC-001:
+    title: 'User Documentation'
+    status: backlog
+    priority: p2
+    dependencies: []
+    subtasks:
+      - id: user-guide
+        title: 'User guide'
+        status: backlog
+      - id: api-docs
+        title: 'API documentation'
+        status: backlog
+      - id: tutorials
+        title: 'Getting started tutorials'
+        status: backlog
+    deliverables:
+      - docs/user-guide/
+      - docs/api/

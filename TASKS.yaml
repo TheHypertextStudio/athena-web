@@ -98,18 +98,36 @@ tasks:
       - apps/api/drizzle.config.ts
       - apps/api/drizzle/
 
+  API-002:
+    title: 'Input/Output Validation'
+    status: completed
+    priority: p0
+    completed_at: '2026-01-04'
+    dependencies: [API-001]
+    deliverables:
+      - apps/api/src/schemas/common.ts
+      - apps/api/src/schemas/initiatives.ts
+      - apps/api/src/schemas/projects.ts
+      - apps/api/src/schemas/tasks.ts
+      - apps/api/src/schemas/events.ts
+      - apps/api/src/schemas/moments.ts
+      - apps/api/src/schemas/activities.ts
+      - apps/api/src/schemas/tags.ts
+      - apps/api/src/schemas/index.ts
+
   TEST-001:
     title: 'API Unit Tests'
-    status: active
+    status: completed
     priority: p0
-    started_at: '2026-01-04'
-    dependencies: [API-001]
+    completed_at: '2026-01-04'
+    dependencies: [API-001, API-002]
     acceptance_criteria:
       - '80% code coverage minimum'
       - 'All endpoints have tests'
       - 'Error cases covered'
     deliverables:
-      - apps/api/src/**/*.test.ts
+      - apps/api/src/schemas/*.test.ts
+      - apps/api/src/test/helpers.ts
 
   TEST-002:
     title: 'Integration Tests'

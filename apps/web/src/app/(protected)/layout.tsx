@@ -3,6 +3,8 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
+import { signOut } from '@/lib/auth-client';
+import { Sidebar } from '@/components/layout/sidebar';
 
 export default function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -13,6 +15,11 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
       router.push('/login');
     }
   }, [isAuthenticated, isLoading, router]);
+
+  async function handleSignOut() {
+    await signOut();
+    router.push('/login');
+  }
 
   if (isLoading) {
     return (
@@ -26,5 +33,10 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
     return null;
   }
 
-  return <>{children}</>;
+  return (
+    <div className="flex h-screen">
+      <Sidebar onSignOut={() => void handleSignOut()} />
+      <main className="flex-1 overflow-auto">{children}</main>
+    </div>
+  );
 }

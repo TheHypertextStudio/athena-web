@@ -7,7 +7,7 @@
 import { createAuthClient } from 'better-auth/react';
 import { passkeyClient } from '@better-auth/passkey/client';
 
-const baseURL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
+const baseURL = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3000';
 
 /**
  * Configured auth client with passkey support.

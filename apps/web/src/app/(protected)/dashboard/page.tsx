@@ -3,7 +3,8 @@
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { signOut, registerPasskey } from '@/lib/auth-client';
-import { Button } from '@/components/ui/button';
+import { Header } from '@/components/layout/header';
+import { StatsCards, TaskSummary, EventSummary, QuickActions } from '@/components/dashboard';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -25,52 +26,40 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="bg-background min-h-screen p-8">
-      <div className="mx-auto max-w-4xl space-y-8">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold">Dashboard</h1>
-            <p className="text-muted-foreground">Welcome back, {user?.name ?? 'User'}</p>
-          </div>
-          <Button variant="outline" onClick={() => void handleSignOut()}>
-            Sign Out
-          </Button>
+    <div className="flex h-full flex-col">
+      <Header title="Dashboard" onSignOut={() => void handleSignOut()} />
+
+      <div className="flex-1 space-y-6 p-6">
+        <div>
+          <h2 className="text-lg font-medium">Welcome back, {user?.name ?? 'there'}!</h2>
+          <p className="text-muted-foreground text-sm">
+            Here&apos;s what&apos;s happening with your productivity today.
+          </p>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          <div className="bg-card rounded-lg border p-6">
-            <h2 className="text-lg font-semibold">Your Profile</h2>
-            <div className="mt-4 space-y-2 text-sm">
-              <p>
-                <span className="text-muted-foreground">Name:</span> {user?.name}
-              </p>
-              <p>
-                <span className="text-muted-foreground">Email:</span> {user?.email}
-              </p>
-              <p>
-                <span className="text-muted-foreground">Verified:</span>{' '}
-                {user?.emailVerified ? 'Yes' : 'No'}
-              </p>
-            </div>
-          </div>
+        <StatsCards />
 
-          <div className="bg-card rounded-lg border p-6">
-            <h2 className="text-lg font-semibold">Security</h2>
-            <div className="mt-4 space-y-4">
-              <Button variant="secondary" size="sm" onClick={() => void handleAddPasskey()}>
-                Add Passkey
-              </Button>
-              <p className="text-muted-foreground text-xs">
-                Passkeys provide passwordless sign-in using your device&apos;s biometrics.
-              </p>
-            </div>
+        <div className="grid gap-6 lg:grid-cols-3">
+          <div className="space-y-6 lg:col-span-2">
+            <TaskSummary />
+            <EventSummary />
           </div>
-
-          <div className="bg-card rounded-lg border p-6">
-            <h2 className="text-lg font-semibold">Get Started</h2>
-            <p className="text-muted-foreground mt-4 text-sm">
-              Start organizing your tasks, projects, and initiatives with Athena.
-            </p>
+          <div className="space-y-6">
+            <QuickActions />
+            <div className="bg-card rounded-xl border p-6">
+              <h3 className="font-semibold">Security</h3>
+              <div className="mt-4 space-y-3">
+                <button
+                  onClick={() => void handleAddPasskey()}
+                  className="bg-secondary text-secondary-foreground hover:bg-secondary/80 inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors"
+                >
+                  Add Passkey
+                </button>
+                <p className="text-muted-foreground text-xs">
+                  Passkeys provide passwordless sign-in using your device&apos;s biometrics.
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </div>

@@ -21,7 +21,9 @@
   "dependencies": {
     "@athena/shared": "workspace:*",
     "@athena/types": "workspace:*",
+    "@better-auth/passkey": "^1.4.10",
     "@radix-ui/react-slot": "^1.1.1",
+    "better-auth": "^1.4.10",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.468.0",

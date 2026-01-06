@@ -23,7 +23,7 @@ export const CreateTaskSchema = z.object({
   priority: TaskPrioritySchema.default('medium'),
   deadline: z.coerce.date().optional(),
   estimatedMinutes: z.number().int().positive().optional(),
-  projectId: z.string().uuid().optional(),
+  projectId: z.uuid().optional(),
 });
 
 export type CreateTaskInput = z.infer<typeof CreateTaskSchema>;
@@ -36,25 +36,25 @@ export const UpdateTaskSchema = z.object({
   priority: TaskPrioritySchema.optional(),
   deadline: z.coerce.date().optional().nullable(),
   estimatedMinutes: z.number().int().positive().optional().nullable(),
-  projectId: z.string().uuid().optional().nullable(),
+  projectId: z.uuid().optional().nullable(),
 });
 
 export type UpdateTaskInput = z.infer<typeof UpdateTaskSchema>;
 
 /** Schema for task response */
 export const TaskResponseSchema = z.object({
-  id: z.string().uuid(),
+  id: z.uuid(),
   title: z.string(),
   description: z.string().nullable(),
   status: TaskStatusSchema,
   priority: TaskPrioritySchema,
-  deadline: z.string().datetime().nullable(),
+  deadline: z.iso.datetime().nullable(),
   estimatedMinutes: z.number().nullable(),
-  projectId: z.string().uuid().nullable(),
-  assigneeId: z.string().uuid().nullable(),
-  creatorId: z.string().uuid(),
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
+  projectId: z.uuid().nullable(),
+  assigneeId: z.uuid().nullable(),
+  creatorId: z.uuid(),
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
 });
 
 export type TaskResponse = z.infer<typeof TaskResponseSchema>;
@@ -68,7 +68,7 @@ export const CreateProjectSchema = z.object({
   name: z.string().min(1, 'Name is required').max(255),
   description: z.string().max(5000).optional(),
   deadline: z.coerce.date().optional(),
-  initiativeId: z.string().uuid().optional(),
+  initiativeId: z.uuid().optional(),
 });
 
 export type CreateProjectInput = z.infer<typeof CreateProjectSchema>;
@@ -79,7 +79,7 @@ export const UpdateProjectSchema = z.object({
   description: z.string().max(5000).optional(),
   status: ProjectStatusSchema.optional(),
   deadline: z.coerce.date().optional().nullable(),
-  initiativeId: z.string().uuid().optional().nullable(),
+  initiativeId: z.uuid().optional().nullable(),
 });
 
 export type UpdateProjectInput = z.infer<typeof UpdateProjectSchema>;
@@ -92,7 +92,7 @@ export type UpdateProjectInput = z.infer<typeof UpdateProjectSchema>;
 export const CreateInitiativeSchema = z.object({
   name: z.string().min(1, 'Name is required').max(255),
   description: z.string().max(5000).optional(),
-  parentId: z.string().uuid().optional(),
+  parentId: z.uuid().optional(),
 });
 
 export type CreateInitiativeInput = z.infer<typeof CreateInitiativeSchema>;
@@ -102,7 +102,7 @@ export const UpdateInitiativeSchema = z.object({
   name: z.string().min(1).max(255).optional(),
   description: z.string().max(5000).optional(),
   status: InitiativeStatusSchema.optional(),
-  parentId: z.string().uuid().optional().nullable(),
+  parentId: z.uuid().optional().nullable(),
 });
 
 export type UpdateInitiativeInput = z.infer<typeof UpdateInitiativeSchema>;

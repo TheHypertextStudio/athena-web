@@ -10,6 +10,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import {
+  CreateMessageRequestSchema,
   ResourceListChangedNotificationSchema,
   ResourceUpdatedNotificationSchema,
 } from '@modelcontextprotocol/sdk/types.js';
@@ -931,6 +932,55 @@ describe('MCP Server - Utilities', () => {
     const data = parseJson(content.text) as { items: { title: string }[]; nextCursor?: string };
     expect(data.items).toHaveLength(2);
     expect(data.nextCursor).toBe('2');
+  });
+
+  it('should include assistant agenda when sampling is supported', async () => {
+    const [samplingServerTransport, samplingClientTransport] = InMemoryTransport.createLinkedPair();
+    const samplingServer = createMcpServer('test-user-id');
+    await samplingServer.connect(samplingServerTransport);
+
+    const samplingClient = new Client(
+      { name: 'sampling-client', version: '1.0.0' },
+      { capabilities: { sampling: { context: {} } } },
+    );
+    samplingClient.setRequestHandler(CreateMessageRequestSchema, () => ({
+      model: 'test-model',
+      role: 'assistant',
+      content: {
+        type: 'text',
+        text: JSON.stringify({
+          summary: 'Sampled agenda',
+          priorityTaskIds: ['task-1'],
+          scheduleNotes: ['Block focus time'],
+          agendaItems: [],
+        }),
+      },
+    }));
+    await samplingClient.connect(samplingClientTransport);
+
+    mockDb.query.tasks.findMany.mockResolvedValue([
+      {
+        id: 'task-1',
+        title: 'Sample task',
+        deadline: new Date(),
+        status: 'pending',
+        creatorId: 'test-user-id',
+      },
+    ]);
+    mockDb.query.events.findMany.mockResolvedValue([
+      { id: 'event-1', title: 'Sample event', startTime: new Date(), creatorId: 'test-user-id' },
+    ]);
+
+    const result = await samplingClient.callTool({
+      name: 'get_agenda',
+      arguments: {
+        date: new Date().toISOString().split('T')[0],
+      },
+    });
+
+    const content = getTextContent(result.content[0]);
+    const data = parseJson(content.text) as { assistantAgenda?: { summary?: string } };
+    expect(data.assistantAgenda?.summary).toBe('Sampled agenda');
   });
 
   it('should emit resource list changed notifications for task changes', async () => {

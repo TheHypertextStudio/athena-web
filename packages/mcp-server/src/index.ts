@@ -172,6 +172,47 @@ const buildPage = <T>(items: T[], offset: number, limit: number) => {
   return { items: pageItems, nextCursor };
 };
 
+const assistantAgendaSchema = z
+  .object({
+    summary: z.string().optional(),
+    priorityTaskIds: z.array(z.string()).optional(),
+    scheduleNotes: z.array(z.string()).optional(),
+    agendaItems: z
+      .array(
+        z.object({
+          type: z.enum(['task', 'event']),
+          id: z.string(),
+          title: z.string(),
+          startTime: z.string().optional(),
+          endTime: z.string().optional(),
+          reason: z.string().optional(),
+        }),
+      )
+      .optional(),
+  })
+  .loose();
+
+const supportsSampling = (server: McpServer): boolean =>
+  Boolean(server.server.getClientCapabilities()?.sampling);
+
+const parseJsonFromText = (text: string): unknown => {
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    const start = text.indexOf('{');
+    const end = text.lastIndexOf('}');
+    if (start === -1 || end === -1 || end <= start) {
+      return null;
+    }
+    const slice = text.slice(start, end + 1);
+    try {
+      return JSON.parse(slice) as unknown;
+    } catch {
+      return null;
+    }
+  }
+};
+
 const isResourceSubscribed = (subscriptions: Set<string>, uri: string): boolean => {
   for (const subscription of subscriptions) {
     if (uri === subscription || uri.startsWith(`${subscription}/`)) {
@@ -1239,6 +1280,40 @@ function registerTools(
         tasks: dayTasks,
         events: dayEvents,
       };
+
+      if (supportsSampling(server)) {
+        const promptText = [
+          'You are Athena. Generate an agenda JSON summary using the provided tasks and events.',
+          'Return only JSON. Do not include code fences or additional text.',
+          'Required JSON keys: summary (string), priorityTaskIds (string[]), scheduleNotes (string[]), agendaItems (array).',
+          'agendaItems entries must include: type ("task" or "event"), id, title, and optional startTime/endTime/reason.',
+          '',
+          JSON.stringify(agenda, null, 2),
+        ].join('\n');
+
+        try {
+          const sampled = await server.server.createMessage({
+            messages: [{ role: 'user', content: { type: 'text', text: promptText } }],
+            maxTokens: 500,
+            temperature: 0.2,
+          });
+
+          if (sampled.content.type === 'text') {
+            const parsed = parseJsonFromText(sampled.content.text);
+            const validated = assistantAgendaSchema.safeParse(parsed);
+            if (validated.success) {
+              const response = { ...agenda, assistantAgenda: validated.data };
+              return { content: [{ type: 'text', text: JSON.stringify(response, null, 2) }] };
+            }
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          await server.sendLoggingMessage(
+            { level: 'error', data: `sampling agenda failed: ${message}` },
+            extra.sessionId,
+          );
+        }
+      }
 
       return { content: [{ type: 'text', text: JSON.stringify(agenda, null, 2) }] };
     },

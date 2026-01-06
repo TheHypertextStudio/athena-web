@@ -32,14 +32,8 @@ export function validateEnv<T extends z.ZodRawShape>(
   const result = schema.safeParse(env);
 
   if (!result.success) {
-    const errors = result.error.flatten().fieldErrors;
-    const errorLines: string[] = [];
-    for (const [key, messages] of Object.entries(errors)) {
-      const messageList = Array.isArray(messages) ? messages : [];
-      errorLines.push(`  ${key}: ${messageList.join(', ')}`);
-    }
-
-    throw new Error(`Environment validation failed:\n${errorLines.join('\n')}`);
+    const formatted = z.treeifyError(result.error);
+    throw new Error(`Environment validation failed:\n${JSON.stringify(formatted, null, 2)}`);
   }
 
   return result.data;
@@ -59,7 +53,7 @@ export type ValidationResult<T> =
  * @param data - Data to validate
  * @returns Validation result with either data or errors
  */
-export function safeValidate<T extends z.ZodTypeAny>(
+export function safeValidate<T extends z.ZodType>(
   schema: T,
   data: unknown,
 ): ValidationResult<z.infer<T>> {
@@ -75,17 +69,17 @@ export function safeValidate<T extends z.ZodTypeAny>(
 /**
  * UUID validation schema.
  */
-export const uuidSchema = z.string().uuid();
+export const uuidSchema = z.uuid();
 
 /**
  * Email validation schema.
  */
-export const emailSchema = z.string().email();
+export const emailSchema = z.email();
 
 /**
  * URL validation schema.
  */
-export const urlSchema = z.string().url();
+export const urlSchema = z.url();
 
 /**
  * Non-empty string validation schema.
@@ -100,4 +94,4 @@ export const positiveIntSchema = z.number().int().positive();
 /**
  * Date string (ISO 8601) validation schema.
  */
-export const dateStringSchema = z.string().datetime();
+export const dateStringSchema = z.iso.datetime();

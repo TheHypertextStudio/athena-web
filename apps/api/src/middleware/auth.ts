@@ -42,3 +42,26 @@ export function getUserId(c: Context): string {
   }
   return userId;
 }
+
+/**
+ * Get the current session from context.
+ */
+export function getSession(c: Context): Awaited<ReturnType<typeof auth.api.getSession>> {
+  const session = c.get('session') as Awaited<ReturnType<typeof auth.api.getSession>> | undefined;
+  if (!session) {
+    throw new HTTPException(401, { message: 'Unauthorized' });
+  }
+  return session;
+}
+
+/**
+ * Get the session token from the request headers.
+ * Returns the Bearer token from Authorization header.
+ */
+export function getSessionToken(c: Context): string | null {
+  const authHeader = c.req.header('authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return null;
+  }
+  return authHeader.slice(7);
+}

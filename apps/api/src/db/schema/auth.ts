@@ -85,3 +85,21 @@ export const passkeys = pgTable('passkeys', {
   transports: text('transports'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
+
+/**
+ * Backup codes table - recovery codes for account access.
+ * Each user can have multiple backup codes.
+ * Codes are stored hashed for security.
+ */
+export const backupCodes = pgTable('backup_codes', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  /** Hashed backup code */
+  codeHash: text('code_hash').notNull(),
+  /** Whether this code has been used */
+  usedAt: timestamp('used_at'),
+  /** When this code was generated */
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});

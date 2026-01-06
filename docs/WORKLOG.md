@@ -99,6 +99,7 @@ Run `pnpm typecheck`, `pnpm lint`, `pnpm test`, and `pnpm build` after each batc
   - `apps/api/tests/integration/mcp.test.ts`
   - `docs/WORKLOG.md`
 - **Learnings**: Resource updated notifications should be gated behind subscriptions; listChanged remains independent of subscriptions.
+- **Retrospective**: Went well—MCP utilities mapped cleanly to SDK capabilities; improve—type-safe JSON parsing helpers earlier to avoid lint churn; change—add shared test utilities for MCP response parsing to reduce repetition.
 
 ### [MCP-001..004] MCP Server Spec Completion
 

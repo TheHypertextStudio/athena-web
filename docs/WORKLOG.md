@@ -1,11 +1,65 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-01-04
+> **Last Updated**: 2026-01-05
 
 ---
 
 ## Active Tasks
+
+### [BACKEND-PLAN-001] Backend Completion Plan (TASKS.yaml)
+
+- **Status**: IN_PROGRESS
+- **State**: RESEARCHING
+- **Started**: 2026-01-05
+- **Priority**: P0
+- **Description**: Plan sequencing to implement all backend functionality specified or implied in TASKS.yaml before client work.
+- **Plan**:
+
+## Plan: Backend Completion (TASKS.yaml)
+
+### Objective
+
+Deliver all backend functionality in TASKS.yaml so client implementations can proceed against stable APIs.
+
+### Approach
+
+Inventory backlog backend tasks, group by dependency, and execute in phased batches: schema/migrations → routes/services → infra/integrations → realtime/sync → tests/docs.
+
+### Steps
+
+1. Build a backend-only task matrix from TASKS.yaml (IDs, dependencies, required routes/services/schemas).
+2. Implement remaining data model changes and migrations (rrule, time blocks, timers, attachments, workspaces, notifications, AI tables, soft delete, custom statuses, etc.).
+3. Complete API routes + Zod schemas per domain (auth recovery/sessions/linking, account export/deletion, tasks/calendar/agenda/time, attachments, search, settings, billing, analytics).
+4. Add async workers, webhooks, and integration sync pipelines (export jobs, calendar sync, third-party integrations).
+5. Implement realtime/sync infrastructure (WebSocket, SSE, offline sync primitives, conflict handling) and MCP server/tools.
+6. Run validation (tests, lint, typecheck, build), update docs/OpenAPI, and close WORKLOG tasks.
+
+### Files to Modify
+
+- `apps/api/src/db/schema/*.ts` - new tables/columns and relations
+- `apps/api/src/routes/*.ts` - missing endpoints per domain
+- `apps/api/src/schemas/*.ts` - Zod IO schemas
+- `apps/api/src/services/**` - AI, notifications, storage, encryption
+- `apps/api/src/integrations/**` - OAuth + sync logic
+- `apps/api/src/workers/**` - background jobs
+- `apps/api/src/ws/**` - realtime server
+- `packages/mcp-server/**` - MCP server/tools
+- `apps/api/tests/**` - unit/integration coverage
+- `docs/WORKLOG.md`, `docs/api/` - tracking + OpenAPI docs
+
+### Risks
+
+- External API integrations (calendar, Stripe, Linear) require secrets and callbacks.
+- Schema migrations touching existing data (soft delete, encryption) may need backfills.
+- Realtime/sync requires careful auth and conflict handling to avoid data races.
+
+### Validation
+
+Run `pnpm typecheck`, `pnpm lint`, `pnpm test`, and `pnpm build` after each batch; ensure coverage targets stay >=80%.
+
+- **Notes**: Task matrix generated at `docs/engineering/backend-task-matrix.md` with user-journey alignment.
+- **Notes**: Execution order drafted at `docs/engineering/backend-execution-order.md`.
 
 ### [DATA-001] Core Data Models
 
@@ -33,6 +87,49 @@
 ---
 
 ## Completed Tasks
+
+### [MCP-UTIL-005] MCP Utilities + Session Isolation
+
+- **Completed**: 2026-01-05
+- **Duration**: 1 day
+- **Summary**: Added MCP subscriptions, listChanged and resource-updated notifications for task/event changes, pagination coverage, completions support, and session isolation checks. Validated with MCP integration tests and MCP server typecheck.
+- **Files Changed**:
+  - `packages/mcp-server/src/index.ts`
+  - `apps/api/src/routes/mcp.ts`
+  - `apps/api/tests/integration/mcp.test.ts`
+  - `docs/WORKLOG.md`
+- **Learnings**: Resource updated notifications should be gated behind subscriptions; listChanged remains independent of subscriptions.
+
+### [MCP-001..004] MCP Server Spec Completion
+
+- **Completed**: 2026-01-05
+- **Summary**: Added MCP server package, completed required tools/prompts, resource templates, and updated MCP tests and legacy listings.
+- **Files Changed**:
+  - `packages/mcp-server/package.json`
+  - `packages/mcp-server/tsconfig.json`
+  - `packages/mcp-server/src/index.ts`
+  - `apps/api/src/services/mcp/server.ts`
+  - `apps/api/src/routes/mcp.ts`
+  - `apps/api/tests/integration/mcp.test.ts`
+  - `apps/api/package.json`
+- **Learnings**: Returning structured MCP tool payloads keeps response generation on the assistant.
+
+### [MCP-TEST-002] MCP Resource Templates
+
+- **Completed**: 2026-01-05
+- **Summary**: Added MCP resource templates for entity URIs and expanded MCP tests for template listing and reads.
+- **Files Changed**:
+  - `apps/api/src/services/mcp/server.ts`
+  - `apps/api/tests/integration/mcp.test.ts`
+- **Learnings**: ResourceTemplate list callbacks allow dynamic resources to appear in resource listings.
+
+### [TEST-UPDATE-001] MCP Test Coverage Refresh
+
+- **Completed**: 2026-01-05
+- **Summary**: Expanded MCP tests for additional resources, tool behaviors, and prompt edge cases.
+- **Files Changed**:
+  - `apps/api/tests/integration/mcp.test.ts`
+- **Learnings**: MCP coverage benefits from asserting resource/tool discovery and basic side-effect calls.
 
 ### [INIT-001] Documentation
 

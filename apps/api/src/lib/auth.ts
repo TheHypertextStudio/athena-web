@@ -12,6 +12,36 @@ import * as schema from '../db/schema/index.js';
 import { env } from './env.js';
 
 /**
+ * Build social providers config from validated env config objects.
+ */
+function buildSocialProviders() {
+  const providers: Record<string, { clientId: string; clientSecret: string }> = {};
+
+  if (env.googleOAuth) {
+    providers['google'] = {
+      clientId: env.googleOAuth.clientId,
+      clientSecret: env.googleOAuth.clientSecret,
+    };
+  }
+
+  if (env.appleOAuth) {
+    providers['apple'] = {
+      clientId: env.appleOAuth.clientId,
+      clientSecret: env.appleOAuth.clientSecret,
+    };
+  }
+
+  if (env.microsoftOAuth) {
+    providers['microsoft'] = {
+      clientId: env.microsoftOAuth.clientId,
+      clientSecret: env.microsoftOAuth.clientSecret,
+    };
+  }
+
+  return providers;
+}
+
+/**
  * Configured Better Auth instance.
  */
 export const auth = betterAuth({
@@ -36,29 +66,7 @@ export const auth = betterAuth({
     autoSignIn: true,
   },
 
-  socialProviders: {
-    ...(env.GOOGLE_CLIENT_ID &&
-      env.GOOGLE_CLIENT_SECRET && {
-        google: {
-          clientId: env.GOOGLE_CLIENT_ID,
-          clientSecret: env.GOOGLE_CLIENT_SECRET,
-        },
-      }),
-    ...(env.APPLE_CLIENT_ID &&
-      env.APPLE_CLIENT_SECRET && {
-        apple: {
-          clientId: env.APPLE_CLIENT_ID,
-          clientSecret: env.APPLE_CLIENT_SECRET,
-        },
-      }),
-    ...(env.MICROSOFT_CLIENT_ID &&
-      env.MICROSOFT_CLIENT_SECRET && {
-        microsoft: {
-          clientId: env.MICROSOFT_CLIENT_ID,
-          clientSecret: env.MICROSOFT_CLIENT_SECRET,
-        },
-      }),
-  },
+  socialProviders: buildSocialProviders(),
 
   plugins: [
     passkey({
@@ -82,7 +90,7 @@ export const auth = betterAuth({
   },
 
   advanced: {
-    useSecureCookies: process.env['NODE_ENV'] === 'production',
+    useSecureCookies: env.NODE_ENV === 'production',
   },
 });
 

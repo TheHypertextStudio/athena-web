@@ -10,7 +10,7 @@
 ### [BACKEND-PLAN-001] Backend Completion Plan (TASKS.yaml)
 
 - **Status**: IN_PROGRESS
-- **State**: RESEARCHING
+- **State**: IMPLEMENTING
 - **Started**: 2026-01-05
 - **Priority**: P0
 - **Description**: Plan sequencing to implement all backend functionality specified or implied in TASKS.yaml before client work.
@@ -100,6 +100,23 @@ Run `pnpm typecheck`, `pnpm lint`, `pnpm test`, and `pnpm build` after each batc
   - `docs/WORKLOG.md`
 - **Learnings**: Resource updated notifications should be gated behind subscriptions; listChanged remains independent of subscriptions.
 - **Retrospective**: Went well—MCP utilities mapped cleanly to SDK capabilities; improve—type-safe JSON parsing helpers earlier to avoid lint churn; change—add shared test utilities for MCP response parsing to reduce repetition.
+
+### [MCP-SAMPLING-006] MCP Sampling Agenda Generation
+
+- **Completed**: 2026-01-05
+- **Duration**: 1 day
+- **Summary**: Added MCP sampling for `get_agenda` to request agenda summaries via `sampling/createMessage`, validate JSON output, and fall back to deterministic agenda data; added integration coverage for sampling responses; updated Zod helpers and index-signature access to satisfy strict lint/type checks.
+- **Files Changed**:
+  - `packages/mcp-server/src/index.ts`
+  - `apps/api/tests/integration/mcp.test.ts`
+  - `apps/api/src/lib/auth.ts`
+  - `packages/shared/src/validation/index.ts`
+  - `packages/types/src/api/index.ts`
+  - `docs/WORKLOG.md`
+- **Learnings**: Sampling responses should be parsed defensively and validated before returning to clients; fallbacks keep agendas reliable.
+- **Retrospective**: Went well—SDK sampling integration was straightforward; improve—share MCP parsing helpers for tests; change—capture sampling prompt formats in specs if reused.
+- **State Transitions**: PLANNING → RESEARCHING → IMPLEMENTING → VALIDATING → DOCUMENTING → COMMITTING → RETROSPECTING
+- **Validation**: `pnpm typecheck` and `pnpm build` passed; `pnpm lint` failed on existing `apps/api` lint violations (441 errors) and `pnpm test` failed due to missing test files in `packages/shared` and `apps/web`.
 
 ### [MCP-001..004] MCP Server Spec Completion
 

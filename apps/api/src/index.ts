@@ -44,6 +44,7 @@ import calendarSyncRoutes from './routes/calendar-sync.js';
 import mcpRoutes from './routes/mcp.js';
 import { timeBlockRoutes } from './routes/time-blocks.js';
 import { riscRoutes } from './routes/risc.js';
+import { initializeRISCStream } from './services/risc/index.js';
 
 const app = new Hono();
 
@@ -129,6 +130,21 @@ if (shouldServe) {
     fetch: app.fetch,
     port,
   });
+
+  // Initialize RISC stream for Cross-Account Protection
+  // This registers our webhook with Google and enables security event notifications
+  if (env.riscConfig) {
+    initializeRISCStream()
+      .then(() => {
+        logger.info('[RISC] Stream initialized successfully');
+      })
+      .catch((err: unknown) => {
+        logger.error(
+          { error: err instanceof Error ? err.message : 'Unknown error' },
+          '[RISC] Stream initialization failed',
+        );
+      });
+  }
 }
 
 export default {

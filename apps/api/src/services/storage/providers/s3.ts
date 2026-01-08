@@ -373,9 +373,15 @@ export class S3StorageProvider implements StorageProviderInterface {
     return `${dateStamp}/${this.config.region}/s3/aws4_request`;
   }
 
+  private toArrayBuffer(data: Uint8Array): ArrayBuffer {
+    const buffer = new Uint8Array(data.byteLength);
+    buffer.set(data);
+    return buffer.buffer;
+  }
+
   private async sha256(data: Uint8Array | string): Promise<string> {
     const buffer = typeof data === 'string' ? new TextEncoder().encode(data) : data;
-    const hash = await crypto.subtle.digest('SHA-256', buffer);
+    const hash = await crypto.subtle.digest('SHA-256', this.toArrayBuffer(buffer));
     return this.toHex(new Uint8Array(hash));
   }
 
@@ -383,7 +389,7 @@ export class S3StorageProvider implements StorageProviderInterface {
     const keyBuffer = typeof key === 'string' ? new TextEncoder().encode(key) : key;
     const cryptoKey = await crypto.subtle.importKey(
       'raw',
-      keyBuffer,
+      this.toArrayBuffer(keyBuffer),
       { name: 'HMAC', hash: 'SHA-256' },
       false,
       ['sign'],

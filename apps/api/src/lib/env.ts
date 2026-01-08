@@ -106,6 +106,15 @@ const optionalServicesSchema = z.object({
   // Observability
   SENTRY_DSN: z.url().optional(),
 
+  // RISC (Cross-Account Protection)
+  // Uses Application Default Credentials (ADC) by default.
+  // Falls back to explicit credentials if ADC not available.
+  GOOGLE_RISC_SERVICE_ACCOUNT_EMAIL: z.email().optional(),
+  GOOGLE_RISC_PRIVATE_KEY: z.string().optional(),
+  RISC_WEBHOOK_URL: z.url().optional(),
+  // Set to 'true' to disable ADC and force explicit credentials
+  GOOGLE_RISC_DISABLE_ADC: z.coerce.boolean().optional(),
+
   // Rate limiting
   RATE_LIMIT_WINDOW_MS: z.coerce.number().optional(),
   RATE_LIMIT_MAX_REQUESTS: z.coerce.number().optional(),
@@ -176,6 +185,18 @@ interface S3Config {
   endpoint?: string;
 }
 
+/** RISC (Cross-Account Protection) config. */
+interface RiscConfig {
+  /** Webhook URL for receiving RISC events. */
+  webhookUrl: string;
+  /** Whether to use Application Default Credentials. */
+  useAdc: boolean;
+  /** Service account email (only used if not using ADC). */
+  serviceAccountEmail?: string;
+  /** Service account private key (only used if not using ADC). */
+  privateKey?: string;
+}
+
 /**
  * Parsed and validated environment variables.
  * Computed config objects are only present when all required fields are set.
@@ -194,6 +215,7 @@ export interface Env extends RawEnv {
   openaiConfig?: OpenAIConfig;
   anthropicConfig?: AnthropicConfig;
   s3Storage?: S3Config;
+  riscConfig?: RiscConfig;
 }
 
 /**
@@ -471,6 +493,29 @@ function getEnv(): Env {
         };
       }
     }
+  }
+
+  // RISC (Cross-Account Protection)
+  // Requires webhook URL at minimum. Uses ADC by default, falls back to explicit credentials.
+  if (raw.RISC_WEBHOOK_URL) {
+    const disableAdc = raw.GOOGLE_RISC_DISABLE_ADC === true;
+    const hasExplicitCredentials =
+      raw.GOOGLE_RISC_SERVICE_ACCOUNT_EMAIL && raw.GOOGLE_RISC_PRIVATE_KEY;
+
+    // If ADC is disabled, require explicit credentials
+    if (disableAdc && !hasExplicitCredentials) {
+      throw new Error(
+        'RISC is configured with GOOGLE_RISC_DISABLE_ADC=true but missing ' +
+          'GOOGLE_RISC_SERVICE_ACCOUNT_EMAIL and/or GOOGLE_RISC_PRIVATE_KEY',
+      );
+    }
+
+    env.riscConfig = {
+      webhookUrl: raw.RISC_WEBHOOK_URL,
+      useAdc: !disableAdc,
+      serviceAccountEmail: raw.GOOGLE_RISC_SERVICE_ACCOUNT_EMAIL,
+      privateKey: raw.GOOGLE_RISC_PRIVATE_KEY,
+    };
   }
 
   return env;

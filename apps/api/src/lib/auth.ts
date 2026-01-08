@@ -10,6 +10,9 @@ import { passkey } from '@better-auth/passkey';
 import { db } from '../db/index.js';
 import * as schema from '../db/schema/index.js';
 import { env } from './env.js';
+import { eq } from 'drizzle-orm';
+import { accounts } from '../db/schema/auth.js';
+import { logger } from './logger.js';
 
 /**
  * Build social providers config from validated env config objects.
@@ -98,6 +101,42 @@ export const auth = betterAuth({
 
   advanced: {
     useSecureCookies: env.NODE_ENV === 'production',
+  },
+
+  databaseHooks: {
+    session: {
+      create: {
+        /**
+         * Before creating a session, check if Google sign-in is disabled for this account.
+         * This prevents users whose Google accounts have been flagged by RISC from signing in.
+         */
+        before: async (session) => {
+          // Get the account that's being used to create this session
+          // We need to check if this is a Google sign-in and if it's disabled
+          const [account] = await db
+            .select({
+              googleSignInDisabled: accounts.googleSignInDisabled,
+              providerId: accounts.providerId,
+            })
+            .from(accounts)
+            .where(eq(accounts.userId, session.userId))
+            .limit(1);
+
+          // If this is a Google account and sign-in is disabled, reject
+          if (account?.providerId === 'google' && account.googleSignInDisabled) {
+            logger.warn(
+              { userId: session.userId },
+              '[Auth] Blocked sign-in attempt for disabled Google account',
+            );
+            // Return false to prevent session creation
+            return false;
+          }
+
+          // Return the session wrapped in { data } as expected by Better Auth
+          return { data: session };
+        },
+      },
+    },
   },
 });
 

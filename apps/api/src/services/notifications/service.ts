@@ -11,7 +11,8 @@ import {
   scheduledNotifications,
 } from '../../db/schema/index.js';
 import { eq, and, desc, isNull, lte } from 'drizzle-orm';
-import { rrulestr } from 'rrule';
+import rrule from 'rrule';
+const { rrulestr } = rrule;
 import type {
   NotificationChannel,
   NotificationContent,

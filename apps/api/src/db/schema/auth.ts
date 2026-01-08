@@ -17,6 +17,8 @@ export const users = pgTable('users', {
   image: text('image'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  /** When a security alert was triggered via RISC event. */
+  securityAlertAt: timestamp('security_alert_at'),
 });
 
 /**
@@ -54,6 +56,13 @@ export const accounts = pgTable('accounts', {
   password: text('password'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  // RISC (Cross-Account Protection) fields
+  /** Whether Google sign-in is disabled due to RISC account-disabled event. */
+  googleSignInDisabled: boolean('google_sign_in_disabled').default(false),
+  /** When OAuth tokens were revoked via RISC event. */
+  tokensRevokedAt: timestamp('tokens_revoked_at'),
+  /** Whether user needs to change credentials due to RISC event. */
+  credentialChangeRequired: boolean('credential_change_required').default(false),
 });
 
 /**

@@ -56,7 +56,7 @@ export const tagRefSchema = z.object({
 export const userRefSchema = z.object({
   id: idSchema,
   name: z.string(),
-  email: z.string().email(),
+  email: z.email(),
 });
 
 /**
@@ -77,7 +77,7 @@ export const createTaskSchema = z.object({
   description: z.string().max(5000).optional(),
   status: taskStatusSchema.optional(),
   priority: taskPrioritySchema.optional(),
-  deadline: z.string().datetime().optional(),
+  deadline: z.iso.datetime().optional(),
   estimatedMinutes: z.number().int().positive().optional(),
   projectId: idSchema.optional(),
   assigneeId: idSchema.optional(),

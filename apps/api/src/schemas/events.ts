@@ -48,7 +48,7 @@ export const eventParticipantSchema = z.object({
     .object({
       id: idSchema,
       name: z.string(),
-      email: z.string().email(),
+      email: z.email(),
     })
     .optional(),
 });
@@ -61,7 +61,7 @@ export const eventWithRelationsSchema = eventSchema.extend({
     .object({
       id: idSchema,
       name: z.string(),
-      email: z.string().email(),
+      email: z.email(),
     })
     .optional(),
   participants: z.array(eventParticipantSchema).optional(),
@@ -73,8 +73,8 @@ export const eventWithRelationsSchema = eventSchema.extend({
 export const createEventSchema = z.object({
   title: z.string().min(1).max(500),
   description: z.string().max(5000).optional(),
-  startTime: z.string().datetime(),
-  endTime: z.string().datetime().optional(),
+  startTime: z.iso.datetime(),
+  endTime: z.iso.datetime().optional(),
   isAllDay: z.boolean().optional(),
   location: z.string().max(500).optional(),
   recurrenceRule: z.string().optional(),
@@ -87,7 +87,7 @@ export const createEventSchema = z.object({
 export const updateEventSchema = z.object({
   title: z.string().min(1).max(500).optional(),
   description: z.string().max(5000).nullable().optional(),
-  startTime: z.string().datetime().optional(),
+  startTime: z.iso.datetime().optional(),
   endTime: optionalTimestampSchema,
   isAllDay: z.boolean().optional(),
   location: z.string().max(500).nullable().optional(),
@@ -98,8 +98,8 @@ export const updateEventSchema = z.object({
  * Event query parameters.
  */
 export const eventQuerySchema = z.object({
-  startDate: z.string().datetime().optional(),
-  endDate: z.string().datetime().optional(),
+  startDate: z.iso.datetime().optional(),
+  endDate: z.iso.datetime().optional(),
 });
 
 /**

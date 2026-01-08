@@ -27,7 +27,7 @@ export const activitySchema = z.object({
   type: z.string().min(1).max(100),
   startTime: timestampSchema,
   endTime: timestampSchema,
-  metadata: z.record(z.unknown()).nullable(),
+  metadata: z.record(z.string(), z.unknown()).nullable(),
   streamId: idSchema,
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
@@ -68,9 +68,9 @@ export const updateActivityStreamSchema = z.object({
  */
 export const createActivitySchema = z.object({
   type: z.string().min(1).max(100),
-  startTime: z.string().datetime(),
-  endTime: z.string().datetime(),
-  metadata: z.record(z.unknown()).optional(),
+  startTime: z.iso.datetime(),
+  endTime: z.iso.datetime(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 /**
@@ -78,17 +78,17 @@ export const createActivitySchema = z.object({
  */
 export const updateActivitySchema = z.object({
   type: z.string().min(1).max(100).optional(),
-  startTime: z.string().datetime().optional(),
-  endTime: z.string().datetime().optional(),
-  metadata: z.record(z.unknown()).optional(),
+  startTime: z.iso.datetime().optional(),
+  endTime: z.iso.datetime().optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 /**
  * Activity query parameters.
  */
 export const activityQuerySchema = z.object({
-  startDate: z.string().datetime().optional(),
-  endDate: z.string().datetime().optional(),
+  startDate: z.iso.datetime().optional(),
+  endDate: z.iso.datetime().optional(),
 });
 
 /**

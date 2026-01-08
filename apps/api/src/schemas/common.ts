@@ -9,17 +9,17 @@ import { z } from 'zod';
 /**
  * UUID schema for entity IDs.
  */
-export const idSchema = z.string().uuid();
+export const idSchema = z.uuid();
 
 /**
  * ISO timestamp schema.
  */
-export const timestampSchema = z.string().datetime();
+export const timestampSchema = z.iso.datetime();
 
 /**
  * Optional ISO timestamp schema.
  */
-export const optionalTimestampSchema = z.string().datetime().nullable().optional();
+export const optionalTimestampSchema = z.iso.datetime().nullable().optional();
 
 /**
  * Pagination query parameters.
@@ -32,7 +32,7 @@ export const paginationSchema = z.object({
 /**
  * Standard success response wrapper.
  */
-export function successResponse<T extends z.ZodTypeAny>(dataSchema: T) {
+export function successResponse<T extends z.ZodType>(dataSchema: T) {
   return z.object({
     data: dataSchema,
   });
@@ -41,7 +41,7 @@ export function successResponse<T extends z.ZodTypeAny>(dataSchema: T) {
 /**
  * Standard list response wrapper.
  */
-export function listResponse<T extends z.ZodTypeAny>(itemSchema: T) {
+export function listResponse<T extends z.ZodType>(itemSchema: T) {
   return z.object({
     data: z.array(itemSchema),
     total: z.number().optional(),
@@ -54,7 +54,7 @@ export function listResponse<T extends z.ZodTypeAny>(itemSchema: T) {
 export const errorResponseSchema = z.object({
   error: z.string(),
   message: z.string().optional(),
-  details: z.record(z.unknown()).optional(),
+  details: z.record(z.string(), z.unknown()).optional(),
 });
 
 /**

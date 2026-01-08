@@ -54,7 +54,7 @@ export const createProjectSchema = z.object({
   name: z.string().min(1).max(255),
   description: z.string().max(2000).optional(),
   status: projectStatusSchema.optional(),
-  deadline: z.string().datetime().optional(),
+  deadline: z.iso.datetime().optional(),
   initiativeId: idSchema.optional(),
 });
 

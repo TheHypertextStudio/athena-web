@@ -605,11 +605,25 @@ export const workspaceRelations = relations(workspaces, ({ one }) => ({
 // ============================================================================
 
 export const integrationProviderEnum = pgEnum('integration_provider', [
+  // Productivity
   'linear',
   'github',
+  'todoist',
+  'asana',
+  'jira',
+  'trello',
+  // Calendar
   'google_calendar',
   'outlook_calendar',
   'apple_calendar',
+  // Communication
+  'slack',
+  'zoom',
+  // Storage
+  'google_drive',
+  'dropbox',
+  // Design
+  'figma',
 ]);
 
 /**

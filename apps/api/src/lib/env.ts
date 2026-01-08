@@ -11,12 +11,12 @@ import { z } from 'zod';
  */
 const coreSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
-  PORT: z.coerce.number().default(3000),
+  PORT: z.coerce.number().default(4000),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
   DATABASE_URL: z.url(),
   BETTER_AUTH_SECRET: z.string().min(32),
   BETTER_AUTH_URL: z.url(),
-  FRONTEND_URL: z.url().default('http://localhost:3001'),
+  FRONTEND_URL: z.url().default('http://localhost:3000'),
 });
 
 /**

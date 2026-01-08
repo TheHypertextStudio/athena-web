@@ -61,11 +61,6 @@ export const auth = betterAuth({
 
   trustedOrigins: [env.FRONTEND_URL],
 
-  emailAndPassword: {
-    enabled: true,
-    autoSignIn: true,
-  },
-
   socialProviders: buildSocialProviders(),
 
   plugins: [
@@ -87,6 +82,18 @@ export const auth = betterAuth({
 
   user: {
     additionalFields: {},
+  },
+
+  account: {
+    accountLinking: {
+      enabled: true,
+      // Google, Apple, Microsoft are trusted providers - they verify emails
+      trustedProviders: ['google', 'apple', 'microsoft'],
+      // Don't allow linking accounts with different emails by default (security)
+      allowDifferentEmails: false,
+      // Prevent users from unlinking all accounts (must have at least one sign-in method)
+      allowUnlinkingAll: false,
+    },
   },
 
   advanced: {

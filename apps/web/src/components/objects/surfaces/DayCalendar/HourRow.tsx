@@ -14,8 +14,8 @@ export function HourRow({ hour, hourHeight }: HourRowProps) {
       style={{ height: `${String(hourHeight)}px` }}
     >
       {/* Hour label */}
-      <div className="w-12 -translate-y-2 pr-2 text-right">
-        <span className="text-label-small text-on-surface-variant">{formatHour(hour)}</span>
+      <div className="w-10 -translate-y-2 pr-2 text-right">
+        <span className="text-on-surface-variant text-xs">{formatHour(hour)}</span>
       </div>
 
       {/* Grid line */}

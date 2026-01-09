@@ -15,15 +15,36 @@ const initiativeRoutes = new Hono();
 // All initiative routes require authentication
 initiativeRoutes.use('*', requireAuth);
 
+const INITIATIVE_STATUS = {
+  DRAFT: 'draft',
+  ACTIVE: 'active',
+  COMPLETED: 'completed',
+  ARCHIVED: 'archived',
+} as const;
+type InitiativeStatus = (typeof INITIATIVE_STATUS)[keyof typeof INITIATIVE_STATUS];
+const DEFAULT_INITIATIVE_STATUS: InitiativeStatus = INITIATIVE_STATUS.DRAFT;
+
 /**
  * List all initiatives for the authenticated user.
  * GET /api/initiatives
  */
 initiativeRoutes.get('/', async (c) => {
   const userId = getUserId(c);
+  const status = c.req.query('status') as InitiativeStatus | undefined;
+  const parentId = c.req.query('parentId');
+
+  const conditions = [eq(initiatives.ownerId, userId)];
+
+  if (status) {
+    conditions.push(eq(initiatives.status, status));
+  }
+
+  if (parentId) {
+    conditions.push(eq(initiatives.parentId, parentId));
+  }
 
   const result = await db.query.initiatives.findMany({
-    where: eq(initiatives.ownerId, userId),
+    where: and(...conditions),
     with: {
       parent: true,
       children: true,
@@ -72,7 +93,7 @@ initiativeRoutes.post('/', async (c) => {
   const body = await c.req.json<{
     name: string;
     description?: string;
-    status?: 'draft' | 'active' | 'completed' | 'archived';
+    status?: InitiativeStatus;
     parentId?: string;
   }>();
 
@@ -83,7 +104,7 @@ initiativeRoutes.post('/', async (c) => {
     id,
     name: body.name,
     description: body.description,
-    status: body.status ?? 'draft',
+    status: body.status ?? DEFAULT_INITIATIVE_STATUS,
     parentId: body.parentId,
     ownerId: userId,
     createdAt: now,
@@ -110,7 +131,7 @@ initiativeRoutes.patch('/:id', async (c) => {
   const body = await c.req.json<{
     name?: string;
     description?: string;
-    status?: 'draft' | 'active' | 'completed' | 'archived';
+    status?: InitiativeStatus;
     parentId?: string | null;
   }>();
 
@@ -159,7 +180,7 @@ initiativeRoutes.delete('/:id', async (c) => {
 
   await db.delete(initiatives).where(and(eq(initiatives.id, id), eq(initiatives.ownerId, userId)));
 
-  return c.json({ success: true });
+  return c.body(null, 204);
 });
 
 export { initiativeRoutes };

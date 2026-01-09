@@ -145,7 +145,7 @@ tagRoutes.delete('/:id', async (c) => {
 
   await db.delete(tags).where(and(eq(tags.id, id), eq(tags.ownerId, userId)));
 
-  return c.json({ success: true });
+  return c.body(null, 204);
 });
 
 export { tagRoutes };

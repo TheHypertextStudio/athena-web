@@ -7,12 +7,29 @@
 import { Hono } from 'hono';
 import { eq, and, or } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { tasks, taskTags, tags } from '../db/schema/index.js';
+import { tasks, taskTags, tags, taskDependencies } from '../db/schema/index.js';
 import { requireAuth, getUserId } from '../middleware/auth.js';
 
 const taskRoutes = new Hono();
 
 taskRoutes.use('*', requireAuth);
+
+const TASK_STATUS = {
+  PENDING: 'pending',
+  IN_PROGRESS: 'in_progress',
+  COMPLETED: 'completed',
+  CANCELLED: 'cancelled',
+} as const;
+type TaskStatus = (typeof TASK_STATUS)[keyof typeof TASK_STATUS];
+const TASK_PRIORITY = {
+  LOW: 'low',
+  MEDIUM: 'medium',
+  HIGH: 'high',
+  URGENT: 'urgent',
+} as const;
+type TaskPriority = (typeof TASK_PRIORITY)[keyof typeof TASK_PRIORITY];
+const DEFAULT_TASK_STATUS: TaskStatus = TASK_STATUS.PENDING;
+const DEFAULT_TASK_PRIORITY: TaskPriority = TASK_PRIORITY.MEDIUM;
 
 /**
  * List all tasks for the authenticated user.
@@ -21,12 +38,8 @@ taskRoutes.use('*', requireAuth);
 taskRoutes.get('/', async (c) => {
   const userId = getUserId(c);
   const projectId = c.req.query('projectId');
-  const status = c.req.query('status') as
-    | 'pending'
-    | 'in_progress'
-    | 'completed'
-    | 'cancelled'
-    | undefined;
+  const status = c.req.query('status') as TaskStatus | undefined;
+  const priority = c.req.query('priority') as TaskPriority | undefined;
 
   let whereClause = or(eq(tasks.creatorId, userId), eq(tasks.assigneeId, userId));
 
@@ -36,6 +49,10 @@ taskRoutes.get('/', async (c) => {
 
   if (status) {
     whereClause = and(whereClause, eq(tasks.status, status));
+  }
+
+  if (priority) {
+    whereClause = and(whereClause, eq(tasks.priority, priority));
   }
 
   const result = await db.query.tasks.findMany({
@@ -98,8 +115,8 @@ taskRoutes.post('/', async (c) => {
   const body = await c.req.json<{
     title: string;
     description?: string;
-    status?: 'pending' | 'in_progress' | 'completed' | 'cancelled';
-    priority?: 'low' | 'medium' | 'high' | 'urgent';
+    status?: TaskStatus;
+    priority?: TaskPriority;
     deadline?: string;
     estimatedMinutes?: number;
     projectId?: string;
@@ -114,8 +131,8 @@ taskRoutes.post('/', async (c) => {
     id,
     title: body.title,
     description: body.description,
-    status: body.status ?? 'pending',
-    priority: body.priority ?? 'medium',
+    status: body.status ?? DEFAULT_TASK_STATUS,
+    priority: body.priority ?? DEFAULT_TASK_PRIORITY,
     deadline: body.deadline ? new Date(body.deadline) : null,
     estimatedMinutes: body.estimatedMinutes,
     projectId: body.projectId,
@@ -161,8 +178,8 @@ taskRoutes.patch('/:id', async (c) => {
   const body = await c.req.json<{
     title?: string;
     description?: string;
-    status?: 'pending' | 'in_progress' | 'completed' | 'cancelled';
-    priority?: 'low' | 'medium' | 'high' | 'urgent';
+    status?: TaskStatus;
+    priority?: TaskPriority;
     deadline?: string | null;
     estimatedMinutes?: number | null;
     projectId?: string | null;
@@ -239,7 +256,7 @@ taskRoutes.delete('/:id', async (c) => {
 
   await db.delete(tasks).where(eq(tasks.id, id));
 
-  return c.json({ success: true });
+  return c.body(null, 204);
 });
 
 /**
@@ -269,7 +286,7 @@ taskRoutes.post('/:id/tags/:tagId', async (c) => {
 
   await db.insert(taskTags).values({ taskId, tagId }).onConflictDoNothing();
 
-  return c.json({ success: true });
+  return c.body(null, 201);
 });
 
 /**
@@ -291,7 +308,120 @@ taskRoutes.delete('/:id/tags/:tagId', async (c) => {
 
   await db.delete(taskTags).where(and(eq(taskTags.taskId, taskId), eq(taskTags.tagId, tagId)));
 
-  return c.json({ success: true });
+  return c.body(null, 204);
+});
+
+/**
+ * Get task dependencies.
+ * GET /api/tasks/:id/dependencies
+ */
+taskRoutes.get('/:id/dependencies', async (c) => {
+  const userId = getUserId(c);
+  const taskId = c.req.param('id');
+
+  const task = await db.query.tasks.findFirst({
+    where: and(eq(tasks.id, taskId), or(eq(tasks.creatorId, userId), eq(tasks.assigneeId, userId))),
+  });
+
+  if (!task) {
+    return c.json({ error: 'Task not found' }, 404);
+  }
+
+  const dependencies = await db.query.taskDependencies.findMany({
+    where: eq(taskDependencies.taskId, taskId),
+    with: {
+      dependsOnTask: true,
+    },
+  });
+
+  return c.json({
+    data: dependencies.map((d) => d.dependsOnTask),
+  });
+});
+
+/**
+ * Add a dependency to a task.
+ * POST /api/tasks/:id/dependencies/:dependsOnId
+ */
+taskRoutes.post('/:id/dependencies/:dependsOnId', async (c) => {
+  const userId = getUserId(c);
+  const taskId = c.req.param('id');
+  const dependsOnId = c.req.param('dependsOnId');
+
+  // Prevent self-dependency
+  if (taskId === dependsOnId) {
+    return c.json({ error: 'A task cannot depend on itself' }, 400);
+  }
+
+  const task = await db.query.tasks.findFirst({
+    where: and(eq(tasks.id, taskId), or(eq(tasks.creatorId, userId), eq(tasks.assigneeId, userId))),
+  });
+
+  if (!task) {
+    return c.json({ error: 'Task not found' }, 404);
+  }
+
+  const dependsOnTask = await db.query.tasks.findFirst({
+    where: and(
+      eq(tasks.id, dependsOnId),
+      or(eq(tasks.creatorId, userId), eq(tasks.assigneeId, userId)),
+    ),
+  });
+
+  if (!dependsOnTask) {
+    return c.json({ error: 'Dependency task not found' }, 404);
+  }
+
+  // Check for circular dependency (simple check - dependsOn task can't depend on this task)
+  const reverseCheck = await db.query.taskDependencies.findFirst({
+    where: and(
+      eq(taskDependencies.taskId, dependsOnId),
+      eq(taskDependencies.dependsOnTaskId, taskId),
+    ),
+  });
+
+  if (reverseCheck) {
+    return c.json({ error: 'Circular dependency detected' }, 400);
+  }
+
+  const id = crypto.randomUUID();
+  await db
+    .insert(taskDependencies)
+    .values({
+      id,
+      taskId,
+      dependsOnTaskId: dependsOnId,
+      createdAt: new Date(),
+    })
+    .onConflictDoNothing();
+
+  return c.body(null, 201);
+});
+
+/**
+ * Remove a dependency from a task.
+ * DELETE /api/tasks/:id/dependencies/:dependsOnId
+ */
+taskRoutes.delete('/:id/dependencies/:dependsOnId', async (c) => {
+  const userId = getUserId(c);
+  const taskId = c.req.param('id');
+  const dependsOnId = c.req.param('dependsOnId');
+
+  const task = await db.query.tasks.findFirst({
+    where: and(eq(tasks.id, taskId), or(eq(tasks.creatorId, userId), eq(tasks.assigneeId, userId))),
+  });
+
+  if (!task) {
+    return c.json({ error: 'Task not found' }, 404);
+  }
+
+  await db
+    .delete(taskDependencies)
+    .where(
+      and(eq(taskDependencies.taskId, taskId), eq(taskDependencies.dependsOnTaskId, dependsOnId)),
+    );
+
+  return c.body(null, 204);
 });
 
 export { taskRoutes };

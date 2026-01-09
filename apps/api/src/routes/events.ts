@@ -14,6 +14,17 @@ const eventRoutes = new Hono();
 
 eventRoutes.use('*', requireAuth);
 
+const EVENT_PARTICIPANT_STATUS = {
+  PENDING: 'pending',
+  ACCEPTED: 'accepted',
+  DECLINED: 'declined',
+  TENTATIVE: 'tentative',
+} as const;
+type EventParticipantStatus =
+  (typeof EVENT_PARTICIPANT_STATUS)[keyof typeof EVENT_PARTICIPANT_STATUS];
+const DEFAULT_EVENT_PARTICIPANT_STATUS: EventParticipantStatus = EVENT_PARTICIPANT_STATUS.PENDING;
+const DEFAULT_EVENT_IS_ALL_DAY = false;
+
 /**
  * List all events for the authenticated user.
  * GET /api/events
@@ -122,7 +133,7 @@ eventRoutes.post('/', async (c) => {
     description: body.description,
     startTime: new Date(body.startTime),
     endTime: body.endTime ? new Date(body.endTime) : null,
-    isAllDay: body.isAllDay ?? false,
+    isAllDay: body.isAllDay ?? DEFAULT_EVENT_IS_ALL_DAY,
     location: body.location,
     recurrenceRule: body.recurrenceRule,
     creatorId: userId,
@@ -137,7 +148,7 @@ eventRoutes.post('/', async (c) => {
         id: crypto.randomUUID(),
         eventId: id,
         userId: participantId,
-        status: 'pending',
+        status: DEFAULT_EVENT_PARTICIPANT_STATUS,
         createdAt: now,
       })),
     );
@@ -229,7 +240,7 @@ eventRoutes.delete('/:id', async (c) => {
 
   await db.delete(events).where(eq(events.id, id));
 
-  return c.json({ success: true });
+  return c.body(null, 204);
 });
 
 /**
@@ -253,11 +264,11 @@ eventRoutes.post('/:id/participants', async (c) => {
     id: crypto.randomUUID(),
     eventId: id,
     userId: body.userId,
-    status: 'pending',
+    status: DEFAULT_EVENT_PARTICIPANT_STATUS,
     createdAt: new Date(),
   });
 
-  return c.json({ success: true });
+  return c.body(null, 201);
 });
 
 /**
@@ -267,7 +278,7 @@ eventRoutes.post('/:id/participants', async (c) => {
 eventRoutes.patch('/:id/participants/:participantId', async (c) => {
   const userId = getUserId(c);
   const participantId = c.req.param('participantId');
-  const body = await c.req.json<{ status: 'pending' | 'accepted' | 'declined' | 'tentative' }>();
+  const body = await c.req.json<{ status: EventParticipantStatus }>();
 
   // Users can only update their own participation status
   const participant = await db.query.eventParticipants.findFirst({
@@ -283,7 +294,7 @@ eventRoutes.patch('/:id/participants/:participantId', async (c) => {
     .set({ status: body.status })
     .where(eq(eventParticipants.id, participantId));
 
-  return c.json({ success: true });
+  return c.json({ data: { status: body.status } });
 });
 
 /**
@@ -305,7 +316,7 @@ eventRoutes.delete('/:id/participants/:participantId', async (c) => {
 
   await db.delete(eventParticipants).where(eq(eventParticipants.id, participantId));
 
-  return c.json({ success: true });
+  return c.body(null, 204);
 });
 
 export { eventRoutes };

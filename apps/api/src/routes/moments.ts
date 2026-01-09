@@ -152,7 +152,7 @@ momentRoutes.delete('/:id', async (c) => {
 
   await db.delete(moments).where(and(eq(moments.id, id), eq(moments.ownerId, userId)));
 
-  return c.json({ success: true });
+  return c.body(null, 204);
 });
 
 export { momentRoutes };

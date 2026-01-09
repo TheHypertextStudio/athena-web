@@ -7,12 +7,22 @@
 import { Hono } from 'hono';
 import { eq, and } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { projects } from '../db/schema/index.js';
+import { projects, projectDependencies } from '../db/schema/index.js';
 import { requireAuth, getUserId } from '../middleware/auth.js';
 
 const projectRoutes = new Hono();
 
 projectRoutes.use('*', requireAuth);
+
+const PROJECT_STATUS = {
+  PLANNING: 'planning',
+  ACTIVE: 'active',
+  ON_HOLD: 'on_hold',
+  COMPLETED: 'completed',
+  CANCELLED: 'cancelled',
+} as const;
+type ProjectStatus = (typeof PROJECT_STATUS)[keyof typeof PROJECT_STATUS];
+const DEFAULT_PROJECT_STATUS: ProjectStatus = PROJECT_STATUS.PLANNING;
 
 /**
  * List all projects for the authenticated user.
@@ -21,13 +31,20 @@ projectRoutes.use('*', requireAuth);
 projectRoutes.get('/', async (c) => {
   const userId = getUserId(c);
   const initiativeId = c.req.query('initiativeId');
+  const status = c.req.query('status') as ProjectStatus | undefined;
 
-  const whereClause = initiativeId
-    ? and(eq(projects.ownerId, userId), eq(projects.initiativeId, initiativeId))
-    : eq(projects.ownerId, userId);
+  const conditions = [eq(projects.ownerId, userId)];
+
+  if (initiativeId) {
+    conditions.push(eq(projects.initiativeId, initiativeId));
+  }
+
+  if (status) {
+    conditions.push(eq(projects.status, status));
+  }
 
   const result = await db.query.projects.findMany({
-    where: whereClause,
+    where: and(...conditions),
     with: {
       initiative: true,
       tasks: true,
@@ -79,7 +96,7 @@ projectRoutes.post('/', async (c) => {
   const body = await c.req.json<{
     name: string;
     description?: string;
-    status?: 'planning' | 'active' | 'on_hold' | 'completed' | 'cancelled';
+    status?: ProjectStatus;
     deadline?: string;
     initiativeId?: string;
   }>();
@@ -91,7 +108,7 @@ projectRoutes.post('/', async (c) => {
     id,
     name: body.name,
     description: body.description,
-    status: body.status ?? 'planning',
+    status: body.status ?? DEFAULT_PROJECT_STATUS,
     deadline: body.deadline ? new Date(body.deadline) : null,
     initiativeId: body.initiativeId,
     ownerId: userId,
@@ -119,7 +136,7 @@ projectRoutes.patch('/:id', async (c) => {
   const body = await c.req.json<{
     name?: string;
     description?: string;
-    status?: 'planning' | 'active' | 'on_hold' | 'completed' | 'cancelled';
+    status?: ProjectStatus;
     deadline?: string | null;
     initiativeId?: string | null;
   }>();
@@ -174,7 +191,120 @@ projectRoutes.delete('/:id', async (c) => {
 
   await db.delete(projects).where(and(eq(projects.id, id), eq(projects.ownerId, userId)));
 
-  return c.json({ success: true });
+  return c.body(null, 204);
+});
+
+/**
+ * Get project dependencies.
+ * GET /api/projects/:id/dependencies
+ */
+projectRoutes.get('/:id/dependencies', async (c) => {
+  const userId = getUserId(c);
+  const projectId = c.req.param('id');
+
+  const project = await db.query.projects.findFirst({
+    where: and(eq(projects.id, projectId), eq(projects.ownerId, userId)),
+  });
+
+  if (!project) {
+    return c.json({ error: 'Project not found' }, 404);
+  }
+
+  const dependencies = await db.query.projectDependencies.findMany({
+    where: eq(projectDependencies.projectId, projectId),
+    with: {
+      dependsOnProject: true,
+    },
+  });
+
+  return c.json({
+    data: dependencies.map((d) => d.dependsOnProject),
+  });
+});
+
+/**
+ * Add a dependency to a project.
+ * POST /api/projects/:id/dependencies/:dependsOnId
+ */
+projectRoutes.post('/:id/dependencies/:dependsOnId', async (c) => {
+  const userId = getUserId(c);
+  const projectId = c.req.param('id');
+  const dependsOnId = c.req.param('dependsOnId');
+
+  // Prevent self-dependency
+  if (projectId === dependsOnId) {
+    return c.json({ error: 'A project cannot depend on itself' }, 400);
+  }
+
+  const project = await db.query.projects.findFirst({
+    where: and(eq(projects.id, projectId), eq(projects.ownerId, userId)),
+  });
+
+  if (!project) {
+    return c.json({ error: 'Project not found' }, 404);
+  }
+
+  const dependsOnProject = await db.query.projects.findFirst({
+    where: and(eq(projects.id, dependsOnId), eq(projects.ownerId, userId)),
+  });
+
+  if (!dependsOnProject) {
+    return c.json({ error: 'Dependency project not found' }, 404);
+  }
+
+  // Check for circular dependency
+  const reverseCheck = await db.query.projectDependencies.findFirst({
+    where: and(
+      eq(projectDependencies.projectId, dependsOnId),
+      eq(projectDependencies.dependsOnProjectId, projectId),
+    ),
+  });
+
+  if (reverseCheck) {
+    return c.json({ error: 'Circular dependency detected' }, 400);
+  }
+
+  const id = crypto.randomUUID();
+  await db
+    .insert(projectDependencies)
+    .values({
+      id,
+      projectId,
+      dependsOnProjectId: dependsOnId,
+      createdAt: new Date(),
+    })
+    .onConflictDoNothing();
+
+  return c.body(null, 201);
+});
+
+/**
+ * Remove a dependency from a project.
+ * DELETE /api/projects/:id/dependencies/:dependsOnId
+ */
+projectRoutes.delete('/:id/dependencies/:dependsOnId', async (c) => {
+  const userId = getUserId(c);
+  const projectId = c.req.param('id');
+  const dependsOnId = c.req.param('dependsOnId');
+
+  const project = await db.query.projects.findFirst({
+    where: and(eq(projects.id, projectId), eq(projects.ownerId, userId)),
+  });
+
+  if (!project) {
+    return c.json({ error: 'Project not found' }, 404);
+  }
+
+  await db
+    .delete(projectDependencies)
+    .where(
+      and(
+        eq(projectDependencies.projectId, projectId),
+        eq(projectDependencies.dependsOnProjectId, dependsOnId),
+      ),
+    );
+
+  return c.body(null, 204);
 });
 
 export { projectRoutes };

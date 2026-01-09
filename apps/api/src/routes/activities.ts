@@ -149,7 +149,7 @@ activityRoutes.delete('/streams/:id', async (c) => {
     .delete(activityStreams)
     .where(and(eq(activityStreams.id, id), eq(activityStreams.ownerId, userId)));
 
-  return c.json({ success: true });
+  return c.body(null, 204);
 });
 
 // ============================================================================
@@ -344,7 +344,7 @@ activityRoutes.delete('/:id', async (c) => {
 
   await db.delete(activities).where(eq(activities.id, id));
 
-  return c.json({ success: true });
+  return c.body(null, 204);
 });
 
 export { activityRoutes };

@@ -24,6 +24,12 @@ export interface CalendarContextMenuState {
   position: { x: number; y: number } | null;
 }
 
+export interface CalendarDetailPopoverState {
+  open: boolean;
+  entry: CalendarEntry | null;
+  anchorRect: DOMRect | null;
+}
+
 export interface CalendarMutationCallbacks {
   /** Called when creating an entry (async) */
   onCreateEntry?: (entry: Omit<CalendarEntry, 'id'>) => Promise<void>;
@@ -65,6 +71,7 @@ export interface UseCalendarStateReturn {
   date: Date;
   entries: CalendarEntry[];
   creationDialog: CalendarDialogState;
+  detailPopover: CalendarDetailPopoverState;
   contextMenu: CalendarContextMenuState;
   previewEntry: PreviewEntry | null;
 
@@ -84,6 +91,11 @@ export interface UseCalendarStateReturn {
   openCreationDialog: (startTime: Date, endTime: Date, anchorRect?: DOMRect) => void;
   closeCreationDialog: () => void;
   setCreationDialogOpen: (open: boolean) => void;
+  movePreview: (newStart: Date, newEnd: Date) => void;
+
+  // Detail popover handlers
+  openDetailPopover: (entry: CalendarEntry, anchorRect: DOMRect) => void;
+  closeDetailPopover: () => void;
 
   // Context menu handlers
   openContextMenu: (entry: CalendarEntry, event: MouseEvent) => void;
@@ -97,6 +109,7 @@ export interface UseCalendarStateReturn {
     onEntryContextMenu: (entry: CalendarEntry, event: MouseEvent) => void;
     onEntryMove: (entryId: string, newStart: Date, newEnd: Date) => void;
     onEntryResize: (entryId: string, newStart: Date, newEnd: Date) => void;
+    onPreviewMove: (newStart: Date, newEnd: Date) => void;
     onTaskClick: (task: LinkedTask, entry: CalendarEntry, event: MouseEvent) => void;
   };
 }
@@ -145,6 +158,13 @@ export function useCalendarState(options: UseCalendarStateOptions = {}): UseCale
 
   // Preview entry (shown on calendar while creating)
   const [previewEntry, setPreviewEntry] = useState<PreviewEntry | null>(null);
+
+  // Detail popover state
+  const [detailPopover, setDetailPopover] = useState<CalendarDetailPopoverState>({
+    open: false,
+    entry: null,
+    anchorRect: null,
+  });
 
   // =============================================================================
   // Date navigation
@@ -273,6 +293,15 @@ export function useCalendarState(options: UseCalendarStateOptions = {}): UseCale
     }
   }, []);
 
+  const movePreview = useCallback((newStart: Date, newEnd: Date) => {
+    setPreviewEntry({ startTime: newStart, endTime: newEnd });
+    setCreationDialog((prev) => ({
+      ...prev,
+      startTime: newStart,
+      endTime: newEnd,
+    }));
+  }, []);
+
   // =============================================================================
   // Context menu handlers
   // =============================================================================
@@ -289,13 +318,29 @@ export function useCalendarState(options: UseCalendarStateOptions = {}): UseCale
   }, []);
 
   // =============================================================================
+  // Detail popover handlers
+  // =============================================================================
+
+  const openDetailPopover = useCallback((entry: CalendarEntry, anchorRect: DOMRect) => {
+    setDetailPopover({ open: true, entry, anchorRect });
+  }, []);
+
+  const closeDetailPopover = useCallback(() => {
+    setDetailPopover({ open: false, entry: null, anchorRect: null });
+  }, []);
+
+  // =============================================================================
   // Event handlers for DayCalendar
   // =============================================================================
 
-  const handleEntryClick = useCallback((entry: CalendarEntry, _event: MouseEvent) => {
-    // Could open detail panel in the future
-    console.log('Entry clicked:', entry.title);
-  }, []);
+  const handleEntryClick = useCallback(
+    (entry: CalendarEntry, event: MouseEvent) => {
+      const target = event.currentTarget as HTMLElement;
+      const rect = target.getBoundingClientRect();
+      openDetailPopover(entry, rect);
+    },
+    [openDetailPopover],
+  );
 
   const handleTaskClick = useCallback(
     (task: LinkedTask, entry: CalendarEntry, _event: MouseEvent) => {
@@ -313,6 +358,7 @@ export function useCalendarState(options: UseCalendarStateOptions = {}): UseCale
     date,
     entries,
     creationDialog,
+    detailPopover,
     contextMenu,
     previewEntry,
 
@@ -332,10 +378,15 @@ export function useCalendarState(options: UseCalendarStateOptions = {}): UseCale
     openCreationDialog,
     closeCreationDialog,
     setCreationDialogOpen,
+    movePreview,
 
     // Context menu handlers
     openContextMenu,
     closeContextMenu,
+
+    // Detail popover handlers
+    openDetailPopover,
+    closeDetailPopover,
 
     // Pre-bound handlers for DayCalendar
     handlers: {
@@ -345,6 +396,7 @@ export function useCalendarState(options: UseCalendarStateOptions = {}): UseCale
       onEntryContextMenu: openContextMenu,
       onEntryMove: moveEntry,
       onEntryResize: resizeEntry,
+      onPreviewMove: movePreview,
       onTaskClick: handleTaskClick,
     },
   };

@@ -1,7 +1,18 @@
+import { headers } from 'next/headers';
+import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { auth } from '@/lib/auth-server';
 
-export default function HomePage() {
+export default async function LandingPage() {
+  const session = await auth.api.getSession({
+    headers: await headers(),
+  });
+
+  if (session) {
+    redirect('/home');
+  }
+
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-24">
       <div className="space-y-6 text-center">
@@ -12,7 +23,7 @@ export default function HomePage() {
         </p>
         <div className="flex justify-center gap-4">
           <Button asChild>
-            <Link href="/login">Sign In</Link>
+            <Link href="/signin">Sign In</Link>
           </Button>
           <Button asChild variant="outline">
             <Link href="/signup">Create Account</Link>

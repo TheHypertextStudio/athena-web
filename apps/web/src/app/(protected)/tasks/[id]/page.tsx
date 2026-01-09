@@ -159,7 +159,8 @@ export default function TaskDetailPage() {
                       </Link>
                     </Button>
                     <Button
-                      variant="destructive"
+                      variant="filled"
+                      intent="error"
                       size="sm"
                       onClick={() => void handleDelete()}
                       disabled={isDeleting}

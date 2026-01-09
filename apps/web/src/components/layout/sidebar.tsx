@@ -8,6 +8,7 @@ import {
   FolderKanban,
   Target,
   Calendar,
+  CalendarDays,
   Clock,
   Settings,
   LogOut,
@@ -23,6 +24,7 @@ interface NavItem {
 }
 
 const mainNavItems: NavItem[] = [
+  { href: '/home', label: 'Home', icon: CalendarDays },
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/tasks', label: 'Tasks', icon: CheckSquare },
   { href: '/projects', label: 'Projects', icon: FolderKanban },
@@ -43,7 +45,7 @@ export function Sidebar({ onSignOut }: SidebarProps) {
   return (
     <aside className="bg-card flex h-screen w-64 flex-col border-r">
       <div className="flex h-16 items-center border-b px-6">
-        <Link href="/dashboard" className="flex items-center gap-2">
+        <Link href="/home" className="flex items-center gap-2">
           <div className="bg-primary flex h-8 w-8 items-center justify-center rounded-lg">
             <Target className="text-primary-foreground h-5 w-5" />
           </div>

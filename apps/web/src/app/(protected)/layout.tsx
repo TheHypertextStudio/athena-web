@@ -2,23 +2,43 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { LogOut, Settings, User } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { signOut } from '@/lib/auth-client';
-import { Sidebar } from '@/components/layout/sidebar';
+import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { QueryClientProvider } from '@/lib/query-client';
+import { CommandPaletteProvider, CommandPalette } from '@/components/command-palette';
+import { registerAllActions } from '@/lib/command-palette/actions';
+import { ObjectSystemProvider } from '@/components/objects';
+import { SnackbarProvider } from '@/components/ui/snackbar';
+import { UndoProvider } from '@/lib/undo';
+import { HistoryPanel } from '@/components/ui/history-panel';
+import { TimezoneMismatchDialog } from '@/components/timezone-mismatch-dialog';
 
 export default function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const { isAuthenticated, isLoading } = useAuth();
+  const { user, isAuthenticated, isLoading } = useAuth();
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      router.push('/login');
+      router.push('/signin');
     }
   }, [isAuthenticated, isLoading, router]);
 
+  // Register command palette actions once on mount
+  useEffect(() => {
+    registerAllActions();
+  }, []);
+
   async function handleSignOut() {
     await signOut();
-    router.push('/login');
+    router.push('/signin');
   }
 
   if (isLoading) {
@@ -34,9 +54,56 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="flex h-screen">
-      <Sidebar onSignOut={() => void handleSignOut()} />
-      <main className="flex-1 overflow-auto">{children}</main>
-    </div>
+    <QueryClientProvider>
+      <SnackbarProvider>
+        <UndoProvider>
+          <ObjectSystemProvider>
+            <CommandPaletteProvider>
+              <div className="min-h-screen">
+                {/* Minimal Top Bar */}
+                <header className="fixed top-0 right-0 z-50 p-4">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="rounded-full">
+                        {user?.image ? (
+                          <img src={user.image} alt={user.name} className="h-8 w-8 rounded-full" />
+                        ) : (
+                          <User className="h-5 w-5" />
+                        )}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onClick={() => {
+                          router.push('/settings');
+                        }}
+                      >
+                        <Settings className="mr-2 h-4 w-4" />
+                        Settings
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => void handleSignOut()}>
+                        <LogOut className="mr-2 h-4 w-4" />
+                        Sign out
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </header>
+
+                <main>{children}</main>
+              </div>
+
+              {/* Command Palette - Cmd+K / Ctrl+K to open */}
+              <CommandPalette />
+
+              {/* History panel for undo/redo - Cmd+Alt+Z to open */}
+              <HistoryPanel />
+
+              {/* Timezone mismatch detection dialog */}
+              <TimezoneMismatchDialog />
+            </CommandPaletteProvider>
+          </ObjectSystemProvider>
+        </UndoProvider>
+      </SnackbarProvider>
+    </QueryClientProvider>
   );
 }

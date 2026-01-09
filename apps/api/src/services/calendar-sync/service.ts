@@ -6,12 +6,13 @@
 
 import * as crypto from 'node:crypto';
 import { db } from '../../db/index.js';
-import { events, linkedIntegrations } from '../../db/schema/index.js';
+import { events, linkedIntegrations, calendarSyncTokens } from '../../db/schema/index.js';
 import { eq, and } from 'drizzle-orm';
 import { GoogleCalendarProvider } from './providers/google.js';
 import { OutlookCalendarProvider } from './providers/outlook.js';
 import { ICloudCalendarProvider } from './providers/icloud.js';
 import { CalDAVProvider } from './providers/caldav.js';
+import { getMappingService, type MappingService } from '../sync/mapping-service.js';
 import type {
   CalendarProvider,
   CalendarProviderClient,
@@ -49,11 +50,11 @@ export interface CalendarSyncConfig {
  */
 export class CalendarSyncService {
   private readonly providers: Map<CalendarProvider, CalendarProviderClient>;
-  private readonly syncTokens: Map<string, string>; // connectionId:calendarId -> syncToken
+  private readonly mappingService: MappingService;
 
   constructor(config: CalendarSyncConfig) {
     this.providers = new Map();
-    this.syncTokens = new Map();
+    this.mappingService = getMappingService();
 
     // Initialize Google provider
     if (config.google) {
@@ -264,6 +265,68 @@ export class CalendarSyncService {
   }
 
   /**
+   * Get persisted sync token for a calendar.
+   */
+  private async getSyncToken(
+    integrationId: string,
+    calendarId: string,
+  ): Promise<string | undefined> {
+    const result = await db.query.calendarSyncTokens.findFirst({
+      where: and(
+        eq(calendarSyncTokens.integrationId, integrationId),
+        eq(calendarSyncTokens.calendarId, calendarId),
+      ),
+    });
+    return result?.syncToken;
+  }
+
+  /**
+   * Persist sync token for a calendar.
+   */
+  private async saveSyncToken(
+    integrationId: string,
+    calendarId: string,
+    token: string,
+  ): Promise<void> {
+    const id = `${integrationId}:${calendarId}`;
+    const now = new Date();
+
+    // Upsert the sync token
+    const existing = await db.query.calendarSyncTokens.findFirst({
+      where: eq(calendarSyncTokens.id, id),
+    });
+
+    if (existing) {
+      await db
+        .update(calendarSyncTokens)
+        .set({
+          syncToken: token,
+          lastSyncAt: now,
+          updatedAt: now,
+        })
+        .where(eq(calendarSyncTokens.id, id));
+    } else {
+      await db.insert(calendarSyncTokens).values({
+        id,
+        integrationId,
+        calendarId,
+        syncToken: token,
+        lastSyncAt: now,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+  }
+
+  /**
+   * Clear sync token (e.g., when token becomes invalid).
+   */
+  private async clearSyncToken(integrationId: string, calendarId: string): Promise<void> {
+    const id = `${integrationId}:${calendarId}`;
+    await db.delete(calendarSyncTokens).where(eq(calendarSyncTokens.id, id));
+  }
+
+  /**
    * Sync events for a connection.
    */
   async sync(connectionId: string, userId: string): Promise<SyncResult> {
@@ -324,23 +387,39 @@ export class CalendarSyncService {
 
     for (const calendar of calendars) {
       try {
-        const syncKey = `${connectionId}:${calendar.id}`;
-        const syncToken = this.syncTokens.get(syncKey);
+        // Get persisted sync token for incremental sync
+        const syncToken = await this.getSyncToken(connectionId, calendar.externalId);
 
         // Get events from external calendar
-        const { events: externalEvents, nextSyncToken } = await client.getEvents(
-          accessToken,
-          calendar.externalId,
-          {
+        let externalEvents: ExternalCalendarEvent[];
+        let nextSyncToken: string | undefined;
+
+        try {
+          const eventsResult = await client.getEvents(accessToken, calendar.externalId, {
             syncToken,
             timeMin: syncToken ? undefined : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // Last 30 days
             timeMax: syncToken ? undefined : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // Next year
-          },
-        );
+          });
+          externalEvents = eventsResult.events;
+          nextSyncToken = eventsResult.nextSyncToken;
+        } catch (err) {
+          // Handle 410 Gone (sync token invalidated) by clearing token and doing full sync
+          if (err instanceof Error && err.message.includes('410')) {
+            await this.clearSyncToken(connectionId, calendar.externalId);
+            const eventsResult = await client.getEvents(accessToken, calendar.externalId, {
+              timeMin: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+              timeMax: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+            });
+            externalEvents = eventsResult.events;
+            nextSyncToken = eventsResult.nextSyncToken;
+          } else {
+            throw err;
+          }
+        }
 
-        // Store new sync token
+        // Persist new sync token
         if (nextSyncToken) {
-          this.syncTokens.set(syncKey, nextSyncToken);
+          await this.saveSyncToken(connectionId, calendar.externalId, nextSyncToken);
         }
 
         // Process each event
@@ -354,6 +433,7 @@ export class CalendarSyncService {
             );
             if (syncResult === 'created') result.eventsCreated++;
             if (syncResult === 'updated') result.eventsUpdated++;
+            if (syncResult === 'deleted') result.eventsDeleted++;
           } catch (err) {
             result.errors.push({
               eventId: externalEvent.externalId,
@@ -375,29 +455,33 @@ export class CalendarSyncService {
   }
 
   /**
-   * Sync a single event.
+   * Sync a single event using external ID mappings.
    */
   private async syncEvent(
     userId: string,
     connectionId: string,
     calendarId: string,
     externalEvent: ExternalCalendarEvent,
-  ): Promise<'created' | 'updated' | 'skipped'> {
-    // Check if event already exists by iCalUID or external ID
-    // For simplicity, we're using title + start time as a match key
-    // In production, you'd want to track external IDs in a sync mapping table
+  ): Promise<'created' | 'updated' | 'deleted' | 'skipped'> {
+    // Handle deleted events from external calendar
+    if (externalEvent.status === 'cancelled') {
+      return this.handleDeletedEvent(connectionId, externalEvent.externalId);
+    }
 
-    const existingEvent = await db.query.events.findFirst({
-      where: and(eq(events.creatorId, userId), eq(events.title, externalEvent.title)),
-    });
+    // Look up existing mapping by external ID
+    const existingMapping = await this.mappingService.findByExternalId(
+      connectionId,
+      externalEvent.externalId,
+    );
 
     const now = new Date();
 
-    if (existingEvent) {
-      // Update existing event
+    if (existingMapping) {
+      // Update existing event via mapping
       await db
         .update(events)
         .set({
+          title: externalEvent.title,
           description: externalEvent.description,
           startTime: externalEvent.startTime,
           endTime: externalEvent.endTime,
@@ -406,14 +490,19 @@ export class CalendarSyncService {
           recurrenceRule: externalEvent.recurrenceRule,
           updatedAt: now,
         })
-        .where(eq(events.id, existingEvent.id));
+        .where(eq(events.id, existingMapping.localEntityId));
+
+      // Update mapping with new etag/version
+      await this.mappingService.markSyncedFromExternal(existingMapping.id, externalEvent.etag);
 
       return 'updated';
     }
 
-    // Create new event
+    // Create new event and mapping
+    const eventId = crypto.randomUUID();
+
     await db.insert(events).values({
-      id: crypto.randomUUID(),
+      id: eventId,
       title: externalEvent.title,
       description: externalEvent.description,
       startTime: externalEvent.startTime,
@@ -422,17 +511,70 @@ export class CalendarSyncService {
       location: externalEvent.location,
       recurrenceRule: externalEvent.recurrenceRule,
       creatorId: userId,
+      source: 'external',
+      sourceIntegrationId: connectionId,
       createdAt: now,
       updatedAt: now,
+    });
+
+    // Create mapping for the new event
+    await this.mappingService.createMapping({
+      integrationId: connectionId,
+      entityType: 'event',
+      localEntityId: eventId,
+      externalId: externalEvent.externalId,
+      syncDirection: 'inbound',
+      externalVersion: externalEvent.etag,
+      metadata: {
+        calendarId,
+        iCalUID: externalEvent.iCalUID,
+      },
     });
 
     return 'created';
   }
 
   /**
-   * Push a local event to external calendar.
+   * Handle a deleted event from external calendar.
    */
-  async pushEvent(connectionId: string, userId: string, eventId: string): Promise<void> {
+  private async handleDeletedEvent(
+    integrationId: string,
+    externalId: string,
+  ): Promise<'deleted' | 'skipped'> {
+    const mapping = await this.mappingService.findByExternalId(integrationId, externalId);
+
+    if (!mapping) {
+      // No local event to delete
+      return 'skipped';
+    }
+
+    // Delete the local event
+    await db.delete(events).where(eq(events.id, mapping.localEntityId));
+
+    // Delete the mapping
+    await this.mappingService.deleteMapping(mapping.id);
+
+    return 'deleted';
+  }
+
+  /**
+   * Push a local event to external calendar.
+   * Creates a mapping to track the relationship.
+   */
+  async pushEvent(connectionId: string, userId: string, eventId: string): Promise<string> {
+    // Check if mapping already exists
+    const existingMapping = await this.mappingService.findByLocalEntity(
+      connectionId,
+      'event',
+      eventId,
+    );
+
+    if (existingMapping) {
+      // Already pushed, do an update instead
+      await this.pushEventUpdate(connectionId, userId, eventId);
+      return existingMapping.externalId;
+    }
+
     const [integration, event] = await Promise.all([
       db.query.linkedIntegrations.findFirst({
         where: and(eq(linkedIntegrations.id, connectionId), eq(linkedIntegrations.userId, userId)),
@@ -465,17 +607,173 @@ export class CalendarSyncService {
       throw new Error('No calendar configured for push');
     }
 
-    await client.createEvent(integration.accessToken, targetCalendar.externalId, {
-      title: event.title,
-      description: event.description ?? undefined,
-      startTime: event.startTime,
-      endTime: event.endTime ?? undefined,
-      isAllDay: event.isAllDay,
-      location: event.location ?? undefined,
-      recurrenceRule: event.recurrenceRule ?? undefined,
-      status: 'confirmed',
-      visibility: 'public',
+    // Create event in external calendar
+    const createdEvent = await client.createEvent(
+      integration.accessToken,
+      targetCalendar.externalId,
+      {
+        title: event.title,
+        description: event.description ?? undefined,
+        startTime: event.startTime,
+        endTime: event.endTime ?? undefined,
+        isAllDay: event.isAllDay,
+        location: event.location ?? undefined,
+        recurrenceRule: event.recurrenceRule ?? undefined,
+        status: 'confirmed',
+        visibility: 'public',
+      },
+    );
+
+    // Create mapping to track the relationship
+    await this.mappingService.createMapping({
+      integrationId: connectionId,
+      entityType: 'event',
+      localEntityId: eventId,
+      externalId: createdEvent.externalId,
+      syncDirection: 'outbound',
+      externalVersion: createdEvent.etag,
+      metadata: {
+        calendarId: targetCalendar.externalId,
+        iCalUID: createdEvent.iCalUID,
+      },
     });
+
+    return createdEvent.externalId;
+  }
+
+  /**
+   * Push an event update to external calendar.
+   */
+  async pushEventUpdate(connectionId: string, userId: string, eventId: string): Promise<void> {
+    // Find existing mapping
+    const mapping = await this.mappingService.findByLocalEntity(connectionId, 'event', eventId);
+
+    if (!mapping) {
+      // No mapping exists - create new event instead
+      await this.pushEvent(connectionId, userId, eventId);
+      return;
+    }
+
+    const [integration, event] = await Promise.all([
+      db.query.linkedIntegrations.findFirst({
+        where: and(eq(linkedIntegrations.id, connectionId), eq(linkedIntegrations.userId, userId)),
+      }),
+      db.query.events.findFirst({
+        where: and(eq(events.id, eventId), eq(events.creatorId, userId)),
+      }),
+    ]);
+
+    if (!integration || !event) {
+      throw new Error('Connection or event not found');
+    }
+
+    const provider = this.mapIntegrationToProvider(integration.provider);
+    const client = this.providers.get(provider);
+
+    if (!client || !integration.accessToken) {
+      throw new Error('Cannot push to this provider');
+    }
+
+    const calendarId = (mapping.metadata as { calendarId: string } | null)?.calendarId;
+    if (!calendarId) {
+      throw new Error('Calendar ID not found in mapping');
+    }
+
+    // Update event in external calendar
+    const updatedEvent = await client.updateEvent(
+      integration.accessToken,
+      calendarId,
+      mapping.externalId,
+      {
+        title: event.title,
+        description: event.description ?? undefined,
+        startTime: event.startTime,
+        endTime: event.endTime ?? undefined,
+        isAllDay: event.isAllDay,
+        location: event.location ?? undefined,
+        recurrenceRule: event.recurrenceRule ?? undefined,
+      },
+    );
+
+    // Update mapping with new etag
+    await this.mappingService.markSyncedToExternal(mapping.id, updatedEvent.etag);
+  }
+
+  /**
+   * Delete an event from external calendar.
+   */
+  async pushEventDelete(connectionId: string, userId: string, eventId: string): Promise<void> {
+    // Find existing mapping
+    const mapping = await this.mappingService.findByLocalEntity(connectionId, 'event', eventId);
+
+    if (!mapping) {
+      // No mapping exists - nothing to delete externally
+      return;
+    }
+
+    const integration = await db.query.linkedIntegrations.findFirst({
+      where: and(eq(linkedIntegrations.id, connectionId), eq(linkedIntegrations.userId, userId)),
+    });
+
+    if (!integration?.accessToken) {
+      throw new Error('Connection not found or no access token');
+    }
+
+    const provider = this.mapIntegrationToProvider(integration.provider);
+    const client = this.providers.get(provider);
+
+    if (!client) {
+      throw new Error('Provider not configured');
+    }
+
+    const calendarId = (mapping.metadata as { calendarId: string } | null)?.calendarId;
+    if (!calendarId) {
+      throw new Error('Calendar ID not found in mapping');
+    }
+
+    // Delete event from external calendar
+    await client.deleteEvent(integration.accessToken, calendarId, mapping.externalId);
+
+    // Delete the mapping
+    await this.mappingService.deleteMapping(mapping.id);
+  }
+
+  /**
+   * Push event to all bidirectional connections for a user.
+   * Used when a local event is created/updated.
+   */
+  async pushEventToAllConnections(
+    userId: string,
+    eventId: string,
+    operation: 'create' | 'update' | 'delete',
+  ): Promise<void> {
+    const connections = await this.getConnections(userId);
+
+    const bidirectionalConnections = connections.filter((c) =>
+      c.calendars.some((cal) => cal.syncEnabled && cal.syncDirection === 'bidirectional'),
+    );
+
+    for (const connection of bidirectionalConnections) {
+      try {
+        switch (operation) {
+          case 'create':
+            await this.pushEvent(connection.id, userId, eventId);
+            break;
+          case 'update':
+            await this.pushEventUpdate(connection.id, userId, eventId);
+            break;
+          case 'delete':
+            await this.pushEventDelete(connection.id, userId, eventId);
+            break;
+        }
+      } catch (error) {
+        // Log error but don't fail - push is best-effort
+        console.error(
+          `Failed to push ${operation} to ${connection.provider}:`,
+          error instanceof Error ? error.message : 'Unknown error',
+        );
+      }
+    }
   }
 
   private mapIntegrationToProvider(integration: string): CalendarProvider {

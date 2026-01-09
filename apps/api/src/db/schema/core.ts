@@ -120,6 +120,10 @@ export const events = pgTable('events', {
   creatorId: text('creator_id')
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
+  /** Source of the event: 'local' for user-created, 'external' for synced from external calendar */
+  source: text('source').notNull().default('local'),
+  /** Integration ID if synced from an external calendar */
+  sourceIntegrationId: text('source_integration_id'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
@@ -704,6 +708,37 @@ export const externalIdMappings = pgTable('external_id_mappings', {
 export const externalIdMappingRelations = relations(externalIdMappings, ({ one }) => ({
   integration: one(linkedIntegrations, {
     fields: [externalIdMappings.integrationId],
+    references: [linkedIntegrations.id],
+  }),
+}));
+
+// ============================================================================
+// Calendar Sync Tokens (for incremental sync)
+// ============================================================================
+
+/**
+ * Calendar sync tokens - persists incremental sync state per calendar.
+ * Google Calendar and other providers use sync tokens to efficiently fetch only changed events.
+ */
+export const calendarSyncTokens = pgTable('calendar_sync_tokens', {
+  id: text('id').primaryKey(),
+  /** Reference to the linked integration */
+  integrationId: text('integration_id')
+    .notNull()
+    .references(() => linkedIntegrations.id, { onDelete: 'cascade' }),
+  /** External calendar ID (e.g., Google Calendar ID) */
+  calendarId: text('calendar_id').notNull(),
+  /** The sync token from the calendar provider */
+  syncToken: text('sync_token').notNull(),
+  /** Last successful sync timestamp */
+  lastSyncAt: timestamp('last_sync_at').notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const calendarSyncTokenRelations = relations(calendarSyncTokens, ({ one }) => ({
+  integration: one(linkedIntegrations, {
+    fields: [calendarSyncTokens.integrationId],
     references: [linkedIntegrations.id],
   }),
 }));

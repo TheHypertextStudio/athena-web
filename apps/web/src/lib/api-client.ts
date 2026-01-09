@@ -62,7 +62,17 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     throw new ApiError(response.status, errorMessage);
   }
 
-  return response.json() as Promise<T>;
+  // Handle empty responses (204 No Content, etc.)
+  if (response.status === 204 || response.headers.get('content-length') === '0') {
+    return {} as T;
+  }
+
+  const text = await response.text();
+  if (!text) {
+    return {} as T;
+  }
+
+  return JSON.parse(text) as T;
 }
 
 // ============================================================================
@@ -710,4 +720,171 @@ export const timeBlockKeys = {
     [...timeBlockKeys.lists(), params] as const,
   details: () => [...timeBlockKeys.all, 'detail'] as const,
   detail: (id: string) => [...timeBlockKeys.details(), id] as const,
+};
+
+// ============================================================================
+// Calendar Sync Types
+// ============================================================================
+
+export type CalendarProvider = 'google' | 'outlook' | 'icloud' | 'caldav';
+export type SyncDirection = 'pull' | 'push' | 'bidirectional';
+
+export interface SyncedCalendar {
+  id: string;
+  externalId: string;
+  name: string;
+  color?: string;
+  isPrimary: boolean;
+  syncEnabled: boolean;
+  syncDirection: SyncDirection;
+}
+
+export interface CalendarConnection {
+  id: string;
+  provider: CalendarProvider;
+  syncEnabled: boolean;
+  lastSyncAt: string | null;
+  lastSyncStatus: 'success' | 'error' | null;
+  calendars: SyncedCalendar[];
+  createdAt: string;
+}
+
+export interface SyncResult {
+  success: boolean;
+  eventsCreated: number;
+  eventsUpdated: number;
+  eventsDeleted: number;
+  errors: { eventId?: string; operation: string; error: string }[];
+  syncedAt?: string;
+}
+
+export interface SyncAllResult {
+  connectionId: string;
+  provider: CalendarProvider;
+  success: boolean;
+  eventsCreated?: number;
+  eventsUpdated?: number;
+  eventsDeleted?: number;
+  errors?: { eventId?: string; operation: string; error: string }[];
+  error?: string;
+}
+
+// ============================================================================
+// Calendar Sync API
+// ============================================================================
+
+/**
+ * Calendar Sync API
+ */
+export const calendarSyncApi = {
+  /**
+   * Get all calendar connections.
+   */
+  getConnections: () =>
+    request<{ success: boolean; data: CalendarConnection[] }>('/api/calendar-sync/connections'),
+
+  /**
+   * Get OAuth URL for a provider.
+   */
+  getAuthUrl: (provider: CalendarProvider) =>
+    request<{ success: boolean; data: { authUrl: string } }>(`/api/calendar-sync/auth/${provider}`),
+
+  /**
+   * Handle OAuth callback.
+   */
+  handleCallback: (provider: CalendarProvider, code: string, state: string) =>
+    request<{
+      success: boolean;
+      data: { id: string; provider: CalendarProvider; calendars: SyncedCalendar[] };
+    }>('/api/calendar-sync/callback', {
+      method: 'POST',
+      body: JSON.stringify({ provider, code, state }),
+    }),
+
+  /**
+   * Update sync settings for a connection.
+   */
+  updateSettings: (
+    connectionId: string,
+    calendars: { id: string; syncEnabled: boolean; syncDirection: SyncDirection }[],
+  ) =>
+    request<{ success: boolean }>(`/api/calendar-sync/connections/${connectionId}/settings`, {
+      method: 'PATCH',
+      body: JSON.stringify({ calendars }),
+    }),
+
+  /**
+   * Trigger sync for a connection.
+   */
+  triggerSync: (connectionId: string) =>
+    request<{ success: boolean; data: SyncResult }>(
+      `/api/calendar-sync/connections/${connectionId}/sync`,
+      { method: 'POST' },
+    ),
+
+  /**
+   * Sync all connections.
+   */
+  syncAll: () =>
+    request<{ success: boolean; data: SyncAllResult[] }>('/api/calendar-sync/sync-all', {
+      method: 'POST',
+    }),
+
+  /**
+   * Push a local event to external calendar.
+   */
+  pushEvent: (connectionId: string, eventId: string) =>
+    request<{ success: boolean }>(`/api/calendar-sync/connections/${connectionId}/push`, {
+      method: 'POST',
+      body: JSON.stringify({ eventId }),
+    }),
+
+  /**
+   * Sync (create/update) an event to a specific external calendar connection.
+   */
+  syncEventToConnection: (connectionId: string, eventId: string) =>
+    request<{ success: boolean }>(
+      `/api/calendar-sync/connections/${connectionId}/events/${eventId}`,
+      { method: 'PUT' },
+    ),
+
+  /**
+   * Delete an event from a specific external calendar connection.
+   */
+  deleteEventFromConnection: (connectionId: string, eventId: string) =>
+    request<EmptyResponse>(`/api/calendar-sync/connections/${connectionId}/events/${eventId}`, {
+      method: 'DELETE',
+    }),
+
+  /**
+   * Sync an event to all bidirectional connections.
+   */
+  syncEventToAll: (eventId: string) =>
+    request<{ success: boolean }>(`/api/calendar-sync/events/${eventId}`, {
+      method: 'PUT',
+    }),
+
+  /**
+   * Delete an event from all bidirectional connections.
+   */
+  deleteEventFromAll: (eventId: string) =>
+    request<EmptyResponse>(`/api/calendar-sync/events/${eventId}`, {
+      method: 'DELETE',
+    }),
+
+  /**
+   * Disconnect a calendar provider.
+   */
+  disconnect: (connectionId: string) =>
+    request<EmptyResponse>(`/api/calendar-sync/connections/${connectionId}`, {
+      method: 'DELETE',
+    }),
+};
+
+/**
+ * Query keys for calendar sync.
+ */
+export const calendarSyncKeys = {
+  all: ['calendar-sync'] as const,
+  connections: () => [...calendarSyncKeys.all, 'connections'] as const,
 };

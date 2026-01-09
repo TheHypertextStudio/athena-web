@@ -24,6 +24,7 @@ import {
   useUndoableUpdateTimeBlock,
   useUndoableDeleteTimeBlock,
 } from './useTimeBlocks';
+import { useCalendarPush } from './useCalendarSync';
 import {
   toCalendarEntries,
   calendarEntryToEventInput,
@@ -77,6 +78,9 @@ export function useCalendarData({ date }: UseCalendarDataOptions): UseCalendarDa
   const snackbar = useSnackbar();
   const { startDate, endDate } = getDayBounds(date);
 
+  // Calendar sync integration
+  const { hasBidirectionalSync, syncEvent, deleteEvent: deleteFromExternal } = useCalendarPush();
+
   // Fetch events and time blocks
   const eventsQuery = useEventsForDay(date);
   const timeBlocksQuery = useTimeBlocksForDay(date);
@@ -100,14 +104,19 @@ export function useCalendarData({ date }: UseCalendarDataOptions): UseCalendarDa
   const createEntry = useCallback(
     async (entry: Omit<CalendarEntry, 'id'>) => {
       if (entry.type === 'event') {
-        await createEvent.mutateAsync(calendarEntryToEventInput(entry));
+        const result = await createEvent.mutateAsync(calendarEntryToEventInput(entry));
         snackbar.show({ message: 'Event created' });
+
+        // Sync to external calendars if bidirectional sync is enabled
+        if (hasBidirectionalSync) {
+          syncEvent(result.data.id);
+        }
       } else {
         await createTimeBlock.mutateAsync(calendarEntryToTimeBlockInput(entry));
         snackbar.show({ message: 'Time block created' });
       }
     },
-    [createEvent, createTimeBlock, snackbar],
+    [createEvent, createTimeBlock, snackbar, hasBidirectionalSync, syncEvent],
   );
 
   // Update entry callback
@@ -118,6 +127,11 @@ export function useCalendarData({ date }: UseCalendarDataOptions): UseCalendarDa
           id: entryId,
           data: calendarUpdateToEventUpdate(updates),
         });
+
+        // Sync update to external calendars if bidirectional sync is enabled
+        if (hasBidirectionalSync) {
+          syncEvent(entryId);
+        }
       } else {
         await updateTimeBlock.mutateAsync({
           id: entryId,
@@ -125,7 +139,7 @@ export function useCalendarData({ date }: UseCalendarDataOptions): UseCalendarDa
         });
       }
     },
-    [updateEvent, updateTimeBlock],
+    [updateEvent, updateTimeBlock, hasBidirectionalSync, syncEvent],
   );
 
   // Delete entry callback
@@ -136,6 +150,12 @@ export function useCalendarData({ date }: UseCalendarDataOptions): UseCalendarDa
       if (!entry) return;
 
       if (type === 'event') {
+        // Delete from external calendars BEFORE local delete
+        // (so the mapping still exists when we try to find it)
+        if (hasBidirectionalSync) {
+          deleteFromExternal(entryId);
+        }
+
         // Get event data from cache or entry
         const events = eventsQuery.data?.data ?? [];
         const eventData = events.find((e) => e.id === entryId);
@@ -153,7 +173,16 @@ export function useCalendarData({ date }: UseCalendarDataOptions): UseCalendarDa
         }
       }
     },
-    [deleteEvent, deleteTimeBlock, snackbar, entries, eventsQuery.data, timeBlocksQuery.data],
+    [
+      deleteEvent,
+      deleteTimeBlock,
+      snackbar,
+      entries,
+      eventsQuery.data,
+      timeBlocksQuery.data,
+      hasBidirectionalSync,
+      deleteFromExternal,
+    ],
   );
 
   // Move entry callback (convenience wrapper around updateEntry)

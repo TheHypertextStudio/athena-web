@@ -218,6 +218,163 @@ app.post(
 );
 
 /**
+ * PUT /calendar-sync/connections/:id/events/:eventId
+ * Sync (create or update) an event to external calendar.
+ * If event doesn't exist in external calendar, creates it.
+ * If it exists, updates it.
+ */
+app.put('/connections/:id/events/:eventId', async (c) => {
+  const userId = getUserId(c);
+  const connectionId = c.req.param('id');
+  const eventId = c.req.param('eventId');
+
+  const service = getCalendarSyncService();
+
+  try {
+    // pushEvent handles both create and update (checks for existing mapping)
+    await service.pushEvent(connectionId, userId, eventId);
+    return c.json({ success: true });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : 'Event sync failed',
+      },
+      500,
+    );
+  }
+});
+
+/**
+ * DELETE /calendar-sync/connections/:id/events/:eventId
+ * Delete an event from external calendar.
+ */
+app.delete('/connections/:id/events/:eventId', async (c) => {
+  const userId = getUserId(c);
+  const connectionId = c.req.param('id');
+  const eventId = c.req.param('eventId');
+
+  const service = getCalendarSyncService();
+
+  try {
+    await service.pushEventDelete(connectionId, userId, eventId);
+    return c.body(null, 204);
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : 'Event delete failed',
+      },
+      500,
+    );
+  }
+});
+
+/**
+ * POST /calendar-sync/sync-all
+ * Trigger sync for all connections.
+ */
+app.post('/sync-all', async (c) => {
+  const userId = getUserId(c);
+  const service = getCalendarSyncService();
+
+  try {
+    const connections = await service.getConnections(userId);
+    const results = await Promise.allSettled(
+      connections.map((conn) => service.sync(conn.id, userId)),
+    );
+
+    const syncResults = results.map((result, index) => {
+      const connection = connections[index];
+      if (!connection) {
+        return { connectionId: '', provider: '', success: false, error: 'Connection not found' };
+      }
+      if (result.status === 'fulfilled') {
+        return {
+          connectionId: connection.id,
+          provider: connection.provider,
+          success: result.value.success,
+          eventsCreated: result.value.eventsCreated,
+          eventsUpdated: result.value.eventsUpdated,
+          eventsDeleted: result.value.eventsDeleted,
+          errors: result.value.errors,
+        };
+      } else {
+        return {
+          connectionId: connection.id,
+          provider: connection.provider,
+          success: false,
+          error: result.reason instanceof Error ? result.reason.message : 'Unknown error',
+        };
+      }
+    });
+
+    const allSuccess = syncResults.every((r) => r.success);
+
+    return c.json({
+      success: allSuccess,
+      data: syncResults,
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : 'Sync all failed',
+      },
+      500,
+    );
+  }
+});
+
+/**
+ * PUT /calendar-sync/events/:eventId
+ * Sync an event to all bidirectional connections.
+ */
+app.put('/events/:eventId', async (c) => {
+  const userId = getUserId(c);
+  const eventId = c.req.param('eventId');
+
+  const service = getCalendarSyncService();
+
+  try {
+    await service.pushEventToAllConnections(userId, eventId, 'update');
+    return c.json({ success: true });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : 'Event sync failed',
+      },
+      500,
+    );
+  }
+});
+
+/**
+ * DELETE /calendar-sync/events/:eventId
+ * Delete an event from all bidirectional connections.
+ */
+app.delete('/events/:eventId', async (c) => {
+  const userId = getUserId(c);
+  const eventId = c.req.param('eventId');
+
+  const service = getCalendarSyncService();
+
+  try {
+    await service.pushEventToAllConnections(userId, eventId, 'delete');
+    return c.body(null, 204);
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : 'Event delete failed',
+      },
+      500,
+    );
+  }
+});
+
+/**
  * DELETE /calendar-sync/connections/:id
  * Disconnect a calendar provider.
  */

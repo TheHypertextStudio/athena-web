@@ -44,6 +44,10 @@ check_prerequisites() {
         missing+=("openssl")
     fi
 
+    if ! command -v jq &> /dev/null; then
+        missing+=("jq (brew install jq)")
+    fi
+
     if [[ ${#missing[@]} -gt 0 ]]; then
         log_error "Missing required tools:"
         for tool in "${missing[@]}"; do
@@ -149,11 +153,99 @@ select_gcp_region() {
 }
 
 # ─────────────────────────────────────────────────────────────────
+# Supabase Database Provisioning
+# ─────────────────────────────────────────────────────────────────
+
+provision_supabase_database() {
+    local project_name="$1"
+    local gcp_region="$2"
+
+    # Map GCP region to Supabase region
+    local supabase_region
+    case "${gcp_region}" in
+        us-central1|us-east1|us-east4|us-west1|us-west2|us-west3|us-west4|us-south1|us-east5)
+            supabase_region="us-east-1"
+            ;;
+        europe-west1|europe-west2|europe-west3|europe-west4|europe-west6|europe-north1|europe-central2|europe-southwest1|europe-west8|europe-west9|europe-west10|europe-west12|europe-north2)
+            supabase_region="eu-west-1"
+            ;;
+        asia-east1|asia-east2|asia-northeast1|asia-northeast2|asia-northeast3|asia-south1|asia-south2|asia-southeast1|asia-southeast2|asia-southeast3)
+            supabase_region="ap-southeast-1"
+            ;;
+        australia-southeast1|australia-southeast2)
+            supabase_region="ap-southeast-2"
+            ;;
+        southamerica-east1|southamerica-west1)
+            supabase_region="sa-east-1"
+            ;;
+        *)
+            supabase_region="us-east-1"
+            ;;
+    esac
+
+    log_info "Creating Supabase project in region: ${supabase_region}" >&2
+
+    # Generate a secure database password
+    local db_password
+    db_password=$(openssl rand -base64 24 | tr -d '/+=')
+
+    # Create the project
+    local create_output
+    if ! create_output=$(supabase projects create "${project_name}" \
+        --db-password "${db_password}" \
+        --region "${supabase_region}" \
+        --org-id "$(supabase orgs list --output json 2>/dev/null | jq -r '.[0].id // empty')" \
+        2>&1); then
+        log_error "Failed to create Supabase project: ${create_output}" >&2
+        return 1
+    fi
+
+    log_success "Supabase project created" >&2
+
+    # Wait for project to be ready
+    log_info "Waiting for project to initialize (this may take 1-2 minutes)..." >&2
+    sleep 30
+
+    # Get project reference
+    local project_ref
+    project_ref=$(supabase projects list --output json 2>/dev/null | jq -r ".[] | select(.name == \"${project_name}\") | .id // empty")
+
+    if [[ -z "${project_ref}" ]]; then
+        log_error "Could not find project reference" >&2
+        return 1
+    fi
+
+    # Construct the pooled connection string (recommended for serverless)
+    # Format: postgresql://postgres.[PROJECT_REF]:[PASSWORD]@aws-0-[REGION].pooler.supabase.com:6543/postgres
+    local database_url="postgresql://postgres.${project_ref}:${db_password}@aws-0-${supabase_region}.pooler.supabase.com:6543/postgres?sslmode=require"
+
+    log_success "Database URL generated" >&2
+    echo "${database_url}"
+}
+
+select_database_option() {
+    echo "" >&2
+    echo "How do you want to configure the database?" >&2
+    echo "" >&2
+    echo "  1) Create new Supabase database (recommended)" >&2
+    echo "  2) Enter existing DATABASE_URL manually" >&2
+    echo "  3) Skip (configure later in GCP Secret Manager)" >&2
+    echo "" >&2
+
+    local selection
+    read -rp "Enter number [1]: " selection </dev/tty
+    selection=${selection:-1}
+
+    echo "${selection}"
+}
+
+# ─────────────────────────────────────────────────────────────────
 # Secret Collection
 # ─────────────────────────────────────────────────────────────────
 
 collect_secrets() {
     local env_file="${PROJECT_ROOT}/apps/api/.env"
+    local gcp_region="${1:-us-central1}"
 
     echo ""
     echo "─────────────────────────────────────────────────────────────"
@@ -179,10 +271,56 @@ collect_secrets() {
 
     # DATABASE_URL
     if [[ -z "${DATABASE_URL:-}" ]]; then
-        echo ""
-        log_info "DATABASE_URL - PostgreSQL connection string"
-        echo "  Format: postgresql://USER:PASSWORD@HOST:PORT/DATABASE"
-        read -rp "  Enter DATABASE_URL: " DATABASE_URL
+        local db_option
+        db_option=$(select_database_option)
+
+        case "${db_option}" in
+            1)
+                # Check for Supabase CLI
+                if ! command -v supabase &> /dev/null; then
+                    log_error "Supabase CLI not installed. Install it: brew install supabase/tap/supabase"
+                    log_info "Falling back to manual entry..."
+                    echo ""
+                    log_info "DATABASE_URL - PostgreSQL connection string"
+                    echo "  Format: postgresql://USER:PASSWORD@HOST:PORT/DATABASE"
+                    read -rp "  Enter DATABASE_URL: " DATABASE_URL
+                elif ! supabase projects list &> /dev/null; then
+                    log_error "Not logged in to Supabase. Run: supabase login"
+                    log_info "Falling back to manual entry..."
+                    echo ""
+                    log_info "DATABASE_URL - PostgreSQL connection string"
+                    echo "  Format: postgresql://USER:PASSWORD@HOST:PORT/DATABASE"
+                    read -rp "  Enter DATABASE_URL: " DATABASE_URL
+                else
+                    echo ""
+                    read -rp "  Enter Supabase project name [athena-api]: " supabase_project_name
+                    supabase_project_name=${supabase_project_name:-athena-api}
+
+                    DATABASE_URL=$(provision_supabase_database "${supabase_project_name}" "${gcp_region}")
+                    if [[ -z "${DATABASE_URL}" ]]; then
+                        log_error "Failed to provision Supabase database"
+                        log_info "Please enter DATABASE_URL manually"
+                        read -rp "  Enter DATABASE_URL: " DATABASE_URL
+                    else
+                        log_success "DATABASE_URL: [provisioned via Supabase]"
+                    fi
+                fi
+                ;;
+            2)
+                echo ""
+                log_info "DATABASE_URL - PostgreSQL connection string"
+                echo "  Format: postgresql://USER:PASSWORD@HOST:PORT/DATABASE"
+                read -rp "  Enter DATABASE_URL: " DATABASE_URL
+                ;;
+            3)
+                log_warn "Skipping DATABASE_URL - you must set it manually in GCP Secret Manager"
+                DATABASE_URL="PLACEHOLDER_SET_IN_GCP_SECRET_MANAGER"
+                ;;
+            *)
+                log_error "Invalid selection, using manual entry"
+                read -rp "  Enter DATABASE_URL: " DATABASE_URL
+                ;;
+        esac
     else
         log_success "DATABASE_URL: [imported from .env]"
     fi
@@ -523,8 +661,8 @@ main() {
     region=$(select_gcp_region)
     log_success "Selected region: ${region}"
 
-    # Collect application secrets
-    collect_secrets
+    # Collect application secrets (pass region for Supabase region mapping)
+    collect_secrets "${region}"
 
     # Summary and confirmation
     echo ""

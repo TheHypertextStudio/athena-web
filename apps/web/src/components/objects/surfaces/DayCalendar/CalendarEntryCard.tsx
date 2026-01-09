@@ -1,12 +1,13 @@
 'use client';
 
 import type { MouseEvent } from 'react';
+import { useMemo, useEffect } from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
 import GridViewOutlinedIcon from '@mui/icons-material/GridViewOutlined';
 import { cn } from '@/lib/utils';
-import { getYFromTime, formatTime } from '@/lib/calendar-utils';
+import { getYFromTime, formatTime, MIN_SLOT_MINUTES } from '@/lib/calendar-utils';
 import type { CalendarEntry, LinkedTask } from './types';
 
 // =============================================================================
@@ -61,6 +62,13 @@ export interface CalendarEntryCardProps {
   onContextMenu?: (e: MouseEvent) => void;
   onTaskClick?: (task: LinkedTask, e: MouseEvent) => void;
   onResizeStart?: (edge: 'top' | 'bottom', e: MouseEvent) => void;
+  /** Preview mode - used for entries being created */
+  isPreview?: boolean;
+  /** Callback when preview entry is dragged to new position */
+  onPreviewMove?: (newStart: Date, newEnd: Date) => void;
+  /** Bounds for dragging */
+  date?: Date;
+  endHour?: number;
 }
 
 export function CalendarEntryCard({
@@ -75,6 +83,10 @@ export function CalendarEntryCard({
   onContextMenu,
   onTaskClick,
   onResizeStart,
+  isPreview,
+  onPreviewMove,
+  date,
+  endHour = 24,
 }: CalendarEntryCardProps) {
   const baseTop = getYFromTime(entry.startTime, startHour, hourHeight);
   const bottom = getYFromTime(entry.endTime, startHour, hourHeight);
@@ -87,11 +99,15 @@ export function CalendarEntryCard({
   const isTimeBlock = entry.type === 'time-block';
   const hasTasks = isTimeBlock && entry.tasks && entry.tasks.length > 0;
 
+  // Use synthetic ID for preview entries
+  const draggableId = isPreview ? 'preview-entry' : entry.id;
+
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: entry.id,
+    id: draggableId,
     data: {
-      type: entry.type,
+      type: isPreview ? 'preview' : entry.type,
       entry,
+      isPreview,
     },
   });
 
@@ -103,6 +119,60 @@ export function CalendarEntryCard({
         y: Math.round(transform.y / (hourHeight / 12)) * (hourHeight / 12),
       }
     : null;
+
+  // Calculate preview times during drag
+  const dragPreviewTimes = useMemo(() => {
+    if (!isDragging || !snappedTransform) return null;
+
+    const pixelsPerMinute = hourHeight / 60;
+    const deltaMinutes =
+      Math.round(snappedTransform.y / pixelsPerMinute / MIN_SLOT_MINUTES) * MIN_SLOT_MINUTES;
+
+    if (deltaMinutes === 0) return null;
+
+    const duration = entry.endTime.getTime() - entry.startTime.getTime();
+    let newStart = new Date(entry.startTime.getTime() + deltaMinutes * 60 * 1000);
+    let newEnd = new Date(newStart.getTime() + duration);
+
+    // Clamp to bounds if date is provided
+    if (date) {
+      const minTime = new Date(date);
+      minTime.setHours(startHour, 0, 0, 0);
+      const maxTime = new Date(date);
+      maxTime.setHours(endHour, 0, 0, 0);
+
+      if (newStart < minTime) {
+        newStart = minTime;
+        newEnd = new Date(minTime.getTime() + duration);
+      }
+      if (newEnd > maxTime) {
+        newEnd = maxTime;
+        newStart = new Date(maxTime.getTime() - duration);
+      }
+    }
+
+    return { startTime: newStart, endTime: newEnd };
+  }, [
+    isDragging,
+    snappedTransform,
+    hourHeight,
+    entry.startTime,
+    entry.endTime,
+    date,
+    startHour,
+    endHour,
+  ]);
+
+  // Call onPreviewMove when preview is being dragged
+  useEffect(() => {
+    if (isPreview && isDragging && dragPreviewTimes && onPreviewMove) {
+      onPreviewMove(dragPreviewTimes.startTime, dragPreviewTimes.endTime);
+    }
+  }, [isPreview, isDragging, dragPreviewTimes, onPreviewMove]);
+
+  // Use preview times when dragging, otherwise use entry times
+  const displayStartTime = dragPreviewTimes?.startTime ?? entry.startTime;
+  const displayEndTime = dragPreviewTimes?.endTime ?? entry.endTime;
 
   const style = {
     top: `${String(top)}px`,
@@ -126,70 +196,94 @@ export function CalendarEntryCard({
       className={cn(
         'group absolute right-2 left-14 cursor-pointer overflow-hidden rounded-md',
         'duration-medium2 ease-emphasized-decelerate transition-[top,height]',
-        isTimeBlock ? 'bg-surface-container-highest' : 'bg-surface-container-high',
-        selected && 'ring-primary ring-2',
-        isDragging && 'ring-primary z-50 opacity-90 ring-2 transition-none',
+        isPreview
+          ? 'bg-primary/20 cursor-grab'
+          : isTimeBlock
+            ? 'bg-surface-container-highest'
+            : 'bg-surface-container-high',
+        selected && !isPreview && 'ring-primary ring-2',
+        isDragging && 'ring-primary z-50 ring-2 transition-none',
+        isDragging && isPreview && 'cursor-grabbing shadow-lg',
+        isDragging && !isPreview && 'opacity-90',
         isResizing && 'ring-primary z-50 ring-2 transition-none',
       )}
-      data-entry
-      onClick={onClick}
-      onContextMenu={onContextMenu}
+      data-entry={!isPreview || undefined}
+      data-preview-entry={isPreview ? true : undefined}
+      onClick={isPreview ? undefined : onClick}
+      onContextMenu={isPreview ? undefined : onContextMenu}
       {...attributes}
       {...listeners}
     >
-      {/* Top resize handle */}
-      <div
-        className="hover:bg-primary/20 absolute top-0 right-0 left-0 z-10 h-2 cursor-ns-resize opacity-0 transition-opacity group-hover:opacity-100"
-        onMouseDown={(e) => {
-          e.stopPropagation();
-          onResizeStart?.('top', e);
-        }}
-      />
-
-      {/* Header */}
-      <div className="flex items-start gap-1.5 px-2 py-1">
-        {isTimeBlock && (
-          <GridViewOutlinedIcon
-            sx={{ fontSize: 14 }}
-            className="text-on-surface-variant mt-0.5 shrink-0"
-          />
-        )}
-        <div className="min-w-0 flex-1">
-          <p className="text-on-surface truncate text-sm font-medium">{entry.title}</p>
-          {!hasTasks && height > 40 && (
-            <p className="text-on-surface-variant truncate text-xs">
-              {formatTime(entry.startTime)} - {formatTime(entry.endTime)}
-            </p>
-          )}
-          {!isTimeBlock && entry.location && height > 40 && (
-            <p className="text-on-surface-variant flex items-center gap-1 truncate text-xs">
-              <PlaceOutlinedIcon sx={{ fontSize: 12 }} />
-              {entry.location}
-            </p>
-          )}
-        </div>
-      </div>
-
-      {/* Tasks inside time block */}
-      {hasTasks && (
-        <div className="space-y-0.5 px-2 pb-1">
-          {visibleTasks.map((task) => (
-            <TimeBlockTask key={task.id} task={task} onClick={(e) => onTaskClick?.(task, e)} />
-          ))}
-          {hiddenTaskCount > 0 && (
-            <p className="text-on-surface-variant/60 pl-4 text-[10px]">+{hiddenTaskCount} more</p>
-          )}
-        </div>
+      {/* Top resize handle - not for preview */}
+      {!isPreview && (
+        <div
+          className="hover:bg-primary/20 absolute top-0 right-0 left-0 z-10 h-2 cursor-ns-resize opacity-0 transition-opacity group-hover:opacity-100"
+          onMouseDown={(e) => {
+            e.stopPropagation();
+            onResizeStart?.('top', e);
+          }}
+        />
       )}
 
-      {/* Bottom resize handle */}
-      <div
-        className="hover:bg-primary/20 absolute right-0 bottom-0 left-0 z-10 h-2 cursor-ns-resize opacity-0 transition-opacity group-hover:opacity-100"
-        onMouseDown={(e) => {
-          e.stopPropagation();
-          onResizeStart?.('bottom', e);
-        }}
-      />
+      {/* Preview mode: simple time display */}
+      {isPreview ? (
+        <div className="flex h-full items-center justify-center px-2 py-1">
+          <p className="text-primary truncate text-sm font-medium">
+            {formatTime(displayStartTime)} - {formatTime(displayEndTime)}
+          </p>
+        </div>
+      ) : (
+        <>
+          {/* Header */}
+          <div className="flex items-start gap-1.5 px-2 py-1">
+            {isTimeBlock && (
+              <GridViewOutlinedIcon
+                sx={{ fontSize: 14 }}
+                className="text-on-surface-variant mt-0.5 shrink-0"
+              />
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="text-on-surface truncate text-sm font-medium">{entry.title}</p>
+              {!hasTasks && height > 40 && (
+                <p className="text-on-surface-variant truncate text-xs">
+                  {formatTime(displayStartTime)} - {formatTime(displayEndTime)}
+                </p>
+              )}
+              {!isTimeBlock && entry.location && height > 40 && (
+                <p className="text-on-surface-variant flex items-center gap-1 truncate text-xs">
+                  <PlaceOutlinedIcon sx={{ fontSize: 12 }} />
+                  {entry.location}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Tasks inside time block */}
+          {hasTasks && (
+            <div className="space-y-0.5 px-2 pb-1">
+              {visibleTasks.map((task) => (
+                <TimeBlockTask key={task.id} task={task} onClick={(e) => onTaskClick?.(task, e)} />
+              ))}
+              {hiddenTaskCount > 0 && (
+                <p className="text-on-surface-variant/60 pl-4 text-[10px]">
+                  +{hiddenTaskCount} more
+                </p>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Bottom resize handle - not for preview */}
+      {!isPreview && (
+        <div
+          className="hover:bg-primary/20 absolute right-0 bottom-0 left-0 z-10 h-2 cursor-ns-resize opacity-0 transition-opacity group-hover:opacity-100"
+          onMouseDown={(e) => {
+            e.stopPropagation();
+            onResizeStart?.('bottom', e);
+          }}
+        />
+      )}
     </div>
   );
 }

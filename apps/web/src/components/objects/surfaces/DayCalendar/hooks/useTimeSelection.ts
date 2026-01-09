@@ -17,6 +17,8 @@ export interface UseTimeSelectionOptions {
   startHour: number;
   endHour: number;
   hourHeight: number;
+  /** Disable starting new selections (e.g., when creation dialog is open) */
+  enabled?: boolean;
   onCreateSelection?: (start: Date, end: Date, anchorRect: DOMRect) => void;
 }
 
@@ -38,6 +40,7 @@ export function useTimeSelection({
   startHour,
   endHour,
   hourHeight,
+  enabled = true,
   onCreateSelection,
 }: UseTimeSelectionOptions): UseTimeSelectionReturn {
   const [selection, setSelection] = useState<TimeSelection | null>(null);
@@ -45,8 +48,11 @@ export function useTimeSelection({
 
   const handleMouseDown = useCallback(
     (e: MouseEvent<HTMLDivElement>) => {
-      // Don't start selection if clicking on an entry
+      // Don't start selection if disabled (e.g., creation dialog is open)
+      if (!enabled) return;
+      // Don't start selection if clicking on an entry or preview
       if ((e.target as HTMLElement).closest('[data-entry]')) return;
+      if ((e.target as HTMLElement).closest('[data-preview-entry]')) return;
       if (e.button !== 0) return; // Left click only
 
       const scrollRect = scrollRef.current?.getBoundingClientRect();
@@ -64,7 +70,7 @@ export function useTimeSelection({
       });
       setIsDragging(true);
     },
-    [scrollRef, date, startHour, hourHeight],
+    [enabled, scrollRef, date, startHour, hourHeight],
   );
 
   const handleMouseMove = useCallback(

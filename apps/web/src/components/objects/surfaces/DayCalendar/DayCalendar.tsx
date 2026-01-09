@@ -14,7 +14,7 @@
 import { useRef, useMemo, useCallback, useEffect, type MouseEvent } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { cn } from '@/lib/utils';
-import { getTimeFromY, getYFromTime } from '@/lib/calendar-utils';
+import { getTimeFromY } from '@/lib/calendar-utils';
 import { useSelection } from '../../context/SelectionContext';
 import { surfaceId } from '../../types';
 
@@ -53,6 +53,7 @@ export function DayCalendar({
   id,
   className,
   previewEntry,
+  onPreviewMove,
 }: DayCalendarProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
@@ -79,7 +80,7 @@ export function DayCalendar({
     scrollMode,
   });
 
-  // Time selection
+  // Time selection - disabled when preview entry exists (creation dialog open)
   const timeSelection = useTimeSelection({
     gridRef,
     scrollRef,
@@ -87,6 +88,7 @@ export function DayCalendar({
     startHour,
     endHour,
     hourHeight,
+    enabled: !previewEntry,
     onCreateSelection,
   });
 
@@ -280,18 +282,22 @@ export function DayCalendar({
             );
           })}
 
-          {/* Preview entry (shown while creating) */}
+          {/* Preview entry (shown while creating) - uses unified CalendarEntryCard */}
           {previewEntry && (
-            <div
-              className="bg-primary/20 pointer-events-none absolute right-3 left-12 rounded-lg"
-              style={{
-                top: getYFromTime(previewEntry.startTime, startHour, hourHeight),
-                height: Math.max(
-                  hourHeight / 4,
-                  getYFromTime(previewEntry.endTime, startHour, hourHeight) -
-                    getYFromTime(previewEntry.startTime, startHour, hourHeight),
-                ),
+            <CalendarEntryCard
+              entry={{
+                id: 'preview',
+                type: 'event',
+                title: '',
+                startTime: previewEntry.startTime,
+                endTime: previewEntry.endTime,
               }}
+              startHour={startHour}
+              hourHeight={hourHeight}
+              isPreview
+              onPreviewMove={onPreviewMove}
+              date={date}
+              endHour={endHour}
             />
           )}
 

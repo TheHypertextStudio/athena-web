@@ -85,4 +85,6 @@ export interface DayCalendarProps {
     startTime: Date;
     endTime: Date;
   } | null;
+  /** Called when the preview entry is dragged to a new position */
+  onPreviewMove?: (newStart: Date, newEnd: Date) => void;
 }

@@ -171,9 +171,16 @@ export function EntryCreationPopover({
     if (!open) return;
 
     const handleClickOutside = (e: MouseEvent) => {
-      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
-        onOpenChange(false);
+      const target = e.target as HTMLElement;
+      // Don't close if clicking on the popover itself
+      if (popoverRef.current?.contains(target)) {
+        return;
       }
+      // Don't close if clicking on the preview entry (user is dragging it)
+      if (target.closest('[data-preview-entry]')) {
+        return;
+      }
+      onOpenChange(false);
     };
 
     const timeoutId = setTimeout(() => {

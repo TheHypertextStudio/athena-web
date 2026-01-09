@@ -5,43 +5,15 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { resetMockDb, type MockDb } from '../integration/test-utils.js';
 
 // Mock database - must use vi.hoisted for proper hoisting
 const mockDb = vi.hoisted(() => {
-  const selectMock = vi.fn();
-  const deleteMock = vi.fn();
-  const updateMock = vi.fn();
-  return {
-    select: selectMock,
-    delete: deleteMock,
-    update: updateMock,
-    _reset: () => {
-      selectMock.mockReset();
-      deleteMock.mockReset();
-      updateMock.mockReset();
-      // Default implementations
-      selectMock.mockReturnValue({
-        from: vi.fn(() => ({
-          innerJoin: vi.fn(() => ({
-            where: vi.fn(() => ({
-              limit: vi.fn(() => Promise.resolve([])),
-            })),
-          })),
-          where: vi.fn(() => ({
-            limit: vi.fn(() => Promise.resolve([])),
-          })),
-        })),
-      });
-      deleteMock.mockReturnValue({
-        where: vi.fn(() => Promise.resolve()),
-      });
-      updateMock.mockReturnValue({
-        set: vi.fn(() => ({
-          where: vi.fn(() => Promise.resolve()),
-        })),
-      });
-    },
-  };
+  const factory = (globalThis as { __athenaMockDbFactory?: () => MockDb }).__athenaMockDbFactory;
+  if (!factory) {
+    throw new Error('Mock DB factory not initialized');
+  }
+  return factory();
 });
 
 const mockJwtVerify = vi.hoisted(() => vi.fn());
@@ -102,7 +74,7 @@ import {
 describe('RISC Service', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockDb._reset();
+    resetMockDb(mockDb);
     // Reset fetch mock
     global.fetch = vi.fn();
   });

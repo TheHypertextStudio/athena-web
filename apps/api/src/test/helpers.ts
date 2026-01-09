@@ -4,7 +4,6 @@
  * @packageDocumentation
  */
 
-import { vi } from 'vitest';
 import type { Context, Next } from 'hono';
 
 /**
@@ -68,63 +67,4 @@ export function createJsonRequest(
  */
 export async function parseResponse<T>(response: Response): Promise<T> {
   return response.json() as Promise<T>;
-}
-
-/**
- * Create mock database query results.
- */
-export function createMockDb() {
-  return {
-    query: {
-      initiatives: {
-        findMany: vi.fn(),
-        findFirst: vi.fn(),
-      },
-      projects: {
-        findMany: vi.fn(),
-        findFirst: vi.fn(),
-      },
-      tasks: {
-        findMany: vi.fn(),
-        findFirst: vi.fn(),
-      },
-      events: {
-        findMany: vi.fn(),
-        findFirst: vi.fn(),
-      },
-      eventParticipants: {
-        findMany: vi.fn(),
-        findFirst: vi.fn(),
-      },
-      moments: {
-        findMany: vi.fn(),
-        findFirst: vi.fn(),
-      },
-      activityStreams: {
-        findMany: vi.fn(),
-        findFirst: vi.fn(),
-      },
-      activities: {
-        findMany: vi.fn(),
-        findFirst: vi.fn(),
-      },
-      tags: {
-        findMany: vi.fn(),
-        findFirst: vi.fn(),
-      },
-    },
-    insert: vi.fn().mockReturnValue({
-      values: vi.fn().mockReturnValue({
-        onConflictDoNothing: vi.fn(),
-      }),
-    }),
-    update: vi.fn().mockReturnValue({
-      set: vi.fn().mockReturnValue({
-        where: vi.fn(),
-      }),
-    }),
-    delete: vi.fn().mockReturnValue({
-      where: vi.fn(),
-    }),
-  };
 }

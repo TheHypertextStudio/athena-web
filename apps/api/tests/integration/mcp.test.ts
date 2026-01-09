@@ -15,19 +15,7 @@ import {
   ResourceUpdatedNotificationSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { createMcpServer } from '../../src/services/mcp/server.js';
-
-type MockQueryFn<T> = ((...args: unknown[]) => Promise<T>) & {
-  mockResolvedValue: (val: T) => MockQueryFn<T>;
-  mockResolvedValueOnce: (val: T) => MockQueryFn<T>;
-  mockClear: () => void;
-};
-
-interface MockDb {
-  query: Record<string, Record<string, MockQueryFn<unknown>>>;
-  insert: ReturnType<typeof vi.fn>;
-  update: ReturnType<typeof vi.fn>;
-  delete: ReturnType<typeof vi.fn>;
-}
+import { resetMockDb, type MockDb } from './test-utils.js';
 
 const parseJson = (text: string): unknown => JSON.parse(text) as unknown;
 
@@ -43,76 +31,12 @@ const getTextContent = (content: unknown): { type: 'text'; text: string } => {
 };
 
 // Create mock database
-const mockDb = vi.hoisted((): MockDb => {
-  const mockFn = <T>(returnValue: T): MockQueryFn<T> => {
-    let currentReturn = returnValue;
-    const onceValues: T[] = [];
-    const fn = Object.assign(
-      (..._args: unknown[]) => {
-        const nextValue = onceValues.length > 0 ? onceValues.shift() : undefined;
-        const resolved = nextValue ?? currentReturn;
-        return Promise.resolve(resolved);
-      },
-      {
-        mockResolvedValue: (val: T) => {
-          currentReturn = val;
-          return fn;
-        },
-        mockResolvedValueOnce: (val: T) => {
-          onceValues.push(val);
-          return fn;
-        },
-        mockClear: () => {
-          onceValues.length = 0;
-        },
-      },
-    );
-    return fn as MockQueryFn<T>;
-  };
-  return {
-    query: {
-      initiatives: { findMany: mockFn([]), findFirst: mockFn(null) },
-      projects: { findMany: mockFn([]), findFirst: mockFn(null) },
-      tasks: { findMany: mockFn([]), findFirst: mockFn(null) },
-      events: { findMany: mockFn([]), findFirst: mockFn(null) },
-      eventParticipants: { findMany: mockFn([]), findFirst: mockFn(null) },
-      moments: { findMany: mockFn([]), findFirst: mockFn(null) },
-      activityStreams: { findMany: mockFn([]), findFirst: mockFn(null) },
-      activities: { findMany: mockFn([]), findFirst: mockFn(null) },
-      tags: { findMany: mockFn([]), findFirst: mockFn(null) },
-      timeEntries: { findMany: mockFn([]), findFirst: mockFn(null) },
-      workspaces: { findMany: mockFn([]), findFirst: mockFn(null) },
-      userSettings: { findFirst: mockFn(null) },
-      subscriptions: { findFirst: mockFn(null) },
-      linkedIntegrations: { findMany: mockFn([]), findFirst: mockFn(null) },
-      taskDependencies: { findMany: mockFn([]), findFirst: mockFn(null) },
-      projectDependencies: { findMany: mockFn([]), findFirst: mockFn(null) },
-      onboardingProgress: { findFirst: mockFn(null) },
-      users: {
-        findFirst: mockFn({
-          id: 'test-user-id',
-          name: 'Test User',
-          email: 'test@example.com',
-          emailVerified: true,
-          createdAt: new Date(),
-        }),
-      },
-    },
-    insert: vi.fn(() => ({
-      values: vi.fn(() => ({
-        onConflictDoNothing: vi.fn(() => ({})),
-        returning: vi.fn(() => Promise.resolve([{ id: 'new-id' }])),
-      })),
-    })),
-    update: vi.fn(() => ({
-      set: vi.fn(() => ({
-        where: vi.fn(() => Promise.resolve(undefined)),
-      })),
-    })),
-    delete: vi.fn(() => ({
-      where: vi.fn(() => Promise.resolve(undefined)),
-    })),
-  };
+const mockDb = vi.hoisted(() => {
+  const factory = (globalThis as { __athenaMockDbFactory?: () => MockDb }).__athenaMockDbFactory;
+  if (!factory) {
+    throw new Error('Mock DB factory not initialized');
+  }
+  return factory();
 });
 
 vi.mock('../../src/db/index.js', () => ({ db: mockDb }));
@@ -123,15 +47,7 @@ describe('MCP Server - Resources', () => {
   let clientTransport: InMemoryTransport;
 
   beforeEach(async () => {
-    // Reset mocks
-    Object.values(mockDb.query).forEach((entity) => {
-      Object.values(entity).forEach((fn) => {
-        fn.mockClear();
-      });
-    });
-    mockDb.insert.mockClear();
-    mockDb.update.mockClear();
-    mockDb.delete.mockClear();
+    resetMockDb(mockDb);
 
     // Create in-memory transport pair for testing
     [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();

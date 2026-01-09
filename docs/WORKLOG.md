@@ -7,6 +7,157 @@
 
 ## Active Tasks
 
+### [WEB-LINT-001] Web Lint Cleanup
+
+- **Status**: BLOCKED
+- **State**: VALIDATING
+- **Started**: 2026-01-05
+- **Priority**: P0
+- **Description**: Resolve remaining web lint errors with real types and safe guards to unblock frontend work.
+- **Plan**:
+
+## Plan: Web Lint Cleanup
+
+### Objective
+
+Clear all remaining `apps/web` lint errors without resorting to fake types or unsafe assertions.
+
+### Approach
+
+Iterate eslint JSON output, fix violations with local type guards and explicit conversions, and re-run lint until clean.
+
+### Steps
+
+1. Regenerate `apps/web` eslint JSON output and group by file.
+2. Fix remaining violations with real types/guards and minimal behavior changes.
+3. Re-run eslint to confirm zero errors.
+4. Run `pnpm lint` after web lint is clean and document results.
+
+### Files to Modify
+
+- `apps/web/src/**/*.{ts,tsx}`
+- `docs/WORKLOG.md`
+
+### Risks
+
+- Type guard changes could mask real runtime issues if not aligned with API shapes.
+- Some lint rules may require small refactors to avoid implicit `any`.
+
+### Validation
+
+Run `pnpm lint` and confirm `apps/web` eslint passes with zero errors.
+
+- **Blockers**: `pnpm test` fails because `jsdom` is missing for `@athena/web`; install attempt failed with `getaddrinfo ENOTFOUND registry.npmjs.org`.
+- **Notes**: `pnpm lint` and `pnpm typecheck` pass; `pnpm test` fails due to missing `jsdom` dependency in `apps/web`.
+
+### [VALIDATION-ROUTES-002] Backend Lint/Test Cleanup
+
+- **Status**: IN_PROGRESS
+- **State**: IMPLEMENTING
+- **Started**: 2026-01-05
+- **Priority**: P0
+- **Description**: Resolve remaining lint, test, and typecheck issues so backend validation passes before frontend work.
+- **Plan**:
+
+## Plan: Backend Lint/Test Cleanup
+
+### Objective
+
+Clear remaining lint violations and failing tests, then re-run validation successfully.
+
+### Approach
+
+Fix lint errors route-by-route with focused, local changes; adjust test configuration where needed to avoid false failures; re-run validation and update WORKLOG status.
+
+### Steps
+
+1. Address lint violations in `apps/api` routes and services (unused imports, unsafe `any`, template literals, non-null assertions).
+2. Fix remaining lint errors in shared/services packages (search, sync, webhooks, risc).
+3. Re-run `pnpm lint`, `pnpm typecheck`, and `pnpm test` and resolve any remaining failures.
+4. Update WORKLOG status and note validation outcomes.
+
+### Files to Modify
+
+- `apps/api/src/routes/*.ts`
+- `apps/api/src/services/**/*.ts`
+- `apps/api/tests/**`
+- `apps/web/vitest.config.ts`
+- `packages/shared/package.json`
+- `docs/WORKLOG.md`
+
+### Risks
+
+- Lint fixes could alter runtime behavior if guards are not equivalent.
+- Some routes depend on external APIs; tests may need local stubs.
+
+### Validation
+
+Run `pnpm typecheck`, `pnpm lint`, and `pnpm test`.
+
+- **Notes**: Added explicit `endTime` guard in `apps/api/src/routes/time-tracking.ts` to satisfy typecheck.
+
+### [ROUTE-MAGIC-VAL-001] Route Magic Value Cleanup
+
+- **Status**: IN_PROGRESS
+- **State**: IMPLEMENTING
+- **Started**: 2026-01-05
+- **Priority**: P1
+- **Description**: Replace hardcoded magic values in all API routes with named constants to improve consistency and auditability.
+- **Plan**:
+
+## Plan: Route Magic Value Cleanup
+
+### Objective
+
+Remove magic values in API routes by consolidating repeated literals into named constants.
+
+### Approach
+
+Inventory repeated literals (status strings, default limits, error messages, enums, timeouts) across route files, add shared constants where appropriate, and update routes to reference them while preserving API behavior.
+
+### Steps
+
+1. Inventory magic values across `apps/api/src/routes/*.ts` and group by domain (status values, pagination defaults, error messages, time units).
+2. Introduce constants in route modules or shared route constants (`apps/api/src/routes/constants.ts`) where reuse is meaningful.
+3. Update route handlers to reference constants, maintaining existing response shapes and defaults.
+4. Run typecheck/lint/tests to ensure no behavior changes or regressions.
+
+### Files to Modify
+
+- `apps/api/src/routes/*.ts`
+- `apps/api/src/routes/constants.ts` (new, if shared values are needed)
+- `docs/WORKLOG.md`
+
+### Risks
+
+- Unintended behavior changes if defaults are altered during refactor.
+- Over-centralization of constants may reduce local clarity.
+
+### Validation
+
+Run `pnpm typecheck`, `pnpm lint`, and `pnpm test`.
+
+### [ROUTE-AUDIT-NULL-001] Route Null/Undefined Handling Audit
+
+- **Status**: REVIEW
+- **State**: VALIDATING
+- **Started**: 2026-01-05
+- **Priority**: P1
+- **Description**: Remove route-level fallbacks that mask undefined/null data and validate invalid state instead of silently defaulting.
+- **Subtasks**:
+  - [x] Locate null/undefined masking patterns in routes
+  - [x] Replace silent fallbacks with explicit validation/errors where required
+  - [ ] Run validation (typecheck, lint, tests)
+- **Files Changed**:
+  - `apps/api/src/routes/account.ts`
+  - `apps/api/src/routes/ai.ts`
+  - `apps/api/src/routes/billing.ts`
+  - `apps/api/src/routes/bulk.ts`
+  - `apps/api/src/routes/integrations.ts`
+  - `apps/api/src/routes/onboarding.ts`
+- **Notes**: Validation not run yet; defaults retained where the API specifies explicit fallback behavior.
+- **Notes**: Route enums/defaults colocated in each route file; analytics/agenda defaults refactored to named values.
+
 ### [BACKEND-PLAN-001] Backend Completion Plan (TASKS.yaml)
 
 - **Status**: IN_PROGRESS
@@ -88,6 +239,35 @@ Run `pnpm typecheck`, `pnpm lint`, `pnpm test`, and `pnpm build` after each batc
 
 ## Completed Tasks
 
+### [TEST-MOCK-DB-001] Centralize DB Mocks
+
+- **Completed**: 2026-01-05
+- **Duration**: 0.2 day
+- **Summary**: Consolidated API test database mocks into a shared utility with hoisted-friendly setup and reset helpers, then migrated integration and service tests to the shared mock.
+- **Files Changed**:
+  - `apps/api/tests/integration/test-utils.ts`
+  - `apps/api/tests/setup.ts`
+  - `apps/api/tests/integration/*.test.ts`
+  - `apps/api/tests/services/risc.test.ts`
+  - `apps/api/src/test/helpers.ts`
+  - `docs/WORKLOG.md`
+- **Learnings**: Vitest hoisted mocks require a globally initialized factory to avoid import-time access errors.
+- **Retrospective**: Went well—centralization reduced repeated mock definitions; improve—capture table coverage once when new routes land; change—consider a typed helper for table presence.
+- **Validation**: `pnpm --filter @athena/api test`
+
+### [MCP-ROUTES-007] Remove MCP Subroutes
+
+- **Completed**: 2026-01-05
+- **Duration**: 0.1 day
+- **Summary**: Removed non-spec `/mcp/resources`, `/mcp/tools`, and `/mcp/prompts` routes so MCP is served only from `/mcp`.
+- **Files Changed**:
+  - `apps/api/src/routes/mcp.ts`
+  - `apps/api/src/index.ts`
+  - `docs/WORKLOG.md`
+  - `docs/engineering/deployment.md`
+- **Learnings**: Keeping MCP on a single endpoint avoids drift between static lists and the registered server surface.
+- **Retrospective**: Went well—routing simplification was straightforward; improve—document migration expectations for clients using the removed routes.
+
 ### [MCP-UTIL-005] MCP Utilities + Session Isolation
 
 - **Completed**: 2026-01-05
@@ -121,7 +301,7 @@ Run `pnpm typecheck`, `pnpm lint`, `pnpm test`, and `pnpm build` after each batc
 ### [MCP-001..004] MCP Server Spec Completion
 
 - **Completed**: 2026-01-05
-- **Summary**: Added MCP server package, completed required tools/prompts, resource templates, and updated MCP tests and legacy listings.
+- **Summary**: Added MCP server package, completed required tools/prompts, resource templates, and updated MCP tests and non-spec listings.
 - **Files Changed**:
   - `packages/mcp-server/package.json`
   - `packages/mcp-server/tsconfig.json`

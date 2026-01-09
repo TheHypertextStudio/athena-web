@@ -1,23 +1,57 @@
 # Project Athena Task Registry
 # Source of truth for all work. Programmatically readable/writable by agents.
-# Last Updated: 2026-01-04
+# Version 2.0.0 - Restructured by domain with exhaustive coverage
+# Last Updated: 2026-01-05
 
 metadata:
-  version: '1.0.0'
+  version: '2.0.0'
+  schema_version: '2'
   project: 'Project Athena'
-  last_synced: '2026-01-04T00:00:00Z'
+  last_synced: '2026-01-05T12:00:00Z'
 
-# Task statuses: backlog | active | blocked | review | completed
-# Priority: p0 (critical) | p1 (high) | p2 (medium) | p3 (low)
+  stats:
+    total_tasks: 0 # Auto-calculated
+    completed: 0
+    in_progress: 0
+    blocked: 0
+    backlog: 0
 
-tasks:
-  # ============================================================================
-  # Phase 0: Foundation (Completed)
-  # ============================================================================
+  test_stats:
+    total_tests: 514
+    coverage: 89.85
+    routes_coverage: 99.61
+    schemas_coverage: 96.11
+
+  definitions:
+    effort_sizes:
+      xs: '< 2 hours'
+      s: '2-8 hours (1 day)'
+      m: '1-3 days'
+      l: '3-5 days (1 week)'
+      xl: '1-2 weeks'
+
+    priorities:
+      p0: 'Critical - blocks deployment'
+      p1: 'High - core functionality'
+      p2: 'Medium - important but not blocking'
+      p3: 'Low - nice to have'
+
+    statuses:
+      backlog: 'Not started'
+      active: 'In progress'
+      blocked: 'Waiting on dependency'
+      review: 'Pending review/testing'
+      completed: 'Done'
+
+# =============================================================================
+# DOMAIN: Foundation (Completed)
+# =============================================================================
+foundation:
   INIT-001:
     title: 'Agent Guidelines & Documentation'
     status: completed
     priority: p0
+    effort: s
     completed_at: '2026-01-04'
     deliverables:
       - AGENTS.md
@@ -27,6 +61,7 @@ tasks:
     title: 'Monorepo Scaffolding'
     status: completed
     priority: p0
+    effort: m
     completed_at: '2026-01-04'
     deliverables:
       - Turborepo configuration
@@ -41,422 +76,2606 @@ tasks:
     title: 'CI/CD Pipeline'
     status: completed
     priority: p0
+    effort: s
     completed_at: '2026-01-04'
     deliverables:
       - GitHub Actions CI workflow
       - Semantic release workflow
       - Dependabot configuration
 
-  AUTH-001:
-    title: 'Authentication System'
+  DATA-001:
+    title: 'Database Schema & Migrations'
     status: completed
     priority: p0
+    effort: l
     completed_at: '2026-01-04'
+    description: 'Core database schema with Drizzle ORM'
+    deliverables:
+      - apps/api/src/db/schema/core.ts
+      - apps/api/src/db/index.ts
+      - apps/api/drizzle.config.ts
+      - Migration infrastructure
+
+  API-001:
+    title: 'Core API Infrastructure'
+    status: completed
+    priority: p0
+    effort: m
+    completed_at: '2026-01-04'
+    description: 'Hono server setup with middleware and routing'
+    deliverables:
+      - apps/api/src/index.ts
+      - apps/api/src/routes/index.ts
+      - apps/api/src/middleware/auth.ts
+      - Error handling middleware
+
+# =============================================================================
+# DOMAIN: Authentication & Identity
+# =============================================================================
+auth:
+  AUTH-001:
+    title: 'Core Authentication System'
+    status: completed
+    priority: p0
+    effort: l
+    completed_at: '2026-01-04'
+    user_story_refs:
+      - 'I can sign into the app using my Google Account'
+      - 'I can sign into the app using my Apple Account'
+      - 'I can sign into the app using my Microsoft account'
     deliverables:
       - Better Auth server configuration
       - OAuth providers (Google, Apple, Microsoft)
-      - Passkey/WebAuthn support
       - Auth database schema
       - Client-side auth hooks
       - Login/signup forms
 
-  # ============================================================================
-  # Phase 1: Core Platform (P0)
-  # ============================================================================
-  DATA-001:
-    title: 'Core Data Models'
+  AUTH-002:
+    title: 'Passkey/WebAuthn Support'
     status: completed
     priority: p0
+    effort: m
     completed_at: '2026-01-04'
-    dependencies: []
+    dependencies: [AUTH-001]
+    user_story_refs:
+      - 'I can add passkeys to my account'
+      - 'I can sign into my account using a platform-native passkey'
+      - 'I can sign into my account using cross-device sign in'
+      - 'I can sign into my account using passkey conditional UI'
     deliverables:
-      - apps/api/src/db/schema/core.ts
+      - WebAuthn registration flow
+      - WebAuthn authentication flow
+      - Conditional UI support
 
-  API-001:
-    title: 'Core REST Endpoints'
-    status: completed
-    priority: p0
-    completed_at: '2026-01-04'
-    dependencies: [DATA-001]
-    deliverables:
-      - apps/api/src/middleware/auth.ts
-      - apps/api/src/routes/initiatives.ts
-      - apps/api/src/routes/projects.ts
-      - apps/api/src/routes/tasks.ts
-      - apps/api/src/routes/events.ts
-      - apps/api/src/routes/moments.ts
-      - apps/api/src/routes/activities.ts
-      - apps/api/src/routes/tags.ts
-
-  DB-001:
-    title: 'Database Migrations'
-    status: completed
-    priority: p0
-    completed_at: '2026-01-04'
-    dependencies: [DATA-001]
-    deliverables:
-      - apps/api/drizzle.config.ts
-      - apps/api/drizzle/
-
-  API-002:
-    title: 'Input/Output Validation'
-    status: completed
-    priority: p0
-    completed_at: '2026-01-04'
-    dependencies: [API-001]
-    deliverables:
-      - apps/api/src/schemas/common.ts
-      - apps/api/src/schemas/initiatives.ts
-      - apps/api/src/schemas/projects.ts
-      - apps/api/src/schemas/tasks.ts
-      - apps/api/src/schemas/events.ts
-      - apps/api/src/schemas/moments.ts
-      - apps/api/src/schemas/activities.ts
-      - apps/api/src/schemas/tags.ts
-      - apps/api/src/schemas/index.ts
-
-  TEST-001:
-    title: 'API Unit Tests'
-    status: completed
-    priority: p0
-    completed_at: '2026-01-04'
-    dependencies: [API-001, API-002]
+  AUTH-003:
+    title: 'SSO Integration'
+    status: backlog
+    priority: p1
+    effort: l
+    dependencies: [AUTH-001]
+    description: 'Support organization-managed SSO for enterprise users'
+    user_story_refs:
+      - 'I can associate my account with an organization managed SSO'
     acceptance_criteria:
-      - '80% code coverage minimum'
-      - 'All endpoints have tests'
-      - 'Error cases covered'
+      - 'SAML 2.0 support'
+      - 'OIDC support'
+      - 'Account linking with existing users'
+    subtasks:
+      - id: saml-provider
+        title: 'Implement SAML 2.0 provider'
+        status: backlog
+        files:
+          - apps/api/src/auth/saml.ts
+      - id: oidc-provider
+        title: 'Implement OIDC provider'
+        status: backlog
+        files:
+          - apps/api/src/auth/oidc.ts
+    test_requirements:
+      unit_tests: 5
+      integration_tests: 3
+
+  AUTH-004:
+    title: 'Account Recovery'
+    status: backlog
+    priority: p1
+    effort: m
+    dependencies: [AUTH-001, AUTH-002]
+    description: 'Allow users to recover accounts when losing access to auth methods'
+    user_story_refs:
+      - 'I can recover my account using backup codes'
+    acceptance_criteria:
+      - 'Generate and display backup codes on account setup'
+      - 'Allow account recovery with backup code'
+      - 'Regenerate backup codes after use'
+    subtasks:
+      - id: backup-codes-gen
+        title: 'Backup code generation and storage'
+        status: backlog
+        files:
+          - apps/api/src/auth/backup-codes.ts
+      - id: recovery-flow
+        title: 'Account recovery flow with backup code'
+        status: backlog
+        files:
+          - apps/api/src/routes/auth/recovery.ts
+    test_requirements:
+      unit_tests: 4
+      integration_tests: 3
+
+  AUTH-005:
+    title: 'Session Management'
+    status: backlog
+    priority: p1
+    effort: s
+    dependencies: [AUTH-001]
+    description: 'View and manage active sessions'
+    user_story_refs:
+      - 'I can see the last used method of sign-in on any auth screen'
+    acceptance_criteria:
+      - 'List all active sessions'
+      - 'Revoke individual sessions'
+      - 'Display last sign-in method'
+    subtasks:
+      - id: sessions-list
+        title: 'GET /api/auth/sessions endpoint'
+        status: backlog
+        files:
+          - apps/api/src/routes/auth/sessions.ts
+      - id: session-revoke
+        title: 'DELETE /api/auth/sessions/:id endpoint'
+        status: backlog
+    test_requirements:
+      unit_tests: 3
+      integration_tests: 2
+
+  AUTH-006:
+    title: 'Identity Provider Linking'
+    status: backlog
+    priority: p1
+    effort: m
+    dependencies: [AUTH-001]
+    description: 'Link additional identity providers to existing account'
+    user_story_refs:
+      - 'I am offered the option to link an identity provider to an existing account'
+      - 'I receive guidance on how to proceed if I try to sign into my account using an identity provider that is not recognized'
+    acceptance_criteria:
+      - 'Detect existing accounts with same email'
+      - 'Offer to link providers'
+      - 'Handle provider conflicts gracefully'
+    subtasks:
+      - id: link-provider
+        title: 'POST /api/auth/link-provider endpoint'
+        status: backlog
+        files:
+          - apps/api/src/routes/auth/link.ts
+      - id: conflict-detection
+        title: 'Detect and handle provider conflicts'
+        status: backlog
+    test_requirements:
+      unit_tests: 4
+      integration_tests: 3
+
+# =============================================================================
+# DOMAIN: Account Data Management
+# =============================================================================
+account:
+  ACCT-001:
+    title: 'Data Export'
+    status: backlog
+    priority: p1
+    effort: l
+    dependencies: [DATA-001]
+    description: 'Export all account data in machine-readable format'
+    user_story_refs:
+      - 'I can export all my account data in a structured, machine-readable format'
+    acceptance_criteria:
+      - 'Export in JSON format with schema definitions'
+      - 'Include all user data: tasks, projects, initiatives, events, activities'
+      - 'Provide documentation for import into other tools'
+      - 'Progress indicator for large exports'
+    subtasks:
+      - id: export-endpoint
+        title: 'POST /api/account/export endpoint'
+        status: backlog
+        files:
+          - apps/api/src/routes/account.ts
+      - id: export-worker
+        title: 'Background export job processor'
+        status: backlog
+        files:
+          - apps/api/src/workers/export.ts
+      - id: export-schema
+        title: 'Export schema documentation'
+        status: backlog
+    test_requirements:
+      unit_tests: 5
+      integration_tests: 3
+
+  ACCT-002:
+    title: 'Account Deletion'
+    status: backlog
+    priority: p1
+    effort: m
+    dependencies: [AUTH-001]
+    description: 'Delete account and all associated data'
+    user_story_refs:
+      - 'I can delete my account from app-wide settings'
+    acceptance_criteria:
+      - 'Confirmation flow before deletion'
+      - 'Cascade delete all user data'
+      - 'Revoke all OAuth tokens'
+      - 'Send confirmation email'
+    subtasks:
+      - id: delete-endpoint
+        title: 'DELETE /api/account endpoint'
+        status: backlog
+        files:
+          - apps/api/src/routes/account.ts
+      - id: cascade-delete
+        title: 'Cascade deletion logic'
+        status: backlog
+    test_requirements:
+      unit_tests: 4
+      integration_tests: 2
+
+  ACCT-003:
+    title: 'Encryption at Rest'
+    status: backlog
+    priority: p2
+    effort: xl
+    dependencies: [DATA-001]
+    description: 'Enable user-controlled encryption of data at rest'
+    user_story_refs:
+      - 'I can enable and disable encryption at rest of my data'
+    acceptance_criteria:
+      - 'User can enable encryption with a key'
+      - 'Data is encrypted before storage'
+      - 'User can disable and re-encrypt'
+      - 'Key recovery mechanism'
+    subtasks:
+      - id: encryption-service
+        title: 'Encryption service implementation'
+        status: backlog
+        files:
+          - apps/api/src/services/encryption.ts
+      - id: key-management
+        title: 'User key management'
+        status: backlog
+      - id: encrypt-migration
+        title: 'Migration to encrypt existing data'
+        status: backlog
+    test_requirements:
+      unit_tests: 8
+      integration_tests: 4
+
+# =============================================================================
+# DOMAIN: Tasks
+# =============================================================================
+tasks:
+  TASK-001:
+    title: 'Core Task CRUD'
+    status: completed
+    priority: p0
+    effort: m
+    completed_at: '2026-01-04'
+    user_story_refs:
+      - 'I can create a task for myself with a title and an optional description'
+      - 'I can set a deadline for a given task'
     deliverables:
-      - apps/api/src/schemas/*.test.ts
-      - apps/api/src/test/helpers.ts
+      - apps/api/src/routes/tasks.ts
+      - apps/api/src/schemas/tasks.ts
+
+  TASK-002:
+    title: 'Task Dependencies'
+    status: completed
+    priority: p0
+    effort: m
+    completed_at: '2026-01-05'
+    dependencies: [TASK-001]
+    user_story_refs:
+      - 'I can create tasks with dependencies so I can establish order between them'
+    deliverables:
+      - apps/api/src/db/schema/core.ts (task_dependencies table)
+      - apps/api/src/routes/tasks.ts (dependency endpoints)
+      - apps/api/tests/integration/tasks.test.ts
+
+  TASK-003:
+    title: 'Recurring Tasks (RRULE)'
+    status: backlog
+    priority: p1
+    effort: l
+    dependencies: [TASK-001]
+    description: 'Support recurring tasks using iCalendar RRULE format'
+    user_story_refs:
+      - 'I can create bounded or unbounded automatically repeated occurrences'
+    acceptance_criteria:
+      - 'Store RRULE string in tasks table'
+      - 'Generate task instances from RRULE'
+      - 'Support daily, weekly, monthly, yearly patterns'
+      - 'Support exceptions (EXDATE)'
+    subtasks:
+      - id: rrule-schema
+        title: 'Add rrule column to tasks table'
+        status: backlog
+        files:
+          - apps/api/src/db/schema/core.ts
+      - id: rrule-parser
+        title: 'RRULE parsing and instance generation'
+        status: backlog
+        files:
+          - apps/api/src/lib/rrule.ts
+      - id: rrule-endpoints
+        title: 'Recurring task endpoints'
+        status: backlog
+        files:
+          - apps/api/src/routes/tasks.ts
+    test_requirements:
+      unit_tests: 10
+      integration_tests: 5
+
+  TASK-004:
+    title: 'Time Estimation'
+    status: backlog
+    priority: p1
+    effort: s
+    dependencies: [TASK-001]
+    description: 'Allow users to set time estimates for tasks'
+    user_story_refs:
+      - 'I can designate a time estimation for a task'
+    acceptance_criteria:
+      - 'estimatedMinutes field on tasks'
+      - 'Display in UI alongside task'
+    subtasks:
+      - id: estimate-schema
+        title: 'Add estimatedMinutes column to tasks'
+        status: backlog
+        files:
+          - apps/api/src/db/schema/core.ts
+      - id: estimate-api
+        title: 'Update task endpoints for estimation'
+        status: backlog
+    test_requirements:
+      unit_tests: 3
+      integration_tests: 2
+
+  TASK-005:
+    title: 'Soft Delete'
+    status: backlog
+    priority: p1
+    effort: m
+    dependencies: [TASK-001]
+    description: 'Implement soft delete for tasks (and all entities)'
+    acceptance_criteria:
+      - 'deletedAt column on all entities'
+      - 'Filter out deleted items by default'
+      - 'Restore endpoint for deleted items'
+      - 'Permanent delete after retention period'
+    subtasks:
+      - id: soft-delete-schema
+        title: 'Add deletedAt columns'
+        status: backlog
+        files:
+          - apps/api/src/db/schema/core.ts
+      - id: soft-delete-middleware
+        title: 'Query middleware to filter deleted'
+        status: backlog
+      - id: restore-endpoints
+        title: 'POST /api/*/restore endpoints'
+        status: backlog
+    test_requirements:
+      unit_tests: 5
+      integration_tests: 4
+
+  TASK-006:
+    title: 'AI Time Estimation'
+    status: backlog
+    priority: p2
+    effort: m
+    dependencies: [TASK-004, AI-001]
+    description: 'Use AI to suggest time estimates based on similar tasks'
+    user_story_refs:
+      - 'I can easily use a time estimation that was recommended by the Athena assistant'
+    acceptance_criteria:
+      - 'Suggest estimates based on task title/description'
+      - 'Learn from historical data'
+      - 'User can accept or modify suggestion'
+    subtasks:
+      - id: estimate-model
+        title: 'Time estimation ML model/prompt'
+        status: backlog
+      - id: estimate-endpoint
+        title: 'GET /api/tasks/estimate endpoint'
+        status: backlog
+    test_requirements:
+      unit_tests: 4
+      integration_tests: 2
+
+# =============================================================================
+# DOMAIN: Projects
+# =============================================================================
+projects:
+  PROJ-001:
+    title: 'Core Project CRUD'
+    status: completed
+    priority: p0
+    effort: m
+    completed_at: '2026-01-04'
+    user_story_refs:
+      - 'I can create a project to group together related work'
+      - 'I can assign one or more tasks to a project'
+    deliverables:
+      - apps/api/src/routes/projects.ts
+      - apps/api/src/schemas/projects.ts
+
+  PROJ-002:
+    title: 'Project Dependencies'
+    status: completed
+    priority: p0
+    effort: m
+    completed_at: '2026-01-05'
+    dependencies: [PROJ-001]
+    user_story_refs:
+      - 'I can define a dependency from one project to another'
+    deliverables:
+      - apps/api/src/db/schema/core.ts (project_dependencies table)
+      - apps/api/src/routes/projects.ts (dependency endpoints)
+      - apps/api/tests/integration/projects.test.ts
+
+  PROJ-003:
+    title: 'Custom Project Statuses'
+    status: backlog
+    priority: p1
+    effort: s
+    dependencies: [PROJ-001, SETTINGS-001]
+    description: 'Allow users to define custom project statuses'
+    user_story_refs:
+      - 'I can set the status of a project to one of the statuses I have defined'
+    acceptance_criteria:
+      - 'User-defined status options in settings'
+      - 'Projects reference user-defined statuses'
+    subtasks:
+      - id: custom-status-schema
+        title: 'Custom status table/enum'
+        status: backlog
+      - id: custom-status-api
+        title: 'Status CRUD endpoints'
+        status: backlog
+    test_requirements:
+      unit_tests: 4
+      integration_tests: 2
+
+# =============================================================================
+# DOMAIN: Initiatives
+# =============================================================================
+initiatives:
+  INIT-101:
+    title: 'Core Initiative CRUD'
+    status: completed
+    priority: p0
+    effort: m
+    completed_at: '2026-01-04'
+    user_story_refs:
+      - 'I can create strategic initiatives to organize projects into higher-level themes'
+    deliverables:
+      - apps/api/src/routes/initiatives.ts
+      - apps/api/src/schemas/initiatives.ts
+
+  INIT-102:
+    title: 'AI-Assisted Initiative Creation'
+    status: backlog
+    priority: p1
+    effort: l
+    dependencies: [INIT-101, AI-001]
+    description: 'Use Athena to help create and structure initiatives'
+    user_story_refs:
+      - 'I am able to use Athena to help me create initiatives'
+      - 'I can view a live draft of an initiative during initiative creation sessions'
+    acceptance_criteria:
+      - 'Chat-based initiative creation flow'
+      - 'Live preview of initiative structure'
+      - 'Suggest projects and tasks from goals'
+    subtasks:
+      - id: initiative-chat
+        title: 'Initiative creation chat endpoint'
+        status: backlog
+        files:
+          - apps/api/src/routes/initiatives.ts
+      - id: initiative-generator
+        title: 'AI initiative generator'
+        status: backlog
+        files:
+          - apps/api/src/services/ai/initiative-generator.ts
+    test_requirements:
+      unit_tests: 5
+      integration_tests: 3
+
+  INIT-103:
+    title: 'Custom Initiative Statuses'
+    status: backlog
+    priority: p1
+    effort: s
+    dependencies: [INIT-101, SETTINGS-001]
+    user_story_refs:
+      - 'I can set the status of an initiative to one of the statuses I have defined'
+    acceptance_criteria:
+      - 'User-defined status options'
+      - 'Initiatives reference custom statuses'
+    test_requirements:
+      unit_tests: 3
+      integration_tests: 2
+
+# =============================================================================
+# DOMAIN: Calendar
+# =============================================================================
+calendar:
+  CAL-001:
+    title: 'Core Calendar Events'
+    status: completed
+    priority: p0
+    effort: m
+    completed_at: '2026-01-04'
+    user_story_refs:
+      - 'I can create events on my calendar'
+    deliverables:
+      - apps/api/src/routes/events.ts
+      - apps/api/src/schemas/events.ts
+
+  CAL-002:
+    title: 'Recurring Events (RRULE)'
+    status: backlog
+    priority: p1
+    effort: l
+    dependencies: [CAL-001]
+    description: 'Support recurring events using iCalendar RRULE format'
+    user_story_refs:
+      - 'I can create bounded or unbounded automatically repeated occurrences of time blocks'
+    acceptance_criteria:
+      - 'RRULE storage on events'
+      - 'Instance generation for calendar views'
+      - 'Exception handling (cancel single occurrence)'
+    subtasks:
+      - id: event-rrule-schema
+        title: 'Add rrule column to events table'
+        status: backlog
+        files:
+          - apps/api/src/db/schema/core.ts
+      - id: event-rrule-parser
+        title: 'Event RRULE parsing'
+        status: backlog
+        files:
+          - apps/api/src/lib/rrule.ts
+    test_requirements:
+      unit_tests: 8
+      integration_tests: 4
+
+  CAL-003:
+    title: 'Timezone Support'
+    status: backlog
+    priority: p1
+    effort: m
+    dependencies: [CAL-001]
+    description: 'Proper timezone handling for events'
+    user_story_refs:
+      - 'I can change the time zone used for any calendar view'
+    acceptance_criteria:
+      - 'Store events in UTC'
+      - 'Convert to user timezone on display'
+      - 'Handle DST transitions correctly'
+    subtasks:
+      - id: timezone-storage
+        title: 'UTC storage with timezone metadata'
+        status: backlog
+      - id: timezone-conversion
+        title: 'Timezone conversion utilities'
+        status: backlog
+        files:
+          - apps/api/src/lib/timezone.ts
+    test_requirements:
+      unit_tests: 6
+      integration_tests: 3
+
+  CAL-004:
+    title: 'Multi-day Events'
+    status: backlog
+    priority: p1
+    effort: s
+    dependencies: [CAL-001]
+    user_story_refs:
+      - 'I can see calendar events that span multiple days as continuous blocks'
+    acceptance_criteria:
+      - 'Events with different start/end dates'
+      - 'Display spanning across days in calendar views'
+    test_requirements:
+      unit_tests: 4
+      integration_tests: 2
+
+  CAL-005:
+    title: 'Event Source Filtering'
+    status: backlog
+    priority: p1
+    effort: s
+    dependencies: [CAL-001, INT-001]
+    user_story_refs:
+      - 'I can filter events on a calendar view by their source'
+    acceptance_criteria:
+      - 'sourceIntegrationId field on events'
+      - 'Filter query parameter on events endpoint'
+    subtasks:
+      - id: event-source-field
+        title: 'Add sourceIntegrationId to events'
+        status: backlog
+      - id: event-source-filter
+        title: 'Filter events by source'
+        status: backlog
+    test_requirements:
+      unit_tests: 3
+      integration_tests: 2
+
+# =============================================================================
+# DOMAIN: Time Blocks
+# =============================================================================
+time_blocks:
+  TB-001:
+    title: 'Time Blocks Entity'
+    status: backlog
+    priority: p1
+    effort: m
+    dependencies: [CAL-001]
+    description: 'Separate entity for time blocks distinct from calendar events'
+    user_story_refs:
+      - 'I can designate some period of time for some arbitrary purpose'
+      - 'I can designate instances of time blocks on my calendar that I can label'
+    acceptance_criteria:
+      - 'time_blocks table separate from events'
+      - 'Label and purpose fields'
+      - 'Not visible to external calendars'
+    subtasks:
+      - id: time-blocks-schema
+        title: 'Create time_blocks table'
+        status: backlog
+        files:
+          - apps/api/src/db/schema/core.ts
+      - id: time-blocks-routes
+        title: 'Time blocks CRUD endpoints'
+        status: backlog
+        files:
+          - apps/api/src/routes/time-blocks.ts
+      - id: time-blocks-schema-validation
+        title: 'Zod schemas for time blocks'
+        status: backlog
+        files:
+          - apps/api/src/schemas/time-blocks.ts
+    test_requirements:
+      unit_tests: 6
+      integration_tests: 4
+
+  TB-002:
+    title: 'Task-Time Block Association'
+    status: backlog
+    priority: p1
+    effort: s
+    dependencies: [TB-001, TASK-001]
+    user_story_refs:
+      - 'I can assign tasks to a time block'
+    acceptance_criteria:
+      - 'Junction table or FK for task-time block'
+      - 'Endpoints to assign/unassign tasks'
+    subtasks:
+      - id: task-timeblock-schema
+        title: 'Task-time block relation'
+        status: backlog
+      - id: task-timeblock-api
+        title: 'Assignment endpoints'
+        status: backlog
+    test_requirements:
+      unit_tests: 4
+      integration_tests: 2
+
+# =============================================================================
+# DOMAIN: Calendar Sync
+# =============================================================================
+calendar_sync:
+  CALSYNC-001:
+    title: 'Google Calendar OAuth'
+    status: backlog
+    priority: p1
+    effort: m
+    dependencies: [AUTH-001, CAL-001]
+    user_story_refs:
+      - 'I can link my Google Calendar to the service'
+    acceptance_criteria:
+      - 'OAuth flow with calendar scope'
+      - 'Store refresh token securely'
+      - 'Token refresh handling'
+    subtasks:
+      - id: google-oauth
+        title: 'Google Calendar OAuth flow'
+        status: backlog
+        files:
+          - apps/api/src/integrations/google/oauth.ts
+      - id: google-token-storage
+        title: 'Token storage and refresh'
+        status: backlog
+    test_requirements:
+      unit_tests: 5
+      integration_tests: 3
+
+  CALSYNC-002:
+    title: 'Google Calendar Sync'
+    status: backlog
+    priority: p1
+    effort: l
+    dependencies: [CALSYNC-001]
+    user_story_refs:
+      - 'I am able to make changes to events in those calendars'
+    acceptance_criteria:
+      - 'Import events from Google Calendar'
+      - 'Bi-directional sync'
+      - 'Incremental sync using syncToken'
+      - 'Handle conflicts'
+    subtasks:
+      - id: google-import
+        title: 'Import Google Calendar events'
+        status: backlog
+        files:
+          - apps/api/src/integrations/google/calendar.ts
+      - id: google-export
+        title: 'Export changes to Google Calendar'
+        status: backlog
+      - id: google-webhook
+        title: 'Google Calendar webhook for push updates'
+        status: backlog
+      - id: google-sync-worker
+        title: 'Background sync worker'
+        status: backlog
+        files:
+          - apps/api/src/workers/google-calendar-sync.ts
+    test_requirements:
+      unit_tests: 8
+      integration_tests: 5
+
+  CALSYNC-003:
+    title: 'Outlook Calendar OAuth'
+    status: backlog
+    priority: p1
+    effort: m
+    dependencies: [AUTH-001, CAL-001]
+    user_story_refs:
+      - 'I can link my Outlook Calendar to the service'
+    acceptance_criteria:
+      - 'Microsoft Graph API OAuth flow'
+      - 'Calendar read/write scopes'
+    subtasks:
+      - id: outlook-oauth
+        title: 'Microsoft Graph OAuth flow'
+        status: backlog
+        files:
+          - apps/api/src/integrations/microsoft/oauth.ts
+    test_requirements:
+      unit_tests: 5
+      integration_tests: 3
+
+  CALSYNC-004:
+    title: 'Outlook Calendar Sync'
+    status: backlog
+    priority: p1
+    effort: l
+    dependencies: [CALSYNC-003]
+    acceptance_criteria:
+      - 'Import events from Outlook'
+      - 'Bi-directional sync'
+      - 'Delta query for incremental sync'
+    subtasks:
+      - id: outlook-import
+        title: 'Import Outlook events'
+        status: backlog
+        files:
+          - apps/api/src/integrations/microsoft/calendar.ts
+      - id: outlook-export
+        title: 'Export changes to Outlook'
+        status: backlog
+      - id: outlook-subscription
+        title: 'Outlook change notifications'
+        status: backlog
+    test_requirements:
+      unit_tests: 8
+      integration_tests: 5
+
+  CALSYNC-005:
+    title: 'iCloud Calendar Auth'
+    status: backlog
+    priority: p1
+    effort: m
+    dependencies: [AUTH-001, CAL-001]
+    user_story_refs:
+      - 'I can link my iCloud Calendar to the service'
+    acceptance_criteria:
+      - 'App-specific password authentication'
+      - 'CalDAV endpoint discovery'
+    subtasks:
+      - id: icloud-auth
+        title: 'iCloud CalDAV authentication'
+        status: backlog
+        files:
+          - apps/api/src/integrations/apple/auth.ts
+    test_requirements:
+      unit_tests: 4
+      integration_tests: 2
+
+  CALSYNC-006:
+    title: 'iCloud Calendar Sync'
+    status: backlog
+    priority: p1
+    effort: l
+    dependencies: [CALSYNC-005]
+    acceptance_criteria:
+      - 'CalDAV client implementation'
+      - 'Event import/export'
+      - 'Bi-directional sync'
+    subtasks:
+      - id: caldav-client
+        title: 'CalDAV client implementation'
+        status: backlog
+        files:
+          - apps/api/src/integrations/caldav/client.ts
+      - id: icloud-sync
+        title: 'iCloud sync logic'
+        status: backlog
+    test_requirements:
+      unit_tests: 8
+      integration_tests: 5
+
+  CALSYNC-007:
+    title: 'Generic CalDAV Support'
+    status: backlog
+    priority: p2
+    effort: m
+    dependencies: [CALSYNC-006]
+    user_story_refs:
+      - 'I can import any calendar to the service'
+    acceptance_criteria:
+      - 'Support any CalDAV server'
+      - 'User provides server URL and credentials'
+    subtasks:
+      - id: caldav-setup
+        title: 'CalDAV server configuration UI'
+        status: backlog
+      - id: caldav-discovery
+        title: 'CalDAV endpoint discovery'
+        status: backlog
+    test_requirements:
+      unit_tests: 5
+      integration_tests: 3
+
+# =============================================================================
+# DOMAIN: Time Tracking
+# =============================================================================
+time_tracking:
+  TIME-001:
+    title: 'Time Entry CRUD'
+    status: completed
+    priority: p0
+    effort: m
+    completed_at: '2026-01-04'
+    user_story_refs:
+      - 'I can track how much time it takes me to complete a task by manually starting a timer'
+    deliverables:
+      - apps/api/src/routes/time-tracking.ts (assumed)
+
+  TIME-002:
+    title: 'Active Timer'
+    status: backlog
+    priority: p1
+    effort: m
+    dependencies: [TIME-001]
+    description: 'Real-time timer that can be started, paused, and stopped'
+    user_story_refs:
+      - 'I can pause and resume a running timer'
+      - 'I can stop a timer and have the tracked time automatically associated with the current task'
+    acceptance_criteria:
+      - 'active_timer table for running timers'
+      - 'Start/pause/stop endpoints'
+      - 'Auto-create time entry on stop'
+    subtasks:
+      - id: active-timer-schema
+        title: 'Active timer table'
+        status: backlog
+        files:
+          - apps/api/src/db/schema/core.ts
+      - id: timer-endpoints
+        title: 'Timer control endpoints'
+        status: backlog
+        files:
+          - apps/api/src/routes/time-tracking.ts
+    test_requirements:
+      unit_tests: 6
+      integration_tests: 4
+
+  TIME-003:
+    title: 'Manual Time Entry'
+    status: backlog
+    priority: p1
+    effort: s
+    dependencies: [TIME-001]
+    user_story_refs:
+      - 'I can add time entries retroactively for work I completed but forgot to track'
+    acceptance_criteria:
+      - 'Create time entry with arbitrary start/end'
+      - 'Validate no overlapping entries'
+    test_requirements:
+      unit_tests: 4
+      integration_tests: 2
+
+  TIME-004:
+    title: 'Time Entry Editing'
+    status: backlog
+    priority: p1
+    effort: s
+    dependencies: [TIME-001]
+    user_story_refs:
+      - 'I can modify the duration and notes of a time tracking session after it has been recorded'
+      - 'I can delete time tracking entries that were created in error'
+    acceptance_criteria:
+      - 'PATCH endpoint for time entries'
+      - 'DELETE endpoint for time entries'
+      - 'Soft delete support'
+    test_requirements:
+      unit_tests: 4
+      integration_tests: 2
+
+  TIME-005:
+    title: 'Time Tracking Analytics'
+    status: backlog
+    priority: p2
+    effort: m
+    dependencies: [TIME-001]
+    user_story_refs:
+      - 'I can see a visual breakdown of how I spent every tracked minute'
+      - 'I can use a table to see a log of all of my time tracking instances'
+      - 'I can filter entries in a table by using interactive filters'
+    acceptance_criteria:
+      - 'Aggregation endpoints (by day, week, project, etc.)'
+      - 'Filter by date range, project, initiative'
+    subtasks:
+      - id: time-aggregation
+        title: 'Time aggregation queries'
+        status: backlog
+        files:
+          - apps/api/src/routes/time-tracking.ts
+      - id: time-filters
+        title: 'Advanced filtering'
+        status: backlog
+    test_requirements:
+      unit_tests: 5
+      integration_tests: 3
+
+# =============================================================================
+# DOMAIN: Daily Agenda
+# =============================================================================
+agenda:
+  AGENDA-001:
+    title: 'Agenda Generation'
+    status: backlog
+    priority: p1
+    effort: m
+    dependencies: [TASK-001, CAL-001]
+    description: 'Generate daily agenda from tasks and events'
+    user_story_refs:
+      - 'I can view an agenda of the current days events and tasks'
+      - 'I can view the status of task completion'
+    acceptance_criteria:
+      - 'GET /api/agenda endpoint'
+      - 'Combine tasks due today + events for today'
+      - 'Sort by time/priority'
+    subtasks:
+      - id: agenda-endpoint
+        title: 'Agenda generation endpoint'
+        status: backlog
+        files:
+          - apps/api/src/routes/agenda.ts
+      - id: agenda-schema
+        title: 'Agenda response schema'
+        status: backlog
+        files:
+          - apps/api/src/schemas/agenda.ts
+    test_requirements:
+      unit_tests: 5
+      integration_tests: 3
+
+  AGENDA-002:
+    title: 'Agenda Reordering'
+    status: backlog
+    priority: p1
+    effort: s
+    dependencies: [AGENDA-001]
+    description: 'Allow users to reorder agenda items'
+    acceptance_criteria:
+      - 'Store custom ordering for agenda items'
+      - 'PATCH endpoint to update order'
+    subtasks:
+      - id: agenda-order-storage
+        title: 'Agenda item ordering storage'
+        status: backlog
+      - id: agenda-order-api
+        title: 'Reorder endpoint'
+        status: backlog
+    test_requirements:
+      unit_tests: 3
+      integration_tests: 2
+
+  AGENDA-003:
+    title: 'AI Task Prioritization'
+    status: backlog
+    priority: p2
+    effort: l
+    dependencies: [AGENDA-001, AI-001]
+    user_story_refs:
+      - 'I can rely on Athena to sort the order of my tasks to prioritize initiatives'
+      - 'I can rely on Athena to balance the time I spend on tasks'
+    acceptance_criteria:
+      - 'AI-suggested task ordering'
+      - 'Balance across initiatives'
+      - 'Consider deadlines and dependencies'
+    subtasks:
+      - id: prioritization-model
+        title: 'Prioritization AI prompt/model'
+        status: backlog
+        files:
+          - apps/api/src/services/ai/prioritization.ts
+      - id: prioritization-endpoint
+        title: 'GET /api/agenda/suggestions endpoint'
+        status: backlog
+    test_requirements:
+      unit_tests: 5
+      integration_tests: 3
+
+  AGENDA-004:
+    title: 'Day Utilization Metrics'
+    status: backlog
+    priority: p2
+    effort: s
+    dependencies: [AGENDA-001, TIME-001]
+    user_story_refs:
+      - 'I can see how much of my day is utilized'
+      - 'I can visualize how much time I am spending on each of my current initiatives'
+    acceptance_criteria:
+      - 'Calculate scheduled vs available hours'
+      - 'Breakdown by initiative/project'
+    test_requirements:
+      unit_tests: 4
+      integration_tests: 2
+
+  AGENDA-005:
+    title: 'Advance Planning'
+    status: backlog
+    priority: p2
+    effort: s
+    dependencies: [AGENDA-001]
+    user_story_refs:
+      - 'I can plan the work or activities for a day in advance'
+    acceptance_criteria:
+      - 'Plan future days'
+      - 'Carry forward incomplete tasks'
+    test_requirements:
+      unit_tests: 3
+      integration_tests: 2
+
+# =============================================================================
+# DOMAIN: AI Assistant (Athena)
+# =============================================================================
+ai:
+  AI-001:
+    title: 'AI Service Foundation'
+    status: backlog
+    priority: p1
+    effort: l
+    dependencies: [AUTH-001]
+    description: 'Core AI service with multi-provider support'
+    user_story_refs:
+      - 'I can configure which LLM provider Athena uses'
+    acceptance_criteria:
+      - 'Abstract LLM provider interface'
+      - 'Anthropic Claude support'
+      - 'OpenAI GPT support'
+      - 'Provider selection in settings'
+    subtasks:
+      - id: llm-interface
+        title: 'LLM provider interface'
+        status: backlog
+        files:
+          - apps/api/src/services/ai/provider.ts
+      - id: anthropic-provider
+        title: 'Anthropic Claude provider'
+        status: backlog
+        files:
+          - apps/api/src/services/ai/providers/anthropic.ts
+      - id: openai-provider
+        title: 'OpenAI provider'
+        status: backlog
+        files:
+          - apps/api/src/services/ai/providers/openai.ts
+      - id: provider-config
+        title: 'Provider configuration'
+        status: backlog
+    test_requirements:
+      unit_tests: 8
+      integration_tests: 4
+
+  AI-002:
+    title: 'Chat Interface'
+    status: backlog
+    priority: p1
+    effort: l
+    dependencies: [AI-001]
+    description: 'Chat-based interface for Athena'
+    user_story_refs:
+      - 'I can chat with Athena using natural language'
+      - 'I can see the conversation history with Athena'
+    acceptance_criteria:
+      - 'Conversations table for chat history'
+      - 'Messages table for individual messages'
+      - 'POST /api/ai/chat endpoint'
+      - 'GET /api/ai/conversations endpoint'
+    subtasks:
+      - id: chat-schema
+        title: 'Conversations and messages tables'
+        status: backlog
+        files:
+          - apps/api/src/db/schema/ai.ts
+      - id: chat-endpoint
+        title: 'Chat API endpoint'
+        status: backlog
+        files:
+          - apps/api/src/routes/ai.ts
+      - id: chat-streaming
+        title: 'Streaming response support'
+        status: backlog
+    test_requirements:
+      unit_tests: 6
+      integration_tests: 4
+
+  AI-003:
+    title: 'Context Retrieval'
+    status: backlog
+    priority: p1
+    effort: l
+    dependencies: [AI-001]
+    description: 'Retrieve relevant context for AI queries'
+    user_story_refs:
+      - 'I can ask Athena to summarize my progress on an initiative or project'
+    acceptance_criteria:
+      - 'Retrieve tasks, projects, events relevant to query'
+      - 'RAG or semantic search for context'
+      - 'Token budget management'
+    subtasks:
+      - id: context-retrieval
+        title: 'Context retrieval service'
+        status: backlog
+        files:
+          - apps/api/src/services/ai/context.ts
+      - id: embedding-storage
+        title: 'Store embeddings for semantic search'
+        status: backlog
+    test_requirements:
+      unit_tests: 5
+      integration_tests: 3
+
+  AI-004:
+    title: 'Tool Execution'
+    status: backlog
+    priority: p1
+    effort: l
+    dependencies: [AI-002]
+    description: 'Allow AI to execute actions on behalf of user'
+    user_story_refs:
+      - 'I can ask Athena to create tasks, events, or projects on my behalf'
+      - 'I can review and approve actions Athena proposes before they are executed'
+    acceptance_criteria:
+      - 'Define tool schemas for AI'
+      - 'Execute tools with user approval'
+      - 'Approval flow before destructive actions'
+    subtasks:
+      - id: tool-definitions
+        title: 'AI tool definitions'
+        status: backlog
+        files:
+          - apps/api/src/services/ai/tools/index.ts
+      - id: tool-executor
+        title: 'Tool execution engine'
+        status: backlog
+        files:
+          - apps/api/src/services/ai/executor.ts
+      - id: approval-flow
+        title: 'Action approval flow'
+        status: backlog
+    test_requirements:
+      unit_tests: 8
+      integration_tests: 5
+
+  AI-005:
+    title: 'Schedule Analysis'
+    status: backlog
+    priority: p2
+    effort: m
+    dependencies: [AI-001, CAL-001]
+    user_story_refs:
+      - 'I can ask Athena to identify conflicts or overcommitments in my schedule'
+    acceptance_criteria:
+      - 'Detect scheduling conflicts'
+      - 'Identify overcommitment patterns'
+      - 'Suggest resolutions'
+    test_requirements:
+      unit_tests: 5
+      integration_tests: 2
+
+  AI-006:
+    title: 'Action Item Extraction'
+    status: backlog
+    priority: p2
+    effort: m
+    dependencies: [AI-001, TASK-001]
+    user_story_refs:
+      - 'I can ask Athena to generate action items from documents, emails, or notes'
+    acceptance_criteria:
+      - 'Parse text for action items'
+      - 'Create tasks from extracted items'
+      - 'Link to source document'
+    test_requirements:
+      unit_tests: 5
+      integration_tests: 3
+
+# =============================================================================
+# DOMAIN: Integrations
+# =============================================================================
+integrations:
+  INT-001:
+    title: 'Integration Management'
+    status: completed
+    priority: p0
+    effort: m
+    completed_at: '2026-01-05'
+    user_story_refs:
+      - 'I can link my Linear account to my Athena account'
+      - 'I can link my GitHub account to my Athena account'
+    deliverables:
+      - apps/api/src/routes/integrations.ts
+      - apps/api/tests/integration/integrations.test.ts
+
+  INT-002:
+    title: 'Linear Integration'
+    status: backlog
+    priority: p1
+    effort: l
+    dependencies: [INT-001]
+    description: 'Full Linear integration with bi-directional sync'
+    user_story_refs:
+      - 'I can see projects and tasks from Linear surfaced in the app'
+    acceptance_criteria:
+      - 'OAuth flow with Linear'
+      - 'Import issues as tasks'
+      - 'Sync status changes both ways'
+      - 'Webhook for real-time updates'
+    subtasks:
+      - id: linear-oauth
+        title: 'Linear OAuth implementation'
+        status: backlog
+        files:
+          - apps/api/src/integrations/linear/oauth.ts
+      - id: linear-api
+        title: 'Linear API client'
+        status: backlog
+        files:
+          - apps/api/src/integrations/linear/client.ts
+      - id: linear-sync
+        title: 'Linear sync logic'
+        status: backlog
+        files:
+          - apps/api/src/integrations/linear/sync.ts
+      - id: linear-webhook
+        title: 'Linear webhook handler'
+        status: backlog
+        files:
+          - apps/api/src/webhooks/linear.ts
+    test_requirements:
+      unit_tests: 8
+      integration_tests: 5
+
+  INT-003:
+    title: 'GitHub Integration'
+    status: backlog
+    priority: p1
+    effort: l
+    dependencies: [INT-001]
+    user_story_refs:
+      - 'I can link my GitHub account to my Athena account'
+    acceptance_criteria:
+      - 'GitHub OAuth flow'
+      - 'Import issues as tasks'
+      - 'Track commits as activities'
+    subtasks:
+      - id: github-oauth
+        title: 'GitHub OAuth implementation'
+        status: backlog
+        files:
+          - apps/api/src/integrations/github/oauth.ts
+      - id: github-api
+        title: 'GitHub API client'
+        status: backlog
+        files:
+          - apps/api/src/integrations/github/client.ts
+      - id: github-issues
+        title: 'GitHub issues import'
+        status: backlog
+      - id: github-commits
+        title: 'GitHub commits as activities'
+        status: backlog
+    test_requirements:
+      unit_tests: 8
+      integration_tests: 5
+
+  INT-004:
+    title: 'Spotify Integration'
+    status: backlog
+    priority: p2
+    effort: m
+    dependencies: [INT-001, ACTIVITY-001]
+    user_story_refs:
+      - 'I can link my Spotify account to track my listening activity'
+    acceptance_criteria:
+      - 'Spotify OAuth flow'
+      - 'Import listening history as activities'
+      - 'Periodic sync of recent plays'
+    subtasks:
+      - id: spotify-oauth
+        title: 'Spotify OAuth implementation'
+        status: backlog
+        files:
+          - apps/api/src/integrations/spotify/oauth.ts
+      - id: spotify-sync
+        title: 'Spotify listening sync'
+        status: backlog
+        files:
+          - apps/api/src/integrations/spotify/sync.ts
+    test_requirements:
+      unit_tests: 5
+      integration_tests: 3
+
+  INT-005:
+    title: 'Todoist Integration'
+    status: backlog
+    priority: p2
+    effort: l
+    dependencies: [INT-001]
+    user_story_refs:
+      - 'I can link my Todoist account to sync tasks bi-directionally'
+    acceptance_criteria:
+      - 'Todoist OAuth flow'
+      - 'Bi-directional task sync'
+      - 'Map Todoist projects to Athena projects'
+    subtasks:
+      - id: todoist-oauth
+        title: 'Todoist OAuth implementation'
+        status: backlog
+      - id: todoist-sync
+        title: 'Todoist sync logic'
+        status: backlog
+    test_requirements:
+      unit_tests: 6
+      integration_tests: 4
+
+  INT-006:
+    title: 'Toggl Integration'
+    status: backlog
+    priority: p2
+    effort: m
+    dependencies: [INT-001, TIME-001]
+    user_story_refs:
+      - 'I can link my Toggl account to import time tracking data'
+    acceptance_criteria:
+      - 'Toggl API key authentication'
+      - 'Import time entries'
+      - 'Map to Athena tasks'
+    subtasks:
+      - id: toggl-auth
+        title: 'Toggl API authentication'
+        status: backlog
+      - id: toggl-import
+        title: 'Toggl entries import'
+        status: backlog
+    test_requirements:
+      unit_tests: 5
+      integration_tests: 3
+
+  INT-007:
+    title: 'Notion Integration'
+    status: backlog
+    priority: p2
+    effort: l
+    dependencies: [INT-001]
+    user_story_refs:
+      - 'I can link my Notion workspace to see pages and databases referenced in tasks'
+    acceptance_criteria:
+      - 'Notion OAuth flow'
+      - 'Link Notion pages to tasks'
+      - 'Preview Notion content'
+    subtasks:
+      - id: notion-oauth
+        title: 'Notion OAuth implementation'
+        status: backlog
+      - id: notion-link
+        title: 'Link Notion pages'
+        status: backlog
+    test_requirements:
+      unit_tests: 5
+      integration_tests: 3
+
+  INT-008:
+    title: 'Integration Sync Status'
+    status: backlog
+    priority: p1
+    effort: s
+    dependencies: [INT-001]
+    user_story_refs:
+      - 'I can see when integrations last synced and manually trigger a sync'
+    acceptance_criteria:
+      - 'Last sync timestamp per integration'
+      - 'Manual sync trigger endpoint'
+      - 'Sync status in UI'
+    test_requirements:
+      unit_tests: 3
+      integration_tests: 2
+
+  INT-009:
+    title: 'Integration Disconnection'
+    status: backlog
+    priority: p1
+    effort: s
+    dependencies: [INT-001]
+    user_story_refs:
+      - 'I can disconnect any linked integration and choose whether to retain or delete its data'
+    acceptance_criteria:
+      - 'Delete integration tokens'
+      - 'Option to retain or delete synced data'
+      - 'Cascade cleanup of integration-sourced entities'
+    test_requirements:
+      unit_tests: 4
+      integration_tests: 2
+
+# =============================================================================
+# DOMAIN: Activity Streams
+# =============================================================================
+activities:
+  ACTIVITY-001:
+    title: 'Activity Stream CRUD'
+    status: completed
+    priority: p0
+    effort: m
+    completed_at: '2026-01-04'
+    user_story_refs:
+      - 'I can create activity streams to track different types of activities'
+    deliverables:
+      - apps/api/src/routes/activities.ts
+
+  ACTIVITY-002:
+    title: 'Manual Activity Logging'
+    status: backlog
+    priority: p1
+    effort: s
+    dependencies: [ACTIVITY-001]
+    user_story_refs:
+      - 'I can log activities manually with a type, start time, and end time'
+    acceptance_criteria:
+      - 'POST /api/activities endpoint'
+      - 'Validate start < end'
+      - 'Optional metadata field'
+    test_requirements:
+      unit_tests: 4
+      integration_tests: 2
+
+  ACTIVITY-003:
+    title: 'Activity Integration Ingestion'
+    status: backlog
+    priority: p1
+    effort: m
+    dependencies: [ACTIVITY-001, INT-001]
+    user_story_refs:
+      - 'I can connect integrations to automatically populate activity streams'
+    acceptance_criteria:
+      - 'Map integration data to activities'
+      - 'Source tracking per activity'
+    test_requirements:
+      unit_tests: 5
+      integration_tests: 3
+
+  ACTIVITY-004:
+    title: 'Activity Export'
+    status: backlog
+    priority: p2
+    effort: s
+    dependencies: [ACTIVITY-001]
+    user_story_refs:
+      - 'I can export my activity data for analysis in external tools'
+    acceptance_criteria:
+      - 'Export in CSV and JSON formats'
+      - 'Date range filter'
+    test_requirements:
+      unit_tests: 3
+      integration_tests: 2
+
+# =============================================================================
+# DOMAIN: Attachments
+# =============================================================================
+attachments:
+  ATTACH-001:
+    title: 'File Upload'
+    status: backlog
+    priority: p1
+    effort: l
+    dependencies: [AUTH-001]
+    description: 'Upload and store files with pluggable storage backends'
+    user_story_refs:
+      - 'I can attach files to tasks, projects, and initiatives'
+    acceptance_criteria:
+      - 'POST /api/attachments endpoint'
+      - 'S3-compatible storage backend'
+      - 'File size limits'
+      - 'MIME type validation'
+    subtasks:
+      - id: storage-interface
+        title: 'Storage provider interface'
+        status: backlog
+        files:
+          - apps/api/src/services/storage/provider.ts
+      - id: s3-storage
+        title: 'S3-compatible storage provider'
+        status: backlog
+        files:
+          - apps/api/src/services/storage/s3.ts
+      - id: local-storage
+        title: 'Local filesystem storage (dev)'
+        status: backlog
+        files:
+          - apps/api/src/services/storage/local.ts
+      - id: attachments-schema
+        title: 'Attachments table'
+        status: backlog
+        files:
+          - apps/api/src/db/schema/core.ts
+      - id: attachments-routes
+        title: 'Attachments API routes'
+        status: backlog
+        files:
+          - apps/api/src/routes/attachments.ts
+    test_requirements:
+      unit_tests: 8
+      integration_tests: 5
+
+  ATTACH-002:
+    title: 'Link Attachments'
+    status: backlog
+    priority: p1
+    effort: m
+    dependencies: [ATTACH-001]
+    user_story_refs:
+      - 'I can attach links with automatic preview generation'
+    acceptance_criteria:
+      - 'Attach URLs to entities'
+      - 'Fetch Open Graph metadata'
+      - 'Generate preview cards'
+    subtasks:
+      - id: link-schema
+        title: 'Link attachments schema'
+        status: backlog
+      - id: og-parser
+        title: 'Open Graph metadata parser'
+        status: backlog
+        files:
+          - apps/api/src/lib/og-parser.ts
+    test_requirements:
+      unit_tests: 5
+      integration_tests: 3
+
+  ATTACH-003:
+    title: 'Entity-Attachment Association'
+    status: backlog
+    priority: p1
+    effort: s
+    dependencies: [ATTACH-001]
+    user_story_refs:
+      - 'I can see all attachments associated with an entity'
+      - 'I can remove attachments from entities I own'
+    acceptance_criteria:
+      - 'Polymorphic attachment associations'
+      - 'List attachments for any entity'
+      - 'Delete attachments'
+    test_requirements:
+      unit_tests: 4
+      integration_tests: 3
+
+# =============================================================================
+# DOMAIN: Workspaces
+# =============================================================================
+workspaces:
+  WS-001:
+    title: 'Workspace CRUD'
+    status: backlog
+    priority: p1
+    effort: m
+    dependencies: [AUTH-001]
+    user_story_refs:
+      - 'I can create workspaces to scope or filter work'
+      - 'I can set the name of a workspace'
+      - 'I can designate a description for a workspace'
+    acceptance_criteria:
+      - 'Workspaces table'
+      - 'CRUD endpoints'
+    subtasks:
+      - id: workspace-schema
+        title: 'Workspaces table'
+        status: backlog
+        files:
+          - apps/api/src/db/schema/core.ts
+      - id: workspace-routes
+        title: 'Workspace CRUD routes'
+        status: backlog
+        files:
+          - apps/api/src/routes/workspaces.ts
+    test_requirements:
+      unit_tests: 5
+      integration_tests: 3
+
+  WS-002:
+    title: 'Workspace Scoping'
+    status: backlog
+    priority: p1
+    effort: m
+    dependencies: [WS-001]
+    user_story_refs:
+      - 'I am not restricted to only viewing information within the context of a workspace'
+    acceptance_criteria:
+      - 'Optional workspace filter on all list endpoints'
+      - 'Default to showing all items'
+    test_requirements:
+      unit_tests: 4
+      integration_tests: 3
+
+  WS-003:
+    title: 'Workspace Sharing'
+    status: backlog
+    priority: p2
+    effort: m
+    dependencies: [WS-001]
+    user_story_refs:
+      - 'I can allow others to view workspaces I have created by sharing'
+    acceptance_criteria:
+      - 'Share link generation'
+      - 'Read-only access for shared users'
+    test_requirements:
+      unit_tests: 4
+      integration_tests: 2
+
+# =============================================================================
+# DOMAIN: Search & Index
+# =============================================================================
+search:
+  SEARCH-001:
+    title: 'Full-text Search'
+    status: backlog
+    priority: p2
+    effort: l
+    dependencies: [TASK-001, PROJ-001]
+    user_story_refs:
+      - 'I have a way to search through my Index'
+    acceptance_criteria:
+      - 'Full-text search across tasks, projects, initiatives'
+      - 'Search API endpoint'
+      - 'Relevance ranking'
+    subtasks:
+      - id: search-index
+        title: 'PostgreSQL full-text search setup'
+        status: backlog
+      - id: search-endpoint
+        title: 'Search API endpoint'
+        status: backlog
+        files:
+          - apps/api/src/routes/search.ts
+    test_requirements:
+      unit_tests: 5
+      integration_tests: 3
+
+  SEARCH-002:
+    title: 'Index Discovery'
+    status: backlog
+    priority: p2
+    effort: m
+    dependencies: [SEARCH-001, ATTACH-001]
+    user_story_refs:
+      - 'I have a way to browse all data linked to all objects viewable to me'
+      - 'I can quantify how much data is associated with my account'
+    acceptance_criteria:
+      - 'Browse all attachments and links'
+      - 'Data usage statistics'
+    test_requirements:
+      unit_tests: 4
+      integration_tests: 2
+
+# =============================================================================
+# DOMAIN: User Settings
+# =============================================================================
+settings:
+  SETTINGS-001:
+    title: 'User Preferences'
+    status: completed
+    priority: p0
+    effort: m
+    completed_at: '2026-01-04'
+    user_story_refs:
+      - 'I can set my preferred name for the Athena assistant to address me'
+    deliverables:
+      - apps/api/src/routes/settings.ts
+
+  SETTINGS-002:
+    title: 'Notification Preferences'
+    status: backlog
+    priority: p1
+    effort: s
+    dependencies: [SETTINGS-001, NOTIF-001]
+    user_story_refs:
+      - 'I can set the time at which I am notified to plan or review my plan for the day'
+      - 'I can configure which types of events trigger notifications'
+      - 'I can set quiet hours during which notifications are suppressed'
+    acceptance_criteria:
+      - 'Notification channel preferences (email, push, SMS)'
+      - 'Event type preferences'
+      - 'Quiet hours configuration'
+    test_requirements:
+      unit_tests: 4
+      integration_tests: 2
+
+  SETTINGS-003:
+    title: 'AI Preferences'
+    status: backlog
+    priority: p1
+    effort: s
+    dependencies: [SETTINGS-001, AI-001]
+    user_story_refs:
+      - 'I can configure which LLM provider Athena uses'
+    acceptance_criteria:
+      - 'LLM provider selection'
+      - 'API key storage (for self-hosted)'
+    test_requirements:
+      unit_tests: 3
+      integration_tests: 2
+
+  SETTINGS-004:
+    title: 'Custom Statuses'
+    status: backlog
+    priority: p1
+    effort: m
+    dependencies: [SETTINGS-001]
+    description: 'User-defined statuses for tasks, projects, initiatives'
+    user_story_refs:
+      - 'I can set the status of a project to one of the statuses I have defined'
+    acceptance_criteria:
+      - 'Custom status table per entity type'
+      - 'CRUD for custom statuses'
+      - 'Default statuses on account creation'
+    subtasks:
+      - id: custom-status-schema
+        title: 'Custom status tables'
+        status: backlog
+        files:
+          - apps/api/src/db/schema/settings.ts
+      - id: custom-status-routes
+        title: 'Custom status CRUD routes'
+        status: backlog
+        files:
+          - apps/api/src/routes/settings.ts
+    test_requirements:
+      unit_tests: 5
+      integration_tests: 3
+
+# =============================================================================
+# DOMAIN: Notifications
+# =============================================================================
+notifications:
+  NOTIF-001:
+    title: 'Notification Service'
+    status: backlog
+    priority: p1
+    effort: l
+    dependencies: [AUTH-001]
+    description: 'Pluggable notification system with multiple channels'
+    user_story_refs:
+      - 'I can receive email notifications for upcoming deadlines'
+      - 'I can receive push notifications on my devices'
+    acceptance_criteria:
+      - 'Abstract notification provider interface'
+      - 'Email provider (Resend, SendGrid, etc.)'
+      - 'Push notification provider (Web Push)'
+    subtasks:
+      - id: notif-interface
+        title: 'Notification provider interface'
+        status: backlog
+        files:
+          - apps/api/src/services/notifications/provider.ts
+      - id: email-provider
+        title: 'Email notification provider'
+        status: backlog
+        files:
+          - apps/api/src/services/notifications/email.ts
+      - id: push-provider
+        title: 'Web Push notification provider'
+        status: backlog
+        files:
+          - apps/api/src/services/notifications/push.ts
+      - id: notif-schema
+        title: 'Notifications table'
+        status: backlog
+        files:
+          - apps/api/src/db/schema/notifications.ts
+    test_requirements:
+      unit_tests: 8
+      integration_tests: 4
+
+  NOTIF-002:
+    title: 'SMS Notifications'
+    status: backlog
+    priority: p2
+    effort: m
+    dependencies: [NOTIF-001]
+    user_story_refs:
+      - 'I can receive SMS notifications for critical reminders'
+    acceptance_criteria:
+      - 'Twilio or similar SMS provider'
+      - 'Phone number verification'
+    test_requirements:
+      unit_tests: 4
+      integration_tests: 2
+
+  NOTIF-003:
+    title: 'Slack Notifications'
+    status: backlog
+    priority: p2
+    effort: m
+    dependencies: [NOTIF-001, INT-001]
+    user_story_refs:
+      - 'I can receive Slack notifications if I have linked my Slack workspace'
+    acceptance_criteria:
+      - 'Slack webhook integration'
+      - 'Configurable message formatting'
+    test_requirements:
+      unit_tests: 4
+      integration_tests: 2
+
+  NOTIF-004:
+    title: 'Notification Snoozing'
+    status: backlog
+    priority: p2
+    effort: s
+    dependencies: [NOTIF-001]
+    user_story_refs:
+      - 'I can snooze notifications to be reminded later'
+    acceptance_criteria:
+      - 'Snooze endpoint with duration'
+      - 'Reschedule notification delivery'
+    test_requirements:
+      unit_tests: 3
+      integration_tests: 2
+
+# =============================================================================
+# DOMAIN: Real-time Sync
+# =============================================================================
+sync:
+  SYNC-001:
+    title: 'WebSocket Server'
+    status: backlog
+    priority: p1
+    effort: l
+    dependencies: [AUTH-001]
+    description: 'WebSocket server for real-time updates'
+    user_story_refs:
+      - 'I can see changes made on one device reflected immediately on other devices'
+    acceptance_criteria:
+      - 'WebSocket server with Hono'
+      - 'Authentication via ticket/token'
+      - 'Room-based subscriptions'
+      - 'Broadcast changes to connected clients'
+    subtasks:
+      - id: ws-server
+        title: 'WebSocket server setup'
+        status: backlog
+        files:
+          - apps/api/src/ws/server.ts
+      - id: ws-auth
+        title: 'WebSocket authentication'
+        status: backlog
+        files:
+          - apps/api/src/ws/auth.ts
+      - id: ws-rooms
+        title: 'Room management'
+        status: backlog
+        files:
+          - apps/api/src/ws/rooms.ts
+    test_requirements:
+      unit_tests: 6
+      integration_tests: 4
+
+  SYNC-002:
+    title: 'SSE for Notifications'
+    status: backlog
+    priority: p1
+    effort: m
+    dependencies: [AUTH-001, NOTIF-001]
+    description: 'Server-Sent Events for push notifications'
+    acceptance_criteria:
+      - 'SSE endpoint for notifications'
+      - 'Heartbeat for connection keep-alive'
+    subtasks:
+      - id: sse-endpoint
+        title: 'SSE notifications endpoint'
+        status: backlog
+        files:
+          - apps/api/src/routes/sse.ts
+    test_requirements:
+      unit_tests: 4
+      integration_tests: 2
+
+  SYNC-003:
+    title: 'Offline Support'
+    status: backlog
+    priority: p1
+    effort: xl
+    dependencies: [SYNC-001]
+    user_story_refs:
+      - 'I can work offline and have my changes sync when I reconnect'
+    acceptance_criteria:
+      - 'Client-side change queue'
+      - 'Sync on reconnection'
+      - 'Conflict detection'
+    subtasks:
+      - id: change-queue
+        title: 'Client change queue'
+        status: backlog
+      - id: sync-protocol
+        title: 'Sync protocol implementation'
+        status: backlog
+    test_requirements:
+      unit_tests: 8
+      integration_tests: 5
+
+  SYNC-004:
+    title: 'Conflict Resolution'
+    status: backlog
+    priority: p1
+    effort: l
+    dependencies: [SYNC-003]
+    user_story_refs:
+      - 'I am notified if there are sync conflicts'
+      - 'I can resolve sync conflicts by choosing which version to keep'
+    acceptance_criteria:
+      - 'Detect conflicting changes'
+      - 'Surface conflicts to user'
+      - 'Merge or override options'
+    test_requirements:
+      unit_tests: 6
+      integration_tests: 4
+
+# =============================================================================
+# DOMAIN: MCP Server
+# =============================================================================
+mcp:
+  MCP-001:
+    title: 'MCP Server Foundation'
+    status: backlog
+    priority: p1
+    effort: l
+    dependencies: [AUTH-001, TASK-001, CAL-001]
+    description: 'Model Context Protocol server for LLM tool calling'
+    acceptance_criteria:
+      - 'MCP server package'
+      - 'Authentication with Athena API'
+      - 'Resource definitions for entities'
+    subtasks:
+      - id: mcp-server
+        title: 'MCP server scaffolding'
+        status: backlog
+        files:
+          - packages/mcp-server/src/index.ts
+      - id: mcp-auth
+        title: 'MCP authentication'
+        status: backlog
+    test_requirements:
+      unit_tests: 5
+      integration_tests: 3
+
+  MCP-002:
+    title: 'MCP Task Tools'
+    status: backlog
+    priority: p1
+    effort: m
+    dependencies: [MCP-001]
+    description: 'Task operation tools for MCP'
+    acceptance_criteria:
+      - 'list_tasks tool'
+      - 'create_task tool'
+      - 'update_task tool'
+      - 'complete_task tool'
+    subtasks:
+      - id: task-tools
+        title: 'Task MCP tools'
+        status: backlog
+        files:
+          - packages/mcp-server/src/tools/tasks.ts
+    test_requirements:
+      unit_tests: 6
+      integration_tests: 3
+
+  MCP-003:
+    title: 'MCP Calendar Tools'
+    status: backlog
+    priority: p1
+    effort: m
+    dependencies: [MCP-001]
+    description: 'Calendar operation tools for MCP'
+    acceptance_criteria:
+      - 'list_events tool'
+      - 'create_event tool'
+      - 'update_event tool'
+      - 'get_availability tool'
+    subtasks:
+      - id: calendar-tools
+        title: 'Calendar MCP tools'
+        status: backlog
+        files:
+          - packages/mcp-server/src/tools/calendar.ts
+    test_requirements:
+      unit_tests: 6
+      integration_tests: 3
+
+  MCP-004:
+    title: 'MCP Prompt Templates'
+    status: backlog
+    priority: p2
+    effort: m
+    dependencies: [MCP-001]
+    description: 'Prompt templates for common queries'
+    acceptance_criteria:
+      - 'daily_summary prompt'
+      - 'task_planning prompt'
+      - 'progress_report prompt'
+    subtasks:
+      - id: prompt-templates
+        title: 'MCP prompt templates'
+        status: backlog
+        files:
+          - packages/mcp-server/src/prompts/
+    test_requirements:
+      unit_tests: 4
+      integration_tests: 2
+
+# =============================================================================
+# DOMAIN: Onboarding
+# =============================================================================
+onboarding:
+  ONBOARD-001:
+    title: 'Onboarding Progress Tracking'
+    status: completed
+    priority: p0
+    effort: m
+    completed_at: '2026-01-05'
+    user_story_refs:
+      - 'My onboarding progress is saved'
+      - 'I can skip most of onboarding if I please'
+    deliverables:
+      - apps/api/src/db/schema/core.ts (onboarding_progress table)
+      - apps/api/src/routes/onboarding.ts
+      - apps/api/tests/integration/onboarding.test.ts
+
+  ONBOARD-002:
+    title: 'AI-Generated Initial Agenda'
+    status: backlog
+    priority: p1
+    effort: m
+    dependencies: [ONBOARD-001, AI-001, INT-001]
+    description: 'Athena generates initial agenda from connected integrations'
+    user_story_refs:
+      - 'Athena uses the information provided to fetch and generate an initial agenda'
+    acceptance_criteria:
+      - 'Fetch tasks/events from connected integrations'
+      - 'AI generates suggested agenda'
+      - 'User can approve/modify before saving'
+    subtasks:
+      - id: initial-agenda-gen
+        title: 'Initial agenda generation'
+        status: backlog
+        files:
+          - apps/api/src/services/ai/onboarding.ts
+    test_requirements:
+      unit_tests: 5
+      integration_tests: 3
+
+# =============================================================================
+# DOMAIN: Focus Mode
+# =============================================================================
+focus:
+  FOCUS-001:
+    title: 'Focus Session'
+    status: backlog
+    priority: p2
+    effort: m
+    dependencies: [TASK-001, TIME-002]
+    user_story_refs:
+      - 'I can enter a focus mode'
+      - 'I can start, pause, or stop the timer associated with the task'
+      - 'I can exit focus mode using a close button'
+    acceptance_criteria:
+      - 'Focus session start/end endpoints'
+      - 'Auto-start timer on focus session start'
+      - 'Track focus sessions for analytics'
+    subtasks:
+      - id: focus-schema
+        title: 'Focus sessions table'
+        status: backlog
+        files:
+          - apps/api/src/db/schema/core.ts
+      - id: focus-routes
+        title: 'Focus session routes'
+        status: backlog
+        files:
+          - apps/api/src/routes/focus.ts
+    test_requirements:
+      unit_tests: 5
+      integration_tests: 3
+
+  FOCUS-002:
+    title: 'Focus Notes'
+    status: backlog
+    priority: p2
+    effort: s
+    dependencies: [FOCUS-001]
+    user_story_refs:
+      - 'I can take quick notes without leaving focus mode'
+    acceptance_criteria:
+      - 'Notes associated with focus sessions'
+      - 'Quick capture API'
+    test_requirements:
+      unit_tests: 3
+      integration_tests: 2
+
+# =============================================================================
+# DOMAIN: Command Palette (Client-side primarily, but API support needed)
+# =============================================================================
+command_palette:
+  CMD-001:
+    title: 'Command Search API'
+    status: backlog
+    priority: p2
+    effort: m
+    dependencies: [SEARCH-001]
+    user_story_refs:
+      - 'I can use fuzzy matching to search for actions'
+      - 'I receive autocomplete hints for matching commands'
+    acceptance_criteria:
+      - 'GET /api/commands/search endpoint'
+      - 'Fuzzy matching on action names'
+      - 'Context-aware suggestions'
+    subtasks:
+      - id: command-search
+        title: 'Command search endpoint'
+        status: backlog
+        files:
+          - apps/api/src/routes/commands.ts
+    test_requirements:
+      unit_tests: 4
+      integration_tests: 2
+
+# =============================================================================
+# DOMAIN: Subscriptions & Billing
+# =============================================================================
+billing:
+  BILL-001:
+    title: 'Stripe Integration'
+    status: backlog
+    priority: p1
+    effort: l
+    dependencies: [AUTH-001]
+    user_story_refs:
+      - 'I can view my current subscription plan'
+      - 'I can upgrade or downgrade my subscription plan'
+      - 'I can view my billing history and download invoices'
+      - 'I can update my payment method'
+    acceptance_criteria:
+      - 'Stripe Customer creation on signup'
+      - 'Checkout session for upgrades'
+      - 'Billing portal for management'
+      - 'Webhook handlers for subscription events'
+    subtasks:
+      - id: stripe-setup
+        title: 'Stripe SDK setup'
+        status: backlog
+        files:
+          - apps/api/src/services/stripe.ts
+      - id: customer-creation
+        title: 'Create Stripe customer on signup'
+        status: backlog
+      - id: checkout-endpoint
+        title: 'Checkout session endpoint'
+        status: backlog
+        files:
+          - apps/api/src/routes/billing.ts
+      - id: portal-endpoint
+        title: 'Billing portal endpoint'
+        status: backlog
+      - id: stripe-webhooks
+        title: 'Stripe webhook handlers'
+        status: backlog
+        files:
+          - apps/api/src/webhooks/stripe.ts
+    test_requirements:
+      unit_tests: 8
+      integration_tests: 5
+
+  BILL-002:
+    title: 'Subscription Cancellation'
+    status: backlog
+    priority: p1
+    effort: m
+    dependencies: [BILL-001]
+    user_story_refs:
+      - 'I can cancel my subscription and understand what data will be retained'
+    acceptance_criteria:
+      - 'Cancel subscription endpoint'
+      - 'Grace period handling'
+      - 'Data retention policy'
+    test_requirements:
+      unit_tests: 4
+      integration_tests: 2
+
+# =============================================================================
+# DOMAIN: Analytics & Reporting
+# =============================================================================
+analytics:
+  REPORT-001:
+    title: 'Productivity Analytics'
+    status: backlog
+    priority: p2
+    effort: l
+    dependencies: [TIME-001, TASK-001]
+    user_story_refs:
+      - 'I can see a visual breakdown of how I spent every tracked minute'
+      - 'I can visualize how much time I am spending on each of my current initiatives'
+    acceptance_criteria:
+      - 'Time spent aggregations'
+      - 'Task completion metrics'
+      - 'Initiative progress metrics'
+    subtasks:
+      - id: time-analytics
+        title: 'Time tracking analytics endpoint'
+        status: backlog
+        files:
+          - apps/api/src/routes/analytics.ts
+      - id: completion-metrics
+        title: 'Task completion metrics'
+        status: backlog
+      - id: initiative-metrics
+        title: 'Initiative progress metrics'
+        status: backlog
+    test_requirements:
+      unit_tests: 6
+      integration_tests: 3
+
+# =============================================================================
+# DOMAIN: API Infrastructure
+# =============================================================================
+api_infra:
+  INFRA-001:
+    title: 'API Versioning'
+    status: backlog
+    priority: p1
+    effort: m
+    dependencies: []
+    description: 'Header-based API versioning'
+    acceptance_criteria:
+      - 'Accept-Version header parsing'
+      - 'Version routing middleware'
+      - 'Graceful deprecation handling'
+    subtasks:
+      - id: version-middleware
+        title: 'API version middleware'
+        status: backlog
+        files:
+          - apps/api/src/middleware/version.ts
+    test_requirements:
+      unit_tests: 4
+      integration_tests: 2
+
+  INFRA-002:
+    title: 'Rate Limiting'
+    status: backlog
+    priority: p1
+    effort: m
+    dependencies: []
+    acceptance_criteria:
+      - 'Per-user rate limits'
+      - 'Per-endpoint rate limits'
+      - 'Rate limit headers in response'
+    subtasks:
+      - id: rate-limiter
+        title: 'Rate limiting middleware'
+        status: backlog
+        files:
+          - apps/api/src/middleware/rate-limit.ts
+    test_requirements:
+      unit_tests: 5
+      integration_tests: 3
+
+  INFRA-003:
+    title: 'Request Logging'
+    status: backlog
+    priority: p1
+    effort: s
+    dependencies: []
+    acceptance_criteria:
+      - 'Structured request/response logging'
+      - 'Request ID tracing'
+      - 'Sensitive data redaction'
+    subtasks:
+      - id: request-logging
+        title: 'Request logging middleware'
+        status: backlog
+        files:
+          - apps/api/src/middleware/logging.ts
+    test_requirements:
+      unit_tests: 3
+      integration_tests: 2
+
+# =============================================================================
+# DOMAIN: Testing
+# =============================================================================
+testing:
+  TEST-001:
+    title: 'Schema Unit Tests'
+    status: completed
+    priority: p0
+    effort: m
+    completed_at: '2026-01-05'
+    notes: 'All schemas tested'
+    deliverables:
+      - apps/api/tests/schemas/*.test.ts
 
   TEST-002:
     title: 'Integration Tests'
-    status: backlog
+    status: completed
     priority: p0
-    dependencies: [TEST-001]
+    effort: l
+    completed_at: '2026-01-05'
+    notes: '514 tests, 89.85% coverage'
+    deliverables:
+      - apps/api/tests/integration/*.test.ts
+
+  TEST-003:
+    title: 'E2E Tests'
+    status: backlog
+    priority: p2
+    effort: l
+    dependencies: [WEB-001]
+    description: 'End-to-end tests for critical user flows'
+    acceptance_criteria:
+      - 'Playwright test setup'
+      - 'Auth flow tests'
+      - 'Task CRUD flow tests'
+      - 'Calendar flow tests'
     subtasks:
-      - id: test-db-setup
-        title: 'Test database configuration'
+      - id: playwright-setup
+        title: 'Playwright configuration'
         status: backlog
-      - id: integration-suite
-        title: 'Integration test suite'
+      - id: auth-e2e
+        title: 'Authentication E2E tests'
+        status: backlog
+      - id: task-e2e
+        title: 'Task management E2E tests'
+        status: backlog
+    test_requirements:
+      e2e_tests: 10
+
+# =============================================================================
+# DOMAIN: Operations & Deployment
+# =============================================================================
+ops:
+  OPS-001:
+    title: 'Docker Configuration'
+    status: completed
+    priority: p0
+    effort: m
+    completed_at: '2026-01-05'
+    deliverables:
+      - apps/api/Dockerfile
+      - apps/api/docker-compose.yml
+      - apps/api/.env.example
+      - apps/api/.dockerignore
+
+  OPS-002:
+    title: 'Production Logging'
+    status: backlog
+    priority: p1
+    effort: m
+    dependencies: []
+    acceptance_criteria:
+      - 'Pino logger configured'
+      - 'Log aggregation ready (Datadog, etc.)'
+      - 'Error tracking (Sentry)'
+    subtasks:
+      - id: pino-setup
+        title: 'Pino logger configuration'
+        status: backlog
+        files:
+          - apps/api/src/lib/logger.ts
+      - id: sentry-setup
+        title: 'Sentry error tracking'
+        status: backlog
+    test_requirements:
+      unit_tests: 3
+      integration_tests: 1
+
+  OPS-003:
+    title: 'Health Checks'
+    status: completed
+    priority: p0
+    effort: s
+    completed_at: '2026-01-04'
+    deliverables:
+      - apps/api/src/routes/health.ts
+
+  OPS-004:
+    title: 'Database Connection Pooling'
+    status: backlog
+    priority: p1
+    effort: s
+    dependencies: [DATA-001]
+    acceptance_criteria:
+      - 'Connection pool configuration'
+      - 'Pool monitoring'
+    test_requirements:
+      unit_tests: 2
+      integration_tests: 1
+
+# =============================================================================
+# DOMAIN: Security
+# =============================================================================
+security:
+  SEC-001:
+    title: 'Security Audit'
+    status: backlog
+    priority: p1
+    effort: l
+    dependencies: [AUTH-001, API-001]
+    acceptance_criteria:
+      - 'OWASP top 10 review'
+      - 'Dependency vulnerability scan'
+      - 'Input validation audit'
+    subtasks:
+      - id: owasp-review
+        title: 'OWASP top 10 review'
+        status: backlog
+      - id: dep-audit
+        title: 'Dependency audit'
+        status: backlog
+    test_requirements:
+      security_tests: 10
+
+  SEC-002:
+    title: 'CORS Configuration'
+    status: backlog
+    priority: p1
+    effort: s
+    dependencies: []
+    acceptance_criteria:
+      - 'Environment-specific CORS origins'
+      - 'Proper credential handling'
+    test_requirements:
+      unit_tests: 3
+      integration_tests: 2
+
+  SEC-003:
+    title: 'CSP Headers'
+    status: backlog
+    priority: p1
+    effort: s
+    dependencies: []
+    acceptance_criteria:
+      - 'Content Security Policy headers'
+      - 'Frame options'
+      - 'XSS protection headers'
+    test_requirements:
+      unit_tests: 3
+      integration_tests: 1
+
+# =============================================================================
+# DOMAIN: Documentation
+# =============================================================================
+docs:
+  DOC-001:
+    title: 'API Documentation'
+    status: backlog
+    priority: p2
+    effort: l
+    dependencies: [API-001]
+    acceptance_criteria:
+      - 'OpenAPI/Swagger spec'
+      - 'Interactive API docs'
+      - 'Authentication documentation'
+    subtasks:
+      - id: openapi-spec
+        title: 'Generate OpenAPI spec'
+        status: backlog
+      - id: swagger-ui
+        title: 'Swagger UI integration'
         status: backlog
     deliverables:
-      - apps/api/tests/integration/
+      - docs/api/
 
-  # ============================================================================
-  # Phase 2: Web Application (P1)
-  # ============================================================================
+  DOC-002:
+    title: 'Integration Guides'
+    status: backlog
+    priority: p2
+    effort: m
+    dependencies: [INT-001]
+    acceptance_criteria:
+      - 'Setup guide per integration'
+      - 'OAuth flow documentation'
+    deliverables:
+      - docs/integrations/
+
+# =============================================================================
+# Web Application Domain (Frontend - keeping existing structure)
+# =============================================================================
+web:
   WEB-001:
     title: 'Dashboard UI'
     status: completed
     priority: p1
+    effort: l
     completed_at: '2026-01-04'
-    dependencies: [API-001]
-    subtasks:
-      - id: dashboard-layout
-        title: 'Dashboard layout and navigation'
-        status: completed
-      - id: overview-widgets
-        title: 'Overview widgets (tasks, events, activity)'
-        status: completed
-      - id: quick-actions
-        title: 'Quick action buttons'
-        status: completed
     deliverables:
-      - apps/web/components.json
       - apps/web/src/app/(protected)/dashboard/page.tsx
-      - apps/web/src/app/(protected)/layout.tsx
-      - apps/web/src/components/layout/
-      - apps/web/src/components/dashboard/
-      - apps/web/src/components/ui/
-      - apps/web/src/lib/api-client.ts
 
   WEB-002:
     title: 'Task Management UI'
     status: completed
     priority: p1
+    effort: l
     completed_at: '2026-01-04'
-    dependencies: [WEB-001]
-    subtasks:
-      - id: task-list
-        title: 'Task list view with filtering'
-        status: completed
-      - id: task-detail
-        title: 'Task detail view'
-        status: completed
-      - id: task-create
-        title: 'Task creation form'
-        status: completed
-      - id: task-edit
-        title: 'Task editing'
-        status: completed
-      - id: task-tags
-        title: 'Tag management'
-        status: backlog
     deliverables:
-      - apps/web/src/app/(protected)/tasks/page.tsx
-      - apps/web/src/app/(protected)/tasks/new/page.tsx
-      - apps/web/src/app/(protected)/tasks/[id]/page.tsx
-      - apps/web/src/app/(protected)/tasks/[id]/edit/page.tsx
-      - apps/web/src/components/tasks/task-form.tsx
-      - apps/web/src/components/tasks/index.ts
+      - apps/web/src/app/(protected)/tasks/
 
   WEB-003:
     title: 'Project Management UI'
     status: backlog
     priority: p1
+    effort: l
     dependencies: [WEB-002]
-    subtasks:
-      - id: project-list
-        title: 'Project list view'
-        status: backlog
-      - id: project-detail
-        title: 'Project detail with tasks'
-        status: backlog
-      - id: project-create
-        title: 'Project creation'
-        status: backlog
     deliverables:
-      - apps/web/src/app/projects/
-      - apps/web/src/components/projects/
+      - apps/web/src/app/(protected)/projects/
 
   WEB-004:
     title: 'Initiative Management UI'
     status: backlog
     priority: p1
+    effort: l
     dependencies: [WEB-003]
-    subtasks:
-      - id: initiative-hierarchy
-        title: 'Initiative hierarchy visualization'
-        status: backlog
-      - id: initiative-crud
-        title: 'Initiative CRUD'
-        status: backlog
     deliverables:
-      - apps/web/src/app/initiatives/
-      - apps/web/src/components/initiatives/
+      - apps/web/src/app/(protected)/initiatives/
 
   WEB-005:
-    title: 'Calendar/Events UI'
+    title: 'Calendar UI'
     status: backlog
     priority: p1
-    dependencies: [WEB-001]
-    subtasks:
-      - id: calendar-view
-        title: 'Calendar view (month/week/day)'
-        status: backlog
-      - id: event-crud
-        title: 'Event creation and editing'
-        status: backlog
-      - id: event-participants
-        title: 'Participant management'
-        status: backlog
+    effort: xl
+    dependencies: [WEB-001, CAL-001]
+    user_story_refs:
+      - 'I can use intuitive transitions to switch between agenda, daily, weekly, monthly view'
+      - 'I can visually zoom into or out of a calendar'
     deliverables:
-      - apps/web/src/app/calendar/
-      - apps/web/src/components/calendar/
-
-  WEB-006:
-    title: 'Moments UI'
-    status: backlog
-    priority: p1
-    dependencies: [WEB-001]
-    subtasks:
-      - id: moments-timeline
-        title: 'Timeline visualization'
-        status: backlog
-      - id: moments-crud
-        title: 'Moment creation and editing'
-        status: backlog
-    deliverables:
-      - apps/web/src/app/moments/
-      - apps/web/src/components/moments/
-
-  # ============================================================================
-  # Phase 3: MCP Integration (P1)
-  # ============================================================================
-  MCP-001:
-    title: 'MCP Server Foundation'
-    status: backlog
-    priority: p1
-    dependencies: [API-001]
-    subtasks:
-      - id: mcp-server-setup
-        title: 'MCP server scaffolding'
-        status: backlog
-      - id: task-tools
-        title: 'Task operation tools'
-        status: backlog
-      - id: project-tools
-        title: 'Project operation tools'
-        status: backlog
-      - id: event-tools
-        title: 'Event operation tools'
-        status: backlog
-      - id: context-tools
-        title: 'Context retrieval tools'
-        status: backlog
-    deliverables:
-      - packages/mcp-server/
-
-  MCP-002:
-    title: 'MCP Client SDK'
-    status: backlog
-    priority: p1
-    dependencies: [MCP-001]
-    deliverables:
-      - packages/mcp-client/
-
-  # ============================================================================
-  # Phase 4: Advanced Features (P2)
-  # ============================================================================
-  SYNC-001:
-    title: 'Real-time Updates'
-    status: backlog
-    priority: p2
-    dependencies: [API-001]
-    subtasks:
-      - id: websocket-server
-        title: 'WebSocket server setup'
-        status: backlog
-      - id: client-subscriptions
-        title: 'Client subscription hooks'
-        status: backlog
-    deliverables:
-      - apps/api/src/ws/
-      - apps/web/src/hooks/use-realtime.ts
-
-  NOTIF-001:
-    title: 'Notification System'
-    status: backlog
-    priority: p2
-    dependencies: [WEB-001]
-    subtasks:
-      - id: notification-service
-        title: 'Notification service'
-        status: backlog
-      - id: push-notifications
-        title: 'Push notification support'
-        status: backlog
-      - id: notification-ui
-        title: 'Notification UI'
-        status: backlog
-    deliverables:
-      - apps/api/src/services/notifications/
-      - apps/web/src/components/notifications/
-
-  SEARCH-001:
-    title: 'Full-text Search'
-    status: backlog
-    priority: p2
-    dependencies: [API-001]
-    deliverables:
-      - apps/api/src/routes/search.ts
-
-  REPORT-001:
-    title: 'Analytics & Reporting'
-    status: backlog
-    priority: p2
-    dependencies: [WEB-001]
-    deliverables:
-      - apps/web/src/app/analytics/
-
-  INTEG-001:
-    title: 'Calendar Integrations'
-    status: backlog
-    priority: p2
-    dependencies: [WEB-005]
-    subtasks:
-      - id: google-calendar
-        title: 'Google Calendar sync'
-        status: backlog
-      - id: apple-calendar
-        title: 'Apple Calendar sync'
-        status: backlog
-    deliverables:
-      - apps/api/src/integrations/calendar/
-
-  INTEG-002:
-    title: 'Third-party Integrations'
-    status: backlog
-    priority: p2
-    dependencies: [NOTIF-001]
-    subtasks:
-      - id: slack-integration
-        title: 'Slack integration'
-        status: backlog
-      - id: discord-integration
-        title: 'Discord integration'
-        status: backlog
-    deliverables:
-      - apps/api/src/integrations/
-
-  # ============================================================================
-  # Phase 5: Production Readiness (P2)
-  # ============================================================================
-  PERF-001:
-    title: 'Performance Optimization'
-    status: backlog
-    priority: p2
-    dependencies: []
-    subtasks:
-      - id: query-optimization
-        title: 'Database query optimization'
-        status: backlog
-      - id: caching
-        title: 'Response caching'
-        status: backlog
-      - id: cdn
-        title: 'CDN configuration'
-        status: backlog
-
-  SEC-001:
-    title: 'Security Audit'
-    status: backlog
-    priority: p2
-    dependencies: [AUTH-001, API-001]
-    subtasks:
-      - id: security-review
-        title: 'Code security review'
-        status: backlog
-      - id: dependency-audit
-        title: 'Dependency vulnerability audit'
-        status: backlog
-
-  OPS-001:
-    title: 'Production Infrastructure'
-    status: backlog
-    priority: p2
-    dependencies: []
-    subtasks:
-      - id: docker-config
-        title: 'Docker configuration'
-        status: backlog
-      - id: k8s-manifests
-        title: 'Kubernetes manifests'
-        status: backlog
-      - id: monitoring
-        title: 'Monitoring setup (Sentry)'
-        status: backlog
-      - id: logging
-        title: 'Logging infrastructure (Pino)'
-        status: backlog
-
-  DOC-001:
-    title: 'User Documentation'
-    status: backlog
-    priority: p2
-    dependencies: []
-    subtasks:
-      - id: user-guide
-        title: 'User guide'
-        status: backlog
-      - id: api-docs
-        title: 'API documentation'
-        status: backlog
-      - id: tutorials
-        title: 'Getting started tutorials'
-        status: backlog
-    deliverables:
-      - docs/user-guide/
-      - docs/api/
+      - apps/web/src/app/(protected)/calendar/

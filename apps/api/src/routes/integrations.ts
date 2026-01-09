@@ -4,6 +4,7 @@
  * @packageDocumentation
  */
 
+import * as crypto from 'node:crypto';
 import { Hono } from 'hono';
 import { eq, and } from 'drizzle-orm';
 import { db } from '../db/index.js';
@@ -268,7 +269,7 @@ integrationRoutes.post('/webhooks/:provider', async (c) => {
 
   const secret = webhookSecrets[provider];
   if (secret && signature) {
-    const isValid = await verifyWebhookSignature(provider, rawBody, signature, secret);
+    const isValid = verifyWebhookSignature(provider, rawBody, signature, secret);
     if (!isValid) {
       return c.json({ error: 'Invalid webhook signature' }, 401);
     }
@@ -293,14 +294,12 @@ integrationRoutes.post('/webhooks/:provider', async (c) => {
 /**
  * Verify webhook signature for different providers.
  */
-async function verifyWebhookSignature(
+function verifyWebhookSignature(
   provider: string,
   payload: string,
   signature: string,
   secret: string,
-): Promise<boolean> {
-  const crypto = await import('crypto');
-
+): boolean {
   switch (provider) {
     case 'linear': {
       // Linear uses HMAC-SHA256

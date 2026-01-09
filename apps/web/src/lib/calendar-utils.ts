@@ -13,7 +13,7 @@ import type { Event, TimeBlock, CreateEventInput, CreateTimeBlockInput } from '@
 // =============================================================================
 
 export const MIN_HOUR_HEIGHT = 32; // Minimum readable height
-export const BASE_HOUR_HEIGHT = 120; // Base pixels per hour
+export const BASE_HOUR_HEIGHT = 60; // Base pixels per hour (shows ~10-12 hours in view)
 export const MAX_ZOOM = 3;
 export const MIN_ZOOM = 1;
 export const MIN_SLOT_MINUTES = 5; // 5-minute granularity

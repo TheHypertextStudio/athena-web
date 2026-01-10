@@ -3,7 +3,12 @@
 import { useTransition } from 'react';
 import OpenInNewOutlinedIcon from '@mui/icons-material/OpenInNewOutlined';
 import { Button } from '@/components/ui/button';
-import { cancelSubscription, resumeSubscription, createPortalSession } from '@/lib/billing-actions';
+import {
+  cancelSubscription,
+  resumeSubscription,
+  createPortalSession,
+  createCheckoutSession,
+} from '@/lib/billing-actions';
 
 interface CurrentPlanActionsProps {
   isPaidPlan: boolean;
@@ -17,6 +22,18 @@ export function CurrentPlanActions({ isPaidPlan, isCanceled }: CurrentPlanAction
     startTransition(async () => {
       const { portalUrl } = await createPortalSession(window.location.href);
       window.location.href = portalUrl;
+    });
+  };
+
+  const handleUpgrade = () => {
+    startTransition(async () => {
+      const { checkoutUrl } = await createCheckoutSession({
+        planTier: 'pro',
+        billingInterval: 'month',
+        successUrl: `${window.location.origin}/settings/billing?success=true`,
+        cancelUrl: window.location.href,
+      });
+      window.location.href = checkoutUrl;
     });
   };
 
@@ -50,7 +67,7 @@ export function CurrentPlanActions({ isPaidPlan, isCanceled }: CurrentPlanAction
           Resume
         </Button>
       )}
-      <Button onClick={handleManageSubscription} disabled={isPending}>
+      <Button onClick={isPaidPlan ? handleManageSubscription : handleUpgrade} disabled={isPending}>
         {isPaidPlan ? 'Manage Subscription' : 'Upgrade'}
         <OpenInNewOutlinedIcon sx={{ fontSize: 16 }} className="ml-2" />
       </Button>

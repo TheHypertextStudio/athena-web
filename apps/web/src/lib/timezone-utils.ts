@@ -346,5 +346,132 @@ export function isValidTimezone(timezone: string): boolean {
   }
 }
 
-// Note: For a comprehensive timezone list with regions, see COMMON_TIMEZONES
-// in components/settings/account/preferences-actions.tsx
+// =============================================================================
+// Common Timezone List
+// =============================================================================
+
+/**
+ * Timezone entry with human-readable label and region grouping.
+ */
+export interface TimezoneEntry {
+  value: string;
+  label: string;
+  region: string;
+}
+
+/**
+ * Region ordering for timezone dropdowns.
+ */
+export const REGION_ORDER = [
+  'UTC',
+  'Americas',
+  'Europe',
+  'Africa',
+  'Middle East',
+  'Asia',
+  'Oceania',
+] as const;
+
+/**
+ * Common timezones grouped by region.
+ * Comprehensive list covering major cities and time zones.
+ */
+export const COMMON_TIMEZONES: TimezoneEntry[] = [
+  // UTC
+  { value: 'UTC', label: 'UTC', region: 'UTC' },
+
+  // Americas - North
+  { value: 'America/New_York', label: 'Eastern Time (US & Canada)', region: 'Americas' },
+  { value: 'America/Chicago', label: 'Central Time (US & Canada)', region: 'Americas' },
+  { value: 'America/Denver', label: 'Mountain Time (US & Canada)', region: 'Americas' },
+  { value: 'America/Los_Angeles', label: 'Pacific Time (US & Canada)', region: 'Americas' },
+  { value: 'America/Anchorage', label: 'Alaska Time', region: 'Americas' },
+  { value: 'Pacific/Honolulu', label: 'Hawaii Time', region: 'Americas' },
+  { value: 'America/Phoenix', label: 'Arizona (no DST)', region: 'Americas' },
+  { value: 'America/Toronto', label: 'Toronto', region: 'Americas' },
+  { value: 'America/Vancouver', label: 'Vancouver', region: 'Americas' },
+
+  // Americas - Central & South
+  { value: 'America/Mexico_City', label: 'Mexico City', region: 'Americas' },
+  { value: 'America/Bogota', label: 'Bogota', region: 'Americas' },
+  { value: 'America/Lima', label: 'Lima', region: 'Americas' },
+  { value: 'America/Santiago', label: 'Santiago', region: 'Americas' },
+  { value: 'America/Sao_Paulo', label: 'Sao Paulo', region: 'Americas' },
+  { value: 'America/Buenos_Aires', label: 'Buenos Aires', region: 'Americas' },
+  { value: 'America/Caracas', label: 'Caracas', region: 'Americas' },
+
+  // Europe
+  { value: 'Europe/London', label: 'London (GMT/BST)', region: 'Europe' },
+  { value: 'Europe/Dublin', label: 'Dublin', region: 'Europe' },
+  { value: 'Europe/Paris', label: 'Paris', region: 'Europe' },
+  { value: 'Europe/Berlin', label: 'Berlin', region: 'Europe' },
+  { value: 'Europe/Amsterdam', label: 'Amsterdam', region: 'Europe' },
+  { value: 'Europe/Brussels', label: 'Brussels', region: 'Europe' },
+  { value: 'Europe/Madrid', label: 'Madrid', region: 'Europe' },
+  { value: 'Europe/Rome', label: 'Rome', region: 'Europe' },
+  { value: 'Europe/Zurich', label: 'Zurich', region: 'Europe' },
+  { value: 'Europe/Stockholm', label: 'Stockholm', region: 'Europe' },
+  { value: 'Europe/Oslo', label: 'Oslo', region: 'Europe' },
+  { value: 'Europe/Helsinki', label: 'Helsinki', region: 'Europe' },
+  { value: 'Europe/Warsaw', label: 'Warsaw', region: 'Europe' },
+  { value: 'Europe/Prague', label: 'Prague', region: 'Europe' },
+  { value: 'Europe/Vienna', label: 'Vienna', region: 'Europe' },
+  { value: 'Europe/Athens', label: 'Athens', region: 'Europe' },
+  { value: 'Europe/Istanbul', label: 'Istanbul', region: 'Europe' },
+  { value: 'Europe/Moscow', label: 'Moscow', region: 'Europe' },
+  { value: 'Europe/Kyiv', label: 'Kyiv', region: 'Europe' },
+
+  // Africa
+  { value: 'Africa/Cairo', label: 'Cairo', region: 'Africa' },
+  { value: 'Africa/Lagos', label: 'Lagos', region: 'Africa' },
+  { value: 'Africa/Johannesburg', label: 'Johannesburg', region: 'Africa' },
+  { value: 'Africa/Nairobi', label: 'Nairobi', region: 'Africa' },
+  { value: 'Africa/Casablanca', label: 'Casablanca', region: 'Africa' },
+  { value: 'Africa/Accra', label: 'Accra', region: 'Africa' },
+  { value: 'Africa/Addis_Ababa', label: 'Addis Ababa', region: 'Africa' },
+  { value: 'Africa/Algiers', label: 'Algiers', region: 'Africa' },
+  { value: 'Africa/Tunis', label: 'Tunis', region: 'Africa' },
+  { value: 'Africa/Dar_es_Salaam', label: 'Dar es Salaam', region: 'Africa' },
+
+  // Middle East
+  { value: 'Asia/Dubai', label: 'Dubai', region: 'Middle East' },
+  { value: 'Asia/Riyadh', label: 'Riyadh', region: 'Middle East' },
+  { value: 'Asia/Jerusalem', label: 'Jerusalem', region: 'Middle East' },
+  { value: 'Asia/Tehran', label: 'Tehran', region: 'Middle East' },
+  { value: 'Asia/Baghdad', label: 'Baghdad', region: 'Middle East' },
+  { value: 'Asia/Kuwait', label: 'Kuwait', region: 'Middle East' },
+  { value: 'Asia/Qatar', label: 'Doha', region: 'Middle East' },
+
+  // Asia - South
+  { value: 'Asia/Kolkata', label: 'India (IST)', region: 'Asia' },
+  { value: 'Asia/Mumbai', label: 'Mumbai', region: 'Asia' },
+  { value: 'Asia/Karachi', label: 'Karachi', region: 'Asia' },
+  { value: 'Asia/Dhaka', label: 'Dhaka', region: 'Asia' },
+  { value: 'Asia/Colombo', label: 'Colombo', region: 'Asia' },
+  { value: 'Asia/Kathmandu', label: 'Kathmandu', region: 'Asia' },
+
+  // Asia - Southeast
+  { value: 'Asia/Singapore', label: 'Singapore', region: 'Asia' },
+  { value: 'Asia/Bangkok', label: 'Bangkok', region: 'Asia' },
+  { value: 'Asia/Jakarta', label: 'Jakarta', region: 'Asia' },
+  { value: 'Asia/Ho_Chi_Minh', label: 'Ho Chi Minh City', region: 'Asia' },
+  { value: 'Asia/Kuala_Lumpur', label: 'Kuala Lumpur', region: 'Asia' },
+  { value: 'Asia/Manila', label: 'Manila', region: 'Asia' },
+
+  // Asia - East
+  { value: 'Asia/Shanghai', label: 'China (CST)', region: 'Asia' },
+  { value: 'Asia/Hong_Kong', label: 'Hong Kong', region: 'Asia' },
+  { value: 'Asia/Taipei', label: 'Taipei', region: 'Asia' },
+  { value: 'Asia/Tokyo', label: 'Tokyo (JST)', region: 'Asia' },
+  { value: 'Asia/Seoul', label: 'Seoul (KST)', region: 'Asia' },
+
+  // Oceania
+  { value: 'Australia/Sydney', label: 'Sydney (AEST)', region: 'Oceania' },
+  { value: 'Australia/Melbourne', label: 'Melbourne', region: 'Oceania' },
+  { value: 'Australia/Brisbane', label: 'Brisbane (no DST)', region: 'Oceania' },
+  { value: 'Australia/Perth', label: 'Perth (AWST)', region: 'Oceania' },
+  { value: 'Australia/Adelaide', label: 'Adelaide', region: 'Oceania' },
+  { value: 'Pacific/Auckland', label: 'Auckland (NZST)', region: 'Oceania' },
+  { value: 'Pacific/Fiji', label: 'Fiji', region: 'Oceania' },
+  { value: 'Pacific/Guam', label: 'Guam', region: 'Oceania' },
+];

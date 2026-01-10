@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import type { CalendarEntry } from '@/components/objects/surfaces/DayCalendar';
+import { RecurrenceSelector } from './RecurrenceSelector';
 
 // =============================================================================
 // Types
@@ -80,6 +81,9 @@ export function EntryCreationDialog({
   const [start, setStart] = useState(formatTimeForInput(entry?.startTime ?? startTime));
   const [end, setEnd] = useState(formatTimeForInput(entry?.endTime ?? endTime));
   const [location, setLocation] = useState(entry?.location ?? '');
+  const [recurrenceRule, setRecurrenceRule] = useState<string | null>(
+    entry?.recurrenceRule ?? null,
+  );
 
   // Update form when entry changes (for edit mode)
   useEffect(() => {
@@ -89,6 +93,7 @@ export function EntryCreationDialog({
       setStart(formatTimeForInput(entry.startTime));
       setEnd(formatTimeForInput(entry.endTime));
       setLocation(entry.location ?? '');
+      setRecurrenceRule(entry.recurrenceRule ?? null);
     }
   }, [entry]);
 
@@ -105,6 +110,9 @@ export function EntryCreationDialog({
       if (entryType === 'event' && location.trim()) {
         updates.location = location.trim();
       }
+      if (recurrenceRule) {
+        updates.recurrenceRule = recurrenceRule;
+      }
       onUpdate(entry.id, updates);
     } else {
       // Create new entry
@@ -114,6 +122,7 @@ export function EntryCreationDialog({
         startTime: parseTimeInput(start, startTime),
         endTime: parseTimeInput(end, startTime),
         ...(entryType === 'event' && location.trim() ? { location: location.trim() } : {}),
+        ...(recurrenceRule ? { recurrenceRule } : {}),
       };
       onSubmit(newEntry);
     }
@@ -124,6 +133,7 @@ export function EntryCreationDialog({
     setTitle('');
     setLocation('');
     setEntryType('event');
+    setRecurrenceRule(null);
   }, [
     isEditMode,
     entry,
@@ -132,6 +142,7 @@ export function EntryCreationDialog({
     start,
     end,
     location,
+    recurrenceRule,
     startTime,
     onSubmit,
     onUpdate,
@@ -147,6 +158,7 @@ export function EntryCreationDialog({
         setTitle('');
         setLocation('');
         setEntryType('event');
+        setRecurrenceRule(null);
       }
       onOpenChange(newOpen);
     },
@@ -240,6 +252,9 @@ export function EntryCreationDialog({
               />
             </div>
           </div>
+
+          {/* Recurrence */}
+          <RecurrenceSelector value={recurrenceRule} onChange={setRecurrenceRule} />
 
           {/* Location (events only) */}
           {entryType === 'event' && (

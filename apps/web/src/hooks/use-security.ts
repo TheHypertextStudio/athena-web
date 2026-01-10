@@ -2,7 +2,12 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { authApi } from '@/lib/api-client';
-import { linkGoogleAccount, linkAppleAccount, linkMicrosoftAccount } from '@/lib/auth-client';
+import {
+  linkGoogleAccount,
+  linkAppleAccount,
+  linkMicrosoftAccount,
+  registerPasskey,
+} from '@/lib/auth-client';
 
 /**
  * Hook for managing active sessions.
@@ -123,5 +128,64 @@ export function useBackupCodes() {
     generateCodes: generateMutation.mutateAsync,
     isGenerating: generateMutation.isPending,
     generatedCodes: generateMutation.data?.codes,
+  };
+}
+
+/**
+ * Hook for managing passkeys.
+ */
+export function usePasskeys() {
+  const queryClient = useQueryClient();
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['auth', 'passkeys'],
+    queryFn: () => authApi.getPasskeys(),
+  });
+
+  const registerMutation = useMutation({
+    mutationFn: async (name?: string) => {
+      await registerPasskey(name);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['auth', 'passkeys'] });
+    },
+  });
+
+  // Wrapper to call without arguments
+  const doRegisterPasskey = async (name?: string) => {
+    return registerMutation.mutateAsync(name);
+  };
+
+  const renameMutation = useMutation({
+    mutationFn: ({ passkeyId, name }: { passkeyId: string; name: string }) =>
+      authApi.renamePasskey(passkeyId, name),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['auth', 'passkeys'] });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: authApi.deletePasskey,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['auth', 'passkeys'] });
+    },
+  });
+
+  return {
+    passkeys: data?.passkeys ?? [],
+    count: data?.count ?? 0,
+    isLoading,
+    error,
+    // Register a new passkey
+    registerPasskey: doRegisterPasskey,
+    isRegistering: registerMutation.isPending,
+    registerError: registerMutation.error,
+    // Rename a passkey
+    renamePasskey: renameMutation.mutate,
+    isRenaming: renameMutation.isPending,
+    // Delete a passkey
+    deletePasskey: deleteMutation.mutate,
+    isDeleting: deleteMutation.isPending,
+    deleteError: deleteMutation.error,
   };
 }

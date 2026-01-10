@@ -530,6 +530,14 @@ export interface BackupCodesInfo {
   generatedAt?: string;
 }
 
+export interface Passkey {
+  id: string;
+  name: string | null;
+  deviceType: string | null;
+  backedUp: boolean;
+  createdAt: string;
+}
+
 // ============================================================================
 // Settings API
 // ============================================================================
@@ -662,6 +670,14 @@ export const authApi = {
         method: 'POST',
       },
     ),
+  getPasskeys: () => request<{ passkeys: Passkey[]; count: number }>('/api/auth/passkeys'),
+  renamePasskey: (passkeyId: string, name: string) =>
+    request<{ success: boolean; name: string }>(`/api/auth/passkeys/${passkeyId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ name }),
+    }),
+  deletePasskey: (passkeyId: string) =>
+    request<EmptyResponse>(`/api/auth/passkeys/${passkeyId}`, { method: 'DELETE' }),
 };
 
 // ============================================================================

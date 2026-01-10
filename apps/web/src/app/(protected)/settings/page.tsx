@@ -1,17 +1,8 @@
-'use client';
-
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { redirect } from 'next/navigation';
 
 /**
  * Settings index page - redirects to account settings.
  */
 export default function SettingsPage() {
-  const router = useRouter();
-
-  useEffect(() => {
-    router.replace('/settings/account');
-  }, [router]);
-
-  return null;
+  redirect('/settings/account');
 }

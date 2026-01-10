@@ -1,3 +1,5 @@
+import ErrorOutlineOutlinedIcon from '@mui/icons-material/ErrorOutlineOutlined';
+import type { ApiErrorCode } from '@/lib/api-errors';
 import { cn } from '@/lib/utils';
 
 interface SettingsSectionProps {
@@ -222,5 +224,57 @@ interface SettingsEmptyStateProps {
 export function SettingsEmptyState({ message, className }: SettingsEmptyStateProps) {
   return (
     <p className={cn('text-on-surface-variant py-4 text-center text-sm', className)}>{message}</p>
+  );
+}
+
+const ERROR_MESSAGES: Record<ApiErrorCode, { title: string; description: string }> = {
+  rate_limited: {
+    title: 'Too many requests',
+    description: 'Please wait a moment and try again.',
+  },
+  unauthorized: {
+    title: 'Session expired',
+    description: 'Please sign in again.',
+  },
+  server_error: {
+    title: 'Server error',
+    description: 'Something went wrong. Please try again later.',
+  },
+  network_error: {
+    title: 'Connection failed',
+    description: 'Check your internet connection.',
+  },
+  unknown: {
+    title: 'Unable to load',
+    description: 'Please try again later.',
+  },
+};
+
+interface SectionErrorProps {
+  code: ApiErrorCode;
+  className?: string;
+}
+
+/**
+ * Inline error display for settings sections when API calls fail.
+ */
+export function SectionError({ code, className }: SectionErrorProps) {
+  const { title, description } = ERROR_MESSAGES[code];
+
+  return (
+    <div
+      className={cn(
+        'bg-error-container/30 border-error/50 flex items-center gap-3 rounded-xl border p-4',
+        className,
+      )}
+    >
+      <div className="text-error shrink-0">
+        <ErrorOutlineOutlinedIcon sx={{ fontSize: 20 }} />
+      </div>
+      <div>
+        <p className="text-error text-sm font-medium">{title}</p>
+        <p className="text-on-surface-variant text-sm">{description}</p>
+      </div>
+    </div>
   );
 }

@@ -9,10 +9,16 @@ import { eq, and } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { workspaces } from '../db/schema/index.js';
 import { requireAuth, getUserId } from '../middleware/auth.js';
+import { requireEntitlement } from '../middleware/entitlements.js';
 
 const workspaceRoutes = new Hono();
 
+// Require authentication for all routes
 workspaceRoutes.use('*', requireAuth);
+
+// Require 'team_workspaces' entitlement for mutating operations (POST/PUT/DELETE)
+// GET requests pass through (read access is sacred)
+workspaceRoutes.use('*', requireEntitlement('team_workspaces'));
 
 /**
  * List all workspaces for the authenticated user.
@@ -99,8 +105,8 @@ workspaceRoutes.patch('/:id', async (c) => {
   }
 
   const updateData: Record<string, unknown> = { updatedAt: new Date() };
-  if (body.name !== undefined) updateData['name'] = body.name;
-  if (body.description !== undefined) updateData['description'] = body.description;
+  if (body.name !== undefined) updateData.name = body.name;
+  if (body.description !== undefined) updateData.description = body.description;
 
   await db
     .update(workspaces)

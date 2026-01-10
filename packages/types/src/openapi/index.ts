@@ -19,3 +19,6 @@ export * from './settings.js';
 export * from './account.js';
 export * from './billing.js';
 export * from './auth.js';
+export * from './notifications.js';
+export * from './integrations.js';
+export * from './calendar-sync.js';

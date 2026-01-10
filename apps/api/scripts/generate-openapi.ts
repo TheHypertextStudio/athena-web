@@ -24,6 +24,9 @@ import * as settingsRouteDefinitions from '../src/routes/settings.openapi.js';
 import * as accountRouteDefinitions from '../src/routes/account.openapi.js';
 import * as billingRouteDefinitions from '../src/routes/billing.openapi.js';
 import * as authRouteDefinitions from '../src/routes/auth.openapi.js';
+import * as notificationsRouteDefinitions from '../src/routes/notifications.openapi.js';
+import * as integrationsRouteDefinitions from '../src/routes/integrations.openapi.js';
+import * as calendarSyncRouteDefinitions from '../src/routes/calendar-sync.openapi.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -63,6 +66,9 @@ registerRoutes(app, settingsRouteDefinitions, '/api/settings');
 registerRoutes(app, accountRouteDefinitions, '/api/account');
 registerRoutes(app, billingRouteDefinitions, '/api/billing');
 registerRoutes(app, authRouteDefinitions, '/api/auth');
+registerRoutes(app, notificationsRouteDefinitions, '/api/notifications');
+registerRoutes(app, integrationsRouteDefinitions, '/api/integrations');
+registerRoutes(app, calendarSyncRouteDefinitions, '/api/calendar-sync');
 
 // Register OpenAPI document
 app.doc('/api/openapi.json', {
@@ -85,6 +91,7 @@ app.doc('/api/openapi.json', {
     { name: 'Billing', description: 'Subscription and billing' },
     { name: 'Integrations', description: 'Third-party integrations' },
     { name: 'Notifications', description: 'Push notifications' },
+    { name: 'Calendar Sync', description: 'Calendar synchronization' },
     { name: 'AI', description: 'AI-powered features' },
   ],
 });

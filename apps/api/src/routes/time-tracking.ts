@@ -9,10 +9,16 @@ import { eq, and, isNull, gte, lte } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { timeEntries, tasks } from '../db/schema/index.js';
 import { requireAuth, getUserId } from '../middleware/auth.js';
+import { requireEntitlement } from '../middleware/entitlements.js';
 
 const timeTrackingRoutes = new Hono();
 
+// Require authentication for all routes
 timeTrackingRoutes.use('*', requireAuth);
+
+// Require 'time_tracking' entitlement for mutating operations (POST/PUT/DELETE)
+// GET requests pass through (read access is sacred)
+timeTrackingRoutes.use('*', requireEntitlement('time_tracking'));
 
 /**
  * List time entries for the current user.
@@ -440,12 +446,12 @@ timeTrackingRoutes.patch('/:id', async (c) => {
   }
 
   const updateData: Record<string, unknown> = { updatedAt: new Date() };
-  if (body.taskId !== undefined) updateData['taskId'] = body.taskId;
-  if (body.startTime !== undefined) updateData['startTime'] = new Date(body.startTime);
+  if (body.taskId !== undefined) updateData.taskId = body.taskId;
+  if (body.startTime !== undefined) updateData.startTime = new Date(body.startTime);
   if (body.endTime !== undefined) {
-    updateData['endTime'] = body.endTime ? new Date(body.endTime) : null;
+    updateData.endTime = body.endTime ? new Date(body.endTime) : null;
   }
-  if (body.description !== undefined) updateData['description'] = body.description;
+  if (body.description !== undefined) updateData.description = body.description;
 
   await db.update(timeEntries).set(updateData).where(eq(timeEntries.id, id));
 

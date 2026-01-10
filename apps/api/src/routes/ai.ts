@@ -7,12 +7,18 @@
 import { Hono } from 'hono';
 import { stream } from 'hono/streaming';
 import { requireAuth, getUserId } from '../middleware/auth.js';
+import { requireEntitlement } from '../middleware/entitlements.js';
 import { getAIService } from '../services/ai/index.js';
 import type { AIProvider } from '../services/ai/types.js';
 
 const aiRoutes = new Hono();
 
+// Require authentication for all routes
 aiRoutes.use('*', requireAuth);
+
+// Require 'ai_features' entitlement for mutating operations (POST/PUT/DELETE)
+// GET requests pass through (read access is sacred)
+aiRoutes.use('*', requireEntitlement('ai_features'));
 
 const DEFAULT_AI_LIST_LIMIT = 20;
 

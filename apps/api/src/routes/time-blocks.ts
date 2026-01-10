@@ -9,10 +9,16 @@ import { eq, and, gte, lte, isNull } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { timeBlocks, timeBlockTasks, tasks } from '../db/schema/index.js';
 import { requireAuth, getUserId } from '../middleware/auth.js';
+import { requireEntitlement } from '../middleware/entitlements.js';
 
 const timeBlockRoutes = new Hono();
 
+// Require authentication for all routes
 timeBlockRoutes.use('*', requireAuth);
+
+// Require 'time_tracking' entitlement for mutating operations (POST/PUT/DELETE)
+// GET requests pass through (read access is sacred)
+timeBlockRoutes.use('*', requireEntitlement('time_tracking'));
 
 /**
  * List all time blocks for the authenticated user.
@@ -190,12 +196,12 @@ timeBlockRoutes.patch('/:id', async (c) => {
   }
 
   const updateData: Record<string, unknown> = { updatedAt: new Date() };
-  if (body.label !== undefined) updateData['label'] = body.label;
-  if (body.description !== undefined) updateData['description'] = body.description;
-  if (body.startTime !== undefined) updateData['startTime'] = new Date(body.startTime);
-  if (body.endTime !== undefined) updateData['endTime'] = new Date(body.endTime);
-  if (body.color !== undefined) updateData['color'] = body.color;
-  if (body.recurrenceRule !== undefined) updateData['recurrenceRule'] = body.recurrenceRule;
+  if (body.label !== undefined) updateData.label = body.label;
+  if (body.description !== undefined) updateData.description = body.description;
+  if (body.startTime !== undefined) updateData.startTime = new Date(body.startTime);
+  if (body.endTime !== undefined) updateData.endTime = new Date(body.endTime);
+  if (body.color !== undefined) updateData.color = body.color;
+  if (body.recurrenceRule !== undefined) updateData.recurrenceRule = body.recurrenceRule;
 
   await db.update(timeBlocks).set(updateData).where(eq(timeBlocks.id, id));
 

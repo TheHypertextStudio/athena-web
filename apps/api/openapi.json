@@ -2491,6 +2491,1224 @@
           }
         },
         "required": ["email", "code"]
+      },
+      "NotificationChannelsResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [true]
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "channels": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": ["email", "push", "sms", "slack", "in_app"],
+                  "description": "Notification delivery channel",
+                  "example": "email"
+                }
+              }
+            },
+            "required": ["channels"]
+          }
+        },
+        "required": ["success", "data"]
+      },
+      "NotificationPreferencesResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/NotificationPreferences"
+          }
+        },
+        "required": ["data"],
+        "description": "Notification preferences response"
+      },
+      "NotificationPreferences": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Preferences ID"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "User ID"
+          },
+          "emailEnabled": {
+            "type": "boolean",
+            "description": "Email notifications enabled"
+          },
+          "pushEnabled": {
+            "type": "boolean",
+            "description": "Push notifications enabled"
+          },
+          "smsEnabled": {
+            "type": "boolean",
+            "description": "SMS notifications enabled"
+          },
+          "slackEnabled": {
+            "type": "boolean",
+            "description": "Slack notifications enabled"
+          },
+          "inAppEnabled": {
+            "type": "boolean",
+            "description": "In-app notifications enabled"
+          },
+          "emailAddress": {
+            "type": ["string", "null"],
+            "description": "Email address for notifications"
+          },
+          "phoneNumber": {
+            "type": ["string", "null"],
+            "description": "Phone number for SMS"
+          },
+          "slackWebhookUrl": {
+            "type": ["string", "null"],
+            "description": "Slack webhook URL"
+          },
+          "slackChannel": {
+            "type": ["string", "null"],
+            "description": "Slack channel"
+          },
+          "quietHoursEnabled": {
+            "type": "boolean",
+            "description": "Quiet hours enabled"
+          },
+          "quietHoursStart": {
+            "type": ["string", "null"],
+            "description": "Quiet hours start (HH:MM)"
+          },
+          "quietHoursEnd": {
+            "type": ["string", "null"],
+            "description": "Quiet hours end (HH:MM)"
+          },
+          "quietHoursTimezone": {
+            "type": ["string", "null"],
+            "description": "Quiet hours timezone"
+          },
+          "taskDeadlineReminders": {
+            "type": "boolean",
+            "description": "Task deadline reminders"
+          },
+          "taskAssignmentNotifications": {
+            "type": "boolean",
+            "description": "Task assignment notifications"
+          },
+          "taskCompletionNotifications": {
+            "type": "boolean",
+            "description": "Task completion notifications"
+          },
+          "eventReminders": {
+            "type": "boolean",
+            "description": "Event reminders"
+          },
+          "dailyPlanningReminder": {
+            "type": "boolean",
+            "description": "Daily planning reminder"
+          },
+          "weeklyReviewReminder": {
+            "type": "boolean",
+            "description": "Weekly review reminder"
+          }
+        },
+        "required": [
+          "id",
+          "userId",
+          "emailEnabled",
+          "pushEnabled",
+          "smsEnabled",
+          "slackEnabled",
+          "inAppEnabled",
+          "emailAddress",
+          "phoneNumber",
+          "slackWebhookUrl",
+          "slackChannel",
+          "quietHoursEnabled",
+          "quietHoursStart",
+          "quietHoursEnd",
+          "quietHoursTimezone",
+          "taskDeadlineReminders",
+          "taskAssignmentNotifications",
+          "taskCompletionNotifications",
+          "eventReminders",
+          "dailyPlanningReminder",
+          "weeklyReviewReminder"
+        ]
+      },
+      "NotificationsResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [true]
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Notification"
+            }
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "limit": {
+                "type": "number"
+              },
+              "offset": {
+                "type": "number"
+              },
+              "count": {
+                "type": "number"
+              }
+            },
+            "required": ["limit", "offset", "count"]
+          }
+        },
+        "required": ["success", "data", "meta"]
+      },
+      "Notification": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Notification ID"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "User ID"
+          },
+          "title": {
+            "type": "string",
+            "description": "Notification title"
+          },
+          "body": {
+            "type": "string",
+            "description": "Notification body"
+          },
+          "channel": {
+            "type": "string",
+            "enum": ["email", "push", "sms", "slack", "in_app"],
+            "description": "Notification delivery channel",
+            "example": "email"
+          },
+          "priority": {
+            "type": "string",
+            "enum": ["low", "normal", "high", "urgent"],
+            "description": "Notification priority level",
+            "example": "normal"
+          },
+          "read": {
+            "type": "boolean",
+            "description": "Whether notification has been read"
+          },
+          "actionUrl": {
+            "type": ["string", "null"],
+            "description": "Action URL"
+          },
+          "entityType": {
+            "type": ["string", "null"],
+            "description": "Related entity type"
+          },
+          "entityId": {
+            "type": ["string", "null"],
+            "description": "Related entity ID"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation timestamp",
+            "example": "2025-01-09T12:00:00Z"
+          }
+        },
+        "required": [
+          "id",
+          "userId",
+          "title",
+          "body",
+          "channel",
+          "priority",
+          "read",
+          "actionUrl",
+          "entityType",
+          "entityId",
+          "createdAt"
+        ]
+      },
+      "UnreadNotificationsResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [true]
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Notification"
+            }
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "count": {
+                "type": "number"
+              }
+            },
+            "required": ["count"]
+          }
+        },
+        "required": ["success", "data", "meta"]
+      },
+      "MarkAllReadResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [true]
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "markedRead": {
+                "type": "number",
+                "description": "Number of notifications marked read"
+              }
+            },
+            "required": ["markedRead"]
+          }
+        },
+        "required": ["success", "data"]
+      },
+      "MarkReadResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "required": ["success"]
+      },
+      "ScheduleNotificationResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [true]
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Scheduled notification ID"
+              },
+              "scheduledFor": {
+                "type": "string",
+                "description": "Scheduled delivery time"
+              }
+            },
+            "required": ["id", "scheduledFor"]
+          }
+        },
+        "required": ["success", "data"]
+      },
+      "ScheduleNotificationRequest": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Target user ID"
+          },
+          "scheduledFor": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Scheduled delivery time (ISO 8601)"
+          },
+          "recurrenceRule": {
+            "type": "string",
+            "description": "Recurrence rule (RFC 5545 RRULE)"
+          },
+          "notificationType": {
+            "type": "string",
+            "description": "Notification type"
+          },
+          "channels": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["email", "push", "sms", "slack", "in_app"],
+              "description": "Notification delivery channel",
+              "example": "email"
+            },
+            "description": "Delivery channels"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Notification title"
+          },
+          "bodyTemplate": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000,
+            "description": "Body template"
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": {}
+          },
+          "actionUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "priority": {
+            "type": "string",
+            "enum": ["low", "normal", "high", "urgent"],
+            "description": "Notification priority level",
+            "example": "normal"
+          }
+        },
+        "required": [
+          "userId",
+          "scheduledFor",
+          "notificationType",
+          "channels",
+          "title",
+          "bodyTemplate"
+        ]
+      },
+      "SendNotificationResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [true]
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "results": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/NotificationResult"
+                }
+              },
+              "successCount": {
+                "type": "number"
+              },
+              "failureCount": {
+                "type": "number"
+              }
+            },
+            "required": ["results", "successCount", "failureCount"]
+          }
+        },
+        "required": ["success", "data"]
+      },
+      "NotificationResult": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string",
+            "enum": ["email", "push", "sms", "slack", "in_app"],
+            "description": "Notification delivery channel",
+            "example": "email"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Whether delivery succeeded"
+          },
+          "error": {
+            "type": ["string", "null"],
+            "description": "Error message if failed"
+          }
+        },
+        "required": ["channel", "success", "error"]
+      },
+      "SendNotificationRequest": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Target user ID"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Notification title"
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000,
+            "description": "Notification body"
+          },
+          "channels": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["email", "push", "sms", "slack", "in_app"],
+              "description": "Notification delivery channel",
+              "example": "email"
+            }
+          },
+          "priority": {
+            "type": "string",
+            "enum": ["low", "normal", "high", "urgent"],
+            "description": "Notification priority level",
+            "example": "normal"
+          },
+          "actionUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "entityType": {
+            "type": "string"
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": {}
+          }
+        },
+        "required": ["userId", "title", "body"]
+      },
+      "UpdateNotificationPreferencesRequest": {
+        "type": "object",
+        "properties": {
+          "emailEnabled": {
+            "type": "boolean"
+          },
+          "pushEnabled": {
+            "type": "boolean"
+          },
+          "smsEnabled": {
+            "type": "boolean"
+          },
+          "slackEnabled": {
+            "type": "boolean"
+          },
+          "inAppEnabled": {
+            "type": "boolean"
+          },
+          "emailAddress": {
+            "type": "string",
+            "format": "email"
+          },
+          "phoneNumber": {
+            "type": "string"
+          },
+          "slackWebhookUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "slackChannel": {
+            "type": "string"
+          },
+          "quietHoursEnabled": {
+            "type": "boolean"
+          },
+          "quietHoursStart": {
+            "type": "string",
+            "pattern": "^\\d{2}:\\d{2}$"
+          },
+          "quietHoursEnd": {
+            "type": "string",
+            "pattern": "^\\d{2}:\\d{2}$"
+          },
+          "quietHoursTimezone": {
+            "type": "string"
+          },
+          "taskDeadlineReminders": {
+            "type": "boolean"
+          },
+          "taskAssignmentNotifications": {
+            "type": "boolean"
+          },
+          "taskCompletionNotifications": {
+            "type": "boolean"
+          },
+          "eventReminders": {
+            "type": "boolean"
+          },
+          "dailyPlanningReminder": {
+            "type": "boolean"
+          },
+          "weeklyReviewReminder": {
+            "type": "boolean"
+          }
+        }
+      },
+      "LinkedIntegrationResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/LinkedIntegration"
+          }
+        },
+        "required": ["data"],
+        "description": "Linked integration"
+      },
+      "LinkedIntegration": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Integration ID"
+          },
+          "provider": {
+            "type": "string",
+            "enum": ["linear", "github", "google_calendar", "outlook_calendar", "apple_calendar"],
+            "description": "Integration provider",
+            "example": "github"
+          },
+          "externalAccountId": {
+            "type": "string",
+            "description": "External account identifier"
+          },
+          "scopes": {
+            "type": ["string", "null"],
+            "description": "OAuth scopes"
+          },
+          "metadata": {
+            "type": ["object", "null"],
+            "additionalProperties": {},
+            "description": "Additional metadata"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Connection timestamp",
+            "example": "2025-01-09T12:00:00Z"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last update timestamp",
+            "example": "2025-01-09T12:00:00Z"
+          }
+        },
+        "required": [
+          "id",
+          "provider",
+          "externalAccountId",
+          "scopes",
+          "metadata",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "ConnectIntegrationRequest": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": ["linear", "github", "google_calendar", "outlook_calendar", "apple_calendar"],
+            "description": "Integration provider",
+            "example": "github"
+          },
+          "externalAccountId": {
+            "type": "string",
+            "description": "External account identifier"
+          },
+          "accessToken": {
+            "type": "string",
+            "description": "OAuth access token"
+          },
+          "refreshToken": {
+            "type": "string",
+            "description": "OAuth refresh token"
+          },
+          "tokenExpiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Token expiration (ISO 8601)"
+          },
+          "scopes": {
+            "type": "string",
+            "description": "OAuth scopes"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {},
+            "description": "Additional metadata"
+          }
+        },
+        "required": ["provider", "externalAccountId"]
+      },
+      "IntegrationMappingResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/IntegrationMapping"
+          }
+        },
+        "required": ["data"],
+        "description": "Integration mapping"
+      },
+      "IntegrationMapping": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Mapping ID"
+          },
+          "integrationId": {
+            "type": "string",
+            "description": "Integration ID"
+          },
+          "entityType": {
+            "type": "string",
+            "enum": ["task", "project", "event", "initiative"],
+            "description": "Entity type for mapping",
+            "example": "task"
+          },
+          "localEntityId": {
+            "type": "string",
+            "description": "Local entity ID"
+          },
+          "externalId": {
+            "type": "string",
+            "description": "External entity ID"
+          },
+          "syncDirection": {
+            "type": "string",
+            "enum": ["pull", "push", "bidirectional"],
+            "description": "Sync direction for mapping",
+            "example": "bidirectional"
+          },
+          "externalVersion": {
+            "type": ["string", "null"],
+            "description": "External version/etag"
+          },
+          "lastSyncedFromExternal": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Last sync from external",
+            "example": "2025-01-09T12:00:00Z"
+          },
+          "lastSyncedToExternal": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Last sync to external",
+            "example": "2025-01-09T12:00:00Z"
+          },
+          "metadata": {
+            "type": ["object", "null"],
+            "additionalProperties": {},
+            "description": "Mapping metadata"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation timestamp",
+            "example": "2025-01-09T12:00:00Z"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last update timestamp",
+            "example": "2025-01-09T12:00:00Z"
+          }
+        },
+        "required": [
+          "id",
+          "integrationId",
+          "entityType",
+          "localEntityId",
+          "externalId",
+          "syncDirection",
+          "externalVersion",
+          "lastSyncedFromExternal",
+          "lastSyncedToExternal",
+          "metadata",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "CreateMappingRequest": {
+        "type": "object",
+        "properties": {
+          "entityType": {
+            "type": "string",
+            "enum": ["task", "project", "event", "initiative"],
+            "description": "Entity type for mapping",
+            "example": "task"
+          },
+          "localEntityId": {
+            "type": "string",
+            "description": "Local entity ID"
+          },
+          "externalId": {
+            "type": "string",
+            "description": "External entity ID"
+          },
+          "syncDirection": {
+            "type": "string",
+            "enum": ["pull", "push", "bidirectional"],
+            "default": "bidirectional",
+            "description": "Sync direction for mapping",
+            "example": "bidirectional"
+          },
+          "externalVersion": {
+            "type": "string",
+            "description": "External version/etag"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {},
+            "description": "Mapping metadata"
+          }
+        },
+        "required": ["entityType", "localEntityId", "externalId"]
+      },
+      "LinkedIntegrationsResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LinkedIntegration"
+            }
+          }
+        },
+        "required": ["data"],
+        "description": "List of linked integrations"
+      },
+      "IntegrationMappingsResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IntegrationMapping"
+            }
+          }
+        },
+        "required": ["data"],
+        "description": "List of mappings"
+      },
+      "OAuthAuthorizationResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/OAuthAuthorization"
+          }
+        },
+        "required": ["data"],
+        "description": "OAuth authorization info"
+      },
+      "OAuthAuthorization": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": ["linear", "github", "google_calendar", "outlook_calendar", "apple_calendar"],
+            "description": "Integration provider",
+            "example": "github"
+          },
+          "authorizationUrl": {
+            "type": "string",
+            "description": "OAuth authorization URL"
+          },
+          "configured": {
+            "type": "boolean",
+            "description": "Whether provider is configured"
+          }
+        },
+        "required": ["provider", "authorizationUrl", "configured"]
+      },
+      "WebhookResult": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "processed": {
+            "type": "object",
+            "properties": {
+              "eventType": {
+                "type": "string",
+                "description": "Webhook event type"
+              },
+              "entityUpdated": {
+                "type": "boolean",
+                "description": "Whether entity was updated"
+              }
+            },
+            "required": ["eventType"]
+          }
+        },
+        "required": ["success", "processed"]
+      },
+      "MarkSyncedResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "success": {
+                "type": "boolean",
+                "enum": [true]
+              }
+            },
+            "required": ["success"]
+          }
+        },
+        "required": ["data"],
+        "description": "Sync marked response"
+      },
+      "MarkSyncedRequest": {
+        "type": "object",
+        "properties": {
+          "externalVersion": {
+            "type": "string",
+            "description": "External version/etag"
+          }
+        }
+      },
+      "CalendarSyncErrorResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [false]
+          },
+          "error": {
+            "type": "string",
+            "description": "Error message"
+          }
+        },
+        "required": ["success", "error"]
+      },
+      "AuthUrlResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [true]
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "authUrl": {
+                "type": "string",
+                "description": "OAuth authorization URL"
+              }
+            },
+            "required": ["authUrl"]
+          }
+        },
+        "required": ["success", "data"]
+      },
+      "CalendarConnectionsResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [true]
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CalendarConnection"
+            }
+          }
+        },
+        "required": ["success", "data"]
+      },
+      "CalendarConnection": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Connection ID"
+          },
+          "provider": {
+            "type": "string",
+            "enum": ["google", "outlook", "icloud", "caldav"],
+            "description": "Calendar provider",
+            "example": "google"
+          },
+          "syncEnabled": {
+            "type": "boolean",
+            "description": "Whether sync is enabled"
+          },
+          "lastSyncAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Last sync timestamp",
+            "example": "2025-01-09T12:00:00Z"
+          },
+          "lastSyncStatus": {
+            "type": ["string", "null"],
+            "enum": ["success", "error", "partial", null],
+            "description": "Last sync status",
+            "example": "success"
+          },
+          "calendars": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Calendar"
+            },
+            "description": "Connected calendars"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Connection creation timestamp",
+            "example": "2025-01-09T12:00:00Z"
+          }
+        },
+        "required": [
+          "id",
+          "provider",
+          "syncEnabled",
+          "lastSyncAt",
+          "lastSyncStatus",
+          "calendars",
+          "createdAt"
+        ]
+      },
+      "Calendar": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Calendar ID"
+          },
+          "name": {
+            "type": "string",
+            "description": "Calendar name"
+          },
+          "color": {
+            "type": ["string", "null"],
+            "description": "Calendar color"
+          },
+          "syncEnabled": {
+            "type": "boolean",
+            "description": "Whether sync is enabled"
+          },
+          "syncDirection": {
+            "type": "string",
+            "enum": ["pull", "push", "bidirectional"],
+            "description": "Sync direction",
+            "example": "bidirectional"
+          }
+        },
+        "required": ["id", "name", "color", "syncEnabled", "syncDirection"]
+      },
+      "OAuthCallbackResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [true]
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Connection ID"
+              },
+              "provider": {
+                "type": "string",
+                "enum": ["google", "outlook", "icloud", "caldav"],
+                "description": "Calendar provider",
+                "example": "google"
+              },
+              "calendars": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Calendar"
+                }
+              }
+            },
+            "required": ["id", "provider", "calendars"]
+          }
+        },
+        "required": ["success", "data"]
+      },
+      "OAuthCallbackRequest": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": ["google", "outlook", "icloud", "caldav"],
+            "description": "Calendar provider",
+            "example": "google"
+          },
+          "code": {
+            "type": "string",
+            "description": "OAuth authorization code"
+          },
+          "state": {
+            "type": "string",
+            "description": "OAuth state parameter"
+          }
+        },
+        "required": ["provider", "code", "state"]
+      },
+      "SuccessResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [true]
+          }
+        },
+        "required": ["success"]
+      },
+      "PushEventRequest": {
+        "type": "object",
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Event ID to push"
+          }
+        },
+        "required": ["eventId"]
+      },
+      "SyncAllResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SyncAllResult"
+            }
+          }
+        },
+        "required": ["success", "data"]
+      },
+      "SyncAllResult": {
+        "type": "object",
+        "properties": {
+          "connectionId": {
+            "type": "string",
+            "description": "Connection ID"
+          },
+          "provider": {
+            "type": "string",
+            "enum": ["google", "outlook", "icloud", "caldav"],
+            "description": "Calendar provider",
+            "example": "google"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Whether sync succeeded"
+          },
+          "eventsCreated": {
+            "type": "integer",
+            "description": "Events created"
+          },
+          "eventsUpdated": {
+            "type": "integer",
+            "description": "Events updated"
+          },
+          "eventsDeleted": {
+            "type": "integer",
+            "description": "Events deleted"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Error messages"
+          },
+          "error": {
+            "type": "string",
+            "description": "Error message if failed"
+          }
+        },
+        "required": ["connectionId", "provider", "success"]
+      },
+      "SyncResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "eventsCreated": {
+                "type": "integer",
+                "description": "Events created"
+              },
+              "eventsUpdated": {
+                "type": "integer",
+                "description": "Events updated"
+              },
+              "eventsDeleted": {
+                "type": "integer",
+                "description": "Events deleted"
+              },
+              "errors": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Error messages"
+              },
+              "syncedAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Sync completion timestamp",
+                "example": "2025-01-09T12:00:00Z"
+              }
+            },
+            "required": ["eventsCreated", "eventsUpdated", "eventsDeleted", "errors", "syncedAt"]
+          }
+        },
+        "required": ["success", "data"]
+      },
+      "UpdateCalendarSettingsRequest": {
+        "type": "object",
+        "properties": {
+          "calendars": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "Calendar ID"
+                },
+                "syncEnabled": {
+                  "type": "boolean",
+                  "description": "Whether sync is enabled"
+                },
+                "syncDirection": {
+                  "type": "string",
+                  "enum": ["pull", "push", "bidirectional"],
+                  "description": "Sync direction",
+                  "example": "bidirectional"
+                }
+              },
+              "required": ["id", "syncEnabled", "syncDirection"]
+            }
+          }
+        },
+        "required": ["calendars"]
       }
     },
     "parameters": {}
@@ -5883,6 +7101,1782 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/notifications/channels": {
+      "get": {
+        "tags": ["Notifications"],
+        "summary": "Get notification channels",
+        "description": "Get list of configured notification channels.",
+        "responses": {
+          "200": {
+            "description": "Notification channels retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationChannelsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/notifications/preferences": {
+      "get": {
+        "tags": ["Notifications"],
+        "summary": "Get notification preferences",
+        "description": "Get notification preferences for the authenticated user.",
+        "responses": {
+          "200": {
+            "description": "Notification preferences retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationPreferencesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["Notifications"],
+        "summary": "Update notification preferences",
+        "description": "Update notification preferences for the authenticated user.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateNotificationPreferencesRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Notification preferences updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationPreferencesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/notifications/": {
+      "get": {
+        "tags": ["Notifications"],
+        "summary": "Get notifications",
+        "description": "Get notifications for the authenticated user with pagination.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "description": "Number of items to return",
+              "example": 20
+            },
+            "required": false,
+            "description": "Number of items to return",
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": ["integer", "null"],
+              "minimum": 0,
+              "default": 0,
+              "description": "Number of items to skip",
+              "example": 0
+            },
+            "required": false,
+            "description": "Number of items to skip",
+            "name": "offset",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Notifications retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/notifications/unread": {
+      "get": {
+        "tags": ["Notifications"],
+        "summary": "Get unread notifications",
+        "description": "Get unread notifications for the authenticated user.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50,
+              "description": "Maximum number of notifications to return",
+              "example": 50
+            },
+            "required": false,
+            "description": "Maximum number of notifications to return",
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Unread notifications retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnreadNotificationsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/notifications/read-all": {
+      "post": {
+        "tags": ["Notifications"],
+        "summary": "Mark all notifications as read",
+        "description": "Mark all notifications as read for the authenticated user.",
+        "responses": {
+          "200": {
+            "description": "All notifications marked as read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarkAllReadResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/notifications/{id}/read": {
+      "post": {
+        "tags": ["Notifications"],
+        "summary": "Mark notification as read",
+        "description": "Mark a specific notification as read.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Notification ID"
+            },
+            "required": true,
+            "description": "Notification ID",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Notification marked as read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarkReadResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Notification not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/notifications/schedule": {
+      "post": {
+        "tags": ["Notifications"],
+        "summary": "Schedule notification",
+        "description": "Schedule a notification for later delivery.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduleNotificationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Notification scheduled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleNotificationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/notifications/send": {
+      "post": {
+        "tags": ["Notifications"],
+        "summary": "Send notification",
+        "description": "Send a notification to a user (admin/system use).",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendNotificationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Notification sent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SendNotificationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/integrations/connect": {
+      "post": {
+        "tags": ["Integrations"],
+        "summary": "Connect integration",
+        "description": "Connect a new integration.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectIntegrationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Integration connected successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkedIntegrationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Integration already exists for this provider",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/integrations/{id}/mappings": {
+      "post": {
+        "tags": ["Integrations"],
+        "summary": "Create mapping",
+        "description": "Create a new mapping for an integration.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Integration ID"
+            },
+            "required": true,
+            "description": "Integration ID",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMappingRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Mapping created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationMappingResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Integration not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": ["Integrations"],
+        "summary": "Get mappings",
+        "description": "Get all mappings for an integration.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Integration ID"
+            },
+            "required": true,
+            "description": "Integration ID",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Mappings retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationMappingsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Integration not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/integrations/{id}/mappings/{mappingId}": {
+      "delete": {
+        "tags": ["Integrations"],
+        "summary": "Delete mapping",
+        "description": "Delete a mapping.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Integration ID"
+            },
+            "required": true,
+            "description": "Integration ID",
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Mapping ID"
+            },
+            "required": true,
+            "description": "Mapping ID",
+            "name": "mappingId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Mapping deleted successfully"
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Mapping or integration not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/integrations/{id}": {
+      "delete": {
+        "tags": ["Integrations"],
+        "summary": "Disconnect integration",
+        "description": "Disconnect (remove) an integration.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Integration ID"
+            },
+            "required": true,
+            "description": "Integration ID",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Integration disconnected successfully"
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Integration not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": ["Integrations"],
+        "summary": "Get integration",
+        "description": "Get a specific integration by ID.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Integration ID"
+            },
+            "required": true,
+            "description": "Integration ID",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Integration retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkedIntegrationResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Integration not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/integrations/": {
+      "get": {
+        "tags": ["Integrations"],
+        "summary": "List integrations",
+        "description": "List all linked integrations for the authenticated user.",
+        "responses": {
+          "200": {
+            "description": "Integrations retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkedIntegrationsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/integrations/{id}/mappings/by-entity/{entityType}/{localEntityId}": {
+      "get": {
+        "tags": ["Integrations"],
+        "summary": "Find mapping by local entity",
+        "description": "Find a mapping by local entity type and ID.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Integration ID"
+            },
+            "required": true,
+            "description": "Integration ID",
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": ["task", "project", "event", "initiative"],
+              "description": "Entity type for mapping",
+              "example": "task"
+            },
+            "required": true,
+            "description": "Entity type for mapping",
+            "name": "entityType",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Local entity ID"
+            },
+            "required": true,
+            "description": "Local entity ID",
+            "name": "localEntityId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Mapping retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationMappingResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Mapping or integration not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/integrations/{id}/mappings/by-external/{externalId}": {
+      "get": {
+        "tags": ["Integrations"],
+        "summary": "Find mapping by external ID",
+        "description": "Find a mapping by external ID.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Integration ID"
+            },
+            "required": true,
+            "description": "Integration ID",
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "External entity ID"
+            },
+            "required": true,
+            "description": "External entity ID",
+            "name": "externalId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Mapping retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationMappingResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Mapping or integration not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/integrations/oauth/{provider}/authorize": {
+      "get": {
+        "tags": ["Integrations"],
+        "summary": "Get OAuth URL",
+        "description": "Get OAuth authorization URL for a provider.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": ["linear", "github", "google_calendar", "outlook_calendar", "apple_calendar"],
+              "description": "Integration provider",
+              "example": "github"
+            },
+            "required": true,
+            "description": "Integration provider",
+            "name": "provider",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "OAuth redirect URI"
+            },
+            "required": true,
+            "description": "OAuth redirect URI",
+            "name": "redirect_uri",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OAuth authorization URL retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthAuthorizationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid provider or missing redirect_uri",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/integrations/webhooks/{provider}": {
+      "post": {
+        "tags": ["Integrations"],
+        "summary": "Handle webhook",
+        "description": "Handle incoming webhook from an integration provider.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": ["linear", "github"],
+              "description": "Webhook-enabled provider",
+              "example": "github"
+            },
+            "required": true,
+            "description": "Webhook-enabled provider",
+            "name": "provider",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook processed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid webhook payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid webhook signature",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/integrations/{id}/mappings/{mappingId}/synced-from-external": {
+      "post": {
+        "tags": ["Integrations"],
+        "summary": "Mark synced from external",
+        "description": "Mark a mapping as synced from external.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Integration ID"
+            },
+            "required": true,
+            "description": "Integration ID",
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Mapping ID"
+            },
+            "required": true,
+            "description": "Mapping ID",
+            "name": "mappingId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkSyncedRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Mapping marked as synced",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarkSyncedResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Mapping or integration not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/integrations/{id}/mappings/{mappingId}/synced-to-external": {
+      "post": {
+        "tags": ["Integrations"],
+        "summary": "Mark synced to external",
+        "description": "Mark a mapping as synced to external.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Integration ID"
+            },
+            "required": true,
+            "description": "Integration ID",
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Mapping ID"
+            },
+            "required": true,
+            "description": "Mapping ID",
+            "name": "mappingId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkSyncedRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Mapping marked as synced",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarkSyncedResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Mapping or integration not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/calendar-sync/events/{eventId}": {
+      "delete": {
+        "tags": ["Calendar Sync"],
+        "summary": "Delete event from all connections",
+        "description": "Delete an event from all bidirectional connections.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Event ID"
+            },
+            "required": true,
+            "description": "Event ID",
+            "name": "eventId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Event deleted from all connections"
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Delete failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarSyncErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["Calendar Sync"],
+        "summary": "Sync event to all connections",
+        "description": "Sync an event to all bidirectional connections.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Event ID"
+            },
+            "required": true,
+            "description": "Event ID",
+            "name": "eventId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Event synced to all connections",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Sync failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarSyncErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/calendar-sync/connections/{id}/events/{eventId}": {
+      "delete": {
+        "tags": ["Calendar Sync"],
+        "summary": "Delete event from connection",
+        "description": "Delete an event from external calendar.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Connection ID"
+            },
+            "required": true,
+            "description": "Connection ID",
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Event ID"
+            },
+            "required": true,
+            "description": "Event ID",
+            "name": "eventId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Event deleted successfully"
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Connection not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Delete failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarSyncErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["Calendar Sync"],
+        "summary": "Sync event to connection",
+        "description": "Sync (create or update) an event to external calendar.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Connection ID"
+            },
+            "required": true,
+            "description": "Connection ID",
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Event ID"
+            },
+            "required": true,
+            "description": "Event ID",
+            "name": "eventId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Event synced successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Connection not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Sync failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarSyncErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/calendar-sync/connections/{id}": {
+      "delete": {
+        "tags": ["Calendar Sync"],
+        "summary": "Disconnect calendar",
+        "description": "Disconnect a calendar provider.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Connection ID"
+            },
+            "required": true,
+            "description": "Connection ID",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Calendar disconnected successfully"
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Connection not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Disconnect failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarSyncErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/calendar-sync/auth/{provider}": {
+      "get": {
+        "tags": ["Calendar Sync"],
+        "summary": "Get OAuth URL",
+        "description": "Get OAuth URL for a calendar provider.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": ["google", "outlook", "icloud", "caldav"],
+              "description": "Calendar provider",
+              "example": "google"
+            },
+            "required": true,
+            "description": "Calendar provider",
+            "name": "provider",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OAuth URL retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthUrlResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Provider not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarSyncErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/calendar-sync/connections": {
+      "get": {
+        "tags": ["Calendar Sync"],
+        "summary": "List calendar connections",
+        "description": "List all calendar connections for the authenticated user.",
+        "responses": {
+          "200": {
+            "description": "Calendar connections retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarConnectionsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/calendar-sync/callback": {
+      "post": {
+        "tags": ["Calendar Sync"],
+        "summary": "Handle OAuth callback",
+        "description": "Handle OAuth callback from calendar provider.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OAuthCallbackRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OAuth callback handled successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthCallbackResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "OAuth callback failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarSyncErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/calendar-sync/connections/{id}/push": {
+      "post": {
+        "tags": ["Calendar Sync"],
+        "summary": "Push event",
+        "description": "Push a local event to external calendar.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Connection ID"
+            },
+            "required": true,
+            "description": "Connection ID",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PushEventRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Event pushed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Connection not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Push failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarSyncErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/calendar-sync/sync-all": {
+      "post": {
+        "tags": ["Calendar Sync"],
+        "summary": "Sync all connections",
+        "description": "Trigger sync for all calendar connections.",
+        "responses": {
+          "200": {
+            "description": "Sync completed for all connections",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncAllResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Sync failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarSyncErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/calendar-sync/connections/{id}/sync": {
+      "post": {
+        "tags": ["Calendar Sync"],
+        "summary": "Trigger sync",
+        "description": "Trigger a sync for a calendar connection.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Connection ID"
+            },
+            "required": true,
+            "description": "Connection ID",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sync completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Connection not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Sync failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarSyncErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/calendar-sync/connections/{id}/settings": {
+      "patch": {
+        "tags": ["Calendar Sync"],
+        "summary": "Update sync settings",
+        "description": "Update sync settings for a calendar connection.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Connection ID"
+            },
+            "required": true,
+            "description": "Connection ID",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCalendarSettingsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Settings updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Update failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarSyncErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Connection not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
                 }
               }
             }

@@ -10,6 +10,7 @@ import { eq, and } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { linkedIntegrations } from '../db/schema/index.js';
 import { requireAuth, getUserId } from '../middleware/auth.js';
+import { requireEntitlement } from '../middleware/entitlements.js';
 import {
   getMappingService,
   type EntityType,
@@ -19,7 +20,12 @@ import { env } from '../lib/env.js';
 
 const integrationRoutes = new Hono();
 
+// Require authentication for all routes
 integrationRoutes.use('*', requireAuth);
+
+// Require 'integrations' entitlement for mutating operations (POST/PUT/DELETE)
+// GET requests pass through (read access is sacred)
+integrationRoutes.use('*', requireEntitlement('integrations'));
 
 type OAuthProvider =
   | 'linear'

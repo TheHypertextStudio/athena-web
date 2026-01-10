@@ -17,3 +17,12 @@ export {
 export { rateLimit, endpointRateLimit, rateLimits, type RateLimitConfig } from './rate-limit.js';
 export { requestLogger, getRequestId, getRequestLogger } from './request-logger.js';
 export { securityHeaders, validateOrigin, type SecurityHeadersConfig } from './security.js';
+export {
+  requireEntitlement,
+  requireAnyEntitlement,
+  requirePlanTier,
+  getUserPlanTier,
+  checkEntitlement,
+  type Entitlement,
+  type PlanTier,
+} from './entitlements.js';

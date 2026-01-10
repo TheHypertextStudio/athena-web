@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import { DndContext, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
-import { DayCalendar } from '@/components/objects/surfaces/DayCalendar';
+import { CalendarContainer } from '@/components/objects/surfaces/CalendarContainer';
 import { EntryCreationPopover } from '@/components/calendar/EntryCreationPopover';
 import { EntryCreationDialog } from '@/components/calendar/EntryCreationDialog';
 import { EntryContextMenu } from '@/components/calendar/EntryContextMenu';
@@ -49,8 +49,8 @@ export default function HomePage() {
     <CalendarTimezoneProvider>
       <DndContext sensors={sensors}>
         <main className="h-screen overflow-hidden p-4 md:p-6">
-          <div className="mx-auto h-full max-w-xl">
-            <DayCalendar
+          <div className="mx-auto h-full max-w-6xl">
+            <CalendarContainer
               date={calendar.date}
               entries={calendar.entries}
               startHour={0}

@@ -1914,6 +1914,1312 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/settings/': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get user settings
+     * @description Retrieve the current user's settings.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Settings retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['SettingsResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /**
+     * Update user settings
+     * @description Update the current user's settings. Only provided fields will be updated.
+     */
+    patch: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': components['schemas']['UpdateSettingsRequest'];
+        };
+      };
+      responses: {
+        /** @description Settings updated successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['SettingsResponse'];
+          };
+        };
+        /** @description Validation error */
+        400: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ValidationError'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    trace?: never;
+  };
+  '/api/account/': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get account overview
+     * @description Retrieve account information and usage statistics.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Account overview retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['AccountOverviewResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    /**
+     * Delete account
+     * @description Permanently delete the user account and all associated data.
+     */
+    delete: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': components['schemas']['DeleteAccountRequest'];
+        };
+      };
+      responses: {
+        /** @description Account deleted successfully */
+        204: {
+          headers: Record<string, unknown>;
+          content?: never;
+        };
+        /** @description Invalid confirmation string */
+        400: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ValidationError'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/account/export': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Export user data
+     * @description Export all user data as JSON for GDPR compliance.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Data export successful */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['DataExportResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/billing/cancel': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Cancel subscription
+     * @description Cancel subscription at the end of the current billing period.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Subscription cancellation scheduled */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['MessageResponse'];
+          };
+        };
+        /** @description No active subscription */
+        400: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ErrorResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/billing/entitlements/{feature}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Check feature access
+     * @description Check if user has access to a specific feature.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Feature identifier */
+          feature: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Feature access status retrieved */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['FeatureAccessResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/billing/checkout': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Create checkout session
+     * @description Create a Stripe checkout session for plan upgrade.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': components['schemas']['CheckoutRequest'];
+        };
+      };
+      responses: {
+        /** @description Checkout session created */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['CheckoutResponse'];
+          };
+        };
+        /** @description Validation error */
+        400: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ValidationError'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/billing/portal': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Create portal session
+     * @description Create a Stripe customer portal session for billing management.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': components['schemas']['PortalRequest'];
+        };
+      };
+      responses: {
+        /** @description Portal session created */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['PortalResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/billing/payment-methods/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Delete payment method
+     * @description Delete a saved payment method.
+     */
+    delete: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Payment method ID */
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Payment method deleted successfully */
+        204: {
+          headers: Record<string, unknown>;
+          content?: never;
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Payment method not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/billing/entitlements': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get entitlements
+     * @description Get all feature entitlements for the current plan.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Entitlements retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['EntitlementsResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/billing/invoices': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get invoices
+     * @description Get billing history and invoices.
+     */
+    get: {
+      parameters: {
+        query?: {
+          /** @description Maximum number of invoices to return */
+          limit?: number;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Invoices retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['InvoicesResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/billing/payment-methods': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get payment methods
+     * @description Get saved payment methods.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Payment methods retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['PaymentMethodsResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/billing/plans': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get available plans
+     * @description Get all available subscription plans. Does not require authentication.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Plans retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['PlansResponse'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/billing/subscription': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get subscription
+     * @description Get current subscription status and plan details.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Subscription retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['SubscriptionResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/billing/resume': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Resume subscription
+     * @description Resume a cancelled subscription before it expires.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Subscription resumed */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['MessageResponse'];
+          };
+        };
+        /** @description Subscription cannot be resumed */
+        400: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ErrorResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/billing/payment-methods/{id}/default': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Set default payment method
+     * @description Set a payment method as the default.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Payment method ID */
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Default payment method updated */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['MessageResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Payment method not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/auth/passkeys/{passkeyId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Delete passkey
+     * @description Delete a registered passkey.
+     */
+    delete: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Passkey ID */
+          passkeyId: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Passkey deleted successfully */
+        204: {
+          headers: Record<string, unknown>;
+          content?: never;
+        };
+        /** @description Cannot delete last authentication method */
+        400: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ErrorResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Passkey not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    options?: never;
+    head?: never;
+    /**
+     * Update passkey
+     * @description Update passkey display name.
+     */
+    patch: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Passkey ID */
+          passkeyId: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': components['schemas']['UpdatePasskeyRequest'];
+        };
+      };
+      responses: {
+        /** @description Passkey updated */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UpdatePasskeyResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Passkey not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    trace?: never;
+  };
+  '/api/auth/backup-codes/generate': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Generate backup codes
+     * @description Generate new backup codes. This invalidates any existing codes.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Backup codes generated */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['GenerateBackupCodesResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/auth/backup-codes': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get backup codes status
+     * @description Get information about backup codes for the current user.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Backup codes status retrieved */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['BackupCodesInfoResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/auth/linked-accounts': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get linked accounts
+     * @description Get all linked OAuth accounts.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Linked accounts retrieved */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['LinkedAccountsResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/auth/passkeys': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get passkeys
+     * @description Get all registered passkeys.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Passkeys retrieved */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['PasskeysResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/auth/sessions': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get active sessions
+     * @description Get all active sessions for the current user.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Sessions retrieved */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['SessionsResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/auth/sessions/revoke-all': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Revoke all sessions
+     * @description Revoke all sessions except the current one.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description All sessions revoked */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['RevokeAllSessionsResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/auth/sessions/{sessionId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Revoke session
+     * @description Revoke a specific session.
+     */
+    delete: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Session ID */
+          sessionId: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Session revoked successfully */
+        204: {
+          headers: Record<string, unknown>;
+          content?: never;
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Session not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/auth/linked-accounts/{accountId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Unlink account
+     * @description Unlink an OAuth account.
+     */
+    delete: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Linked account ID */
+          accountId: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Account unlinked successfully */
+        204: {
+          headers: Record<string, unknown>;
+          content?: never;
+        };
+        /** @description Cannot unlink last authentication method */
+        400: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ErrorResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Linked account not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/auth/backup-codes/verify': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Verify backup code
+     * @description Verify a backup code for account recovery. Does not require authentication.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': components['schemas']['VerifyBackupCodeRequest'];
+        };
+      };
+      responses: {
+        /** @description Backup code verified */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['VerifyBackupCodeResponse'];
+          };
+        };
+        /** @description Invalid backup code */
+        400: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ValidationError'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2826,6 +4132,532 @@ export interface components {
       color?: string | null;
       /** @description Recurrence rule (null to clear) */
       recurrenceRule?: string | null;
+    };
+    /** @description Settings response */
+    SettingsResponse: {
+      data: components['schemas']['UserSettings'];
+    };
+    UserSettings: {
+      /**
+       * Format: uuid
+       * @description Settings UUID
+       */
+      id: string;
+      /**
+       * Format: uuid
+       * @description User UUID
+       */
+      userId: string;
+      /**
+       * @description Preferred display name
+       * @example John
+       */
+      preferredName: string | null;
+      /**
+       * @description User timezone (IANA format)
+       * @example America/New_York
+       */
+      timezone: string;
+      /**
+       * @description Daily planning reminder time (HH:MM format)
+       * @example 09:00
+       */
+      dailyPlanningTime: string | null;
+      /**
+       * @description Daily review reminder time (HH:MM format)
+       * @example 17:00
+       */
+      dailyReviewTime: string | null;
+      /**
+       * @description Whether client-side encryption is enabled
+       * @example false
+       */
+      encryptionEnabled: boolean;
+      /**
+       * Format: date-time
+       * @description Creation timestamp
+       * @example 2025-01-09T12:00:00Z
+       */
+      createdAt: string;
+      /**
+       * Format: date-time
+       * @description Last update timestamp
+       * @example 2025-01-09T12:00:00Z
+       */
+      updatedAt: string;
+    };
+    UpdateSettingsRequest: {
+      /** @description Preferred display name (null to clear) */
+      preferredName?: string | null;
+      /**
+       * @description User timezone (IANA format)
+       * @example America/New_York
+       */
+      timezone?: string;
+      /**
+       * @description Daily planning reminder time (HH:MM format, null to clear)
+       * @example 09:00
+       */
+      dailyPlanningTime?: string | null;
+      /**
+       * @description Daily review reminder time (HH:MM format, null to clear)
+       * @example 17:00
+       */
+      dailyReviewTime?: string | null;
+      /** @description Whether to enable client-side encryption */
+      encryptionEnabled?: boolean;
+    };
+    DeleteAccountRequest: {
+      /**
+       * @description Confirmation string - must be exactly "DELETE_MY_ACCOUNT"
+       * @example DELETE_MY_ACCOUNT
+       * @enum {string}
+       */
+      confirmation: 'DELETE_MY_ACCOUNT';
+    };
+    DataExportResponse: {
+      /**
+       * @description Export format version
+       * @example 1.0
+       */
+      exportVersion: string;
+      /** @description Export timestamp */
+      exportedAt: string;
+      user: {
+        /** Format: uuid */
+        id: string;
+        name: string;
+        email: string;
+        /**
+         * Format: date-time
+         * @description ISO 8601 timestamp
+         * @example 2025-01-09T12:00:00Z
+         */
+        createdAt: string;
+      };
+      /** @description User settings */
+      settings: Record<string, unknown>;
+      /** @description Subscription info */
+      subscription: {
+        planTier: string;
+        status: string;
+      } | null;
+      data: {
+        initiatives: Record<string, unknown>[];
+        projects: Record<string, unknown>[];
+        tasks: Record<string, unknown>[];
+        events: Record<string, unknown>[];
+        tags: Record<string, unknown>[];
+      };
+      integrations: {
+        provider: string;
+        /**
+         * Format: date-time
+         * @description ISO 8601 timestamp
+         * @example 2025-01-09T12:00:00Z
+         */
+        connectedAt: string;
+      }[];
+    };
+    /** @description Account overview response */
+    AccountOverviewResponse: {
+      data: components['schemas']['AccountOverview'];
+    };
+    AccountOverview: {
+      /**
+       * Format: uuid
+       * @description User UUID
+       */
+      id: string;
+      /**
+       * @description User display name
+       * @example John Doe
+       */
+      name: string;
+      /**
+       * Format: email
+       * @description User email
+       * @example john@example.com
+       */
+      email: string;
+      /** @description Whether email is verified */
+      emailVerified: boolean;
+      /** @description Profile image URL */
+      image: string | null;
+      /**
+       * Format: date-time
+       * @description Account creation timestamp
+       * @example 2025-01-09T12:00:00Z
+       */
+      createdAt: string;
+      stats: components['schemas']['AccountStats'];
+    };
+    /** @description Account usage statistics */
+    AccountStats: {
+      /** @description Number of initiatives */
+      initiatives: number;
+      /** @description Number of projects */
+      projects: number;
+      /** @description Number of tasks */
+      tasks: number;
+      /** @description Number of events */
+      events: number;
+    };
+    /** @description Message response */
+    MessageResponse: {
+      data: {
+        message: string;
+      };
+    };
+    /** @description Feature access response */
+    FeatureAccessResponse: {
+      data: components['schemas']['FeatureAccess'];
+    };
+    FeatureAccess: {
+      /** @description Feature identifier */
+      feature: string;
+      /** @description Whether user has access */
+      hasAccess: boolean;
+      /**
+       * @description Subscription plan tier
+       * @example pro
+       * @enum {string}
+       */
+      planTier: 'free' | 'pro' | 'team';
+    };
+    /** @description Checkout response */
+    CheckoutResponse: {
+      data: {
+        /**
+         * Format: uri
+         * @description Stripe checkout URL
+         */
+        checkoutUrl: string;
+        /** @description Checkout session ID */
+        sessionId: string;
+      };
+    };
+    CheckoutRequest: {
+      /**
+       * @description Plan to upgrade to
+       * @enum {string}
+       */
+      planTier: 'pro' | 'team';
+      /**
+       * @description Billing interval
+       * @default month
+       * @example month
+       * @enum {string}
+       */
+      billingInterval: 'month' | 'year';
+      /**
+       * Format: uri
+       * @description URL to redirect after successful checkout
+       */
+      successUrl: string;
+      /**
+       * Format: uri
+       * @description URL to redirect after cancelled checkout
+       */
+      cancelUrl: string;
+      /** @description Number of trial days */
+      trialDays?: number;
+      /** @description Coupon code to apply */
+      couponCode?: string;
+    };
+    /** @description Portal response */
+    PortalResponse: {
+      data: {
+        /**
+         * Format: uri
+         * @description Stripe portal URL
+         */
+        portalUrl: string;
+      };
+    };
+    PortalRequest: {
+      /**
+       * Format: uri
+       * @description URL to return to after portal session
+       */
+      returnUrl: string;
+    };
+    /** @description Entitlements response */
+    EntitlementsResponse: {
+      data: components['schemas']['Entitlements'];
+    };
+    Entitlements: {
+      /**
+       * @description Subscription plan tier
+       * @example pro
+       * @enum {string}
+       */
+      planTier: 'free' | 'pro' | 'team';
+      /** @description List of enabled features */
+      entitlements: string[];
+    };
+    /** @description Invoices response */
+    InvoicesResponse: {
+      data: {
+        invoices: components['schemas']['Invoice'][];
+      };
+    };
+    Invoice: {
+      /** @description Invoice ID */
+      id: string;
+      /** @description Invoice number */
+      number: string | null;
+      /** @description Invoice status */
+      status: string;
+      /** @description Amount in cents */
+      amount: number;
+      /**
+       * @description Currency code
+       * @example usd
+       */
+      currency: string;
+      /**
+       * Format: date-time
+       * @description Invoice creation date
+       * @example 2025-01-09T12:00:00Z
+       */
+      createdAt: string;
+      /** @description URL to download PDF */
+      pdfUrl: string | null;
+    };
+    /** @description Payment methods response */
+    PaymentMethodsResponse: {
+      data: {
+        paymentMethods: components['schemas']['PaymentMethod'][];
+      };
+    };
+    PaymentMethod: {
+      /** @description Payment method ID */
+      id: string;
+      /**
+       * @description Payment method type
+       * @example card
+       */
+      type: string;
+      /** @description Card details */
+      card: {
+        /**
+         * @description Card brand
+         * @example visa
+         */
+        brand: string;
+        /**
+         * @description Last 4 digits
+         * @example 4242
+         */
+        last4: string;
+        /** @description Expiration month */
+        expMonth: number;
+        /** @description Expiration year */
+        expYear: number;
+      } | null;
+      /** @description Whether this is the default payment method */
+      isDefault: boolean;
+    };
+    /** @description Plans response */
+    PlansResponse: {
+      data: {
+        plans: components['schemas']['Plan'][];
+      };
+    };
+    Plan: {
+      /** @description Plan identifier */
+      id: string;
+      /**
+       * @description Plan display name
+       * @example Pro
+       */
+      name: string;
+      /** @description Plan description */
+      description: string;
+      /**
+       * @description Monthly price in cents
+       * @example 1200
+       */
+      monthlyPrice: number;
+      /**
+       * @description Yearly price in cents
+       * @example 9600
+       */
+      yearlyPrice: number;
+      /** @description List of included features */
+      features: string[];
+      /** @description Plan limits */
+      limits: Record<string, number>;
+    };
+    /** @description Subscription response */
+    SubscriptionResponse: {
+      data: components['schemas']['Subscription'];
+    };
+    Subscription: {
+      /**
+       * @description Subscription plan tier
+       * @example pro
+       * @enum {string}
+       */
+      planTier: 'free' | 'pro' | 'team';
+      /**
+       * @description Subscription status
+       * @example active
+       */
+      status: string;
+      /** @description List of enabled features */
+      entitlements: string[];
+      /**
+       * Format: date-time
+       * @description Current period start
+       * @example 2025-01-09T12:00:00Z
+       */
+      currentPeriodStart: string | null;
+      /**
+       * Format: date-time
+       * @description Current period end
+       * @example 2025-01-09T12:00:00Z
+       */
+      currentPeriodEnd: string | null;
+      /** @description Whether subscription will cancel at period end */
+      cancelAtPeriodEnd: boolean;
+    };
+    GenerateBackupCodesResponse: {
+      /** @description Generated backup codes */
+      codes: string[];
+      /** @description Success message */
+      message: string;
+      /** @description Number of codes generated */
+      count: number;
+    };
+    /** @description Backup codes info response */
+    BackupCodesInfoResponse: {
+      data: components['schemas']['BackupCodesInfo'];
+    };
+    BackupCodesInfo: {
+      /** @description Whether user has backup codes */
+      hasBackupCodes: boolean;
+      /** @description Number of unused backup codes */
+      remainingCount: number;
+      /**
+       * Format: date-time
+       * @description When codes were generated
+       * @example 2025-01-09T12:00:00Z
+       */
+      createdAt: string | null;
+    };
+    LinkedAccountsResponse: {
+      accounts: components['schemas']['LinkedAccount'][];
+      /** @description Total number of linked accounts */
+      count: number;
+    };
+    LinkedAccount: {
+      /** @description Account link ID */
+      id: string;
+      /**
+       * @description OAuth provider ID
+       * @example google
+       */
+      providerId: string;
+      /** @description Provider account ID */
+      accountId: string;
+      /**
+       * Format: date-time
+       * @description Link creation time
+       * @example 2025-01-09T12:00:00Z
+       */
+      createdAt: string;
+    };
+    PasskeysResponse: {
+      passkeys: components['schemas']['Passkey'][];
+      /** @description Total number of passkeys */
+      count: number;
+    };
+    Passkey: {
+      /** @description Passkey ID */
+      id: string;
+      /**
+       * @description Passkey display name
+       * @example MacBook Pro
+       */
+      name: string;
+      /** @description Device type */
+      deviceType: string | null;
+      /** @description Whether passkey is backed up */
+      backedUp: boolean;
+      /**
+       * Format: date-time
+       * @description Registration time
+       * @example 2025-01-09T12:00:00Z
+       */
+      createdAt: string;
+    };
+    SessionsResponse: {
+      sessions: components['schemas']['Session'][];
+      /** @description Total number of sessions */
+      count: number;
+    };
+    Session: {
+      /** @description Session ID */
+      id: string;
+      /** @description IP address of session */
+      ipAddress: string | null;
+      /** @description User agent string */
+      userAgent: string | null;
+      /**
+       * Format: date-time
+       * @description Session creation time
+       * @example 2025-01-09T12:00:00Z
+       */
+      createdAt: string;
+      /**
+       * Format: date-time
+       * @description Session expiration time
+       * @example 2025-01-09T12:00:00Z
+       */
+      expiresAt: string;
+      /** @description Whether this is the current session */
+      isCurrent: boolean;
+    };
+    RevokeAllSessionsResponse: {
+      /** @enum {boolean} */
+      success: true;
+      /** @description Success message */
+      message: string;
+    };
+    UpdatePasskeyResponse: {
+      /** @enum {boolean} */
+      success: true;
+      /** @description Updated passkey name */
+      name: string;
+    };
+    UpdatePasskeyRequest: {
+      /**
+       * @description New passkey display name
+       * @example Work MacBook
+       */
+      name: string;
+    };
+    VerifyBackupCodeResponse: {
+      /** @enum {boolean} */
+      success: true;
+      /** @description Success message */
+      message: string;
+      /** @description Token for account recovery */
+      recoveryToken: string;
+      /** @description Token expiration time */
+      expiresAt: string;
+    };
+    VerifyBackupCodeRequest: {
+      /**
+       * Format: email
+       * @description User email address
+       * @example user@example.com
+       */
+      email: string;
+      /** @description Backup code (8-10 characters) */
+      code: string;
     };
   };
   responses: never;

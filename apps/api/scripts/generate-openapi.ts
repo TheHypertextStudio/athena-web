@@ -20,6 +20,10 @@ import * as projectRouteDefinitions from '../src/routes/projects.openapi.js';
 import * as eventRouteDefinitions from '../src/routes/events.openapi.js';
 import * as initiativeRouteDefinitions from '../src/routes/initiatives.openapi.js';
 import * as timeBlockRouteDefinitions from '../src/routes/time-blocks.openapi.js';
+import * as settingsRouteDefinitions from '../src/routes/settings.openapi.js';
+import * as accountRouteDefinitions from '../src/routes/account.openapi.js';
+import * as billingRouteDefinitions from '../src/routes/billing.openapi.js';
+import * as authRouteDefinitions from '../src/routes/auth.openapi.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -55,6 +59,10 @@ registerRoutes(app, projectRouteDefinitions, '/api/projects');
 registerRoutes(app, eventRouteDefinitions, '/api/events');
 registerRoutes(app, initiativeRouteDefinitions, '/api/initiatives');
 registerRoutes(app, timeBlockRouteDefinitions, '/api/time-blocks');
+registerRoutes(app, settingsRouteDefinitions, '/api/settings');
+registerRoutes(app, accountRouteDefinitions, '/api/account');
+registerRoutes(app, billingRouteDefinitions, '/api/billing');
+registerRoutes(app, authRouteDefinitions, '/api/auth');
 
 // Register OpenAPI document
 app.doc('/api/openapi.json', {

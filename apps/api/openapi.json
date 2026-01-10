@@ -1503,6 +1503,994 @@
             "description": "Recurrence rule (null to clear)"
           }
         }
+      },
+      "SettingsResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/UserSettings"
+          }
+        },
+        "required": ["data"],
+        "description": "Settings response"
+      },
+      "UserSettings": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Settings UUID"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "User UUID"
+          },
+          "preferredName": {
+            "type": ["string", "null"],
+            "description": "Preferred display name",
+            "example": "John"
+          },
+          "timezone": {
+            "type": "string",
+            "description": "User timezone (IANA format)",
+            "example": "America/New_York"
+          },
+          "dailyPlanningTime": {
+            "type": ["string", "null"],
+            "description": "Daily planning reminder time (HH:MM format)",
+            "example": "09:00"
+          },
+          "dailyReviewTime": {
+            "type": ["string", "null"],
+            "description": "Daily review reminder time (HH:MM format)",
+            "example": "17:00"
+          },
+          "encryptionEnabled": {
+            "type": "boolean",
+            "description": "Whether client-side encryption is enabled",
+            "example": false
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation timestamp",
+            "example": "2025-01-09T12:00:00Z"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last update timestamp",
+            "example": "2025-01-09T12:00:00Z"
+          }
+        },
+        "required": [
+          "id",
+          "userId",
+          "preferredName",
+          "timezone",
+          "dailyPlanningTime",
+          "dailyReviewTime",
+          "encryptionEnabled",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "UpdateSettingsRequest": {
+        "type": "object",
+        "properties": {
+          "preferredName": {
+            "type": ["string", "null"],
+            "maxLength": 100,
+            "description": "Preferred display name (null to clear)"
+          },
+          "timezone": {
+            "type": "string",
+            "maxLength": 100,
+            "description": "User timezone (IANA format)",
+            "example": "America/New_York"
+          },
+          "dailyPlanningTime": {
+            "type": ["string", "null"],
+            "pattern": "^\\d{2}:\\d{2}$",
+            "description": "Daily planning reminder time (HH:MM format, null to clear)",
+            "example": "09:00"
+          },
+          "dailyReviewTime": {
+            "type": ["string", "null"],
+            "pattern": "^\\d{2}:\\d{2}$",
+            "description": "Daily review reminder time (HH:MM format, null to clear)",
+            "example": "17:00"
+          },
+          "encryptionEnabled": {
+            "type": "boolean",
+            "description": "Whether to enable client-side encryption"
+          }
+        }
+      },
+      "DeleteAccountRequest": {
+        "type": "object",
+        "properties": {
+          "confirmation": {
+            "type": "string",
+            "enum": ["DELETE_MY_ACCOUNT"],
+            "description": "Confirmation string - must be exactly \"DELETE_MY_ACCOUNT\"",
+            "example": "DELETE_MY_ACCOUNT"
+          }
+        },
+        "required": ["confirmation"]
+      },
+      "DataExportResponse": {
+        "type": "object",
+        "properties": {
+          "exportVersion": {
+            "type": "string",
+            "description": "Export format version",
+            "example": "1.0"
+          },
+          "exportedAt": {
+            "type": "string",
+            "description": "Export timestamp"
+          },
+          "user": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "ISO 8601 timestamp",
+                "example": "2025-01-09T12:00:00Z"
+              }
+            },
+            "required": ["id", "name", "email", "createdAt"]
+          },
+          "settings": {
+            "type": "object",
+            "additionalProperties": {},
+            "description": "User settings"
+          },
+          "subscription": {
+            "type": ["object", "null"],
+            "properties": {
+              "planTier": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              }
+            },
+            "required": ["planTier", "status"],
+            "description": "Subscription info"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "initiatives": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              },
+              "projects": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              },
+              "tasks": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              },
+              "events": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              },
+              "tags": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              }
+            },
+            "required": ["initiatives", "projects", "tasks", "events", "tags"]
+          },
+          "integrations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "provider": {
+                  "type": "string"
+                },
+                "connectedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "ISO 8601 timestamp",
+                  "example": "2025-01-09T12:00:00Z"
+                }
+              },
+              "required": ["provider", "connectedAt"]
+            }
+          }
+        },
+        "required": [
+          "exportVersion",
+          "exportedAt",
+          "user",
+          "settings",
+          "subscription",
+          "data",
+          "integrations"
+        ]
+      },
+      "AccountOverviewResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/AccountOverview"
+          }
+        },
+        "required": ["data"],
+        "description": "Account overview response"
+      },
+      "AccountOverview": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "User UUID"
+          },
+          "name": {
+            "type": "string",
+            "description": "User display name",
+            "example": "John Doe"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "User email",
+            "example": "john@example.com"
+          },
+          "emailVerified": {
+            "type": "boolean",
+            "description": "Whether email is verified"
+          },
+          "image": {
+            "type": ["string", "null"],
+            "description": "Profile image URL"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Account creation timestamp",
+            "example": "2025-01-09T12:00:00Z"
+          },
+          "stats": {
+            "$ref": "#/components/schemas/AccountStats"
+          }
+        },
+        "required": ["id", "name", "email", "emailVerified", "image", "createdAt", "stats"]
+      },
+      "AccountStats": {
+        "type": "object",
+        "properties": {
+          "initiatives": {
+            "type": "integer",
+            "description": "Number of initiatives"
+          },
+          "projects": {
+            "type": "integer",
+            "description": "Number of projects"
+          },
+          "tasks": {
+            "type": "integer",
+            "description": "Number of tasks"
+          },
+          "events": {
+            "type": "integer",
+            "description": "Number of events"
+          }
+        },
+        "required": ["initiatives", "projects", "tasks", "events"],
+        "description": "Account usage statistics"
+      },
+      "MessageResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": ["message"]
+          }
+        },
+        "required": ["data"],
+        "description": "Message response"
+      },
+      "FeatureAccessResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/FeatureAccess"
+          }
+        },
+        "required": ["data"],
+        "description": "Feature access response"
+      },
+      "FeatureAccess": {
+        "type": "object",
+        "properties": {
+          "feature": {
+            "type": "string",
+            "description": "Feature identifier"
+          },
+          "hasAccess": {
+            "type": "boolean",
+            "description": "Whether user has access"
+          },
+          "planTier": {
+            "type": "string",
+            "enum": ["free", "pro", "team"],
+            "description": "Subscription plan tier",
+            "example": "pro"
+          }
+        },
+        "required": ["feature", "hasAccess", "planTier"]
+      },
+      "CheckoutResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "checkoutUrl": {
+                "type": "string",
+                "format": "uri",
+                "description": "Stripe checkout URL"
+              },
+              "sessionId": {
+                "type": "string",
+                "description": "Checkout session ID"
+              }
+            },
+            "required": ["checkoutUrl", "sessionId"]
+          }
+        },
+        "required": ["data"],
+        "description": "Checkout response"
+      },
+      "CheckoutRequest": {
+        "type": "object",
+        "properties": {
+          "planTier": {
+            "type": "string",
+            "enum": ["pro", "team"],
+            "description": "Plan to upgrade to"
+          },
+          "billingInterval": {
+            "type": "string",
+            "enum": ["month", "year"],
+            "default": "month",
+            "description": "Billing interval",
+            "example": "month"
+          },
+          "successUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL to redirect after successful checkout"
+          },
+          "cancelUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL to redirect after cancelled checkout"
+          },
+          "trialDays": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Number of trial days"
+          },
+          "couponCode": {
+            "type": "string",
+            "description": "Coupon code to apply"
+          }
+        },
+        "required": ["planTier", "successUrl", "cancelUrl"]
+      },
+      "PortalResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "portalUrl": {
+                "type": "string",
+                "format": "uri",
+                "description": "Stripe portal URL"
+              }
+            },
+            "required": ["portalUrl"]
+          }
+        },
+        "required": ["data"],
+        "description": "Portal response"
+      },
+      "PortalRequest": {
+        "type": "object",
+        "properties": {
+          "returnUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL to return to after portal session"
+          }
+        },
+        "required": ["returnUrl"]
+      },
+      "EntitlementsResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Entitlements"
+          }
+        },
+        "required": ["data"],
+        "description": "Entitlements response"
+      },
+      "Entitlements": {
+        "type": "object",
+        "properties": {
+          "planTier": {
+            "type": "string",
+            "enum": ["free", "pro", "team"],
+            "description": "Subscription plan tier",
+            "example": "pro"
+          },
+          "entitlements": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of enabled features"
+          }
+        },
+        "required": ["planTier", "entitlements"]
+      },
+      "InvoicesResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "invoices": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Invoice"
+                }
+              }
+            },
+            "required": ["invoices"]
+          }
+        },
+        "required": ["data"],
+        "description": "Invoices response"
+      },
+      "Invoice": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Invoice ID"
+          },
+          "number": {
+            "type": ["string", "null"],
+            "description": "Invoice number"
+          },
+          "status": {
+            "type": "string",
+            "description": "Invoice status"
+          },
+          "amount": {
+            "type": "number",
+            "description": "Amount in cents"
+          },
+          "currency": {
+            "type": "string",
+            "description": "Currency code",
+            "example": "usd"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Invoice creation date",
+            "example": "2025-01-09T12:00:00Z"
+          },
+          "pdfUrl": {
+            "type": ["string", "null"],
+            "description": "URL to download PDF"
+          }
+        },
+        "required": ["id", "number", "status", "amount", "currency", "createdAt", "pdfUrl"]
+      },
+      "PaymentMethodsResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "paymentMethods": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/PaymentMethod"
+                }
+              }
+            },
+            "required": ["paymentMethods"]
+          }
+        },
+        "required": ["data"],
+        "description": "Payment methods response"
+      },
+      "PaymentMethod": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Payment method ID"
+          },
+          "type": {
+            "type": "string",
+            "description": "Payment method type",
+            "example": "card"
+          },
+          "card": {
+            "type": ["object", "null"],
+            "properties": {
+              "brand": {
+                "type": "string",
+                "description": "Card brand",
+                "example": "visa"
+              },
+              "last4": {
+                "type": "string",
+                "description": "Last 4 digits",
+                "example": "4242"
+              },
+              "expMonth": {
+                "type": "number",
+                "description": "Expiration month"
+              },
+              "expYear": {
+                "type": "number",
+                "description": "Expiration year"
+              }
+            },
+            "required": ["brand", "last4", "expMonth", "expYear"],
+            "description": "Card details"
+          },
+          "isDefault": {
+            "type": "boolean",
+            "description": "Whether this is the default payment method"
+          }
+        },
+        "required": ["id", "type", "card", "isDefault"]
+      },
+      "PlansResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "plans": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Plan"
+                }
+              }
+            },
+            "required": ["plans"]
+          }
+        },
+        "required": ["data"],
+        "description": "Plans response"
+      },
+      "Plan": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Plan identifier"
+          },
+          "name": {
+            "type": "string",
+            "description": "Plan display name",
+            "example": "Pro"
+          },
+          "description": {
+            "type": "string",
+            "description": "Plan description"
+          },
+          "monthlyPrice": {
+            "type": "number",
+            "description": "Monthly price in cents",
+            "example": 1200
+          },
+          "yearlyPrice": {
+            "type": "number",
+            "description": "Yearly price in cents",
+            "example": 9600
+          },
+          "features": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of included features"
+          },
+          "limits": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            },
+            "description": "Plan limits"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "monthlyPrice",
+          "yearlyPrice",
+          "features",
+          "limits"
+        ]
+      },
+      "SubscriptionResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Subscription"
+          }
+        },
+        "required": ["data"],
+        "description": "Subscription response"
+      },
+      "Subscription": {
+        "type": "object",
+        "properties": {
+          "planTier": {
+            "type": "string",
+            "enum": ["free", "pro", "team"],
+            "description": "Subscription plan tier",
+            "example": "pro"
+          },
+          "status": {
+            "type": "string",
+            "description": "Subscription status",
+            "example": "active"
+          },
+          "entitlements": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of enabled features"
+          },
+          "currentPeriodStart": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Current period start",
+            "example": "2025-01-09T12:00:00Z"
+          },
+          "currentPeriodEnd": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Current period end",
+            "example": "2025-01-09T12:00:00Z"
+          },
+          "cancelAtPeriodEnd": {
+            "type": "boolean",
+            "description": "Whether subscription will cancel at period end"
+          }
+        },
+        "required": [
+          "planTier",
+          "status",
+          "entitlements",
+          "currentPeriodStart",
+          "currentPeriodEnd",
+          "cancelAtPeriodEnd"
+        ]
+      },
+      "GenerateBackupCodesResponse": {
+        "type": "object",
+        "properties": {
+          "codes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Generated backup codes"
+          },
+          "message": {
+            "type": "string",
+            "description": "Success message"
+          },
+          "count": {
+            "type": "integer",
+            "description": "Number of codes generated"
+          }
+        },
+        "required": ["codes", "message", "count"]
+      },
+      "BackupCodesInfoResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/BackupCodesInfo"
+          }
+        },
+        "required": ["data"],
+        "description": "Backup codes info response"
+      },
+      "BackupCodesInfo": {
+        "type": "object",
+        "properties": {
+          "hasBackupCodes": {
+            "type": "boolean",
+            "description": "Whether user has backup codes"
+          },
+          "remainingCount": {
+            "type": "integer",
+            "description": "Number of unused backup codes"
+          },
+          "createdAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When codes were generated",
+            "example": "2025-01-09T12:00:00Z"
+          }
+        },
+        "required": ["hasBackupCodes", "remainingCount", "createdAt"]
+      },
+      "LinkedAccountsResponse": {
+        "type": "object",
+        "properties": {
+          "accounts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LinkedAccount"
+            }
+          },
+          "count": {
+            "type": "integer",
+            "description": "Total number of linked accounts"
+          }
+        },
+        "required": ["accounts", "count"]
+      },
+      "LinkedAccount": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Account link ID"
+          },
+          "providerId": {
+            "type": "string",
+            "description": "OAuth provider ID",
+            "example": "google"
+          },
+          "accountId": {
+            "type": "string",
+            "description": "Provider account ID"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Link creation time",
+            "example": "2025-01-09T12:00:00Z"
+          }
+        },
+        "required": ["id", "providerId", "accountId", "createdAt"]
+      },
+      "PasskeysResponse": {
+        "type": "object",
+        "properties": {
+          "passkeys": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Passkey"
+            }
+          },
+          "count": {
+            "type": "integer",
+            "description": "Total number of passkeys"
+          }
+        },
+        "required": ["passkeys", "count"]
+      },
+      "Passkey": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Passkey ID"
+          },
+          "name": {
+            "type": "string",
+            "description": "Passkey display name",
+            "example": "MacBook Pro"
+          },
+          "deviceType": {
+            "type": ["string", "null"],
+            "description": "Device type"
+          },
+          "backedUp": {
+            "type": "boolean",
+            "description": "Whether passkey is backed up"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Registration time",
+            "example": "2025-01-09T12:00:00Z"
+          }
+        },
+        "required": ["id", "name", "deviceType", "backedUp", "createdAt"]
+      },
+      "SessionsResponse": {
+        "type": "object",
+        "properties": {
+          "sessions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Session"
+            }
+          },
+          "count": {
+            "type": "integer",
+            "description": "Total number of sessions"
+          }
+        },
+        "required": ["sessions", "count"]
+      },
+      "Session": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Session ID"
+          },
+          "ipAddress": {
+            "type": ["string", "null"],
+            "description": "IP address of session"
+          },
+          "userAgent": {
+            "type": ["string", "null"],
+            "description": "User agent string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Session creation time",
+            "example": "2025-01-09T12:00:00Z"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Session expiration time",
+            "example": "2025-01-09T12:00:00Z"
+          },
+          "isCurrent": {
+            "type": "boolean",
+            "description": "Whether this is the current session"
+          }
+        },
+        "required": ["id", "ipAddress", "userAgent", "createdAt", "expiresAt", "isCurrent"]
+      },
+      "RevokeAllSessionsResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [true]
+          },
+          "message": {
+            "type": "string",
+            "description": "Success message"
+          }
+        },
+        "required": ["success", "message"]
+      },
+      "UpdatePasskeyResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [true]
+          },
+          "name": {
+            "type": "string",
+            "description": "Updated passkey name"
+          }
+        },
+        "required": ["success", "name"]
+      },
+      "UpdatePasskeyRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "description": "New passkey display name",
+            "example": "Work MacBook"
+          }
+        },
+        "required": ["name"]
+      },
+      "VerifyBackupCodeResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [true]
+          },
+          "message": {
+            "type": "string",
+            "description": "Success message"
+          },
+          "recoveryToken": {
+            "type": "string",
+            "description": "Token for account recovery"
+          },
+          "expiresAt": {
+            "type": "string",
+            "description": "Token expiration time"
+          }
+        },
+        "required": ["success", "message", "recoveryToken", "expiresAt"]
+      },
+      "VerifyBackupCodeRequest": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "User email address",
+            "example": "user@example.com"
+          },
+          "code": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 10,
+            "description": "Backup code (8-10 characters)"
+          }
+        },
+        "required": ["email", "code"]
       }
     },
     "parameters": {}
@@ -3849,6 +4837,1052 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings/": {
+      "get": {
+        "tags": ["Settings"],
+        "summary": "Get user settings",
+        "description": "Retrieve the current user's settings.",
+        "responses": {
+          "200": {
+            "description": "Settings retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["Settings"],
+        "summary": "Update user settings",
+        "description": "Update the current user's settings. Only provided fields will be updated.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSettingsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Settings updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/account/": {
+      "delete": {
+        "tags": ["Account"],
+        "summary": "Delete account",
+        "description": "Permanently delete the user account and all associated data.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteAccountRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Account deleted successfully"
+          },
+          "400": {
+            "description": "Invalid confirmation string",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": ["Account"],
+        "summary": "Get account overview",
+        "description": "Retrieve account information and usage statistics.",
+        "responses": {
+          "200": {
+            "description": "Account overview retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountOverviewResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/account/export": {
+      "get": {
+        "tags": ["Account"],
+        "summary": "Export user data",
+        "description": "Export all user data as JSON for GDPR compliance.",
+        "responses": {
+          "200": {
+            "description": "Data export successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DataExportResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/billing/cancel": {
+      "post": {
+        "tags": ["Billing"],
+        "summary": "Cancel subscription",
+        "description": "Cancel subscription at the end of the current billing period.",
+        "responses": {
+          "200": {
+            "description": "Subscription cancellation scheduled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No active subscription",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/billing/entitlements/{feature}": {
+      "get": {
+        "tags": ["Billing"],
+        "summary": "Check feature access",
+        "description": "Check if user has access to a specific feature.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Feature identifier",
+              "example": "integrations"
+            },
+            "required": true,
+            "description": "Feature identifier",
+            "name": "feature",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Feature access status retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureAccessResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/billing/checkout": {
+      "post": {
+        "tags": ["Billing"],
+        "summary": "Create checkout session",
+        "description": "Create a Stripe checkout session for plan upgrade.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckoutRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Checkout session created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckoutResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/billing/portal": {
+      "post": {
+        "tags": ["Billing"],
+        "summary": "Create portal session",
+        "description": "Create a Stripe customer portal session for billing management.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PortalRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Portal session created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortalResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/billing/payment-methods/{id}": {
+      "delete": {
+        "tags": ["Billing"],
+        "summary": "Delete payment method",
+        "description": "Delete a saved payment method.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Payment method ID"
+            },
+            "required": true,
+            "description": "Payment method ID",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Payment method deleted successfully"
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Payment method not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/billing/entitlements": {
+      "get": {
+        "tags": ["Billing"],
+        "summary": "Get entitlements",
+        "description": "Get all feature entitlements for the current plan.",
+        "responses": {
+          "200": {
+            "description": "Entitlements retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntitlementsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/billing/invoices": {
+      "get": {
+        "tags": ["Billing"],
+        "summary": "Get invoices",
+        "description": "Get billing history and invoices.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 10,
+              "description": "Maximum number of invoices to return",
+              "example": 10
+            },
+            "required": false,
+            "description": "Maximum number of invoices to return",
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Invoices retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoicesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/billing/payment-methods": {
+      "get": {
+        "tags": ["Billing"],
+        "summary": "Get payment methods",
+        "description": "Get saved payment methods.",
+        "responses": {
+          "200": {
+            "description": "Payment methods retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentMethodsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/billing/plans": {
+      "get": {
+        "tags": ["Billing"],
+        "summary": "Get available plans",
+        "description": "Get all available subscription plans. Does not require authentication.",
+        "responses": {
+          "200": {
+            "description": "Plans retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlansResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/billing/subscription": {
+      "get": {
+        "tags": ["Billing"],
+        "summary": "Get subscription",
+        "description": "Get current subscription status and plan details.",
+        "responses": {
+          "200": {
+            "description": "Subscription retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/billing/resume": {
+      "post": {
+        "tags": ["Billing"],
+        "summary": "Resume subscription",
+        "description": "Resume a cancelled subscription before it expires.",
+        "responses": {
+          "200": {
+            "description": "Subscription resumed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Subscription cannot be resumed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/billing/payment-methods/{id}/default": {
+      "post": {
+        "tags": ["Billing"],
+        "summary": "Set default payment method",
+        "description": "Set a payment method as the default.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Payment method ID"
+            },
+            "required": true,
+            "description": "Payment method ID",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default payment method updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Payment method not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/passkeys/{passkeyId}": {
+      "delete": {
+        "tags": ["Auth"],
+        "summary": "Delete passkey",
+        "description": "Delete a registered passkey.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Passkey ID"
+            },
+            "required": true,
+            "description": "Passkey ID",
+            "name": "passkeyId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Passkey deleted successfully"
+          },
+          "400": {
+            "description": "Cannot delete last authentication method",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Passkey not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["Auth"],
+        "summary": "Update passkey",
+        "description": "Update passkey display name.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Passkey ID"
+            },
+            "required": true,
+            "description": "Passkey ID",
+            "name": "passkeyId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePasskeyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Passkey updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdatePasskeyResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Passkey not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/backup-codes/generate": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Generate backup codes",
+        "description": "Generate new backup codes. This invalidates any existing codes.",
+        "responses": {
+          "200": {
+            "description": "Backup codes generated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerateBackupCodesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/backup-codes": {
+      "get": {
+        "tags": ["Auth"],
+        "summary": "Get backup codes status",
+        "description": "Get information about backup codes for the current user.",
+        "responses": {
+          "200": {
+            "description": "Backup codes status retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackupCodesInfoResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/linked-accounts": {
+      "get": {
+        "tags": ["Auth"],
+        "summary": "Get linked accounts",
+        "description": "Get all linked OAuth accounts.",
+        "responses": {
+          "200": {
+            "description": "Linked accounts retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkedAccountsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/passkeys": {
+      "get": {
+        "tags": ["Auth"],
+        "summary": "Get passkeys",
+        "description": "Get all registered passkeys.",
+        "responses": {
+          "200": {
+            "description": "Passkeys retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeysResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/sessions": {
+      "get": {
+        "tags": ["Auth"],
+        "summary": "Get active sessions",
+        "description": "Get all active sessions for the current user.",
+        "responses": {
+          "200": {
+            "description": "Sessions retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/sessions/revoke-all": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Revoke all sessions",
+        "description": "Revoke all sessions except the current one.",
+        "responses": {
+          "200": {
+            "description": "All sessions revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevokeAllSessionsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/sessions/{sessionId}": {
+      "delete": {
+        "tags": ["Auth"],
+        "summary": "Revoke session",
+        "description": "Revoke a specific session.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Session ID"
+            },
+            "required": true,
+            "description": "Session ID",
+            "name": "sessionId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Session revoked successfully"
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/linked-accounts/{accountId}": {
+      "delete": {
+        "tags": ["Auth"],
+        "summary": "Unlink account",
+        "description": "Unlink an OAuth account.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Linked account ID"
+            },
+            "required": true,
+            "description": "Linked account ID",
+            "name": "accountId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Account unlinked successfully"
+          },
+          "400": {
+            "description": "Cannot unlink last authentication method",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Linked account not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/backup-codes/verify": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Verify backup code",
+        "description": "Verify a backup code for account recovery. Does not require authentication.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyBackupCodeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Backup code verified",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerifyBackupCodeResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid backup code",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
                 }
               }
             }

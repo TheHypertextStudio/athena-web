@@ -15,3 +15,7 @@ export * from './projects.js';
 export * from './events.js';
 export * from './initiatives.js';
 export * from './time-blocks.js';
+export * from './settings.js';
+export * from './account.js';
+export * from './billing.js';
+export * from './auth.js';

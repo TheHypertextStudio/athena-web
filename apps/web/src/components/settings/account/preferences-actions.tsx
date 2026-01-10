@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { updateSettings } from '@/lib/account-actions';
+import { getTimezoneInfo } from '@/lib/timezone-utils';
 
 const COMMON_TIMEZONES: { value: string; label: string; region: string }[] = [
   // UTC
@@ -114,36 +115,6 @@ const COMMON_TIMEZONES: { value: string; label: string; region: string }[] = [
 ];
 
 const REGION_ORDER = ['UTC', 'Americas', 'Europe', 'Africa', 'Middle East', 'Asia', 'Oceania'];
-
-function getTimezoneInfo(
-  timezone: string,
-  now: Date,
-): { offset: string; time: string; offsetMinutes: number } {
-  try {
-    const formatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: timezone,
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-    });
-    const time = formatter.format(now);
-
-    const utcDate = new Date(now.toLocaleString('en-US', { timeZone: 'UTC' }));
-    const tzDate = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
-    const diffMinutes = (tzDate.getTime() - utcDate.getTime()) / (1000 * 60);
-    const diffHours = Math.floor(Math.abs(diffMinutes) / 60);
-    const diffMins = Math.abs(diffMinutes) % 60;
-    const sign = diffMinutes >= 0 ? '+' : '-';
-    const offset =
-      diffMins > 0
-        ? `UTC${sign}${String(diffHours)}:${diffMins.toString().padStart(2, '0')}`
-        : `UTC${sign}${String(diffHours)}`;
-
-    return { offset, time, offsetMinutes: diffMinutes };
-  } catch {
-    return { offset: 'UTC', time: '--:--', offsetMinutes: 0 };
-  }
-}
 
 function detectBrowserTimezone(): string | null {
   try {

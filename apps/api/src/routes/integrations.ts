@@ -276,8 +276,8 @@ integrationRoutes.post('/webhooks/:provider', async (c) => {
 
   // Verify webhook signature based on provider
   const webhookSecrets: Record<string, string | undefined> = {
-    linear: process.env['LINEAR_WEBHOOK_SECRET'],
-    github: process.env['GITHUB_WEBHOOK_SECRET'],
+    linear: process.env.LINEAR_WEBHOOK_SECRET,
+    github: process.env.GITHUB_WEBHOOK_SECRET,
   };
 
   const secret = webhookSecrets[provider];

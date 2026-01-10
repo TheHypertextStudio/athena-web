@@ -270,3 +270,133 @@ export function getDayBounds(date: Date): { startDate: string; endDate: string }
   const endDate = toDateString(nextDay);
   return { startDate, endDate };
 }
+
+/**
+ * Get the start of the week (Sunday) for a given date.
+ */
+export function getStartOfWeek(date: Date): Date {
+  const result = new Date(date);
+  result.setHours(0, 0, 0, 0);
+  const day = result.getDay();
+  result.setDate(result.getDate() - day);
+  return result;
+}
+
+/**
+ * Get the end of the week (Saturday 23:59:59) for a given date.
+ */
+export function getEndOfWeek(date: Date): Date {
+  const startOfWeek = getStartOfWeek(date);
+  const result = new Date(startOfWeek);
+  result.setDate(result.getDate() + 6);
+  result.setHours(23, 59, 59, 999);
+  return result;
+}
+
+/**
+ * Get the start and end of a week as ISO strings.
+ * Week starts on Sunday.
+ */
+export function getWeekBounds(date: Date): { startDate: string; endDate: string } {
+  const startOfWeek = getStartOfWeek(date);
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setDate(endOfWeek.getDate() + 7);
+  return {
+    startDate: toDateString(startOfWeek),
+    endDate: toDateString(endOfWeek),
+  };
+}
+
+/**
+ * Get the start of the month for a given date.
+ */
+export function getStartOfMonth(date: Date): Date {
+  const result = new Date(date);
+  result.setHours(0, 0, 0, 0);
+  result.setDate(1);
+  return result;
+}
+
+/**
+ * Get the end of the month for a given date.
+ */
+export function getEndOfMonth(date: Date): Date {
+  const result = new Date(date);
+  result.setMonth(result.getMonth() + 1);
+  result.setDate(0); // Last day of previous month
+  result.setHours(23, 59, 59, 999);
+  return result;
+}
+
+/**
+ * Get the start and end of a month as ISO strings.
+ * For calendar grid display, includes days from adjacent months to fill the grid.
+ */
+export function getMonthBounds(date: Date): { startDate: string; endDate: string } {
+  const startOfMonth = getStartOfMonth(date);
+  // Go back to the Sunday of the week containing the 1st
+  const gridStart = getStartOfWeek(startOfMonth);
+
+  const endOfMonth = getEndOfMonth(date);
+  // Go forward to the Saturday of the week containing the last day
+  const gridEnd = getEndOfWeek(endOfMonth);
+  // Add one day for exclusive end bound
+  const gridEndExclusive = new Date(gridEnd);
+  gridEndExclusive.setDate(gridEndExclusive.getDate() + 1);
+
+  return {
+    startDate: toDateString(gridStart),
+    endDate: toDateString(gridEndExclusive),
+  };
+}
+
+/**
+ * Get an array of dates for a week starting from a given date.
+ */
+export function getWeekDates(startDate: Date): Date[] {
+  const dates: Date[] = [];
+  const start = getStartOfWeek(startDate);
+  for (let i = 0; i < 7; i++) {
+    const date = new Date(start);
+    date.setDate(start.getDate() + i);
+    dates.push(date);
+  }
+  return dates;
+}
+
+/**
+ * Get an array of dates for a month grid (6 weeks, 42 days).
+ */
+export function getMonthGridDates(date: Date): Date[] {
+  const dates: Date[] = [];
+  const startOfMonth = getStartOfMonth(date);
+  const gridStart = getStartOfWeek(startOfMonth);
+
+  for (let i = 0; i < 42; i++) {
+    const cellDate = new Date(gridStart);
+    cellDate.setDate(gridStart.getDate() + i);
+    dates.push(cellDate);
+  }
+  return dates;
+}
+
+/**
+ * Check if two dates are the same day.
+ */
+export function isSameDay(date1: Date, date2: Date): boolean {
+  return (
+    date1.getFullYear() === date2.getFullYear() &&
+    date1.getMonth() === date2.getMonth() &&
+    date1.getDate() === date2.getDate()
+  );
+}
+
+/**
+ * Check if a date is in the same month as a reference date.
+ */
+export function isSameMonth(date: Date, referenceDate: Date): boolean {
+  return (
+    date.getFullYear() === referenceDate.getFullYear() &&
+    date.getMonth() === referenceDate.getMonth()
+  );
+}

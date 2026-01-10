@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import { DndContext, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { DayCalendar } from '@/components/objects/surfaces/DayCalendar';
 import { EntryCreationPopover } from '@/components/calendar/EntryCreationPopover';
+import { EntryCreationDialog } from '@/components/calendar/EntryCreationDialog';
 import { EntryContextMenu } from '@/components/calendar/EntryContextMenu';
 import { EntryDetailPopover } from '@/components/calendar/EntryDetailPopover';
 import { surfaceId } from '@/components/objects/types';
@@ -74,6 +75,7 @@ export default function HomePage() {
         entry={calendar.contextMenu.entry}
         position={calendar.contextMenu.position}
         onClose={calendar.closeContextMenu}
+        onEdit={calendar.openEditDialog}
         onDelete={(entry) => {
           calendar.deleteEntry(entry.id);
         }}
@@ -87,8 +89,24 @@ export default function HomePage() {
         }}
         entry={calendar.detailPopover.entry}
         anchorRect={calendar.detailPopover.anchorRect}
+        onEdit={calendar.openEditDialog}
         onDelete={(entry) => {
           calendar.deleteEntry(entry.id);
+        }}
+      />
+
+      {/* Edit Dialog */}
+      <EntryCreationDialog
+        open={calendar.editDialog.open}
+        onOpenChange={(open) => {
+          if (!open) calendar.closeEditDialog();
+        }}
+        startTime={calendar.editDialog.entry?.startTime ?? new Date()}
+        endTime={calendar.editDialog.entry?.endTime ?? new Date()}
+        entry={calendar.editDialog.entry ?? undefined}
+        onSubmit={calendar.createEntry}
+        onUpdate={(entryId, updates) => {
+          calendar.updateEntry(entryId, updates);
         }}
       />
     </DndContext>

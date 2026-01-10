@@ -19,11 +19,11 @@ import * as schema from './auth-schema';
  * In development, use localhost:3000.
  */
 function getBaseURL(): string {
-  if (process.env['NEXTAUTH_URL']) {
-    return process.env['NEXTAUTH_URL'];
+  if (process.env.NEXTAUTH_URL) {
+    return process.env.NEXTAUTH_URL;
   }
-  if (process.env['VERCEL_URL']) {
-    return `https://${process.env['VERCEL_URL']}`;
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`;
   }
   return 'http://localhost:3000';
 }
@@ -36,8 +36,8 @@ const baseURL = getBaseURL();
 function buildSocialProviders() {
   const providers: Record<string, { clientId: string; clientSecret: string }> = {};
 
-  const googleClientId = process.env['GOOGLE_CLIENT_ID'];
-  const googleClientSecret = process.env['GOOGLE_CLIENT_SECRET'];
+  const googleClientId = process.env.GOOGLE_CLIENT_ID;
+  const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
   if (googleClientId && googleClientSecret) {
     providers['google'] = {
       clientId: googleClientId,
@@ -45,8 +45,8 @@ function buildSocialProviders() {
     };
   }
 
-  const appleClientId = process.env['APPLE_CLIENT_ID'];
-  const appleClientSecret = process.env['APPLE_CLIENT_SECRET'];
+  const appleClientId = process.env.APPLE_CLIENT_ID;
+  const appleClientSecret = process.env.APPLE_CLIENT_SECRET;
   if (appleClientId && appleClientSecret) {
     providers['apple'] = {
       clientId: appleClientId,
@@ -54,8 +54,8 @@ function buildSocialProviders() {
     };
   }
 
-  const microsoftClientId = process.env['MICROSOFT_CLIENT_ID'];
-  const microsoftClientSecret = process.env['MICROSOFT_CLIENT_SECRET'];
+  const microsoftClientId = process.env.MICROSOFT_CLIENT_ID;
+  const microsoftClientSecret = process.env.MICROSOFT_CLIENT_SECRET;
   if (microsoftClientId && microsoftClientSecret) {
     providers['microsoft'] = {
       clientId: microsoftClientId,
@@ -81,7 +81,7 @@ export const auth = betterAuth({
     },
   }),
 
-  secret: process.env['BETTER_AUTH_SECRET'],
+  secret: process.env.BETTER_AUTH_SECRET,
   baseURL,
 
   socialProviders: buildSocialProviders(),

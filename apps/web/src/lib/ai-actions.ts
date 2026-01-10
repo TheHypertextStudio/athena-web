@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
 import type { AIProvider } from './ai-data';
 
-const API_BASE = process.env['API_URL'] ?? 'http://localhost:4000';
+const API_BASE = process.env.API_URL ?? 'http://localhost:4000';
 
 async function fetchWithAuth<T>(path: string, options?: RequestInit): Promise<T> {
   const cookieStore = await cookies();

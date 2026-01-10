@@ -30,6 +30,11 @@ export interface CalendarDetailPopoverState {
   anchorRect: DOMRect | null;
 }
 
+export interface CalendarEditDialogState {
+  open: boolean;
+  entry: CalendarEntry | null;
+}
+
 export interface CalendarMutationCallbacks {
   /** Called when creating an entry (async) */
   onCreateEntry?: (entry: Omit<CalendarEntry, 'id'>) => Promise<void>;
@@ -71,6 +76,7 @@ export interface UseCalendarStateReturn {
   date: Date;
   entries: CalendarEntry[];
   creationDialog: CalendarDialogState;
+  editDialog: CalendarEditDialogState;
   detailPopover: CalendarDetailPopoverState;
   contextMenu: CalendarContextMenuState;
   previewEntry: PreviewEntry | null;
@@ -92,6 +98,10 @@ export interface UseCalendarStateReturn {
   closeCreationDialog: () => void;
   setCreationDialogOpen: (open: boolean) => void;
   movePreview: (newStart: Date, newEnd: Date) => void;
+
+  // Edit dialog handlers
+  openEditDialog: (entry: CalendarEntry) => void;
+  closeEditDialog: () => void;
 
   // Detail popover handlers
   openDetailPopover: (entry: CalendarEntry, anchorRect: DOMRect) => void;
@@ -164,6 +174,12 @@ export function useCalendarState(options: UseCalendarStateOptions = {}): UseCale
     open: false,
     entry: null,
     anchorRect: null,
+  });
+
+  // Edit dialog state
+  const [editDialog, setEditDialog] = useState<CalendarEditDialogState>({
+    open: false,
+    entry: null,
   });
 
   // =============================================================================
@@ -303,6 +319,20 @@ export function useCalendarState(options: UseCalendarStateOptions = {}): UseCale
   }, []);
 
   // =============================================================================
+  // Edit dialog handlers
+  // =============================================================================
+
+  const openEditDialog = useCallback((entry: CalendarEntry) => {
+    setEditDialog({ open: true, entry });
+    // Close detail popover if open
+    setDetailPopover({ open: false, entry: null, anchorRect: null });
+  }, []);
+
+  const closeEditDialog = useCallback(() => {
+    setEditDialog({ open: false, entry: null });
+  }, []);
+
+  // =============================================================================
   // Context menu handlers
   // =============================================================================
 
@@ -358,6 +388,7 @@ export function useCalendarState(options: UseCalendarStateOptions = {}): UseCale
     date,
     entries,
     creationDialog,
+    editDialog,
     detailPopover,
     contextMenu,
     previewEntry,
@@ -379,6 +410,10 @@ export function useCalendarState(options: UseCalendarStateOptions = {}): UseCale
     closeCreationDialog,
     setCreationDialogOpen,
     movePreview,
+
+    // Edit dialog handlers
+    openEditDialog,
+    closeEditDialog,
 
     // Context menu handlers
     openContextMenu,

@@ -10,7 +10,7 @@
 import { cookies } from 'next/headers';
 import { mapResponseToError } from './api-errors';
 
-const API_BASE = process.env['API_URL'] ?? 'http://localhost:4000';
+const API_BASE = process.env.API_URL ?? 'http://localhost:4000';
 
 async function fetchWithAuth<T>(path: string): Promise<T> {
   const cookieStore = await cookies();

@@ -10,11 +10,11 @@ import { vi } from 'vitest';
 import { createMockDb } from './integration/test-utils.js';
 
 // Set up mock environment variables before any imports
-process.env['DATABASE_URL'] = 'postgresql://test:test@localhost:5432/test';
-process.env['BETTER_AUTH_SECRET'] = 'test-secret-that-is-at-least-32-chars';
-process.env['BETTER_AUTH_URL'] = 'http://localhost:4000';
-process.env['FRONTEND_URL'] = 'http://localhost:3000';
-process.env['PORT'] = '4000';
+process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/test';
+process.env.BETTER_AUTH_SECRET = 'test-secret-that-is-at-least-32-chars';
+process.env.BETTER_AUTH_URL = 'http://localhost:4000';
+process.env.FRONTEND_URL = 'http://localhost:3000';
+process.env.PORT = '4000';
 process.env.NODE_ENV = 'test';
 
 const globalWithMocks = globalThis as typeof globalThis & {

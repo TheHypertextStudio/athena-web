@@ -2,7 +2,7 @@
 
 import { cookies } from 'next/headers';
 
-const API_BASE = process.env['API_URL'] ?? 'http://localhost:4000';
+const API_BASE = process.env.API_URL ?? 'http://localhost:4000';
 
 async function fetchWithAuth<T>(path: string, options?: RequestInit): Promise<T> {
   const cookieStore = await cookies();
@@ -32,8 +32,10 @@ async function fetchWithAuth<T>(path: string, options?: RequestInit): Promise<T>
   return res.json() as Promise<T>;
 }
 
+const ACCOUNT_DELETE_CONFIRMATION = 'DELETE_MY_ACCOUNT' as const;
+
 export async function deleteAccount(confirmation: string) {
-  if (confirmation !== 'DELETE') {
+  if (confirmation !== ACCOUNT_DELETE_CONFIRMATION) {
     throw new Error('Invalid confirmation');
   }
 

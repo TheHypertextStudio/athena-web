@@ -7,7 +7,7 @@
 import { defineConfig } from 'drizzle-kit';
 
 const databaseUrl =
-  process.env['DATABASE_URL'] ?? 'postgresql://postgres:postgres@localhost:5432/athena';
+  process.env.DATABASE_URL ?? 'postgresql://postgres:postgres@localhost:5432/athena';
 
 export default defineConfig({
   schema: './dist/db/schema/index.js',

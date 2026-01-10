@@ -26,13 +26,23 @@ export interface CalendarEntry {
   taskId?: string;
   /** Tasks scheduled within this time block */
   tasks?: LinkedTask[];
+  /** RRULE string for recurring entries */
+  recurrenceRule?: string;
+  /** True if this entry is an instance of a recurring series */
+  isRecurringInstance?: boolean;
+  /** The date of this specific instance (for recurring entries) */
+  instanceDate?: Date;
+  /** The parent entry ID (for recurring instances) */
+  seriesId?: string;
+  /** True if this instance has been modified from the series */
+  isModified?: boolean;
 }
 
 // =============================================================================
 // View Mode Types
 // =============================================================================
 
-export type CalendarViewMode = 'day' | 'week';
+export type CalendarViewMode = 'day' | 'week' | 'month';
 
 /** Scroll behavior mode */
 export type CalendarScrollMode = 'fit' | 'scroll';

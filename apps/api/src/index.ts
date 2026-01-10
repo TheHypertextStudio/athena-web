@@ -130,7 +130,7 @@ app.route('/mcp', mcpRoutes);
 setupOpenAPIDocs(app);
 
 const port = env.PORT;
-const shouldServe = process.env['NODE_ENV'] !== 'test' && !process.env['VITEST'];
+const shouldServe = process.env.NODE_ENV !== 'test' && !process.env.VITEST;
 
 if (shouldServe) {
   logger.info(`Starting Athena API server on port ${String(port)}`);

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import EventIcon from '@mui/icons-material/Event';
 import GridViewOutlinedIcon from '@mui/icons-material/GridViewOutlined';
 import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
@@ -26,7 +26,12 @@ export interface EntryCreationDialogProps {
   onOpenChange: (open: boolean) => void;
   startTime: Date;
   endTime: Date;
+  /** Called when creating a new entry */
   onSubmit: (entry: Omit<CalendarEntry, 'id'>) => void;
+  /** Entry to edit (when in edit mode) */
+  entry?: CalendarEntry;
+  /** Called when updating an existing entry */
+  onUpdate?: (entryId: string, updates: Partial<CalendarEntry>) => void;
 }
 
 type EntryType = 'event' | 'time-block';
@@ -66,88 +71,133 @@ export function EntryCreationDialog({
   startTime,
   endTime,
   onSubmit,
+  entry,
+  onUpdate,
 }: EntryCreationDialogProps) {
-  const [entryType, setEntryType] = useState<EntryType>('event');
-  const [title, setTitle] = useState('');
-  const [start, setStart] = useState(formatTimeForInput(startTime));
-  const [end, setEnd] = useState(formatTimeForInput(endTime));
-  const [location, setLocation] = useState('');
+  const isEditMode = Boolean(entry);
+  const [entryType, setEntryType] = useState<EntryType>(entry?.type ?? 'event');
+  const [title, setTitle] = useState(entry?.title ?? '');
+  const [start, setStart] = useState(formatTimeForInput(entry?.startTime ?? startTime));
+  const [end, setEnd] = useState(formatTimeForInput(entry?.endTime ?? endTime));
+  const [location, setLocation] = useState(entry?.location ?? '');
+
+  // Update form when entry changes (for edit mode)
+  useEffect(() => {
+    if (entry) {
+      setEntryType(entry.type);
+      setTitle(entry.title);
+      setStart(formatTimeForInput(entry.startTime));
+      setEnd(formatTimeForInput(entry.endTime));
+      setLocation(entry.location ?? '');
+    }
+  }, [entry]);
 
   const handleSubmit = useCallback(() => {
     if (!title.trim()) return;
 
-    const entry: Omit<CalendarEntry, 'id'> = {
-      type: entryType,
-      title: title.trim(),
-      startTime: parseTimeInput(start, startTime),
-      endTime: parseTimeInput(end, startTime),
-      ...(entryType === 'event' && location.trim() ? { location: location.trim() } : {}),
-    };
+    if (isEditMode && entry && onUpdate) {
+      // Update existing entry
+      const updates: Partial<CalendarEntry> = {
+        title: title.trim(),
+        startTime: parseTimeInput(start, entry.startTime),
+        endTime: parseTimeInput(end, entry.startTime),
+      };
+      if (entryType === 'event' && location.trim()) {
+        updates.location = location.trim();
+      }
+      onUpdate(entry.id, updates);
+    } else {
+      // Create new entry
+      const newEntry: Omit<CalendarEntry, 'id'> = {
+        type: entryType,
+        title: title.trim(),
+        startTime: parseTimeInput(start, startTime),
+        endTime: parseTimeInput(end, startTime),
+        ...(entryType === 'event' && location.trim() ? { location: location.trim() } : {}),
+      };
+      onSubmit(newEntry);
+    }
 
-    onSubmit(entry);
     onOpenChange(false);
 
     // Reset form
     setTitle('');
     setLocation('');
     setEntryType('event');
-  }, [entryType, title, start, end, location, startTime, onSubmit, onOpenChange]);
+  }, [
+    isEditMode,
+    entry,
+    entryType,
+    title,
+    start,
+    end,
+    location,
+    startTime,
+    onSubmit,
+    onUpdate,
+    onOpenChange,
+  ]);
 
   const handleOpenChange = useCallback(
     (newOpen: boolean) => {
-      if (newOpen) {
-        // Reset form when opening
+      if (newOpen && !entry) {
+        // Reset form when opening in create mode
         setStart(formatTimeForInput(startTime));
         setEnd(formatTimeForInput(endTime));
         setTitle('');
         setLocation('');
+        setEntryType('event');
       }
       onOpenChange(newOpen);
     },
-    [startTime, endTime, onOpenChange],
+    [startTime, endTime, entry, onOpenChange],
   );
+
+  const displayDate = entry?.startTime ?? startTime;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>New Entry</DialogTitle>
-          <p className="text-on-surface-variant text-sm">{formatDateDisplay(startTime)}</p>
+          <DialogTitle>{isEditMode ? 'Edit Entry' : 'New Entry'}</DialogTitle>
+          <p className="text-on-surface-variant text-sm">{formatDateDisplay(displayDate)}</p>
         </DialogHeader>
 
-        {/* Entry type toggle */}
-        <div className="mt-4 flex gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              setEntryType('event');
-            }}
-            className={cn(
-              'flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg px-4 py-3 transition-colors',
-              entryType === 'event'
-                ? 'bg-primary text-on-primary'
-                : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high',
-            )}
-          >
-            <EventIcon sx={{ fontSize: 20 }} />
-            <span className="text-sm font-medium">Event</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setEntryType('time-block');
-            }}
-            className={cn(
-              'flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg px-4 py-3 transition-colors',
-              entryType === 'time-block'
-                ? 'bg-primary text-on-primary'
-                : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high',
-            )}
-          >
-            <GridViewOutlinedIcon sx={{ fontSize: 20 }} />
-            <span className="text-sm font-medium">Time Block</span>
-          </button>
-        </div>
+        {/* Entry type toggle (only shown in create mode) */}
+        {!isEditMode && (
+          <div className="mt-4 flex gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setEntryType('event');
+              }}
+              className={cn(
+                'flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg px-4 py-3 transition-colors',
+                entryType === 'event'
+                  ? 'bg-primary text-on-primary'
+                  : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high',
+              )}
+            >
+              <EventIcon sx={{ fontSize: 20 }} />
+              <span className="text-sm font-medium">Event</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setEntryType('time-block');
+              }}
+              className={cn(
+                'flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg px-4 py-3 transition-colors',
+                entryType === 'time-block'
+                  ? 'bg-primary text-on-primary'
+                  : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high',
+              )}
+            >
+              <GridViewOutlinedIcon sx={{ fontSize: 20 }} />
+              <span className="text-sm font-medium">Time Block</span>
+            </button>
+          </div>
+        )}
 
         {/* Form fields */}
         <div className="mt-6 space-y-4">
@@ -224,7 +274,7 @@ export function EntryCreationDialog({
             Cancel
           </Button>
           <Button onClick={handleSubmit} disabled={!title.trim()}>
-            Create
+            {isEditMode ? 'Save' : 'Create'}
           </Button>
         </DialogFooter>
       </DialogContent>

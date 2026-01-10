@@ -7,7 +7,8 @@ import { CSS } from '@dnd-kit/utilities';
 import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
 import GridViewOutlinedIcon from '@mui/icons-material/GridViewOutlined';
 import { cn } from '@/lib/utils';
-import { getYFromTime, formatTime, MIN_SLOT_MINUTES } from '@/lib/calendar-utils';
+import { getYFromTime, MIN_SLOT_MINUTES } from '@/lib/calendar-utils';
+import { useCalendarTimezoneOptional } from '@/contexts/TimezoneContext';
 import type { CalendarEntry, LinkedTask } from './types';
 
 // =============================================================================
@@ -88,6 +89,9 @@ export function CalendarEntryCard({
   date,
   endHour = 24,
 }: CalendarEntryCardProps) {
+  // Use timezone-aware formatting
+  const { formatTime } = useCalendarTimezoneOptional();
+
   const baseTop = getYFromTime(entry.startTime, startHour, hourHeight);
   const bottom = getYFromTime(entry.endTime, startHour, hourHeight);
   const baseHeight = Math.max(bottom - baseTop, 24);

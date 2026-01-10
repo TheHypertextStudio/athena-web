@@ -6,9 +6,11 @@ import ZoomInIcon from '@mui/icons-material/ZoomIn';
 import ZoomOutIcon from '@mui/icons-material/ZoomOut';
 import ViewDayOutlinedIcon from '@mui/icons-material/ViewDayOutlined';
 import ViewWeekOutlinedIcon from '@mui/icons-material/ViewWeekOutlined';
+import CalendarMonthOutlinedIcon from '@mui/icons-material/CalendarMonthOutlined';
 import { cn } from '@/lib/utils';
 import type { CalendarViewMode } from './types';
 import type { UseCalendarNavigationReturn } from './hooks/useCalendarNavigation';
+import { TimezoneSelector } from '@/components/calendar/TimezoneSelector';
 
 export interface CalendarHeaderProps {
   isScrolled: boolean;
@@ -67,6 +69,9 @@ export function CalendarHeader({
       </div>
 
       <div className="flex items-center gap-4">
+        {/* Timezone selector */}
+        <TimezoneSelector />
+
         {/* View toggle */}
         <div className="bg-surface-container-high flex items-center rounded-lg p-1">
           <button
@@ -92,6 +97,18 @@ export function CalendarHeader({
             aria-label="Week view"
           >
             <ViewWeekOutlinedIcon sx={{ fontSize: 20 }} />
+          </button>
+          <button
+            onClick={() => onViewModeChange?.('month')}
+            className={cn(
+              'cursor-pointer rounded-md p-1.5 transition-colors',
+              viewMode === 'month'
+                ? 'bg-surface-container-highest text-on-surface'
+                : 'text-on-surface-variant hover:text-on-surface',
+            )}
+            aria-label="Month view"
+          >
+            <CalendarMonthOutlinedIcon sx={{ fontSize: 20 }} />
           </button>
         </div>
 

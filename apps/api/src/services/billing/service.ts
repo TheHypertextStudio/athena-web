@@ -418,17 +418,30 @@ export class BillingService {
    * Get user's payment methods.
    */
   async getPaymentMethods(userId: string): Promise<PaymentMethodData[]> {
-    const customer = await this.getOrCreateCustomer(userId);
+    const sub = await db.query.subscriptions.findFirst({
+      where: eq(subscriptions.userId, userId),
+    });
+
+    if (!sub?.stripeCustomerId) {
+      return [];
+    }
+
+    const customer = await this.stripe.customers.retrieve(sub.stripeCustomerId);
+    if (customer.deleted) {
+      return [];
+    }
+    // Without expand, default_payment_method is always a string ID or null
+    const defaultPmId = customer.invoice_settings.default_payment_method as string | null;
 
     const paymentMethods = await this.stripe.paymentMethods.list({
-      customer: customer.stripeCustomerId,
+      customer: sub.stripeCustomerId,
       type: 'card',
     });
 
     return paymentMethods.data.map((pm: Stripe.PaymentMethod) => ({
       id: pm.id,
       type: 'card' as const,
-      isDefault: pm.id === customer.defaultPaymentMethodId,
+      isDefault: pm.id === defaultPmId,
       card: pm.card
         ? {
             brand: pm.card.brand,

@@ -16,6 +16,10 @@ import { OpenAPIHono } from '@hono/zod-openapi';
 // Import only the route DEFINITIONS (not the full routes with handlers)
 // These have no runtime dependencies
 import * as taskRouteDefinitions from '../src/routes/tasks.openapi.js';
+import * as projectRouteDefinitions from '../src/routes/projects.openapi.js';
+import * as eventRouteDefinitions from '../src/routes/events.openapi.js';
+import * as initiativeRouteDefinitions from '../src/routes/initiatives.openapi.js';
+import * as timeBlockRouteDefinitions from '../src/routes/time-blocks.openapi.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -27,18 +31,30 @@ function prefixRoute<T extends { path: string }>(route: T, prefix: string): T {
   };
 }
 
+// Helper to register all routes from a module with a given prefix
+function registerRoutes(
+  app: OpenAPIHono,
+  routeDefinitions: Record<string, unknown>,
+  prefix: string,
+) {
+  for (const [, route] of Object.entries(routeDefinitions)) {
+    if (typeof route === 'object' && route !== null && 'method' in route && 'path' in route) {
+      const prefixedRoute = prefixRoute(route as { path: string }, prefix);
+      // Register a dummy handler - we only care about the route definition for the spec
+      app.openapi(prefixedRoute, (c) => c.json({}) as never);
+    }
+  }
+}
+
 // Create a minimal app to register routes for spec extraction
 const app = new OpenAPIHono();
 
-// Register task routes with /api/tasks prefix
-const TASKS_PREFIX = '/api/tasks';
-for (const [, route] of Object.entries(taskRouteDefinitions)) {
-  if (typeof route === 'object' && 'method' in route && 'path' in route) {
-    const prefixedRoute = prefixRoute(route, TASKS_PREFIX);
-    // Register a dummy handler - we only care about the route definition for the spec
-    app.openapi(prefixedRoute, (c) => c.json({}) as never);
-  }
-}
+// Register all route definitions with their prefixes
+registerRoutes(app, taskRouteDefinitions, '/api/tasks');
+registerRoutes(app, projectRouteDefinitions, '/api/projects');
+registerRoutes(app, eventRouteDefinitions, '/api/events');
+registerRoutes(app, initiativeRouteDefinitions, '/api/initiatives');
+registerRoutes(app, timeBlockRouteDefinitions, '/api/time-blocks');
 
 // Register OpenAPI document
 app.doc('/api/openapi.json', {

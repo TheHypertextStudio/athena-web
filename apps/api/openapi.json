@@ -431,6 +431,1078 @@
             "description": "Tag UUIDs (replaces existing tags)"
           }
         }
+      },
+      "ProjectResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ProjectWithRelations"
+          }
+        },
+        "required": ["data"],
+        "description": "Project response"
+      },
+      "ProjectWithRelations": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Project"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "initiative": {
+                "type": ["object", "null"],
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Initiative UUID"
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "Initiative name",
+                    "example": "Q1 Goals"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": ["draft", "active", "completed", "archived"],
+                    "description": "Initiative status",
+                    "example": "active"
+                  }
+                },
+                "required": ["id", "name", "status"],
+                "description": "Parent initiative details"
+              },
+              "owner": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/UserRef"
+                  },
+                  {
+                    "description": "Project owner details"
+                  }
+                ]
+              },
+              "taskCount": {
+                "type": "integer",
+                "description": "Number of tasks in the project"
+              }
+            }
+          }
+        ]
+      },
+      "Project": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Project UUID"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500,
+            "description": "Project name",
+            "example": "Website Redesign"
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Project description",
+            "example": "Complete redesign of the marketing website"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["planning", "active", "on_hold", "completed", "cancelled"],
+            "description": "Project status",
+            "example": "active"
+          },
+          "deadline": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Project deadline",
+            "example": "2025-03-01T00:00:00Z"
+          },
+          "initiativeId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Parent initiative UUID"
+          },
+          "ownerId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Owner user UUID"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation timestamp",
+            "example": "2025-01-09T12:00:00Z"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last update timestamp",
+            "example": "2025-01-09T12:00:00Z"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "status",
+          "deadline",
+          "initiativeId",
+          "ownerId",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "CreateProjectRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500,
+            "description": "Project name",
+            "example": "Website Redesign"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 10000,
+            "description": "Project description"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["planning", "active", "on_hold", "completed", "cancelled"],
+            "default": "planning",
+            "description": "Initial project status",
+            "example": "active"
+          },
+          "deadline": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Project deadline (ISO 8601)",
+            "example": "2025-03-01T00:00:00Z"
+          },
+          "initiativeId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Parent initiative UUID"
+          }
+        },
+        "required": ["name"]
+      },
+      "ProjectDependenciesResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProjectDependency"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "description": "Total number of items"
+          }
+        },
+        "required": ["data"],
+        "description": "Project dependencies response"
+      },
+      "ProjectDependency": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Dependency UUID"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Project UUID"
+          },
+          "dependsOnProjectId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Depends on project UUID"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation timestamp",
+            "example": "2025-01-09T12:00:00Z"
+          }
+        },
+        "required": ["id", "projectId", "dependsOnProjectId", "createdAt"]
+      },
+      "ProjectListResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProjectWithRelations"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "description": "Total number of items"
+          }
+        },
+        "required": ["data"],
+        "description": "Project list response"
+      },
+      "UpdateProjectRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500,
+            "description": "Project name"
+          },
+          "description": {
+            "type": ["string", "null"],
+            "maxLength": 10000,
+            "description": "Project description (null to clear)"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["planning", "active", "on_hold", "completed", "cancelled"],
+            "description": "Project status",
+            "example": "active"
+          },
+          "deadline": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Project deadline (null to clear)"
+          },
+          "initiativeId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Parent initiative UUID (null to clear)"
+          }
+        }
+      },
+      "EventParticipantResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/EventParticipantWithUser"
+          }
+        },
+        "required": ["data"],
+        "description": "Event participant response"
+      },
+      "EventParticipantWithUser": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/EventParticipant"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "user": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/UserRef"
+                  },
+                  {
+                    "description": "Participant user details"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "EventParticipant": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Participant record UUID"
+          },
+          "eventId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Event UUID"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "User UUID"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "accepted", "declined", "tentative"],
+            "description": "Event participant RSVP status",
+            "example": "accepted"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When participant was added",
+            "example": "2025-01-09T12:00:00Z"
+          }
+        },
+        "required": ["id", "eventId", "userId", "status", "createdAt"]
+      },
+      "AddParticipantRequest": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "User UUID to add as participant"
+          }
+        },
+        "required": ["userId"]
+      },
+      "EventResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/EventWithRelations"
+          }
+        },
+        "required": ["data"],
+        "description": "Event response"
+      },
+      "EventWithRelations": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Event"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "creator": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/UserRef"
+                  },
+                  {
+                    "description": "Event creator details"
+                  }
+                ]
+              },
+              "participants": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/EventParticipantWithUser"
+                },
+                "description": "Event participants with user details"
+              }
+            }
+          }
+        ]
+      },
+      "Event": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Event UUID"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500,
+            "description": "Event title",
+            "example": "Team Standup"
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Event description",
+            "example": "Daily standup meeting for the engineering team"
+          },
+          "startTime": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Event start time",
+            "example": "2025-01-10T09:00:00Z"
+          },
+          "endTime": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Event end time",
+            "example": "2025-01-10T09:30:00Z"
+          },
+          "isAllDay": {
+            "type": "boolean",
+            "description": "Whether this is an all-day event",
+            "example": false
+          },
+          "location": {
+            "type": ["string", "null"],
+            "description": "Event location",
+            "example": "Conference Room A"
+          },
+          "recurrenceRule": {
+            "type": ["string", "null"],
+            "description": "iCalendar RRULE for recurring events",
+            "example": "FREQ=DAILY;BYDAY=MO,TU,WE,TH,FR"
+          },
+          "creatorId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Event creator user UUID"
+          },
+          "source": {
+            "type": "string",
+            "enum": ["local", "external"],
+            "description": "Event source (local or synced from external calendar)",
+            "example": "local"
+          },
+          "sourceIntegrationId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Integration ID if event is from external source"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation timestamp",
+            "example": "2025-01-09T12:00:00Z"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last update timestamp",
+            "example": "2025-01-09T12:00:00Z"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "description",
+          "startTime",
+          "endTime",
+          "isAllDay",
+          "location",
+          "recurrenceRule",
+          "creatorId",
+          "source",
+          "sourceIntegrationId",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "CreateEventRequest": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500,
+            "description": "Event title",
+            "example": "Team Standup"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 10000,
+            "description": "Event description"
+          },
+          "startTime": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Event start time (ISO 8601)",
+            "example": "2025-01-10T09:00:00Z"
+          },
+          "endTime": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Event end time (ISO 8601)",
+            "example": "2025-01-10T09:30:00Z"
+          },
+          "isAllDay": {
+            "type": "boolean",
+            "default": false,
+            "description": "Whether this is an all-day event"
+          },
+          "location": {
+            "type": "string",
+            "maxLength": 500,
+            "description": "Event location"
+          },
+          "recurrenceRule": {
+            "type": "string",
+            "maxLength": 500,
+            "description": "iCalendar RRULE for recurring events"
+          },
+          "participantIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "User UUIDs to add as participants"
+          }
+        },
+        "required": ["title", "startTime"]
+      },
+      "EventListResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EventWithRelations"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "description": "Total number of items"
+          }
+        },
+        "required": ["data"],
+        "description": "Event list response"
+      },
+      "UpdateEventRequest": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500,
+            "description": "Event title"
+          },
+          "description": {
+            "type": ["string", "null"],
+            "maxLength": 10000,
+            "description": "Event description (null to clear)"
+          },
+          "startTime": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Event start time (ISO 8601)"
+          },
+          "endTime": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Event end time (null to clear)"
+          },
+          "isAllDay": {
+            "type": "boolean",
+            "description": "Whether this is an all-day event"
+          },
+          "location": {
+            "type": ["string", "null"],
+            "maxLength": 500,
+            "description": "Event location (null to clear)"
+          },
+          "recurrenceRule": {
+            "type": ["string", "null"],
+            "maxLength": 500,
+            "description": "Recurrence rule (null to clear)"
+          }
+        }
+      },
+      "UpdateParticipantStatusRequest": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["pending", "accepted", "declined", "tentative"],
+            "description": "New RSVP status",
+            "example": "accepted"
+          }
+        },
+        "required": ["status"]
+      },
+      "InitiativeResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/InitiativeWithRelations"
+          }
+        },
+        "required": ["data"],
+        "description": "Initiative response"
+      },
+      "InitiativeWithRelations": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Initiative"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "parent": {
+                "type": ["object", "null"],
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Initiative UUID"
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "Initiative name",
+                    "example": "Q1 Goals"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": ["draft", "active", "completed", "archived"],
+                    "description": "Initiative status",
+                    "example": "active"
+                  }
+                },
+                "required": ["id", "name", "status"],
+                "description": "Parent initiative details"
+              },
+              "owner": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/UserRef"
+                  },
+                  {
+                    "description": "Initiative owner details"
+                  }
+                ]
+              },
+              "children": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/InitiativeRefDetailed"
+                },
+                "description": "Child initiative summaries"
+              },
+              "projectCount": {
+                "type": "integer",
+                "description": "Number of projects in this initiative"
+              }
+            }
+          }
+        ]
+      },
+      "InitiativeRefDetailed": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Initiative UUID"
+          },
+          "name": {
+            "type": "string",
+            "description": "Initiative name",
+            "example": "Q1 Goals"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["draft", "active", "completed", "archived"],
+            "description": "Initiative status",
+            "example": "active"
+          }
+        },
+        "required": ["id", "name", "status"]
+      },
+      "Initiative": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Initiative UUID"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500,
+            "description": "Initiative name",
+            "example": "Q1 2025 Goals"
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Initiative description",
+            "example": "Key objectives for the first quarter"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["draft", "active", "completed", "archived"],
+            "description": "Initiative status",
+            "example": "active"
+          },
+          "parentId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Parent initiative UUID for hierarchical initiatives"
+          },
+          "ownerId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Owner user UUID"
+          },
+          "deletedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Soft delete timestamp",
+            "example": "2025-01-09T12:00:00Z"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation timestamp",
+            "example": "2025-01-09T12:00:00Z"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last update timestamp",
+            "example": "2025-01-09T12:00:00Z"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "status",
+          "parentId",
+          "ownerId",
+          "deletedAt",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "CreateInitiativeRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500,
+            "description": "Initiative name",
+            "example": "Q1 2025 Goals"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 10000,
+            "description": "Initiative description"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["draft", "active", "completed", "archived"],
+            "default": "draft",
+            "description": "Initial initiative status",
+            "example": "active"
+          },
+          "parentId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Parent initiative UUID for hierarchical initiatives"
+          }
+        },
+        "required": ["name"]
+      },
+      "InitiativeListResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InitiativeWithRelations"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "description": "Total number of items"
+          }
+        },
+        "required": ["data"],
+        "description": "Initiative list response"
+      },
+      "UpdateInitiativeRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500,
+            "description": "Initiative name"
+          },
+          "description": {
+            "type": ["string", "null"],
+            "maxLength": 10000,
+            "description": "Initiative description (null to clear)"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["draft", "active", "completed", "archived"],
+            "description": "Initiative status",
+            "example": "active"
+          },
+          "parentId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Parent initiative UUID (null to clear)"
+          }
+        }
+      },
+      "TimeBlockResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/TimeBlockWithTasks"
+          }
+        },
+        "required": ["data"],
+        "description": "Time block response"
+      },
+      "TimeBlockWithTasks": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/TimeBlock"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "linkedTasks": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/LinkedTask"
+                },
+                "description": "Tasks linked to this time block with their positions"
+              }
+            }
+          }
+        ]
+      },
+      "LinkedTask": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Task"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "position": {
+                "type": "integer",
+                "description": "Task position within the time block",
+                "example": 0
+              }
+            },
+            "required": ["position"]
+          }
+        ]
+      },
+      "TimeBlock": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Time block UUID"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500,
+            "description": "Time block label",
+            "example": "Focus Time"
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Time block description",
+            "example": "Deep work session for coding"
+          },
+          "startTime": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Block start time",
+            "example": "2025-01-10T09:00:00Z"
+          },
+          "endTime": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Block end time",
+            "example": "2025-01-10T11:00:00Z"
+          },
+          "color": {
+            "type": ["string", "null"],
+            "description": "Block color hex code",
+            "example": "#3B82F6"
+          },
+          "recurrenceRule": {
+            "type": ["string", "null"],
+            "description": "iCalendar RRULE for recurring time blocks",
+            "example": "FREQ=WEEKLY;BYDAY=MO,WE,FR"
+          },
+          "ownerId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Owner user UUID"
+          },
+          "deletedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Soft delete timestamp",
+            "example": "2025-01-09T12:00:00Z"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation timestamp",
+            "example": "2025-01-09T12:00:00Z"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last update timestamp",
+            "example": "2025-01-09T12:00:00Z"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "description",
+          "startTime",
+          "endTime",
+          "color",
+          "recurrenceRule",
+          "ownerId",
+          "deletedAt",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "CreateTimeBlockRequest": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500,
+            "description": "Time block label",
+            "example": "Focus Time"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 10000,
+            "description": "Time block description"
+          },
+          "startTime": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Block start time (ISO 8601)",
+            "example": "2025-01-10T09:00:00Z"
+          },
+          "endTime": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Block end time (ISO 8601)",
+            "example": "2025-01-10T11:00:00Z"
+          },
+          "color": {
+            "type": "string",
+            "maxLength": 50,
+            "description": "Block color hex code",
+            "example": "#3B82F6"
+          },
+          "recurrenceRule": {
+            "type": "string",
+            "maxLength": 500,
+            "description": "iCalendar RRULE for recurring time blocks"
+          },
+          "taskIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Task UUIDs to link to this time block"
+          }
+        },
+        "required": ["label", "startTime", "endTime"]
+      },
+      "LinkTaskRequest": {
+        "type": "object",
+        "properties": {
+          "taskId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Task UUID to link"
+          },
+          "position": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Position in the task list (defaults to end)"
+          }
+        },
+        "required": ["taskId"]
+      },
+      "TimeBlockListResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TimeBlockWithTasks"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "description": "Total number of items"
+          }
+        },
+        "required": ["data"],
+        "description": "Time block list response"
+      },
+      "ReorderTasksRequest": {
+        "type": "object",
+        "properties": {
+          "taskIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Task UUIDs in desired order"
+          }
+        },
+        "required": ["taskIds"]
+      },
+      "UpdateTimeBlockRequest": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500,
+            "description": "Time block label"
+          },
+          "description": {
+            "type": ["string", "null"],
+            "maxLength": 10000,
+            "description": "Time block description (null to clear)"
+          },
+          "startTime": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Block start time (ISO 8601)"
+          },
+          "endTime": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Block end time (ISO 8601)"
+          },
+          "color": {
+            "type": ["string", "null"],
+            "maxLength": 50,
+            "description": "Block color (null to clear)"
+          },
+          "recurrenceRule": {
+            "type": ["string", "null"],
+            "maxLength": 500,
+            "description": "Recurrence rule (null to clear)"
+          }
+        }
       }
     },
     "parameters": {}
@@ -1014,6 +2086,1765 @@
           },
           "404": {
             "description": "Task not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{id}/dependencies/{dependsOnId}": {
+      "post": {
+        "tags": ["Projects"],
+        "summary": "Add project dependency",
+        "description": "Add a dependency relationship between two projects.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Project UUID"
+            },
+            "required": true,
+            "description": "Project UUID",
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Dependency project UUID"
+            },
+            "required": true,
+            "description": "Dependency project UUID",
+            "name": "dependsOnId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Dependency added successfully"
+          },
+          "400": {
+            "description": "Invalid dependency (e.g., circular dependency)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Project not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Projects"],
+        "summary": "Remove project dependency",
+        "description": "Remove a dependency relationship between two projects.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Project UUID"
+            },
+            "required": true,
+            "description": "Project UUID",
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Dependency project UUID"
+            },
+            "required": true,
+            "description": "Dependency project UUID",
+            "name": "dependsOnId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Dependency removed successfully"
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Project or dependency not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/": {
+      "post": {
+        "tags": ["Projects"],
+        "summary": "Create a project",
+        "description": "Create a new project.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProjectRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Project created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": ["Projects"],
+        "summary": "List projects",
+        "description": "Retrieve a list of projects with optional filtering and pagination.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Filter by initiative"
+            },
+            "required": false,
+            "description": "Filter by initiative",
+            "name": "initiativeId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": ["planning", "active", "on_hold", "completed", "cancelled"],
+              "description": "Filter by status",
+              "example": "active"
+            },
+            "required": false,
+            "description": "Filter by status",
+            "name": "status",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50,
+              "description": "Maximum number of projects to return",
+              "example": 50
+            },
+            "required": false,
+            "description": "Maximum number of projects to return",
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": ["integer", "null"],
+              "minimum": 0,
+              "default": 0,
+              "description": "Number of projects to skip",
+              "example": 0
+            },
+            "required": false,
+            "description": "Number of projects to skip",
+            "name": "offset",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Projects retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{id}": {
+      "delete": {
+        "tags": ["Projects"],
+        "summary": "Delete a project",
+        "description": "Delete a project by its ID.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Project UUID",
+              "example": "123e4567-e89b-12d3-a456-426614174000"
+            },
+            "required": true,
+            "description": "Project UUID",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Project deleted successfully"
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Project not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": ["Projects"],
+        "summary": "Get a project",
+        "description": "Retrieve a single project by its ID.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Project UUID",
+              "example": "123e4567-e89b-12d3-a456-426614174000"
+            },
+            "required": true,
+            "description": "Project UUID",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Project retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Project not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["Projects"],
+        "summary": "Update a project",
+        "description": "Update an existing project. Only provided fields will be updated.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Project UUID",
+              "example": "123e4567-e89b-12d3-a456-426614174000"
+            },
+            "required": true,
+            "description": "Project UUID",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProjectRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Project updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Project not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{id}/dependencies": {
+      "get": {
+        "tags": ["Projects"],
+        "summary": "Get project dependencies",
+        "description": "Retrieve all projects that this project depends on.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Project UUID",
+              "example": "123e4567-e89b-12d3-a456-426614174000"
+            },
+            "required": true,
+            "description": "Project UUID",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dependencies retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectDependenciesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Project not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/events/{id}/participants": {
+      "post": {
+        "tags": ["Events"],
+        "summary": "Add participant to event",
+        "description": "Add a user as a participant to an event.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Event UUID",
+              "example": "123e4567-e89b-12d3-a456-426614174000"
+            },
+            "required": true,
+            "description": "Event UUID",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddParticipantRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Participant added successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventParticipantResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Event or user not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/events/": {
+      "post": {
+        "tags": ["Events"],
+        "summary": "Create an event",
+        "description": "Create a new event.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateEventRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Event created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": ["Events"],
+        "summary": "List events",
+        "description": "Retrieve a list of events with optional date filtering and pagination.",
+        "parameters": [
+          {
+            "schema": {
+              "type": ["string", "null"],
+              "format": "date-time",
+              "description": "Filter events starting on or after this date",
+              "example": "2025-01-01T00:00:00Z"
+            },
+            "required": false,
+            "description": "Filter events starting on or after this date",
+            "name": "startDate",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": ["string", "null"],
+              "format": "date-time",
+              "description": "Filter events starting before this date",
+              "example": "2025-01-31T23:59:59Z"
+            },
+            "required": false,
+            "description": "Filter events starting before this date",
+            "name": "endDate",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50,
+              "description": "Maximum number of events to return",
+              "example": 50
+            },
+            "required": false,
+            "description": "Maximum number of events to return",
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": ["integer", "null"],
+              "minimum": 0,
+              "default": 0,
+              "description": "Number of events to skip",
+              "example": 0
+            },
+            "required": false,
+            "description": "Number of events to skip",
+            "name": "offset",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Events retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/events/{id}": {
+      "delete": {
+        "tags": ["Events"],
+        "summary": "Delete an event",
+        "description": "Delete an event by its ID.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Event UUID",
+              "example": "123e4567-e89b-12d3-a456-426614174000"
+            },
+            "required": true,
+            "description": "Event UUID",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Event deleted successfully"
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Event not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": ["Events"],
+        "summary": "Get an event",
+        "description": "Retrieve a single event by its ID.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Event UUID",
+              "example": "123e4567-e89b-12d3-a456-426614174000"
+            },
+            "required": true,
+            "description": "Event UUID",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Event retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Event not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["Events"],
+        "summary": "Update an event",
+        "description": "Update an existing event. Only provided fields will be updated.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Event UUID",
+              "example": "123e4567-e89b-12d3-a456-426614174000"
+            },
+            "required": true,
+            "description": "Event UUID",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateEventRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Event updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Event not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/events/{id}/participants/{participantId}": {
+      "delete": {
+        "tags": ["Events"],
+        "summary": "Remove participant from event",
+        "description": "Remove a participant from an event.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Event UUID"
+            },
+            "required": true,
+            "description": "Event UUID",
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Participant record UUID"
+            },
+            "required": true,
+            "description": "Participant record UUID",
+            "name": "participantId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Participant removed successfully"
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Event or participant not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["Events"],
+        "summary": "Update participant status",
+        "description": "Update the RSVP status of an event participant.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Event UUID"
+            },
+            "required": true,
+            "description": "Event UUID",
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Participant record UUID"
+            },
+            "required": true,
+            "description": "Participant record UUID",
+            "name": "participantId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateParticipantStatusRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Participant status updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventParticipantResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Event or participant not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/initiatives/": {
+      "post": {
+        "tags": ["Initiatives"],
+        "summary": "Create an initiative",
+        "description": "Create a new initiative.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateInitiativeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Initiative created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InitiativeResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": ["Initiatives"],
+        "summary": "List initiatives",
+        "description": "Retrieve a list of initiatives with optional filtering and pagination.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": ["draft", "active", "completed", "archived"],
+              "description": "Filter by status",
+              "example": "active"
+            },
+            "required": false,
+            "description": "Filter by status",
+            "name": "status",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Filter by parent initiative"
+            },
+            "required": false,
+            "description": "Filter by parent initiative",
+            "name": "parentId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50,
+              "description": "Maximum number of initiatives to return",
+              "example": 50
+            },
+            "required": false,
+            "description": "Maximum number of initiatives to return",
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": ["integer", "null"],
+              "minimum": 0,
+              "default": 0,
+              "description": "Number of initiatives to skip",
+              "example": 0
+            },
+            "required": false,
+            "description": "Number of initiatives to skip",
+            "name": "offset",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Initiatives retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InitiativeListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/initiatives/{id}": {
+      "delete": {
+        "tags": ["Initiatives"],
+        "summary": "Delete an initiative",
+        "description": "Soft-delete an initiative by its ID.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Initiative UUID",
+              "example": "123e4567-e89b-12d3-a456-426614174000"
+            },
+            "required": true,
+            "description": "Initiative UUID",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Initiative deleted successfully"
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Initiative not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": ["Initiatives"],
+        "summary": "Get an initiative",
+        "description": "Retrieve a single initiative by its ID.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Initiative UUID",
+              "example": "123e4567-e89b-12d3-a456-426614174000"
+            },
+            "required": true,
+            "description": "Initiative UUID",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Initiative retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InitiativeResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Initiative not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["Initiatives"],
+        "summary": "Update an initiative",
+        "description": "Update an existing initiative. Only provided fields will be updated.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Initiative UUID",
+              "example": "123e4567-e89b-12d3-a456-426614174000"
+            },
+            "required": true,
+            "description": "Initiative UUID",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateInitiativeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Initiative updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InitiativeResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Initiative not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/time-blocks/": {
+      "post": {
+        "tags": ["Time Blocks"],
+        "summary": "Create a time block",
+        "description": "Create a new time block.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTimeBlockRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Time block created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeBlockResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": ["Time Blocks"],
+        "summary": "List time blocks",
+        "description": "Retrieve a list of time blocks with optional date filtering and pagination.",
+        "parameters": [
+          {
+            "schema": {
+              "type": ["string", "null"],
+              "format": "date-time",
+              "description": "Filter time blocks starting on or after this date",
+              "example": "2025-01-01T00:00:00Z"
+            },
+            "required": false,
+            "description": "Filter time blocks starting on or after this date",
+            "name": "startDate",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": ["string", "null"],
+              "format": "date-time",
+              "description": "Filter time blocks ending before this date",
+              "example": "2025-01-31T23:59:59Z"
+            },
+            "required": false,
+            "description": "Filter time blocks ending before this date",
+            "name": "endDate",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50,
+              "description": "Maximum number of time blocks to return",
+              "example": 50
+            },
+            "required": false,
+            "description": "Maximum number of time blocks to return",
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": ["integer", "null"],
+              "minimum": 0,
+              "default": 0,
+              "description": "Number of time blocks to skip",
+              "example": 0
+            },
+            "required": false,
+            "description": "Number of time blocks to skip",
+            "name": "offset",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Time blocks retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeBlockListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/time-blocks/{id}": {
+      "delete": {
+        "tags": ["Time Blocks"],
+        "summary": "Delete a time block",
+        "description": "Soft-delete a time block by its ID.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Time block UUID",
+              "example": "123e4567-e89b-12d3-a456-426614174000"
+            },
+            "required": true,
+            "description": "Time block UUID",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Time block deleted successfully"
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Time block not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": ["Time Blocks"],
+        "summary": "Get a time block",
+        "description": "Retrieve a single time block by its ID.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Time block UUID",
+              "example": "123e4567-e89b-12d3-a456-426614174000"
+            },
+            "required": true,
+            "description": "Time block UUID",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Time block retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeBlockResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Time block not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["Time Blocks"],
+        "summary": "Update a time block",
+        "description": "Update an existing time block. Only provided fields will be updated.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Time block UUID",
+              "example": "123e4567-e89b-12d3-a456-426614174000"
+            },
+            "required": true,
+            "description": "Time block UUID",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTimeBlockRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Time block updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeBlockResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Time block not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/time-blocks/{id}/tasks": {
+      "post": {
+        "tags": ["Time Blocks"],
+        "summary": "Link task to time block",
+        "description": "Link a task to a time block.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Time block UUID",
+              "example": "123e4567-e89b-12d3-a456-426614174000"
+            },
+            "required": true,
+            "description": "Time block UUID",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LinkTaskRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Task linked successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeBlockResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or task already linked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Time block or task not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/time-blocks/{id}/tasks/order": {
+      "put": {
+        "tags": ["Time Blocks"],
+        "summary": "Reorder tasks in time block",
+        "description": "Reorder the tasks linked to a time block.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Time block UUID",
+              "example": "123e4567-e89b-12d3-a456-426614174000"
+            },
+            "required": true,
+            "description": "Time block UUID",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReorderTasksRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Tasks reordered successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeBlockResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error (e.g., task IDs do not match)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Time block not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/time-blocks/{id}/tasks/{taskId}": {
+      "delete": {
+        "tags": ["Time Blocks"],
+        "summary": "Unlink task from time block",
+        "description": "Remove the link between a task and a time block.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Time block UUID"
+            },
+            "required": true,
+            "description": "Time block UUID",
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Task UUID"
+            },
+            "required": true,
+            "description": "Task UUID",
+            "name": "taskId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Task unlinked successfully"
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Time block or task link not found",
             "content": {
               "application/json": {
                 "schema": {

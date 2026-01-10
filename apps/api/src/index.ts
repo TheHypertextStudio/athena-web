@@ -76,14 +76,17 @@ app.use(
   }),
 );
 
-// Global rate limiting (100 requests per minute)
-app.use('/api/*', rateLimit(rateLimits.standard));
+// Rate limiting (disabled in development)
+if (env.NODE_ENV === 'production') {
+  // Global rate limiting (100 requests per minute)
+  app.use('/api/*', rateLimit(rateLimits.standard));
 
-// Stricter rate limits for auth endpoints
-app.use('/api/auth/*', rateLimit(rateLimits.auth));
+  // Stricter rate limits for auth endpoints
+  app.use('/api/auth/*', rateLimit(rateLimits.auth));
 
-// Stricter rate limits for AI endpoints (expensive API calls)
-app.use('/api/ai/*', rateLimit(rateLimits.ai));
+  // Stricter rate limits for AI endpoints (expensive API calls)
+  app.use('/api/ai/*', rateLimit(rateLimits.ai));
+}
 
 // Health check endpoint (no rate limiting)
 app.get('/health', (c) => c.json({ status: 'ok', timestamp: new Date().toISOString() }));

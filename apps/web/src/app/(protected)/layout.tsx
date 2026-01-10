@@ -21,7 +21,13 @@ import { UndoProvider } from '@/lib/undo';
 import { HistoryPanel } from '@/components/ui/history-panel';
 import { TimezoneMismatchDialog } from '@/components/timezone-mismatch-dialog';
 
-export default function ProtectedLayout({ children }: { children: React.ReactNode }) {
+export default function ProtectedLayout({
+  children,
+  modal,
+}: {
+  children: React.ReactNode;
+  modal: React.ReactNode;
+}) {
   const router = useRouter();
   const { user, isAuthenticated, isLoading } = useAuth();
 
@@ -94,6 +100,9 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
 
               {/* Command Palette - Cmd+K / Ctrl+K to open */}
               <CommandPalette />
+
+              {/* Modal slot for route interception (e.g., assistant) */}
+              {modal}
 
               {/* History panel for undo/redo - Cmd+Alt+Z to open */}
               <HistoryPanel />

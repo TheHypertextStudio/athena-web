@@ -28,12 +28,14 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import { Search, ChevronRight, X } from 'lucide-react';
 import { useCallback, useEffect, useId, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 
 import { cn } from '@/lib/utils';
 import { getShortcutManager } from '@/lib/command-palette';
 import { useCommandPalette } from './command-palette-provider';
 import { CommandPaletteItem } from './command-palette-item';
 import { CommandPaletteForm } from './command-palette-form';
+import { CommandPaletteAssistant } from './command-palette-assistant';
 
 /**
  * Main command palette component.
@@ -44,6 +46,7 @@ import { CommandPaletteForm } from './command-palette-form';
 export function CommandPalette() {
   const {
     isOpen,
+    mode,
     close,
     query,
     setQuery,
@@ -58,7 +61,13 @@ export function CommandPalette() {
     isExecuting,
     pushNavigation,
     executeAction,
+    enterAssistantMode,
+    exitAssistantMode,
+    assistantInitialMessage,
+    shouldShowAssistantHint,
   } = useCommandPalette();
+
+  const router = useRouter();
 
   // Generate unique IDs for ARIA relationships
   const inputId = useId();
@@ -99,6 +108,15 @@ export function CommandPalette() {
   // Handle keyboard navigation within the palette
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
+      // In assistant mode, let the assistant component handle keys
+      if (mode === 'assistant') {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          exitAssistantMode();
+        }
+        return;
+      }
+
       // Handle form mode separately
       if (activeAction) {
         if (event.key === 'Escape') {
@@ -128,8 +146,21 @@ export function CommandPalette() {
 
         case 'Enter': {
           event.preventDefault();
+
+          // If showing assistant hint, enter assistant mode with query
+          if (shouldShowAssistantHint) {
+            enterAssistantMode(query);
+            return;
+          }
+
           const selected = filteredActions[selectedIndex];
           if (selected) {
+            // Check if it's the "Talk to Athena" action
+            if (selected.action.id === 'talk-to-athena') {
+              enterAssistantMode();
+              return;
+            }
+
             if (selected.action.type === 'group') {
               pushNavigation(selected.action);
             } else {
@@ -168,6 +199,8 @@ export function CommandPalette() {
       }
     },
     [
+      mode,
+      exitAssistantMode,
       activeAction,
       setActiveAction,
       selectedIndex,
@@ -179,6 +212,8 @@ export function CommandPalette() {
       executeAction,
       popNavigation,
       close,
+      shouldShowAssistantHint,
+      enterAssistantMode,
     ],
   );
 
@@ -237,72 +272,74 @@ export function CommandPalette() {
             {announcement}
           </div>
 
-          {/* Search Input */}
-          <div className="bg-surface-container flex items-center gap-3 rounded-t-3xl px-4">
-            <Search className="text-on-surface-variant h-5 w-5 shrink-0" aria-hidden="true" />
-            <input
-              ref={inputRef}
-              id={inputId}
-              type="text"
-              role="combobox"
-              aria-expanded={!activeAction && filteredActions.length > 0}
-              aria-controls={listboxId}
-              aria-activedescendant={
-                selectedAction ? `palette-item-${selectedAction.action.id}` : undefined
-              }
-              aria-autocomplete="list"
-              aria-haspopup="listbox"
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-              }}
-              placeholder={
-                activeAction
-                  ? activeAction.label
-                  : activeGroupLabel
-                    ? `Search in ${activeGroupLabel}...`
-                    : 'Type a command or search...'
-              }
-              className={cn(
-                'text-on-surface flex-1 bg-transparent py-4 text-base outline-none',
-                'placeholder:text-on-surface-variant',
-              )}
-              autoComplete="off"
-              autoCorrect="off"
-              autoCapitalize="off"
-              spellCheck={false}
-            />
-
-            {/* Clear button when there's text */}
-            {query && (
-              <button
-                type="button"
-                onClick={() => {
-                  setQuery('');
+          {/* Search Input - hide in assistant mode */}
+          {mode !== 'assistant' && (
+            <div className="bg-surface-container flex items-center gap-3 rounded-t-3xl px-4">
+              <Search className="text-on-surface-variant h-5 w-5 shrink-0" aria-hidden="true" />
+              <input
+                ref={inputRef}
+                id={inputId}
+                type="text"
+                role="combobox"
+                aria-expanded={!activeAction && filteredActions.length > 0}
+                aria-controls={listboxId}
+                aria-activedescendant={
+                  selectedAction ? `palette-item-${selectedAction.action.id}` : undefined
+                }
+                aria-autocomplete="list"
+                aria-haspopup="listbox"
+                value={query}
+                onChange={(e) => {
+                  setQuery(e.target.value);
                 }}
+                placeholder={
+                  activeAction
+                    ? activeAction.label
+                    : activeGroupLabel
+                      ? `Search in ${activeGroupLabel}...`
+                      : 'Type a command or search...'
+                }
                 className={cn(
-                  'text-on-surface-variant rounded-full p-1',
-                  'hover:bg-surface-container hover:text-on-surface',
-                  'focus-visible:ring-primary focus-visible:ring-2 focus-visible:outline-none',
-                  'duration-short3 transition-colors',
+                  'text-on-surface flex-1 bg-transparent py-4 text-base outline-none',
+                  'placeholder:text-on-surface-variant',
                 )}
-                aria-label="Clear search"
-                tabIndex={0}
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+              />
 
-            <kbd
-              className="bg-surface-container-highest text-on-surface-variant hidden rounded-md px-2 py-1 text-xs sm:inline-block"
-              aria-hidden="true"
-            >
-              {shortcutManager.formatForDisplay('mod+k')}
-            </kbd>
-          </div>
+              {/* Clear button when there's text */}
+              {query && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQuery('');
+                  }}
+                  className={cn(
+                    'text-on-surface-variant rounded-full p-1',
+                    'hover:bg-surface-container hover:text-on-surface',
+                    'focus-visible:ring-primary focus-visible:ring-2 focus-visible:outline-none',
+                    'duration-short3 transition-colors',
+                  )}
+                  aria-label="Clear search"
+                  tabIndex={0}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+
+              <kbd
+                className="bg-surface-container-highest text-on-surface-variant hidden rounded-md px-2 py-1 text-xs sm:inline-block"
+                aria-hidden="true"
+              >
+                {shortcutManager.formatForDisplay('mod+k')}
+              </kbd>
+            </div>
+          )}
 
           {/* Breadcrumb Navigation */}
-          {breadcrumbs.length > 0 && !activeAction && (
+          {mode !== 'assistant' && breadcrumbs.length > 0 && !activeAction && (
             <nav
               aria-label="Command palette navigation"
               className="bg-surface-container flex items-center gap-1 px-4 py-2"
@@ -350,7 +387,18 @@ export function CommandPalette() {
           )}
 
           {/* Content Area */}
-          {activeAction ? (
+          {mode === 'assistant' ? (
+            // Assistant Mode
+            <CommandPaletteAssistant
+              initialMessage={assistantInitialMessage ?? undefined}
+              onExit={exitAssistantMode}
+              onExpand={() => {
+                close();
+                // Navigate to assistant modal (intercepted route)
+                router.push('/assistant');
+              }}
+            />
+          ) : activeAction ? (
             // Inline Form Mode
             <div className="palette-form-enter">
               <CommandPaletteForm />
@@ -368,7 +416,25 @@ export function CommandPalette() {
               className="max-h-[320px] overflow-y-auto overscroll-contain p-2"
               tabIndex={-1}
             >
-              {filteredActions.length === 0 ? (
+              {shouldShowAssistantHint ? (
+                // Show assistant hint when no results but query exists
+                <div
+                  className="flex flex-col items-center justify-center py-8 text-center"
+                  role="status"
+                >
+                  <div className="bg-tertiary-container text-on-tertiary-container mb-3 rounded-full p-3">
+                    <Search className="h-6 w-6" aria-hidden="true" />
+                  </div>
+                  <p className="text-on-surface text-sm font-medium">No matching commands</p>
+                  <p className="text-on-surface-variant mt-1 text-xs">
+                    Press{' '}
+                    <kbd className="bg-surface-container-highest rounded px-1 py-0.5 font-mono">
+                      ↵
+                    </kbd>{' '}
+                    to ask Athena
+                  </p>
+                </div>
+              ) : filteredActions.length === 0 ? (
                 <div
                   className="flex flex-col items-center justify-center py-12 text-center"
                   role="status"
@@ -395,46 +461,48 @@ export function CommandPalette() {
             </div>
           )}
 
-          {/* Footer */}
-          <footer className="bg-surface-container text-on-surface-variant flex items-center justify-between rounded-b-3xl px-4 py-2.5 text-xs">
-            <div className="flex items-center gap-4" aria-hidden="true">
-              <span className="flex items-center gap-1.5">
-                <kbd className="bg-surface-container-highest inline-flex h-5 min-w-5 items-center justify-center rounded-md px-1.5 text-[10px]">
-                  ↑↓
-                </kbd>
-                navigate
-              </span>
-              <span className="flex items-center gap-1.5">
-                <kbd className="bg-surface-container-highest inline-flex h-5 min-w-5 items-center justify-center rounded-md px-1.5 text-[10px]">
-                  ↵
-                </kbd>
-                select
-              </span>
-              {(navigationStack.length > 0 || activeAction) && (
+          {/* Footer - hide in assistant mode as it has its own footer */}
+          {mode !== 'assistant' && (
+            <footer className="bg-surface-container text-on-surface-variant flex items-center justify-between rounded-b-3xl px-4 py-2.5 text-xs">
+              <div className="flex items-center gap-4" aria-hidden="true">
                 <span className="flex items-center gap-1.5">
                   <kbd className="bg-surface-container-highest inline-flex h-5 min-w-5 items-center justify-center rounded-md px-1.5 text-[10px]">
-                    {activeAction ? 'esc' : '⌫'}
+                    ↑↓
                   </kbd>
-                  back
+                  navigate
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <kbd className="bg-surface-container-highest inline-flex h-5 min-w-5 items-center justify-center rounded-md px-1.5 text-[10px]">
+                    ↵
+                  </kbd>
+                  select
+                </span>
+                {(navigationStack.length > 0 || activeAction) && (
+                  <span className="flex items-center gap-1.5">
+                    <kbd className="bg-surface-container-highest inline-flex h-5 min-w-5 items-center justify-center rounded-md px-1.5 text-[10px]">
+                      {activeAction ? 'esc' : '⌫'}
+                    </kbd>
+                    back
+                  </span>
+                )}
+                <span className="flex items-center gap-1.5">
+                  <kbd className="bg-surface-container-highest inline-flex h-5 min-w-5 items-center justify-center rounded-md px-1.5 text-[10px]">
+                    esc
+                  </kbd>
+                  close
+                </span>
+              </div>
+              {isExecuting && (
+                <span className="text-primary flex items-center gap-2">
+                  <span
+                    className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent"
+                    aria-hidden="true"
+                  />
+                  Running...
                 </span>
               )}
-              <span className="flex items-center gap-1.5">
-                <kbd className="bg-surface-container-highest inline-flex h-5 min-w-5 items-center justify-center rounded-md px-1.5 text-[10px]">
-                  esc
-                </kbd>
-                close
-              </span>
-            </div>
-            {isExecuting && (
-              <span className="text-primary flex items-center gap-2">
-                <span
-                  className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent"
-                  aria-hidden="true"
-                />
-                Running...
-              </span>
-            )}
-          </footer>
+            </footer>
+          )}
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

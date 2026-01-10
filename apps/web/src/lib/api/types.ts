@@ -3220,6 +3220,1787 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/notifications/channels': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get notification channels
+     * @description Get list of configured notification channels.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Notification channels retrieved */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotificationChannelsResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/notifications/preferences': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get notification preferences
+     * @description Get notification preferences for the authenticated user.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Notification preferences retrieved */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotificationPreferencesResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /**
+     * Update notification preferences
+     * @description Update notification preferences for the authenticated user.
+     */
+    patch: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': components['schemas']['UpdateNotificationPreferencesRequest'];
+        };
+      };
+      responses: {
+        /** @description Notification preferences updated */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotificationPreferencesResponse'];
+          };
+        };
+        /** @description Validation error */
+        400: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ValidationError'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    trace?: never;
+  };
+  '/api/notifications/': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get notifications
+     * @description Get notifications for the authenticated user with pagination.
+     */
+    get: {
+      parameters: {
+        query?: {
+          /** @description Number of items to return */
+          limit?: number;
+          /** @description Number of items to skip */
+          offset?: number | null;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Notifications retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotificationsResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/notifications/unread': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get unread notifications
+     * @description Get unread notifications for the authenticated user.
+     */
+    get: {
+      parameters: {
+        query?: {
+          /** @description Maximum number of notifications to return */
+          limit?: number;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Unread notifications retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnreadNotificationsResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/notifications/read-all': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Mark all notifications as read
+     * @description Mark all notifications as read for the authenticated user.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description All notifications marked as read */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['MarkAllReadResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/notifications/{id}/read': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Mark notification as read
+     * @description Mark a specific notification as read.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Notification ID */
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Notification marked as read */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['MarkReadResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Notification not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/notifications/schedule': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Schedule notification
+     * @description Schedule a notification for later delivery.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': components['schemas']['ScheduleNotificationRequest'];
+        };
+      };
+      responses: {
+        /** @description Notification scheduled */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ScheduleNotificationResponse'];
+          };
+        };
+        /** @description Validation error */
+        400: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ValidationError'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/notifications/send': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Send notification
+     * @description Send a notification to a user (admin/system use).
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': components['schemas']['SendNotificationRequest'];
+        };
+      };
+      responses: {
+        /** @description Notification sent */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['SendNotificationResponse'];
+          };
+        };
+        /** @description Validation error */
+        400: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ValidationError'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/integrations/connect': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Connect integration
+     * @description Connect a new integration.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': components['schemas']['ConnectIntegrationRequest'];
+        };
+      };
+      responses: {
+        /** @description Integration connected successfully */
+        201: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['LinkedIntegrationResponse'];
+          };
+        };
+        /** @description Validation error */
+        400: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ValidationError'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Integration already exists for this provider */
+        409: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ErrorResponse'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/integrations/{id}/mappings': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get mappings
+     * @description Get all mappings for an integration.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Integration ID */
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Mappings retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['IntegrationMappingsResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Integration not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    /**
+     * Create mapping
+     * @description Create a new mapping for an integration.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Integration ID */
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': components['schemas']['CreateMappingRequest'];
+        };
+      };
+      responses: {
+        /** @description Mapping created successfully */
+        201: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['IntegrationMappingResponse'];
+          };
+        };
+        /** @description Validation error */
+        400: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ValidationError'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Integration not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/integrations/{id}/mappings/{mappingId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Delete mapping
+     * @description Delete a mapping.
+     */
+    delete: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Integration ID */
+          id: string;
+          /** @description Mapping ID */
+          mappingId: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Mapping deleted successfully */
+        204: {
+          headers: Record<string, unknown>;
+          content?: never;
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Mapping or integration not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/integrations/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get integration
+     * @description Get a specific integration by ID.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Integration ID */
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Integration retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['LinkedIntegrationResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Integration not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    /**
+     * Disconnect integration
+     * @description Disconnect (remove) an integration.
+     */
+    delete: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Integration ID */
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Integration disconnected successfully */
+        204: {
+          headers: Record<string, unknown>;
+          content?: never;
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Integration not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/integrations/': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List integrations
+     * @description List all linked integrations for the authenticated user.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Integrations retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['LinkedIntegrationsResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/integrations/{id}/mappings/by-entity/{entityType}/{localEntityId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Find mapping by local entity
+     * @description Find a mapping by local entity type and ID.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Integration ID */
+          id: string;
+          /** @description Entity type for mapping */
+          entityType: 'task' | 'project' | 'event' | 'initiative';
+          /** @description Local entity ID */
+          localEntityId: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Mapping retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['IntegrationMappingResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Mapping or integration not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/integrations/{id}/mappings/by-external/{externalId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Find mapping by external ID
+     * @description Find a mapping by external ID.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Integration ID */
+          id: string;
+          /** @description External entity ID */
+          externalId: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Mapping retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['IntegrationMappingResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Mapping or integration not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/integrations/oauth/{provider}/authorize': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get OAuth URL
+     * @description Get OAuth authorization URL for a provider.
+     */
+    get: {
+      parameters: {
+        query: {
+          /** @description OAuth redirect URI */
+          redirect_uri: string;
+        };
+        header?: never;
+        path: {
+          /** @description Integration provider */
+          provider: 'linear' | 'github' | 'google_calendar' | 'outlook_calendar' | 'apple_calendar';
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description OAuth authorization URL retrieved */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['OAuthAuthorizationResponse'];
+          };
+        };
+        /** @description Invalid provider or missing redirect_uri */
+        400: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ValidationError'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/integrations/webhooks/{provider}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Handle webhook
+     * @description Handle incoming webhook from an integration provider.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Webhook-enabled provider */
+          provider: 'linear' | 'github';
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Webhook processed successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['WebhookResult'];
+          };
+        };
+        /** @description Invalid webhook payload */
+        400: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ErrorResponse'];
+          };
+        };
+        /** @description Invalid webhook signature */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/integrations/{id}/mappings/{mappingId}/synced-from-external': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Mark synced from external
+     * @description Mark a mapping as synced from external.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Integration ID */
+          id: string;
+          /** @description Mapping ID */
+          mappingId: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': components['schemas']['MarkSyncedRequest'];
+        };
+      };
+      responses: {
+        /** @description Mapping marked as synced */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['MarkSyncedResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Mapping or integration not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/integrations/{id}/mappings/{mappingId}/synced-to-external': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Mark synced to external
+     * @description Mark a mapping as synced to external.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Integration ID */
+          id: string;
+          /** @description Mapping ID */
+          mappingId: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': components['schemas']['MarkSyncedRequest'];
+        };
+      };
+      responses: {
+        /** @description Mapping marked as synced */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['MarkSyncedResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Mapping or integration not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/calendar-sync/events/{eventId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Sync event to all connections
+     * @description Sync an event to all bidirectional connections.
+     */
+    put: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Event ID */
+          eventId: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Event synced to all connections */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['SuccessResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Sync failed */
+        500: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['CalendarSyncErrorResponse'];
+          };
+        };
+      };
+    };
+    post?: never;
+    /**
+     * Delete event from all connections
+     * @description Delete an event from all bidirectional connections.
+     */
+    delete: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Event ID */
+          eventId: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Event deleted from all connections */
+        204: {
+          headers: Record<string, unknown>;
+          content?: never;
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Delete failed */
+        500: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['CalendarSyncErrorResponse'];
+          };
+        };
+      };
+    };
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/calendar-sync/connections/{id}/events/{eventId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Sync event to connection
+     * @description Sync (create or update) an event to external calendar.
+     */
+    put: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Connection ID */
+          id: string;
+          /** @description Event ID */
+          eventId: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Event synced successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['SuccessResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Connection not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+        /** @description Sync failed */
+        500: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['CalendarSyncErrorResponse'];
+          };
+        };
+      };
+    };
+    post?: never;
+    /**
+     * Delete event from connection
+     * @description Delete an event from external calendar.
+     */
+    delete: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Connection ID */
+          id: string;
+          /** @description Event ID */
+          eventId: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Event deleted successfully */
+        204: {
+          headers: Record<string, unknown>;
+          content?: never;
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Connection not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+        /** @description Delete failed */
+        500: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['CalendarSyncErrorResponse'];
+          };
+        };
+      };
+    };
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/calendar-sync/connections/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Disconnect calendar
+     * @description Disconnect a calendar provider.
+     */
+    delete: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Connection ID */
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Calendar disconnected successfully */
+        204: {
+          headers: Record<string, unknown>;
+          content?: never;
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Connection not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+        /** @description Disconnect failed */
+        500: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['CalendarSyncErrorResponse'];
+          };
+        };
+      };
+    };
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/calendar-sync/auth/{provider}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get OAuth URL
+     * @description Get OAuth URL for a calendar provider.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Calendar provider */
+          provider: 'google' | 'outlook' | 'icloud' | 'caldav';
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description OAuth URL retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['AuthUrlResponse'];
+          };
+        };
+        /** @description Provider not configured */
+        400: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['CalendarSyncErrorResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/calendar-sync/connections': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List calendar connections
+     * @description List all calendar connections for the authenticated user.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Calendar connections retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['CalendarConnectionsResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/calendar-sync/callback': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Handle OAuth callback
+     * @description Handle OAuth callback from calendar provider.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': components['schemas']['OAuthCallbackRequest'];
+        };
+      };
+      responses: {
+        /** @description OAuth callback handled successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['OAuthCallbackResponse'];
+          };
+        };
+        /** @description OAuth callback failed */
+        400: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['CalendarSyncErrorResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/calendar-sync/connections/{id}/push': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Push event
+     * @description Push a local event to external calendar.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Connection ID */
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': components['schemas']['PushEventRequest'];
+        };
+      };
+      responses: {
+        /** @description Event pushed successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['SuccessResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Connection not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+        /** @description Push failed */
+        500: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['CalendarSyncErrorResponse'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/calendar-sync/sync-all': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Sync all connections
+     * @description Trigger sync for all calendar connections.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Sync completed for all connections */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['SyncAllResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Sync failed */
+        500: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['CalendarSyncErrorResponse'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/calendar-sync/connections/{id}/sync': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Trigger sync
+     * @description Trigger a sync for a calendar connection.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Connection ID */
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Sync completed */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['SyncResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Connection not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+        /** @description Sync failed */
+        500: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['CalendarSyncErrorResponse'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/calendar-sync/connections/{id}/settings': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /**
+     * Update sync settings
+     * @description Update sync settings for a calendar connection.
+     */
+    patch: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Connection ID */
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': components['schemas']['UpdateCalendarSettingsRequest'];
+        };
+      };
+      responses: {
+        /** @description Settings updated successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['SuccessResponse'];
+          };
+        };
+        /** @description Update failed */
+        400: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['CalendarSyncErrorResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Connection not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -4658,6 +6439,580 @@ export interface components {
       email: string;
       /** @description Backup code (8-10 characters) */
       code: string;
+    };
+    NotificationChannelsResponse: {
+      /** @enum {boolean} */
+      success: true;
+      data: {
+        channels: ('email' | 'push' | 'sms' | 'slack' | 'in_app')[];
+      };
+    };
+    /** @description Notification preferences response */
+    NotificationPreferencesResponse: {
+      data: components['schemas']['NotificationPreferences'];
+    };
+    NotificationPreferences: {
+      /** @description Preferences ID */
+      id: string;
+      /**
+       * Format: uuid
+       * @description User ID
+       */
+      userId: string;
+      /** @description Email notifications enabled */
+      emailEnabled: boolean;
+      /** @description Push notifications enabled */
+      pushEnabled: boolean;
+      /** @description SMS notifications enabled */
+      smsEnabled: boolean;
+      /** @description Slack notifications enabled */
+      slackEnabled: boolean;
+      /** @description In-app notifications enabled */
+      inAppEnabled: boolean;
+      /** @description Email address for notifications */
+      emailAddress: string | null;
+      /** @description Phone number for SMS */
+      phoneNumber: string | null;
+      /** @description Slack webhook URL */
+      slackWebhookUrl: string | null;
+      /** @description Slack channel */
+      slackChannel: string | null;
+      /** @description Quiet hours enabled */
+      quietHoursEnabled: boolean;
+      /** @description Quiet hours start (HH:MM) */
+      quietHoursStart: string | null;
+      /** @description Quiet hours end (HH:MM) */
+      quietHoursEnd: string | null;
+      /** @description Quiet hours timezone */
+      quietHoursTimezone: string | null;
+      /** @description Task deadline reminders */
+      taskDeadlineReminders: boolean;
+      /** @description Task assignment notifications */
+      taskAssignmentNotifications: boolean;
+      /** @description Task completion notifications */
+      taskCompletionNotifications: boolean;
+      /** @description Event reminders */
+      eventReminders: boolean;
+      /** @description Daily planning reminder */
+      dailyPlanningReminder: boolean;
+      /** @description Weekly review reminder */
+      weeklyReviewReminder: boolean;
+    };
+    NotificationsResponse: {
+      /** @enum {boolean} */
+      success: true;
+      data: components['schemas']['Notification'][];
+      meta: {
+        limit: number;
+        offset: number;
+        count: number;
+      };
+    };
+    Notification: {
+      /** @description Notification ID */
+      id: string;
+      /**
+       * Format: uuid
+       * @description User ID
+       */
+      userId: string;
+      /** @description Notification title */
+      title: string;
+      /** @description Notification body */
+      body: string;
+      /**
+       * @description Notification delivery channel
+       * @example email
+       * @enum {string}
+       */
+      channel: 'email' | 'push' | 'sms' | 'slack' | 'in_app';
+      /**
+       * @description Notification priority level
+       * @example normal
+       * @enum {string}
+       */
+      priority: 'low' | 'normal' | 'high' | 'urgent';
+      /** @description Whether notification has been read */
+      read: boolean;
+      /** @description Action URL */
+      actionUrl: string | null;
+      /** @description Related entity type */
+      entityType: string | null;
+      /** @description Related entity ID */
+      entityId: string | null;
+      /**
+       * Format: date-time
+       * @description Creation timestamp
+       * @example 2025-01-09T12:00:00Z
+       */
+      createdAt: string;
+    };
+    UnreadNotificationsResponse: {
+      /** @enum {boolean} */
+      success: true;
+      data: components['schemas']['Notification'][];
+      meta: {
+        count: number;
+      };
+    };
+    MarkAllReadResponse: {
+      /** @enum {boolean} */
+      success: true;
+      data: {
+        /** @description Number of notifications marked read */
+        markedRead: number;
+      };
+    };
+    MarkReadResponse: {
+      success: boolean;
+    };
+    ScheduleNotificationResponse: {
+      /** @enum {boolean} */
+      success: true;
+      data: {
+        /** @description Scheduled notification ID */
+        id: string;
+        /** @description Scheduled delivery time */
+        scheduledFor: string;
+      };
+    };
+    ScheduleNotificationRequest: {
+      /**
+       * Format: uuid
+       * @description Target user ID
+       */
+      userId: string;
+      /**
+       * Format: date-time
+       * @description Scheduled delivery time (ISO 8601)
+       */
+      scheduledFor: string;
+      /** @description Recurrence rule (RFC 5545 RRULE) */
+      recurrenceRule?: string;
+      /** @description Notification type */
+      notificationType: string;
+      /** @description Delivery channels */
+      channels: ('email' | 'push' | 'sms' | 'slack' | 'in_app')[];
+      /** @description Notification title */
+      title: string;
+      /** @description Body template */
+      bodyTemplate: string;
+      data?: Record<string, unknown>;
+      /** Format: uri */
+      actionUrl?: string;
+      /**
+       * @description Notification priority level
+       * @example normal
+       * @enum {string}
+       */
+      priority?: 'low' | 'normal' | 'high' | 'urgent';
+    };
+    SendNotificationResponse: {
+      /** @enum {boolean} */
+      success: true;
+      data: {
+        results: components['schemas']['NotificationResult'][];
+        successCount: number;
+        failureCount: number;
+      };
+    };
+    NotificationResult: {
+      /**
+       * @description Notification delivery channel
+       * @example email
+       * @enum {string}
+       */
+      channel: 'email' | 'push' | 'sms' | 'slack' | 'in_app';
+      /** @description Whether delivery succeeded */
+      success: boolean;
+      /** @description Error message if failed */
+      error: string | null;
+    };
+    SendNotificationRequest: {
+      /**
+       * Format: uuid
+       * @description Target user ID
+       */
+      userId: string;
+      /** @description Notification title */
+      title: string;
+      /** @description Notification body */
+      body: string;
+      channels?: ('email' | 'push' | 'sms' | 'slack' | 'in_app')[];
+      /**
+       * @description Notification priority level
+       * @example normal
+       * @enum {string}
+       */
+      priority?: 'low' | 'normal' | 'high' | 'urgent';
+      /** Format: uri */
+      actionUrl?: string;
+      entityType?: string;
+      entityId?: string;
+      data?: Record<string, unknown>;
+    };
+    UpdateNotificationPreferencesRequest: {
+      emailEnabled?: boolean;
+      pushEnabled?: boolean;
+      smsEnabled?: boolean;
+      slackEnabled?: boolean;
+      inAppEnabled?: boolean;
+      /** Format: email */
+      emailAddress?: string;
+      phoneNumber?: string;
+      /** Format: uri */
+      slackWebhookUrl?: string;
+      slackChannel?: string;
+      quietHoursEnabled?: boolean;
+      quietHoursStart?: string;
+      quietHoursEnd?: string;
+      quietHoursTimezone?: string;
+      taskDeadlineReminders?: boolean;
+      taskAssignmentNotifications?: boolean;
+      taskCompletionNotifications?: boolean;
+      eventReminders?: boolean;
+      dailyPlanningReminder?: boolean;
+      weeklyReviewReminder?: boolean;
+    };
+    /** @description Linked integration */
+    LinkedIntegrationResponse: {
+      data: components['schemas']['LinkedIntegration'];
+    };
+    LinkedIntegration: {
+      /** @description Integration ID */
+      id: string;
+      /**
+       * @description Integration provider
+       * @example github
+       * @enum {string}
+       */
+      provider: 'linear' | 'github' | 'google_calendar' | 'outlook_calendar' | 'apple_calendar';
+      /** @description External account identifier */
+      externalAccountId: string;
+      /** @description OAuth scopes */
+      scopes: string | null;
+      /** @description Additional metadata */
+      metadata: Record<string, unknown> | null;
+      /**
+       * Format: date-time
+       * @description Connection timestamp
+       * @example 2025-01-09T12:00:00Z
+       */
+      createdAt: string;
+      /**
+       * Format: date-time
+       * @description Last update timestamp
+       * @example 2025-01-09T12:00:00Z
+       */
+      updatedAt: string;
+    };
+    ConnectIntegrationRequest: {
+      /**
+       * @description Integration provider
+       * @example github
+       * @enum {string}
+       */
+      provider: 'linear' | 'github' | 'google_calendar' | 'outlook_calendar' | 'apple_calendar';
+      /** @description External account identifier */
+      externalAccountId: string;
+      /** @description OAuth access token */
+      accessToken?: string;
+      /** @description OAuth refresh token */
+      refreshToken?: string;
+      /**
+       * Format: date-time
+       * @description Token expiration (ISO 8601)
+       */
+      tokenExpiresAt?: string;
+      /** @description OAuth scopes */
+      scopes?: string;
+      /** @description Additional metadata */
+      metadata?: Record<string, unknown>;
+    };
+    /** @description Integration mapping */
+    IntegrationMappingResponse: {
+      data: components['schemas']['IntegrationMapping'];
+    };
+    IntegrationMapping: {
+      /** @description Mapping ID */
+      id: string;
+      /** @description Integration ID */
+      integrationId: string;
+      /**
+       * @description Entity type for mapping
+       * @example task
+       * @enum {string}
+       */
+      entityType: 'task' | 'project' | 'event' | 'initiative';
+      /** @description Local entity ID */
+      localEntityId: string;
+      /** @description External entity ID */
+      externalId: string;
+      /**
+       * @description Sync direction for mapping
+       * @example bidirectional
+       * @enum {string}
+       */
+      syncDirection: 'pull' | 'push' | 'bidirectional';
+      /** @description External version/etag */
+      externalVersion: string | null;
+      /**
+       * Format: date-time
+       * @description Last sync from external
+       * @example 2025-01-09T12:00:00Z
+       */
+      lastSyncedFromExternal: string | null;
+      /**
+       * Format: date-time
+       * @description Last sync to external
+       * @example 2025-01-09T12:00:00Z
+       */
+      lastSyncedToExternal: string | null;
+      /** @description Mapping metadata */
+      metadata: Record<string, unknown> | null;
+      /**
+       * Format: date-time
+       * @description Creation timestamp
+       * @example 2025-01-09T12:00:00Z
+       */
+      createdAt: string;
+      /**
+       * Format: date-time
+       * @description Last update timestamp
+       * @example 2025-01-09T12:00:00Z
+       */
+      updatedAt: string;
+    };
+    CreateMappingRequest: {
+      /**
+       * @description Entity type for mapping
+       * @example task
+       * @enum {string}
+       */
+      entityType: 'task' | 'project' | 'event' | 'initiative';
+      /** @description Local entity ID */
+      localEntityId: string;
+      /** @description External entity ID */
+      externalId: string;
+      /**
+       * @description Sync direction for mapping
+       * @default bidirectional
+       * @example bidirectional
+       * @enum {string}
+       */
+      syncDirection: 'pull' | 'push' | 'bidirectional';
+      /** @description External version/etag */
+      externalVersion?: string;
+      /** @description Mapping metadata */
+      metadata?: Record<string, unknown>;
+    };
+    /** @description List of linked integrations */
+    LinkedIntegrationsResponse: {
+      data: components['schemas']['LinkedIntegration'][];
+    };
+    /** @description List of mappings */
+    IntegrationMappingsResponse: {
+      data: components['schemas']['IntegrationMapping'][];
+    };
+    /** @description OAuth authorization info */
+    OAuthAuthorizationResponse: {
+      data: components['schemas']['OAuthAuthorization'];
+    };
+    OAuthAuthorization: {
+      /**
+       * @description Integration provider
+       * @example github
+       * @enum {string}
+       */
+      provider: 'linear' | 'github' | 'google_calendar' | 'outlook_calendar' | 'apple_calendar';
+      /** @description OAuth authorization URL */
+      authorizationUrl: string;
+      /** @description Whether provider is configured */
+      configured: boolean;
+    };
+    WebhookResult: {
+      success: boolean;
+      processed: {
+        /** @description Webhook event type */
+        eventType: string;
+        /** @description Whether entity was updated */
+        entityUpdated?: boolean;
+      };
+    };
+    /** @description Sync marked response */
+    MarkSyncedResponse: {
+      data: {
+        /** @enum {boolean} */
+        success: true;
+      };
+    };
+    MarkSyncedRequest: {
+      /** @description External version/etag */
+      externalVersion?: string;
+    };
+    CalendarSyncErrorResponse: {
+      /** @enum {boolean} */
+      success: false;
+      /** @description Error message */
+      error: string;
+    };
+    AuthUrlResponse: {
+      /** @enum {boolean} */
+      success: true;
+      data: {
+        /** @description OAuth authorization URL */
+        authUrl: string;
+      };
+    };
+    CalendarConnectionsResponse: {
+      /** @enum {boolean} */
+      success: true;
+      data: components['schemas']['CalendarConnection'][];
+    };
+    CalendarConnection: {
+      /** @description Connection ID */
+      id: string;
+      /**
+       * @description Calendar provider
+       * @example google
+       * @enum {string}
+       */
+      provider: 'google' | 'outlook' | 'icloud' | 'caldav';
+      /** @description Whether sync is enabled */
+      syncEnabled: boolean;
+      /**
+       * Format: date-time
+       * @description Last sync timestamp
+       * @example 2025-01-09T12:00:00Z
+       */
+      lastSyncAt: string | null;
+      /**
+       * @description Last sync status
+       * @example success
+       * @enum {string|null}
+       */
+      lastSyncStatus: 'success' | 'error' | 'partial' | null;
+      /** @description Connected calendars */
+      calendars: components['schemas']['Calendar'][];
+      /**
+       * Format: date-time
+       * @description Connection creation timestamp
+       * @example 2025-01-09T12:00:00Z
+       */
+      createdAt: string;
+    };
+    Calendar: {
+      /** @description Calendar ID */
+      id: string;
+      /** @description Calendar name */
+      name: string;
+      /** @description Calendar color */
+      color: string | null;
+      /** @description Whether sync is enabled */
+      syncEnabled: boolean;
+      /**
+       * @description Sync direction
+       * @example bidirectional
+       * @enum {string}
+       */
+      syncDirection: 'pull' | 'push' | 'bidirectional';
+    };
+    OAuthCallbackResponse: {
+      /** @enum {boolean} */
+      success: true;
+      data: {
+        /** @description Connection ID */
+        id: string;
+        /**
+         * @description Calendar provider
+         * @example google
+         * @enum {string}
+         */
+        provider: 'google' | 'outlook' | 'icloud' | 'caldav';
+        calendars: components['schemas']['Calendar'][];
+      };
+    };
+    OAuthCallbackRequest: {
+      /**
+       * @description Calendar provider
+       * @example google
+       * @enum {string}
+       */
+      provider: 'google' | 'outlook' | 'icloud' | 'caldav';
+      /** @description OAuth authorization code */
+      code: string;
+      /** @description OAuth state parameter */
+      state: string;
+    };
+    SuccessResponse: {
+      /** @enum {boolean} */
+      success: true;
+    };
+    PushEventRequest: {
+      /**
+       * Format: uuid
+       * @description Event ID to push
+       */
+      eventId: string;
+    };
+    SyncAllResponse: {
+      success: boolean;
+      data: components['schemas']['SyncAllResult'][];
+    };
+    SyncAllResult: {
+      /** @description Connection ID */
+      connectionId: string;
+      /**
+       * @description Calendar provider
+       * @example google
+       * @enum {string}
+       */
+      provider: 'google' | 'outlook' | 'icloud' | 'caldav';
+      /** @description Whether sync succeeded */
+      success: boolean;
+      /** @description Events created */
+      eventsCreated?: number;
+      /** @description Events updated */
+      eventsUpdated?: number;
+      /** @description Events deleted */
+      eventsDeleted?: number;
+      /** @description Error messages */
+      errors?: string[];
+      /** @description Error message if failed */
+      error?: string;
+    };
+    SyncResponse: {
+      success: boolean;
+      data: {
+        /** @description Events created */
+        eventsCreated: number;
+        /** @description Events updated */
+        eventsUpdated: number;
+        /** @description Events deleted */
+        eventsDeleted: number;
+        /** @description Error messages */
+        errors: string[];
+        /**
+         * Format: date-time
+         * @description Sync completion timestamp
+         * @example 2025-01-09T12:00:00Z
+         */
+        syncedAt: string;
+      };
+    };
+    UpdateCalendarSettingsRequest: {
+      calendars: {
+        /** @description Calendar ID */
+        id: string;
+        /** @description Whether sync is enabled */
+        syncEnabled: boolean;
+        /**
+         * @description Sync direction
+         * @example bidirectional
+         * @enum {string}
+         */
+        syncDirection: 'pull' | 'push' | 'bidirectional';
+      }[];
     };
   };
   responses: never;

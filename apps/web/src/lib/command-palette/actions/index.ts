@@ -53,6 +53,7 @@ import { navigationActions } from './navigation';
 import { taskActions } from './tasks';
 import { timeActions } from './time';
 import { undoActions } from './undo';
+import { assistantActions } from './assistant';
 
 /**
  * All actions to register.
@@ -60,7 +61,13 @@ import { undoActions } from './undo';
  * Combines actions from all modules. Order doesn't matter here since
  * actions are sorted by priority within the registry.
  */
-const allActions = [...navigationActions, ...taskActions, ...timeActions, ...undoActions];
+const allActions = [
+  ...navigationActions,
+  ...taskActions,
+  ...timeActions,
+  ...undoActions,
+  ...assistantActions,
+];
 
 /**
  * Register all actions with the registry.
@@ -103,3 +110,4 @@ export { navigationActions } from './navigation';
 export { taskActions, createTaskAction } from './tasks';
 export { timeActions } from './time';
 export { undoActions } from './undo';
+export { assistantActions, talkToAthenaAction } from './assistant';

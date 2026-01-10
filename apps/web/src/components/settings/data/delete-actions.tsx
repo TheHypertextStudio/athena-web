@@ -19,6 +19,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { deleteAccount } from '@/lib/data-actions';
 
+const ACCOUNT_DELETE_CONFIRMATION = 'DELETE_MY_ACCOUNT' as const;
+
 export function DeleteActions() {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -26,12 +28,12 @@ export function DeleteActions() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   const handleDeleteAccount = () => {
-    if (deleteConfirmation !== 'DELETE') {
+    if (deleteConfirmation !== ACCOUNT_DELETE_CONFIRMATION) {
       return;
     }
 
     startTransition(async () => {
-      await deleteAccount('DELETE');
+      await deleteAccount(ACCOUNT_DELETE_CONFIRMATION);
       router.push('/');
     });
   };
@@ -54,7 +56,8 @@ export function DeleteActions() {
         </AlertDialogHeader>
         <div className="space-y-2 py-4">
           <Label htmlFor="delete-confirmation">
-            Type <span className="font-mono font-bold">DELETE</span> to confirm
+            Type <span className="font-mono font-bold">{ACCOUNT_DELETE_CONFIRMATION}</span> to
+            confirm
           </Label>
           <Input
             id="delete-confirmation"
@@ -62,7 +65,7 @@ export function DeleteActions() {
             onChange={(e) => {
               setDeleteConfirmation(e.target.value);
             }}
-            placeholder="DELETE"
+            placeholder={ACCOUNT_DELETE_CONFIRMATION}
           />
         </div>
         <AlertDialogFooter>
@@ -75,7 +78,7 @@ export function DeleteActions() {
           </AlertDialogCancel>
           <AlertDialogAction
             onClick={handleDeleteAccount}
-            disabled={deleteConfirmation !== 'DELETE' || isPending}
+            disabled={deleteConfirmation !== ACCOUNT_DELETE_CONFIRMATION || isPending}
             className="bg-error text-on-error hover:bg-error/90"
           >
             {isPending ? 'Deleting...' : 'Delete Account'}

@@ -116,6 +116,14 @@ const isDefaultValueFactory = (value: unknown): value is (ctx: CommandContext) =
   typeof value === 'function';
 
 /**
+ * Mode for the command palette.
+ *
+ * - 'command': Default mode showing action list and search
+ * - 'assistant': AI assistant chat mode
+ */
+export type CommandPaletteMode = 'command' | 'assistant';
+
+/**
  * Command palette context value.
  *
  * This is what components receive when they call `useCommandPalette()`.
@@ -125,6 +133,11 @@ interface CommandPaletteContextValue {
    * Whether the command palette is currently open.
    */
   isOpen: boolean;
+
+  /**
+   * Current mode of the command palette.
+   */
+  mode: CommandPaletteMode;
 
   /**
    * Open the command palette.
@@ -243,6 +256,26 @@ interface CommandPaletteContextValue {
    * Form validation errors keyed by field name.
    */
   formErrors: Record<string, string>;
+
+  /**
+   * Enter assistant mode with an optional initial message.
+   */
+  enterAssistantMode: (initialMessage?: string) => void;
+
+  /**
+   * Exit assistant mode and return to command mode.
+   */
+  exitAssistantMode: () => void;
+
+  /**
+   * Initial message to send to assistant (when entering from search).
+   */
+  assistantInitialMessage: string | null;
+
+  /**
+   * Whether we should show the assistant hint (no matching actions).
+   */
+  shouldShowAssistantHint: boolean;
 }
 
 /**
@@ -284,6 +317,7 @@ export function CommandPaletteProvider({ children }: CommandPaletteProviderProps
   // ----- State -----
 
   const [isOpen, setIsOpen] = useState(false);
+  const [mode, setMode] = useState<CommandPaletteMode>('command');
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [navigationStack, setNavigationStack] = useState<NavigationItem[]>([]);
@@ -291,6 +325,7 @@ export function CommandPaletteProvider({ children }: CommandPaletteProviderProps
   const [formData, setFormData] = useState<Record<string, unknown>>({});
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [isExecuting, setIsExecuting] = useState(false);
+  const [assistantInitialMessage, setAssistantInitialMessage] = useState<string | null>(null);
 
   // ----- Context Sources -----
 
@@ -343,6 +378,20 @@ export function CommandPaletteProvider({ children }: CommandPaletteProviderProps
     return fuzzySearch(allActions, query, context);
   }, [navigationStack, query, context]);
 
+  /**
+   * Whether to show the assistant hint (no matching actions).
+   * Only show if query is long enough and no actions match.
+   */
+  const shouldShowAssistantHint = useMemo(() => {
+    return (
+      mode === 'command' &&
+      query.length > 2 &&
+      filteredActions.length === 0 &&
+      navigationStack.length === 0 &&
+      !activeAction
+    );
+  }, [mode, query, filteredActions.length, navigationStack.length, activeAction]);
+
   // ----- Actions -----
 
   /**
@@ -350,12 +399,14 @@ export function CommandPaletteProvider({ children }: CommandPaletteProviderProps
    */
   const open = useCallback((actionId?: string) => {
     setIsOpen(true);
+    setMode('command');
     setQuery('');
     setSelectedIndex(0);
     setNavigationStack([]);
     setActiveAction(null);
     setFormData({});
     setFormErrors({});
+    setAssistantInitialMessage(null);
 
     // If actionId provided, try to navigate to it
     if (actionId) {
@@ -372,12 +423,38 @@ export function CommandPaletteProvider({ children }: CommandPaletteProviderProps
    */
   const close = useCallback(() => {
     setIsOpen(false);
+    setMode('command');
     setQuery('');
     setSelectedIndex(0);
     setNavigationStack([]);
     setActiveAction(null);
     setFormData({});
     setFormErrors({});
+    setAssistantInitialMessage(null);
+  }, []);
+
+  /**
+   * Enter assistant mode with an optional initial message.
+   */
+  const enterAssistantMode = useCallback((initialMessage?: string) => {
+    setMode('assistant');
+    setAssistantInitialMessage(initialMessage ?? null);
+    setQuery('');
+    setSelectedIndex(0);
+    setNavigationStack([]);
+    setActiveAction(null);
+    setFormData({});
+    setFormErrors({});
+  }, []);
+
+  /**
+   * Exit assistant mode and return to command mode.
+   */
+  const exitAssistantMode = useCallback(() => {
+    setMode('command');
+    setAssistantInitialMessage(null);
+    setQuery('');
+    setSelectedIndex(0);
   }, []);
 
   /**
@@ -522,6 +599,19 @@ export function CommandPaletteProvider({ children }: CommandPaletteProviderProps
 
   // ----- Global Keyboard Shortcuts -----
 
+  // Open palette and enter assistant mode
+  const openInAssistantMode = useCallback(() => {
+    setIsOpen(true);
+    setMode('assistant');
+    setQuery('');
+    setSelectedIndex(0);
+    setNavigationStack([]);
+    setActiveAction(null);
+    setFormData({});
+    setFormErrors({});
+    setAssistantInitialMessage(null);
+  }, []);
+
   useEffect(() => {
     const shortcutManager = getShortcutManager();
 
@@ -536,6 +626,17 @@ export function CommandPaletteProvider({ children }: CommandPaletteProviderProps
       toggle,
     );
 
+    // Register Cmd+Shift+A to open palette in assistant mode
+    const unregisterAssistant = shortcutManager.register(
+      {
+        id: 'open-assistant',
+        keys: 'mod+shift+a',
+        scope: 'global',
+        preventDefault: true,
+      },
+      openInAssistantMode,
+    );
+
     // Set up keydown listener
     const handleKeyDown = (event: KeyboardEvent) => {
       shortcutManager.handleKeyDown(event);
@@ -545,9 +646,10 @@ export function CommandPaletteProvider({ children }: CommandPaletteProviderProps
 
     return () => {
       unregisterToggle();
+      unregisterAssistant();
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [toggle]);
+  }, [toggle, openInAssistantMode]);
 
   // Note: Palette-specific keyboard navigation is handled in CommandPalette
   // component via onKeyDown on the Dialog.Content element. This keeps the
@@ -565,6 +667,7 @@ export function CommandPaletteProvider({ children }: CommandPaletteProviderProps
   const value = useMemo<CommandPaletteContextValue>(
     () => ({
       isOpen,
+      mode,
       open,
       close,
       toggle,
@@ -586,9 +689,14 @@ export function CommandPaletteProvider({ children }: CommandPaletteProviderProps
       isExecuting,
       executeAction,
       formErrors,
+      enterAssistantMode,
+      exitAssistantMode,
+      assistantInitialMessage,
+      shouldShowAssistantHint,
     }),
     [
       isOpen,
+      mode,
       open,
       close,
       toggle,
@@ -607,6 +715,10 @@ export function CommandPaletteProvider({ children }: CommandPaletteProviderProps
       isExecuting,
       executeAction,
       formErrors,
+      enterAssistantMode,
+      exitAssistantMode,
+      assistantInitialMessage,
+      shouldShowAssistantHint,
     ],
   );
 

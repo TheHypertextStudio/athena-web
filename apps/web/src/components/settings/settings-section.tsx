@@ -244,6 +244,14 @@ const ERROR_MESSAGES: Record<ApiErrorCode, { title: string; description: string 
     title: 'Connection failed',
     description: 'Check your internet connection.',
   },
+  bad_request: {
+    title: 'Invalid request',
+    description: 'The request could not be processed.',
+  },
+  not_found: {
+    title: 'Not found',
+    description: 'The requested resource was not found.',
+  },
   unknown: {
     title: 'Unable to load',
     description: 'Please try again later.',

@@ -8,7 +8,7 @@
  */
 
 import { cookies } from 'next/headers';
-import { mapStatusToError } from './api-errors';
+import { mapResponseToError } from './api-errors';
 
 const API_BASE = process.env['API_URL'] ?? 'http://localhost:4000';
 
@@ -24,7 +24,7 @@ async function fetchWithAuth<T>(path: string): Promise<T> {
   });
 
   if (!res.ok) {
-    throw mapStatusToError(res.status);
+    throw await mapResponseToError(res);
   }
 
   return res.json() as Promise<T>;

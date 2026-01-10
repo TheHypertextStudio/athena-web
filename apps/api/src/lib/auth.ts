@@ -69,8 +69,10 @@ export const auth = betterAuth({
   plugins: [
     passkey({
       rpName: 'Athena',
-      rpID: new URL(env.BETTER_AUTH_URL).hostname,
-      origin: env.BETTER_AUTH_URL,
+      // rpID is the hostname where the passkey is registered (e.g., localhost, athena.app)
+      rpID: new URL(env.FRONTEND_URL).hostname,
+      // origin must match where the WebAuthn ceremony happens (the frontend)
+      origin: env.FRONTEND_URL,
     }),
   ],
 

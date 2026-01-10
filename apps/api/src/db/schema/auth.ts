@@ -79,6 +79,7 @@ export const verifications = pgTable('verifications', {
 
 /**
  * Passkeys table - WebAuthn credentials.
+ * Field names must match BetterAuth's expected schema (camelCase).
  */
 export const passkeys = pgTable('passkeys', {
   id: text('id').primaryKey(),
@@ -86,12 +87,13 @@ export const passkeys = pgTable('passkeys', {
   userId: text('user_id')
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
-  credentialId: text('credential_id').notNull().unique(),
+  credentialID: text('credential_id').notNull().unique(),
   publicKey: text('public_key').notNull(),
   counter: integer('counter').notNull().default(0),
   deviceType: text('device_type'),
   backedUp: boolean('backed_up').notNull().default(false),
   transports: text('transports'),
+  aaguid: text('aaguid'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 

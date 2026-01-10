@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { eq, desc } from 'drizzle-orm';
 import { auth } from '../lib/auth.js';
 import { db } from '../db/index.js';
-import { sessions, accounts, verifications } from '../db/schema/auth.js';
+import { sessions, accounts, verifications, passkeys } from '../db/schema/auth.js';
 import { requireAuth, getUserId, getSessionToken } from '../middleware/auth.js';
 import {
   generateBackupCodes,
@@ -271,6 +271,110 @@ authRoutes.delete('/linked-accounts/:accountId', requireAuth, async (c) => {
 
   // Delete the account link
   await db.delete(accounts).where(eq(accounts.id, accountId));
+
+  return c.body(null, 204);
+});
+
+// ============================================================================
+// Passkey Management Routes
+// ============================================================================
+
+/**
+ * Get all registered passkeys for the user.
+ * GET /api/auth/passkeys
+ */
+authRoutes.get('/passkeys', requireAuth, async (c) => {
+  const userId = getUserId(c);
+
+  const userPasskeys = await db
+    .select({
+      id: passkeys.id,
+      name: passkeys.name,
+      deviceType: passkeys.deviceType,
+      backedUp: passkeys.backedUp,
+      createdAt: passkeys.createdAt,
+    })
+    .from(passkeys)
+    .where(eq(passkeys.userId, userId))
+    .orderBy(desc(passkeys.createdAt));
+
+  return c.json({
+    passkeys: userPasskeys,
+    count: userPasskeys.length,
+  });
+});
+
+/**
+ * Update a passkey (rename).
+ * PATCH /api/auth/passkeys/:passkeyId
+ */
+const updatePasskeySchema = z.object({
+  name: z.string().min(1).max(100),
+});
+
+authRoutes.patch('/passkeys/:passkeyId', requireAuth, async (c) => {
+  const userId = getUserId(c);
+  const passkeyId = c.req.param('passkeyId');
+
+  const body = await c.req.json<unknown>();
+  const parsed = updatePasskeySchema.safeParse(body);
+
+  if (!parsed.success) {
+    return c.json({ error: 'Invalid request', details: z.treeifyError(parsed.error) }, 400);
+  }
+
+  // Verify passkey belongs to user
+  const [passkey] = await db.select().from(passkeys).where(eq(passkeys.id, passkeyId)).limit(1);
+
+  if (!passkey) {
+    return c.json({ error: 'Passkey not found' }, 404);
+  }
+
+  if (passkey.userId !== userId) {
+    return c.json({ error: 'Unauthorized' }, 403);
+  }
+
+  // Update the passkey name
+  await db.update(passkeys).set({ name: parsed.data.name }).where(eq(passkeys.id, passkeyId));
+
+  return c.json({ success: true, name: parsed.data.name });
+});
+
+/**
+ * Delete a passkey.
+ * DELETE /api/auth/passkeys/:passkeyId
+ */
+authRoutes.delete('/passkeys/:passkeyId', requireAuth, async (c) => {
+  const userId = getUserId(c);
+  const passkeyId = c.req.param('passkeyId');
+
+  // Verify passkey belongs to user
+  const [passkey] = await db.select().from(passkeys).where(eq(passkeys.id, passkeyId)).limit(1);
+
+  if (!passkey) {
+    return c.json({ error: 'Passkey not found' }, 404);
+  }
+
+  if (passkey.userId !== userId) {
+    return c.json({ error: 'Unauthorized' }, 403);
+  }
+
+  // Check if user has other sign-in methods before deleting last passkey
+  const allPasskeys = await db.select().from(passkeys).where(eq(passkeys.userId, userId));
+  const linkedAccounts = await db.select().from(accounts).where(eq(accounts.userId, userId));
+
+  if (allPasskeys.length <= 1 && linkedAccounts.length === 0) {
+    return c.json(
+      {
+        error: 'Cannot delete last passkey',
+        message: 'You must have at least one sign-in method. Link an OAuth account first.',
+      },
+      400,
+    );
+  }
+
+  // Delete the passkey
+  await db.delete(passkeys).where(eq(passkeys.id, passkeyId));
 
   return c.body(null, 204);
 });

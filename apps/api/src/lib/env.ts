@@ -10,13 +10,18 @@ import { z } from 'zod';
  * Core environment schema - these are always required.
  */
 const coreSchema = z.object({
-  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
-  PORT: z.coerce.number().default(4000),
-  LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
+  NODE_ENV: z.enum(['development', 'production', 'test']),
+  PORT: z.coerce.number(),
+  LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']),
   DATABASE_URL: z.url(),
   BETTER_AUTH_SECRET: z.string().min(32),
   BETTER_AUTH_URL: z.url(),
-  FRONTEND_URL: z.url().default('http://localhost:3000'),
+  FRONTEND_URL: z.url(),
+
+  // Google OAuth - required for auth and calendar sync
+  GOOGLE_CLIENT_ID: z.string().min(1, 'GOOGLE_CLIENT_ID is required'),
+  GOOGLE_CLIENT_SECRET: z.string().min(1, 'GOOGLE_CLIENT_SECRET is required'),
+  GOOGLE_CALENDAR_REDIRECT_URI: z.url(),
 });
 
 /**
@@ -24,20 +29,13 @@ const coreSchema = z.object({
  * These are only included if their required fields are present.
  */
 const optionalServicesSchema = z.object({
-  // OAuth providers
-  GOOGLE_OAUTH_CLIENT_ID: z.string().optional(),
-  GOOGLE_OAUTH_CLIENT_SECRET: z.string().optional(),
-  APPLE_OAUTH_CLIENT_ID: z.string().optional(),
-  APPLE_OAUTH_CLIENT_SECRET: z.string().optional(),
-  MICROSOFT_OAUTH_CLIENT_ID: z.string().optional(),
-  MICROSOFT_OAUTH_CLIENT_SECRET: z.string().optional(),
+  // Other OAuth providers (Google is required in core schema)
+  APPLE_CLIENT_ID: z.string().optional(),
+  APPLE_CLIENT_SECRET: z.string().optional(),
+  MICROSOFT_CLIENT_ID: z.string().optional(),
+  MICROSOFT_CLIENT_SECRET: z.string().optional(),
 
-  // Calendar providers
-  GOOGLE_CALENDAR_CLIENT_ID: z.string().optional(),
-  GOOGLE_CALENDAR_CLIENT_SECRET: z.string().optional(),
-  GOOGLE_CALENDAR_REDIRECT_URI: z.string().optional(),
-  OUTLOOK_CALENDAR_CLIENT_ID: z.string().optional(),
-  OUTLOOK_CALENDAR_CLIENT_SECRET: z.string().optional(),
+  // Calendar redirect URIs
   OUTLOOK_CALENDAR_REDIRECT_URI: z.string().optional(),
 
   // Integration providers
@@ -337,42 +335,37 @@ function getEnv(): Env {
   const raw = result.data;
   const env: Env = { ...raw };
 
-  // OAuth providers
+  // OAuth providers - use standard credential names
   env.googleOAuth = buildOAuthConfig(
     raw,
     'Google OAuth',
-    'GOOGLE_OAUTH_CLIENT_ID',
-    'GOOGLE_OAUTH_CLIENT_SECRET',
+    'GOOGLE_CLIENT_ID',
+    'GOOGLE_CLIENT_SECRET',
   );
 
   env.microsoftOAuth = buildOAuthConfig(
     raw,
     'Microsoft OAuth',
-    'MICROSOFT_OAUTH_CLIENT_ID',
-    'MICROSOFT_OAUTH_CLIENT_SECRET',
+    'MICROSOFT_CLIENT_ID',
+    'MICROSOFT_CLIENT_SECRET',
   );
 
-  env.appleOAuth = buildOAuthConfig(
-    raw,
-    'Apple OAuth',
-    'APPLE_OAUTH_CLIENT_ID',
-    'APPLE_OAUTH_CLIENT_SECRET',
-  );
+  env.appleOAuth = buildOAuthConfig(raw, 'Apple OAuth', 'APPLE_CLIENT_ID', 'APPLE_CLIENT_SECRET');
 
-  // Calendar providers
+  // Calendar providers - reuse OAuth credentials, just need redirect URI
   env.googleCalendar = buildCalendarConfig(
     raw,
     'Google Calendar',
-    'GOOGLE_CALENDAR_CLIENT_ID',
-    'GOOGLE_CALENDAR_CLIENT_SECRET',
+    'GOOGLE_CLIENT_ID',
+    'GOOGLE_CLIENT_SECRET',
     'GOOGLE_CALENDAR_REDIRECT_URI',
   );
 
   env.outlookCalendar = buildCalendarConfig(
     raw,
     'Outlook Calendar',
-    'OUTLOOK_CALENDAR_CLIENT_ID',
-    'OUTLOOK_CALENDAR_CLIENT_SECRET',
+    'MICROSOFT_CLIENT_ID',
+    'MICROSOFT_CLIENT_SECRET',
     'OUTLOOK_CALENDAR_REDIRECT_URI',
   );
 

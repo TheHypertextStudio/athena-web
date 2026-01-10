@@ -15,6 +15,7 @@ import {
   type EntityType,
   type SyncDirection,
 } from '../services/sync/mapping-service.js';
+import { env } from '../lib/env.js';
 
 const integrationRoutes = new Hono();
 
@@ -202,23 +203,35 @@ integrationRoutes.get('/oauth/:provider/authorize', (c) => {
     });
   }
 
-  const redirectUri = c.req.query('redirect_uri') ?? 'http://localhost:3000/callback';
+  const redirectUri = c.req.query('redirect_uri');
+  if (!redirectUri) {
+    return c.json({ success: false, error: 'redirect_uri query parameter is required' }, 400);
+  }
 
-  // Get OAuth credentials from environment (use placeholder for unconfigured providers in dev/test)
-  const clientIds: Record<Exclude<OAuthProvider, 'apple_calendar'>, string> = {
-    linear: process.env['LINEAR_OAUTH_CLIENT_ID'] ?? 'linear_client_placeholder',
-    github: process.env['GITHUB_OAUTH_CLIENT_ID'] ?? 'github_client_placeholder',
-    google_calendar: process.env['GOOGLE_CALENDAR_CLIENT_ID'] ?? 'google_client_placeholder',
-    outlook_calendar: process.env['OUTLOOK_CALENDAR_CLIENT_ID'] ?? 'outlook_client_placeholder',
+  // Get OAuth credentials from validated env config
+  const clientIds: Record<Exclude<OAuthProvider, 'apple_calendar'>, string | undefined> = {
+    linear: env.LINEAR_OAUTH_CLIENT_ID,
+    github: env.GITHUB_OAUTH_CLIENT_ID,
+    google_calendar: env.GOOGLE_CLIENT_ID,
+    outlook_calendar: env.MICROSOFT_CLIENT_ID,
   };
 
   const clientId = clientIds[provider];
-  const isConfigured = !clientId.includes('placeholder');
+
+  if (!clientId) {
+    return c.json(
+      {
+        success: false,
+        error: `${provider} is not configured. Set the required environment variables.`,
+      },
+      400,
+    );
+  }
 
   const authUrls: Record<Exclude<OAuthProvider, 'apple_calendar'>, string> = {
     linear: `https://linear.app/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=read,write,issues:create`,
     github: `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=repo,user`,
-    google_calendar: `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=https://www.googleapis.com/auth/calendar&access_type=offline`,
+    google_calendar: `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=https://www.googleapis.com/auth/calendar.readonly%20https://www.googleapis.com/auth/calendar.events&access_type=offline&prompt=consent`,
     outlook_calendar: `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=Calendars.ReadWrite%20offline_access`,
   };
 
@@ -228,7 +241,7 @@ integrationRoutes.get('/oauth/:provider/authorize', (c) => {
     data: {
       provider,
       authorizationUrl: authUrl,
-      configured: isConfigured,
+      configured: true,
     },
   });
 });

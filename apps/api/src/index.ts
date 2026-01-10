@@ -4,11 +4,12 @@
  * @packageDocumentation
  */
 
-import { Hono } from 'hono';
+import { OpenAPIHono } from '@hono/zod-openapi';
 import { cors } from 'hono/cors';
 import { serve } from '@hono/node-server';
 import { logger } from './lib/logger.js';
 import { env } from './lib/env.js';
+import { type AppEnv, setupOpenAPIDocs } from './lib/openapi.js';
 import {
   requestLogger,
   securityHeaders,
@@ -46,7 +47,7 @@ import { timeBlockRoutes } from './routes/time-blocks.js';
 import { riscRoutes } from './routes/risc.js';
 import { initializeRISCStream } from './services/risc/index.js';
 
-const app = new Hono();
+const app = new OpenAPIHono<AppEnv>();
 
 // Security headers (first, before any response)
 app.use('*', securityHeaders('api'));
@@ -119,6 +120,11 @@ app.route('/api/calendar-sync', calendarSyncRoutes);
 app.route('/api/time-blocks', timeBlockRoutes);
 app.route('/api/risc', riscRoutes);
 app.route('/mcp', mcpRoutes);
+
+// Setup OpenAPI documentation endpoints
+// - /api/openapi.json - Raw OpenAPI spec
+// - /api/docs - Scalar interactive documentation
+setupOpenAPIDocs(app);
 
 const port = env.PORT;
 const shouldServe = process.env['NODE_ENV'] !== 'test' && !process.env['VITEST'];

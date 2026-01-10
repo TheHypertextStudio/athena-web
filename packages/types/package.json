@@ -16,6 +16,14 @@
     "./domain": {
       "types": "./dist/domain/index.d.ts",
       "import": "./dist/domain/index.js"
+    },
+    "./openapi": {
+      "types": "./dist/openapi/index.d.ts",
+      "import": "./dist/openapi/index.js"
+    },
+    "./openapi/*": {
+      "types": "./dist/openapi/*.d.ts",
+      "import": "./dist/openapi/*.js"
     }
   },
   "main": "./dist/index.js",
@@ -31,6 +39,7 @@
     "lint:fix": "eslint src --ext .ts --fix"
   },
   "dependencies": {
+    "@hono/zod-openapi": "^1.2.0",
     "zod": "^4.3.5"
   },
   "devDependencies": {

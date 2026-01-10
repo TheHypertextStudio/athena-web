@@ -1,426 +1,108 @@
 /**
- * Task routes.
+ * Task routes with OpenAPI documentation.
  *
  * @packageDocumentation
  */
 
-import { Hono } from 'hono';
-import { eq, and, or } from 'drizzle-orm';
-import { db } from '../db/index.js';
-import { tasks, taskTags, tags, taskDependencies } from '../db/schema/index.js';
-import { requireAuth, getUserId } from '../middleware/auth.js';
+import { createOpenAPIApp } from '../lib/openapi.js';
+import { requireAuth } from '../middleware/auth.js';
+import { createServiceContext } from '../lib/service.js';
+import { TaskService } from '../services/tasks/index.js';
+import * as routes from './tasks.openapi.js';
 
-const taskRoutes = new Hono();
+const taskRoutes = createOpenAPIApp();
 
+// Apply auth middleware to all routes
 taskRoutes.use('*', requireAuth);
 
-const TASK_STATUS = {
-  PENDING: 'pending',
-  IN_PROGRESS: 'in_progress',
-  COMPLETED: 'completed',
-  CANCELLED: 'cancelled',
-} as const;
-type TaskStatus = (typeof TASK_STATUS)[keyof typeof TASK_STATUS];
-const TASK_PRIORITY = {
-  LOW: 'low',
-  MEDIUM: 'medium',
-  HIGH: 'high',
-  URGENT: 'urgent',
-} as const;
-type TaskPriority = (typeof TASK_PRIORITY)[keyof typeof TASK_PRIORITY];
-const DEFAULT_TASK_STATUS: TaskStatus = TASK_STATUS.PENDING;
-const DEFAULT_TASK_PRIORITY: TaskPriority = TASK_PRIORITY.MEDIUM;
-
-/**
- * List all tasks for the authenticated user.
- * GET /api/tasks
- */
-taskRoutes.get('/', async (c) => {
-  const userId = getUserId(c);
-  const projectId = c.req.query('projectId');
-  const status = c.req.query('status') as TaskStatus | undefined;
-  const priority = c.req.query('priority') as TaskPriority | undefined;
-
-  let whereClause = or(eq(tasks.creatorId, userId), eq(tasks.assigneeId, userId));
-
-  if (projectId) {
-    whereClause = and(whereClause, eq(tasks.projectId, projectId));
-  }
-
-  if (status) {
-    whereClause = and(whereClause, eq(tasks.status, status));
-  }
-
-  if (priority) {
-    whereClause = and(whereClause, eq(tasks.priority, priority));
-  }
-
-  const result = await db.query.tasks.findMany({
-    where: whereClause,
-    with: {
-      project: true,
-      assignee: true,
-      creator: true,
-      tags: {
-        with: {
-          tag: true,
-        },
-      },
-    },
-    orderBy: (tasks, { desc }) => [desc(tasks.createdAt)],
-  });
-
-  return c.json({ data: result });
+// List tasks
+taskRoutes.openapi(routes.listTasks, async (c) => {
+  const ctx = createServiceContext(c);
+  const service = new TaskService(ctx);
+  const query = c.req.valid('query');
+  const tasks = await service.list(query);
+  return c.json({ data: tasks }, 200);
 });
 
-/**
- * Get a single task by ID.
- * GET /api/tasks/:id
- */
-taskRoutes.get('/:id', async (c) => {
-  const userId = getUserId(c);
-  const id = c.req.param('id');
-
-  const result = await db.query.tasks.findFirst({
-    where: and(eq(tasks.id, id), or(eq(tasks.creatorId, userId), eq(tasks.assigneeId, userId))),
-    with: {
-      project: {
-        with: {
-          initiative: true,
-        },
-      },
-      assignee: true,
-      creator: true,
-      tags: {
-        with: {
-          tag: true,
-        },
-      },
-    },
-  });
-
-  if (!result) {
-    return c.json({ error: 'Task not found' }, 404);
-  }
-
-  return c.json({ data: result });
+// Get task by ID
+taskRoutes.openapi(routes.getTask, async (c) => {
+  const ctx = createServiceContext(c);
+  const service = new TaskService(ctx);
+  const { id } = c.req.valid('param');
+  const task = await service.get(id);
+  return c.json({ data: task }, 200);
 });
 
-/**
- * Create a new task.
- * POST /api/tasks
- */
-taskRoutes.post('/', async (c) => {
-  const userId = getUserId(c);
-  const body = await c.req.json<{
-    title: string;
-    description?: string;
-    status?: TaskStatus;
-    priority?: TaskPriority;
-    deadline?: string;
-    estimatedMinutes?: number;
-    projectId?: string;
-    assigneeId?: string;
-    tagIds?: string[];
-  }>();
-
-  const id = crypto.randomUUID();
-  const now = new Date();
-
-  await db.insert(tasks).values({
-    id,
-    title: body.title,
-    description: body.description,
-    status: body.status ?? DEFAULT_TASK_STATUS,
-    priority: body.priority ?? DEFAULT_TASK_PRIORITY,
-    deadline: body.deadline ? new Date(body.deadline) : null,
-    estimatedMinutes: body.estimatedMinutes,
-    projectId: body.projectId,
-    assigneeId: body.assigneeId,
-    creatorId: userId,
-    createdAt: now,
-    updatedAt: now,
-  });
-
-  // Add tags if provided
-  if (body.tagIds && body.tagIds.length > 0) {
-    await db.insert(taskTags).values(
-      body.tagIds.map((tagId) => ({
-        taskId: id,
-        tagId,
-      })),
-    );
-  }
-
-  const result = await db.query.tasks.findFirst({
-    where: eq(tasks.id, id),
-    with: {
-      project: true,
-      assignee: true,
-      tags: {
-        with: {
-          tag: true,
-        },
-      },
-    },
-  });
-
-  return c.json({ data: result }, 201);
+// Create task
+taskRoutes.openapi(routes.createTask, async (c) => {
+  const ctx = createServiceContext(c);
+  const service = new TaskService(ctx);
+  const input = c.req.valid('json');
+  const task = await service.create(input);
+  return c.json({ data: task }, 201);
 });
 
-/**
- * Update a task.
- * PATCH /api/tasks/:id
- */
-taskRoutes.patch('/:id', async (c) => {
-  const userId = getUserId(c);
-  const id = c.req.param('id');
-  const body = await c.req.json<{
-    title?: string;
-    description?: string;
-    status?: TaskStatus;
-    priority?: TaskPriority;
-    deadline?: string | null;
-    estimatedMinutes?: number | null;
-    projectId?: string | null;
-    assigneeId?: string | null;
-    tagIds?: string[];
-  }>();
-
-  const existing = await db.query.tasks.findFirst({
-    where: and(eq(tasks.id, id), or(eq(tasks.creatorId, userId), eq(tasks.assigneeId, userId))),
-  });
-
-  if (!existing) {
-    return c.json({ error: 'Task not found' }, 404);
-  }
-
-  const updateData: Record<string, unknown> = { updatedAt: new Date() };
-  if (body.title !== undefined) updateData['title'] = body.title;
-  if (body.description !== undefined) updateData['description'] = body.description;
-  if (body.status !== undefined) updateData['status'] = body.status;
-  if (body.priority !== undefined) updateData['priority'] = body.priority;
-  if (body.deadline !== undefined) {
-    updateData['deadline'] = body.deadline ? new Date(body.deadline) : null;
-  }
-  if (body.estimatedMinutes !== undefined) updateData['estimatedMinutes'] = body.estimatedMinutes;
-  if (body.projectId !== undefined) updateData['projectId'] = body.projectId;
-  if (body.assigneeId !== undefined) updateData['assigneeId'] = body.assigneeId;
-
-  await db.update(tasks).set(updateData).where(eq(tasks.id, id));
-
-  // Update tags if provided
-  if (body.tagIds !== undefined) {
-    await db.delete(taskTags).where(eq(taskTags.taskId, id));
-    if (body.tagIds.length > 0) {
-      await db.insert(taskTags).values(
-        body.tagIds.map((tagId) => ({
-          taskId: id,
-          tagId,
-        })),
-      );
-    }
-  }
-
-  const result = await db.query.tasks.findFirst({
-    where: eq(tasks.id, id),
-    with: {
-      project: true,
-      assignee: true,
-      tags: {
-        with: {
-          tag: true,
-        },
-      },
-    },
-  });
-
-  return c.json({ data: result });
+// Update task
+taskRoutes.openapi(routes.updateTask, async (c) => {
+  const ctx = createServiceContext(c);
+  const service = new TaskService(ctx);
+  const { id } = c.req.valid('param');
+  const input = c.req.valid('json');
+  const task = await service.update(id, input);
+  return c.json({ data: task }, 200);
 });
 
-/**
- * Delete a task.
- * DELETE /api/tasks/:id
- */
-taskRoutes.delete('/:id', async (c) => {
-  const userId = getUserId(c);
-  const id = c.req.param('id');
-
-  const existing = await db.query.tasks.findFirst({
-    where: and(eq(tasks.id, id), eq(tasks.creatorId, userId)),
-  });
-
-  if (!existing) {
-    return c.json({ error: 'Task not found or not authorized' }, 404);
-  }
-
-  await db.delete(tasks).where(eq(tasks.id, id));
-
+// Delete task
+taskRoutes.openapi(routes.deleteTask, async (c) => {
+  const ctx = createServiceContext(c);
+  const service = new TaskService(ctx);
+  const { id } = c.req.valid('param');
+  await service.delete(id);
   return c.body(null, 204);
 });
 
-/**
- * Add a tag to a task.
- * POST /api/tasks/:id/tags/:tagId
- */
-taskRoutes.post('/:id/tags/:tagId', async (c) => {
-  const userId = getUserId(c);
-  const taskId = c.req.param('id');
-  const tagId = c.req.param('tagId');
-
-  const task = await db.query.tasks.findFirst({
-    where: and(eq(tasks.id, taskId), or(eq(tasks.creatorId, userId), eq(tasks.assigneeId, userId))),
-  });
-
-  if (!task) {
-    return c.json({ error: 'Task not found' }, 404);
-  }
-
-  const tag = await db.query.tags.findFirst({
-    where: and(eq(tags.id, tagId), eq(tags.ownerId, userId)),
-  });
-
-  if (!tag) {
-    return c.json({ error: 'Tag not found' }, 404);
-  }
-
-  await db.insert(taskTags).values({ taskId, tagId }).onConflictDoNothing();
-
+// Add tag to task
+taskRoutes.openapi(routes.addTagToTask, async (c) => {
+  const ctx = createServiceContext(c);
+  const service = new TaskService(ctx);
+  const { id, tagId } = c.req.valid('param');
+  await service.addTag(id, tagId);
   return c.body(null, 201);
 });
 
-/**
- * Remove a tag from a task.
- * DELETE /api/tasks/:id/tags/:tagId
- */
-taskRoutes.delete('/:id/tags/:tagId', async (c) => {
-  const userId = getUserId(c);
-  const taskId = c.req.param('id');
-  const tagId = c.req.param('tagId');
-
-  const task = await db.query.tasks.findFirst({
-    where: and(eq(tasks.id, taskId), or(eq(tasks.creatorId, userId), eq(tasks.assigneeId, userId))),
-  });
-
-  if (!task) {
-    return c.json({ error: 'Task not found' }, 404);
-  }
-
-  await db.delete(taskTags).where(and(eq(taskTags.taskId, taskId), eq(taskTags.tagId, tagId)));
-
+// Remove tag from task
+taskRoutes.openapi(routes.removeTagFromTask, async (c) => {
+  const ctx = createServiceContext(c);
+  const service = new TaskService(ctx);
+  const { id, tagId } = c.req.valid('param');
+  await service.removeTag(id, tagId);
   return c.body(null, 204);
 });
 
-/**
- * Get task dependencies.
- * GET /api/tasks/:id/dependencies
- */
-taskRoutes.get('/:id/dependencies', async (c) => {
-  const userId = getUserId(c);
-  const taskId = c.req.param('id');
-
-  const task = await db.query.tasks.findFirst({
-    where: and(eq(tasks.id, taskId), or(eq(tasks.creatorId, userId), eq(tasks.assigneeId, userId))),
-  });
-
-  if (!task) {
-    return c.json({ error: 'Task not found' }, 404);
-  }
-
-  const dependencies = await db.query.taskDependencies.findMany({
-    where: eq(taskDependencies.taskId, taskId),
-    with: {
-      dependsOnTask: true,
-    },
-  });
-
-  return c.json({
-    data: dependencies.map((d) => d.dependsOnTask),
-  });
+// Get task dependencies
+taskRoutes.openapi(routes.getTaskDependencies, async (c) => {
+  const ctx = createServiceContext(c);
+  const service = new TaskService(ctx);
+  const { id } = c.req.valid('param');
+  const dependencies = await service.getDependencies(id);
+  return c.json({ data: dependencies }, 200);
 });
 
-/**
- * Add a dependency to a task.
- * POST /api/tasks/:id/dependencies/:dependsOnId
- */
-taskRoutes.post('/:id/dependencies/:dependsOnId', async (c) => {
-  const userId = getUserId(c);
-  const taskId = c.req.param('id');
-  const dependsOnId = c.req.param('dependsOnId');
-
-  // Prevent self-dependency
-  if (taskId === dependsOnId) {
-    return c.json({ error: 'A task cannot depend on itself' }, 400);
-  }
-
-  const task = await db.query.tasks.findFirst({
-    where: and(eq(tasks.id, taskId), or(eq(tasks.creatorId, userId), eq(tasks.assigneeId, userId))),
-  });
-
-  if (!task) {
-    return c.json({ error: 'Task not found' }, 404);
-  }
-
-  const dependsOnTask = await db.query.tasks.findFirst({
-    where: and(
-      eq(tasks.id, dependsOnId),
-      or(eq(tasks.creatorId, userId), eq(tasks.assigneeId, userId)),
-    ),
-  });
-
-  if (!dependsOnTask) {
-    return c.json({ error: 'Dependency task not found' }, 404);
-  }
-
-  // Check for circular dependency (simple check - dependsOn task can't depend on this task)
-  const reverseCheck = await db.query.taskDependencies.findFirst({
-    where: and(
-      eq(taskDependencies.taskId, dependsOnId),
-      eq(taskDependencies.dependsOnTaskId, taskId),
-    ),
-  });
-
-  if (reverseCheck) {
-    return c.json({ error: 'Circular dependency detected' }, 400);
-  }
-
-  const id = crypto.randomUUID();
-  await db
-    .insert(taskDependencies)
-    .values({
-      id,
-      taskId,
-      dependsOnTaskId: dependsOnId,
-      createdAt: new Date(),
-    })
-    .onConflictDoNothing();
-
+// Add task dependency
+taskRoutes.openapi(routes.addTaskDependency, async (c) => {
+  const ctx = createServiceContext(c);
+  const service = new TaskService(ctx);
+  const { id, dependsOnId } = c.req.valid('param');
+  await service.addDependency(id, dependsOnId);
   return c.body(null, 201);
 });
 
-/**
- * Remove a dependency from a task.
- * DELETE /api/tasks/:id/dependencies/:dependsOnId
- */
-taskRoutes.delete('/:id/dependencies/:dependsOnId', async (c) => {
-  const userId = getUserId(c);
-  const taskId = c.req.param('id');
-  const dependsOnId = c.req.param('dependsOnId');
-
-  const task = await db.query.tasks.findFirst({
-    where: and(eq(tasks.id, taskId), or(eq(tasks.creatorId, userId), eq(tasks.assigneeId, userId))),
-  });
-
-  if (!task) {
-    return c.json({ error: 'Task not found' }, 404);
-  }
-
-  await db
-    .delete(taskDependencies)
-    .where(
-      and(eq(taskDependencies.taskId, taskId), eq(taskDependencies.dependsOnTaskId, dependsOnId)),
-    );
-
+// Remove task dependency
+taskRoutes.openapi(routes.removeTaskDependency, async (c) => {
+  const ctx = createServiceContext(c);
+  const service = new TaskService(ctx);
+  const { id, dependsOnId } = c.req.valid('param');
+  await service.removeDependency(id, dependsOnId);
   return c.body(null, 204);
 });
 

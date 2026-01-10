@@ -7,10 +7,18 @@
  * @packageDocumentation
  */
 
+function requireEnv(key: string): string {
+  const value = process.env[key];
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${key}`);
+  }
+  return value;
+}
+
 /**
  * Public environment variables available in the browser.
  */
 export const env = {
   /** Base URL for the API server */
-  API_URL: process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000',
+  API_URL: requireEnv('NEXT_PUBLIC_API_URL'),
 } as const;

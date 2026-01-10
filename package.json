@@ -26,6 +26,7 @@
     "db:push": "turbo run db:push --filter=@athena/api",
     "db:migrate": "turbo run db:migrate --filter=@athena/api",
     "db:studio": "turbo run db:studio --filter=@athena/api",
+    "generate:api-types": "pnpm --filter @athena/api generate:openapi && pnpm --filter @athena/web generate:api-types",
     "prepare": "husky"
   },
   "devDependencies": {

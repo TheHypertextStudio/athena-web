@@ -9,8 +9,10 @@
 
 import { use } from 'react';
 import { useRouter } from 'next/navigation';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { IntegrationDetailContent } from '@/components/integrations';
+import { getIntegrationConfig } from '@/lib/integrations';
 
 export default function IntegrationDetailModalPage({
   params,
@@ -19,6 +21,7 @@ export default function IntegrationDetailModalPage({
 }) {
   const router = useRouter();
   const { provider } = use(params);
+  const config = getIntegrationConfig(provider);
 
   const handleOpenChange = (open: boolean) => {
     if (!open) {
@@ -29,6 +32,14 @@ export default function IntegrationDetailModalPage({
   return (
     <Dialog open onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-lg">
+        <VisuallyHidden asChild>
+          <DialogTitle>{config?.name ?? 'Integration'} Details</DialogTitle>
+        </VisuallyHidden>
+        <VisuallyHidden asChild>
+          <DialogDescription>
+            View and manage your {config?.name ?? 'integration'} connection settings.
+          </DialogDescription>
+        </VisuallyHidden>
         <IntegrationDetailContent provider={provider} />
       </DialogContent>
     </Dialog>

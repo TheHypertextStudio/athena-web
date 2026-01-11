@@ -114,6 +114,7 @@ export function setupOpenAPIDocs(app: OpenAPIHono<AppEnv>, config: OpenAPIDocCon
     tags: [
       { name: 'Auth', description: 'Authentication and session management' },
       { name: 'Tasks', description: 'Task management' },
+      { name: 'Task Statuses', description: 'Custom task status workflow configuration' },
       { name: 'Projects', description: 'Project management' },
       { name: 'Events', description: 'Calendar events and scheduling' },
       { name: 'Initiatives', description: 'High-level initiative tracking' },

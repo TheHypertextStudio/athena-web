@@ -76,6 +76,55 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 // ============================================================================
+// Task Status Types
+// ============================================================================
+
+export type TaskStatusCategory = 'not_started' | 'in_progress' | 'done' | 'cancelled';
+
+export interface CustomTaskStatus {
+  id: string;
+  workspaceId: string;
+  name: string;
+  description: string | null;
+  category: TaskStatusCategory;
+  color: string;
+  icon: string | null;
+  position: number;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GroupedTaskStatuses {
+  not_started: CustomTaskStatus[];
+  in_progress: CustomTaskStatus[];
+  done: CustomTaskStatus[];
+  cancelled: CustomTaskStatus[];
+}
+
+export interface CreateTaskStatusInput {
+  name: string;
+  description?: string;
+  category: TaskStatusCategory;
+  color: string;
+  icon?: string;
+  workspaceId?: string;
+}
+
+export interface UpdateTaskStatusInput {
+  name?: string;
+  description?: string | null;
+  color?: string;
+  icon?: string | null;
+}
+
+export interface ReorderTaskStatusesInput {
+  category: TaskStatusCategory;
+  statusIds: string[];
+  workspaceId?: string;
+}
+
+// ============================================================================
 // Task Types
 // ============================================================================
 
@@ -151,6 +200,8 @@ export interface Initiative {
 // Event Types
 // ============================================================================
 
+export type EventSource = 'local' | 'external';
+
 export interface Event {
   id: string;
   title: string;
@@ -161,6 +212,10 @@ export interface Event {
   isAllDay: boolean;
   recurrenceRule: string | null;
   ownerId: string;
+  /** Source of the event: 'local' for Athena-native, 'external' for synced calendars */
+  source: EventSource;
+  /** Integration ID for external events (null for local events) */
+  sourceIntegrationId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -234,6 +289,61 @@ export interface Activity {
 // ============================================================================
 // API Functions
 // ============================================================================
+
+/**
+ * Task Statuses API
+ */
+export const taskStatusesApi = {
+  list: (params?: { workspaceId?: string; category?: TaskStatusCategory }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.workspaceId) searchParams.set('workspaceId', params.workspaceId);
+    if (params?.category) searchParams.set('category', params.category);
+    const query = searchParams.toString();
+    return request<{ data: CustomTaskStatus[] }>(`/api/task-statuses${query ? `?${query}` : ''}`);
+  },
+  listGrouped: (workspaceId?: string) => {
+    const query = workspaceId ? `?workspaceId=${workspaceId}` : '';
+    return request<{ data: GroupedTaskStatuses }>(`/api/task-statuses/grouped${query}`);
+  },
+  get: (id: string) => request<{ data: CustomTaskStatus }>(`/api/task-statuses/${id}`),
+  create: (data: CreateTaskStatusInput) =>
+    request<{ data: CustomTaskStatus }>('/api/task-statuses', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  update: (id: string, data: UpdateTaskStatusInput) =>
+    request<{ data: CustomTaskStatus }>(`/api/task-statuses/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  delete: (id: string) =>
+    request<EmptyResponse>(`/api/task-statuses/${id}`, {
+      method: 'DELETE',
+    }),
+  reorder: (data: ReorderTaskStatusesInput) =>
+    request<{ data: CustomTaskStatus[] }>('/api/task-statuses/reorder', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  setDefault: (id: string, workspaceId?: string) =>
+    request<{ data: CustomTaskStatus }>(`/api/task-statuses/${id}/set-default`, {
+      method: 'POST',
+      body: JSON.stringify({ workspaceId }),
+    }),
+};
+
+/**
+ * Query keys for task statuses.
+ */
+export const taskStatusKeys = {
+  all: ['task-statuses'] as const,
+  lists: () => [...taskStatusKeys.all, 'list'] as const,
+  list: (params?: { workspaceId?: string; category?: TaskStatusCategory }) =>
+    [...taskStatusKeys.lists(), params] as const,
+  grouped: (workspaceId?: string) => [...taskStatusKeys.all, 'grouped', workspaceId] as const,
+  details: () => [...taskStatusKeys.all, 'detail'] as const,
+  detail: (id: string) => [...taskStatusKeys.details(), id] as const,
+};
 
 /**
  * Tasks API

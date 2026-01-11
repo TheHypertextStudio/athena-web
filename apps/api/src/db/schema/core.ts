@@ -19,6 +19,17 @@ export const taskStatusEnum = pgEnum('task_status', [
   'completed',
   'cancelled',
 ]);
+
+/**
+ * System-defined task status categories.
+ * Custom statuses map to these categories for filtering, reporting, and sync.
+ */
+export const taskStatusCategoryEnum = pgEnum('task_status_category', [
+  'not_started',
+  'in_progress',
+  'done',
+  'cancelled',
+]);
 export const projectStatusEnum = pgEnum('project_status', [
   'planning',
   'active',
@@ -79,7 +90,12 @@ export const tasks = pgTable('tasks', {
   id: text('id').primaryKey(),
   title: text('title').notNull(),
   description: text('description'),
+  /** @deprecated Use statusId and statusCategory instead */
   status: taskStatusEnum('status').notNull().default('pending'),
+  /** Reference to custom task status */
+  statusId: text('status_id').references(() => customTaskStatuses.id, { onDelete: 'set null' }),
+  /** Denormalized category for quick filtering (derived from statusId) */
+  statusCategory: taskStatusCategoryEnum('status_category').notNull().default('not_started'),
   priority: taskPriorityEnum('priority').notNull().default('medium'),
   deadline: timestamp('deadline'),
   estimatedMinutes: integer('estimated_minutes'),
@@ -260,6 +276,10 @@ export const taskRelations = relations(tasks, ({ one, many }) => ({
   project: one(projects, {
     fields: [tasks.projectId],
     references: [projects.id],
+  }),
+  customStatus: one(customTaskStatuses, {
+    fields: [tasks.statusId],
+    references: [customTaskStatuses.id],
   }),
   tags: many(taskTags),
   dependencies: many(taskDependencies, { relationName: 'taskDependencies' }),
@@ -597,11 +617,52 @@ export const workspaces = pgTable('workspaces', {
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
 
-export const workspaceRelations = relations(workspaces, ({ one }) => ({
+export const workspaceRelations = relations(workspaces, ({ one, many }) => ({
   owner: one(users, {
     fields: [workspaces.ownerId],
     references: [users.id],
   }),
+  customTaskStatuses: many(customTaskStatuses),
+}));
+
+// ============================================================================
+// Custom Task Statuses
+// ============================================================================
+
+/**
+ * Custom task statuses - user-defined workflow states.
+ * Each status maps to a system-defined category (not_started, in_progress, done, cancelled).
+ * Inspired by Linear's customizable workflows.
+ */
+export const customTaskStatuses = pgTable('custom_task_statuses', {
+  id: text('id').primaryKey(),
+  workspaceId: text('workspace_id')
+    .notNull()
+    .references(() => workspaces.id, { onDelete: 'cascade' }),
+  /** Display name for the status */
+  name: text('name').notNull(),
+  /** Optional description of what this status means */
+  description: text('description'),
+  /** System category this status maps to */
+  category: taskStatusCategoryEnum('category').notNull(),
+  /** Hex color code for UI display */
+  color: text('color').notNull(),
+  /** Optional icon identifier */
+  icon: text('icon'),
+  /** Display order within the category (0 = first) */
+  position: integer('position').notNull().default(0),
+  /** Whether this is the default status for its category when creating tasks */
+  isDefault: boolean('is_default').notNull().default(false),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const customTaskStatusRelations = relations(customTaskStatuses, ({ one, many }) => ({
+  workspace: one(workspaces, {
+    fields: [customTaskStatuses.workspaceId],
+    references: [workspaces.id],
+  }),
+  tasks: many(tasks),
 }));
 
 // ============================================================================
@@ -609,13 +670,17 @@ export const workspaceRelations = relations(workspaces, ({ one }) => ({
 // ============================================================================
 
 export const integrationProviderEnum = pgEnum('integration_provider', [
-  // Productivity
+  // Productivity / Issue Tracking
   'linear',
   'github',
   'todoist',
   'asana',
   'jira',
   'trello',
+  // Task Providers
+  'google_tasks',
+  'microsoft_todo',
+  'apple_reminders',
   // Calendar
   'google_calendar',
   'outlook_calendar',

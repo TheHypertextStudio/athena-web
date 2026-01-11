@@ -48,7 +48,7 @@ export const TaskPriority = {
 
 export type TaskPriority = (typeof TaskPriority)[keyof typeof TaskPriority];
 
-/** Task status values */
+/** Task status values (legacy - use TaskStatusCategory for new code) */
 export const TaskStatus = {
   Pending: 'pending',
   InProgress: 'in_progress',
@@ -57,6 +57,26 @@ export const TaskStatus = {
 } as const;
 
 export type TaskStatus = (typeof TaskStatus)[keyof typeof TaskStatus];
+
+/**
+ * System-defined task status categories.
+ * Custom statuses must map to one of these immutable categories.
+ * Used for filtering, reporting, and provider sync.
+ */
+export const TaskStatusCategory = {
+  NotStarted: 'not_started',
+  InProgress: 'in_progress',
+  Done: 'done',
+  Cancelled: 'cancelled',
+} as const;
+
+export type TaskStatusCategory = (typeof TaskStatusCategory)[keyof typeof TaskStatusCategory];
+
+/** Branded type for Custom Task Status IDs */
+export type CustomTaskStatusId = string & { readonly __brand: 'CustomTaskStatusId' };
+
+/** Branded type for Workspace IDs */
+export type WorkspaceId = string & { readonly __brand: 'WorkspaceId' };
 
 /** Project status values */
 export const ProjectStatus = {
@@ -191,6 +211,7 @@ export interface Agenda {
 
 export const TaskPrioritySchema = z.enum(['low', 'medium', 'high', 'urgent']);
 export const TaskStatusSchema = z.enum(['pending', 'in_progress', 'completed', 'cancelled']);
+export const TaskStatusCategorySchema = z.enum(['not_started', 'in_progress', 'done', 'cancelled']);
 export const ProjectStatusSchema = z.enum([
   'planning',
   'active',

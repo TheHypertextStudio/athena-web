@@ -10,6 +10,7 @@ import ExtensionOutlinedIcon from '@mui/icons-material/ExtensionOutlined';
 import NotificationsOutlinedIcon from '@mui/icons-material/NotificationsOutlined';
 import AutoAwesomeOutlinedIcon from '@mui/icons-material/AutoAwesomeOutlined';
 import StorageOutlinedIcon from '@mui/icons-material/StorageOutlined';
+import TuneOutlinedIcon from '@mui/icons-material/TuneOutlined';
 import { cn } from '@/lib/utils';
 
 interface SettingsNavItem {
@@ -22,6 +23,7 @@ const settingsNavItems: SettingsNavItem[] = [
   { href: '/settings/account', label: 'Account', icon: PersonOutlineIcon },
   { href: '/settings/security', label: 'Security', icon: ShieldOutlinedIcon },
   { href: '/settings/billing', label: 'Billing', icon: CreditCardOutlinedIcon },
+  { href: '/settings/workflow', label: 'Workflow', icon: TuneOutlinedIcon },
   { href: '/settings/integrations', label: 'Integrations', icon: ExtensionOutlinedIcon },
   { href: '/settings/notifications', label: 'Notifications', icon: NotificationsOutlinedIcon },
   { href: '/settings/ai', label: 'Athena AI', icon: AutoAwesomeOutlinedIcon },

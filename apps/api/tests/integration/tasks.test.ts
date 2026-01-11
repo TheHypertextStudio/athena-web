@@ -7,6 +7,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { resetMockDb, type MockDb } from './test-utils.js';
 
+const TASK_ID = '11111111-1111-4111-8111-111111111111';
+const TASK_ID_2 = '22222222-2222-4222-8222-222222222222';
+const TASK_ID_3 = '33333333-3333-4333-8333-333333333333';
+const PROJECT_ID = '44444444-4444-4444-8444-444444444444';
+const TAG_ID = '55555555-5555-4555-8555-555555555555';
+const TAG_ID_2 = '66666666-6666-4666-8666-666666666666';
+const NEW_TASK_ID = '77777777-7777-4777-8777-777777777777';
+
 const mockDb = vi.hoisted(() => {
   const factory = (globalThis as { __athenaMockDbFactory?: () => MockDb }).__athenaMockDbFactory;
   if (!factory) {
@@ -56,7 +64,7 @@ describe('Tasks API', () => {
     it('should return tasks list', async () => {
       const mockTasks = [
         {
-          id: 'task-1',
+          id: TASK_ID,
           title: 'Test Task',
           status: 'pending',
           priority: 'medium',
@@ -85,7 +93,7 @@ describe('Tasks API', () => {
     it('should filter tasks by projectId', async () => {
       mockDb.query.tasks.findMany.mockResolvedValue([]);
 
-      const res = await app.request('/api/tasks?projectId=project-1');
+      const res = await app.request(`/api/tasks?projectId=${PROJECT_ID}`);
       expect(res.status).toBe(200);
     });
 
@@ -99,7 +107,9 @@ describe('Tasks API', () => {
     it('should combine multiple filters', async () => {
       mockDb.query.tasks.findMany.mockResolvedValue([]);
 
-      const res = await app.request('/api/tasks?status=pending&priority=high&projectId=proj-1');
+      const res = await app.request(
+        `/api/tasks?status=pending&priority=high&projectId=${PROJECT_ID}`,
+      );
       expect(res.status).toBe(200);
     });
   });
@@ -108,7 +118,7 @@ describe('Tasks API', () => {
     it('should return 404 for non-existent task', async () => {
       mockDb.query.tasks.findFirst.mockResolvedValue(null);
 
-      const res = await app.request('/api/tasks/non-existent');
+      const res = await app.request(`/api/tasks/${TASK_ID_3}`);
       expect(res.status).toBe(404);
 
       const body = (await res.json()) as { error: string };
@@ -117,7 +127,7 @@ describe('Tasks API', () => {
 
     it('should return task by id', async () => {
       const mockTask = {
-        id: 'task-1',
+        id: TASK_ID,
         title: 'Test Task',
         status: 'pending',
         priority: 'medium',
@@ -125,11 +135,11 @@ describe('Tasks API', () => {
       };
       mockDb.query.tasks.findFirst.mockResolvedValue(mockTask);
 
-      const res = await app.request('/api/tasks/task-1');
+      const res = await app.request(`/api/tasks/${TASK_ID}`);
       expect(res.status).toBe(200);
 
       const body = (await res.json()) as { data: typeof mockTask };
-      expect(body.data.id).toBe('task-1');
+      expect(body.data.id).toBe(TASK_ID);
       expect(body.data.title).toBe('Test Task');
     });
   });
@@ -137,7 +147,7 @@ describe('Tasks API', () => {
   describe('POST /api/tasks', () => {
     it('should create a new task with minimal fields', async () => {
       const newTask = {
-        id: 'new-task',
+        id: NEW_TASK_ID,
         title: 'New Task',
         status: 'pending',
         priority: 'medium',
@@ -158,12 +168,12 @@ describe('Tasks API', () => {
 
     it('should create task with all optional fields', async () => {
       const newTask = {
-        id: 'new-task',
+        id: NEW_TASK_ID,
         title: 'Full Task',
         description: 'A task description',
         status: 'in_progress',
         priority: 'high',
-        projectId: 'project-1',
+        projectId: PROJECT_ID,
         deadline: new Date('2026-12-31'),
         estimatedMinutes: 60,
         creatorId: 'test-user-id',
@@ -178,7 +188,7 @@ describe('Tasks API', () => {
           description: 'A task description',
           status: 'in_progress',
           priority: 'high',
-          projectId: 'project-1',
+          projectId: PROJECT_ID,
           deadline: '2026-12-31T00:00:00Z',
           estimatedMinutes: 60,
         }),
@@ -192,7 +202,7 @@ describe('Tasks API', () => {
     it('should return 404 for non-existent task', async () => {
       mockDb.query.tasks.findFirst.mockResolvedValue(null);
 
-      const res = await app.request('/api/tasks/non-existent', {
+      const res = await app.request(`/api/tasks/${TASK_ID_3}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: 'Updated' }),
@@ -202,14 +212,14 @@ describe('Tasks API', () => {
     });
 
     it('should update task title', async () => {
-      const existingTask = { id: 'task-1', title: 'Original', creatorId: 'test-user-id' };
-      const updatedTask = { id: 'task-1', title: 'Updated', creatorId: 'test-user-id' };
+      const existingTask = { id: TASK_ID, title: 'Original', creatorId: 'test-user-id' };
+      const updatedTask = { id: TASK_ID, title: 'Updated', creatorId: 'test-user-id' };
 
       mockDb.query.tasks.findFirst
         .mockResolvedValueOnce(existingTask)
         .mockResolvedValueOnce(updatedTask);
 
-      const res = await app.request('/api/tasks/task-1', {
+      const res = await app.request(`/api/tasks/${TASK_ID}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: 'Updated' }),
@@ -221,14 +231,14 @@ describe('Tasks API', () => {
     });
 
     it('should update task status', async () => {
-      const existingTask = { id: 'task-1', status: 'pending', creatorId: 'test-user-id' };
-      const updatedTask = { id: 'task-1', status: 'completed', creatorId: 'test-user-id' };
+      const existingTask = { id: TASK_ID, status: 'pending', creatorId: 'test-user-id' };
+      const updatedTask = { id: TASK_ID, status: 'completed', creatorId: 'test-user-id' };
 
       mockDb.query.tasks.findFirst
         .mockResolvedValueOnce(existingTask)
         .mockResolvedValueOnce(updatedTask);
 
-      const res = await app.request('/api/tasks/task-1', {
+      const res = await app.request(`/api/tasks/${TASK_ID}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'completed' }),
@@ -238,14 +248,14 @@ describe('Tasks API', () => {
     });
 
     it('should update task priority', async () => {
-      const existingTask = { id: 'task-1', priority: 'low', creatorId: 'test-user-id' };
-      const updatedTask = { id: 'task-1', priority: 'high', creatorId: 'test-user-id' };
+      const existingTask = { id: TASK_ID, priority: 'low', creatorId: 'test-user-id' };
+      const updatedTask = { id: TASK_ID, priority: 'high', creatorId: 'test-user-id' };
 
       mockDb.query.tasks.findFirst
         .mockResolvedValueOnce(existingTask)
         .mockResolvedValueOnce(updatedTask);
 
-      const res = await app.request('/api/tasks/task-1', {
+      const res = await app.request(`/api/tasks/${TASK_ID}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ priority: 'high' }),
@@ -255,9 +265,9 @@ describe('Tasks API', () => {
     });
 
     it('should update multiple fields at once', async () => {
-      const existingTask = { id: 'task-1', creatorId: 'test-user-id' };
+      const existingTask = { id: TASK_ID, creatorId: 'test-user-id' };
       const updatedTask = {
-        id: 'task-1',
+        id: TASK_ID,
         title: 'Updated',
         status: 'in_progress',
         priority: 'high',
@@ -268,7 +278,7 @@ describe('Tasks API', () => {
         .mockResolvedValueOnce(existingTask)
         .mockResolvedValueOnce(updatedTask);
 
-      const res = await app.request('/api/tasks/task-1', {
+      const res = await app.request(`/api/tasks/${TASK_ID}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -282,9 +292,9 @@ describe('Tasks API', () => {
     });
 
     it('should update deadline to a new date', async () => {
-      const existingTask = { id: 'task-1', deadline: null, creatorId: 'test-user-id' };
+      const existingTask = { id: TASK_ID, deadline: null, creatorId: 'test-user-id' };
       const updatedTask = {
-        id: 'task-1',
+        id: TASK_ID,
         deadline: new Date('2026-12-31'),
         creatorId: 'test-user-id',
       };
@@ -293,7 +303,7 @@ describe('Tasks API', () => {
         .mockResolvedValueOnce(existingTask)
         .mockResolvedValueOnce(updatedTask);
 
-      const res = await app.request('/api/tasks/task-1', {
+      const res = await app.request(`/api/tasks/${TASK_ID}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ deadline: '2026-12-31T00:00:00Z' }),
@@ -304,17 +314,17 @@ describe('Tasks API', () => {
 
     it('should clear deadline with null', async () => {
       const existingTask = {
-        id: 'task-1',
+        id: TASK_ID,
         deadline: new Date(),
         creatorId: 'test-user-id',
       };
-      const updatedTask = { id: 'task-1', deadline: null, creatorId: 'test-user-id' };
+      const updatedTask = { id: TASK_ID, deadline: null, creatorId: 'test-user-id' };
 
       mockDb.query.tasks.findFirst
         .mockResolvedValueOnce(existingTask)
         .mockResolvedValueOnce(updatedTask);
 
-      const res = await app.request('/api/tasks/task-1', {
+      const res = await app.request(`/api/tasks/${TASK_ID}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ deadline: null }),
@@ -324,21 +334,21 @@ describe('Tasks API', () => {
     });
 
     it('should update tags to new set', async () => {
-      const existingTask = { id: 'task-1', creatorId: 'test-user-id' };
+      const existingTask = { id: TASK_ID, creatorId: 'test-user-id' };
       const updatedTask = {
-        id: 'task-1',
+        id: TASK_ID,
         creatorId: 'test-user-id',
-        tags: [{ tag: { id: 'tag-2', name: 'work' } }],
+        tags: [{ tag: { id: TAG_ID_2, name: 'work' } }],
       };
 
       mockDb.query.tasks.findFirst
         .mockResolvedValueOnce(existingTask)
         .mockResolvedValueOnce(updatedTask);
 
-      const res = await app.request('/api/tasks/task-1', {
+      const res = await app.request(`/api/tasks/${TASK_ID}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tagIds: ['tag-2'] }),
+        body: JSON.stringify({ tagIds: [TAG_ID_2] }),
       });
 
       expect(res.status).toBe(200);
@@ -346,17 +356,17 @@ describe('Tasks API', () => {
 
     it('should clear all tags with empty array', async () => {
       const existingTask = {
-        id: 'task-1',
+        id: TASK_ID,
         creatorId: 'test-user-id',
-        tags: [{ tag: { id: 'tag-1' } }],
+        tags: [{ tag: { id: TAG_ID } }],
       };
-      const updatedTask = { id: 'task-1', creatorId: 'test-user-id', tags: [] };
+      const updatedTask = { id: TASK_ID, creatorId: 'test-user-id', tags: [] };
 
       mockDb.query.tasks.findFirst
         .mockResolvedValueOnce(existingTask)
         .mockResolvedValueOnce(updatedTask);
 
-      const res = await app.request('/api/tasks/task-1', {
+      const res = await app.request(`/api/tasks/${TASK_ID}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tagIds: [] }),
@@ -370,7 +380,7 @@ describe('Tasks API', () => {
     it('should return 404 for non-existent task', async () => {
       mockDb.query.tasks.findFirst.mockResolvedValue(null);
 
-      const res = await app.request('/api/tasks/non-existent', {
+      const res = await app.request(`/api/tasks/${TASK_ID_3}`, {
         method: 'DELETE',
       });
 
@@ -379,11 +389,11 @@ describe('Tasks API', () => {
 
     it('should delete task', async () => {
       mockDb.query.tasks.findFirst.mockResolvedValue({
-        id: 'task-1',
+        id: TASK_ID,
         creatorId: 'test-user-id',
       });
 
-      const res = await app.request('/api/tasks/task-1', {
+      const res = await app.request(`/api/tasks/${TASK_ID}`, {
         method: 'DELETE',
       });
 
@@ -395,7 +405,7 @@ describe('Tasks API', () => {
     it('should return 404 for non-existent task', async () => {
       mockDb.query.tasks.findFirst.mockResolvedValue(null);
 
-      const res = await app.request('/api/tasks/non-existent/tags/tag-1', {
+      const res = await app.request(`/api/tasks/${TASK_ID_3}/tags/${TAG_ID}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
@@ -408,12 +418,12 @@ describe('Tasks API', () => {
 
     it('should return 404 for non-existent tag', async () => {
       mockDb.query.tasks.findFirst.mockResolvedValue({
-        id: 'task-1',
+        id: TASK_ID,
         creatorId: 'test-user-id',
       });
       mockDb.query.tags.findFirst.mockResolvedValue(null);
 
-      const res = await app.request('/api/tasks/task-1/tags/non-existent', {
+      const res = await app.request(`/api/tasks/${TASK_ID}/tags/${TAG_ID_2}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
@@ -426,16 +436,16 @@ describe('Tasks API', () => {
 
     it('should add tag to task', async () => {
       mockDb.query.tasks.findFirst.mockResolvedValue({
-        id: 'task-1',
+        id: TASK_ID,
         creatorId: 'test-user-id',
       });
       mockDb.query.tags.findFirst.mockResolvedValue({
-        id: 'tag-1',
+        id: TAG_ID,
         name: 'urgent',
         ownerId: 'test-user-id',
       });
 
-      const res = await app.request('/api/tasks/task-1/tags/tag-1', {
+      const res = await app.request(`/api/tasks/${TASK_ID}/tags/${TAG_ID}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
@@ -449,7 +459,7 @@ describe('Tasks API', () => {
     it('should return 404 for non-existent task', async () => {
       mockDb.query.tasks.findFirst.mockResolvedValue(null);
 
-      const res = await app.request('/api/tasks/non-existent/tags/tag-1', {
+      const res = await app.request(`/api/tasks/${TASK_ID_3}/tags/${TAG_ID}`, {
         method: 'DELETE',
       });
 
@@ -460,11 +470,11 @@ describe('Tasks API', () => {
 
     it('should remove tag from task', async () => {
       mockDb.query.tasks.findFirst.mockResolvedValue({
-        id: 'task-1',
+        id: TASK_ID,
         creatorId: 'test-user-id',
       });
 
-      const res = await app.request('/api/tasks/task-1/tags/tag-1', {
+      const res = await app.request(`/api/tasks/${TASK_ID}/tags/${TAG_ID}`, {
         method: 'DELETE',
       });
 
@@ -476,7 +486,7 @@ describe('Tasks API', () => {
     it('should return 404 for non-existent task', async () => {
       mockDb.query.tasks.findFirst.mockResolvedValue(null);
 
-      const res = await app.request('/api/tasks/non-existent/dependencies');
+      const res = await app.request(`/api/tasks/${TASK_ID_3}/dependencies`);
       expect(res.status).toBe(404);
 
       const body = (await res.json()) as { error: string };
@@ -485,12 +495,12 @@ describe('Tasks API', () => {
 
     it('should return empty dependencies list', async () => {
       mockDb.query.tasks.findFirst.mockResolvedValue({
-        id: 'task-1',
+        id: TASK_ID,
         creatorId: 'test-user-id',
       });
       mockDb.query.taskDependencies.findMany.mockResolvedValue([]);
 
-      const res = await app.request('/api/tasks/task-1/dependencies');
+      const res = await app.request(`/api/tasks/${TASK_ID}/dependencies`);
       expect(res.status).toBe(200);
 
       const body = (await res.json()) as { data: unknown[] };
@@ -499,30 +509,30 @@ describe('Tasks API', () => {
 
     it('should return task dependencies', async () => {
       mockDb.query.tasks.findFirst.mockResolvedValue({
-        id: 'task-1',
+        id: TASK_ID,
         creatorId: 'test-user-id',
       });
       mockDb.query.taskDependencies.findMany.mockResolvedValue([
         {
           id: 'dep-1',
-          taskId: 'task-1',
-          dependsOnTaskId: 'task-2',
-          dependsOnTask: { id: 'task-2', title: 'Dependency Task' },
+          taskId: TASK_ID,
+          dependsOnTaskId: TASK_ID_2,
+          dependsOnTask: { id: TASK_ID_2, title: 'Dependency Task' },
         },
       ]);
 
-      const res = await app.request('/api/tasks/task-1/dependencies');
+      const res = await app.request(`/api/tasks/${TASK_ID}/dependencies`);
       expect(res.status).toBe(200);
 
       const body = (await res.json()) as { data: { id: string; title: string }[] };
       expect(body.data).toHaveLength(1);
-      expect(body.data[0]?.id).toBe('task-2');
+      expect(body.data[0]?.id).toBe(TASK_ID_2);
     });
   });
 
   describe('POST /api/tasks/:id/dependencies/:dependsOnId', () => {
     it('should return 400 for self-dependency', async () => {
-      const res = await app.request('/api/tasks/task-1/dependencies/task-1', {
+      const res = await app.request(`/api/tasks/${TASK_ID}/dependencies/${TASK_ID}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
@@ -536,7 +546,7 @@ describe('Tasks API', () => {
     it('should return 404 for non-existent task', async () => {
       mockDb.query.tasks.findFirst.mockResolvedValue(null);
 
-      const res = await app.request('/api/tasks/non-existent/dependencies/task-2', {
+      const res = await app.request(`/api/tasks/${TASK_ID_3}/dependencies/${TASK_ID_2}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
@@ -549,10 +559,10 @@ describe('Tasks API', () => {
 
     it('should return 404 for non-existent dependency task', async () => {
       mockDb.query.tasks.findFirst
-        .mockResolvedValueOnce({ id: 'task-1', creatorId: 'test-user-id' })
+        .mockResolvedValueOnce({ id: TASK_ID, creatorId: 'test-user-id' })
         .mockResolvedValueOnce(null);
 
-      const res = await app.request('/api/tasks/task-1/dependencies/non-existent', {
+      const res = await app.request(`/api/tasks/${TASK_ID}/dependencies/${TASK_ID_3}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
@@ -565,15 +575,15 @@ describe('Tasks API', () => {
 
     it('should return 400 for circular dependency', async () => {
       mockDb.query.tasks.findFirst
-        .mockResolvedValueOnce({ id: 'task-1', creatorId: 'test-user-id' })
-        .mockResolvedValueOnce({ id: 'task-2', creatorId: 'test-user-id' });
+        .mockResolvedValueOnce({ id: TASK_ID, creatorId: 'test-user-id' })
+        .mockResolvedValueOnce({ id: TASK_ID_2, creatorId: 'test-user-id' });
       mockDb.query.taskDependencies.findFirst.mockResolvedValue({
         id: 'existing-dep',
-        taskId: 'task-2',
-        dependsOnTaskId: 'task-1',
+        taskId: TASK_ID_2,
+        dependsOnTaskId: TASK_ID,
       });
 
-      const res = await app.request('/api/tasks/task-1/dependencies/task-2', {
+      const res = await app.request(`/api/tasks/${TASK_ID}/dependencies/${TASK_ID_2}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
@@ -586,11 +596,11 @@ describe('Tasks API', () => {
 
     it('should add dependency', async () => {
       mockDb.query.tasks.findFirst
-        .mockResolvedValueOnce({ id: 'task-1', creatorId: 'test-user-id' })
-        .mockResolvedValueOnce({ id: 'task-2', creatorId: 'test-user-id' });
+        .mockResolvedValueOnce({ id: TASK_ID, creatorId: 'test-user-id' })
+        .mockResolvedValueOnce({ id: TASK_ID_2, creatorId: 'test-user-id' });
       mockDb.query.taskDependencies.findFirst.mockResolvedValue(null);
 
-      const res = await app.request('/api/tasks/task-1/dependencies/task-2', {
+      const res = await app.request(`/api/tasks/${TASK_ID}/dependencies/${TASK_ID_2}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
@@ -604,7 +614,7 @@ describe('Tasks API', () => {
     it('should return 404 for non-existent task', async () => {
       mockDb.query.tasks.findFirst.mockResolvedValue(null);
 
-      const res = await app.request('/api/tasks/non-existent/dependencies/task-2', {
+      const res = await app.request(`/api/tasks/${TASK_ID_3}/dependencies/${TASK_ID_2}`, {
         method: 'DELETE',
       });
 
@@ -615,11 +625,11 @@ describe('Tasks API', () => {
 
     it('should remove dependency', async () => {
       mockDb.query.tasks.findFirst.mockResolvedValue({
-        id: 'task-1',
+        id: TASK_ID,
         creatorId: 'test-user-id',
       });
 
-      const res = await app.request('/api/tasks/task-1/dependencies/task-2', {
+      const res = await app.request(`/api/tasks/${TASK_ID}/dependencies/${TASK_ID_2}`, {
         method: 'DELETE',
       });
 

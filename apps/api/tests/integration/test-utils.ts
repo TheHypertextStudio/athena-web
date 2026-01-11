@@ -18,6 +18,18 @@ const DEFAULT_USER = {
   createdAt: new Date(),
 };
 
+const DEFAULT_SUBSCRIPTION = {
+  id: 'sub-test',
+  userId: 'test-user-id',
+  planTier: 'team',
+  status: 'active',
+  currentPeriodStart: new Date('2026-01-01T00:00:00Z'),
+  currentPeriodEnd: new Date('2026-02-01T00:00:00Z'),
+  cancelAtPeriodEnd: false,
+  createdAt: new Date('2026-01-01T00:00:00Z'),
+  updatedAt: new Date('2026-01-01T00:00:00Z'),
+};
+
 const createMockQueryFn = <T>(returnValue: T) => {
   const fn = vi.fn<(..._args: unknown[]) => Promise<T>>();
   fn.mockResolvedValue(returnValue as Awaited<T>);
@@ -198,6 +210,7 @@ export function resetMockDb(mockDb: MockDb) {
     }
   });
   mockDb.query.users.findFirst.mockResolvedValue(DEFAULT_USER);
+  mockDb.query.subscriptions.findFirst.mockResolvedValue(DEFAULT_SUBSCRIPTION);
 
   mockDb.select.mockReset();
   mockDb.select.mockImplementation(() => createSelectChain());

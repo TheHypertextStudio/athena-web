@@ -17,6 +17,7 @@ import {
   rateLimit,
   rateLimits,
 } from './middleware/index.js';
+import { handleError, notFoundHandler } from './middleware/error-handler.js';
 import { authRoutes } from './routes/auth.js';
 import { initiativeRoutes } from './routes/initiatives.js';
 import { projectRoutes } from './routes/projects.js';
@@ -48,6 +49,9 @@ import { riscRoutes } from './routes/risc.js';
 import { initializeRISCStream } from './services/risc/index.js';
 
 const app = new OpenAPIHono<AppEnv>();
+
+// Centralized error handling for all routes
+app.onError((error, c) => handleError(error, c));
 
 // Security headers (first, before any response)
 app.use('*', securityHeaders('api'));
@@ -128,6 +132,9 @@ app.route('/mcp', mcpRoutes);
 // - /api/openapi.json - Raw OpenAPI spec
 // - /api/docs - Scalar interactive documentation
 setupOpenAPIDocs(app);
+
+// 404 handler for unmatched routes
+app.notFound(notFoundHandler());
 
 const port = env.PORT;
 const shouldServe = process.env.NODE_ENV !== 'test' && !process.env.VITEST;

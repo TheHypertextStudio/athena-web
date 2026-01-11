@@ -141,7 +141,7 @@ export class TaskService extends BaseService {
 
     const dependsOnTask = await this.repository.findById(dependsOnId, this.userId);
     if (!dependsOnTask) {
-      this.notFound('Task', dependsOnId);
+      this.notFound('Dependency task', dependsOnId);
     }
 
     const hasReverse = await this.repository.hasDependency(dependsOnId, taskId);

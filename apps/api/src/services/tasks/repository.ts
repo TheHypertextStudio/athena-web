@@ -208,7 +208,7 @@ export class TaskRepository {
         eq(taskDependencies.dependsOnTaskId, dependsOnId),
       ),
     });
-    return result !== undefined;
+    return result != null;
   }
 
   async addDependency(id: string, taskId: string, dependsOnId: string): Promise<void> {

@@ -209,7 +209,17 @@ integrationRoutes.get('/oauth/:provider/authorize', (c) => {
     });
   }
 
-  const redirectUri = c.req.query('redirect_uri');
+  const defaultRedirectUris: Record<
+    Exclude<OAuthProvider, 'apple_calendar'>,
+    string | undefined
+  > = {
+    linear: env.linearIntegration?.redirectUri,
+    github: env.githubIntegration?.redirectUri,
+    google_calendar: env.googleCalendar?.redirectUri,
+    outlook_calendar: env.outlookCalendar?.redirectUri,
+  };
+
+  const redirectUri = c.req.query('redirect_uri') ?? defaultRedirectUris[provider];
   if (!redirectUri) {
     return c.json({ success: false, error: 'redirect_uri query parameter is required' }, 400);
   }

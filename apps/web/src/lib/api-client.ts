@@ -372,6 +372,15 @@ export const tasksApi = {
     request<{ success: boolean }>(`/api/tasks/${id}`, {
       method: 'DELETE',
     }),
+  getDependencies: (id: string) => request<{ data: Task[] }>(`/api/tasks/${id}/dependencies`),
+  addDependency: (id: string, dependsOnId: string) =>
+    request<EmptyResponse>(`/api/tasks/${id}/dependencies/${dependsOnId}`, {
+      method: 'POST',
+    }),
+  removeDependency: (id: string, dependsOnId: string) =>
+    request<EmptyResponse>(`/api/tasks/${id}/dependencies/${dependsOnId}`, {
+      method: 'DELETE',
+    }),
 };
 
 /**

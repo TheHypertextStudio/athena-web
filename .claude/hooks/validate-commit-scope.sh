@@ -2,19 +2,18 @@
 # PreToolUse hook to validate commit message scopes
 # Reads JSON from stdin, validates git commit -m messages
 
-set -e
-
 # Read JSON input from stdin
 INPUT=$(cat)
 
-# Extract tool name and command
-TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // empty')
-COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
+# Fast path: quick string checks before any JSON parsing
+# Exit immediately if this isn't a Bash tool with a git commit command
+[[ "$INPUT" != *'"Bash"'* ]] && exit 0
+[[ "$INPUT" != *'git commit'* ]] && exit 0
 
-# Only validate Bash tool with git commit commands
-if [[ "$TOOL_NAME" != "Bash" ]] || [[ ! "$COMMAND" =~ "git commit" ]]; then
-  exit 0
-fi
+# Now parse JSON (we know it's likely relevant)
+COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
+[[ -z "$COMMAND" ]] && exit 0
+[[ "$COMMAND" != *'git commit'* ]] && exit 0
 
 # Extract commit message from -m flag
 # Handle both -m "message" and -m 'message' formats

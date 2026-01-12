@@ -150,6 +150,20 @@ Run `pnpm typecheck`, `pnpm lint`, `pnpm test`, and `pnpm build` after each batc
 
 ## Completed Tasks
 
+### [WEB-WARN-001] Web Build Warning Cleanup
+
+- **Completed**: 2026-01-11
+- **Duration**: 0.2 day
+- **Summary**: Removed Next.js build warnings by guarding workspace persistence storage for SSR and disabling composite/declaration settings in the web tsconfig.
+- **Files Changed**:
+  - `apps/web/src/hooks/use-active-workspace.ts`
+  - `apps/web/tsconfig.json`
+  - `docs/WORKLOG.md`
+- **Learnings**: Client-side persistence needs an SSR-safe storage initializer to avoid Node web storage warnings.
+- **Retrospective**: Went well—stack trace pinpointed the storage access quickly; improve—add SSR guardrails for other client-only storage uses; change—track build warnings in worklog to prevent regressions.
+- **State Transitions**: PLANNING → IMPLEMENTING → VALIDATING → DOCUMENTING → COMMITTING → RETROSPECTING
+- **Validation**: `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm build`
+
 ### [MCP-REF-001] MCP Server Hardening + Refactor
 
 - **Completed**: 2026-01-11

@@ -104,7 +104,7 @@
  */
 
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { createJSONStorage, persist } from 'zustand/middleware';
 import type { WorkspaceContext } from '@/lib/command-palette/types';
 
 /**
@@ -158,6 +158,15 @@ interface WorkspaceStore {
  * last-used workspace. The `availableWorkspaces` list is NOT persisted
  * because it should be fetched fresh (workspaces may have been added/removed).
  */
+interface WorkspacePersistedState {
+  workspace: WorkspaceContext | null;
+}
+
+const workspaceStorage =
+  typeof window === 'undefined'
+    ? undefined
+    : createJSONStorage<WorkspacePersistedState>(() => localStorage);
+
 const useWorkspaceStore = create<WorkspaceStore>()(
   persist(
     (set) => ({
@@ -174,6 +183,7 @@ const useWorkspaceStore = create<WorkspaceStore>()(
     }),
     {
       name: 'athena-workspace', // localStorage key
+      storage: workspaceStorage,
       /**
        * Only persist the workspace selection, not the full list.
        * The list should be fetched fresh on each session.

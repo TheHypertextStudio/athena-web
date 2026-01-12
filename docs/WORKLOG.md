@@ -7,74 +7,6 @@
 
 ## Active Tasks
 
-### [MCP-REF-001] MCP Server Hardening + Refactor
-
-- **Status**: IN_PROGRESS
-- **State**: IMPLEMENTING
-- **Started**: 2026-01-11
-- **Priority**: P1
-- **Description**: Address MCP server correctness, security/privacy, and performance issues; refactor for maintainability and add coverage.
-- **Notes**: Repo lint deprecation warnings resolved via LINT-DEP-001; continue to run lint with each MCP iteration.
-- **Subtasks**:
-  - [x] Fix tasks/today scoping
-  - [x] Implement session-scoped resource subscriptions
-  - [x] Validate project ownership for task creation/updates
-  - [x] Prevent progress_report from returning all tasks on empty initiatives
-  - [x] Filter soft-deleted tasks from completion/breakdown flows
-  - [x] Validate agenda date inputs + timezone anchoring
-  - [x] Enforce event endTime ordering
-  - [x] Redact agenda sampling payloads by default
-  - [x] Gate availability event titles behind explicit flag
-  - [x] Cap list resources with default limits
-  - [x] Move task search filtering into SQL
-  - [x] Replace offset pagination with cursor-based pagination for tools
-- **Plan**:
-
-## Plan: MCP Server Hardening + Refactor
-
-### Objective
-
-Fix all identified MCP server correctness, security/privacy, and performance issues, while improving maintainability and test coverage.
-
-### Approach
-
-Apply scoped fixes first (authorization, subscription semantics, data validation), then performance refactors and module extraction, finally add tests. Ensure agenda calculations honor user-configured timezone.
-
-### Steps
-
-1. Fix `tasks/today` query to scope by creator instead of `eq(tasks, undefined)` and add explicit `deletedAt` filter.
-2. Replace global subscription `Set` with session-scoped subscriptions to avoid cross-session leaks and ensure notifications go to subscribed sessions.
-3. Validate `projectId` ownership in `create_task`/`update_task` and return errors when the project is not owned by the current user.
-4. Correct `progress_report` so `initiativeId` with no linked projects returns an empty task set rather than all tasks.
-5. Add `deletedAt` checks for `complete_task` and `task_breakdown` so soft-deleted tasks are not surfaced or mutated.
-6. Validate `get_agenda` date inputs (reject invalid dates) and anchor agenda calculations to a user-configured timezone.
-7. Enforce `endTime >= startTime` for events in `create_event` and `update_event`.
-8. Add sampling redaction/opt-in for agenda summaries to prevent leaking sensitive task/event fields to LLM sampling.
-9. Remove event titles from `get_availability` (or gate behind an explicit flag) to avoid privacy leaks.
-10. Add limits/pagination to unbounded resources (`projects`, `initiatives`, `events/upcoming`, `tasks/pending`) to cap payload size.
-11. Move `search_tasks` filtering into the database (or a full-text index) instead of in-memory filtering.
-12. Replace offset pagination for tools with cursor-based pagination to avoid skips/dupes on concurrent writes.
-13. Split resources/tools/prompts into modules and extract shared query helpers for scoping and common filters.
-14. Replace `unknown` schema casts with typed Drizzle schema inputs or a repository layer to make query contracts explicit.
-15. Add MCP handler tests for scoping, pagination, and subscription behavior to prevent regressions.
-
-### Files to Modify
-
-- `packages/mcp-server/src/index.ts`
-- `packages/mcp-server/src/**` (new modules/helpers)
-- `packages/mcp-server/tests/**` (new)
-- `docs/WORKLOG.md`
-
-### Risks
-
-- Changing pagination semantics might affect client expectations.
-- Timezone-aware agenda logic needs a reliable user timezone source.
-- Subscription handling changes could affect MCP client integrations.
-
-### Validation
-
-Run `pnpm typecheck`, `pnpm lint`, `pnpm test`, and targeted MCP server tests.
-
 ### [ROUTE-MAGIC-VAL-001] Route Magic Value Cleanup
 
 - **Status**: IN_PROGRESS
@@ -217,6 +149,30 @@ Run `pnpm typecheck`, `pnpm lint`, `pnpm test`, and `pnpm build` after each batc
 ---
 
 ## Completed Tasks
+
+### [MCP-REF-001] MCP Server Hardening + Refactor
+
+- **Completed**: 2026-01-11
+- **Duration**: 0.4 day
+- **Summary**: Hardened MCP server scoping, privacy, and pagination; modularized resources/tools/prompts; added typed query helpers and MCP tests; refactored agenda prompt helper.
+- **Files Changed**:
+  - `packages/mcp-server/package.json`
+  - `packages/mcp-server/src/index.ts`
+  - `packages/mcp-server/src/constants.ts`
+  - `packages/mcp-server/src/prompts.ts`
+  - `packages/mcp-server/src/queries.ts`
+  - `packages/mcp-server/src/resource-templates.ts`
+  - `packages/mcp-server/src/resources.ts`
+  - `packages/mcp-server/src/subscriptions.ts`
+  - `packages/mcp-server/src/tools.ts`
+  - `packages/mcp-server/src/types.ts`
+  - `packages/mcp-server/src/utils.ts`
+  - `packages/mcp-server/tests/mcp-server.test.ts`
+  - `docs/WORKLOG.md`
+- **Learnings**: Shared query helpers and typed schema inputs prevent scoping drift; modular MCP handlers make testing safer.
+- **Retrospective**: Went well—module split reduced lint friction and clarified ownership checks; improve—add more MCP tooling tests around sampling; change—standardize cursor helpers across services.
+- **State Transitions**: PLANNING → RESEARCHING → IMPLEMENTING → VALIDATING → DOCUMENTING → COMMITTING → RETROSPECTING
+- **Validation**: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`
 
 ### [LINT-DEP-001] Task Status Deprecation Cleanup
 

@@ -48,27 +48,6 @@ Inventory repeated literals (status strings, default limits, error messages, enu
 
 Run `pnpm typecheck`, `pnpm lint`, and `pnpm test`.
 
-### [ROUTE-AUDIT-NULL-001] Route Null/Undefined Handling Audit
-
-- **Status**: REVIEW
-- **State**: VALIDATING
-- **Started**: 2026-01-05
-- **Priority**: P1
-- **Description**: Remove route-level fallbacks that mask undefined/null data and validate invalid state instead of silently defaulting.
-- **Subtasks**:
-  - [x] Locate null/undefined masking patterns in routes
-  - [x] Replace silent fallbacks with explicit validation/errors where required
-  - [ ] Run validation (typecheck, lint, tests)
-- **Files Changed**:
-  - `apps/api/src/routes/account.ts`
-  - `apps/api/src/routes/ai.ts`
-  - `apps/api/src/routes/billing.ts`
-  - `apps/api/src/routes/bulk.ts`
-  - `apps/api/src/routes/integrations.ts`
-  - `apps/api/src/routes/onboarding.ts`
-- **Notes**: Validation not run yet; defaults retained where the API specifies explicit fallback behavior.
-- **Notes**: Route enums/defaults colocated in each route file; analytics/agenda defaults refactored to named values.
-
 ### [BACKEND-PLAN-001] Backend Completion Plan (TASKS.yaml)
 
 - **Status**: IN_PROGRESS
@@ -149,6 +128,24 @@ Run `pnpm typecheck`, `pnpm lint`, `pnpm test`, and `pnpm build` after each batc
 ---
 
 ## Completed Tasks
+
+### [ROUTE-AUDIT-NULL-001] Route Null/Undefined Handling Audit
+
+- **Completed**: 2026-01-11
+- **Duration**: 0.2 day
+- **Summary**: Validated null/undefined handling changes and confirmed route fallbacks now surface invalid state instead of silently defaulting.
+- **Files Changed**:
+  - `apps/api/src/routes/account.ts`
+  - `apps/api/src/routes/ai.ts`
+  - `apps/api/src/routes/billing.ts`
+  - `apps/api/src/routes/bulk.ts`
+  - `apps/api/src/routes/integrations.ts`
+  - `apps/api/src/routes/onboarding.ts`
+  - `docs/WORKLOG.md`
+- **Learnings**: Route defaults should be explicitly documented to avoid masking invalid state.
+- **Retrospective**: Went well—validation passes confirmed the audit changes; improve—capture fallback rules in shared route docs; change—pair audits with dedicated route tests when defaults shift.
+- **State Transitions**: PLANNING → IMPLEMENTING → VALIDATING → COMPLETE
+- **Validation**: `pnpm typecheck`, `pnpm lint`, `pnpm test`
 
 ### [WEB-WARN-001] Web Build Warning Cleanup
 

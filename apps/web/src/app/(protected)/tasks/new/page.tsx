@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Header } from '@/components/layout/header';
+import { Header, PageContainer } from '@/components/layout';
 import { TaskForm } from '@/components/tasks/task-form';
 import { tasksApi, type CreateTaskInput } from '@/lib/api-client';
 import { signOut } from '@/lib/auth-client';
@@ -34,8 +34,8 @@ export default function NewTaskPage() {
     <div className="flex h-full flex-col">
       <Header title="New Task" onSignOut={() => void handleSignOut()} />
 
-      <div className="flex-1 p-6">
-        <div className="mx-auto max-w-2xl">
+      <div className="flex-1 overflow-auto p-6">
+        <PageContainer maxWidth="narrow">
           {error && (
             <div className="bg-destructive/10 text-destructive mb-6 rounded-lg p-4 text-sm">
               {error}
@@ -50,7 +50,7 @@ export default function NewTaskPage() {
               router.back();
             }}
           />
-        </div>
+        </PageContainer>
       </div>
     </div>
   );

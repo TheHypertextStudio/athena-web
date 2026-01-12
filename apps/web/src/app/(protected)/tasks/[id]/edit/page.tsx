@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
-import { Header } from '@/components/layout/header';
+import { Header, PageContainer } from '@/components/layout';
 import { TaskForm } from '@/components/tasks/task-form';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent } from '@/components/ui/card';
@@ -57,8 +57,8 @@ export default function EditTaskPage() {
     <div className="flex h-full flex-col">
       <Header title="Edit Task" onSignOut={() => void handleSignOut()} />
 
-      <div className="flex-1 p-6">
-        <div className="mx-auto max-w-2xl">
+      <div className="flex-1 overflow-auto p-6">
+        <PageContainer maxWidth="narrow">
           <Link
             href={`/tasks/${taskId}`}
             className="text-muted-foreground hover:text-foreground mb-6 inline-flex items-center gap-2 text-sm"
@@ -93,7 +93,7 @@ export default function EditTaskPage() {
               }}
             />
           ) : null}
-        </div>
+        </PageContainer>
       </div>
     </div>
   );

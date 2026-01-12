@@ -13,7 +13,7 @@ import {
   Trash2,
   ArrowLeft,
 } from 'lucide-react';
-import { Header } from '@/components/layout/header';
+import { Header, PageContainer } from '@/components/layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -100,8 +100,8 @@ export default function TaskDetailPage() {
     <div className="flex h-full flex-col">
       <Header title="Task Details" onSignOut={() => void handleSignOut()} />
 
-      <div className="flex-1 p-6">
-        <div className="mx-auto max-w-3xl">
+      <div className="flex-1 overflow-auto p-6">
+        <PageContainer maxWidth="medium">
           <Link
             href="/tasks"
             className="text-muted-foreground hover:text-foreground mb-6 inline-flex items-center gap-2 text-sm"
@@ -251,7 +251,7 @@ export default function TaskDetailPage() {
               </CardContent>
             </Card>
           ) : null}
-        </div>
+        </PageContainer>
       </div>
     </div>
   );

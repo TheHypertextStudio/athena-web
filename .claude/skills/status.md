@@ -1,3 +1,8 @@
+---
+name: status
+description: Display current agent state and project status. Use to see active tasks, git status, uncommitted changes, and validation state at a glance.
+---
+
 # /status
 
 Display current agent state and project status.

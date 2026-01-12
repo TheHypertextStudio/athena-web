@@ -1,3 +1,8 @@
+---
+name: plan
+description: Create an implementation plan for a task. Use when starting non-trivial work that requires design, when asked to plan something, or before implementing complex features.
+---
+
 # /plan
 
 Create an implementation plan for a task.
@@ -28,24 +33,30 @@ Enter planning mode to design an implementation approach for a task. This follow
 ## Plan: [Task Title]
 
 ### Objective
+
 What we're trying to accomplish
 
 ### Approach
+
 How we'll accomplish it
 
 ### Steps
+
 1. Step 1 description
 2. Step 2 description
 3. ...
 
 ### Files to Modify
+
 - `path/to/file.ts` - What changes
 
 ### Risks
+
 - Potential issue 1
 - Potential issue 2
 
 ### Validation
+
 How we'll verify success
 ```
 

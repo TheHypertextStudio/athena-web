@@ -1,3 +1,8 @@
+---
+name: commit
+description: Prepare and execute a git commit with proper validation and message format. Use when ready to commit changes, when the user says "commit", or after completing a unit of work.
+---
+
 # /commit - Prepare and Execute a Commit
 
 Use this skill when you're ready to commit changes. Follow every step.

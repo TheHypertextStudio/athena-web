@@ -1,3 +1,8 @@
+---
+name: validate
+description: Run typecheck, lint, and tests to verify code quality. Use before committing changes, after making edits, or when asked to validate or check the code.
+---
+
 # /validate
 
 Run all validation checks before committing.

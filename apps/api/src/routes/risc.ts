@@ -21,7 +21,7 @@ import { env } from '../lib/env.js';
 const riscRoutes = new Hono();
 
 const ERROR_MISSING_SECURITY_EVENT_TOKEN = 'Missing security event token';
-const ERROR_INVALID_SECURITY_EVENT = 'Invalid security event token';
+const ERROR_INVALID_SECURITY_EVENT = 'Invalid token';
 const MESSAGE_EVENT_ALREADY_PROCESSED = 'Event already processed';
 const ERROR_INTERNAL_SECURITY_EVENT = 'Internal error processing security event';
 const STATUS_OK = 'ok';

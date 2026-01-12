@@ -26,6 +26,8 @@ const DEFAULT_BILLING_INTERVAL = 'month' as const;
 const ERROR_UNKNOWN_PLAN_TIER = 'Unknown plan tier';
 const ERROR_NO_SUBSCRIPTION = 'No subscription found';
 const ERROR_MISSING_STRIPE_SIGNATURE = 'Missing Stripe signature';
+const ERROR_INVALID_CHECKOUT_PLAN = 'Invalid plan for checkout';
+const ERROR_PRICE_NOT_CONFIGURED = 'Price not configured for this plan';
 const ERROR_CHECKOUT_SESSION_FAILED = 'Failed to create checkout session';
 const ERROR_PORTAL_SESSION_FAILED = 'Failed to create portal session';
 const ERROR_CANCEL_SUBSCRIPTION_FAILED = 'Failed to cancel subscription';
@@ -231,7 +233,11 @@ billingRoutes.post('/checkout', async (c) => {
         sessionId: result.sessionId,
       },
     });
-  } catch {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '';
+    if (message === ERROR_INVALID_CHECKOUT_PLAN || message === ERROR_PRICE_NOT_CONFIGURED) {
+      return c.json({ error: message }, 400);
+    }
     return c.json({ error: ERROR_CHECKOUT_SESSION_FAILED }, 400);
   }
 });
@@ -287,8 +293,11 @@ billingRoutes.post('/cancel', async (c) => {
         message: 'Subscription will be canceled at the end of the current period',
       },
     });
-  } catch {
-    return c.json({ error: ERROR_CANCEL_SUBSCRIPTION_FAILED }, 400);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '';
+    const errorMessage =
+      message === ERROR_NO_SUBSCRIPTION ? ERROR_NO_SUBSCRIPTION : ERROR_CANCEL_SUBSCRIPTION_FAILED;
+    return c.json({ error: errorMessage }, 400);
   }
 });
 
@@ -308,8 +317,11 @@ billingRoutes.post('/resume', async (c) => {
         message: 'Subscription resumed',
       },
     });
-  } catch {
-    return c.json({ error: ERROR_RESUME_SUBSCRIPTION_FAILED }, 400);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '';
+    const errorMessage =
+      message === ERROR_NO_SUBSCRIPTION ? ERROR_NO_SUBSCRIPTION : ERROR_RESUME_SUBSCRIPTION_FAILED;
+    return c.json({ error: errorMessage }, 400);
   }
 });
 

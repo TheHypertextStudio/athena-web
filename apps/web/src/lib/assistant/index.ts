@@ -15,6 +15,12 @@ export type {
   ObjectType,
   ObjectAction,
   ObjectReference,
+  TypedObjectReference,
+  TaskObjectData,
+  EventObjectData,
+  ProjectObjectData,
+  InitiativeObjectData,
+  ObjectDataMap,
   ToolCallState,
   AssistantMessage,
   Conversation,
@@ -28,7 +34,7 @@ export type {
   AssistantObjectCardProps,
 } from './types';
 
-export { TOOL_LABELS, TOOL_ICONS } from './types';
+export { TOOL_LABELS, TOOL_ICONS, isObjectOfType } from './types';
 
 // Stream parser
 export {

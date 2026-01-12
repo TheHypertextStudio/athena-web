@@ -79,8 +79,77 @@ export type ObjectType = 'task' | 'event' | 'project' | 'initiative';
  */
 export type ObjectAction = 'created' | 'updated' | 'returned' | 'deleted';
 
+// =============================================================================
+// Type-Safe Object Data Interfaces
+// =============================================================================
+
+/**
+ * Task object data returned from tool calls.
+ */
+export interface TaskObjectData {
+  id: string;
+  title: string;
+  description?: string;
+  status?: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+  priority?: 'low' | 'medium' | 'high' | 'urgent';
+  dueDate?: string;
+  projectId?: string;
+  tags?: string[];
+  [key: string]: unknown; // Allow additional properties from API
+}
+
+/**
+ * Event object data returned from tool calls.
+ */
+export interface EventObjectData {
+  id: string;
+  title: string;
+  description?: string;
+  startTime: string;
+  endTime?: string;
+  location?: string;
+  isAllDay?: boolean;
+  [key: string]: unknown; // Allow additional properties from API
+}
+
+/**
+ * Project object data returned from tool calls.
+ */
+export interface ProjectObjectData {
+  id: string;
+  name: string;
+  description?: string;
+  color?: string;
+  status?: 'active' | 'archived' | 'completed';
+  [key: string]: unknown; // Allow additional properties from API
+}
+
+/**
+ * Initiative object data returned from tool calls.
+ */
+export interface InitiativeObjectData {
+  id: string;
+  name: string;
+  description?: string;
+  status?: 'active' | 'archived' | 'completed';
+  [key: string]: unknown; // Allow additional properties from API
+}
+
+/**
+ * Map of object types to their data interfaces.
+ */
+export interface ObjectDataMap {
+  task: TaskObjectData;
+  event: EventObjectData;
+  project: ProjectObjectData;
+  initiative: InitiativeObjectData;
+}
+
 /**
  * A reference to an object created or returned by a tool call.
+ *
+ * The `data` property is typed as `unknown` for flexibility when creating references.
+ * Use the `isObjectOfType` type guard for type-safe access when consuming references.
  */
 export interface ObjectReference {
   /** Type of the object */
@@ -89,8 +158,41 @@ export interface ObjectReference {
   id: string;
   /** Action that was taken */
   action: ObjectAction;
-  /** Object data (shape depends on type) */
+  /** Object data (use type guard for type-safe access) */
   data: unknown;
+}
+
+/**
+ * Type-safe object reference for when the type is known.
+ * Use this when you need type-safe access to the data property.
+ */
+export interface TypedObjectReference<T extends ObjectType> extends Omit<
+  ObjectReference,
+  'type' | 'data'
+> {
+  /** Type of the object */
+  type: T;
+  /** Type-safe object data */
+  data: ObjectDataMap[T];
+}
+
+/**
+ * Type guard to check if an ObjectReference is of a specific type.
+ * After narrowing, `data` will be typed according to the object type.
+ *
+ * @example
+ * ```typescript
+ * if (isObjectOfType(ref, 'task')) {
+ *   // ref.data is now TaskObjectData
+ *   console.log(ref.data.title);
+ * }
+ * ```
+ */
+export function isObjectOfType<T extends ObjectType>(
+  ref: ObjectReference,
+  type: T,
+): ref is TypedObjectReference<T> {
+  return ref.type === type;
 }
 
 /**

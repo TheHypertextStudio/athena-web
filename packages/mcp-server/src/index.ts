@@ -291,7 +291,7 @@ function registerResources(server: McpServer, options: CreateAthenaMcpServerOpti
 
       const data = await db.query.tasks.findMany({
         where: and(
-          eq(tasks as never, undefined as never),
+          eq((tasks as { creatorId?: unknown }).creatorId as never, userId),
           isNull((tasks as { deletedAt?: unknown }).deletedAt as never),
           gte((tasks as { deadline?: unknown }).deadline as never, today),
           lte((tasks as { deadline?: unknown }).deadline as never, tomorrow),
@@ -888,14 +888,14 @@ function registerTools(
       }
 
       const updates: Record<string, unknown> = {};
-      if (args.title !== undefined) updates['title'] = args.title;
-      if (args.description !== undefined) updates['description'] = args.description;
-      if (args.status !== undefined) updates['status'] = args.status;
-      if (args.priority !== undefined) updates['priority'] = args.priority;
+      if (args.title !== undefined) updates.title = args.title;
+      if (args.description !== undefined) updates.description = args.description;
+      if (args.status !== undefined) updates.status = args.status;
+      if (args.priority !== undefined) updates.priority = args.priority;
       if (args.deadline !== undefined)
-        updates['deadline'] = args.deadline ? new Date(args.deadline) : null;
-      if (args.estimatedMinutes !== undefined) updates['estimatedMinutes'] = args.estimatedMinutes;
-      if (args.projectId !== undefined) updates['projectId'] = args.projectId;
+        updates.deadline = args.deadline ? new Date(args.deadline) : null;
+      if (args.estimatedMinutes !== undefined) updates.estimatedMinutes = args.estimatedMinutes;
+      if (args.projectId !== undefined) updates.projectId = args.projectId;
 
       if (Object.keys(updates).length === 0) {
         return {
@@ -909,7 +909,7 @@ function registerTools(
         };
       }
 
-      updates['updatedAt'] = new Date();
+      updates.updatedAt = new Date();
 
       await db
         .update(tasks)
@@ -1139,13 +1139,13 @@ function registerTools(
       }
 
       const updates: Record<string, unknown> = {};
-      if (args.title !== undefined) updates['title'] = args.title;
-      if (args.description !== undefined) updates['description'] = args.description;
-      if (args.startTime !== undefined) updates['startTime'] = new Date(args.startTime);
+      if (args.title !== undefined) updates.title = args.title;
+      if (args.description !== undefined) updates.description = args.description;
+      if (args.startTime !== undefined) updates.startTime = new Date(args.startTime);
       if (args.endTime !== undefined)
-        updates['endTime'] = args.endTime ? new Date(args.endTime) : null;
-      if (args.location !== undefined) updates['location'] = args.location;
-      if (args.isAllDay !== undefined) updates['isAllDay'] = args.isAllDay;
+        updates.endTime = args.endTime ? new Date(args.endTime) : null;
+      if (args.location !== undefined) updates.location = args.location;
+      if (args.isAllDay !== undefined) updates.isAllDay = args.isAllDay;
 
       if (Object.keys(updates).length === 0) {
         return {
@@ -1163,7 +1163,7 @@ function registerTools(
         };
       }
 
-      updates['updatedAt'] = new Date();
+      updates.updatedAt = new Date();
 
       await db
         .update(events)
@@ -1229,9 +1229,11 @@ function registerTools(
       });
 
       allTasks = allTasks.filter((task) => {
-        const title = typeof task['title'] === 'string' ? task['title'].toLowerCase() : '';
+        const titleValue = task.title;
+        const descriptionValue = task.description;
+        const title = typeof titleValue === 'string' ? titleValue.toLowerCase() : '';
         const description =
-          typeof task['description'] === 'string' ? task['description'].toLowerCase() : '';
+          typeof descriptionValue === 'string' ? descriptionValue.toLowerCase() : '';
         return title.includes(query) || description.includes(query);
       });
 
@@ -1355,9 +1357,9 @@ function registerTools(
       }
 
       const intervals: Interval[] = eventsInRange.map((event) => {
-        const start = parseDate(event['startTime']) ?? rangeStart;
+        const start = parseDate(event.startTime) ?? rangeStart;
         const isAllDay = getBooleanField(event, 'isAllDay') === true;
-        let end = parseDate(event['endTime']);
+        let end = parseDate(event.endTime);
         if (!end) {
           if (isAllDay) {
             end = new Date(start.getTime());
@@ -1475,7 +1477,7 @@ function registerPrompts(server: McpServer, options: CreateAthenaMcpServerOption
         }),
       ]);
 
-      const completedTasks = todayTasks.filter((task) => task['status'] === 'completed');
+      const completedTasks = todayTasks.filter((task) => task.status === 'completed');
 
       const agenda = {
         date: today.toISOString().split('T')[0],

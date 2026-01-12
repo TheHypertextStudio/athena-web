@@ -7,6 +7,61 @@
 
 ## Active Tasks
 
+### [MCP-REF-001] MCP Server Hardening + Refactor
+
+- **Status**: IN_PROGRESS
+- **State**: IMPLEMENTING
+- **Started**: 2026-01-11
+- **Priority**: P1
+- **Description**: Address MCP server correctness, security/privacy, and performance issues; refactor for maintainability and add coverage.
+- **Notes**: Repo lint deprecation warnings resolved via LINT-DEP-001; continue to run lint with each MCP iteration.
+- **Plan**:
+
+## Plan: MCP Server Hardening + Refactor
+
+### Objective
+
+Fix all identified MCP server correctness, security/privacy, and performance issues, while improving maintainability and test coverage.
+
+### Approach
+
+Apply scoped fixes first (authorization, subscription semantics, data validation), then performance refactors and module extraction, finally add tests. Ensure agenda calculations honor user-configured timezone.
+
+### Steps
+
+1. Fix `tasks/today` query to scope by creator instead of `eq(tasks, undefined)` and add explicit `deletedAt` filter.
+2. Replace global subscription `Set` with session-scoped subscriptions to avoid cross-session leaks and ensure notifications go to subscribed sessions.
+3. Validate `projectId` ownership in `create_task`/`update_task` and return errors when the project is not owned by the current user.
+4. Correct `progress_report` so `initiativeId` with no linked projects returns an empty task set rather than all tasks.
+5. Add `deletedAt` checks for `complete_task` and `task_breakdown` so soft-deleted tasks are not surfaced or mutated.
+6. Validate `get_agenda` date inputs (reject invalid dates) and anchor agenda calculations to a user-configured timezone.
+7. Enforce `endTime >= startTime` for events in `create_event` and `update_event`.
+8. Add sampling redaction/opt-in for agenda summaries to prevent leaking sensitive task/event fields to LLM sampling.
+9. Remove event titles from `get_availability` (or gate behind an explicit flag) to avoid privacy leaks.
+10. Add limits/pagination to unbounded resources (`projects`, `initiatives`, `events/upcoming`, `tasks/pending`) to cap payload size.
+11. Move `search_tasks` filtering into the database (or a full-text index) instead of in-memory filtering.
+12. Replace offset pagination for tools with cursor-based pagination to avoid skips/dupes on concurrent writes.
+13. Split resources/tools/prompts into modules and extract shared query helpers for scoping and common filters.
+14. Replace `unknown` schema casts with typed Drizzle schema inputs or a repository layer to make query contracts explicit.
+15. Add MCP handler tests for scoping, pagination, and subscription behavior to prevent regressions.
+
+### Files to Modify
+
+- `packages/mcp-server/src/index.ts`
+- `packages/mcp-server/src/**` (new modules/helpers)
+- `packages/mcp-server/tests/**` (new)
+- `docs/WORKLOG.md`
+
+### Risks
+
+- Changing pagination semantics might affect client expectations.
+- Timezone-aware agenda logic needs a reliable user timezone source.
+- Subscription handling changes could affect MCP client integrations.
+
+### Validation
+
+Run `pnpm typecheck`, `pnpm lint`, `pnpm test`, and targeted MCP server tests.
+
 ### [ROUTE-MAGIC-VAL-001] Route Magic Value Cleanup
 
 - **Status**: IN_PROGRESS

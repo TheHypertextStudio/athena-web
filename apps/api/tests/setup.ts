@@ -29,6 +29,8 @@ process.env.LINEAR_OAUTH_REDIRECT_URI = 'http://localhost:4000/oauth/linear/call
 process.env.MICROSOFT_CLIENT_ID = 'test-microsoft-client-id';
 process.env.MICROSOFT_CLIENT_SECRET = 'test-microsoft-client-secret';
 process.env.OUTLOOK_CALENDAR_REDIRECT_URI = 'http://localhost:4000/oauth/outlook/callback';
+process.env.CALENDAR_OAUTH_STATE_SECRET = 'test-calendar-oauth-secret';
+process.env.DATA_ENCRYPTION_KEY = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
 
 const globalWithMocks = globalThis as typeof globalThis & {
   __athenaMockDbFactory?: () => ReturnType<typeof createMockDb>;

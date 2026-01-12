@@ -209,11 +209,11 @@ export class GitHubProvider implements IntegrationProviderClient {
     };
 
     if (data.labels?.length) {
-      body['labels'] = data.labels;
+      body.labels = data.labels;
     }
 
     if (data.assignee) {
-      body['assignees'] = [data.assignee];
+      body.assignees = [data.assignee];
     }
 
     const issue = await this.apiRequest<GitHubIssue>(accessToken, `/repos/${workspaceId}/issues`, {
@@ -242,11 +242,11 @@ export class GitHubProvider implements IntegrationProviderClient {
     }
 
     const body: Record<string, unknown> = {};
-    if (data.title) body['title'] = data.title;
-    if (data.description) body['body'] = data.description;
-    if (data.status) body['state'] = data.status === 'closed' ? 'closed' : 'open';
-    if (data.labels) body['labels'] = data.labels;
-    if (data.assignee) body['assignees'] = [data.assignee];
+    if (data.title) body.title = data.title;
+    if (data.description) body.body = data.description;
+    if (data.status) body.state = data.status === 'closed' ? 'closed' : 'open';
+    if (data.labels) body.labels = data.labels;
+    if (data.assignee) body.assignees = [data.assignee];
 
     const issue = await this.apiRequest<GitHubIssue>(
       accessToken,

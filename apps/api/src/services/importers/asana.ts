@@ -225,7 +225,7 @@ export function isAsanaExport(data: unknown): boolean {
 
   if (typeof data === 'object' && data !== null) {
     const obj = data as Record<string, unknown>;
-    return 'data' in obj && Array.isArray(obj['data']);
+    return 'data' in obj && Array.isArray(obj.data);
   }
 
   return false;

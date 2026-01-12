@@ -172,7 +172,7 @@ export class IntegrationSyncService {
     }
 
     const metadata = (integration.metadata ?? {}) as Record<string, unknown>;
-    const existingWorkspaces = (metadata['workspaces'] ?? []) as ExternalWorkspace[];
+    const existingWorkspaces = (metadata.workspaces ?? []) as ExternalWorkspace[];
 
     const updatedWorkspaces = existingWorkspaces.map((ws) => {
       const update = workspaces.find((w) => w.id === ws.id);
@@ -217,7 +217,7 @@ export class IntegrationSyncService {
     }
 
     const metadata = (integration.metadata ?? {}) as Record<string, unknown>;
-    const workspaces = ((metadata['workspaces'] ?? []) as ExternalWorkspace[]).filter(
+    const workspaces = ((metadata.workspaces ?? []) as ExternalWorkspace[]).filter(
       (ws) => ws.syncEnabled,
     );
 

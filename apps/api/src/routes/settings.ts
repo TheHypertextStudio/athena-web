@@ -87,13 +87,11 @@ settingsRoutes.patch('/', async (c) => {
   }
 
   const updateData: Record<string, unknown> = { updatedAt: new Date() };
-  if (body.preferredName !== undefined) updateData['preferredName'] = body.preferredName;
-  if (body.timezone !== undefined) updateData['timezone'] = body.timezone;
-  if (body.dailyPlanningTime !== undefined)
-    updateData['dailyPlanningTime'] = body.dailyPlanningTime;
-  if (body.dailyReviewTime !== undefined) updateData['dailyReviewTime'] = body.dailyReviewTime;
-  if (body.encryptionEnabled !== undefined)
-    updateData['encryptionEnabled'] = body.encryptionEnabled;
+  if (body.preferredName !== undefined) updateData.preferredName = body.preferredName;
+  if (body.timezone !== undefined) updateData.timezone = body.timezone;
+  if (body.dailyPlanningTime !== undefined) updateData.dailyPlanningTime = body.dailyPlanningTime;
+  if (body.dailyReviewTime !== undefined) updateData.dailyReviewTime = body.dailyReviewTime;
+  if (body.encryptionEnabled !== undefined) updateData.encryptionEnabled = body.encryptionEnabled;
 
   await db.update(userSettings).set(updateData).where(eq(userSettings.userId, userId));
 

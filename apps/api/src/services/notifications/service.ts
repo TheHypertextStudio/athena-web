@@ -337,17 +337,17 @@ export class NotificationService {
 
     switch (channel) {
       case 'email':
-        options['email'] = prefs.emailAddress;
+        options.email = prefs.emailAddress;
         break;
       case 'push':
-        options['deviceTokens'] = prefs.pushDeviceTokens as string[] | undefined;
+        options.deviceTokens = prefs.pushDeviceTokens as string[] | undefined;
         break;
       case 'sms':
-        options['phoneNumber'] = prefs.phoneNumber;
+        options.phoneNumber = prefs.phoneNumber;
         break;
       case 'slack':
-        options['webhookUrl'] = prefs.slackWebhookUrl;
-        options['channel'] = prefs.slackChannel;
+        options.webhookUrl = prefs.slackWebhookUrl;
+        options.channel = prefs.slackChannel;
         break;
     }
 

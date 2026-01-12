@@ -71,7 +71,7 @@ export class SlackProvider implements NotificationProvider {
     };
 
     if (channel) {
-      payload['channel'] = channel;
+      payload.channel = channel;
     }
 
     const response = await fetch(webhookUrl, {

@@ -21,21 +21,21 @@ function buildSocialProviders() {
   const providers: Record<string, { clientId: string; clientSecret: string }> = {};
 
   if (env.googleOAuth) {
-    providers['google'] = {
+    providers.google = {
       clientId: env.googleOAuth.clientId,
       clientSecret: env.googleOAuth.clientSecret,
     };
   }
 
   if (env.appleOAuth) {
-    providers['apple'] = {
+    providers.apple = {
       clientId: env.appleOAuth.clientId,
       clientSecret: env.appleOAuth.clientSecret,
     };
   }
 
   if (env.microsoftOAuth) {
-    providers['microsoft'] = {
+    providers.microsoft = {
       clientId: env.microsoftOAuth.clientId,
       clientSecret: env.microsoftOAuth.clientSecret,
     };

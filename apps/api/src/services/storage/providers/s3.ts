@@ -313,7 +313,7 @@ export class S3StorageProvider implements StorageProviderInterface {
       .sort()
       .join(';');
 
-    signedHeaders['Authorization'] = [
+    signedHeaders.Authorization = [
       `AWS4-HMAC-SHA256 Credential=${this.config.accessKeyId}/${dateStamp}/${this.config.region}/s3/aws4_request`,
       `SignedHeaders=${headerNames}`,
       `Signature=${signature}`,

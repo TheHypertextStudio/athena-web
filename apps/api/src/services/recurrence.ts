@@ -238,12 +238,12 @@ export function parseRRuleBasic(rruleString: string): {
   }
 
   return {
-    frequency: params['FREQ'] ?? null,
-    interval: params['INTERVAL'] ? parseInt(params['INTERVAL'], 10) : 1,
-    byDay: params['BYDAY'] ? params['BYDAY'].split(',') : [],
-    byMonthDay: params['BYMONTHDAY'] ? params['BYMONTHDAY'].split(',').map(Number) : [],
-    count: params['COUNT'] ? parseInt(params['COUNT'], 10) : null,
-    until: params['UNTIL'] ? parseRRuleDate(params['UNTIL']) : null,
+    frequency: params.FREQ ?? null,
+    interval: params.INTERVAL ? parseInt(params.INTERVAL, 10) : 1,
+    byDay: params.BYDAY ? params.BYDAY.split(',') : [],
+    byMonthDay: params.BYMONTHDAY ? params.BYMONTHDAY.split(',').map(Number) : [],
+    count: params.COUNT ? parseInt(params.COUNT, 10) : null,
+    until: params.UNTIL ? parseRRuleDate(params.UNTIL) : null,
   };
 }
 

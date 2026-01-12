@@ -141,7 +141,7 @@ export class LinearProvider implements IntegrationProviderClient {
     };
 
     if (options.updatedSince) {
-      filter['updatedAt'] = { gte: options.updatedSince.toISOString() };
+      filter.updatedAt = { gte: options.updatedSince.toISOString() };
     }
 
     const query = `
@@ -310,7 +310,7 @@ export class LinearProvider implements IntegrationProviderClient {
     };
 
     if (data.priority) {
-      input['priority'] = this.mapPriorityToLinear(data.priority);
+      input.priority = this.mapPriorityToLinear(data.priority);
     }
 
     const result = await this.graphql<{
@@ -383,9 +383,9 @@ export class LinearProvider implements IntegrationProviderClient {
     `;
 
     const input: Record<string, unknown> = {};
-    if (data.title) input['title'] = data.title;
-    if (data.description) input['description'] = data.description;
-    if (data.priority) input['priority'] = this.mapPriorityToLinear(data.priority);
+    if (data.title) input.title = data.title;
+    if (data.description) input.description = data.description;
+    if (data.priority) input.priority = this.mapPriorityToLinear(data.priority);
 
     const result = await this.graphql<{
       issueUpdate: {

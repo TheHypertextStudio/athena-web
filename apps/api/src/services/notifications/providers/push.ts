@@ -162,9 +162,9 @@ export class PushProvider implements NotificationProvider {
     const payload = JSON.stringify({
       title: content.title,
       body: content.body,
-      icon: content.data?.['icon'] ?? '/icon-192.png',
-      badge: content.data?.['badge'] ?? '/badge-72.png',
-      tag: content.data?.['tag'] ?? 'notification',
+      icon: content.data?.icon ?? '/icon-192.png',
+      badge: content.data?.badge ?? '/badge-72.png',
+      tag: content.data?.tag ?? 'notification',
       data: {
         url: content.actionUrl,
         ...content.data,

@@ -9,9 +9,10 @@
 
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { Maximize2, X, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getShortcutManager } from '@/lib/command-palette';
 import { useChatStream } from '@/hooks/use-chat-stream';
 import type { AssistantChatProps } from '@/lib/assistant';
 import { AssistantMessages } from './assistant-messages';
@@ -31,6 +32,12 @@ export function AssistantChat({ variant, className, onExpand, onClose }: Assista
   const { messages, isStreaming, error, sendMessage, clearError, retryLastMessage } = useChatStream(
     { variant },
   );
+
+  // Platform-aware keyboard shortcut display
+  const expandShortcut = useMemo(() => {
+    const shortcutManager = getShortcutManager();
+    return shortcutManager.formatForDisplay('mod+shift+e');
+  }, []);
 
   // Handle message submission
   const handleSubmit = useCallback(
@@ -171,7 +178,7 @@ export function AssistantChat({ variant, className, onExpand, onClose }: Assista
               {onExpand && (
                 <span className="flex items-center gap-1">
                   <kbd className="bg-surface-container-highest rounded px-1 py-0.5 text-[10px]">
-                    ⌘⇧E
+                    {expandShortcut}
                   </kbd>
                   expand
                 </span>

@@ -10,6 +10,7 @@ export { AssistantMessages } from './assistant-messages';
 export { AssistantMessage } from './assistant-message';
 export { AssistantInput } from './assistant-input';
 export { AssistantTypingIndicator } from './assistant-typing-indicator';
+export { AssistantErrorBoundary } from './assistant-error-boundary';
 
 // Rich content components
 export { AssistantStreamingContent } from './assistant-streaming-content';

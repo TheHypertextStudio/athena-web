@@ -20,7 +20,7 @@ import { useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { AssistantChat } from '@/components/assistant';
+import { AssistantChat, AssistantErrorBoundary } from '@/components/assistant';
 
 /**
  * Full page assistant.
@@ -60,7 +60,9 @@ export default function AssistantPage() {
 
       {/* Chat area - takes remaining height */}
       <div className="flex-1 overflow-hidden">
-        <AssistantChat variant="full" className="h-full rounded-none" />
+        <AssistantErrorBoundary variant="full">
+          <AssistantChat variant="full" className="h-full rounded-none" />
+        </AssistantErrorBoundary>
       </div>
     </div>
   );

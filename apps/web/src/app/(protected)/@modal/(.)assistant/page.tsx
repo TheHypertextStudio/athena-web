@@ -21,7 +21,7 @@ import { useRouter } from 'next/navigation';
 import * as Dialog from '@radix-ui/react-dialog';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import { cn } from '@/lib/utils';
-import { AssistantChat } from '@/components/assistant';
+import { AssistantChat, AssistantErrorBoundary } from '@/components/assistant';
 
 /**
  * Assistant modal page (intercepted route).
@@ -73,7 +73,9 @@ export default function AssistantModalPage() {
             </Dialog.Description>
           </VisuallyHidden>
 
-          <AssistantChat variant="modal" onClose={handleClose} onExpand={handleExpand} />
+          <AssistantErrorBoundary variant="modal">
+            <AssistantChat variant="modal" onClose={handleClose} onExpand={handleExpand} />
+          </AssistantErrorBoundary>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

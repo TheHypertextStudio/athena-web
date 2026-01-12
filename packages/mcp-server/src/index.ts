@@ -1267,13 +1267,31 @@ function registerTools(
       );
       const id = crypto.randomUUID();
       const now = new Date();
+      const startTime = new Date(args.startTime);
+      const endTime = args.endTime ? new Date(args.endTime) : null;
+
+      if (endTime && endTime < startTime) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(
+                { error: 'invalid_time_range', startTime: args.startTime, endTime: args.endTime },
+                null,
+                2,
+              ),
+            },
+          ],
+          isError: true,
+        };
+      }
 
       await db.insert(events).values({
         id,
         title: args.title,
         description: args.description ?? null,
-        startTime: new Date(args.startTime),
-        endTime: args.endTime ? new Date(args.endTime) : null,
+        startTime,
+        endTime,
         location: args.location ?? null,
         isAllDay: args.isAllDay ?? false,
         creatorId: userId,
@@ -1334,6 +1352,31 @@ function registerTools(
             {
               type: 'text',
               text: JSON.stringify({ error: 'event_not_found', eventId: args.eventId }, null, 2),
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      const currentStart = parseDate(event.startTime) ?? new Date();
+      const currentEnd = parseDate(event.endTime);
+      const nextStart = args.startTime ? new Date(args.startTime) : currentStart;
+      const nextEnd =
+        args.endTime !== undefined ? (args.endTime ? new Date(args.endTime) : null) : currentEnd;
+      if (nextEnd && nextEnd < nextStart) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(
+                {
+                  error: 'invalid_time_range',
+                  startTime: nextStart.toISOString(),
+                  endTime: nextEnd.toISOString(),
+                },
+                null,
+                2,
+              ),
             },
           ],
           isError: true,

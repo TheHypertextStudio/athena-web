@@ -14,6 +14,7 @@
 - **Started**: 2026-01-05
 - **Priority**: P1
 - **Description**: Replace hardcoded magic values in all API routes with named constants to improve consistency and auditability.
+- **Notes**: Constants must remain colocated with route usage (no shared constants module).
 - **Plan**:
 
 ## Plan: Route Magic Value Cleanup

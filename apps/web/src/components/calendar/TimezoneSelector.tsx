@@ -80,7 +80,7 @@ export function TimezoneSelector({ className }: TimezoneSelectorProps) {
       <DropdownMenuTrigger asChild>
         <button
           className={cn(
-            'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
+            'flex cursor-pointer items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors',
             'hover:bg-surface-container-high',
             isOverride ? 'bg-tertiary/10 text-tertiary' : 'text-on-surface-variant',
             className,
@@ -90,8 +90,10 @@ export function TimezoneSelector({ className }: TimezoneSelectorProps) {
           }
         >
           <LanguageOutlinedIcon sx={{ fontSize: 14 }} />
-          <span className="tabular-nums">{abbreviation}</span>
-          <span className="text-on-surface-variant/70">{currentInfo.offset}</span>
+          <div className="flex flex-col items-start leading-tight">
+            <span className="tabular-nums">{abbreviation}</span>
+            <span className="text-on-surface-variant/70 text-[10px]">{currentInfo.offset}</span>
+          </div>
           {isOverride && (
             <button
               onClick={handleClearOverride}

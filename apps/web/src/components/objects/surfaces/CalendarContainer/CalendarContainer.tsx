@@ -5,6 +5,7 @@
  *
  * Orchestrates switching between Day, Week, and Month views.
  * Manages shared state like selected date and view mode.
+ * Width transitions are handled by the parent container for smooth mode switching.
  */
 
 import { DayCalendar } from '../DayCalendar';

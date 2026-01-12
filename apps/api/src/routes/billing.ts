@@ -26,6 +26,15 @@ const DEFAULT_BILLING_INTERVAL = 'month' as const;
 const ERROR_UNKNOWN_PLAN_TIER = 'Unknown plan tier';
 const ERROR_NO_SUBSCRIPTION = 'No subscription found';
 const ERROR_MISSING_STRIPE_SIGNATURE = 'Missing Stripe signature';
+const ERROR_CHECKOUT_SESSION_FAILED = 'Failed to create checkout session';
+const ERROR_PORTAL_SESSION_FAILED = 'Failed to create portal session';
+const ERROR_CANCEL_SUBSCRIPTION_FAILED = 'Failed to cancel subscription';
+const ERROR_RESUME_SUBSCRIPTION_FAILED = 'Failed to resume subscription';
+const ERROR_FETCH_INVOICES_FAILED = 'Failed to fetch invoices';
+const ERROR_FETCH_PAYMENT_METHODS_FAILED = 'Failed to fetch payment methods';
+const ERROR_UPDATE_PAYMENT_METHOD_FAILED = 'Failed to update payment method';
+const ERROR_DELETE_PAYMENT_METHOD_FAILED = 'Failed to delete payment method';
+const ERROR_WEBHOOK_HANDLER_FAILED = 'Webhook handler failed';
 
 type UpgradePlanTier = 'pro' | 'team';
 type BillingIntervalValue = 'month' | 'year';
@@ -222,9 +231,8 @@ billingRoutes.post('/checkout', async (c) => {
         sessionId: result.sessionId,
       },
     });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to create checkout session';
-    return c.json({ error: message }, 400);
+  } catch {
+    return c.json({ error: ERROR_CHECKOUT_SESSION_FAILED }, 400);
   }
 });
 
@@ -258,9 +266,8 @@ billingRoutes.post('/portal', async (c) => {
         portalUrl: result.url,
       },
     });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to create portal session';
-    return c.json({ error: message }, 400);
+  } catch {
+    return c.json({ error: ERROR_PORTAL_SESSION_FAILED }, 400);
   }
 });
 
@@ -280,9 +287,8 @@ billingRoutes.post('/cancel', async (c) => {
         message: 'Subscription will be canceled at the end of the current period',
       },
     });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to cancel subscription';
-    return c.json({ error: message }, 400);
+  } catch {
+    return c.json({ error: ERROR_CANCEL_SUBSCRIPTION_FAILED }, 400);
   }
 });
 
@@ -302,9 +308,8 @@ billingRoutes.post('/resume', async (c) => {
         message: 'Subscription resumed',
       },
     });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to resume subscription';
-    return c.json({ error: message }, 400);
+  } catch {
+    return c.json({ error: ERROR_RESUME_SUBSCRIPTION_FAILED }, 400);
   }
 });
 
@@ -325,9 +330,8 @@ billingRoutes.get('/invoices', async (c) => {
         invoices,
       },
     });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to fetch invoices';
-    return c.json({ error: message }, 400);
+  } catch {
+    return c.json({ error: ERROR_FETCH_INVOICES_FAILED }, 400);
   }
 });
 
@@ -347,9 +351,8 @@ billingRoutes.get('/payment-methods', async (c) => {
         paymentMethods,
       },
     });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to fetch payment methods';
-    return c.json({ error: message }, 400);
+  } catch {
+    return c.json({ error: ERROR_FETCH_PAYMENT_METHODS_FAILED }, 400);
   }
 });
 
@@ -370,9 +373,8 @@ billingRoutes.post('/payment-methods/:id/default', async (c) => {
         message: 'Default payment method updated',
       },
     });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to update payment method';
-    return c.json({ error: message }, 400);
+  } catch {
+    return c.json({ error: ERROR_UPDATE_PAYMENT_METHOD_FAILED }, 400);
   }
 });
 
@@ -388,9 +390,8 @@ billingRoutes.delete('/payment-methods/:id', async (c) => {
     await billingService.deletePaymentMethod(paymentMethodId);
 
     return c.body(null, 204);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to delete payment method';
-    return c.json({ error: message }, 400);
+  } catch {
+    return c.json({ error: ERROR_DELETE_PAYMENT_METHOD_FAILED }, 400);
   }
 });
 
@@ -415,9 +416,8 @@ billingRoutes.post('/webhook', async (c) => {
     }
 
     return c.json({ received: true, eventType: result.eventType });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Webhook handler failed';
-    return c.json({ error: message }, 400);
+  } catch {
+    return c.json({ error: ERROR_WEBHOOK_HANDLER_FAILED }, 400);
   }
 });
 

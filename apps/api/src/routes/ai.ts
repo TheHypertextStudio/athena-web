@@ -21,6 +21,11 @@ aiRoutes.use('*', requireAuth);
 aiRoutes.use('*', requireEntitlement('ai_features'));
 
 const DEFAULT_AI_LIST_LIMIT = 20;
+const ERROR_CONVERSATION_NOT_FOUND = 'Conversation not found';
+const ERROR_CHAT_REQUIRED = 'conversationId and message are required';
+const ERROR_MESSAGE_REQUIRED = 'message is required';
+const ERROR_CHAT_FAILED = 'Chat failed';
+const ERROR_STREAM_FAILED = 'Stream failed';
 
 /**
  * List conversations.
@@ -62,7 +67,7 @@ aiRoutes.get('/conversations/:id', async (c) => {
   const conversation = await aiService.getConversation(conversationId, userId);
 
   if (!conversation) {
-    return c.json({ error: 'Conversation not found' }, 404);
+    return c.json({ error: ERROR_CONVERSATION_NOT_FOUND }, 404);
   }
 
   return c.json({ data: conversation });
@@ -80,7 +85,7 @@ aiRoutes.delete('/conversations/:id', async (c) => {
   const deleted = await aiService.deleteConversation(conversationId, userId);
 
   if (!deleted) {
-    return c.json({ error: 'Conversation not found' }, 404);
+    return c.json({ error: ERROR_CONVERSATION_NOT_FOUND }, 404);
   }
 
   return c.body(null, 204);
@@ -115,7 +120,7 @@ aiRoutes.post('/chat', async (c) => {
   }>();
 
   if (!body.conversationId || !body.message) {
-    return c.json({ error: 'conversationId and message are required' }, 400);
+    return c.json({ error: ERROR_CHAT_REQUIRED }, 400);
   }
 
   const aiService = getAIService();
@@ -134,9 +139,8 @@ aiRoutes.post('/chat', async (c) => {
         usage: result.usage,
       },
     });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Chat failed';
-    return c.json({ error: message }, 500);
+  } catch {
+    return c.json({ error: ERROR_CHAT_FAILED }, 500);
   }
 });
 
@@ -155,7 +159,7 @@ aiRoutes.post('/chat/stream', async (c) => {
   }>();
 
   if (!body.conversationId || !body.message) {
-    return c.json({ error: 'conversationId and message are required' }, 400);
+    return c.json({ error: ERROR_CHAT_REQUIRED }, 400);
   }
 
   const aiService = getAIService();
@@ -169,9 +173,10 @@ aiRoutes.post('/chat/stream', async (c) => {
       })) {
         await streamWriter.write(`data: ${JSON.stringify(chunk)}\n\n`);
       }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Stream failed';
-      await streamWriter.write(`data: ${JSON.stringify({ type: 'error', error: message })}\n\n`);
+    } catch {
+      await streamWriter.write(
+        `data: ${JSON.stringify({ type: 'error', error: ERROR_STREAM_FAILED })}\n\n`,
+      );
     }
   });
 });
@@ -188,7 +193,7 @@ aiRoutes.post('/quick', async (c) => {
   }>();
 
   if (!body.message) {
-    return c.json({ error: 'message is required' }, 400);
+    return c.json({ error: ERROR_MESSAGE_REQUIRED }, 400);
   }
 
   const aiService = getAIService();
@@ -213,9 +218,8 @@ aiRoutes.post('/quick', async (c) => {
         usage: result.usage,
       },
     });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Chat failed';
-    return c.json({ error: message }, 500);
+  } catch {
+    return c.json({ error: ERROR_CHAT_FAILED }, 500);
   }
 });
 

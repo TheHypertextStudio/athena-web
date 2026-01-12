@@ -19,6 +19,12 @@ const ATTACHMENT_CONTENT_DISPOSITION_VALUES = ['inline', 'attachment'] as const;
 const SIGNED_URL_MIN_EXPIRES_SECONDS = 60;
 const SIGNED_URL_MAX_EXPIRES_SECONDS = 86400;
 const DEFAULT_SIGNED_URL_EXPIRES_SECONDS = 3600;
+const ERROR_NO_FILE_PROVIDED = 'No file provided';
+const ERROR_ATTACHMENT_NOT_FOUND = 'Attachment not found';
+const ERROR_INVALID_ENTITY_TYPE = 'Invalid entity type';
+const ERROR_UPLOAD_FAILED = 'Upload failed';
+const ERROR_DOWNLOAD_FAILED = 'Download failed';
+const ERROR_SIGNED_URL_FAILED = 'Failed to generate URL';
 
 /**
  * POST /attachments/upload
@@ -30,7 +36,7 @@ app.post('/upload', async (c) => {
 
   const file = formData.get('file');
   if (!file || !(file instanceof File)) {
-    return c.json({ success: false, error: 'No file provided' }, 400);
+    return c.json({ success: false, error: ERROR_NO_FILE_PROVIDED }, 400);
   }
 
   const entityType = formData.get('entityType') as string | null;
@@ -52,11 +58,11 @@ app.post('/upload', async (c) => {
       success: true,
       data: result,
     });
-  } catch (error) {
+  } catch {
     return c.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Upload failed',
+        error: ERROR_UPLOAD_FAILED,
       },
       400,
     );
@@ -75,7 +81,7 @@ app.get('/:id', async (c) => {
   const info = await service.getInfo(attachmentId, userId);
 
   if (!info) {
-    return c.json({ success: false, error: 'Attachment not found' }, 404);
+    return c.json({ success: false, error: ERROR_ATTACHMENT_NOT_FOUND }, 404);
   }
 
   return c.json({
@@ -103,11 +109,11 @@ app.get('/:id/download', async (c) => {
         'Content-Length': String(info.size),
       },
     });
-  } catch (error) {
+  } catch {
     return c.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Download failed',
+        error: ERROR_DOWNLOAD_FAILED,
       },
       404,
     );
@@ -148,11 +154,11 @@ app.get(
         success: true,
         data: { url, expiresIn },
       });
-    } catch (error) {
+    } catch {
       return c.json(
         {
           success: false,
-          error: error instanceof Error ? error.message : 'Failed to generate URL',
+          error: ERROR_SIGNED_URL_FAILED,
         },
         400,
       );
@@ -172,7 +178,7 @@ app.delete('/:id', async (c) => {
   const deleted = await service.delete(attachmentId, userId);
 
   if (!deleted) {
-    return c.json({ success: false, error: 'Attachment not found' }, 404);
+    return c.json({ success: false, error: ERROR_ATTACHMENT_NOT_FOUND }, 404);
   }
 
   return c.body(null, 204);
@@ -188,7 +194,7 @@ app.get('/entity/:type/:entityId', async (c) => {
   const entityId = c.req.param('entityId');
 
   if (!['task', 'project', 'event'].includes(entityType)) {
-    return c.json({ success: false, error: 'Invalid entity type' }, 400);
+    return c.json({ success: false, error: ERROR_INVALID_ENTITY_TYPE }, 400);
   }
 
   const service = getStorageService();

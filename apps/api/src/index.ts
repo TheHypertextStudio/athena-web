@@ -48,6 +48,8 @@ import mcpRoutes from './routes/mcp.js';
 import { timeBlockRoutes } from './routes/time-blocks.js';
 import { riscRoutes } from './routes/risc.js';
 import { initializeRISCStream } from './services/risc/index.js';
+import { davRoutes } from './routes/dav.js';
+import { appPasswordRoutes } from './routes/app-passwords.js';
 
 const app = new OpenAPIHono<AppEnv>();
 
@@ -99,6 +101,14 @@ app.get('/health', (c) => c.json({ status: 'ok', timestamp: new Date().toISOStri
 // Root endpoint
 app.get('/', (c) => c.json({ message: 'Welcome to Athena API', version: '0.0.0' }));
 
+// CalDAV/CardDAV well-known redirects (RFC 6764)
+// These allow calendar apps to discover the DAV endpoint from just the domain
+app.get('/.well-known/caldav', (c) => c.redirect('/dav/', 301));
+app.get('/.well-known/carddav', (c) => c.redirect('/dav/', 301));
+
+// Mount CalDAV routes (uses its own Basic Auth, not session auth)
+app.route('/dav', davRoutes);
+
 // Mount routes
 app.route('/api/auth', authRoutes);
 app.route('/api/initiatives', initiativeRoutes);
@@ -128,6 +138,7 @@ app.route('/api/audit', auditRoutes);
 app.route('/api/calendar-sync', calendarSyncRoutes);
 app.route('/api/time-blocks', timeBlockRoutes);
 app.route('/api/risc', riscRoutes);
+app.route('/api/app-passwords', appPasswordRoutes);
 app.route('/mcp', mcpRoutes);
 
 // Setup OpenAPI documentation endpoints

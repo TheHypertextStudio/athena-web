@@ -37,6 +37,8 @@ const optionalServicesSchema = z.object({
 
   // Calendar redirect URIs
   OUTLOOK_CALENDAR_REDIRECT_URI: z.string().optional(),
+  CALENDAR_OAUTH_STATE_SECRET: z.string().optional(),
+  DATA_ENCRYPTION_KEY: z.string().optional(),
 
   // Integration providers
   LINEAR_OAUTH_CLIENT_ID: z.string().optional(),
@@ -333,6 +335,11 @@ function getEnv(): Env {
   }
 
   const raw = result.data;
+
+  if (raw.NODE_ENV === 'production' && !raw.DATA_ENCRYPTION_KEY) {
+    throw new Error('DATA_ENCRYPTION_KEY is required in production');
+  }
+
   const env: Env = { ...raw };
 
   // OAuth providers - use standard credential names

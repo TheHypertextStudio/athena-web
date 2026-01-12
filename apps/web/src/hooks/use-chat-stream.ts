@@ -14,6 +14,7 @@ import {
   selectIsStreaming,
   selectError,
   selectConversationId,
+  selectIsLoadingConversation,
 } from '@/lib/assistant';
 import type { AssistantMessage, ChatVariant } from '@/lib/assistant';
 
@@ -61,6 +62,8 @@ export interface UseChatStreamReturn {
   clearError: () => void;
   /** Retry the last failed message */
   retryLastMessage: () => Promise<void>;
+  /** Abort the current streaming response */
+  abortStream: () => void;
 }
 
 /**
@@ -103,18 +106,22 @@ export function useChatStream(options: UseChatStreamOptions = {}): UseChatStream
   const isStreaming = useAssistantStore(selectIsStreaming);
   const error = useAssistantStore(selectError);
   const conversationId = useAssistantStore(selectConversationId);
+  const isLoading = useAssistantStore(selectIsLoadingConversation);
 
   // Get actions from store
   const storeSendMessage = useAssistantStore((state) => state.sendMessage);
   const storeClearConversation = useAssistantStore((state) => state.clearConversation);
   const storeLoadConversation = useAssistantStore((state) => state.loadConversation);
   const storeSetError = useAssistantStore((state) => state.setError);
+  const storeAbortStream = useAssistantStore((state) => state.abortStream);
 
-  // Derived state
-  const hasMessages = messages.length > 0;
-  const lastMessage = messages.length > 0 ? (messages[messages.length - 1] ?? null) : null;
-  const isAssistantTurn = lastMessage?.role === 'assistant';
-  const isLoading = false; // Could track initial load state if needed
+  // Memoized derived state to prevent unnecessary re-renders
+  const derivedState = useMemo(() => {
+    const hasMessages = messages.length > 0;
+    const lastMessage = hasMessages ? (messages[messages.length - 1] ?? null) : null;
+    const isAssistantTurn = lastMessage?.role === 'assistant';
+    return { hasMessages, lastMessage, isAssistantTurn };
+  }, [messages]);
 
   // Store the last user message for retry functionality
   const lastUserMessage = useMemo(() => {
@@ -178,21 +185,44 @@ export function useChatStream(options: UseChatStreamOptions = {}): UseChatStream
     await sendMessage(lastUserMessage);
   }, [lastUserMessage, sendMessage, storeSetError]);
 
-  return {
-    messages,
-    isStreaming,
-    isLoading,
-    error,
-    conversationId,
-    hasMessages,
-    lastMessage,
-    isAssistantTurn,
-    sendMessage,
-    clearConversation,
-    loadConversation,
-    clearError,
-    retryLastMessage,
-  };
+  // Abort streaming
+  const abortStream = useCallback(() => {
+    storeAbortStream();
+  }, [storeAbortStream]);
+
+  // Memoize return object for stable reference
+  return useMemo(
+    () => ({
+      messages,
+      isStreaming,
+      isLoading,
+      error,
+      conversationId,
+      hasMessages: derivedState.hasMessages,
+      lastMessage: derivedState.lastMessage,
+      isAssistantTurn: derivedState.isAssistantTurn,
+      sendMessage,
+      clearConversation,
+      loadConversation,
+      clearError,
+      retryLastMessage,
+      abortStream,
+    }),
+    [
+      messages,
+      isStreaming,
+      isLoading,
+      error,
+      conversationId,
+      derivedState,
+      sendMessage,
+      clearConversation,
+      loadConversation,
+      clearError,
+      retryLastMessage,
+      abortStream,
+    ],
+  );
 }
 
 /**

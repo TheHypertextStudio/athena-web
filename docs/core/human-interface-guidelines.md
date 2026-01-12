@@ -50,13 +50,13 @@ Our product is oriented towards a few underlying data structures, each of which 
 
 Surfaces are places where information can appear and be made actionable. For graphical interfaces, this may take the form of a card, a pop-up, a modal dialog, or similar containers.
 
-While the information represented by a card may be an object, the interface itself is a surface. A surface is a *medium* for interaction.
+While the information represented by a card may be an object, the interface itself is a surface. A surface is a _medium_ for interaction.
 
 Surfaces translate intent into action, converting actions that a user takes (like clicking on an item) into updates to a surface or data.
 
 ## Objects
 
-Objects are structured units of semantic information. This includes information like tasks, events, or user profile data. In other words, objects are *entities*.
+Objects are structured units of semantic information. This includes information like tasks, events, or user profile data. In other words, objects are _entities_.
 
 Objects are semantic in that each of their parts has meaning. For example, a task may have a date associated with it that has the semantic meaning of a due date.
 
@@ -66,7 +66,7 @@ Because objects are self-contained units of information, they can be transferred
 
 ## Flows
 
-A flow is a collection of surfaces organized for a particular purpose. In other words, a flow is a *process*.
+A flow is a collection of surfaces organized for a particular purpose. In other words, a flow is a _process_.
 
 Flows capture state and context, translating actions into operations with intent. All user activities happen within the context of a flow.
 
@@ -77,3 +77,169 @@ Examples of flows including a customer onboarding, a document editor, and an eve
 A terminal is the place where interfaces are rendered or actualized to the user. For graphical interfaces, this may take the form of windows in a traditional desktop setting, a mobile phone screen, or similar discrete forms of visual output.
 
 Multiple terminals can be leveraged at the same time to provide complementary information or to distinguish their scopes. A single terminal should only render a single flow at a time to avoid creating unnecessary cognitive load on the user.
+
+# Visual Behavior
+
+Our interfaces must feel alive, connected, and responsive. Nothing should feel static or disconnected. Every visual change should communicate meaning and maintain spatial continuity.
+
+## Core Tenets
+
+### Nothing appears from nowhere
+
+Elements must never pop into existence. Every new element should enter the view through a deliberate transition that communicates its origin:
+
+- Elements expanding from a trigger point should animate from that point
+- List items should stagger their entrance, not appear simultaneously
+- Modal dialogs should scale or fade from their invoking element
+- Buttons and interactive elements should fade in with a subtle opacity transition
+
+### Nothing shifts without purpose
+
+Layout changes must be animated. Users should never experience sudden jumps or reflows:
+
+- When content loads, reserve space or animate the insertion
+- When elements resize, animate the bounds change
+- When items reorder, animate their positions
+- When sections expand or collapse, the transition should be smooth and trackable
+
+### Everything is connected
+
+Visual continuity must reinforce conceptual relationships:
+
+- When navigating from a list item to a detail view, the transition should establish the connection between them
+- Shared elements (like titles, icons, or thumbnails) should animate between their positions across views
+- Color, shape, and motion should reinforce that two views represent the same underlying object
+- Parent-child relationships should be visually evident through spatial animation
+
+## Transitions
+
+### Shared Element Transitions
+
+Shared element transitions are a first-class concern, not an afterthought. When an element represents the same object across two views, it must visually travel between those positions.
+
+**Required for:**
+
+- Task cards opening into task detail views
+- Calendar events expanding into event editors
+- List items becoming full-screen views
+- Thumbnails becoming full images
+
+**Implementation guidance:**
+
+- Identify the persistent element (the thing that represents continuity)
+- Animate position, size, and shape from origin to destination
+- Cross-fade any content that changes between views
+- Duration should be 200-300ms for most transitions
+- Use ease-out curves for entrances, ease-in for exits
+
+### View Transitions
+
+When changing between views within the same flow:
+
+- Use directional slides that match the conceptual hierarchy (forward = slide left, back = slide right)
+- Cross-fade background content while sliding foreground content
+- Maintain context by keeping stable elements (like headers) in place
+
+### State Transitions
+
+When an element changes state:
+
+- Interactive states (hover, pressed, focused) should transition over 100-150ms
+- Selection states should animate with a subtle scale or highlight effect
+- Loading states should use skeleton screens that match the final layout, not spinners that provide no spatial information
+- Error states should draw attention through color transition, not sudden appearance
+
+## Progressive Disclosure
+
+Information density must be managed through progressive disclosure. The interface should reveal complexity gradually, responding to user intent.
+
+### Hover and Focus States
+
+On terminals that support pointing devices:
+
+- Hovering over an element should reveal secondary actions and metadata
+- Hover cards should fade in after a brief delay (150-200ms) to avoid flickering
+- Revealed content should not cause layout shifts—use overlays or reserved space
+- Focus states should be visually distinct and animate smoothly
+
+### Expansion Patterns
+
+- Summary views should expand to reveal detail, not navigate away
+- Expansion should animate bounds to show the relationship between summary and detail
+- Collapsed state should hint at available content (truncated text, overflow indicators)
+- Users should be able to expand without losing their place in a list or view
+
+### Contextual Actions
+
+- Actions should appear contextually near the element they affect
+- Action menus should emerge from their trigger point
+- Destructive actions should require deliberate interaction (not just hover)
+
+## Layout Principles
+
+### Stability
+
+Layouts must remain stable during interaction:
+
+- Reserve space for content that will load asynchronously
+- Never allow content to reflow while the user is reading or interacting
+- If content height is unknown, use a reasonable estimate and animate to actual height
+- Infinite scroll should not cause existing content to jump
+
+### Responsive Behavior
+
+When viewport or container size changes:
+
+- Elements should animate to their new positions and sizes
+- Content reflow should be smooth, not instantaneous
+- Breakpoint changes should feel like a transformation, not a replacement
+
+### Spatial Consistency
+
+- Elements should maintain consistent positions across related views
+- Navigation elements should be anchored to predictable locations
+- The user's eye should be able to track important elements across transitions
+
+## Platform Idioms
+
+Leverage native capabilities rather than reinventing them:
+
+### Pointer-Based Terminals (Desktop)
+
+- Support hover states for progressive disclosure
+- Use native tooltips for simple labels
+- Implement context menus for secondary actions
+- Support keyboard navigation and shortcuts
+- Respect system preferences for reduced motion
+
+### Touch-Based Terminals (Mobile)
+
+- Use press-and-hold for contextual actions
+- Implement swipe gestures for common operations
+- Support pull-to-refresh where appropriate
+- Respect safe areas and system gestures
+- Use haptic feedback to confirm actions
+
+### Accessibility
+
+- All transitions must respect `prefers-reduced-motion`
+- When motion is reduced, use opacity fades instead of positional animations
+- Ensure transitions don't interfere with screen readers
+- Maintain focus management through view transitions
+
+## Timing Guidelines
+
+| Transition Type                   | Duration  | Easing        |
+| --------------------------------- | --------- | ------------- |
+| Micro-interactions (hover, press) | 100-150ms | ease-out      |
+| Element state changes             | 150-200ms | ease-out      |
+| Shared element transitions        | 200-300ms | ease-out      |
+| View transitions                  | 250-350ms | ease-in-out   |
+| Complex choreographed sequences   | 300-500ms | custom curves |
+
+**General rules:**
+
+- Faster is usually better—transitions should enhance, not delay
+- Exits can be faster than entrances
+- Staggered animations should have 30-50ms delays between elements
+- Never exceed 500ms for any single transition

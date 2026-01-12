@@ -4,6 +4,8 @@
  * @packageDocumentation
  */
 
+import { Client } from '@microsoft/microsoft-graph-client';
+import type { Calendar, Event } from '@microsoft/microsoft-graph-types';
 import type {
   CalendarProviderClient,
   OAuthTokens,
@@ -14,42 +16,6 @@ import type {
 
 const MICROSOFT_AUTH_URL = 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize';
 const MICROSOFT_TOKEN_URL = 'https://login.microsoftonline.com/common/oauth2/v2.0/token';
-const GRAPH_API = 'https://graph.microsoft.com/v1.0';
-
-/**
- * Microsoft Graph event type.
- */
-interface MicrosoftCalendarEvent {
-  id?: string;
-  subject?: string;
-  body?: { content?: string; contentType?: string };
-  start?: { dateTime?: string; timeZone?: string };
-  end?: { dateTime?: string; timeZone?: string };
-  isAllDay?: boolean;
-  location?: { displayName?: string };
-  recurrence?: {
-    pattern?: {
-      type?: string;
-      interval?: number;
-      daysOfWeek?: string[];
-    };
-    range?: {
-      type?: string;
-      startDate?: string;
-      endDate?: string;
-    };
-  };
-  attendees?: {
-    emailAddress?: { address?: string; name?: string };
-    status?: { response?: string };
-    type?: string;
-  }[];
-  showAs?: string;
-  sensitivity?: string;
-  iCalUId?: string;
-  changeKey?: string;
-  isCancelled?: boolean;
-}
 
 /**
  * Outlook Calendar provider implementation.
@@ -149,35 +115,49 @@ export class OutlookCalendarProvider implements CalendarProviderClient {
   }
 
   async listCalendars(accessToken: string): Promise<SyncedCalendar[]> {
-    const response = await fetch(`${GRAPH_API}/me/calendars`, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    });
+    const client = this.createClient(accessToken);
+    const calendars: SyncedCalendar[] = [];
+    let nextLink: string | undefined = '/me/calendars';
+    let includeSelect = true;
 
-    if (!response.ok) {
-      throw new Error(`Failed to list calendars: ${response.statusText}`);
-    }
+    while (nextLink) {
+      const request = client.api(nextLink);
+      if (includeSelect) {
+        request.select('id,name,color,isDefaultCalendar,canEdit');
+      }
 
-    const data = (await response.json()) as {
-      value: {
+      const response = (await request.get()) as {
+        value?: Calendar[];
+        '@odata.nextLink'?: string;
+      };
+
+      const batch = (response.value ?? []) as (Calendar & {
         id: string;
         name: string;
-        color?: string;
-        isDefaultCalendar?: boolean;
         canEdit?: boolean;
-      }[];
-    };
+      })[];
 
-    return data.value.map((cal) => ({
-      id: cal.id,
-      externalId: cal.id,
-      name: cal.name,
-      color: this.mapOutlookColor(cal.color),
-      isPrimary: cal.isDefaultCalendar ?? false,
-      syncEnabled: true,
-      syncDirection: cal.canEdit ? ('bidirectional' as const) : ('pull' as const),
-    }));
+      calendars.push(
+        ...batch.map((cal) => {
+          const canEdit = cal.canEdit ?? false;
+          return {
+            id: cal.id,
+            externalId: cal.id,
+            name: cal.name,
+            color: this.mapOutlookColor(cal.color ?? undefined),
+            isPrimary: cal.isDefaultCalendar ?? false,
+            canEdit,
+            syncEnabled: true,
+            syncDirection: canEdit ? ('bidirectional' as const) : ('pull' as const),
+          };
+        }),
+      );
+
+      nextLink = response['@odata.nextLink'];
+      includeSelect = false;
+    }
+
+    return calendars;
   }
 
   async getEvents(
@@ -188,69 +168,62 @@ export class OutlookCalendarProvider implements CalendarProviderClient {
       timeMax?: Date;
       syncToken?: string;
       maxResults?: number;
+      pageToken?: string;
     } = {},
   ): Promise<{
     events: ExternalCalendarEvent[];
     nextSyncToken?: string;
     nextPageToken?: string;
+    fullSync?: boolean;
   }> {
-    let url: string;
+    const client = this.createClient(accessToken);
 
-    if (options.syncToken) {
-      // Use delta query for incremental sync
-      url = options.syncToken;
-    } else {
-      // Initial sync with time range
-      const params = new URLSearchParams();
+    if (options.pageToken || options.syncToken) {
+      const deltaResponse = (await client
+        .api(options.pageToken ?? options.syncToken ?? '')
+        .header('Prefer', 'odata.maxpagesize=50')
+        .get()) as GraphDeltaResponse;
 
-      if (options.timeMin || options.timeMax) {
-        const filters: string[] = [];
-        if (options.timeMin) {
-          filters.push(`start/dateTime ge '${options.timeMin.toISOString()}'`);
-        }
-        if (options.timeMax) {
-          filters.push(`end/dateTime le '${options.timeMax.toISOString()}'`);
-        }
-        params.set('$filter', filters.join(' and '));
-      }
+      const events = (deltaResponse.value ?? []) as (Event & { id: string })[];
 
-      if (options.maxResults) {
-        params.set('$top', String(options.maxResults));
-      }
+      return {
+        events: events.map((item) => this.mapOutlookEvent(item, calendarId)),
+        nextSyncToken: deltaResponse['@odata.deltaLink'] ?? undefined,
+        nextPageToken: deltaResponse['@odata.nextLink'] ?? undefined,
+        fullSync: !options.syncToken,
+      };
+    }
 
-      params.set(
-        '$select',
+    const request = client
+      .api(`/me/calendars/${encodeURIComponent(calendarId)}/events`)
+      .header('Prefer', 'odata.maxpagesize=50')
+      .select(
         'id,subject,body,start,end,isAllDay,location,recurrence,attendees,showAs,sensitivity,iCalUId,changeKey,isCancelled',
       );
 
-      url = `${GRAPH_API}/me/calendars/${encodeURIComponent(calendarId)}/events?${params.toString()}`;
+    if (options.timeMin || options.timeMax) {
+      const filters: string[] = [];
+      if (options.timeMin) {
+        filters.push(`start/dateTime ge '${options.timeMin.toISOString()}'`);
+      }
+      if (options.timeMax) {
+        filters.push(`end/dateTime le '${options.timeMax.toISOString()}'`);
+      }
+      request.filter(filters.join(' and '));
     }
 
-    const response = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Prefer: 'odata.maxpagesize=50',
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to get events: ${response.statusText}`);
+    if (options.maxResults) {
+      request.top(options.maxResults);
     }
 
-    const data = (await response.json()) as {
-      value?: MicrosoftCalendarEvent[];
-      '@odata.nextLink'?: string;
-      '@odata.deltaLink'?: string;
-    };
-
-    const events = (data.value ?? [])
-      .filter((item) => !item.isCancelled)
-      .map((item) => this.mapOutlookEvent(item, calendarId));
+    const response = (await request.get()) as GraphDeltaResponse;
+    const events = (response.value ?? []) as (Event & { id: string })[];
 
     return {
-      events,
-      nextSyncToken: data['@odata.deltaLink'],
-      nextPageToken: data['@odata.nextLink'],
+      events: events.map((item) => this.mapOutlookEvent(item, calendarId)),
+      nextSyncToken: response['@odata.deltaLink'] ?? undefined,
+      nextPageToken: response['@odata.nextLink'] ?? undefined,
+      fullSync: !options.syncToken,
     };
   }
 
@@ -259,26 +232,14 @@ export class OutlookCalendarProvider implements CalendarProviderClient {
     calendarId: string,
     event: Omit<ExternalCalendarEvent, 'externalId' | 'calendarId' | 'etag'>,
   ): Promise<ExternalCalendarEvent> {
+    const client = this.createClient(accessToken);
     const outlookEvent = this.mapToOutlookEvent(event);
 
-    const response = await fetch(
-      `${GRAPH_API}/me/calendars/${encodeURIComponent(calendarId)}/events`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(outlookEvent),
-      },
-    );
+    const response = (await client
+      .api(`/me/calendars/${encodeURIComponent(calendarId)}/events`)
+      .post(outlookEvent)) as Event & { id: string };
 
-    if (!response.ok) {
-      throw new Error(`Failed to create event: ${response.statusText}`);
-    }
-
-    const data = (await response.json()) as MicrosoftCalendarEvent;
-    return this.mapOutlookEvent(data, calendarId);
+    return this.mapOutlookEvent(response, calendarId);
   }
 
   async updateEvent(
@@ -287,46 +248,43 @@ export class OutlookCalendarProvider implements CalendarProviderClient {
     eventId: string,
     event: Partial<ExternalCalendarEvent>,
   ): Promise<ExternalCalendarEvent> {
+    const client = this.createClient(accessToken);
     const outlookEvent = this.mapToOutlookEvent(event as ExternalCalendarEvent);
 
-    const response = await fetch(
-      `${GRAPH_API}/me/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
-      {
-        method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(outlookEvent),
-      },
-    );
+    const response = (await client
+      .api(`/me/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`)
+      .patch(outlookEvent)) as Event & { id: string };
 
-    if (!response.ok) {
-      throw new Error(`Failed to update event: ${response.statusText}`);
-    }
-
-    const data = (await response.json()) as MicrosoftCalendarEvent;
-    return this.mapOutlookEvent(data, calendarId);
+    return this.mapOutlookEvent(response, calendarId);
   }
 
   async deleteEvent(accessToken: string, calendarId: string, eventId: string): Promise<void> {
-    const response = await fetch(
-      `${GRAPH_API}/me/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
-      {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      },
-    );
-
-    if (!response.ok && response.status !== 404) {
-      throw new Error(`Failed to delete event: ${response.statusText}`);
+    const client = this.createClient(accessToken);
+    try {
+      await client
+        .api(
+          `/me/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
+        )
+        .delete();
+    } catch (error) {
+      const status = (error as { statusCode?: number }).statusCode;
+      if (status === 404) {
+        return;
+      }
+      throw error;
     }
   }
 
+  private createClient(accessToken: string): Client {
+    return Client.init({
+      authProvider: (done) => {
+        done(null, accessToken);
+      },
+    });
+  }
+
   private mapOutlookEvent(
-    event: MicrosoftCalendarEvent,
+    event: Event & { id: string },
     calendarId: string,
   ): ExternalCalendarEvent {
     const isAllDay = event.isAllDay ?? false;
@@ -338,25 +296,25 @@ export class OutlookCalendarProvider implements CalendarProviderClient {
       : undefined;
 
     return {
-      externalId: event.id ?? '',
+      externalId: event.id,
       calendarId,
       title: event.subject ?? '(No title)',
-      description: event.body?.content,
+      description: event.body?.content ?? undefined,
       startTime,
       endTime,
       isAllDay,
-      location: event.location?.displayName,
+      location: event.location?.displayName ?? undefined,
       recurrenceRule: this.parseOutlookRecurrence(event.recurrence),
-      attendees: event.attendees?.map((a) => ({
-        email: a.emailAddress?.address ?? '',
-        name: a.emailAddress?.name,
-        status: this.mapAttendeeStatus(a.status?.response),
-        isOrganizer: a.type === 'required',
+      attendees: event.attendees?.map((attendee) => ({
+        email: attendee.emailAddress?.address ?? '',
+        name: attendee.emailAddress?.name ?? undefined,
+        status: this.mapAttendeeStatus(attendee.status?.response ?? undefined),
+        isOrganizer: attendee.type === 'required',
       })),
-      status: this.mapShowAs(event.showAs),
-      visibility: this.mapSensitivity(event.sensitivity),
-      etag: event.changeKey,
-      iCalUID: event.iCalUId,
+      status: event.isCancelled ? 'cancelled' : this.mapShowAs(event.showAs ?? undefined),
+      visibility: this.mapSensitivity(event.sensitivity ?? undefined),
+      etag: event.changeKey ?? undefined,
+      iCalUID: event.iCalUId ?? undefined,
     };
   }
 
@@ -371,23 +329,23 @@ export class OutlookCalendarProvider implements CalendarProviderClient {
     };
 
     if (event.isAllDay) {
-      outlookEvent['start'] = {
+      outlookEvent.start = {
         dateTime: event.startTime.toISOString().split('T')[0],
         timeZone: 'UTC',
       };
       if (event.endTime) {
-        outlookEvent['end'] = {
+        outlookEvent.end = {
           dateTime: event.endTime.toISOString().split('T')[0],
           timeZone: 'UTC',
         };
       }
     } else {
-      outlookEvent['start'] = {
+      outlookEvent.start = {
         dateTime: event.startTime.toISOString(),
         timeZone: 'UTC',
       };
       if (event.endTime) {
-        outlookEvent['end'] = {
+        outlookEvent.end = {
           dateTime: event.endTime.toISOString(),
           timeZone: 'UTC',
         };
@@ -397,9 +355,7 @@ export class OutlookCalendarProvider implements CalendarProviderClient {
     return outlookEvent;
   }
 
-  private parseOutlookRecurrence(
-    recurrence?: MicrosoftCalendarEvent['recurrence'],
-  ): string | undefined {
+  private parseOutlookRecurrence(recurrence?: Event['recurrence']): string | undefined {
     if (!recurrence?.pattern) return undefined;
 
     // Convert Microsoft recurrence to RRULE format
@@ -413,7 +369,7 @@ export class OutlookCalendarProvider implements CalendarProviderClient {
         parts.push(`FREQ=WEEKLY;INTERVAL=${String(recurrence.pattern.interval ?? 1)}`);
         if (recurrence.pattern.daysOfWeek?.length) {
           const days = recurrence.pattern.daysOfWeek
-            .map((d) => d.substring(0, 2).toUpperCase())
+            .map((day) => day.substring(0, 2).toUpperCase())
             .join(',');
           parts.push(`;BYDAY=${days}`);
         }
@@ -486,4 +442,10 @@ export class OutlookCalendarProvider implements CalendarProviderClient {
     };
     return color ? (colorMap[color] ?? color) : undefined;
   }
+}
+
+interface GraphDeltaResponse {
+  value?: Event[];
+  '@odata.nextLink'?: string;
+  '@odata.deltaLink'?: string;
 }

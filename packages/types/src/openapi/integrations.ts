@@ -17,7 +17,14 @@ import { TimestampSchema, successResponseSchema } from './common.js';
 // =============================================================================
 
 export const IntegrationProviderSchema = z
-  .enum(['linear', 'github', 'google_calendar', 'outlook_calendar', 'apple_calendar'])
+  .enum([
+    'linear',
+    'github',
+    'google_calendar',
+    'outlook_calendar',
+    'apple_calendar',
+    'caldav_calendar',
+  ])
   .openapi({
     description: 'Integration provider',
     example: 'github',

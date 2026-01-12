@@ -124,6 +124,7 @@ app.get('/connections', async (c) => {
       syncEnabled: conn.syncEnabled,
       lastSyncAt: conn.lastSyncAt,
       lastSyncStatus: conn.lastSyncStatus,
+      lastSyncError: conn.lastSyncError ?? null,
       calendars: conn.calendars,
       createdAt: conn.createdAt,
     })),

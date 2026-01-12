@@ -68,41 +68,42 @@ const CALENDAR_SYNC_DIRECTIONS = ['pull', 'push', 'bidirectional'] as const;
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === 'object' && !Array.isArray(value);
 
-const isSyncedCalendar = (value: unknown): value is SyncedCalendar => {
+const coerceSyncedCalendar = (value: unknown): SyncedCalendar | null => {
   if (!isRecord(value)) {
-    return false;
+    return null;
   }
 
-  if (typeof value.id !== 'string' || typeof value.externalId !== 'string') {
-    return false;
+  const id = typeof value.id === 'string' ? value.id : undefined;
+  const externalId = typeof value.externalId === 'string' ? value.externalId : undefined;
+  const name = typeof value.name === 'string' ? value.name : undefined;
+
+  if (!id || !externalId || !name) {
+    return null;
   }
 
-  if (typeof value.name !== 'string' || typeof value.isPrimary !== 'boolean') {
-    return false;
-  }
+  const color = typeof value.color === 'string' ? value.color : undefined;
+  const canEdit = typeof value.canEdit === 'boolean' ? value.canEdit : undefined;
+  const isPrimary = typeof value.isPrimary === 'boolean' ? value.isPrimary : false;
+  const syncEnabled = typeof value.syncEnabled === 'boolean' ? value.syncEnabled : true;
 
-  if (typeof value.syncEnabled !== 'boolean') {
-    return false;
-  }
+  const rawDirection =
+    typeof value.syncDirection === 'string'
+      ? (value.syncDirection as (typeof CALENDAR_SYNC_DIRECTIONS)[number])
+      : undefined;
+  const parsedDirection =
+    rawDirection && CALENDAR_SYNC_DIRECTIONS.includes(rawDirection) ? rawDirection : undefined;
+  const syncDirection = parsedDirection ?? (canEdit === false ? 'pull' : 'bidirectional');
 
-  if (
-    typeof value.syncDirection !== 'string' ||
-    !CALENDAR_SYNC_DIRECTIONS.includes(
-      value.syncDirection as (typeof CALENDAR_SYNC_DIRECTIONS)[number],
-    )
-  ) {
-    return false;
-  }
-
-  if (value.color !== undefined && typeof value.color !== 'string') {
-    return false;
-  }
-
-  if (value.canEdit !== undefined && typeof value.canEdit !== 'boolean') {
-    return false;
-  }
-
-  return true;
+  return {
+    id,
+    externalId,
+    name,
+    color,
+    isPrimary,
+    canEdit,
+    syncEnabled,
+    syncDirection,
+  };
 };
 
 const parseSyncStatus = (value: unknown): IntegrationSyncStatus | undefined => {
@@ -137,7 +138,9 @@ const parseIntegrationMetadata = (metadata: unknown): IntegrationMetadata => {
   }
 
   const calendars = Array.isArray(metadata.calendars)
-    ? metadata.calendars.filter(isSyncedCalendar)
+    ? metadata.calendars
+        .map(coerceSyncedCalendar)
+        .filter((calendar): calendar is SyncedCalendar => calendar !== null)
     : [];
   const syncStatus = parseSyncStatus(metadata.syncStatus);
 
@@ -155,6 +158,19 @@ const getCalendarIdFromMetadata = (
   }
 
   return typeof metadata.calendarId === 'string' ? metadata.calendarId : undefined;
+};
+
+const isInvalidSyncTokenError = (error: unknown): boolean => {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const status =
+    (error as { response?: { status?: number } }).response?.status ??
+    (error as { code?: number }).code ??
+    (error as { statusCode?: number }).statusCode;
+
+  return status === 410;
 };
 
 /**
@@ -255,13 +271,14 @@ export class CalendarSyncService {
       google: 'google_calendar',
       outlook: 'outlook_calendar',
       icloud: 'apple_calendar',
-      caldav: 'google_calendar', // CalDAV doesn't have its own enum, use a placeholder
+      caldav: 'caldav_calendar',
     };
 
     const integrationProvider = providerMap[provider] as
       | 'google_calendar'
       | 'outlook_calendar'
-      | 'apple_calendar';
+      | 'apple_calendar'
+      | 'caldav_calendar';
 
     // Use the primary calendar's external ID as account identifier, or email, or 'default'
     const externalAccountId =
@@ -303,8 +320,6 @@ export class CalendarSyncService {
         userId,
         provider,
         externalAccountId,
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
         tokenExpiresAt: tokens.expiresAt,
         syncEnabled: true,
         calendars: mergedCalendars,
@@ -369,8 +384,6 @@ export class CalendarSyncService {
       userId,
       provider,
       externalAccountId,
-      accessToken: tokens.accessToken,
-      refreshToken: tokens.refreshToken,
       tokenExpiresAt: tokens.expiresAt,
       syncEnabled: true,
       calendars,
@@ -393,7 +406,11 @@ export class CalendarSyncService {
     });
 
     return integrations
-      .filter((i) => ['google_calendar', 'outlook_calendar', 'apple_calendar'].includes(i.provider))
+      .filter((i) =>
+        ['google_calendar', 'outlook_calendar', 'apple_calendar', 'caldav_calendar'].includes(
+          i.provider,
+        ),
+      )
       .map((i) => {
         const metadata = parseIntegrationMetadata(i.metadata);
         const syncStatus = metadata.syncStatus;
@@ -655,7 +672,7 @@ export class CalendarSyncService {
 
     const metadata = parseIntegrationMetadata(integration.metadata);
 
-    const calendars = metadata.calendars.filter((c) => c.syncEnabled);
+    const calendars = metadata.calendars.filter((c) => c.syncEnabled && c.syncDirection !== 'push');
 
     const result: SyncResult = {
       success: true,
@@ -710,7 +727,7 @@ export class CalendarSyncService {
           nextSyncToken = eventsResult.nextSyncToken;
           fullSync = eventsResult.fullSync;
         } catch (err) {
-          if (err instanceof Error && err.message.includes('410')) {
+          if (isInvalidSyncTokenError(err)) {
             await this.clearSyncToken(connectionId, calendar.externalId);
             const eventsResult = await fetchEvents(undefined);
             externalEvents = eventsResult.externalEvents;
@@ -730,7 +747,7 @@ export class CalendarSyncService {
             const syncResult = await this.syncEvent(
               userId,
               connectionId,
-              calendar.id,
+              calendar.externalId,
               externalEvent,
             );
             if (syncResult === 'created') result.eventsCreated++;
@@ -1073,13 +1090,74 @@ export class CalendarSyncService {
     eventId: string,
     operation: 'create' | 'update' | 'delete',
   ): Promise<void> {
-    const connections = await this.getConnections(userId);
+    const event = await db.query.events.findFirst({
+      where: and(eq(events.id, eventId), eq(events.creatorId, userId)),
+    });
 
-    const bidirectionalConnections = connections.filter((c) =>
-      c.calendars.some((cal) => cal.syncEnabled && cal.syncDirection === 'bidirectional'),
+    if (!event) {
+      return;
+    }
+
+    if (event.sourceIntegrationId) {
+      if (operation === 'create') {
+        return;
+      }
+
+      const integration = await db.query.linkedIntegrations.findFirst({
+        where: and(
+          eq(linkedIntegrations.id, event.sourceIntegrationId),
+          eq(linkedIntegrations.userId, userId),
+        ),
+      });
+
+      if (!integration) {
+        return;
+      }
+
+      const mapping = await this.mappingService.findByLocalEntity(
+        event.sourceIntegrationId,
+        'event',
+        eventId,
+      );
+      const calendarId = mapping ? getCalendarIdFromMetadata(mapping.metadata) : undefined;
+      const metadata = parseIntegrationMetadata(integration.metadata);
+      const calendar = calendarId
+        ? metadata.calendars.find((cal) => cal.externalId === calendarId || cal.id === calendarId)
+        : undefined;
+
+      if (!calendar || !calendar.syncEnabled || calendar.syncDirection === 'pull') {
+        return;
+      }
+
+      try {
+        switch (operation) {
+          case 'update':
+            await this.pushEventUpdate(event.sourceIntegrationId, userId, eventId);
+            break;
+          case 'delete':
+            await this.pushEventDelete(event.sourceIntegrationId, userId, eventId);
+            break;
+        }
+      } catch (error) {
+        console.error(
+          `Failed to push ${operation} to source integration:`,
+          error instanceof Error ? error.message : 'Unknown error',
+        );
+      }
+
+      return;
+    }
+
+    const connections = await this.getConnections(userId);
+    const pushConnections = connections.filter((c) =>
+      c.calendars.some(
+        (cal) =>
+          cal.syncEnabled &&
+          (cal.syncDirection === 'push' || cal.syncDirection === 'bidirectional'),
+      ),
     );
 
-    for (const connection of bidirectionalConnections) {
+    for (const connection of pushConnections) {
       try {
         switch (operation) {
           case 'create':
@@ -1110,35 +1188,33 @@ export class CalendarSyncService {
         return 'outlook';
       case 'apple_calendar':
         return 'icloud';
+      case 'caldav_calendar':
+        return 'caldav';
       default:
         return 'caldav';
     }
   }
 
   private mergeCalendars(existing: SyncedCalendar[], incoming: SyncedCalendar[]): SyncedCalendar[] {
-    if (existing.length === 0) {
-      return incoming;
-    }
-
     const existingByExternalId = new Map(
       existing.map((calendar) => [calendar.externalId, calendar]),
     );
+    const existingById = new Map(existing.map((calendar) => [calendar.id, calendar]));
 
     return incoming.map((calendar) => {
-      const previous = existingByExternalId.get(calendar.externalId);
-      if (!previous) {
-        return calendar;
-      }
-
-      const nextDirection =
-        calendar.canEdit === false && previous.syncDirection !== 'pull'
-          ? 'pull'
-          : previous.syncDirection;
+      const previous =
+        existingByExternalId.get(calendar.externalId) ?? existingById.get(calendar.id);
+      const canEdit = calendar.canEdit ?? previous?.canEdit ?? true;
+      const syncEnabled = previous?.syncEnabled ?? calendar.syncEnabled;
+      const desiredDirection = previous?.syncDirection ?? calendar.syncDirection;
+      const syncDirection = !canEdit && desiredDirection !== 'pull' ? 'pull' : desiredDirection;
 
       return {
         ...calendar,
-        syncEnabled: previous.syncEnabled,
-        syncDirection: nextDirection,
+        externalId: calendar.externalId,
+        canEdit,
+        syncEnabled,
+        syncDirection,
       };
     });
   }
@@ -1148,9 +1224,13 @@ export class CalendarSyncService {
     connectionId: string,
     calendarExternalId: string,
     externalEventIds: string[],
-    options: { timeMin?: Date; timeMax?: Date },
+    options?: { timeMin?: Date; timeMax?: Date },
   ): Promise<number> {
-    const eventIdSet = new Set(externalEventIds);
+    const defaultTimeMin = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const defaultTimeMax = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
+    const timeMin = options?.timeMin ?? defaultTimeMin;
+    const timeMax = options?.timeMax ?? defaultTimeMax;
+    const eventIdSet = new Set(externalEventIds.filter(Boolean));
     const mappings = await this.mappingService.getMappingsForIntegration(connectionId);
 
     const missingMappings = mappings.filter((mapping) => {
@@ -1166,15 +1246,13 @@ export class CalendarSyncService {
     }
 
     const missingEventIds = missingMappings.map((mapping) => mapping.localEntityId);
-    const conditions = [eq(events.creatorId, userId), inArray(events.id, missingEventIds)];
-
-    if (options.timeMin) {
-      conditions.push(gte(events.startTime, options.timeMin));
-    }
-
-    if (options.timeMax) {
-      conditions.push(lte(events.startTime, options.timeMax));
-    }
+    const conditions = [
+      eq(events.creatorId, userId),
+      eq(events.sourceIntegrationId, connectionId),
+      inArray(events.id, missingEventIds),
+      gte(events.startTime, timeMin),
+      lte(events.startTime, timeMax),
+    ];
 
     const eventsToDelete = await db.query.events.findMany({
       where: and(...conditions),
@@ -1196,7 +1274,7 @@ export class CalendarSyncService {
       await db.delete(externalIdMappings).where(inArray(externalIdMappings.id, mappingIdsToDelete));
     }
 
-    return mappingIdsToDelete.length;
+    return eventsToDelete.length;
   }
 }
 

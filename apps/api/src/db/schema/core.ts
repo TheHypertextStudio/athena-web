@@ -4,9 +4,19 @@
  * @packageDocumentation
  */
 
-import { pgTable, text, timestamp, boolean, integer, jsonb, pgEnum } from 'drizzle-orm/pg-core';
+import {
+  pgTable,
+  text,
+  timestamp,
+  boolean,
+  integer,
+  jsonb,
+  pgEnum,
+  index,
+} from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import { users } from './auth.js';
+import { calendars } from './dav.js';
 
 // ============================================================================
 // Enums
@@ -124,25 +134,47 @@ export const tasks = pgTable('tasks', {
 /**
  * Events - Scheduled moments with participants.
  */
-export const events = pgTable('events', {
-  id: text('id').primaryKey(),
-  title: text('title').notNull(),
-  description: text('description'),
-  startTime: timestamp('start_time').notNull(),
-  endTime: timestamp('end_time'),
-  isAllDay: boolean('is_all_day').notNull().default(false),
-  location: text('location'),
-  recurrenceRule: text('recurrence_rule'),
-  creatorId: text('creator_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  /** Source of the event: 'local' for user-created, 'external' for synced from external calendar */
-  source: text('source').notNull().default('local'),
-  /** Integration ID if synced from an external calendar */
-  sourceIntegrationId: text('source_integration_id'),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
-  updatedAt: timestamp('updated_at').notNull().defaultNow(),
-});
+export const events = pgTable(
+  'events',
+  {
+    id: text('id').primaryKey(),
+    title: text('title').notNull(),
+    description: text('description'),
+    startTime: timestamp('start_time').notNull(),
+    endTime: timestamp('end_time'),
+    isAllDay: boolean('is_all_day').notNull().default(false),
+    location: text('location'),
+    recurrenceRule: text('recurrence_rule'),
+    creatorId: text('creator_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** Source of the event: 'local' for user-created, 'external' for synced from external calendar */
+    source: text('source').notNull().default('local'),
+    /** Integration ID if synced from an external calendar */
+    sourceIntegrationId: text('source_integration_id'),
+
+    // CalDAV fields
+    /** Calendar this event belongs to (for CalDAV server) */
+    calendarId: text('calendar_id').references(() => calendars.id, { onDelete: 'cascade' }),
+    /** ETag for conflict detection - changes on every update */
+    etag: text('etag'),
+    /** iCalendar SEQUENCE property - increments on significant changes */
+    sequence: integer('sequence').notNull().default(0),
+    /** iCalendar STATUS property: CONFIRMED, TENTATIVE, CANCELLED */
+    calendarStatus: text('calendar_status').default('CONFIRMED'),
+    /** iCalendar TRANSP property: OPAQUE (busy) or TRANSPARENT (free) */
+    transparency: text('transparency').default('OPAQUE'),
+    /** iCalendar CLASS property: PUBLIC, PRIVATE, CONFIDENTIAL */
+    classification: text('classification').default('PUBLIC'),
+
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => [
+    index('events_calendar_idx').on(table.calendarId),
+    index('events_etag_idx').on(table.etag),
+  ],
+);
 
 /**
  * Moments - Time-bounded containers.
@@ -685,6 +717,7 @@ export const integrationProviderEnum = pgEnum('integration_provider', [
   'google_calendar',
   'outlook_calendar',
   'apple_calendar',
+  'caldav_calendar',
   // Communication
   'slack',
   'zoom',
@@ -697,6 +730,9 @@ export const integrationProviderEnum = pgEnum('integration_provider', [
 
 /**
  * Linked integrations - third-party service connections.
+ *
+ * Supports multiple accounts per provider (e.g., work + personal Google accounts).
+ * Each connection is uniquely identified by (userId, provider, externalAccountId).
  */
 export const linkedIntegrations = pgTable('linked_integrations', {
   id: text('id').primaryKey(),
@@ -710,6 +746,16 @@ export const linkedIntegrations = pgTable('linked_integrations', {
   tokenExpiresAt: timestamp('token_expires_at'),
   scopes: text('scopes'),
   metadata: jsonb('metadata'),
+  /** User-defined label for this account (e.g., "Work", "Personal") */
+  accountLabel: text('account_label'),
+  /** Email address from OAuth profile for display */
+  accountEmail: text('account_email'),
+  /** Color for account indicator in calendar view (hex code) */
+  accountColor: text('account_color'),
+  /** Whether this is the primary account for the provider (used for event creation default) */
+  isPrimary: boolean('is_primary').notNull().default(false),
+  /** Display order for account list UI (0 = first) */
+  displayOrder: integer('display_order').notNull().default(0),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });

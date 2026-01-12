@@ -7,6 +7,7 @@
  * @packageDocumentation
  */
 
+import * as crypto from 'node:crypto';
 import type {
   CalendarProviderClient,
   OAuthTokens,
@@ -168,12 +169,23 @@ export class ICloudCalendarProvider implements CalendarProviderClient {
       timeMax?: Date;
       syncToken?: string;
       maxResults?: number;
+      pageToken?: string;
     } = {},
   ): Promise<{
     events: ExternalCalendarEvent[];
     nextSyncToken?: string;
     nextPageToken?: string;
+    fullSync?: boolean;
   }> {
+    const currentCtag = await this.fetchCtag(accessToken, calendarId);
+    if (options.syncToken && currentCtag && options.syncToken === currentCtag) {
+      return {
+        events: [],
+        nextSyncToken: currentCtag,
+        fullSync: false,
+      };
+    }
+
     // Build time-range filter if dates provided
     let timeRangeFilter = '';
     if (options.timeMin || options.timeMax) {
@@ -216,33 +228,10 @@ export class ICloudCalendarProvider implements CalendarProviderClient {
     const xml = await response.text();
     const events = this.parseEventList(xml, calendarId);
 
-    // Get sync token (ctag) for incremental sync
-    const ctagResponse = await fetch(calendarId, {
-      method: 'PROPFIND',
-      headers: {
-        Authorization: `Basic ${accessToken}`,
-        'Content-Type': 'application/xml; charset=utf-8',
-        Depth: '0',
-      },
-      body: `<?xml version="1.0" encoding="UTF-8"?>
-<d:propfind xmlns:d="DAV:" xmlns:cs="http://calendarserver.org/ns/">
-  <d:prop>
-    <cs:getctag/>
-  </d:prop>
-</d:propfind>`,
-    });
-
-    let nextSyncToken: string | undefined;
-    if (ctagResponse.ok) {
-      const ctagXml = await ctagResponse.text();
-      const ctagRegex = /<cs:getctag[^>]*>([^<]+)<\/cs:getctag>/;
-      const ctagMatch = ctagRegex.exec(ctagXml);
-      nextSyncToken = ctagMatch?.[1];
-    }
-
     return {
       events: options.maxResults ? events.slice(0, options.maxResults) : events,
-      nextSyncToken,
+      nextSyncToken: currentCtag,
+      fullSync: !options.syncToken || options.syncToken !== currentCtag,
     };
   }
 
@@ -483,6 +472,7 @@ export class ICloudCalendarProvider implements CalendarProviderClient {
         name: this.decodeHtmlEntities(name),
         color: color ? this.normalizeColor(color) : undefined,
         isPrimary: calendars.length === 0, // First calendar is primary
+        canEdit: true,
         syncEnabled: true,
         syncDirection: 'bidirectional',
       });
@@ -572,23 +562,23 @@ export class ICloudCalendarProvider implements CalendarProviderClient {
       }
     }
 
-    const uid = props['UID'] ?? crypto.randomUUID();
-    const isAllDay = props['DTSTART_PARAMS']?.includes('VALUE=DATE') ?? false;
+    const uid = props.UID ?? crypto.randomUUID();
+    const isAllDay = props.DTSTART_PARAMS?.includes('VALUE=DATE') ?? false;
     const dtstart =
-      props['DTSTART'] ?? (new Date().toISOString().replace(/[-:]/g, '').split('.')[0] ?? '') + 'Z';
+      props.DTSTART ?? (new Date().toISOString().replace(/[-:]/g, '').split('.')[0] ?? '') + 'Z';
 
     return {
       externalId: uid,
       calendarId,
-      title: this.unescapeICS(props['SUMMARY'] ?? '(No title)'),
-      description: props['DESCRIPTION'] ? this.unescapeICS(props['DESCRIPTION']) : undefined,
+      title: this.unescapeICS(props.SUMMARY ?? '(No title)'),
+      description: props.DESCRIPTION ? this.unescapeICS(props.DESCRIPTION) : undefined,
       startTime: this.parseICSDate(dtstart, isAllDay),
-      endTime: props['DTEND'] ? this.parseICSDate(props['DTEND'], isAllDay) : undefined,
+      endTime: props.DTEND ? this.parseICSDate(props.DTEND, isAllDay) : undefined,
       isAllDay,
-      location: props['LOCATION'] ? this.unescapeICS(props['LOCATION']) : undefined,
-      recurrenceRule: props['RRULE'],
-      status: this.mapICSStatus(props['STATUS']),
-      visibility: this.mapICSClass(props['CLASS']),
+      location: props.LOCATION ? this.unescapeICS(props.LOCATION) : undefined,
+      recurrenceRule: props.RRULE,
+      status: this.mapICSStatus(props.STATUS),
+      visibility: this.mapICSClass(props.CLASS),
       iCalUID: uid,
     };
   }
@@ -759,5 +749,31 @@ export class ICloudCalendarProvider implements CalendarProviderClient {
       return color.slice(0, 7); // Remove alpha channel
     }
     return color;
+  }
+
+  private async fetchCtag(accessToken: string, calendarId: string): Promise<string | undefined> {
+    const ctagResponse = await fetch(calendarId, {
+      method: 'PROPFIND',
+      headers: {
+        Authorization: `Basic ${accessToken}`,
+        'Content-Type': 'application/xml; charset=utf-8',
+        Depth: '0',
+      },
+      body: `<?xml version="1.0" encoding="UTF-8"?>
+<d:propfind xmlns:d="DAV:" xmlns:cs="http://calendarserver.org/ns/">
+  <d:prop>
+    <cs:getctag/>
+  </d:prop>
+</d:propfind>`,
+    });
+
+    if (!ctagResponse.ok) {
+      return undefined;
+    }
+
+    const ctagXml = await ctagResponse.text();
+    const ctagRegex = /<cs:getctag[^>]*>([^<]+)<\/cs:getctag>/;
+    const ctagMatch = ctagRegex.exec(ctagXml);
+    return ctagMatch?.[1];
   }
 }

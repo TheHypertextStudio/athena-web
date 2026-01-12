@@ -38,8 +38,11 @@ export const SyncStatusSchema = z.enum(['success', 'error', 'partial']).openapi(
 export const CalendarSchema = z
   .object({
     id: z.string().openapi({ description: 'Calendar ID' }),
+    externalId: z.string().openapi({ description: 'External calendar ID' }),
     name: z.string().openapi({ description: 'Calendar name' }),
     color: z.string().nullable().openapi({ description: 'Calendar color' }),
+    isPrimary: z.boolean().openapi({ description: 'Whether this is the primary calendar' }),
+    canEdit: z.boolean().optional().openapi({ description: 'Whether events can be edited' }),
     syncEnabled: z.boolean().openapi({ description: 'Whether sync is enabled' }),
     syncDirection: CalendarSyncDirectionSchema,
   })
@@ -52,6 +55,15 @@ export const CalendarConnectionSchema = z
     syncEnabled: z.boolean().openapi({ description: 'Whether sync is enabled' }),
     lastSyncAt: TimestampSchema.nullable().openapi({ description: 'Last sync timestamp' }),
     lastSyncStatus: SyncStatusSchema.nullable().openapi({ description: 'Last sync status' }),
+    lastSyncError: z.string().nullable().openapi({ description: 'Last sync error message' }),
+    accountLabel: z
+      .string()
+      .nullable()
+      .openapi({ description: 'User-defined label for the account' }),
+    accountEmail: z.string().nullable().openapi({ description: 'Account email address' }),
+    accountColor: z.string().nullable().openapi({ description: 'Account color indicator' }),
+    isPrimary: z.boolean().openapi({ description: 'Whether this is the primary account' }),
+    displayOrder: z.number().int().openapi({ description: 'Display order' }),
     calendars: z.array(CalendarSchema).openapi({ description: 'Connected calendars' }),
     createdAt: TimestampSchema.openapi({ description: 'Connection creation timestamp' }),
   })
@@ -63,7 +75,15 @@ export const SyncResultSchema = z
     eventsCreated: z.number().int().openapi({ description: 'Events created' }),
     eventsUpdated: z.number().int().openapi({ description: 'Events updated' }),
     eventsDeleted: z.number().int().openapi({ description: 'Events deleted' }),
-    errors: z.array(z.string()).openapi({ description: 'Error messages' }),
+    errors: z
+      .array(
+        z.object({
+          eventId: z.string().optional().openapi({ description: 'External event ID' }),
+          operation: z.enum(['create', 'update', 'delete']).openapi({ description: 'Operation' }),
+          error: z.string().openapi({ description: 'Error message' }),
+        }),
+      )
+      .openapi({ description: 'Error details' }),
     syncedAt: TimestampSchema.openapi({ description: 'Sync completion timestamp' }),
   })
   .openapi('SyncResult');
@@ -76,7 +96,16 @@ export const SyncAllResultSchema = z
     eventsCreated: z.number().int().optional().openapi({ description: 'Events created' }),
     eventsUpdated: z.number().int().optional().openapi({ description: 'Events updated' }),
     eventsDeleted: z.number().int().optional().openapi({ description: 'Events deleted' }),
-    errors: z.array(z.string()).optional().openapi({ description: 'Error messages' }),
+    errors: z
+      .array(
+        z.object({
+          eventId: z.string().optional().openapi({ description: 'External event ID' }),
+          operation: z.enum(['create', 'update', 'delete']).openapi({ description: 'Operation' }),
+          error: z.string().openapi({ description: 'Error message' }),
+        }),
+      )
+      .optional()
+      .openapi({ description: 'Error details' }),
     error: z.string().optional().openapi({ description: 'Error message if failed' }),
   })
   .openapi('SyncAllResult');

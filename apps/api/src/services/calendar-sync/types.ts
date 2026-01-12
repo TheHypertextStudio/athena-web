@@ -11,6 +11,8 @@ export type CalendarProvider = 'google' | 'outlook' | 'icloud' | 'caldav';
 
 /**
  * Calendar connection configuration.
+ *
+ * Supports multiple accounts per provider (e.g., work + personal Google accounts).
  */
 export interface CalendarConnection {
   id: string;
@@ -25,6 +27,16 @@ export interface CalendarConnection {
   lastSyncStatus?: 'success' | 'error';
   lastSyncError?: string;
   calendars: SyncedCalendar[];
+  /** User-defined label for this account (e.g., "Work", "Personal") */
+  accountLabel?: string;
+  /** Email address from OAuth profile for display */
+  accountEmail?: string;
+  /** Color for account indicator in calendar view (hex code) */
+  accountColor?: string;
+  /** Whether this is the primary account for the provider (used for event creation default) */
+  isPrimary: boolean;
+  /** Display order for account list UI (0 = first) */
+  displayOrder: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -38,6 +50,7 @@ export interface SyncedCalendar {
   name: string;
   color?: string;
   isPrimary: boolean;
+  canEdit?: boolean;
   syncEnabled: boolean;
   syncDirection: 'pull' | 'push' | 'bidirectional';
 }
@@ -125,6 +138,16 @@ export interface CalDAVConfig {
 }
 
 /**
+ * Account settings update.
+ */
+export interface AccountSettingsUpdate {
+  accountLabel?: string;
+  accountColor?: string;
+  isPrimary?: boolean;
+  displayOrder?: number;
+}
+
+/**
  * Calendar provider interface.
  */
 export interface CalendarProviderClient {
@@ -142,6 +165,12 @@ export interface CalendarProviderClient {
    * Exchange authorization code for tokens.
    */
   exchangeCode(code: string): Promise<OAuthTokens>;
+
+  /**
+   * Get user profile info (email) from access token.
+   * Optional - not all providers support this.
+   */
+  getUserEmail?(accessToken: string): Promise<string | undefined>;
 
   /**
    * Refresh access token.
@@ -164,11 +193,13 @@ export interface CalendarProviderClient {
       timeMax?: Date;
       syncToken?: string;
       maxResults?: number;
+      pageToken?: string;
     },
   ): Promise<{
     events: ExternalCalendarEvent[];
     nextSyncToken?: string;
     nextPageToken?: string;
+    fullSync?: boolean;
   }>;
 
   /**

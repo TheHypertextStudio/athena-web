@@ -13,6 +13,9 @@
  * @packageDocumentation
  */
 
+import * as crypto from 'node:crypto';
+import { isIP } from 'node:net';
+import { env } from '../../../lib/env.js';
 import type {
   CalendarProviderClient,
   OAuthTokens,
@@ -66,14 +69,16 @@ export class CalDAVProvider implements CalendarProviderClient {
       throw new Error('Credentials must include serverUrl, username, and password');
     }
 
+    const validatedServerUrl = validateServerUrl(config.serverUrl);
+
     // Store server URL for later use
-    this.serverUrl = config.serverUrl;
+    this.serverUrl = validatedServerUrl;
 
     // Create Basic Auth token
     const authToken = Buffer.from(`${config.username}:${config.password}`).toString('base64');
 
     // Validate credentials by making a PROPFIND request
-    const response = await fetch(config.serverUrl, {
+    const response = await fetch(validatedServerUrl, {
       method: 'PROPFIND',
       headers: {
         Authorization: `Basic ${authToken}`,
@@ -98,7 +103,7 @@ export class CalDAVProvider implements CalendarProviderClient {
     // Store full config as access token (we need server URL for subsequent requests)
     const fullToken = Buffer.from(
       JSON.stringify({
-        serverUrl: config.serverUrl,
+        serverUrl: validatedServerUrl,
         auth: authToken,
       }),
     ).toString('base64');
@@ -188,13 +193,24 @@ export class CalDAVProvider implements CalendarProviderClient {
       timeMax?: Date;
       syncToken?: string;
       maxResults?: number;
+      pageToken?: string;
     } = {},
   ): Promise<{
     events: ExternalCalendarEvent[];
     nextSyncToken?: string;
     nextPageToken?: string;
+    fullSync?: boolean;
   }> {
     const { auth } = this.parseToken(accessToken);
+
+    const currentCtag = await this.fetchCtag(auth, calendarId);
+    if (options.syncToken && currentCtag && options.syncToken === currentCtag) {
+      return {
+        events: [],
+        nextSyncToken: currentCtag,
+        fullSync: false,
+      };
+    }
 
     // Build time-range filter if dates provided
     let timeRangeFilter = '';
@@ -238,33 +254,10 @@ export class CalDAVProvider implements CalendarProviderClient {
     const xml = await response.text();
     const events = this.parseEventList(xml, calendarId);
 
-    // Get sync token (ctag) for incremental sync
-    const ctagResponse = await fetch(calendarId, {
-      method: 'PROPFIND',
-      headers: {
-        Authorization: `Basic ${auth}`,
-        'Content-Type': 'application/xml; charset=utf-8',
-        Depth: '0',
-      },
-      body: `<?xml version="1.0" encoding="UTF-8"?>
-<d:propfind xmlns:d="DAV:" xmlns:cs="http://calendarserver.org/ns/">
-  <d:prop>
-    <cs:getctag/>
-  </d:prop>
-</d:propfind>`,
-    });
-
-    let nextSyncToken: string | undefined;
-    if (ctagResponse.ok) {
-      const ctagXml = await ctagResponse.text();
-      const ctagRegex = /<cs:getctag[^>]*>([^<]+)<\/cs:getctag>/;
-      const ctagMatch = ctagRegex.exec(ctagXml);
-      nextSyncToken = ctagMatch?.[1];
-    }
-
     return {
       events: options.maxResults ? events.slice(0, options.maxResults) : events,
-      nextSyncToken,
+      nextSyncToken: currentCtag,
+      fullSync: !options.syncToken || options.syncToken !== currentCtag,
     };
   }
 
@@ -392,7 +385,8 @@ export class CalDAVProvider implements CalendarProviderClient {
   private parseToken(token: string): { serverUrl: string; auth: string } {
     try {
       const decoded = Buffer.from(token, 'base64').toString('utf-8');
-      return JSON.parse(decoded) as { serverUrl: string; auth: string };
+      const parsed = JSON.parse(decoded) as { serverUrl: string; auth: string };
+      return { ...parsed, serverUrl: validateServerUrl(parsed.serverUrl) };
     } catch {
       throw new Error('Invalid access token format');
     }
@@ -520,6 +514,7 @@ export class CalDAVProvider implements CalendarProviderClient {
         name: this.decodeHtmlEntities(name),
         color: color ? this.normalizeColor(color) : undefined,
         isPrimary: calendars.length === 0,
+        canEdit: true,
         syncEnabled: true,
         syncDirection: 'bidirectional',
       });
@@ -600,23 +595,23 @@ export class CalDAVProvider implements CalendarProviderClient {
       }
     }
 
-    const uid = props['UID'] ?? crypto.randomUUID();
-    const isAllDay = props['DTSTART_PARAMS']?.includes('VALUE=DATE') ?? false;
+    const uid = props.UID ?? crypto.randomUUID();
+    const isAllDay = props.DTSTART_PARAMS?.includes('VALUE=DATE') ?? false;
     const defaultDtstart = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] ?? '';
-    const dtstart = props['DTSTART'] ?? defaultDtstart + 'Z';
+    const dtstart = props.DTSTART ?? defaultDtstart + 'Z';
 
     return {
       externalId: uid,
       calendarId,
-      title: this.unescapeICS(props['SUMMARY'] ?? '(No title)'),
-      description: props['DESCRIPTION'] ? this.unescapeICS(props['DESCRIPTION']) : undefined,
+      title: this.unescapeICS(props.SUMMARY ?? '(No title)'),
+      description: props.DESCRIPTION ? this.unescapeICS(props.DESCRIPTION) : undefined,
       startTime: this.parseICSDate(dtstart, isAllDay),
-      endTime: props['DTEND'] ? this.parseICSDate(props['DTEND'], isAllDay) : undefined,
+      endTime: props.DTEND ? this.parseICSDate(props.DTEND, isAllDay) : undefined,
       isAllDay,
-      location: props['LOCATION'] ? this.unescapeICS(props['LOCATION']) : undefined,
-      recurrenceRule: props['RRULE'],
-      status: this.mapICSStatus(props['STATUS']),
-      visibility: this.mapICSClass(props['CLASS']),
+      location: props.LOCATION ? this.unescapeICS(props.LOCATION) : undefined,
+      recurrenceRule: props.RRULE,
+      status: this.mapICSStatus(props.STATUS),
+      visibility: this.mapICSClass(props.CLASS),
       iCalUID: uid,
     };
   }
@@ -781,4 +776,84 @@ export class CalDAVProvider implements CalendarProviderClient {
     }
     return color;
   }
+
+  private async fetchCtag(auth: string, calendarId: string): Promise<string | undefined> {
+    const ctagResponse = await fetch(calendarId, {
+      method: 'PROPFIND',
+      headers: {
+        Authorization: `Basic ${auth}`,
+        'Content-Type': 'application/xml; charset=utf-8',
+        Depth: '0',
+      },
+      body: `<?xml version="1.0" encoding="UTF-8"?>
+<d:propfind xmlns:d="DAV:" xmlns:cs="http://calendarserver.org/ns/">
+  <d:prop>
+    <cs:getctag/>
+  </d:prop>
+</d:propfind>`,
+    });
+
+    if (!ctagResponse.ok) {
+      return undefined;
+    }
+
+    const ctagXml = await ctagResponse.text();
+    const ctagRegex = /<cs:getctag[^>]*>([^<]+)<\/cs:getctag>/;
+    const ctagMatch = ctagRegex.exec(ctagXml);
+    return ctagMatch?.[1];
+  }
+}
+
+function validateServerUrl(serverUrl: string): string {
+  let url: URL;
+  try {
+    url = new URL(serverUrl);
+  } catch {
+    throw new Error('Invalid CalDAV server URL');
+  }
+
+  if (url.protocol !== 'https:' && env.NODE_ENV === 'production') {
+    throw new Error('CalDAV server must use HTTPS');
+  }
+
+  const hostname = url.hostname.toLowerCase();
+  if (hostname === 'localhost' || hostname.endsWith('.local')) {
+    throw new Error('CalDAV server hostname is not allowed');
+  }
+
+  if (isPrivateIp(hostname)) {
+    throw new Error('CalDAV server hostname is not allowed');
+  }
+
+  return url.toString();
+}
+
+function isPrivateIp(hostname: string): boolean {
+  if (hostname === '::1') return true;
+  const ipType = isIP(hostname);
+  if (ipType === 0) {
+    return false;
+  }
+
+  if (ipType === 4) {
+    const [a, b] = hostname.split('.').map((part) => parseInt(part, 10));
+    if (a === 10) return true;
+    if (a === 127) return true;
+    if (a === 0) return true;
+    if (a === 169 && b === 254) return true;
+    if (a === 172 && b !== undefined && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    return false;
+  }
+
+  const normalized = hostname.toLowerCase();
+  return (
+    normalized.startsWith('fc') ||
+    normalized.startsWith('fd') ||
+    normalized.startsWith('fe80') ||
+    normalized.startsWith('::ffff:127') ||
+    normalized.startsWith('::ffff:10') ||
+    normalized.startsWith('::ffff:192.168') ||
+    normalized.startsWith('::ffff:172.')
+  );
 }

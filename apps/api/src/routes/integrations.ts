@@ -118,7 +118,13 @@ integrationRoutes.get('/:id', async (c) => {
 integrationRoutes.post('/connect', async (c) => {
   const userId = getUserId(c);
   const body = await c.req.json<{
-    provider: 'linear' | 'github' | 'google_calendar' | 'outlook_calendar' | 'apple_calendar';
+    provider:
+      | 'linear'
+      | 'github'
+      | 'google_calendar'
+      | 'outlook_calendar'
+      | 'apple_calendar'
+      | 'caldav_calendar';
     externalAccountId: string;
     accessToken?: string;
     refreshToken?: string;

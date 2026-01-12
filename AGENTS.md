@@ -1,222 +1,783 @@
-# AGENTS.md - Project Athena Agent Guidelines
+# Project Athena Agent Rules
 
-> **Version**: 1.0.0
-> **Last Updated**: 2026-01-04
-> **Applies To**: All AI coding agents working on Project Athena
+> **Version**: 2.0.0
+> **Last Updated**: 2026-01-11
 
-This document defines the operational framework for AI agents contributing to Project Athena. All agents MUST adhere to these guidelines to ensure consistent, high-quality, autonomous development.
-
----
-
-## Table of Contents
-
-1. [Agent State Machine](#agent-state-machine)
-2. [Documentation Requirements](#documentation-requirements)
-3. [Version Control Protocol](#version-control-protocol)
-4. [Work Tracking System](#work-tracking-system)
-5. [Platform Best Practices](#platform-best-practices)
-6. [Task Completion Standards](#task-completion-standards)
-7. [Reusable Tooling](#reusable-tooling)
-8. [Self-Modification Protocol](#self-modification-protocol)
-9. [Research Requirements](#research-requirements)
-10. [Planning Protocol](#planning-protocol)
-11. [Retrospection Requirements](#retrospection-requirements)
-12. [Self-Validation Protocol](#self-validation-protocol)
+Direct, actionable rules for AI agents working on this codebase.
 
 ---
 
-## Agent State Machine
+## Quick Reference
 
-Agents operate in a defined state machine to ensure predictable, autonomous behavior. The agent MUST always be in exactly one of these states:
+### Commands
+
+| Action           | Command          | Run from   |
+| ---------------- | ---------------- | ---------- |
+| Install deps     | `pnpm install`   | repo root  |
+| Build API        | `pnpm build`     | `apps/api` |
+| Build Web        | `pnpm build`     | `apps/web` |
+| Type check       | `pnpm typecheck` | repo root  |
+| Lint             | `pnpm lint`      | repo root  |
+| Test             | `pnpm test`      | repo root  |
+| Dev server (API) | `pnpm dev`       | `apps/api` |
+| Dev server (Web) | `pnpm dev`       | `apps/web` |
+
+### File Locations
+
+| What                | Where                              |
+| ------------------- | ---------------------------------- |
+| API routes          | `apps/api/src/routes/*.ts`         |
+| DB schema           | `apps/api/src/db/schema/*.ts`      |
+| DB migrations       | `apps/api/drizzle/*.sql`           |
+| Frontend pages      | `apps/web/src/app/**/*.tsx`        |
+| Frontend components | `apps/web/src/components/**/*.tsx` |
+| Shared types        | `packages/types/src/**/*.ts`       |
+| Work tracking       | `docs/WORKLOG.md`                  |
+| Product specs       | `docs/core/`                       |
+| Engineering specs   | `docs/engineering/`                |
+
+---
+
+## 1. Task Workflow
 
 ```
-┌─────────────┐
-│   IDLE      │◄────────────────────────────────────────┐
-└──────┬──────┘                                         │
-       │ receive task                                   │
-       ▼                                                │
-┌─────────────┐                                         │
-│  PLANNING   │◄──────────────────────┐                 │
-└──────┬──────┘                       │                 │
-       │ plan approved                │ need more info  │
-       ▼                              │                 │
-┌─────────────┐    blocked     ┌──────┴──────┐          │
-│ RESEARCHING │───────────────►│  CLARIFYING │          │
-└──────┬──────┘                └─────────────┘          │
-       │ research complete                              │
-       ▼                                                │
-┌─────────────┐                                         │
-│ IMPLEMENTING│◄──────────────────────┐                 │
-└──────┬──────┘                       │                 │
-       │ implementation complete      │ tests fail     │
-       ▼                              │                 │
-┌─────────────┐                       │                 │
-│  VALIDATING │───────────────────────┘                 │
-└──────┬──────┘                                         │
-       │ validation passed                              │
-       ▼                                                │
-┌─────────────┐                                         │
-│ DOCUMENTING │                                         │
-└──────┬──────┘                                         │
-       │ docs complete                                  │
-       ▼                                                │
-┌─────────────┐                                         │
-│ COMMITTING  │                                         │
-└──────┬──────┘                                         │
-       │ changes committed                              │
-       ▼                                                │
-┌─────────────┐                                         │
-│RETROSPECTING│─────────────────────────────────────────┘
-└─────────────┘
+┌──────────┐     ┌────────────┐     ┌──────────────┐     ┌────────────┐     ┌──────────┐
+│  IDLE    │────►│  PLANNING  │────►│ IMPLEMENTING │────►│ VALIDATING │────►│ COMPLETE │
+└──────────┘     └────────────┘     └──────────────┘     └────────────┘     └──────────┘
+                       │                   ▲                    │
+                       │                   └────────────────────┘
+                       │                      (if tests fail)
+                       ▼
+                 ┌────────────┐
+                 │ CLARIFYING │ (if blocked, ask user)
+                 └────────────┘
 ```
 
-### State Definitions
+### When you receive a task:
 
-| State | Description | Exit Criteria |
-|-------|-------------|---------------|
-| **IDLE** | Awaiting new task or user input | Task received |
-| **PLANNING** | Analyzing requirements, breaking down work | Plan documented in WORKLOG.md |
-| **RESEARCHING** | Gathering information, reading code, web searches | Sufficient context obtained |
-| **CLARIFYING** | Awaiting user input for ambiguous requirements | User response received |
-| **IMPLEMENTING** | Writing code, creating files, making changes | All code changes complete |
-| **VALIDATING** | Running tests, linting, type-checking | All validations pass |
-| **DOCUMENTING** | Writing/updating documentation | Docs reflect changes |
-| **COMMITTING** | Staging and committing changes (with user approval) | Changes committed |
-| **RETROSPECTING** | Reviewing work, updating WORKLOG.md | Entry complete |
+1. Read relevant code before modifying anything
+2. Create entry in `docs/WORKLOG.md`:
 
-### State Transition Rules
+   ```markdown
+   ### [TASK-ID] Task Title
 
-1. **NEVER skip states** - Each state serves a purpose
-2. **Always enter PLANNING before IMPLEMENTING** for non-trivial tasks
-3. **VALIDATING failures return to IMPLEMENTING** - Fix issues, don't ignore them
-4. **CLARIFYING returns to the previous state** once resolved
-5. **Document state transitions** in WORKLOG.md for complex tasks
+   - **Status**: IN_PROGRESS
+   - **Started**: YYYY-MM-DD
+   - **Description**: What needs to be done
+   ```
+
+3. If task is non-trivial (multi-file, new feature, architecture change):
+   - Write a plan before coding
+   - Get user approval on approach
+
+### When you complete a task:
+
+1. Run validation:
+   ```bash
+   pnpm typecheck
+   pnpm lint
+   pnpm test
+   ```
+2. Fix any failures before proceeding
+3. Update `docs/WORKLOG.md`:
+
+   ```markdown
+   ### [TASK-ID] Task Title
+
+   - **Status**: COMPLETED
+   - **Completed**: YYYY-MM-DD
+   - **Summary**: What was accomplished
+   - **Files Changed**: List of files
+   ```
+
+### When you are blocked:
+
+1. Try at least 3 different approaches
+2. Search the codebase for similar patterns
+3. Check documentation in `docs/`
+4. If still blocked: ask the user with specific questions
+
+### When a task cannot be completed:
+
+1. Document the blocker in WORKLOG.md
+2. Create explicit subtask for remaining work
+3. Notify user with specific details
+4. Do NOT leave TODO comments or stub implementations
 
 ---
 
-## Documentation Requirements
+## 2. Database Changes
 
-### Mandatory Documentation
-
-Every significant piece of work MUST include:
-
-1. **Code Comments** (TSDoc format)
-   - All exported functions, classes, and types
-   - Complex algorithms or non-obvious logic
-   - Cross-references to related code
-
-2. **WORKLOG.md Updates**
-   - Task description
-   - Approach taken
-   - Files modified
-   - Decisions made
-
-3. **README Updates** (when applicable)
-   - New features or capabilities
-   - Changed APIs or interfaces
-   - Updated setup instructions
-
-### Documentation Standards
-
-```typescript
-/**
- * Brief description of what this does.
- *
- * @remarks
- * Additional context, usage notes, or implementation details.
- *
- * @param paramName - Description of parameter
- * @returns Description of return value
- *
- * @example
- * ```typescript
- * const result = myFunction('input');
- * ``
- *
- * @see {@link RelatedFunction} for related functionality
- * @throws {ErrorType} When this error condition occurs
- */
+```
+┌────────┐     ┌───────┐     ┌──────────┐     ┌────────┐     ┌───────┐     ┌──────┐
+│ Modify │────►│ Build │────►│ Generate │────►│ Verify │────►│ Apply │────►│ Test │
+│ Schema │     │  API  │     │Migration │     │  SQL   │     │ to DB │     │      │
+└────────┘     └───────┘     └──────────┘     └────────┘     └───────┘     └──────┘
 ```
 
-### Documentation Locations
+### When you modify `apps/api/src/db/schema/*.ts`:
 
-| Type | Location |
-|------|----------|
-| Product specs | `docs/core/` |
-| Engineering specs | `docs/engineering/` |
-| API documentation | Auto-generated via Scalar/OpenAPI |
-| Work history | `docs/WORKLOG.md` |
-| Agent guidelines | `AGENTS.md` (this file) |
-| Repo-specific config | `.claude/` |
+1. **Build** (required - Drizzle reads from `dist/`, not `src/`):
+
+   ```bash
+   cd apps/api && pnpm build
+   ```
+
+2. **Generate migration**:
+
+   ```bash
+   pnpm drizzle-kit generate
+   ```
+
+3. **Verify the SQL** - read the new file in `apps/api/drizzle/`:
+   - Confirm it only contains your intended changes
+   - Watch for unintended DROP or ALTER statements
+
+4. **Apply to database**:
+
+   ```bash
+   pnpm drizzle-kit push --strict=false --force
+   ```
+
+5. **Test** - start the API and confirm no schema errors:
+   ```bash
+   pnpm dev
+   ```
+
+### When you see "column X does not exist" errors:
+
+1. You forgot to apply the migration
+2. Run: `pnpm drizzle-kit push --strict=false --force`
+
+### When migration is empty or wrong:
+
+1. You forgot to build first
+2. Run: `cd apps/api && pnpm build`
+3. Then regenerate: `pnpm drizzle-kit generate`
 
 ---
 
-## Version Control Protocol
+## 3. API Development
 
-### Commit Convention
+### When you add a new endpoint:
 
-All commits MUST follow [Conventional Commits](https://www.conventionalcommits.org/):
+1. Create route file in `apps/api/src/routes/`
+2. Define Zod schemas for request/response validation
+3. Add OpenAPI annotations using `@hono/zod-openapi`
+4. Register route in `apps/api/src/index.ts`
+5. Add tests in `apps/api/src/routes/*.test.ts`
+
+### When you modify an existing endpoint:
+
+1. Update Zod schemas if input/output changes
+2. Update OpenAPI annotations
+3. Run existing tests to ensure no regressions
+4. Update tests if behavior changed
+
+### API patterns to follow:
+
+- Use `requireAuth` middleware for protected routes
+- Return consistent error shapes via error handler
+- Use typed responses (no `any`)
+
+---
+
+## 4. Frontend Development
+
+### When you add a new page:
+
+1. Create page in `apps/web/src/app/`
+2. Use Server Components by default
+3. Only add `"use client"` if you need:
+   - Event handlers (onClick, onChange)
+   - Browser APIs
+   - useState/useEffect
+
+### When you add a new component:
+
+1. Create in `apps/web/src/components/`
+2. Use shadcn/ui components as base
+3. Add props interface with TypeScript
+4. Export from component's index.ts
+
+### When you modify existing components:
+
+1. Check for usages before changing props
+2. Update all call sites if interface changes
+3. Test the component in the browser
+
+---
+
+## 5. Testing
+
+### When you write tests:
+
+1. Test files go next to source: `foo.ts` → `foo.test.ts`
+2. Cover happy path AND edge cases
+3. Use descriptive test names: "should X when Y"
+
+### When tests fail:
+
+1. Read the error message carefully
+2. Fix the code, not the test (unless test is wrong)
+3. Do NOT use `.skip()` to bypass failures
+4. Re-run until all pass before proceeding
+
+### Test commands:
+
+```bash
+pnpm test              # Run all tests
+pnpm test -- --watch   # Watch mode
+pnpm test -- foo.test  # Run specific test file
+```
+
+---
+
+## 6. Version Control
+
+### Commit message format:
 
 ```
 <type>(<scope>): <description>
-
-[optional body]
-
-[optional footer(s)]
 ```
 
-**Types:**
-- `feat`: New feature
-- `fix`: Bug fix
-- `docs`: Documentation only
-- `style`: Formatting, no code change
-- `refactor`: Code restructuring
-- `perf`: Performance improvement
-- `test`: Adding/fixing tests
-- `chore`: Maintenance tasks
-- `ci`: CI/CD changes
+### Choosing the correct commit type:
 
-**Examples:**
-```
-feat(api): add user authentication endpoints
-fix(calendar): resolve timezone offset calculation
-docs(readme): update installation instructions
-refactor(tasks): extract validation into shared utility
-```
+**CRITICAL**: `feat` commits auto-generate changelogs. Only use `feat` for the **final enabler of new user-facing functionality**.
 
-### Commit Frequency
+**Use `feat` ONLY when:**
 
-- **Commit atomically** - One logical change per commit
-- **Commit frequently** - Small, focused commits
-- **Never commit broken code** - All commits must pass validation
+- A user can do something new they couldn't do before
+- The feature is complete and usable, not partially implemented
+- You would announce this in release notes
 
-### Branch Strategy
+**Use `chore` for almost everything else:**
+
+- Internal refactoring
+- Code cleanup
+- Dependency updates
+- Build/config changes
+- Prep work for a feature (that isn't the feature itself)
+
+### Examples - What is NOT a feature:
 
 ```
-main
-  └── feature/<ticket-id>-<description>
-  └── fix/<ticket-id>-<description>
-  └── docs/<description>
-  └── refactor/<description>
+// BAD - These are NOT features
+feat(ui): update button styles
+feat(api): refactor endpoint for efficiency
+feat(tasks): swap component composition
+feat(auth): add helper function for token validation
+feat(db): add index to improve query performance
+feat(web): extract hook from component
+
+// GOOD - Correct types for above
+chore(ui): update button styles
+refactor(api): improve endpoint efficiency
+refactor(tasks): simplify component composition
+chore(auth): add helper function for token validation
+perf(db): add index to improve query performance
+refactor(web): extract hook from component
 ```
 
-### Commit Policy
+### Examples - What IS a feature:
 
-**AUTO-COMMIT ENABLED** - Commits are made automatically after completing tasks.
+```
+// These ARE features - user can do something new
+feat(tasks): add ability to set task deadlines
+feat(calendar): add drag-and-drop event rescheduling
+feat(api): add endpoint for bulk task creation
+feat(auth): add passkey authentication support
+feat(export): add CSV export for tasks
+```
 
-Commit behavior:
-1. Commit atomically after each completed task
-2. Use Conventional Commits format
-3. Include meaningful descriptions
-4. No user approval required (project override)
+### The test for `feat`:
+
+Ask yourself: **"Can a user do something new after this change?"**
+
+- "I refactored the task service" → `refactor` (user sees no difference)
+- "I added a deadline field to tasks" → `feat` (user can now set deadlines)
+- "I improved the API response time" → `perf` (user can't do anything new)
+- "I fixed the date picker" → `fix` (restoring existing functionality)
+- "I updated the button color" → `chore` (cosmetic, not new functionality)
+
+### Full type reference:
+
+| Type       | Use when                                | Changelog? |
+| ---------- | --------------------------------------- | ---------- |
+| `feat`     | User can do something NEW               | Yes        |
+| `fix`      | Broken functionality now works          | Yes        |
+| `perf`     | Measurably faster, no new functionality | Sometimes  |
+| `refactor` | Code restructured, behavior unchanged   | No         |
+| `chore`    | Maintenance, deps, config, cleanup      | No         |
+| `docs`     | Documentation only                      | No         |
+| `test`     | Adding/fixing tests only                | No         |
+| `ci`       | CI/CD pipeline changes                  | No         |
+
+**When in doubt, use `chore`.** It's better to under-claim than to pollute the changelog with non-features.
+
+### When you need to commit:
+
+Multiple agents may work on the same repo. Prevent race conditions:
+
+1. **Always commit atomically in a single command chain:**
+
+   ```bash
+   git restore --staged . && git add <files> && git commit -m "message"
+   ```
+
+2. **Why each part matters:**
+   - `git restore --staged .` - Clears any staged files from other agents
+   - `git add <files>` - Stages only your intended files
+   - `git commit` - Commits immediately before state can change
+
+3. **Never do this (race condition risk):**
+
+   ```bash
+   git add .              # Another agent could add files here
+   git commit -m "msg"    # You commit their changes too
+   ```
+
+4. **For multi-file commits, list files explicitly:**
+
+   ```bash
+   git restore --staged . && git add src/foo.ts src/bar.ts && git commit -m "feat: add foo and bar"
+   ```
+
+5. Never commit broken code - validate first
+
+### Branch naming:
+
+```
+feature/<description>
+fix/<description>
+docs/<description>
+refactor/<description>
+```
 
 ---
 
-## Work Tracking System
+## 7. Error Recovery
 
-### WORKLOG.md Structure
+### When a build fails:
 
-All work MUST be tracked in `docs/WORKLOG.md`:
+1. Read the error message
+2. Fix the TypeScript/syntax error
+3. Re-run build
+4. If unclear, check recent changes for the cause
+
+### When the database is out of sync:
+
+1. Check if schema files were modified but not migrated
+2. Run the migration workflow:
+   ```bash
+   cd apps/api && pnpm build
+   pnpm drizzle-kit push --strict=false --force
+   ```
+
+### When you encounter "already exists" during migration:
+
+1. Use `push` instead of `migrate` for development:
+   ```bash
+   pnpm drizzle-kit push --strict=false --force
+   ```
+
+### When you break something:
+
+1. Don't panic
+2. Use `git diff` to see what changed
+3. Use `git stash` to temporarily undo changes
+4. Fix the issue
+5. Apply stash back: `git stash pop`
+
+---
+
+## 8. Agent Behavior
+
+Agents should be autonomous and long-running. Focus on quality, not artificial constraints.
+
+### Ensuring high-quality work:
+
+1. **Validate incrementally** - Don't wait until the end to test
+   - Run `pnpm typecheck` after significant changes
+   - Test affected functionality before moving on
+   - Catch issues early, fix them immediately
+
+2. **Understand before acting** - Read code before modifying it
+   - Trace the data flow
+   - Identify all callers/callees
+   - Understand why code exists before changing it
+
+3. **Test thoroughly** - Cover what you change
+   - Happy path: does the feature work?
+   - Edge cases: empty inputs, nulls, boundaries
+   - Error cases: what happens when things fail?
+   - Integration: does it work with the rest of the system?
+
+4. **Self-review before completing:**
+   - [ ] Does every change serve the goal?
+   - [ ] Would I be comfortable explaining each change?
+   - [ ] Did I verify the changes work end-to-end?
+   - [ ] Are there any regressions in existing functionality?
+
+### When to ask vs proceed:
+
+| Situation                       | Action                                  |
+| ------------------------------- | --------------------------------------- |
+| Requirements are ambiguous      | Ask for clarification                   |
+| Multiple valid approaches exist | Ask for preference with options         |
+| You're uncertain about intent   | Ask                                     |
+| You know what to do             | Proceed autonomously                    |
+| Task is large but clear         | Proceed - agents should be long-running |
+
+### Gathering context interactively:
+
+Use interactive tools to query the user rather than guessing:
+
+1. **Always give a recommendation** - Minimize cognitive load on the user
+
+   ```
+   // BAD - forces user to think through tradeoffs
+   "Which approach do you prefer?"
+   - Option A: [description]
+   - Option B: [description]
+
+   // GOOD - user can just approve the default
+   "Which approach do you prefer?"
+   - Option A: [description] (Recommended)
+   - Option B: [description]
+   ```
+
+2. **Ask early, not late** - Gather context before starting, not after you've gone down a wrong path
+
+3. **Be specific** - "Should this support pagination?" not "Any other requirements?"
+
+4. **Batch related questions** - Ask multiple related things at once instead of one at a time
+
+5. **Don't ask what you can discover** - Read the code, check the docs, explore first
+
+### Planning depth:
+
+| Task complexity           | Planning approach                    |
+| ------------------------- | ------------------------------------ |
+| Simple/clear              | Execute directly                     |
+| Multi-step but understood | Track with todo list                 |
+| Complex or unfamiliar     | Research first, then plan            |
+| Architectural impact      | Detailed plan with explicit approval |
+
+### When you make a mistake:
+
+1. **Acknowledge it** - Don't pretend it didn't happen
+2. **Understand why** - What assumption was wrong?
+3. **Fix it completely** - Don't leave partial fixes
+4. **Learn from it** - Don't repeat the same mistake in this session
+
+### Maintaining quality at scale:
+
+For long-running tasks:
+
+1. **Commit working increments** - Don't accumulate huge uncommitted changes
+2. **Validate after each logical unit** - Don't let errors compound
+3. **Keep the build green** - Never leave the codebase broken
+4. **Document decisions** - Future you (or another agent) needs context
+
+---
+
+## 9. Monorepo Organization
+
+This is a pnpm monorepo. Understand the boundaries:
+
+```
+apps/
+├── api/          # Hono backend - runs on server
+└── web/          # Next.js frontend - runs in browser + server
+
+packages/
+├── types/        # Shared type definitions (API contracts)
+├── test-utils/   # Shared testing helpers
+└── mcp-server/   # Model Context Protocol server
+```
+
+### When to put code in a package vs an app:
+
+**Put in `apps/`** when the code is:
+
+- Specific to one deployment target (API server, web client)
+- Glue code connecting packages together
+- Entry points, routing, request handling
+
+**Put in `packages/`** when the code:
+
+- Needs clear encapsulation (hide implementation, expose clean API)
+- Is shared between multiple apps
+- Is self-contained logic that apps shouldn't need to understand internals of
+- Benefits from being tested in isolation
+
+| What                                   | Where                  | Why                                       |
+| -------------------------------------- | ---------------------- | ----------------------------------------- |
+| API contracts (request/response types) | `packages/types/`      | Both apps need identical definitions      |
+| Test mocks and fixtures                | `packages/test-utils/` | Shared test infrastructure                |
+| Complex algorithms                     | `packages/<domain>/`   | Encapsulate complexity, test in isolation |
+| Protocol implementations               | `packages/<protocol>/` | Self-contained, apps just call the API    |
+| UI components                          | `apps/web/`            | Only web uses UI                          |
+| Database queries                       | `apps/api/`            | Only API touches the database             |
+| Route handlers                         | `apps/api/`            | Glue code specific to the server          |
+
+**Never create a package for:**
+
+- "Utils" grab-bags with unrelated functions
+- Code that's just "similar" between apps (duplication is OK)
+- Premature abstractions you "might need later"
+
+### When you import between packages:
+
+1. **Allowed imports:**
+
+   ```
+   apps/api     → packages/types ✓
+   apps/web     → packages/types ✓
+   apps/api     → packages/test-utils ✓ (in tests only)
+   apps/web     → packages/test-utils ✓ (in tests only)
+   ```
+
+2. **Forbidden imports:**
+
+   ```
+   apps/web     → apps/api ✗ (never import between apps)
+   apps/api     → apps/web ✗
+   packages/types → apps/* ✗ (packages can't import apps)
+   ```
+
+3. **Import syntax:**
+
+   ```typescript
+   // From a package - use package name
+   import { Task } from '@athena/types';
+
+   // Within same app - use relative paths
+   import { createTask } from '../services/tasks/service';
+   ```
+
+### When you add a dependency:
+
+1. **Decide which package.json:**
+
+   | Dependency used in | Add to                                                          |
+   | ------------------ | --------------------------------------------------------------- |
+   | Only `apps/api`    | `apps/api/package.json`                                         |
+   | Only `apps/web`    | `apps/web/package.json`                                         |
+   | Multiple packages  | Root `package.json` (if dev tool) or each package that needs it |
+
+2. **Never add to root package.json:**
+   - Runtime dependencies (express, react, etc.)
+   - App-specific dev dependencies
+
+3. **Add to root package.json:**
+   - Shared dev tools (typescript, eslint, prettier, vitest)
+   - Workspace scripts
+
+### When you create a new package:
+
+1. **You probably don't need to.** Consider:
+   - Can this live in an existing package?
+   - Is this used by 3+ consumers?
+   - Does this have a clear, single responsibility?
+
+2. **If you must create one:**
+
+   ```bash
+   mkdir -p packages/<name>/src
+   ```
+
+3. **Required files:**
+
+   ```
+   packages/<name>/
+   ├── package.json      # name: "@athena/<name>"
+   ├── tsconfig.json     # extends root config
+   ├── src/
+   │   └── index.ts      # public exports only
+   └── README.md         # what this package does
+   ```
+
+4. **Package naming:** `@athena/<name>` (matches workspace config)
+
+---
+
+## 10. Code Structure
+
+### When a file exceeds 300 lines:
+
+1. Stop and evaluate - is this file doing too much?
+2. Split by one of these strategies:
+   - **By domain**: `tools.ts` → `task-tools.ts`, `calendar-tools.ts`
+   - **By concern**: Extract hooks, utilities, types into separate files
+   - **By layer**: Separate validation, business logic, data access
+
+3. Exceptions (files that can be larger):
+   - Schema files (`db/schema/*.ts`) - keep related tables together
+   - Auto-generated files (`lib/api/types.ts`) - don't touch
+   - Configuration with many options (`lib/env.ts`)
+
+### When you define constants:
+
+1. **Don't inline magic values** in logic:
+
+   ```typescript
+   // BAD
+   if (priority === 'high') { ... }
+   if (days > 30) { ... }
+
+   // GOOD
+   const PRIORITY = { HIGH: 'high', MEDIUM: 'medium' } as const;
+   const MAX_RETENTION_DAYS = 30;
+   ```
+
+2. **Where to put constants:**
+
+   | Scope                  | Location                 |
+   | ---------------------- | ------------------------ |
+   | Used in one file       | Top of that file         |
+   | Shared in one service  | Service's `constants.ts` |
+   | Shared across app      | `lib/constants.ts`       |
+   | Shared across packages | `packages/types/`        |
+
+### When you add a new service:
+
+1. Create directory: `apps/api/src/services/<domain>/`
+2. Follow this structure:
+   ```
+   services/<domain>/
+   ├── service.ts        # Main logic
+   ├── types.ts          # Types for this domain
+   └── providers/        # If multiple implementations
+       ├── provider-a.ts
+       └── provider-b.ts
+   ```
+3. One service = one domain (don't mix billing logic into calendar service)
+
+### When you add types:
+
+1. **Co-locate types with implementation** - don't create types-only files:
+
+   ```typescript
+   // BAD - separate types file
+   // types.ts
+   export interface Task { ... }
+   // service.ts
+   import { Task } from './types';
+
+   // GOOD - types in same file
+   // service.ts
+   interface Task { ... }
+   export function createTask(task: Task) { ... }
+   ```
+
+2. **Exception**: `packages/types/` for API contract types shared between apps
+3. **Never create types-only packages or modules**
+
+### When you add a React component:
+
+1. Create in `apps/web/src/components/<feature>/`
+2. Structure for complex components:
+
+   ```
+   components/<feature>/
+   ├── feature-name.tsx         # Main component (<200 lines ideal)
+   ├── feature-name.test.tsx    # Co-located tests
+   ├── use-feature-name.ts      # Extracted hooks
+   └── index.ts                 # Re-exports
+   ```
+
+3. Extract a hook when:
+   - Component exceeds 200 lines
+   - Logic is reused elsewhere
+   - You want to test logic separately from UI
+
+### When you add error handling:
+
+1. Use existing error classes from `lib/errors.ts`:
+   - `NotFoundError` - resource doesn't exist
+   - `ValidationError` - input validation failed
+   - `UnauthorizedError` - not logged in
+   - `ForbiddenError` - logged in but not allowed
+   - `ConflictError` - resource state conflict
+   - `ExternalServiceError` - third-party API failed
+
+2. Don't create new error classes unless none fit
+
+3. Include actionable error messages:
+
+   ```typescript
+   // BAD
+   throw new NotFoundError('Not found');
+
+   // GOOD
+   throw new NotFoundError(`Task ${taskId} not found`);
+   ```
+
+---
+
+## 11. Security & Performance
+
+### Security basics (don't introduce vulnerabilities):
+
+1. **Never log sensitive data:**
+
+   ```typescript
+   // BAD
+   console.log('User login:', { email, password });
+
+   // GOOD
+   console.log('User login:', { email, passwordLength: password.length });
+   ```
+
+2. **Never commit secrets:**
+   - API keys, tokens, passwords → environment variables
+   - Check `.env.example` exists for required vars
+   - If you accidentally commit a secret, notify the user immediately
+
+3. **Always validate input:**
+   - Use Zod schemas for all API inputs
+   - Don't trust client-provided IDs - verify ownership
+   - Sanitize user content before rendering
+
+4. **SQL injection prevention:**
+   - Drizzle ORM handles this - never use raw SQL strings
+   - If you must use raw SQL, use parameterized queries
+
+### Performance basics (don't introduce slowdowns):
+
+1. **Database queries:**
+   - Don't query in loops - batch instead
+   - Use `select()` to fetch only needed columns
+   - Add indexes for frequently filtered columns (ask before adding)
+
+2. **N+1 query prevention:**
+
+   ```typescript
+   // BAD - N+1 queries
+   const tasks = await db.select().from(tasks);
+   for (const task of tasks) {
+     const project = await db.select().from(projects).where(eq(id, task.projectId));
+   }
+
+   // GOOD - single query with join
+   const tasksWithProjects = await db
+     .select()
+     .from(tasks)
+     .leftJoin(projects, eq(tasks.projectId, projects.id));
+   ```
+
+3. **Frontend performance:**
+   - Don't fetch data in loops
+   - Use React Server Components for static content
+   - Lazy load heavy components with `dynamic()`
+
+---
+
+## Reference
+
+### WORKLOG.md Template
 
 ```markdown
 # Project Athena Work Log
@@ -224,6 +785,7 @@ All work MUST be tracked in `docs/WORKLOG.md`:
 ## Active Tasks
 
 ### [TASK-ID] Task Title
+
 - **Status**: IN_PROGRESS | BLOCKED | REVIEW
 - **Started**: YYYY-MM-DD
 - **Priority**: P0 | P1 | P2 | P3
@@ -239,8 +801,8 @@ All work MUST be tracked in `docs/WORKLOG.md`:
 ## Completed Tasks
 
 ### [TASK-ID] Task Title
+
 - **Completed**: YYYY-MM-DD
-- **Duration**: X hours/days
 - **Summary**: What was accomplished
 - **Files Changed**: List of modified files
 - **Learnings**: What was learned
@@ -250,368 +812,37 @@ All work MUST be tracked in `docs/WORKLOG.md`:
 ## Backlog
 
 ### [TASK-ID] Task Title
+
 - **Priority**: P0 | P1 | P2 | P3
 - **Description**: Brief description
-- **Dependencies**: Required prior work
 ```
 
-### Task Lifecycle
+### TSDoc Format
 
-```
-BACKLOG → ACTIVE (IN_PROGRESS) → ACTIVE (REVIEW) → COMPLETED
-                ↓
-            ACTIVE (BLOCKED) → ACTIVE (IN_PROGRESS)
-```
+````typescript
+/**
+ * Brief description of what this does.
+ *
+ * @param paramName - Description of parameter
+ * @returns Description of return value
+ * @throws {ErrorType} When this error occurs
+ *
+ * @example
+ * ```typescript
+ * const result = myFunction('input');
+ * ```
+ */
+````
 
-### Work Tracking Rules
+### Hard Rules (Never Break These)
 
-1. **Create task entry BEFORE starting work**
-2. **Update status immediately** when state changes
-3. **Document blockers explicitly** with details
-4. **Move to COMPLETED only after validation**
-5. **Include learnings** for future reference
-
----
-
-## Platform Best Practices
-
-### TypeScript Standards
-
-- **Strict mode enabled** - No `any` types without justification
-- **Explicit return types** for public functions
-- **Prefer `unknown` over `any`** for truly unknown types
-- **Use branded types** for domain identifiers
-
-### Hono Backend Patterns
-
-- **Zod for all validation** - Input AND output
-- **OpenAPI annotations** for all routes
-- **Middleware composition** for cross-cutting concerns
-- **Error handling via Hono's error handler**
-
-### Next.js Frontend Patterns
-
-- **Server Components by default** - Client only when needed
-- **Server Actions for mutations** - Type-safe form handling
-- **App Router conventions** - Layouts, loading, error boundaries
-- **shadcn/ui components** - Accessible, customizable
-
-### Database Patterns (Drizzle)
-
-- **Migrations for all schema changes**
-- **Typed queries only** - No raw SQL without types
-- **Connection pooling** for production
-- **Row-level security** for multi-tenancy
-
-### Testing Requirements
-
-- **Minimum 80% coverage** for all packages
-- **Unit tests** for business logic
-- **Integration tests** for API endpoints
-- **E2E tests** for critical user journeys
+1. **Never commit TODO comments** - finish the work or document blocker
+2. **Never skip tests** - fix failing tests before proceeding
+3. **Never use `any` without justification** - prefer `unknown`
+4. **Never leave stub implementations** - complete the code or don't commit
+5. **Always validate before completing** - run typecheck, lint, test
+6. **Always update WORKLOG.md** - track what you did
 
 ---
 
-## Task Completion Standards
-
-### Definition of Done
-
-A task is ONLY complete when:
-
-1. **Code is implemented** - All functionality works
-2. **Tests pass** - Unit, integration, and E2E
-3. **Types check** - `tsc --noEmit` succeeds
-4. **Linting passes** - No ESLint errors
-5. **Documentation updated** - TSDoc, README if needed
-6. **WORKLOG.md updated** - Task marked complete
-7. **Code reviewed** - Self-review or peer review
-
-### NO Stubs or TODOs
-
-**CRITICAL**: Agents MUST NOT leave incomplete work:
-
-- **NO `// TODO:` comments** in committed code
-- **NO stub implementations** (`throw new Error('Not implemented')`)
-- **NO skipped tests** (`it.skip()`, `describe.skip()`)
-- **NO placeholder content** without implementation plan
-
-If a task cannot be completed:
-1. Document the blocker in WORKLOG.md
-2. Create explicit subtask for the remaining work
-3. Notify user with specific details
-4. Move to next actionable task
-
-### Persistence Requirements
-
-When encountering obstacles:
-
-1. **Try at least 3 different approaches** before escalating
-2. **Research solutions** via web search or documentation
-3. **Examine similar code** in the codebase
-4. **Document failed approaches** in WORKLOG.md
-5. **Only escalate to user** with specific, actionable questions
-
----
-
-## Reusable Tooling
-
-### Creating Reusable Tools
-
-Agents SHOULD create reusable utilities when:
-
-- A pattern is used **3 or more times**
-- A workflow is executed **repeatedly**
-- A complex operation can be **abstracted**
-
-### Tool Locations
-
-| Type | Location | Purpose |
-|------|----------|---------|
-| CLI scripts | `scripts/` | Build, deploy, maintenance |
-| Shared utilities | `packages/shared/` | Cross-package code |
-| Type definitions | `packages/types/` | Shared TypeScript types |
-| Test utilities | `packages/test-utils/` | Testing helpers |
-
-### Claude Code Skills
-
-Create skills in `.claude/skills/` for repeated workflows:
-
-```markdown
-# Skill: run-tests
-
-Run all tests with coverage report.
-
-## Invocation
-/run-tests [package-name]
-
-## Actions
-1. Run vitest with coverage
-2. Check coverage threshold (80%)
-3. Report failures with context
-```
-
-### Hook Automation
-
-Create hooks in `.claude/hooks/` for automatic triggers:
-
-- **pre-commit**: Lint, type-check, test affected
-- **post-implement**: Update WORKLOG.md
-- **pre-push**: Full test suite
-
----
-
-## Self-Modification Protocol
-
-### AGENTS.md Updates
-
-This file SHOULD be updated when:
-
-- New patterns or standards emerge
-- Technology decisions change
-- Workflows are refined
-- Learnings warrant documentation
-
-### Update Process
-
-1. Propose change with rationale
-2. Document in WORKLOG.md
-3. Make atomic, focused changes
-4. Increment version number
-5. Update "Last Updated" date
-
-### Protected Sections
-
-These sections MUST NOT be weakened:
-- Task Completion Standards
-- NO Stubs or TODOs
-- Commit Approval requirement
-
----
-
-## Research Requirements
-
-### When to Research
-
-Research is REQUIRED when:
-
-- **Unfamiliar technology** is encountered
-- **Multiple approaches** exist for a problem
-- **Best practices** are unclear
-- **Security implications** are possible
-- **Performance considerations** apply
-
-### Research Methods
-
-1. **Codebase exploration** - Find existing patterns
-2. **Documentation review** - Official docs first
-3. **Web search** - Recent, authoritative sources
-4. **API documentation** - For external services
-
-### Research Documentation
-
-Document research findings in:
-- `docs/research/` for significant explorations
-- WORKLOG.md task notes for task-specific research
-- Code comments for implementation decisions
-
----
-
-## Planning Protocol
-
-### Mandatory Planning
-
-Enter planning mode for:
-
-- **New features** - Any non-trivial functionality
-- **Architecture changes** - System structure modifications
-- **Multi-file changes** - Cross-cutting implementations
-- **Unknown scope** - Tasks requiring investigation
-
-### Plan Structure
-
-```markdown
-## Plan: [Task Title]
-
-### Objective
-What we're trying to accomplish
-
-### Approach
-How we'll accomplish it
-
-### Steps
-1. Step 1 description
-2. Step 2 description
-3. ...
-
-### Files to Modify
-- `path/to/file.ts` - What changes
-
-### Risks
-- Potential issue 1
-- Potential issue 2
-
-### Validation
-How we'll verify success
-```
-
-### Plan Approval
-
-For significant changes:
-1. Write plan to WORKLOG.md
-2. Present plan to user
-3. Await explicit approval
-4. Begin implementation
-
----
-
-## Retrospection Requirements
-
-### Post-Task Retrospection
-
-After completing each significant task:
-
-1. **What went well?** - Successful approaches
-2. **What could improve?** - Areas for enhancement
-3. **What was learned?** - New knowledge gained
-4. **What should change?** - Process improvements
-
-### Documentation
-
-Record retrospections in:
-- WORKLOG.md task completion entry
-- AGENTS.md if process changes warranted
-- `docs/research/` if significant learnings
-
-### Periodic Review
-
-Agents SHOULD periodically review:
-- Recent WORKLOG.md entries
-- Common patterns across tasks
-- Recurring blockers or issues
-
----
-
-## Self-Validation Protocol
-
-### Pre-Commit Validation
-
-Before any commit, verify:
-
-```bash
-# Type checking
-pnpm typecheck
-
-# Linting
-pnpm lint
-
-# Tests
-pnpm test
-
-# Build
-pnpm build
-```
-
-### Documentation Validation
-
-Verify documentation by:
-
-1. **Reading generated docs** - Ensure accuracy
-2. **Testing code examples** - Verify they work
-3. **Cross-referencing** - Check links are valid
-4. **Completeness check** - All exports documented
-
-### Specification Compliance
-
-Validate against specifications:
-
-1. **Read relevant spec** in `docs/core/`
-2. **Check implementation** matches spec
-3. **Verify edge cases** from user stories
-4. **Test user journeys** end-to-end
-
-### Self-Review Checklist
-
-Before considering work complete:
-
-- [ ] Code implements all requirements
-- [ ] Tests cover happy path AND edge cases
-- [ ] Error handling is comprehensive
-- [ ] Documentation is complete and accurate
-- [ ] No security vulnerabilities introduced
-- [ ] Performance is acceptable
-- [ ] Accessibility requirements met
-- [ ] WORKLOG.md is updated
-
----
-
-## Quick Reference
-
-### State Commands
-
-| Current State | Action | Next State |
-|---------------|--------|------------|
-| IDLE | Receive task | PLANNING |
-| PLANNING | Plan complete | RESEARCHING |
-| RESEARCHING | Research complete | IMPLEMENTING |
-| IMPLEMENTING | Code complete | VALIDATING |
-| VALIDATING | Tests pass | DOCUMENTING |
-| DOCUMENTING | Docs complete | COMMITTING |
-| COMMITTING | Committed | RETROSPECTING |
-| RETROSPECTING | Complete | IDLE |
-
-### File Locations
-
-| Purpose | Path |
-|---------|------|
-| Agent guidelines | `AGENTS.md` |
-| Work tracking | `docs/WORKLOG.md` |
-| Product specs | `docs/core/` |
-| Engineering specs | `docs/engineering/` |
-| Research notes | `docs/research/` |
-| Claude config | `.claude/` |
-| Scripts | `scripts/` |
-| Shared packages | `packages/` |
-
----
-
-*This document is self-governing. Agents are encouraged to propose improvements through the established modification protocol.*
+_This document is self-governing. Update it when workflows change._

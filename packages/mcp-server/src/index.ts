@@ -1493,6 +1493,10 @@ function registerTools(
       description: 'Get agenda for a specific date',
       inputSchema: {
         date: z.string().optional().describe('Date in YYYY-MM-DD format (defaults to today)'),
+        includeSamplingDetails: z
+          .boolean()
+          .optional()
+          .describe('Include full task/event details in sampling prompt'),
       },
     },
     async (args, extra) => {
@@ -1541,13 +1545,47 @@ function registerTools(
       };
 
       if (supportsSampling(server)) {
+        const includeSamplingDetails = args.includeSamplingDetails === true;
+        const samplingTasks = dayTasks.map((task) => {
+          const record = asRecord(task);
+          if (!record) {
+            return { id: null, title: null };
+          }
+          return {
+            id: getStringField(record, 'id'),
+            title: getStringField(record, 'title'),
+            status: getStringField(record, 'status'),
+            priority: getStringField(record, 'priority'),
+            deadline: parseDate(record.deadline)?.toISOString() ?? null,
+          };
+        });
+        const samplingEvents = dayEvents.map((event) => {
+          const record = asRecord(event);
+          if (!record) {
+            return { id: null, title: null };
+          }
+          return {
+            id: getStringField(record, 'id'),
+            title: getStringField(record, 'title'),
+            startTime: parseDate(record.startTime)?.toISOString() ?? null,
+            endTime: parseDate(record.endTime)?.toISOString() ?? null,
+            isAllDay: getBooleanField(record, 'isAllDay'),
+          };
+        });
+        const samplingAgenda = includeSamplingDetails
+          ? agenda
+          : {
+              date: dateString,
+              tasks: samplingTasks,
+              events: samplingEvents,
+            };
         const promptText = [
           'You are Athena. Generate an agenda JSON summary using the provided tasks and events.',
           'Return only JSON. Do not include code fences or additional text.',
           'Required JSON keys: summary (string), priorityTaskIds (string[]), scheduleNotes (string[]), agendaItems (array).',
           'agendaItems entries must include: type ("task" or "event"), id, title, and optional startTime/endTime/reason.',
           '',
-          JSON.stringify(agenda, null, 2),
+          JSON.stringify(samplingAgenda, null, 2),
         ].join('\n');
 
         try {

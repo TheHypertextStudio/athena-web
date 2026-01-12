@@ -23,6 +23,7 @@
   - [x] Filter soft-deleted tasks from completion/breakdown flows
   - [x] Validate agenda date inputs + timezone anchoring
   - [x] Enforce event endTime ordering
+  - [x] Redact agenda sampling payloads by default
 - **Plan**:
 
 ## Plan: MCP Server Hardening + Refactor

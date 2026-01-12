@@ -428,6 +428,17 @@ Agents should be autonomous and long-running. Focus on quality, not artificial c
 | You're uncertain about intent   | Ask                                     |
 | You know what to do             | Proceed autonomously                    |
 | Task is large but clear         | Proceed - agents should be long-running |
+| Need to validate code           | **Always proceed** - never ask          |
+
+### Validation is mandatory, not optional:
+
+**Never ask permission to run typecheck, lint, or tests.** These are non-negotiable quality gates:
+
+- Run `pnpm typecheck` after any code changes
+- Run `pnpm lint` to catch style/quality issues
+- Run `pnpm test` to verify behavior
+
+Just do it. If validation fails, fix the issues immediately. This is part of doing the work correctly, not a separate step that requires approval.
 
 ### Gathering context interactively:
 

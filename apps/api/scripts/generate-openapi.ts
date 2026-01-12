@@ -27,6 +27,21 @@ import * as authRouteDefinitions from '../src/routes/auth.openapi.js';
 import * as notificationsRouteDefinitions from '../src/routes/notifications.openapi.js';
 import * as integrationsRouteDefinitions from '../src/routes/integrations.openapi.js';
 import * as calendarSyncRouteDefinitions from '../src/routes/calendar-sync.openapi.js';
+import * as tagsRouteDefinitions from '../src/routes/tags.openapi.js';
+import * as aiRouteDefinitions from '../src/routes/ai.openapi.js';
+import * as searchRouteDefinitions from '../src/routes/search.openapi.js';
+import * as agendaRouteDefinitions from '../src/routes/agenda.openapi.js';
+import * as activitiesRouteDefinitions from '../src/routes/activities.openapi.js';
+import * as analyticsRouteDefinitions from '../src/routes/analytics.openapi.js';
+import * as attachmentsRouteDefinitions from '../src/routes/attachments.openapi.js';
+import * as auditRouteDefinitions from '../src/routes/audit.openapi.js';
+import * as bulkRouteDefinitions from '../src/routes/bulk.openapi.js';
+import * as momentsRouteDefinitions from '../src/routes/moments.openapi.js';
+import * as onboardingRouteDefinitions from '../src/routes/onboarding.openapi.js';
+import * as timeTrackingRouteDefinitions from '../src/routes/time-tracking.openapi.js';
+import * as webhooksRouteDefinitions from '../src/routes/webhooks.openapi.js';
+import * as workspacesRouteDefinitions from '../src/routes/workspaces.openapi.js';
+import * as riscRouteDefinitions from '../src/routes/risc.openapi.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -69,6 +84,21 @@ registerRoutes(app, authRouteDefinitions, '/api/auth');
 registerRoutes(app, notificationsRouteDefinitions, '/api/notifications');
 registerRoutes(app, integrationsRouteDefinitions, '/api/integrations');
 registerRoutes(app, calendarSyncRouteDefinitions, '/api/calendar-sync');
+registerRoutes(app, tagsRouteDefinitions, '/api/tags');
+registerRoutes(app, aiRouteDefinitions, '/api/ai');
+registerRoutes(app, searchRouteDefinitions, '/api/search');
+registerRoutes(app, agendaRouteDefinitions, '/api/agenda');
+registerRoutes(app, activitiesRouteDefinitions, '/api/activities');
+registerRoutes(app, analyticsRouteDefinitions, '/api/analytics');
+registerRoutes(app, attachmentsRouteDefinitions, '/api/attachments');
+registerRoutes(app, auditRouteDefinitions, '/api/audit');
+registerRoutes(app, bulkRouteDefinitions, '/api/bulk');
+registerRoutes(app, momentsRouteDefinitions, '/api/moments');
+registerRoutes(app, onboardingRouteDefinitions, '/api/onboarding');
+registerRoutes(app, timeTrackingRouteDefinitions, '/api/time');
+registerRoutes(app, webhooksRouteDefinitions, '/api/webhooks');
+registerRoutes(app, workspacesRouteDefinitions, '/api/workspaces');
+registerRoutes(app, riscRouteDefinitions, '/api/risc');
 
 // Register OpenAPI document
 app.doc('/api/openapi.json', {
@@ -93,6 +123,19 @@ app.doc('/api/openapi.json', {
     { name: 'Notifications', description: 'Push notifications' },
     { name: 'Calendar Sync', description: 'Calendar synchronization' },
     { name: 'AI', description: 'AI-powered features' },
+    { name: 'Search', description: 'Global search functionality' },
+    { name: 'Agenda', description: 'Daily and weekly agenda views' },
+    { name: 'Activities', description: 'Activity streams and tracking' },
+    { name: 'Analytics', description: 'Productivity metrics and analytics' },
+    { name: 'Attachments', description: 'File attachments and uploads' },
+    { name: 'Audit', description: 'Audit logs and tracking' },
+    { name: 'Bulk', description: 'Bulk operations on tasks' },
+    { name: 'Moments', description: 'Moment capture and journaling' },
+    { name: 'Onboarding', description: 'User onboarding flow' },
+    { name: 'Time Tracking', description: 'Time tracking and timers' },
+    { name: 'Webhooks', description: 'Webhook management' },
+    { name: 'Workspaces', description: 'Workspace management' },
+    { name: 'RISC', description: 'Google Cross-Account Protection' },
   ],
 });
 

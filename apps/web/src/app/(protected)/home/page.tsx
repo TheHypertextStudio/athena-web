@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
 import { DndContext, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { CalendarContainer } from '@/components/objects/surfaces/CalendarContainer';
 import { EntryCreationPopover } from '@/components/calendar/EntryCreationPopover';
@@ -11,11 +12,28 @@ import { surfaceId } from '@/components/objects/types';
 import { useCalendarState } from '@/hooks/useCalendarState';
 import { useCalendarData } from '@/hooks/useCalendarData';
 import { useAutoCalendarSync } from '@/hooks/useCalendarSync';
+import { useCalendarViewMode } from '@/hooks/useCalendarViewMode';
 import { CalendarTimezoneProvider } from '@/contexts/TimezoneContext';
+
+/**
+ * Width configuration for each view mode.
+ * Day view is narrow and focused; week/month views need more space.
+ * Day width must accommodate header controls (nav, timezone, view toggle, zoom).
+ */
+const VIEW_WIDTHS = {
+  day: 480,
+  week: 1152,
+  month: 1152,
+} as const;
 
 export default function HomePage() {
   // Auto-sync calendar data on page load
   useAutoCalendarSync();
+
+  // View mode state - lifted up for animated width control
+  const { viewMode, setViewMode } = useCalendarViewMode();
+  const prefersReducedMotion = useReducedMotion();
+
   const today = useMemo(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
@@ -45,11 +63,21 @@ export default function HomePage() {
     },
   });
 
+  // Animated container width based on view mode
+  const containerWidth = VIEW_WIDTHS[viewMode];
+
   return (
     <CalendarTimezoneProvider>
       <DndContext sensors={sensors}>
         <main className="h-screen overflow-hidden p-4 md:p-6">
-          <div className="mx-auto h-full max-w-6xl">
+          <motion.div
+            className="mx-auto h-full"
+            animate={{ maxWidth: containerWidth }}
+            initial={false}
+            transition={
+              prefersReducedMotion ? { duration: 0 } : { duration: 0.3, ease: [0.2, 0, 0, 1] } // MD3 ease-standard
+            }
+          >
             <CalendarContainer
               date={calendar.date}
               entries={calendar.entries}
@@ -59,9 +87,11 @@ export default function HomePage() {
               id={surfaceId('home-calendar')}
               className="h-full"
               previewEntry={calendar.previewEntry}
+              viewMode={viewMode}
+              onViewModeChange={setViewMode}
               {...calendar.handlers}
             />
-          </div>
+          </motion.div>
         </main>
 
         <EntryCreationPopover

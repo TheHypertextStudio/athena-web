@@ -7,6 +7,7 @@
 import { db } from '../../db/index.js';
 import { tasks, projects, events, initiatives } from '../../db/schema/index.js';
 import { eq, or, and, ilike, isNull, sql, desc } from 'drizzle-orm';
+import { getTaskStatusCategoryFromValue } from '../tasks/schemas.js';
 import type {
   SearchOptions,
   SearchResponse,
@@ -112,13 +113,12 @@ export class SearchService {
     }
 
     if (status?.length) {
-      conditions.push(
-        or(
-          ...status.map((s) =>
-            eq(tasks.status, s as 'pending' | 'in_progress' | 'completed' | 'cancelled'),
-          ),
-        ),
-      );
+      const categories = status
+        .map((value) => getTaskStatusCategoryFromValue(value))
+        .filter((value): value is NonNullable<typeof value> => value !== null);
+      if (categories.length) {
+        conditions.push(or(...categories.map((category) => eq(tasks.statusCategory, category))));
+      }
     }
 
     const results = await db.query.tasks.findMany({

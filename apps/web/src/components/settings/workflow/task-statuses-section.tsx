@@ -15,7 +15,10 @@ import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import AddIcon from '@mui/icons-material/Add';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import ViewListOutlinedIcon from '@mui/icons-material/ViewListOutlined';
+import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined';
 import { Button } from '@/components/ui/button';
+import { WorkflowStatusFlow } from '@/components/flows';
 import {
   Dialog,
   DialogContent,
@@ -380,6 +383,8 @@ function StatusDialog({
   );
 }
 
+type ViewMode = 'list' | 'visual';
+
 export function TaskStatusesSection() {
   const { groupedStatuses, isLoading: isLoadingGrouped } = useGroupedStatuses();
   const {
@@ -393,6 +398,7 @@ export function TaskStatusesSection() {
     isDeleting,
   } = useCustomStatuses();
 
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingStatus, setEditingStatus] = useState<CustomTaskStatus | null>(null);
   const [defaultCategory, setDefaultCategory] = useState<TaskStatusCategory>('not_started');
@@ -448,6 +454,23 @@ export function TaskStatusesSection() {
     [create, update],
   );
 
+  const handleStatusNodeClick = useCallback(
+    (statusId: string) => {
+      // Find the status and open edit dialog
+      const allStatuses = [
+        ...groupedStatuses.not_started,
+        ...groupedStatuses.in_progress,
+        ...groupedStatuses.done,
+        ...groupedStatuses.cancelled,
+      ];
+      const status = allStatuses.find((s) => s.id === statusId);
+      if (status) {
+        handleEdit(status);
+      }
+    },
+    [groupedStatuses, handleEdit],
+  );
+
   if (isLoadingGrouped) {
     return (
       <SettingsSection
@@ -467,51 +490,101 @@ export function TaskStatusesSection() {
     <>
       <SettingsSection
         title="Task Statuses"
-        description="Configure custom workflow statuses for tasks. Drag to reorder within categories."
+        description={
+          viewMode === 'list'
+            ? 'Configure custom workflow statuses for tasks. Drag to reorder within categories.'
+            : 'Visual overview of your task workflow. Click a status to edit it.'
+        }
+        headerAction={
+          <div className="bg-surface-container-high flex rounded-full p-1">
+            <button
+              onClick={() => {
+                setViewMode('list');
+              }}
+              className={cn(
+                'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors',
+                viewMode === 'list'
+                  ? 'bg-primary text-on-primary'
+                  : 'text-on-surface-variant hover:text-on-surface',
+              )}
+            >
+              <ViewListOutlinedIcon sx={{ fontSize: 18 }} />
+              List
+            </button>
+            <button
+              onClick={() => {
+                setViewMode('visual');
+              }}
+              className={cn(
+                'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors',
+                viewMode === 'visual'
+                  ? 'bg-primary text-on-primary'
+                  : 'text-on-surface-variant hover:text-on-surface',
+              )}
+            >
+              <AccountTreeOutlinedIcon sx={{ fontSize: 18 }} />
+              Visual
+            </button>
+          </div>
+        }
       >
-        <SettingsAlertBanner variant="info" className="mb-4">
-          Custom statuses are grouped by category. When syncing with external providers, statuses
-          are mapped to their category (Not Started, In Progress, Done, Cancelled).
-        </SettingsAlertBanner>
+        {viewMode === 'list' ? (
+          <>
+            <SettingsAlertBanner variant="info" className="mb-4">
+              Custom statuses are grouped by category. When syncing with external providers,
+              statuses are mapped to their category (Not Started, In Progress, Done, Cancelled).
+            </SettingsAlertBanner>
 
-        <div className="space-y-6">
-          <CategorySection
-            category="not_started"
-            statuses={groupedStatuses.not_started}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-            onSetDefault={handleSetDefault}
-            onReorder={handleReorder}
-            onAddNew={handleAddNew}
-          />
-          <CategorySection
-            category="in_progress"
-            statuses={groupedStatuses.in_progress}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-            onSetDefault={handleSetDefault}
-            onReorder={handleReorder}
-            onAddNew={handleAddNew}
-          />
-          <CategorySection
-            category="done"
-            statuses={groupedStatuses.done}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-            onSetDefault={handleSetDefault}
-            onReorder={handleReorder}
-            onAddNew={handleAddNew}
-          />
-          <CategorySection
-            category="cancelled"
-            statuses={groupedStatuses.cancelled}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-            onSetDefault={handleSetDefault}
-            onReorder={handleReorder}
-            onAddNew={handleAddNew}
-          />
-        </div>
+            <div className="space-y-6">
+              <CategorySection
+                category="not_started"
+                statuses={groupedStatuses.not_started}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+                onSetDefault={handleSetDefault}
+                onReorder={handleReorder}
+                onAddNew={handleAddNew}
+              />
+              <CategorySection
+                category="in_progress"
+                statuses={groupedStatuses.in_progress}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+                onSetDefault={handleSetDefault}
+                onReorder={handleReorder}
+                onAddNew={handleAddNew}
+              />
+              <CategorySection
+                category="done"
+                statuses={groupedStatuses.done}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+                onSetDefault={handleSetDefault}
+                onReorder={handleReorder}
+                onAddNew={handleAddNew}
+              />
+              <CategorySection
+                category="cancelled"
+                statuses={groupedStatuses.cancelled}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+                onSetDefault={handleSetDefault}
+                onReorder={handleReorder}
+                onAddNew={handleAddNew}
+              />
+            </div>
+          </>
+        ) : (
+          <div className="h-[500px]">
+            <WorkflowStatusFlow
+              title=""
+              showMinimap={false}
+              showControls={true}
+              onNodeClick={handleStatusNodeClick}
+              className="h-full"
+            />
+          </div>
+        )}
       </SettingsSection>
 
       <StatusDialog

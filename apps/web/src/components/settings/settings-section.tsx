@@ -9,6 +9,8 @@ interface SettingsSectionProps {
   className?: string;
   /** Applies destructive styling for danger zones */
   variant?: 'default' | 'destructive';
+  /** Optional action element to display in the header (e.g., toggle, button) */
+  headerAction?: React.ReactNode;
 }
 
 /**
@@ -20,6 +22,7 @@ export function SettingsSection({
   children,
   className,
   variant = 'default',
+  headerAction,
 }: SettingsSectionProps) {
   return (
     <section
@@ -30,15 +33,20 @@ export function SettingsSection({
       )}
     >
       <div className="mb-4">
-        <h2
-          className={cn(
-            'text-on-surface text-lg font-medium',
-            variant === 'destructive' && 'text-error',
-          )}
-        >
-          {title}
-        </h2>
-        {description && <p className="text-on-surface-variant mt-1 text-sm">{description}</p>}
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2
+              className={cn(
+                'text-on-surface text-lg font-medium',
+                variant === 'destructive' && 'text-error',
+              )}
+            >
+              {title}
+            </h2>
+            {description && <p className="text-on-surface-variant mt-1 text-sm">{description}</p>}
+          </div>
+          {headerAction && <div className="shrink-0">{headerAction}</div>}
+        </div>
       </div>
       <div>{children}</div>
     </section>
@@ -251,6 +259,14 @@ const ERROR_MESSAGES: Record<ApiErrorCode, { title: string; description: string 
   not_found: {
     title: 'Not found',
     description: 'The requested resource was not found.',
+  },
+  forbidden: {
+    title: 'Access denied',
+    description: 'You do not have permission to access this resource.',
+  },
+  entitlement_required: {
+    title: 'Upgrade required',
+    description: 'This feature requires a higher subscription tier.',
   },
   unknown: {
     title: 'Unable to load',

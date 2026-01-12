@@ -12,6 +12,10 @@ import { db } from '../../db/index.js';
 import { tasks, projects, events, timeEntries } from '../../db/schema/index.js';
 import { eq, and, or, gte, lte, like, desc, asc, isNull } from 'drizzle-orm';
 import { notDeleted } from '../../lib/soft-delete.js';
+import {
+  getLegacyTaskStatusFromCategory,
+  getTaskStatusCategoryFromValue,
+} from '../tasks/schemas.js';
 
 /**
  * Available tools for the Athena AI assistant.
@@ -382,10 +386,9 @@ async function listTasks(userId: string, args: Record<string, unknown>): Promise
   ];
 
   const status = getString(args, 'status');
-  if (status) {
-    conditions.push(
-      eq(tasks.status, status as 'pending' | 'in_progress' | 'completed' | 'cancelled'),
-    );
+  const statusCategory = getTaskStatusCategoryFromValue(status);
+  if (statusCategory) {
+    conditions.push(eq(tasks.statusCategory, statusCategory));
   }
 
   const projectId = getString(args, 'projectId');
@@ -417,7 +420,7 @@ async function listTasks(userId: string, args: Record<string, unknown>): Promise
       id: t.id,
       title: t.title,
       description: t.description,
-      status: t.status,
+      status: getLegacyTaskStatusFromCategory(t.statusCategory) ?? 'pending',
       priority: t.priority,
       deadline: t.deadline?.toISOString(),
       estimatedMinutes: t.estimatedMinutes,
@@ -482,11 +485,11 @@ async function updateTask(userId: string, args: Record<string, unknown>): Promis
   const priority = getString(args, 'priority');
   const deadline = getString(args, 'deadline');
 
-  if (title !== undefined) updates['title'] = title;
-  if (description !== undefined) updates['description'] = description;
-  if (status !== undefined) updates['status'] = status;
-  if (priority !== undefined) updates['priority'] = priority;
-  if (deadline !== undefined) updates['deadline'] = new Date(deadline);
+  if (title !== undefined) updates.title = title;
+  if (description !== undefined) updates.description = description;
+  if (status !== undefined) updates.status = status;
+  if (priority !== undefined) updates.priority = priority;
+  if (deadline !== undefined) updates.deadline = new Date(deadline);
 
   await db.update(tasks).set(updates).where(eq(tasks.id, taskId));
 
@@ -558,9 +561,9 @@ async function getAgenda(userId: string, args: Record<string, unknown>): Promise
       or(eq(tasks.creatorId, userId), eq(tasks.assigneeId, userId)),
       notDeleted(tasks.deletedAt),
       or(
-        eq(tasks.status, 'in_progress'),
+        eq(tasks.statusCategory, 'in_progress'),
         and(
-          eq(tasks.status, 'pending'),
+          eq(tasks.statusCategory, 'not_started'),
           gte(tasks.deadline, startOfDay),
           lte(tasks.deadline, endOfDay),
         ),
@@ -587,7 +590,7 @@ async function getAgenda(userId: string, args: Record<string, unknown>): Promise
     tasks: userTasks.map((t) => ({
       id: t.id,
       title: t.title,
-      status: t.status,
+      status: getLegacyTaskStatusFromCategory(t.statusCategory) ?? 'pending',
       priority: t.priority,
       deadline: t.deadline?.toISOString(),
       project: t.project?.name,
@@ -778,7 +781,7 @@ async function searchTasks(userId: string, args: Record<string, unknown>): Promi
       id: t.id,
       title: t.title,
       description: t.description,
-      status: t.status,
+      status: getLegacyTaskStatusFromCategory(t.statusCategory) ?? 'pending',
       priority: t.priority,
       project: t.project?.name,
     })),
@@ -802,7 +805,7 @@ async function getProductivitySummary(
   const completedTasks = await db.query.tasks.findMany({
     where: and(
       or(eq(tasks.creatorId, userId), eq(tasks.assigneeId, userId)),
-      eq(tasks.status, 'completed'),
+      eq(tasks.statusCategory, 'done'),
       gte(tasks.updatedAt, startDate),
       lte(tasks.updatedAt, endDate),
     ),

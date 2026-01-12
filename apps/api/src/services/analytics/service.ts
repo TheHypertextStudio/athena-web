@@ -278,7 +278,7 @@ export class AnalyticsService {
     const completedTasks = await db.query.tasks.findMany({
       where: and(
         or(eq(tasks.creatorId, userId), eq(tasks.assigneeId, userId)),
-        eq(tasks.status, 'completed'),
+        eq(tasks.statusCategory, 'done'),
         isNull(tasks.deletedAt),
         gte(tasks.updatedAt, dateFrom),
         lte(tasks.updatedAt, dateTo),

@@ -5,12 +5,56 @@
  */
 
 import { z } from 'zod';
+import { TaskStatusCategory } from '../task-statuses/schemas.js';
 
 export const TaskStatus = z.enum(['pending', 'in_progress', 'completed', 'cancelled']);
 export type TaskStatus = z.infer<typeof TaskStatus>;
 
 export const TaskPriority = z.enum(['low', 'medium', 'high', 'urgent']);
 export type TaskPriority = z.infer<typeof TaskPriority>;
+
+export const TASK_STATUS_CATEGORY_BY_STATUS = {
+  pending: 'not_started',
+  in_progress: 'in_progress',
+  completed: 'done',
+  cancelled: 'cancelled',
+} as const satisfies Record<TaskStatus, TaskStatusCategory>;
+
+export const TASK_STATUS_BY_CATEGORY = {
+  not_started: 'pending',
+  in_progress: 'in_progress',
+  done: 'completed',
+  cancelled: 'cancelled',
+} as const satisfies Record<TaskStatusCategory, TaskStatus>;
+
+export const getTaskStatusCategory = (status: TaskStatus): TaskStatusCategory =>
+  TASK_STATUS_CATEGORY_BY_STATUS[status];
+
+export const getTaskStatusCategoryFromValue = (
+  value: string | null | undefined,
+): TaskStatusCategory | null => {
+  if (!value) {
+    return null;
+  }
+  const category = TaskStatusCategory.safeParse(value);
+  if (category.success) {
+    return category.data;
+  }
+  const status = TaskStatus.safeParse(value);
+  if (!status.success) {
+    return null;
+  }
+  return TASK_STATUS_CATEGORY_BY_STATUS[status.data];
+};
+
+export const getLegacyTaskStatusFromCategory = (
+  category: TaskStatusCategory | null | undefined,
+): TaskStatus | null => {
+  if (!category) {
+    return null;
+  }
+  return TASK_STATUS_BY_CATEGORY[category];
+};
 
 export const ListTasksInput = z.object({
   projectId: z.uuid().optional(),

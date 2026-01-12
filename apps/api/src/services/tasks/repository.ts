@@ -8,6 +8,7 @@ import { eq, and, or } from 'drizzle-orm';
 import { db } from '../../db/index.js';
 import { tasks, taskTags, tags, taskDependencies } from '../../db/schema/index.js';
 import type { TaskStatus, TaskPriority } from './schemas.js';
+import { getTaskStatusCategory } from './schemas.js';
 
 export interface TaskRecord {
   id: string;
@@ -93,7 +94,7 @@ export class TaskRepository {
       whereClause = and(whereClause, eq(tasks.projectId, projectId));
     }
     if (status) {
-      whereClause = and(whereClause, eq(tasks.status, status));
+      whereClause = and(whereClause, eq(tasks.statusCategory, getTaskStatusCategory(status)));
     }
     if (priority) {
       whereClause = and(whereClause, eq(tasks.priority, priority));

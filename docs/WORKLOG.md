@@ -150,6 +150,36 @@ Run `pnpm typecheck`, `pnpm lint`, `pnpm test`, and `pnpm build` after each batc
 
 ## Completed Tasks
 
+### [LINT-DEP-001] Task Status Deprecation Cleanup
+
+- **Completed**: 2026-01-11
+- **Duration**: 0.2 day
+- **Summary**: Replaced deprecated `tasks.status` usage with status category mappings across agenda, analytics, search, repository, and AI tools; added status mapping helpers.
+- **Files Changed**:
+  - `apps/api/src/routes/agenda.ts`
+  - `apps/api/src/services/analytics/service.ts`
+  - `apps/api/src/services/ai/tools.ts`
+  - `apps/api/src/services/search/service.ts`
+  - `apps/api/src/services/tasks/repository.ts`
+  - `apps/api/src/services/tasks/schemas.ts`
+  - `docs/WORKLOG.md`
+- **Learnings**: Status category is the canonical filter surface; legacy status inputs should map through a single helper.
+- **Retrospective**: Went well—targeted replacements cleared lint quickly; improve—add contract tests for status filters; change—centralize status mappings early to avoid repeated refactors.
+- **State Transitions**: PLANNING → IMPLEMENTING → VALIDATING → DOCUMENTING → COMMITTING → RETROSPECTING
+- **Validation**: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`
+
+### [MCP-AUDIT-001] MCP Server Architecture Audit
+
+- **Completed**: 2026-01-11
+- **Duration**: 0.2 day
+- **Summary**: Audited the MCP server package for architecture, security/privacy, and performance risks; documented remediation recommendations.
+- **Files Changed**:
+  - `docs/WORKLOG.md`
+- **Learnings**: Subscription tracking must be session-scoped to prevent notification leakage; user scoping needs consistent enforcement in every query.
+- **Retrospective**: Went well—targeted scan surfaced correctness and privacy gaps quickly; improve—add MCP tool/resource tests; change—codify resource/tool guardrails in a shared helper.
+- **State Transitions**: PLANNING → RESEARCHING → DOCUMENTING → RETROSPECTING
+- **Validation**: `pnpm typecheck`; `pnpm lint` failed (existing @typescript-eslint/no-deprecated errors in `apps/api`).
+
 ### [CAL-AUDIT-001] Calendar Integrations Audit
 
 - **Completed**: 2026-01-11

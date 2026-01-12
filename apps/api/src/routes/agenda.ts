@@ -15,10 +15,10 @@ const agendaRoutes = new Hono();
 
 agendaRoutes.use('*', requireAuth);
 
-const TASK_STATUS = {
-  PENDING: 'pending',
+const TASK_STATUS_CATEGORY = {
+  NOT_STARTED: 'not_started',
   IN_PROGRESS: 'in_progress',
-  COMPLETED: 'completed',
+  DONE: 'done',
 } as const;
 
 const START_OF_DAY = [0, 0, 0, 0] as const;
@@ -65,9 +65,12 @@ agendaRoutes.get('/', async (c) => {
     where: and(
       or(eq(tasks.creatorId, userId), eq(tasks.assigneeId, userId)),
       or(
-        eq(tasks.status, TASK_STATUS.IN_PROGRESS),
+        eq(tasks.statusCategory, TASK_STATUS_CATEGORY.IN_PROGRESS),
         and(
-          or(eq(tasks.status, TASK_STATUS.PENDING), eq(tasks.status, TASK_STATUS.IN_PROGRESS)),
+          or(
+            eq(tasks.statusCategory, TASK_STATUS_CATEGORY.NOT_STARTED),
+            eq(tasks.statusCategory, TASK_STATUS_CATEGORY.IN_PROGRESS),
+          ),
           gte(tasks.deadline, startOfDay),
           lte(tasks.deadline, endOfDay),
         ),
@@ -186,7 +189,9 @@ agendaRoutes.get('/', async (c) => {
 
   // Calculate summary stats
   const totalTasks = userTasks.length;
-  const completedTasks = userTasks.filter((t) => t.status === TASK_STATUS.COMPLETED).length;
+  const completedTasks = userTasks.filter(
+    (task) => task.statusCategory === TASK_STATUS_CATEGORY.DONE,
+  ).length;
   const estimatedMinutes = userTasks.reduce(
     (sum, t) => sum + (t.estimatedMinutes ?? DEFAULT_ESTIMATE_FALLBACK_MINUTES),
     DEFAULT_ESTIMATE_FALLBACK_MINUTES,
@@ -231,7 +236,10 @@ agendaRoutes.get('/range', async (c) => {
   const userTasks = await db.query.tasks.findMany({
     where: and(
       or(eq(tasks.creatorId, userId), eq(tasks.assigneeId, userId)),
-      or(eq(tasks.status, TASK_STATUS.PENDING), eq(tasks.status, TASK_STATUS.IN_PROGRESS)),
+      or(
+        eq(tasks.statusCategory, TASK_STATUS_CATEGORY.NOT_STARTED),
+        eq(tasks.statusCategory, TASK_STATUS_CATEGORY.IN_PROGRESS),
+      ),
       gte(tasks.deadline, startDate),
       lte(tasks.deadline, endDate),
     ),
@@ -299,9 +307,9 @@ agendaRoutes.get('/today', async (c) => {
       or(eq(tasks.creatorId, userId), eq(tasks.assigneeId, userId)),
       notDeleted(tasks.deletedAt),
       or(
-        eq(tasks.status, TASK_STATUS.IN_PROGRESS),
+        eq(tasks.statusCategory, TASK_STATUS_CATEGORY.IN_PROGRESS),
         and(
-          eq(tasks.status, TASK_STATUS.PENDING),
+          eq(tasks.statusCategory, TASK_STATUS_CATEGORY.NOT_STARTED),
           or(
             and(gte(tasks.deadline, today), lte(tasks.deadline, tomorrow)),
             isNull(tasks.deadline),
@@ -527,7 +535,10 @@ agendaRoutes.get('/deadlines', async (c) => {
     where: and(
       or(eq(tasks.creatorId, userId), eq(tasks.assigneeId, userId)),
       notDeleted(tasks.deletedAt),
-      or(eq(tasks.status, TASK_STATUS.PENDING), eq(tasks.status, TASK_STATUS.IN_PROGRESS)),
+      or(
+        eq(tasks.statusCategory, TASK_STATUS_CATEGORY.NOT_STARTED),
+        eq(tasks.statusCategory, TASK_STATUS_CATEGORY.IN_PROGRESS),
+      ),
       gte(tasks.deadline, now),
       lte(tasks.deadline, futureDate),
     ),
@@ -580,7 +591,10 @@ agendaRoutes.get('/week', async (c) => {
     where: and(
       or(eq(tasks.creatorId, userId), eq(tasks.assigneeId, userId)),
       notDeleted(tasks.deletedAt),
-      or(eq(tasks.status, TASK_STATUS.PENDING), eq(tasks.status, TASK_STATUS.IN_PROGRESS)),
+      or(
+        eq(tasks.statusCategory, TASK_STATUS_CATEGORY.NOT_STARTED),
+        eq(tasks.statusCategory, TASK_STATUS_CATEGORY.IN_PROGRESS),
+      ),
       or(and(gte(tasks.deadline, startDate), lte(tasks.deadline, endDate)), isNull(tasks.deadline)),
     ),
     with: { project: true },

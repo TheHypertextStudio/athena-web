@@ -345,6 +345,55 @@ Multiple agents may work on the same repo. Prevent race conditions:
 
 5. Never commit broken code - validate first
 
+### Commit message formatting:
+
+**DO NOT use heredoc format** for commit messages - it complicates hook validation:
+
+```bash
+# BAD - Heredoc format
+git commit -m "$(cat <<'EOF'
+message here
+EOF
+)"
+```
+
+**Use simple -m flag** with multi-line strings (quotes preserve newlines):
+
+```bash
+# GOOD - Simple single line
+git commit -m "feat(tasks): add recurring tasks"
+
+# GOOD - Multi-line (quotes preserve newlines in bash)
+git commit -m "feat(tasks): add recurring tasks
+
+Users can now create tasks that repeat on a schedule.
+The recurrence engine supports daily, weekly, and monthly patterns.
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
+```
+
+**Body content guidelines:**
+
+- Write prose paragraphs, NOT bullet lists
+- Explain WHY the change was made, not WHAT changed (the diff shows what)
+- For detailed examples, see `.claude/skills/commit/SKILL.md`
+
+**BAD - Bullet list format:**
+
+```
+- Add feature X
+- Fix bug Y
+- Update component Z
+```
+
+**GOOD - Prose explaining context:**
+
+```
+Users can now export their tasks to CSV format. This addresses
+the most requested feature from our feedback survey and enables
+integration with spreadsheet workflows.
+```
+
 ### Branch naming:
 
 ```

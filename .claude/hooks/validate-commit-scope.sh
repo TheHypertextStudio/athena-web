@@ -11,20 +11,40 @@ INPUT=$(cat)
 [[ "$INPUT" != *'git commit'* ]] && exit 0
 
 # Now parse JSON (we know it's likely relevant)
-COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
+# Use jq with error suppression - if JSON is malformed, skip validation
+COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
 [[ -z "$COMMAND" ]] && exit 0
 [[ "$COMMAND" != *'git commit'* ]] && exit 0
 
-# Extract commit message from -m flag
-# Handle both -m "message" and -m 'message' formats
-if [[ "$COMMAND" =~ -m[[:space:]]+[\"\']([^\"\']+)[\"\'] ]]; then
-  COMMIT_MSG="${BASH_REMATCH[1]}"
-elif [[ "$COMMAND" =~ -m[[:space:]]+([^[:space:]]+) ]]; then
-  COMMIT_MSG="${BASH_REMATCH[1]}"
-else
-  # No -m flag found (might be using heredoc or editor), skip validation
-  exit 0
+# Extract commit message - handle heredoc, quoted, and unquoted formats
+COMMIT_MSG=""
+
+# Check for heredoc format: <<DELIMITER ... DELIMITER (arbitrary delimiter)
+# Matches: <<EOF, <<'EOF', <<"EOF", <<COMMIT, <<'MSG', etc.
+if [[ "$COMMAND" =~ \<\<[\'\"]?([A-Za-z_][A-Za-z0-9_]*)[\'\"]? ]]; then
+  HEREDOC_DELIM="${BASH_REMATCH[1]}"
+  # Extract content between delimiter markers using sed
+  # The content appears after the opening delimiter line and before closing delimiter
+  HEREDOC_CONTENT=$(echo "$COMMAND" | sed -n "/<<['\"]\\{0,1\\}${HEREDOC_DELIM}['\"]\\{0,1\\}/,/^${HEREDOC_DELIM}\$/p" | sed '1d;$d')
+  if [[ -n "$HEREDOC_CONTENT" ]]; then
+    # Get first line (the type(scope): description line)
+    COMMIT_MSG=$(echo "$HEREDOC_CONTENT" | head -n1 | xargs)
+  fi
 fi
+
+# Fallback to standard -m "message" or -m 'message' format
+if [[ -z "$COMMIT_MSG" ]]; then
+  if [[ "$COMMAND" =~ -m[[:space:]]+[\"\']([^\"\']+)[\"\'] ]]; then
+    FULL_MSG="${BASH_REMATCH[1]}"
+    # Get first line only for validation
+    COMMIT_MSG=$(echo "$FULL_MSG" | head -n1)
+  elif [[ "$COMMAND" =~ -m[[:space:]]+([^[:space:]]+) ]]; then
+    COMMIT_MSG="${BASH_REMATCH[1]}"
+  fi
+fi
+
+# If we still can't extract the message, skip validation
+[[ -z "$COMMIT_MSG" ]] && exit 0
 
 # Valid scopes from .claude/skills/commit.md
 VALID_SCOPES=(

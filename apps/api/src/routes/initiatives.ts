@@ -23,6 +23,7 @@ const INITIATIVE_STATUS = {
 } as const;
 type InitiativeStatus = (typeof INITIATIVE_STATUS)[keyof typeof INITIATIVE_STATUS];
 const DEFAULT_INITIATIVE_STATUS: InitiativeStatus = INITIATIVE_STATUS.DRAFT;
+const ERROR_INITIATIVE_NOT_FOUND = 'Initiative not found';
 
 /**
  * List all initiatives for the authenticated user.
@@ -78,7 +79,7 @@ initiativeRoutes.get('/:id', async (c) => {
   });
 
   if (!result) {
-    return c.json({ error: 'Initiative not found' }, 404);
+    return c.json({ error: ERROR_INITIATIVE_NOT_FOUND }, 404);
   }
 
   return c.json({ data: result });
@@ -140,7 +141,7 @@ initiativeRoutes.patch('/:id', async (c) => {
   });
 
   if (!existing) {
-    return c.json({ error: 'Initiative not found' }, 404);
+    return c.json({ error: ERROR_INITIATIVE_NOT_FOUND }, 404);
   }
 
   await db
@@ -175,7 +176,7 @@ initiativeRoutes.delete('/:id', async (c) => {
   });
 
   if (!existing) {
-    return c.json({ error: 'Initiative not found' }, 404);
+    return c.json({ error: ERROR_INITIATIVE_NOT_FOUND }, 404);
   }
 
   await db.delete(initiatives).where(and(eq(initiatives.id, id), eq(initiatives.ownerId, userId)));

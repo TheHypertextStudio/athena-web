@@ -23,6 +23,9 @@ const DEFAULT_PLAN_TIER: PlanTier = 'free';
 const DEFAULT_SUBSCRIPTION_STATUS = 'active' as const;
 const DEFAULT_BILLING_LIST_LIMIT = 10;
 const DEFAULT_BILLING_INTERVAL = 'month' as const;
+const ERROR_UNKNOWN_PLAN_TIER = 'Unknown plan tier';
+const ERROR_NO_SUBSCRIPTION = 'No subscription found';
+const ERROR_MISSING_STRIPE_SIGNATURE = 'Missing Stripe signature';
 
 type UpgradePlanTier = 'pro' | 'team';
 type BillingIntervalValue = 'month' | 'year';
@@ -91,7 +94,7 @@ billingRoutes.get('/subscription', async (c) => {
   }
 
   if (!isPlanTier(result.planTier)) {
-    return c.json({ error: 'Unknown plan tier' }, 500);
+    return c.json({ error: ERROR_UNKNOWN_PLAN_TIER }, 500);
   }
   const entitlements = PLAN_ENTITLEMENTS[result.planTier];
 
@@ -122,7 +125,7 @@ billingRoutes.get('/entitlements/:feature', async (c) => {
   let planTier: PlanTier = DEFAULT_PLAN_TIER;
   if (result) {
     if (!isPlanTier(result.planTier)) {
-      return c.json({ error: 'Unknown plan tier' }, 500);
+      return c.json({ error: ERROR_UNKNOWN_PLAN_TIER }, 500);
     }
     planTier = result.planTier;
   }
@@ -152,7 +155,7 @@ billingRoutes.get('/entitlements', async (c) => {
   let planTier: PlanTier = DEFAULT_PLAN_TIER;
   if (result) {
     if (!isPlanTier(result.planTier)) {
-      return c.json({ error: 'Unknown plan tier' }, 500);
+      return c.json({ error: ERROR_UNKNOWN_PLAN_TIER }, 500);
     }
     planTier = result.planTier;
   }
@@ -240,7 +243,7 @@ billingRoutes.post('/portal', async (c) => {
   });
 
   if (!subscription) {
-    return c.json({ error: 'No subscription found' }, 404);
+    return c.json({ error: ERROR_NO_SUBSCRIPTION }, 404);
   }
 
   try {
@@ -399,7 +402,7 @@ billingRoutes.post('/webhook', async (c) => {
   const signature = c.req.header('stripe-signature');
 
   if (!signature) {
-    return c.json({ error: 'Missing Stripe signature' }, 400);
+    return c.json({ error: ERROR_MISSING_STRIPE_SIGNATURE }, 400);
   }
 
   try {

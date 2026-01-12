@@ -23,6 +23,10 @@ const PROJECT_STATUS = {
 } as const;
 type ProjectStatus = (typeof PROJECT_STATUS)[keyof typeof PROJECT_STATUS];
 const DEFAULT_PROJECT_STATUS: ProjectStatus = PROJECT_STATUS.PLANNING;
+const ERROR_PROJECT_NOT_FOUND = 'Project not found';
+const ERROR_DEPENDENCY_PROJECT_NOT_FOUND = 'Dependency project not found';
+const ERROR_SELF_DEPENDENCY = 'A project cannot depend on itself';
+const ERROR_CIRCULAR_DEPENDENCY = 'Circular dependency detected';
 
 /**
  * List all projects for the authenticated user.
@@ -81,7 +85,7 @@ projectRoutes.get('/:id', async (c) => {
   });
 
   if (!result) {
-    return c.json({ error: 'Project not found' }, 404);
+    return c.json({ error: ERROR_PROJECT_NOT_FOUND }, 404);
   }
 
   return c.json({ data: result });
@@ -146,17 +150,17 @@ projectRoutes.patch('/:id', async (c) => {
   });
 
   if (!existing) {
-    return c.json({ error: 'Project not found' }, 404);
+    return c.json({ error: ERROR_PROJECT_NOT_FOUND }, 404);
   }
 
   const updateData: Record<string, unknown> = { updatedAt: new Date() };
-  if (body.name !== undefined) updateData['name'] = body.name;
-  if (body.description !== undefined) updateData['description'] = body.description;
-  if (body.status !== undefined) updateData['status'] = body.status;
+  if (body.name !== undefined) updateData.name = body.name;
+  if (body.description !== undefined) updateData.description = body.description;
+  if (body.status !== undefined) updateData.status = body.status;
   if (body.deadline !== undefined) {
-    updateData['deadline'] = body.deadline ? new Date(body.deadline) : null;
+    updateData.deadline = body.deadline ? new Date(body.deadline) : null;
   }
-  if (body.initiativeId !== undefined) updateData['initiativeId'] = body.initiativeId;
+  if (body.initiativeId !== undefined) updateData.initiativeId = body.initiativeId;
 
   await db
     .update(projects)
@@ -186,7 +190,7 @@ projectRoutes.delete('/:id', async (c) => {
   });
 
   if (!existing) {
-    return c.json({ error: 'Project not found' }, 404);
+    return c.json({ error: ERROR_PROJECT_NOT_FOUND }, 404);
   }
 
   await db.delete(projects).where(and(eq(projects.id, id), eq(projects.ownerId, userId)));
@@ -207,7 +211,7 @@ projectRoutes.get('/:id/dependencies', async (c) => {
   });
 
   if (!project) {
-    return c.json({ error: 'Project not found' }, 404);
+    return c.json({ error: ERROR_PROJECT_NOT_FOUND }, 404);
   }
 
   const dependencies = await db.query.projectDependencies.findMany({
@@ -233,7 +237,7 @@ projectRoutes.post('/:id/dependencies/:dependsOnId', async (c) => {
 
   // Prevent self-dependency
   if (projectId === dependsOnId) {
-    return c.json({ error: 'A project cannot depend on itself' }, 400);
+    return c.json({ error: ERROR_SELF_DEPENDENCY }, 400);
   }
 
   const project = await db.query.projects.findFirst({
@@ -241,7 +245,7 @@ projectRoutes.post('/:id/dependencies/:dependsOnId', async (c) => {
   });
 
   if (!project) {
-    return c.json({ error: 'Project not found' }, 404);
+    return c.json({ error: ERROR_PROJECT_NOT_FOUND }, 404);
   }
 
   const dependsOnProject = await db.query.projects.findFirst({
@@ -249,7 +253,7 @@ projectRoutes.post('/:id/dependencies/:dependsOnId', async (c) => {
   });
 
   if (!dependsOnProject) {
-    return c.json({ error: 'Dependency project not found' }, 404);
+    return c.json({ error: ERROR_DEPENDENCY_PROJECT_NOT_FOUND }, 404);
   }
 
   // Check for circular dependency
@@ -261,7 +265,7 @@ projectRoutes.post('/:id/dependencies/:dependsOnId', async (c) => {
   });
 
   if (reverseCheck) {
-    return c.json({ error: 'Circular dependency detected' }, 400);
+    return c.json({ error: ERROR_CIRCULAR_DEPENDENCY }, 400);
   }
 
   const id = crypto.randomUUID();
@@ -292,7 +296,7 @@ projectRoutes.delete('/:id/dependencies/:dependsOnId', async (c) => {
   });
 
   if (!project) {
-    return c.json({ error: 'Project not found' }, 404);
+    return c.json({ error: ERROR_PROJECT_NOT_FOUND }, 404);
   }
 
   await db

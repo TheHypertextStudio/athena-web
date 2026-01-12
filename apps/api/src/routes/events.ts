@@ -24,6 +24,9 @@ type EventParticipantStatus =
   (typeof EVENT_PARTICIPANT_STATUS)[keyof typeof EVENT_PARTICIPANT_STATUS];
 const DEFAULT_EVENT_PARTICIPANT_STATUS: EventParticipantStatus = EVENT_PARTICIPANT_STATUS.PENDING;
 const DEFAULT_EVENT_IS_ALL_DAY = false;
+const ERROR_EVENT_NOT_FOUND = 'Event not found';
+const ERROR_EVENT_NOT_AUTHORIZED = 'Event not found or not authorized';
+const ERROR_PARTICIPANT_NOT_FOUND = 'Participant not found';
 
 /**
  * List all events for the authenticated user.
@@ -93,7 +96,7 @@ eventRoutes.get('/:id', async (c) => {
   });
 
   if (!result) {
-    return c.json({ error: 'Event not found' }, 404);
+    return c.json({ error: ERROR_EVENT_NOT_FOUND }, 404);
   }
 
   // Check if user is creator or participant
@@ -101,7 +104,7 @@ eventRoutes.get('/:id', async (c) => {
   const isParticipant = result.participants.some((p) => p.userId === userId);
 
   if (!isCreator && !isParticipant) {
-    return c.json({ error: 'Event not found' }, 404);
+    return c.json({ error: ERROR_EVENT_NOT_FOUND }, 404);
   }
 
   return c.json({ data: result });
@@ -191,19 +194,19 @@ eventRoutes.patch('/:id', async (c) => {
   });
 
   if (!existing) {
-    return c.json({ error: 'Event not found or not authorized' }, 404);
+    return c.json({ error: ERROR_EVENT_NOT_AUTHORIZED }, 404);
   }
 
   const updateData: Record<string, unknown> = { updatedAt: new Date() };
-  if (body.title !== undefined) updateData['title'] = body.title;
-  if (body.description !== undefined) updateData['description'] = body.description;
-  if (body.startTime !== undefined) updateData['startTime'] = new Date(body.startTime);
+  if (body.title !== undefined) updateData.title = body.title;
+  if (body.description !== undefined) updateData.description = body.description;
+  if (body.startTime !== undefined) updateData.startTime = new Date(body.startTime);
   if (body.endTime !== undefined) {
-    updateData['endTime'] = body.endTime ? new Date(body.endTime) : null;
+    updateData.endTime = body.endTime ? new Date(body.endTime) : null;
   }
-  if (body.isAllDay !== undefined) updateData['isAllDay'] = body.isAllDay;
-  if (body.location !== undefined) updateData['location'] = body.location;
-  if (body.recurrenceRule !== undefined) updateData['recurrenceRule'] = body.recurrenceRule;
+  if (body.isAllDay !== undefined) updateData.isAllDay = body.isAllDay;
+  if (body.location !== undefined) updateData.location = body.location;
+  if (body.recurrenceRule !== undefined) updateData.recurrenceRule = body.recurrenceRule;
 
   await db.update(events).set(updateData).where(eq(events.id, id));
 
@@ -235,7 +238,7 @@ eventRoutes.delete('/:id', async (c) => {
   });
 
   if (!existing) {
-    return c.json({ error: 'Event not found or not authorized' }, 404);
+    return c.json({ error: ERROR_EVENT_NOT_AUTHORIZED }, 404);
   }
 
   await db.delete(events).where(eq(events.id, id));
@@ -257,7 +260,7 @@ eventRoutes.post('/:id/participants', async (c) => {
   });
 
   if (!event) {
-    return c.json({ error: 'Event not found or not authorized' }, 404);
+    return c.json({ error: ERROR_EVENT_NOT_AUTHORIZED }, 404);
   }
 
   await db.insert(eventParticipants).values({
@@ -286,7 +289,7 @@ eventRoutes.patch('/:id/participants/:participantId', async (c) => {
   });
 
   if (!participant) {
-    return c.json({ error: 'Participant not found' }, 404);
+    return c.json({ error: ERROR_PARTICIPANT_NOT_FOUND }, 404);
   }
 
   await db
@@ -311,7 +314,7 @@ eventRoutes.delete('/:id/participants/:participantId', async (c) => {
   });
 
   if (!event) {
-    return c.json({ error: 'Event not found or not authorized' }, 404);
+    return c.json({ error: ERROR_EVENT_NOT_AUTHORIZED }, 404);
   }
 
   await db.delete(eventParticipants).where(eq(eventParticipants.id, participantId));

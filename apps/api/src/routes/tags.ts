@@ -14,6 +14,8 @@ const tagRoutes = new Hono();
 
 tagRoutes.use('*', requireAuth);
 
+const ERROR_TAG_NOT_FOUND = 'Tag not found';
+
 /**
  * List all tags for the authenticated user.
  * GET /api/tags
@@ -56,7 +58,7 @@ tagRoutes.get('/:id', async (c) => {
   });
 
   if (!result) {
-    return c.json({ error: 'Tag not found' }, 404);
+    return c.json({ error: ERROR_TAG_NOT_FOUND }, 404);
   }
 
   return c.json({ data: result });
@@ -108,12 +110,12 @@ tagRoutes.patch('/:id', async (c) => {
   });
 
   if (!existing) {
-    return c.json({ error: 'Tag not found' }, 404);
+    return c.json({ error: ERROR_TAG_NOT_FOUND }, 404);
   }
 
   const updateData: Record<string, unknown> = {};
-  if (body.name !== undefined) updateData['name'] = body.name;
-  if (body.color !== undefined) updateData['color'] = body.color;
+  if (body.name !== undefined) updateData.name = body.name;
+  if (body.color !== undefined) updateData.color = body.color;
 
   await db
     .update(tags)
@@ -140,7 +142,7 @@ tagRoutes.delete('/:id', async (c) => {
   });
 
   if (!existing) {
-    return c.json({ error: 'Tag not found' }, 404);
+    return c.json({ error: ERROR_TAG_NOT_FOUND }, 404);
   }
 
   await db.delete(tags).where(and(eq(tags.id, id), eq(tags.ownerId, userId)));

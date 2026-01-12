@@ -41,6 +41,9 @@ const accountRoutes = new Hono();
 accountRoutes.use('*', requireAuth);
 
 const ACCOUNT_DELETE_CONFIRMATION = 'DELETE_MY_ACCOUNT' as const;
+const ACCOUNT_EXPORT_VERSION = '2.0.0';
+const ACCOUNT_EXPORT_FILE_PREFIX = 'athena-export';
+const ACCOUNT_EXPORT_AUDIT_LOG_LIMIT = 1000;
 
 /**
  * Export all user data.
@@ -151,12 +154,12 @@ accountRoutes.get('/export', async (c) => {
   // Get audit logs (limited to last 1000 for performance)
   const userAuditLogs = await db.query.auditLogs.findMany({
     where: eq(auditLogs.userId, userId),
-    limit: 1000,
+    limit: ACCOUNT_EXPORT_AUDIT_LOG_LIMIT,
     orderBy: (logs, { desc }) => [desc(logs.createdAt)],
   });
 
   const exportData = {
-    exportVersion: '2.0.0',
+    exportVersion: ACCOUNT_EXPORT_VERSION,
     exportedAt: new Date().toISOString(),
     user: {
       id: user?.id,
@@ -345,7 +348,10 @@ accountRoutes.get('/export', async (c) => {
   // Set headers for file download
   const dateStr = new Date().toISOString().slice(0, 10);
   c.header('Content-Type', 'application/json');
-  c.header('Content-Disposition', `attachment; filename="athena-export-${dateStr}.json"`);
+  c.header(
+    'Content-Disposition',
+    `attachment; filename="${ACCOUNT_EXPORT_FILE_PREFIX}-${dateStr}.json"`,
+  );
 
   return c.json(exportData);
 });

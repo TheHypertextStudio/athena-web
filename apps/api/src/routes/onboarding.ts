@@ -27,6 +27,17 @@ const ONBOARDING_STEPS = [
 ] as const;
 
 type OnboardingStep = (typeof ONBOARDING_STEPS)[number];
+const DEFAULT_ONBOARDING_STEP: OnboardingStep = 'welcome';
+const COMPLETED_ONBOARDING_STEP: OnboardingStep = 'complete';
+const ERROR_ONBOARDING_PROGRESS_UNAVAILABLE = 'Onboarding progress unavailable';
+const ERROR_INVALID_ONBOARDING_STEP = 'Invalid onboarding step';
+const ERROR_INVALID_ONBOARDING_STATE = 'Invalid onboarding progress state';
+const ERROR_ONBOARDING_NOT_STARTED = 'Onboarding not started';
+const ERROR_ONBOARDING_ALREADY_FINISHED = 'Onboarding already finished';
+const ERROR_INVALID_ONBOARDING_METADATA = 'Invalid onboarding metadata';
+const ERROR_INVALID_ONBOARDING_METADATA_STATE = 'Invalid onboarding metadata state';
+const ERROR_ONBOARDING_ALREADY_COMPLETED = 'Onboarding already completed';
+const ERROR_ONBOARDING_ALREADY_SKIPPED = 'Onboarding already skipped';
 
 /**
  * Get onboarding status for the authenticated user.
@@ -47,7 +58,7 @@ onboardingRoutes.get('/', async (c) => {
     await db.insert(onboardingProgress).values({
       id,
       userId,
-      currentStep: 'welcome',
+      currentStep: DEFAULT_ONBOARDING_STEP,
       completedSteps: [],
       createdAt: now,
       updatedAt: now,
@@ -59,15 +70,15 @@ onboardingRoutes.get('/', async (c) => {
   }
 
   if (!progress) {
-    return c.json({ error: 'Onboarding progress unavailable' }, 500);
+    return c.json({ error: ERROR_ONBOARDING_PROGRESS_UNAVAILABLE }, 500);
   }
 
   if (!ONBOARDING_STEPS.includes(progress.currentStep as OnboardingStep)) {
-    return c.json({ error: 'Invalid onboarding step' }, 500);
+    return c.json({ error: ERROR_INVALID_ONBOARDING_STEP }, 500);
   }
 
   if (!Array.isArray(progress.completedSteps)) {
-    return c.json({ error: 'Invalid onboarding progress state' }, 500);
+    return c.json({ error: ERROR_INVALID_ONBOARDING_STATE }, 500);
   }
 
   const isCompleted = progress.completedAt !== null;
@@ -103,7 +114,7 @@ onboardingRoutes.patch('/step', async (c) => {
   }>();
 
   if (!ONBOARDING_STEPS.includes(body.step as OnboardingStep)) {
-    return c.json({ error: 'Invalid onboarding step' }, 400);
+    return c.json({ error: ERROR_INVALID_ONBOARDING_STEP }, 400);
   }
 
   const existing = await db.query.onboardingProgress.findFirst({
@@ -111,16 +122,16 @@ onboardingRoutes.patch('/step', async (c) => {
   });
 
   if (!existing) {
-    return c.json({ error: 'Onboarding not started' }, 404);
+    return c.json({ error: ERROR_ONBOARDING_NOT_STARTED }, 404);
   }
 
   if (existing.completedAt || existing.skippedAt) {
-    return c.json({ error: 'Onboarding already finished' }, 400);
+    return c.json({ error: ERROR_ONBOARDING_ALREADY_FINISHED }, 400);
   }
 
   // Add current step to completed steps if not already there
   if (!Array.isArray(existing.completedSteps)) {
-    return c.json({ error: 'Invalid onboarding progress state' }, 500);
+    return c.json({ error: ERROR_INVALID_ONBOARDING_STATE }, 500);
   }
   const completedSteps = [...existing.completedSteps];
   if (existing.currentStep && !completedSteps.includes(existing.currentStep)) {
@@ -139,7 +150,7 @@ onboardingRoutes.patch('/step', async (c) => {
       typeof body.metadata !== 'object' ||
       Array.isArray(body.metadata)
     ) {
-      return c.json({ error: 'Invalid onboarding metadata' }, 400);
+      return c.json({ error: ERROR_INVALID_ONBOARDING_METADATA }, 400);
     }
     const existingMetadata = existing.metadata;
     const normalizedMetadata =
@@ -147,9 +158,9 @@ onboardingRoutes.patch('/step', async (c) => {
         ? (existingMetadata as Record<string, unknown>)
         : null;
     if (existingMetadata !== null && existingMetadata !== undefined && !normalizedMetadata) {
-      return c.json({ error: 'Invalid onboarding metadata state' }, 500);
+      return c.json({ error: ERROR_INVALID_ONBOARDING_METADATA_STATE }, 500);
     }
-    updateData['metadata'] = {
+    updateData.metadata = {
       ...(normalizedMetadata ?? {}),
       ...body.metadata,
     };
@@ -181,16 +192,16 @@ onboardingRoutes.post('/complete', async (c) => {
   });
 
   if (!existing) {
-    return c.json({ error: 'Onboarding not started' }, 404);
+    return c.json({ error: ERROR_ONBOARDING_NOT_STARTED }, 404);
   }
 
   if (existing.completedAt) {
-    return c.json({ error: 'Onboarding already completed' }, 400);
+    return c.json({ error: ERROR_ONBOARDING_ALREADY_COMPLETED }, 400);
   }
 
   const now = new Date();
   if (!Array.isArray(existing.completedSteps)) {
-    return c.json({ error: 'Invalid onboarding progress state' }, 500);
+    return c.json({ error: ERROR_INVALID_ONBOARDING_STATE }, 500);
   }
   const completedSteps = [...existing.completedSteps];
   if (existing.currentStep && !completedSteps.includes(existing.currentStep)) {
@@ -200,7 +211,7 @@ onboardingRoutes.post('/complete', async (c) => {
   await db
     .update(onboardingProgress)
     .set({
-      currentStep: 'complete',
+      currentStep: COMPLETED_ONBOARDING_STEP,
       completedSteps,
       completedAt: now,
       updatedAt: now,
@@ -234,7 +245,7 @@ onboardingRoutes.post('/skip', async (c) => {
     await db.insert(onboardingProgress).values({
       id,
       userId,
-      currentStep: 'welcome',
+      currentStep: DEFAULT_ONBOARDING_STEP,
       completedSteps: [],
       skippedAt: now,
       createdAt: now,
@@ -250,11 +261,11 @@ onboardingRoutes.post('/skip', async (c) => {
   }
 
   if (existing.completedAt) {
-    return c.json({ error: 'Onboarding already completed' }, 400);
+    return c.json({ error: ERROR_ONBOARDING_ALREADY_COMPLETED }, 400);
   }
 
   if (existing.skippedAt) {
-    return c.json({ error: 'Onboarding already skipped' }, 400);
+    return c.json({ error: ERROR_ONBOARDING_ALREADY_SKIPPED }, 400);
   }
 
   const now = new Date();

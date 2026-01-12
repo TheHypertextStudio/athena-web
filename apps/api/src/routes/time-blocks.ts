@@ -20,6 +20,11 @@ timeBlockRoutes.use('*', requireAuth);
 // GET requests pass through (read access is sacred)
 timeBlockRoutes.use('*', requireEntitlement('time_tracking'));
 
+const ERROR_TIME_BLOCK_NOT_FOUND = 'Time block not found';
+const ERROR_TIME_BLOCK_NOT_AUTHORIZED = 'Time block not found or not authorized';
+const ERROR_TASK_NOT_FOUND = 'Task not found';
+const ERROR_TASK_ALREADY_LINKED = 'Task already linked to this time block';
+
 /**
  * List all time blocks for the authenticated user.
  * GET /api/time-blocks
@@ -85,7 +90,7 @@ timeBlockRoutes.get('/:id', async (c) => {
   });
 
   if (!result) {
-    return c.json({ error: 'Time block not found' }, 404);
+    return c.json({ error: ERROR_TIME_BLOCK_NOT_FOUND }, 404);
   }
 
   return c.json({
@@ -192,7 +197,7 @@ timeBlockRoutes.patch('/:id', async (c) => {
   });
 
   if (!existing) {
-    return c.json({ error: 'Time block not found or not authorized' }, 404);
+    return c.json({ error: ERROR_TIME_BLOCK_NOT_AUTHORIZED }, 404);
   }
 
   const updateData: Record<string, unknown> = { updatedAt: new Date() };
@@ -242,7 +247,7 @@ timeBlockRoutes.delete('/:id', async (c) => {
   });
 
   if (!existing) {
-    return c.json({ error: 'Time block not found or not authorized' }, 404);
+    return c.json({ error: ERROR_TIME_BLOCK_NOT_AUTHORIZED }, 404);
   }
 
   await db.update(timeBlocks).set({ deletedAt: new Date() }).where(eq(timeBlocks.id, id));
@@ -267,7 +272,7 @@ timeBlockRoutes.post('/:id/tasks', async (c) => {
   });
 
   if (!timeBlock) {
-    return c.json({ error: 'Time block not found or not authorized' }, 404);
+    return c.json({ error: ERROR_TIME_BLOCK_NOT_AUTHORIZED }, 404);
   }
 
   // Verify task exists and belongs to user
@@ -276,13 +281,13 @@ timeBlockRoutes.post('/:id/tasks', async (c) => {
   });
 
   if (!task) {
-    return c.json({ error: 'Task not found' }, 404);
+    return c.json({ error: ERROR_TASK_NOT_FOUND }, 404);
   }
 
   // Check if already linked
   const existingLink = timeBlock.tasks.find((t) => t.taskId === body.taskId);
   if (existingLink) {
-    return c.json({ error: 'Task already linked to this time block' }, 400);
+    return c.json({ error: ERROR_TASK_ALREADY_LINKED }, 400);
   }
 
   const position = body.position ?? timeBlock.tasks.length;
@@ -312,7 +317,7 @@ timeBlockRoutes.delete('/:id/tasks/:taskId', async (c) => {
   });
 
   if (!timeBlock) {
-    return c.json({ error: 'Time block not found or not authorized' }, 404);
+    return c.json({ error: ERROR_TIME_BLOCK_NOT_AUTHORIZED }, 404);
   }
 
   await db
@@ -336,7 +341,7 @@ timeBlockRoutes.put('/:id/tasks/order', async (c) => {
   });
 
   if (!timeBlock) {
-    return c.json({ error: 'Time block not found or not authorized' }, 404);
+    return c.json({ error: ERROR_TIME_BLOCK_NOT_AUTHORIZED }, 404);
   }
 
   // Update positions

@@ -20,6 +20,16 @@ timeTrackingRoutes.use('*', requireAuth);
 // GET requests pass through (read access is sacred)
 timeTrackingRoutes.use('*', requireEntitlement('time_tracking'));
 
+const MILLISECONDS_PER_MINUTE = 60000;
+const MINUTES_PER_HOUR = 60;
+const HOURS_DECIMAL_SCALE = 100;
+const ERROR_DATE_RANGE_REQUIRED = 'startDate and endDate are required';
+const ERROR_TIME_ENTRY_NOT_FOUND = 'Time entry not found';
+const ERROR_TASK_NOT_FOUND = 'Task not found';
+const ERROR_ACTIVE_TIMER_EXISTS = 'A timer is already running. Stop it first.';
+const ERROR_NO_ACTIVE_TIMER = 'No active timer to stop';
+const ERROR_END_TIME_MISSING = 'Time entry end time missing';
+
 /**
  * List time entries for the current user.
  * GET /api/time-tracking
@@ -66,7 +76,7 @@ timeTrackingRoutes.get('/summary', async (c) => {
   const endDate = c.req.query('endDate');
 
   if (!startDate || !endDate) {
-    return c.json({ error: 'startDate and endDate are required' }, 400);
+    return c.json({ error: ERROR_DATE_RANGE_REQUIRED }, 400);
   }
 
   const entries = await db.query.timeEntries.findMany({
@@ -91,7 +101,9 @@ timeTrackingRoutes.get('/summary', async (c) => {
 
   for (const entry of entries) {
     if (entry.endTime) {
-      const minutes = Math.round((entry.endTime.getTime() - entry.startTime.getTime()) / 60000);
+      const minutes = Math.round(
+        (entry.endTime.getTime() - entry.startTime.getTime()) / MILLISECONDS_PER_MINUTE,
+      );
       totalMinutes += minutes;
 
       if (entry.task) {
@@ -109,7 +121,8 @@ timeTrackingRoutes.get('/summary', async (c) => {
   return c.json({
     data: {
       totalMinutes,
-      totalHours: Math.round((totalMinutes / 60) * 100) / 100,
+      totalHours:
+        Math.round((totalMinutes / MINUTES_PER_HOUR) * HOURS_DECIMAL_SCALE) / HOURS_DECIMAL_SCALE,
       entryCount: entries.length,
       taskBreakdown,
       projectBreakdown,
@@ -155,7 +168,7 @@ timeTrackingRoutes.get('/:id', async (c) => {
   });
 
   if (!result) {
-    return c.json({ error: 'Time entry not found' }, 404);
+    return c.json({ error: ERROR_TIME_ENTRY_NOT_FOUND }, 404);
   }
 
   return c.json({ data: result });
@@ -178,7 +191,7 @@ timeTrackingRoutes.post('/start', async (c) => {
   });
 
   if (activeTimer) {
-    return c.json({ error: 'A timer is already running. Stop it first.' }, 409);
+    return c.json({ error: ERROR_ACTIVE_TIMER_EXISTS }, 409);
   }
 
   // Verify task exists and belongs to user if provided
@@ -188,7 +201,7 @@ timeTrackingRoutes.post('/start', async (c) => {
     });
 
     if (!task) {
-      return c.json({ error: 'Task not found' }, 404);
+      return c.json({ error: ERROR_TASK_NOT_FOUND }, 404);
     }
   }
 
@@ -227,7 +240,7 @@ timeTrackingRoutes.post('/stop', async (c) => {
   });
 
   if (!activeTimer) {
-    return c.json({ error: 'No active timer to stop' }, 404);
+    return c.json({ error: ERROR_NO_ACTIVE_TIMER }, 404);
   }
 
   const now = new Date();
@@ -245,16 +258,16 @@ timeTrackingRoutes.post('/stop', async (c) => {
   });
 
   if (!result) {
-    return c.json({ error: 'Time entry not found' }, 404);
+    return c.json({ error: ERROR_TIME_ENTRY_NOT_FOUND }, 404);
   }
 
   if (!result.endTime) {
-    return c.json({ error: 'Time entry end time missing' }, 500);
+    return c.json({ error: ERROR_END_TIME_MISSING }, 500);
   }
 
   // Calculate duration
   const durationMinutes = Math.round(
-    (result.endTime.getTime() - result.startTime.getTime()) / 60000,
+    (result.endTime.getTime() - result.startTime.getTime()) / MILLISECONDS_PER_MINUTE,
   );
 
   return c.json({
@@ -303,7 +316,7 @@ timeTrackingRoutes.post('/switch', async (c) => {
       where: eq(tasks.id, body.taskId),
     });
     if (!task) {
-      return c.json({ error: 'Task not found' }, 404);
+      return c.json({ error: ERROR_TASK_NOT_FOUND }, 404);
     }
   }
 
@@ -350,7 +363,7 @@ timeTrackingRoutes.get('/elapsed', async (c) => {
   }
 
   const elapsedMs = Date.now() - activeTimer.startTime.getTime();
-  const elapsedMinutes = Math.floor(elapsedMs / 60000);
+  const elapsedMinutes = Math.floor(elapsedMs / MILLISECONDS_PER_MINUTE);
 
   return c.json({
     data: activeTimer,
@@ -367,7 +380,7 @@ timeTrackingRoutes.get('/elapsed', async (c) => {
  * Format duration in minutes to human-readable string.
  */
 function formatDuration(minutes: number): string {
-  const hours = Math.floor(minutes / 60);
+  const hours = Math.floor(minutes / MINUTES_PER_HOUR);
   const mins = minutes % 60;
   if (hours > 0) {
     return `${String(hours)}h ${String(mins)}m`;
@@ -395,7 +408,7 @@ timeTrackingRoutes.post('/', async (c) => {
     });
 
     if (!task) {
-      return c.json({ error: 'Task not found' }, 404);
+      return c.json({ error: ERROR_TASK_NOT_FOUND }, 404);
     }
   }
 
@@ -442,7 +455,7 @@ timeTrackingRoutes.patch('/:id', async (c) => {
   });
 
   if (!existing) {
-    return c.json({ error: 'Time entry not found' }, 404);
+    return c.json({ error: ERROR_TIME_ENTRY_NOT_FOUND }, 404);
   }
 
   const updateData: Record<string, unknown> = { updatedAt: new Date() };
@@ -478,7 +491,7 @@ timeTrackingRoutes.delete('/:id', async (c) => {
   });
 
   if (!existing) {
-    return c.json({ error: 'Time entry not found' }, 404);
+    return c.json({ error: ERROR_TIME_ENTRY_NOT_FOUND }, 404);
   }
 
   await db.delete(timeEntries).where(eq(timeEntries.id, id));

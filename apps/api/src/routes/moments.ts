@@ -14,6 +14,8 @@ const momentRoutes = new Hono();
 
 momentRoutes.use('*', requireAuth);
 
+const ERROR_MOMENT_NOT_FOUND = 'Moment not found';
+
 /**
  * List all moments for the authenticated user.
  * GET /api/moments
@@ -54,7 +56,7 @@ momentRoutes.get('/:id', async (c) => {
   });
 
   if (!result) {
-    return c.json({ error: 'Moment not found' }, 404);
+    return c.json({ error: ERROR_MOMENT_NOT_FOUND }, 404);
   }
 
   return c.json({ data: result });
@@ -113,14 +115,14 @@ momentRoutes.patch('/:id', async (c) => {
   });
 
   if (!existing) {
-    return c.json({ error: 'Moment not found' }, 404);
+    return c.json({ error: ERROR_MOMENT_NOT_FOUND }, 404);
   }
 
   const updateData: Record<string, unknown> = { updatedAt: new Date() };
-  if (body.label !== undefined) updateData['label'] = body.label;
-  if (body.description !== undefined) updateData['description'] = body.description;
-  if (body.startTime !== undefined) updateData['startTime'] = new Date(body.startTime);
-  if (body.endTime !== undefined) updateData['endTime'] = new Date(body.endTime);
+  if (body.label !== undefined) updateData.label = body.label;
+  if (body.description !== undefined) updateData.description = body.description;
+  if (body.startTime !== undefined) updateData.startTime = new Date(body.startTime);
+  if (body.endTime !== undefined) updateData.endTime = new Date(body.endTime);
 
   await db
     .update(moments)
@@ -147,7 +149,7 @@ momentRoutes.delete('/:id', async (c) => {
   });
 
   if (!existing) {
-    return c.json({ error: 'Moment not found' }, 404);
+    return c.json({ error: ERROR_MOMENT_NOT_FOUND }, 404);
   }
 
   await db.delete(moments).where(and(eq(moments.id, id), eq(moments.ownerId, userId)));

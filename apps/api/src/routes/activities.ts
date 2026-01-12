@@ -14,6 +14,10 @@ const activityRoutes = new Hono();
 
 activityRoutes.use('*', requireAuth);
 
+const DEFAULT_STREAM_ACTIVITIES_LIMIT = 10;
+const ERROR_ACTIVITY_STREAM_NOT_FOUND = 'Activity stream not found';
+const ERROR_ACTIVITY_NOT_FOUND = 'Activity not found';
+
 // ============================================================================
 // Activity Streams
 // ============================================================================
@@ -29,7 +33,7 @@ activityRoutes.get('/streams', async (c) => {
     where: eq(activityStreams.ownerId, userId),
     with: {
       activities: {
-        limit: 10,
+        limit: DEFAULT_STREAM_ACTIVITIES_LIMIT,
         orderBy: (activities, { desc }) => [desc(activities.startTime)],
       },
     },
@@ -57,7 +61,7 @@ activityRoutes.get('/streams/:id', async (c) => {
   });
 
   if (!result) {
-    return c.json({ error: 'Activity stream not found' }, 404);
+    return c.json({ error: ERROR_ACTIVITY_STREAM_NOT_FOUND }, 404);
   }
 
   return c.json({ data: result });
@@ -110,12 +114,12 @@ activityRoutes.patch('/streams/:id', async (c) => {
   });
 
   if (!existing) {
-    return c.json({ error: 'Activity stream not found' }, 404);
+    return c.json({ error: ERROR_ACTIVITY_STREAM_NOT_FOUND }, 404);
   }
 
   const updateData: Record<string, unknown> = { updatedAt: new Date() };
-  if (body.name !== undefined) updateData['name'] = body.name;
-  if (body.source !== undefined) updateData['source'] = body.source;
+  if (body.name !== undefined) updateData.name = body.name;
+  if (body.source !== undefined) updateData.source = body.source;
 
   await db
     .update(activityStreams)
@@ -142,7 +146,7 @@ activityRoutes.delete('/streams/:id', async (c) => {
   });
 
   if (!existing) {
-    return c.json({ error: 'Activity stream not found' }, 404);
+    return c.json({ error: ERROR_ACTIVITY_STREAM_NOT_FOUND }, 404);
   }
 
   await db
@@ -172,7 +176,7 @@ activityRoutes.get('/streams/:streamId/activities', async (c) => {
   });
 
   if (!stream) {
-    return c.json({ error: 'Activity stream not found' }, 404);
+    return c.json({ error: ERROR_ACTIVITY_STREAM_NOT_FOUND }, 404);
   }
 
   const conditions = [eq(activities.streamId, streamId)];
@@ -209,7 +213,7 @@ activityRoutes.get('/:id', async (c) => {
   });
 
   if (!result) {
-    return c.json({ error: 'Activity not found' }, 404);
+    return c.json({ error: ERROR_ACTIVITY_NOT_FOUND }, 404);
   }
 
   // Verify stream ownership
@@ -218,7 +222,7 @@ activityRoutes.get('/:id', async (c) => {
   });
 
   if (!stream) {
-    return c.json({ error: 'Activity not found' }, 404);
+    return c.json({ error: ERROR_ACTIVITY_NOT_FOUND }, 404);
   }
 
   return c.json({ data: result });
@@ -244,7 +248,7 @@ activityRoutes.post('/streams/:streamId/activities', async (c) => {
   });
 
   if (!stream) {
-    return c.json({ error: 'Activity stream not found' }, 404);
+    return c.json({ error: ERROR_ACTIVITY_STREAM_NOT_FOUND }, 404);
   }
 
   const id = crypto.randomUUID();
@@ -290,7 +294,7 @@ activityRoutes.patch('/:id', async (c) => {
   });
 
   if (!existing) {
-    return c.json({ error: 'Activity not found' }, 404);
+    return c.json({ error: ERROR_ACTIVITY_NOT_FOUND }, 404);
   }
 
   // Verify stream ownership
@@ -299,14 +303,14 @@ activityRoutes.patch('/:id', async (c) => {
   });
 
   if (!stream) {
-    return c.json({ error: 'Activity not found' }, 404);
+    return c.json({ error: ERROR_ACTIVITY_NOT_FOUND }, 404);
   }
 
   const updateData: Record<string, unknown> = { updatedAt: new Date() };
-  if (body.type !== undefined) updateData['type'] = body.type;
-  if (body.startTime !== undefined) updateData['startTime'] = new Date(body.startTime);
-  if (body.endTime !== undefined) updateData['endTime'] = new Date(body.endTime);
-  if (body.metadata !== undefined) updateData['metadata'] = body.metadata;
+  if (body.type !== undefined) updateData.type = body.type;
+  if (body.startTime !== undefined) updateData.startTime = new Date(body.startTime);
+  if (body.endTime !== undefined) updateData.endTime = new Date(body.endTime);
+  if (body.metadata !== undefined) updateData.metadata = body.metadata;
 
   await db.update(activities).set(updateData).where(eq(activities.id, id));
 
@@ -330,7 +334,7 @@ activityRoutes.delete('/:id', async (c) => {
   });
 
   if (!existing) {
-    return c.json({ error: 'Activity not found' }, 404);
+    return c.json({ error: ERROR_ACTIVITY_NOT_FOUND }, 404);
   }
 
   // Verify stream ownership
@@ -339,7 +343,7 @@ activityRoutes.delete('/:id', async (c) => {
   });
 
   if (!stream) {
-    return c.json({ error: 'Activity not found' }, 404);
+    return c.json({ error: ERROR_ACTIVITY_NOT_FOUND }, 404);
   }
 
   await db.delete(activities).where(eq(activities.id, id));

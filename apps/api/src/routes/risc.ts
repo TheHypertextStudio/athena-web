@@ -20,6 +20,17 @@ import { env } from '../lib/env.js';
 
 const riscRoutes = new Hono();
 
+const ERROR_MISSING_SECURITY_EVENT_TOKEN = 'Missing security event token';
+const MESSAGE_EVENT_ALREADY_PROCESSED = 'Event already processed';
+const ERROR_INTERNAL_SECURITY_EVENT = 'Internal error processing security event';
+const STATUS_OK = 'ok';
+const MESSAGE_WEBHOOK_ACTIVE = 'RISC webhook endpoint is active';
+const MESSAGE_RISC_NOT_CONFIGURED = 'RISC is not configured (missing RISC_WEBHOOK_URL)';
+const ERROR_RISC_NOT_CONFIGURED = 'RISC is not configured';
+const ERROR_STREAM_STATUS_FETCH = 'Failed to fetch stream status';
+const ERROR_VERIFICATION_REQUEST_FAILED = 'Failed to request verification';
+const MESSAGE_VERIFICATION_SENT = 'Verification request sent';
+
 /**
  * RISC webhook endpoint.
  * POST /api/risc/webhook
@@ -36,7 +47,7 @@ riscRoutes.post('/webhook', async (c) => {
     if (contentType.includes('application/x-www-form-urlencoded')) {
       // Form data format
       const formData = await c.req.parseBody();
-      const assertion = formData['assertion'];
+      const assertion = formData.assertion;
       token = typeof assertion === 'string' ? assertion : '';
     } else if (contentType.includes('application/secevent+jwt')) {
       // Direct JWT format (preferred)
@@ -49,7 +60,7 @@ riscRoutes.post('/webhook', async (c) => {
       const body = await c.req.json<unknown>().catch(() => null);
       if (body && typeof body === 'object' && !Array.isArray(body)) {
         const record = body as Record<string, unknown>;
-        const rawToken = record['token'] ?? record['assertion'];
+        const rawToken = record.token ?? record.assertion;
         token = typeof rawToken === 'string' ? rawToken : '';
       } else {
         token = '';
@@ -58,7 +69,7 @@ riscRoutes.post('/webhook', async (c) => {
 
     if (!token) {
       logger.warn('[RISC] Received webhook with no token');
-      return c.json({ error: 'Missing security event token' }, 400);
+      return c.json({ error: ERROR_MISSING_SECURITY_EVENT_TOKEN }, 400);
     }
 
     // Validate the token
@@ -70,7 +81,7 @@ riscRoutes.post('/webhook', async (c) => {
 
     if (result.eventTypes.length === 0) {
       // Duplicate event - already processed
-      return c.json({ success: true, message: 'Event already processed' });
+      return c.json({ success: true, message: MESSAGE_EVENT_ALREADY_PROCESSED });
     }
 
     logger.info({ eventTypes: result.eventTypes }, '[RISC] Processed security events');
@@ -90,7 +101,7 @@ riscRoutes.post('/webhook', async (c) => {
       return c.json({ error: message }, 400);
     }
 
-    return c.json({ error: 'Internal error processing security event' }, 500);
+    return c.json({ error: ERROR_INTERNAL_SECURITY_EVENT }, 500);
   }
 });
 
@@ -102,8 +113,8 @@ riscRoutes.post('/webhook', async (c) => {
  */
 riscRoutes.get('/webhook', (c) => {
   return c.json({
-    status: 'ok',
-    message: 'RISC webhook endpoint is active',
+    status: STATUS_OK,
+    message: MESSAGE_WEBHOOK_ACTIVE,
   });
 });
 
@@ -121,7 +132,7 @@ riscRoutes.get('/stream', async (c) => {
       return c.json(
         {
           configured: false,
-          message: 'RISC is not configured (missing RISC_WEBHOOK_URL)',
+          message: MESSAGE_RISC_NOT_CONFIGURED,
         },
         200,
       );
@@ -152,7 +163,7 @@ riscRoutes.get('/stream', async (c) => {
     return c.json(
       {
         configured: true,
-        error: 'Failed to fetch stream status',
+        error: ERROR_STREAM_STATUS_FETCH,
       },
       500,
     );
@@ -168,7 +179,7 @@ riscRoutes.get('/stream', async (c) => {
 riscRoutes.post('/stream/verify', async (c) => {
   try {
     if (!env.riscConfig) {
-      return c.json({ error: 'RISC is not configured' }, 400);
+      return c.json({ error: ERROR_RISC_NOT_CONFIGURED }, 400);
     }
 
     const state = crypto.randomUUID();
@@ -178,7 +189,7 @@ riscRoutes.post('/stream/verify', async (c) => {
 
     return c.json({
       success: true,
-      message: 'Verification request sent',
+      message: MESSAGE_VERIFICATION_SENT,
       state,
     });
   } catch (error) {
@@ -186,7 +197,7 @@ riscRoutes.post('/stream/verify', async (c) => {
       { error: error instanceof Error ? error.message : 'Unknown error' },
       '[RISC] Error requesting verification',
     );
-    return c.json({ error: 'Failed to request verification' }, 500);
+    return c.json({ error: ERROR_VERIFICATION_REQUEST_FAILED }, 500);
   }
 });
 

@@ -32,6 +32,8 @@ const IMPORTED_PROJECT_STATUS = 'active' as const;
 const BULK_ITEMS_MIN = 1;
 const BULK_ITEMS_MAX = 100;
 const TASK_IMPORT_FORMAT_VALUES = ['json', 'todoist', 'asana', 'trello'] as const;
+const ERROR_NO_TASKS_FOUND = 'No tasks found';
+const ERROR_PROJECT_NOT_FOUND = 'Project not found';
 
 /**
  * POST /bulk/tasks
@@ -129,17 +131,17 @@ app.patch(
     const ownedIds = owned.map((t) => t.id);
 
     if (ownedIds.length === 0) {
-      return c.json({ success: false, error: 'No tasks found' }, 404);
+      return c.json({ success: false, error: ERROR_NO_TASKS_FOUND }, 404);
     }
 
     const updateData: Record<string, unknown> = { updatedAt: new Date() };
 
-    if (updates.status !== undefined) updateData['status'] = updates.status;
-    if (updates.priority !== undefined) updateData['priority'] = updates.priority;
-    if (updates.projectId !== undefined) updateData['projectId'] = updates.projectId;
-    if (updates.assigneeId !== undefined) updateData['assigneeId'] = updates.assigneeId;
+    if (updates.status !== undefined) updateData.status = updates.status;
+    if (updates.priority !== undefined) updateData.priority = updates.priority;
+    if (updates.projectId !== undefined) updateData.projectId = updates.projectId;
+    if (updates.assigneeId !== undefined) updateData.assigneeId = updates.assigneeId;
     if (updates.deadline !== undefined) {
-      updateData['deadline'] = updates.deadline ? new Date(updates.deadline) : null;
+      updateData.deadline = updates.deadline ? new Date(updates.deadline) : null;
     }
 
     await db.update(tasks).set(updateData).where(inArray(tasks.id, ownedIds));
@@ -180,7 +182,7 @@ app.delete(
     const ownedIds = owned.map((t) => t.id);
 
     if (ownedIds.length === 0) {
-      return c.json({ success: false, error: 'No tasks found' }, 404);
+      return c.json({ success: false, error: ERROR_NO_TASKS_FOUND }, 404);
     }
 
     if (permanent) {
@@ -352,7 +354,7 @@ app.post(
       });
 
       if (!project) {
-        return c.json({ success: false, error: 'Project not found' }, 404);
+        return c.json({ success: false, error: ERROR_PROJECT_NOT_FOUND }, 404);
       }
     }
 

@@ -24,6 +24,7 @@ export class ApiError extends Error {
 
 interface ErrorResponse {
   message?: string;
+  error?: string;
 }
 
 /**
@@ -55,6 +56,8 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
       const errorData = (await response.json()) as ErrorResponse;
       if (errorData.message) {
         errorMessage = errorData.message;
+      } else if (errorData.error) {
+        errorMessage = errorData.error;
       }
     } catch {
       // Use default error message if JSON parsing fails
@@ -565,6 +568,7 @@ export type IntegrationProvider =
   | 'google_calendar'
   | 'outlook_calendar'
   | 'apple_calendar'
+  | 'caldav_calendar'
   | 'slack'
   | 'zoom'
   | 'google_drive'
@@ -870,6 +874,7 @@ export interface SyncedCalendar {
   name: string;
   color?: string;
   isPrimary: boolean;
+  canEdit?: boolean;
   syncEnabled: boolean;
   syncDirection: SyncDirection;
 }
@@ -877,11 +882,29 @@ export interface SyncedCalendar {
 export interface CalendarConnection {
   id: string;
   provider: CalendarProvider;
+  /** User-defined label for this account (e.g., "Work", "Personal") */
+  accountLabel: string | null;
+  /** Email address from OAuth profile for display */
+  accountEmail: string | null;
+  /** Color for account indicator in calendar view (hex code) */
+  accountColor: string | null;
+  /** Whether this is the primary account for the provider (used for event creation default) */
+  isPrimary: boolean;
+  /** Display order for account list UI (0 = first) */
+  displayOrder: number;
   syncEnabled: boolean;
   lastSyncAt: string | null;
   lastSyncStatus: 'success' | 'error' | null;
+  lastSyncError: string | null;
   calendars: SyncedCalendar[];
   createdAt: string;
+}
+
+export interface AccountSettingsUpdate {
+  accountLabel?: string;
+  accountColor?: string;
+  isPrimary?: boolean;
+  displayOrder?: number;
 }
 
 export interface SyncResult {
@@ -930,7 +953,16 @@ export const calendarSyncApi = {
   handleCallback: (provider: CalendarProvider, code: string, state: string) =>
     request<{
       success: boolean;
-      data: { id: string; provider: CalendarProvider; calendars: SyncedCalendar[] };
+      data: {
+        id: string;
+        provider: CalendarProvider;
+        accountLabel: string | null;
+        accountEmail: string | null;
+        accountColor: string | null;
+        isPrimary: boolean;
+        displayOrder: number;
+        calendars: SyncedCalendar[];
+      };
     }>('/api/calendar-sync/callback', {
       method: 'POST',
       body: JSON.stringify({ provider, code, state }),
@@ -946,6 +978,24 @@ export const calendarSyncApi = {
     request<{ success: boolean }>(`/api/calendar-sync/connections/${connectionId}/settings`, {
       method: 'PATCH',
       body: JSON.stringify({ calendars }),
+    }),
+
+  /**
+   * Update account settings (label, color, primary status).
+   */
+  updateAccountSettings: (connectionId: string, settings: AccountSettingsUpdate) =>
+    request<{ success: boolean }>(`/api/calendar-sync/connections/${connectionId}/account`, {
+      method: 'PATCH',
+      body: JSON.stringify(settings),
+    }),
+
+  /**
+   * Reorder accounts by updating displayOrder.
+   */
+  reorderAccounts: (connectionIds: string[]) =>
+    request<{ success: boolean }>('/api/calendar-sync/connections/reorder', {
+      method: 'PUT',
+      body: JSON.stringify({ connectionIds }),
     }),
 
   /**

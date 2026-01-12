@@ -558,7 +558,7 @@ export class BillingService {
   }
 
   private handleCheckoutComplete(session: Stripe.Checkout.Session): void {
-    const userId = session.metadata?.['userId'];
+    const userId = session.metadata?.userId;
     if (!userId) return;
 
     // Subscription will be created via subscription.created webhook
@@ -566,10 +566,10 @@ export class BillingService {
   }
 
   private async handleSubscriptionUpdate(subscription: Stripe.Subscription): Promise<void> {
-    const userId = subscription.metadata['userId'];
+    const userId = subscription.metadata.userId;
     if (!userId) return;
 
-    const planTier = (subscription.metadata['planTier'] ?? 'pro') as 'free' | 'pro' | 'team';
+    const planTier = (subscription.metadata.planTier ?? 'pro') as 'free' | 'pro' | 'team';
     const customerId =
       typeof subscription.customer === 'string' ? subscription.customer : subscription.customer.id;
     const periodStart = (subscription as SubscriptionWithPeriod).current_period_start;
@@ -619,7 +619,7 @@ export class BillingService {
   }
 
   private async handleSubscriptionDeleted(subscription: Stripe.Subscription): Promise<void> {
-    const userId = subscription.metadata['userId'];
+    const userId = subscription.metadata.userId;
     if (!userId) return;
 
     await db

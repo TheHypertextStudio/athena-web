@@ -1036,7 +1036,11 @@ export class CalendarSyncService {
       where: and(eq(linkedIntegrations.id, connectionId), eq(linkedIntegrations.userId, userId)),
     });
 
-    const accessToken = decryptSecretOptional(integration?.accessToken ?? null);
+    if (!integration) {
+      throw new Error('Connection not found');
+    }
+
+    const accessToken = decryptSecretOptional(integration.accessToken ?? null);
     if (!accessToken) {
       throw new Error('Connection not found or no access token');
     }

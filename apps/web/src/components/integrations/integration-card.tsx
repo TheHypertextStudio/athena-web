@@ -24,7 +24,7 @@ export function IntegrationCard({ config, connection }: IntegrationCardProps) {
     <LinkButton
       href={`/settings/integrations/detail/${config.provider}`}
       variant="text"
-      className="group border-outline-variant bg-surface hover:bg-surface-container-low flex h-auto w-full items-center justify-start gap-4 rounded-xl border p-4"
+      className="group bg-surface-container-low hover:bg-surface-container flex h-auto w-full items-center justify-start gap-4 rounded-xl p-4"
     >
       <div className="bg-surface-container flex h-10 w-10 shrink-0 items-center justify-center rounded-lg">
         <IntegrationIcon provider={config.provider} size={20} />

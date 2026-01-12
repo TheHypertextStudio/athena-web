@@ -11,6 +11,7 @@ import { useState } from 'react';
 import CalendarTodayOutlinedIcon from '@mui/icons-material/CalendarTodayOutlined';
 import { calendarSyncApi, type SyncedCalendar, type SyncDirection } from '@/lib/api-client';
 import { Switch } from '@/components/ui/switch';
+import { Surface } from '@/components/ui/surface';
 import {
   Select,
   SelectContent,
@@ -91,10 +92,7 @@ export function CalendarSelection({ connectionId, calendars, onUpdate }: Calenda
       </h3>
       <div className="space-y-2">
         {calendars.map((calendar) => (
-          <div
-            key={calendar.id}
-            className="border-outline-variant bg-surface-container-lowest rounded-lg border p-3"
-          >
+          <Surface key={calendar.id} elevation="high" padding="sm" rounded="sm">
             <div className="flex items-center justify-between gap-3">
               <div className="flex min-w-0 flex-1 items-center gap-2">
                 {/* Calendar color indicator */}
@@ -150,7 +148,7 @@ export function CalendarSelection({ connectionId, calendars, onUpdate }: Calenda
                 </Select>
               </div>
             )}
-          </div>
+          </Surface>
         ))}
       </div>
     </div>

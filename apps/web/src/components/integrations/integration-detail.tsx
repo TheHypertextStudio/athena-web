@@ -19,6 +19,7 @@ import { calendarSyncApi, type CalendarProvider } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Surface } from '@/components/ui/surface';
 import { IntegrationIcon } from './integration-icons';
 import { CalendarSelection } from './calendar-selection';
 
@@ -144,9 +145,14 @@ export function IntegrationDetailContent({ provider }: IntegrationDetailContentP
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-start gap-4">
-        <div className="bg-surface-container flex h-12 w-12 shrink-0 items-center justify-center rounded-xl">
+        <Surface
+          elevation="high"
+          padding="none"
+          rounded="md"
+          className="flex h-12 w-12 shrink-0 items-center justify-center"
+        >
           <IntegrationIcon provider={config.provider} size={24} />
-        </div>
+        </Surface>
         <div className="min-w-0 flex-1">
           <h2 className="text-on-surface text-xl font-semibold">{config.name}</h2>
           <Badge variant="outline" className="mt-1">
@@ -162,7 +168,7 @@ export function IntegrationDetailContent({ provider }: IntegrationDetailContentP
 
       {/* Connection Status */}
       {isConnected && (
-        <div className="border-tertiary/30 bg-tertiary/5 rounded-xl border p-4">
+        <div className="bg-tertiary-container/30 rounded-xl p-4">
           <div className="text-tertiary flex items-center gap-2">
             <CheckCircleOutlinedIcon sx={{ fontSize: 20 }} />
             <span className="font-medium">Connected</span>
@@ -224,13 +230,10 @@ export function IntegrationDetailContent({ provider }: IntegrationDetailContentP
         </h3>
         <div className="space-y-2">
           {config.scopes.map((scope) => (
-            <div
-              key={scope.id}
-              className="border-outline-variant bg-surface-container-lowest rounded-lg border p-3"
-            >
+            <Surface key={scope.id} elevation="high" padding="sm" rounded="sm">
               <div className="text-on-surface font-medium">{scope.name}</div>
               <div className="text-on-surface-variant text-sm">{scope.description}</div>
-            </div>
+            </Surface>
           ))}
         </div>
       </div>

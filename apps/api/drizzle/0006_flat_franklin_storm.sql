@@ -1,0 +1,1 @@
+ALTER TABLE "passkeys" ADD COLUMN "aaguid" text;

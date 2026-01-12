@@ -13,7 +13,6 @@ import { InitiativeNode } from './InitiativeNode';
 import { ProjectNode } from './ProjectNode';
 import { TimelineEdge } from './TimelineEdge';
 import { useRoadmapGraph } from './useRoadmapGraph';
-import { useFlowExport } from '@/hooks/use-flow-export';
 
 export interface ProjectRoadmapFlowProps {
   initiativeId?: string;
@@ -66,14 +65,6 @@ export function ProjectRoadmapFlow({
     includeCompleted,
   });
 
-  const { exportToPng } = useFlowExport({
-    fileName: `roadmap-${initiativeId ?? 'all'}`,
-  });
-
-  const handleExport = useCallback(() => {
-    void exportToPng();
-  }, [exportToPng]);
-
   const handleNodeClick = useCallback(
     (_event: React.MouseEvent, node: Node) => {
       if (onNodeClick) {
@@ -123,7 +114,7 @@ export function ProjectRoadmapFlow({
       title={title}
       showMinimap={showMinimap}
       showControls={showControls}
-      onExport={handleExport}
+      exportFileName={`roadmap-${initiativeId ?? 'all'}`}
       onExpand={onExpand}
       className={className}
     />

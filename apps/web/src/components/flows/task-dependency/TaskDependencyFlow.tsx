@@ -13,7 +13,6 @@ import { FlowSurface } from '../FlowSurface';
 import { TaskNode } from './TaskNode';
 import { DependencyEdge } from './DependencyEdge';
 import { useDependencyGraph } from './useDependencyGraph';
-import { useFlowExport } from '@/hooks/use-flow-export';
 
 export interface TaskDependencyFlowProps {
   rootTaskId: string;
@@ -69,14 +68,6 @@ export function TaskDependencyFlow({
     isLoading,
     error,
   } = useDependencyGraph({ rootTaskId, includeCompleted });
-
-  const { exportToPng } = useFlowExport({
-    fileName: `task-dependencies-${rootTaskId}`,
-  });
-
-  const handleExport = useCallback(() => {
-    void exportToPng();
-  }, [exportToPng]);
 
   const handleNodeClick = useCallback(
     (_event: React.MouseEvent, node: Node) => {
@@ -137,7 +128,7 @@ export function TaskDependencyFlow({
       title={title}
       showMinimap={showMinimap}
       showControls={showControls}
-      onExport={handleExport}
+      exportFileName={`task-dependencies-${rootTaskId}`}
       onExpand={onExpand}
       className={className}
     />

@@ -11,7 +11,6 @@ import {
 import { FlowSurface } from '../FlowSurface';
 import { StatusNode } from './StatusNode';
 import { useWorkflowGraph, CATEGORY_ORDER } from './useWorkflowGraph';
-import { useFlowExport } from '@/hooks/use-flow-export';
 import { cn } from '@/lib/utils';
 
 export interface WorkflowStatusFlowProps {
@@ -68,14 +67,6 @@ export function WorkflowStatusFlow({
     workspaceId,
   });
 
-  const { exportToPng } = useFlowExport({
-    fileName: 'workflow-status',
-  });
-
-  const handleExport = useCallback(() => {
-    void exportToPng();
-  }, [exportToPng]);
-
   const handleNodeClick = useCallback(
     (_event: React.MouseEvent, node: Node) => {
       if (onNodeClick) {
@@ -123,7 +114,7 @@ export function WorkflowStatusFlow({
       title={title}
       showMinimap={showMinimap}
       showControls={showControls}
-      onExport={handleExport}
+      exportFileName="workflow-status"
       fitView
       className={className}
     >

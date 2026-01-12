@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useCallback } from 'react';
+import { useMemo, useCallback, useEffect } from 'react';
 import { useNodesState, useEdgesState, type Edge } from '@xyflow/react';
 import {
   useGroupedStatuses,
@@ -108,12 +108,18 @@ export function useWorkflowGraph(options: UseWorkflowGraphOptions = {}) {
 
   const { groupedStatuses, isLoading, error } = useGroupedStatuses(workspaceId);
 
-  const initialGraph = useMemo(() => {
+  const graph = useMemo(() => {
     return buildWorkflowGraph(groupedStatuses);
   }, [groupedStatuses]);
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialGraph.nodes);
-  const [edges, _setEdges, onEdgesChange] = useEdgesState(initialGraph.edges);
+  const [nodes, setNodes, onNodesChange] = useNodesState<StatusNodeType>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState([] as Edge[]);
+
+  // Sync nodes and edges when the graph data changes
+  useEffect(() => {
+    setNodes(graph.nodes);
+    setEdges(graph.edges);
+  }, [graph, setNodes, setEdges]);
 
   const updateNodePosition = useCallback(
     (nodeId: string, newCategory: TaskStatusCategory, newPosition: number) => {

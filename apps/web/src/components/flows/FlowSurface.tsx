@@ -4,7 +4,6 @@ import { useCallback, type ReactNode } from 'react';
 import {
   ReactFlow,
   ReactFlowProvider,
-  useReactFlow,
   type Node,
   type Edge,
   type OnNodesChange,
@@ -20,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import { FlowBackground } from './shared/FlowBackground';
 import { FlowControls } from './shared/FlowControls';
 import { FlowMinimap } from './shared/FlowMinimap';
+import { useFlowExport } from '@/hooks/use-flow-export';
 import { cn } from '@/lib/utils';
 
 export interface FlowSurfaceProps {
@@ -36,7 +36,8 @@ export interface FlowSurfaceProps {
   showMinimap?: boolean;
   showControls?: boolean;
   showBackground?: boolean;
-  onExport?: () => void;
+  /** Enable export button. Pass string for custom filename. */
+  exportFileName?: string | boolean;
   onExpand?: () => void;
   fitView?: boolean;
   className?: string;
@@ -57,19 +58,26 @@ function FlowSurfaceInner({
   showMinimap = true,
   showControls = true,
   showBackground = true,
-  onExport,
+  exportFileName,
   onExpand,
   fitView = true,
   className,
   children,
 }: FlowSurfaceProps) {
-  const _reactFlow = useReactFlow();
+  const fileName =
+    typeof exportFileName === 'string'
+      ? exportFileName
+      : exportFileName
+        ? 'flow-export'
+        : undefined;
+
+  const { exportToPng } = useFlowExport({
+    fileName: fileName ?? 'flow-export',
+  });
 
   const handleExport = useCallback(() => {
-    if (onExport) {
-      onExport();
-    }
-  }, [onExport]);
+    void exportToPng();
+  }, [exportToPng]);
 
   return (
     <div
@@ -82,7 +90,7 @@ function FlowSurfaceInner({
         <div className="border-outline-variant flex items-center justify-between border-b px-4 py-2">
           <h3 className="text-on-surface font-medium">{title}</h3>
           <div className="flex gap-1">
-            {onExport && (
+            {fileName && (
               <Button variant="text" size="icon" onClick={handleExport} title="Export">
                 <DownloadIcon sx={{ fontSize: 18 }} />
               </Button>

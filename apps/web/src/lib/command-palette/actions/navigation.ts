@@ -13,6 +13,8 @@
  * | Go to Tasks | `g t` | Navigate to tasks list |
  * | Go to Projects | `g p` | Navigate to projects list |
  * | Go to Initiatives | `g i` | Navigate to initiatives |
+ * | Go to Roadmap | `g r` | Navigate to project roadmap |
+ * | Go to Task Dependencies | - | Navigate to task dependency graph |
  * | Go to Events | `g e` | Navigate to calendar/events |
  * | Go to Moments | `g m` | Navigate to moments journal |
  * | Go to Settings | `g s` | Navigate to settings |
@@ -34,6 +36,8 @@ import {
   Calendar,
   BookOpen,
   Settings,
+  GitBranch,
+  Map,
 } from 'lucide-react';
 
 import type { ExecutableAction } from '../types';
@@ -149,6 +153,44 @@ export const goToInitiativesAction: ExecutableAction = {
 };
 
 /**
+ * Navigate to roadmap action.
+ *
+ * The roadmap shows initiatives and projects in a visual flow diagram,
+ * helping users see the strategic timeline and dependencies.
+ */
+export const goToRoadmapAction: ExecutableAction = {
+  type: 'action',
+  id: 'go-roadmap',
+  label: 'Go to Roadmap',
+  icon: Map,
+  category: 'navigation',
+  keywords: ['timeline', 'strategic', 'planning', 'flow', 'diagram'],
+  priority: 78,
+  shortcut: {
+    id: 'go-roadmap',
+    keys: 'g r',
+    scope: 'global',
+  },
+  execute: () => createNavigationResult('/roadmap'),
+};
+
+/**
+ * Navigate to task dependencies action.
+ *
+ * Shows task dependency graphs, visualizing which tasks block others.
+ */
+export const goToTaskDependenciesAction: ExecutableAction = {
+  type: 'action',
+  id: 'go-task-dependencies',
+  label: 'Go to Task Dependencies',
+  icon: GitBranch,
+  category: 'navigation',
+  keywords: ['blocking', 'blockers', 'graph', 'flow', 'depends'],
+  priority: 77,
+  execute: () => createNavigationResult('/tasks/dependencies'),
+};
+
+/**
  * Navigate to events/calendar action.
  *
  * The events page shows calendar events and allows scheduling.
@@ -222,6 +264,8 @@ export const navigationActions: ExecutableAction[] = [
   goToTasksAction,
   goToProjectsAction,
   goToInitiativesAction,
+  goToRoadmapAction,
+  goToTaskDependenciesAction,
   goToEventsAction,
   goToMomentsAction,
   goToSettingsAction,

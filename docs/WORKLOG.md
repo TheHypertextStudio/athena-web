@@ -1,7 +1,7 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-01-05
+> **Last Updated**: 2026-01-11
 
 ---
 
@@ -149,6 +149,18 @@ Run `pnpm typecheck`, `pnpm lint`, `pnpm test`, and `pnpm build` after each batc
 ---
 
 ## Completed Tasks
+
+### [CAL-AUDIT-001] Calendar Integrations Audit
+
+- **Completed**: 2026-01-11
+- **Duration**: 0.2 day
+- **Summary**: Audited calendar integrations (Google, Outlook, iCloud, CalDAV) for onboarding defaults, UX/accessibility, lint/type safety, performance, and security. Compiled findings and remediation recommendations.
+- **Files Changed**:
+  - `docs/WORKLOG.md`
+- **Learnings**: Calendar sync correctness depends on incremental pagination and explicit delete handling; OAuth state must be signed and user-bound.
+- **Retrospective**: Went well—inventorying API+UI touchpoints surfaced integration gaps quickly; improve—add automated calendar sync tests to catch data divergence; change—align OpenAPI schemas with runtime responses.
+- **State Transitions**: PLANNING → RESEARCHING → DOCUMENTING → RETROSPECTING
+- **Validation**: Audit-only; no code changes.
 
 ### [TEST-BLOCKERS-001] API Test Blockers
 

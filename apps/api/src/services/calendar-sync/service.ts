@@ -6,8 +6,13 @@
 
 import * as crypto from 'node:crypto';
 import { db } from '../../db/index.js';
-import { events, linkedIntegrations, calendarSyncTokens } from '../../db/schema/index.js';
-import { eq, and } from 'drizzle-orm';
+import {
+  events,
+  linkedIntegrations,
+  calendarSyncTokens,
+  externalIdMappings,
+} from '../../db/schema/index.js';
+import { eq, and, inArray, gte, lte } from 'drizzle-orm';
 import { GoogleCalendarProvider } from './providers/google.js';
 import { OutlookCalendarProvider } from './providers/outlook.js';
 import { ICloudCalendarProvider } from './providers/icloud.js';
@@ -20,8 +25,10 @@ import type {
   SyncedCalendar,
   SyncResult,
   ExternalCalendarEvent,
+  AccountSettingsUpdate,
 } from './types.js';
 import { env } from '../../lib/env.js';
+import { decryptSecretOptional, encryptSecret } from '../../lib/crypto.js';
 
 /**
  * Calendar sync configuration.
@@ -44,6 +51,111 @@ export interface CalendarSyncConfig {
     enabled: boolean;
   };
 }
+
+interface IntegrationSyncStatus {
+  lastSyncAt?: string | null;
+  lastSyncStatus?: 'success' | 'error' | null;
+  lastSyncError?: string | null;
+}
+
+interface IntegrationMetadata {
+  calendars: SyncedCalendar[];
+  syncStatus?: IntegrationSyncStatus;
+}
+
+const CALENDAR_SYNC_DIRECTIONS = ['pull', 'push', 'bidirectional'] as const;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  !!value && typeof value === 'object' && !Array.isArray(value);
+
+const isSyncedCalendar = (value: unknown): value is SyncedCalendar => {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  if (typeof value.id !== 'string' || typeof value.externalId !== 'string') {
+    return false;
+  }
+
+  if (typeof value.name !== 'string' || typeof value.isPrimary !== 'boolean') {
+    return false;
+  }
+
+  if (typeof value.syncEnabled !== 'boolean') {
+    return false;
+  }
+
+  if (
+    typeof value.syncDirection !== 'string' ||
+    !CALENDAR_SYNC_DIRECTIONS.includes(
+      value.syncDirection as (typeof CALENDAR_SYNC_DIRECTIONS)[number],
+    )
+  ) {
+    return false;
+  }
+
+  if (value.color !== undefined && typeof value.color !== 'string') {
+    return false;
+  }
+
+  if (value.canEdit !== undefined && typeof value.canEdit !== 'boolean') {
+    return false;
+  }
+
+  return true;
+};
+
+const parseSyncStatus = (value: unknown): IntegrationSyncStatus | undefined => {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  const lastSyncAt = typeof value.lastSyncAt === 'string' ? value.lastSyncAt : undefined;
+  const lastSyncStatus =
+    value.lastSyncStatus === 'success' || value.lastSyncStatus === 'error'
+      ? value.lastSyncStatus
+      : undefined;
+  const lastSyncError =
+    value.lastSyncError === null || typeof value.lastSyncError === 'string'
+      ? value.lastSyncError
+      : undefined;
+
+  if (!lastSyncAt && !lastSyncStatus && lastSyncError === undefined) {
+    return undefined;
+  }
+
+  return {
+    lastSyncAt,
+    lastSyncStatus,
+    lastSyncError,
+  };
+};
+
+const parseIntegrationMetadata = (metadata: unknown): IntegrationMetadata => {
+  if (!isRecord(metadata)) {
+    return { calendars: [] };
+  }
+
+  const calendars = Array.isArray(metadata.calendars)
+    ? metadata.calendars.filter(isSyncedCalendar)
+    : [];
+  const syncStatus = parseSyncStatus(metadata.syncStatus);
+
+  return {
+    calendars,
+    syncStatus,
+  };
+};
+
+const getCalendarIdFromMetadata = (
+  metadata: Record<string, unknown> | null,
+): string | undefined => {
+  if (!isRecord(metadata)) {
+    return undefined;
+  }
+
+  return typeof metadata.calendarId === 'string' ? metadata.calendarId : undefined;
+};
 
 /**
  * Calendar sync service.
@@ -99,58 +211,43 @@ export class CalendarSyncService {
   /**
    * Get OAuth authorization URL for a provider.
    */
-  getAuthUrl(provider: CalendarProvider, userId: string): string {
+  getAuthUrl(provider: CalendarProvider, state: string): string {
     const client = this.providers.get(provider);
     if (!client) {
       throw new Error(`Provider ${provider} is not configured`);
     }
-
-    // Generate state token with user ID for security
-    const state = Buffer.from(JSON.stringify({ userId, provider, timestamp: Date.now() })).toString(
-      'base64url',
-    );
 
     return client.getAuthUrl(state);
   }
 
   /**
    * Handle OAuth callback and create connection.
+   * Supports multiple accounts per provider.
    */
   async handleOAuthCallback(
     provider: CalendarProvider,
+    userId: string,
     code: string,
-    state: string,
   ): Promise<CalendarConnection> {
     const client = this.providers.get(provider);
     if (!client) {
       throw new Error(`Provider ${provider} is not configured`);
     }
 
-    // Decode and validate state
-    let stateData: { userId: string; provider: string; timestamp: number };
-    try {
-      stateData = JSON.parse(Buffer.from(state, 'base64url').toString()) as {
-        userId: string;
-        provider: string;
-        timestamp: number;
-      };
-    } catch {
-      throw new Error('Invalid state token');
-    }
-
-    // Verify state is recent (within 10 minutes)
-    if (Date.now() - stateData.timestamp > 10 * 60 * 1000) {
-      throw new Error('State token expired');
-    }
-
     // Exchange code for tokens
     const tokens = await client.exchangeCode(code);
+    const encryptedAccessToken = encryptSecret(tokens.accessToken);
+    const encryptedRefreshToken = tokens.refreshToken ? encryptSecret(tokens.refreshToken) : null;
 
     // Get list of calendars
     const calendars = await client.listCalendars(tokens.accessToken);
 
+    // Get account email if provider supports it
+    const accountEmail = client.getUserEmail
+      ? await client.getUserEmail(tokens.accessToken)
+      : undefined;
+
     // Store connection
-    const connectionId = crypto.randomUUID();
     const now = new Date();
 
     // Map provider to integration provider enum
@@ -161,30 +258,126 @@ export class CalendarSyncService {
       caldav: 'google_calendar', // CalDAV doesn't have its own enum, use a placeholder
     };
 
+    const integrationProvider = providerMap[provider] as
+      | 'google_calendar'
+      | 'outlook_calendar'
+      | 'apple_calendar';
+
+    // Use the primary calendar's external ID as account identifier, or email, or 'default'
+    const externalAccountId =
+      accountEmail ?? calendars.find((c) => c.isPrimary)?.externalId ?? 'default';
+
+    // Check if this specific external account is already connected (not just any account for this provider)
+    const existingByExternalAccount = await db.query.linkedIntegrations.findFirst({
+      where: and(
+        eq(linkedIntegrations.userId, userId),
+        eq(linkedIntegrations.provider, integrationProvider),
+        eq(linkedIntegrations.externalAccountId, externalAccountId),
+      ),
+    });
+
+    if (existingByExternalAccount) {
+      // Update existing connection for this specific account
+      const existingMetadata = parseIntegrationMetadata(existingByExternalAccount.metadata);
+      const mergedCalendars = this.mergeCalendars(existingMetadata.calendars, calendars);
+      const metadata = {
+        ...existingMetadata,
+        calendars: mergedCalendars,
+      };
+
+      await db
+        .update(linkedIntegrations)
+        .set({
+          accessToken: encryptedAccessToken,
+          refreshToken: encryptedRefreshToken,
+          tokenExpiresAt: tokens.expiresAt,
+          scopes: tokens.scope,
+          accountEmail,
+          metadata,
+          updatedAt: now,
+        })
+        .where(eq(linkedIntegrations.id, existingByExternalAccount.id));
+
+      return {
+        id: existingByExternalAccount.id,
+        userId,
+        provider,
+        externalAccountId,
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+        tokenExpiresAt: tokens.expiresAt,
+        syncEnabled: true,
+        calendars: mergedCalendars,
+        accountLabel: existingByExternalAccount.accountLabel ?? undefined,
+        accountEmail,
+        accountColor: existingByExternalAccount.accountColor ?? undefined,
+        isPrimary: existingByExternalAccount.isPrimary,
+        displayOrder: existingByExternalAccount.displayOrder,
+        createdAt: existingByExternalAccount.createdAt,
+        updatedAt: now,
+      };
+    }
+
+    // Check if any accounts exist for this provider (to determine isPrimary)
+    const existingForProvider = await db.query.linkedIntegrations.findMany({
+      where: and(
+        eq(linkedIntegrations.userId, userId),
+        eq(linkedIntegrations.provider, integrationProvider),
+      ),
+    });
+
+    // First account for this provider is primary
+    const isPrimary = existingForProvider.length === 0;
+
+    // Calculate display order (max + 1)
+    const maxDisplayOrder = existingForProvider.reduce(
+      (max, conn) => Math.max(max, conn.displayOrder),
+      -1,
+    );
+    const displayOrder = maxDisplayOrder + 1;
+
+    // Generate a default account color based on display order
+    const defaultColors = ['#4285F4', '#EA4335', '#FBBC05', '#34A853', '#9C27B0'];
+    const accountColor = defaultColors[displayOrder % defaultColors.length];
+
+    const metadata = {
+      calendars,
+    };
+
+    const connectionId = crypto.randomUUID();
+
     await db.insert(linkedIntegrations).values({
       id: connectionId,
-      userId: stateData.userId,
-      provider: providerMap[provider] as 'google_calendar' | 'outlook_calendar' | 'apple_calendar',
-      externalAccountId: calendars.find((c) => c.isPrimary)?.externalId ?? 'default',
-      accessToken: tokens.accessToken,
-      refreshToken: tokens.refreshToken,
+      userId,
+      provider: integrationProvider,
+      externalAccountId,
+      accessToken: encryptedAccessToken,
+      refreshToken: encryptedRefreshToken,
       tokenExpiresAt: tokens.expiresAt,
       scopes: tokens.scope,
-      metadata: { calendars: calendars.map((c) => ({ ...c, syncEnabled: c.isPrimary })) },
+      accountEmail,
+      accountColor,
+      isPrimary,
+      displayOrder,
+      metadata,
       createdAt: now,
       updatedAt: now,
     });
 
     return {
       id: connectionId,
-      userId: stateData.userId,
+      userId,
       provider,
-      externalAccountId: calendars.find((c) => c.isPrimary)?.externalId ?? 'default',
+      externalAccountId,
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
       tokenExpiresAt: tokens.expiresAt,
       syncEnabled: true,
-      calendars: calendars.map((c) => ({ ...c, syncEnabled: c.isPrimary })),
+      calendars,
+      accountEmail,
+      accountColor,
+      isPrimary,
+      displayOrder,
       createdAt: now,
       updatedAt: now,
     };
@@ -192,6 +385,7 @@ export class CalendarSyncService {
 
   /**
    * Get user's calendar connections.
+   * Returns all connections, supporting multiple accounts per provider.
    */
   async getConnections(userId: string): Promise<CalendarConnection[]> {
     const integrations = await db.query.linkedIntegrations.findMany({
@@ -200,19 +394,105 @@ export class CalendarSyncService {
 
     return integrations
       .filter((i) => ['google_calendar', 'outlook_calendar', 'apple_calendar'].includes(i.provider))
-      .map((i) => ({
-        id: i.id,
-        userId: i.userId,
-        provider: this.mapIntegrationToProvider(i.provider),
-        externalAccountId: i.externalAccountId,
-        accessToken: i.accessToken ?? undefined,
-        refreshToken: i.refreshToken ?? undefined,
-        tokenExpiresAt: i.tokenExpiresAt ?? undefined,
-        syncEnabled: true,
-        calendars: (i.metadata as { calendars?: SyncedCalendar[] }).calendars ?? [],
-        createdAt: i.createdAt,
-        updatedAt: i.updatedAt,
-      }));
+      .map((i) => {
+        const metadata = parseIntegrationMetadata(i.metadata);
+        const syncStatus = metadata.syncStatus;
+        return {
+          id: i.id,
+          userId: i.userId,
+          provider: this.mapIntegrationToProvider(i.provider),
+          externalAccountId: i.externalAccountId,
+          accessToken: undefined,
+          refreshToken: undefined,
+          tokenExpiresAt: i.tokenExpiresAt ?? undefined,
+          syncEnabled: true,
+          lastSyncAt: syncStatus?.lastSyncAt ? new Date(syncStatus.lastSyncAt) : undefined,
+          lastSyncStatus:
+            (syncStatus?.lastSyncStatus as 'success' | 'error' | undefined) ?? undefined,
+          lastSyncError: syncStatus?.lastSyncError ?? undefined,
+          calendars: metadata.calendars,
+          accountLabel: i.accountLabel ?? undefined,
+          accountEmail: i.accountEmail ?? undefined,
+          accountColor: i.accountColor ?? undefined,
+          isPrimary: i.isPrimary,
+          displayOrder: i.displayOrder,
+          createdAt: i.createdAt,
+          updatedAt: i.updatedAt,
+        };
+      })
+      .sort((a, b) => {
+        // Sort by provider, then by displayOrder
+        if (a.provider !== b.provider) {
+          return a.provider.localeCompare(b.provider);
+        }
+        return a.displayOrder - b.displayOrder;
+      });
+  }
+
+  /**
+   * Update account settings (label, color, primary status).
+   */
+  async updateAccountSettings(
+    connectionId: string,
+    userId: string,
+    settings: AccountSettingsUpdate,
+  ): Promise<void> {
+    const integration = await db.query.linkedIntegrations.findFirst({
+      where: and(eq(linkedIntegrations.id, connectionId), eq(linkedIntegrations.userId, userId)),
+    });
+
+    if (!integration) {
+      throw new Error('Connection not found');
+    }
+
+    const updates: Partial<typeof linkedIntegrations.$inferInsert> = {
+      updatedAt: new Date(),
+    };
+
+    if (settings.accountLabel !== undefined) {
+      updates.accountLabel = settings.accountLabel;
+    }
+
+    if (settings.accountColor !== undefined) {
+      updates.accountColor = settings.accountColor;
+    }
+
+    if (settings.displayOrder !== undefined) {
+      updates.displayOrder = settings.displayOrder;
+    }
+
+    // If setting as primary, unset other accounts for this provider
+    if (settings.isPrimary === true) {
+      await db
+        .update(linkedIntegrations)
+        .set({ isPrimary: false, updatedAt: new Date() })
+        .where(
+          and(
+            eq(linkedIntegrations.userId, userId),
+            eq(linkedIntegrations.provider, integration.provider),
+          ),
+        );
+      updates.isPrimary = true;
+    }
+
+    await db.update(linkedIntegrations).set(updates).where(eq(linkedIntegrations.id, connectionId));
+  }
+
+  /**
+   * Reorder accounts by updating displayOrder.
+   */
+  async reorderAccounts(userId: string, connectionIds: string[]): Promise<void> {
+    const now = new Date();
+
+    for (let i = 0; i < connectionIds.length; i++) {
+      const connectionId = connectionIds[i];
+      if (!connectionId) continue;
+
+      await db
+        .update(linkedIntegrations)
+        .set({ displayOrder: i, updatedAt: now })
+        .where(and(eq(linkedIntegrations.id, connectionId), eq(linkedIntegrations.userId, userId)));
+    }
   }
 
   /**
@@ -235,13 +515,15 @@ export class CalendarSyncService {
       throw new Error('Connection not found');
     }
 
-    const existingCalendars =
-      (integration.metadata as { calendars?: SyncedCalendar[] }).calendars ?? [];
+    const metadata = parseIntegrationMetadata(integration.metadata);
+    const existingCalendars = metadata.calendars;
 
     const updatedCalendars = existingCalendars.map((cal) => {
       const update = calendars.find((c) => c.id === cal.id);
       if (update) {
-        return { ...cal, syncEnabled: update.syncEnabled, syncDirection: update.syncDirection };
+        const nextDirection =
+          cal.canEdit === false && update.syncDirection !== 'pull' ? 'pull' : update.syncDirection;
+        return { ...cal, syncEnabled: update.syncEnabled, syncDirection: nextDirection };
       }
       return cal;
     });
@@ -249,7 +531,7 @@ export class CalendarSyncService {
     await db
       .update(linkedIntegrations)
       .set({
-        metadata: { calendars: updatedCalendars },
+        metadata: { ...metadata, calendars: updatedCalendars },
         updatedAt: new Date(),
       })
       .where(eq(linkedIntegrations.id, connectionId));
@@ -346,35 +628,34 @@ export class CalendarSyncService {
     }
 
     // Ensure we have valid tokens
-    let accessToken = integration.accessToken;
+    let accessToken = decryptSecretOptional(integration.accessToken);
     if (!accessToken) {
       throw new Error('No access token available');
     }
 
     // Check if token needs refresh
-    if (
-      integration.tokenExpiresAt &&
-      integration.tokenExpiresAt < new Date() &&
-      integration.refreshToken
-    ) {
-      const newTokens = await client.refreshToken(integration.refreshToken);
+    const refreshToken = decryptSecretOptional(integration.refreshToken);
+    if (integration.tokenExpiresAt && integration.tokenExpiresAt < new Date() && refreshToken) {
+      const newTokens = await client.refreshToken(refreshToken);
       accessToken = newTokens.accessToken;
 
       // Update stored tokens
       await db
         .update(linkedIntegrations)
         .set({
-          accessToken: newTokens.accessToken,
-          refreshToken: newTokens.refreshToken ?? integration.refreshToken,
+          accessToken: encryptSecret(newTokens.accessToken),
+          refreshToken: newTokens.refreshToken
+            ? encryptSecret(newTokens.refreshToken)
+            : integration.refreshToken,
           tokenExpiresAt: newTokens.expiresAt,
           updatedAt: new Date(),
         })
         .where(eq(linkedIntegrations.id, connectionId));
     }
 
-    const calendars = (
-      (integration.metadata as { calendars?: SyncedCalendar[] }).calendars ?? []
-    ).filter((c) => c.syncEnabled);
+    const metadata = parseIntegrationMetadata(integration.metadata);
+
+    const calendars = metadata.calendars.filter((c) => c.syncEnabled);
 
     const result: SyncResult = {
       success: true,
@@ -385,44 +666,65 @@ export class CalendarSyncService {
       syncedAt: new Date(),
     };
 
+    const supportsDeletionSync = provider === 'google' || provider === 'outlook';
+
     for (const calendar of calendars) {
       try {
-        // Get persisted sync token for incremental sync
         const syncToken = await this.getSyncToken(connectionId, calendar.externalId);
+        const timeMin = syncToken ? undefined : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        const timeMax = syncToken ? undefined : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
 
-        // Get events from external calendar
-        let externalEvents: ExternalCalendarEvent[];
+        const fetchEvents = async (activeSyncToken?: string) => {
+          const externalEvents: ExternalCalendarEvent[] = [];
+          let nextSyncToken: string | undefined;
+          let nextPageToken: string | undefined;
+          let fullSync = !activeSyncToken;
+
+          do {
+            const eventsResult = await client.getEvents(accessToken, calendar.externalId, {
+              syncToken: activeSyncToken,
+              timeMin,
+              timeMax,
+              pageToken: nextPageToken,
+            });
+            externalEvents.push(...eventsResult.events);
+            if (eventsResult.nextSyncToken) {
+              nextSyncToken = eventsResult.nextSyncToken;
+            }
+            if (eventsResult.fullSync !== undefined) {
+              fullSync = eventsResult.fullSync;
+            }
+            nextPageToken = eventsResult.nextPageToken;
+          } while (nextPageToken);
+
+          return { externalEvents, nextSyncToken, fullSync };
+        };
+
+        let externalEvents: ExternalCalendarEvent[] = [];
         let nextSyncToken: string | undefined;
+        let fullSync = false;
 
         try {
-          const eventsResult = await client.getEvents(accessToken, calendar.externalId, {
-            syncToken,
-            timeMin: syncToken ? undefined : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // Last 30 days
-            timeMax: syncToken ? undefined : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // Next year
-          });
-          externalEvents = eventsResult.events;
+          const eventsResult = await fetchEvents(syncToken);
+          externalEvents = eventsResult.externalEvents;
           nextSyncToken = eventsResult.nextSyncToken;
+          fullSync = eventsResult.fullSync;
         } catch (err) {
-          // Handle 410 Gone (sync token invalidated) by clearing token and doing full sync
           if (err instanceof Error && err.message.includes('410')) {
             await this.clearSyncToken(connectionId, calendar.externalId);
-            const eventsResult = await client.getEvents(accessToken, calendar.externalId, {
-              timeMin: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
-              timeMax: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-            });
-            externalEvents = eventsResult.events;
+            const eventsResult = await fetchEvents(undefined);
+            externalEvents = eventsResult.externalEvents;
             nextSyncToken = eventsResult.nextSyncToken;
+            fullSync = eventsResult.fullSync;
           } else {
             throw err;
           }
         }
 
-        // Persist new sync token
         if (nextSyncToken) {
           await this.saveSyncToken(connectionId, calendar.externalId, nextSyncToken);
         }
 
-        // Process each event
         for (const externalEvent of externalEvents) {
           try {
             const syncResult = await this.syncEvent(
@@ -442,6 +744,17 @@ export class CalendarSyncService {
             });
           }
         }
+
+        if (!supportsDeletionSync && fullSync) {
+          const deletedCount = await this.pruneMissingEvents(
+            userId,
+            connectionId,
+            calendar.externalId,
+            externalEvents.map((event) => event.externalId),
+            { timeMin, timeMax },
+          );
+          result.eventsDeleted += deletedCount;
+        }
       } catch (err) {
         result.errors.push({
           operation: 'update',
@@ -451,6 +764,22 @@ export class CalendarSyncService {
     }
 
     result.success = result.errors.length === 0;
+
+    await db
+      .update(linkedIntegrations)
+      .set({
+        metadata: {
+          ...metadata,
+          syncStatus: {
+            lastSyncAt: result.syncedAt.toISOString(),
+            lastSyncStatus: result.success ? 'success' : 'error',
+            lastSyncError: result.success ? null : (result.errors[0]?.error ?? 'Unknown error'),
+          },
+        },
+        updatedAt: new Date(),
+      })
+      .where(eq(linkedIntegrations.id, connectionId));
+
     return result;
   }
 
@@ -591,13 +920,13 @@ export class CalendarSyncService {
     const provider = this.mapIntegrationToProvider(integration.provider);
     const client = this.providers.get(provider);
 
-    if (!client || !integration.accessToken) {
+    const accessToken = decryptSecretOptional(integration.accessToken);
+    if (!client || !accessToken) {
       throw new Error('Cannot push to this provider');
     }
 
-    const calendars = (
-      (integration.metadata as { calendars?: SyncedCalendar[] }).calendars ?? []
-    ).filter(
+    const metadata = parseIntegrationMetadata(integration.metadata);
+    const calendars = metadata.calendars.filter(
       (c) => c.syncEnabled && (c.syncDirection === 'push' || c.syncDirection === 'bidirectional'),
     );
 
@@ -608,21 +937,17 @@ export class CalendarSyncService {
     }
 
     // Create event in external calendar
-    const createdEvent = await client.createEvent(
-      integration.accessToken,
-      targetCalendar.externalId,
-      {
-        title: event.title,
-        description: event.description ?? undefined,
-        startTime: event.startTime,
-        endTime: event.endTime ?? undefined,
-        isAllDay: event.isAllDay,
-        location: event.location ?? undefined,
-        recurrenceRule: event.recurrenceRule ?? undefined,
-        status: 'confirmed',
-        visibility: 'public',
-      },
-    );
+    const createdEvent = await client.createEvent(accessToken, targetCalendar.externalId, {
+      title: event.title,
+      description: event.description ?? undefined,
+      startTime: event.startTime,
+      endTime: event.endTime ?? undefined,
+      isAllDay: event.isAllDay,
+      location: event.location ?? undefined,
+      recurrenceRule: event.recurrenceRule ?? undefined,
+      status: 'confirmed',
+      visibility: 'public',
+    });
 
     // Create mapping to track the relationship
     await this.mappingService.createMapping({
@@ -670,30 +995,26 @@ export class CalendarSyncService {
     const provider = this.mapIntegrationToProvider(integration.provider);
     const client = this.providers.get(provider);
 
-    if (!client || !integration.accessToken) {
+    const accessToken = decryptSecretOptional(integration.accessToken);
+    if (!client || !accessToken) {
       throw new Error('Cannot push to this provider');
     }
 
-    const calendarId = (mapping.metadata as { calendarId: string } | null)?.calendarId;
+    const calendarId = getCalendarIdFromMetadata(mapping.metadata);
     if (!calendarId) {
       throw new Error('Calendar ID not found in mapping');
     }
 
     // Update event in external calendar
-    const updatedEvent = await client.updateEvent(
-      integration.accessToken,
-      calendarId,
-      mapping.externalId,
-      {
-        title: event.title,
-        description: event.description ?? undefined,
-        startTime: event.startTime,
-        endTime: event.endTime ?? undefined,
-        isAllDay: event.isAllDay,
-        location: event.location ?? undefined,
-        recurrenceRule: event.recurrenceRule ?? undefined,
-      },
-    );
+    const updatedEvent = await client.updateEvent(accessToken, calendarId, mapping.externalId, {
+      title: event.title,
+      description: event.description ?? undefined,
+      startTime: event.startTime,
+      endTime: event.endTime ?? undefined,
+      isAllDay: event.isAllDay,
+      location: event.location ?? undefined,
+      recurrenceRule: event.recurrenceRule ?? undefined,
+    });
 
     // Update mapping with new etag
     await this.mappingService.markSyncedToExternal(mapping.id, updatedEvent.etag);
@@ -715,7 +1036,8 @@ export class CalendarSyncService {
       where: and(eq(linkedIntegrations.id, connectionId), eq(linkedIntegrations.userId, userId)),
     });
 
-    if (!integration?.accessToken) {
+    const accessToken = decryptSecretOptional(integration?.accessToken ?? null);
+    if (!accessToken) {
       throw new Error('Connection not found or no access token');
     }
 
@@ -726,13 +1048,13 @@ export class CalendarSyncService {
       throw new Error('Provider not configured');
     }
 
-    const calendarId = (mapping.metadata as { calendarId: string } | null)?.calendarId;
+    const calendarId = getCalendarIdFromMetadata(mapping.metadata);
     if (!calendarId) {
       throw new Error('Calendar ID not found in mapping');
     }
 
     // Delete event from external calendar
-    await client.deleteEvent(integration.accessToken, calendarId, mapping.externalId);
+    await client.deleteEvent(accessToken, calendarId, mapping.externalId);
 
     // Delete the mapping
     await this.mappingService.deleteMapping(mapping.id);
@@ -787,6 +1109,90 @@ export class CalendarSyncService {
       default:
         return 'caldav';
     }
+  }
+
+  private mergeCalendars(existing: SyncedCalendar[], incoming: SyncedCalendar[]): SyncedCalendar[] {
+    if (existing.length === 0) {
+      return incoming;
+    }
+
+    const existingByExternalId = new Map(
+      existing.map((calendar) => [calendar.externalId, calendar]),
+    );
+
+    return incoming.map((calendar) => {
+      const previous = existingByExternalId.get(calendar.externalId);
+      if (!previous) {
+        return calendar;
+      }
+
+      const nextDirection =
+        calendar.canEdit === false && previous.syncDirection !== 'pull'
+          ? 'pull'
+          : previous.syncDirection;
+
+      return {
+        ...calendar,
+        syncEnabled: previous.syncEnabled,
+        syncDirection: nextDirection,
+      };
+    });
+  }
+
+  private async pruneMissingEvents(
+    userId: string,
+    connectionId: string,
+    calendarExternalId: string,
+    externalEventIds: string[],
+    options: { timeMin?: Date; timeMax?: Date },
+  ): Promise<number> {
+    const eventIdSet = new Set(externalEventIds);
+    const mappings = await this.mappingService.getMappingsForIntegration(connectionId);
+
+    const missingMappings = mappings.filter((mapping) => {
+      if (mapping.entityType !== 'event') {
+        return false;
+      }
+      const calendarId = getCalendarIdFromMetadata(mapping.metadata);
+      return calendarId === calendarExternalId && !eventIdSet.has(mapping.externalId);
+    });
+
+    if (missingMappings.length === 0) {
+      return 0;
+    }
+
+    const missingEventIds = missingMappings.map((mapping) => mapping.localEntityId);
+    const conditions = [eq(events.creatorId, userId), inArray(events.id, missingEventIds)];
+
+    if (options.timeMin) {
+      conditions.push(gte(events.startTime, options.timeMin));
+    }
+
+    if (options.timeMax) {
+      conditions.push(lte(events.startTime, options.timeMax));
+    }
+
+    const eventsToDelete = await db.query.events.findMany({
+      where: and(...conditions),
+      columns: { id: true },
+    });
+
+    if (eventsToDelete.length === 0) {
+      return 0;
+    }
+
+    const deletableIds = eventsToDelete.map((event) => event.id);
+    const mappingIdsToDelete = missingMappings
+      .filter((mapping) => deletableIds.includes(mapping.localEntityId))
+      .map((mapping) => mapping.id);
+
+    await db.delete(events).where(inArray(events.id, deletableIds));
+
+    if (mappingIdsToDelete.length > 0) {
+      await db.delete(externalIdMappings).where(inArray(externalIdMappings.id, mappingIdsToDelete));
+    }
+
+    return mappingIdsToDelete.length;
   }
 }
 

@@ -5,13 +5,13 @@
  *
  * Used by both the modal and full-page detail views.
  * Handles both standard integrations and calendar-specific integrations.
+ * Supports multiple accounts per provider for calendar integrations.
  */
 
+import { useState } from 'react';
 import LinkOutlinedIcon from '@mui/icons-material/LinkOutlined';
-import LinkOffOutlinedIcon from '@mui/icons-material/LinkOffOutlined';
 import CheckCircleOutlinedIcon from '@mui/icons-material/CheckCircleOutlined';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
-import SyncOutlinedIcon from '@mui/icons-material/SyncOutlined';
 import { useIntegrations } from '@/hooks/use-integrations';
 import { useCalendarSync } from '@/hooks/useCalendarSync';
 import { getIntegrationConfig, CATEGORY_INFO } from '@/lib/integrations';
@@ -21,7 +21,9 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Surface } from '@/components/ui/surface';
 import { IntegrationIcon } from './integration-icons';
-import { CalendarSelection } from './calendar-selection';
+import { AccountCard } from './account-card';
+import { AddAccountButton } from './add-account-button';
+import { RenameAccountDialog } from './rename-account-dialog';
 
 /** Calendar provider identifiers */
 const CALENDAR_PROVIDERS = ['google_calendar', 'outlook_calendar', 'apple_calendar'] as const;
@@ -42,24 +44,44 @@ interface IntegrationDetailContentProps {
   provider: string;
 }
 
+/** Provider display name mapping */
+const PROVIDER_DISPLAY_NAMES: Record<CalendarProvider, string> = {
+  google: 'Google',
+  outlook: 'Microsoft',
+  icloud: 'Apple',
+  caldav: 'CalDAV',
+};
+
 /**
  * Detail content for an integration.
  * Shows description, scopes, connection status, and connect/disconnect actions.
- * For calendar providers, also shows calendar selection and sync status.
+ * For calendar providers, shows multi-account UI with individual account cards.
  */
 export function IntegrationDetailContent({ provider }: IntegrationDetailContentProps) {
   const config = getIntegrationConfig(provider);
   const { integrations, isLoading, connect, isConnecting, disconnect, isDisconnecting } =
     useIntegrations();
   const {
-    connections: calendarConnections,
+    connectionsByProvider,
     isLoading: isLoadingCalendar,
     syncConnection,
-    isSyncing,
+    syncingConnectionId,
+    updateAccountSettings,
+    setAccountPrimary,
+    disconnect: disconnectCalendar,
+    isDisconnecting: isDisconnectingCalendar,
+    isUpdatingAccount,
     refetch: refetchCalendar,
   } = useCalendarSync();
 
+  // Rename dialog state
+  const [renameDialogOpen, setRenameDialogOpen] = useState(false);
+  const [renameConnectionId, setRenameConnectionId] = useState<string | null>(null);
+  const [renameCurrentLabel, setRenameCurrentLabel] = useState<string | null>(null);
+  const [renameAccountEmail, setRenameAccountEmail] = useState<string | null>(null);
+
   const isCalendar = isCalendarProvider(provider);
+  const calendarProvider = isCalendar ? CALENDAR_PROVIDER_MAP[provider] : null;
 
   if (!config) {
     return (
@@ -85,21 +107,19 @@ export function IntegrationDetailContent({ provider }: IntegrationDetailContentP
     );
   }
 
-  // For calendar providers, find the connection in calendarConnections
-  const calendarConnection = isCalendar
-    ? calendarConnections.find((c) => c.provider === CALENDAR_PROVIDER_MAP[provider])
-    : null;
+  // For calendar providers, get all connections for this provider
+  const calendarConnections =
+    isCalendar && calendarProvider ? connectionsByProvider[calendarProvider] : [];
 
   // For non-calendar providers, use the standard integrations
   const connection = isCalendar ? null : integrations.find((i) => i.provider === provider);
 
-  const isConnected = isCalendar ? !!calendarConnection : !!connection;
+  const isConnected = isCalendar ? calendarConnections.length > 0 : !!connection;
   const categoryInfo = CATEGORY_INFO[config.category];
 
   const handleConnect = async () => {
-    if (isCalendar) {
+    if (isCalendar && calendarProvider) {
       // Use calendar-sync OAuth flow
-      const calendarProvider = CALENDAR_PROVIDER_MAP[provider];
       try {
         const result = await calendarSyncApi.getAuthUrl(calendarProvider);
         if (result.data.authUrl) {
@@ -117,27 +137,31 @@ export function IntegrationDetailContent({ provider }: IntegrationDetailContentP
     }
   };
 
-  const handleDisconnect = async () => {
+  const handleDisconnectNonCalendar = () => {
     const name = config.name;
     if (!confirm(`Are you sure you want to disconnect ${name}?`)) {
       return;
     }
-
-    if (isCalendar && calendarConnection) {
-      try {
-        await calendarSyncApi.disconnect(calendarConnection.id);
-        refetchCalendar();
-      } catch (err) {
-        console.error('Failed to disconnect calendar:', err);
-      }
-    } else if (connection) {
+    if (connection) {
       disconnect(connection.id);
     }
   };
 
-  const handleSync = () => {
-    if (calendarConnection) {
-      syncConnection(calendarConnection.id);
+  const handleRename = (
+    connectionId: string,
+    currentLabel: string | null,
+    email: string | null,
+  ) => {
+    setRenameConnectionId(connectionId);
+    setRenameCurrentLabel(currentLabel);
+    setRenameAccountEmail(email);
+    setRenameDialogOpen(true);
+  };
+
+  const handleRenameSubmit = (newLabel: string) => {
+    if (renameConnectionId) {
+      updateAccountSettings(renameConnectionId, { accountLabel: newLabel || undefined });
+      setRenameDialogOpen(false);
     }
   };
 
@@ -166,60 +190,84 @@ export function IntegrationDetailContent({ provider }: IntegrationDetailContentP
         <p className="text-on-surface-variant">{config.description}</p>
       </div>
 
-      {/* Connection Status */}
-      {isConnected && (
+      {/* Calendar Multi-Account UI */}
+      {isCalendar && calendarProvider && (
+        <>
+          {calendarConnections.length > 0 && (
+            <div>
+              <h3 className="text-on-surface mb-3 font-medium">
+                Connected Accounts ({calendarConnections.length})
+              </h3>
+              <div className="space-y-3">
+                {calendarConnections.map((conn) => (
+                  <AccountCard
+                    key={conn.id}
+                    connection={conn}
+                    onSync={() => {
+                      syncConnection(conn.id);
+                    }}
+                    onDisconnect={() => {
+                      disconnectCalendar(conn.id);
+                    }}
+                    onRename={() => {
+                      handleRename(conn.id, conn.accountLabel, conn.accountEmail);
+                    }}
+                    onSetPrimary={() => {
+                      setAccountPrimary(conn.id);
+                    }}
+                    onCalendarUpdate={refetchCalendar}
+                    isSyncing={syncingConnectionId === conn.id}
+                    isDisconnecting={isDisconnectingCalendar}
+                  />
+                ))}
+              </div>
+
+              {/* Add Another Account button */}
+              <div className="mt-4">
+                <AddAccountButton
+                  provider={calendarProvider}
+                  providerName={PROVIDER_DISPLAY_NAMES[calendarProvider]}
+                  existingAccountCount={calendarConnections.length}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Show connect button when no connections exist */}
+          {calendarConnections.length === 0 && (
+            <Button
+              variant="filled"
+              onClick={() => {
+                void handleConnect();
+              }}
+              disabled={isConnecting}
+              className="w-full"
+            >
+              <LinkOutlinedIcon sx={{ fontSize: 18 }} className="mr-2" />
+              {isConnecting ? 'Connecting...' : 'Connect'}
+            </Button>
+          )}
+        </>
+      )}
+
+      {/* Non-Calendar Connection Status */}
+      {!isCalendar && isConnected && connection && (
         <div className="bg-tertiary-container/30 rounded-xl p-4">
           <div className="text-tertiary flex items-center gap-2">
             <CheckCircleOutlinedIcon sx={{ fontSize: 20 }} />
             <span className="font-medium">Connected</span>
           </div>
           <div className="text-on-surface-variant mt-2 space-y-1 text-sm">
-            {connection && (
-              <p>
-                Connected on{' '}
-                {new Date(connection.createdAt).toLocaleDateString(undefined, {
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric',
-                })}
-              </p>
-            )}
-            {/* Calendar-specific status */}
-            {calendarConnection && (
-              <>
-                <p>
-                  Connected on{' '}
-                  {new Date(calendarConnection.createdAt).toLocaleDateString(undefined, {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                  })}
-                </p>
-                {calendarConnection.lastSyncAt && (
-                  <p>
-                    Last synced:{' '}
-                    {new Date(calendarConnection.lastSyncAt).toLocaleString(undefined, {
-                      dateStyle: 'short',
-                      timeStyle: 'short',
-                    })}
-                    {calendarConnection.lastSyncStatus === 'error' && (
-                      <span className="text-error ml-1">(sync failed)</span>
-                    )}
-                  </p>
-                )}
-              </>
-            )}
+            <p>
+              Connected on{' '}
+              {new Date(connection.createdAt).toLocaleDateString(undefined, {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+              })}
+            </p>
           </div>
         </div>
-      )}
-
-      {/* Calendar Selection (for calendar providers when connected) */}
-      {isCalendar && calendarConnection && (
-        <CalendarSelection
-          connectionId={calendarConnection.id}
-          calendars={calendarConnection.calendars}
-          onUpdate={refetchCalendar}
-        />
       )}
 
       {/* Scopes */}
@@ -238,47 +286,43 @@ export function IntegrationDetailContent({ provider }: IntegrationDetailContentP
         </div>
       </div>
 
-      {/* Action Buttons */}
-      <div className="space-y-2 pt-2">
-        {isConnected ? (
-          <>
-            {/* Sync button for calendar providers */}
-            {isCalendar && calendarConnection && (
-              <Button variant="filled" onClick={handleSync} disabled={isSyncing} className="w-full">
-                <SyncOutlinedIcon
-                  sx={{ fontSize: 18 }}
-                  className={`mr-2 ${isSyncing ? 'animate-spin' : ''}`}
-                />
-                {isSyncing ? 'Syncing...' : 'Sync Now'}
-              </Button>
-            )}
-            {/* Disconnect button */}
+      {/* Non-Calendar Action Buttons */}
+      {!isCalendar && (
+        <div className="space-y-2 pt-2">
+          {isConnected ? (
             <Button
               variant="outlined"
-              onClick={() => {
-                void handleDisconnect();
-              }}
+              onClick={handleDisconnectNonCalendar}
               disabled={isDisconnecting}
               className="w-full"
             >
-              <LinkOffOutlinedIcon sx={{ fontSize: 18 }} className="mr-2" />
               {isDisconnecting ? 'Disconnecting...' : 'Disconnect'}
             </Button>
-          </>
-        ) : (
-          <Button
-            variant="filled"
-            onClick={() => {
-              void handleConnect();
-            }}
-            disabled={isConnecting}
-            className="w-full"
-          >
-            <LinkOutlinedIcon sx={{ fontSize: 18 }} className="mr-2" />
-            {isConnecting ? 'Connecting...' : 'Connect'}
-          </Button>
-        )}
-      </div>
+          ) : (
+            <Button
+              variant="filled"
+              onClick={() => {
+                void handleConnect();
+              }}
+              disabled={isConnecting}
+              className="w-full"
+            >
+              <LinkOutlinedIcon sx={{ fontSize: 18 }} className="mr-2" />
+              {isConnecting ? 'Connecting...' : 'Connect'}
+            </Button>
+          )}
+        </div>
+      )}
+
+      {/* Rename Account Dialog */}
+      <RenameAccountDialog
+        open={renameDialogOpen}
+        onOpenChange={setRenameDialogOpen}
+        currentLabel={renameCurrentLabel}
+        accountEmail={renameAccountEmail}
+        onRename={handleRenameSubmit}
+        isLoading={isUpdatingAccount}
+      />
     </div>
   );
 }

@@ -11,7 +11,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { z } from 'zod';
-import { and, desc, eq, gte, ilike, inArray, isNull, lte, or } from 'drizzle-orm';
+import { and, desc, eq, gte, ilike, inArray, isNull, lt, lte, or } from 'drizzle-orm';
 
 const SERVER_INFO = {
   name: 'athena-mcp',
@@ -265,18 +265,53 @@ const stringifyJson = (uri: string, data: unknown) => ({
   contents: [{ uri, mimeType: 'application/json', text: JSON.stringify(data, null, 2) }],
 });
 
-const parseCursor = (cursor: string | undefined | null): number => {
+const encodeCursor = (date: Date, id: string): string =>
+  Buffer.from(JSON.stringify({ date: date.toISOString(), id }), 'utf8').toString('base64url');
+
+const decodeCursor = (cursor: string | undefined | null): { date: Date; id: string } | null => {
   if (!cursor) {
-    return 0;
+    return null;
   }
-  const value = Number.parseInt(cursor, 10);
-  return Number.isNaN(value) || value < 0 ? 0 : value;
+  try {
+    const decoded = Buffer.from(cursor, 'base64url').toString('utf8');
+    const payload = asRecord(JSON.parse(decoded) as unknown);
+    if (!payload) {
+      return null;
+    }
+    const dateValue = getStringField(payload, 'date');
+    const id = getStringField(payload, 'id');
+    const date = dateValue ? parseDate(dateValue) : null;
+    if (!date || !id) {
+      return null;
+    }
+    return { date, id };
+  } catch {
+    return null;
+  }
 };
 
-const buildPage = <T>(items: T[], offset: number, limit: number) => {
+const buildCursorFromItem = (
+  item: unknown,
+  dateField: string,
+  idField: string,
+): string | undefined => {
+  const record = asRecord(item);
+  if (!record) {
+    return undefined;
+  }
+  const dateValue = parseDate(record[dateField]);
+  const id = getStringField(record, idField);
+  if (!dateValue || !id) {
+    return undefined;
+  }
+  return encodeCursor(dateValue, id);
+};
+
+const buildCursorPage = <T>(items: T[], limit: number, dateField: string, idField: string) => {
   const hasNext = items.length > limit;
   const pageItems = hasNext ? items.slice(0, limit) : items;
-  const nextCursor = hasNext ? String(offset + limit) : undefined;
+  const lastItem = pageItems[pageItems.length - 1];
+  const nextCursor = hasNext ? buildCursorFromItem(lastItem, dateField, idField) : undefined;
   return { items: pageItems, nextCursor };
 };
 
@@ -933,7 +968,15 @@ function registerTools(
     async (args, extra) => {
       await server.sendLoggingMessage({ level: 'info', data: 'tool: list_tasks' }, extra.sessionId);
       const limit = args.limit ?? 50;
-      const offset = parseCursor(args.cursor ?? null);
+      const cursor = decodeCursor(args.cursor ?? null);
+      const createdAtField = (tasks as { createdAt?: unknown }).createdAt as never;
+      const taskIdField = (tasks as { id?: unknown }).id as never;
+      const cursorFilter = cursor
+        ? or(
+            lt(createdAtField, cursor.date),
+            and(eq(createdAtField, cursor.date), lt(taskIdField, cursor.id)),
+          )
+        : undefined;
       const data = await db.query.tasks.findMany({
         where: and(
           eq((tasks as { creatorId?: unknown }).creatorId as never, userId),
@@ -944,13 +987,13 @@ function registerTools(
           args.projectId
             ? eq((tasks as { projectId?: unknown }).projectId as never, args.projectId)
             : undefined,
+          cursorFilter,
         ),
-        orderBy: [desc((tasks as { createdAt?: unknown }).createdAt as never)],
+        orderBy: [desc(createdAtField), desc(taskIdField)],
         limit: limit + 1,
-        offset,
       });
 
-      const page = buildPage(data, offset, limit);
+      const page = buildCursorPage(data, limit, 'createdAt', 'id');
       return { content: [{ type: 'text', text: JSON.stringify(page, null, 2) }] };
     },
   );
@@ -1231,7 +1274,15 @@ function registerTools(
         extra.sessionId,
       );
       const limit = args.limit ?? 50;
-      const offset = parseCursor(args.cursor ?? null);
+      const cursor = decodeCursor(args.cursor ?? null);
+      const startTimeField = (events as { startTime?: unknown }).startTime as never;
+      const eventIdField = (events as { id?: unknown }).id as never;
+      const cursorFilter = cursor
+        ? or(
+            lt(startTimeField, cursor.date),
+            and(eq(startTimeField, cursor.date), lt(eventIdField, cursor.id)),
+          )
+        : undefined;
       const startDate = args.startDate ? new Date(args.startDate) : undefined;
       const endDate = args.endDate ? new Date(args.endDate) : undefined;
 
@@ -1244,13 +1295,13 @@ function registerTools(
           endDate
             ? lte((events as { startTime?: unknown }).startTime as never, endDate)
             : undefined,
+          cursorFilter,
         ),
-        orderBy: [desc((events as { startTime?: unknown }).startTime as never)],
+        orderBy: [desc(startTimeField), desc(eventIdField)],
         limit: limit + 1,
-        offset,
       });
 
-      const page = buildPage(data, offset, limit);
+      const page = buildCursorPage(data, limit, 'startTime', 'id');
       return { content: [{ type: 'text', text: JSON.stringify(page, null, 2) }] };
     },
   );

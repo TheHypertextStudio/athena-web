@@ -27,6 +27,7 @@
   - [x] Gate availability event titles behind explicit flag
   - [x] Cap list resources with default limits
   - [x] Move task search filtering into SQL
+  - [x] Replace offset pagination with cursor-based pagination for tools
 - **Plan**:
 
 ## Plan: MCP Server Hardening + Refactor

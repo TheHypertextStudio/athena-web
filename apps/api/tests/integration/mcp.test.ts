@@ -829,11 +829,13 @@ describe('MCP Server - Utilities', () => {
   });
 
   it('should include a next cursor when list_tasks has more data', async () => {
+    const baseDate = new Date('2024-01-03T00:00:00.000Z');
     const mockTasks = Array.from({ length: 3 }).map((_, index) => ({
       id: `task-${String(index)}`,
       title: `Task ${String(index)}`,
       status: 'pending',
       creatorId: 'test-user-id',
+      createdAt: new Date(baseDate.getTime() - index * 1000),
     }));
     mockDb.query.tasks.findMany.mockResolvedValue(mockTasks);
 
@@ -847,7 +849,17 @@ describe('MCP Server - Utilities', () => {
     const content = getTextContent(result.content[0]);
     const data = parseJson(content.text) as { items: { title: string }[]; nextCursor?: string };
     expect(data.items).toHaveLength(2);
-    expect(data.nextCursor).toBe('2');
+    const nextCursor = data.nextCursor;
+    expect(nextCursor).toEqual(expect.any(String));
+    if (!nextCursor) {
+      throw new Error('Expected list_tasks to return a cursor');
+    }
+    const cursorPayload = JSON.parse(Buffer.from(nextCursor, 'base64url').toString('utf8')) as {
+      date: string;
+      id: string;
+    };
+    expect(cursorPayload.id).toBe('task-1');
+    expect(new Date(cursorPayload.date).toISOString()).toBe(mockTasks[1].createdAt.toISOString());
   });
 
   it('should include assistant agenda when sampling is supported', async () => {

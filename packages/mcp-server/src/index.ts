@@ -788,7 +788,19 @@ function registerTools(
   subscriptions: Map<string, SessionSubscriptions>,
 ): void {
   const { userId, db, schema } = options;
-  const { tasks, events } = schema;
+  const { tasks, events, projects } = schema;
+
+  const hasOwnedProject = async (projectId: string): Promise<boolean> => {
+    const project = await db.query.projects.findFirst({
+      where: and(
+        eq((projects as { id?: unknown }).id as never, projectId),
+        eq((projects as { ownerId?: unknown }).ownerId as never, userId),
+        isNull((projects as { deletedAt?: unknown }).deletedAt as never),
+      ),
+    });
+
+    return Boolean(project);
+  };
 
   server.registerTool(
     'list_tasks',
@@ -846,6 +858,24 @@ function registerTools(
         { level: 'info', data: 'tool: create_task' },
         extra.sessionId,
       );
+      if (args.projectId) {
+        const projectOwned = await hasOwnedProject(args.projectId);
+        if (!projectOwned) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  { error: 'project_not_found', projectId: args.projectId },
+                  null,
+                  2,
+                ),
+              },
+            ],
+            isError: true,
+          };
+        }
+      }
       const id = crypto.randomUUID();
       const now = new Date();
 
@@ -917,6 +947,24 @@ function registerTools(
         { level: 'info', data: 'tool: update_task' },
         extra.sessionId,
       );
+      if (args.projectId !== undefined && args.projectId !== null) {
+        const projectOwned = await hasOwnedProject(args.projectId);
+        if (!projectOwned) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  { error: 'project_not_found', projectId: args.projectId },
+                  null,
+                  2,
+                ),
+              },
+            ],
+            isError: true,
+          };
+        }
+      }
       const task = await db.query.tasks.findFirst({
         where: and(
           eq((tasks as { id?: unknown }).id as never, args.taskId),

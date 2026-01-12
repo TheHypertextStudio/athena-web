@@ -18,6 +18,7 @@
 - **Subtasks**:
   - [x] Fix tasks/today scoping
   - [x] Implement session-scoped resource subscriptions
+  - [x] Validate project ownership for task creation/updates
 - **Plan**:
 
 ## Plan: MCP Server Hardening + Refactor

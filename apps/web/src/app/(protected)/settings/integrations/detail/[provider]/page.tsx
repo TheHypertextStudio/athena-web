@@ -32,7 +32,7 @@ export default async function IntegrationDetailPage({
         <ArrowBackOutlinedIcon sx={{ fontSize: 18 }} />
         Back to Integrations
       </Link>
-      <div className="border-outline-variant bg-surface-container-lowest rounded-xl border p-6">
+      <div className="bg-surface-container rounded-xl p-6">
         <IntegrationDetailContent provider={provider} />
       </div>
     </div>

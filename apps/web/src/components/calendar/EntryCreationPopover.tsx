@@ -227,7 +227,7 @@ export function EntryCreationPopover({
       aria-modal="true"
       aria-labelledby="popover-title"
       className={cn(
-        'bg-surface-container-high fixed z-50 overflow-hidden rounded-2xl shadow-xl',
+        'bg-surface-container fixed z-50 overflow-hidden rounded-2xl shadow-xl',
         'animate-in fade-in-0 zoom-in-95 duration-150',
         position.placement === 'right' ? 'slide-in-from-left-2' : 'slide-in-from-right-2',
       )}

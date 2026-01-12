@@ -1,6 +1,7 @@
 import ErrorOutlineOutlinedIcon from '@mui/icons-material/ErrorOutlineOutlined';
 import type { ApiErrorCode } from '@/lib/api-errors';
 import { cn } from '@/lib/utils';
+import { Surface, SurfaceContainer } from '@/components/ui/surface';
 
 interface SettingsSectionProps {
   title: string;
@@ -25,12 +26,10 @@ export function SettingsSection({
   headerAction,
 }: SettingsSectionProps) {
   return (
-    <section
-      className={cn(
-        'bg-surface-container rounded-2xl p-6',
-        variant === 'destructive' && 'border-error/50 border',
-        className,
-      )}
+    <SurfaceContainer
+      as="section"
+      rounded="lg"
+      className={cn(variant === 'destructive' && 'bg-error-container/20', className)}
     >
       <div className="mb-4">
         <div className="flex items-start justify-between gap-4">
@@ -49,7 +48,7 @@ export function SettingsSection({
         </div>
       </div>
       <div>{children}</div>
-    </section>
+    </SurfaceContainer>
   );
 }
 
@@ -96,16 +95,21 @@ export function SettingsItemCard({
   className,
 }: SettingsItemCardProps) {
   return (
-    <div
-      className={cn(
-        'bg-surface-container-high flex items-center justify-between rounded-xl p-4',
-        className,
-      )}
+    <Surface
+      elevation="high"
+      padding="md"
+      rounded="md"
+      className={cn('flex items-center justify-between', className)}
     >
       <div className="flex items-center gap-4">
-        <div className="bg-surface-container-highest text-on-surface-variant flex h-10 w-10 shrink-0 items-center justify-center rounded-lg">
+        <Surface
+          elevation="highest"
+          padding="none"
+          rounded="sm"
+          className="text-on-surface-variant flex h-10 w-10 shrink-0 items-center justify-center"
+        >
           {icon}
-        </div>
+        </Surface>
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <span className="text-on-surface font-medium">{title}</span>
@@ -115,7 +119,7 @@ export function SettingsItemCard({
         </div>
       </div>
       {action && <div className="shrink-0">{action}</div>}
-    </div>
+    </Surface>
   );
 }
 
@@ -187,9 +191,9 @@ export function SettingsAlertBanner({
   className,
 }: SettingsAlertBannerProps) {
   const variantStyles = {
-    warning: 'bg-tertiary-container/30 border-tertiary/50',
-    error: 'bg-error-container/30 border-error/50',
-    info: 'bg-secondary-container/30 border-secondary/50',
+    warning: 'bg-tertiary-container/30',
+    error: 'bg-error-container/30',
+    info: 'bg-secondary-container/30',
   };
 
   const iconStyles = {
@@ -205,13 +209,7 @@ export function SettingsAlertBanner({
   };
 
   return (
-    <div
-      className={cn(
-        'flex items-start gap-3 rounded-xl border p-4',
-        variantStyles[variant],
-        className,
-      )}
-    >
+    <div className={cn('flex items-start gap-3 rounded-xl p-4', variantStyles[variant], className)}>
       {icon && <div className={cn('mt-0.5 shrink-0', iconStyles[variant])}>{icon}</div>}
       <div className="space-y-1">
         {title && <p className={cn('text-sm font-medium', titleStyles[variant])}>{title}</p>}
@@ -286,12 +284,7 @@ export function SectionError({ code, className }: SectionErrorProps) {
   const { title, description } = ERROR_MESSAGES[code];
 
   return (
-    <div
-      className={cn(
-        'bg-error-container/30 border-error/50 flex items-center gap-3 rounded-xl border p-4',
-        className,
-      )}
-    >
+    <div className={cn('bg-error-container/30 flex items-center gap-3 rounded-xl p-4', className)}>
       <div className="text-error shrink-0">
         <ErrorOutlineOutlinedIcon sx={{ fontSize: 20 }} />
       </div>

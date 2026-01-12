@@ -36,6 +36,7 @@ import { useCommandPalette } from './command-palette-provider';
 import { CommandPaletteItem } from './command-palette-item';
 import { CommandPaletteForm } from './command-palette-form';
 import { CommandPaletteAssistant } from './command-palette-assistant';
+import { AssistantErrorBoundary } from '@/components/assistant';
 
 /**
  * Main command palette component.
@@ -241,7 +242,7 @@ export function CommandPalette() {
           ref={contentRef}
           className={cn(
             'fixed top-[15%] left-1/2 z-50 w-full max-w-xl -translate-x-1/2',
-            'bg-surface-container-high rounded-3xl shadow-2xl outline-none',
+            'bg-surface-container rounded-3xl shadow-2xl outline-none',
             'data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
             'data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 duration-200',
           )}
@@ -389,15 +390,17 @@ export function CommandPalette() {
           {/* Content Area */}
           {mode === 'assistant' ? (
             // Assistant Mode
-            <CommandPaletteAssistant
-              initialMessage={assistantInitialMessage ?? undefined}
-              onExit={exitAssistantMode}
-              onExpand={() => {
-                close();
-                // Navigate to assistant modal (intercepted route)
-                router.push('/assistant');
-              }}
-            />
+            <AssistantErrorBoundary variant="compact" onReset={exitAssistantMode}>
+              <CommandPaletteAssistant
+                initialMessage={assistantInitialMessage ?? undefined}
+                onExit={exitAssistantMode}
+                onExpand={() => {
+                  close();
+                  // Navigate to assistant modal (intercepted route)
+                  router.push('/assistant');
+                }}
+              />
+            </AssistantErrorBoundary>
           ) : activeAction ? (
             // Inline Form Mode
             <div className="palette-form-enter">

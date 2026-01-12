@@ -8,7 +8,7 @@ export default function IntegrationDetailLoading() {
   return (
     <div className="space-y-6">
       <Skeleton className="h-5 w-32" />
-      <div className="border-outline-variant bg-surface-container-lowest rounded-xl border p-6">
+      <div className="bg-surface-container rounded-xl p-6">
         <div className="space-y-6">
           <div className="flex items-center gap-4">
             <Skeleton className="h-12 w-12 rounded-xl" />

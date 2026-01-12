@@ -36,8 +36,11 @@ const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        'fixed top-1/2 left-1/2 z-50 w-full max-w-[400px] -translate-x-1/2 -translate-y-1/2',
-        'bg-surface-container-high rounded-xl p-6',
+        'fixed top-1/2 left-1/2 z-50 -translate-x-1/2 -translate-y-1/2',
+        'w-[calc(100%-2rem)] max-w-[400px] sm:max-w-[480px] md:max-w-[560px] lg:max-w-[640px]',
+        'max-h-[calc(100vh-4rem)] sm:max-h-[calc(100vh-6rem)] lg:max-h-[calc(100vh-8rem)]',
+        'overflow-y-auto',
+        'bg-surface-container rounded-xl p-6 sm:p-8',
         'data-[state=open]:animate-in data-[state=closed]:animate-out',
         'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
         'data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
@@ -49,7 +52,7 @@ const DialogContent = React.forwardRef<
       {...props}
     >
       {children}
-      <DialogPrimitive.Close className="focus:ring-primary absolute top-4 right-4 rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-none disabled:pointer-events-none">
+      <DialogPrimitive.Close className="focus:ring-primary absolute top-4 right-4 rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-none disabled:pointer-events-none sm:top-6 sm:right-6">
         <CloseIcon sx={{ fontSize: 20 }} />
         <span className="sr-only">Close</span>
       </DialogPrimitive.Close>

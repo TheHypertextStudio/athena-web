@@ -123,7 +123,7 @@ export function EntryContextMenu({
   return (
     <div
       ref={menuRef}
-      className="bg-surface-container-high fixed z-50 min-w-[160px] rounded-lg py-1 shadow-lg"
+      className="bg-surface-container fixed z-50 min-w-[160px] rounded-lg py-1 shadow-lg"
       style={{
         left: position.x,
         top: position.y,

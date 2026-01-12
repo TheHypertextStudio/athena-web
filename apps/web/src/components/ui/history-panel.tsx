@@ -103,7 +103,7 @@ export function HistoryPanel() {
         aria-labelledby="history-panel-title"
         className={cn(
           'fixed top-0 right-0 z-50 h-full w-full max-w-sm',
-          'bg-surface-container-high shadow-xl',
+          'bg-surface-container shadow-xl',
           'animate-in slide-in-from-right duration-300 ease-out',
           'flex flex-col',
         )}

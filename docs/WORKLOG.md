@@ -1,11 +1,120 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-01-11
+> **Last Updated**: 2026-01-12
 
 ---
 
 ## Active Tasks
+
+### [CALDAV-SERVER-001] CalDAV Server Foundation (Phase 1)
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-01-12
+- **Priority**: P1
+- **Description**: Implement CalDAV server to allow native calendar apps (iOS Calendar, macOS Calendar.app) to connect directly to Athena.
+- **Subtasks**:
+  - [x] Create database schema for calendars, app_passwords, event_changes tables
+  - [x] Add CalDAV columns to events table (calendarId, etag, sequence, calendarStatus, transparency, classification)
+  - [x] Generate database migration (0008_bizarre_argent.sql)
+  - [x] Implement CalDAV Basic Auth middleware with scrypt password hashing
+  - [x] Create iCalendar parsing/generation utilities (utils/ics.ts)
+  - [x] Create WebDAV XML builder utilities (utils/xml.ts)
+  - [x] Implement PROPFIND handler for discovery chain
+  - [x] Implement GET handler for event retrieval as .ics
+  - [x] Implement PUT handler for event create/update with ETag conflict detection
+  - [x] Implement DELETE handler for event removal
+  - [x] Mount DAV routes at /dav with .well-known redirects
+  - [x] Create app password management API routes
+  - [ ] Apply database migration (requires running PostgreSQL)
+  - [ ] Test with macOS Calendar.app
+- **Notes**: All code compiles. Migration generated but not applied (database not running). REPORT handler returns 501 (not yet implemented - Phase 2).
+- **Files Created**:
+  - `apps/api/src/db/schema/dav.ts` - CalDAV/CardDAV schema
+  - `apps/api/src/services/caldav-server/` - CalDAV server service
+  - `apps/api/src/routes/dav.ts` - DAV routes
+  - `apps/api/src/routes/app-passwords.ts` - App password management API
+  - `apps/api/drizzle/0008_bizarre_argent.sql` - Migration
+
+### [AUTH-SESSION-RESILIENCE-001] Auth Session Resilience Refactor
+
+### [CAL-FIX-001] Calendar Integrations Hardening
+
+- **Status**: IN_PROGRESS
+- **State**: IMPLEMENTING
+- **Started**: 2026-01-11
+- **Priority**: P0
+- **Description**: Implement calendar integration fixes for security, reliability, onboarding defaults, accessibility, performance, and schema alignment.
+- **Plan**:
+  - **Notes**:
+    - Updated Google/Outlook providers to rely on official SDKs and require event IDs in types.
+    - Added CalDAV provider enum + migration and wired CalDAV into integration registry/UI.
+    - Continued tightening sync correctness (410 handling, push-only filtering, prune guards).
+  - **State Transitions**: PLANNING → RESEARCHING → IMPLEMENTING (2026-01-12)
+
+## Plan: Calendar Integrations Hardening
+
+### Objective
+
+Implement all calendar integration fixes from the audit, ordered by priority, to ensure “just works” onboarding with strong security and performance.
+
+### Approach
+
+Audit security, performance, correctness, and accessibility across calendar sync; prioritize fixes that block onboarding or cause data loss, then align APIs/types and UX improvements.
+
+### Steps (Priority-Ordered Fixes)
+
+#### P0 (High)
+
+1. Fix CalDAV storage correctness: add a dedicated `caldav_calendar` integration provider enum + migration, update provider mapping, and register CalDAV in the integrations registry so it does not collide with Google.
+2. Resolve lint/runtime blockers: add missing imports (CalDAV/iCloud crypto), implement `mergeCalendars` in the sync service, add `pruneMissingEvents`, and guard missing `externalId` by falling back to `id`.
+3. Complete OAuth state hardening: signed state + cookie binding, remove userId from state payload, and ensure callback only accepts matching cookie state.
+4. Ensure token security: encrypt access/refresh tokens at rest with `DATA_ENCRYPTION_KEY`, enforce production key presence, and keep tokens out of API responses.
+5. Sync correctness for deltas + deletions: handle Google/Outlook 410 sync token invalidation with typed errors, paginate all event pages, and prune missing events for CalDAV/iCloud full syncs.
+6. Respect syncDirection in pulls: skip inbound sync for push-only calendars and clamp read-only calendars to pull in both service + UI.
+7. Prevent cross-calendar duplication: push updates only to the correct connection (by `sourceIntegrationId` or mapping) instead of broadcasting to all connections.
+8. iCloud/CalDAV onboarding: intercept `athena://` auth URLs, render credential forms, call calendar callback with state, and surface provider configuration errors.
+
+#### P1 (Medium)
+
+1. Safer onboarding defaults: enable only primary calendars by default and default to pull-only unless the user opts into push/bidirectional.
+2. Sync throttling + backoff: avoid redundant syncs on page load by respecting `lastSyncAt`/`lastSyncStatus`, and avoid double-sync after OAuth callback.
+3. API contract alignment: update OpenAPI + web client types to include `externalId`, `isPrimary`, `canEdit`, `lastSyncError`, and correct error payload shapes.
+4. Error UX improvements: map `error` responses in the API client, show `lastSyncError` in UI, and add clearer retry guidance.
+5. Accessibility upgrades: label switches/selects, add `aria-live` for callback status, replace `confirm()` with accessible dialog, and ensure keyboard focus handling.
+6. Outlook time zone correctness: parse `dateTime` + `timeZone` into accurate UTC/local times.
+7. Harden CalDAV token parsing: validate stored server URLs on read (not just on exchange) and block DNS-rebinding to private IPs.
+8. Test coverage: add unit tests for OAuth state, token encryption, sync-direction enforcement, and integration tests for sync pruning + onboarding flows.
+
+#### P2 (Low)
+
+1. Evaluate recurring event handling: decide whether to sync instances (`singleEvents=true`) or store recurrence exceptions for Google/Outlook.
+2. Add UX polish for calendar settings: tooltips for sync modes, clearer iCloud app-specific password help, and inline validation for CalDAV server URLs.
+3. Add structured sync telemetry: optional logging/metrics for sync duration, page counts, and error frequency to guide future performance work.
+
+### Files to Modify
+
+- `apps/api/src/routes/calendar-sync.ts`
+- `apps/api/src/services/calendar-sync/**`
+- `apps/api/src/lib/env.ts`
+- `apps/api/src/lib/crypto.ts` (new)
+- `apps/api/src/db/schema/core.ts` (if schema needs fields)
+- `apps/api/src/db/migrations/**` (enum update for CalDAV provider)
+- `apps/web/src/components/integrations/**`
+- `apps/web/src/app/(protected)/settings/integrations/callback/page.tsx`
+- `apps/web/src/hooks/useCalendarSync.ts`
+- `apps/web/src/lib/api-client.ts`
+- `packages/types/src/openapi/calendar-sync.ts`
+- `docs/WORKLOG.md`
+
+### Risks
+
+- OAuth and token encryption changes are security-sensitive and require careful migration.
+- Pagination and deletion handling changes could impact sync correctness.
+
+### Validation
+
+Run `pnpm lint`, `pnpm typecheck`, `pnpm test`, and targeted calendar integration tests if added.
 
 ### [ROUTE-MAGIC-VAL-001] Route Magic Value Cleanup
 
@@ -129,6 +238,41 @@ Run `pnpm typecheck`, `pnpm lint`, `pnpm test`, and `pnpm build` after each batc
 ---
 
 ## Completed Tasks
+
+### [AUTH-SESSION-RESILIENCE-001] Auth Session Resilience Refactor
+
+- **Completed**: 2026-01-12
+- **Summary**: Restored SSR session checks with Better Auth while degrading gracefully on backend failures, showing an auth error banner instead of breaking public-page renders; removed the client gate and cleaned lint/type issues needed for validation.
+- **Files Changed**:
+  - `apps/web/src/app/(auth)/layout.tsx`
+  - `apps/web/src/app/page.tsx`
+  - `apps/web/src/components/auth/index.ts`
+  - `apps/web/src/components/auth/public-auth-gate.tsx` (deleted)
+  - `apps/web/src/components/integrations/calendar-credentials-dialog.tsx`
+  - `apps/api/src/routes/app-passwords.ts`
+  - `apps/api/src/routes/dav.ts`
+  - `apps/api/src/services/caldav-server/auth.ts`
+  - `apps/api/src/services/caldav-server/handlers/delete.ts`
+  - `apps/api/src/services/caldav-server/handlers/get.ts`
+  - `apps/api/src/services/caldav-server/handlers/propfind.ts`
+  - `apps/api/src/services/caldav-server/handlers/put.ts`
+  - `apps/api/src/services/caldav-server/utils/ics.ts`
+  - `apps/api/src/services/caldav-server/utils/xml.ts`
+  - `apps/api/src/services/calendar-sync/providers/google.ts`
+
+### [AUTH-SESSION-QUERY-001] Auth Session Query Failure
+
+- **Completed**: 2026-01-12
+- **Summary**: Guarded public-page session lookups against database failures and cleaned lint blockers encountered during validation.
+- **Files Changed**:
+  - `apps/web/src/lib/auth-server.ts`
+  - `apps/web/src/app/(auth)/layout.tsx`
+  - `apps/web/src/app/page.tsx`
+  - `apps/web/src/components/tasks/task-list-item.tsx`
+  - `apps/web/src/components/tasks/task-detail-modal.tsx`
+  - `apps/web/src/components/tasks/task-list-view.tsx`
+  - `apps/api/src/services/calendar-sync/service.ts`
+  - `docs/WORKLOG.md`
 
 ### [ROUTE-AUDIT-NULL-001] Route Null/Undefined Handling Audit
 

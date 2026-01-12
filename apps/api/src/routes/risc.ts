@@ -21,6 +21,7 @@ import { env } from '../lib/env.js';
 const riscRoutes = new Hono();
 
 const ERROR_MISSING_SECURITY_EVENT_TOKEN = 'Missing security event token';
+const ERROR_INVALID_SECURITY_EVENT = 'Invalid security event token';
 const MESSAGE_EVENT_ALREADY_PROCESSED = 'Event already processed';
 const ERROR_INTERNAL_SECURITY_EVENT = 'Internal error processing security event';
 const STATUS_OK = 'ok';
@@ -92,13 +93,20 @@ riscRoutes.post('/webhook', async (c) => {
       eventTypes: result.eventTypes,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    logger.error({ error: message }, '[RISC] Error processing webhook');
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    logger.error({ error: errorMessage }, '[RISC] Error processing webhook');
+    const normalizedMessage = errorMessage.toLowerCase();
+    const isInvalid = normalizedMessage.includes('invalid');
+    const isNotConfigured = normalizedMessage.includes('not configured');
 
     // Return 400 for validation errors, 500 for others
     // Google will retry on 5xx errors
-    if (message.includes('Invalid') || message.includes('not configured')) {
-      return c.json({ error: message }, 400);
+    if (isNotConfigured) {
+      return c.json({ error: ERROR_RISC_NOT_CONFIGURED }, 400);
+    }
+
+    if (isInvalid) {
+      return c.json({ error: ERROR_INVALID_SECURITY_EVENT }, 400);
     }
 
     return c.json({ error: ERROR_INTERNAL_SECURITY_EVENT }, 500);

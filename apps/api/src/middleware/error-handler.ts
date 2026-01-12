@@ -73,6 +73,7 @@ export function handleError<Env extends ErrorHandlerEnv>(
   }
 
   if (isAppError(error)) {
+    const isServerError = error.statusCode >= 500;
     if (logErrors && error.statusCode >= 500) {
       console.error(
         `[${requestId ?? 'no-request-id'}] ${error.code}: ${error.message}`,
@@ -86,10 +87,14 @@ export function handleError<Env extends ErrorHandlerEnv>(
     }
 
     const response: ErrorResponse = {
-      error: error instanceof ValidationError ? 'Validation error' : errorMessage,
-      message: error.message,
+      error: isServerError
+        ? 'INTERNAL_ERROR'
+        : error instanceof ValidationError
+          ? 'Validation error'
+          : errorMessage,
+      message: isServerError ? 'An unexpected error occurred' : error.message,
     };
-    if (error.details !== undefined) {
+    if (!isServerError && error.details !== undefined) {
       response.details = error.details;
     }
     if (requestId) {

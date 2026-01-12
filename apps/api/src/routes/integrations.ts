@@ -50,6 +50,13 @@ type WebhookProvider = (typeof WEBHOOK_PROVIDERS)[number];
 const isWebhookProvider = (value: string): value is WebhookProvider =>
   WEBHOOK_PROVIDERS.includes(value as WebhookProvider);
 
+const ERROR_INVALID_PROVIDER = 'Invalid provider';
+const ERROR_INVALID_JSON_PAYLOAD = 'Invalid JSON payload';
+const ERROR_INVALID_WEBHOOK_SIGNATURE = 'Invalid webhook signature';
+const ERROR_INVALID_WEBHOOK_PAYLOAD = 'Invalid webhook payload';
+const ERROR_UNSUPPORTED_WEBHOOK_PROVIDER = 'Unsupported webhook provider';
+const ERROR_WEBHOOK_PROCESSING_FAILED = 'Webhook processing failed';
+
 /**
  * List all linked integrations for the authenticated user.
  * GET /api/integrations
@@ -272,7 +279,7 @@ integrationRoutes.get('/oauth/:provider/authorize', (c) => {
 integrationRoutes.post('/webhooks/:provider', async (c) => {
   const providerParam = c.req.param('provider');
   if (!isWebhookProvider(providerParam)) {
-    return c.json({ error: 'Invalid provider' }, 400);
+    return c.json({ error: ERROR_INVALID_PROVIDER }, 400);
   }
   const provider = providerParam;
   const signature =
@@ -287,7 +294,7 @@ integrationRoutes.post('/webhooks/:provider', async (c) => {
   try {
     payload = JSON.parse(rawBody);
   } catch {
-    return c.json({ error: 'Invalid JSON payload' }, 400);
+    return c.json({ error: ERROR_INVALID_JSON_PAYLOAD }, 400);
   }
 
   // Verify webhook signature based on provider
@@ -300,7 +307,7 @@ integrationRoutes.post('/webhooks/:provider', async (c) => {
   if (secret && signature) {
     const isValid = verifyWebhookSignature(provider, rawBody, signature, secret);
     if (!isValid) {
-      return c.json({ error: 'Invalid webhook signature' }, 401);
+      return c.json({ error: ERROR_INVALID_WEBHOOK_SIGNATURE }, 401);
     }
   }
 
@@ -309,14 +316,14 @@ integrationRoutes.post('/webhooks/:provider', async (c) => {
     const result = processIntegrationWebhook(provider, payload);
     return c.json({ success: true, processed: result });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Webhook processing failed';
+    const message = error instanceof Error ? error.message : '';
     const status =
-      message.startsWith('Invalid webhook payload') ||
-      message.startsWith('Unsupported webhook provider')
+      message === ERROR_INVALID_WEBHOOK_PAYLOAD || message === ERROR_UNSUPPORTED_WEBHOOK_PROVIDER
         ? 400
         : 500;
+    const errorMessage = status === 400 ? message : ERROR_WEBHOOK_PROCESSING_FAILED;
     console.error(`Failed to process ${provider} webhook:`, error);
-    return c.json({ error: message }, status);
+    return c.json({ error: errorMessage }, status);
   }
 });
 
@@ -368,7 +375,7 @@ function processIntegrationWebhook(
       };
 
       if (!data.type || !data.action) {
-        throw new Error('Invalid webhook payload: missing type or action');
+        throw new Error(ERROR_INVALID_WEBHOOK_PAYLOAD);
       }
       const eventType = `${data.type}.${data.action}`;
 
@@ -399,7 +406,7 @@ function processIntegrationWebhook(
       };
 
       if (!data.action) {
-        throw new Error('Invalid webhook payload: missing action');
+        throw new Error(ERROR_INVALID_WEBHOOK_PAYLOAD);
       }
 
       if (data.issue) {
@@ -416,11 +423,11 @@ function processIntegrationWebhook(
         return { eventType };
       }
 
-      throw new Error('Invalid webhook payload: missing issue or pull_request');
+      throw new Error(ERROR_INVALID_WEBHOOK_PAYLOAD);
     }
 
     default:
-      throw new Error('Unsupported webhook provider');
+      throw new Error(ERROR_UNSUPPORTED_WEBHOOK_PROVIDER);
   }
 }
 

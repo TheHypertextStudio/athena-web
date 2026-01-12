@@ -1623,6 +1623,10 @@ function registerTools(
       inputSchema: {
         startDate: z.iso.datetime().describe('Start of range'),
         endDate: z.iso.datetime().describe('End of range'),
+        includeEventTitles: z
+          .boolean()
+          .optional()
+          .describe('Include event titles in busy intervals'),
       },
     },
     async (args, extra) => {
@@ -1630,6 +1634,7 @@ function registerTools(
         { level: 'info', data: 'tool: get_availability' },
         extra.sessionId,
       );
+      const includeEventTitles = args.includeEventTitles === true;
       const rangeStart = new Date(args.startDate);
       const rangeEnd = new Date(args.endDate);
 
@@ -1669,7 +1674,7 @@ function registerTools(
         return {
           start,
           end,
-          title: getStringField(event, 'title'),
+          title: includeEventTitles ? getStringField(event, 'title') : null,
         };
       });
 
@@ -1716,11 +1721,16 @@ function registerTools(
 
       const payload = {
         range: { start: rangeStart.toISOString(), end: rangeEnd.toISOString() },
-        busy: merged.map((interval) => ({
-          start: interval.start.toISOString(),
-          end: interval.end.toISOString(),
-          title: interval.title ?? undefined,
-        })),
+        busy: merged.map((interval) => {
+          const entry: { start: string; end: string; title?: string } = {
+            start: interval.start.toISOString(),
+            end: interval.end.toISOString(),
+          };
+          if (includeEventTitles) {
+            entry.title = interval.title ?? undefined;
+          }
+          return entry;
+        }),
         free: free.map((interval) => ({
           start: interval.start.toISOString(),
           end: interval.end.toISOString(),

@@ -15,6 +15,9 @@
 - **Priority**: P1
 - **Description**: Address MCP server correctness, security/privacy, and performance issues; refactor for maintainability and add coverage.
 - **Notes**: Repo lint deprecation warnings resolved via LINT-DEP-001; continue to run lint with each MCP iteration.
+- **Subtasks**:
+  - [x] Fix tasks/today scoping
+  - [x] Implement session-scoped resource subscriptions
 - **Plan**:
 
 ## Plan: MCP Server Hardening + Refactor

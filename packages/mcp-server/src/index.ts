@@ -84,13 +84,30 @@ export function createMcpServer(options: CreateAthenaMcpServerOptions): McpServe
     },
   });
 
-  const subscriptions = new Set<string>();
-  server.server.setRequestHandler(SubscribeRequestSchema, (request) => {
-    subscriptions.add(request.params.uri);
+  const subscriptions = new Map<string, SessionSubscriptions>();
+  server.server.setRequestHandler(SubscribeRequestSchema, (request, extra) => {
+    const sessionKey = getSessionKey(extra);
+    if (!sessionKey) {
+      return {};
+    }
+    const session = getSessionSubscriptions(subscriptions, sessionKey);
+    session.uris.add(request.params.uri);
+    session.sendNotification = extra.sendNotification;
     return {};
   });
-  server.server.setRequestHandler(UnsubscribeRequestSchema, (request) => {
-    subscriptions.delete(request.params.uri);
+  server.server.setRequestHandler(UnsubscribeRequestSchema, (request, extra) => {
+    const sessionKey = getSessionKey(extra);
+    if (!sessionKey) {
+      return {};
+    }
+    const session = subscriptions.get(sessionKey);
+    if (!session) {
+      return {};
+    }
+    session.uris.delete(request.params.uri);
+    if (session.uris.size === 0) {
+      subscriptions.delete(sessionKey);
+    }
     return {};
   });
 
@@ -222,29 +239,63 @@ const isResourceSubscribed = (subscriptions: Set<string>, uri: string): boolean 
   return false;
 };
 
+interface SessionSubscriptions {
+  uris: Set<string>;
+  sendNotification?: (notification: ServerNotification) => Promise<void>;
+}
+
+const getSessionKey = (
+  extra: { sessionId?: string; requestId: string | number } | undefined,
+): string | null => {
+  if (!extra) {
+    return null;
+  }
+  if (extra.sessionId) {
+    return extra.sessionId;
+  }
+  return `request-${String(extra.requestId)}`;
+};
+
+const getSessionSubscriptions = (
+  subscriptions: Map<string, SessionSubscriptions>,
+  sessionKey: string,
+): SessionSubscriptions => {
+  const existing = subscriptions.get(sessionKey);
+  if (existing) {
+    return existing;
+  }
+  const entry: SessionSubscriptions = { uris: new Set<string>() };
+  subscriptions.set(sessionKey, entry);
+  return entry;
+};
+
 const sendResourceUpdates = async (
-  extra: { sendNotification?: (notification: ServerNotification) => Promise<void> },
   uris: string[],
-  subscriptions: Set<string>,
+  subscriptions: Map<string, SessionSubscriptions>,
 ) => {
-  const sendNotification = extra.sendNotification;
-  if (!sendNotification || subscriptions.size === 0) {
+  if (subscriptions.size === 0) {
     return;
   }
-  const unique = Array.from(new Set(uris)).filter((uri) =>
-    isResourceSubscribed(subscriptions, uri),
-  );
-  if (unique.length === 0) {
+  const uniqueUris = Array.from(new Set(uris));
+  const notifications: Promise<void>[] = [];
+  for (const session of subscriptions.values()) {
+    if (!session.sendNotification || session.uris.size === 0) {
+      continue;
+    }
+    const matches = uniqueUris.filter((uri) => isResourceSubscribed(session.uris, uri));
+    for (const uri of matches) {
+      notifications.push(
+        session.sendNotification({
+          method: 'notifications/resources/updated',
+          params: { uri },
+        } as ServerNotification),
+      );
+    }
+  }
+  if (notifications.length === 0) {
     return;
   }
-  await Promise.all(
-    unique.map((uri) =>
-      sendNotification({
-        method: 'notifications/resources/updated',
-        params: { uri },
-      } as ServerNotification),
-    ),
-  );
+  await Promise.all(notifications);
 };
 
 function registerResources(server: McpServer, options: CreateAthenaMcpServerOptions): void {
@@ -734,7 +785,7 @@ function registerResourceTemplates(server: McpServer, options: CreateAthenaMcpSe
 function registerTools(
   server: McpServer,
   options: CreateAthenaMcpServerOptions,
-  subscriptions: Set<string>,
+  subscriptions: Map<string, SessionSubscriptions>,
 ): void {
   const { userId, db, schema } = options;
   const { tasks, events } = schema;
@@ -813,7 +864,6 @@ function registerTools(
 
       server.sendResourceListChanged();
       await sendResourceUpdates(
-        extra,
         [
           `athena://tasks/${id}`,
           'athena://tasks',
@@ -917,7 +967,6 @@ function registerTools(
         .where(eq((tasks as { id?: unknown }).id as never, args.taskId));
       server.sendResourceListChanged();
       await sendResourceUpdates(
-        extra,
         [
           `athena://tasks/${args.taskId}`,
           'athena://tasks',
@@ -979,7 +1028,6 @@ function registerTools(
         .where(eq((tasks as { id?: unknown }).id as never, args.taskId));
       server.sendResourceListChanged();
       await sendResourceUpdates(
-        extra,
         [
           `athena://tasks/${args.taskId}`,
           'athena://tasks',
@@ -1080,7 +1128,6 @@ function registerTools(
 
       server.sendResourceListChanged();
       await sendResourceUpdates(
-        extra,
         [`athena://events/${id}`, 'athena://events', 'athena://events/upcoming', 'athena://agenda'],
         subscriptions,
       );
@@ -1171,7 +1218,6 @@ function registerTools(
         .where(eq((events as { id?: unknown }).id as never, args.eventId));
       server.sendResourceListChanged();
       await sendResourceUpdates(
-        extra,
         [
           `athena://events/${args.eventId}`,
           'athena://events',

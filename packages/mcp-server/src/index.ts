@@ -18,6 +18,8 @@ const SERVER_INFO = {
   version: '1.0.0',
 };
 
+const RESOURCE_LIST_LIMIT = 100;
+
 /**
  * Minimal Drizzle query API needed by the MCP server.
  */
@@ -460,6 +462,7 @@ function registerResources(server: McpServer, options: CreateAthenaMcpServerOpti
           eq((tasks as { status?: unknown }).status as never, 'pending'),
         ),
         orderBy: [desc((tasks as { priority?: unknown }).priority as never)],
+        limit: RESOURCE_LIST_LIMIT,
       });
       return stringifyJson('athena://tasks/pending', data);
     },
@@ -482,6 +485,8 @@ function registerResources(server: McpServer, options: CreateAthenaMcpServerOpti
           eq((projects as { ownerId?: unknown }).ownerId as never, userId),
           isNull((projects as { deletedAt?: unknown }).deletedAt as never),
         ),
+        orderBy: [desc((projects as { createdAt?: unknown }).createdAt as never)],
+        limit: RESOURCE_LIST_LIMIT,
       });
       return stringifyJson('athena://projects', data);
     },
@@ -528,6 +533,7 @@ function registerResources(server: McpServer, options: CreateAthenaMcpServerOpti
           lte((events as { startTime?: unknown }).startTime as never, nextWeek),
         ),
         orderBy: [(events as { startTime?: unknown }).startTime as never],
+        limit: RESOURCE_LIST_LIMIT,
       });
       return stringifyJson('athena://events/upcoming', data);
     },
@@ -550,6 +556,8 @@ function registerResources(server: McpServer, options: CreateAthenaMcpServerOpti
           eq((initiatives as { ownerId?: unknown }).ownerId as never, userId),
           isNull((initiatives as { deletedAt?: unknown }).deletedAt as never),
         ),
+        orderBy: [desc((initiatives as { createdAt?: unknown }).createdAt as never)],
+        limit: RESOURCE_LIST_LIMIT,
       });
       return stringifyJson('athena://initiatives', data);
     },

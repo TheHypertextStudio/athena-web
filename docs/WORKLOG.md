@@ -20,6 +20,7 @@
   - [x] Implement session-scoped resource subscriptions
   - [x] Validate project ownership for task creation/updates
   - [x] Prevent progress_report from returning all tasks on empty initiatives
+  - [x] Filter soft-deleted tasks from completion/breakdown flows
 - **Plan**:
 
 ## Plan: MCP Server Hardening + Refactor

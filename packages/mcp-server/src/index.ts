@@ -1055,6 +1055,7 @@ function registerTools(
         where: and(
           eq((tasks as { id?: unknown }).id as never, args.taskId),
           eq((tasks as { creatorId?: unknown }).creatorId as never, userId),
+          isNull((tasks as { deletedAt?: unknown }).deletedAt as never),
         ),
       });
 
@@ -1755,6 +1756,7 @@ function registerPrompts(server: McpServer, options: CreateAthenaMcpServerOption
         where: and(
           eq((tasks as { id?: unknown }).id as never, args.taskId),
           eq((tasks as { creatorId?: unknown }).creatorId as never, userId),
+          isNull((tasks as { deletedAt?: unknown }).deletedAt as never),
         ),
       });
 

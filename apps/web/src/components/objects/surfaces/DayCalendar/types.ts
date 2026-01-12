@@ -24,6 +24,8 @@ export interface CalendarEntry {
   location?: string;
   /** Source of the entry: 'local' for native, 'external' for synced calendars */
   source?: 'local' | 'external';
+  /** Account color indicator for external entries (from connected account) */
+  accountColor?: string;
   /** For time blocks, the primary linked task ID */
   taskId?: string;
   /** Tasks scheduled within this time block */

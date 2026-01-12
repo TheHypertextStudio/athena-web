@@ -244,13 +244,21 @@ export function CalendarEntryCard({
         <>
           {/* Header */}
           <div className="flex items-start gap-1.5 px-2 py-1">
+            {/* Account color indicator for external events */}
+            {isExternal && entry.accountColor && (
+              <span
+                className="mt-1 h-2 w-2 shrink-0 rounded-full"
+                style={{ backgroundColor: entry.accountColor }}
+                title="From connected account"
+              />
+            )}
             {isTimeBlock && (
               <GridViewOutlinedIcon
                 sx={{ fontSize: 14 }}
                 className="text-on-surface-variant mt-0.5 shrink-0"
               />
             )}
-            {isExternal && !isTimeBlock && (
+            {isExternal && !isTimeBlock && !entry.accountColor && (
               <CloudSyncOutlinedIcon
                 sx={{ fontSize: 14 }}
                 className="text-outline mt-0.5 shrink-0"

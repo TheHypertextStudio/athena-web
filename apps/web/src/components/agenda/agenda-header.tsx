@@ -46,15 +46,15 @@ export function AgendaHeader({ date, onDateChange, view }: AgendaHeaderProps) {
     <div className="flex items-center justify-between border-b px-6 py-4">
       {/* Date Navigation */}
       <div className="flex items-center gap-2">
-        <Button variant="outline" size="icon" onClick={goToPreviousDay} aria-label="Previous day">
+        <Button variant="outlined" size="icon" onClick={goToPreviousDay} aria-label="Previous day">
           <ChevronLeft className="h-4 w-4" />
         </Button>
 
-        <Button variant={todaySelected ? 'filled' : 'outline'} size="sm" onClick={goToToday}>
+        <Button variant={todaySelected ? 'filled' : 'outlined'} size="sm" onClick={goToToday}>
           Today
         </Button>
 
-        <Button variant="outline" size="icon" onClick={goToNextDay} aria-label="Next day">
+        <Button variant="outlined" size="icon" onClick={goToNextDay} aria-label="Next day">
           <ChevronRight className="h-4 w-4" />
         </Button>
 
@@ -64,13 +64,13 @@ export function AgendaHeader({ date, onDateChange, view }: AgendaHeaderProps) {
       {/* View Toggle */}
       <div className="flex items-center gap-2">
         <Link href="/home">
-          <Button variant={view === 'daily' ? 'filled' : 'ghost'} size="sm">
+          <Button variant={view === 'daily' ? 'filled' : 'text'} size="sm">
             <Calendar className="mr-2 h-4 w-4" />
             Daily
           </Button>
         </Link>
         <Link href="/home/weekly">
-          <Button variant={view === 'weekly' ? 'filled' : 'ghost'} size="sm">
+          <Button variant={view === 'weekly' ? 'filled' : 'text'} size="sm">
             <Calendar className="mr-2 h-4 w-4" />
             Weekly
           </Button>

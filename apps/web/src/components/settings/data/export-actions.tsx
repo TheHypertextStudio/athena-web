@@ -41,7 +41,7 @@ export function ExportActions() {
   };
 
   return (
-    <Button variant="outline" onClick={() => void handleExport()} disabled={isExporting}>
+    <Button variant="outlined" onClick={() => void handleExport()} disabled={isExporting}>
       <FileDownloadOutlinedIcon sx={{ fontSize: 18 }} className="mr-2" />
       {isExporting ? 'Preparing export...' : 'Export My Data'}
     </Button>

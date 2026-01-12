@@ -95,7 +95,7 @@ export function Sidebar({ onSignOut }: SidebarProps) {
           );
         })}
         <Button
-          variant="ghost"
+          variant="text"
           className="text-muted-foreground hover:bg-accent hover:text-accent-foreground mt-1 w-full justify-start gap-3 px-3"
           onClick={onSignOut}
         >

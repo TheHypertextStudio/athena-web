@@ -205,7 +205,7 @@ export function HistoryPanel() {
         {reversedHistory.length > 0 && (
           <div className="bg-surface-container shrink-0 px-4 py-3">
             <Button
-              variant="ghost"
+              variant="text"
               size="sm"
               onClick={handleClearHistory}
               disabled={isProcessing}

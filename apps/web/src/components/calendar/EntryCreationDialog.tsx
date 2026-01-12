@@ -281,7 +281,7 @@ export function EntryCreationDialog({
 
         <DialogFooter>
           <Button
-            variant="ghost"
+            variant="text"
             onClick={() => {
               onOpenChange(false);
             }}

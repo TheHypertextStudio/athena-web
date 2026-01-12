@@ -15,7 +15,7 @@ export function PaymentMethodsActions() {
   };
 
   return (
-    <Button variant="outline" size="sm" onClick={handleManagePaymentMethods} disabled={isPending}>
+    <Button variant="outlined" size="sm" onClick={handleManagePaymentMethods} disabled={isPending}>
       Manage payment methods
     </Button>
   );

@@ -59,7 +59,7 @@ export function TaskForm({ initialData, onSubmit, isSubmitting, onCancel }: Task
               }}
               placeholder="Enter task title"
               required
-              className="bg-background border-input placeholder:text-muted-foreground focus-visible:ring-ring w-full rounded-md border px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1"
+              className="bg-background border-input placeholder:text-muted-foreground focus-visible:ring-ring w-full rounded-md border px-3 py-2 text-sm focus-visible:ring-1 focus-visible:outline-none"
             />
           </div>
 
@@ -75,7 +75,7 @@ export function TaskForm({ initialData, onSubmit, isSubmitting, onCancel }: Task
               }}
               placeholder="Enter task description"
               rows={4}
-              className="bg-background border-input placeholder:text-muted-foreground focus-visible:ring-ring w-full rounded-md border px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1"
+              className="bg-background border-input placeholder:text-muted-foreground focus-visible:ring-ring w-full rounded-md border px-3 py-2 text-sm focus-visible:ring-1 focus-visible:outline-none"
             />
           </div>
 
@@ -90,7 +90,7 @@ export function TaskForm({ initialData, onSubmit, isSubmitting, onCancel }: Task
                 onChange={(e) => {
                   setStatus(e.target.value as Task['status']);
                 }}
-                className="bg-background border-input focus-visible:ring-ring w-full rounded-md border px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1"
+                className="bg-background border-input focus-visible:ring-ring w-full rounded-md border px-3 py-2 text-sm focus-visible:ring-1 focus-visible:outline-none"
               >
                 <option value="pending">Pending</option>
                 <option value="in_progress">In Progress</option>
@@ -109,7 +109,7 @@ export function TaskForm({ initialData, onSubmit, isSubmitting, onCancel }: Task
                 onChange={(e) => {
                   setPriority(e.target.value as Task['priority']);
                 }}
-                className="bg-background border-input focus-visible:ring-ring w-full rounded-md border px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1"
+                className="bg-background border-input focus-visible:ring-ring w-full rounded-md border px-3 py-2 text-sm focus-visible:ring-1 focus-visible:outline-none"
               >
                 <option value="low">Low</option>
                 <option value="medium">Medium</option>
@@ -131,7 +131,7 @@ export function TaskForm({ initialData, onSubmit, isSubmitting, onCancel }: Task
                 onChange={(e) => {
                   setDeadline(e.target.value);
                 }}
-                className="bg-background border-input focus-visible:ring-ring w-full rounded-md border px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1"
+                className="bg-background border-input focus-visible:ring-ring w-full rounded-md border px-3 py-2 text-sm focus-visible:ring-1 focus-visible:outline-none"
               />
             </div>
 
@@ -148,14 +148,14 @@ export function TaskForm({ initialData, onSubmit, isSubmitting, onCancel }: Task
                   setEstimatedMinutes(e.target.value);
                 }}
                 placeholder="e.g., 60"
-                className="bg-background border-input placeholder:text-muted-foreground focus-visible:ring-ring w-full rounded-md border px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1"
+                className="bg-background border-input placeholder:text-muted-foreground focus-visible:ring-ring w-full rounded-md border px-3 py-2 text-sm focus-visible:ring-1 focus-visible:outline-none"
               />
             </div>
           </div>
 
           <div className="flex justify-end gap-3">
             {onCancel && (
-              <Button type="button" variant="outline" onClick={onCancel}>
+              <Button type="button" variant="outlined" onClick={onCancel}>
                 Cancel
               </Button>
             )}

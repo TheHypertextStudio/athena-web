@@ -82,7 +82,7 @@ export function OAuthButtons({ onProviderClick, disabled, loadingProvider }: OAu
           <Button
             key={provider.id}
             type="button"
-            variant="outline"
+            variant="outlined"
             size="lg"
             className="h-11 w-full"
             disabled={isDisabled}

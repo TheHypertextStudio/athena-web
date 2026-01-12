@@ -96,7 +96,7 @@ export default function TasksPage() {
         {/* Actions Bar */}
         <div className="flex items-center justify-between gap-4">
           <div className="relative max-w-md flex-1">
-            <Search className="text-muted-foreground absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" />
+            <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
             <input
               type="text"
               placeholder="Search tasks..."
@@ -104,14 +104,14 @@ export default function TasksPage() {
               onChange={(e) => {
                 setSearchQuery(e.target.value);
               }}
-              className="bg-background border-input placeholder:text-muted-foreground focus-visible:ring-ring w-full rounded-md border py-2 pl-10 pr-4 text-sm focus-visible:outline-none focus-visible:ring-1"
+              className="bg-background border-input placeholder:text-muted-foreground focus-visible:ring-ring w-full rounded-md border py-2 pr-4 pl-10 text-sm focus-visible:ring-1 focus-visible:outline-none"
             />
           </div>
 
           <div className="flex items-center gap-2">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm">
+                <Button variant="outlined" size="sm">
                   <Filter className="mr-2 h-4 w-4" />
                   Status: {statusFilter === 'all' ? 'All' : statusLabels[statusFilter]}
                 </Button>
@@ -159,7 +159,7 @@ export default function TasksPage() {
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm">
+                <Button variant="outlined" size="sm">
                   <Filter className="mr-2 h-4 w-4" />
                   Priority: {priorityFilter === 'all' ? 'All' : priorityFilter}
                 </Button>

@@ -28,7 +28,7 @@ export function QuickActions() {
           {actions.map((action) => (
             <Button
               key={action.label}
-              variant="outline"
+              variant="outlined"
               className="h-auto flex-col gap-2 py-4"
               asChild
             >

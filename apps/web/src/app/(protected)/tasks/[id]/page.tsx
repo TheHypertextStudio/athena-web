@@ -46,7 +46,7 @@ const priorityColors = {
 export default function TaskDetailPage() {
   const router = useRouter();
   const params = useParams();
-  const taskId = params['id'] as string;
+  const taskId = params.id as string;
 
   const [task, setTask] = useState<Task | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -152,7 +152,7 @@ export default function TaskDetailPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" asChild>
+                    <Button variant="outlined" size="sm" asChild>
                       <Link href={`/tasks/${taskId}/edit`}>
                         <Edit className="mr-2 h-4 w-4" />
                         Edit
@@ -160,10 +160,10 @@ export default function TaskDetailPage() {
                     </Button>
                     <Button
                       variant="filled"
-                      intent="error"
                       size="sm"
                       onClick={() => void handleDelete()}
                       disabled={isDeleting}
+                      className="bg-error text-on-error hover:bg-error/90"
                     >
                       <Trash2 className="mr-2 h-4 w-4" />
                       {isDeleting ? 'Deleting...' : 'Delete'}
@@ -218,7 +218,7 @@ export default function TaskDetailPage() {
                   <div className="flex flex-wrap gap-2">
                     {task.status !== 'in_progress' && task.status !== 'completed' && (
                       <Button
-                        variant="outline"
+                        variant="outlined"
                         size="sm"
                         onClick={() => void handleStatusChange('in_progress')}
                       >
@@ -228,7 +228,7 @@ export default function TaskDetailPage() {
                     )}
                     {task.status !== 'completed' && (
                       <Button
-                        variant="outline"
+                        variant="outlined"
                         size="sm"
                         onClick={() => void handleStatusChange('completed')}
                       >
@@ -238,7 +238,7 @@ export default function TaskDetailPage() {
                     )}
                     {task.status === 'completed' && (
                       <Button
-                        variant="outline"
+                        variant="outlined"
                         size="sm"
                         onClick={() => void handleStatusChange('pending')}
                       >

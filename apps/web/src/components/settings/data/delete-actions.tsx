@@ -41,7 +41,7 @@ export function DeleteActions() {
   return (
     <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
       <AlertDialogTrigger asChild>
-        <Button variant="filled" intent="error">
+        <Button variant="filled" className="bg-error text-on-error hover:bg-error/90">
           <DeleteOutlinedIcon sx={{ fontSize: 18 }} className="mr-2" />
           Delete Account
         </Button>

@@ -39,7 +39,7 @@ export async function IntegrationsListSection() {
   const getConnection = (provider: string): IntegrationConnection | null => {
     const connection = integrations.find((i) => i.provider === provider);
     if (!connection) return null;
-    const accountName = connection.metadata?.['accountName'];
+    const accountName = connection.metadata?.accountName;
     return {
       id: connection.id,
       provider: connection.provider as IntegrationProvider,

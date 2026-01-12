@@ -364,7 +364,7 @@ export function EntryCreationPopover({
       {/* Actions */}
       <div className="flex justify-end gap-2 px-5 py-4">
         <Button
-          variant="ghost"
+          variant="text"
           onClick={() => {
             onOpenChange(false);
           }}

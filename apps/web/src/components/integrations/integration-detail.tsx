@@ -4,18 +4,38 @@
  * Shared integration detail content component.
  *
  * Used by both the modal and full-page detail views.
+ * Handles both standard integrations and calendar-specific integrations.
  */
 
 import LinkOutlinedIcon from '@mui/icons-material/LinkOutlined';
 import LinkOffOutlinedIcon from '@mui/icons-material/LinkOffOutlined';
 import CheckCircleOutlinedIcon from '@mui/icons-material/CheckCircleOutlined';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
+import SyncOutlinedIcon from '@mui/icons-material/SyncOutlined';
 import { useIntegrations } from '@/hooks/use-integrations';
+import { useCalendarSync } from '@/hooks/useCalendarSync';
 import { getIntegrationConfig, CATEGORY_INFO } from '@/lib/integrations';
+import { calendarSyncApi, type CalendarProvider } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { IntegrationIcon } from './integration-icons';
+import { CalendarSelection } from './calendar-selection';
+
+/** Calendar provider identifiers */
+const CALENDAR_PROVIDERS = ['google_calendar', 'outlook_calendar', 'apple_calendar'] as const;
+type CalendarProviderType = (typeof CALENDAR_PROVIDERS)[number];
+
+/** Map integration provider to calendar-sync provider */
+const CALENDAR_PROVIDER_MAP: Record<CalendarProviderType, CalendarProvider> = {
+  google_calendar: 'google',
+  outlook_calendar: 'outlook',
+  apple_calendar: 'icloud',
+};
+
+function isCalendarProvider(provider: string): provider is CalendarProviderType {
+  return CALENDAR_PROVIDERS.includes(provider as CalendarProviderType);
+}
 
 interface IntegrationDetailContentProps {
   provider: string;
@@ -24,11 +44,21 @@ interface IntegrationDetailContentProps {
 /**
  * Detail content for an integration.
  * Shows description, scopes, connection status, and connect/disconnect actions.
+ * For calendar providers, also shows calendar selection and sync status.
  */
 export function IntegrationDetailContent({ provider }: IntegrationDetailContentProps) {
   const config = getIntegrationConfig(provider);
   const { integrations, isLoading, connect, isConnecting, disconnect, isDisconnecting } =
     useIntegrations();
+  const {
+    connections: calendarConnections,
+    isLoading: isLoadingCalendar,
+    syncConnection,
+    isSyncing,
+    refetch: refetchCalendar,
+  } = useCalendarSync();
+
+  const isCalendar = isCalendarProvider(provider);
 
   if (!config) {
     return (
@@ -38,7 +68,7 @@ export function IntegrationDetailContent({ provider }: IntegrationDetailContentP
     );
   }
 
-  if (isLoading) {
+  if (isLoading || (isCalendar && isLoadingCalendar)) {
     return (
       <div className="space-y-6">
         <div className="flex items-center gap-4">
@@ -54,20 +84,59 @@ export function IntegrationDetailContent({ provider }: IntegrationDetailContentP
     );
   }
 
-  const connection = integrations.find((i) => i.provider === provider);
-  const isConnected = !!connection;
+  // For calendar providers, find the connection in calendarConnections
+  const calendarConnection = isCalendar
+    ? calendarConnections.find((c) => c.provider === CALENDAR_PROVIDER_MAP[provider])
+    : null;
+
+  // For non-calendar providers, use the standard integrations
+  const connection = isCalendar ? null : integrations.find((i) => i.provider === provider);
+
+  const isConnected = isCalendar ? !!calendarConnection : !!connection;
   const categoryInfo = CATEGORY_INFO[config.category];
 
-  const handleConnect = () => {
-    connect({
-      provider: config.provider,
-      redirectUri: `${window.location.origin}/settings/integrations/detail/${config.provider}`,
-    });
+  const handleConnect = async () => {
+    if (isCalendar) {
+      // Use calendar-sync OAuth flow
+      const calendarProvider = CALENDAR_PROVIDER_MAP[provider];
+      try {
+        const result = await calendarSyncApi.getAuthUrl(calendarProvider);
+        if (result.data.authUrl) {
+          window.location.href = result.data.authUrl;
+        }
+      } catch (err) {
+        console.error('Failed to get calendar auth URL:', err);
+      }
+    } else {
+      // Use standard integrations OAuth flow
+      connect({
+        provider: config.provider,
+        redirectUri: `${window.location.origin}/settings/integrations/detail/${config.provider}`,
+      });
+    }
   };
 
-  const handleDisconnect = () => {
-    if (connection && confirm(`Are you sure you want to disconnect ${config.name}?`)) {
+  const handleDisconnect = async () => {
+    const name = config.name;
+    if (!confirm(`Are you sure you want to disconnect ${name}?`)) {
+      return;
+    }
+
+    if (isCalendar && calendarConnection) {
+      try {
+        await calendarSyncApi.disconnect(calendarConnection.id);
+        refetchCalendar();
+      } catch (err) {
+        console.error('Failed to disconnect calendar:', err);
+      }
+    } else if (connection) {
       disconnect(connection.id);
+    }
+  };
+
+  const handleSync = () => {
+    if (calendarConnection) {
+      syncConnection(calendarConnection.id);
     }
   };
 
@@ -92,26 +161,59 @@ export function IntegrationDetailContent({ provider }: IntegrationDetailContentP
       </div>
 
       {/* Connection Status */}
-      {connection && (
+      {isConnected && (
         <div className="border-tertiary/30 bg-tertiary/5 rounded-xl border p-4">
           <div className="text-tertiary flex items-center gap-2">
             <CheckCircleOutlinedIcon sx={{ fontSize: 20 }} />
             <span className="font-medium">Connected</span>
           </div>
           <div className="text-on-surface-variant mt-2 space-y-1 text-sm">
-            {typeof connection.metadata?.['accountName'] === 'string' && (
-              <p>Account: {connection.metadata['accountName']}</p>
+            {connection && (
+              <p>
+                Connected on{' '}
+                {new Date(connection.createdAt).toLocaleDateString(undefined, {
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric',
+                })}
+              </p>
             )}
-            <p>
-              Connected on{' '}
-              {new Date(connection.createdAt).toLocaleDateString(undefined, {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-              })}
-            </p>
+            {/* Calendar-specific status */}
+            {calendarConnection && (
+              <>
+                <p>
+                  Connected on{' '}
+                  {new Date(calendarConnection.createdAt).toLocaleDateString(undefined, {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                  })}
+                </p>
+                {calendarConnection.lastSyncAt && (
+                  <p>
+                    Last synced:{' '}
+                    {new Date(calendarConnection.lastSyncAt).toLocaleString(undefined, {
+                      dateStyle: 'short',
+                      timeStyle: 'short',
+                    })}
+                    {calendarConnection.lastSyncStatus === 'error' && (
+                      <span className="text-error ml-1">(sync failed)</span>
+                    )}
+                  </p>
+                )}
+              </>
+            )}
           </div>
         </div>
+      )}
+
+      {/* Calendar Selection (for calendar providers when connected) */}
+      {isCalendar && calendarConnection && (
+        <CalendarSelection
+          connectionId={calendarConnection.id}
+          calendars={calendarConnection.calendars}
+          onUpdate={refetchCalendar}
+        />
       )}
 
       {/* Scopes */}
@@ -133,22 +235,39 @@ export function IntegrationDetailContent({ provider }: IntegrationDetailContentP
         </div>
       </div>
 
-      {/* Action Button */}
-      <div className="pt-2">
+      {/* Action Buttons */}
+      <div className="space-y-2 pt-2">
         {isConnected ? (
-          <Button
-            variant="outline"
-            onClick={handleDisconnect}
-            disabled={isDisconnecting}
-            className="w-full"
-          >
-            <LinkOffOutlinedIcon sx={{ fontSize: 18 }} className="mr-2" />
-            {isDisconnecting ? 'Disconnecting...' : 'Disconnect'}
-          </Button>
+          <>
+            {/* Sync button for calendar providers */}
+            {isCalendar && calendarConnection && (
+              <Button variant="filled" onClick={handleSync} disabled={isSyncing} className="w-full">
+                <SyncOutlinedIcon
+                  sx={{ fontSize: 18 }}
+                  className={`mr-2 ${isSyncing ? 'animate-spin' : ''}`}
+                />
+                {isSyncing ? 'Syncing...' : 'Sync Now'}
+              </Button>
+            )}
+            {/* Disconnect button */}
+            <Button
+              variant="outlined"
+              onClick={() => {
+                void handleDisconnect();
+              }}
+              disabled={isDisconnecting}
+              className="w-full"
+            >
+              <LinkOffOutlinedIcon sx={{ fontSize: 18 }} className="mr-2" />
+              {isDisconnecting ? 'Disconnecting...' : 'Disconnect'}
+            </Button>
+          </>
         ) : (
           <Button
             variant="filled"
-            onClick={handleConnect}
+            onClick={() => {
+              void handleConnect();
+            }}
             disabled={isConnecting}
             className="w-full"
           >

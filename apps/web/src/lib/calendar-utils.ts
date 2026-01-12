@@ -156,6 +156,7 @@ export function eventToCalendarEntry(event: Event): CalendarEntry {
     startTime: new Date(event.startTime),
     endTime: event.endTime ? new Date(event.endTime) : new Date(event.startTime),
     location: event.location ?? undefined,
+    source: event.source,
   };
 }
 

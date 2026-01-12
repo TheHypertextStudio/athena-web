@@ -6,228 +6,75 @@ import { cn } from '@/lib/utils';
 /**
  * MD3 Button Component
  *
- * State layer opacities (MD3 spec):
- * - Hover: 8% state layer
- * - Focus: 12% state layer
- * - Pressed: 12% state layer
- * - Disabled: 12% container opacity, 38% content opacity
+ * Five button types per Material Design 3:
+ * - Elevated: Surface container with shadow (medium emphasis)
+ * - Filled: Primary container (high emphasis)
+ * - Tonal (Filled Tonal): Secondary container (medium-high emphasis)
+ * - Outlined: Transparent with border (medium emphasis)
+ * - Text: No background (low emphasis)
  *
- * Composable via `variant` (button type) and `intent` (color scheme).
+ * @see https://m3.material.io/components/buttons/specs
  */
 
-// =============================================================================
-// State Effects (MD3 state layers)
-// =============================================================================
-
-const stateLayer = {
-  // For filled/tonal: use on-[color] for state layer (shows as brightness change)
-  filled: 'hover:shadow-md active:shadow-none transition-shadow',
-  // For outline/ghost: use [color] background with opacity for state layer
-  transparent: (color: string) =>
-    `hover:bg-${color}/8 focus-visible:bg-${color}/12 active:bg-${color}/12`,
-};
-
-// =============================================================================
-// Disabled States
-// =============================================================================
-
-const disabled = {
-  filled: 'disabled:bg-on-surface/12 disabled:text-on-surface/38 disabled:shadow-none',
-  outlined: 'disabled:border-on-surface/12 disabled:text-on-surface/38',
-  text: 'disabled:text-on-surface/38',
-};
-
-// =============================================================================
-// Color Schemes
-// =============================================================================
-
-const colors = {
-  primary: {
-    filled: 'bg-primary text-on-primary',
-    tonal: 'bg-primary-container text-on-primary-container',
-    outline: 'border-outline text-primary',
-    ghost: 'text-primary',
-    elevated: 'bg-surface-container-low text-primary',
-    link: 'text-primary',
-  },
-  secondary: {
-    filled: 'bg-secondary text-on-secondary',
-    tonal: 'bg-secondary-container text-on-secondary-container',
-    outline: 'border-outline text-secondary',
-    ghost: 'text-secondary',
-    elevated: 'bg-surface-container-low text-secondary',
-    link: 'text-secondary',
-  },
-  tertiary: {
-    filled: 'bg-tertiary text-on-tertiary',
-    tonal: 'bg-tertiary-container text-on-tertiary-container',
-    outline: 'border-outline text-tertiary',
-    ghost: 'text-tertiary',
-    elevated: 'bg-surface-container-low text-tertiary',
-    link: 'text-tertiary',
-  },
-  error: {
-    filled: 'bg-error text-on-error',
-    tonal: 'bg-error-container text-on-error-container',
-    outline: 'border-error text-error',
-    ghost: 'text-error',
-    elevated: 'bg-surface-container-low text-error',
-    link: 'text-error',
-  },
-} as const;
-
-// =============================================================================
-// Button Variants
-// =============================================================================
-
 const buttonVariants = cva(
-  // Base styles
+  // Base styles - MD3 common button properties
   [
-    'relative inline-flex items-center justify-center whitespace-nowrap',
-    'font-medium rounded-full',
-    'transition-all duration-200 ease-out',
-    'focus-visible:outline-none',
-    'disabled:pointer-events-none',
-    // State layer effect via pseudo-element
-    'before:absolute before:inset-0 before:rounded-full before:transition-opacity before:opacity-0',
-    'hover:before:opacity-8 focus-visible:before:opacity-12 active:before:opacity-12',
+    'inline-flex items-center justify-center gap-2 whitespace-nowrap',
+    'font-medium rounded-full cursor-pointer select-none',
+    'transition-colors duration-200',
+    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
+    'disabled:pointer-events-none disabled:cursor-not-allowed',
   ].join(' '),
   {
     variants: {
       variant: {
-        filled: [
-          stateLayer.filled,
-          'before:bg-on-primary', // State layer color for filled
-        ].join(' '),
-        tonal: [
-          'hover:shadow-sm active:shadow-none transition-shadow',
-          'before:bg-on-secondary-container',
-        ].join(' '),
-        outline: [
-          'border bg-transparent',
-          'focus-visible:border-current',
-          'before:bg-current',
-        ].join(' '),
-        ghost: ['bg-transparent', 'before:bg-current'].join(' '),
+        // MD3 Elevated Button - surface container with shadow
         elevated: [
-          'shadow-sm hover:shadow-md active:shadow-sm transition-shadow',
-          'before:bg-primary',
+          'bg-surface-container-low text-primary shadow-md',
+          'hover:bg-surface-container hover:shadow-lg',
+          'active:bg-surface-container-high',
+          'disabled:bg-on-surface/12 disabled:text-on-surface/38 disabled:shadow-none',
         ].join(' '),
-        link: [
-          'bg-transparent underline-offset-4 hover:underline',
-          'p-0 h-auto before:hidden',
+        // MD3 Filled Button - high emphasis, primary actions
+        filled: [
+          'bg-primary text-on-primary shadow-sm',
+          'hover:bg-primary/90 hover:shadow-md',
+          'active:bg-primary/80',
+          'disabled:bg-on-surface/12 disabled:text-on-surface/38 disabled:shadow-none',
         ].join(' '),
-      },
-      intent: {
-        primary: '',
-        secondary: '',
-        tertiary: '',
-        error: '',
+        // MD3 Filled Tonal Button - medium-high emphasis
+        tonal: [
+          'bg-secondary-container text-on-secondary-container',
+          'hover:bg-secondary-container/80',
+          'active:bg-secondary-container/70',
+          'disabled:bg-on-surface/12 disabled:text-on-surface/38',
+        ].join(' '),
+        // MD3 Outlined Button - medium emphasis
+        outlined: [
+          'border border-outline bg-transparent text-primary',
+          'hover:bg-primary/8',
+          'active:bg-primary/12',
+          'disabled:border-on-surface/12 disabled:text-on-surface/38',
+        ].join(' '),
+        // MD3 Text Button - low emphasis
+        text: [
+          'bg-transparent text-primary',
+          'hover:bg-primary/8',
+          'active:bg-primary/12',
+          'disabled:text-on-surface/38',
+        ].join(' '),
       },
       size: {
         sm: 'h-8 px-3 gap-1.5 text-label-sm',
         md: 'h-10 px-6 gap-2 text-label-lg',
-        lg: 'h-14 px-8 gap-2.5 text-title-sm',
+        lg: 'h-12 px-8 gap-2.5 text-label-lg',
         icon: 'h-10 w-10 p-0',
         'icon-sm': 'h-8 w-8 p-0',
         'icon-lg': 'h-12 w-12 p-0',
       },
     },
-    compoundVariants: [
-      // Filled colors
-      {
-        variant: 'filled',
-        intent: 'primary',
-        className: `${colors.primary.filled} ${disabled.filled}`,
-      },
-      {
-        variant: 'filled',
-        intent: 'secondary',
-        className: `${colors.secondary.filled} ${disabled.filled}`,
-      },
-      {
-        variant: 'filled',
-        intent: 'tertiary',
-        className: `${colors.tertiary.filled} ${disabled.filled}`,
-      },
-      {
-        variant: 'filled',
-        intent: 'error',
-        className: `${colors.error.filled} ${disabled.filled}`,
-      },
-
-      // Tonal colors
-      {
-        variant: 'tonal',
-        intent: 'primary',
-        className: `${colors.primary.tonal} ${disabled.filled}`,
-      },
-      {
-        variant: 'tonal',
-        intent: 'secondary',
-        className: `${colors.secondary.tonal} ${disabled.filled}`,
-      },
-      {
-        variant: 'tonal',
-        intent: 'tertiary',
-        className: `${colors.tertiary.tonal} ${disabled.filled}`,
-      },
-      { variant: 'tonal', intent: 'error', className: `${colors.error.tonal} ${disabled.filled}` },
-
-      // Outline colors
-      {
-        variant: 'outline',
-        intent: 'primary',
-        className: `${colors.primary.outline} ${disabled.outlined}`,
-      },
-      {
-        variant: 'outline',
-        intent: 'secondary',
-        className: `${colors.secondary.outline} ${disabled.outlined}`,
-      },
-      {
-        variant: 'outline',
-        intent: 'tertiary',
-        className: `${colors.tertiary.outline} ${disabled.outlined}`,
-      },
-      {
-        variant: 'outline',
-        intent: 'error',
-        className: `${colors.error.outline} ${disabled.outlined}`,
-      },
-
-      // Ghost colors
-      {
-        variant: 'ghost',
-        intent: 'primary',
-        className: `${colors.primary.ghost} ${disabled.text}`,
-      },
-      {
-        variant: 'ghost',
-        intent: 'secondary',
-        className: `${colors.secondary.ghost} ${disabled.text}`,
-      },
-      {
-        variant: 'ghost',
-        intent: 'tertiary',
-        className: `${colors.tertiary.ghost} ${disabled.text}`,
-      },
-      { variant: 'ghost', intent: 'error', className: `${colors.error.ghost} ${disabled.text}` },
-
-      // Elevated colors
-      {
-        variant: 'elevated',
-        intent: 'primary',
-        className: `${colors.primary.elevated} ${disabled.filled}`,
-      },
-
-      // Link colors
-      { variant: 'link', intent: 'primary', className: colors.primary.link },
-      { variant: 'link', intent: 'error', className: colors.error.link },
-    ],
     defaultVariants: {
       variant: 'filled',
-      intent: 'primary',
       size: 'md',
     },
   },
@@ -239,14 +86,10 @@ export interface ButtonProps
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, intent, size, asChild = false, ...props }, ref) => {
+  ({ className, variant, size, asChild = false, ...props }, ref) => {
     const Comp = asChild ? Slot : 'button';
     return (
-      <Comp
-        className={cn(buttonVariants({ variant, intent, size, className }))}
-        ref={ref}
-        {...props}
-      />
+      <Comp className={cn(buttonVariants({ variant, size, className }))} ref={ref} {...props} />
     );
   },
 );

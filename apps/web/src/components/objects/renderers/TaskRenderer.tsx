@@ -248,7 +248,7 @@ function TaskNormal({
         <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
           {onSchedule && (
             <Button
-              variant="ghost"
+              variant="text"
               size="icon"
               className="h-8 w-8"
               onClick={(e) => {
@@ -261,7 +261,7 @@ function TaskNormal({
           )}
           {onMore && (
             <Button
-              variant="ghost"
+              variant="text"
               size="icon"
               className="h-8 w-8"
               onClick={(e) => {

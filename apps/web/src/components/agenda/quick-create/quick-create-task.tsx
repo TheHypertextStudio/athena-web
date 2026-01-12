@@ -92,7 +92,7 @@ export function QuickCreateTask({ onCreated, date }: QuickCreateTaskProps) {
   if (!isOpen) {
     return (
       <Button
-        variant="ghost"
+        variant="text"
         size="sm"
         onClick={handleOpen}
         className="text-muted-foreground hover:text-foreground w-full justify-start gap-2"
@@ -120,7 +120,7 @@ export function QuickCreateTask({ onCreated, date }: QuickCreateTaskProps) {
           className="flex-1"
           disabled={isSubmitting}
         />
-        <Button type="button" variant="ghost" size="icon" onClick={handleClose} className="h-8 w-8">
+        <Button type="button" variant="text" size="icon" onClick={handleClose} className="h-8 w-8">
           <X className="h-4 w-4" />
         </Button>
       </div>

@@ -93,7 +93,7 @@ export function PasskeyRegistrationPrompt({
           </Button>
           <Button
             type="button"
-            variant="ghost"
+            variant="text"
             className="w-full"
             onClick={onSkip}
             disabled={isLoading}

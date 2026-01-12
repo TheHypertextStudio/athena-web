@@ -72,7 +72,7 @@ export async function BillingHistorySection() {
               }
               action={
                 invoice.invoicePdfUrl && (
-                  <Button variant="ghost" size="icon" asChild>
+                  <Button variant="text" size="icon" asChild>
                     <a href={invoice.invoicePdfUrl} target="_blank" rel="noopener noreferrer">
                       <FileDownloadOutlinedIcon sx={{ fontSize: 18 }} />
                     </a>

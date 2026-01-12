@@ -33,7 +33,7 @@ export function RevokeSessionButton({ sessionId }: RevokeSessionButtonProps) {
   };
 
   return (
-    <Button variant="ghost" size="icon" onClick={handleRevoke} disabled={isPending}>
+    <Button variant="text" size="icon" onClick={handleRevoke} disabled={isPending}>
       <DeleteOutlinedIcon sx={{ fontSize: 18 }} />
     </Button>
   );
@@ -53,7 +53,7 @@ export function RevokeAllSessionsButton() {
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
-        <Button variant="outline" size="sm" disabled={isPending}>
+        <Button variant="outlined" size="sm" disabled={isPending}>
           {isPending ? 'Signing out...' : 'Sign out of all other devices'}
         </Button>
       </AlertDialogTrigger>

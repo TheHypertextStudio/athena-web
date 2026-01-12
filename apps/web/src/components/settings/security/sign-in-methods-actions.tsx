@@ -48,7 +48,7 @@ export function UnlinkAccountButton({
   };
 
   return (
-    <Button variant="ghost" size="sm" onClick={handleUnlink} disabled={isPending || !canUnlink}>
+    <Button variant="text" size="sm" onClick={handleUnlink} disabled={isPending || !canUnlink}>
       {isPending ? 'Unlinking...' : 'Unlink'}
     </Button>
   );
@@ -86,7 +86,7 @@ export function LinkAccountButtons({ providers }: LinkAccountButtonsProps) {
       {providers.map((provider) => (
         <Button
           key={provider}
-          variant="outline"
+          variant="outlined"
           size="sm"
           onClick={() => void handleLink(provider)}
           disabled={isLinking}

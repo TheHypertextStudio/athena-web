@@ -96,7 +96,7 @@ export const createTaskAction: ExecutableAction = {
     // Simulate API call
     await new Promise((resolve) => setTimeout(resolve, 500));
 
-    const title = typeof formData?.['title'] === 'string' ? formData['title'] : 'task';
+    const title = typeof formData?.title === 'string' ? formData.title : 'task';
 
     return {
       success: true,
@@ -235,7 +235,7 @@ export const deleteTaskAction: ExecutableAction = {
       };
     }
 
-    if (!formData?.['confirm']) {
+    if (!formData?.confirm) {
       return {
         success: false,
         message: 'Deletion not confirmed',

@@ -175,7 +175,7 @@ function SnackbarItem({ snackbar, onDismiss }: SnackbarItemProps) {
       <span className="text-body-medium">{snackbar.message}</span>
       {snackbar.action && (
         <Button
-          variant="ghost"
+          variant="text"
           size="sm"
           onClick={handleAction}
           className="text-inverse-primary hover:bg-inverse-primary/10 -mr-2"

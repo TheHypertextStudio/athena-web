@@ -39,7 +39,7 @@ function buildSocialProviders() {
   const googleClientId = process.env.GOOGLE_CLIENT_ID;
   const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
   if (googleClientId && googleClientSecret) {
-    providers['google'] = {
+    providers.google = {
       clientId: googleClientId,
       clientSecret: googleClientSecret,
     };
@@ -48,7 +48,7 @@ function buildSocialProviders() {
   const appleClientId = process.env.APPLE_CLIENT_ID;
   const appleClientSecret = process.env.APPLE_CLIENT_SECRET;
   if (appleClientId && appleClientSecret) {
-    providers['apple'] = {
+    providers.apple = {
       clientId: appleClientId,
       clientSecret: appleClientSecret,
     };
@@ -57,7 +57,7 @@ function buildSocialProviders() {
   const microsoftClientId = process.env.MICROSOFT_CLIENT_ID;
   const microsoftClientSecret = process.env.MICROSOFT_CLIENT_SECRET;
   if (microsoftClientId && microsoftClientSecret) {
-    providers['microsoft'] = {
+    providers.microsoft = {
       clientId: microsoftClientId,
       clientSecret: microsoftClientSecret,
     };

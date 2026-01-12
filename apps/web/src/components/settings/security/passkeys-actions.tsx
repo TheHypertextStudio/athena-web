@@ -69,7 +69,7 @@ export function PasskeyActions({ passkey, canDelete }: PasskeyActionsProps) {
     <>
       <div className="flex items-center gap-1">
         <Button
-          variant="ghost"
+          variant="text"
           size="icon"
           onClick={() => {
             setNewName(passkey.name ?? '');
@@ -81,7 +81,7 @@ export function PasskeyActions({ passkey, canDelete }: PasskeyActionsProps) {
         </Button>
         <AlertDialog>
           <AlertDialogTrigger asChild>
-            <Button variant="ghost" size="icon" disabled={isPending || !canDelete}>
+            <Button variant="text" size="icon" disabled={isPending || !canDelete}>
               <DeleteOutlinedIcon sx={{ fontSize: 18 }} />
             </Button>
           </AlertDialogTrigger>
@@ -119,7 +119,7 @@ export function PasskeyActions({ passkey, canDelete }: PasskeyActionsProps) {
           />
           <DialogFooter>
             <Button
-              variant="ghost"
+              variant="text"
               onClick={() => {
                 setRenameDialogOpen(false);
               }}
@@ -163,7 +163,7 @@ export function AddPasskeyButton() {
   }
 
   return (
-    <Button variant="outline" size="sm" onClick={handleAdd} disabled={isPending}>
+    <Button variant="outlined" size="sm" onClick={handleAdd} disabled={isPending}>
       <AddOutlinedIcon sx={{ fontSize: 18 }} className="mr-1" />
       {isPending ? 'Adding...' : 'Add passkey'}
     </Button>

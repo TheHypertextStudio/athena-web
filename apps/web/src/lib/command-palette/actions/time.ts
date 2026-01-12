@@ -77,7 +77,7 @@ export const startTimerAction: ExecutableAction = {
   execute: ({ formData, context }) => {
     const { startTimer } = getTimerState();
 
-    const taskId = (formData?.['taskId'] as string) || null;
+    const taskId = (formData?.taskId as string) || null;
     const taskTitle =
       context.entity?.type === 'task'
         ? ((context.entity.data as { title?: string }).title ?? null)

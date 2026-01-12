@@ -30,9 +30,9 @@ export function useEntryDrag({
 
       // Check if this is a calendar entry drag
       const activeData = active.data.current;
-      if (activeData?.['type'] !== 'event' && activeData?.['type'] !== 'time-block') return;
+      if (activeData?.type !== 'event' && activeData?.type !== 'time-block') return;
 
-      const entry = activeData['entry'] as CalendarEntry | undefined;
+      const entry = activeData.entry as CalendarEntry | undefined;
       if (!entry) return;
 
       // Calculate time delta from pixel delta

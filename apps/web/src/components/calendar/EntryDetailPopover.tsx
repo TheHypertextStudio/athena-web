@@ -289,7 +289,7 @@ export function EntryDetailPopover({
       <div className="border-outline-variant/30 flex justify-end gap-2 border-t px-4 py-3">
         {onDelete && (
           <Button
-            variant="ghost"
+            variant="text"
             size="sm"
             onClick={handleDelete}
             className="text-error hover:bg-error/10"
@@ -299,7 +299,7 @@ export function EntryDetailPopover({
           </Button>
         )}
         {onEdit && (
-          <Button variant="ghost" size="sm" onClick={handleEdit} className="text-primary">
+          <Button variant="text" size="sm" onClick={handleEdit} className="text-primary">
             <EditOutlinedIcon sx={{ fontSize: 18 }} className="mr-1" />
             Edit
           </Button>

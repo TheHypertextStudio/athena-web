@@ -31,7 +31,7 @@ export function GenerateBackupCodesButton({ hasExisting }: GenerateBackupCodesBu
 
   return (
     <>
-      <Button variant="outline" size="sm" onClick={handleGenerate} disabled={isPending}>
+      <Button variant="outlined" size="sm" onClick={handleGenerate} disabled={isPending}>
         {isPending ? 'Generating...' : hasExisting ? 'Regenerate' : 'Generate'}
       </Button>
 
@@ -56,7 +56,7 @@ export function GenerateBackupCodesButton({ hasExisting }: GenerateBackupCodesBu
                   </div>
                 ))}
               </div>
-              <Button variant="outline" size="sm" className="mt-3" onClick={handleDismiss}>
+              <Button variant="outlined" size="sm" className="mt-3" onClick={handleDismiss}>
                 I've saved these codes
               </Button>
             </SettingsAlertBanner>

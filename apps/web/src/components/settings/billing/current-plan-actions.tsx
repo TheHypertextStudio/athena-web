@@ -58,12 +58,12 @@ export function CurrentPlanActions({ isPaidPlan, isCanceled }: CurrentPlanAction
   return (
     <div className="flex gap-2">
       {isPaidPlan && !isCanceled && (
-        <Button variant="outline" onClick={handleCancel} disabled={isPending}>
+        <Button variant="outlined" onClick={handleCancel} disabled={isPending}>
           Cancel
         </Button>
       )}
       {isCanceled && (
-        <Button variant="outline" onClick={handleResume} disabled={isPending}>
+        <Button variant="outlined" onClick={handleResume} disabled={isPending}>
           Resume
         </Button>
       )}

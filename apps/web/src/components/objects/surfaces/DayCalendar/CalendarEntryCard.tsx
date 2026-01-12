@@ -6,6 +6,7 @@ import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
 import GridViewOutlinedIcon from '@mui/icons-material/GridViewOutlined';
+import CloudSyncOutlinedIcon from '@mui/icons-material/CloudSyncOutlined';
 import { cn } from '@/lib/utils';
 import { getYFromTime, MIN_SLOT_MINUTES } from '@/lib/calendar-utils';
 import { useCalendarTimezoneOptional } from '@/contexts/TimezoneContext';
@@ -101,6 +102,7 @@ export function CalendarEntryCard({
   const height = isResizing && resizePreviewHeight !== undefined ? resizePreviewHeight : baseHeight;
 
   const isTimeBlock = entry.type === 'time-block';
+  const isExternal = entry.source === 'external';
   const hasTasks = isTimeBlock && entry.tasks && entry.tasks.length > 0;
 
   // Use synthetic ID for preview entries
@@ -204,7 +206,9 @@ export function CalendarEntryCard({
           ? 'bg-primary/20 cursor-grab'
           : isTimeBlock
             ? 'bg-surface-container-highest'
-            : 'bg-surface-container-high',
+            : isExternal
+              ? 'bg-surface-container border-outline-variant border'
+              : 'bg-surface-container-high',
         selected && !isPreview && 'ring-primary ring-2',
         isDragging && 'ring-primary z-50 ring-2 transition-none',
         isDragging && isPreview && 'cursor-grabbing shadow-lg',
@@ -244,6 +248,13 @@ export function CalendarEntryCard({
               <GridViewOutlinedIcon
                 sx={{ fontSize: 14 }}
                 className="text-on-surface-variant mt-0.5 shrink-0"
+              />
+            )}
+            {isExternal && !isTimeBlock && (
+              <CloudSyncOutlinedIcon
+                sx={{ fontSize: 14 }}
+                className="text-outline mt-0.5 shrink-0"
+                titleAccess="Synced from external calendar"
               />
             )}
             <div className="min-w-0 flex-1">

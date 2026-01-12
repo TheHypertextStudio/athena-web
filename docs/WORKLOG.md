@@ -26,6 +26,7 @@
   - [x] Redact agenda sampling payloads by default
   - [x] Gate availability event titles behind explicit flag
   - [x] Cap list resources with default limits
+  - [x] Move task search filtering into SQL
 - **Plan**:
 
 ## Plan: MCP Server Hardening + Refactor

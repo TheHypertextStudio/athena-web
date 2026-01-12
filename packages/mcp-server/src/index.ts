@@ -11,7 +11,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { z } from 'zod';
-import { and, desc, eq, gte, inArray, isNull, lte, or } from 'drizzle-orm';
+import { and, desc, eq, gte, ilike, inArray, isNull, lte, or } from 'drizzle-orm';
 
 const SERVER_INFO = {
   name: 'athena-mcp',
@@ -1466,32 +1466,27 @@ function registerTools(
         { level: 'info', data: 'tool: search_tasks' },
         extra.sessionId,
       );
-      const query = args.query.toLowerCase();
       const limit = args.limit ?? 10;
+      const searchPattern = `%${args.query}%`;
 
-      let allTasks = await db.query.tasks.findMany({
+      const results = await db.query.tasks.findMany({
         where: and(
           eq((tasks as { creatorId?: unknown }).creatorId as never, userId),
           isNull((tasks as { deletedAt?: unknown }).deletedAt as never),
           args.status
             ? eq((tasks as { status?: unknown }).status as never, args.status)
             : undefined,
+          or(
+            ilike((tasks as { title?: unknown }).title as never, searchPattern),
+            ilike((tasks as { description?: unknown }).description as never, searchPattern),
+          ),
         ),
-        limit: 100,
+        orderBy: [desc((tasks as { createdAt?: unknown }).createdAt as never)],
+        limit,
       });
 
-      allTasks = allTasks.filter((task) => {
-        const titleValue = task.title;
-        const descriptionValue = task.description;
-        const title = typeof titleValue === 'string' ? titleValue.toLowerCase() : '';
-        const description =
-          typeof descriptionValue === 'string' ? descriptionValue.toLowerCase() : '';
-        return title.includes(query) || description.includes(query);
-      });
-
-      const results = allTasks.slice(0, limit);
-
-      return { content: [{ type: 'text', text: JSON.stringify(results, null, 2) }] };
+      const limitedResults = results.slice(0, limit);
+      return { content: [{ type: 'text', text: JSON.stringify(limitedResults, null, 2) }] };
     },
   );
 

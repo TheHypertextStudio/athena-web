@@ -2,9 +2,12 @@
  * Calendar sync hook for managing Google Calendar and other provider integrations.
  *
  * Provides:
- * - Connection management (list, sync, push)
+ * - Connection listing and grouping
+ * - Sync operations (all, per-connection, per-event)
  * - Auto-sync on page load
- * - Push mutations for bidirectional sync
+ *
+ * For connection management (rename, set primary, disconnect),
+ * use the composed useCalendarConnectionActions hook.
  *
  * @packageDocumentation
  */
@@ -21,6 +24,7 @@ import {
   type CalendarProvider,
   type AccountSettingsUpdate,
 } from '@/lib/api-client';
+import { useCalendarConnectionActions } from './useCalendarConnectionActions';
 
 export interface UseCalendarSyncReturn {
   /** List of calendar connections */
@@ -29,7 +33,7 @@ export interface UseCalendarSyncReturn {
   connectionsByProvider: Record<CalendarProvider, CalendarConnection[]>;
   /** Whether there are any active connections */
   hasConnections: boolean;
-  /** Connections configured for bidirectional sync */
+  /** Connections configured to push events externally */
   bidirectionalConnections: CalendarConnection[];
   /** Loading state for connections query */
   isLoading: boolean;
@@ -47,22 +51,20 @@ export interface UseCalendarSyncReturn {
   syncingConnectionId: string | null;
 
   // Event sync operations
-  /** Sync an event (create/update) to all bidirectional connections */
+  /** Sync an event (create/update) to all push-enabled connections */
   syncEvent: (eventId: string) => void;
-  /** Delete an event from all bidirectional connections */
+  /** Delete an event from all push-enabled connections */
   deleteEvent: (eventId: string) => void;
   /** Whether an event sync operation is in progress */
   isSyncingEvent: boolean;
 
-  // Account management
-  /** Update account settings (label, color, primary status) */
-  updateAccountSettings: (connectionId: string, settings: AccountSettingsUpdate) => void;
-  /** Set an account as primary */
-  setAccountPrimary: (connectionId: string) => void;
-  /** Whether an account update is in progress */
-  isUpdatingAccount: boolean;
-
-  // Disconnect
+  // Connection management (delegated to useCalendarConnectionActions)
+  /** Update connection settings (label, color, primary status) */
+  updateConnectionSettings: (connectionId: string, settings: AccountSettingsUpdate) => void;
+  /** Set a connection as primary */
+  setConnectionPrimary: (connectionId: string) => void;
+  /** Whether a connection update is in progress */
+  isUpdatingConnection: boolean;
   /** Disconnect a calendar connection */
   disconnect: (connectionId: string) => void;
   /** Whether a disconnect is in progress */
@@ -75,9 +77,13 @@ export interface UseCalendarSyncReturn {
 
 /**
  * Hook for managing calendar sync state and operations.
+ * Composes useCalendarConnectionActions for connection management.
  */
 export function useCalendarSync(): UseCalendarSyncReturn {
   const queryClient = useQueryClient();
+
+  // Compose connection actions hook
+  const connectionActions = useCalendarConnectionActions();
 
   // Fetch connections
   const connectionsQuery = useQuery({
@@ -93,8 +99,8 @@ export function useCalendarSync(): UseCalendarSyncReturn {
   const syncAllMutation = useMutation({
     mutationFn: () => calendarSyncApi.syncAll(),
     onSuccess: () => {
-      // Invalidate events to refetch synced data
       void queryClient.invalidateQueries({ queryKey: eventKeys.lists() });
+      void queryClient.invalidateQueries({ queryKey: calendarSyncKeys.connections() });
     },
   });
 
@@ -103,6 +109,7 @@ export function useCalendarSync(): UseCalendarSyncReturn {
     mutationFn: (connectionId: string) => calendarSyncApi.triggerSync(connectionId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: eventKeys.lists() });
+      void queryClient.invalidateQueries({ queryKey: calendarSyncKeys.connections() });
     },
   });
 
@@ -114,29 +121,6 @@ export function useCalendarSync(): UseCalendarSyncReturn {
   // Delete event mutation
   const deleteEventMutation = useMutation({
     mutationFn: (eventId: string) => calendarSyncApi.deleteEventFromAll(eventId),
-  });
-
-  // Update account settings mutation
-  const updateAccountMutation = useMutation({
-    mutationFn: ({
-      connectionId,
-      settings,
-    }: {
-      connectionId: string;
-      settings: AccountSettingsUpdate;
-    }) => calendarSyncApi.updateAccountSettings(connectionId, settings),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: calendarSyncKeys.connections() });
-    },
-  });
-
-  // Disconnect mutation
-  const disconnectMutation = useMutation({
-    mutationFn: (connectionId: string) => calendarSyncApi.disconnect(connectionId),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: calendarSyncKeys.connections() });
-      void queryClient.invalidateQueries({ queryKey: eventKeys.lists() });
-    },
   });
 
   const connections = connectionsQuery.data ?? [];
@@ -158,9 +142,17 @@ export function useCalendarSync(): UseCalendarSyncReturn {
     return grouped;
   }, [connections]);
 
-  // Filter for bidirectional connections
-  const bidirectionalConnections = connections.filter((c) =>
-    c.calendars.some((cal) => cal.syncEnabled && cal.syncDirection === 'bidirectional'),
+  // Filter for push-enabled connections
+  const bidirectionalConnections = useMemo(
+    () =>
+      connections.filter((c) =>
+        c.calendars.some(
+          (cal) =>
+            cal.syncEnabled &&
+            (cal.syncDirection === 'bidirectional' || cal.syncDirection === 'push'),
+        ),
+      ),
+    [connections],
   );
 
   // Track which connection is currently syncing
@@ -201,27 +193,6 @@ export function useCalendarSync(): UseCalendarSyncReturn {
     void queryClient.invalidateQueries({ queryKey: calendarSyncKeys.connections() });
   }, [queryClient]);
 
-  const updateAccountSettings = useCallback(
-    (connectionId: string, settings: AccountSettingsUpdate) => {
-      updateAccountMutation.mutate({ connectionId, settings });
-    },
-    [updateAccountMutation],
-  );
-
-  const setAccountPrimary = useCallback(
-    (connectionId: string) => {
-      updateAccountMutation.mutate({ connectionId, settings: { isPrimary: true } });
-    },
-    [updateAccountMutation],
-  );
-
-  const disconnect = useCallback(
-    (connectionId: string) => {
-      disconnectMutation.mutate(connectionId);
-    },
-    [disconnectMutation],
-  );
-
   return {
     connections,
     connectionsByProvider,
@@ -239,12 +210,8 @@ export function useCalendarSync(): UseCalendarSyncReturn {
     deleteEvent,
     isSyncingEvent: syncEventMutation.isPending || deleteEventMutation.isPending,
 
-    updateAccountSettings,
-    setAccountPrimary,
-    isUpdatingAccount: updateAccountMutation.isPending,
-
-    disconnect,
-    isDisconnecting: disconnectMutation.isPending,
+    // Spread connection actions
+    ...connectionActions,
 
     refetch,
   };
@@ -255,16 +222,26 @@ export function useCalendarSync(): UseCalendarSyncReturn {
  * Only syncs once per page load to avoid excessive API calls.
  */
 export function useAutoCalendarSync(): void {
-  const { hasConnections, syncAll, isSyncing } = useCalendarSync();
+  const { hasConnections, syncAll, isSyncing, connections } = useCalendarSync();
   const hasSynced = useRef(false);
 
   useEffect(() => {
+    const recentSyncThresholdMs = 2 * 60 * 1000;
+    const now = Date.now();
+    const recentlySynced = connections.some((connection) => {
+      if (!connection.lastSyncAt) {
+        return false;
+      }
+      const lastSyncTime = Date.parse(connection.lastSyncAt);
+      return Number.isFinite(lastSyncTime) && now - lastSyncTime < recentSyncThresholdMs;
+    });
+
     // Only sync once on mount, and only if we have connections
-    if (hasConnections && !isSyncing && !hasSynced.current) {
+    if (hasConnections && !isSyncing && !hasSynced.current && !recentlySynced) {
       hasSynced.current = true;
       syncAll();
     }
-  }, [hasConnections, isSyncing, syncAll]);
+  }, [connections, hasConnections, isSyncing, syncAll]);
 }
 
 /**

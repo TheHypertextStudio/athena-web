@@ -5,28 +5,41 @@
  *
  * Used by both the modal and full-page detail views.
  * Handles both standard integrations and calendar-specific integrations.
- * Supports multiple accounts per provider for calendar integrations.
  */
 
-import { useState } from 'react';
 import LinkOutlinedIcon from '@mui/icons-material/LinkOutlined';
 import CheckCircleOutlinedIcon from '@mui/icons-material/CheckCircleOutlined';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import { useIntegrations } from '@/hooks/use-integrations';
 import { useCalendarSync } from '@/hooks/useCalendarSync';
 import { getIntegrationConfig, CATEGORY_INFO } from '@/lib/integrations';
-import { calendarSyncApi, type CalendarProvider } from '@/lib/api-client';
+import type { CalendarProvider } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Surface } from '@/components/ui/surface';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { IntegrationIcon } from './integration-icons';
-import { AccountCard } from './account-card';
-import { AddAccountButton } from './add-account-button';
-import { RenameAccountDialog } from './rename-account-dialog';
+import { CalendarConnectionsList } from './calendar-connections-list';
+import { ConnectCalendarButton } from './connect-calendar-button';
 
 /** Calendar provider identifiers */
-const CALENDAR_PROVIDERS = ['google_calendar', 'outlook_calendar', 'apple_calendar'] as const;
+const CALENDAR_PROVIDERS = [
+  'google_calendar',
+  'outlook_calendar',
+  'apple_calendar',
+  'caldav_calendar',
+] as const;
 type CalendarProviderType = (typeof CALENDAR_PROVIDERS)[number];
 
 /** Map integration provider to calendar-sync provider */
@@ -34,6 +47,14 @@ const CALENDAR_PROVIDER_MAP: Record<CalendarProviderType, CalendarProvider> = {
   google_calendar: 'google',
   outlook_calendar: 'outlook',
   apple_calendar: 'icloud',
+  caldav_calendar: 'caldav',
+};
+
+const CALENDAR_PROVIDER_LABELS: Record<CalendarProvider, string> = {
+  google: 'Google',
+  outlook: 'Microsoft',
+  icloud: 'Apple',
+  caldav: 'CalDAV',
 };
 
 function isCalendarProvider(provider: string): provider is CalendarProviderType {
@@ -44,18 +65,12 @@ interface IntegrationDetailContentProps {
   provider: string;
 }
 
-/** Provider display name mapping */
-const PROVIDER_DISPLAY_NAMES: Record<CalendarProvider, string> = {
-  google: 'Google',
-  outlook: 'Microsoft',
-  icloud: 'Apple',
-  caldav: 'CalDAV',
-};
-
 /**
  * Detail content for an integration.
  * Shows description, scopes, connection status, and connect/disconnect actions.
- * For calendar providers, shows multi-account UI with individual account cards.
+ * For calendar providers, delegates to CalendarIntegrationAccounts component.
+ *
+ * @param props - Integration detail props.
  */
 export function IntegrationDetailContent({ provider }: IntegrationDetailContentProps) {
   const config = getIntegrationConfig(provider);
@@ -66,19 +81,13 @@ export function IntegrationDetailContent({ provider }: IntegrationDetailContentP
     isLoading: isLoadingCalendar,
     syncConnection,
     syncingConnectionId,
-    updateAccountSettings,
-    setAccountPrimary,
+    updateConnectionSettings,
+    setConnectionPrimary,
     disconnect: disconnectCalendar,
     isDisconnecting: isDisconnectingCalendar,
-    isUpdatingAccount,
+    isUpdatingConnection,
     refetch: refetchCalendar,
   } = useCalendarSync();
-
-  // Rename dialog state
-  const [renameDialogOpen, setRenameDialogOpen] = useState(false);
-  const [renameConnectionId, setRenameConnectionId] = useState<string | null>(null);
-  const [renameCurrentLabel, setRenameCurrentLabel] = useState<string | null>(null);
-  const [renameAccountEmail, setRenameAccountEmail] = useState<string | null>(null);
 
   const isCalendar = isCalendarProvider(provider);
   const calendarProvider = isCalendar ? CALENDAR_PROVIDER_MAP[provider] : null;
@@ -117,51 +126,16 @@ export function IntegrationDetailContent({ provider }: IntegrationDetailContentP
   const isConnected = isCalendar ? calendarConnections.length > 0 : !!connection;
   const categoryInfo = CATEGORY_INFO[config.category];
 
-  const handleConnect = async () => {
-    if (isCalendar && calendarProvider) {
-      // Use calendar-sync OAuth flow
-      try {
-        const result = await calendarSyncApi.getAuthUrl(calendarProvider);
-        if (result.data.authUrl) {
-          window.location.href = result.data.authUrl;
-        }
-      } catch (err) {
-        console.error('Failed to get calendar auth URL:', err);
-      }
-    } else {
-      // Use standard integrations OAuth flow
-      connect({
-        provider: config.provider,
-        redirectUri: `${window.location.origin}/settings/integrations/detail/${config.provider}`,
-      });
-    }
+  const handleConnect = () => {
+    connect({
+      provider: config.provider,
+      redirectUri: `${window.location.origin}/settings/integrations/detail/${config.provider}`,
+    });
   };
 
   const handleDisconnectNonCalendar = () => {
-    const name = config.name;
-    if (!confirm(`Are you sure you want to disconnect ${name}?`)) {
-      return;
-    }
     if (connection) {
       disconnect(connection.id);
-    }
-  };
-
-  const handleRename = (
-    connectionId: string,
-    currentLabel: string | null,
-    email: string | null,
-  ) => {
-    setRenameConnectionId(connectionId);
-    setRenameCurrentLabel(currentLabel);
-    setRenameAccountEmail(email);
-    setRenameDialogOpen(true);
-  };
-
-  const handleRenameSubmit = (newLabel: string) => {
-    if (renameConnectionId) {
-      updateAccountSettings(renameConnectionId, { accountLabel: newLabel || undefined });
-      setRenameDialogOpen(false);
     }
   };
 
@@ -193,59 +167,28 @@ export function IntegrationDetailContent({ provider }: IntegrationDetailContentP
       {/* Calendar Multi-Account UI */}
       {isCalendar && calendarProvider && (
         <>
-          {calendarConnections.length > 0 && (
-            <div>
-              <h3 className="text-on-surface mb-3 font-medium">
-                Connected Accounts ({calendarConnections.length})
-              </h3>
-              <div className="space-y-3">
-                {calendarConnections.map((conn) => (
-                  <AccountCard
-                    key={conn.id}
-                    connection={conn}
-                    onSync={() => {
-                      syncConnection(conn.id);
-                    }}
-                    onDisconnect={() => {
-                      disconnectCalendar(conn.id);
-                    }}
-                    onRename={() => {
-                      handleRename(conn.id, conn.accountLabel, conn.accountEmail);
-                    }}
-                    onSetPrimary={() => {
-                      setAccountPrimary(conn.id);
-                    }}
-                    onCalendarUpdate={refetchCalendar}
-                    isSyncing={syncingConnectionId === conn.id}
-                    isDisconnecting={isDisconnectingCalendar}
-                  />
-                ))}
-              </div>
-
-              {/* Add Another Account button */}
-              <div className="mt-4">
-                <AddAccountButton
-                  provider={calendarProvider}
-                  providerName={PROVIDER_DISPLAY_NAMES[calendarProvider]}
-                  existingAccountCount={calendarConnections.length}
-                />
-              </div>
-            </div>
-          )}
+          <CalendarConnectionsList
+            provider={calendarProvider}
+            connections={calendarConnections}
+            syncingConnectionId={syncingConnectionId}
+            isDisconnecting={isDisconnectingCalendar}
+            isUpdatingConnection={isUpdatingConnection}
+            onSync={syncConnection}
+            onDisconnect={disconnectCalendar}
+            onSetPrimary={setConnectionPrimary}
+            onUpdateSettings={updateConnectionSettings}
+            onCalendarUpdate={refetchCalendar}
+          />
 
           {/* Show connect button when no connections exist */}
           {calendarConnections.length === 0 && (
-            <Button
-              variant="filled"
-              onClick={() => {
-                void handleConnect();
-              }}
-              disabled={isConnecting}
-              className="w-full"
-            >
-              <LinkOutlinedIcon sx={{ fontSize: 18 }} className="mr-2" />
-              {isConnecting ? 'Connecting...' : 'Connect'}
-            </Button>
+            <ConnectCalendarButton
+              provider={calendarProvider}
+              providerName={CALENDAR_PROVIDER_LABELS[calendarProvider]}
+              existingAccountCount={0}
+              label={`Connect ${CALENDAR_PROVIDER_LABELS[calendarProvider]} Account`}
+              onConnected={refetchCalendar}
+            />
           )}
         </>
       )}
@@ -290,20 +233,34 @@ export function IntegrationDetailContent({ provider }: IntegrationDetailContentP
       {!isCalendar && (
         <div className="space-y-2 pt-2">
           {isConnected ? (
-            <Button
-              variant="outlined"
-              onClick={handleDisconnectNonCalendar}
-              disabled={isDisconnecting}
-              className="w-full"
-            >
-              {isDisconnecting ? 'Disconnecting...' : 'Disconnect'}
-            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outlined" disabled={isDisconnecting} className="w-full">
+                  {isDisconnecting ? 'Disconnecting...' : 'Disconnect'}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Disconnect {config.name}?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will remove the integration from your account.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={isDisconnecting}>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleDisconnectNonCalendar}
+                    disabled={isDisconnecting}
+                  >
+                    Disconnect
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           ) : (
             <Button
               variant="filled"
-              onClick={() => {
-                void handleConnect();
-              }}
+              onClick={handleConnect}
               disabled={isConnecting}
               className="w-full"
             >
@@ -313,16 +270,6 @@ export function IntegrationDetailContent({ provider }: IntegrationDetailContentP
           )}
         </div>
       )}
-
-      {/* Rename Account Dialog */}
-      <RenameAccountDialog
-        open={renameDialogOpen}
-        onOpenChange={setRenameDialogOpen}
-        currentLabel={renameCurrentLabel}
-        accountEmail={renameAccountEmail}
-        onRename={handleRenameSubmit}
-        isLoading={isUpdatingAccount}
-      />
     </div>
   );
 }

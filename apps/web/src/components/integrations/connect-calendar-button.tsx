@@ -1,8 +1,8 @@
 'use client';
 
 /**
- * Add account button for connecting additional accounts from the same provider.
- * Respects account limits based on user's subscription tier.
+ * Connect calendar button for adding calendar connections.
+ * Respects connection limits based on user's subscription tier.
  */
 
 import { useState } from 'react';
@@ -11,25 +11,41 @@ import { calendarSyncApi, type CalendarProvider } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { UpgradeModal } from '@/components/ui/upgrade-modal';
 import { useEntitlements } from '@/hooks/use-entitlements';
+import { CalendarCredentialsDialog } from './calendar-credentials-dialog';
 
-interface AddAccountButtonProps {
+interface ConnectCalendarButtonProps {
   provider: CalendarProvider;
   providerName: string;
   existingAccountCount: number;
+  label?: string;
+  onConnected?: () => void;
 }
 
 /**
- * Button to add another account from the same provider.
- * Shows count of existing accounts and respects account limits based on plan tier.
+ * Button to connect a calendar from a provider.
+ * Shows connection count and respects limits based on plan tier.
+ *
+ * @param props - Connect calendar button props.
  */
-export function AddAccountButton({
+export function ConnectCalendarButton({
   provider,
   providerName,
   existingAccountCount,
-}: AddAccountButtonProps) {
+  label,
+  onConnected,
+}: ConnectCalendarButtonProps) {
   const [isLoading, setIsLoading] = useState(false);
+  const [authState, setAuthState] = useState<string | null>(null);
+  const [credentialsOpen, setCredentialsOpen] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const { getAccountLimit, hasReachedAccountLimit } = useEntitlements();
+
+  const handleCredentialsOpenChange = (open: boolean) => {
+    setCredentialsOpen(open);
+    if (!open) {
+      setAuthState(null);
+    }
+  };
 
   const accountLimit = getAccountLimit();
   const isAtLimit = hasReachedAccountLimit(existingAccountCount);
@@ -45,7 +61,19 @@ export function AddAccountButton({
     setIsLoading(true);
     try {
       const result = await calendarSyncApi.getAuthUrl(provider);
-      if (result.data.authUrl) {
+      if (!result.data.authUrl) {
+        return;
+      }
+
+      if (result.data.authUrl.startsWith('athena://')) {
+        const parsedUrl = new URL(result.data.authUrl);
+        const state = parsedUrl.searchParams.get('state');
+        if (!state) {
+          throw new Error('Missing authorization state.');
+        }
+        setAuthState(state);
+        setCredentialsOpen(true);
+      } else {
         window.location.href = result.data.authUrl;
       }
     } catch (err) {
@@ -70,7 +98,7 @@ export function AddAccountButton({
           ? 'Redirecting...'
           : isAtLimit
             ? `Account limit reached (${accountCountLabel}/${accountLimitLabel})`
-            : `Add Another ${providerName} Account`}
+            : (label ?? `Add Another ${providerName} Account`)}
       </Button>
 
       <UpgradeModal
@@ -80,6 +108,16 @@ export function AddAccountButton({
         featureName="Unlimited Connected Accounts"
         featureDescription={`Free plans are limited to ${accountLimitLabel} connected accounts per provider. Upgrade to Pro for unlimited accounts.`}
       />
+
+      {(provider === 'icloud' || provider === 'caldav') && (
+        <CalendarCredentialsDialog
+          provider={provider}
+          state={authState}
+          open={credentialsOpen}
+          onOpenChange={handleCredentialsOpenChange}
+          onSuccess={onConnected}
+        />
+      )}
     </>
   );
 }

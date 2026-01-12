@@ -183,6 +183,26 @@ export const INTEGRATIONS: IntegrationConfig[] = [
       },
     ],
   },
+  {
+    provider: 'caldav_calendar',
+    name: 'CalDAV',
+    shortDescription: 'Connect CalDAV calendars',
+    description:
+      'Connect a CalDAV server (Fastmail, Nextcloud, or other providers) to sync events with Athena.',
+    category: 'calendar',
+    scopes: [
+      {
+        id: 'calendar.read',
+        name: 'Read calendars',
+        description: 'View your calendar events',
+      },
+      {
+        id: 'calendar.write',
+        name: 'Manage events',
+        description: 'Create and edit calendar events',
+      },
+    ],
+  },
 
   // Communication
   {

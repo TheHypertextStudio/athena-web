@@ -18,6 +18,7 @@ export type IntegrationProvider =
   | 'google_calendar'
   | 'outlook_calendar'
   | 'apple_calendar'
+  | 'caldav_calendar'
   | 'slack'
   | 'google_drive'
   | 'dropbox'

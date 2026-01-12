@@ -1,10 +1,10 @@
 'use client';
 
 /**
- * Account card component for multi-account calendar integrations.
+ * Calendar connection card component.
  *
- * Displays account info, sync status, and calendar selection.
- * Includes overflow menu for account management (rename, set primary, disconnect).
+ * Displays connection info, sync status, and calendar selection.
+ * Includes overflow menu for connection management (rename, set primary, disconnect).
  */
 
 import { useState } from 'react';
@@ -18,6 +18,16 @@ import type { CalendarConnection } from '@/lib/api-client';
 import { Surface } from '@/components/ui/surface';
 import { Button } from '@/components/ui/button';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -26,7 +36,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { CalendarSelection } from './calendar-selection';
 
-interface AccountCardProps {
+interface CalendarConnectionCardProps {
   connection: CalendarConnection;
   onSync: () => void;
   onDisconnect: () => void;
@@ -38,10 +48,12 @@ interface AccountCardProps {
 }
 
 /**
- * Account card for a connected calendar account.
- * Shows account email/label, sync status, and calendar toggles.
+ * Card for a connected calendar connection.
+ * Shows connection email/label, sync status, and calendar toggles.
+ *
+ * @param props - Calendar connection card props.
  */
-export function AccountCard({
+export function CalendarConnectionCard({
   connection,
   onSync,
   onDisconnect,
@@ -50,18 +62,12 @@ export function AccountCard({
   onCalendarUpdate,
   isSyncing = false,
   isDisconnecting = false,
-}: AccountCardProps) {
+}: CalendarConnectionCardProps) {
   const [isExpanded, setIsExpanded] = useState(true);
+  const [disconnectOpen, setDisconnectOpen] = useState(false);
 
   const displayName = connection.accountLabel ?? connection.accountEmail ?? 'Connected Account';
   const hasEmail = connection.accountEmail && connection.accountLabel !== connection.accountEmail;
-
-  const handleDisconnect = () => {
-    if (!confirm(`Are you sure you want to disconnect ${displayName}?`)) {
-      return;
-    }
-    onDisconnect();
-  };
 
   return (
     <Surface elevation="high" padding="md" rounded="md" className="space-y-3">
@@ -99,6 +105,9 @@ export function AccountCard({
               )}
             </p>
           )}
+          {connection.lastSyncStatus === 'error' && connection.lastSyncError && (
+            <p className="text-error mt-1 text-xs">{connection.lastSyncError}</p>
+          )}
         </div>
 
         {/* Actions */}
@@ -132,7 +141,9 @@ export function AccountCard({
               )}
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                onClick={handleDisconnect}
+                onClick={() => {
+                  setDisconnectOpen(true);
+                }}
                 disabled={isDisconnecting}
                 className="text-error focus:text-error"
               >
@@ -166,6 +177,29 @@ export function AccountCard({
           )}
         </div>
       )}
+
+      <AlertDialog open={disconnectOpen} onOpenChange={setDisconnectOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Disconnect {displayName}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove the account connection and stop future syncs.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDisconnecting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                onDisconnect();
+                setDisconnectOpen(false);
+              }}
+              disabled={isDisconnecting}
+            >
+              Disconnect
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Surface>
   );
 }

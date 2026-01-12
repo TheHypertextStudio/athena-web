@@ -30,6 +30,9 @@ type IconComponent = React.FC<IconProps>;
 
 /**
  * Get the icon component for a specific provider.
+ *
+ * @param provider - Integration provider identifier.
+ * @returns Icon component for the provider.
  */
 export function getProviderIcon(provider: IntegrationProvider): IconComponent {
   const iconMap: Record<IntegrationProvider, IconComponent> = {
@@ -60,6 +63,9 @@ export function getProviderIcon(provider: IntegrationProvider): IconComponent {
     apple_calendar: ({ size = 20, className }) => (
       <AppleIcon sx={{ fontSize: size }} className={className} />
     ),
+    caldav_calendar: ({ size = 20, className }) => (
+      <CloudOutlinedIcon sx={{ fontSize: size }} className={className} />
+    ),
     slack: ({ size = 20, className }) => (
       <ChatOutlinedIcon sx={{ fontSize: size }} className={className} />
     ),
@@ -82,6 +88,8 @@ export function getProviderIcon(provider: IntegrationProvider): IconComponent {
 
 /**
  * Component wrapper for provider icons.
+ *
+ * @param props - Integration icon props.
  */
 export function IntegrationIcon({
   provider,

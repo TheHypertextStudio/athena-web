@@ -24,7 +24,7 @@ import {
   useUndoableUpdateTimeBlock,
   useUndoableDeleteTimeBlock,
 } from './useTimeBlocks';
-import { useCalendarPush } from './useCalendarSync';
+import { useCalendarPush, useCalendarSync } from './useCalendarSync';
 import {
   toCalendarEntries,
   calendarEntryToEventInput,
@@ -32,6 +32,7 @@ import {
   calendarUpdateToEventUpdate,
   calendarUpdateToTimeBlockUpdate,
   getDayBounds,
+  type AccountColorMap,
 } from '@/lib/calendar-utils';
 import { eventKeys, timeBlockKeys } from '@/lib/api-client';
 import { useSnackbar } from '@/components/ui/snackbar';
@@ -80,6 +81,16 @@ export function useCalendarData({ date }: UseCalendarDataOptions): UseCalendarDa
 
   // Calendar sync integration
   const { hasBidirectionalSync, syncEvent, deleteEvent: deleteFromExternal } = useCalendarPush();
+  const { connections } = useCalendarSync();
+
+  // Build account color map from connections
+  const accountColorMap = useMemo<AccountColorMap>(() => {
+    const map = new Map<string, string | null>();
+    for (const conn of connections) {
+      map.set(conn.id, conn.accountColor);
+    }
+    return map;
+  }, [connections]);
 
   // Fetch events and time blocks
   const eventsQuery = useEventsForDay(date);
@@ -97,8 +108,8 @@ export function useCalendarData({ date }: UseCalendarDataOptions): UseCalendarDa
   const entries = useMemo(() => {
     const events = eventsQuery.data?.data ?? [];
     const timeBlocks = timeBlocksQuery.data?.data ?? [];
-    return toCalendarEntries(events, timeBlocks);
-  }, [eventsQuery.data, timeBlocksQuery.data]);
+    return toCalendarEntries(events, timeBlocks, accountColorMap);
+  }, [eventsQuery.data, timeBlocksQuery.data, accountColorMap]);
 
   // Create entry callback
   const createEntry = useCallback(

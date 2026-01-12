@@ -19,17 +19,22 @@ import { calendarSyncApi, type CalendarProvider } from '@/lib/api-client';
 type CallbackState = 'processing' | 'syncing' | 'success' | 'error';
 
 interface DecodedState {
-  userId: string;
   provider: CalendarProvider;
-  timestamp: number;
+  issuedAt: number;
+  nonce: string;
 }
 
 /**
  * Decode base64url-encoded state parameter.
  */
 function decodeState(state: string): DecodedState {
+  const [payload] = state.split('.');
+  if (!payload) {
+    throw new Error('Invalid state');
+  }
+
   // Replace URL-safe chars with standard base64 chars
-  const base64 = state.replace(/-/g, '+').replace(/_/g, '/');
+  const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
   const decoded = atob(base64);
   return JSON.parse(decoded) as DecodedState;
 }
@@ -106,7 +111,13 @@ export default function OAuthCallbackPage() {
 
   return (
     <div className="flex min-h-[400px] flex-col items-center justify-center">
-      <div className="space-y-4 text-center">
+      <div
+        className="space-y-4 text-center"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        aria-busy={status === 'processing' || status === 'syncing'}
+      >
         {status === 'processing' && (
           <>
             <Loader2 className="text-primary mx-auto h-8 w-8 animate-spin" />

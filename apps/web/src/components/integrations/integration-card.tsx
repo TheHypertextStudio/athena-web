@@ -16,6 +16,8 @@ interface IntegrationCardProps {
 /**
  * Card component for displaying an integration in the list view.
  * Links to the integration detail page/modal.
+ *
+ * @param props - Integration card props.
  */
 export function IntegrationCard({ config, connection }: IntegrationCardProps) {
   const isConnected = !!connection;

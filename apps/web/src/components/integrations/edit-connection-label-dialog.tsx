@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Dialog for renaming a connected account.
+ * Dialog for editing a calendar connection label.
  */
 
 import { useState, useEffect } from 'react';
@@ -17,26 +17,28 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
-interface RenameAccountDialogProps {
+interface EditConnectionLabelDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   currentLabel: string | null;
-  accountEmail: string | null;
-  onRename: (newLabel: string) => void;
+  connectionEmail: string | null;
+  onSave: (newLabel: string) => void;
   isLoading?: boolean;
 }
 
 /**
- * Dialog for renaming a connected calendar account.
+ * Dialog for editing a calendar connection's display label.
+ *
+ * @param props - Edit connection label dialog props.
  */
-export function RenameAccountDialog({
+export function EditConnectionLabelDialog({
   open,
   onOpenChange,
   currentLabel,
-  accountEmail,
-  onRename,
+  connectionEmail,
+  onSave,
   isLoading = false,
-}: RenameAccountDialogProps) {
+}: EditConnectionLabelDialogProps) {
   const [label, setLabel] = useState(currentLabel ?? '');
 
   // Reset label when dialog opens
@@ -48,29 +50,29 @@ export function RenameAccountDialog({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onRename(label.trim());
+    onSave(label.trim());
   };
 
-  const placeholder = accountEmail ? `e.g., "Work" or "Personal"` : 'Enter a label';
+  const placeholder = connectionEmail ? `e.g., "Work" or "Personal"` : 'Enter a label';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Rename Account</DialogTitle>
+          <DialogTitle>Rename Connection</DialogTitle>
           <DialogDescription>
-            {accountEmail
-              ? `Give "${accountEmail}" a friendly name to easily identify it.`
-              : 'Give this account a friendly name to easily identify it.'}
+            {connectionEmail
+              ? `Give "${connectionEmail}" a friendly name to easily identify it.`
+              : 'Give this connection a friendly name to easily identify it.'}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
           <div className="py-4">
-            <Label htmlFor="account-label" className="text-on-surface">
-              Account Label
+            <Label htmlFor="connection-label" className="text-on-surface">
+              Connection Label
             </Label>
             <Input
-              id="account-label"
+              id="connection-label"
               value={label}
               onChange={(e) => {
                 setLabel(e.target.value);

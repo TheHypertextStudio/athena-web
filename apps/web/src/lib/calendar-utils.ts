@@ -145,10 +145,24 @@ export function createTimeOnDate(baseDate: Date, hour: number, minute = 0): Date
 // API Type Mapping
 // =============================================================================
 
+/** Map of integration ID to account color for fast lookups */
+export type AccountColorMap = Map<string, string | null>;
+
 /**
  * Convert an API Event to a CalendarEntry.
+ * @param event The event from the API
+ * @param accountColorMap Optional map of integration IDs to account colors
  */
-export function eventToCalendarEntry(event: Event): CalendarEntry {
+export function eventToCalendarEntry(
+  event: Event,
+  accountColorMap?: AccountColorMap,
+): CalendarEntry {
+  // Look up account color for external events
+  const accountColor =
+    event.sourceIntegrationId && accountColorMap
+      ? (accountColorMap.get(event.sourceIntegrationId) ?? undefined)
+      : undefined;
+
   return {
     id: event.id,
     type: 'event',
@@ -157,6 +171,7 @@ export function eventToCalendarEntry(event: Event): CalendarEntry {
     endTime: event.endTime ? new Date(event.endTime) : new Date(event.startTime),
     location: event.location ?? undefined,
     source: event.source,
+    accountColor,
   };
 }
 
@@ -183,9 +198,16 @@ export function timeBlockToCalendarEntry(block: TimeBlock): CalendarEntry {
 
 /**
  * Convert arrays of Events and TimeBlocks to CalendarEntries.
+ * @param events Events from the API
+ * @param timeBlocks Time blocks from the API
+ * @param accountColorMap Optional map of integration IDs to account colors
  */
-export function toCalendarEntries(events: Event[], timeBlocks: TimeBlock[]): CalendarEntry[] {
-  const eventEntries = events.map(eventToCalendarEntry);
+export function toCalendarEntries(
+  events: Event[],
+  timeBlocks: TimeBlock[],
+  accountColorMap?: AccountColorMap,
+): CalendarEntry[] {
+  const eventEntries = events.map((e) => eventToCalendarEntry(e, accountColorMap));
   const blockEntries = timeBlocks.map(timeBlockToCalendarEntry);
 
   // Combine and sort by start time

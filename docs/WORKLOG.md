@@ -19,6 +19,7 @@
   - [x] Fix tasks/today scoping
   - [x] Implement session-scoped resource subscriptions
   - [x] Validate project ownership for task creation/updates
+  - [x] Prevent progress_report from returning all tasks on empty initiatives
 - **Plan**:
 
 ## Plan: MCP Server Hardening + Refactor

@@ -1706,15 +1706,27 @@ function registerPrompts(server: McpServer, options: CreateAthenaMcpServerOption
           .filter((id): id is string => id !== null);
       }
 
-      const relevantTasks = await db.query.tasks.findMany({
-        where: and(
-          eq((tasks as { creatorId?: unknown }).creatorId as never, userId),
-          isNull((tasks as { deletedAt?: unknown }).deletedAt as never),
-          projectIds && projectIds.length > 0
-            ? inArray((tasks as { projectId?: unknown }).projectId as never, projectIds)
-            : undefined,
-        ),
-      });
+      const filterByProjects = projectIds !== null;
+      const projectFilterIds = projectIds ?? [];
+      let relevantTasks: unknown[] = [];
+
+      if (!filterByProjects) {
+        relevantTasks = await db.query.tasks.findMany({
+          where: and(
+            eq((tasks as { creatorId?: unknown }).creatorId as never, userId),
+            isNull((tasks as { deletedAt?: unknown }).deletedAt as never),
+            undefined,
+          ),
+        });
+      } else if (projectFilterIds.length > 0) {
+        relevantTasks = await db.query.tasks.findMany({
+          where: and(
+            eq((tasks as { creatorId?: unknown }).creatorId as never, userId),
+            isNull((tasks as { deletedAt?: unknown }).deletedAt as never),
+            inArray((tasks as { projectId?: unknown }).projectId as never, projectFilterIds),
+          ),
+        });
+      }
 
       return {
         messages: [

@@ -10,7 +10,7 @@ import {
   McpServer,
 } from '@athena/mcp-server';
 import { db } from '../../db/index.js';
-import { tasks, projects, events, initiatives } from '../../db/schema/index.js';
+import { tasks, projects, events, initiatives, userSettings } from '../../db/schema/index.js';
 
 /**
  * Create and configure an MCP server for a specific user.
@@ -26,6 +26,7 @@ export function createMcpServer(userId: string): McpServer {
       projects,
       events,
       initiatives,
+      userSettings,
     },
   });
 }

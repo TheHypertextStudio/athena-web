@@ -35,6 +35,7 @@ export interface AthenaMcpDb {
     projects: AthenaMcpDbQuery;
     events: AthenaMcpDbQuery;
     initiatives: AthenaMcpDbQuery;
+    userSettings: AthenaMcpDbQuery;
   };
   insert: (table: unknown) => {
     values: (
@@ -56,6 +57,7 @@ export interface AthenaMcpSchema {
   projects: unknown;
   events: unknown;
   initiatives: unknown;
+  userSettings: unknown;
 }
 
 /**
@@ -144,6 +146,93 @@ const parseDate = (value: unknown): Date | null => {
     return Number.isNaN(parsed.getTime()) ? null : parsed;
   }
   return null;
+};
+
+interface DateParts {
+  year: number;
+  month: number;
+  day: number;
+}
+
+const parseIsoDateParts = (value: string): DateParts | null => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) {
+    return null;
+  }
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const candidate = new Date(Date.UTC(year, month - 1, day));
+  if (
+    candidate.getUTCFullYear() !== year ||
+    candidate.getUTCMonth() !== month - 1 ||
+    candidate.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return { year, month, day };
+};
+
+const getRequiredDatePart = (parts: Record<string, string>, key: string): string => {
+  const value = parts[key];
+  if (!value) {
+    throw new Error(`Missing date part: ${key}`);
+  }
+  return value;
+};
+
+const formatDateInTimeZone = (date: Date, timeZone: string): string => {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  const parts = formatter.formatToParts(date);
+  const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const year = getRequiredDatePart(lookup, 'year');
+  const month = getRequiredDatePart(lookup, 'month');
+  const day = getRequiredDatePart(lookup, 'day');
+  return `${year}-${month}-${day}`;
+};
+
+const getTimeZoneOffset = (date: Date, timeZone: string): number => {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(date);
+  const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const asUtc = Date.UTC(
+    Number(getRequiredDatePart(lookup, 'year')),
+    Number(getRequiredDatePart(lookup, 'month')) - 1,
+    Number(getRequiredDatePart(lookup, 'day')),
+    Number(getRequiredDatePart(lookup, 'hour')),
+    Number(getRequiredDatePart(lookup, 'minute')),
+    Number(getRequiredDatePart(lookup, 'second')),
+  );
+  return asUtc - date.getTime();
+};
+
+const getStartOfDayInTimeZone = (parts: DateParts, timeZone: string): Date => {
+  const utcDate = new Date(Date.UTC(parts.year, parts.month - 1, parts.day, 0, 0, 0));
+  const offsetMs = getTimeZoneOffset(utcDate, timeZone);
+  return new Date(utcDate.getTime() - offsetMs);
+};
+
+const addDaysToParts = (parts: DateParts, days: number): DateParts => {
+  const next = new Date(Date.UTC(parts.year, parts.month - 1, parts.day + days));
+  return {
+    year: next.getUTCFullYear(),
+    month: next.getUTCMonth() + 1,
+    day: next.getUTCDate(),
+  };
 };
 
 const getStringField = (record: Record<string, unknown>, key: string): string | null => {
@@ -788,7 +877,7 @@ function registerTools(
   subscriptions: Map<string, SessionSubscriptions>,
 ): void {
   const { userId, db, schema } = options;
-  const { tasks, events, projects } = schema;
+  const { tasks, events, projects, userSettings } = schema;
 
   const hasOwnedProject = async (projectId: string): Promise<boolean> => {
     const project = await db.query.projects.findFirst({
@@ -800,6 +889,23 @@ function registerTools(
     });
 
     return Boolean(project);
+  };
+
+  const getUserTimezone = async (): Promise<string> => {
+    const settings = await db.query.userSettings.findFirst({
+      where: eq((userSettings as { userId?: unknown }).userId as never, userId),
+    });
+    const record = settings ? asRecord(settings) : null;
+    const timezone = record ? getStringField(record, 'timezone') : null;
+    if (!timezone) {
+      return 'UTC';
+    }
+    try {
+      new Intl.DateTimeFormat('en-US', { timeZone: timezone });
+      return timezone;
+    } catch {
+      return 'UTC';
+    }
   };
 
   server.registerTool(
@@ -1348,10 +1454,23 @@ function registerTools(
     },
     async (args, extra) => {
       await server.sendLoggingMessage({ level: 'info', data: 'tool: get_agenda' }, extra.sessionId);
-      const date = args.date ? new Date(args.date) : new Date();
-      date.setHours(0, 0, 0, 0);
-      const nextDay = new Date(date);
-      nextDay.setDate(nextDay.getDate() + 1);
+      const timezone = await getUserTimezone();
+      const dateString = args.date ?? formatDateInTimeZone(new Date(), timezone);
+      const dateParts = parseIsoDateParts(dateString);
+      if (!dateParts) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({ error: 'invalid_date', date: dateString }, null, 2),
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      const date = getStartOfDayInTimeZone(dateParts, timezone);
+      const nextDay = getStartOfDayInTimeZone(addDaysToParts(dateParts, 1), timezone);
 
       const [dayTasks, dayEvents] = await Promise.all([
         db.query.tasks.findMany({
@@ -1373,7 +1492,7 @@ function registerTools(
       ]);
 
       const agenda = {
-        date: date.toISOString().split('T')[0],
+        date: dateString,
         tasks: dayTasks,
         events: dayEvents,
       };

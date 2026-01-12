@@ -21,6 +21,7 @@
   - [x] Validate project ownership for task creation/updates
   - [x] Prevent progress_report from returning all tasks on empty initiatives
   - [x] Filter soft-deleted tasks from completion/breakdown flows
+  - [x] Validate agenda date inputs + timezone anchoring
 - **Plan**:
 
 ## Plan: MCP Server Hardening + Refactor

@@ -10,10 +10,11 @@
 
 'use client';
 
-import { useCallback, useRef, useEffect } from 'react';
+import { useCallback, useRef, useEffect, useMemo } from 'react';
 import { Maximize2, ArrowLeft } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
+import { getShortcutManager } from '@/lib/command-palette';
 import { useChatStream } from '@/hooks/use-chat-stream';
 import { AssistantMessages } from '@/components/assistant/assistant-messages';
 import { AssistantInput } from '@/components/assistant/assistant-input';
@@ -51,6 +52,12 @@ export function CommandPaletteAssistant({
   const { messages, isStreaming, error, sendMessage, clearError, retryLastMessage } = useChatStream(
     { variant: 'compact' },
   );
+
+  // Platform-aware keyboard shortcut display
+  const expandShortcut = useMemo(() => {
+    const shortcutManager = getShortcutManager();
+    return shortcutManager.formatForDisplay('mod+shift+e');
+  }, []);
 
   // Handle initial message
   useEffect(() => {
@@ -202,7 +209,7 @@ export function CommandPaletteAssistant({
             send
           </span>
           <span className="flex items-center gap-1">
-            <kbd className="bg-surface-container-highest rounded px-1 py-0.5">⌘⇧E</kbd>
+            <kbd className="bg-surface-container-highest rounded px-1 py-0.5">{expandShortcut}</kbd>
             expand
           </span>
         </div>

@@ -73,7 +73,6 @@ export function CommandPalette() {
   // Generate unique IDs for ARIA relationships
   const inputId = useId();
   const listboxId = useId();
-  const labelId = useId();
 
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -247,7 +246,6 @@ export function CommandPalette() {
             'data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 duration-200',
           )}
           onKeyDown={handleKeyDown}
-          aria-labelledby={labelId}
           // Let Radix manage focus trap, but we focus input on open
           onOpenAutoFocus={(e) => {
             e.preventDefault();
@@ -258,15 +256,15 @@ export function CommandPalette() {
             e.preventDefault();
           }}
         >
-          {/* Accessible title (visually hidden) */}
-          <VisuallyHidden asChild>
-            <Dialog.Title id={labelId}>Command Palette</Dialog.Title>
-          </VisuallyHidden>
-          <VisuallyHidden asChild>
-            <Dialog.Description>
+          {/* Accessible title (visually hidden) - Radix auto-generates IDs */}
+          <Dialog.Title>
+            <VisuallyHidden>Command Palette</VisuallyHidden>
+          </Dialog.Title>
+          <Dialog.Description>
+            <VisuallyHidden>
               Search for commands and actions. Use arrow keys to navigate, Enter to select.
-            </Dialog.Description>
-          </VisuallyHidden>
+            </VisuallyHidden>
+          </Dialog.Description>
 
           {/* Live region for screen reader announcements */}
           <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">

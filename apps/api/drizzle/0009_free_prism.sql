@@ -1,0 +1,1 @@
+ALTER TABLE "sessions" ADD COLUMN "last_active_at" timestamp DEFAULT now() NOT NULL;

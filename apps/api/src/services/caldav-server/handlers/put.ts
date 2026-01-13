@@ -38,16 +38,19 @@ export async function handlePut(c: Context): Promise<Response> {
     return c.text('Forbidden', 403);
   }
 
+  // Fetch calendar, existing event, and request body in parallel for better performance
+  const [calendar, existing, icsContent] = await Promise.all([
+    db.query.calendars.findFirst({
+      where: eq(calendars.id, calendarId),
+    }),
+    db.query.events.findFirst({
+      where: eq(events.id, eventId),
+    }),
+    c.req.text(),
+  ]);
+
   // Verify calendar exists and user owns it
-  const calendar = await db.query.calendars.findFirst({
-    where: eq(calendars.id, calendarId),
-  });
-
-  if (!calendar) {
-    return c.text('Not Found', 404);
-  }
-
-  if (calendar.userId !== auth.userId) {
+  if (calendar?.userId !== auth.userId) {
     return c.text('Not Found', 404);
   }
 
@@ -56,7 +59,6 @@ export async function handlePut(c: Context): Promise<Response> {
   }
 
   // Parse iCalendar content
-  const icsContent = await c.req.text();
   let parsedEvent;
   try {
     parsedEvent = parseICS(icsContent);
@@ -67,11 +69,6 @@ export async function handlePut(c: Context): Promise<Response> {
   // Get conflict detection headers
   const ifMatch = c.req.header('if-match')?.replace(/"/g, '');
   const ifNoneMatch = c.req.header('if-none-match');
-
-  // Check if event exists
-  const existing = await db.query.events.findFirst({
-    where: eq(events.id, eventId),
-  });
 
   const newEtag = crypto.randomUUID();
   const nextSyncToken = calendar.syncToken + 1;

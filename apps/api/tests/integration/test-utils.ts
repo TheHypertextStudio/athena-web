@@ -182,11 +182,36 @@ export function createMockDb() {
       users: {
         findFirst: createMockQueryFn(DEFAULT_USER as unknown),
       },
+      calendars: {
+        findMany: createMockQueryFn([] as unknown[]),
+        findFirst: createMockQueryFn(null as unknown),
+      },
+      appPasswords: {
+        findMany: createMockQueryFn([] as unknown[]),
+        findFirst: createMockQueryFn(null as unknown),
+      },
+      eventChanges: {
+        findMany: createMockQueryFn([] as unknown[]),
+        findFirst: createMockQueryFn(null as unknown),
+      },
     },
     insert: vi.fn(() => createInsertChain()),
     update: vi.fn(() => createUpdateChain()),
     delete: vi.fn(() => createDeleteChain()),
     select: vi.fn(() => createSelectChain()),
+    // Transaction mock - executes the callback with the mock db
+    transaction: vi.fn(
+      async (callback: (tx: ReturnType<typeof createMockDb>) => Promise<unknown>) => {
+        // Create a transaction mock that has the same shape as the db
+        const txMock = {
+          insert: vi.fn(() => createInsertChain()),
+          update: vi.fn(() => createUpdateChain()),
+          delete: vi.fn(() => createDeleteChain()),
+          select: vi.fn(() => createSelectChain()),
+        };
+        return callback(txMock as unknown as ReturnType<typeof createMockDb>);
+      },
+    ),
   };
 }
 

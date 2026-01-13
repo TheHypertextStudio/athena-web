@@ -193,6 +193,9 @@ export function detectReportType(
 
 /**
  * Render a property value to XML.
+ *
+ * Supports attributes using `@attrName` syntax in objects.
+ * Example: { '@name': 'VEVENT' } becomes `<element name="VEVENT"/>`
  */
 function renderProp(prop: PropValue, indent: number): string {
   const lines: string[] = [];
@@ -200,6 +203,8 @@ function renderProp(prop: PropValue, indent: number): string {
 
   for (const [key, value] of Object.entries(prop)) {
     if (value === undefined) continue;
+    // Skip attribute keys at this level (they're processed by the parent)
+    if (key.startsWith('@')) continue;
 
     if (typeof value === 'string') {
       if (value === '') {
@@ -210,15 +215,37 @@ function renderProp(prop: PropValue, indent: number): string {
     } else if (Array.isArray(value)) {
       // Array of nested elements
       for (const item of value) {
-        lines.push(`${pad}<${key}>`);
-        lines.push(renderProp(item, indent + 2));
-        lines.push(`${pad}</${key}>`);
+        const attrs = extractAttributes(item);
+        const hasChildren = hasNonAttributeKeys(item);
+
+        if (attrs && !hasChildren) {
+          // Self-closing with attributes: <c:comp name="VEVENT"/>
+          lines.push(`${pad}<${key}${attrs}/>`);
+        } else if (attrs) {
+          // Element with attributes and children
+          lines.push(`${pad}<${key}${attrs}>`);
+          lines.push(renderProp(item, indent + 2));
+          lines.push(`${pad}</${key}>`);
+        } else {
+          lines.push(`${pad}<${key}>`);
+          lines.push(renderProp(item, indent + 2));
+          lines.push(`${pad}</${key}>`);
+        }
       }
     } else {
       // Nested object
-      const hasContent = Object.keys(value).length > 0;
-      if (hasContent) {
-        lines.push(`${pad}<${key}>`);
+      const attrs = extractAttributes(value);
+      const hasChildren = hasNonAttributeKeys(value);
+
+      if (!hasChildren && attrs) {
+        // Self-closing element with attributes only
+        lines.push(`${pad}<${key}${attrs}/>`);
+      } else if (hasChildren) {
+        if (attrs) {
+          lines.push(`${pad}<${key}${attrs}>`);
+        } else {
+          lines.push(`${pad}<${key}>`);
+        }
         lines.push(renderProp(value, indent + 2));
         lines.push(`${pad}</${key}>`);
       } else {
@@ -228,6 +255,28 @@ function renderProp(prop: PropValue, indent: number): string {
   }
 
   return lines.join('\n');
+}
+
+/**
+ * Extract attributes (@key values) from a prop object.
+ * Returns a string like ` name="value"` or empty string if no attributes.
+ */
+function extractAttributes(prop: PropValue): string {
+  const attrs: string[] = [];
+  for (const [key, value] of Object.entries(prop)) {
+    if (key.startsWith('@') && typeof value === 'string') {
+      const attrName = key.slice(1); // Remove @ prefix
+      attrs.push(`${attrName}="${escapeXml(value)}"`);
+    }
+  }
+  return attrs.length > 0 ? ' ' + attrs.join(' ') : '';
+}
+
+/**
+ * Check if an object has any keys that are not attributes.
+ */
+function hasNonAttributeKeys(prop: PropValue): boolean {
+  return Object.keys(prop).some((key) => !key.startsWith('@'));
 }
 
 /**

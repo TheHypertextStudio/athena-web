@@ -23,13 +23,19 @@ import type { DavAuthResult } from '../auth.js';
 
 /**
  * Handle PROPFIND requests.
+ *
+ * For root path, allows unauthenticated access and returns minimal discovery info.
+ * For all other paths, requires authentication.
  */
 export async function handlePropfind(c: Context): Promise<Response> {
-  const auth = c.get('davAuth') as DavAuthResult;
+  const auth = c.get('davAuth') as DavAuthResult | undefined;
   const path = c.req.path.replace(/^\/dav/, '');
   const depth = c.req.header('depth') ?? '0';
 
   // Parse requested properties from body
+  // NOTE: We parse requestedProps but currently return all properties regardless.
+  // A full implementation would filter responses based on what the client requests.
+  // This is acceptable per RFC 4918 - servers MAY return more properties than requested.
   const body = await c.req.text();
   const _requestedProps = body ? parseRequestedProperties(body) : ['allprop'];
 
@@ -38,20 +44,38 @@ export async function handlePropfind(c: Context): Promise<Response> {
     return handleRootPropfind(c, auth);
   }
 
+  // Principals collection: /principals/
+  if (path === '/principals' || path === '/principals/') {
+    return handlePrincipalsCollectionPropfind(c, auth);
+  }
+
   // Principal: /principals/{userId}/
   const principalMatch = /^\/principals\/([^/]+)\/?$/.exec(path);
   if (principalMatch) {
     const userId = principalMatch[1];
+    // Auth required to access specific principal
+    if (!auth) {
+      return unauthorizedResponse(c);
+    }
     if (userId !== auth.userId) {
       return c.text('Forbidden', 403);
     }
     return handlePrincipalPropfind(c, auth);
   }
 
+  // Calendars collection: /calendars/
+  if (path === '/calendars' || path === '/calendars/') {
+    return handleCalendarsCollectionPropfind(c, auth);
+  }
+
   // Calendar home: /calendars/{userId}/
   const calendarHomeMatch = /^\/calendars\/([^/]+)\/?$/.exec(path);
   if (calendarHomeMatch) {
     const userId = calendarHomeMatch[1];
+    // Auth required to access user's calendar home
+    if (!auth) {
+      return unauthorizedResponse(c);
+    }
     if (userId !== auth.userId) {
       return c.text('Forbidden', 403);
     }
@@ -64,6 +88,10 @@ export async function handlePropfind(c: Context): Promise<Response> {
     const [, userId, calendarId] = calendarMatch;
     if (!userId || !calendarId) {
       return c.text('Not Found', 404);
+    }
+    // Auth required
+    if (!auth) {
+      return unauthorizedResponse(c);
     }
     if (userId !== auth.userId) {
       return c.text('Forbidden', 403);
@@ -78,6 +106,10 @@ export async function handlePropfind(c: Context): Promise<Response> {
     if (!userId || !calendarId || !eventId) {
       return c.text('Not Found', 404);
     }
+    // Auth required
+    if (!auth) {
+      return unauthorizedResponse(c);
+    }
     if (userId !== auth.userId) {
       return c.text('Forbidden', 403);
     }
@@ -88,9 +120,127 @@ export async function handlePropfind(c: Context): Promise<Response> {
 }
 
 /**
- * Root PROPFIND - returns current-user-principal.
+ * Return a 401 Unauthorized response with proper headers.
  */
-function handleRootPropfind(c: Context, auth: DavAuthResult): Response {
+function unauthorizedResponse(c: Context): Response {
+  return c.text('Unauthorized', 401, {
+    'WWW-Authenticate': 'Basic realm="Athena"',
+    DAV: '1, 2, 3, calendar-access',
+  });
+}
+
+/**
+ * Principals collection PROPFIND - returns info about the principals collection.
+ */
+function handlePrincipalsCollectionPropfind(c: Context, auth: DavAuthResult | undefined): Response {
+  const response: MultistatusItem[] = [
+    {
+      href: '/dav/principals/',
+      propstat: [
+        {
+          status: 'HTTP/1.1 200 OK',
+          prop: {
+            'd:resourcetype': {
+              'd:collection': {},
+            },
+            'd:displayname': 'Principals',
+          },
+        },
+      ],
+    },
+  ];
+
+  // If authenticated, include the user's principal in the response
+  if (auth) {
+    response.push({
+      href: `/dav/principals/${auth.userId}/`,
+      propstat: [
+        {
+          status: 'HTTP/1.1 200 OK',
+          prop: {
+            'd:resourcetype': {
+              'd:collection': {},
+              'd:principal': {},
+            },
+            'd:displayname': auth.email,
+          },
+        },
+      ],
+    });
+  }
+
+  return c.body(buildMultistatus(response), 207, {
+    'Content-Type': 'application/xml; charset=utf-8',
+    DAV: '1, 2, 3, calendar-access',
+    'WWW-Authenticate': 'Basic realm="Athena"',
+  });
+}
+
+/**
+ * Calendars collection PROPFIND - returns info about the calendars collection.
+ */
+function handleCalendarsCollectionPropfind(c: Context, _auth: DavAuthResult | undefined): Response {
+  const response: MultistatusItem[] = [
+    {
+      href: '/dav/calendars/',
+      propstat: [
+        {
+          status: 'HTTP/1.1 200 OK',
+          prop: {
+            'd:resourcetype': {
+              'd:collection': {},
+            },
+            'd:displayname': 'Calendars',
+          },
+        },
+      ],
+    },
+  ];
+
+  return c.body(buildMultistatus(response), 207, {
+    'Content-Type': 'application/xml; charset=utf-8',
+    DAV: '1, 2, 3, calendar-access',
+    'WWW-Authenticate': 'Basic realm="Athena"',
+  });
+}
+
+/**
+ * Root PROPFIND - returns current-user-principal.
+ *
+ * When unauthenticated: Returns minimal info indicating auth is needed for principal.
+ * When authenticated: Returns the user's principal URL.
+ */
+function handleRootPropfind(c: Context, auth: DavAuthResult | undefined): Response {
+  // If authenticated, return the user's principal
+  if (auth) {
+    const response: MultistatusItem[] = [
+      {
+        href: '/dav/',
+        propstat: [
+          {
+            status: 'HTTP/1.1 200 OK',
+            prop: {
+              'd:current-user-principal': {
+                'd:href': `/dav/principals/${auth.userId}/`,
+              },
+              'd:resourcetype': {
+                'd:collection': {},
+              },
+            },
+          },
+        ],
+      },
+    ];
+
+    return c.body(buildMultistatus(response), 207, {
+      'Content-Type': 'application/xml; charset=utf-8',
+      DAV: '1, 2, 3, calendar-access',
+    });
+  }
+
+  // Unauthenticated: Return minimal discovery info
+  // Tell the client this is a CalDAV server and they need to authenticate
+  // The current-user-principal points to a generic URL that will require auth
   const response: MultistatusItem[] = [
     {
       href: '/dav/',
@@ -98,11 +248,20 @@ function handleRootPropfind(c: Context, auth: DavAuthResult): Response {
         {
           status: 'HTTP/1.1 200 OK',
           prop: {
-            'd:current-user-principal': {
-              'd:href': `/dav/principals/${auth.userId}/`,
-            },
             'd:resourcetype': {
               'd:collection': {},
+            },
+            // Indicate principal discovery requires auth
+            'd:current-user-principal': {
+              'd:unauthenticated': {},
+            },
+            // Indicate this server supports CalDAV
+            'd:supported-report-set': {
+              'd:supported-report': [
+                { 'c:calendar-query': {} },
+                { 'c:calendar-multiget': {} },
+                { 'd:sync-collection': {} },
+              ],
             },
           },
         },
@@ -112,6 +271,8 @@ function handleRootPropfind(c: Context, auth: DavAuthResult): Response {
 
   return c.body(buildMultistatus(response), 207, {
     'Content-Type': 'application/xml; charset=utf-8',
+    DAV: '1, 2, 3, calendar-access',
+    'WWW-Authenticate': 'Basic realm="Athena"',
   });
 }
 
@@ -312,19 +473,22 @@ async function handleEventPropfind(
   calendarId: string,
   eventId: string,
 ): Promise<Response> {
-  const event = await db.query.events.findFirst({
-    where: eq(events.id, eventId),
-  });
+  // Fetch event and calendar in parallel for better performance
+  const [event, calendar] = await Promise.all([
+    db.query.events.findFirst({
+      where: eq(events.id, eventId),
+    }),
+    db.query.calendars.findFirst({
+      where: eq(calendars.id, calendarId),
+    }),
+  ]);
 
+  // Verify event belongs to the specified calendar
   if (event?.calendarId !== calendarId) {
     return c.text('Not Found', 404);
   }
 
   // Verify calendar ownership
-  const calendar = await db.query.calendars.findFirst({
-    where: eq(calendars.id, calendarId),
-  });
-
   if (calendar?.userId !== auth.userId) {
     return c.text('Forbidden', 403);
   }

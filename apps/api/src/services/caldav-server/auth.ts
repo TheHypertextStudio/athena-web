@@ -14,6 +14,14 @@ import { db } from '../../db/index.js';
 import { appPasswords, users } from '../../db/schema/index.js';
 import { eq, and, or, isNull, gt } from 'drizzle-orm';
 
+const SCRYPT_PARAMS = {
+  N: 131072, // 2^17 - recommended for high-security scenarios
+  r: 8,
+  p: 1,
+};
+
+const SCRYPT_MAXMEM = 256 * 1024 * 1024;
+
 /**
  * Promisified scrypt with options support.
  */
@@ -51,18 +59,18 @@ export interface DavAuthResult {
  */
 export async function hashPassword(password: string): Promise<string> {
   const salt = crypto.randomBytes(16);
-  const N = 131072; // 2^17 - recommended for high-security scenarios
-  const r = 8;
-  const p = 1;
   const keylen = 64;
 
-  const hash = await scryptAsync(password, salt, keylen, { N, r, p });
+  const hash = await scryptAsync(password, salt, keylen, {
+    ...SCRYPT_PARAMS,
+    maxmem: SCRYPT_MAXMEM,
+  });
 
   return [
     'scrypt',
-    String(N),
-    String(r),
-    String(p),
+    String(SCRYPT_PARAMS.N),
+    String(SCRYPT_PARAMS.r),
+    String(SCRYPT_PARAMS.p),
     salt.toString('base64'),
     hash.toString('base64'),
   ].join(':');
@@ -93,7 +101,12 @@ export async function verifyPassword(password: string, storedHash: string): Prom
   const salt = Buffer.from(saltB64, 'base64');
   const expectedHash = Buffer.from(hashB64, 'base64');
 
-  const hash = await scryptAsync(password, salt, expectedHash.length, { N, r, p });
+  const hash = await scryptAsync(password, salt, expectedHash.length, {
+    N,
+    r,
+    p,
+    maxmem: SCRYPT_MAXMEM,
+  });
 
   return crypto.timingSafeEqual(hash, expectedHash);
 }
@@ -213,7 +226,9 @@ export function requireDavAuth(requiredScope: 'caldav' | 'carddav') {
         res: new Response('Unauthorized', {
           status: 401,
           headers: {
-            'WWW-Authenticate': 'Basic realm="Athena CalDAV/CardDAV"',
+            'WWW-Authenticate': 'Basic realm="Athena"',
+            DAV: '1, 2, 3, calendar-access',
+            'Content-Type': 'text/plain; charset=utf-8',
           },
         }),
       });

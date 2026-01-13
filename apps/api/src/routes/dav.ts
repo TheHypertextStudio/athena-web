@@ -15,8 +15,10 @@
  */
 
 import { Hono } from 'hono';
+import type { Context, Next } from 'hono';
 import {
   requireDavAuth,
+  authenticateDav,
   handlePropfind,
   handleGet,
   handlePut,
@@ -25,10 +27,8 @@ import {
 
 const davRoutes = new Hono();
 
-// Apply CalDAV authentication to all routes
-davRoutes.use('*', requireDavAuth('caldav'));
-
-// OPTIONS - Advertise DAV capabilities (required for client discovery)
+// OPTIONS - Advertise DAV capabilities (NO AUTH REQUIRED)
+// This must be defined BEFORE auth middleware so clients can discover the server
 davRoutes.options('*', (c) => {
   return c.text('', 200, {
     DAV: '1, 2, 3, calendar-access',
@@ -37,7 +37,40 @@ davRoutes.options('*', (c) => {
       'OPTIONS, GET, HEAD, PUT, DELETE, PROPFIND, PROPPATCH, REPORT, MKCALENDAR',
     'Access-Control-Allow-Headers':
       'Authorization, Content-Type, Depth, If-Match, If-None-Match, Prefer',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Credentials': 'true',
   });
+});
+
+// Apply CalDAV authentication
+// PROPFIND requests are allowed without auth for discovery - they return appropriate
+// responses based on auth state. Other methods (GET, PUT, DELETE) always require auth.
+davRoutes.use('*', async (c: Context, next: Next) => {
+  // Skip auth for OPTIONS (already handled above)
+  if (c.req.method === 'OPTIONS') {
+    return next();
+  }
+
+  // PROPFIND is used for discovery - allow without auth, handler will return appropriate response
+  if (c.req.method === 'PROPFIND') {
+    const authHeader = c.req.header('authorization');
+
+    // Try to authenticate if credentials provided
+    if (authHeader?.startsWith('Basic ')) {
+      const auth = await authenticateDav(c);
+      if (auth) {
+        c.set('davAuth', auth);
+        c.set('userId', auth.userId);
+      }
+      // If auth fails, still continue - handler will return 401 for protected resources
+    }
+
+    // Continue to handler - it decides what to return based on auth state
+    return next();
+  }
+
+  // All other methods (GET, PUT, DELETE, etc.) require authentication
+  return requireDavAuth('caldav')(c, next);
 });
 
 // PROPFIND - Resource and property discovery

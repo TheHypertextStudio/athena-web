@@ -41,20 +41,22 @@ export async function handleGet(c: Context): Promise<Response> {
     return c.text('Forbidden', 403);
   }
 
-  // Get event
-  const event = await db.query.events.findFirst({
-    where: eq(events.id, eventId),
-  });
+  // Fetch event and calendar in parallel for better performance
+  const [event, calendar] = await Promise.all([
+    db.query.events.findFirst({
+      where: eq(events.id, eventId),
+    }),
+    db.query.calendars.findFirst({
+      where: eq(calendars.id, calendarId),
+    }),
+  ]);
 
+  // Verify event belongs to the specified calendar
   if (event?.calendarId !== calendarId) {
     return c.text('Not Found', 404);
   }
 
   // Verify calendar ownership
-  const calendar = await db.query.calendars.findFirst({
-    where: eq(calendars.id, calendarId),
-  });
-
   if (calendar?.userId !== auth.userId) {
     return c.text('Forbidden', 403);
   }

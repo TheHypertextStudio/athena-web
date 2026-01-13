@@ -65,23 +65,30 @@ app.use('*', requestLogger);
 // API versioning
 app.use('/api/*', versionMiddleware);
 
-// CORS middleware
-app.use(
-  '*',
-  cors({
-    origin: [env.FRONTEND_URL],
-    allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowHeaders: ['Content-Type', 'Authorization', 'Accept-Version', 'X-Request-ID'],
-    exposeHeaders: [
-      'X-Request-ID',
-      'X-API-Version',
-      'X-RateLimit-Limit',
-      'X-RateLimit-Remaining',
-      'X-RateLimit-Reset',
-    ],
-    credentials: true,
-  }),
-);
+// CORS middleware - applied to non-DAV routes only
+// DAV routes handle their own CORS/OPTIONS with CalDAV-specific headers
+const corsConfig = {
+  origin: [env.FRONTEND_URL],
+  allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowHeaders: ['Content-Type', 'Authorization', 'Accept-Version', 'X-Request-ID'],
+  exposeHeaders: [
+    'X-Request-ID',
+    'X-API-Version',
+    'X-RateLimit-Limit',
+    'X-RateLimit-Remaining',
+    'X-RateLimit-Reset',
+  ],
+  credentials: true,
+};
+
+// Apply CORS to API routes
+app.use('/api/*', cors(corsConfig));
+
+// Apply CORS to auth routes (outside /api namespace)
+app.use('/auth/*', cors(corsConfig));
+
+// Apply CORS to well-known routes
+app.use('/.well-known/*', cors(corsConfig));
 
 // Rate limiting (disabled in development)
 if (env.NODE_ENV === 'production') {
@@ -99,12 +106,72 @@ if (env.NODE_ENV === 'production') {
 app.get('/health', (c) => c.json({ status: 'ok', timestamp: new Date().toISOString() }));
 
 // Root endpoint
-app.get('/', (c) => c.json({ message: 'Welcome to Athena API', version: '0.0.0' }));
+app.get('/', (c) => {
+  const accept = c.req.header('accept') ?? '';
+  const auth = c.req.header('authorization');
+
+  // CalDAV clients requesting calendar data
+  if (accept.includes('text/calendar') || accept.includes('text/vcard')) {
+    // If credentials provided, redirect to DAV endpoint which handles auth
+    if (auth?.startsWith('Basic ')) {
+      return c.redirect('/dav/', 307); // 307 preserves method and headers
+    }
+    // No credentials - prompt for auth
+    return c.text('Authentication required', 401, {
+      'WWW-Authenticate': 'Basic realm="Athena CalDAV"',
+      DAV: '1, 2, 3, calendar-access',
+    });
+  }
+
+  return c.json({ message: 'Welcome to Athena API', version: '0.0.0' }, 200, {
+    DAV: '1, 2, 3, calendar-access',
+  });
+});
+
+// Root OPTIONS - Required for CalDAV client discovery (RFC 6764)
+app.options('/', (c) => {
+  return c.text('', 200, {
+    DAV: '1, 2, 3, calendar-access',
+    Allow: 'OPTIONS, GET, HEAD, PROPFIND',
+    'Access-Control-Allow-Methods': 'OPTIONS, GET, HEAD, PROPFIND',
+    'Access-Control-Allow-Headers': 'Authorization, Content-Type, Depth',
+    'Access-Control-Allow-Origin': '*',
+  });
+});
+
+// Root PROPFIND - CalDAV discovery (RFC 6764)
+// Use 308 (Permanent Redirect) to preserve the PROPFIND method
+app.on('PROPFIND', '/', (c) => {
+  return c.redirect('/dav/', 308);
+});
 
 // CalDAV/CardDAV well-known redirects (RFC 6764)
 // These allow calendar apps to discover the DAV endpoint from just the domain
+// Handle both GET and PROPFIND as some clients use either method
+// GET uses 301 (permanent redirect), PROPFIND uses 308 (preserves method)
 app.get('/.well-known/caldav', (c) => c.redirect('/dav/', 301));
 app.get('/.well-known/carddav', (c) => c.redirect('/dav/', 301));
+app.on('PROPFIND', '/.well-known/caldav', (c) => c.redirect('/dav/', 308));
+app.on('PROPFIND', '/.well-known/carddav', (c) => c.redirect('/dav/', 308));
+
+// Fallback CalDAV discovery paths (various calendar clients try these)
+// /principals/* - Some clients look for principals at root level
+app.on('PROPFIND', '/principals/*', (c) => {
+  const subPath = c.req.path.replace('/principals', '');
+  return c.redirect(`/dav/principals${subPath}`, 308);
+});
+app.on('PROPFIND', '/principals', (c) => c.redirect('/dav/principals/', 308));
+
+// /calendar/* - Some clients (like macOS Calendar.app) try this pattern
+app.on('PROPFIND', '/calendar/*', (c) => c.redirect('/dav/', 308));
+app.on('PROPFIND', '/calendar', (c) => c.redirect('/dav/', 308));
+
+// /calendars/* - Direct calendar access attempts
+app.on('PROPFIND', '/calendars/*', (c) => {
+  const subPath = c.req.path.replace('/calendars', '');
+  return c.redirect(`/dav/calendars${subPath}`, 308);
+});
+app.on('PROPFIND', '/calendars', (c) => c.redirect('/dav/calendars/', 308));
 
 // Mount CalDAV routes (uses its own Basic Auth, not session auth)
 app.route('/dav', davRoutes);

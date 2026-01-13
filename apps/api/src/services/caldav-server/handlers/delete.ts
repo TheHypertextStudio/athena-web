@@ -41,16 +41,18 @@ export async function handleDelete(c: Context): Promise<Response> {
     return c.text('Forbidden', 403);
   }
 
+  // Fetch calendar and event in parallel for better performance
+  const [calendar, event] = await Promise.all([
+    db.query.calendars.findFirst({
+      where: eq(calendars.id, calendarId),
+    }),
+    db.query.events.findFirst({
+      where: eq(events.id, eventId),
+    }),
+  ]);
+
   // Verify calendar exists and user owns it
-  const calendar = await db.query.calendars.findFirst({
-    where: eq(calendars.id, calendarId),
-  });
-
-  if (!calendar) {
-    return c.text('Not Found', 404);
-  }
-
-  if (calendar.userId !== auth.userId) {
+  if (calendar?.userId !== auth.userId) {
     return c.text('Not Found', 404);
   }
 
@@ -58,11 +60,7 @@ export async function handleDelete(c: Context): Promise<Response> {
     return c.text('Forbidden - calendar is read-only', 403);
   }
 
-  // Get event
-  const event = await db.query.events.findFirst({
-    where: eq(events.id, eventId),
-  });
-
+  // Verify event belongs to this calendar
   if (event?.calendarId !== calendarId) {
     // Return 204 even if not found (idempotent delete)
     return c.body(null, 204);

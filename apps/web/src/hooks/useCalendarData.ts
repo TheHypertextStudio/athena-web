@@ -36,6 +36,8 @@ import {
 } from '@/lib/calendar-utils';
 import { eventKeys, timeBlockKeys } from '@/lib/api-client';
 import { useSnackbar } from '@/components/ui/snackbar';
+import { useEntitlementError } from '@/contexts/entitlement-error-context';
+import { ApiError } from '@/lib/api-errors';
 
 export interface UseCalendarDataOptions {
   date: Date;
@@ -77,6 +79,7 @@ export interface UseCalendarDataReturn {
 export function useCalendarData({ date }: UseCalendarDataOptions): UseCalendarDataReturn {
   const queryClient = useQueryClient();
   const snackbar = useSnackbar();
+  const { handleError: handleEntitlementError } = useEntitlementError();
   const { startDate, endDate } = getDayBounds(date);
 
   // Calendar sync integration
@@ -123,11 +126,25 @@ export function useCalendarData({ date }: UseCalendarDataOptions): UseCalendarDa
           syncEvent(result.data.id);
         }
       } else {
-        await createTimeBlock.mutateAsync(calendarEntryToTimeBlockInput(entry));
-        snackbar.show({ message: 'Time block created' });
+        try {
+          await createTimeBlock.mutateAsync(calendarEntryToTimeBlockInput(entry));
+          snackbar.show({ message: 'Time block created' });
+        } catch (error) {
+          if (error instanceof ApiError && handleEntitlementError(error)) {
+            return; // Upgrade modal shown
+          }
+          throw error;
+        }
       }
     },
-    [createEvent, createTimeBlock, snackbar, hasBidirectionalSync, syncEvent],
+    [
+      createEvent,
+      createTimeBlock,
+      snackbar,
+      hasBidirectionalSync,
+      syncEvent,
+      handleEntitlementError,
+    ],
   );
 
   // Update entry callback
@@ -144,13 +161,20 @@ export function useCalendarData({ date }: UseCalendarDataOptions): UseCalendarDa
           syncEvent(entryId);
         }
       } else {
-        await updateTimeBlock.mutateAsync({
-          id: entryId,
-          data: calendarUpdateToTimeBlockUpdate(updates),
-        });
+        try {
+          await updateTimeBlock.mutateAsync({
+            id: entryId,
+            data: calendarUpdateToTimeBlockUpdate(updates),
+          });
+        } catch (error) {
+          if (error instanceof ApiError && handleEntitlementError(error)) {
+            return; // Upgrade modal shown
+          }
+          throw error;
+        }
       }
     },
-    [updateEvent, updateTimeBlock, hasBidirectionalSync, syncEvent],
+    [updateEvent, updateTimeBlock, hasBidirectionalSync, syncEvent, handleEntitlementError],
   );
 
   // Delete entry callback
@@ -179,8 +203,15 @@ export function useCalendarData({ date }: UseCalendarDataOptions): UseCalendarDa
         const timeBlocks = timeBlocksQuery.data?.data ?? [];
         const blockData = timeBlocks.find((b) => b.id === entryId);
         if (blockData) {
-          await deleteTimeBlock.mutateAsync({ id: entryId, blockData });
-          snackbar.show({ message: 'Time block deleted' });
+          try {
+            await deleteTimeBlock.mutateAsync({ id: entryId, blockData });
+            snackbar.show({ message: 'Time block deleted' });
+          } catch (error) {
+            if (error instanceof ApiError && handleEntitlementError(error)) {
+              return; // Upgrade modal shown
+            }
+            throw error;
+          }
         }
       }
     },
@@ -193,6 +224,7 @@ export function useCalendarData({ date }: UseCalendarDataOptions): UseCalendarDa
       timeBlocksQuery.data,
       hasBidirectionalSync,
       deleteFromExternal,
+      handleEntitlementError,
     ],
   );
 

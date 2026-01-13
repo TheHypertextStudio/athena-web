@@ -61,11 +61,17 @@ interface SettingsRowProps {
 
 /**
  * A single row within a settings section, with label on left and control on right.
+ * On very small screens, stacks vertically for better usability.
  */
 export function SettingsRow({ label, description, children, className }: SettingsRowProps) {
   return (
-    <div className={cn('flex items-center justify-between py-4', className)}>
-      <div className="space-y-0.5">
+    <div
+      className={cn(
+        'flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4',
+        className,
+      )}
+    >
+      <div className="min-w-0 space-y-0.5">
         <div className="text-on-surface text-sm font-medium">{label}</div>
         {description && <div className="text-on-surface-variant text-xs">{description}</div>}
       </div>
@@ -85,6 +91,7 @@ interface SettingsItemCardProps {
 
 /**
  * A card-style item within a settings section (accounts, sessions, integrations, etc.).
+ * Responsive: stacks vertically on very small screens.
  */
 export function SettingsItemCard({
   icon,
@@ -99,9 +106,12 @@ export function SettingsItemCard({
       elevation="high"
       padding="md"
       rounded="md"
-      className={cn('flex items-center justify-between', className)}
+      className={cn(
+        'flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4',
+        className,
+      )}
     >
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3 sm:gap-4">
         <Surface
           elevation="highest"
           padding="none"
@@ -110,15 +120,17 @@ export function SettingsItemCard({
         >
           {icon}
         </Surface>
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="text-on-surface font-medium">{title}</span>
             {badge}
           </div>
-          {description && <p className="text-on-surface-variant text-sm">{description}</p>}
+          {description && (
+            <p className="text-on-surface-variant text-sm break-words">{description}</p>
+          )}
         </div>
       </div>
-      {action && <div className="shrink-0">{action}</div>}
+      {action && <div className="shrink-0 self-end sm:self-center">{action}</div>}
     </Surface>
   );
 }
@@ -135,6 +147,7 @@ interface SettingsToggleRowProps {
 
 /**
  * A toggle row with optional icon for notification-style settings.
+ * Responsive: keeps horizontal layout but allows text to wrap.
  */
 export function SettingsToggleRow({
   icon,
@@ -146,10 +159,10 @@ export function SettingsToggleRow({
   className,
 }: SettingsToggleRowProps) {
   return (
-    <div className={cn('flex items-center justify-between py-4', className)}>
-      <div className="flex items-center gap-3">
-        {icon && <div className="text-on-surface-variant">{icon}</div>}
-        <div className="space-y-0.5">
+    <div className={cn('flex items-start justify-between gap-4 py-4 sm:items-center', className)}>
+      <div className="flex min-w-0 items-start gap-3 sm:items-center">
+        {icon && <div className="text-on-surface-variant mt-0.5 shrink-0 sm:mt-0">{icon}</div>}
+        <div className="min-w-0 space-y-0.5">
           <div className="text-on-surface text-sm font-medium">{label}</div>
           {description && <div className="text-on-surface-variant text-xs">{description}</div>}
         </div>

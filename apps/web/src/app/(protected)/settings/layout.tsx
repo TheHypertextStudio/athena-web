@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -32,25 +33,77 @@ const settingsNavItems: SettingsNavItem[] = [
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const [isScrolled, setIsScrolled] = useState(false);
+
+  // Track window scroll for mobile sticky header elevation
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 0);
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
 
   return (
     <div className="bg-surface min-h-screen">
-      <div className="mx-auto max-w-4xl px-4 py-8">
-        {/* Back link */}
-        <Link
-          href="/home"
-          className="text-on-surface-variant hover:text-on-surface mb-6 inline-flex items-center gap-2 text-sm font-medium transition-colors"
-        >
-          <ArrowBackIcon sx={{ fontSize: 18 }} />
-          Back to Home
-        </Link>
+      {/* Mobile: Sticky header with back link, title, and navigation */}
+      <header
+        className={cn(
+          'duration-medium1 ease-standard sticky top-0 z-10 backdrop-blur-sm transition-[background-color,box-shadow] md:relative md:bg-transparent md:shadow-none md:backdrop-blur-none',
+          isScrolled ? 'bg-surface-container-high shadow-md' : 'bg-surface/95',
+        )}
+      >
+        <div className="mx-auto max-w-4xl px-4 pt-4 md:pt-8">
+          {/* Back link */}
+          <Link
+            href="/home"
+            className="text-on-surface-variant hover:text-on-surface mb-3 inline-flex items-center gap-2 text-sm font-medium transition-colors md:mb-6"
+          >
+            <ArrowBackIcon sx={{ fontSize: 18 }} />
+            Back to Home
+          </Link>
 
-        {/* Page title */}
-        <h1 className="text-on-surface mb-8 text-2xl font-semibold">Settings</h1>
+          {/* Page title */}
+          <h1 className="text-on-surface mb-3 text-xl font-semibold md:mb-8 md:text-2xl">
+            Settings
+          </h1>
 
+          {/* Mobile: Horizontal scrollable navigation */}
+          <nav className="scrollbar-none -mx-4 overflow-x-auto pb-4 md:hidden">
+            <ul className="inline-flex gap-2 px-4">
+              {settingsNavItems.map((item) => {
+                const isActive =
+                  pathname === item.href ||
+                  (pathname === '/settings' && item.href === '/settings/account');
+                return (
+                  <li key={item.href} className="shrink-0">
+                    <Link
+                      href={item.href}
+                      className={cn(
+                        'flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors',
+                        isActive
+                          ? 'bg-secondary-container text-on-secondary-container'
+                          : 'bg-surface-container text-on-surface-variant',
+                      )}
+                    >
+                      <item.icon sx={{ fontSize: 18 }} />
+                      {item.label}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </nav>
+        </div>
+      </header>
+
+      <div className="mx-auto max-w-4xl px-4 py-4 md:py-0">
         <div className="flex gap-8">
-          {/* Sidebar navigation */}
-          <nav className="w-52 shrink-0">
+          {/* Desktop: Sidebar navigation */}
+          <nav className="sticky top-8 hidden h-fit w-52 shrink-0 md:block">
             <ul className="space-y-1">
               {settingsNavItems.map((item) => {
                 const isActive =
@@ -77,7 +130,7 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
           </nav>
 
           {/* Content area */}
-          <main className="min-w-0 flex-1">{children}</main>
+          <main className="min-w-0 flex-1 pb-8">{children}</main>
         </div>
       </div>
     </div>

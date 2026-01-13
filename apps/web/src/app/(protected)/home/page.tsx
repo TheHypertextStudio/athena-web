@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { DndContext, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { CalendarContainer } from '@/components/objects/surfaces/CalendarContainer';
@@ -34,11 +34,12 @@ export default function HomePage() {
   const { viewMode, setViewMode } = useCalendarViewMode();
   const prefersReducedMotion = useReducedMotion();
 
-  const today = useMemo(() => {
+  // Lifted date state - controls both data fetching and display
+  const [selectedDate, setSelectedDate] = useState(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
     return d;
-  }, []);
+  });
 
   // Configure drag activation: require 5px movement before drag starts
   // This allows clicks to work normally
@@ -50,7 +51,7 @@ export default function HomePage() {
     }),
   );
 
-  const calendarData = useCalendarData({ date: today });
+  const calendarData = useCalendarData({ date: selectedDate });
 
   const calendar = useCalendarState({
     entries: calendarData.entries,
@@ -79,7 +80,7 @@ export default function HomePage() {
             }
           >
             <CalendarContainer
-              date={calendar.date}
+              date={selectedDate}
               entries={calendar.entries}
               startHour={0}
               endHour={24}
@@ -90,6 +91,7 @@ export default function HomePage() {
               viewMode={viewMode}
               onViewModeChange={setViewMode}
               {...calendar.handlers}
+              onDateChange={setSelectedDate}
             />
           </motion.div>
         </main>

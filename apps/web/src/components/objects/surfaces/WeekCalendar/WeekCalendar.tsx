@@ -9,7 +9,7 @@
 
 import { useRef, useMemo } from 'react';
 import { cn } from '@/lib/utils';
-import { isSameDay, formatHour } from '@/lib/calendar-utils';
+import { isSameDay, formatHour, toDateString } from '@/lib/calendar-utils';
 import { useContainerSize, useScrollState, useCalendarZoom } from '../DayCalendar/hooks';
 import { useWeekNavigation } from './hooks';
 import { WeekHeader } from './WeekHeader';
@@ -46,24 +46,20 @@ export function WeekCalendar({
     scrollMode: 'scroll',
   });
 
-  // Group entries by day
+  // Group entries by day (using local date to avoid timezone issues)
   const entriesByDay = useMemo(() => {
     const grouped = new Map<string, CalendarEntry[]>();
 
     for (const weekDate of navigation.weekDates) {
-      const key = weekDate.toISOString().split('T')[0];
-      if (key) {
-        grouped.set(key, []);
-      }
+      const key = toDateString(weekDate);
+      grouped.set(key, []);
     }
 
     for (const entry of entries) {
-      const key = entry.startTime.toISOString().split('T')[0];
-      if (key) {
-        const dayEntries = grouped.get(key);
-        if (dayEntries) {
-          dayEntries.push(entry);
-        }
+      const key = toDateString(entry.startTime);
+      const dayEntries = grouped.get(key);
+      if (dayEntries) {
+        dayEntries.push(entry);
       }
     }
 
@@ -113,7 +109,7 @@ export function WeekCalendar({
           {/* Day columns */}
           <div className="flex flex-1">
             {navigation.weekDates.map((weekDate, index) => {
-              const key = weekDate.toISOString().split('T')[0] ?? '';
+              const key = toDateString(weekDate);
               const dayEntries = entriesByDay.get(key) ?? [];
 
               return (

@@ -9,7 +9,7 @@
 
 import { useMemo } from 'react';
 import { cn } from '@/lib/utils';
-import { isSameDay, isSameMonth } from '@/lib/calendar-utils';
+import { isSameDay, isSameMonth, toDateString } from '@/lib/calendar-utils';
 import { useMonthNavigation } from './hooks';
 import { MonthHeader } from './MonthHeader';
 import { MonthDayCell } from './MonthDayCell';
@@ -30,19 +30,17 @@ export function MonthCalendar({
   // Month navigation
   const navigation = useMonthNavigation({ date, onDateChange });
 
-  // Group entries by day
+  // Group entries by day (using local date to avoid timezone issues)
   const entriesByDay = useMemo(() => {
     const grouped = new Map<string, CalendarEntry[]>();
 
     for (const entry of entries) {
-      const key = entry.startTime.toISOString().split('T')[0];
-      if (key) {
-        const existing = grouped.get(key);
-        if (existing) {
-          existing.push(entry);
-        } else {
-          grouped.set(key, [entry]);
-        }
+      const key = toDateString(entry.startTime);
+      const existing = grouped.get(key);
+      if (existing) {
+        existing.push(entry);
+      } else {
+        grouped.set(key, [entry]);
       }
     }
 
@@ -89,7 +87,7 @@ export function MonthCalendar({
       {/* Month grid */}
       <div className="grid flex-1 grid-cols-7">
         {navigation.gridDates.map((gridDate) => {
-          const key = gridDate.toISOString().split('T')[0] ?? '';
+          const key = toDateString(gridDate);
           const dayEntries = entriesByDay.get(key) ?? [];
 
           return (

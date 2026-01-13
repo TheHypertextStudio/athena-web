@@ -9,6 +9,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import RepeatIcon from '@mui/icons-material/Repeat';
 import { cn } from '@/lib/utils';
+import { toDateString } from '@/lib/calendar-utils';
 import {
   Select,
   SelectContent,
@@ -286,7 +287,7 @@ export function RecurrenceSelector({
                 {customConfig.endType === 'on_date' && (
                   <Input
                     type="date"
-                    value={customConfig.endDate?.toISOString().split('T')[0] ?? ''}
+                    value={customConfig.endDate ? toDateString(customConfig.endDate) : ''}
                     onChange={(e) => {
                       handleCustomConfigChange({
                         endDate: e.target.value ? new Date(e.target.value) : undefined,

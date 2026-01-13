@@ -15,6 +15,7 @@ import {
   type UpdateTimeBlockInput,
 } from '@/lib/api-client';
 import { useUndoableMutation } from '@/lib/undo';
+import { toDateString } from '@/lib/calendar-utils';
 
 /**
  * Hook for fetching time blocks within a date range.
@@ -108,12 +109,13 @@ export function useDeleteTimeBlock() {
 
 /**
  * Hook for fetching time blocks for a specific day.
+ * Uses local date components to avoid timezone conversion issues.
  */
 export function useTimeBlocksForDay(date: Date) {
-  const startDate = date.toISOString().split('T')[0];
+  const startDate = toDateString(date);
   const nextDay = new Date(date);
   nextDay.setDate(nextDay.getDate() + 1);
-  const endDate = nextDay.toISOString().split('T')[0];
+  const endDate = toDateString(nextDay);
 
   return useTimeBlocks({ startDate, endDate });
 }

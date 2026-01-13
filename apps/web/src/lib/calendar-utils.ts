@@ -169,6 +169,7 @@ export function eventToCalendarEntry(
     title: event.title,
     startTime: new Date(event.startTime),
     endTime: event.endTime ? new Date(event.endTime) : new Date(event.startTime),
+    isAllDay: event.isAllDay,
     location: event.location ?? undefined,
     source: event.source,
     accountColor,
@@ -278,9 +279,13 @@ export function calendarUpdateToTimeBlockUpdate(
 
 /**
  * Get date string in YYYY-MM-DD format from a Date object.
+ * Uses local date components to avoid timezone conversion issues.
  */
 export function toDateString(date: Date): string {
-  return date.toISOString().slice(0, 10);
+  const year = String(date.getFullYear());
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 /**

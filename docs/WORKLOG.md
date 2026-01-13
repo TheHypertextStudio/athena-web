@@ -7,6 +7,62 @@
 
 ## Active Tasks
 
+### [SETTINGS-MOBILE-001] Settings Screen Mobile Responsiveness
+
+- **Status**: IN_PROGRESS
+- **State**: PLANNING
+- **Started**: 2026-01-12
+- **Priority**: P1
+- **Description**: Make the settings layout and all settings pages mobile responsive.
+
+## Plan: Settings Screen Mobile Responsiveness
+
+### Objective
+
+Make the settings screen fully responsive across mobile, tablet, and desktop viewports.
+
+### Approach
+
+Convert the desktop-only sidebar layout to a responsive design that:
+
+1. On mobile (<768px): Shows navigation as a horizontal scrollable row at the top, then content below
+2. On tablet/desktop (≥768px): Keeps the existing sticky sidebar layout
+
+The settings section components (`SettingsSection`, `SettingsRow`, `SettingsItemCard`) are already fairly responsive since they use flex layouts, but some may need minor adjustments for smaller screens.
+
+### Steps
+
+1. **Update settings layout** (`apps/web/src/app/(protected)/settings/layout.tsx`):
+   - Change the flex layout to stack vertically on mobile, side-by-side on larger screens
+   - Convert sidebar nav to horizontal scrollable pills on mobile
+   - Adjust padding and spacing for mobile
+
+2. **Update SettingsRow component** (`apps/web/src/components/settings/settings-section.tsx`):
+   - Stack label and control vertically on very small screens if needed
+   - Ensure text doesn't overflow
+
+3. **Update SettingsItemCard component**:
+   - Ensure the icon/title/action layout works on narrow screens
+   - Allow text to wrap appropriately
+
+4. **Validate** with typecheck and lint
+
+### Files to Modify
+
+- `apps/web/src/app/(protected)/settings/layout.tsx` - Main responsive layout changes
+- `apps/web/src/components/settings/settings-section.tsx` - Component responsive tweaks (if needed)
+
+### Risks
+
+- Horizontal scrolling nav may need touch scrolling hints on mobile
+- Some settings pages may have content-specific layout issues
+
+### Validation
+
+Run `pnpm typecheck` and `pnpm lint`. Manually verify layout at mobile/tablet/desktop breakpoints.
+
+---
+
 ### [CALDAV-SERVER-001] CalDAV Server Foundation (Phase 1)
 
 - **Status**: IN_PROGRESS

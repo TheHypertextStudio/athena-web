@@ -197,14 +197,15 @@ export class GoogleCalendarProvider implements CalendarProviderClient {
     fullSync?: boolean;
   }> {
     const calendar = this.createCalendarClient(accessToken);
+    // When singleEvents: true, Google expands recurring events into individual instances
+    // This is incompatible with syncToken, so we always use time-range based fetching
     const response = await calendar.events.list({
       calendarId,
-      syncToken: options.syncToken ?? undefined,
       timeMin: options.timeMin?.toISOString(),
       timeMax: options.timeMax?.toISOString(),
       maxResults: options.maxResults ?? undefined,
       pageToken: options.pageToken ?? undefined,
-      singleEvents: false,
+      singleEvents: true,
       showDeleted: true,
     });
 

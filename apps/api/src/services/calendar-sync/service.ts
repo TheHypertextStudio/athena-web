@@ -688,8 +688,11 @@ export class CalendarSyncService {
     for (const calendar of calendars) {
       try {
         const syncToken = await this.getSyncToken(connectionId, calendar.externalId);
-        const timeMin = syncToken ? undefined : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-        const timeMax = syncToken ? undefined : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
+        // Google uses singleEvents: true which is incompatible with syncToken,
+        // so always use time-range based fetching for Google
+        const useSyncToken = syncToken && provider !== 'google';
+        const timeMin = useSyncToken ? undefined : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        const timeMax = useSyncToken ? undefined : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
 
         const fetchEvents = async (activeSyncToken?: string) => {
           const externalEvents: ExternalCalendarEvent[] = [];
@@ -722,7 +725,7 @@ export class CalendarSyncService {
         let fullSync = false;
 
         try {
-          const eventsResult = await fetchEvents(syncToken);
+          const eventsResult = await fetchEvents(useSyncToken ? syncToken : undefined);
           externalEvents = eventsResult.externalEvents;
           nextSyncToken = eventsResult.nextSyncToken;
           fullSync = eventsResult.fullSync;

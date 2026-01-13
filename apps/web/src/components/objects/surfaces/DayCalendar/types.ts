@@ -20,6 +20,8 @@ export interface CalendarEntry {
   title: string;
   startTime: Date;
   endTime: Date;
+  /** True if this is an all-day event (spans entire day, no specific time) */
+  isAllDay?: boolean;
   color?: string;
   location?: string;
   /** Source of the entry: 'local' for native, 'external' for synced calendars */

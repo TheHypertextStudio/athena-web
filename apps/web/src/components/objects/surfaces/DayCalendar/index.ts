@@ -9,6 +9,7 @@ export type {
 
 // Sub-components
 export { CalendarHeader } from './CalendarHeader';
+export { AllDaySection } from './AllDaySection';
 export { CalendarEntryCard } from './CalendarEntryCard';
 export { TimeSelectionOverlay } from './TimeSelectionOverlay';
 export { CurrentTimeIndicator } from './CurrentTimeIndicator';

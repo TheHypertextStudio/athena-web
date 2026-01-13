@@ -28,6 +28,7 @@ import {
   useEntryDrag,
 } from './hooks';
 import { CalendarHeader } from './CalendarHeader';
+import { AllDaySection } from './AllDaySection';
 import { CalendarEntryCard } from './CalendarEntryCard';
 import { TimeSelectionOverlay } from './TimeSelectionOverlay';
 import { CurrentTimeIndicator } from './CurrentTimeIndicator';
@@ -117,6 +118,20 @@ export function DayCalendar({
   const hours = useMemo(() => {
     return Array.from({ length: endHour - startHour }, (_, i) => startHour + i);
   }, [startHour, endHour]);
+
+  // Separate all-day events from timed entries
+  const { allDayEntries, timedEntries } = useMemo(() => {
+    const allDay: CalendarEntry[] = [];
+    const timed: CalendarEntry[] = [];
+    for (const entry of entries) {
+      if (entry.isAllDay) {
+        allDay.push(entry);
+      } else {
+        timed.push(entry);
+      }
+    }
+    return { allDayEntries: allDay, timedEntries: timed };
+  }, [entries]);
 
   // Check if current time is visible
   const now = new Date();
@@ -230,6 +245,13 @@ export function DayCalendar({
         onViewModeChange={onViewModeChange}
       />
 
+      {/* All-day events section */}
+      <AllDaySection
+        entries={allDayEntries}
+        onEntryClick={handleEntryClick}
+        onEntryContextMenu={handleEntryContextMenu}
+      />
+
       {/* Scrollable calendar body */}
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
         <div
@@ -255,8 +277,8 @@ export function DayCalendar({
             <HourRow key={hour} hour={hour} hourHeight={hourHeight} />
           ))}
 
-          {/* Entries */}
-          {entries.map((entry) => {
+          {/* Timed entries (excludes all-day events) */}
+          {timedEntries.map((entry) => {
             const preview = entryResize.getResizePreview(entry);
             return (
               <CalendarEntryCard

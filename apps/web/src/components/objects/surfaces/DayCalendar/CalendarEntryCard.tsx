@@ -5,12 +5,47 @@ import { useMemo, useEffect } from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
-import GridViewOutlinedIcon from '@mui/icons-material/GridViewOutlined';
-import CloudSyncOutlinedIcon from '@mui/icons-material/CloudSyncOutlined';
 import { cn } from '@/lib/utils';
 import { getYFromTime, MIN_SLOT_MINUTES } from '@/lib/calendar-utils';
 import { useCalendarTimezoneOptional } from '@/contexts/TimezoneContext';
 import type { CalendarEntry, LinkedTask } from './types';
+
+/**
+ * Converts a hex color to RGB values.
+ */
+function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  if (!result?.[1] || !result[2] || !result[3]) return null;
+  return {
+    r: parseInt(result[1], 16),
+    g: parseInt(result[2], 16),
+    b: parseInt(result[3], 16),
+  };
+}
+
+/**
+ * Calculates relative luminance of a color for contrast checking.
+ * Returns value between 0 (black) and 1 (white).
+ */
+function getLuminance(r: number, g: number, b: number): number {
+  const toLinear = (c: number) => {
+    const s = c / 255;
+    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  };
+  return 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
+}
+
+/**
+ * Determines if dark text should be used on a given background color.
+ * Uses WCAG relative luminance formula.
+ */
+function shouldUseDarkText(hex: string): boolean {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return true; // Default to dark text if parsing fails
+  const luminance = getLuminance(rgb.r, rgb.g, rgb.b);
+  // Use dark text if background is light (luminance > 0.179)
+  return luminance > 0.179;
+}
 
 // =============================================================================
 // Sub-components
@@ -28,23 +63,38 @@ function PriorityDot({ priority }: { priority?: LinkedTask['priority'] }) {
 }
 
 /** Task item rendered inside a time block (display only, not completable) */
-function TimeBlockTask({ task, onClick }: { task: LinkedTask; onClick?: (e: MouseEvent) => void }) {
+function TimeBlockTask({
+  task,
+  onClick,
+  useDarkText,
+}: {
+  task: LinkedTask;
+  onClick?: (e: MouseEvent) => void;
+  useDarkText: boolean;
+}) {
   return (
-    <div
-      className="flex items-center gap-1.5 py-0.5"
+    <button
+      type="button"
+      className="flex w-full items-center gap-1.5 py-0.5 text-left"
       onClick={(e) => {
         e.stopPropagation();
         onClick?.(e);
       }}
     >
       <PriorityDot priority={task.priority} />
-      <span className="text-on-secondary-container flex-1 truncate text-xs">{task.title}</span>
+      <span
+        className={cn('flex-1 truncate text-xs', useDarkText ? 'text-gray-800' : 'text-white/90')}
+      >
+        {task.title}
+      </span>
       {task.estimateMinutes && (
-        <span className="text-on-secondary-container/50 shrink-0 text-[10px]">
+        <span
+          className={cn('shrink-0 text-[10px]', useDarkText ? 'text-gray-600' : 'text-white/60')}
+        >
           {task.estimateMinutes}m
         </span>
       )}
-    </div>
+    </button>
   );
 }
 
@@ -102,8 +152,12 @@ export function CalendarEntryCard({
   const height = isResizing && resizePreviewHeight !== undefined ? resizePreviewHeight : baseHeight;
 
   const isTimeBlock = entry.type === 'time-block';
-  const isExternal = entry.source === 'external';
   const hasTasks = isTimeBlock && entry.tasks && entry.tasks.length > 0;
+
+  // All entries get a solid color fill
+  const DEFAULT_ENTRY_COLOR = '#5f6368'; // Neutral gray
+  const entryColor = entry.color ?? entry.accountColor ?? DEFAULT_ENTRY_COLOR;
+  const useDarkText = shouldUseDarkText(entryColor);
 
   // Use synthetic ID for preview entries
   const draggableId = isPreview ? 'preview-entry' : entry.id;
@@ -184,6 +238,7 @@ export function CalendarEntryCard({
     top: `${String(top)}px`,
     height: `${String(height)}px`,
     transform: CSS.Translate.toString(snappedTransform),
+    ...(!isPreview && { backgroundColor: entryColor }),
   };
 
   // Calculate how many tasks can fit based on height
@@ -202,13 +257,7 @@ export function CalendarEntryCard({
       className={cn(
         'group absolute right-2 left-14 cursor-pointer overflow-hidden rounded-md',
         'duration-medium2 ease-emphasized-decelerate transition-[top,height]',
-        isPreview
-          ? 'bg-primary/20 cursor-grab'
-          : isTimeBlock
-            ? 'bg-surface-container-highest'
-            : isExternal
-              ? 'bg-surface-container border-outline-variant border'
-              : 'bg-surface-container-high',
+        isPreview && 'bg-primary/20 cursor-grab',
         selected && !isPreview && 'ring-primary ring-2',
         isDragging && 'ring-primary z-50 ring-2 transition-none',
         isDragging && isPreview && 'cursor-grabbing shadow-lg',
@@ -244,36 +293,32 @@ export function CalendarEntryCard({
         <>
           {/* Header */}
           <div className="flex items-start gap-1.5 px-2 py-1">
-            {/* Account color indicator for external events */}
-            {isExternal && entry.accountColor && (
-              <span
-                className="mt-1 h-2 w-2 shrink-0 rounded-full"
-                style={{ backgroundColor: entry.accountColor }}
-                title="From connected account"
-              />
-            )}
-            {isTimeBlock && (
-              <GridViewOutlinedIcon
-                sx={{ fontSize: 14 }}
-                className="text-on-surface-variant mt-0.5 shrink-0"
-              />
-            )}
-            {isExternal && !isTimeBlock && !entry.accountColor && (
-              <CloudSyncOutlinedIcon
-                sx={{ fontSize: 14 }}
-                className="text-outline mt-0.5 shrink-0"
-                titleAccess="Synced from external calendar"
-              />
-            )}
             <div className="min-w-0 flex-1">
-              <p className="text-on-surface truncate text-sm font-medium">{entry.title}</p>
+              <p
+                className={cn(
+                  'truncate text-sm font-medium',
+                  useDarkText ? 'text-gray-900' : 'text-white',
+                )}
+              >
+                {entry.title}
+              </p>
               {!hasTasks && height > 40 && (
-                <p className="text-on-surface-variant truncate text-xs">
+                <p
+                  className={cn(
+                    'truncate text-xs',
+                    useDarkText ? 'text-gray-700' : 'text-white/80',
+                  )}
+                >
                   {formatTime(displayStartTime)} - {formatTime(displayEndTime)}
                 </p>
               )}
               {!isTimeBlock && entry.location && height > 40 && (
-                <p className="text-on-surface-variant flex items-center gap-1 truncate text-xs">
+                <p
+                  className={cn(
+                    'flex items-center gap-1 truncate text-xs',
+                    useDarkText ? 'text-gray-700' : 'text-white/80',
+                  )}
+                >
                   <PlaceOutlinedIcon sx={{ fontSize: 12 }} />
                   {entry.location}
                 </p>
@@ -285,10 +330,20 @@ export function CalendarEntryCard({
           {hasTasks && (
             <div className="space-y-0.5 px-2 pb-1">
               {visibleTasks.map((task) => (
-                <TimeBlockTask key={task.id} task={task} onClick={(e) => onTaskClick?.(task, e)} />
+                <TimeBlockTask
+                  key={task.id}
+                  task={task}
+                  onClick={(e) => onTaskClick?.(task, e)}
+                  useDarkText={useDarkText}
+                />
               ))}
               {hiddenTaskCount > 0 && (
-                <p className="text-on-surface-variant/60 pl-4 text-[10px]">
+                <p
+                  className={cn(
+                    'pl-4 text-[10px]',
+                    useDarkText ? 'text-gray-500' : 'text-white/50',
+                  )}
+                >
                   +{hiddenTaskCount} more
                 </p>
               )}

@@ -149,6 +149,18 @@ export function createTimeOnDate(baseDate: Date, hour: number, minute = 0): Date
 export type AccountColorMap = Map<string, string | null>;
 
 /**
+ * Parse a date string as a local calendar date (ignoring time/timezone).
+ * For all-day events, dates represent calendar days, not instants in time.
+ * "2024-01-15" means "January 15th" regardless of timezone.
+ */
+function parseAsLocalDate(dateString: string): Date {
+  // Extract just the date portion (YYYY-MM-DD) and create local midnight
+  const datePart = dateString.slice(0, 10); // "2024-01-15"
+  const [year, month, day] = datePart.split('-').map(Number);
+  return new Date(year, month - 1, day, 0, 0, 0, 0);
+}
+
+/**
  * Convert an API Event to a CalendarEntry.
  * @param event The event from the API
  * @param accountColorMap Optional map of integration IDs to account colors
@@ -163,12 +175,22 @@ export function eventToCalendarEntry(
       ? (accountColorMap.get(event.sourceIntegrationId) ?? undefined)
       : undefined;
 
+  // For all-day events, parse dates as local calendar days, not UTC timestamps
+  // "2024-01-15" means "January 15th" in the user's local calendar
+  const startTime = event.isAllDay ? parseAsLocalDate(event.startTime) : new Date(event.startTime);
+
+  const endTime = event.endTime
+    ? event.isAllDay
+      ? parseAsLocalDate(event.endTime)
+      : new Date(event.endTime)
+    : startTime;
+
   return {
     id: event.id,
     type: 'event',
     title: event.title,
-    startTime: new Date(event.startTime),
-    endTime: event.endTime ? new Date(event.endTime) : new Date(event.startTime),
+    startTime,
+    endTime,
     isAllDay: event.isAllDay,
     location: event.location ?? undefined,
     source: event.source,

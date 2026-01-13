@@ -245,12 +245,16 @@ export function EntryDetailPopover({
             <div className="text-on-surface text-sm font-medium">
               {formatDateFull(entry.startTime)}
             </div>
-            <div className="text-on-surface-variant text-sm">
-              {formatTimeRange(entry.startTime, entry.endTime)}
-              <span className="text-on-surface-variant/60 ml-2">
-                ({getDurationText(entry.startTime, entry.endTime)})
-              </span>
-            </div>
+            {entry.isAllDay ? (
+              <div className="text-on-surface-variant text-sm">All day</div>
+            ) : (
+              <div className="text-on-surface-variant text-sm">
+                {formatTimeRange(entry.startTime, entry.endTime)}
+                <span className="text-on-surface-variant/60 ml-2">
+                  ({getDurationText(entry.startTime, entry.endTime)})
+                </span>
+              </div>
+            )}
           </div>
         </div>
 

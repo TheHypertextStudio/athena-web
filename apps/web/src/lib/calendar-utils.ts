@@ -156,7 +156,10 @@ export type AccountColorMap = Map<string, string | null>;
 function parseAsLocalDate(dateString: string): Date {
   // Extract just the date portion (YYYY-MM-DD) and create local midnight
   const datePart = dateString.slice(0, 10); // "2024-01-15"
-  const [year, month, day] = datePart.split('-').map(Number);
+  const parts = datePart.split('-').map(Number);
+  const year = parts[0] ?? 1970;
+  const month = parts[1] ?? 1;
+  const day = parts[2] ?? 1;
   return new Date(year, month - 1, day, 0, 0, 0, 0);
 }
 
@@ -312,13 +315,21 @@ export function toDateString(date: Date): string {
 
 /**
  * Get the start and end of a day as ISO strings.
+ * Returns full timestamps representing local midnight to properly filter
+ * entries across timezone boundaries.
  */
 export function getDayBounds(date: Date): { startDate: string; endDate: string } {
-  const startDate = toDateString(date);
-  const nextDay = new Date(date);
-  nextDay.setDate(nextDay.getDate() + 1);
-  const endDate = toDateString(nextDay);
-  return { startDate, endDate };
+  const dayStart = new Date(date);
+  dayStart.setHours(0, 0, 0, 0);
+
+  const dayEnd = new Date(date);
+  dayEnd.setDate(dayEnd.getDate() + 1);
+  dayEnd.setHours(0, 0, 0, 0);
+
+  return {
+    startDate: dayStart.toISOString(),
+    endDate: dayEnd.toISOString(),
+  };
 }
 
 /**
@@ -345,15 +356,15 @@ export function getEndOfWeek(date: Date): Date {
 
 /**
  * Get the start and end of a week as ISO strings.
- * Week starts on Sunday.
+ * Week starts on Sunday. Returns full timestamps for proper timezone handling.
  */
 export function getWeekBounds(date: Date): { startDate: string; endDate: string } {
   const startOfWeek = getStartOfWeek(date);
   const endOfWeek = new Date(startOfWeek);
   endOfWeek.setDate(endOfWeek.getDate() + 7);
   return {
-    startDate: toDateString(startOfWeek),
-    endDate: toDateString(endOfWeek),
+    startDate: startOfWeek.toISOString(),
+    endDate: endOfWeek.toISOString(),
   };
 }
 
@@ -381,6 +392,7 @@ export function getEndOfMonth(date: Date): Date {
 /**
  * Get the start and end of a month as ISO strings.
  * For calendar grid display, includes days from adjacent months to fill the grid.
+ * Returns full timestamps for proper timezone handling.
  */
 export function getMonthBounds(date: Date): { startDate: string; endDate: string } {
   const startOfMonth = getStartOfMonth(date);
@@ -393,10 +405,11 @@ export function getMonthBounds(date: Date): { startDate: string; endDate: string
   // Add one day for exclusive end bound
   const gridEndExclusive = new Date(gridEnd);
   gridEndExclusive.setDate(gridEndExclusive.getDate() + 1);
+  gridEndExclusive.setHours(0, 0, 0, 0);
 
   return {
-    startDate: toDateString(gridStart),
-    endDate: toDateString(gridEndExclusive),
+    startDate: gridStart.toISOString(),
+    endDate: gridEndExclusive.toISOString(),
   };
 }
 
@@ -449,4 +462,79 @@ export function isSameMonth(date: Date, referenceDate: Date): boolean {
     date.getFullYear() === referenceDate.getFullYear() &&
     date.getMonth() === referenceDate.getMonth()
   );
+}
+
+// =============================================================================
+// Multi-Day Event Clipping
+// =============================================================================
+
+/**
+ * Clip calendar entries to a specific day's bounds.
+ *
+ * For events that span multiple days (like sleep from 10pm to 7am), this
+ * ensures each day shows the portion of the event that falls within that day.
+ *
+ * The rule: if time is scheduled, it must be visually covered.
+ *
+ * @param entries - The calendar entries to clip
+ * @param date - The day to clip to
+ * @param startHour - The display start hour (default 0)
+ * @param endHour - The display end hour (default 24)
+ * @returns Entries with displayStartTime/displayEndTime set for rendering
+ */
+export function clipEntriesToDay<T extends { startTime: Date; endTime: Date; isAllDay?: boolean }>(
+  entries: T[],
+  date: Date,
+  startHour = 0,
+  endHour = 24,
+): (T & {
+  displayStartTime: Date;
+  displayEndTime: Date;
+  continuesFromPreviousDay: boolean;
+  continuesToNextDay: boolean;
+})[] {
+  // Day boundaries in local time
+  const dayStart = new Date(date);
+  dayStart.setHours(startHour, 0, 0, 0);
+
+  const dayEnd = new Date(date);
+  dayEnd.setHours(endHour, 0, 0, 0);
+
+  return entries
+    .filter((entry) => {
+      // Skip all-day events - they're handled separately
+      if (entry.isAllDay) return true;
+
+      // Include if the event overlaps with this day's time range
+      // Event overlaps if: event starts before day ends AND event ends after day starts
+      return entry.startTime < dayEnd && entry.endTime > dayStart;
+    })
+    .map((entry) => {
+      // All-day events don't need clipping
+      if (entry.isAllDay) {
+        return {
+          ...entry,
+          displayStartTime: entry.startTime,
+          displayEndTime: entry.endTime,
+          continuesFromPreviousDay: false,
+          continuesToNextDay: false,
+        };
+      }
+
+      // Check if event extends beyond this day
+      const startsBeforeDay = entry.startTime < dayStart;
+      const endsAfterDay = entry.endTime > dayEnd;
+
+      // Clip to day bounds
+      const displayStartTime = startsBeforeDay ? dayStart : entry.startTime;
+      const displayEndTime = endsAfterDay ? dayEnd : entry.endTime;
+
+      return {
+        ...entry,
+        displayStartTime,
+        displayEndTime,
+        continuesFromPreviousDay: startsBeforeDay,
+        continuesToNextDay: endsAfterDay,
+      };
+    });
 }

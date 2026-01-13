@@ -171,11 +171,15 @@ describe('All-day event date parsing', () => {
     const apiEvent: Event = {
       id: 'event-1',
       title: 'All Day Meeting',
+      description: null,
       startTime: '2024-01-15T00:00:00Z', // UTC midnight
       endTime: '2024-01-15T23:59:59Z',
+      location: null,
       isAllDay: true,
+      recurrenceRule: null,
+      ownerId: 'user-1',
       source: 'local',
-      userId: 'user-1',
+      sourceIntegrationId: null,
       createdAt: '2024-01-01T00:00:00Z',
       updatedAt: '2024-01-01T00:00:00Z',
     };
@@ -193,11 +197,15 @@ describe('All-day event date parsing', () => {
     const apiEvent: Event = {
       id: 'event-2',
       title: 'Team Meeting',
+      description: null,
       startTime: '2024-01-15T14:00:00Z', // 2 PM UTC
       endTime: '2024-01-15T15:00:00Z',
+      location: null,
       isAllDay: false,
+      recurrenceRule: null,
+      ownerId: 'user-1',
       source: 'local',
-      userId: 'user-1',
+      sourceIntegrationId: null,
       createdAt: '2024-01-01T00:00:00Z',
       updatedAt: '2024-01-01T00:00:00Z',
     };
@@ -214,11 +222,15 @@ describe('All-day event date parsing', () => {
     const apiEvent: Event = {
       id: 'event-3',
       title: 'Holiday',
+      description: null,
       startTime: '2024-12-25', // Just a date, no time
       endTime: '2024-12-25',
+      location: null,
       isAllDay: true,
+      recurrenceRule: null,
+      ownerId: 'user-1',
       source: 'external',
-      userId: 'user-1',
+      sourceIntegrationId: null,
       createdAt: '2024-01-01T00:00:00Z',
       updatedAt: '2024-01-01T00:00:00Z',
     };

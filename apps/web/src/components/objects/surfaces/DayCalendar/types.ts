@@ -42,6 +42,16 @@ export interface CalendarEntry {
   seriesId?: string;
   /** True if this instance has been modified from the series */
   isModified?: boolean;
+
+  // Multi-day event display fields (set when clipping to a day's view)
+  /** Clipped start time for rendering on the current day (may differ from startTime) */
+  displayStartTime?: Date;
+  /** Clipped end time for rendering on the current day (may differ from endTime) */
+  displayEndTime?: Date;
+  /** True if this event started before the current day (continues from previous day) */
+  continuesFromPreviousDay?: boolean;
+  /** True if this event ends after the current day (continues to next day) */
+  continuesToNextDay?: boolean;
 }
 
 // =============================================================================

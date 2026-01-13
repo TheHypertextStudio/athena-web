@@ -14,7 +14,7 @@
 import { useRef, useMemo, useCallback, useEffect, type MouseEvent } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { cn } from '@/lib/utils';
-import { getTimeFromY } from '@/lib/calendar-utils';
+import { getTimeFromY, clipEntriesToDay } from '@/lib/calendar-utils';
 import { useSelection } from '../../context/SelectionContext';
 import { surfaceId } from '../../types';
 
@@ -119,7 +119,7 @@ export function DayCalendar({
     return Array.from({ length: endHour - startHour }, (_, i) => startHour + i);
   }, [startHour, endHour]);
 
-  // Separate all-day events from timed entries
+  // Separate all-day events from timed entries, and clip multi-day events to day bounds
   const { allDayEntries, timedEntries } = useMemo(() => {
     const allDay: CalendarEntry[] = [];
     const timed: CalendarEntry[] = [];
@@ -130,8 +130,11 @@ export function DayCalendar({
         timed.push(entry);
       }
     }
-    return { allDayEntries: allDay, timedEntries: timed };
-  }, [entries]);
+    // Clip timed entries to day bounds for proper multi-day event rendering
+    // This ensures events like "sleep 10pm-7am" show on both days correctly
+    const clippedTimed = clipEntriesToDay(timed, date, startHour, endHour);
+    return { allDayEntries: allDay, timedEntries: clippedTimed };
+  }, [entries, date, startHour, endHour]);
 
   // Check if current time is visible
   const now = new Date();

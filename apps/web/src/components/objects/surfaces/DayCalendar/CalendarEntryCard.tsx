@@ -143,8 +143,13 @@ export function CalendarEntryCard({
   // Use timezone-aware formatting
   const { formatTime } = useCalendarTimezoneOptional();
 
-  const baseTop = getYFromTime(entry.startTime, startHour, hourHeight);
-  const bottom = getYFromTime(entry.endTime, startHour, hourHeight);
+  // Use display times for positioning (clipped to day bounds for multi-day events)
+  // Fall back to entry times if display times not set
+  const positionStartTime = entry.displayStartTime ?? entry.startTime;
+  const positionEndTime = entry.displayEndTime ?? entry.endTime;
+
+  const baseTop = getYFromTime(positionStartTime, startHour, hourHeight);
+  const bottom = getYFromTime(positionEndTime, startHour, hourHeight);
   const baseHeight = Math.max(bottom - baseTop, 24);
 
   // Use preview values when resizing
@@ -153,6 +158,10 @@ export function CalendarEntryCard({
 
   const isTimeBlock = entry.type === 'time-block';
   const hasTasks = isTimeBlock && entry.tasks && entry.tasks.length > 0;
+
+  // Multi-day event continuation flags
+  const continuesFromPreviousDay = entry.continuesFromPreviousDay ?? false;
+  const continuesToNextDay = entry.continuesToNextDay ?? false;
 
   // All entries get a solid color fill
   const DEFAULT_ENTRY_COLOR = '#5f6368'; // Neutral gray
@@ -255,8 +264,13 @@ export function CalendarEntryCard({
       ref={setNodeRef}
       style={style}
       className={cn(
-        'group absolute right-2 left-14 cursor-pointer overflow-hidden rounded-md',
+        'group absolute right-2 left-14 cursor-pointer overflow-hidden',
         'duration-medium2 ease-emphasized-decelerate transition-[top,height]',
+        // Adjust border-radius for multi-day events
+        !continuesFromPreviousDay && !continuesToNextDay && 'rounded-md',
+        continuesFromPreviousDay && !continuesToNextDay && 'rounded-b-md',
+        !continuesFromPreviousDay && continuesToNextDay && 'rounded-t-md',
+        // No rounded corners if continues both ways
         isPreview && 'bg-primary/20 cursor-grab',
         selected && !isPreview && 'ring-primary ring-2',
         isDragging && 'ring-primary z-50 ring-2 transition-none',
@@ -271,8 +285,19 @@ export function CalendarEntryCard({
       {...attributes}
       {...listeners}
     >
-      {/* Top resize handle - not for preview */}
-      {!isPreview && (
+      {/* Continuation indicator - event continues from previous day */}
+      {continuesFromPreviousDay && !isPreview && (
+        <div
+          className={cn(
+            'absolute top-0 right-0 left-0 h-1',
+            useDarkText ? 'bg-black/10' : 'bg-white/20',
+          )}
+          title="Continues from previous day"
+        />
+      )}
+
+      {/* Top resize handle - not for preview or events continuing from previous day */}
+      {!isPreview && !continuesFromPreviousDay && (
         <div
           className="hover:bg-primary/20 absolute top-0 right-0 left-0 z-10 h-2 cursor-ns-resize opacity-0 transition-opacity group-hover:opacity-100"
           onMouseDown={(e) => {
@@ -352,14 +377,25 @@ export function CalendarEntryCard({
         </>
       )}
 
-      {/* Bottom resize handle - not for preview */}
-      {!isPreview && (
+      {/* Bottom resize handle - not for preview or events continuing to next day */}
+      {!isPreview && !continuesToNextDay && (
         <div
           className="hover:bg-primary/20 absolute right-0 bottom-0 left-0 z-10 h-2 cursor-ns-resize opacity-0 transition-opacity group-hover:opacity-100"
           onMouseDown={(e) => {
             e.stopPropagation();
             onResizeStart?.('bottom', e);
           }}
+        />
+      )}
+
+      {/* Continuation indicator - event continues to next day */}
+      {continuesToNextDay && !isPreview && (
+        <div
+          className={cn(
+            'absolute right-0 bottom-0 left-0 h-1',
+            useDarkText ? 'bg-black/10' : 'bg-white/20',
+          )}
+          title="Continues to next day"
         />
       )}
     </div>

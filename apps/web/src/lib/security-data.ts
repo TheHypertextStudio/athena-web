@@ -37,6 +37,7 @@ export interface Session {
   userAgent: string | null;
   createdAt: string;
   expiresAt: string;
+  lastActiveAt: string;
   isCurrent: boolean;
 }
 
@@ -66,6 +67,16 @@ export interface Settings {
   encryptionEnabled: boolean;
 }
 
+export interface AppPassword {
+  id: string;
+  name: string;
+  scopes: string[];
+  lastUsedAt: string | null;
+  lastUsedIp: string | null;
+  expiresAt: string | null;
+  createdAt: string;
+}
+
 // Data fetchers
 export async function getSessions(): Promise<{ sessions: Session[]; count: number }> {
   return fetchWithAuth('/api/auth/sessions');
@@ -85,4 +96,8 @@ export async function getBackupCodesInfo(): Promise<BackupCodesInfo> {
 
 export async function getSettings(): Promise<{ data: Settings }> {
   return fetchWithAuth('/api/settings');
+}
+
+export async function getAppPasswords(): Promise<{ data: AppPassword[] }> {
+  return fetchWithAuth('/api/app-passwords');
 }

@@ -35,6 +35,8 @@ export const sessions = pgTable('sessions', {
   userAgent: text('user_agent'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  /** Last time this session was used for an authenticated request */
+  lastActiveAt: timestamp('last_active_at').notNull().defaultNow(),
 });
 
 /**

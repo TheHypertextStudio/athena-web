@@ -41,6 +41,22 @@ function parseUserAgent(userAgent: string | null): string {
   return `${browser} on ${os}`;
 }
 
+function formatRelativeTime(dateString: string): string {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMinutes = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffMinutes < 1) return 'Just now';
+  if (diffMinutes < 60) return `${String(diffMinutes)}m ago`;
+  if (diffHours < 24) return `${String(diffHours)}h ago`;
+  if (diffDays < 7) return `${String(diffDays)}d ago`;
+
+  return date.toLocaleDateString();
+}
+
 export async function ActiveSessionsSection() {
   let sessions: Session[] = [];
   let errorCode: ApiErrorCode | null = null;
@@ -76,7 +92,7 @@ export async function ActiveSessionsSection() {
               key={session.id}
               icon={<DeviceIcon sx={{ fontSize: 20 }} />}
               title={parseUserAgent(session.userAgent)}
-              description={`${session.ipAddress ?? 'Unknown IP'} • Last active ${new Date(session.createdAt).toLocaleDateString()}`}
+              description={`${session.ipAddress ?? 'Unknown IP'} • ${formatRelativeTime(session.lastActiveAt)}`}
               badge={session.isCurrent ? <Badge variant="secondary">Current</Badge> : undefined}
               action={
                 !session.isCurrent ? <RevokeSessionButton sessionId={session.id} /> : undefined

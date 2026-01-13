@@ -777,10 +777,7 @@ export const authApi = {
   getSessions: () => request<{ sessions: Session[]; count: number }>('/api/auth/sessions'),
   revokeSession: (sessionId: string) =>
     request<EmptyResponse>(`/api/auth/sessions/${sessionId}`, { method: 'DELETE' }),
-  revokeAllSessions: () =>
-    request<{ success: boolean; message: string }>('/api/auth/sessions/revoke-all', {
-      method: 'POST',
-    }),
+  revokeAllSessions: () => request<EmptyResponse>('/api/auth/sessions', { method: 'DELETE' }),
   getLinkedAccounts: () =>
     request<{ accounts: LinkedAccount[]; count: number }>('/api/auth/linked-accounts'),
   unlinkAccount: (accountId: string) =>
@@ -1072,4 +1069,76 @@ export const calendarSyncApi = {
 export const calendarSyncKeys = {
   all: ['calendar-sync'] as const,
   connections: () => [...calendarSyncKeys.all, 'connections'] as const,
+};
+
+// ============================================================================
+// App Password Types
+// ============================================================================
+
+export interface AppPassword {
+  id: string;
+  name: string;
+  scopes: string[];
+  lastUsedAt: string | null;
+  lastUsedIp: string | null;
+  expiresAt: string | null;
+  createdAt: string;
+}
+
+export interface AppPasswordWithSecret extends AppPassword {
+  password: string;
+}
+
+export interface CreateAppPasswordInput {
+  name: string;
+  scopes?: ('caldav' | 'carddav')[];
+  expiresAt?: string;
+}
+
+// ============================================================================
+// App Passwords API
+// ============================================================================
+
+/**
+ * App Passwords API for CalDAV/CardDAV device authentication.
+ */
+export const appPasswordsApi = {
+  /**
+   * List all app passwords for the current user.
+   */
+  list: () => request<{ data: AppPassword[] }>('/api/app-passwords'),
+
+  /**
+   * Create a new app password. The password is only returned once.
+   */
+  create: (data: CreateAppPasswordInput) =>
+    request<{ data: AppPasswordWithSecret }>('/api/app-passwords', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  /**
+   * Update an app password's name.
+   */
+  update: (id: string, data: { name: string }) =>
+    request<{ data: AppPassword }>(`/api/app-passwords/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  /**
+   * Delete an app password. The device will immediately lose access.
+   */
+  delete: (id: string) =>
+    request<{ data: { deleted: boolean } }>(`/api/app-passwords/${id}`, {
+      method: 'DELETE',
+    }),
+};
+
+/**
+ * Query keys for app passwords.
+ */
+export const appPasswordKeys = {
+  all: ['app-passwords'] as const,
+  list: () => [...appPasswordKeys.all, 'list'] as const,
 };

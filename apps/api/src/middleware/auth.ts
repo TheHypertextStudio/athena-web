@@ -6,11 +6,32 @@
 
 import type { Context, Next } from 'hono';
 import { HTTPException } from 'hono/http-exception';
+import { eq, and, lt } from 'drizzle-orm';
 import { auth } from '../lib/auth.js';
+import { db } from '../db/index.js';
+import { sessions } from '../db/schema/auth.js';
 
 export interface AuthContext {
   userId: string;
   session: Awaited<ReturnType<typeof auth.api.getSession>>;
+}
+
+/** Minimum interval between lastActiveAt updates (5 minutes) */
+const ACTIVITY_UPDATE_INTERVAL_MS = 5 * 60 * 1000;
+
+/**
+ * Update session's lastActiveAt if enough time has passed.
+ * Only updates if lastActiveAt is older than the threshold to reduce database writes.
+ */
+async function updateSessionActivity(sessionId: string): Promise<void> {
+  const now = new Date();
+  const threshold = new Date(now.getTime() - ACTIVITY_UPDATE_INTERVAL_MS);
+
+  // Only update if lastActiveAt is older than threshold (avoids write on every request)
+  await db
+    .update(sessions)
+    .set({ lastActiveAt: now })
+    .where(and(eq(sessions.id, sessionId), lt(sessions.lastActiveAt, threshold)));
 }
 
 /**
@@ -28,6 +49,9 @@ export async function requireAuth(c: Context, next: Next): Promise<void> {
 
   c.set('userId', session.user.id);
   c.set('session', session);
+
+  // Update session activity (fire-and-forget, don't block the request)
+  void updateSessionActivity(session.session.id);
 
   await next();
 }
@@ -55,13 +79,22 @@ export function getSession(c: Context): Awaited<ReturnType<typeof auth.api.getSe
 }
 
 /**
- * Get the session token from the request headers.
- * Returns the Bearer token from Authorization header.
+ * Get the session token from the request.
+ * Better Auth stores the session token in a cookie named 'better-auth.session_token'.
  */
 export function getSessionToken(c: Context): string | null {
-  const authHeader = c.req.header('authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
+  const cookieHeader = c.req.header('cookie');
+  if (!cookieHeader) {
     return null;
   }
-  return authHeader.slice(7);
+
+  // Parse cookies to find the session token
+  const cookies = cookieHeader.split(';').map((c) => c.trim());
+  for (const cookie of cookies) {
+    if (cookie.startsWith('better-auth.session_token=')) {
+      return cookie.slice('better-auth.session_token='.length);
+    }
+  }
+
+  return null;
 }

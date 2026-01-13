@@ -6,7 +6,7 @@
 
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, and, ne, gt } from 'drizzle-orm';
 import { auth } from '../lib/auth.js';
 import { db } from '../db/index.js';
 import { sessions, accounts, verifications, passkeys } from '../db/schema/auth.js';
@@ -26,13 +26,6 @@ function generateRecoveryToken(): { token: string; hash: string } {
   const token = randomBytes(32).toString('base64url');
   const hash = createHash('sha256').update(token).digest('hex');
   return { token, hash };
-}
-
-/**
- * Hash a token for storage/comparison.
- */
-function hashToken(token: string): string {
-  return createHash('sha256').update(token).digest('hex');
 }
 
 const authRoutes = new Hono();
@@ -137,8 +130,8 @@ authRoutes.get('/sessions', requireAuth, async (c) => {
 
   // Get current session token from request
   const currentSessionToken = getSessionToken(c);
-  const currentTokenHash = currentSessionToken ? hashToken(currentSessionToken) : null;
 
+  // Query only non-expired sessions
   const userSessions = await db
     .select({
       id: sessions.id,
@@ -147,19 +140,21 @@ authRoutes.get('/sessions', requireAuth, async (c) => {
       userAgent: sessions.userAgent,
       createdAt: sessions.createdAt,
       expiresAt: sessions.expiresAt,
+      lastActiveAt: sessions.lastActiveAt,
     })
     .from(sessions)
-    .where(eq(sessions.userId, userId))
-    .orderBy(desc(sessions.createdAt));
+    .where(and(eq(sessions.userId, userId), gt(sessions.expiresAt, new Date())))
+    .orderBy(desc(sessions.lastActiveAt));
 
-  // Mark which session is current by comparing token hashes
+  // Mark which session is current by comparing tokens
   const sessionsWithCurrent = userSessions.map((session) => ({
     id: session.id,
     ipAddress: session.ipAddress,
     userAgent: session.userAgent,
     createdAt: session.createdAt,
     expiresAt: session.expiresAt,
-    isCurrent: currentTokenHash !== null && session.token === currentSessionToken,
+    lastActiveAt: session.lastActiveAt,
+    isCurrent: currentSessionToken !== null && session.token === currentSessionToken,
   }));
 
   return c.json({
@@ -195,19 +190,25 @@ authRoutes.delete('/sessions/:sessionId', requireAuth, async (c) => {
 
 /**
  * Revoke all sessions except current.
- * POST /api/auth/sessions/revoke-all
+ * DELETE /api/auth/sessions
+ *
+ * RESTful semantics: DELETE on the collection removes all items.
+ * The current session is automatically excluded (you can't delete the session making the request).
  */
-authRoutes.post('/sessions/revoke-all', requireAuth, async (c) => {
+authRoutes.delete('/sessions', requireAuth, async (c) => {
   const userId = getUserId(c);
+  const currentSessionToken = getSessionToken(c);
 
-  // Delete all sessions for this user
-  // Note: The current session will also be deleted, requiring re-login
-  await db.delete(sessions).where(eq(sessions.userId, userId));
+  if (!currentSessionToken) {
+    return c.json({ error: 'No current session found' }, 400);
+  }
 
-  return c.json({
-    success: true,
-    message: 'All sessions have been revoked',
-  });
+  // Delete all sessions for this user EXCEPT the current one
+  await db
+    .delete(sessions)
+    .where(and(eq(sessions.userId, userId), ne(sessions.token, currentSessionToken)));
+
+  return c.body(null, 204);
 });
 
 // ============================================================================

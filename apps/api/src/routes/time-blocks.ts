@@ -9,16 +9,11 @@ import { eq, and, gte, lte, isNull } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { timeBlocks, timeBlockTasks, tasks } from '../db/schema/index.js';
 import { requireAuth, getUserId } from '../middleware/auth.js';
-import { requireEntitlement } from '../middleware/entitlements.js';
 
 const timeBlockRoutes = new Hono();
 
 // Require authentication for all routes
 timeBlockRoutes.use('*', requireAuth);
-
-// Require 'time_tracking' entitlement for mutating operations (POST/PUT/DELETE)
-// GET requests pass through (read access is sacred)
-timeBlockRoutes.use('*', requireEntitlement('time_tracking'));
 
 const ERROR_TIME_BLOCK_NOT_FOUND = 'Time block not found';
 const ERROR_TIME_BLOCK_NOT_AUTHORIZED = 'Time block not found or not authorized';

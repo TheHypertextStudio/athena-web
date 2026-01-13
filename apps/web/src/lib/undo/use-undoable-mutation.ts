@@ -9,7 +9,7 @@
 
 'use client';
 
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { UseMutationOptions, UseMutationResult } from '@tanstack/react-query';
 import { useUndoStore } from './store';
 import type { UndoCommand, UndoableMutationConfig } from './types';
@@ -60,6 +60,7 @@ export function useUndoableMutation<
   config: UndoableMutationConfig<TVariables, TData>,
   options?: Omit<UseMutationOptions<TData, TError, TVariables, TContext | undefined>, 'mutationFn'>,
 ): UseMutationResult<TData, TError, TVariables, TContext | undefined> {
+  const queryClient = useQueryClient();
   const pushCommand = useUndoStore((s) => s.pushCommand);
   const isProcessing = useUndoStore((s) => s.isProcessing);
   type MutationContext = TContext | undefined;
@@ -154,6 +155,15 @@ export function useUndoableMutation<
       userOnError?.(error, variables, context);
     },
     onSettled: (data, error, variables, context) => {
+      // Invalidate queries to refresh the UI
+      const entityId = data
+        ? config.getEntityId(variables, data)
+        : config.getEntityId(variables, undefined);
+      const queryKeys = config.getQueryKeys(variables, entityId);
+      for (const queryKey of queryKeys) {
+        void queryClient.invalidateQueries({ queryKey: queryKey as unknown[] });
+      }
+
       userOnSettled?.(data, error, variables, context);
     },
   });

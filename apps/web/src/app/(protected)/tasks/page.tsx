@@ -9,27 +9,41 @@
 
 'use client';
 
-import { useRouter } from 'next/navigation';
-import { Header, PageContainer } from '@/components/layout';
-import { TaskListView } from '@/components/tasks/task-list-view';
-import { signOut } from '@/lib/auth-client';
+import { useQuery } from '@tanstack/react-query';
+import { motion, useReducedMotion } from 'framer-motion';
+import { TasksSurface } from '@/components/tasks/surfaces/TasksSurface';
+import { SurfaceContainer } from '@/components/ui/surface';
+import { projectsApi, type Project } from '@/lib/api-client';
+
+/** Width for the tasks surface container - matches day view on home */
+const SURFACE_WIDTH = 560;
 
 export default function TasksPage() {
-  const router = useRouter();
+  const prefersReducedMotion = useReducedMotion();
 
-  async function handleSignOut() {
-    await signOut();
-    router.push('/login');
-  }
+  // Fetch projects for filtering and assignment
+  const { data: projectsData } = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => projectsApi.list({ status: 'active' }),
+  });
+
+  const projects: { id: string; name: string }[] =
+    projectsData?.data.map((p: Project) => ({ id: p.id, name: p.name })) ?? [];
 
   return (
-    <div className="flex h-full flex-col">
-      <Header title="Tasks" onSignOut={() => void handleSignOut()} />
-      <div className="flex-1 overflow-auto p-6">
-        <PageContainer>
-          <TaskListView />
-        </PageContainer>
-      </div>
-    </div>
+    <main className="h-screen overflow-hidden p-4 md:p-6">
+      <motion.div
+        className="mx-auto h-full"
+        animate={{ maxWidth: SURFACE_WIDTH }}
+        initial={false}
+        transition={
+          prefersReducedMotion ? { duration: 0 } : { duration: 0.3, ease: [0.2, 0, 0, 1] }
+        }
+      >
+        <SurfaceContainer rounded="xl" padding="lg" className="h-full overflow-hidden">
+          <TasksSurface className="h-full" projects={projects} />
+        </SurfaceContainer>
+      </motion.div>
+    </main>
   );
 }

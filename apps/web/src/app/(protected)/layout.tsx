@@ -2,7 +2,10 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { LogOut, Settings, User } from 'lucide-react';
+import { LayoutGroup } from 'framer-motion';
+import LogoutIcon from '@mui/icons-material/Logout';
+import SettingsIcon from '@mui/icons-material/Settings';
+import PersonIcon from '@mui/icons-material/Person';
 import { useAuth } from '@/hooks/use-auth';
 import { signOut } from '@/lib/auth-client';
 import { Button } from '@/components/ui/button';
@@ -12,6 +15,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { ViewTransitions } from 'next-view-transitions';
 import { QueryClientProvider } from '@/lib/query-client';
 import { CommandPaletteProvider, CommandPalette } from '@/components/command-palette';
 import { registerAllActions } from '@/lib/command-palette/actions';
@@ -61,65 +65,69 @@ export default function ProtectedLayout({
   }
 
   return (
-    <QueryClientProvider>
-      <EntitlementErrorProvider>
-        <SnackbarProvider>
-          <UndoProvider>
-            <ObjectSystemProvider>
-              <CommandPaletteProvider>
-                <div className="min-h-screen">
-                  {/* Minimal Top Bar */}
-                  <header className="fixed top-0 right-0 z-50 p-4">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="text" size="icon" className="rounded-full">
-                          {user?.image ? (
-                            <img
-                              src={user.image}
-                              alt={user.name}
-                              className="h-8 w-8 rounded-full"
-                            />
-                          ) : (
-                            <User className="h-5 w-5" />
-                          )}
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          onClick={() => {
-                            router.push('/settings');
-                          }}
-                        >
-                          <Settings className="mr-2 h-4 w-4" />
-                          Settings
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => void handleSignOut()}>
-                          <LogOut className="mr-2 h-4 w-4" />
-                          Sign out
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </header>
+    <ViewTransitions>
+      <QueryClientProvider>
+        <EntitlementErrorProvider>
+          <SnackbarProvider>
+            <UndoProvider>
+              <ObjectSystemProvider>
+                <CommandPaletteProvider>
+                  <LayoutGroup>
+                    <div className="min-h-screen">
+                      {/* Minimal Top Bar */}
+                      <header className="fixed top-0 right-0 z-50 p-4">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="text" size="icon" className="rounded-full">
+                              {user?.image ? (
+                                <img
+                                  src={user.image}
+                                  alt={user.name}
+                                  className="h-8 w-8 rounded-full"
+                                />
+                              ) : (
+                                <PersonIcon sx={{ fontSize: 20 }} />
+                              )}
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onClick={() => {
+                                router.push('/settings');
+                              }}
+                            >
+                              <SettingsIcon sx={{ fontSize: 16 }} className="mr-2" />
+                              Settings
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => void handleSignOut()}>
+                              <LogoutIcon sx={{ fontSize: 16 }} className="mr-2" />
+                              Sign out
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </header>
 
-                  <main>{children}</main>
-                </div>
+                      <main>{children}</main>
+                    </div>
 
-                {/* Command Palette - Cmd+K / Ctrl+K to open */}
-                <CommandPalette />
+                    {/* Command Palette - Cmd+K / Ctrl+K to open */}
+                    <CommandPalette />
 
-                {/* Modal slot for route interception (e.g., assistant) */}
-                {modal}
+                    {/* Modal slot for route interception (e.g., assistant) */}
+                    {modal}
 
-                {/* History panel for undo/redo - Cmd+Alt+Z to open */}
-                <HistoryPanel />
+                    {/* History panel for undo/redo - Cmd+Alt+Z to open */}
+                    <HistoryPanel />
 
-                {/* Timezone mismatch detection dialog */}
-                <TimezoneMismatchDialog />
-              </CommandPaletteProvider>
-            </ObjectSystemProvider>
-          </UndoProvider>
-        </SnackbarProvider>
-      </EntitlementErrorProvider>
-    </QueryClientProvider>
+                    {/* Timezone mismatch detection dialog */}
+                    <TimezoneMismatchDialog />
+                  </LayoutGroup>
+                </CommandPaletteProvider>
+              </ObjectSystemProvider>
+            </UndoProvider>
+          </SnackbarProvider>
+        </EntitlementErrorProvider>
+      </QueryClientProvider>
+    </ViewTransitions>
   );
 }

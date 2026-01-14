@@ -7,60 +7,6 @@
 
 ## Active Tasks
 
-### [SETTINGS-MOBILE-001] Settings Screen Mobile Responsiveness
-
-- **Status**: IN_PROGRESS
-- **State**: PLANNING
-- **Started**: 2026-01-12
-- **Priority**: P1
-- **Description**: Make the settings layout and all settings pages mobile responsive.
-
-## Plan: Settings Screen Mobile Responsiveness
-
-### Objective
-
-Make the settings screen fully responsive across mobile, tablet, and desktop viewports.
-
-### Approach
-
-Convert the desktop-only sidebar layout to a responsive design that:
-
-1. On mobile (<768px): Shows navigation as a horizontal scrollable row at the top, then content below
-2. On tablet/desktop (≥768px): Keeps the existing sticky sidebar layout
-
-The settings section components (`SettingsSection`, `SettingsRow`, `SettingsItemCard`) are already fairly responsive since they use flex layouts, but some may need minor adjustments for smaller screens.
-
-### Steps
-
-1. **Update settings layout** (`apps/web/src/app/(protected)/settings/layout.tsx`):
-   - Change the flex layout to stack vertically on mobile, side-by-side on larger screens
-   - Convert sidebar nav to horizontal scrollable pills on mobile
-   - Adjust padding and spacing for mobile
-
-2. **Update SettingsRow component** (`apps/web/src/components/settings/settings-section.tsx`):
-   - Stack label and control vertically on very small screens if needed
-   - Ensure text doesn't overflow
-
-3. **Update SettingsItemCard component**:
-   - Ensure the icon/title/action layout works on narrow screens
-   - Allow text to wrap appropriately
-
-4. **Validate** with typecheck and lint
-
-### Files to Modify
-
-- `apps/web/src/app/(protected)/settings/layout.tsx` - Main responsive layout changes
-- `apps/web/src/components/settings/settings-section.tsx` - Component responsive tweaks (if needed)
-
-### Risks
-
-- Horizontal scrolling nav may need touch scrolling hints on mobile
-- Some settings pages may have content-specific layout issues
-
-### Validation
-
-Run `pnpm typecheck` and `pnpm lint`. Manually verify layout at mobile/tablet/desktop breakpoints.
-
 ---
 
 ### [CALDAV-SERVER-001] CalDAV Server Foundation (Phase 1)
@@ -294,6 +240,63 @@ Run `pnpm typecheck`, `pnpm lint`, `pnpm test`, and `pnpm build` after each batc
 ---
 
 ## Completed Tasks
+
+### [UI-TOOLBAR-001] Remove Tasks Toolbar Create Button
+
+- **Completed**: 2026-01-13
+- **Summary**: Removed the toolbar "New" create button and cleaned up related props; resolved lint issues in task dependency flow export naming and keyboard navigation centering.
+- **Files Changed**:
+  - `apps/web/src/components/flows/task-dependency/TaskDependencyFlow.tsx`
+  - `apps/web/src/components/flows/task-dependency/useGraphKeyboardNav.ts`
+  - `apps/web/src/components/tasks/surfaces/TasksSurface/TasksSurface.tsx`
+  - `apps/web/src/components/tasks/surfaces/TasksSurface/TasksToolbar.tsx`
+  - `docs/WORKLOG.md`
+
+### [UI-TRANSITION-002] Create Task Modal Shared Element Implementation
+
+- **Completed**: 2026-01-13
+- **Summary**: Wired create task triggers to shared element transitions by tracking layout IDs, updating create buttons to motion wrappers, and converting the modal to TransitionModal with layoutId support; resolved a lint blocker in the dependency graph hook.
+- **Files Changed**:
+  - `apps/web/src/components/flows/task-dependency/useDependencyGraph.ts`
+  - `apps/web/src/components/tasks/TaskCreationModal.tsx`
+  - `apps/web/src/components/tasks/surfaces/TasksSurface/TasksEmptyState.tsx`
+  - `apps/web/src/components/tasks/surfaces/TasksSurface/TasksSurface.tsx`
+  - `apps/web/src/components/tasks/surfaces/TasksSurface/TasksToolbar.tsx`
+  - `apps/web/src/hooks/useTasksSurface.ts`
+  - `docs/WORKLOG.md`
+
+### [UI-TRANSITION-001] Create Task Modal Shared Element Transition
+
+- **Completed**: 2026-01-13
+- **Summary**: Identified that the create task modal uses a portal-based Dialog with no shared `layoutId` on the create button, so Framer Motion shared element transitions never link the button to the modal content; resolved lint blockers encountered during validation.
+- **Files Changed**:
+  - `apps/web/src/components/calendar/TimeBlockTaskSelector.tsx`
+  - `apps/web/src/components/objects/surfaces/DayCalendar/CalendarEntryCard.tsx`
+  - `docs/WORKLOG.md`
+
+### [APP-PASSWORD-SCRYPT-001] App Password Scrypt Maxmem Fix
+
+- **Completed**: 2026-01-12
+- **Summary**: Allowed higher scrypt memory usage for app password hashing/verification to prevent API 500s during app password creation.
+- **Files Changed**:
+  - `apps/api/src/services/caldav-server/auth.ts`
+  - `docs/WORKLOG.md`
+
+### [SECURITY-SETTINGS-SSR-001] Fix Connected Devices Dynamic Import
+
+- **Completed**: 2026-01-12
+- **Summary**: Removed the invalid `next/dynamic` `ssr: false` usage in the security settings page by importing the client `ConnectedDevicesSection` directly.
+- **Files Changed**:
+  - `apps/web/src/app/(protected)/settings/security/page.tsx`
+  - `docs/WORKLOG.md`
+
+### [SETTINGS-MOBILE-001] Settings Screen Mobile Responsiveness
+
+- **Completed**: 2026-01-12
+- **Summary**: Made the settings screen fully mobile responsive with a sticky header that changes surface elevation on scroll, horizontal scrollable navigation pills on mobile, and responsive settings components.
+- **Files Changed**:
+  - `apps/web/src/app/(protected)/settings/layout.tsx` - Sticky header with scroll-based elevation, horizontal mobile nav
+  - `apps/web/src/components/settings/settings-section.tsx` - Responsive SettingsRow, SettingsItemCard, SettingsToggleRow
 
 ### [AUTH-SESSION-RESILIENCE-001] Auth Session Resilience Refactor
 

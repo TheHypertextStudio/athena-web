@@ -56,6 +56,7 @@ VALID_SCOPES=(
   "tasks" "calendar" "events" "agenda" "auth" "billing" "ai"
   "notifications" "integrations" "sync" "settings" "search"
   "analytics" "attachments" "webhooks" "projects" "tags" "time-tracking"
+  "initiatives"
   # UI-specific
   "ui" "layout" "dashboard" "command-palette"
   # Infrastructure

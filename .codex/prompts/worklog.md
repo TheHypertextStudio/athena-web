@@ -1,0 +1,57 @@
+---
+description: View or update the project work log in docs/WORKLOG.md. Use when tracking tasks, checking active work status, adding new tasks, or marking tasks complete.
+argument-hint: [ACTION=<view|add|start|done>] [TASK="<task or id>"]
+---
+
+# Work Log
+
+View or update the project work log.
+
+## Description
+
+Display the current work log status or add entries. The work log tracks all active, completed, and backlog tasks.
+
+## Usage
+
+```
+/prompts:worklog                           # View current status
+/prompts:worklog ACTION=add TASK="..."     # Add new task to backlog
+/prompts:worklog ACTION=start TASK=ID-001  # Start working on a task
+/prompts:worklog ACTION=done TASK=ID-001   # Mark task as completed
+```
+
+## Actions
+
+Perform action based on `$ACTION`. Default to View Status if not specified. Use `$TASK` for the task description or ID.
+
+### View Status
+
+1. Read `docs/WORKLOG.md`
+2. Display active tasks with their status
+3. Show count of backlog and completed items
+
+### Add Task
+
+1. Generate a new task ID (format: AREA-NNN)
+2. Add task to Backlog section
+3. Include priority and description
+
+### Start Task
+
+1. Move task from Backlog to Active
+2. Set status to IN_PROGRESS
+3. Add started timestamp
+
+### Complete Task
+
+1. Move task from Active to Completed
+2. Add completion timestamp
+3. Prompt for summary and learnings
+
+## File Location
+
+`docs/WORKLOG.md`
+
+## Notes
+
+Always update the work log BEFORE starting work and AFTER completing work, as specified in AGENTS.md.

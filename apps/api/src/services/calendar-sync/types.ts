@@ -225,4 +225,41 @@ export interface CalendarProviderClient {
    * Delete an event.
    */
   deleteEvent(accessToken: string, calendarId: string, eventId: string): Promise<void>;
+
+  /**
+   * Create a webhook watch for real-time notifications.
+   * Optional - not all providers support webhooks.
+   *
+   * @param accessToken - OAuth access token
+   * @param calendarId - Calendar to watch (or 'primary' for all calendars)
+   * @param webhookUrl - URL to receive notifications
+   * @param channelToken - Token to identify the connection (e.g., userId:connectionId)
+   * @returns Watch metadata to store for renewal/cancellation
+   */
+  createWatch?(
+    accessToken: string,
+    calendarId: string,
+    webhookUrl: string,
+    channelToken: string,
+  ): Promise<WebhookWatch>;
+
+  /**
+   * Stop a webhook watch.
+   * Optional - only needed if createWatch is implemented.
+   */
+  stopWatch?(accessToken: string, watch: WebhookWatch): Promise<void>;
+}
+
+/**
+ * Webhook watch metadata.
+ */
+export interface WebhookWatch {
+  /** Provider-specific channel/subscription ID */
+  id: string;
+  /** Resource ID being watched */
+  resourceId?: string;
+  /** When the watch expires and needs renewal */
+  expiresAt: Date;
+  /** Calendar ID being watched */
+  calendarId: string;
 }

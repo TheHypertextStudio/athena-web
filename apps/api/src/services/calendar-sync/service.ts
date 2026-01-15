@@ -5,6 +5,7 @@
  */
 
 import * as crypto from 'node:crypto';
+import { z } from 'zod';
 import { db } from '../../db/index.js';
 import {
   events,
@@ -61,6 +62,12 @@ interface IntegrationSyncStatus {
 interface IntegrationMetadata {
   calendars: SyncedCalendar[];
   syncStatus?: IntegrationSyncStatus;
+  webhookWatch?: {
+    id: string;
+    resourceId?: string;
+    expiresAt: string;
+    calendarId: string;
+  };
 }
 
 const CALENDAR_SYNC_DIRECTIONS = ['pull', 'push', 'bidirectional'] as const;
@@ -132,6 +139,20 @@ const parseSyncStatus = (value: unknown): IntegrationSyncStatus | undefined => {
   };
 };
 
+const webhookWatchSchema = z.object({
+  id: z.string(),
+  resourceId: z.string().optional(),
+  expiresAt: z.string(),
+  calendarId: z.string(),
+});
+
+const parseWebhookWatch = (
+  value: unknown,
+): { id: string; resourceId?: string; expiresAt: string; calendarId: string } | undefined => {
+  const result = webhookWatchSchema.safeParse(value);
+  return result.success ? result.data : undefined;
+};
+
 const parseIntegrationMetadata = (metadata: unknown): IntegrationMetadata => {
   if (!isRecord(metadata)) {
     return { calendars: [] };
@@ -144,9 +165,13 @@ const parseIntegrationMetadata = (metadata: unknown): IntegrationMetadata => {
     : [];
   const syncStatus = parseSyncStatus(metadata.syncStatus);
 
+  // Parse webhook watch if present
+  const webhookWatch = parseWebhookWatch(metadata.webhookWatch);
+
   return {
     calendars,
     syncStatus,
+    webhookWatch,
   };
 };
 
@@ -394,6 +419,175 @@ export class CalendarSyncService {
       createdAt: now,
       updatedAt: now,
     };
+  }
+
+  /**
+   * Set up a webhook watch for real-time calendar notifications.
+   * This should be called after OAuth callback to enable push notifications.
+   *
+   * @param connectionId - Connection ID
+   * @param userId - User ID
+   * @returns true if watch was set up, false if provider doesn't support webhooks
+   */
+  async setupWebhookWatch(connectionId: string, userId: string): Promise<boolean> {
+    // Get API public URL from env
+    const apiPublicUrl = env.API_PUBLIC_URL;
+    if (!apiPublicUrl) {
+      console.warn('API_PUBLIC_URL not set, skipping webhook watch setup');
+      return false;
+    }
+
+    const integration = await db.query.linkedIntegrations.findFirst({
+      where: and(eq(linkedIntegrations.id, connectionId), eq(linkedIntegrations.userId, userId)),
+    });
+
+    if (!integration) {
+      throw new Error('Connection not found');
+    }
+
+    const provider = this.mapIntegrationToProvider(integration.provider);
+    const client = this.providers.get(provider);
+
+    if (!client?.createWatch) {
+      // Provider doesn't support webhooks (e.g., iCloud, CalDAV)
+      return false;
+    }
+
+    const accessToken = decryptSecretOptional(integration.accessToken);
+    if (!accessToken) {
+      throw new Error('No access token available');
+    }
+
+    // Determine webhook URL based on provider
+    const webhookPath =
+      provider === 'google' ? '/webhooks/google-calendar' : '/webhooks/outlook-calendar';
+    const webhookUrl = `${apiPublicUrl}${webhookPath}`;
+
+    // Channel token identifies the connection: userId:connectionId
+    const channelToken = `${userId}:${connectionId}`;
+
+    // Watch the primary calendar (or 'primary' for Google which means the main calendar)
+    const calendarId = 'primary';
+
+    try {
+      const watch = await client.createWatch(accessToken, calendarId, webhookUrl, channelToken);
+
+      // Store watch metadata in connection
+      const existingMetadata = parseIntegrationMetadata(integration.metadata);
+      const updatedMetadata = {
+        ...existingMetadata,
+        webhookWatch: {
+          id: watch.id,
+          resourceId: watch.resourceId,
+          expiresAt: watch.expiresAt.toISOString(),
+          calendarId: watch.calendarId,
+        },
+      };
+
+      await db
+        .update(linkedIntegrations)
+        .set({
+          metadata: updatedMetadata,
+          updatedAt: new Date(),
+        })
+        .where(eq(linkedIntegrations.id, connectionId));
+
+      console.log(
+        `Webhook watch created for ${provider} connection ${connectionId}, expires ${watch.expiresAt.toISOString()}`,
+      );
+      return true;
+    } catch (error) {
+      console.error(`Failed to create webhook watch for ${provider}:`, error);
+      // Don't throw - webhook setup failure shouldn't break the connection
+      return false;
+    }
+  }
+
+  /**
+   * Renew a webhook watch, stopping the old one first to prevent duplicates.
+   * Called when OAuth tokens are refreshed.
+   *
+   * @param connectionId - Connection ID
+   * @param userId - User ID
+   * @param accessToken - Fresh access token
+   */
+  private async renewWebhookWatch(
+    connectionId: string,
+    userId: string,
+    accessToken: string,
+  ): Promise<boolean> {
+    const apiPublicUrl = env.API_PUBLIC_URL;
+    if (!apiPublicUrl) {
+      return false;
+    }
+
+    const integration = await db.query.linkedIntegrations.findFirst({
+      where: and(eq(linkedIntegrations.id, connectionId), eq(linkedIntegrations.userId, userId)),
+    });
+
+    if (!integration) {
+      return false;
+    }
+
+    const provider = this.mapIntegrationToProvider(integration.provider);
+    const client = this.providers.get(provider);
+
+    if (!client?.createWatch) {
+      return false;
+    }
+
+    const metadata = parseIntegrationMetadata(integration.metadata);
+
+    // Stop existing watch first to prevent duplicates
+    if (metadata.webhookWatch && client.stopWatch) {
+      try {
+        await client.stopWatch(accessToken, {
+          id: metadata.webhookWatch.id,
+          resourceId: metadata.webhookWatch.resourceId,
+          expiresAt: new Date(metadata.webhookWatch.expiresAt),
+          calendarId: metadata.webhookWatch.calendarId,
+        });
+      } catch {
+        // Ignore errors stopping old watch - it may have already expired
+      }
+    }
+
+    // Create new watch
+    const webhookPath =
+      provider === 'google' ? '/webhooks/google-calendar' : '/webhooks/outlook-calendar';
+    const webhookUrl = `${apiPublicUrl}${webhookPath}`;
+    const channelToken = `${userId}:${connectionId}`;
+
+    try {
+      const watch = await client.createWatch(accessToken, 'primary', webhookUrl, channelToken);
+
+      // Update metadata with new watch
+      const updatedMetadata = {
+        ...metadata,
+        webhookWatch: {
+          id: watch.id,
+          resourceId: watch.resourceId,
+          expiresAt: watch.expiresAt.toISOString(),
+          calendarId: watch.calendarId,
+        },
+      };
+
+      await db
+        .update(linkedIntegrations)
+        .set({
+          metadata: updatedMetadata,
+          updatedAt: new Date(),
+        })
+        .where(eq(linkedIntegrations.id, connectionId));
+
+      console.log(
+        `Webhook watch renewed for ${provider} connection ${connectionId}, expires ${watch.expiresAt.toISOString()}`,
+      );
+      return true;
+    } catch (error) {
+      console.error(`Failed to renew webhook watch for ${provider}:`, error);
+      return false;
+    }
   }
 
   /**
@@ -668,6 +862,11 @@ export class CalendarSyncService {
           updatedAt: new Date(),
         })
         .where(eq(linkedIntegrations.id, connectionId));
+
+      // Renew webhook watch on token refresh (fire-and-forget)
+      this.renewWebhookWatch(connectionId, userId, accessToken).catch((err: unknown) => {
+        console.error('Failed to renew webhook watch on token refresh:', err);
+      });
     }
 
     const metadata = parseIntegrationMetadata(integration.metadata);

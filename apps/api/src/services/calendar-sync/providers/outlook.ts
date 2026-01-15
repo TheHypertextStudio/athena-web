@@ -12,6 +12,7 @@ import type {
   SyncedCalendar,
   ExternalCalendarEvent,
   OAuthConfig,
+  WebhookWatch,
 } from '../types.js';
 
 const MICROSOFT_AUTH_URL = 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize';
@@ -441,6 +442,50 @@ export class OutlookCalendarProvider implements CalendarProviderClient {
       lightRed: '#e81123',
     };
     return color ? (colorMap[color] ?? color) : undefined;
+  }
+
+  /**
+   * Create a webhook subscription for real-time calendar notifications.
+   *
+   * Microsoft Graph subscriptions:
+   * - Max expiration: 3 days for calendar events
+   * - Must respond to validation request with validationToken
+   */
+  async createWatch(
+    accessToken: string,
+    calendarId: string,
+    webhookUrl: string,
+    channelToken: string,
+  ): Promise<WebhookWatch> {
+    const client = this.createClient(accessToken);
+
+    // Subscription expires in 3 days (Microsoft's max for calendar events)
+    const expirationDateTime = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
+
+    // Resource path for calendar events
+    const resource = calendarId === 'primary' ? '/me/events' : `/me/calendars/${calendarId}/events`;
+
+    const subscription = (await client.api('/subscriptions').post({
+      changeType: 'created,updated,deleted',
+      notificationUrl: webhookUrl,
+      resource,
+      expirationDateTime,
+      clientState: channelToken,
+    })) as { id: string; expirationDateTime: string };
+
+    return {
+      id: subscription.id,
+      expiresAt: new Date(subscription.expirationDateTime),
+      calendarId,
+    };
+  }
+
+  /**
+   * Stop a webhook subscription.
+   */
+  async stopWatch(accessToken: string, watch: WebhookWatch): Promise<void> {
+    const client = this.createClient(accessToken);
+    await client.api(`/subscriptions/${watch.id}`).delete();
   }
 }
 

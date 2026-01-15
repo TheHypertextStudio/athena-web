@@ -33,6 +33,7 @@ import type {
   SyncedCalendar,
   ExternalCalendarEvent,
   OAuthConfig,
+  WebhookWatch,
 } from '../types.js';
 
 const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
@@ -393,5 +394,62 @@ export class GoogleCalendarProvider implements CalendarProviderClient {
       default:
         return 'public';
     }
+  }
+
+  /**
+   * Create a webhook watch for real-time calendar notifications.
+   *
+   * Google Calendar push notifications require:
+   * 1. A publicly accessible HTTPS URL
+   * 2. Domain verification in Google Search Console
+   * 3. The URL must respond with 200 to POST requests
+   */
+  async createWatch(
+    accessToken: string,
+    calendarId: string,
+    webhookUrl: string,
+    channelToken: string,
+  ): Promise<WebhookWatch> {
+    const auth = this.createAuthClient(accessToken);
+    const calendar = new calendar_v3.Calendar({ auth });
+
+    // Generate a unique channel ID
+    const channelId = crypto.randomUUID();
+
+    // Watch expires in 7 days (Google's max is about 1 week)
+    const expiration = Date.now() + 7 * 24 * 60 * 60 * 1000;
+
+    const response = await calendar.events.watch({
+      calendarId,
+      requestBody: {
+        id: channelId,
+        type: 'web_hook',
+        address: webhookUrl,
+        token: channelToken,
+        expiration: String(expiration),
+      },
+    });
+
+    return {
+      id: channelId,
+      resourceId: response.data.resourceId ?? undefined,
+      expiresAt: new Date(Number(response.data.expiration ?? expiration)),
+      calendarId,
+    };
+  }
+
+  /**
+   * Stop a webhook watch.
+   */
+  async stopWatch(accessToken: string, watch: WebhookWatch): Promise<void> {
+    const auth = this.createAuthClient(accessToken);
+    const calendar = new calendar_v3.Calendar({ auth });
+
+    await calendar.channels.stop({
+      requestBody: {
+        id: watch.id,
+        resourceId: watch.resourceId,
+      },
+    });
   }
 }

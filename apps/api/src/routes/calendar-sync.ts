@@ -193,6 +193,12 @@ app.post(
 
       const connection = await service.handleOAuthCallback(provider, userId, code);
 
+      // Set up webhook watch for real-time sync (fire-and-forget)
+      // Don't block the response - webhook setup can happen in background
+      service.setupWebhookWatch(connection.id, userId).catch((err: unknown) => {
+        console.error('Failed to set up webhook watch:', err);
+      });
+
       return c.json({
         success: true,
         data: {

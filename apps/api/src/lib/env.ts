@@ -40,6 +40,10 @@ const optionalServicesSchema = z.object({
   CALENDAR_OAUTH_STATE_SECRET: z.string().optional(),
   DATA_ENCRYPTION_KEY: z.string().optional(),
 
+  // Public API URL for webhooks (e.g., https://api.athena.app)
+  // Used for Google/Outlook calendar webhook callbacks
+  API_PUBLIC_URL: z.url().optional(),
+
   // Integration providers
   LINEAR_OAUTH_CLIENT_ID: z.string().optional(),
   LINEAR_OAUTH_CLIENT_SECRET: z.string().optional(),

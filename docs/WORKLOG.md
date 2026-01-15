@@ -241,6 +241,17 @@ Run `pnpm typecheck`, `pnpm lint`, `pnpm test`, and `pnpm build` after each batc
 
 ## Completed Tasks
 
+### [CALENDAR-ENTRY-CARD-001] Calendar Entry Card Refactor
+
+- **Completed**: 2026-01-14
+- **Summary**: Split CalendarEntryCard into focused helper modules, centralized drag-preview logic, and aligned display times with clipped day bounds to reduce drift and improve readability.
+- **Files Changed**:
+  - `apps/web/src/components/objects/surfaces/DayCalendar/CalendarEntryCard.tsx`
+  - `apps/web/src/components/objects/surfaces/DayCalendar/CalendarEntryCardParts.tsx`
+  - `apps/web/src/components/objects/surfaces/DayCalendar/CalendarEntryCard.utils.ts`
+  - `apps/web/src/components/objects/surfaces/DayCalendar/useCalendarEntryDrag.ts`
+  - `docs/WORKLOG.md`
+
 ### [UI-TOOLBAR-001] Remove Tasks Toolbar Create Button
 
 - **Completed**: 2026-01-13

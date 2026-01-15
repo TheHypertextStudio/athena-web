@@ -550,90 +550,15 @@ Common mistakes:
 
 ## Runbooks
 
-### Runbook: Rotate OAuth Credentials
+Step-by-step procedures for common operations are in **[Auth Runbooks](../runbooks/auth.md)**:
 
-**When:** Scheduled rotation, suspected compromise, or expiration.
-
-1. Generate new credentials in provider console
-2. Update `GOOGLE_CLIENT_SECRET` (or Apple/Microsoft) in environment
-3. Deploy both web and API
-4. Test sign-in
-5. Revoke old credentials in provider console
-
-### Runbook: Force Sign-Out a User
-
-**When:** User reports unauthorized access, suspicious activity.
-
-```sql
--- Find user
-SELECT id, email FROM users WHERE email = 'user@example.com';
-
--- Revoke all their sessions
-DELETE FROM sessions WHERE user_id = '<user_id>';
-```
-
-User must sign in again.
-
-### Runbook: Block a Compromised Google Account
-
-**When:** Manual intervention needed for compromised account.
-
-```sql
--- Block Google sign-in for user
-UPDATE accounts
-SET google_sign_in_disabled = true
-WHERE user_id = '<user_id>' AND provider_id = 'google';
-
--- Also revoke sessions
-DELETE FROM sessions WHERE user_id = '<user_id>';
-```
-
-### Runbook: Renew Apple Client Secret
-
-**When:** Every 6 months (set calendar reminder).
-
-1. Download `.p8` key from Apple Developer Portal (or use existing)
-2. Generate new JWT:
-   ```bash
-   npx apple-client-secret-generator \
-     --teamId <TEAM_ID> \
-     --keyId <KEY_ID> \
-     --privateKeyPath ./AuthKey.p8 \
-     --clientId studio.hypertext.athena.web \
-     --exp 15777000
-   ```
-3. Update `APPLE_CLIENT_SECRET` in environment
-4. Deploy
-5. Test Apple sign-in
-
-### Runbook: Database Migration (Auth Tables)
-
-**When:** Schema changes to auth tables.
-
-1. Backup:
-
-   ```bash
-   pg_dump $DATABASE_URL > backup-$(date +%Y%m%d).sql
-   ```
-
-2. Apply migration:
-
-   ```bash
-   cd apps/api
-   pnpm build
-   pnpm drizzle-kit push --strict=false --force
-   ```
-
-3. Verify:
-   ```bash
-   psql $DATABASE_URL -c "\d sessions"
-   ```
-
-**Rollback:**
-
-```bash
-psql $DATABASE_URL < backup-YYYYMMDD.sql
-```
+- Rotate OAuth Credentials
+- Force Sign-Out a User
+- Block a Compromised Google Account
+- Renew Apple Client Secret
+- Migrate Auth Database Schema
+- Emergency: Revoke All Sessions
+- Investigate Suspicious Sign-In Activity
 
 ---
 

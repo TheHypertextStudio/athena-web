@@ -20,10 +20,15 @@ import {
   requireDavAuth,
   authenticateDav,
   handlePropfind,
+  handleProppatch,
   handleGet,
   handlePut,
   handleDelete,
   handleReport,
+  handleMkcalendar,
+  handleMkcol,
+  handleCopy,
+  handleMove,
 } from '../services/caldav-server/index.js';
 
 const davRoutes = new Hono();
@@ -33,11 +38,12 @@ const davRoutes = new Hono();
 davRoutes.options('*', (c) => {
   return c.text('', 200, {
     DAV: '1, 2, 3, calendar-access',
-    Allow: 'OPTIONS, GET, HEAD, PUT, DELETE, PROPFIND, PROPPATCH, REPORT, MKCALENDAR',
+    Allow:
+      'OPTIONS, GET, HEAD, PUT, DELETE, PROPFIND, PROPPATCH, REPORT, MKCALENDAR, MKCOL, COPY, MOVE',
     'Access-Control-Allow-Methods':
-      'OPTIONS, GET, HEAD, PUT, DELETE, PROPFIND, PROPPATCH, REPORT, MKCALENDAR',
+      'OPTIONS, GET, HEAD, PUT, DELETE, PROPFIND, PROPPATCH, REPORT, MKCALENDAR, MKCOL, COPY, MOVE',
     'Access-Control-Allow-Headers':
-      'Authorization, Content-Type, Depth, If-Match, If-None-Match, Prefer',
+      'Authorization, Content-Type, Depth, If-Match, If-None-Match, Prefer, Destination, Overwrite',
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Credentials': 'true',
   });
@@ -97,19 +103,19 @@ davRoutes.on('HEAD', '*', (c) => {
 // REPORT - Calendar queries and sync-collection
 davRoutes.on('REPORT', '*', handleReport);
 
-// PROPPATCH - Modify properties (TODO: implement)
-davRoutes.on('PROPPATCH', '*', (c) => {
-  return c.text('Not Implemented', 501);
-});
+// PROPPATCH - Modify calendar properties
+davRoutes.on('PROPPATCH', '*', handleProppatch);
 
-// MKCALENDAR - Create new calendar (TODO: implement)
-davRoutes.on('MKCALENDAR', '*', (c) => {
-  return c.text('Not Implemented', 501);
-});
+// MKCALENDAR - Create new calendar
+davRoutes.on('MKCALENDAR', '*', handleMkcalendar);
 
 // MKCOL - Create collection (used by some clients for calendars)
-davRoutes.on('MKCOL', '*', (c) => {
-  return c.text('Not Implemented', 501);
-});
+davRoutes.on('MKCOL', '*', handleMkcol);
+
+// COPY - Copy events between calendars
+davRoutes.on('COPY', '*', handleCopy);
+
+// MOVE - Move events between calendars
+davRoutes.on('MOVE', '*', handleMove);
 
 export { davRoutes };

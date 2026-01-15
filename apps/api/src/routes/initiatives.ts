@@ -7,7 +7,7 @@
 import { Hono } from 'hono';
 import { eq, and } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { initiatives } from '../db/schema/index.js';
+import { initiatives, customInitiativeStatuses } from '../db/schema/index.js';
 import { requireAuth, getUserId } from '../middleware/auth.js';
 
 const initiativeRoutes = new Hono();
@@ -15,30 +15,62 @@ const initiativeRoutes = new Hono();
 // All initiative routes require authentication
 initiativeRoutes.use('*', requireAuth);
 
-const INITIATIVE_STATUS = {
-  DRAFT: 'draft',
-  ACTIVE: 'active',
-  COMPLETED: 'completed',
-  ARCHIVED: 'archived',
-} as const;
-type InitiativeStatus = (typeof INITIATIVE_STATUS)[keyof typeof INITIATIVE_STATUS];
-const DEFAULT_INITIATIVE_STATUS: InitiativeStatus = INITIATIVE_STATUS.DRAFT;
+type InitiativeStatusCategory = 'planning' | 'active' | 'completed' | 'archived';
+
+/**
+ * Look up custom status and return its details.
+ */
+async function getCustomStatus(statusId: string) {
+  return db.query.customInitiativeStatuses.findFirst({
+    where: eq(customInitiativeStatuses.id, statusId),
+  });
+}
+
+/**
+ * Get the default status for a category (first status marked as default, or first by position).
+ */
+async function getDefaultStatus(category: InitiativeStatusCategory = 'planning') {
+  // First try to find a default status for this category
+  let status = await db.query.customInitiativeStatuses.findFirst({
+    where: and(
+      eq(customInitiativeStatuses.category, category),
+      eq(customInitiativeStatuses.isDefault, true),
+    ),
+  });
+
+  // Fall back to first status in the category by position
+  status ??= await db.query.customInitiativeStatuses.findFirst({
+    where: eq(customInitiativeStatuses.category, category),
+    orderBy: (s, { asc }) => [asc(s.position)],
+  });
+
+  return status;
+}
 const ERROR_INITIATIVE_NOT_FOUND = 'Initiative not found';
 
 /**
  * List all initiatives for the authenticated user.
  * GET /api/initiatives
+ *
+ * Query params:
+ * - category: Filter by status category (planning, active, completed, archived)
+ * - statusId: Filter by specific status ID
+ * - parentId: Filter by parent initiative
  */
 initiativeRoutes.get('/', async (c) => {
   const userId = getUserId(c);
-  const status = c.req.query('status') as InitiativeStatus | undefined;
+  const category = c.req.query('category') as InitiativeStatusCategory | undefined;
+  const statusId = c.req.query('statusId');
   const parentId = c.req.query('parentId');
 
   const conditions = [eq(initiatives.ownerId, userId)];
 
-  if (status) {
-    // eslint-disable-next-line @typescript-eslint/no-deprecated
-    conditions.push(eq(initiatives.status, status));
+  if (category) {
+    conditions.push(eq(initiatives.statusCategory, category));
+  }
+
+  if (statusId) {
+    conditions.push(eq(initiatives.statusId, statusId));
   }
 
   if (parentId) {
@@ -51,6 +83,7 @@ initiativeRoutes.get('/', async (c) => {
       parent: true,
       children: true,
       projects: true,
+      customStatus: true,
     },
     orderBy: (initiatives, { desc }) => [desc(initiatives.createdAt)],
   });
@@ -76,6 +109,7 @@ initiativeRoutes.get('/:id', async (c) => {
           tasks: true,
         },
       },
+      customStatus: true,
     },
   });
 
@@ -95,18 +129,27 @@ initiativeRoutes.post('/', async (c) => {
   const body = await c.req.json<{
     name: string;
     description?: string;
-    status?: InitiativeStatus;
+    statusId?: string;
     parentId?: string;
   }>();
 
   const id = crypto.randomUUID();
   const now = new Date();
 
+  // Get status - use provided statusId or default to first planning status
+  let customStatus = body.statusId ? await getCustomStatus(body.statusId) : null;
+  customStatus ??= await getDefaultStatus('planning');
+
+  if (!customStatus) {
+    return c.json({ error: 'No initiative statuses configured' }, 400);
+  }
+
   await db.insert(initiatives).values({
     id,
     name: body.name,
     description: body.description,
-    status: body.status ?? DEFAULT_INITIATIVE_STATUS,
+    statusId: customStatus.id,
+    statusCategory: customStatus.category,
     parentId: body.parentId,
     ownerId: userId,
     createdAt: now,
@@ -117,6 +160,7 @@ initiativeRoutes.post('/', async (c) => {
     where: eq(initiatives.id, id),
     with: {
       parent: true,
+      customStatus: true,
     },
   });
 
@@ -132,8 +176,8 @@ initiativeRoutes.patch('/:id', async (c) => {
   const id = c.req.param('id');
   const body = await c.req.json<{
     name?: string;
-    description?: string;
-    status?: InitiativeStatus;
+    description?: string | null;
+    statusId?: string;
     parentId?: string | null;
   }>();
 
@@ -145,12 +189,35 @@ initiativeRoutes.patch('/:id', async (c) => {
     return c.json({ error: ERROR_INITIATIVE_NOT_FOUND }, 404);
   }
 
+  // Build update data
+  const updateData: {
+    name?: string;
+    description?: string | null;
+    statusId?: string;
+    statusCategory?: InitiativeStatusCategory;
+    parentId?: string | null;
+    updatedAt: Date;
+  } = {
+    updatedAt: new Date(),
+  };
+
+  if (body.name !== undefined) updateData.name = body.name;
+  if (body.description !== undefined) updateData.description = body.description;
+  if (body.parentId !== undefined) updateData.parentId = body.parentId;
+
+  // Handle status update
+  if (body.statusId) {
+    const customStatus = await getCustomStatus(body.statusId);
+    if (!customStatus) {
+      return c.json({ error: 'Invalid status ID' }, 400);
+    }
+    updateData.statusId = customStatus.id;
+    updateData.statusCategory = customStatus.category;
+  }
+
   await db
     .update(initiatives)
-    .set({
-      ...body,
-      updatedAt: new Date(),
-    })
+    .set(updateData)
     .where(and(eq(initiatives.id, id), eq(initiatives.ownerId, userId)));
 
   const result = await db.query.initiatives.findFirst({
@@ -158,6 +225,7 @@ initiativeRoutes.patch('/:id', async (c) => {
     with: {
       parent: true,
       children: true,
+      customStatus: true,
     },
   });
 

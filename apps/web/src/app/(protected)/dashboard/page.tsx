@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
-import { signOut, registerPasskey } from '@/lib/auth-client';
+import { signOutWithCleanup, registerPasskey } from '@/lib/auth-client';
 import { Header, PageContainer } from '@/components/layout';
 import { StatsCards, TaskSummary, EventSummary, QuickActions } from '@/components/dashboard';
 
@@ -11,8 +11,8 @@ export default function DashboardPage() {
   const { user } = useAuth();
 
   async function handleSignOut() {
-    await signOut();
-    router.push('/login');
+    await signOutWithCleanup();
+    router.push('/signin');
   }
 
   async function handleAddPasskey() {

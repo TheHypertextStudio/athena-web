@@ -417,17 +417,50 @@ export const projectsApi = {
   },
 };
 
+// ============================================================================
+// Initiative Types (extended)
+// ============================================================================
+
+export interface CreateInitiativeInput {
+  name: string;
+  description?: string;
+  status?: Initiative['status'];
+  parentId?: string;
+}
+
+export interface UpdateInitiativeInput {
+  name?: string;
+  description?: string | null;
+  status?: Initiative['status'];
+  parentId?: string | null;
+}
+
 /**
  * Initiatives API
  */
 export const initiativesApi = {
-  list: (params?: { status?: Initiative['status'] }) => {
+  list: (params?: { status?: Initiative['status']; parentId?: string }) => {
     const searchParams = new URLSearchParams();
     if (params?.status) searchParams.set('status', params.status);
+    if (params?.parentId) searchParams.set('parentId', params.parentId);
     const query = searchParams.toString();
     return request<{ data: Initiative[] }>(`/api/initiatives${query ? `?${query}` : ''}`);
   },
   get: (id: string) => request<{ data: Initiative }>(`/api/initiatives/${id}`),
+  create: (data: CreateInitiativeInput) =>
+    request<{ data: Initiative }>('/api/initiatives', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  update: (id: string, data: UpdateInitiativeInput) =>
+    request<{ data: Initiative }>(`/api/initiatives/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  delete: (id: string) =>
+    request<EmptyResponse>(`/api/initiatives/${id}`, {
+      method: 'DELETE',
+    }),
 };
 
 /**
@@ -648,13 +681,16 @@ export interface AIProviderInfo {
 // Auth/Session Types
 // ============================================================================
 
+export type SessionStatus = 'current' | 'recent' | 'inactive';
+
 export interface Session {
   id: string;
   ipAddress: string | null;
   userAgent: string | null;
   createdAt: string;
   expiresAt: string;
-  isCurrent: boolean;
+  lastActiveAt: string;
+  status: SessionStatus;
 }
 
 export interface LinkedAccount {
@@ -795,6 +831,17 @@ export const authApi = {
   revokeSession: (sessionId: string) =>
     request<EmptyResponse>(`/api/auth/sessions/${sessionId}`, { method: 'DELETE' }),
   revokeAllSessions: () => request<EmptyResponse>('/api/auth/sessions', { method: 'DELETE' }),
+  /**
+   * Revoke the current session by finding it and deleting it.
+   * This ensures the session is removed from the database on sign-out.
+   */
+  revokeCurrentSession: async () => {
+    const { sessions } = await authApi.getSessions();
+    const current = sessions.find((s) => s.status === 'current');
+    if (current) {
+      await authApi.revokeSession(current.id);
+    }
+  },
   getLinkedAccounts: () =>
     request<{ accounts: LinkedAccount[]; count: number }>('/api/auth/linked-accounts'),
   unlinkAccount: (accountId: string) =>

@@ -7,7 +7,7 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import SettingsIcon from '@mui/icons-material/Settings';
 import PersonIcon from '@mui/icons-material/Person';
 import { useAuth } from '@/hooks/use-auth';
-import { signOut } from '@/lib/auth-client';
+import { signOutWithCleanup } from '@/lib/auth-client';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -48,7 +48,7 @@ export default function ProtectedLayout({
   }, []);
 
   async function handleSignOut() {
-    await signOut();
+    await signOutWithCleanup();
     router.push('/signin');
   }
 

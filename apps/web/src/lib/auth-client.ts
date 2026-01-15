@@ -26,6 +26,30 @@ export const authClient = createAuthClient({
 export const { signIn, signUp, signOut, useSession, getSession } = authClient;
 
 /**
+ * Sign out the current user with proper session cleanup.
+ *
+ * This function ensures the session is properly deleted from the database
+ * before clearing the session cookie. Use this instead of calling signOut directly.
+ */
+export async function signOutWithCleanup(): Promise<void> {
+  // Import dynamically to avoid circular dependency
+  const { authApi } = await import('./api-client');
+
+  // First, explicitly revoke the current session from the database
+  // This ensures the session record is deleted even if Better Auth's
+  // built-in signOut doesn't properly clean it up
+  try {
+    await authApi.revokeCurrentSession();
+  } catch {
+    // If session revocation fails (e.g., already expired), continue with signOut
+    // The important thing is to clear the cookie
+  }
+
+  // Then call Better Auth's signOut to clear the session cookie
+  await signOut();
+}
+
+/**
  * Social sign-in helpers.
  * All OAuth sign-ins redirect to /home after successful authentication.
  */

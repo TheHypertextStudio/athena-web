@@ -20,7 +20,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { tasksApi, type Task } from '@/lib/api-client';
-import { signOut } from '@/lib/auth-client';
+import { signOutWithCleanup } from '@/lib/auth-client';
 
 const statusIcons = {
   pending: Circle,
@@ -54,8 +54,8 @@ export default function TaskDetailPage() {
   const [isDeleting, setIsDeleting] = useState(false);
 
   async function handleSignOut() {
-    await signOut();
-    router.push('/login');
+    await signOutWithCleanup();
+    router.push('/signin');
   }
 
   useEffect(() => {

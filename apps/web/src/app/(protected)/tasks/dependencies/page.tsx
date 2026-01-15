@@ -10,7 +10,7 @@ import { useState } from 'react';
 import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
 import { TaskDependencyFlow } from '@/components/flows';
-import { signOut } from '@/lib/auth-client';
+import { signOutWithCleanup } from '@/lib/auth-client';
 
 export default function TaskDependenciesPage() {
   const router = useRouter();
@@ -19,8 +19,8 @@ export default function TaskDependenciesPage() {
   const [includeCompleted, setIncludeCompleted] = useState(false);
 
   async function handleSignOut() {
-    await signOut();
-    router.push('/login');
+    await signOutWithCleanup();
+    router.push('/signin');
   }
 
   const handleNodeClick = (taskId: string) => {

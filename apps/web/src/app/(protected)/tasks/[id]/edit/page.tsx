@@ -9,7 +9,7 @@ import { TaskForm } from '@/components/tasks/task-form';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent } from '@/components/ui/card';
 import { tasksApi, type Task, type UpdateTaskInput } from '@/lib/api-client';
-import { signOut } from '@/lib/auth-client';
+import { signOutWithCleanup } from '@/lib/auth-client';
 
 export default function EditTaskPage() {
   const router = useRouter();
@@ -22,8 +22,8 @@ export default function EditTaskPage() {
   const [error, setError] = useState<string | null>(null);
 
   async function handleSignOut() {
-    await signOut();
-    router.push('/login');
+    await signOutWithCleanup();
+    router.push('/signin');
   }
 
   useEffect(() => {

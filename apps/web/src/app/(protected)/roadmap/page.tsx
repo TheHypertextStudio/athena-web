@@ -16,7 +16,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ProjectRoadmapFlow } from '@/components/flows';
-import { signOut } from '@/lib/auth-client';
+import { signOutWithCleanup } from '@/lib/auth-client';
 import { useQuery } from '@tanstack/react-query';
 import { initiativesApi } from '@/lib/api-client';
 
@@ -31,8 +31,8 @@ export default function RoadmapPage() {
   });
 
   async function handleSignOut() {
-    await signOut();
-    router.push('/login');
+    await signOutWithCleanup();
+    router.push('/signin');
   }
 
   const handleNodeClick = (nodeId: string, nodeType: 'initiative' | 'project') => {

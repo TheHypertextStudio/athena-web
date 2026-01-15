@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Header, PageContainer } from '@/components/layout';
 import { TaskForm } from '@/components/tasks/task-form';
 import { tasksApi, type CreateTaskInput } from '@/lib/api-client';
-import { signOut } from '@/lib/auth-client';
+import { signOutWithCleanup } from '@/lib/auth-client';
 
 export default function NewTaskPage() {
   const router = useRouter();
@@ -13,8 +13,8 @@ export default function NewTaskPage() {
   const [error, setError] = useState<string | null>(null);
 
   async function handleSignOut() {
-    await signOut();
-    router.push('/login');
+    await signOutWithCleanup();
+    router.push('/signin');
   }
 
   async function handleSubmit(data: CreateTaskInput) {

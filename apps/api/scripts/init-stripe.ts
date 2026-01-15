@@ -310,9 +310,13 @@ async function ensureBillingPortal(stripe: Stripe, result: InitResult): Promise<
     }
   }
 
+  const returnUrl = process.env.APP_URL
+    ? `${process.env.APP_URL}/settings/billing`
+    : 'http://localhost:3000/settings/billing';
+
   const config = await stripe.billingPortal.configurations.create({
     ...portalParams,
-    default_return_url: 'http://localhost:3000/settings/billing',
+    default_return_url: returnUrl,
   } as Stripe.BillingPortal.ConfigurationCreateParams);
 
   return { id: config.id, status: 'created' };

@@ -47,11 +47,23 @@ export const projectStatusEnum = pgEnum('project_status', [
   'completed',
   'cancelled',
 ]);
+/** @deprecated Use initiativeStatusCategoryEnum and customInitiativeStatuses instead */
 export const initiativeStatusEnum = pgEnum('initiative_status', [
   'draft',
   'active',
   'completed',
   'archived',
+]);
+
+/**
+ * Initiative status categories - system-defined workflow states.
+ * Custom statuses map to these categories for consistent behavior.
+ */
+export const initiativeStatusCategoryEnum = pgEnum('initiative_status_category', [
+  'planning', // Not yet started
+  'active', // In progress
+  'completed', // Done
+  'archived', // Hidden from active views
 ]);
 
 // ============================================================================
@@ -65,7 +77,17 @@ export const initiatives = pgTable('initiatives', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
   description: text('description'),
+  /** @deprecated Use statusId and statusCategory instead */
+  // eslint-disable-next-line @typescript-eslint/no-deprecated
   status: initiativeStatusEnum('status').notNull().default('draft'),
+  /** Reference to custom initiative status */
+  statusId: text('status_id').references(() => customInitiativeStatuses.id, {
+    onDelete: 'set null',
+  }),
+  /** Denormalized category for quick filtering (derived from statusId) */
+  statusCategory: initiativeStatusCategoryEnum('status_category').notNull().default('planning'),
+  /** Whether this initiative is a strategic priority (affects AI planning) */
+  isStrategicPriority: boolean('is_strategic_priority').notNull().default(false),
   parentId: text('parent_id'),
   ownerId: text('owner_id')
     .notNull()
@@ -278,6 +300,10 @@ export const initiativeRelations = relations(initiatives, ({ one, many }) => ({
   }),
   children: many(initiatives, { relationName: 'initiativeHierarchy' }),
   projects: many(projects),
+  customStatus: one(customInitiativeStatuses, {
+    fields: [initiatives.statusId],
+    references: [customInitiativeStatuses.id],
+  }),
 }));
 
 export const projectRelations = relations(projects, ({ one, many }) => ({
@@ -507,7 +533,39 @@ export const projectDependencyRelations = relations(projectDependencies, ({ one 
 // ============================================================================
 
 /**
+ * Onboarding step enum - the 3-step conversational onboarding flow.
+ *
+ * Steps:
+ * - intent: Athena asks what brings the user here
+ * - integrations: Connect calendar and task sources
+ * - agenda: AI generates personalized agenda for approval
+ */
+export const onboardingStepEnum = pgEnum('onboarding_step', ['intent', 'integrations', 'agenda']);
+
+/**
  * Onboarding progress - tracks user's onboarding state.
+ *
+ * The onboarding flow is a 3-step conversational experience:
+ * 1. Intent - Athena asks what brings the user here
+ * 2. Integrations - Connect calendar and task sources
+ * 3. Agenda - AI generates personalized agenda for approval
+ *
+ * Metadata structure:
+ * {
+ *   intent: {
+ *     selectedChips: string[],  // e.g., ['focus', 'calendars']
+ *     customText: string | null,
+ *     confirmedAt: ISO timestamp
+ *   },
+ *   conversationId: string | null,  // Reference to AI conversation
+ *   integrations: [{
+ *     provider: string,
+ *     connectedAt: ISO timestamp,
+ *     syncedEventsCount: number
+ *   }],
+ *   agendaGenerated: boolean,
+ *   agendaApprovedAt: ISO timestamp | null
+ * }
  */
 export const onboardingProgress = pgTable('onboarding_progress', {
   id: text('id').primaryKey(),
@@ -515,14 +573,37 @@ export const onboardingProgress = pgTable('onboarding_progress', {
     .notNull()
     .unique()
     .references(() => users.id, { onDelete: 'cascade' }),
-  currentStep: text('current_step').notNull().default('welcome'),
-  completedSteps: text('completed_steps').array().notNull().default([]),
+  /** Current step in the onboarding flow */
+  currentStep: onboardingStepEnum('current_step').notNull().default('intent'),
+  /** Flexible storage for step data - see type definition above */
+  metadata: jsonb('metadata').$type<OnboardingMetadata>(),
+  /** When user skipped onboarding (null if not skipped) */
   skippedAt: timestamp('skipped_at'),
+  /** When user completed onboarding (null if not completed) */
   completedAt: timestamp('completed_at'),
-  metadata: jsonb('metadata'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
+
+/**
+ * Type definition for onboarding metadata.
+ * This provides type safety for the JSONB column.
+ */
+export interface OnboardingMetadata {
+  intent?: {
+    selectedChips: string[];
+    customText: string | null;
+    confirmedAt: string | null;
+  };
+  conversationId?: string | null;
+  integrations?: {
+    provider: string;
+    connectedAt: string;
+    syncedEventsCount?: number;
+  }[];
+  agendaGenerated?: boolean;
+  agendaApprovedAt?: string | null;
+}
 
 export const onboardingProgressRelations = relations(onboardingProgress, ({ one }) => ({
   user: one(users, {
@@ -696,6 +777,44 @@ export const customTaskStatusRelations = relations(customTaskStatuses, ({ one, m
   }),
   tasks: many(tasks),
 }));
+
+/**
+ * Custom initiative statuses - user-defined workflow states.
+ * Each status maps to a system-defined category (planning, active, completed, archived).
+ */
+export const customInitiativeStatuses = pgTable('custom_initiative_statuses', {
+  id: text('id').primaryKey(),
+  workspaceId: text('workspace_id')
+    .notNull()
+    .references(() => workspaces.id, { onDelete: 'cascade' }),
+  /** Display name for the status */
+  name: text('name').notNull(),
+  /** Optional description of what this status means */
+  description: text('description'),
+  /** System category this status maps to */
+  category: initiativeStatusCategoryEnum('category').notNull(),
+  /** Hex color code for UI display */
+  color: text('color').notNull(),
+  /** Optional icon identifier */
+  icon: text('icon'),
+  /** Display order within the category (0 = first) */
+  position: integer('position').notNull().default(0),
+  /** Whether this is the default status for its category when creating initiatives */
+  isDefault: boolean('is_default').notNull().default(false),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const customInitiativeStatusRelations = relations(
+  customInitiativeStatuses,
+  ({ one, many }) => ({
+    workspace: one(workspaces, {
+      fields: [customInitiativeStatuses.workspaceId],
+      references: [workspaces.id],
+    }),
+    initiatives: many(initiatives),
+  }),
+);
 
 // ============================================================================
 // Account Linking (Third-Party Integrations)

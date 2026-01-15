@@ -283,4 +283,51 @@ aiRoutes.get('/health', async (c) => {
   return c.json({ data: health });
 });
 
+/**
+ * Generate field suggestions for inline assistance.
+ * POST /api/ai/completions
+ *
+ * This is a general-purpose endpoint for AI-native form UX.
+ * Returns 1-3 suggestions based on context.
+ */
+aiRoutes.post('/completions', async (c) => {
+  const body = await c.req.json<{
+    type?: string;
+    context?: {
+      objectType?: 'initiative' | 'task' | 'project';
+      field?: 'title' | 'description';
+      values?: {
+        title?: string;
+        description?: string;
+      };
+    };
+  }>();
+
+  if (body.type !== 'field_suggestion' || !body.context) {
+    return c.json({ error: 'Invalid completion type' }, 400);
+  }
+
+  const { objectType, field, values = {} } = body.context;
+
+  if (!objectType || !field) {
+    return c.json({ error: 'objectType and field are required' }, 400);
+  }
+
+  const validObjectTypes = ['initiative', 'task', 'project'];
+  const validFields = ['title', 'description'];
+
+  if (!validObjectTypes.includes(objectType)) {
+    return c.json({ error: 'Invalid objectType' }, 400);
+  }
+
+  if (!validFields.includes(field)) {
+    return c.json({ error: 'Invalid field' }, 400);
+  }
+
+  const aiService = getAIService();
+  const completions = await aiService.generateFieldSuggestions({ objectType, field, values });
+
+  return c.json({ completions });
+});
+
 export { aiRoutes };

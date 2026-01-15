@@ -54,6 +54,7 @@ import { taskActions } from './tasks';
 import { timeActions } from './time';
 import { undoActions } from './undo';
 import { assistantActions } from './assistant';
+import { initiativeActions } from './initiatives';
 
 /**
  * All actions to register.
@@ -67,6 +68,7 @@ const allActions = [
   ...timeActions,
   ...undoActions,
   ...assistantActions,
+  ...initiativeActions,
 ];
 
 /**
@@ -111,3 +113,4 @@ export { taskActions, createTaskAction } from './tasks';
 export { timeActions } from './time';
 export { undoActions } from './undo';
 export { assistantActions, talkToAthenaAction } from './assistant';
+export { initiativeActions, goToInitiativesAction, createInitiativeAction } from './initiatives';

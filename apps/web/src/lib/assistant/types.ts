@@ -390,6 +390,10 @@ export const TOOL_LABELS: Record<string, string> = {
   stop_timer: 'Stopping timer',
   get_timer_status: 'Checking timer',
   get_productivity_summary: 'Getting productivity stats',
+  list_initiatives: 'Fetching initiatives',
+  create_initiative: 'Creating initiative',
+  update_initiative: 'Updating initiative',
+  get_initiative: 'Getting initiative details',
 };
 
 /**
@@ -409,4 +413,8 @@ export const TOOL_ICONS: Record<string, string> = {
   stop_timer: 'Square',
   get_timer_status: 'Timer',
   get_productivity_summary: 'BarChart3',
+  list_initiatives: 'Target',
+  create_initiative: 'Target',
+  update_initiative: 'Target',
+  get_initiative: 'Target',
 };

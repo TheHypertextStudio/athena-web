@@ -590,6 +590,54 @@ export class AIService {
   }
 
   /**
+   * Generate field suggestions for an object type.
+   * Used for inline AI-native form assistance.
+   */
+  async generateFieldSuggestions(params: {
+    objectType: 'initiative' | 'task' | 'project';
+    field: 'title' | 'description';
+    values: {
+      title?: string;
+      description?: string;
+    };
+  }): Promise<string[]> {
+    const provider = this.getProvider();
+    const { objectType, field, values } = params;
+
+    // Build context-aware prompt
+    let prompt: string;
+
+    if (field === 'title' && values.description) {
+      prompt = `Generate 1-3 concise ${objectType} title suggestions based on this description. Return ONLY the titles, one per line, no numbering or bullets.\n\nDescription: "${values.description}"\n\nSuggested titles:`;
+    } else if (field === 'description' && values.title) {
+      prompt = `Generate 1-2 brief ${objectType} description suggestions based on this title. Return ONLY the descriptions, one per line, no numbering or bullets.\n\nTitle: "${values.title}"\n\nSuggested descriptions:`;
+    } else {
+      // Not enough context for suggestions
+      return [];
+    }
+
+    try {
+      const response = await provider.chat({
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.8,
+        maxTokens: 150,
+      });
+
+      // Parse the response into individual suggestions
+      const suggestions = response.content
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0 && line.length < 200)
+        .slice(0, 3);
+
+      return suggestions;
+    } catch {
+      // Gracefully degrade - no suggestions is fine
+      return [];
+    }
+  }
+
+  /**
    * Health check for configured providers.
    */
   async healthCheck(): Promise<Record<AIProvider, boolean>> {

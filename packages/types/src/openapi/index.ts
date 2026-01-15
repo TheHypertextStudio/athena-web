@@ -12,6 +12,7 @@
 export * from './common.js';
 export * from './tasks.js';
 export * from './task-statuses.js';
+export * from './initiative-statuses.js';
 export * from './projects.js';
 export * from './events.js';
 export * from './initiatives.js';

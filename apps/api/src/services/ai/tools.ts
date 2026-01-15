@@ -9,7 +9,7 @@
 
 import type { ToolDefinition, ToolCall, ToolResult } from './types.js';
 import { db } from '../../db/index.js';
-import { tasks, projects, events, timeEntries } from '../../db/schema/index.js';
+import { tasks, projects, events, timeEntries, initiatives } from '../../db/schema/index.js';
 import { eq, and, or, gte, lte, like, desc, asc, isNull } from 'drizzle-orm';
 import { notDeleted } from '../../lib/soft-delete.js';
 import {
@@ -288,6 +288,105 @@ export const ATHENA_TOOLS: ToolDefinition[] = [
       },
     },
   },
+  {
+    name: 'list_initiatives',
+    description:
+      'List strategic initiatives for the current user, optionally filtered by status category.',
+    parameters: {
+      type: 'object',
+      properties: {
+        statusCategory: {
+          type: 'string',
+          description: 'Filter by status category',
+          enum: ['planning', 'active', 'completed', 'archived'],
+        },
+        strategicOnly: {
+          type: 'string',
+          description: 'Only show strategic priorities (true/false)',
+        },
+        limit: {
+          type: 'string',
+          description: 'Maximum number of initiatives to return (default: 20)',
+        },
+      },
+    },
+  },
+  {
+    name: 'create_initiative',
+    description: 'Create a new strategic initiative.',
+    parameters: {
+      type: 'object',
+      properties: {
+        name: {
+          type: 'string',
+          description: 'Initiative name (required)',
+        },
+        description: {
+          type: 'string',
+          description: 'Initiative description',
+        },
+        statusCategory: {
+          type: 'string',
+          description: 'Initial status category (defaults to planning)',
+          enum: ['planning', 'active'],
+        },
+        isStrategicPriority: {
+          type: 'string',
+          description: 'Whether this is a strategic priority (true/false)',
+        },
+        parentId: {
+          type: 'string',
+          description: 'Parent initiative ID for nested initiatives',
+        },
+      },
+      required: ['name'],
+    },
+  },
+  {
+    name: 'update_initiative',
+    description: 'Update an existing initiative.',
+    parameters: {
+      type: 'object',
+      properties: {
+        initiativeId: {
+          type: 'string',
+          description: 'ID of the initiative to update (required)',
+        },
+        name: {
+          type: 'string',
+          description: 'New initiative name',
+        },
+        description: {
+          type: 'string',
+          description: 'New initiative description',
+        },
+        statusCategory: {
+          type: 'string',
+          description: 'New status category',
+          enum: ['planning', 'active', 'completed', 'archived'],
+        },
+        isStrategicPriority: {
+          type: 'string',
+          description: 'Whether this is a strategic priority (true/false)',
+        },
+      },
+      required: ['initiativeId'],
+    },
+  },
+  {
+    name: 'get_initiative',
+    description: 'Get details of a specific initiative including linked projects.',
+    parameters: {
+      type: 'object',
+      properties: {
+        initiativeId: {
+          type: 'string',
+          description: 'ID of the initiative (required)',
+        },
+      },
+      required: ['initiativeId'],
+    },
+  },
 ];
 
 /**
@@ -351,6 +450,18 @@ async function executeToolInternal(toolCall: ToolCall, userId: string): Promise<
 
     case 'get_productivity_summary':
       return getProductivitySummary(userId, args);
+
+    case 'list_initiatives':
+      return listInitiatives(userId, args);
+
+    case 'create_initiative':
+      return createInitiative(userId, args);
+
+    case 'update_initiative':
+      return updateInitiative(userId, args);
+
+    case 'get_initiative':
+      return getInitiative(userId, args);
 
     default:
       throw new Error(`Unknown tool: ${toolCall.name}`);
@@ -851,4 +962,191 @@ function formatDuration(minutes: number): string {
     return `${String(hours)}h ${String(mins)}m`;
   }
   return `${String(mins)}m`;
+}
+
+// Initiative tool implementations
+
+async function listInitiatives(userId: string, args: Record<string, unknown>): Promise<unknown> {
+  const conditions = [eq(initiatives.ownerId, userId), notDeleted(initiatives.deletedAt)];
+
+  const statusCategory = getString(args, 'statusCategory') as
+    | 'planning'
+    | 'active'
+    | 'completed'
+    | 'archived'
+    | undefined;
+  if (statusCategory) {
+    conditions.push(eq(initiatives.statusCategory, statusCategory));
+  }
+
+  const strategicOnly = getString(args, 'strategicOnly');
+  if (strategicOnly === 'true') {
+    conditions.push(eq(initiatives.isStrategicPriority, true));
+  }
+
+  const limit = getNumber(args, 'limit', 20);
+
+  const result = await db.query.initiatives.findMany({
+    where: and(...conditions),
+    with: {
+      projects: {
+        columns: { id: true, name: true, status: true },
+        limit: 5,
+      },
+    },
+    orderBy: [desc(initiatives.isStrategicPriority), desc(initiatives.updatedAt)],
+    limit,
+  });
+
+  return {
+    initiatives: result.map((i) => ({
+      id: i.id,
+      name: i.name,
+      description: i.description,
+      statusCategory: i.statusCategory,
+      isStrategicPriority: i.isStrategicPriority,
+      projectCount: i.projects.length,
+      projects: i.projects.map((p) => ({ id: p.id, name: p.name, status: p.status })),
+    })),
+    count: result.length,
+  };
+}
+
+async function createInitiative(userId: string, args: Record<string, unknown>): Promise<unknown> {
+  const id = crypto.randomUUID();
+  const now = new Date();
+
+  const name = getString(args, 'name') ?? 'Untitled Initiative';
+  const description = getString(args, 'description');
+  const statusCategoryStr = getString(args, 'statusCategory');
+  const statusCategory: 'planning' | 'active' =
+    statusCategoryStr === 'planning' || statusCategoryStr === 'active'
+      ? statusCategoryStr
+      : 'planning';
+  const isStrategicPriorityStr = getString(args, 'isStrategicPriority');
+  const isStrategicPriority = isStrategicPriorityStr === 'true';
+  const parentId = getString(args, 'parentId');
+
+  // Map statusCategory to legacy status for backward compatibility
+  const status = statusCategory === 'active' ? 'active' : 'draft';
+
+  await db.insert(initiatives).values({
+    id,
+    name,
+    description,
+    status,
+    statusCategory,
+    isStrategicPriority,
+    parentId,
+    ownerId: userId,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  return {
+    success: true,
+    initiativeId: id,
+    message: `Initiative "${name}" created successfully.`,
+  };
+}
+
+async function updateInitiative(userId: string, args: Record<string, unknown>): Promise<unknown> {
+  const initiativeId = getString(args, 'initiativeId');
+  if (!initiativeId) {
+    throw new Error('initiativeId is required');
+  }
+
+  const existing = await db.query.initiatives.findFirst({
+    where: and(eq(initiatives.id, initiativeId), eq(initiatives.ownerId, userId)),
+  });
+
+  if (!existing) {
+    throw new Error('Initiative not found or you do not have permission to update it.');
+  }
+
+  const updates: Record<string, unknown> = { updatedAt: new Date() };
+  const name = getString(args, 'name');
+  const description = getString(args, 'description');
+  const statusCategory = getString(args, 'statusCategory') as
+    | 'planning'
+    | 'active'
+    | 'completed'
+    | 'archived'
+    | undefined;
+  const isStrategicPriorityStr = getString(args, 'isStrategicPriority');
+
+  if (name !== undefined) updates.name = name;
+  if (description !== undefined) updates.description = description;
+  if (statusCategory !== undefined) {
+    updates.statusCategory = statusCategory;
+    // Update legacy status field for backward compatibility
+    const legacyStatusMap: Record<string, string> = {
+      planning: 'draft',
+      active: 'active',
+      completed: 'completed',
+      archived: 'archived',
+    };
+    updates.status = legacyStatusMap[statusCategory] ?? 'draft';
+  }
+  if (isStrategicPriorityStr !== undefined) {
+    updates.isStrategicPriority = isStrategicPriorityStr === 'true';
+  }
+
+  await db.update(initiatives).set(updates).where(eq(initiatives.id, initiativeId));
+
+  return { success: true, message: `Initiative "${existing.name}" updated successfully.` };
+}
+
+async function getInitiative(userId: string, args: Record<string, unknown>): Promise<unknown> {
+  const initiativeId = getString(args, 'initiativeId');
+  if (!initiativeId) {
+    throw new Error('initiativeId is required');
+  }
+
+  const initiative = await db.query.initiatives.findFirst({
+    where: and(
+      eq(initiatives.id, initiativeId),
+      eq(initiatives.ownerId, userId),
+      notDeleted(initiatives.deletedAt),
+    ),
+    with: {
+      projects: {
+        columns: { id: true, name: true, status: true, description: true },
+        where: notDeleted(projects.deletedAt),
+      },
+      parent: {
+        columns: { id: true, name: true },
+      },
+      children: {
+        columns: { id: true, name: true, statusCategory: true },
+        where: notDeleted(initiatives.deletedAt),
+      },
+    },
+  });
+
+  if (!initiative) {
+    throw new Error('Initiative not found.');
+  }
+
+  return {
+    id: initiative.id,
+    name: initiative.name,
+    description: initiative.description,
+    statusCategory: initiative.statusCategory,
+    isStrategicPriority: initiative.isStrategicPriority,
+    parent: initiative.parent ? { id: initiative.parent.id, name: initiative.parent.name } : null,
+    children: initiative.children.map((c) => ({
+      id: c.id,
+      name: c.name,
+      statusCategory: c.statusCategory,
+    })),
+    projects: initiative.projects.map((p) => ({
+      id: p.id,
+      name: p.name,
+      status: p.status,
+      description: p.description,
+    })),
+    createdAt: initiative.createdAt.toISOString(),
+    updatedAt: initiative.updatedAt.toISOString(),
+  };
 }

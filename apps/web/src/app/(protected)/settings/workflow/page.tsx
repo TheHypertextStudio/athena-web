@@ -1,5 +1,5 @@
 import { Suspense } from 'react';
-import { TaskStatusesSection } from '@/components/settings/workflow';
+import { TaskStatusesSection, InitiativeStatusesSection } from '@/components/settings/workflow';
 
 function SectionSkeleton() {
   return (
@@ -22,6 +22,9 @@ export default function WorkflowSettingsPage() {
     <div className="space-y-6">
       <Suspense fallback={<SectionSkeleton />}>
         <TaskStatusesSection />
+      </Suspense>
+      <Suspense fallback={<SectionSkeleton />}>
+        <InitiativeStatusesSection />
       </Suspense>
     </div>
   );

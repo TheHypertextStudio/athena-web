@@ -164,6 +164,65 @@ const EXTRACTORS: Record<string, Extractor> = {
   },
 
   // ==========================================================================
+  // Initiative Tools
+  // ==========================================================================
+
+  create_initiative: (result) => {
+    if (result.success && result.initiativeId) {
+      return [
+        {
+          type: 'initiative' as ObjectType,
+          id: result.initiativeId as string,
+          action: 'created',
+          data: result,
+        },
+      ];
+    }
+    return [];
+  },
+
+  update_initiative: (result) => {
+    if (result.success && result.initiativeId) {
+      return [
+        {
+          type: 'initiative' as ObjectType,
+          id: result.initiativeId as string,
+          action: 'updated',
+          data: result,
+        },
+      ];
+    }
+    return [];
+  },
+
+  list_initiatives: (result) => {
+    if (!Array.isArray(result.initiatives)) {
+      return [];
+    }
+
+    return (result.initiatives as { id: string; [key: string]: unknown }[]).map((initiative) => ({
+      type: 'initiative' as ObjectType,
+      id: initiative.id,
+      action: 'returned' as const,
+      data: initiative,
+    }));
+  },
+
+  get_initiative: (result) => {
+    if (result.id) {
+      return [
+        {
+          type: 'initiative' as ObjectType,
+          id: result.id as string,
+          action: 'returned',
+          data: result,
+        },
+      ];
+    }
+    return [];
+  },
+
+  // ==========================================================================
   // Agenda Tool (combines tasks and events)
   // ==========================================================================
 
@@ -229,6 +288,10 @@ export function toolReturnsObjects(toolName: string): boolean {
     'list_events',
     'list_projects',
     'get_agenda',
+    'create_initiative',
+    'update_initiative',
+    'list_initiatives',
+    'get_initiative',
   ];
 
   return objectReturningTools.includes(toolName);
@@ -250,6 +313,10 @@ export function getToolObjectType(toolName: string): ObjectType | null {
     create_event: 'event',
     list_events: 'event',
     list_projects: 'project',
+    create_initiative: 'initiative',
+    update_initiative: 'initiative',
+    list_initiatives: 'initiative',
+    get_initiative: 'initiative',
   };
 
   return toolTypes[toolName] ?? null;

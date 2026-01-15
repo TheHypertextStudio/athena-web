@@ -128,6 +128,55 @@ export interface ReorderTaskStatusesInput {
 }
 
 // ============================================================================
+// Initiative Status Types
+// ============================================================================
+
+export type InitiativeStatusCategory = 'planning' | 'active' | 'completed' | 'archived';
+
+export interface CustomInitiativeStatus {
+  id: string;
+  workspaceId: string;
+  name: string;
+  description: string | null;
+  category: InitiativeStatusCategory;
+  color: string;
+  icon: string | null;
+  position: number;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GroupedInitiativeStatuses {
+  planning: CustomInitiativeStatus[];
+  active: CustomInitiativeStatus[];
+  completed: CustomInitiativeStatus[];
+  archived: CustomInitiativeStatus[];
+}
+
+export interface CreateInitiativeStatusInput {
+  name: string;
+  description?: string;
+  category: InitiativeStatusCategory;
+  color: string;
+  icon?: string;
+  workspaceId?: string;
+}
+
+export interface UpdateInitiativeStatusInput {
+  name?: string;
+  description?: string | null;
+  color?: string;
+  icon?: string | null;
+}
+
+export interface ReorderInitiativeStatusesInput {
+  category: InitiativeStatusCategory;
+  statusIds: string[];
+  workspaceId?: string;
+}
+
+// ============================================================================
 // Task Types
 // ============================================================================
 
@@ -349,6 +398,63 @@ export const taskStatusKeys = {
 };
 
 /**
+ * Initiative Statuses API - CRUD operations for custom initiative workflow statuses.
+ */
+export const initiativeStatusesApi = {
+  list: (params?: { workspaceId?: string; category?: InitiativeStatusCategory }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.workspaceId) searchParams.set('workspaceId', params.workspaceId);
+    if (params?.category) searchParams.set('category', params.category);
+    const query = searchParams.toString();
+    return request<{ data: CustomInitiativeStatus[] }>(
+      `/api/initiative-statuses${query ? `?${query}` : ''}`,
+    );
+  },
+  listGrouped: (workspaceId?: string) => {
+    const query = workspaceId ? `?workspaceId=${workspaceId}` : '';
+    return request<{ data: GroupedInitiativeStatuses }>(`/api/initiative-statuses/grouped${query}`);
+  },
+  get: (id: string) => request<{ data: CustomInitiativeStatus }>(`/api/initiative-statuses/${id}`),
+  create: (data: CreateInitiativeStatusInput) =>
+    request<{ data: CustomInitiativeStatus }>('/api/initiative-statuses', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  update: (id: string, data: UpdateInitiativeStatusInput) =>
+    request<{ data: CustomInitiativeStatus }>(`/api/initiative-statuses/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  delete: (id: string) =>
+    request<EmptyResponse>(`/api/initiative-statuses/${id}`, {
+      method: 'DELETE',
+    }),
+  reorder: (data: ReorderInitiativeStatusesInput) =>
+    request<{ data: CustomInitiativeStatus[] }>('/api/initiative-statuses/reorder', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  setDefault: (id: string, workspaceId?: string) =>
+    request<{ data: CustomInitiativeStatus }>(`/api/initiative-statuses/${id}/set-default`, {
+      method: 'POST',
+      body: JSON.stringify({ workspaceId }),
+    }),
+};
+
+/**
+ * Query keys for initiative statuses.
+ */
+export const initiativeStatusKeys = {
+  all: ['initiative-statuses'] as const,
+  lists: () => [...initiativeStatusKeys.all, 'list'] as const,
+  list: (params?: { workspaceId?: string; category?: InitiativeStatusCategory }) =>
+    [...initiativeStatusKeys.lists(), params] as const,
+  grouped: (workspaceId?: string) => [...initiativeStatusKeys.all, 'grouped', workspaceId] as const,
+  details: () => [...initiativeStatusKeys.all, 'detail'] as const,
+  detail: (id: string) => [...initiativeStatusKeys.details(), id] as const,
+};
+
+/**
  * Tasks API
  */
 export const tasksApi = {
@@ -438,6 +544,17 @@ export interface UpdateInitiativeInput {
 /**
  * Initiatives API
  */
+export interface InitiativeMetricsResponse {
+  totalProjects: number;
+  totalTasks: number;
+  completedTasks: number;
+  inProgressTasks: number;
+  weeklyCompletions: number[];
+  estimatedMinutes: number;
+  loggedMinutes: number;
+  velocity: number;
+}
+
 export const initiativesApi = {
   list: (params?: { status?: Initiative['status']; parentId?: string }) => {
     const searchParams = new URLSearchParams();
@@ -447,6 +564,8 @@ export const initiativesApi = {
     return request<{ data: Initiative[] }>(`/api/initiatives${query ? `?${query}` : ''}`);
   },
   get: (id: string) => request<{ data: Initiative }>(`/api/initiatives/${id}`),
+  getMetrics: (id: string) =>
+    request<{ data: InitiativeMetricsResponse }>(`/api/initiatives/${id}/metrics`),
   create: (data: CreateInitiativeInput) =>
     request<{ data: Initiative }>('/api/initiatives', {
       method: 'POST',
@@ -812,6 +931,22 @@ export const notificationsApi = {
 // AI API
 // ============================================================================
 
+export interface AICompletionsRequest {
+  type: 'field_suggestion';
+  context: {
+    objectType: 'initiative' | 'task' | 'project';
+    field: 'title' | 'description';
+    values: {
+      title?: string;
+      description?: string;
+    };
+  };
+}
+
+export interface AICompletionsResponse {
+  completions: string[];
+}
+
 export const aiApi = {
   getPreferences: () => request<{ data: AIPreferences }>('/api/ai/preferences'),
   updatePreferences: (data: Partial<AIPreferences>) =>
@@ -820,6 +955,11 @@ export const aiApi = {
       body: JSON.stringify(data),
     }),
   getProviders: () => request<{ data: AIProviderInfo }>('/api/ai/providers'),
+  getCompletions: (data: AICompletionsRequest) =>
+    request<AICompletionsResponse>('/api/ai/completions', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 };
 
 // ============================================================================
@@ -1205,4 +1345,201 @@ export const appPasswordsApi = {
 export const appPasswordKeys = {
   all: ['app-passwords'] as const,
   list: () => [...appPasswordKeys.all, 'list'] as const,
+};
+
+// ============================================================================
+// Onboarding Types
+// ============================================================================
+
+export type OnboardingStep = 'intent' | 'integrations' | 'agenda';
+
+export interface IntentChip {
+  id: string;
+  label: string;
+  icon: string;
+}
+
+export interface OnboardingIntent {
+  selectedChips: string[];
+  customText: string | null;
+  confirmedAt: string | null;
+}
+
+export interface OnboardingIntegration {
+  provider: string;
+  connectedAt: string;
+  syncedEventsCount?: number;
+}
+
+export interface OnboardingMetadata {
+  intent?: OnboardingIntent;
+  conversationId?: string | null;
+  integrations?: OnboardingIntegration[];
+  agendaGenerated?: boolean;
+  agendaApprovedAt?: string | null;
+}
+
+export interface OnboardingStatus {
+  currentStep: OnboardingStep;
+  metadata: OnboardingMetadata;
+  skippedAt: string | null;
+  completedAt: string | null;
+  user: {
+    name: string;
+    email: string;
+  } | null;
+}
+
+export interface OnboardingTimeBlock {
+  type: 'time_block';
+  source: 'ai';
+  title: string;
+  description?: string;
+  startTime: string;
+  endTime: string;
+  color?: string;
+}
+
+// ============================================================================
+// Onboarding API
+// ============================================================================
+
+/**
+ * Onboarding API for the 3-step conversational onboarding flow.
+ */
+export const onboardingApi = {
+  /**
+   * Get onboarding status for the current user.
+   */
+  getStatus: () => request<OnboardingStatus>('/api/onboarding'),
+
+  /**
+   * Get available intent chips.
+   */
+  getIntentChips: () => request<{ chips: IntentChip[] }>('/api/onboarding/intent-chips'),
+
+  /**
+   * Update current onboarding step.
+   */
+  updateStep: (step: OnboardingStep, metadata?: Partial<OnboardingMetadata>) =>
+    request<{ currentStep: OnboardingStep; metadata: OnboardingMetadata }>('/api/onboarding/step', {
+      method: 'PATCH',
+      body: JSON.stringify({ step, metadata }),
+    }),
+
+  /**
+   * Complete onboarding.
+   */
+  complete: () =>
+    request<{ completedAt: string; redirectTo: string }>('/api/onboarding/complete', {
+      method: 'POST',
+    }),
+
+  /**
+   * Skip onboarding.
+   */
+  skip: () =>
+    request<{ skippedAt: string; redirectTo: string }>('/api/onboarding/skip', {
+      method: 'POST',
+    }),
+
+  /**
+   * Reset onboarding (for testing).
+   */
+  reset: () => request<EmptyResponse>('/api/onboarding', { method: 'DELETE' }),
+
+  /**
+   * Generate personalized agenda.
+   * Returns an EventSource for streaming time blocks.
+   */
+  generateAgendaStream: (date: string, intent?: OnboardingIntent) => {
+    const url = new URL(`${API_BASE_URL}/api/onboarding/generate-agenda`);
+    return fetch(url, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date, intent }),
+    });
+  },
+
+  // ============================================================================
+  // AI Conversation Endpoints
+  // ============================================================================
+
+  /**
+   * Get conversation messages for onboarding.
+   */
+  getMessages: () =>
+    request<{ messages: { role: string; content: string }[] }>('/api/onboarding/messages'),
+
+  /**
+   * Get initial greeting from Athena.
+   * Returns a streaming response.
+   */
+  getGreetingStream: () => {
+    return fetch(`${API_BASE_URL}/api/onboarding/greeting`, {
+      credentials: 'include',
+      headers: { Accept: 'text/event-stream' },
+    });
+  },
+
+  /**
+   * Send a message to Athena during onboarding.
+   * Returns a streaming response with content and tool calls.
+   */
+  sendMessage: (message: string) => {
+    return fetch(`${API_BASE_URL}/api/onboarding/chat`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message }),
+    });
+  },
+
+  // ============================================================================
+  // Calendar Integration Endpoints
+  // ============================================================================
+
+  /**
+   * Get OAuth URL for a calendar provider.
+   */
+  getCalendarOAuthUrl: (provider: 'google_calendar' | 'outlook_calendar' | 'caldav') =>
+    request<{ authUrl: string }>(`/api/onboarding/calendar/oauth/${provider}`),
+
+  /**
+   * Get all calendar connections for the user.
+   */
+  getCalendarConnections: () =>
+    request<{
+      connections: {
+        id: string;
+        provider: string;
+        email: string | null;
+        status: string;
+        lastSyncAt: string | null;
+        error: string | null;
+      }[];
+    }>('/api/onboarding/calendar/connections'),
+
+  /**
+   * Trigger sync for a calendar connection.
+   */
+  triggerCalendarSync: (connectionId: string) =>
+    request<{ success: boolean; eventsCount: number }>(
+      `/api/onboarding/calendar/sync/${connectionId}`,
+      {
+        method: 'POST',
+      },
+    ),
+};
+
+/**
+ * Query keys for onboarding.
+ */
+export const onboardingKeys = {
+  all: ['onboarding'] as const,
+  status: () => [...onboardingKeys.all, 'status'] as const,
+  intentChips: () => [...onboardingKeys.all, 'intent-chips'] as const,
+  messages: () => [...onboardingKeys.all, 'messages'] as const,
+  calendarConnections: () => [...onboardingKeys.all, 'calendar-connections'] as const,
 };

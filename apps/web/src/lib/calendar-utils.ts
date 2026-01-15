@@ -12,11 +12,42 @@ import type { Event, TimeBlock, CreateEventInput, CreateTimeBlockInput } from '@
 // Constants
 // =============================================================================
 
-export const MIN_HOUR_HEIGHT = 32; // Minimum readable height
-export const BASE_HOUR_HEIGHT = 60; // Base pixels per hour (shows ~10-12 hours in view)
+/**
+ * Minimum height in pixels for one hour row.
+ * Below this, text becomes unreadable.
+ */
+export const MIN_HOUR_HEIGHT = 32;
+
+/**
+ * Base height in pixels per hour at 1x zoom.
+ * This value shows approximately 10-12 hours in a typical viewport.
+ */
+export const BASE_HOUR_HEIGHT = 60;
+
+/**
+ * Maximum zoom multiplier for the calendar view.
+ * At max zoom, hour rows are 3x taller than base height.
+ */
 export const MAX_ZOOM = 3;
+
+/**
+ * Minimum zoom multiplier for the calendar view.
+ * At min zoom, hour rows are at base height.
+ */
 export const MIN_ZOOM = 1;
-export const MIN_SLOT_MINUTES = 5; // 5-minute granularity
+
+/**
+ * Time granularity in minutes for fine adjustments (drag and resize).
+ * Users can move or resize events in 5-minute increments.
+ */
+export const MIN_SLOT_MINUTES = 5;
+
+/**
+ * Time granularity in minutes for initial time selection.
+ * When clicking to create a new event, snaps to nearest 15-minute mark
+ * (0, 15, 30, 45) for easier visual targeting.
+ */
+export const SELECTION_SLOT_MINUTES = 15;
 
 // =============================================================================
 // Time/Position Conversions
@@ -24,11 +55,17 @@ export const MIN_SLOT_MINUTES = 5; // 5-minute granularity
 
 /**
  * Converts a Y coordinate to a Date, snapping to the configured grid.
+ * Uses 15-minute intervals for initial selection (easier to hit visually).
+ * Always floors to the earlier interval so clicking on a line gives that line's time.
  */
 export function getTimeFromY(y: number, date: Date, startHour: number, hourHeight: number): Date {
   const hours = startHour + y / hourHeight;
   const wholeHours = Math.floor(hours);
-  const minutes = Math.round(((hours - wholeHours) * 60) / MIN_SLOT_MINUTES) * MIN_SLOT_MINUTES;
+  const fractionalHours = hours - wholeHours;
+  const rawMinutes = fractionalHours * 60;
+
+  // Floor to earlier 15-minute interval - clicking on/near a line gives that line's time
+  const minutes = Math.floor(rawMinutes / SELECTION_SLOT_MINUTES) * SELECTION_SLOT_MINUTES;
 
   const result = new Date(date);
   result.setHours(wholeHours, minutes, 0, 0);
@@ -37,9 +74,40 @@ export function getTimeFromY(y: number, date: Date, startHour: number, hourHeigh
 
 /**
  * Converts a Date to a Y coordinate relative to the calendar grid.
+ * @param time - The time to convert
+ * @param startHour - The hour at which the calendar grid starts
+ * @param hourHeight - Pixels per hour
+ * @param referenceDate - Optional date to determine if time is on next day (midnight = 24)
  */
-export function getYFromTime(time: Date, startHour: number, hourHeight: number): number {
-  const hours = time.getHours() + time.getMinutes() / 60;
+export function getYFromTime(
+  time: Date,
+  startHour: number,
+  hourHeight: number,
+  referenceDate?: Date,
+): number {
+  let hours = time.getHours() + time.getMinutes() / 60;
+
+  // If we have a reference date and the time is on the next day at midnight,
+  // treat it as hour 24 (end of day) for positioning purposes
+  if (referenceDate) {
+    const refDay = referenceDate.getDate();
+    const refMonth = referenceDate.getMonth();
+    const refYear = referenceDate.getFullYear();
+    const timeDay = time.getDate();
+    const timeMonth = time.getMonth();
+    const timeYear = time.getFullYear();
+
+    // Check if time is on the next day
+    const isNextDay =
+      timeYear > refYear ||
+      (timeYear === refYear && timeMonth > refMonth) ||
+      (timeYear === refYear && timeMonth === refMonth && timeDay > refDay);
+
+    if (isNextDay && time.getHours() === 0 && time.getMinutes() === 0) {
+      hours = 24; // Treat midnight of next day as hour 24
+    }
+  }
+
   return (hours - startHour) * hourHeight;
 }
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, type RefObject, type MouseEvent } from 'react';
-import { getTimeFromY, MIN_SLOT_MINUTES } from '@/lib/calendar-utils';
+import { getTimeFromY, getYFromTime, MIN_SLOT_MINUTES } from '@/lib/calendar-utils';
 
 export interface TimeSelection {
   startY: number;
@@ -61,10 +61,12 @@ export function useTimeSelection({
       const scrollTop = scrollRef.current?.scrollTop ?? 0;
       const y = e.clientY - scrollRect.top + scrollTop;
       const time = getTimeFromY(y, date, startHour, hourHeight);
+      // Snap Y to match the calculated time so preview aligns with grid
+      const snappedY = getYFromTime(time, startHour, hourHeight);
 
       setSelection({
-        startY: y,
-        endY: y,
+        startY: snappedY,
+        endY: snappedY,
         startTime: time,
         endTime: time,
       });
@@ -82,12 +84,14 @@ export function useTimeSelection({
       const maxY = (endHour - startHour) * hourHeight;
       const y = Math.max(0, Math.min(e.clientY - scrollRect.top + scrollTop, maxY));
       const time = getTimeFromY(y, date, startHour, hourHeight);
+      // Snap Y to match the calculated time so preview aligns with grid
+      const snappedY = getYFromTime(time, startHour, hourHeight);
 
       setSelection((prev) => {
         if (!prev) return null;
         return {
           ...prev,
-          endY: y,
+          endY: snappedY,
           endTime: time,
         };
       });

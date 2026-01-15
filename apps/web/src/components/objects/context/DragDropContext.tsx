@@ -150,11 +150,15 @@ export function DragDropProvider({ children, renderDragOverlay }: DragDropProvid
 
   const handleDragOver = useCallback((event: DragOverEvent) => {
     const { over } = event;
-    setState((prev) => ({
-      ...prev,
-      overId: over?.id ?? null,
-      // overSurfaceId can be extracted from over.data if needed
-    }));
+    const newOverId = over?.id ?? null;
+    // Only update state if overId actually changed to prevent unnecessary re-renders
+    setState((prev) => {
+      if (prev.overId === newOverId) return prev;
+      return {
+        ...prev,
+        overId: newOverId,
+      };
+    });
   }, []);
 
   const handleDragEnd = useCallback(

@@ -9,7 +9,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { eventsApi, eventKeys, type Event, type CreateEventInput } from '@/lib/api-client';
 import { useUndoableMutation } from '@/lib/undo';
-import { toDateString } from '@/lib/calendar-utils';
 
 /**
  * Hook for fetching events within a date range.
@@ -210,13 +209,18 @@ export function useUndoableDeleteEvent() {
 
 /**
  * Hook for fetching events for a specific day.
- * Uses local date components to avoid timezone conversion issues.
+ * Uses full ISO timestamps to properly filter across timezone boundaries.
  */
 export function useEventsForDay(date: Date) {
-  const startDate = toDateString(date);
-  const nextDay = new Date(date);
-  nextDay.setDate(nextDay.getDate() + 1);
-  const endDate = toDateString(nextDay);
+  const dayStart = new Date(date);
+  dayStart.setHours(0, 0, 0, 0);
 
-  return useEvents({ startDate, endDate });
+  const dayEnd = new Date(date);
+  dayEnd.setDate(dayEnd.getDate() + 1);
+  dayEnd.setHours(0, 0, 0, 0);
+
+  return useEvents({
+    startDate: dayStart.toISOString(),
+    endDate: dayEnd.toISOString(),
+  });
 }

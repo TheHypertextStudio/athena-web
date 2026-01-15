@@ -15,7 +15,6 @@ import {
   type UpdateTimeBlockInput,
 } from '@/lib/api-client';
 import { useUndoableMutation } from '@/lib/undo';
-import { toDateString } from '@/lib/calendar-utils';
 
 /**
  * Hook for fetching time blocks within a date range.
@@ -109,15 +108,20 @@ export function useDeleteTimeBlock() {
 
 /**
  * Hook for fetching time blocks for a specific day.
- * Uses local date components to avoid timezone conversion issues.
+ * Uses full ISO timestamps to properly filter across timezone boundaries.
  */
 export function useTimeBlocksForDay(date: Date) {
-  const startDate = toDateString(date);
-  const nextDay = new Date(date);
-  nextDay.setDate(nextDay.getDate() + 1);
-  const endDate = toDateString(nextDay);
+  const dayStart = new Date(date);
+  dayStart.setHours(0, 0, 0, 0);
 
-  return useTimeBlocks({ startDate, endDate });
+  const dayEnd = new Date(date);
+  dayEnd.setDate(dayEnd.getDate() + 1);
+  dayEnd.setHours(0, 0, 0, 0);
+
+  return useTimeBlocks({
+    startDate: dayStart.toISOString(),
+    endDate: dayEnd.toISOString(),
+  });
 }
 
 /**
@@ -179,10 +183,22 @@ export function useReorderTimeBlockTasks() {
 // =============================================================================
 
 /**
- * Hook for creating a time block with undo support.
+ * Hook for creating a time block with undo support and optimistic updates.
  */
+interface CreateTimeBlockContext {
+  tempId: string;
+  previousData?: unknown;
+}
+
 export function useUndoableCreateTimeBlock() {
-  return useUndoableMutation<{ data: TimeBlock }, Error, CreateTimeBlockInput>(
+  const queryClient = useQueryClient();
+
+  return useUndoableMutation<
+    { data: TimeBlock },
+    Error,
+    CreateTimeBlockInput,
+    CreateTimeBlockContext
+  >(
     (data) => timeBlocksApi.create(data),
     {
       entityType: 'time-block',
@@ -191,6 +207,57 @@ export function useUndoableCreateTimeBlock() {
       getEntityId: (_input, result) => result?.data.id ?? '',
       getQueryKeys: () => [timeBlockKeys.lists()],
       getSnapshotData: (result) => result.data,
+    },
+    {
+      onMutate: async (input) => {
+        // Cancel outgoing refetches
+        await queryClient.cancelQueries({ queryKey: timeBlockKeys.lists() });
+
+        // Generate a temporary ID
+        const tempId = `temp-${String(Date.now())}`;
+
+        // Create optimistic time block
+        const optimisticBlock: TimeBlock = {
+          id: tempId,
+          label: input.label,
+          description: input.description ?? null,
+          startTime: input.startTime,
+          endTime: input.endTime,
+          color: input.color ?? null,
+          recurrenceRule: input.recurrenceRule ?? null,
+          ownerId: '',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          linkedTasks: [],
+        };
+
+        // Add to all list caches
+        queryClient.setQueriesData<{ data: TimeBlock[] }>(
+          { queryKey: timeBlockKeys.lists() },
+          (old) => {
+            if (!old) return { data: [optimisticBlock] };
+            return { data: [...old.data, optimisticBlock] };
+          },
+        );
+
+        return { tempId };
+      },
+      onError: (_err, _input, context) => {
+        // Remove optimistic entry on error
+        if (context?.tempId) {
+          queryClient.setQueriesData<{ data: TimeBlock[] }>(
+            { queryKey: timeBlockKeys.lists() },
+            (old) => {
+              if (!old) return old;
+              return { data: old.data.filter((b) => b.id !== context.tempId) };
+            },
+          );
+        }
+      },
+      onSettled: () => {
+        // Refetch to get the real data
+        void queryClient.invalidateQueries({ queryKey: timeBlockKeys.lists() });
+      },
     },
   );
 }

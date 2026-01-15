@@ -289,6 +289,7 @@ export function DayCalendar({
                 entry={entry}
                 startHour={startHour}
                 hourHeight={hourHeight}
+                date={date}
                 selected={selectionCtx.isSelected(entry.id)}
                 isResizing={entryResize.resizeState?.entryId === entry.id}
                 resizePreviewTop={preview?.top}

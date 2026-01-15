@@ -106,7 +106,7 @@ export function OAuthButtons({
             )}
             Continue with {provider.name}
             {isLastUsed && (
-              <Badge variant="secondary" className="ml-2">
+              <Badge variant="secondary" className="animate-in fade-in ml-2 duration-300">
                 Last used
               </Badge>
             )}

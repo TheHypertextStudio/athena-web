@@ -6,7 +6,7 @@
 
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Separator } from '@/components/ui/separator';
 import { usePasskeySupport } from '@/hooks/use-passkey-support';
@@ -41,8 +41,11 @@ export function SignInForm({ callbackUrl = '/home' }: SignInFormProps) {
 
   const { isSupported: passkeySupported, isLoading: checkingSupport } = usePasskeySupport();
 
-  // Get the last used login method for UI hints
-  const lastMethod = getLastUsedLoginMethod();
+  // Defer to useEffect to avoid hydration mismatch (cookie only readable on client)
+  const [lastMethod, setLastMethod] = useState<string | null>(null);
+  useEffect(() => {
+    setLastMethod(getLastUsedLoginMethod());
+  }, []);
 
   const handleSuccess = useCallback(() => {
     router.push(callbackUrl);

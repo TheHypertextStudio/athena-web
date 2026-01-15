@@ -43,6 +43,13 @@ export function usePasskeyAutofill(options: UsePasskeyAutofillOptions): void {
 
     const runAutofill = async () => {
       try {
+        // Passkey autofill requires an input with autocomplete="webauthn"
+        // Skip if no such input exists to avoid console errors
+        const webauthnInput = document.querySelector('input[autocomplete*="webauthn"]');
+        if (!webauthnInput) {
+          return;
+        }
+
         const result = await signInWithPasskeyAutofill({
           signal: controller.signal,
         });

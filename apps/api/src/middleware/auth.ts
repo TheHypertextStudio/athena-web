@@ -81,6 +81,7 @@ export function getSession(c: Context): Awaited<ReturnType<typeof auth.api.getSe
 /**
  * Get the session token from the request.
  * Better Auth stores the session token in a cookie named 'better-auth.session_token'.
+ * The cookie value format is `{token}.{signature}` - we extract just the token part.
  */
 export function getSessionToken(c: Context): string | null {
   const cookieHeader = c.req.header('cookie');
@@ -92,7 +93,20 @@ export function getSessionToken(c: Context): string | null {
   const cookies = cookieHeader.split(';').map((c) => c.trim());
   for (const cookie of cookies) {
     if (cookie.startsWith('better-auth.session_token=')) {
-      return cookie.slice('better-auth.session_token='.length);
+      let rawValue = cookie.slice('better-auth.session_token='.length);
+      // Decode URL-encoded cookie value
+      try {
+        rawValue = decodeURIComponent(rawValue);
+      } catch {
+        // Use raw value if decoding fails
+      }
+      // Extract just the token part (before the signature)
+      // Cookie format: {token}.{signature}
+      const dotIndex = rawValue.indexOf('.');
+      if (dotIndex !== -1) {
+        return rawValue.substring(0, dotIndex);
+      }
+      return rawValue;
     }
   }
 

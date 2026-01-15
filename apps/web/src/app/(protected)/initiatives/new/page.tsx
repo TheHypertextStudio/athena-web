@@ -28,7 +28,7 @@ export default function NewInitiativePage() {
   });
 
   const parentOptions = (initiativesData?.data ?? [])
-    .filter((i) => i.status !== 'archived')
+    .filter((i) => i.statusCategory !== 'archived')
     .map((i) => ({ id: i.id, name: i.name }));
 
   return (

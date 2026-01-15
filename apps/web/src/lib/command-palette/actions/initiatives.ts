@@ -101,14 +101,12 @@ export const createInitiativeAction: ExecutableAction = {
       const name = typeof formData?.name === 'string' ? formData.name : '';
       const description =
         typeof formData?.description === 'string' ? formData.description : undefined;
-      const statusValue = formData?.status;
-      const status: 'draft' | 'active' =
-        statusValue === 'draft' || statusValue === 'active' ? statusValue : 'draft';
+      // Note: status is now handled via custom statuses (statusId)
+      // For quick creation, we rely on the backend default status
 
       const response = await initiativesApi.create({
         name,
         description,
-        status,
       });
 
       return {
@@ -151,7 +149,6 @@ export const editInitiativeAction: ExecutableAction = {
       | {
           name?: string;
           description?: string;
-          status?: string;
         }
       | undefined;
 
@@ -172,19 +169,8 @@ export const editInitiativeAction: ExecutableAction = {
           schema: z.string().max(2000).optional(),
           defaultValue: initiative?.description ?? '',
         },
-        {
-          name: 'status',
-          label: 'Status',
-          type: 'select',
-          schema: z.enum(['draft', 'active', 'completed', 'archived']).optional(),
-          options: [
-            { value: 'draft', label: 'Draft' },
-            { value: 'active', label: 'Active' },
-            { value: 'completed', label: 'Completed' },
-            { value: 'archived', label: 'Archived' },
-          ],
-          defaultValue: initiative?.status ?? 'draft',
-        },
+        // Status changes should be done via the initiative detail page
+        // which properly handles custom status selection
       ],
       submitLabel: 'Save Changes',
     };
@@ -203,12 +189,12 @@ export const editInitiativeAction: ExecutableAction = {
       const name = typeof formData?.name === 'string' ? formData.name : undefined;
       const description =
         typeof formData?.description === 'string' ? formData.description : undefined;
-      const status = formData?.status as 'draft' | 'active' | 'completed' | 'archived' | undefined;
+      // Note: status changes should be done via the status management UI
+      // which handles custom status IDs properly
 
       await initiativesApi.update(initiativeId, {
         name,
         description: description ?? null,
-        status,
       });
 
       return {

@@ -13,7 +13,7 @@ import { X, Maximize2, Target, Loader2, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { ProgressBar } from '@/components/ui/progress-bar';
-import { InitiativeStatusBadge } from './initiative-status-badge';
+import { CustomInitiativeStatusBadge } from './initiative-status-select';
 import type { Initiative } from '@/lib/api-client';
 
 export interface InitiativeDetailModalProps {
@@ -101,7 +101,7 @@ export function InitiativeDetailModal({
           </div>
           <div>
             <h2 className="text-on-surface font-semibold">{initiative.name}</h2>
-            <InitiativeStatusBadge status={initiative.status} size="sm" />
+            <CustomInitiativeStatusBadge status={initiative.customStatus} size="small" />
           </div>
         </div>
         <div className="flex items-center gap-1">

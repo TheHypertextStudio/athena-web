@@ -30,7 +30,7 @@ export default function NewInitiativeModalPage() {
   });
 
   const parentOptions = (initiativesData?.data ?? [])
-    .filter((i) => i.status !== 'archived')
+    .filter((i) => i.statusCategory !== 'archived')
     .map((i) => ({ id: i.id, name: i.name }));
 
   const handleClose = useCallback(() => {

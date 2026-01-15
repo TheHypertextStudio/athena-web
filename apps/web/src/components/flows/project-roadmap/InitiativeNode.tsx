@@ -4,19 +4,20 @@ import { memo } from 'react';
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
 import FolderIcon from '@mui/icons-material/Folder';
 import { cn } from '@/lib/utils';
+import type { InitiativeStatusCategory } from '@/lib/api-client';
 
 export interface InitiativeNodeData extends Record<string, unknown> {
   id: string;
   name: string;
-  status: 'draft' | 'active' | 'completed' | 'archived';
+  status: InitiativeStatusCategory;
   projectCount?: number;
   color?: string;
 }
 
 export type InitiativeNodeType = Node<InitiativeNodeData, 'initiative'>;
 
-const statusConfig = {
-  draft: { label: 'Draft', className: 'bg-surface-variant text-on-surface-variant' },
+const statusConfig: Record<InitiativeStatusCategory, { label: string; className: string }> = {
+  planning: { label: 'Planning', className: 'bg-surface-variant text-on-surface-variant' },
   active: { label: 'Active', className: 'bg-primary-container text-on-primary-container' },
   completed: {
     label: 'Completed',

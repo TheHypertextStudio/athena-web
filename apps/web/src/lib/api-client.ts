@@ -28,6 +28,22 @@ interface ErrorResponse {
 }
 
 /**
+ * Build a query string from parameters object.
+ * Filters out undefined values.
+ */
+function buildQueryString(params?: Record<string, string | number | boolean | undefined>): string {
+  if (!params) return '';
+  const searchParams = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined) {
+      searchParams.set(key, String(value));
+    }
+  });
+  const query = searchParams.toString();
+  return query ? `?${query}` : '';
+}
+
+/**
  * Make an authenticated API request.
  */
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -190,7 +206,7 @@ export interface Task {
   estimatedMinutes: number | null;
   projectId: string | null;
   assigneeId: string | null;
-  ownerId: string;
+  creatorId: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -241,7 +257,9 @@ export interface Initiative {
   id: string;
   name: string;
   description: string | null;
-  status: 'draft' | 'active' | 'completed' | 'archived';
+  statusId: string | null;
+  statusCategory: InitiativeStatusCategory | null;
+  customStatus: CustomInitiativeStatus | null;
   parentId: string | null;
   ownerId: string;
   createdAt: string;
@@ -263,7 +281,7 @@ export interface Event {
   location: string | null;
   isAllDay: boolean;
   recurrenceRule: string | null;
-  ownerId: string;
+  creatorId: string;
   /** Source of the event: 'local' for Athena-native, 'external' for synced calendars */
   source: EventSource;
   /** Integration ID for external events (null for local events) */
@@ -458,14 +476,8 @@ export const initiativeStatusKeys = {
  * Tasks API
  */
 export const tasksApi = {
-  list: (params?: { status?: Task['status']; priority?: Task['priority']; projectId?: string }) => {
-    const searchParams = new URLSearchParams();
-    if (params?.status) searchParams.set('status', params.status);
-    if (params?.priority) searchParams.set('priority', params.priority);
-    if (params?.projectId) searchParams.set('projectId', params.projectId);
-    const query = searchParams.toString();
-    return request<{ data: Task[] }>(`/api/tasks${query ? `?${query}` : ''}`);
-  },
+  list: (params?: { status?: Task['status']; priority?: Task['priority']; projectId?: string }) =>
+    request<{ data: Task[] }>(`/api/tasks${buildQueryString(params)}`),
   get: (id: string) => request<{ data: Task }>(`/api/tasks/${id}`),
   create: (data: CreateTaskInput) =>
     request<{ data: Task }>('/api/tasks', {
@@ -530,14 +542,14 @@ export const projectsApi = {
 export interface CreateInitiativeInput {
   name: string;
   description?: string;
-  status?: Initiative['status'];
+  statusId?: string;
   parentId?: string;
 }
 
 export interface UpdateInitiativeInput {
   name?: string;
   description?: string | null;
-  status?: Initiative['status'];
+  statusId?: string;
   parentId?: string | null;
 }
 
@@ -556,9 +568,14 @@ export interface InitiativeMetricsResponse {
 }
 
 export const initiativesApi = {
-  list: (params?: { status?: Initiative['status']; parentId?: string }) => {
+  list: (params?: {
+    category?: InitiativeStatusCategory;
+    statusId?: string;
+    parentId?: string;
+  }) => {
     const searchParams = new URLSearchParams();
-    if (params?.status) searchParams.set('status', params.status);
+    if (params?.category) searchParams.set('category', params.category);
+    if (params?.statusId) searchParams.set('statusId', params.statusId);
     if (params?.parentId) searchParams.set('parentId', params.parentId);
     const query = searchParams.toString();
     return request<{ data: Initiative[] }>(`/api/initiatives${query ? `?${query}` : ''}`);
@@ -1073,7 +1090,7 @@ export interface SyncedCalendar {
   id: string;
   externalId: string;
   name: string;
-  color?: string;
+  color: string | null;
   isPrimary: boolean;
   canEdit?: boolean;
   syncEnabled: boolean;
@@ -1095,7 +1112,7 @@ export interface CalendarConnection {
   displayOrder: number;
   syncEnabled: boolean;
   lastSyncAt: string | null;
-  lastSyncStatus: 'success' | 'error' | null;
+  lastSyncStatus: 'success' | 'error' | 'partial' | null;
   lastSyncError: string | null;
   calendars: SyncedCalendar[];
   createdAt: string;

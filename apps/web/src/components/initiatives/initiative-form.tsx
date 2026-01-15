@@ -16,7 +16,6 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { SmartInput } from '@/components/ui/smart-input';
 import { SmartTextarea } from '@/components/ui/smart-textarea';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -32,15 +31,7 @@ import {
   type UpdateInitiativeInput,
 } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
-
-type InitiativeStatus = Initiative['status'];
-
-const STATUS_OPTIONS: { value: InitiativeStatus; label: string }[] = [
-  { value: 'draft', label: 'Draft' },
-  { value: 'active', label: 'Active' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'archived', label: 'Archived' },
-];
+import { InitiativeStatusSelect } from './initiative-status-select';
 
 export interface InitiativeFormProps {
   /** Existing initiative for editing (undefined for create) */
@@ -77,9 +68,8 @@ export function InitiativeForm({ initiative, parentOptions = [], className }: In
   // Form state
   const [name, setName] = useState(initiative?.name ?? '');
   const [description, setDescription] = useState(initiative?.description ?? '');
-  const [status, setStatus] = useState<InitiativeStatus>(initiative?.status ?? 'draft');
+  const [statusId, setStatusId] = useState<string | undefined>(initiative?.statusId ?? undefined);
   const [parentId, setParentId] = useState<string | undefined>(initiative?.parentId ?? undefined);
-  const [isStrategicPriority, setIsStrategicPriority] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Filter out current initiative from parent options (can't be own parent)
@@ -100,7 +90,7 @@ export function InitiativeForm({ initiative, parentOptions = [], className }: In
         const updateData: UpdateInitiativeInput = {
           name: name.trim(),
           description: description.trim() || null,
-          status,
+          statusId,
           parentId: parentId ?? null,
         };
         await initiativesApi.update(initiative.id, updateData);
@@ -110,7 +100,7 @@ export function InitiativeForm({ initiative, parentOptions = [], className }: In
         const createData: CreateInitiativeInput = {
           name: name.trim(),
           description: description.trim() || undefined,
-          status,
+          statusId,
           parentId: parentId ?? undefined,
         };
         const response = await initiativesApi.create(createData);
@@ -168,23 +158,7 @@ export function InitiativeForm({ initiative, parentOptions = [], className }: In
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label htmlFor="status">Status</Label>
-            <Select
-              value={status}
-              onValueChange={(v) => {
-                setStatus(v as InitiativeStatus);
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select status" />
-              </SelectTrigger>
-              <SelectContent>
-                {STATUS_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <InitiativeStatusSelect value={statusId} onChange={setStatusId} />
           </div>
 
           <div className="space-y-2">
@@ -208,20 +182,6 @@ export function InitiativeForm({ initiative, parentOptions = [], className }: In
               </SelectContent>
             </Select>
           </div>
-        </div>
-
-        {/* Strategic Priority */}
-        <div className="flex items-center gap-2">
-          <Checkbox
-            id="strategic-priority"
-            checked={isStrategicPriority}
-            onCheckedChange={(checked) => {
-              setIsStrategicPriority(checked === true);
-            }}
-          />
-          <Label htmlFor="strategic-priority" className="cursor-pointer text-sm font-normal">
-            Strategic priority
-          </Label>
         </div>
       </div>
 

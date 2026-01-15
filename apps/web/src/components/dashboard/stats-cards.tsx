@@ -46,7 +46,7 @@ export function StatsCards() {
         const [tasks, projects, initiatives, events] = await Promise.all([
           tasksApi.list({ status: 'pending' }),
           projectsApi.list({ status: 'active' }),
-          initiativesApi.list({ status: 'active' }),
+          initiativesApi.list({ category: 'active' }),
           eventsApi.list({
             startDate: new Date().toISOString(),
             endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),

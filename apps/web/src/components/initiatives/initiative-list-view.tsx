@@ -16,14 +16,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { InitiativeListItem, type InitiativeWithMetrics } from './initiative-list-item';
 import { cn } from '@/lib/utils';
-import type { Initiative } from '@/lib/api-client';
+import type { InitiativeStatusCategory } from '@/lib/api-client';
 
-type InitiativeStatus = Initiative['status'];
-
-const STATUS_OPTIONS: { value: InitiativeStatus | 'all'; label: string }[] = [
+const STATUS_OPTIONS: { value: InitiativeStatusCategory | 'all'; label: string }[] = [
   { value: 'all', label: 'All' },
   { value: 'active', label: 'Active' },
-  { value: 'draft', label: 'Draft' },
+  { value: 'planning', label: 'Planning' },
   { value: 'completed', label: 'Completed' },
   { value: 'archived', label: 'Archived' },
 ];
@@ -114,31 +112,32 @@ function StatusFilterChip({
  * ```
  */
 export function InitiativeListView({ initiatives, className }: InitiativeListViewProps) {
-  const [statusFilter, setStatusFilter] = useState<InitiativeStatus | 'all'>('all');
+  const [statusFilter, setStatusFilter] = useState<InitiativeStatusCategory | 'all'>('all');
 
-  // Filter initiatives by status
+  // Filter initiatives by status category
   const filteredInitiatives = useMemo(() => {
     if (statusFilter === 'all') {
       return initiatives;
     }
-    return initiatives.filter((i) => i.status === statusFilter);
+    return initiatives.filter((i) => i.statusCategory === statusFilter);
   }, [initiatives, statusFilter]);
 
-  // Group by status for organized display when showing all
+  // Group by status category for organized display when showing all
   const groupedInitiatives = useMemo(() => {
     if (statusFilter !== 'all') {
       return { [statusFilter]: filteredInitiatives };
     }
 
-    const groups: Record<InitiativeStatus, InitiativeWithMetrics[]> = {
+    const groups: Record<InitiativeStatusCategory, InitiativeWithMetrics[]> = {
       active: [],
-      draft: [],
+      planning: [],
       completed: [],
       archived: [],
     };
 
     for (const initiative of filteredInitiatives) {
-      groups[initiative.status].push(initiative);
+      const category = initiative.statusCategory ?? 'planning';
+      groups[category].push(initiative);
     }
 
     return groups;

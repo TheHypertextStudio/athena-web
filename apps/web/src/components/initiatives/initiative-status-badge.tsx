@@ -8,16 +8,14 @@
  */
 
 import { cn } from '@/lib/utils';
-import type { Initiative } from '@/lib/api-client';
-
-type InitiativeStatus = Initiative['status'];
+import type { InitiativeStatusCategory } from '@/lib/api-client';
 
 const statusConfig: Record<
-  InitiativeStatus,
+  InitiativeStatusCategory,
   { label: string; bgColor: string; textColor: string }
 > = {
-  draft: {
-    label: 'Draft',
+  planning: {
+    label: 'Planning',
     bgColor: 'bg-slate-500/10',
     textColor: 'text-slate-600 dark:text-slate-400',
   },
@@ -40,7 +38,7 @@ const statusConfig: Record<
 
 export interface InitiativeStatusBadgeProps {
   /** The status to display */
-  status: InitiativeStatus;
+  status: InitiativeStatusCategory;
   /** Size variant */
   size?: 'sm' | 'md';
   /** Additional class names */
@@ -53,7 +51,7 @@ export interface InitiativeStatusBadgeProps {
  * @example
  * ```tsx
  * <InitiativeStatusBadge status="active" />
- * <InitiativeStatusBadge status="draft" size="sm" />
+ * <InitiativeStatusBadge status="planning" size="sm" />
  * ```
  */
 export function InitiativeStatusBadge({

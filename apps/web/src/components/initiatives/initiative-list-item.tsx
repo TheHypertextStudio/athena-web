@@ -13,7 +13,7 @@ import Link from 'next/link';
 import { Target, Zap, ChevronRight, FolderKanban } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ProgressBar } from '@/components/ui/progress-bar';
-import { InitiativeStatusBadge } from './initiative-status-badge';
+import { CustomInitiativeStatusBadge } from './initiative-status-select';
 import type { Initiative } from '@/lib/api-client';
 
 export interface InitiativeWithMetrics extends Initiative {
@@ -148,7 +148,7 @@ export function InitiativeListItem({ initiative, className }: InitiativeListItem
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h3 className="text-on-surface truncate text-base font-semibold">{initiative.name}</h3>
-            <InitiativeStatusBadge status={initiative.status} size="sm" />
+            <CustomInitiativeStatusBadge status={initiative.customStatus} size="small" />
           </div>
 
           {initiative.description && (

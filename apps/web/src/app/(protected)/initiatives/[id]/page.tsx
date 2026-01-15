@@ -31,11 +31,9 @@ import { Button } from '@/components/ui/button';
 import { SurfaceContainer } from '@/components/ui/surface';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useSnackbar } from '@/components/ui/snackbar';
-import {
-  InitiativeStatusBadge,
-  InitiativeMetrics,
-  type InitiativeMetricsData,
-} from '@/components/initiatives';
+import { InitiativeMetrics, type InitiativeMetricsData } from '@/components/initiatives';
+import { CustomInitiativeStatusBadge } from '@/components/initiatives/initiative-status-select';
+import { useInitiativeStatuses, getDefaultInitiativeStatus } from '@/hooks/use-initiative-statuses';
 import { initiativesApi, projectsApi, tasksApi, type Task, type Project } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 
@@ -226,6 +224,10 @@ export default function InitiativeDetailPage({ params }: InitiativeDetailPagePro
   const queryClient = useQueryClient();
   const [isArchiving, setIsArchiving] = useState(false);
 
+  // Fetch initiative statuses to get archived status ID
+  const { statuses: initiativeStatuses } = useInitiativeStatuses();
+  const archivedStatus = getDefaultInitiativeStatus(initiativeStatuses, 'archived');
+
   // Fetch initiative
   const { data: initiativeData, isLoading: isLoadingInitiative } = useQuery({
     queryKey: ['initiative', id],
@@ -241,7 +243,12 @@ export default function InitiativeDetailPage({ params }: InitiativeDetailPagePro
 
   // Archive mutation
   const archiveMutation = useMutation({
-    mutationFn: () => initiativesApi.update(id, { status: 'archived' }),
+    mutationFn: () => {
+      if (!archivedStatus) {
+        throw new Error('No archived status available');
+      }
+      return initiativesApi.update(id, { statusId: archivedStatus.id });
+    },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['initiatives'] });
       snackbar.show({ message: 'Initiative archived' });
@@ -472,7 +479,7 @@ export default function InitiativeDetailPage({ params }: InitiativeDetailPagePro
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <h1 className="text-on-surface text-xl font-bold">{initiative.name}</h1>
-                  <InitiativeStatusBadge status={initiative.status} />
+                  <CustomInitiativeStatusBadge status={initiative.customStatus} />
                 </div>
                 {initiative.description && (
                   <p className="text-on-surface-variant mt-1 text-sm">{initiative.description}</p>

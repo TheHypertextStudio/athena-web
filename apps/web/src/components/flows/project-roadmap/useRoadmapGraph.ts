@@ -51,7 +51,7 @@ function buildRoadmapGraph(
   for (const initiative of initiatives) {
     if (
       !includeCompleted &&
-      (initiative.status === 'completed' || initiative.status === 'archived')
+      (initiative.statusCategory === 'completed' || initiative.statusCategory === 'archived')
     ) {
       continue;
     }
@@ -61,7 +61,7 @@ function buildRoadmapGraph(
     const nodeData: InitiativeNodeData = {
       id: initiative.id,
       name: initiative.name,
-      status: initiative.status,
+      status: initiative.statusCategory ?? 'planning',
       projectCount: initiativeProjectsList.length,
       color: 'var(--md-sys-color-tertiary)',
     };
@@ -141,8 +141,8 @@ export function useRoadmapGraph(options: UseRoadmapGraphOptions = {}) {
     isLoading: initiativesLoading,
     error: initiativesError,
   } = useQuery({
-    queryKey: ['initiatives', { status: includeCompleted ? undefined : 'active' }],
-    queryFn: () => initiativesApi.list(includeCompleted ? undefined : { status: 'active' }),
+    queryKey: ['initiatives', { category: includeCompleted ? undefined : 'active' }],
+    queryFn: () => initiativesApi.list(includeCompleted ? undefined : { category: 'active' }),
   });
 
   const {

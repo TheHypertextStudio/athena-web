@@ -76,7 +76,7 @@ export default function EditInitiativePage({ params }: EditInitiativePageProps) 
   const initiative = initiativeData?.data;
 
   const parentOptions = (initiativesData?.data ?? [])
-    .filter((i) => i.status !== 'archived' && i.id !== id)
+    .filter((i) => i.statusCategory !== 'archived' && i.id !== id)
     .map((i) => ({ id: i.id, name: i.name }));
 
   return (

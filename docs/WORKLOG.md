@@ -248,7 +248,7 @@ Run `pnpm typecheck`, `pnpm lint`, `pnpm test`, and `pnpm build` after each batc
 - **Files Changed**:
   - `apps/web/src/components/objects/surfaces/DayCalendar/CalendarEntryCard.tsx`
   - `apps/web/src/components/objects/surfaces/DayCalendar/CalendarEntryCardParts.tsx`
-  - `apps/web/src/components/objects/surfaces/DayCalendar/CalendarEntryCard.utils.ts`
+  - `apps/web/src/components/objects/surfaces/DayCalendar/calendar-entry-card-colors.ts`
   - `apps/web/src/components/objects/surfaces/DayCalendar/useCalendarEntryDrag.ts`
   - `docs/WORKLOG.md`
 

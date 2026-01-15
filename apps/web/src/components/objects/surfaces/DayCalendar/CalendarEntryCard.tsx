@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 import { getYFromTime } from '@/lib/calendar-utils';
 import { useCalendarTimezoneOptional } from '@/contexts/TimezoneContext';
 import { EntryHeader, EntryPreview, EntryTasks } from './CalendarEntryCardParts';
-import { getEntryColor, shouldUseDarkText } from './CalendarEntryCard.utils';
+import { getEntryColor, shouldUseDarkText } from './calendar-entry-card-colors';
 import type { CalendarEntry, LinkedTask } from './types';
 import { useCalendarEntryDrag } from './useCalendarEntryDrag';
 

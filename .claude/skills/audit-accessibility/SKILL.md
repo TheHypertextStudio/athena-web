@@ -9,14 +9,30 @@ Identify accessibility issues across the application including WCAG compliance, 
 
 ---
 
-## Phase 0: Scope & Standards
+## Phase 0: Scope Detection
+
+### Determine Changed Files
+
+Before auditing, identify the scope of changes:
+
+```bash
+# Get list of changed files (staged + unstaged + untracked)
+CHANGED_FILES=$(git status --porcelain | awk '{print $NF}' | grep -E '\.tsx$')
+echo "Changed files: $(echo "$CHANGED_FILES" | wc -l | tr -d ' ')"
+echo "$CHANGED_FILES"
+```
 
 ### Determine Audit Scope
 
 ```
 What kind of audit is needed?
+├── SESSION AUDIT (default) → Only changed files in current session
+│   Use when: After implementing a feature, fixing a bug
+│   Scope: Files from git status (uncommitted changes only)
+│
 ├── FULL AUDIT → All phases, WCAG 2.1 AA compliance
 │   Use when: Pre-release, compliance requirements, redesign
+│   ⚠️  Requires explicit SCOPE=full
 │
 ├── TARGETED AUDIT → Specific area only
 │   ├── perceivable → Phase 1 (content accessibility)
@@ -27,6 +43,21 @@ What kind of audit is needed?
 │
 └── COMPONENT AUDIT → Single component focus
     Use when: New component development, PR review
+```
+
+### Session vs Full Scope Commands
+
+When `SCOPE=session` (default), scope all automated checks to changed files:
+
+```bash
+# Store changed files for reuse throughout audit
+CHANGED_FILES=$(git status --porcelain | awk '{print $NF}' | grep -E '\.tsx$')
+
+# Exit early if no relevant changes
+if [ -z "$CHANGED_FILES" ]; then
+  echo "No uncommitted React component changes to audit."
+  exit 0
+fi
 ```
 
 ### WCAG Conformance Levels
@@ -40,6 +71,23 @@ What kind of audit is needed?
 **Target**: WCAG 2.1 Level AA (standard for most applications)
 
 ### Establish Baseline
+
+**Session scope (default):**
+
+```bash
+CHANGED_FILES=$(git status --porcelain | awk '{print $NF}' | grep -E '\.tsx$')
+
+# Count ARIA attributes in changed files
+[ -n "$CHANGED_FILES" ] && echo "$CHANGED_FILES" | xargs grep -E "aria-|role=" 2>/dev/null | wc -l
+
+# Find images in changed files
+[ -n "$CHANGED_FILES" ] && echo "$CHANGED_FILES" | xargs grep -E "<img|Image" 2>/dev/null | wc -l
+
+# Find interactive elements in changed files
+[ -n "$CHANGED_FILES" ] && echo "$CHANGED_FILES" | xargs grep -E "onClick|onKeyDown|button|Button|<a " 2>/dev/null | wc -l
+```
+
+**Full scope (explicit SCOPE=full):**
 
 ```bash
 # Count ARIA attributes in use
@@ -61,7 +109,22 @@ grep -rE "<input|<select|<textarea|<form" --include="*.tsx" | wc -l
 
 ### 1.1 Text Alternatives (WCAG 1.1)
 
-**Automated Check:**
+**Automated Check (session scope - default):**
+
+```bash
+CHANGED_FILES=$(git status --porcelain | awk '{print $NF}' | grep -E '\.tsx$')
+
+# Find images without alt text in changed files
+[ -n "$CHANGED_FILES" ] && echo "$CHANGED_FILES" | xargs grep -E "<img" 2>/dev/null | grep -v "alt="
+
+# Find Image components without alt in changed files
+[ -n "$CHANGED_FILES" ] && echo "$CHANGED_FILES" | xargs grep -E "Image\s" 2>/dev/null | grep -v "alt="
+
+# Find icon buttons without labels in changed files
+[ -n "$CHANGED_FILES" ] && echo "$CHANGED_FILES" | xargs grep -E "onClick.*Icon|Icon.*onClick" 2>/dev/null | grep -v "aria-label\|title\|sr-only"
+```
+
+**Automated Check (full scope - SCOPE=full):**
 
 ```bash
 # Find images without alt text

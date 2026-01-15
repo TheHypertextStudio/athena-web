@@ -9,14 +9,30 @@ Perform a thorough security audit to identify vulnerabilities, verify security c
 
 ---
 
-## Phase 0: Scope Definition
+## Phase 0: Scope Detection
+
+### Determine Changed Files
+
+Before auditing, identify the scope of changes:
+
+```bash
+# Get list of changed files (staged + unstaged + untracked)
+CHANGED_FILES=$(git status --porcelain | awk '{print $NF}' | grep -E '\.(ts|tsx)$')
+echo "Changed files: $(echo "$CHANGED_FILES" | wc -l | tr -d ' ')"
+echo "$CHANGED_FILES"
+```
 
 ### Determine Audit Type
 
 ```
 What kind of audit is needed?
-├── FULL AUDIT → All phases, comprehensive review
+├── SESSION AUDIT (default) → Only changed files in current session
+│   Use when: After implementing a feature, fixing a bug
+│   Scope: Files from git status (uncommitted changes only)
+│
+├── FULL AUDIT → All phases, entire codebase
 │   Use when: Pre-release, after major changes, periodic security review
+│   ⚠️  Requires explicit SCOPE=full
 │
 ├── TARGETED AUDIT → Specific area only
 │   ├── auth → Phase 1 (authentication & sessions)
@@ -31,7 +47,36 @@ What kind of audit is needed?
     Use when: CI/CD pipeline, quick sanity check
 ```
 
+### Session vs Full Scope Commands
+
+When `SCOPE=session` (default), scope all automated checks to changed files:
+
+```bash
+# Store changed files for reuse throughout audit
+CHANGED_FILES=$(git status --porcelain | awk '{print $NF}' | grep -E '\.(ts|tsx)$')
+
+# Exit early if no relevant changes
+if [ -z "$CHANGED_FILES" ]; then
+  echo "No uncommitted TypeScript changes to audit."
+  exit 0
+fi
+```
+
 ### Gather Baseline Information
+
+**Session scope (default):**
+
+```bash
+CHANGED_FILES=$(git status --porcelain | awk '{print $NF}' | grep -E '\.(ts|tsx)$')
+
+# Count endpoints in changed files only
+[ -n "$CHANGED_FILES" ] && echo "$CHANGED_FILES" | xargs grep -E "\.get\(|\.post\(|\.put\(|\.patch\(|\.delete\(" 2>/dev/null | wc -l
+
+# Find middleware usage in changed files
+[ -n "$CHANGED_FILES" ] && echo "$CHANGED_FILES" | xargs grep "\.use\(" 2>/dev/null | head -10
+```
+
+**Full scope (explicit SCOPE=full):**
 
 ```bash
 # List all API routes (adapt path to your project)
@@ -50,7 +95,19 @@ grep -r "\.use\(" --include="*.ts" | head -20
 
 ### 1.1 Route Protection Audit
 
-**Automated Checks:**
+**Automated Checks (session scope - default):**
+
+```bash
+CHANGED_FILES=$(git status --porcelain | awk '{print $NF}' | grep -E '\.(ts|tsx)$')
+
+# Find changed route files that might be unprotected
+[ -n "$CHANGED_FILES" ] && echo "$CHANGED_FILES" | xargs grep -L "requireAuth\|isAuthenticated\|protect\|authMiddleware" 2>/dev/null
+
+# Find user-specific operations in changed files
+[ -n "$CHANGED_FILES" ] && echo "$CHANGED_FILES" | xargs grep "userId\|user\.id\|req\.user" 2>/dev/null | grep -v "auth\|middleware"
+```
+
+**Automated Checks (full scope - SCOPE=full):**
 
 ```bash
 # Find routes that might be unprotected (adjust auth middleware name)

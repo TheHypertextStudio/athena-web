@@ -1,6 +1,6 @@
 ---
 description: Comprehensive security audit for detecting vulnerabilities, verifying authentication/authorization, and ensuring compliance with security best practices. Use before releases, after adding auth-related features, or when reviewing security posture.
-argument-hint: [SCOPE=<full|auth|authz|input|crypto|api>]
+argument-hint: [SCOPE=<session|full|auth|authz|input|crypto|api>]
 ---
 
 # Security Audit
@@ -19,14 +19,30 @@ Run the phases corresponding to `$SCOPE`. Default to full audit if not specified
 
 ---
 
-## Phase 0: Scope Definition
+## Phase 0: Scope Detection
+
+### Determine Changed Files
+
+Before auditing, identify the scope of changes:
+
+```bash
+# Get list of changed files (staged + unstaged + untracked)
+CHANGED_FILES=$(git status --porcelain | awk '{print $NF}' | grep -E '\.(ts|tsx)$')
+echo "Changed files: $(echo "$CHANGED_FILES" | wc -l | tr -d ' ')"
+echo "$CHANGED_FILES"
+```
 
 ### Determine Audit Type
 
 ```
 What kind of audit is needed?
-├── FULL AUDIT → All phases, comprehensive review
+├── SESSION AUDIT (default) → Only changed files in current session
+│   Use when: After implementing a feature, fixing a bug
+│   Scope: Files from git status (uncommitted changes only)
+│
+├── FULL AUDIT → All phases, entire codebase
 │   Use when: Pre-release, after major changes, periodic security review
+│   ⚠️  Requires explicit SCOPE=full
 │
 ├── TARGETED AUDIT → Specific area only
 │   ├── auth → Phase 1 (authentication & sessions)
@@ -41,7 +57,36 @@ What kind of audit is needed?
     Use when: CI/CD pipeline, quick sanity check
 ```
 
+### Session vs Full Scope Commands
+
+When `SCOPE=session` (default), scope all automated checks to changed files:
+
+```bash
+# Store changed files for reuse throughout audit
+CHANGED_FILES=$(git status --porcelain | awk '{print $NF}' | grep -E '\.(ts|tsx)$')
+
+# Exit early if no relevant changes
+if [ -z "$CHANGED_FILES" ]; then
+  echo "No uncommitted TypeScript changes to audit."
+  exit 0
+fi
+```
+
 ### Gather Baseline Information
+
+**Session scope (default):**
+
+```bash
+CHANGED_FILES=$(git status --porcelain | awk '{print $NF}' | grep -E '\.(ts|tsx)$')
+
+# Count endpoints in changed files only
+[ -n "$CHANGED_FILES" ] && echo "$CHANGED_FILES" | xargs grep -E "\.get\(|\.post\(|\.put\(|\.patch\(|\.delete\(" 2>/dev/null | wc -l
+
+# Find middleware usage in changed files
+[ -n "$CHANGED_FILES" ] && echo "$CHANGED_FILES" | xargs grep "\.use\(" 2>/dev/null | head -10
+```
+
+**Full scope (explicit SCOPE=full):**
 
 ```bash
 # List all API routes (adapt path to your project)

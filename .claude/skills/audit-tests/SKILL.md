@@ -25,7 +25,62 @@ If the answer is "not much" or "it just proves the code runs," the test has low 
 
 ---
 
-## Phase 0: Test Validity Assessment
+## Phase 0: Scope Detection
+
+### Determine Changed Files
+
+Before auditing, identify the scope of changes:
+
+```bash
+# Get list of changed test files (staged + unstaged + untracked)
+CHANGED_TEST_FILES=$(git status --porcelain | awk '{print $NF}' | grep -E '\.(test|spec)\.(ts|tsx)$')
+echo "Changed test files: $(echo "$CHANGED_TEST_FILES" | wc -l | tr -d ' ')"
+echo "$CHANGED_TEST_FILES"
+
+# Also find related source files that changed (may need new tests)
+CHANGED_SRC_FILES=$(git status --porcelain | awk '{print $NF}' | grep -E '\.(ts|tsx)$' | grep -v -E '\.(test|spec)\.')
+echo "Changed source files: $(echo "$CHANGED_SRC_FILES" | wc -l | tr -d ' ')"
+```
+
+### Determine Audit Scope
+
+```
+What kind of audit is needed?
+├── SESSION AUDIT (default) → Only changed test files + source files needing tests
+│   Use when: After implementing a feature, fixing a bug, adding tests
+│   Scope: Files from git status (uncommitted changes only)
+│
+├── FULL AUDIT → All tests across codebase
+│   Use when: Test quality sprint, major refactor, CI optimization
+│   ⚠️  Requires explicit SCOPE=full
+│
+├── TARGETED AUDIT → Specific test type
+│   ├── unit → Phase 1 (unit test validity)
+│   ├── integration → Phase 2 (integration test validity)
+│   └── e2e → Phase 3 (Playwright e2e validity)
+│
+└── ALL → All test types
+```
+
+### Session vs Full Scope Commands
+
+When `SCOPE=session` (default), scope all automated checks to changed files:
+
+```bash
+# Store changed files for reuse throughout audit
+CHANGED_TEST_FILES=$(git status --porcelain | awk '{print $NF}' | grep -E '\.(test|spec)\.(ts|tsx)$')
+CHANGED_SRC_FILES=$(git status --porcelain | awk '{print $NF}' | grep -E '\.(ts|tsx)$' | grep -v -E '\.(test|spec)\.')
+
+# Exit early if no relevant changes
+if [ -z "$CHANGED_TEST_FILES" ] && [ -z "$CHANGED_SRC_FILES" ]; then
+  echo "No uncommitted test or source changes to audit."
+  exit 0
+fi
+```
+
+---
+
+## Test Validity Assessment
 
 ### Questions to Ask Before Writing Tests
 
@@ -93,7 +148,16 @@ What does this test verify?
 - Fails only when the behavior is broken
 - Passes only when the behavior works
 
-**Automated Check:**
+**Automated Check (session scope - default):**
+
+```bash
+CHANGED_TEST_FILES=$(git status --porcelain | awk '{print $NF}' | grep -E '\.(test|spec)\.(ts|tsx)$')
+
+# Find tests with weak assertions in changed files
+[ -n "$CHANGED_TEST_FILES" ] && echo "$CHANGED_TEST_FILES" | xargs grep -E "toBeTruthy|toBeFalsy|toBeDefined|not\.toBeNull" 2>/dev/null
+```
+
+**Automated Check (full scope - SCOPE=full):**
 
 ```bash
 # Find tests with weak assertions

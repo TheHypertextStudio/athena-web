@@ -9,14 +9,30 @@ Identify performance bottlenecks across the full stack: React rendering, data fe
 
 ---
 
-## Phase 0: Scope & Baseline
+## Phase 0: Scope Detection
+
+### Determine Changed Files
+
+Before auditing, identify the scope of changes:
+
+```bash
+# Get list of changed files (staged + unstaged + untracked)
+CHANGED_FILES=$(git status --porcelain | awk '{print $NF}' | grep -E '\.(ts|tsx)$')
+echo "Changed files: $(echo "$CHANGED_FILES" | wc -l | tr -d ' ')"
+echo "$CHANGED_FILES"
+```
 
 ### Determine Audit Scope
 
 ```
 What kind of audit is needed?
+├── SESSION AUDIT (default) → Only changed files in current session
+│   Use when: After implementing a feature, fixing a bug
+│   Scope: Files from git status (uncommitted changes only)
+│
 ├── FULL AUDIT → All phases, frontend + backend
 │   Use when: Major performance issues, pre-release
+│   ⚠️  Requires explicit SCOPE=full
 │
 ├── FRONTEND ONLY → Phases 1-4
 │   ├── rendering → React component performance
@@ -33,11 +49,40 @@ What kind of audit is needed?
 └── TARGETED → Specific component or endpoint
 ```
 
+### Session vs Full Scope Commands
+
+When `SCOPE=session` (default), scope all automated checks to changed files:
+
+```bash
+# Store changed files for reuse throughout audit
+CHANGED_FILES=$(git status --porcelain | awk '{print $NF}' | grep -E '\.(ts|tsx)$')
+
+# Exit early if no relevant changes
+if [ -z "$CHANGED_FILES" ]; then
+  echo "No uncommitted TypeScript changes to audit."
+  exit 0
+fi
+```
+
 ### Establish Baselines
+
+**Session scope (default):**
+
+```bash
+CHANGED_FILES=$(git status --porcelain | awk '{print $NF}' | grep -E '\.(ts|tsx)$')
+
+# Count client components in changed files
+[ -n "$CHANGED_FILES" ] && echo "$CHANGED_FILES" | xargs grep -l "'use client'" 2>/dev/null | wc -l
+
+# Check line counts for changed components
+[ -n "$CHANGED_FILES" ] && echo "$CHANGED_FILES" | xargs wc -l 2>/dev/null | awk '$1 > 200 {print "Large file:", $0}'
+```
+
+**Full scope (explicit SCOPE=full):**
 
 ```bash
 # Build time
-time npm run build  # or pnpm/yarn
+time pnpm build
 
 # Bundle size (Next.js)
 du -sh .next/static/chunks/ 2>/dev/null || du -sh dist/
@@ -55,7 +100,23 @@ find . -path "*/routes/*" -name "*.ts" | wc -l
 
 ### 1.1 Component Architecture
 
-**Automated Check - Client vs Server Components:**
+**Automated Check (session scope - default):**
+
+```bash
+CHANGED_FILES=$(git status --porcelain | awk '{print $NF}' | grep -E '\.tsx$')
+
+# Find client components in changed files
+[ -n "$CHANGED_FILES" ] && echo "$CHANGED_FILES" | xargs grep -l "'use client'" 2>/dev/null
+
+# Check if changed client components have hooks (or could be Server Components)
+for f in $(echo "$CHANGED_FILES" | xargs grep -l "'use client'" 2>/dev/null); do
+  if ! grep -qE "useState|useEffect|useCallback|useMemo|useRef|useContext|onClick|onChange" "$f"; then
+    echo "No hooks/handlers (candidate for Server Component): $f"
+  fi
+done
+```
+
+**Automated Check (full scope - SCOPE=full):**
 
 ```bash
 # Count client components (Next.js App Router)

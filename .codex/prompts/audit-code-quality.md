@@ -1,6 +1,6 @@
 ---
 description: Code quality audit for detecting dead code, duplication, complexity issues, type safety violations, and test coverage gaps. Use before releases, during code reviews, or when addressing technical debt.
-argument-hint: [SCOPE=<full|dead-code|duplication|complexity|types|tests|deps>]
+argument-hint: [SCOPE=<session|full|dead-code|duplication|complexity|types|tests|deps>]
 ---
 
 # Code Quality Audit
@@ -19,14 +19,30 @@ Run the phases corresponding to `$SCOPE`. Default to full audit if not specified
 
 ---
 
-## Phase 0: Scope & Metrics
+## Phase 0: Scope Detection
+
+### Determine Changed Files
+
+Before auditing, identify the scope of changes:
+
+```bash
+# Get list of changed files (staged + unstaged + untracked)
+CHANGED_FILES=$(git status --porcelain | awk '{print $NF}' | grep -E '\.(ts|tsx)$')
+echo "Changed files: $(echo "$CHANGED_FILES" | wc -l | tr -d ' ')"
+echo "$CHANGED_FILES"
+```
 
 ### Determine Audit Scope
 
 ```
 What kind of audit is needed?
-├── FULL AUDIT → All phases, comprehensive review
-│   Use when: Technical debt sprint, major refactor, new team onboarding
+├── SESSION AUDIT (default) → Only changed files in current session
+│   Use when: After implementing a feature, fixing a bug, refactoring
+│   Scope: Files from git status (uncommitted changes only)
+│
+├── FULL AUDIT → All phases, entire codebase
+│   Use when: Technical debt sprint, major release, new team onboarding
+│   ⚠️  Requires explicit SCOPE=full
 │
 ├── TARGETED AUDIT → Specific area only
 │   ├── dead-code → Phase 1 (unused code detection)
@@ -40,17 +56,48 @@ What kind of audit is needed?
     Use when: Pre-commit, CI/CD pipeline
 ```
 
+### Session vs Full Scope Commands
+
+When `SCOPE=session` (default), scope all automated checks to changed files:
+
+```bash
+# Store changed files for reuse throughout audit
+CHANGED_FILES=$(git status --porcelain | awk '{print $NF}' | grep -E '\.(ts|tsx)$')
+
+# Exit early if no relevant changes
+if [ -z "$CHANGED_FILES" ]; then
+  echo "No uncommitted TypeScript changes to audit."
+  exit 0
+fi
+```
+
 ### Establish Baselines
+
+For session scope, run checks against changed files only. For full scope, run against entire codebase.
+
+**Session scope (default):**
+
+```bash
+CHANGED_FILES=$(git status --porcelain | awk '{print $NF}' | grep -E '\.(ts|tsx)$')
+
+# Type check (always full - TypeScript needs full context)
+pnpm typecheck 2>&1 | tail -5
+
+# Files over 300 lines (session scope)
+[ -n "$CHANGED_FILES" ] && echo "$CHANGED_FILES" | xargs wc -l 2>/dev/null | awk '$1 > 300 {print}'
+```
+
+**Full scope (explicit SCOPE=full):**
 
 ```bash
 # Type check errors
-npx tsc --noEmit 2>&1 | tail -5
+pnpm typecheck 2>&1 | tail -5
 
 # Lint warnings/errors
-npm run lint 2>&1 | grep -E "warning|error" | wc -l
+pnpm lint 2>&1 | grep -E "warning|error" | wc -l
 
 # Test coverage (if configured)
-npm test -- --coverage 2>&1 | grep -E "All files|Statements|Branches"
+pnpm test -- --coverage 2>&1 | grep -E "All files|Statements|Branches"
 
 # Total lines of code
 find . -name "*.ts" -o -name "*.tsx" | xargs wc -l | tail -1

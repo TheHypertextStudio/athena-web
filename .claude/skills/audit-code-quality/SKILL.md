@@ -9,14 +9,30 @@ Identify code quality issues including dead code, duplication, excessive complex
 
 ---
 
-## Phase 0: Scope & Metrics
+## Phase 0: Scope Detection
+
+### Determine Changed Files
+
+Before auditing, identify the scope of changes:
+
+```bash
+# Get list of changed files (staged + unstaged + untracked)
+CHANGED_FILES=$(git status --porcelain | awk '{print $NF}' | grep -E '\.(ts|tsx)$')
+echo "Changed files: $(echo "$CHANGED_FILES" | wc -l | tr -d ' ')"
+echo "$CHANGED_FILES"
+```
 
 ### Determine Audit Scope
 
 ```
 What kind of audit is needed?
-├── FULL AUDIT → All phases, comprehensive review
-│   Use when: Technical debt sprint, major refactor, new team onboarding
+├── SESSION AUDIT (default) → Only changed files in current session
+│   Use when: After implementing a feature, fixing a bug, refactoring
+│   Scope: Files from git status (uncommitted changes only)
+│
+├── FULL AUDIT → All phases, entire codebase
+│   Use when: Technical debt sprint, major release, new team onboarding
+│   ⚠️  Requires explicit SCOPE=full
 │
 ├── TARGETED AUDIT → Specific area only
 │   ├── dead-code → Phase 1 (unused code detection)
@@ -30,17 +46,48 @@ What kind of audit is needed?
     Use when: Pre-commit, CI/CD pipeline
 ```
 
+### Session vs Full Scope Commands
+
+When `SCOPE=session` (default), scope all automated checks to changed files:
+
+```bash
+# Store changed files for reuse throughout audit
+CHANGED_FILES=$(git status --porcelain | awk '{print $NF}' | grep -E '\.(ts|tsx)$')
+
+# Exit early if no relevant changes
+if [ -z "$CHANGED_FILES" ]; then
+  echo "No uncommitted TypeScript changes to audit."
+  exit 0
+fi
+```
+
 ### Establish Baselines
+
+For session scope, run checks against changed files only. For full scope, run against entire codebase.
+
+**Session scope (default):**
+
+```bash
+CHANGED_FILES=$(git status --porcelain | awk '{print $NF}' | grep -E '\.(ts|tsx)$')
+
+# Type check (always full - TypeScript needs full context)
+pnpm typecheck 2>&1 | tail -5
+
+# Files over 300 lines (session scope)
+[ -n "$CHANGED_FILES" ] && echo "$CHANGED_FILES" | xargs wc -l 2>/dev/null | awk '$1 > 300 {print}'
+```
+
+**Full scope (explicit SCOPE=full):**
 
 ```bash
 # Type check errors
-npx tsc --noEmit 2>&1 | tail -5
+pnpm typecheck 2>&1 | tail -5
 
 # Lint warnings/errors
-npm run lint 2>&1 | grep -E "warning|error" | wc -l
+pnpm lint 2>&1 | grep -E "warning|error" | wc -l
 
 # Test coverage (if configured)
-npm test -- --coverage 2>&1 | grep -E "All files|Statements|Branches"
+pnpm test -- --coverage 2>&1 | grep -E "All files|Statements|Branches"
 
 # Total lines of code
 find . -name "*.ts" -o -name "*.tsx" | xargs wc -l | tail -1
@@ -55,7 +102,19 @@ find . -name "*.ts" -o -name "*.tsx" | xargs wc -l | awk '$1 > 300 {print}' | wc
 
 ### 1.1 Unused Exports
 
-**Automated Check:**
+**Automated Check (session scope - default):**
+
+```bash
+CHANGED_FILES=$(git status --porcelain | awk '{print $NF}' | grep -E '\.(ts|tsx)$')
+
+# Find exports in changed files
+[ -n "$CHANGED_FILES" ] && echo "$CHANGED_FILES" | xargs grep -E "^export (const|function|class|type|interface|enum)" 2>/dev/null | wc -l
+
+# List exported identifiers from changed files
+[ -n "$CHANGED_FILES" ] && echo "$CHANGED_FILES" | xargs grep -oE "export (const|function|class|type|interface|enum) [A-Za-z0-9_]+" 2>/dev/null | cut -d' ' -f3 | sort -u
+```
+
+**Automated Check (full scope - SCOPE=full):**
 
 ```bash
 # Find all exports
@@ -226,7 +285,19 @@ async function findById<T>(
 
 ### 3.1 File Size
 
-**Automated Check:**
+**Automated Check (session scope - default):**
+
+```bash
+CHANGED_FILES=$(git status --porcelain | awk '{print $NF}' | grep -E '\.(ts|tsx)$')
+
+# Check line counts for changed files only
+[ -n "$CHANGED_FILES" ] && echo "$CHANGED_FILES" | xargs wc -l 2>/dev/null | awk '$1 > 300 {print "WARNING:", $0}'
+
+# Files over 500 lines (critical)
+[ -n "$CHANGED_FILES" ] && echo "$CHANGED_FILES" | xargs wc -l 2>/dev/null | awk '$1 > 500 {print "CRITICAL:", $0}'
+```
+
+**Automated Check (full scope - SCOPE=full):**
 
 ```bash
 # Files over 300 lines (warning)
@@ -325,7 +396,22 @@ function process(data) {
 
 ### 4.1 `any` Type Usage
 
-**Automated Check:**
+**Automated Check (session scope - default):**
+
+```bash
+CHANGED_FILES=$(git status --porcelain | awk '{print $NF}' | grep -E '\.(ts|tsx)$')
+
+# Find explicit any usage in changed files
+[ -n "$CHANGED_FILES" ] && echo "$CHANGED_FILES" | xargs grep -E ": any\b|: any\[|: any\)" 2>/dev/null | wc -l
+
+# Find as any casts in changed files
+[ -n "$CHANGED_FILES" ] && echo "$CHANGED_FILES" | xargs grep -E "as any" 2>/dev/null
+
+# List files with any usage
+[ -n "$CHANGED_FILES" ] && echo "$CHANGED_FILES" | xargs grep -c ": any" 2>/dev/null | grep -v ":0$"
+```
+
+**Automated Check (full scope - SCOPE=full):**
 
 ```bash
 # Find explicit any usage

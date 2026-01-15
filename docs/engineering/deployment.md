@@ -120,7 +120,7 @@ pnpm dev
 pnpm --filter @athena/api dev
 ```
 
-The API server will be available at `http://localhost:3000`.
+The API server will be available at `http://localhost:4000`.
 
 ---
 
@@ -130,24 +130,24 @@ The API server will be available at `http://localhost:3000`.
 
 These must be set for the server to start:
 
-| Variable             | Description                  | Example                                                  |
-| -------------------- | ---------------------------- | -------------------------------------------------------- |
-| `DATABASE_URL`       | PostgreSQL connection string | `postgresql://athena:password@localhost:5432/athena_dev` |
-| `BETTER_AUTH_SECRET` | Auth secret (min 32 chars)   | Generate with `openssl rand -base64 32`                  |
-| `BETTER_AUTH_URL`    | Public API URL               | `http://localhost:3000`                                  |
+| Variable             | Description                    | Example                                                  |
+| -------------------- | ------------------------------ | -------------------------------------------------------- |
+| `DATABASE_URL`       | PostgreSQL connection string   | `postgresql://athena:password@localhost:5432/athena_dev` |
+| `BETTER_AUTH_SECRET` | Auth secret (min 32 chars)     | Generate with `openssl rand -base64 32`                  |
+| `BETTER_AUTH_URL`    | Frontend URL (where auth runs) | `http://localhost:3000`                                  |
 
 ### Minimal .env for Development
 
 ```env
 NODE_ENV=development
-PORT=3000
+PORT=4000
 LOG_LEVEL=debug
 
 DATABASE_URL=postgresql://athena:athena_dev_password@localhost:5432/athena_dev
 
 BETTER_AUTH_SECRET=development-secret-key-at-least-32-chars
 BETTER_AUTH_URL=http://localhost:3000
-FRONTEND_URL=http://localhost:3001
+FRONTEND_URL=http://localhost:3000
 ```
 
 ### Feature-Specific Configuration
@@ -183,7 +183,7 @@ APPLE_CLIENT_SECRET=your-apple-key
 # Outlook Calendar
 OUTLOOK_CLIENT_ID=your-outlook-client-id
 OUTLOOK_CLIENT_SECRET=your-outlook-secret
-OUTLOOK_REDIRECT_URI=http://localhost:3000/api/calendar/callback/outlook
+OUTLOOK_REDIRECT_URI=http://localhost:3000/settings/integrations/callback
 ```
 
 #### AI Assistant (Athena)
@@ -346,7 +346,7 @@ COPY --from=builder /app/apps/api/dist ./dist
 COPY --from=builder /app/apps/api/package.json .
 COPY --from=builder /app/node_modules ./node_modules
 
-EXPOSE 3000
+EXPOSE 4000
 CMD ["node", "dist/index.js"]
 ```
 
@@ -359,7 +359,7 @@ docker build -t athena-api -f apps/api/Dockerfile .
 # Run container
 docker run -d \
   --name athena-api \
-  -p 3000:3000 \
+  -p 4000:4000 \
   --env-file apps/api/.env \
   athena-api
 ```
@@ -488,15 +488,15 @@ FRONTEND_URL=https://app.yourdomain.com
 #### Port Already in Use
 
 ```
-Error: listen EADDRINUSE: address already in use :::3000
+Error: listen EADDRINUSE: address already in use :::4000
 ```
 
 **Solution:** Use a different port or kill the existing process:
 
 ```bash
-PORT=3001 pnpm dev
+PORT=4001 pnpm dev
 # or
-lsof -ti:3000 | xargs kill
+lsof -ti:4000 | xargs kill
 ```
 
 ### Debug Mode
@@ -534,9 +534,11 @@ pnpm db:studio
 
 ```env
 NODE_ENV=development
+PORT=4000
 DATABASE_URL=postgresql://athena:password@localhost:5432/athena_dev
 BETTER_AUTH_SECRET=your-32-character-minimum-secret-key
 BETTER_AUTH_URL=http://localhost:3000
+FRONTEND_URL=http://localhost:3000
 ```
 
 ### Start Commands
@@ -556,9 +558,10 @@ pnpm test
 
 | URL                              | Description                             |
 | -------------------------------- | --------------------------------------- |
-| `http://localhost:3000`          | API server                              |
-| `http://localhost:3000/health`   | Health check                            |
-| `http://localhost:3000/api/docs` | API documentation                       |
+| `http://localhost:4000`          | API server                              |
+| `http://localhost:4000/health`   | Health check                            |
+| `http://localhost:4000/api/docs` | API documentation                       |
+| `http://localhost:3000`          | Frontend (Next.js)                      |
 | `http://localhost:4983`          | Drizzle Studio (after `pnpm db:studio`) |
 
 ---

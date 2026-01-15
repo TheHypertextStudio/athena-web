@@ -67,7 +67,7 @@ brew install stripe/stripe-cli/stripe
 stripe login
 
 # Forward webhooks to your local server
-stripe listen --forward-to localhost:3001/api/billing/webhook
+stripe listen --forward-to localhost:4000/api/billing/webhook
 ```
 
 The CLI will display a webhook signing secret (starts with `whsec_`). Use this for `STRIPE_WEBHOOK_SECRET`.

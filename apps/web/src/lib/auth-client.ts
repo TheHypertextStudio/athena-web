@@ -9,14 +9,15 @@
 
 import { createAuthClient } from 'better-auth/react';
 import { passkeyClient } from '@better-auth/passkey/client';
+import { oauthProviderClient } from '@better-auth/oauth-provider/client';
 import { lastLoginMethodClient } from 'better-auth/client/plugins';
 
 /**
- * Configured auth client with passkey support.
+ * Configured auth client with passkey and OAuth provider support.
  * No baseURL needed - auth routes are same-origin at /api/auth/*
  */
 export const authClient = createAuthClient({
-  plugins: [passkeyClient(), lastLoginMethodClient()],
+  plugins: [passkeyClient(), lastLoginMethodClient(), oauthProviderClient()],
 });
 
 /**

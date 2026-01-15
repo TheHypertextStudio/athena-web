@@ -2,15 +2,18 @@
  * MCP (Model Context Protocol) routes.
  *
  * Uses the official MCP SDK with streamable HTTP transport.
+ * Supports both session-based auth (for web) and OAuth Bearer auth (for MCP clients).
  *
  * @packageDocumentation
  */
 
 import { Hono } from 'hono';
-import type { Context } from 'hono';
+import type { Context, Next } from 'hono';
+import { HTTPException } from 'hono/http-exception';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { createMcpServer } from '../services/mcp/index.js';
-import { requireAuth, getUserId } from '../middleware/auth.js';
+import { requireAuth } from '../middleware/auth.js';
+import { requireOAuthAuth } from '../middleware/oauth-auth.js';
 
 const app = new Hono();
 
@@ -24,7 +27,37 @@ const sessions = new Map<
   }
 >();
 
-app.use('*', requireAuth);
+/**
+ * Combined auth middleware that supports both session and OAuth Bearer token.
+ * OAuth takes precedence if a Bearer token is present.
+ */
+async function requireMcpAuth(c: Context, next: Next): Promise<void> {
+  const authorization = c.req.header('authorization');
+
+  if (authorization?.startsWith('Bearer ')) {
+    // OAuth Bearer token authentication for MCP clients
+    const oauthMiddleware = requireOAuthAuth({
+      scopes: ['mcp:read'], // Minimum required scope for MCP access
+    });
+    return oauthMiddleware(c, next);
+  }
+
+  // Session-based authentication for web clients
+  return requireAuth(c, next);
+}
+
+/**
+ * Get user ID from context (works for both session and OAuth auth).
+ */
+function getUserId(c: Context): string {
+  const userId = c.get('userId') as string | undefined;
+  if (!userId) {
+    throw new HTTPException(401, { message: 'Unauthorized' });
+  }
+  return userId;
+}
+
+app.use('*', requireMcpAuth);
 
 /**
  * Handle all MCP requests via the streamable HTTP transport.

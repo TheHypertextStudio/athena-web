@@ -8,7 +8,12 @@ export default tseslint.config(
   {
     languageOptions: {
       parserOptions: {
-        projectService: true,
+        projectService: {
+          allowDefaultProject: [
+            'apps/web/src/app/.well-known/oauth-authorization-server/route.ts',
+            'apps/web/src/app/.well-known/openid-configuration/route.ts',
+          ],
+        },
         tsconfigRootDir: import.meta.dirname,
       },
     },

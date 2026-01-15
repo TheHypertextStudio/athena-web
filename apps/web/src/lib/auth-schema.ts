@@ -6,7 +6,7 @@
  * @packageDocumentation
  */
 
-import { pgTable, text, timestamp, boolean, integer } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, boolean, integer, jsonb } from 'drizzle-orm/pg-core';
 
 /**
  * Users table - core user data.
@@ -90,4 +90,106 @@ export const passkeys = pgTable('passkeys', {
   transports: text('transports'),
   aaguid: text('aaguid'),
   createdAt: timestamp('created_at').defaultNow(),
+});
+
+// ============================================================================
+// OAuth 2.1 Provider Tables
+// ============================================================================
+
+/**
+ * JWKS table - stores JWT signing keys for OAuth access/id tokens.
+ */
+export const jwks = pgTable('jwks', {
+  id: text('id').primaryKey(),
+  publicKey: text('public_key').notNull(),
+  privateKey: text('private_key').notNull(),
+  createdAt: timestamp('created_at').notNull(),
+  expiresAt: timestamp('expires_at'),
+});
+
+/**
+ * OAuth clients table - registered OAuth applications (MCP agents, third-party apps).
+ */
+export const oauthClients = pgTable('oauth_clients', {
+  id: text('id').primaryKey(),
+  clientId: text('client_id').notNull().unique(),
+  clientSecret: text('client_secret'),
+  disabled: boolean('disabled').default(false),
+  skipConsent: boolean('skip_consent').default(false),
+  enableEndSession: boolean('enable_end_session').default(false),
+  scopes: text('scopes').array(),
+  userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
+  referenceId: text('reference_id'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+  name: text('name'),
+  uri: text('uri'),
+  icon: text('icon'),
+  contacts: text('contacts').array(),
+  tos: text('tos'),
+  policy: text('policy'),
+  softwareId: text('software_id'),
+  softwareVersion: text('software_version'),
+  softwareStatement: text('software_statement'),
+  redirectUris: text('redirect_uris').array().notNull(),
+  postLogoutRedirectUris: text('post_logout_redirect_uris').array(),
+  tokenEndpointAuthMethod: text('token_endpoint_auth_method'),
+  grantTypes: text('grant_types').array(),
+  responseTypes: text('response_types').array(),
+  public: boolean('public').default(false),
+  type: text('type'),
+  metadata: jsonb('metadata'),
+});
+
+/**
+ * OAuth refresh tokens table.
+ */
+export const oauthRefreshTokens = pgTable('oauth_refresh_tokens', {
+  id: text('id').primaryKey(),
+  token: text('token').notNull(),
+  clientId: text('client_id')
+    .notNull()
+    .references(() => oauthClients.clientId, { onDelete: 'cascade' }),
+  sessionId: text('session_id').references(() => sessions.id, { onDelete: 'set null' }),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  referenceId: text('reference_id'),
+  expiresAt: timestamp('expires_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+  revoked: timestamp('revoked'),
+  scopes: text('scopes').array().notNull(),
+});
+
+/**
+ * OAuth access tokens table.
+ */
+export const oauthAccessTokens = pgTable('oauth_access_tokens', {
+  id: text('id').primaryKey(),
+  token: text('token').unique(),
+  clientId: text('client_id')
+    .notNull()
+    .references(() => oauthClients.clientId, { onDelete: 'cascade' }),
+  sessionId: text('session_id').references(() => sessions.id, { onDelete: 'set null' }),
+  userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
+  referenceId: text('reference_id'),
+  refreshId: text('refresh_id').references(() => oauthRefreshTokens.id, { onDelete: 'cascade' }),
+  expiresAt: timestamp('expires_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+  scopes: text('scopes').array().notNull(),
+});
+
+/**
+ * OAuth consent table.
+ */
+export const oauthConsents = pgTable('oauth_consents', {
+  id: text('id').primaryKey(),
+  clientId: text('client_id')
+    .notNull()
+    .references(() => oauthClients.clientId, { onDelete: 'cascade' }),
+  userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
+  referenceId: text('reference_id'),
+  scopes: text('scopes').array().notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
 });

@@ -4,6 +4,7 @@ import {
   PasskeysSection,
   ActiveSessionsSection,
   AccountRecoverySection,
+  ConnectedDevicesSection,
   SectionSkeleton,
 } from '@/components/settings/security';
 
@@ -17,6 +18,8 @@ export default function SecuritySettingsPage() {
       <Suspense fallback={<SectionSkeleton />}>
         <PasskeysSection />
       </Suspense>
+
+      <ConnectedDevicesSection />
 
       <Suspense fallback={<SectionSkeleton />}>
         <ActiveSessionsSection />

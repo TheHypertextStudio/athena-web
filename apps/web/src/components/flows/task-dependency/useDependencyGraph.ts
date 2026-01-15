@@ -3,7 +3,7 @@
 import { useMemo, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNodesState, useEdgesState, type OnConnect, addEdge } from '@xyflow/react';
-import { tasksApi, type Task } from '@/lib/api-client';
+import { tasksApi, projectsApi, type Task, type TaskDependencyGraphData } from '@/lib/api-client';
 import { getLayoutedElements } from '../shared/layout-utils';
 import type { TaskNodeType, TaskNodeData } from './TaskNode';
 import type { DependencyEdgeType, DependencyEdgeData } from './DependencyEdge';
@@ -154,32 +154,180 @@ function getStatusColor(status: Task['status']): string {
 }
 
 /**
+ * Transforms project dependency graph data into ReactFlow nodes and edges.
+ */
+function buildProjectGraph(graphData: TaskDependencyGraphData): {
+  nodes: TaskNodeType[];
+  edges: DependencyEdgeType[];
+} {
+  const { tasks, dependencies } = graphData;
+
+  // Build a map of task dependencies for calculating isBlocking
+  const taskDependents = new Map<string, string[]>();
+  for (const dep of dependencies) {
+    const existing = taskDependents.get(dep.dependsOnTaskId) ?? [];
+    existing.push(dep.taskId);
+    taskDependents.set(dep.dependsOnTaskId, existing);
+  }
+
+  const taskMap = new Map(tasks.map((t) => [t.id, t]));
+
+  const nodes: TaskNodeType[] = tasks.map((task) => {
+    const dependentIds = taskDependents.get(task.id) ?? [];
+    const isBlocking = dependentIds.some((depId) => {
+      const dependent = taskMap.get(depId);
+      return dependent && dependent.status !== 'completed' && dependent.status !== 'cancelled';
+    });
+
+    const nodeData: TaskNodeData = {
+      id: task.id,
+      title: task.title,
+      status: task.status,
+      priority: task.priority,
+      assignee: task.assignee?.name ?? null,
+      deadline: task.deadline,
+      isBlocking,
+      color: getStatusColor(task.status),
+    };
+
+    return {
+      id: task.id,
+      type: 'task',
+      position: { x: 0, y: 0 },
+      data: nodeData,
+    };
+  });
+
+  const edges: DependencyEdgeType[] = dependencies.map((dep) => {
+    const edgeData: DependencyEdgeData = {
+      type: 'blocks',
+      isOnCriticalPath: false,
+    };
+
+    return {
+      id: `${dep.dependsOnTaskId}->${dep.taskId}`,
+      source: dep.dependsOnTaskId,
+      target: dep.taskId,
+      type: 'dependency',
+      data: edgeData,
+    };
+  });
+
+  return getLayoutedElements<TaskNodeType, DependencyEdgeType>(nodes, edges, {
+    direction: 'LR',
+    nodeSep: 80,
+    rankSep: 150,
+  });
+}
+
+/**
+ * Computes topological order of nodes using Kahn's algorithm.
+ * Returns node IDs sorted from roots (no dependencies) to leaves.
+ */
+function computeTopologicalOrder(nodes: TaskNodeType[], edges: DependencyEdgeType[]): string[] {
+  const inDegree = new Map<string, number>();
+  const adjacency = new Map<string, string[]>();
+
+  // Initialize
+  for (const node of nodes) {
+    inDegree.set(node.id, 0);
+    adjacency.set(node.id, []);
+  }
+
+  // Build adjacency list and in-degree counts
+  for (const edge of edges) {
+    inDegree.set(edge.target, (inDegree.get(edge.target) ?? 0) + 1);
+    adjacency.get(edge.source)?.push(edge.target);
+  }
+
+  // Start with nodes that have no incoming edges (roots)
+  const queue = nodes.filter((n) => inDegree.get(n.id) === 0).map((n) => n.id);
+  const result: string[] = [];
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current) {
+      break;
+    }
+    result.push(current);
+
+    for (const neighbor of adjacency.get(current) ?? []) {
+      const newDegree = (inDegree.get(neighbor) ?? 1) - 1;
+      inDegree.set(neighbor, newDegree);
+      if (newDegree === 0) {
+        queue.push(neighbor);
+      }
+    }
+  }
+
+  // If there are remaining nodes (cycle), add them at the end
+  for (const node of nodes) {
+    if (!result.includes(node.id)) {
+      result.push(node.id);
+    }
+  }
+
+  return result;
+}
+
+/**
  * Hook for managing a task dependency graph.
+ *
+ * Supports two modes:
+ * - `rootTaskId`: Fetches a single task and its dependency tree (N+1 queries)
+ * - `projectId`: Fetches all tasks in a project with their dependencies (single query)
  */
 export function useDependencyGraph(options: UseDependencyGraphOptions = {}) {
-  const { rootTaskId, includeCompleted = false } = options;
+  const { rootTaskId, projectId, includeCompleted = false } = options;
   const queryClient = useQueryClient();
 
-  const {
-    data: graphData,
-    isLoading,
-    error,
-  } = useQuery({
+  // Determine which mode we're in
+  const mode = projectId ? 'project' : rootTaskId ? 'task' : 'none';
+
+  // Query for single task mode (existing behavior)
+  const taskQuery = useQuery({
     queryKey: dependencyKeys.graph(rootTaskId ?? ''),
     queryFn: async () => {
       if (!rootTaskId) return new Map<string, DependencyGraphData>();
       return fetchDependencyTree(rootTaskId);
     },
-    enabled: !!rootTaskId,
+    enabled: mode === 'task',
   });
 
-  const initialGraph = useMemo(() => {
-    if (!graphData) return { nodes: [], edges: [] };
-    return buildGraph(graphData, { includeCompleted });
-  }, [graphData, includeCompleted]);
+  // Query for project mode (new behavior - single request)
+  const projectQuery = useQuery({
+    queryKey: dependencyKeys.projectGraph(projectId ?? ''),
+    queryFn: async () => {
+      if (!projectId) return null;
+      const response = await projectsApi.getTaskDependencyGraph(projectId, { includeCompleted });
+      return response.data;
+    },
+    enabled: mode === 'project',
+  });
 
-  const [nodes, _setNodes, onNodesChange] = useNodesState(initialGraph.nodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialGraph.edges);
+  // Combine loading/error states
+  const isLoading = mode === 'project' ? projectQuery.isLoading : taskQuery.isLoading;
+  const error = mode === 'project' ? projectQuery.error : taskQuery.error;
+
+  // Build graph based on mode
+  const { nodes: initialNodes, edges: initialEdges } = useMemo(() => {
+    if (mode === 'project' && projectQuery.data) {
+      return buildProjectGraph(projectQuery.data);
+    }
+    if (mode === 'task' && taskQuery.data) {
+      return buildGraph(taskQuery.data, { includeCompleted });
+    }
+    return { nodes: [], edges: [] };
+  }, [mode, projectQuery.data, taskQuery.data, includeCompleted]);
+
+  // Compute topological order for keyboard navigation
+  const topologicalOrder = useMemo(
+    () => computeTopologicalOrder(initialNodes, initialEdges),
+    [initialNodes, initialEdges],
+  );
+
+  const [nodes, _setNodes, onNodesChange] = useNodesState(initialNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
   const addDependencyMutation = useMutation({
     mutationFn: async ({ taskId, dependsOnId }: { taskId: string; dependsOnId: string }) => {
@@ -238,6 +386,7 @@ export function useDependencyGraph(options: UseDependencyGraphOptions = {}) {
   return {
     nodes,
     edges,
+    topologicalOrder,
     onNodesChange,
     onEdgesChange,
     onConnect,

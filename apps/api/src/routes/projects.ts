@@ -5,9 +5,9 @@
  */
 
 import { Hono } from 'hono';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { projects, projectDependencies } from '../db/schema/index.js';
+import { projects, projectDependencies, tasks, taskDependencies } from '../db/schema/index.js';
 import { requireAuth, getUserId } from '../middleware/auth.js';
 
 const projectRoutes = new Hono();
@@ -196,6 +196,67 @@ projectRoutes.delete('/:id', async (c) => {
   await db.delete(projects).where(and(eq(projects.id, id), eq(projects.ownerId, userId)));
 
   return c.body(null, 204);
+});
+
+/**
+ * Get task dependency graph for a project.
+ * Returns all tasks in the project and their dependency relationships.
+ * GET /api/projects/:id/task-dependency-graph
+ */
+projectRoutes.get('/:id/task-dependency-graph', async (c) => {
+  const userId = getUserId(c);
+  const projectId = c.req.param('id');
+  const includeCompleted = c.req.query('includeCompleted') === 'true';
+
+  const project = await db.query.projects.findFirst({
+    where: and(eq(projects.id, projectId), eq(projects.ownerId, userId)),
+  });
+
+  if (!project) {
+    return c.json({ error: ERROR_PROJECT_NOT_FOUND }, 404);
+  }
+
+  // Fetch all tasks for this project
+  const projectTasks = await db.query.tasks.findMany({
+    where: and(eq(tasks.projectId, projectId), eq(tasks.creatorId, userId)),
+    with: {
+      assignee: {
+        columns: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+    },
+  });
+
+  // Filter out completed tasks if not requested
+  const filteredTasks = includeCompleted
+    ? projectTasks
+    : projectTasks.filter((t) => t.status !== 'completed');
+
+  const taskIds = filteredTasks.map((t) => t.id);
+  const taskIdSet = new Set(taskIds);
+
+  // Fetch dependencies where both source and target are in this project's tasks
+  const projectDeps =
+    taskIds.length > 0
+      ? (
+          await db.query.taskDependencies.findMany({
+            where: inArray(taskDependencies.taskId, taskIds),
+          })
+        ).filter((d) => taskIdSet.has(d.dependsOnTaskId))
+      : [];
+
+  return c.json({
+    data: {
+      tasks: filteredTasks,
+      dependencies: projectDeps.map((d) => ({
+        taskId: d.taskId,
+        dependsOnTaskId: d.dependsOnTaskId,
+      })),
+    },
+  });
 });
 
 /**

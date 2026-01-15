@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import {
   type Node,
   type Edge,
@@ -13,9 +13,16 @@ import { FlowSurface } from '../FlowSurface';
 import { TaskNode } from './TaskNode';
 import { DependencyEdge } from './DependencyEdge';
 import { useDependencyGraph } from './useDependencyGraph';
+import { useSelection } from '@/components/objects/context/SelectionContext';
+import { surfaceId } from '@/components/objects/types';
+
+const SURFACE_ID = surfaceId('task-dependency-graph');
 
 export interface TaskDependencyFlowProps {
-  rootTaskId: string;
+  /** Single task mode - shows task and its dependency tree */
+  rootTaskId?: string;
+  /** Project mode - shows all tasks in project with dependencies */
+  projectId?: string;
   title?: string;
   showMinimap?: boolean;
   showControls?: boolean;
@@ -37,19 +44,32 @@ const edgeTypes: EdgeTypes = {
  * Interactive task dependency graph visualization.
  *
  * Displays tasks and their blocking relationships in a directed graph.
- * Users can click nodes to view task details and drag to create new dependencies.
+ * Supports two modes:
+ * - `rootTaskId`: Shows a single task and its dependency tree
+ * - `projectId`: Shows all tasks in a project with their dependencies
+ *
+ * Integrates with SelectionContext for multi-select behavior.
  *
  * @example
  * ```tsx
+ * // Single task mode
  * <TaskDependencyFlow
  *   rootTaskId={taskId}
  *   title="Dependencies"
+ *   onNodeClick={(id) => openTaskModal(id)}
+ * />
+ *
+ * // Project mode
+ * <TaskDependencyFlow
+ *   projectId={projectId}
+ *   title="Project Dependencies"
  *   onNodeClick={(id) => openTaskModal(id)}
  * />
  * ```
  */
 export function TaskDependencyFlow({
   rootTaskId,
+  projectId,
   title = 'Task Dependencies',
   showMinimap = true,
   showControls = true,
@@ -59,32 +79,66 @@ export function TaskDependencyFlow({
   className,
 }: TaskDependencyFlowProps) {
   const {
-    nodes,
+    nodes: graphNodes,
     edges,
+    topologicalOrder,
     onNodesChange,
     onEdgesChange,
     onConnect,
     removeDependency,
     isLoading,
     error,
-  } = useDependencyGraph({ rootTaskId, includeCompleted });
+  } = useDependencyGraph({ rootTaskId, projectId, includeCompleted });
+
+  const { select, toggle, selectRange, isSelected, state } = useSelection();
+
+  // Update nodes with selection state from SelectionContext
+  const nodes = useMemo(() => {
+    return graphNodes.map((node) => ({
+      ...node,
+      selected: isSelected(node.id),
+    }));
+  }, [graphNodes, isSelected]);
 
   const handleNodeClick = useCallback(
-    (_event: React.MouseEvent, node: Node) => {
+    (event: React.MouseEvent, node: Node) => {
+      // Multi-select behavior
+      if (event.shiftKey && state.anchor) {
+        selectRange(state.anchor, node.id, topologicalOrder, SURFACE_ID);
+      } else if (event.metaKey || event.ctrlKey) {
+        toggle(node.id, SURFACE_ID);
+      } else {
+        select(node.id, SURFACE_ID);
+      }
+
+      // Notify parent
       if (onNodeClick) {
         onNodeClick(node.id);
       }
     },
-    [onNodeClick],
+    [state.anchor, topologicalOrder, select, toggle, selectRange, onNodeClick],
   );
 
-  const handleEdgeClick = useCallback(
-    (_event: React.MouseEvent, edge: Edge) => {
-      if (window.confirm('Remove this dependency?')) {
-        removeDependency(edge.id);
-      }
+  // Edge context menu instead of window.confirm
+  const handleEdgeContextMenu = useCallback(
+    (event: React.MouseEvent, edge: Edge) => {
+      event.preventDefault();
+      // For now, just remove the dependency - proper context menu will be added later
+      removeDependency(edge.id);
     },
     [removeDependency],
+  );
+
+  // Filter onNodesChange to only allow selection changes (no position changes)
+  const handleNodesChange: OnNodesChange = useCallback(
+    (changes) => {
+      // Only allow selection changes, filter out position changes
+      const allowedChanges = changes.filter(
+        (change) => change.type === 'select' || change.type === 'remove',
+      );
+      onNodesChange(allowedChanges);
+    },
+    [onNodesChange],
   );
 
   if (isLoading) {
@@ -108,28 +162,45 @@ export function TaskDependencyFlow({
 
   if (nodes.length === 0) {
     return (
-      <div className="border-outline-variant bg-surface flex h-64 items-center justify-center rounded-xl border">
-        <p className="text-on-surface-variant">No dependencies found</p>
+      <div className="border-outline-variant bg-surface flex h-64 flex-col items-center justify-center rounded-xl border">
+        <p className="text-on-surface-variant">No tasks found</p>
+        <p className="text-on-surface-variant/60 mt-1 text-sm">
+          {projectId ? 'Create tasks to see their dependencies' : 'This task has no dependencies'}
+        </p>
       </div>
     );
   }
+
+  const exportFileName = (() => {
+    if (projectId) {
+      const id = projectId;
+      return `project-dependencies-${id}`;
+    }
+    if (rootTaskId) {
+      const id = rootTaskId;
+      return `task-dependencies-${id}`;
+    }
+    return 'task-dependencies';
+  })();
 
   return (
     <FlowSurface
       nodes={nodes}
       edges={edges}
-      onNodesChange={onNodesChange as OnNodesChange}
+      onNodesChange={handleNodesChange}
       onEdgesChange={onEdgesChange as OnEdgesChange}
       onConnect={onConnect}
       onNodeClick={handleNodeClick}
-      onEdgeClick={handleEdgeClick}
+      onEdgeClick={handleEdgeContextMenu}
       nodeTypes={nodeTypes}
       edgeTypes={edgeTypes}
       title={title}
       showMinimap={showMinimap}
       showControls={showControls}
-      exportFileName={`task-dependencies-${rootTaskId}`}
+      exportFileName={exportFileName}
       onExpand={onExpand}
+      nodesDraggable={false}
+      nodesConnectable={false}
       className={className}
     />
   );

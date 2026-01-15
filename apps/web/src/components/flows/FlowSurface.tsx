@@ -40,6 +40,10 @@ export interface FlowSurfaceProps {
   exportFileName?: string | boolean;
   onExpand?: () => void;
   fitView?: boolean;
+  /** Disable node dragging for read-only graphs */
+  nodesDraggable?: boolean;
+  /** Disable edge creation via drag */
+  nodesConnectable?: boolean;
   className?: string;
   children?: ReactNode;
 }
@@ -61,6 +65,8 @@ function FlowSurfaceInner({
   exportFileName,
   onExpand,
   fitView = true,
+  nodesDraggable = true,
+  nodesConnectable = true,
   className,
   children,
 }: FlowSurfaceProps) {
@@ -115,6 +121,8 @@ function FlowSurfaceInner({
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
           fitView={fitView}
+          nodesDraggable={nodesDraggable}
+          nodesConnectable={nodesConnectable}
           proOptions={{ hideAttribution: true }}
           className="bg-surface"
         >

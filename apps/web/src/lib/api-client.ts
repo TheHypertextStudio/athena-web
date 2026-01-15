@@ -386,6 +386,15 @@ export const tasksApi = {
     }),
 };
 
+// ============================================================================
+// Task Dependency Graph Types
+// ============================================================================
+
+export interface TaskDependencyGraphData {
+  tasks: (Task & { assignee?: { id: string; name: string; email: string } | null })[];
+  dependencies: { taskId: string; dependsOnTaskId: string }[];
+}
+
 /**
  * Projects API
  */
@@ -398,6 +407,14 @@ export const projectsApi = {
     return request<{ data: Project[] }>(`/api/projects${query ? `?${query}` : ''}`);
   },
   get: (id: string) => request<{ data: Project }>(`/api/projects/${id}`),
+  getTaskDependencyGraph: (id: string, params?: { includeCompleted?: boolean }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.includeCompleted) searchParams.set('includeCompleted', 'true');
+    const query = searchParams.toString();
+    return request<{ data: TaskDependencyGraphData }>(
+      `/api/projects/${id}/task-dependency-graph${query ? `?${query}` : ''}`,
+    );
+  },
 };
 
 /**

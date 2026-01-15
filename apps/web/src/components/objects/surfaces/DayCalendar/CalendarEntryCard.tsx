@@ -1,7 +1,7 @@
 'use client';
 
 import type { MouseEvent } from 'react';
-import { useMemo, useEffect } from 'react';
+import { useMemo, useEffect, useRef } from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
@@ -148,8 +148,9 @@ export function CalendarEntryCard({
   const positionStartTime = entry.displayStartTime ?? entry.startTime;
   const positionEndTime = entry.displayEndTime ?? entry.endTime;
 
-  const baseTop = getYFromTime(positionStartTime, startHour, hourHeight);
-  const bottom = getYFromTime(positionEndTime, startHour, hourHeight);
+  // Pass date as reference to correctly handle midnight (next day) as hour 24
+  const baseTop = getYFromTime(positionStartTime, startHour, hourHeight, date);
+  const bottom = getYFromTime(positionEndTime, startHour, hourHeight, date);
   const baseHeight = Math.max(bottom - baseTop, 24);
 
   // Use preview values when resizing
@@ -157,7 +158,7 @@ export function CalendarEntryCard({
   const height = isResizing && resizePreviewHeight !== undefined ? resizePreviewHeight : baseHeight;
 
   const isTimeBlock = entry.type === 'time-block';
-  const hasTasks = isTimeBlock && entry.tasks && entry.tasks.length > 0;
+  const hasTasks = isTimeBlock && (entry.tasks?.length ?? 0) > 0;
 
   // Multi-day event continuation flags
   const continuesFromPreviousDay = entry.continuesFromPreviousDay ?? false;
@@ -180,27 +181,70 @@ export function CalendarEntryCard({
     },
   });
 
+  // Capture values at drag start to prevent mid-drag fluctuations
+  // This includes hourHeight, baseTop, AND entry times (for preview entries that get updated)
+  const dragStartValuesRef = useRef<{
+    hourHeight: number;
+    baseTop: number;
+    entryStartTime: number;
+    entryEndTime: number;
+  } | null>(null);
+
+  // Capture values synchronously during render when drag starts
+  // This ensures captured values are available on the same render cycle
+  if (isDragging && dragStartValuesRef.current === null) {
+    // Drag just started - capture current values immediately
+    dragStartValuesRef.current = {
+      hourHeight,
+      baseTop,
+      entryStartTime: entry.startTime.getTime(),
+      entryEndTime: entry.endTime.getTime(),
+    };
+  } else if (!isDragging && dragStartValuesRef.current !== null) {
+    // Drag ended - clear captured values
+    dragStartValuesRef.current = null;
+  }
+
+  // Use captured values during drag for stability
+  const stableHourHeight = dragStartValuesRef.current?.hourHeight ?? hourHeight;
+
+  // During drag, use the stable base position so transform is applied from a fixed point
+  // This prevents the "acceleration" effect caused by baseTop recalculating during drag
+  const effectiveTop =
+    isDragging && dragStartValuesRef.current ? dragStartValuesRef.current.baseTop : top;
+
   // Snap transform to grid (5-minute increments) and lock horizontal movement
-  const snappedTransform = transform
-    ? {
-        ...transform,
-        x: 0, // Lock horizontal - no other days to drag to in day view
-        y: Math.round(transform.y / (hourHeight / 12)) * (hourHeight / 12),
-      }
-    : null;
+  // Use stable values to prevent any mid-drag changes from affecting position
+  const snappedTransform = useMemo(() => {
+    if (!transform) return null;
+    const snapSize = stableHourHeight / 12;
+    return {
+      x: 0, // Lock horizontal - no other days to drag to in day view
+      y: Math.round(transform.y / snapSize) * snapSize,
+      scaleX: 1,
+      scaleY: 1,
+    };
+  }, [transform?.y, stableHourHeight]);
 
   // Calculate preview times during drag
+  // IMPORTANT: Use captured entry times from drag start, not current entry times
+  // This prevents compounding when parent updates entry times via onPreviewMove
   const dragPreviewTimes = useMemo(() => {
-    if (!isDragging || !snappedTransform) return null;
+    if (!isDragging || !snappedTransform || !dragStartValuesRef.current) return null;
 
-    const pixelsPerMinute = hourHeight / 60;
+    // Use stable values captured at drag start
+    const pixelsPerMinute = stableHourHeight / 60;
     const deltaMinutes =
       Math.round(snappedTransform.y / pixelsPerMinute / MIN_SLOT_MINUTES) * MIN_SLOT_MINUTES;
 
     if (deltaMinutes === 0) return null;
 
-    const duration = entry.endTime.getTime() - entry.startTime.getTime();
-    let newStart = new Date(entry.startTime.getTime() + deltaMinutes * 60 * 1000);
+    // Use the ORIGINAL entry times captured at drag start, not current entry times
+    const originalStartTime = dragStartValuesRef.current.entryStartTime;
+    const originalEndTime = dragStartValuesRef.current.entryEndTime;
+    const duration = originalEndTime - originalStartTime;
+
+    let newStart = new Date(originalStartTime + deltaMinutes * 60 * 1000);
     let newEnd = new Date(newStart.getTime() + duration);
 
     // Clamp to bounds if date is provided
@@ -224,17 +268,32 @@ export function CalendarEntryCard({
   }, [
     isDragging,
     snappedTransform,
-    hourHeight,
-    entry.startTime,
-    entry.endTime,
+    stableHourHeight,
     date,
     startHour,
     endHour,
+    // Note: NOT depending on entry.startTime/endTime anymore - we use captured values
   ]);
 
-  // Call onPreviewMove when preview is being dragged
+  // Track previous preview times to prevent infinite update loops
+  const prevPreviewTimesRef = useRef<{ start: number; end: number } | null>(null);
+
+  // Call onPreviewMove when preview is being dragged - only when times actually change
   useEffect(() => {
-    if (isPreview && isDragging && dragPreviewTimes && onPreviewMove) {
+    if (!isPreview || !isDragging || !dragPreviewTimes || !onPreviewMove) {
+      prevPreviewTimesRef.current = null;
+      return;
+    }
+
+    const newStart = dragPreviewTimes.startTime.getTime();
+    const newEnd = dragPreviewTimes.endTime.getTime();
+    const prev = prevPreviewTimesRef.current;
+
+    // Only call onPreviewMove if times actually changed (not just object reference)
+    // When prev is null, prev?.start returns undefined which !== newStart (a number), so we enter the block
+    // When prev exists but prev.start === newStart, we check prev.end (prev is guaranteed non-null here)
+    if (prev?.start !== newStart || prev.end !== newEnd) {
+      prevPreviewTimesRef.current = { start: newStart, end: newEnd };
       onPreviewMove(dragPreviewTimes.startTime, dragPreviewTimes.endTime);
     }
   }, [isPreview, isDragging, dragPreviewTimes, onPreviewMove]);
@@ -244,7 +303,7 @@ export function CalendarEntryCard({
   const displayEndTime = dragPreviewTimes?.endTime ?? entry.endTime;
 
   const style = {
-    top: `${String(top)}px`,
+    top: `${String(effectiveTop)}px`,
     height: `${String(height)}px`,
     transform: CSS.Translate.toString(snappedTransform),
     ...(!isPreview && { backgroundColor: entryColor }),
@@ -265,7 +324,10 @@ export function CalendarEntryCard({
       style={style}
       className={cn(
         'group absolute right-2 left-14 cursor-pointer overflow-hidden',
-        'duration-medium2 ease-emphasized-decelerate transition-[top,height]',
+        // Only apply transitions when NOT dragging or resizing for immediate visual feedback
+        !isDragging &&
+          !isResizing &&
+          'duration-medium2 ease-emphasized-decelerate transition-[top,height]',
         // Adjust border-radius for multi-day events
         !continuesFromPreviousDay && !continuesToNextDay && 'rounded-md',
         continuesFromPreviousDay && !continuesToNextDay && 'rounded-b-md',
@@ -273,10 +335,10 @@ export function CalendarEntryCard({
         // No rounded corners if continues both ways
         isPreview && 'bg-primary/20 cursor-grab',
         selected && !isPreview && 'ring-primary ring-2',
-        isDragging && 'ring-primary z-50 ring-2 transition-none',
+        isDragging && 'ring-primary z-50 ring-2',
         isDragging && isPreview && 'cursor-grabbing shadow-lg',
         isDragging && !isPreview && 'opacity-90',
-        isResizing && 'ring-primary z-50 ring-2 transition-none',
+        isResizing && 'ring-primary z-50 ring-2',
       )}
       data-entry={!isPreview || undefined}
       data-preview-entry={isPreview ? true : undefined}

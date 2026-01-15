@@ -121,6 +121,18 @@ authRoutes.post('/backup-codes/verify', async (c) => {
 // Session Management Routes
 // ============================================================================
 
+const INACTIVE_THRESHOLD_DAYS = 7;
+
+type SessionStatus = 'current' | 'recent' | 'inactive';
+
+function getSessionStatus(lastActiveAt: Date, isCurrent: boolean): SessionStatus {
+  if (isCurrent) return 'current';
+
+  const now = new Date();
+  const diffDays = (now.getTime() - lastActiveAt.getTime()) / (1000 * 60 * 60 * 24);
+  return diffDays >= INACTIVE_THRESHOLD_DAYS ? 'inactive' : 'recent';
+}
+
 /**
  * Get all active sessions for the user.
  * GET /api/auth/sessions
@@ -146,20 +158,23 @@ authRoutes.get('/sessions', requireAuth, async (c) => {
     .where(and(eq(sessions.userId, userId), gt(sessions.expiresAt, new Date())))
     .orderBy(desc(sessions.lastActiveAt));
 
-  // Mark which session is current by comparing tokens
-  const sessionsWithCurrent = userSessions.map((session) => ({
-    id: session.id,
-    ipAddress: session.ipAddress,
-    userAgent: session.userAgent,
-    createdAt: session.createdAt,
-    expiresAt: session.expiresAt,
-    lastActiveAt: session.lastActiveAt,
-    isCurrent: currentSessionToken !== null && session.token === currentSessionToken,
-  }));
+  // Add status to each session
+  const sessionsWithStatus = userSessions.map((session) => {
+    const isCurrent = currentSessionToken !== null && session.token === currentSessionToken;
+    return {
+      id: session.id,
+      ipAddress: session.ipAddress,
+      userAgent: session.userAgent,
+      createdAt: session.createdAt,
+      expiresAt: session.expiresAt,
+      lastActiveAt: session.lastActiveAt,
+      status: getSessionStatus(session.lastActiveAt, isCurrent),
+    };
+  });
 
   return c.json({
-    sessions: sessionsWithCurrent,
-    count: sessionsWithCurrent.length,
+    sessions: sessionsWithStatus,
+    count: sessionsWithStatus.length,
   });
 });
 

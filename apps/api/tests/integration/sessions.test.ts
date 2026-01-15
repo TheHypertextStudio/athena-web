@@ -97,7 +97,7 @@ describe('Session Management API', () => {
       const body = (await res.json()) as {
         sessions: {
           id: string;
-          isCurrent: boolean;
+          status: 'current' | 'recent' | 'inactive';
           ipAddress: string;
           lastActiveAt: string;
         }[];
@@ -108,7 +108,7 @@ describe('Session Management API', () => {
       expect(body.sessions).toHaveLength(2);
     });
 
-    it('should correctly identify the current session', async () => {
+    it('should correctly identify the current session with status', async () => {
       const now = new Date();
       const futureDate = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
@@ -153,15 +153,72 @@ describe('Session Management API', () => {
       const body = (await res.json()) as {
         sessions: {
           id: string;
-          isCurrent: boolean;
+          status: 'current' | 'recent' | 'inactive';
         }[];
       };
 
       const currentSession = body.sessions.find((s) => s.id === 'session-current');
       const otherSession = body.sessions.find((s) => s.id === 'session-other');
 
-      expect(currentSession?.isCurrent).toBe(true);
-      expect(otherSession?.isCurrent).toBe(false);
+      expect(currentSession?.status).toBe('current');
+      expect(otherSession?.status).toBe('recent');
+    });
+
+    it('should mark inactive sessions based on lastActiveAt', async () => {
+      const now = new Date();
+      const futureDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // 30 days from now
+      const eightDaysAgo = new Date(now.getTime() - 8 * 24 * 60 * 60 * 1000); // 8 days ago
+
+      const mockSessions = [
+        {
+          id: 'session-current',
+          token: TEST_SESSION_TOKEN,
+          ipAddress: '192.168.1.1',
+          userAgent: 'Chrome/120.0.0.0',
+          createdAt: now,
+          expiresAt: futureDate,
+          lastActiveAt: now,
+        },
+        {
+          id: 'session-inactive',
+          token: 'old-token',
+          ipAddress: '10.0.0.1',
+          userAgent: 'Firefox/100.0',
+          createdAt: eightDaysAgo,
+          expiresAt: futureDate,
+          lastActiveAt: eightDaysAgo, // More than 7 days ago
+        },
+      ];
+
+      const mockSelectChain = {
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            orderBy: vi.fn().mockResolvedValue(mockSessions),
+          }),
+        }),
+      };
+      mockDb.select.mockReturnValue(mockSelectChain);
+
+      const res = await app.request('/api/auth/sessions', {
+        headers: {
+          Cookie: `better-auth.session_token=${TEST_SESSION_TOKEN}`,
+        },
+      });
+
+      expect(res.status).toBe(200);
+
+      const body = (await res.json()) as {
+        sessions: {
+          id: string;
+          status: 'current' | 'recent' | 'inactive';
+        }[];
+      };
+
+      const currentSession = body.sessions.find((s) => s.id === 'session-current');
+      const inactiveSession = body.sessions.find((s) => s.id === 'session-inactive');
+
+      expect(currentSession?.status).toBe('current');
+      expect(inactiveSession?.status).toBe('inactive');
     });
 
     it('should include lastActiveAt in response', async () => {

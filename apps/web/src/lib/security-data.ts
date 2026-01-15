@@ -31,6 +31,8 @@ async function fetchWithAuth<T>(path: string): Promise<T> {
 }
 
 // Types
+export type SessionStatus = 'current' | 'recent' | 'inactive';
+
 export interface Session {
   id: string;
   ipAddress: string | null;
@@ -38,7 +40,7 @@ export interface Session {
   createdAt: string;
   expiresAt: string;
   lastActiveAt: string;
-  isCurrent: boolean;
+  status: SessionStatus;
 }
 
 export interface LinkedAccount {

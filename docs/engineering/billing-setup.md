@@ -28,16 +28,20 @@ In your Stripe Dashboard, create the following products:
 2. Name: `Athena Pro`
 3. Create two prices:
    - Monthly: `$12/month` (recurring)
-   - Yearly: `$120/year` (recurring)
+   - Yearly: `$96/year` (recurring) - $8/month equivalent
 
 #### Team Plan
 
 1. Create another product: `Athena Team`
 2. Create two prices:
-   - Monthly: `$25/month per seat` (recurring)
-   - Yearly: `$250/year per seat` (recurring)
+   - Monthly: `$24/month` (recurring)
+   - Yearly: `$192/year` (recurring) - $16/month equivalent
 
 Note the Price IDs (e.g., `price_1ABC...`) for each price.
+
+#### Test Sandbox Configuration
+
+The test sandbox has been configured with Pro and Team products, each with monthly and yearly prices. Get the Price IDs from the Stripe Dashboard or your team's secrets manager.
 
 ### 2. Configure Customer Portal
 
@@ -83,22 +87,25 @@ The CLI will display a webhook signing secret (starts with `whsec_`). Use this f
 
 ## Environment Variables
 
-Add these to your `.env` file:
+Add these to your `apps/api/.env` file:
 
 ```env
 # Stripe API Keys (from Dashboard → Developers → API keys)
 STRIPE_SECRET_KEY=sk_test_...          # Use sk_live_... in production
-STRIPE_PUBLISHABLE_KEY=pk_test_...     # Use pk_live_... in production
 
 # Webhook secret (from webhook setup above)
 STRIPE_WEBHOOK_SECRET=whsec_...
 
 # Price IDs (from product setup above)
-STRIPE_PRICE_PRO_MONTHLY=price_...
-STRIPE_PRICE_PRO_YEARLY=price_...
-STRIPE_PRICE_TEAM_MONTHLY=price_...
-STRIPE_PRICE_TEAM_YEARLY=price_...
+STRIPE_PRICE_ID_PRO_MONTHLY=price_...
+STRIPE_PRICE_ID_PRO_YEARLY=price_...
+STRIPE_PRICE_ID_TEAM_MONTHLY=price_...
+STRIPE_PRICE_ID_TEAM_YEARLY=price_...
 ```
+
+### Test Sandbox Values
+
+Copy the test sandbox values to your local `.env` file. Get them from the Stripe Dashboard under Developers → API keys. Never commit keys to the repository.
 
 ### Test vs Live Mode
 
@@ -213,16 +220,53 @@ CREATE TABLE subscriptions (
 
 ## Testing
 
+### Integration Test Script
+
+Run the Stripe integration test to verify configuration:
+
+```bash
+cd apps/api
+npx tsx scripts/test-stripe-integration.ts
+```
+
+This verifies:
+
+- Products and prices exist in Stripe
+- Customer creation works
+- Checkout session creation works
+- Billing portal is configured
+
 ### Manual Testing
 
-1. Start local server and Stripe CLI webhook forwarding
-2. Go to `/settings/billing` and click upgrade
-3. Use test card `4242 4242 4242 4242`
-4. Verify subscription created and entitlements granted
-5. Test customer portal access
-6. Test cancellation flow
+1. Start local server and Stripe CLI webhook forwarding:
+
+   ```bash
+   # Terminal 1: Start API
+   cd apps/api && pnpm dev
+
+   # Terminal 2: Start web
+   cd apps/web && pnpm dev
+
+   # Terminal 3: Forward Stripe webhooks
+   stripe listen --forward-to localhost:4000/api/billing/webhook
+   ```
+
+2. Copy the webhook secret from Stripe CLI output to your `.env`
+3. Go to `http://localhost:3000/settings/billing` and click upgrade
+4. Use test card `4242 4242 4242 4242`
+5. Verify subscription created and entitlements granted
+6. Test customer portal access
+7. Test cancellation flow
 
 ### Automated Testing
+
+The billing integration tests are located at `apps/api/tests/integration/billing.test.ts`.
+
+Run them with:
+
+```bash
+cd apps/api && pnpm test -- tests/integration/billing.test.ts
+```
 
 Mock Stripe in tests:
 
@@ -238,3 +282,22 @@ vi.mock('stripe', () => ({
   })),
 }));
 ```
+
+## Production Checklist
+
+Before going live:
+
+- [ ] Create production Stripe products and prices
+- [ ] Configure live API keys (`sk_live_...`)
+- [ ] Set up production webhook endpoint in Stripe Dashboard
+- [ ] Configure webhook events:
+  - `checkout.session.completed`
+  - `customer.subscription.created`
+  - `customer.subscription.updated`
+  - `customer.subscription.deleted`
+  - `invoice.paid`
+  - `invoice.payment_failed`
+- [ ] Verify billing portal configuration
+- [ ] Test complete checkout flow with live cards
+- [ ] Set up monitoring for webhook failures
+- [ ] Configure email notifications for subscription events

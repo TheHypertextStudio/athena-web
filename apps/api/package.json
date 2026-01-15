@@ -21,7 +21,8 @@
     "db:push": "drizzle-kit push",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
-    "generate:openapi": "tsx scripts/generate-openapi.ts"
+    "generate:openapi": "tsx scripts/generate-openapi.ts",
+    "stripe:init": "tsx scripts/init-stripe.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
@@ -34,13 +35,13 @@
     "@microsoft/microsoft-graph-client": "^3.0.7",
     "@microsoft/microsoft-graph-types": "^2.40.0",
     "@scalar/hono-api-reference": "^0.9.23",
-    "@modelcontextprotocol/sdk": "^1.25.1",
+    "@modelcontextprotocol/sdk": "^1.25.2",
     "@types/web-push": "^3.6.4",
     "better-auth": "^1.4.10",
     "drizzle-orm": "^0.45.1",
     "google-auth-library": "^9.15.1",
     "googleapis": "^140.0.0",
-    "hono": "^4.11.3",
+    "hono": "^4.11.4",
     "jose": "^6.0.11",
     "openai": "^6.15.0",
     "pino": "^10.1.0",
@@ -53,6 +54,7 @@
   },
   "devDependencies": {
     "@athena/test-utils": "workspace:*",
+    "@clack/prompts": "^0.9.1",
     "@types/node": "^25.0.3",
     "@vitest/coverage-v8": "^4.0.16",
     "drizzle-kit": "^0.31.8",

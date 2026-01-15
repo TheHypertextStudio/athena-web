@@ -19,6 +19,8 @@ export const users = pgTable('users', {
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
   /** When a security alert was triggered via RISC event. */
   securityAlertAt: timestamp('security_alert_at'),
+  /** The last authentication method used (e.g., 'google', 'apple', 'passkey'). */
+  lastLoginMethod: text('last_login_method'),
 });
 
 /**

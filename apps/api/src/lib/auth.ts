@@ -7,6 +7,7 @@
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { passkey } from '@better-auth/passkey';
+import { lastLoginMethod } from 'better-auth/plugins';
 import { db } from '../db/index.js';
 import * as schema from '../db/schema/index.js';
 import { env } from './env.js';
@@ -73,6 +74,9 @@ export const auth = betterAuth({
       rpID: new URL(env.FRONTEND_URL).hostname,
       // origin must match where the WebAuthn ceremony happens (the frontend)
       origin: env.FRONTEND_URL,
+    }),
+    lastLoginMethod({
+      storeInDatabase: true,
     }),
   ],
 

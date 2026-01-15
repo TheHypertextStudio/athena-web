@@ -16,6 +16,7 @@ import {
   signInWithGoogle,
   signInWithApple,
   signInWithMicrosoft,
+  getLastUsedLoginMethod,
 } from '@/lib/auth-client';
 import { AuthCard } from './auth-card';
 import { AuthErrorBanner } from './auth-error-banner';
@@ -39,6 +40,9 @@ export function SignInForm({ callbackUrl = '/home' }: SignInFormProps) {
   const [loadingProvider, setLoadingProvider] = useState<OAuthProvider | null>(null);
 
   const { isSupported: passkeySupported, isLoading: checkingSupport } = usePasskeySupport();
+
+  // Get the last used login method for UI hints
+  const lastMethod = getLastUsedLoginMethod();
 
   const handleSuccess = useCallback(() => {
     router.push(callbackUrl);
@@ -142,6 +146,7 @@ export function SignInForm({ callbackUrl = '/home' }: SignInFormProps) {
         onProviderClick={(provider) => void handleOAuthClick(provider)}
         disabled={disabled}
         loadingProvider={loadingProvider}
+        lastMethod={lastMethod}
       />
     </AuthCard>
   );

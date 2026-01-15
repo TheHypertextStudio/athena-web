@@ -8,6 +8,7 @@
 
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 type OAuthProvider = 'google' | 'apple' | 'microsoft';
 
@@ -18,6 +19,8 @@ interface OAuthButtonsProps {
   disabled?: boolean;
   /** Provider currently loading (null if none) */
   loadingProvider?: OAuthProvider | null;
+  /** The last used login method (e.g., 'google', 'apple', 'microsoft') */
+  lastMethod?: string | null;
 }
 
 const providers: { id: OAuthProvider; name: string; icon: React.ReactNode }[] = [
@@ -71,12 +74,18 @@ const providers: { id: OAuthProvider; name: string; icon: React.ReactNode }[] = 
 /**
  * OAuth provider buttons for social sign-in.
  */
-export function OAuthButtons({ onProviderClick, disabled, loadingProvider }: OAuthButtonsProps) {
+export function OAuthButtons({
+  onProviderClick,
+  disabled,
+  loadingProvider,
+  lastMethod,
+}: OAuthButtonsProps) {
   return (
     <div className="flex flex-col gap-3">
       {providers.map((provider) => {
         const isLoading = loadingProvider === provider.id;
         const isDisabled = (disabled ?? false) || loadingProvider !== null;
+        const isLastUsed = lastMethod === provider.id;
 
         return (
           <Button
@@ -96,6 +105,11 @@ export function OAuthButtons({ onProviderClick, disabled, loadingProvider }: OAu
               <span className="mr-2">{provider.icon}</span>
             )}
             Continue with {provider.name}
+            {isLastUsed && (
+              <Badge variant="secondary" className="ml-2">
+                Last used
+              </Badge>
+            )}
           </Button>
         );
       })}

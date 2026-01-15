@@ -10,6 +10,7 @@
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { passkey } from '@better-auth/passkey';
+import { lastLoginMethod } from 'better-auth/plugins';
 import { db } from './db';
 import * as schema from './auth-schema';
 
@@ -91,6 +92,9 @@ export const auth = betterAuth({
       rpName: 'Athena',
       rpID: new URL(baseURL).hostname,
       origin: baseURL,
+    }),
+    lastLoginMethod({
+      storeInDatabase: true,
     }),
   ],
 

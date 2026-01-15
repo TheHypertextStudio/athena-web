@@ -19,6 +19,8 @@ export const users = pgTable('users', {
   image: text('image'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  /** The last authentication method used (e.g., 'google', 'apple', 'passkey'). */
+  lastLoginMethod: text('last_login_method'),
 });
 
 /**

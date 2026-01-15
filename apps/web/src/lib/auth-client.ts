@@ -9,13 +9,14 @@
 
 import { createAuthClient } from 'better-auth/react';
 import { passkeyClient } from '@better-auth/passkey/client';
+import { lastLoginMethodClient } from 'better-auth/client/plugins';
 
 /**
  * Configured auth client with passkey support.
  * No baseURL needed - auth routes are same-origin at /api/auth/*
  */
 export const authClient = createAuthClient({
-  plugins: [passkeyClient()],
+  plugins: [passkeyClient(), lastLoginMethodClient()],
 });
 
 /**
@@ -202,4 +203,34 @@ export async function unlinkAccount(accountId: string): Promise<void> {
     const errorData: unknown = await response.json();
     throw new Error(getErrorMessage(errorData) ?? 'Failed to unlink account');
   }
+}
+
+// =============================================================================
+// Last Login Method
+// =============================================================================
+
+/**
+ * Get the last authentication method used by the user.
+ *
+ * @returns The last login method (e.g., 'google', 'apple', 'passkey') or null if not set
+ */
+export function getLastUsedLoginMethod(): string | null {
+  return authClient.getLastUsedLoginMethod();
+}
+
+/**
+ * Check if a specific method was the last used login method.
+ *
+ * @param method - The method to check (e.g., 'google', 'apple', 'passkey')
+ * @returns True if the specified method was last used
+ */
+export function isLastUsedLoginMethod(method: string): boolean {
+  return authClient.isLastUsedLoginMethod(method);
+}
+
+/**
+ * Clear the stored last login method.
+ */
+export function clearLastUsedLoginMethod(): void {
+  authClient.clearLastUsedLoginMethod();
 }

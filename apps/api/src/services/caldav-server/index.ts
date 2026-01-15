@@ -21,6 +21,7 @@ export { handlePropfind } from './handlers/propfind.js';
 export { handleGet } from './handlers/get.js';
 export { handlePut } from './handlers/put.js';
 export { handleDelete } from './handlers/delete.js';
+export { handleReport } from './handlers/report.js';
 
 export { parseICS, generateICS, type ICSEvent, type ICSAttendee } from './utils/ics.js';
 

@@ -23,6 +23,7 @@ import {
   handleGet,
   handlePut,
   handleDelete,
+  handleReport,
 } from '../services/caldav-server/index.js';
 
 const davRoutes = new Hono();
@@ -93,15 +94,8 @@ davRoutes.on('HEAD', '*', (c) => {
   });
 });
 
-// REPORT - Calendar queries and sync-collection (TODO: implement)
-davRoutes.on('REPORT', '*', (c) => {
-  // For now, return not implemented
-  // Full implementation will handle:
-  // - calendar-query (time-range filtering)
-  // - calendar-multiget (batch fetch)
-  // - sync-collection (incremental sync)
-  return c.text('Not Implemented', 501);
-});
+// REPORT - Calendar queries and sync-collection
+davRoutes.on('REPORT', '*', handleReport);
 
 // PROPPATCH - Modify properties (TODO: implement)
 davRoutes.on('PROPPATCH', '*', (c) => {

@@ -988,6 +988,7 @@ export class CalendarSyncService {
 
   /**
    * Push an event update to external calendar.
+   * Implements conflict detection with external-wins policy.
    */
   async pushEventUpdate(connectionId: string, userId: string, eventId: string): Promise<void> {
     // Find existing mapping
@@ -1025,7 +1026,35 @@ export class CalendarSyncService {
       throw new Error('Calendar ID not found in mapping');
     }
 
-    // Update event in external calendar
+    // Conflict detection: Check if external event was modified since last sync
+    // by comparing stored ETag with current external ETag
+    if (mapping.externalVersion) {
+      const conflictResult = await this.checkForConflict(
+        client,
+        accessToken,
+        calendarId,
+        mapping.externalId,
+        mapping.externalVersion,
+      );
+
+      if (conflictResult.hasConflict && conflictResult.externalEvent) {
+        // External wins - sync from external and skip push
+        console.log(
+          `Conflict detected for event ${eventId}: external ETag changed. ` +
+            `Expected ${mapping.externalVersion}, got ${conflictResult.externalEvent.etag ?? 'unknown'}. ` +
+            'Applying external-wins policy.',
+        );
+        await this.syncEventFromExternal(
+          conflictResult.externalEvent,
+          connectionId,
+          userId,
+          calendarId,
+        );
+        return;
+      }
+    }
+
+    // No conflict - proceed with update
     const updatedEvent = await client.updateEvent(accessToken, calendarId, mapping.externalId, {
       title: event.title,
       description: event.description ?? undefined,
@@ -1038,6 +1067,133 @@ export class CalendarSyncService {
 
     // Update mapping with new etag
     await this.mappingService.markSyncedToExternal(mapping.id, updatedEvent.etag);
+  }
+
+  /**
+   * Check for conflict by comparing stored ETag with current external ETag.
+   */
+  private async checkForConflict(
+    client: CalendarProviderClient,
+    accessToken: string,
+    calendarId: string,
+    externalId: string,
+    storedEtag: string,
+  ): Promise<{ hasConflict: boolean; externalEvent?: ExternalCalendarEvent }> {
+    try {
+      // Fetch recent events - we need to find the specific event
+      // Most providers support filtering, but we may need to fetch a batch
+      const result = await client.getEvents(accessToken, calendarId, {
+        maxResults: 250, // Fetch a reasonable batch to find our event
+      });
+
+      // Find the specific event by external ID
+      const externalEvent = result.events.find((e) => e.externalId === externalId);
+
+      if (!externalEvent) {
+        // Event was deleted externally - this is a conflict (external wins = deleted)
+        return { hasConflict: true };
+      }
+
+      // Compare ETags - if different, there's a conflict
+      if (externalEvent.etag && externalEvent.etag !== storedEtag) {
+        return { hasConflict: true, externalEvent };
+      }
+
+      // No conflict
+      return { hasConflict: false };
+    } catch (error) {
+      // If we can't check for conflict, proceed with update (optimistic)
+      console.warn(
+        'Could not check for conflict, proceeding with update:',
+        error instanceof Error ? error.message : 'Unknown error',
+      );
+      return { hasConflict: false };
+    }
+  }
+
+  /**
+   * Sync a single event from external source to local database.
+   * Used when external wins in a conflict scenario.
+   */
+  private async syncEventFromExternal(
+    externalEvent: ExternalCalendarEvent,
+    connectionId: string,
+    userId: string,
+    calendarId: string,
+  ): Promise<void> {
+    // Find existing mapping
+    const mapping = await this.mappingService.findByExternalId(
+      connectionId,
+      externalEvent.externalId,
+    );
+
+    if (!mapping) {
+      // Create new local event from external
+      await this.createLocalEventFromExternal(externalEvent, connectionId, userId, calendarId);
+      return;
+    }
+
+    // Update existing local event
+    await db
+      .update(events)
+      .set({
+        title: externalEvent.title,
+        description: externalEvent.description ?? null,
+        startTime: externalEvent.startTime,
+        endTime: externalEvent.endTime ?? null,
+        isAllDay: externalEvent.isAllDay,
+        location: externalEvent.location ?? null,
+        recurrenceRule: externalEvent.recurrenceRule ?? null,
+        updatedAt: new Date(),
+      })
+      .where(eq(events.id, mapping.localEntityId));
+
+    // Update mapping with new ETag
+    await this.mappingService.markSyncedFromExternal(mapping.id, externalEvent.etag);
+  }
+
+  /**
+   * Create a local event from an external event.
+   * Used when external wins in a conflict scenario and no local event exists.
+   */
+  private async createLocalEventFromExternal(
+    externalEvent: ExternalCalendarEvent,
+    connectionId: string,
+    userId: string,
+    calendarId: string,
+  ): Promise<void> {
+    const eventId = crypto.randomUUID();
+    const now = new Date();
+
+    await db.insert(events).values({
+      id: eventId,
+      title: externalEvent.title,
+      description: externalEvent.description ?? null,
+      startTime: externalEvent.startTime,
+      endTime: externalEvent.endTime ?? null,
+      isAllDay: externalEvent.isAllDay,
+      location: externalEvent.location ?? null,
+      recurrenceRule: externalEvent.recurrenceRule ?? null,
+      creatorId: userId,
+      source: 'external',
+      sourceIntegrationId: connectionId,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    // Create mapping for the new event
+    await this.mappingService.createMapping({
+      integrationId: connectionId,
+      entityType: 'event',
+      localEntityId: eventId,
+      externalId: externalEvent.externalId,
+      syncDirection: 'inbound',
+      externalVersion: externalEvent.etag,
+      metadata: {
+        calendarId,
+        iCalUID: externalEvent.iCalUID,
+      },
+    });
   }
 
   /**

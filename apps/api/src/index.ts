@@ -23,6 +23,7 @@ import { initiativeRoutes } from './routes/initiatives.js';
 import { projectRoutes } from './routes/projects.js';
 import { taskRoutes } from './routes/tasks.js';
 import { taskStatusRoutes } from './routes/task-statuses.js';
+import { initiativeStatusRoutes } from './routes/initiative-statuses.js';
 import { eventRoutes } from './routes/events.js';
 import { momentRoutes } from './routes/moments.js';
 import { activityRoutes } from './routes/activities.js';
@@ -50,6 +51,8 @@ import { riscRoutes } from './routes/risc.js';
 import { initializeRISCStream } from './services/risc/index.js';
 import { davRoutes } from './routes/dav.js';
 import { appPasswordRoutes } from './routes/app-passwords.js';
+import { googleCalendarWebhookRoutes } from './routes/webhooks/google-calendar.js';
+import { outlookCalendarWebhookRoutes } from './routes/webhooks/outlook-calendar.js';
 
 const app = new OpenAPIHono<AppEnv>();
 
@@ -176,12 +179,18 @@ app.on('PROPFIND', '/calendars', (c) => c.redirect('/dav/calendars/', 308));
 // Mount CalDAV routes (uses its own Basic Auth, not session auth)
 app.route('/dav', davRoutes);
 
+// Mount inbound webhook receivers for external calendar providers (no auth required)
+// These receive push notifications from Google Calendar and Microsoft Outlook
+app.route('/webhooks/google-calendar', googleCalendarWebhookRoutes);
+app.route('/webhooks/outlook-calendar', outlookCalendarWebhookRoutes);
+
 // Mount routes
 app.route('/api/auth', authRoutes);
 app.route('/api/initiatives', initiativeRoutes);
 app.route('/api/projects', projectRoutes);
 app.route('/api/tasks', taskRoutes);
 app.route('/api/task-statuses', taskStatusRoutes);
+app.route('/api/initiative-statuses', initiativeStatusRoutes);
 app.route('/api/events', eventRoutes);
 app.route('/api/moments', momentRoutes);
 app.route('/api/activities', activityRoutes);

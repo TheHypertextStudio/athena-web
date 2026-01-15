@@ -9,6 +9,7 @@ import { eq, and, gte, lte, or } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { events, eventParticipants } from '../db/schema/index.js';
 import { requireAuth, getUserId } from '../middleware/auth.js';
+import { getCalendarSyncService } from '../services/calendar-sync/index.js';
 
 const eventRoutes = new Hono();
 
@@ -169,6 +170,13 @@ eventRoutes.post('/', async (c) => {
     },
   });
 
+  // Auto-push to bidirectional calendar connections (fire-and-forget)
+  getCalendarSyncService()
+    .pushEventToAllConnections(userId, id, 'create')
+    .catch((err: unknown) => {
+      console.error('Auto-push create failed:', err);
+    });
+
   return c.json({ data: result }, 201);
 });
 
@@ -222,6 +230,13 @@ eventRoutes.patch('/:id', async (c) => {
     },
   });
 
+  // Auto-push to bidirectional calendar connections (fire-and-forget)
+  getCalendarSyncService()
+    .pushEventToAllConnections(userId, id, 'update')
+    .catch((err: unknown) => {
+      console.error('Auto-push update failed:', err);
+    });
+
   return c.json({ data: result });
 });
 
@@ -240,6 +255,14 @@ eventRoutes.delete('/:id', async (c) => {
   if (!existing) {
     return c.json({ error: ERROR_EVENT_NOT_AUTHORIZED }, 404);
   }
+
+  // Auto-push delete to bidirectional calendar connections BEFORE deleting locally
+  // Must await since service queries the event - don't let local delete race ahead
+  await getCalendarSyncService()
+    .pushEventToAllConnections(userId, id, 'delete')
+    .catch((err: unknown) => {
+      console.error('Auto-push delete failed:', err);
+    });
 
   await db.delete(events).where(eq(events.id, id));
 

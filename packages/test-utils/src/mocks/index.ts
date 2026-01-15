@@ -4,6 +4,8 @@
  * @packageDocumentation
  */
 
+export * from './calendar.js';
+
 interface LogEntry {
   level: string;
   message: string;

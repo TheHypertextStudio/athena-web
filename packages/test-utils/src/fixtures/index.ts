@@ -4,6 +4,8 @@
  * @packageDocumentation
  */
 
+export * from './calendar.js';
+
 import { faker } from '@faker-js/faker';
 import type {
   Task,

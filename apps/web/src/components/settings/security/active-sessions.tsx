@@ -57,6 +57,14 @@ function formatRelativeTime(dateString: string): string {
   return date.toLocaleDateString();
 }
 
+function formatIpAddress(ip: string | null): string {
+  if (!ip) return 'Unknown location';
+  if (ip === '::1' || ip === '127.0.0.1' || ip === 'localhost') {
+    return 'Local';
+  }
+  return ip;
+}
+
 export async function ActiveSessionsSection() {
   let sessions: Session[] = [];
   let errorCode: ApiErrorCode | null = null;
@@ -87,16 +95,25 @@ export async function ActiveSessionsSection() {
       <div className="space-y-3">
         {sessions.map((session) => {
           const DeviceIcon = getDeviceIcon(session.userAgent);
+          const isCurrent = session.status === 'current';
           return (
             <SettingsItemCard
               key={session.id}
               icon={<DeviceIcon sx={{ fontSize: 20 }} />}
-              title={parseUserAgent(session.userAgent)}
-              description={`${session.ipAddress ?? 'Unknown IP'} • ${formatRelativeTime(session.lastActiveAt)}`}
-              badge={session.isCurrent ? <Badge variant="secondary">Current</Badge> : undefined}
-              action={
-                !session.isCurrent ? <RevokeSessionButton sessionId={session.id} /> : undefined
+              title={isCurrent ? 'This device' : parseUserAgent(session.userAgent)}
+              description={
+                isCurrent
+                  ? `${parseUserAgent(session.userAgent)} • ${formatIpAddress(session.ipAddress)}`
+                  : `${formatIpAddress(session.ipAddress)} • ${formatRelativeTime(session.lastActiveAt)}`
               }
+              badge={
+                session.status === 'inactive' ? (
+                  <Badge variant="outline" className="text-muted-foreground">
+                    Inactive
+                  </Badge>
+                ) : undefined
+              }
+              action={!isCurrent ? <RevokeSessionButton sessionId={session.id} /> : undefined}
             />
           );
         })}

@@ -7,7 +7,6 @@ import {
   type NodeTypes,
   type EdgeTypes,
   type OnNodesChange,
-  type OnEdgesChange,
 } from '@xyflow/react';
 import { FlowSurface } from '../FlowSurface';
 import { TaskNode } from './TaskNode';
@@ -188,7 +187,7 @@ export function TaskDependencyFlow({
       nodes={nodes}
       edges={edges}
       onNodesChange={handleNodesChange}
-      onEdgesChange={onEdgesChange as OnEdgesChange}
+      onEdgesChange={onEdgesChange}
       onConnect={onConnect}
       onNodeClick={handleNodeClick}
       onEdgeClick={handleEdgeContextMenu}

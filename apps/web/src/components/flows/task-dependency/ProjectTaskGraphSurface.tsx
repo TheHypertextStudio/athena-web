@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback } from 'react';
 import { ReactFlowProvider } from '@xyflow/react';
 import { TaskDependencyFlow } from './TaskDependencyFlow';
 import { useGraphKeyboardNav } from './useGraphKeyboardNav';
@@ -96,29 +96,16 @@ function ProjectTaskGraphSurfaceInner({
   onExpand,
   className,
 }: ProjectTaskGraphSurfaceProps) {
-  const [_contextMenuPosition, setContextMenuPosition] = useState<{
-    x: number;
-    y: number;
-  } | null>(null);
-
   const { nodes, edges, topologicalOrder } = useDependencyGraph({
     projectId,
     includeCompleted,
   });
 
-  const {
-    focusedId: _focusedId,
-    handleKeyDown,
-    hasFocus: _hasFocus,
-    setHasFocus,
-  } = useGraphKeyboardNav({
+  const { handleKeyDown, setHasFocus } = useGraphKeyboardNav({
     nodes,
     edges,
     topologicalOrder,
     surfaceId: SURFACE_ID,
-    onActivate: useCallback((_nodeId: string, position: { x: number; y: number }) => {
-      setContextMenuPosition(position);
-    }, []),
   });
 
   const handleNodeClick = useCallback(

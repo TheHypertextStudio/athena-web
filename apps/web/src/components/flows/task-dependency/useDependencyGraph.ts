@@ -2,11 +2,21 @@
 
 import { useMemo, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNodesState, useEdgesState, type OnConnect, addEdge } from '@xyflow/react';
+import type { OnNodesChange, OnEdgesChange, OnConnect } from '@xyflow/react';
 import { tasksApi, projectsApi, type Task, type TaskDependencyGraphData } from '@/lib/api-client';
 import { getLayoutedElements } from '../shared/layout-utils';
 import type { TaskNodeType, TaskNodeData } from './TaskNode';
 import type { DependencyEdgeType, DependencyEdgeData } from './DependencyEdge';
+
+/** Layout configuration for the dependency graph */
+const GRAPH_LAYOUT = {
+  /** Direction: left-to-right */
+  direction: 'LR' as const,
+  /** Horizontal spacing between nodes */
+  nodeSep: 80,
+  /** Vertical spacing between ranks/layers */
+  rankSep: 150,
+};
 
 interface UseDependencyGraphOptions {
   rootTaskId?: string;
@@ -133,11 +143,7 @@ function buildGraph(
     }
   }
 
-  return getLayoutedElements<TaskNodeType, DependencyEdgeType>(nodes, edges, {
-    direction: 'LR',
-    nodeSep: 80,
-    rankSep: 150,
-  });
+  return getLayoutedElements<TaskNodeType, DependencyEdgeType>(nodes, edges, GRAPH_LAYOUT);
 }
 
 function getStatusColor(status: Task['status']): string {
@@ -213,11 +219,7 @@ function buildProjectGraph(graphData: TaskDependencyGraphData): {
     };
   });
 
-  return getLayoutedElements<TaskNodeType, DependencyEdgeType>(nodes, edges, {
-    direction: 'LR',
-    nodeSep: 80,
-    rankSep: 150,
-  });
+  return getLayoutedElements<TaskNodeType, DependencyEdgeType>(nodes, edges, GRAPH_LAYOUT);
 }
 
 /**
@@ -309,8 +311,8 @@ export function useDependencyGraph(options: UseDependencyGraphOptions = {}) {
   const isLoading = mode === 'project' ? projectQuery.isLoading : taskQuery.isLoading;
   const error = mode === 'project' ? projectQuery.error : taskQuery.error;
 
-  // Build graph based on mode
-  const { nodes: initialNodes, edges: initialEdges } = useMemo(() => {
+  // Build graph based on mode - derived directly from query data (reactive)
+  const { nodes, edges } = useMemo(() => {
     if (mode === 'project' && projectQuery.data) {
       return buildProjectGraph(projectQuery.data);
     }
@@ -321,14 +323,9 @@ export function useDependencyGraph(options: UseDependencyGraphOptions = {}) {
   }, [mode, projectQuery.data, taskQuery.data, includeCompleted]);
 
   // Compute topological order for keyboard navigation
-  const topologicalOrder = useMemo(
-    () => computeTopologicalOrder(initialNodes, initialEdges),
-    [initialNodes, initialEdges],
-  );
+  const topologicalOrder = useMemo(() => computeTopologicalOrder(nodes, edges), [nodes, edges]);
 
-  const [nodes, _setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
-
+  // Mutations for modifying dependencies
   const addDependencyMutation = useMutation({
     mutationFn: async ({ taskId, dependsOnId }: { taskId: string; dependsOnId: string }) => {
       await tasksApi.addDependency(taskId, dependsOnId);
@@ -347,6 +344,7 @@ export function useDependencyGraph(options: UseDependencyGraphOptions = {}) {
     },
   });
 
+  // Connect handler for creating new dependencies
   const onConnect: OnConnect = useCallback(
     (connection) => {
       if (connection.source && connection.target) {
@@ -354,21 +352,12 @@ export function useDependencyGraph(options: UseDependencyGraphOptions = {}) {
           taskId: connection.target,
           dependsOnId: connection.source,
         });
-        setEdges((eds) =>
-          addEdge(
-            {
-              ...connection,
-              type: 'dependency',
-              data: { type: 'blocks' } as DependencyEdgeData,
-            },
-            eds,
-          ),
-        );
       }
     },
-    [addDependencyMutation, setEdges],
+    [addDependencyMutation],
   );
 
+  // Remove dependency by edge ID
   const removeDependency = useCallback(
     (edgeId: string) => {
       const edge = edges.find((e) => e.id === edgeId);
@@ -377,11 +366,20 @@ export function useDependencyGraph(options: UseDependencyGraphOptions = {}) {
           taskId: edge.target,
           dependsOnId: edge.source,
         });
-        setEdges((eds) => eds.filter((e) => e.id !== edgeId));
       }
     },
-    [edges, removeDependencyMutation, setEdges],
+    [edges, removeDependencyMutation],
   );
+
+  // No-op handlers since we derive state from query data
+  // Selection is handled by SelectionContext in the parent component
+  const onNodesChange: OnNodesChange = useCallback(() => {
+    // Nodes are derived from query data - changes come via React Query invalidation
+  }, []);
+
+  const onEdgesChange: OnEdgesChange = useCallback(() => {
+    // Edges are derived from query data - changes come via React Query invalidation
+  }, []);
 
   return {
     nodes,
@@ -398,4 +396,4 @@ export function useDependencyGraph(options: UseDependencyGraphOptions = {}) {
   };
 }
 
-export { dependencyKeys };
+export { dependencyKeys, getStatusColor, computeTopologicalOrder, GRAPH_LAYOUT };

@@ -7,6 +7,9 @@ import type { DependencyEdgeType } from './DependencyEdge';
 import { useSelection } from '@/components/objects/context/SelectionContext';
 import type { SurfaceId } from '@/components/objects/types';
 
+/** Minimum pixel distance to consider a node "in direction" for arrow keys */
+const DIRECTION_THRESHOLD_PX = 20;
+
 interface UseGraphKeyboardNavOptions {
   nodes: TaskNodeType[];
   edges: DependencyEdgeType[];
@@ -83,16 +86,16 @@ export function useGraphKeyboardNav({
         let isInDirection = false;
         switch (direction) {
           case 'up':
-            isInDirection = dy < -20;
+            isInDirection = dy < -DIRECTION_THRESHOLD_PX;
             break;
           case 'down':
-            isInDirection = dy > 20;
+            isInDirection = dy > DIRECTION_THRESHOLD_PX;
             break;
           case 'left':
-            isInDirection = dx < -20;
+            isInDirection = dx < -DIRECTION_THRESHOLD_PX;
             break;
           case 'right':
-            isInDirection = dx > 20;
+            isInDirection = dx > DIRECTION_THRESHOLD_PX;
             break;
         }
 
@@ -268,3 +271,5 @@ export function useGraphKeyboardNav({
     setHasFocus,
   };
 }
+
+export { DIRECTION_THRESHOLD_PX };

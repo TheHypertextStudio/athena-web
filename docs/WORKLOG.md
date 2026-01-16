@@ -9,6 +9,56 @@
 
 ---
 
+### [API-OPENAPI-ROUTES-001] API OpenAPI Route Migration
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-01-15
+- **Priority**: P1
+- **Description**: Migrate API routes to OpenAPIHono with Zod v4 validation and remove `.openapi.ts` suffixes.
+- **Subtasks**:
+  - [ ] Audit each route file and map inputs to Zod schemas
+  - [ ] Convert route handlers to OpenAPIHono + `c.req.valid`
+  - [ ] Rename OpenAPI definition files and update imports
+  - [ ] Validate with typecheck, lint, and tests
+
+### [E2E-ONBOARDING-REFAC-001] Onboarding E2E Reliability Audit & Refactor
+
+- **Status**: COMPLETED
+- **Started**: 2026-01-15
+- **Completed**: 2026-01-15
+- **Priority**: P1
+- **Summary**: Reorganized onboarding E2E coverage into step/flow/error suites, added stable test IDs across onboarding UI, introduced request-tracking mocks, and added inline action error handling for robust assertions.
+- **Files Changed**:
+  - `apps/web/playwright.config.ts`
+  - `apps/web/src/components/onboarding/test-ids.ts`
+  - `apps/web/src/components/onboarding/OnboardingContainer.tsx`
+  - `apps/web/src/components/onboarding/OnboardingNavigation.tsx`
+  - `apps/web/src/components/onboarding/OnboardingProgress.tsx`
+  - `apps/web/src/components/onboarding/SkipButton.tsx`
+  - `apps/web/src/components/onboarding/AthenaPanel.tsx`
+  - `apps/web/src/components/onboarding/surfaces/IntentSurface.tsx`
+  - `apps/web/src/components/onboarding/surfaces/IntegrationsSurface.tsx`
+  - `apps/web/src/components/onboarding/surfaces/AgendaSurface.tsx`
+  - `apps/web/src/components/onboarding/resume-banner.tsx`
+  - `apps/web/src/components/objects/surfaces/DayCalendar/CalendarEntryCard.tsx`
+  - `apps/web/src/hooks/use-onboarding.ts`
+  - `apps/web/src/lib/onboarding/store.ts`
+  - `apps/web/e2e/onboarding/fixtures/onboarding.mocks.ts`
+  - `apps/web/e2e/onboarding/fixtures/onboarding.page.ts`
+  - `apps/web/e2e/onboarding/steps/intent.spec.ts`
+  - `apps/web/e2e/onboarding/steps/integrations.spec.ts`
+  - `apps/web/e2e/onboarding/steps/agenda.spec.ts`
+  - `apps/web/e2e/onboarding/flows/completion.spec.ts`
+  - `apps/web/e2e/onboarding/flows/skip-resume.spec.ts`
+  - `apps/web/e2e/onboarding/errors.spec.ts`
+  - `apps/web/e2e/fixtures/onboarding-fixtures.ts` (removed)
+  - `apps/web/e2e/onboarding/agenda-step.spec.ts` (removed)
+  - `apps/web/e2e/onboarding/intent-step.spec.ts` (removed)
+  - `apps/web/e2e/onboarding/integrations-step.spec.ts` (removed)
+  - `apps/web/e2e/onboarding/skip-flow.spec.ts` (removed)
+  - `apps/web/e2e/onboarding/completion.spec.ts` (removed)
+  - `apps/web/e2e/onboarding/error-recovery.spec.ts` (removed)
+
 ### [CALDAV-SERVER-001] CalDAV Server Foundation (Phase 1)
 
 - **Status**: IN_PROGRESS
@@ -240,6 +290,13 @@ Run `pnpm typecheck`, `pnpm lint`, `pnpm test`, and `pnpm build` after each batc
 ---
 
 ## Completed Tasks
+
+### [CALDAV-RFC4791-AUDIT-001] CalDAV WebDAV RFC4791 Compliance Audit
+
+- **Completed**: 2026-01-14
+- **Summary**: Audited CalDAV/WebDAV server implementation against RFC 4791 and documented compliance gaps with code references.
+- **Files Changed**:
+  - `docs/WORKLOG.md`
 
 ### [CALENDAR-ENTRY-CARD-001] Calendar Entry Card Refactor
 

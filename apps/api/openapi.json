@@ -3070,7 +3070,14 @@
           },
           "provider": {
             "type": "string",
-            "enum": ["linear", "github", "google_calendar", "outlook_calendar", "apple_calendar"],
+            "enum": [
+              "linear",
+              "github",
+              "google_calendar",
+              "outlook_calendar",
+              "apple_calendar",
+              "caldav_calendar"
+            ],
             "description": "Integration provider",
             "example": "github"
           },
@@ -3115,7 +3122,14 @@
         "properties": {
           "provider": {
             "type": "string",
-            "enum": ["linear", "github", "google_calendar", "outlook_calendar", "apple_calendar"],
+            "enum": [
+              "linear",
+              "github",
+              "google_calendar",
+              "outlook_calendar",
+              "apple_calendar",
+              "caldav_calendar"
+            ],
             "description": "Integration provider",
             "example": "github"
           },
@@ -3315,7 +3329,14 @@
         "properties": {
           "provider": {
             "type": "string",
-            "enum": ["linear", "github", "google_calendar", "outlook_calendar", "apple_calendar"],
+            "enum": [
+              "linear",
+              "github",
+              "google_calendar",
+              "outlook_calendar",
+              "apple_calendar",
+              "caldav_calendar"
+            ],
             "description": "Integration provider",
             "example": "github"
           },
@@ -3458,6 +3479,30 @@
             "description": "Last sync status",
             "example": "success"
           },
+          "lastSyncError": {
+            "type": ["string", "null"],
+            "description": "Last sync error message"
+          },
+          "accountLabel": {
+            "type": ["string", "null"],
+            "description": "User-defined label for the account"
+          },
+          "accountEmail": {
+            "type": ["string", "null"],
+            "description": "Account email address"
+          },
+          "accountColor": {
+            "type": ["string", "null"],
+            "description": "Account color indicator"
+          },
+          "isPrimary": {
+            "type": "boolean",
+            "description": "Whether this is the primary account"
+          },
+          "displayOrder": {
+            "type": "integer",
+            "description": "Display order"
+          },
           "calendars": {
             "type": "array",
             "items": {
@@ -3478,6 +3523,12 @@
           "syncEnabled",
           "lastSyncAt",
           "lastSyncStatus",
+          "lastSyncError",
+          "accountLabel",
+          "accountEmail",
+          "accountColor",
+          "isPrimary",
+          "displayOrder",
           "calendars",
           "createdAt"
         ]
@@ -3489,6 +3540,10 @@
             "type": "string",
             "description": "Calendar ID"
           },
+          "externalId": {
+            "type": "string",
+            "description": "External calendar ID"
+          },
           "name": {
             "type": "string",
             "description": "Calendar name"
@@ -3496,6 +3551,14 @@
           "color": {
             "type": ["string", "null"],
             "description": "Calendar color"
+          },
+          "isPrimary": {
+            "type": "boolean",
+            "description": "Whether this is the primary calendar"
+          },
+          "canEdit": {
+            "type": "boolean",
+            "description": "Whether events can be edited"
           },
           "syncEnabled": {
             "type": "boolean",
@@ -3508,7 +3571,15 @@
             "example": "bidirectional"
           }
         },
-        "required": ["id", "name", "color", "syncEnabled", "syncDirection"]
+        "required": [
+          "id",
+          "externalId",
+          "name",
+          "color",
+          "isPrimary",
+          "syncEnabled",
+          "syncDirection"
+        ]
       },
       "OAuthCallbackResponse": {
         "type": "object",
@@ -3630,9 +3701,25 @@
           "errors": {
             "type": "array",
             "items": {
-              "type": "string"
+              "type": "object",
+              "properties": {
+                "eventId": {
+                  "type": "string",
+                  "description": "External event ID"
+                },
+                "operation": {
+                  "type": "string",
+                  "enum": ["create", "update", "delete"],
+                  "description": "Operation"
+                },
+                "error": {
+                  "type": "string",
+                  "description": "Error message"
+                }
+              },
+              "required": ["operation", "error"]
             },
-            "description": "Error messages"
+            "description": "Error details"
           },
           "error": {
             "type": "string",
@@ -3665,9 +3752,25 @@
               "errors": {
                 "type": "array",
                 "items": {
-                  "type": "string"
+                  "type": "object",
+                  "properties": {
+                    "eventId": {
+                      "type": "string",
+                      "description": "External event ID"
+                    },
+                    "operation": {
+                      "type": "string",
+                      "enum": ["create", "update", "delete"],
+                      "description": "Operation"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Error message"
+                    }
+                  },
+                  "required": ["operation", "error"]
                 },
-                "description": "Error messages"
+                "description": "Error details"
               },
               "syncedAt": {
                 "type": "string",
@@ -11443,7 +11546,14 @@
           {
             "schema": {
               "type": "string",
-              "enum": ["linear", "github", "google_calendar", "outlook_calendar", "apple_calendar"],
+              "enum": [
+                "linear",
+                "github",
+                "google_calendar",
+                "outlook_calendar",
+                "apple_calendar",
+                "caldav_calendar"
+              ],
               "description": "Integration provider",
               "example": "github"
             },

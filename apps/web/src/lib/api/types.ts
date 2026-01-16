@@ -4138,7 +4138,13 @@ export interface paths {
         header?: never;
         path: {
           /** @description Integration provider */
-          provider: 'linear' | 'github' | 'google_calendar' | 'outlook_calendar' | 'apple_calendar';
+          provider:
+            | 'linear'
+            | 'github'
+            | 'google_calendar'
+            | 'outlook_calendar'
+            | 'apple_calendar'
+            | 'caldav_calendar';
         };
         cookie?: never;
       };
@@ -4999,6 +5005,4451 @@ export interface paths {
         };
       };
     };
+    trace?: never;
+  };
+  '/api/tags/': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List tags
+     * @description List all tags for the authenticated user.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Tags retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['TagsResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    /**
+     * Create tag
+     * @description Create a new tag.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': components['schemas']['CreateTagRequest'];
+        };
+      };
+      responses: {
+        /** @description Tag created successfully */
+        201: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['CreateTagResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/tags/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get tag
+     * @description Get a tag by ID.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Tag ID */
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Tag retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['TagResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Tag not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    /**
+     * Delete tag
+     * @description Delete a tag.
+     */
+    delete: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Tag ID */
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Tag deleted successfully */
+        204: {
+          headers: Record<string, unknown>;
+          content?: never;
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Tag not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    options?: never;
+    head?: never;
+    /**
+     * Update tag
+     * @description Update a tag.
+     */
+    patch: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Tag ID */
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': components['schemas']['UpdateTagRequest'];
+        };
+      };
+      responses: {
+        /** @description Tag updated successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['TagResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Tag not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    trace?: never;
+  };
+  '/api/ai/chat': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Send chat message
+     * @description Send a message and get a response.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': components['schemas']['ChatRequest'];
+        };
+      };
+      responses: {
+        /** @description Chat response received */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ChatResponse'];
+          };
+        };
+        /** @description Invalid request */
+        400: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ErrorResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Chat failed */
+        500: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ErrorResponse'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/ai/chat/stream': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Send chat message (streaming)
+     * @description Send a message and stream the response.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': components['schemas']['ChatRequest'];
+        };
+      };
+      responses: {
+        /** @description Streaming response */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'text/event-stream': string;
+          };
+        };
+        /** @description Invalid request */
+        400: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ErrorResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/ai/conversations': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List conversations
+     * @description List AI conversations for the authenticated user.
+     */
+    get: {
+      parameters: {
+        query?: {
+          /** @description Maximum number of conversations to return */
+          limit?: number;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Conversations retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ConversationsResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    /**
+     * Create conversation
+     * @description Create a new AI conversation.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': components['schemas']['CreateConversationRequest'];
+        };
+      };
+      responses: {
+        /** @description Conversation created successfully */
+        201: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['CreateConversationResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/ai/conversations/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get conversation
+     * @description Get a conversation with its messages.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Conversation ID */
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Conversation retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ConversationResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Conversation not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    /**
+     * Delete conversation
+     * @description Delete a conversation.
+     */
+    delete: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Conversation ID */
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Conversation deleted successfully */
+        204: {
+          headers: Record<string, unknown>;
+          content?: never;
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Conversation not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/ai/conversations/{id}/title': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Generate title
+     * @description Generate a title for a conversation.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Conversation ID */
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Title generated successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['GenerateTitleResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/ai/preferences': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get AI preferences
+     * @description Get AI preferences for the authenticated user.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Preferences retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['AIPreferencesResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /**
+     * Update AI preferences
+     * @description Update AI preferences.
+     */
+    patch: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': components['schemas']['UpdateAIPreferencesRequest'];
+        };
+      };
+      responses: {
+        /** @description Preferences updated successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': {
+              /** @enum {boolean} */
+              success: true;
+            };
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    trace?: never;
+  };
+  '/api/ai/health': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * AI health check
+     * @description Check AI provider health.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Health status retrieved */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['AIHealthResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/ai/providers': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List AI providers
+     * @description List available AI providers.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Providers retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ProvidersResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/ai/quick': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Quick chat
+     * @description Quick chat without conversation context.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': components['schemas']['QuickChatRequest'];
+        };
+      };
+      responses: {
+        /** @description Chat response received */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['QuickChatResponse'];
+          };
+        };
+        /** @description Invalid request */
+        400: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ErrorResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Chat failed */
+        500: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ErrorResponse'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/search/': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Search
+     * @description Search across all entity types.
+     */
+    get: {
+      parameters: {
+        query: {
+          /** @description Search query */
+          q: string;
+          /** @description Comma-separated entity types to search */
+          types?: string;
+          /** @description Maximum results */
+          limit?: number;
+          /** @description Results offset */
+          offset?: number | null;
+          /** @description Filter by project */
+          projectId?: string;
+          /** @description Comma-separated tag names */
+          tags?: string;
+          /** @description Comma-separated statuses */
+          status?: string;
+          /** @description Filter from date */
+          dateFrom?: string;
+          /** @description Filter to date */
+          dateTo?: string;
+          /** @description Include archived items */
+          includeArchived?: boolean | null;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Search results */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['SearchResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/search/stats': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get search stats
+     * @description Get search index statistics.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Stats retrieved */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['SearchStatsResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/search/suggestions': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get suggestions
+     * @description Get autocomplete suggestions.
+     */
+    get: {
+      parameters: {
+        query: {
+          /** @description Query for suggestions */
+          q: string;
+          /** @description Maximum suggestions */
+          limit?: number;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Suggestions retrieved */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['SuggestionsResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/agenda/': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get agenda
+     * @description Get agenda for a specific date.
+     */
+    get: {
+      parameters: {
+        query?: {
+          /** @description Date (YYYY-MM-DD) */
+          date?: string;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Agenda retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['AgendaResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/agenda/range': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get agenda range
+     * @description Get agenda for a date range.
+     */
+    get: {
+      parameters: {
+        query: {
+          /** @description Start date (YYYY-MM-DD) */
+          startDate: string;
+          /** @description End date (YYYY-MM-DD) */
+          endDate: string;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Agenda range retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['AgendaRangeResponse'];
+          };
+        };
+        /** @description Missing required parameters */
+        400: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ErrorResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/agenda/deadlines': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get upcoming deadlines
+     * @description Get upcoming task deadlines.
+     */
+    get: {
+      parameters: {
+        query?: {
+          /** @description Days to look ahead */
+          days?: number;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Deadlines retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['DeadlinesResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/agenda/order': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get task order
+     * @description Get custom task order for a specific date.
+     */
+    get: {
+      parameters: {
+        query?: {
+          /** @description Date (YYYY-MM-DD) */
+          date?: string;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Task order retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['TaskOrderResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/agenda/today': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get today agenda
+     * @description Get agenda for today with time blocks and utilization.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Today agenda retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['TodayAgendaResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/agenda/week': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get week agenda
+     * @description Get weekly overview.
+     */
+    get: {
+      parameters: {
+        query?: {
+          /** @description Week start date (YYYY-MM-DD) */
+          startDate?: string;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Week agenda retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['WeekAgendaResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/agenda/reorder': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Reorder tasks
+     * @description Reorder tasks in the agenda for a specific date.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': components['schemas']['AgendaReorderRequest'];
+        };
+      };
+      responses: {
+        /** @description Tasks reordered successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ReorderResponse'];
+          };
+        };
+        /** @description Invalid request */
+        400: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ErrorResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/activities/streams/{streamId}/activities': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List activities for stream
+     * @description List activities for an activity stream.
+     */
+    get: {
+      parameters: {
+        query?: {
+          /** @description Filter from date */
+          startDate?: string;
+          /** @description Filter to date */
+          endDate?: string;
+        };
+        header?: never;
+        path: {
+          /** @description Stream ID */
+          streamId: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Activities retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ActivitiesResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Activity stream not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    /**
+     * Create activity
+     * @description Create a new activity in a stream.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Stream ID */
+          streamId: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': components['schemas']['CreateActivityRequest'];
+        };
+      };
+      responses: {
+        /** @description Activity created successfully */
+        201: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['CreateActivityResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Activity stream not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/activities/streams': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List activity streams
+     * @description List all activity streams for the authenticated user.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Activity streams retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ActivityStreamsResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    /**
+     * Create activity stream
+     * @description Create a new activity stream.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': components['schemas']['CreateActivityStreamRequest'];
+        };
+      };
+      responses: {
+        /** @description Activity stream created successfully */
+        201: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['CreateActivityStreamResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/activities/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get activity
+     * @description Get an activity by ID.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Activity ID */
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Activity retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ActivityResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Activity not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    /**
+     * Delete activity
+     * @description Delete an activity.
+     */
+    delete: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Activity ID */
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Activity deleted successfully */
+        204: {
+          headers: Record<string, unknown>;
+          content?: never;
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Activity not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    options?: never;
+    head?: never;
+    /**
+     * Update activity
+     * @description Update an activity.
+     */
+    patch: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Activity ID */
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': components['schemas']['UpdateActivityRequest'];
+        };
+      };
+      responses: {
+        /** @description Activity updated successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ActivityResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Activity not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    trace?: never;
+  };
+  '/api/activities/streams/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get activity stream
+     * @description Get an activity stream by ID.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Activity stream ID */
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Activity stream retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ActivityStreamResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Activity stream not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    /**
+     * Delete activity stream
+     * @description Delete an activity stream.
+     */
+    delete: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Activity stream ID */
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Activity stream deleted successfully */
+        204: {
+          headers: Record<string, unknown>;
+          content?: never;
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Activity stream not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    options?: never;
+    head?: never;
+    /**
+     * Update activity stream
+     * @description Update an activity stream.
+     */
+    patch: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Activity stream ID */
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': components['schemas']['UpdateActivityStreamRequest'];
+        };
+      };
+      responses: {
+        /** @description Activity stream updated successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ActivityStreamResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Activity stream not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    trace?: never;
+  };
+  '/api/analytics/dashboard': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get dashboard
+     * @description Get dashboard summary metrics.
+     */
+    get: {
+      parameters: {
+        query?: {
+          /** @description Analytics period */
+          period?: 'day' | 'week' | 'month' | 'quarter' | 'year' | 'all';
+          /** @description Filter from date */
+          dateFrom?: string;
+          /** @description Filter to date */
+          dateTo?: string;
+          /** @description Filter by project */
+          projectId?: string;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Dashboard metrics retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['DashboardResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/analytics/productivity': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get productivity metrics
+     * @description Get productivity analytics.
+     */
+    get: {
+      parameters: {
+        query?: {
+          /** @description Analytics period */
+          period?: 'day' | 'week' | 'month' | 'quarter' | 'year' | 'all';
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Productivity metrics retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ProductivityMetricsResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/analytics/projects': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get project metrics
+     * @description Get project analytics.
+     */
+    get: {
+      parameters: {
+        query?: {
+          /** @description Analytics period */
+          period?: 'day' | 'week' | 'month' | 'quarter' | 'year' | 'all';
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Project metrics retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ProjectMetricsResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/analytics/tasks': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get task metrics
+     * @description Get task analytics metrics.
+     */
+    get: {
+      parameters: {
+        query?: {
+          /** @description Analytics period */
+          period?: 'day' | 'week' | 'month' | 'quarter' | 'year' | 'all';
+          /** @description Filter by project */
+          projectId?: string;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Task metrics retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['TaskMetricsResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/analytics/time': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get time metrics
+     * @description Get time tracking analytics.
+     */
+    get: {
+      parameters: {
+        query?: {
+          /** @description Analytics period */
+          period?: 'day' | 'week' | 'month' | 'quarter' | 'year' | 'all';
+          /** @description Filter by project */
+          projectId?: string;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Time metrics retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['TimeMetricsResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/attachments/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get attachment info
+     * @description Get attachment information.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Attachment ID */
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Attachment info retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['AttachmentInfoResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Attachment not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    /**
+     * Delete attachment
+     * @description Delete an attachment.
+     */
+    delete: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Attachment ID */
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Attachment deleted successfully */
+        204: {
+          headers: Record<string, unknown>;
+          content?: never;
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Attachment not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/attachments/{id}/download': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Download file
+     * @description Download an attachment.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Attachment ID */
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description File download */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            '*/*': string;
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Attachment not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/attachments/{id}/signed-url': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get signed URL
+     * @description Get a signed URL for temporary access.
+     */
+    get: {
+      parameters: {
+        query?: {
+          /** @description Expiration time in seconds (60-86400) */
+          expiresIn?: number;
+          /** @description Content disposition */
+          contentDisposition?: 'inline' | 'attachment';
+        };
+        header?: never;
+        path: {
+          /** @description Attachment ID */
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Signed URL generated successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['SignedUrlResponse'];
+          };
+        };
+        /** @description Failed to generate URL */
+        400: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ErrorResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/attachments/entity/{type}/{entityId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List entity attachments
+     * @description List attachments for an entity.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Entity type for attachment */
+          type: 'task' | 'project' | 'event';
+          /** @description Entity ID */
+          entityId: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Attachments retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['EntityAttachmentsResponse'];
+          };
+        };
+        /** @description Invalid entity type */
+        400: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ErrorResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/attachments/upload': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Upload file
+     * @description Upload a file attachment.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description File uploaded successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UploadResponse'];
+          };
+        };
+        /** @description Upload failed */
+        400: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ErrorResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/audit/entity/{type}/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get entity audit logs
+     * @description Get audit logs for a specific entity.
+     */
+    get: {
+      parameters: {
+        query?: {
+          /** @description Maximum results */
+          limit?: number;
+        };
+        header?: never;
+        path: {
+          /** @description Entity type */
+          type: string;
+          /** @description Entity ID */
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Audit logs retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['AuditLogsResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/audit/': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List audit logs
+     * @description Get audit logs for the user.
+     */
+    get: {
+      parameters: {
+        query?: {
+          /** @description Number of items to return */
+          limit?: number;
+          /** @description Number of items to skip */
+          offset?: number | null;
+          /** @description Filter by entity type */
+          entityType?: string;
+          /** @description Filter by entity ID */
+          entityId?: string;
+          /** @description Filter by action */
+          action?: 'create' | 'update' | 'delete';
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Audit logs retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['AuditLogsResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/bulk/tasks/tags': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Bulk add tags
+     * @description Add tags to multiple tasks.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': components['schemas']['BulkAddTagsRequest'];
+        };
+      };
+      responses: {
+        /** @description Tags added successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['BulkTagsResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    /**
+     * Bulk remove tags
+     * @description Remove tags from multiple tasks.
+     */
+    delete: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': components['schemas']['BulkRemoveTagsRequest'];
+        };
+      };
+      responses: {
+        /** @description Tags removed successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['BulkTagsResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/bulk/tasks': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Bulk create tasks
+     * @description Create multiple tasks at once.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': components['schemas']['BulkCreateTasksRequest'];
+        };
+      };
+      responses: {
+        /** @description Tasks created successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['BulkCreateResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    /**
+     * Bulk delete tasks
+     * @description Delete multiple tasks at once.
+     */
+    delete: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': components['schemas']['BulkDeleteTasksRequest'];
+        };
+      };
+      responses: {
+        /** @description Tasks deleted successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['BulkDeleteResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description No tasks found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    options?: never;
+    head?: never;
+    /**
+     * Bulk update tasks
+     * @description Update multiple tasks at once.
+     */
+    patch: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': components['schemas']['BulkUpdateTasksRequest'];
+        };
+      };
+      responses: {
+        /** @description Tasks updated successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['BulkUpdateResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description No tasks found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    trace?: never;
+  };
+  '/api/bulk/tasks/move': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Bulk move tasks
+     * @description Move multiple tasks to a project.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': components['schemas']['BulkMoveTasksRequest'];
+        };
+      };
+      responses: {
+        /** @description Tasks moved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['BulkMoveResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Project not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/bulk/import': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Import tasks
+     * @description Import tasks from various formats.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': components['schemas']['ImportTasksRequest'];
+        };
+      };
+      responses: {
+        /** @description Tasks imported successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ImportResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/moments/': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List moments
+     * @description List all moments for the authenticated user.
+     */
+    get: {
+      parameters: {
+        query?: {
+          /** @description Filter from date */
+          startDate?: string;
+          /** @description Filter to date */
+          endDate?: string;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Moments retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['MomentsResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    /**
+     * Create moment
+     * @description Create a new moment.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': components['schemas']['CreateMomentRequest'];
+        };
+      };
+      responses: {
+        /** @description Moment created successfully */
+        201: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['MomentResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/moments/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get moment
+     * @description Get a moment by ID.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Moment ID */
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Moment retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['MomentResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Moment not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    /**
+     * Delete moment
+     * @description Delete a moment.
+     */
+    delete: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Moment ID */
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Moment deleted successfully */
+        204: {
+          headers: Record<string, unknown>;
+          content?: never;
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Moment not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    options?: never;
+    head?: never;
+    /**
+     * Update moment
+     * @description Update a moment.
+     */
+    patch: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Moment ID */
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': components['schemas']['UpdateMomentRequest'];
+        };
+      };
+      responses: {
+        /** @description Moment updated successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['MomentResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Moment not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    trace?: never;
+  };
+  '/api/onboarding/complete': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Complete onboarding
+     * @description Mark onboarding as complete.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Onboarding completed successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['OnboardingCompleteResponse'];
+          };
+        };
+        /** @description Onboarding already completed */
+        400: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ErrorResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Onboarding not started */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/onboarding/': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get onboarding progress
+     * @description Get onboarding status for the authenticated user.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Onboarding progress retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['OnboardingProgressResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Internal error */
+        500: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ErrorResponse'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    /**
+     * Reset onboarding
+     * @description Reset onboarding progress.
+     */
+    delete: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Onboarding reset successfully */
+        204: {
+          headers: Record<string, unknown>;
+          content?: never;
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/onboarding/skip': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Skip onboarding
+     * @description Skip the onboarding process.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Onboarding skipped successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['OnboardingSkipResponse'];
+          };
+        };
+        /** @description Onboarding already completed or skipped */
+        400: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ErrorResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/onboarding/step': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /**
+     * Update onboarding step
+     * @description Update current onboarding step.
+     */
+    patch: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': components['schemas']['UpdateOnboardingStepRequest'];
+        };
+      };
+      responses: {
+        /** @description Step updated successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['OnboardingUpdateResponse'];
+          };
+        };
+        /** @description Invalid step or onboarding finished */
+        400: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ErrorResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Onboarding not started */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    trace?: never;
+  };
+  '/api/time/': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List time entries
+     * @description List time entries for the authenticated user.
+     */
+    get: {
+      parameters: {
+        query?: {
+          /** @description Filter by task ID */
+          taskId?: string;
+          /** @description Filter from date */
+          startDate?: string;
+          /** @description Filter to date */
+          endDate?: string;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Time entries retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['TimeEntriesResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    /**
+     * Create time entry
+     * @description Create a manual time entry.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': components['schemas']['CreateTimeEntryRequest'];
+        };
+      };
+      responses: {
+        /** @description Time entry created successfully */
+        201: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['TimeEntryResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Task not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/time/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get time entry
+     * @description Get a time entry by ID.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Time entry ID */
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Time entry retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['TimeEntryResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Time entry not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    /**
+     * Delete time entry
+     * @description Delete a time entry.
+     */
+    delete: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Time entry ID */
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Time entry deleted successfully */
+        204: {
+          headers: Record<string, unknown>;
+          content?: never;
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Time entry not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    options?: never;
+    head?: never;
+    /**
+     * Update time entry
+     * @description Update a time entry.
+     */
+    patch: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Time entry ID */
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': components['schemas']['UpdateTimeEntryRequest'];
+        };
+      };
+      responses: {
+        /** @description Time entry updated successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['TimeEntryResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Time entry not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    trace?: never;
+  };
+  '/api/time/active': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get active timer
+     * @description Get the currently active time entry.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Active timer retrieved */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ActiveTimerResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/time/elapsed': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get elapsed time
+     * @description Get elapsed time of current timer.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Elapsed time retrieved */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ElapsedTimeResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/time/summary': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get time summary
+     * @description Get time tracking summary for a date range.
+     */
+    get: {
+      parameters: {
+        query: {
+          /** @description Summary start date */
+          startDate: string;
+          /** @description Summary end date */
+          endDate: string;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Time summary retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['TimeSummaryResponse'];
+          };
+        };
+        /** @description Missing required dates */
+        400: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ErrorResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/time/start': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Start timer
+     * @description Start a new timer.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': components['schemas']['StartTimerRequest'];
+        };
+      };
+      responses: {
+        /** @description Timer started successfully */
+        201: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['TimeEntryResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Task not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+        /** @description Timer already running */
+        409: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ErrorResponse'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/time/stop': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Stop timer
+     * @description Stop the current timer.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Timer stopped successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['StopTimerResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description No active timer */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/time/switch': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Switch timer
+     * @description Stop current timer and start a new one.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': components['schemas']['SwitchTimerRequest'];
+        };
+      };
+      responses: {
+        /** @description Timer switched successfully */
+        201: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['SwitchTimerResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Task not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/webhooks/': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List webhooks
+     * @description List all webhook endpoints for the authenticated user.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Webhooks retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['WebhookEndpointsResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    /**
+     * Create webhook
+     * @description Create a new webhook endpoint.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': components['schemas']['CreateWebhookRequest'];
+        };
+      };
+      responses: {
+        /** @description Webhook created successfully */
+        201: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['WebhookEndpointResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/webhooks/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Delete webhook
+     * @description Delete a webhook endpoint.
+     */
+    delete: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Webhook endpoint ID */
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Webhook deleted successfully */
+        204: {
+          headers: Record<string, unknown>;
+          content?: never;
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Webhook not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    options?: never;
+    head?: never;
+    /**
+     * Update webhook
+     * @description Update a webhook endpoint.
+     */
+    patch: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Webhook endpoint ID */
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': components['schemas']['UpdateWebhookRequest'];
+        };
+      };
+      responses: {
+        /** @description Webhook updated successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': {
+              /** @enum {boolean} */
+              success: true;
+            };
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Webhook not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    trace?: never;
+  };
+  '/api/webhooks/{id}/deliveries': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get webhook deliveries
+     * @description Get delivery history for a webhook.
+     */
+    get: {
+      parameters: {
+        query?: {
+          /** @description Maximum deliveries to return */
+          limit?: number;
+        };
+        header?: never;
+        path: {
+          /** @description Webhook endpoint ID */
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Deliveries retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['WebhookDeliveriesResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/webhooks/{id}/regenerate-secret': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Regenerate webhook secret
+     * @description Regenerate the webhook secret.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Webhook endpoint ID */
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Secret regenerated successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['RegenerateSecretResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Webhook not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/webhooks/deliveries/{id}/retry': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Retry delivery
+     * @description Retry a failed webhook delivery.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Delivery ID */
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Delivery retry initiated */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': {
+              /** @enum {boolean} */
+              success: true;
+            };
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Delivery not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/webhooks/test': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Test webhook
+     * @description Send a test webhook.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': components['schemas']['TestWebhookRequest'];
+        };
+      };
+      responses: {
+        /** @description Test webhook sent */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': {
+              /** @enum {boolean} */
+              success: true;
+            };
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Webhook not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/workspaces/': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List workspaces
+     * @description List all workspaces for the authenticated user.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Workspaces retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['WorkspacesResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    /**
+     * Create workspace
+     * @description Create a new workspace.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': components['schemas']['CreateWorkspaceRequest'];
+        };
+      };
+      responses: {
+        /** @description Workspace created successfully */
+        201: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['WorkspaceResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/workspaces/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get workspace
+     * @description Get a workspace by ID.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Workspace ID */
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Workspace retrieved successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['WorkspaceResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Workspace not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    /**
+     * Delete workspace
+     * @description Delete a workspace.
+     */
+    delete: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Workspace ID */
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Workspace deleted successfully */
+        204: {
+          headers: Record<string, unknown>;
+          content?: never;
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Workspace not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    options?: never;
+    head?: never;
+    /**
+     * Update workspace
+     * @description Update a workspace.
+     */
+    patch: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          /** @description Workspace ID */
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          'application/json': components['schemas']['UpdateWorkspaceRequest'];
+        };
+      };
+      responses: {
+        /** @description Workspace updated successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['WorkspaceResponse'];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['UnauthorizedError'];
+          };
+        };
+        /** @description Workspace not found */
+        404: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['NotFoundError'];
+          };
+        };
+      };
+    };
+    trace?: never;
+  };
+  '/api/risc/stream': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get RISC stream status
+     * @description Get RISC stream configuration and status.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Stream status retrieved */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['RISCStreamResponse'];
+          };
+        };
+        /** @description Failed to fetch status */
+        500: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ErrorResponse'];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/risc/stream/verify': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Request RISC verification
+     * @description Send a verification request to Google.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Verification requested */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['RISCVerifyResponse'];
+          };
+        };
+        /** @description RISC not configured */
+        400: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ErrorResponse'];
+          };
+        };
+        /** @description Failed to request verification */
+        500: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ErrorResponse'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/risc/webhook': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * RISC webhook verification
+     * @description Verify webhook endpoint connectivity.
+     */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Webhook endpoint active */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['RISCWebhookVerifyResponse'];
+          };
+        };
+      };
+    };
+    put?: never;
+    /**
+     * RISC webhook
+     * @description Receive security events from Google Cross-Account Protection.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Event processed successfully */
+        200: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['RISCWebhookResponse'];
+          };
+        };
+        /** @description Invalid token or missing configuration */
+        400: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ErrorResponse'];
+          };
+        };
+        /** @description Internal error */
+        500: {
+          headers: Record<string, unknown>;
+          content: {
+            'application/json': components['schemas']['ErrorResponse'];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
     trace?: never;
   };
 }
@@ -6686,7 +11137,13 @@ export interface components {
        * @example github
        * @enum {string}
        */
-      provider: 'linear' | 'github' | 'google_calendar' | 'outlook_calendar' | 'apple_calendar';
+      provider:
+        | 'linear'
+        | 'github'
+        | 'google_calendar'
+        | 'outlook_calendar'
+        | 'apple_calendar'
+        | 'caldav_calendar';
       /** @description External account identifier */
       externalAccountId: string;
       /** @description OAuth scopes */
@@ -6712,7 +11169,13 @@ export interface components {
        * @example github
        * @enum {string}
        */
-      provider: 'linear' | 'github' | 'google_calendar' | 'outlook_calendar' | 'apple_calendar';
+      provider:
+        | 'linear'
+        | 'github'
+        | 'google_calendar'
+        | 'outlook_calendar'
+        | 'apple_calendar'
+        | 'caldav_calendar';
       /** @description External account identifier */
       externalAccountId: string;
       /** @description OAuth access token */
@@ -6824,7 +11287,13 @@ export interface components {
        * @example github
        * @enum {string}
        */
-      provider: 'linear' | 'github' | 'google_calendar' | 'outlook_calendar' | 'apple_calendar';
+      provider:
+        | 'linear'
+        | 'github'
+        | 'google_calendar'
+        | 'outlook_calendar'
+        | 'apple_calendar'
+        | 'caldav_calendar';
       /** @description OAuth authorization URL */
       authorizationUrl: string;
       /** @description Whether provider is configured */
@@ -6892,6 +11361,18 @@ export interface components {
        * @enum {string|null}
        */
       lastSyncStatus: 'success' | 'error' | 'partial' | null;
+      /** @description Last sync error message */
+      lastSyncError: string | null;
+      /** @description User-defined label for the account */
+      accountLabel: string | null;
+      /** @description Account email address */
+      accountEmail: string | null;
+      /** @description Account color indicator */
+      accountColor: string | null;
+      /** @description Whether this is the primary account */
+      isPrimary: boolean;
+      /** @description Display order */
+      displayOrder: number;
       /** @description Connected calendars */
       calendars: components['schemas']['Calendar'][];
       /**
@@ -6904,10 +11385,16 @@ export interface components {
     Calendar: {
       /** @description Calendar ID */
       id: string;
+      /** @description External calendar ID */
+      externalId: string;
       /** @description Calendar name */
       name: string;
       /** @description Calendar color */
       color: string | null;
+      /** @description Whether this is the primary calendar */
+      isPrimary: boolean;
+      /** @description Whether events can be edited */
+      canEdit?: boolean;
       /** @description Whether sync is enabled */
       syncEnabled: boolean;
       /**
@@ -6976,8 +11463,18 @@ export interface components {
       eventsUpdated?: number;
       /** @description Events deleted */
       eventsDeleted?: number;
-      /** @description Error messages */
-      errors?: string[];
+      /** @description Error details */
+      errors?: {
+        /** @description External event ID */
+        eventId?: string;
+        /**
+         * @description Operation
+         * @enum {string}
+         */
+        operation: 'create' | 'update' | 'delete';
+        /** @description Error message */
+        error: string;
+      }[];
       /** @description Error message if failed */
       error?: string;
     };
@@ -6990,8 +11487,18 @@ export interface components {
         eventsUpdated: number;
         /** @description Events deleted */
         eventsDeleted: number;
-        /** @description Error messages */
-        errors: string[];
+        /** @description Error details */
+        errors: {
+          /** @description External event ID */
+          eventId?: string;
+          /**
+           * @description Operation
+           * @enum {string}
+           */
+          operation: 'create' | 'update' | 'delete';
+          /** @description Error message */
+          error: string;
+        }[];
         /**
          * Format: date-time
          * @description Sync completion timestamp
@@ -7013,6 +11520,1542 @@ export interface components {
          */
         syncDirection: 'pull' | 'push' | 'bidirectional';
       }[];
+    };
+    /** @description Created tag */
+    CreateTagResponse: {
+      data: components['schemas']['Tag'];
+    };
+    Tag: {
+      /** @description Tag ID */
+      id: string;
+      /** @description Tag name */
+      name: string;
+      /** @description Tag color (hex) */
+      color: string | null;
+      /**
+       * Format: uuid
+       * @description Owner user ID
+       */
+      ownerId: string;
+      /**
+       * Format: date-time
+       * @description Creation timestamp
+       * @example 2025-01-09T12:00:00Z
+       */
+      createdAt: string;
+    };
+    CreateTagRequest: {
+      /** @description Tag name */
+      name: string;
+      /** @description Tag color (hex) */
+      color?: string;
+    };
+    /** @description Tag details */
+    TagResponse: {
+      data: components['schemas']['TagWithTasks'];
+    };
+    TagWithTasks: components['schemas']['Tag'] & {
+      /** @description Associated tasks */
+      tasks: {
+        task: {
+          id: string;
+          title: string;
+          status: string;
+        } | null;
+      }[];
+    };
+    /** @description List of tags */
+    TagsResponse: {
+      data: components['schemas']['TagWithTasks'][];
+    };
+    UpdateTagRequest: {
+      /** @description Tag name */
+      name?: string;
+      /** @description Tag color (hex) */
+      color?: string;
+    };
+    /** @description Chat response */
+    ChatResponse: {
+      data: {
+        /** @description AI response */
+        response: string;
+        toolCalls?: components['schemas']['ToolCall'][];
+        usage?: components['schemas']['Usage'];
+      };
+    };
+    ToolCall: {
+      /** @description Tool name */
+      name: string;
+      /** @description Tool input */
+      input: Record<string, unknown>;
+      /** @description Tool result */
+      result?: unknown;
+    };
+    Usage: {
+      /** @description Input tokens used */
+      inputTokens: number;
+      /** @description Output tokens used */
+      outputTokens: number;
+    };
+    ChatRequest: {
+      /** @description Conversation ID */
+      conversationId: string;
+      /** @description User message */
+      message: string;
+      /**
+       * @description AI provider to use
+       * @example anthropic
+       * @enum {string}
+       */
+      provider?: 'anthropic' | 'openai' | 'google';
+      /** @description Temperature */
+      temperature?: number;
+      /** @description Max tokens */
+      maxTokens?: number;
+    };
+    /** @description Created conversation ID */
+    CreateConversationResponse: {
+      data: {
+        id: string;
+      };
+    };
+    CreateConversationRequest: {
+      /** @description Conversation title */
+      title?: string;
+    };
+    /** @description Generated title */
+    GenerateTitleResponse: {
+      data: {
+        title: string | null;
+      };
+    };
+    /** @description Conversation with messages */
+    ConversationResponse: {
+      data: components['schemas']['ConversationWithMessages'];
+    };
+    ConversationWithMessages: components['schemas']['Conversation'] & {
+      /** @description Conversation messages */
+      messages: components['schemas']['Message'][];
+    };
+    Message: {
+      /** @description Message ID */
+      id: string;
+      /** @description Conversation ID */
+      conversationId: string;
+      /**
+       * @description Message role
+       * @enum {string}
+       */
+      role: 'user' | 'assistant' | 'system';
+      /** @description Message content */
+      content: string;
+      /**
+       * Format: date-time
+       * @description Creation timestamp
+       * @example 2025-01-09T12:00:00Z
+       */
+      createdAt: string;
+    };
+    Conversation: {
+      /** @description Conversation ID */
+      id: string;
+      /**
+       * Format: uuid
+       * @description User ID
+       */
+      userId: string;
+      /** @description Conversation title */
+      title: string | null;
+      /**
+       * Format: date-time
+       * @description Creation timestamp
+       * @example 2025-01-09T12:00:00Z
+       */
+      createdAt: string;
+      /**
+       * Format: date-time
+       * @description Last update timestamp
+       * @example 2025-01-09T12:00:00Z
+       */
+      updatedAt: string;
+    };
+    /** @description AI preferences */
+    AIPreferencesResponse: {
+      data: components['schemas']['AIPreferences'];
+    };
+    AIPreferences: {
+      /** @description Preferred AI provider */
+      preferredProvider: string | null;
+      /** @description Preferred model */
+      preferredModel: string | null;
+      /** @description Temperature */
+      temperature: number | null;
+      /** @description Max tokens */
+      maxTokens: number | null;
+    };
+    /** @description Provider health status */
+    AIHealthResponse: {
+      data: components['schemas']['ProviderHealth'][];
+    };
+    ProviderHealth: {
+      /** @description Provider ID */
+      provider: string;
+      /** @description Health status */
+      healthy: boolean;
+      /** @description Latency in ms */
+      latencyMs?: number;
+      /** @description Error message */
+      error?: string;
+    };
+    /** @description List of conversations */
+    ConversationsResponse: {
+      data: components['schemas']['Conversation'][];
+    };
+    /** @description Available providers */
+    ProvidersResponse: {
+      data: {
+        providers: components['schemas']['ProviderInfo'][];
+        default: string;
+      };
+    };
+    ProviderInfo: {
+      /** @description Provider ID */
+      id: string;
+      /** @description Provider name */
+      name: string;
+      /** @description Available models */
+      models: string[];
+      /** @description Whether provider is available */
+      available: boolean;
+    };
+    /** @description Quick chat response */
+    QuickChatResponse: {
+      data: {
+        conversationId: string;
+        title: string | null;
+        response: string;
+        toolCalls?: components['schemas']['ToolCall'][];
+        usage?: components['schemas']['Usage'];
+      };
+    };
+    QuickChatRequest: {
+      /** @description User message */
+      message: string;
+      /**
+       * @description AI provider to use
+       * @example anthropic
+       * @enum {string}
+       */
+      provider?: 'anthropic' | 'openai' | 'google';
+    };
+    UpdateAIPreferencesRequest: {
+      preferredProvider?: string;
+      preferredModel?: string;
+      temperature?: number;
+      maxTokens?: number;
+    };
+    /** @description Search results */
+    SearchResponse: {
+      data: components['schemas']['SearchResults'];
+    };
+    SearchResults: {
+      /** @description Search results */
+      results: components['schemas']['SearchResultItem'][];
+      /** @description Total matching results */
+      total: number;
+      /** @description Search query */
+      query: string;
+      /** @description Search time in ms */
+      took: number;
+    };
+    SearchResultItem: {
+      /** @description Entity ID */
+      id: string;
+      /**
+       * @description Searchable entity type
+       * @example task
+       * @enum {string}
+       */
+      type: 'task' | 'project' | 'event' | 'initiative' | 'tag';
+      /** @description Entity title/name */
+      title: string;
+      /** @description Entity description */
+      description: string | null;
+      /** @description Relevance score */
+      score: number;
+      /** @description Highlighted match */
+      highlight: string | null;
+      /** @description Additional metadata */
+      metadata: Record<string, unknown> | null;
+    };
+    /** @description Search statistics */
+    SearchStatsResponse: {
+      data: components['schemas']['SearchStats'];
+    };
+    SearchStats: {
+      /** @description Total indexed documents */
+      totalIndexed: number;
+      /** @description Count by entity type */
+      byType: Record<string, number>;
+      /** @description Last index update */
+      lastUpdated: string;
+    };
+    /** @description Search suggestions */
+    SuggestionsResponse: {
+      data: components['schemas']['SearchSuggestion'][];
+    };
+    SearchSuggestion: {
+      /** @description Suggestion text */
+      text: string;
+      /**
+       * @description Searchable entity type
+       * @example task
+       * @enum {string}
+       */
+      type: 'task' | 'project' | 'event' | 'initiative' | 'tag';
+      /** @description Entity ID if specific */
+      id?: string;
+    };
+    /** @description Daily agenda */
+    AgendaResponse: {
+      data: {
+        date: string;
+        items: components['schemas']['AgendaItem'][];
+        summary: components['schemas']['AgendaSummary'];
+      };
+    };
+    AgendaItem: {
+      /**
+       * @description Agenda item type
+       * @enum {string}
+       */
+      type: 'task' | 'event';
+      /**
+       * Format: date-time
+       * @description Sort time
+       * @example 2025-01-09T12:00:00Z
+       */
+      sortTime: string;
+      /** @description Custom position */
+      customPosition?: number;
+      /** @description Item data */
+      data: components['schemas']['AgendaTask'] | components['schemas']['AgendaEvent'];
+    };
+    AgendaTask: {
+      /** @description Task ID */
+      id: string;
+      /** @description Task title */
+      title: string;
+      /** @description Task status */
+      status: string;
+      /** @description Task priority */
+      priority: string | null;
+      /**
+       * Format: date-time
+       * @description Task deadline
+       * @example 2025-01-09T12:00:00Z
+       */
+      deadline: string | null;
+      /** @description Estimated minutes */
+      estimatedMinutes: number | null;
+      /** @description Associated project */
+      project: {
+        id: string;
+        name: string;
+      } | null;
+    };
+    AgendaEvent: {
+      /** @description Event ID */
+      id: string;
+      /** @description Event title */
+      title: string;
+      /**
+       * Format: date-time
+       * @description Start time
+       * @example 2025-01-09T12:00:00Z
+       */
+      startTime: string;
+      /**
+       * Format: date-time
+       * @description End time
+       * @example 2025-01-09T12:00:00Z
+       */
+      endTime: string | null;
+      /** @description All-day event */
+      isAllDay: boolean;
+    };
+    AgendaSummary: {
+      /** @description Total tasks */
+      totalTasks: number;
+      /** @description Completed tasks */
+      completedTasks: number;
+      /** @description Total events */
+      totalEvents: number;
+      /** @description Estimated minutes */
+      estimatedMinutes: number;
+      /** @description Estimated hours */
+      estimatedHours: number;
+    };
+    /** @description Agenda range */
+    AgendaRangeResponse: {
+      data: {
+        startDate: string;
+        endDate: string;
+        tasks: components['schemas']['AgendaTask'][];
+        events: components['schemas']['AgendaEvent'][];
+        summary: {
+          totalTasks: number;
+          totalEvents: number;
+        };
+      };
+    };
+    /** @description Upcoming deadlines */
+    DeadlinesResponse: {
+      data: {
+        tasks: components['schemas']['AgendaTask'][];
+        byDay: Record<string, components['schemas']['AgendaTask'][]>;
+        totalCount: number;
+        overdueCount: number;
+      };
+    };
+    /** @description Task order */
+    TaskOrderResponse: {
+      data: {
+        date: string;
+        taskIds: string[];
+      };
+    };
+    /** @description Today agenda */
+    TodayAgendaResponse: {
+      data: {
+        date: string;
+        tasks: components['schemas']['AgendaTask'][];
+        events: components['schemas']['AgendaEvent'][];
+        timeBlocks: unknown[];
+        summary: components['schemas']['TodaySummary'];
+      };
+    };
+    TodaySummary: {
+      /** @description Task count */
+      taskCount: number;
+      /** @description Event count */
+      eventCount: number;
+      /** @description Time block count */
+      timeBlockCount: number;
+      /** @description Estimated task minutes */
+      estimatedTaskMinutes: number;
+      /** @description Scheduled event minutes */
+      scheduledEventMinutes: number;
+      /** @description Tracked minutes */
+      trackedMinutes: number;
+      /** @description Utilization percent */
+      utilizationPercent: number;
+      /** @description Available minutes */
+      availableMinutes: number;
+    };
+    /** @description Week agenda */
+    WeekAgendaResponse: {
+      data: {
+        startDate: string;
+        endDate: string;
+        days: Record<
+          string,
+          {
+            tasks: components['schemas']['AgendaTask'][];
+            events: components['schemas']['AgendaEvent'][];
+          }
+        >;
+        summary: {
+          totalTasks: number;
+          totalEvents: number;
+        };
+      };
+    };
+    ReorderResponse: {
+      /** @enum {boolean} */
+      success: true;
+      date: string;
+      orderedTaskIds: string[];
+    };
+    AgendaReorderRequest: {
+      /** @description Ordered task IDs */
+      taskIds: string[];
+      /** @description Date (YYYY-MM-DD) */
+      date?: string;
+    };
+    /** @description Created activity */
+    CreateActivityResponse: {
+      data: components['schemas']['Activity'];
+    };
+    Activity: {
+      /** @description Activity ID */
+      id: string;
+      /** @description Stream ID */
+      streamId: string;
+      /** @description Activity type */
+      type: string;
+      /**
+       * Format: date-time
+       * @description Start time
+       * @example 2025-01-09T12:00:00Z
+       */
+      startTime: string;
+      /**
+       * Format: date-time
+       * @description End time
+       * @example 2025-01-09T12:00:00Z
+       */
+      endTime: string;
+      /** @description Activity metadata */
+      metadata: Record<string, unknown> | null;
+      /**
+       * Format: date-time
+       * @description Creation timestamp
+       * @example 2025-01-09T12:00:00Z
+       */
+      createdAt: string;
+      /**
+       * Format: date-time
+       * @description Last update timestamp
+       * @example 2025-01-09T12:00:00Z
+       */
+      updatedAt: string;
+    };
+    CreateActivityRequest: {
+      /** @description Activity type */
+      type: string;
+      /**
+       * Format: date-time
+       * @description Start time
+       */
+      startTime: string;
+      /**
+       * Format: date-time
+       * @description End time
+       */
+      endTime: string;
+      /** @description Activity metadata */
+      metadata?: Record<string, unknown>;
+    };
+    /** @description Created activity stream */
+    CreateActivityStreamResponse: {
+      data: components['schemas']['ActivityStream'];
+    };
+    ActivityStream: {
+      /** @description Activity stream ID */
+      id: string;
+      /** @description Stream name */
+      name: string;
+      /** @description Stream source */
+      source: string;
+      /**
+       * Format: uuid
+       * @description Owner user ID
+       */
+      ownerId: string;
+      /**
+       * Format: date-time
+       * @description Creation timestamp
+       * @example 2025-01-09T12:00:00Z
+       */
+      createdAt: string;
+      /**
+       * Format: date-time
+       * @description Last update timestamp
+       * @example 2025-01-09T12:00:00Z
+       */
+      updatedAt: string;
+    };
+    CreateActivityStreamRequest: {
+      /** @description Stream name */
+      name: string;
+      /** @description Stream source */
+      source: string;
+    };
+    /** @description Activity details */
+    ActivityResponse: {
+      data: components['schemas']['ActivityWithStream'];
+    };
+    ActivityWithStream: components['schemas']['Activity'] & {
+      stream?: components['schemas']['ActivityStream'] & unknown;
+    };
+    /** @description Activity stream details */
+    ActivityStreamResponse: {
+      data: components['schemas']['ActivityStreamWithActivities'];
+    };
+    ActivityStreamWithActivities: components['schemas']['ActivityStream'] & {
+      /** @description Recent activities */
+      activities: components['schemas']['Activity'][];
+    };
+    /** @description List of activities */
+    ActivitiesResponse: {
+      data: components['schemas']['Activity'][];
+    };
+    /** @description List of activity streams */
+    ActivityStreamsResponse: {
+      data: components['schemas']['ActivityStreamWithActivities'][];
+    };
+    UpdateActivityRequest: {
+      /** @description Activity type */
+      type?: string;
+      /**
+       * Format: date-time
+       * @description Start time
+       */
+      startTime?: string;
+      /**
+       * Format: date-time
+       * @description End time
+       */
+      endTime?: string;
+      /** @description Activity metadata */
+      metadata?: Record<string, unknown>;
+    };
+    UpdateActivityStreamRequest: {
+      /** @description Stream name */
+      name?: string;
+      /** @description Stream source */
+      source?: string;
+    };
+    /** @description Dashboard metrics */
+    DashboardResponse: {
+      data: components['schemas']['DashboardMetrics'];
+    };
+    DashboardMetrics: {
+      /** @description Tasks completed */
+      tasksCompleted: number;
+      /** @description Tasks created */
+      tasksCreated: number;
+      /** @description Events attended */
+      eventsAttended: number;
+      /** @description Minutes tracked */
+      minutesTracked: number;
+      /** @description Active projects */
+      activeProjects: number;
+      /** @description Completion rate (0-1) */
+      completionRate: number;
+      /** @description Average task duration in minutes */
+      averageTaskDuration: number;
+    };
+    /** @description Productivity metrics */
+    ProductivityMetricsResponse: {
+      data: components['schemas']['ProductivityMetrics'];
+    };
+    ProductivityMetrics: {
+      /** @description Focus score (0-100) */
+      focusScore: number;
+      /** @description Consistency score (0-100) */
+      consistencyScore: number;
+      /** @description Completion rate (0-1) */
+      completionRate: number;
+      /** @description Peak productivity hours */
+      peakHours: number[];
+      /** @description Current streak days */
+      streakDays: number;
+      /** @description Longest streak days */
+      longestStreak: number;
+      /** @description Weekly progress */
+      weeklyProgress: {
+        week: string;
+        score: number;
+      }[];
+    };
+    /** @description Project metrics */
+    ProjectMetricsResponse: {
+      data: components['schemas']['ProjectMetrics'];
+    };
+    ProjectMetrics: {
+      /** @description Total projects */
+      total: number;
+      /** @description Active projects */
+      active: number;
+      /** @description Completed projects */
+      completed: number;
+      /** @description Projects by status */
+      byStatus: Record<string, number>;
+      /** @description Task distribution by project */
+      taskDistribution: {
+        projectId: string;
+        projectName: string;
+        taskCount: number;
+        completedCount: number;
+      }[];
+    };
+    /** @description Task metrics */
+    TaskMetricsResponse: {
+      data: components['schemas']['TaskMetrics'];
+    };
+    TaskMetrics: {
+      /** @description Total tasks */
+      total: number;
+      /** @description Completed tasks */
+      completed: number;
+      /** @description Pending tasks */
+      pending: number;
+      /** @description In-progress tasks */
+      inProgress: number;
+      /** @description Overdue tasks */
+      overdue: number;
+      /** @description Tasks by priority */
+      byPriority: Record<string, number>;
+      /** @description Tasks by status */
+      byStatus: Record<string, number>;
+      /** @description Completion trend */
+      completionTrend: {
+        date: string;
+        completed: number;
+      }[];
+    };
+    /** @description Time tracking metrics */
+    TimeMetricsResponse: {
+      data: components['schemas']['TimeMetrics'];
+    };
+    TimeMetrics: {
+      /** @description Total minutes tracked */
+      totalMinutes: number;
+      /** @description Total hours tracked */
+      totalHours: number;
+      /** @description Minutes by day */
+      byDay: {
+        date: string;
+        minutes: number;
+      }[];
+      /** @description Minutes by project */
+      byProject: Record<string, number>;
+      /** @description Minutes by task */
+      byTask: Record<string, number>;
+      /** @description Average minutes per day */
+      averagePerDay: number;
+    };
+    /** @description Attachment info */
+    AttachmentInfoResponse: {
+      data: components['schemas']['Attachment'];
+    };
+    Attachment: {
+      /** @description Attachment ID */
+      id: string;
+      /**
+       * Format: uuid
+       * @description Owner user ID
+       */
+      userId: string;
+      /** @description Original filename */
+      originalFilename: string;
+      /** @description MIME type */
+      mimeType: string;
+      /** @description File size in bytes */
+      size: number;
+      /**
+       * @description Associated entity type
+       * @example task
+       * @enum {string|null}
+       */
+      entityType: 'task' | 'project' | 'event' | null;
+      /** @description Associated entity ID */
+      entityId: string | null;
+      /** @description Public accessibility */
+      isPublic: boolean;
+      /** @description Public URL if available */
+      url: string | null;
+      /**
+       * Format: date-time
+       * @description Upload timestamp
+       * @example 2025-01-09T12:00:00Z
+       */
+      createdAt: string;
+    };
+    /** @description Signed URL */
+    SignedUrlResponse: {
+      data: components['schemas']['SignedUrlResult'];
+    };
+    SignedUrlResult: {
+      /** @description Signed URL */
+      url: string;
+      /** @description Expiration in seconds */
+      expiresIn: number;
+    };
+    /** @description Entity attachments */
+    EntityAttachmentsResponse: {
+      data: components['schemas']['Attachment'][];
+    };
+    /** @description Upload result */
+    UploadResponse: {
+      data: components['schemas']['UploadResult'];
+    };
+    UploadResult: {
+      /** @description Attachment ID */
+      id: string;
+      /** @description Public URL if available */
+      url: string | null;
+      /** @description Original filename */
+      originalFilename: string;
+      /** @description MIME type */
+      mimeType: string;
+      /** @description File size in bytes */
+      size: number;
+    };
+    /** @description Audit logs */
+    AuditLogsResponse: {
+      data: components['schemas']['AuditLog'][];
+    };
+    AuditLog: {
+      /** @description Audit log ID */
+      id: string;
+      /**
+       * Format: uuid
+       * @description User ID
+       */
+      userId: string;
+      /**
+       * @description Audit action type
+       * @example create
+       * @enum {string}
+       */
+      action: 'create' | 'update' | 'delete';
+      /** @description Entity type */
+      entityType: string;
+      /** @description Entity ID */
+      entityId: string;
+      /** @description Changes made */
+      changes: Record<string, unknown> | null;
+      /** @description Additional metadata */
+      metadata: Record<string, unknown> | null;
+      /** @description IP address */
+      ipAddress: string | null;
+      /** @description User agent */
+      userAgent: string | null;
+      /**
+       * Format: date-time
+       * @description Timestamp
+       * @example 2025-01-09T12:00:00Z
+       */
+      createdAt: string;
+    };
+    /** @description Bulk tags result */
+    BulkTagsResponse: {
+      data: {
+        /** @description Associations created */
+        created?: number;
+        /** @description Associations deleted */
+        deleted?: number;
+      };
+    };
+    BulkAddTagsRequest: {
+      /** @description Task IDs */
+      taskIds: string[];
+      /** @description Tag IDs to add */
+      tagIds: string[];
+    };
+    /** @description Bulk create result */
+    BulkCreateResponse: {
+      data: {
+        /** @description Number created */
+        created: number;
+        /** @description Created IDs */
+        ids: string[];
+      };
+    };
+    BulkCreateTasksRequest: {
+      /** @description Tasks to create */
+      tasks: {
+        /** @description Task title */
+        title: string;
+        /** @description Task description */
+        description?: string;
+        /**
+         * Format: uuid
+         * @description Project ID
+         */
+        projectId?: string;
+        /**
+         * @description Task priority
+         * @example medium
+         * @enum {string}
+         */
+        priority?: 'low' | 'medium' | 'high' | 'urgent';
+        /**
+         * Format: date-time
+         * @description Task deadline
+         */
+        deadline?: string;
+        /** @description Tag names */
+        tags?: string[];
+      }[];
+    };
+    /** @description Bulk delete result */
+    BulkDeleteResponse: {
+      data: {
+        /** @description Number deleted */
+        deleted: number;
+        /** @description Deleted IDs */
+        ids: string[];
+      };
+    };
+    BulkDeleteTasksRequest: {
+      /** @description Task IDs to delete */
+      ids: string[];
+      /**
+       * @description Permanent deletion
+       * @default false
+       */
+      permanent: boolean;
+    };
+    /** @description Bulk move result */
+    BulkMoveResponse: {
+      data: {
+        /** @description Number moved */
+        moved: number;
+        /** @description Moved IDs */
+        ids: string[];
+      };
+    };
+    BulkMoveTasksRequest: {
+      /** @description Task IDs */
+      taskIds: string[];
+      /**
+       * Format: uuid
+       * @description Target project ID (null for no project)
+       */
+      projectId: string | null;
+    };
+    BulkRemoveTagsRequest: {
+      /** @description Task IDs */
+      taskIds: string[];
+      /** @description Tag IDs to remove */
+      tagIds: string[];
+    };
+    /** @description Bulk update result */
+    BulkUpdateResponse: {
+      data: {
+        /** @description Number updated */
+        updated: number;
+        /** @description Updated IDs */
+        ids: string[];
+      };
+    };
+    BulkUpdateTasksRequest: {
+      /** @description Task IDs to update */
+      ids: string[];
+      /** @description Updates to apply */
+      updates: {
+        /**
+         * @description Task status
+         * @example pending
+         * @enum {string}
+         */
+        status?: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+        /**
+         * @description Task priority level
+         * @example medium
+         * @enum {string}
+         */
+        priority?: 'low' | 'medium' | 'high' | 'urgent';
+        /** Format: uuid */
+        projectId?: string | null;
+        /** Format: uuid */
+        assigneeId?: string | null;
+        /** Format: date-time */
+        deadline?: string | null;
+      };
+    };
+    /** @description Import result */
+    ImportResponse: {
+      data: {
+        /** @description Number imported */
+        imported: number;
+        /** @description Imported IDs */
+        ids: string[];
+        /**
+         * @description Import format
+         * @example json
+         * @enum {string}
+         */
+        format: 'json' | 'todoist' | 'asana' | 'trello';
+      };
+    };
+    ImportTasksRequest: {
+      /**
+       * @description Import format
+       * @example json
+       * @enum {string}
+       */
+      format: 'json' | 'todoist' | 'asana' | 'trello';
+      /** @description Import data */
+      data?: unknown;
+      /**
+       * Format: uuid
+       * @description Default project ID
+       */
+      projectId?: string;
+    };
+    /** @description Moment details */
+    MomentResponse: {
+      data: components['schemas']['Moment'];
+    };
+    Moment: {
+      /** @description Moment ID */
+      id: string;
+      /** @description Moment label */
+      label: string | null;
+      /** @description Moment description */
+      description: string | null;
+      /**
+       * Format: date-time
+       * @description Start time
+       * @example 2025-01-09T12:00:00Z
+       */
+      startTime: string;
+      /**
+       * Format: date-time
+       * @description End time
+       * @example 2025-01-09T12:00:00Z
+       */
+      endTime: string;
+      /**
+       * Format: uuid
+       * @description Owner user ID
+       */
+      ownerId: string;
+      /**
+       * Format: date-time
+       * @description Creation timestamp
+       * @example 2025-01-09T12:00:00Z
+       */
+      createdAt: string;
+      /**
+       * Format: date-time
+       * @description Last update timestamp
+       * @example 2025-01-09T12:00:00Z
+       */
+      updatedAt: string;
+    };
+    CreateMomentRequest: {
+      /** @description Moment label */
+      label?: string;
+      /** @description Moment description */
+      description?: string;
+      /**
+       * Format: date-time
+       * @description Start time
+       */
+      startTime: string;
+      /**
+       * Format: date-time
+       * @description End time
+       */
+      endTime: string;
+    };
+    /** @description List of moments */
+    MomentsResponse: {
+      data: components['schemas']['Moment'][];
+    };
+    UpdateMomentRequest: {
+      /** @description Moment label */
+      label?: string;
+      /** @description Moment description */
+      description?: string;
+      /**
+       * Format: date-time
+       * @description Start time
+       */
+      startTime?: string;
+      /**
+       * Format: date-time
+       * @description End time
+       */
+      endTime?: string;
+    };
+    /** @description Onboarding complete result */
+    OnboardingCompleteResponse: {
+      data: components['schemas']['OnboardingCompleteResult'];
+    };
+    OnboardingCompleteResult: {
+      /** @description Completion status */
+      completed: boolean;
+      /** @description Completion timestamp */
+      completedAt: string;
+    };
+    /** @description Onboarding progress */
+    OnboardingProgressResponse: {
+      data: components['schemas']['OnboardingProgress'];
+    };
+    OnboardingProgress: {
+      /**
+       * @description Current step
+       * @example welcome
+       * @enum {string}
+       */
+      currentStep: 'welcome' | 'profile' | 'integrations' | 'preferences' | 'tour' | 'complete';
+      /** @description Completed steps */
+      completedSteps: string[];
+      /** @description Whether onboarding is complete */
+      isCompleted: boolean;
+      /** @description Whether onboarding was skipped */
+      isSkipped: boolean;
+      /** @description Progress info */
+      progress: {
+        /** @description Current step number */
+        current: number;
+        /** @description Total steps */
+        total: number;
+        /** @description Progress percentage */
+        percentage: number;
+      };
+      /** @description Step metadata */
+      metadata: Record<string, unknown> | null;
+    };
+    /** @description Onboarding skip result */
+    OnboardingSkipResponse: {
+      data: components['schemas']['OnboardingSkipResult'];
+    };
+    OnboardingSkipResult: {
+      /** @description Skip status */
+      skipped: boolean;
+      /** @description Skip timestamp */
+      skippedAt: string;
+    };
+    /** @description Onboarding update result */
+    OnboardingUpdateResponse: {
+      data: components['schemas']['OnboardingUpdateResult'];
+    };
+    OnboardingUpdateResult: {
+      /** @description Current step */
+      currentStep: string;
+      /** @description Completed steps */
+      completedSteps: string[];
+    };
+    UpdateOnboardingStepRequest: {
+      /**
+       * @description Step to set as current
+       * @example welcome
+       * @enum {string}
+       */
+      step: 'welcome' | 'profile' | 'integrations' | 'preferences' | 'tour' | 'complete';
+      /** @description Step metadata */
+      metadata?: Record<string, unknown>;
+    };
+    /** @description Time entry details */
+    TimeEntryResponse: {
+      data: components['schemas']['TimeEntryWithTask'];
+    };
+    TimeEntryWithTask: components['schemas']['TimeEntry'] & {
+      task: components['schemas']['TimeEntryTask'];
+    };
+    /** @description Associated task */
+    TimeEntryTask: {
+      /** @description Task ID */
+      id: string;
+      /** @description Task title */
+      title: string;
+      /** @description Task status */
+      status: string;
+    } | null;
+    TimeEntry: {
+      /** @description Time entry ID */
+      id: string;
+      /** @description Associated task ID */
+      taskId: string | null;
+      /**
+       * Format: uuid
+       * @description User ID
+       */
+      userId: string;
+      /**
+       * Format: date-time
+       * @description Start time
+       * @example 2025-01-09T12:00:00Z
+       */
+      startTime: string;
+      /**
+       * Format: date-time
+       * @description End time (null if running)
+       * @example 2025-01-09T12:00:00Z
+       */
+      endTime: string | null;
+      /** @description Entry description */
+      description: string | null;
+      /**
+       * Format: date-time
+       * @description Creation timestamp
+       * @example 2025-01-09T12:00:00Z
+       */
+      createdAt: string;
+      /**
+       * Format: date-time
+       * @description Last update timestamp
+       * @example 2025-01-09T12:00:00Z
+       */
+      updatedAt: string;
+    };
+    CreateTimeEntryRequest: {
+      /** @description Task ID */
+      taskId?: string;
+      /**
+       * Format: date-time
+       * @description Start time
+       */
+      startTime: string;
+      /**
+       * Format: date-time
+       * @description End time
+       */
+      endTime: string;
+      /** @description Description */
+      description?: string;
+    };
+    /** @description Active timer */
+    ActiveTimerResponse: {
+      data: components['schemas']['TimeEntryWithTask'];
+    };
+    ElapsedTimeResponse: {
+      data: components['schemas']['TimeEntryWithTask'];
+      isRunning: boolean;
+      elapsed?: components['schemas']['ElapsedTime'];
+    };
+    ElapsedTime: {
+      /** @description Elapsed milliseconds */
+      milliseconds: number;
+      /** @description Elapsed minutes */
+      minutes: number;
+      /** @description Formatted elapsed time */
+      formatted: string;
+    };
+    /** @description Time tracking summary */
+    TimeSummaryResponse: {
+      data: components['schemas']['TimeSummary'];
+    };
+    TimeSummary: {
+      /** @description Total minutes */
+      totalMinutes: number;
+      /** @description Total hours */
+      totalHours: number;
+      /** @description Number of entries */
+      entryCount: number;
+      /** @description Minutes by task */
+      taskBreakdown: Record<string, number>;
+      /** @description Minutes by project */
+      projectBreakdown: Record<string, number>;
+    };
+    /** @description List of time entries */
+    TimeEntriesResponse: {
+      data: components['schemas']['TimeEntryWithTask'][];
+    };
+    StartTimerRequest: {
+      /** @description Task ID to track */
+      taskId?: string;
+      /** @description Timer description */
+      description?: string;
+    };
+    StopTimerResponse: {
+      data: components['schemas']['TimeEntryWithTask'];
+      duration: components['schemas']['TimerDuration'];
+    };
+    TimerDuration: {
+      /** @description Duration in minutes */
+      minutes: number;
+      /** @description Formatted duration */
+      formatted: string;
+    };
+    SwitchTimerResponse: {
+      data: components['schemas']['TimeEntryWithTask'];
+      previousEntry: components['schemas']['TimeEntryWithTask'];
+    };
+    SwitchTimerRequest: {
+      /** @description New task ID */
+      taskId?: string;
+      /** @description Timer description */
+      description?: string;
+    };
+    UpdateTimeEntryRequest: {
+      /** @description Task ID */
+      taskId?: string | null;
+      /**
+       * Format: date-time
+       * @description Start time
+       */
+      startTime?: string;
+      /**
+       * Format: date-time
+       * @description End time
+       */
+      endTime?: string | null;
+      /** @description Description */
+      description?: string | null;
+    };
+    /** @description Webhook endpoint */
+    WebhookEndpointResponse: {
+      data: components['schemas']['WebhookEndpoint'];
+    };
+    WebhookEndpoint: {
+      /** @description Endpoint ID */
+      id: string;
+      /**
+       * Format: uuid
+       * @description Owner user ID
+       */
+      userId: string;
+      /** @description Webhook URL */
+      url: string;
+      /** @description Subscribed events */
+      events: (
+        | 'task.created'
+        | 'task.updated'
+        | 'task.deleted'
+        | 'task.completed'
+        | 'project.created'
+        | 'project.updated'
+        | 'project.deleted'
+        | 'event.created'
+        | 'event.updated'
+        | 'event.deleted'
+        | 'comment.created'
+        | 'timer.started'
+        | 'timer.stopped'
+      )[];
+      /** @description Endpoint description */
+      description: string | null;
+      /** @description Webhook secret */
+      secret: string;
+      /** @description Active status */
+      isActive: boolean;
+      /**
+       * Format: date-time
+       * @description Creation timestamp
+       * @example 2025-01-09T12:00:00Z
+       */
+      createdAt: string;
+      /**
+       * Format: date-time
+       * @description Last update timestamp
+       * @example 2025-01-09T12:00:00Z
+       */
+      updatedAt: string;
+    };
+    CreateWebhookRequest: {
+      /**
+       * Format: uri
+       * @description Webhook URL
+       */
+      url: string;
+      /** @description Events to subscribe */
+      events: (
+        | 'task.created'
+        | 'task.updated'
+        | 'task.deleted'
+        | 'task.completed'
+        | 'project.created'
+        | 'project.updated'
+        | 'project.deleted'
+        | 'event.created'
+        | 'event.updated'
+        | 'event.deleted'
+        | 'comment.created'
+        | 'timer.started'
+        | 'timer.stopped'
+      )[];
+      /** @description Endpoint description */
+      description?: string;
+    };
+    /** @description Delivery history */
+    WebhookDeliveriesResponse: {
+      data: components['schemas']['WebhookDelivery'][];
+    };
+    WebhookDelivery: {
+      /** @description Delivery ID */
+      id: string;
+      /** @description Endpoint ID */
+      endpointId: string;
+      /**
+       * @description Webhook event type
+       * @example task.created
+       * @enum {string}
+       */
+      eventType:
+        | 'task.created'
+        | 'task.updated'
+        | 'task.deleted'
+        | 'task.completed'
+        | 'project.created'
+        | 'project.updated'
+        | 'project.deleted'
+        | 'event.created'
+        | 'event.updated'
+        | 'event.deleted'
+        | 'comment.created'
+        | 'timer.started'
+        | 'timer.stopped';
+      /**
+       * @description Delivery status
+       * @example success
+       * @enum {string}
+       */
+      status: 'pending' | 'success' | 'failed';
+      /** @description Request body */
+      requestBody: string | null;
+      /** @description Response status code */
+      responseStatus: number | null;
+      /** @description Response body */
+      responseBody: string | null;
+      /** @description Error message */
+      error: string | null;
+      /** @description Delivery attempts */
+      attempts: number;
+      /**
+       * Format: date-time
+       * @description Creation timestamp
+       * @example 2025-01-09T12:00:00Z
+       */
+      createdAt: string;
+      /**
+       * Format: date-time
+       * @description Delivery timestamp
+       * @example 2025-01-09T12:00:00Z
+       */
+      deliveredAt: string | null;
+    };
+    /** @description List of webhook endpoints */
+    WebhookEndpointsResponse: {
+      data: components['schemas']['WebhookEndpoint'][];
+    };
+    /** @description New webhook secret */
+    RegenerateSecretResponse: {
+      data: {
+        secret: string;
+      };
+    };
+    TestWebhookRequest: {
+      /**
+       * Format: uuid
+       * @description Endpoint ID to test
+       */
+      endpointId: string;
+    };
+    UpdateWebhookRequest: {
+      /**
+       * Format: uri
+       * @description Webhook URL
+       */
+      url?: string;
+      /** @description Events to subscribe */
+      events?: (
+        | 'task.created'
+        | 'task.updated'
+        | 'task.deleted'
+        | 'task.completed'
+        | 'project.created'
+        | 'project.updated'
+        | 'project.deleted'
+        | 'event.created'
+        | 'event.updated'
+        | 'event.deleted'
+        | 'comment.created'
+        | 'timer.started'
+        | 'timer.stopped'
+      )[];
+      /** @description Endpoint description */
+      description?: string;
+      /** @description Active status */
+      isActive?: boolean;
+    };
+    /** @description Workspace details */
+    WorkspaceResponse: {
+      data: components['schemas']['Workspace'];
+    };
+    Workspace: {
+      /** @description Workspace ID */
+      id: string;
+      /** @description Workspace name */
+      name: string;
+      /** @description Workspace description */
+      description: string | null;
+      /**
+       * Format: uuid
+       * @description Owner user ID
+       */
+      ownerId: string;
+      /**
+       * Format: date-time
+       * @description Creation timestamp
+       * @example 2025-01-09T12:00:00Z
+       */
+      createdAt: string;
+      /**
+       * Format: date-time
+       * @description Last update timestamp
+       * @example 2025-01-09T12:00:00Z
+       */
+      updatedAt: string;
+    };
+    CreateWorkspaceRequest: {
+      /** @description Workspace name */
+      name: string;
+      /** @description Workspace description */
+      description?: string;
+    };
+    /** @description List of workspaces */
+    WorkspacesResponse: {
+      data: components['schemas']['Workspace'][];
+    };
+    UpdateWorkspaceRequest: {
+      /** @description Workspace name */
+      name?: string;
+      /** @description Workspace description */
+      description?: string | null;
+    };
+    RISCStreamResponse:
+      | {
+          /** @enum {boolean} */
+          configured: false;
+          message: string;
+        }
+      | {
+          /** @enum {boolean} */
+          configured: true;
+          webhookUrl: string;
+          /** @enum {string} */
+          authMethod: 'adc' | 'explicit';
+          stream: components['schemas']['RISCStreamInfo'];
+          /**
+           * @description RISC stream status
+           * @example enabled
+           * @enum {string}
+           */
+          status: 'enabled' | 'disabled' | 'unknown';
+        }
+      | {
+          /** @enum {boolean} */
+          configured: true;
+          error: string;
+        };
+    RISCStreamInfo: {
+      /** @description Delivery URL */
+      deliveryUrl: string;
+      /** @description Requested events */
+      eventsRequested: string[];
+      /** @description Supported events */
+      eventsSupported: string[];
+      /** @description Delivered events */
+      eventsDelivered: string[];
+    } | null;
+    RISCVerifyResponse:
+      | {
+          /** @enum {boolean} */
+          success: true;
+          message: string;
+          state: string;
+        }
+      | {
+          error: string;
+        };
+    RISCWebhookResponse: {
+      success: boolean;
+      eventTypes?: string[];
+      message?: string;
+    };
+    RISCWebhookVerifyResponse: {
+      /** @enum {string} */
+      status: 'ok';
+      message: string;
     };
   };
   responses: never;

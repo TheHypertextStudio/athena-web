@@ -12,6 +12,9 @@ export default defineConfig({
   use: {
     baseURL: 'http://localhost:3000',
     trace: 'on-first-retry',
+    testIdAttribute: 'data-testid',
+    locale: 'en-US',
+    timezoneId: 'UTC',
   },
   projects: [
     {

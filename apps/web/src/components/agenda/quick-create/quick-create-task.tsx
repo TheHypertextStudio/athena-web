@@ -7,7 +7,9 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Plus, X, Clock } from 'lucide-react';
+import AddOutlined from '@mui/icons-material/AddOutlined';
+import CloseOutlined from '@mui/icons-material/CloseOutlined';
+import ScheduleOutlined from '@mui/icons-material/ScheduleOutlined';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -97,7 +99,7 @@ export function QuickCreateTask({ onCreated, date }: QuickCreateTaskProps) {
         onClick={handleOpen}
         className="text-muted-foreground hover:text-foreground w-full justify-start gap-2"
       >
-        <Plus className="h-4 w-4" />
+        <AddOutlined sx={{ fontSize: 16 }} />
         Add task
       </Button>
     );
@@ -121,7 +123,7 @@ export function QuickCreateTask({ onCreated, date }: QuickCreateTaskProps) {
           disabled={isSubmitting}
         />
         <Button type="button" variant="text" size="icon" onClick={handleClose} className="h-8 w-8">
-          <X className="h-4 w-4" />
+          <CloseOutlined sx={{ fontSize: 16 }} />
         </Button>
       </div>
 
@@ -145,7 +147,7 @@ export function QuickCreateTask({ onCreated, date }: QuickCreateTaskProps) {
         </Select>
 
         <div className="flex items-center gap-1">
-          <Clock className="text-muted-foreground h-4 w-4" />
+          <ScheduleOutlined sx={{ fontSize: 16 }} className="text-muted-foreground" />
           <Input
             type="number"
             value={estimatedMinutes}

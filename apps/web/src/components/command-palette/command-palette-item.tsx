@@ -12,7 +12,7 @@
 
 'use client';
 
-import { ChevronRight } from 'lucide-react';
+import ChevronRightOutlined from '@mui/icons-material/ChevronRightOutlined';
 import { useCallback, useMemo } from 'react';
 
 import { cn } from '@/lib/utils';
@@ -171,7 +171,7 @@ export function CommandPaletteItem({
         )}
         aria-hidden="true"
       >
-        <Icon className="h-4 w-4" />
+        <Icon sx={{ fontSize: 16 }} />
       </div>
 
       {/* Label with match highlighting */}
@@ -202,9 +202,10 @@ export function CommandPaletteItem({
 
       {/* Group indicator with rotation animation */}
       {isGroup && (
-        <ChevronRight
+        <ChevronRightOutlined
+          sx={{ fontSize: 16 }}
           className={cn(
-            'text-on-surface-variant h-4 w-4 shrink-0',
+            'text-on-surface-variant shrink-0',
             'duration-short3 transition-transform',
             isSelected && 'translate-x-0.5',
           )}

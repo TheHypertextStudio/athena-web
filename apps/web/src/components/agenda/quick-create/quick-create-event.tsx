@@ -7,7 +7,9 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Plus, X, MapPin } from 'lucide-react';
+import AddOutlined from '@mui/icons-material/AddOutlined';
+import CloseOutlined from '@mui/icons-material/CloseOutlined';
+import PlaceOutlined from '@mui/icons-material/PlaceOutlined';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -101,7 +103,7 @@ export function QuickCreateEvent({ onCreated, date }: QuickCreateEventProps) {
         onClick={handleOpen}
         className="text-muted-foreground hover:text-foreground w-full justify-start gap-2"
       >
-        <Plus className="h-4 w-4" />
+        <AddOutlined sx={{ fontSize: 16 }} />
         Add event
       </Button>
     );
@@ -125,7 +127,7 @@ export function QuickCreateEvent({ onCreated, date }: QuickCreateEventProps) {
           disabled={isSubmitting}
         />
         <Button type="button" variant="text" size="icon" onClick={handleClose} className="h-8 w-8">
-          <X className="h-4 w-4" />
+          <CloseOutlined sx={{ fontSize: 16 }} />
         </Button>
       </div>
 
@@ -173,7 +175,7 @@ export function QuickCreateEvent({ onCreated, date }: QuickCreateEventProps) {
 
       <div className="flex items-center gap-2">
         <div className="flex flex-1 items-center gap-1">
-          <MapPin className="text-muted-foreground h-4 w-4" />
+          <PlaceOutlined sx={{ fontSize: 16 }} className="text-muted-foreground" />
           <Input
             value={location}
             onChange={(e) => {

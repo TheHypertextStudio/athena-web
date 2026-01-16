@@ -10,7 +10,9 @@
 'use client';
 
 import { useCallback, useMemo } from 'react';
-import { Maximize2, X, RefreshCw } from 'lucide-react';
+import FullscreenOutlined from '@mui/icons-material/FullscreenOutlined';
+import CloseOutlined from '@mui/icons-material/CloseOutlined';
+import RefreshOutlined from '@mui/icons-material/RefreshOutlined';
 import { cn } from '@/lib/utils';
 import { getShortcutManager } from '@/lib/command-palette';
 import { useChatStream } from '@/hooks/use-chat-stream';
@@ -93,7 +95,7 @@ export function AssistantChat({ variant, className, onExpand, onClose }: Assista
                 )}
                 aria-label="Expand to full page"
               >
-                <Maximize2 className="h-4 w-4" />
+                <FullscreenOutlined sx={{ fontSize: 16 }} />
               </button>
             )}
 
@@ -110,7 +112,7 @@ export function AssistantChat({ variant, className, onExpand, onClose }: Assista
                 )}
                 aria-label="Close"
               >
-                <X className="h-4 w-4" />
+                <CloseOutlined sx={{ fontSize: 16 }} />
               </button>
             )}
           </div>
@@ -145,7 +147,7 @@ export function AssistantChat({ variant, className, onExpand, onClose }: Assista
               'focus-visible:ring-error focus-visible:ring-2 focus-visible:outline-none',
             )}
           >
-            <RefreshCw className="h-3 w-3" />
+            <RefreshOutlined sx={{ fontSize: 12 }} />
             Retry
           </button>
         </div>

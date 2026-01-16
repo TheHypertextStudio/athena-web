@@ -11,7 +11,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2 } from 'lucide-react';
+import SyncOutlined from '@mui/icons-material/SyncOutlined';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { SmartInput } from '@/components/ui/smart-input';
@@ -200,7 +200,7 @@ export function InitiativeForm({ initiative, parentOptions = [], className }: In
         <Button type="submit" disabled={isSubmitting || !name.trim()}>
           {isSubmitting ? (
             <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              <SyncOutlined sx={{ fontSize: 16 }} className="mr-2 animate-spin" />
               {isEditing ? 'Saving...' : 'Creating...'}
             </>
           ) : isEditing ? (

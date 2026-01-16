@@ -17,7 +17,11 @@
  * @packageDocumentation
  */
 
-import { Plus, Target, Edit, Trash2, ArrowRight } from 'lucide-react';
+import AddOutlined from '@mui/icons-material/AddOutlined';
+import GpsFixedOutlined from '@mui/icons-material/GpsFixedOutlined';
+import EditOutlined from '@mui/icons-material/EditOutlined';
+import DeleteOutlined from '@mui/icons-material/DeleteOutlined';
+import ArrowForwardOutlined from '@mui/icons-material/ArrowForwardOutlined';
 import { z } from 'zod';
 
 import type { ExecutableAction, Action } from '../types';
@@ -30,7 +34,7 @@ export const goToInitiativesAction: ExecutableAction = {
   type: 'action',
   id: 'go-to-initiatives',
   label: 'Go to Initiatives',
-  icon: Target,
+  icon: GpsFixedOutlined,
   category: 'navigation',
   keywords: ['navigate', 'view', 'list', 'goals', 'strategic'],
   priority: 75,
@@ -55,7 +59,7 @@ export const createInitiativeAction: ExecutableAction = {
   type: 'action',
   id: 'create-initiative',
   label: 'Create Initiative',
-  icon: Plus,
+  icon: AddOutlined,
   category: 'create',
   keywords: ['new', 'add', 'goal', 'strategic', 'objective'],
   priority: 85,
@@ -134,7 +138,7 @@ export const editInitiativeAction: ExecutableAction = {
   type: 'action',
   id: 'edit-initiative',
   label: 'Edit Initiative',
-  icon: Edit,
+  icon: EditOutlined,
   category: 'entity',
   keywords: ['modify', 'update', 'change', 'goal'],
   priority: 90,
@@ -221,7 +225,7 @@ export const deleteInitiativeAction: ExecutableAction = {
   type: 'action',
   id: 'delete-initiative',
   label: 'Delete Initiative',
-  icon: Trash2,
+  icon: DeleteOutlined,
   category: 'entity',
   keywords: ['remove', 'trash', 'goal'],
   priority: 10,
@@ -296,7 +300,7 @@ export const viewInitiativeAction: ExecutableAction = {
   type: 'action',
   id: 'view-initiative',
   label: 'View Initiative Details',
-  icon: ArrowRight,
+  icon: ArrowForwardOutlined,
   category: 'entity',
   keywords: ['open', 'details', 'show'],
   priority: 95,

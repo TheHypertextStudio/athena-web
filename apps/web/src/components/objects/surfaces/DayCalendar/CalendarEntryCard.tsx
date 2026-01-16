@@ -130,6 +130,9 @@ export function CalendarEntryCard({
         isResizing && 'ring-primary z-50 ring-2',
       )}
       data-entry={!isPreviewEntry || undefined}
+      data-entry-id={!isPreviewEntry ? entry.id : undefined}
+      data-entry-title={!isPreviewEntry ? entry.title : undefined}
+      data-entry-type={!isPreviewEntry ? entry.type : undefined}
       data-preview-entry={isPreviewEntry ? true : undefined}
       onClick={isPreviewEntry ? undefined : onClick}
       onContextMenu={isPreviewEntry ? undefined : onContextMenu}

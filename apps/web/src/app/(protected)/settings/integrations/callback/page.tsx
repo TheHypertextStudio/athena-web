@@ -13,7 +13,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Loader2 } from 'lucide-react';
+import SyncOutlined from '@mui/icons-material/SyncOutlined';
 import { calendarSyncApi, type CalendarProvider } from '@/lib/api-client';
 
 type CallbackState = 'processing' | 'syncing' | 'success' | 'error';
@@ -120,14 +120,14 @@ export default function OAuthCallbackPage() {
       >
         {status === 'processing' && (
           <>
-            <Loader2 className="text-primary mx-auto h-8 w-8 animate-spin" />
+            <SyncOutlined sx={{ fontSize: 32 }} className="text-primary mx-auto animate-spin" />
             <p className="text-on-surface-variant">Connecting your calendar...</p>
           </>
         )}
 
         {status === 'syncing' && (
           <>
-            <Loader2 className="text-primary mx-auto h-8 w-8 animate-spin" />
+            <SyncOutlined sx={{ fontSize: 32 }} className="text-primary mx-auto animate-spin" />
             <p className="text-on-surface-variant">Syncing your events...</p>
           </>
         )}

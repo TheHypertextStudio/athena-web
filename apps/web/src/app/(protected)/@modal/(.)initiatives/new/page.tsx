@@ -14,7 +14,7 @@ import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import * as Dialog from '@radix-ui/react-dialog';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
-import { X } from 'lucide-react';
+import CloseOutlined from '@mui/icons-material/CloseOutlined';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { InitiativeForm } from '@/components/initiatives/initiative-form';
@@ -67,7 +67,7 @@ export default function NewInitiativeModalPage() {
               New Initiative
             </Dialog.Title>
             <Button variant="text" size="icon" onClick={handleClose}>
-              <X className="h-5 w-5" />
+              <CloseOutlined sx={{ fontSize: 20 }} />
             </Button>
           </div>
 

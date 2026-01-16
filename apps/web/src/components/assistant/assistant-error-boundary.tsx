@@ -10,7 +10,8 @@
 'use client';
 
 import { Component, type ErrorInfo, type ReactNode } from 'react';
-import { AlertTriangle, RefreshCw } from 'lucide-react';
+import WarningAmberOutlined from '@mui/icons-material/WarningAmberOutlined';
+import RefreshOutlined from '@mui/icons-material/RefreshOutlined';
 import { cn } from '@/lib/utils';
 import type { ChatVariant } from '@/lib/assistant';
 
@@ -78,7 +79,7 @@ export class AssistantErrorBoundary extends Component<
           aria-live="assertive"
         >
           <div className="bg-error-container mb-4 rounded-full p-3">
-            <AlertTriangle className="text-on-error-container h-6 w-6" />
+            <WarningAmberOutlined sx={{ fontSize: 24 }} className="text-on-error-container" />
           </div>
 
           <h3 className="text-title-md text-on-surface mb-2 font-medium">Something went wrong</h3>
@@ -109,7 +110,7 @@ export class AssistantErrorBoundary extends Component<
               'focus-visible:ring-primary focus-visible:ring-2 focus-visible:outline-none',
             )}
           >
-            <RefreshCw className="h-4 w-4" />
+            <RefreshOutlined sx={{ fontSize: 16 }} />
             Try again
           </button>
         </div>

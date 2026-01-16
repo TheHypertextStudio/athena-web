@@ -17,7 +17,9 @@
  * @packageDocumentation
  */
 
-import { Undo2, Redo2, History } from 'lucide-react';
+import UndoOutlined from '@mui/icons-material/UndoOutlined';
+import RedoOutlined from '@mui/icons-material/RedoOutlined';
+import HistoryOutlined from '@mui/icons-material/HistoryOutlined';
 import type { ExecutableAction } from '../types';
 import { getUndoState } from '@/lib/undo';
 
@@ -38,7 +40,7 @@ export const undoAction: ExecutableAction = {
   type: 'action',
   id: 'undo',
   label: 'Undo',
-  icon: Undo2,
+  icon: UndoOutlined,
   category: 'settings',
   keywords: ['back', 'reverse', 'cancel', 'ctrl z', 'cmd z'],
   priority: 100,
@@ -78,7 +80,7 @@ export const redoAction: ExecutableAction = {
   type: 'action',
   id: 'redo',
   label: 'Redo',
-  icon: Redo2,
+  icon: RedoOutlined,
   category: 'settings',
   keywords: ['forward', 'repeat', 'again', 'ctrl shift z', 'cmd shift z'],
   priority: 99,
@@ -117,7 +119,7 @@ export const viewHistoryAction: ExecutableAction = {
   type: 'action',
   id: 'view-history',
   label: 'View History',
-  icon: History,
+  icon: HistoryOutlined,
   category: 'settings',
   keywords: ['actions', 'changes', 'log', 'undo list'],
   priority: 98,

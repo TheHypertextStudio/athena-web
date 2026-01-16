@@ -5,7 +5,10 @@ import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { authClient } from '@/lib/auth-client';
 import { getScopeDescription } from '@/lib/oauth-scopes';
-import { CheckCircle, ExternalLink, Shield, XCircle } from 'lucide-react';
+import CheckCircleOutlined from '@mui/icons-material/CheckCircleOutlined';
+import OpenInNewOutlined from '@mui/icons-material/OpenInNewOutlined';
+import SecurityOutlined from '@mui/icons-material/SecurityOutlined';
+import CancelOutlined from '@mui/icons-material/CancelOutlined';
 
 interface ConsentFormProps {
   clientId: string;
@@ -70,7 +73,7 @@ export function ConsentForm({
           />
         ) : (
           <div className="bg-primary/10 flex h-12 w-12 items-center justify-center rounded-lg">
-            <Shield className="text-primary h-6 w-6" />
+            <SecurityOutlined className="text-primary" sx={{ fontSize: 24 }} />
           </div>
         )}
         <div className="flex-1">
@@ -83,7 +86,7 @@ export function ConsentForm({
               className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-sm"
             >
               {new URL(clientUri).hostname}
-              <ExternalLink className="h-3 w-3" />
+              <OpenInNewOutlined sx={{ fontSize: 12 }} />
             </a>
           )}
         </div>
@@ -95,7 +98,10 @@ export function ConsentForm({
         <ul className="space-y-2">
           {displayScopes.map((scope) => (
             <li key={scope} className="flex items-start gap-2 text-sm">
-              <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-green-500" />
+              <CheckCircleOutlined
+                className="mt-0.5 shrink-0 text-green-500"
+                sx={{ fontSize: 16 }}
+              />
               <span>{getScopeDescription(scope)}</span>
             </li>
           ))}
@@ -120,7 +126,7 @@ export function ConsentForm({
           disabled={isSubmitting}
           className="w-full"
         >
-          <XCircle className="mr-2 h-4 w-4" />
+          <CancelOutlined className="mr-2" sx={{ fontSize: 16 }} />
           Deny
         </Button>
       </div>

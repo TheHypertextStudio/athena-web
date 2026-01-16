@@ -8,7 +8,9 @@
  */
 
 import { forwardRef, useCallback, type MouseEvent } from 'react';
-import { GripVertical, Calendar, MoreHorizontal } from 'lucide-react';
+import DragIndicator from '@mui/icons-material/DragIndicator';
+import CalendarTodayOutlined from '@mui/icons-material/CalendarTodayOutlined';
+import MoreHorizOutlined from '@mui/icons-material/MoreHorizOutlined';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -203,7 +205,7 @@ function TaskNormal({
           {...dragHandleProps.attributes}
           {...dragHandleProps.listeners}
         >
-          <GripVertical className="text-on-surface-variant h-4 w-4" />
+          <DragIndicator sx={{ fontSize: 16 }} className="text-on-surface-variant" />
         </div>
       )}
 
@@ -256,7 +258,7 @@ function TaskNormal({
                 onSchedule();
               }}
             >
-              <Calendar className="h-4 w-4" />
+              <CalendarTodayOutlined sx={{ fontSize: 16 }} />
             </Button>
           )}
           {onMore && (
@@ -269,7 +271,7 @@ function TaskNormal({
                 onMore();
               }}
             >
-              <MoreHorizontal className="h-4 w-4" />
+              <MoreHorizOutlined sx={{ fontSize: 16 }} />
             </Button>
           )}
         </div>

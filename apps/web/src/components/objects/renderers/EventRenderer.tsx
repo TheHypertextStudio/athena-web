@@ -8,7 +8,10 @@
  */
 
 import { forwardRef, type MouseEvent } from 'react';
-import { MapPin, Clock, Link2, GripVertical } from 'lucide-react';
+import PlaceOutlined from '@mui/icons-material/PlaceOutlined';
+import ScheduleOutlined from '@mui/icons-material/ScheduleOutlined';
+import InsertLinkOutlined from '@mui/icons-material/InsertLinkOutlined';
+import DragIndicator from '@mui/icons-material/DragIndicator';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import type { EventObject, RenderVariant, DragHandleProps } from '../types';
@@ -219,7 +222,7 @@ function EventNormal({
               {...dragHandleProps.attributes}
               {...dragHandleProps.listeners}
             >
-              <GripVertical className="h-3 w-3" />
+              <DragIndicator sx={{ fontSize: 12 }} />
             </div>
           )}
         </div>
@@ -228,21 +231,21 @@ function EventNormal({
         <div className="mt-1 space-y-0.5">
           {event.location && (
             <div className="flex items-center gap-1">
-              <MapPin className="text-on-surface-variant h-3 w-3" />
+              <PlaceOutlined sx={{ fontSize: 12 }} className="text-on-surface-variant" />
               <span className="text-on-surface-variant truncate text-xs">{event.location}</span>
             </div>
           )}
 
           {duration > 0 && (
             <div className="flex items-center gap-1">
-              <Clock className="text-on-surface-variant h-3 w-3" />
+              <ScheduleOutlined sx={{ fontSize: 12 }} className="text-on-surface-variant" />
               <span className="text-on-surface-variant text-xs">{formatDuration(duration)}</span>
             </div>
           )}
 
           {linkedTaskTitle && (
             <div className="flex items-center gap-1">
-              <Link2 className="text-on-surface-variant h-3 w-3" />
+              <InsertLinkOutlined sx={{ fontSize: 12 }} className="text-on-surface-variant" />
               <span className="text-on-surface-variant truncate text-xs">{linkedTaskTitle}</span>
             </div>
           )}
@@ -321,7 +324,7 @@ function EventExpanded({
           <div>
             <span className="text-on-surface-variant">Location</span>
             <p className="mt-1 flex items-center gap-1">
-              <MapPin className="h-4 w-4" />
+              <PlaceOutlined sx={{ fontSize: 16 }} />
               {event.location}
             </p>
           </div>
@@ -331,7 +334,7 @@ function EventExpanded({
           <div>
             <span className="text-on-surface-variant">Linked Task</span>
             <p className="mt-1 flex items-center gap-1">
-              <Link2 className="h-4 w-4" />
+              <InsertLinkOutlined sx={{ fontSize: 16 }} />
               {linkedTaskTitle}
             </p>
           </div>

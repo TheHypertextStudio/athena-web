@@ -26,7 +26,9 @@
 
 import * as Dialog from '@radix-ui/react-dialog';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
-import { Search, ChevronRight, X } from 'lucide-react';
+import SearchOutlined from '@mui/icons-material/SearchOutlined';
+import ChevronRightOutlined from '@mui/icons-material/ChevronRightOutlined';
+import CloseOutlined from '@mui/icons-material/CloseOutlined';
 import { useCallback, useEffect, useId, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 
@@ -274,7 +276,11 @@ export function CommandPalette() {
           {/* Search Input - hide in assistant mode */}
           {mode !== 'assistant' && (
             <div className="bg-surface-container flex items-center gap-3 rounded-t-3xl px-4">
-              <Search className="text-on-surface-variant h-5 w-5 shrink-0" aria-hidden="true" />
+              <SearchOutlined
+                sx={{ fontSize: 20 }}
+                className="text-on-surface-variant shrink-0"
+                aria-hidden="true"
+              />
               <input
                 ref={inputRef}
                 id={inputId}
@@ -324,7 +330,7 @@ export function CommandPalette() {
                   aria-label="Clear search"
                   tabIndex={0}
                 >
-                  <X className="h-4 w-4" />
+                  <CloseOutlined sx={{ fontSize: 16 }} />
                 </button>
               )}
 
@@ -358,7 +364,11 @@ export function CommandPalette() {
               </button>
               {breadcrumbs.map((crumb, index) => (
                 <span key={index} className="flex items-center gap-1">
-                  <ChevronRight className="text-outline h-3 w-3" aria-hidden="true" />
+                  <ChevronRightOutlined
+                    sx={{ fontSize: 12 }}
+                    className="text-outline"
+                    aria-hidden="true"
+                  />
                   <button
                     type="button"
                     onClick={() => {
@@ -424,7 +434,7 @@ export function CommandPalette() {
                   role="status"
                 >
                   <div className="bg-tertiary-container text-on-tertiary-container mb-3 rounded-full p-3">
-                    <Search className="h-6 w-6" aria-hidden="true" />
+                    <SearchOutlined sx={{ fontSize: 24 }} aria-hidden="true" />
                   </div>
                   <p className="text-on-surface text-sm font-medium">No matching commands</p>
                   <p className="text-on-surface-variant mt-1 text-xs">
@@ -440,7 +450,11 @@ export function CommandPalette() {
                   className="flex flex-col items-center justify-center py-12 text-center"
                   role="status"
                 >
-                  <Search className="text-outline mb-3 h-8 w-8" aria-hidden="true" />
+                  <SearchOutlined
+                    sx={{ fontSize: 32 }}
+                    className="text-outline mb-3"
+                    aria-hidden="true"
+                  />
                   <p className="text-on-surface text-sm font-medium">No results found</p>
                   <p className="text-on-surface-variant mt-1 text-xs">
                     Try a different search term

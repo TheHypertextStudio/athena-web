@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
+import ArrowBackOutlined from '@mui/icons-material/ArrowBackOutlined';
 import { Header, PageContainer } from '@/components/layout';
 import { TaskForm } from '@/components/tasks/task-form';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -63,7 +63,7 @@ export default function EditTaskPage() {
             href={`/tasks/${taskId}`}
             className="text-muted-foreground hover:text-foreground mb-6 inline-flex items-center gap-2 text-sm"
           >
-            <ArrowLeft className="h-4 w-4" />
+            <ArrowBackOutlined sx={{ fontSize: 16 }} />
             Back to Task
           </Link>
 

@@ -11,7 +11,8 @@
 'use client';
 
 import { useCallback, useRef, useEffect, useMemo } from 'react';
-import { Maximize2, ArrowLeft } from 'lucide-react';
+import FullscreenOutlined from '@mui/icons-material/FullscreenOutlined';
+import ArrowBackOutlined from '@mui/icons-material/ArrowBackOutlined';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { getShortcutManager } from '@/lib/command-palette';
@@ -129,7 +130,7 @@ export function CommandPaletteAssistant({
             )}
             aria-label="Back to commands"
           >
-            <ArrowLeft className="h-4 w-4" />
+            <ArrowBackOutlined sx={{ fontSize: 16 }} />
           </button>
           <span className="text-on-surface text-sm font-medium">Athena</span>
           {isStreaming && (
@@ -148,7 +149,7 @@ export function CommandPaletteAssistant({
           )}
           aria-label="Expand to full view"
         >
-          <Maximize2 className="h-4 w-4" />
+          <FullscreenOutlined sx={{ fontSize: 16 }} />
         </button>
       </div>
 

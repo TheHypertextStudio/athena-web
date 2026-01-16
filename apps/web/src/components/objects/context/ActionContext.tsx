@@ -8,7 +8,12 @@
  */
 
 import { createContext, useContext, useCallback, useMemo, useState, type ReactNode } from 'react';
-import { Trash2, Copy, Link, Check, Calendar, FolderInput } from 'lucide-react';
+import DeleteOutlined from '@mui/icons-material/DeleteOutlined';
+import ContentCopyOutlined from '@mui/icons-material/ContentCopyOutlined';
+import LinkOutlined from '@mui/icons-material/LinkOutlined';
+import CheckOutlined from '@mui/icons-material/CheckOutlined';
+import CalendarTodayOutlined from '@mui/icons-material/CalendarTodayOutlined';
+import DriveFileMoveOutlined from '@mui/icons-material/DriveFileMoveOutlined';
 import type { AnyObject, Action, ActionGroup } from '../types';
 import { useSelection } from './SelectionContext';
 import { useObjectRegistry } from './ObjectRegistryContext';
@@ -25,7 +30,7 @@ const universalActions: Action[] = [
   {
     id: 'delete',
     label: 'Delete',
-    icon: Trash2,
+    icon: DeleteOutlined,
     shortcut: '⌘⌫',
     appliesTo: ['task', 'event', 'project', 'initiative', 'moment', 'activity'],
     isDestructive: true,
@@ -41,7 +46,7 @@ const universalActions: Action[] = [
   {
     id: 'duplicate',
     label: 'Duplicate',
-    icon: Copy,
+    icon: ContentCopyOutlined,
     shortcut: '⌘D',
     appliesTo: ['task', 'event', 'project'],
     execute: (objects) => {
@@ -55,7 +60,7 @@ const universalActions: Action[] = [
   {
     id: 'copy-link',
     label: 'Copy link',
-    icon: Link,
+    icon: LinkOutlined,
     shortcut: '⌘⇧C',
     appliesTo: ['task', 'event', 'project', 'initiative', 'moment', 'activity'],
     execute: async (objects) => {
@@ -75,7 +80,7 @@ const completableActions: Action[] = [
   {
     id: 'complete',
     label: 'Mark complete',
-    icon: Check,
+    icon: CheckOutlined,
     shortcut: '⌘⏎',
     appliesTo: ['task', 'project', 'initiative'],
     isAvailable: (objects) => {
@@ -92,7 +97,7 @@ const completableActions: Action[] = [
   {
     id: 'uncomplete',
     label: 'Mark incomplete',
-    icon: Check,
+    icon: CheckOutlined,
     appliesTo: ['task', 'project', 'initiative'],
     isAvailable: (objects) => {
       return objects.every((obj) => isCompletable(obj) && isCompleted(obj));
@@ -114,7 +119,7 @@ const taskActions: Action[] = [
   {
     id: 'schedule',
     label: 'Schedule...',
-    icon: Calendar,
+    icon: CalendarTodayOutlined,
     shortcut: '⌘S',
     appliesTo: ['task'],
     execute: (objects) => {
@@ -128,7 +133,7 @@ const taskActions: Action[] = [
   {
     id: 'move-to-project',
     label: 'Move to project...',
-    icon: FolderInput,
+    icon: DriveFileMoveOutlined,
     shortcut: '⌘M',
     appliesTo: ['task'],
     execute: (objects) => {

@@ -18,7 +18,7 @@
 
 import { useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
+import ArrowBackOutlined from '@mui/icons-material/ArrowBackOutlined';
 import { cn } from '@/lib/utils';
 import { AssistantChat, AssistantErrorBoundary } from '@/components/assistant';
 
@@ -53,7 +53,7 @@ export default function AssistantPage() {
           )}
           aria-label="Go back"
         >
-          <ArrowLeft className="h-5 w-5" />
+          <ArrowBackOutlined sx={{ fontSize: 20 }} />
         </button>
         <h1 className="text-title-lg text-on-surface font-medium">Athena Assistant</h1>
       </header>

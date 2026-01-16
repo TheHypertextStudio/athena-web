@@ -11,7 +11,10 @@
 import { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, Plus, X, Folder } from 'lucide-react';
+import CheckOutlined from '@mui/icons-material/CheckOutlined';
+import AddOutlined from '@mui/icons-material/AddOutlined';
+import CloseOutlined from '@mui/icons-material/CloseOutlined';
+import FolderOutlined from '@mui/icons-material/FolderOutlined';
 import { cn } from '@/lib/utils';
 
 export interface Project {
@@ -203,9 +206,11 @@ export const ProjectSelector = memo(function ProjectSelector({
                 value === project.id && 'bg-primary/5',
               )}
             >
-              <Folder className="text-on-surface-variant h-4 w-4" />
+              <FolderOutlined sx={{ fontSize: 16 }} className="text-on-surface-variant" />
               <span className="flex-1 truncate text-left">{project.name}</span>
-              {value === project.id && <Check className="text-primary h-4 w-4" />}
+              {value === project.id && (
+                <CheckOutlined sx={{ fontSize: 16 }} className="text-primary" />
+              )}
             </button>
           ))}
 
@@ -225,7 +230,7 @@ export const ProjectSelector = memo(function ProjectSelector({
                 isCreating && 'opacity-50',
               )}
             >
-              <Plus className="h-4 w-4" />
+              <AddOutlined sx={{ fontSize: 16 }} />
               <span className="flex-1 truncate text-left">
                 {isCreating ? 'Creating...' : `Create "${searchQuery}"`}
               </span>
@@ -253,9 +258,9 @@ export const ProjectSelector = memo(function ProjectSelector({
               value === null && 'bg-primary/5',
             )}
           >
-            <X className="text-on-surface-variant h-4 w-4" />
+            <CloseOutlined sx={{ fontSize: 16 }} className="text-on-surface-variant" />
             <span className="flex-1 text-left">No Project</span>
-            {value === null && <Check className="text-primary h-4 w-4" />}
+            {value === null && <CheckOutlined sx={{ fontSize: 16 }} className="text-primary" />}
           </button>
         </div>
       </motion.div>

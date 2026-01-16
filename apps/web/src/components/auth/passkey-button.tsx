@@ -6,7 +6,8 @@
 
 'use client';
 
-import { KeyRound, Loader2 } from 'lucide-react';
+import KeyOutlined from '@mui/icons-material/KeyOutlined';
+import SyncOutlined from '@mui/icons-material/SyncOutlined';
 import { Button } from '@/components/ui/button';
 
 interface PasskeyButtonProps {
@@ -32,12 +33,12 @@ export function PasskeyButton({ disabled, loading, onClick }: PasskeyButtonProps
     >
       {loading ? (
         <>
-          <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+          <SyncOutlined sx={{ fontSize: 20 }} className="mr-2 animate-spin" />
           Authenticating...
         </>
       ) : (
         <>
-          <KeyRound className="mr-2 h-5 w-5" />
+          <KeyOutlined sx={{ fontSize: 20 }} className="mr-2" />
           Sign in with Passkey
         </>
       )}

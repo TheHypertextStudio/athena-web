@@ -7,6 +7,7 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import SettingsIcon from '@mui/icons-material/Settings';
 import PersonIcon from '@mui/icons-material/Person';
 import { useAuth } from '@/hooks/use-auth';
+import { useOnboardingRequired } from '@/hooks/use-onboarding';
 import { signOutWithCleanup } from '@/lib/auth-client';
 import { Button } from '@/components/ui/button';
 import {
@@ -25,6 +26,7 @@ import { UndoProvider } from '@/lib/undo';
 import { HistoryPanel } from '@/components/ui/history-panel';
 import { TimezoneMismatchDialog } from '@/components/timezone-mismatch-dialog';
 import { EntitlementErrorProvider } from '@/contexts/entitlement-error-context';
+import { OnboardingResumeBanner } from '@/components/onboarding/resume-banner';
 
 export default function ProtectedLayout({
   children,
@@ -34,13 +36,24 @@ export default function ProtectedLayout({
   modal: React.ReactNode;
 }) {
   const router = useRouter();
-  const { user, isAuthenticated, isLoading } = useAuth();
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { isRequired: onboardingRequired, isLoading: onboardingLoading } = useOnboardingRequired();
 
+  // Redirect to sign-in if not authenticated
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
+    if (!authLoading && !isAuthenticated) {
       router.push('/signin');
     }
-  }, [isAuthenticated, isLoading, router]);
+  }, [isAuthenticated, authLoading, router]);
+
+  // Redirect to onboarding if not complete
+  useEffect(() => {
+    if (!authLoading && isAuthenticated && !onboardingLoading && onboardingRequired) {
+      router.push('/onboarding');
+    }
+  }, [isAuthenticated, authLoading, onboardingRequired, onboardingLoading, router]);
+
+  const isLoading = authLoading || onboardingLoading;
 
   // Register command palette actions once on mount
   useEffect(() => {
@@ -108,6 +121,9 @@ export default function ProtectedLayout({
                       </header>
 
                       <main>{children}</main>
+
+                      {/* Resume banner for users who skipped onboarding */}
+                      <OnboardingResumeBanner />
                     </div>
 
                     {/* Command Palette - Cmd+K / Ctrl+K to open */}

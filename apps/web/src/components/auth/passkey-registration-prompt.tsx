@@ -7,7 +7,9 @@
 'use client';
 
 import { useState } from 'react';
-import { KeyRound, Loader2, X } from 'lucide-react';
+import KeyOutlined from '@mui/icons-material/KeyOutlined';
+import SyncOutlined from '@mui/icons-material/SyncOutlined';
+import CloseOutlined from '@mui/icons-material/CloseOutlined';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { registerPasskey } from '@/lib/auth-client';
@@ -62,10 +64,10 @@ export function PasskeyRegistrationPrompt({
             className="text-muted-foreground hover:text-foreground absolute top-4 right-4 rounded p-1 transition-colors"
             aria-label="Close"
           >
-            <X className="h-5 w-5" />
+            <CloseOutlined sx={{ fontSize: 20 }} />
           </button>
           <div className="bg-primary/10 mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full">
-            <KeyRound className="text-primary h-8 w-8" />
+            <KeyOutlined sx={{ fontSize: 32 }} className="text-primary" />
           </div>
           <CardTitle className="text-center">Add a Passkey</CardTitle>
           <CardDescription className="text-center">
@@ -84,7 +86,7 @@ export function PasskeyRegistrationPrompt({
           >
             {isLoading ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <SyncOutlined sx={{ fontSize: 16 }} className="mr-2 animate-spin" />
                 Setting up...
               </>
             ) : (

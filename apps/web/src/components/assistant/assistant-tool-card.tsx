@@ -10,27 +10,25 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import type { LucideIcon } from 'lucide-react';
-import {
-  ListTodo,
-  Plus,
-  Pencil,
-  CheckCircle,
-  Search,
-  FolderKanban,
-  Calendar,
-  CalendarPlus,
-  CalendarDays,
-  Play,
-  Square,
-  Timer,
-  BarChart3,
-  ChevronDown,
-  ChevronUp,
-  Loader2,
-  AlertCircle,
-  Check,
-} from 'lucide-react';
+import type { SvgIconComponent } from '@mui/icons-material';
+import ChecklistOutlined from '@mui/icons-material/ChecklistOutlined';
+import AddOutlined from '@mui/icons-material/AddOutlined';
+import EditOutlined from '@mui/icons-material/EditOutlined';
+import CheckCircleOutlined from '@mui/icons-material/CheckCircleOutlined';
+import SearchOutlined from '@mui/icons-material/SearchOutlined';
+import ViewKanbanOutlined from '@mui/icons-material/ViewKanbanOutlined';
+import CalendarTodayOutlined from '@mui/icons-material/CalendarTodayOutlined';
+import EventOutlined from '@mui/icons-material/EventOutlined';
+import CalendarMonthOutlined from '@mui/icons-material/CalendarMonthOutlined';
+import PlayArrowOutlined from '@mui/icons-material/PlayArrowOutlined';
+import StopOutlined from '@mui/icons-material/StopOutlined';
+import TimerOutlined from '@mui/icons-material/TimerOutlined';
+import BarChartOutlined from '@mui/icons-material/BarChartOutlined';
+import ExpandMoreOutlined from '@mui/icons-material/ExpandMoreOutlined';
+import ExpandLessOutlined from '@mui/icons-material/ExpandLessOutlined';
+import SyncOutlined from '@mui/icons-material/SyncOutlined';
+import ErrorOutlineOutlined from '@mui/icons-material/ErrorOutlineOutlined';
+import CheckOutlined from '@mui/icons-material/CheckOutlined';
 import { cn } from '@/lib/utils';
 import type { AssistantToolCardProps } from '@/lib/assistant';
 import { TOOL_LABELS } from '@/lib/assistant';
@@ -38,20 +36,20 @@ import { TOOL_LABELS } from '@/lib/assistant';
 /**
  * Icon mapping for tool names.
  */
-const TOOL_ICON_MAP: Record<string, LucideIcon> = {
-  list_tasks: ListTodo,
-  create_task: Plus,
-  update_task: Pencil,
-  complete_task: CheckCircle,
-  search_tasks: Search,
-  list_projects: FolderKanban,
-  list_events: Calendar,
-  create_event: CalendarPlus,
-  get_agenda: CalendarDays,
-  start_timer: Play,
-  stop_timer: Square,
-  get_timer_status: Timer,
-  get_productivity_summary: BarChart3,
+const TOOL_ICON_MAP: Record<string, SvgIconComponent> = {
+  list_tasks: ChecklistOutlined,
+  create_task: AddOutlined,
+  update_task: EditOutlined,
+  complete_task: CheckCircleOutlined,
+  search_tasks: SearchOutlined,
+  list_projects: ViewKanbanOutlined,
+  list_events: CalendarTodayOutlined,
+  create_event: EventOutlined,
+  get_agenda: CalendarMonthOutlined,
+  start_timer: PlayArrowOutlined,
+  stop_timer: StopOutlined,
+  get_timer_status: TimerOutlined,
+  get_productivity_summary: BarChartOutlined,
 };
 
 /**
@@ -67,7 +65,7 @@ export function AssistantToolCard({ toolCall, compact = false }: AssistantToolCa
   const [isExpanded, setIsExpanded] = useState(false);
 
   // Get icon for this tool
-  const ToolIcon = TOOL_ICON_MAP[toolCall.name] ?? Search;
+  const ToolIcon = TOOL_ICON_MAP[toolCall.name] ?? SearchOutlined;
 
   // Get human-readable label
   const label = TOOL_LABELS[toolCall.name] ?? toolCall.name;
@@ -86,7 +84,7 @@ export function AssistantToolCard({ toolCall, compact = false }: AssistantToolCa
         return {
           border: 'border-primary',
           bg: 'bg-primary-container/20',
-          statusIcon: Loader2,
+          statusIcon: SyncOutlined,
           statusColor: 'text-primary',
           animate: 'animate-spin',
         };
@@ -94,14 +92,14 @@ export function AssistantToolCard({ toolCall, compact = false }: AssistantToolCa
         return {
           border: 'border-outline-variant',
           bg: 'bg-surface-container',
-          statusIcon: Check,
+          statusIcon: CheckOutlined,
           statusColor: 'text-primary',
         };
       case 'error':
         return {
           border: 'border-error',
           bg: 'bg-error-container/20',
-          statusIcon: AlertCircle,
+          statusIcon: ErrorOutlineOutlined,
           statusColor: 'text-error',
         };
       default:
@@ -148,11 +146,8 @@ export function AssistantToolCard({ toolCall, compact = false }: AssistantToolCa
       <div className="flex items-center gap-2">
         {/* Tool icon */}
         <ToolIcon
-          className={cn(
-            'flex-shrink-0',
-            compact ? 'h-3.5 w-3.5' : 'h-4 w-4',
-            'text-on-surface-variant',
-          )}
+          sx={{ fontSize: compact ? 14 : 16 }}
+          className={cn('flex-shrink-0', 'text-on-surface-variant')}
           aria-hidden="true"
         />
 
@@ -164,8 +159,8 @@ export function AssistantToolCard({ toolCall, compact = false }: AssistantToolCa
         {/* Status icon */}
         {StatusIcon && (
           <StatusIcon
+            sx={{ fontSize: compact ? 14 : 16 }}
             className={cn(
-              compact ? 'h-3.5 w-3.5' : 'h-4 w-4',
               statusStyles.statusColor,
               'animate' in statusStyles && statusStyles.animate,
             )}
@@ -189,7 +184,11 @@ export function AssistantToolCard({ toolCall, compact = false }: AssistantToolCa
             aria-expanded={isExpanded}
             aria-label={isExpanded ? 'Collapse details' : 'Expand details'}
           >
-            {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            {isExpanded ? (
+              <ExpandLessOutlined sx={{ fontSize: 16 }} />
+            ) : (
+              <ExpandMoreOutlined sx={{ fontSize: 16 }} />
+            )}
           </button>
         )}
       </div>

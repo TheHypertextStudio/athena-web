@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Calendar as CalendarIcon, Clock, MapPin, ArrowRight } from 'lucide-react';
+import CalendarTodayOutlined from '@mui/icons-material/CalendarTodayOutlined';
+import ScheduleOutlined from '@mui/icons-material/ScheduleOutlined';
+import PlaceOutlined from '@mui/icons-material/PlaceOutlined';
+import ArrowForwardOutlined from '@mui/icons-material/ArrowForwardOutlined';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { eventsApi, type Event } from '@/lib/api-client';
@@ -104,7 +107,7 @@ export function EventSummary() {
           href="/calendar"
           className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-sm"
         >
-          View calendar <ArrowRight className="h-4 w-4" />
+          View calendar <ArrowForwardOutlined sx={{ fontSize: 16 }} />
         </Link>
       </CardHeader>
       <CardContent>
@@ -119,18 +122,18 @@ export function EventSummary() {
                   className="hover:bg-accent block rounded-lg p-2 transition-colors"
                 >
                   <div className="text-muted-foreground mb-1 flex items-center gap-2 text-xs">
-                    <CalendarIcon className="h-3 w-3" />
+                    <CalendarTodayOutlined sx={{ fontSize: 12 }} />
                     {formatEventDate(event.startTime)}
                   </div>
                   <p className="font-medium">{event.title}</p>
                   <div className="text-muted-foreground mt-1 flex items-center gap-3 text-xs">
                     <span className="flex items-center gap-1">
-                      <Clock className="h-3 w-3" />
+                      <ScheduleOutlined sx={{ fontSize: 12 }} />
                       {formatEventTime(event.startTime, event.endTime, event.isAllDay)}
                     </span>
                     {event.location && (
                       <span className="flex items-center gap-1">
-                        <MapPin className="h-3 w-3" />
+                        <PlaceOutlined sx={{ fontSize: 12 }} />
                         {event.location}
                       </span>
                     )}

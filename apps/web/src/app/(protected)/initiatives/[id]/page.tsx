@@ -17,16 +17,14 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, useReducedMotion } from 'framer-motion';
-import {
-  ArrowLeft,
-  Pencil,
-  Archive,
-  Target,
-  FolderKanban,
-  Plus,
-  ChevronRight,
-  AlertCircle,
-} from 'lucide-react';
+import ArrowBackOutlined from '@mui/icons-material/ArrowBackOutlined';
+import EditOutlined from '@mui/icons-material/EditOutlined';
+import ArchiveOutlined from '@mui/icons-material/ArchiveOutlined';
+import GpsFixedOutlined from '@mui/icons-material/GpsFixedOutlined';
+import ViewKanbanOutlined from '@mui/icons-material/ViewKanbanOutlined';
+import AddOutlined from '@mui/icons-material/AddOutlined';
+import ChevronRightOutlined from '@mui/icons-material/ChevronRightOutlined';
+import ErrorOutlineOutlined from '@mui/icons-material/ErrorOutlineOutlined';
 import { Button } from '@/components/ui/button';
 import { SurfaceContainer } from '@/components/ui/surface';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -103,7 +101,7 @@ function ProjectCard({ project, tasks }: { project: Project; tasks: Task[] }) {
         'bg-surface-container hover:bg-surface-container-high',
       )}
     >
-      <FolderKanban className="text-on-surface-variant h-5 w-5 flex-shrink-0" />
+      <ViewKanbanOutlined sx={{ fontSize: 20 }} className="text-on-surface-variant flex-shrink-0" />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span className="text-on-surface truncate font-medium">{project.name}</span>
@@ -135,7 +133,10 @@ function ProjectCard({ project, tasks }: { project: Project; tasks: Task[] }) {
       >
         {health === 'on_track' ? 'On Track' : health === 'at_risk' ? 'At Risk' : 'Blocked'}
       </span>
-      <ChevronRight className="text-on-surface-variant h-4 w-4 opacity-0 transition-opacity group-hover:opacity-100" />
+      <ChevronRightOutlined
+        sx={{ fontSize: 16 }}
+        className="text-on-surface-variant opacity-0 transition-opacity group-hover:opacity-100"
+      />
     </Link>
   );
 }
@@ -182,7 +183,7 @@ function TaskItem({ task, projectName }: { task: Task; projectName: string }) {
           {task.estimatedMinutes}m
         </span>
       )}
-      {isOverdue && <AlertCircle className="text-error h-4 w-4" />}
+      {isOverdue && <ErrorOutlineOutlined sx={{ fontSize: 16 }} className="text-error" />}
     </Link>
   );
 }
@@ -456,25 +457,25 @@ export default function InitiativeDetailPage({ params }: InitiativeDetailPagePro
                 }}
                 className="text-on-surface-variant"
               >
-                <ArrowLeft className="mr-1 h-4 w-4" />
+                <ArrowBackOutlined sx={{ fontSize: 16 }} className="mr-1" />
                 Initiatives
               </Button>
               <div className="flex-1" />
               <Button variant="text" size="sm" asChild>
                 <Link href={`/initiatives/${id}/edit`}>
-                  <Pencil className="mr-1 h-4 w-4" />
+                  <EditOutlined sx={{ fontSize: 16 }} className="mr-1" />
                   Edit
                 </Link>
               </Button>
               <Button variant="text" size="sm" onClick={handleArchive} disabled={isArchiving}>
-                <Archive className="mr-1 h-4 w-4" />
+                <ArchiveOutlined sx={{ fontSize: 16 }} className="mr-1" />
                 {isArchiving ? 'Archiving...' : 'Archive'}
               </Button>
             </div>
 
             <div className="mt-4 flex items-start gap-4">
               <div className="bg-primary/10 text-primary flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl">
-                <Target className="h-6 w-6" />
+                <GpsFixedOutlined sx={{ fontSize: 24 }} />
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
@@ -500,7 +501,7 @@ export default function InitiativeDetailPage({ params }: InitiativeDetailPagePro
                   Projects ({projects.length})
                 </h2>
                 <Button variant="text" size="sm" onClick={handleAddProject}>
-                  <Plus className="mr-1 h-4 w-4" />
+                  <AddOutlined sx={{ fontSize: 16 }} className="mr-1" />
                   Add Project
                 </Button>
               </div>

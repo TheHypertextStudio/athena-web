@@ -7,7 +7,7 @@
  * @packageDocumentation
  */
 
-import { Sparkles } from 'lucide-react';
+import AutoAwesomeOutlined from '@mui/icons-material/AutoAwesomeOutlined';
 import type { ExecutableAction } from '../types';
 
 /**
@@ -21,7 +21,7 @@ export const talkToAthenaAction: ExecutableAction = {
   type: 'action',
   id: 'talk-to-athena',
   label: 'Talk to Athena',
-  icon: Sparkles,
+  icon: AutoAwesomeOutlined,
   category: 'ai',
   keywords: ['assistant', 'ai', 'help', 'ask', 'chat', 'athena'],
   priority: 100,

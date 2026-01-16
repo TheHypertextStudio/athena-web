@@ -1,7 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { CheckSquare, FolderKanban, Target, Calendar } from 'lucide-react';
+import CheckBoxOutlined from '@mui/icons-material/CheckBoxOutlined';
+import ViewKanbanOutlined from '@mui/icons-material/ViewKanbanOutlined';
+import GpsFixedOutlined from '@mui/icons-material/GpsFixedOutlined';
+import CalendarTodayOutlined from '@mui/icons-material/CalendarTodayOutlined';
+import type { SvgIconComponent } from '@mui/icons-material';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { tasksApi, projectsApi, initiativesApi, eventsApi } from '@/lib/api-client';
@@ -9,7 +13,7 @@ import { tasksApi, projectsApi, initiativesApi, eventsApi } from '@/lib/api-clie
 interface StatCardProps {
   title: string;
   value: number | null;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: SvgIconComponent;
   description: string;
 }
 
@@ -18,7 +22,7 @@ function StatCard({ title, value, icon: Icon, description }: StatCardProps) {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium">{title}</CardTitle>
-        <Icon className="text-muted-foreground h-4 w-4" />
+        <Icon sx={{ fontSize: 16 }} className="text-muted-foreground" />
       </CardHeader>
       <CardContent>
         {value === null ? (
@@ -71,25 +75,25 @@ export function StatsCards() {
       <StatCard
         title="Pending Tasks"
         value={stats.pendingTasks}
-        icon={CheckSquare}
+        icon={CheckBoxOutlined}
         description="Tasks awaiting action"
       />
       <StatCard
         title="Active Projects"
         value={stats.activeProjects}
-        icon={FolderKanban}
+        icon={ViewKanbanOutlined}
         description="Currently in progress"
       />
       <StatCard
         title="Active Initiatives"
         value={stats.activeInitiatives}
-        icon={Target}
+        icon={GpsFixedOutlined}
         description="Strategic goals"
       />
       <StatCard
         title="Upcoming Events"
         value={stats.upcomingEvents}
-        icon={Calendar}
+        icon={CalendarTodayOutlined}
         description="Next 7 days"
       />
     </div>

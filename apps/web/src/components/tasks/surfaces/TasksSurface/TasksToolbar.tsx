@@ -11,7 +11,13 @@
 
 import { useRef, useEffect, memo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, ChevronDown, Search, X, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import CheckOutlined from '@mui/icons-material/CheckOutlined';
+import ExpandMoreOutlined from '@mui/icons-material/ExpandMoreOutlined';
+import SearchOutlined from '@mui/icons-material/SearchOutlined';
+import CloseOutlined from '@mui/icons-material/CloseOutlined';
+import SwapVertOutlined from '@mui/icons-material/SwapVertOutlined';
+import ArrowUpwardOutlined from '@mui/icons-material/ArrowUpwardOutlined';
+import ArrowDownwardOutlined from '@mui/icons-material/ArrowDownwardOutlined';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -106,7 +112,7 @@ function FilterDropdown<T extends string>({
           className={cn('gap-1', isActive && 'bg-primary/10 text-primary')}
         >
           {isActive ? selectedOption?.label : label}
-          <ChevronDown className="h-3.5 w-3.5" />
+          <ExpandMoreOutlined sx={{ fontSize: 14 }} />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="min-w-[140px]">
@@ -121,7 +127,7 @@ function FilterDropdown<T extends string>({
             className="flex items-center justify-between"
           >
             {option.label}
-            {value === option.value && <Check className="h-4 w-4" />}
+            {value === option.value && <CheckOutlined sx={{ fontSize: 16 }} />}
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>
@@ -156,13 +162,13 @@ function SortDropdown({ sort, onChange }: { sort: TaskSort; onChange: (sort: Tas
           size="sm"
           className={cn('gap-1', !isOrganized && 'bg-primary/10 text-primary')}
         >
-          <ArrowUpDown className="h-3.5 w-3.5" />
+          <SwapVertOutlined sx={{ fontSize: 14 }} />
           {selectedOption?.label}
           {!isOrganized &&
             (sort.direction === 'asc' ? (
-              <ArrowUp className="h-3 w-3" />
+              <ArrowUpwardOutlined sx={{ fontSize: 12 }} />
             ) : (
-              <ArrowDown className="h-3 w-3" />
+              <ArrowDownwardOutlined sx={{ fontSize: 12 }} />
             ))}
         </Button>
       </DropdownMenuTrigger>
@@ -182,11 +188,11 @@ function SortDropdown({ sort, onChange }: { sort: TaskSort; onChange: (sort: Tas
               {sort.field === option.value &&
                 option.value !== 'none' &&
                 (sort.direction === 'asc' ? (
-                  <ArrowUp className="h-3.5 w-3.5" />
+                  <ArrowUpwardOutlined sx={{ fontSize: 14 }} />
                 ) : (
-                  <ArrowDown className="h-3.5 w-3.5" />
+                  <ArrowDownwardOutlined sx={{ fontSize: 14 }} />
                 ))}
-              {sort.field === option.value && <Check className="h-4 w-4" />}
+              {sort.field === option.value && <CheckOutlined sx={{ fontSize: 16 }} />}
             </div>
           </DropdownMenuItem>
         ))}
@@ -241,7 +247,7 @@ function SearchInput({
         }}
         aria-label="Search tasks"
       >
-        <Search className="h-4 w-4" />
+        <SearchOutlined sx={{ fontSize: 16 }} />
       </Button>
     );
   }
@@ -254,7 +260,10 @@ function SearchInput({
       transition={{ duration: 0.2, ease: [0.2, 0, 0, 1] }}
       className="relative"
     >
-      <Search className="text-on-surface-variant absolute top-1/2 left-2.5 h-4 w-4 -translate-y-1/2" />
+      <SearchOutlined
+        sx={{ fontSize: 16 }}
+        className="text-on-surface-variant absolute top-1/2 left-2.5 -translate-y-1/2"
+      />
       <input
         ref={inputRef}
         type="text"
@@ -282,7 +291,7 @@ function SearchInput({
         )}
         aria-label="Close search"
       >
-        <X className="h-4 w-4" />
+        <CloseOutlined sx={{ fontSize: 16 }} />
       </button>
     </motion.div>
   );
@@ -376,7 +385,7 @@ export const TasksToolbar = memo(function TasksToolbar({
             transition={{ duration: 0.15 }}
           >
             <Button variant="text" size="sm" onClick={onClearFilters}>
-              <X className="mr-1 h-3.5 w-3.5" />
+              <CloseOutlined sx={{ fontSize: 14 }} className="mr-1" />
               Clear
             </Button>
           </motion.div>

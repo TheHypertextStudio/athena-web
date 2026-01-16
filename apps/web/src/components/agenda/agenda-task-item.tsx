@@ -8,7 +8,10 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { CheckCircle2, Circle, Clock, GripVertical } from 'lucide-react';
+import CheckCircleOutlined from '@mui/icons-material/CheckCircleOutlined';
+import RadioButtonUncheckedOutlined from '@mui/icons-material/RadioButtonUncheckedOutlined';
+import ScheduleOutlined from '@mui/icons-material/ScheduleOutlined';
+import DragIndicator from '@mui/icons-material/DragIndicator';
 import { Badge } from '@/components/ui/badge';
 import { tasksApi, type Task } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
@@ -79,7 +82,7 @@ export function AgendaTaskItem({
           className="text-muted-foreground hover:text-foreground cursor-grab opacity-0 transition-opacity group-hover:opacity-100"
           {...dragHandleProps}
         >
-          <GripVertical className="h-4 w-4" />
+          <DragIndicator sx={{ fontSize: 16 }} />
         </button>
       )}
 
@@ -93,7 +96,11 @@ export function AgendaTaskItem({
           isCompleted ? 'text-green-500' : 'text-muted-foreground hover:text-foreground',
         )}
       >
-        {isCompleted ? <CheckCircle2 className="h-5 w-5" /> : <Circle className="h-5 w-5" />}
+        {isCompleted ? (
+          <CheckCircleOutlined sx={{ fontSize: 20 }} />
+        ) : (
+          <RadioButtonUncheckedOutlined sx={{ fontSize: 20 }} />
+        )}
       </button>
 
       {/* Task Content */}
@@ -105,7 +112,7 @@ export function AgendaTaskItem({
         {/* Estimated Time */}
         {task.estimatedMinutes && (
           <span className="text-muted-foreground flex items-center gap-1 text-xs">
-            <Clock className="h-3 w-3" />
+            <ScheduleOutlined sx={{ fontSize: 12 }} />
             {task.estimatedMinutes}m
           </span>
         )}

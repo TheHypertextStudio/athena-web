@@ -4,7 +4,7 @@
  * @packageDocumentation
  */
 
-import type { LucideIcon } from 'lucide-react';
+import type { SvgIconComponent } from '@mui/icons-material';
 import type { z } from 'zod';
 
 // =============================================================================
@@ -159,7 +159,7 @@ export type ActionCategory =
 export interface CategoryMeta {
   id: ActionCategory;
   label: string;
-  icon: LucideIcon;
+  icon: SvgIconComponent;
   priority: number;
 }
 
@@ -192,7 +192,7 @@ export interface ActionGroup {
   type: 'group';
   id: string;
   label: string;
-  icon: LucideIcon;
+  icon: SvgIconComponent;
   category: ActionCategory;
   children: Action[];
   /** Keywords for search. */
@@ -208,7 +208,7 @@ export interface ExecutableAction {
   type: 'action';
   id: string;
   label: string;
-  icon: LucideIcon;
+  icon: SvgIconComponent;
   category: ActionCategory;
 
   /** Search keywords beyond label. */
@@ -262,7 +262,7 @@ export type FieldType =
 export interface SelectOption {
   value: string;
   label: string;
-  icon?: LucideIcon;
+  icon?: SvgIconComponent;
   description?: string;
 }
 

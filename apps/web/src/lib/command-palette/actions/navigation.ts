@@ -27,18 +27,16 @@
  * @packageDocumentation
  */
 
-import {
-  LayoutDashboard,
-  CalendarClock,
-  CheckSquare,
-  FolderKanban,
-  Target,
-  Calendar,
-  BookOpen,
-  Settings,
-  GitBranch,
-  Map,
-} from 'lucide-react';
+import DashboardOutlined from '@mui/icons-material/DashboardOutlined';
+import EventNoteOutlined from '@mui/icons-material/EventNoteOutlined';
+import CheckBoxOutlined from '@mui/icons-material/CheckBoxOutlined';
+import ViewKanbanOutlined from '@mui/icons-material/ViewKanbanOutlined';
+import GpsFixedOutlined from '@mui/icons-material/GpsFixedOutlined';
+import CalendarTodayOutlined from '@mui/icons-material/CalendarTodayOutlined';
+import MenuBookOutlined from '@mui/icons-material/MenuBookOutlined';
+import SettingsOutlined from '@mui/icons-material/SettingsOutlined';
+import AccountTreeOutlined from '@mui/icons-material/AccountTreeOutlined';
+import MapOutlined from '@mui/icons-material/MapOutlined';
 
 import type { ExecutableAction } from '../types';
 
@@ -55,7 +53,7 @@ export const goToDashboardAction: ExecutableAction = {
   type: 'action',
   id: 'go-dashboard',
   label: 'Go to Dashboard',
-  icon: LayoutDashboard,
+  icon: DashboardOutlined,
   category: 'navigation',
   keywords: ['home', 'overview', 'main'],
   priority: 100,
@@ -77,7 +75,7 @@ export const goToAgendaAction: ExecutableAction = {
   type: 'action',
   id: 'go-agenda',
   label: 'Go to Agenda',
-  icon: CalendarClock,
+  icon: EventNoteOutlined,
   category: 'navigation',
   keywords: ['today', 'schedule', 'plan', 'daily'],
   priority: 95,
@@ -98,7 +96,7 @@ export const goToTasksAction: ExecutableAction = {
   type: 'action',
   id: 'go-tasks',
   label: 'Go to Tasks',
-  icon: CheckSquare,
+  icon: CheckBoxOutlined,
   category: 'navigation',
   keywords: ['todos', 'work', 'items'],
   priority: 90,
@@ -119,7 +117,7 @@ export const goToProjectsAction: ExecutableAction = {
   type: 'action',
   id: 'go-projects',
   label: 'Go to Projects',
-  icon: FolderKanban,
+  icon: ViewKanbanOutlined,
   category: 'navigation',
   keywords: ['folders', 'groups', 'collections'],
   priority: 85,
@@ -140,7 +138,7 @@ export const goToInitiativesAction: ExecutableAction = {
   type: 'action',
   id: 'go-initiatives',
   label: 'Go to Initiatives',
-  icon: Target,
+  icon: GpsFixedOutlined,
   category: 'navigation',
   keywords: ['goals', 'objectives', 'okrs'],
   priority: 80,
@@ -162,7 +160,7 @@ export const goToRoadmapAction: ExecutableAction = {
   type: 'action',
   id: 'go-roadmap',
   label: 'Go to Roadmap',
-  icon: Map,
+  icon: MapOutlined,
   category: 'navigation',
   keywords: ['timeline', 'strategic', 'planning', 'flow', 'diagram'],
   priority: 78,
@@ -183,7 +181,7 @@ export const goToTaskDependenciesAction: ExecutableAction = {
   type: 'action',
   id: 'go-task-dependencies',
   label: 'Go to Task Dependencies',
-  icon: GitBranch,
+  icon: AccountTreeOutlined,
   category: 'navigation',
   keywords: ['blocking', 'blockers', 'graph', 'flow', 'depends'],
   priority: 77,
@@ -199,7 +197,7 @@ export const goToEventsAction: ExecutableAction = {
   type: 'action',
   id: 'go-events',
   label: 'Go to Events',
-  icon: Calendar,
+  icon: CalendarTodayOutlined,
   category: 'navigation',
   keywords: ['calendar', 'meetings', 'appointments'],
   priority: 75,
@@ -220,7 +218,7 @@ export const goToMomentsAction: ExecutableAction = {
   type: 'action',
   id: 'go-moments',
   label: 'Go to Moments',
-  icon: BookOpen,
+  icon: MenuBookOutlined,
   category: 'navigation',
   keywords: ['journal', 'notes', 'thoughts', 'diary'],
   priority: 70,
@@ -241,7 +239,7 @@ export const goToSettingsAction: ExecutableAction = {
   type: 'action',
   id: 'go-settings',
   label: 'Go to Settings',
-  icon: Settings,
+  icon: SettingsOutlined,
   category: 'navigation',
   keywords: ['preferences', 'config', 'options'],
   priority: 50,

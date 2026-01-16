@@ -11,7 +11,11 @@
 import { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Clock, X, Trash2, Plus, GripVertical } from 'lucide-react';
+import ScheduleOutlined from '@mui/icons-material/ScheduleOutlined';
+import CloseOutlined from '@mui/icons-material/CloseOutlined';
+import DeleteOutlined from '@mui/icons-material/DeleteOutlined';
+import AddOutlined from '@mui/icons-material/AddOutlined';
+import DragIndicator from '@mui/icons-material/DragIndicator';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { TimeBlock, TimeBlockLinkedTask, Task } from '@/lib/api-client';
@@ -87,7 +91,7 @@ function LinkedTaskRow({
         'transition-colors duration-150',
       )}
     >
-      <GripVertical className="text-on-surface-variant/50 h-4 w-4 cursor-grab" />
+      <DragIndicator sx={{ fontSize: 16 }} className="text-on-surface-variant/50 cursor-grab" />
       <PriorityDot priority={task.priority} />
       <button
         type="button"
@@ -109,7 +113,7 @@ function LinkedTaskRow({
         )}
         aria-label={`Remove ${task.title} from time block`}
       >
-        <X className="h-4 w-4" />
+        <CloseOutlined sx={{ fontSize: 16 }} />
       </button>
     </div>
   );
@@ -324,8 +328,8 @@ export const TimeBlockDetailModal = memo(function TimeBlockDetailModal({
                     backgroundColor: color ? `${color}30` : 'var(--md-sys-color-primary-container)',
                   }}
                 >
-                  <Clock
-                    className="h-5 w-5"
+                  <ScheduleOutlined
+                    sx={{ fontSize: 20 }}
                     style={{ color: color ?? 'var(--md-sys-color-primary)' }}
                   />
                 </div>
@@ -342,7 +346,7 @@ export const TimeBlockDetailModal = memo(function TimeBlockDetailModal({
                 )}
                 aria-label="Close"
               >
-                <X className="h-5 w-5" />
+                <CloseOutlined sx={{ fontSize: 20 }} />
               </button>
             </div>
           </div>
@@ -391,7 +395,7 @@ export const TimeBlockDetailModal = memo(function TimeBlockDetailModal({
             {/* Time range */}
             <div className="flex items-center gap-3">
               <div className="bg-surface-container flex items-center gap-2 rounded-full px-4 py-2">
-                <Clock className="text-on-surface-variant h-4 w-4" />
+                <ScheduleOutlined sx={{ fontSize: 16 }} className="text-on-surface-variant" />
                 <input
                   type="time"
                   value={startTime}
@@ -434,7 +438,7 @@ export const TimeBlockDetailModal = memo(function TimeBlockDetailModal({
                   }}
                   className="text-primary h-auto gap-1 rounded-full px-3 py-1 text-sm"
                 >
-                  <Plus className="h-4 w-4" />
+                  <AddOutlined sx={{ fontSize: 16 }} />
                   Add Task
                 </Button>
               </div>
@@ -480,7 +484,7 @@ export const TimeBlockDetailModal = memo(function TimeBlockDetailModal({
               disabled={isDeleting}
               className="text-error hover:bg-error/10 rounded-full px-4"
             >
-              <Trash2 className="mr-2 h-4 w-4" />
+              <DeleteOutlined sx={{ fontSize: 16 }} className="mr-2" />
               {isDeleting ? 'Deleting...' : 'Delete'}
             </Button>
             <div className="flex items-center gap-3">

@@ -3,16 +3,15 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
-import {
-  CheckCircle2,
-  Circle,
-  Clock,
-  AlertCircle,
-  Calendar,
-  Edit,
-  Trash2,
-  ArrowLeft,
-} from 'lucide-react';
+import CheckCircleOutlined from '@mui/icons-material/CheckCircleOutlined';
+import RadioButtonUncheckedOutlined from '@mui/icons-material/RadioButtonUncheckedOutlined';
+import ScheduleOutlined from '@mui/icons-material/ScheduleOutlined';
+import ErrorOutlineOutlined from '@mui/icons-material/ErrorOutlineOutlined';
+import CalendarTodayOutlined from '@mui/icons-material/CalendarTodayOutlined';
+import EditOutlined from '@mui/icons-material/EditOutlined';
+import DeleteOutlined from '@mui/icons-material/DeleteOutlined';
+import ArrowBackOutlined from '@mui/icons-material/ArrowBackOutlined';
+import type { SvgIconComponent } from '@mui/icons-material';
 import { Header, PageContainer } from '@/components/layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -22,12 +21,12 @@ import { Separator } from '@/components/ui/separator';
 import { tasksApi, type Task } from '@/lib/api-client';
 import { signOutWithCleanup } from '@/lib/auth-client';
 
-const statusIcons = {
-  pending: Circle,
-  in_progress: Clock,
-  completed: CheckCircle2,
-  cancelled: AlertCircle,
-} as const;
+const statusIcons: Record<Task['status'], SvgIconComponent> = {
+  pending: RadioButtonUncheckedOutlined,
+  in_progress: ScheduleOutlined,
+  completed: CheckCircleOutlined,
+  cancelled: ErrorOutlineOutlined,
+};
 
 const statusLabels = {
   pending: 'Pending',
@@ -106,7 +105,7 @@ export default function TaskDetailPage() {
             href="/tasks"
             className="text-muted-foreground hover:text-foreground mb-6 inline-flex items-center gap-2 text-sm"
           >
-            <ArrowLeft className="h-4 w-4" />
+            <ArrowBackOutlined sx={{ fontSize: 16 }} />
             Back to Tasks
           </Link>
 
@@ -144,7 +143,7 @@ export default function TaskDetailPage() {
                         const StatusIcon = statusIcons[task.status];
                         return (
                           <span className="text-muted-foreground flex items-center gap-1 text-sm">
-                            <StatusIcon className="h-4 w-4" />
+                            <StatusIcon sx={{ fontSize: 16 }} />
                             {statusLabels[task.status]}
                           </span>
                         );
@@ -154,7 +153,7 @@ export default function TaskDetailPage() {
                   <div className="flex items-center gap-2">
                     <Button variant="outlined" size="sm" asChild>
                       <Link href={`/tasks/${taskId}/edit`}>
-                        <Edit className="mr-2 h-4 w-4" />
+                        <EditOutlined sx={{ fontSize: 16 }} className="mr-2" />
                         Edit
                       </Link>
                     </Button>
@@ -165,7 +164,7 @@ export default function TaskDetailPage() {
                       disabled={isDeleting}
                       className="bg-error text-on-error hover:bg-error/90"
                     >
-                      <Trash2 className="mr-2 h-4 w-4" />
+                      <DeleteOutlined sx={{ fontSize: 16 }} className="mr-2" />
                       {isDeleting ? 'Deleting...' : 'Delete'}
                     </Button>
                   </div>
@@ -186,7 +185,10 @@ export default function TaskDetailPage() {
                     <div>
                       <h3 className="text-muted-foreground mb-1 text-sm font-medium">Deadline</h3>
                       <p className="flex items-center gap-2">
-                        <Calendar className="text-muted-foreground h-4 w-4" />
+                        <CalendarTodayOutlined
+                          sx={{ fontSize: 16 }}
+                          className="text-muted-foreground"
+                        />
                         {new Date(task.deadline).toLocaleDateString('en-US', {
                           weekday: 'long',
                           year: 'numeric',
@@ -202,7 +204,7 @@ export default function TaskDetailPage() {
                         Estimated Time
                       </h3>
                       <p className="flex items-center gap-2">
-                        <Clock className="text-muted-foreground h-4 w-4" />
+                        <ScheduleOutlined sx={{ fontSize: 16 }} className="text-muted-foreground" />
                         {task.estimatedMinutes >= 60
                           ? `${String(Math.floor(task.estimatedMinutes / 60))}h ${String(task.estimatedMinutes % 60)}m`
                           : `${String(task.estimatedMinutes)}m`}
@@ -222,7 +224,7 @@ export default function TaskDetailPage() {
                         size="sm"
                         onClick={() => void handleStatusChange('in_progress')}
                       >
-                        <Clock className="mr-2 h-4 w-4" />
+                        <ScheduleOutlined sx={{ fontSize: 16 }} className="mr-2" />
                         Start Working
                       </Button>
                     )}
@@ -232,7 +234,7 @@ export default function TaskDetailPage() {
                         size="sm"
                         onClick={() => void handleStatusChange('completed')}
                       >
-                        <CheckCircle2 className="mr-2 h-4 w-4" />
+                        <CheckCircleOutlined sx={{ fontSize: 16 }} className="mr-2" />
                         Mark Complete
                       </Button>
                     )}
@@ -242,7 +244,7 @@ export default function TaskDetailPage() {
                         size="sm"
                         onClick={() => void handleStatusChange('pending')}
                       >
-                        <Circle className="mr-2 h-4 w-4" />
+                        <RadioButtonUncheckedOutlined sx={{ fontSize: 16 }} className="mr-2" />
                         Reopen
                       </Button>
                     )}

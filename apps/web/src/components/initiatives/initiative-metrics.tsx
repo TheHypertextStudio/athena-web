@@ -14,7 +14,11 @@
 'use client';
 
 import { useMemo } from 'react';
-import { TrendingUp, Clock, Calendar, Target } from 'lucide-react';
+import TrendingUpOutlined from '@mui/icons-material/TrendingUpOutlined';
+import ScheduleOutlined from '@mui/icons-material/ScheduleOutlined';
+import CalendarTodayOutlined from '@mui/icons-material/CalendarTodayOutlined';
+import GpsFixedOutlined from '@mui/icons-material/GpsFixedOutlined';
+import type { SvgIconComponent } from '@mui/icons-material';
 import { cn } from '@/lib/utils';
 // Types are defined locally in InitiativeMetricsData interface
 
@@ -65,13 +69,13 @@ function MetricCard({
   label: string;
   value: string | number;
   subValue?: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: SvgIconComponent;
   trend?: { value: string; positive: boolean };
 }) {
   return (
     <div className="bg-surface-container-high rounded-xl p-4">
       <div className="text-on-surface-variant flex items-center gap-2">
-        <Icon className="h-4 w-4" />
+        <Icon sx={{ fontSize: 16 }} />
         <span className="text-xs font-medium tracking-wide uppercase">{label}</span>
       </div>
       <div className="mt-2">
@@ -243,7 +247,7 @@ export function InitiativeMetrics({ metrics, className }: InitiativeMetricsProps
         {/* Progress */}
         <div className="bg-surface-container-high rounded-xl p-4">
           <div className="text-on-surface-variant flex items-center gap-2">
-            <Target className="h-4 w-4" />
+            <GpsFixedOutlined sx={{ fontSize: 16 }} />
             <span className="text-xs font-medium tracking-wide uppercase">Progress</span>
           </div>
           <div className="mt-3 flex justify-center">
@@ -256,13 +260,13 @@ export function InitiativeMetrics({ metrics, className }: InitiativeMetricsProps
           label="Time Spent"
           value={formatHours(metrics.loggedMinutes)}
           subValue={`of ${formatHours(metrics.estimatedMinutes)} est`}
-          icon={Clock}
+          icon={ScheduleOutlined}
         />
 
         {/* Velocity */}
         <div className="bg-surface-container-high rounded-xl p-4">
           <div className="text-on-surface-variant flex items-center gap-2">
-            <TrendingUp className="h-4 w-4" />
+            <TrendingUpOutlined sx={{ fontSize: 16 }} />
             <span className="text-xs font-medium tracking-wide uppercase">Velocity</span>
           </div>
           <div className="mt-2 flex items-center gap-2">
@@ -305,7 +309,7 @@ export function InitiativeMetrics({ metrics, className }: InitiativeMetricsProps
               ? projectedCompletion.toLocaleDateString('en-US', { year: 'numeric' })
               : 'Not enough data'
           }
-          icon={Calendar}
+          icon={CalendarTodayOutlined}
         />
       </div>
 

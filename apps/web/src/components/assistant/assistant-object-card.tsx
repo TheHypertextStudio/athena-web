@@ -10,19 +10,23 @@
 'use client';
 
 import { useMemo } from 'react';
-import type { LucideIcon } from 'lucide-react';
-import { CheckCircle2, Calendar, FolderKanban, ExternalLink, Flag } from 'lucide-react';
+import type { SvgIconComponent } from '@mui/icons-material';
+import CheckCircleOutlined from '@mui/icons-material/CheckCircleOutlined';
+import CalendarTodayOutlined from '@mui/icons-material/CalendarTodayOutlined';
+import ViewKanbanOutlined from '@mui/icons-material/ViewKanbanOutlined';
+import OpenInNewOutlined from '@mui/icons-material/OpenInNewOutlined';
+import FlagOutlined from '@mui/icons-material/FlagOutlined';
 import { cn } from '@/lib/utils';
 import type { AssistantObjectCardProps, ObjectType } from '@/lib/assistant';
 
 /**
  * Icon mapping for object types.
  */
-const OBJECT_ICONS: Record<ObjectType, LucideIcon> = {
-  task: CheckCircle2,
-  event: Calendar,
-  project: FolderKanban,
-  initiative: Flag,
+const OBJECT_ICONS: Record<ObjectType, SvgIconComponent> = {
+  task: CheckCircleOutlined,
+  event: CalendarTodayOutlined,
+  project: ViewKanbanOutlined,
+  initiative: FlagOutlined,
 };
 
 /**
@@ -175,9 +179,9 @@ export function AssistantObjectCard({
       <div className="flex items-start gap-2">
         {/* Icon */}
         <Icon
+          sx={{ fontSize: isCompact ? 14 : 16 }}
           className={cn(
             'mt-0.5 flex-shrink-0',
-            isCompact ? 'h-3.5 w-3.5' : 'h-4 w-4',
             colorClass,
             'isComplete' in displayData && displayData.isComplete && 'opacity-50',
           )}
@@ -233,8 +237,9 @@ export function AssistantObjectCard({
 
         {/* External link indicator */}
         {!isCompact && (
-          <ExternalLink
-            className="text-on-surface-variant h-3.5 w-3.5 flex-shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
+          <OpenInNewOutlined
+            sx={{ fontSize: 14 }}
+            className="text-on-surface-variant flex-shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
             aria-hidden="true"
           />
         )}

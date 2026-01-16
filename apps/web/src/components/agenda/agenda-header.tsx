@@ -7,7 +7,9 @@
 'use client';
 
 import Link from 'next/link';
-import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
+import ChevronLeftOutlined from '@mui/icons-material/ChevronLeftOutlined';
+import ChevronRightOutlined from '@mui/icons-material/ChevronRightOutlined';
+import CalendarTodayOutlined from '@mui/icons-material/CalendarTodayOutlined';
 import { Button } from '@/components/ui/button';
 import { formatDate, isToday } from '@/hooks/use-agenda';
 
@@ -47,7 +49,7 @@ export function AgendaHeader({ date, onDateChange, view }: AgendaHeaderProps) {
       {/* Date Navigation */}
       <div className="flex items-center gap-2">
         <Button variant="outlined" size="icon" onClick={goToPreviousDay} aria-label="Previous day">
-          <ChevronLeft className="h-4 w-4" />
+          <ChevronLeftOutlined sx={{ fontSize: 16 }} />
         </Button>
 
         <Button variant={todaySelected ? 'filled' : 'outlined'} size="sm" onClick={goToToday}>
@@ -55,7 +57,7 @@ export function AgendaHeader({ date, onDateChange, view }: AgendaHeaderProps) {
         </Button>
 
         <Button variant="outlined" size="icon" onClick={goToNextDay} aria-label="Next day">
-          <ChevronRight className="h-4 w-4" />
+          <ChevronRightOutlined sx={{ fontSize: 16 }} />
         </Button>
 
         <h1 className="ml-4 text-xl font-semibold">{formatDate(date)}</h1>
@@ -65,13 +67,13 @@ export function AgendaHeader({ date, onDateChange, view }: AgendaHeaderProps) {
       <div className="flex items-center gap-2">
         <Link href="/home">
           <Button variant={view === 'daily' ? 'filled' : 'text'} size="sm">
-            <Calendar className="mr-2 h-4 w-4" />
+            <CalendarTodayOutlined sx={{ fontSize: 16 }} className="mr-2" />
             Daily
           </Button>
         </Link>
         <Link href="/home/weekly">
           <Button variant={view === 'weekly' ? 'filled' : 'text'} size="sm">
-            <Calendar className="mr-2 h-4 w-4" />
+            <CalendarTodayOutlined sx={{ fontSize: 16 }} className="mr-2" />
             Weekly
           </Button>
         </Link>

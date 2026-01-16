@@ -6,7 +6,8 @@
 
 'use client';
 
-import { Clock, MapPin } from 'lucide-react';
+import ScheduleOutlined from '@mui/icons-material/ScheduleOutlined';
+import PlaceOutlined from '@mui/icons-material/PlaceOutlined';
 import type { Event } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 
@@ -44,7 +45,7 @@ export function AgendaEventItem({ event }: AgendaEventItemProps) {
     >
       {/* Time */}
       <div className="text-muted-foreground flex items-center gap-1 text-xs">
-        <Clock className="h-3 w-3" />
+        <ScheduleOutlined sx={{ fontSize: 12 }} />
         <span className="whitespace-nowrap">{timeDisplay}</span>
       </div>
 
@@ -55,7 +56,7 @@ export function AgendaEventItem({ event }: AgendaEventItemProps) {
         {/* Location */}
         {event.location && (
           <p className="text-muted-foreground mt-1 flex items-center gap-1 text-xs">
-            <MapPin className="h-3 w-3" />
+            <PlaceOutlined sx={{ fontSize: 12 }} />
             <span className="truncate">{event.location}</span>
           </p>
         )}

@@ -6,7 +6,7 @@
 
 'use client';
 
-import { Loader2 } from 'lucide-react';
+import SyncOutlined from '@mui/icons-material/SyncOutlined';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
@@ -100,7 +100,7 @@ export function OAuthButtons({
             }}
           >
             {isLoading ? (
-              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+              <SyncOutlined sx={{ fontSize: 20 }} className="mr-2 animate-spin" />
             ) : (
               <span className="mr-2">{provider.icon}</span>
             )}

@@ -11,31 +11,37 @@
 
 import { useState, useCallback } from 'react';
 import Link from 'next/link';
-import {
-  CheckCircle2,
-  Circle,
-  Clock,
-  AlertCircle,
-  Calendar,
-  X,
-  Maximize2,
-  Edit,
-  Trash2,
-  FolderKanban,
-  GitBranch,
-} from 'lucide-react';
+import CheckCircleOutlined from '@mui/icons-material/CheckCircleOutlined';
+import RadioButtonUncheckedOutlined from '@mui/icons-material/RadioButtonUncheckedOutlined';
+import ScheduleOutlined from '@mui/icons-material/ScheduleOutlined';
+import ErrorOutlineOutlined from '@mui/icons-material/ErrorOutlineOutlined';
+import CalendarTodayOutlined from '@mui/icons-material/CalendarTodayOutlined';
+import CloseOutlined from '@mui/icons-material/CloseOutlined';
+import FullscreenOutlined from '@mui/icons-material/FullscreenOutlined';
+import EditOutlined from '@mui/icons-material/EditOutlined';
+import DeleteOutlined from '@mui/icons-material/DeleteOutlined';
+import ViewKanbanOutlined from '@mui/icons-material/ViewKanbanOutlined';
+import AccountTreeOutlined from '@mui/icons-material/AccountTreeOutlined';
+import type { SvgIconComponent } from '@mui/icons-material';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { tasksApi, type Task } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 
-const statusConfig = {
-  pending: { icon: Circle, label: 'Pending', color: 'text-on-surface-variant' },
-  in_progress: { icon: Clock, label: 'In Progress', color: 'text-tertiary' },
-  completed: { icon: CheckCircle2, label: 'Completed', color: 'text-primary' },
-  cancelled: { icon: AlertCircle, label: 'Cancelled', color: 'text-error' },
-} as const;
+const statusConfig: Record<
+  Task['status'],
+  { icon: SvgIconComponent; label: string; color: string }
+> = {
+  pending: {
+    icon: RadioButtonUncheckedOutlined,
+    label: 'Pending',
+    color: 'text-on-surface-variant',
+  },
+  in_progress: { icon: ScheduleOutlined, label: 'In Progress', color: 'text-tertiary' },
+  completed: { icon: CheckCircleOutlined, label: 'Completed', color: 'text-primary' },
+  cancelled: { icon: ErrorOutlineOutlined, label: 'Cancelled', color: 'text-error' },
+};
 
 const priorityConfig = {
   low: { label: 'Low', color: 'bg-slate-400', textColor: 'text-slate-600 dark:text-slate-400' },
@@ -188,7 +194,7 @@ export function TaskDetailModal({
             onClick={onClose}
             className="text-on-surface-variant hover:text-on-surface rounded p-1 transition-colors"
           >
-            <X className="h-5 w-5" />
+            <CloseOutlined sx={{ fontSize: 20 }} />
           </button>
         </div>
         <div className="flex items-center justify-center p-12">
@@ -219,7 +225,7 @@ export function TaskDetailModal({
               className="text-on-surface-variant hover:text-on-surface rounded p-1.5 transition-colors"
               title="Expand to full page"
             >
-              <Maximize2 className="h-4 w-4" />
+              <FullscreenOutlined sx={{ fontSize: 16 }} />
             </button>
           )}
           <button
@@ -227,7 +233,7 @@ export function TaskDetailModal({
             onClick={onClose}
             className="text-on-surface-variant hover:text-on-surface rounded p-1.5 transition-colors"
           >
-            <X className="h-5 w-5" />
+            <CloseOutlined sx={{ fontSize: 20 }} />
           </button>
         </div>
       </div>
@@ -238,7 +244,8 @@ export function TaskDetailModal({
         <div className="mb-6">
           <div className="mb-3 flex items-start gap-3">
             <StatusIcon
-              className={cn('mt-1 h-5 w-5 flex-shrink-0', statusConfig[task.status].color)}
+              sx={{ fontSize: 20 }}
+              className={cn('mt-1 flex-shrink-0', statusConfig[task.status].color)}
             />
             <h2
               className={cn(
@@ -268,8 +275,8 @@ export function TaskDetailModal({
                     overdue ? 'text-error font-medium' : 'text-on-surface-variant',
                   )}
                 >
-                  <Calendar className="h-3.5 w-3.5" />
-                  {overdue && <AlertCircle className="h-3.5 w-3.5" />}
+                  <CalendarTodayOutlined sx={{ fontSize: 14 }} />
+                  {overdue && <ErrorOutlineOutlined sx={{ fontSize: 14 }} />}
                   {formatDeadline(task.deadline)}
                 </span>
               </>
@@ -297,7 +304,7 @@ export function TaskDetailModal({
                 Estimate
               </h3>
               <span className="text-on-surface flex items-center gap-1.5 text-sm">
-                <Clock className="text-on-surface-variant h-4 w-4" />
+                <ScheduleOutlined sx={{ fontSize: 16 }} className="text-on-surface-variant" />
                 {formatEstimate(task.estimatedMinutes)}
               </span>
             </div>
@@ -311,7 +318,7 @@ export function TaskDetailModal({
                 href={`/projects/${task.projectId}`}
                 className="text-primary hover:text-primary/80 flex items-center gap-1.5 text-sm transition-colors"
               >
-                <FolderKanban className="h-4 w-4" />
+                <ViewKanbanOutlined sx={{ fontSize: 16 }} />
                 View Project
               </Link>
             </div>
@@ -331,7 +338,7 @@ export function TaskDetailModal({
                 onClick={() => void handleStatusChange('in_progress')}
                 disabled={isUpdating}
               >
-                <Clock className="mr-1.5 h-4 w-4" />
+                <ScheduleOutlined sx={{ fontSize: 16 }} className="mr-1.5" />
                 Start Working
               </Button>
             )}
@@ -342,7 +349,7 @@ export function TaskDetailModal({
                 onClick={() => void handleStatusChange('completed')}
                 disabled={isUpdating}
               >
-                <CheckCircle2 className="mr-1.5 h-4 w-4" />
+                <CheckCircleOutlined sx={{ fontSize: 16 }} className="mr-1.5" />
                 Mark Complete
               </Button>
             )}
@@ -353,7 +360,7 @@ export function TaskDetailModal({
                 onClick={() => void handleStatusChange('pending')}
                 disabled={isUpdating}
               >
-                <Circle className="mr-1.5 h-4 w-4" />
+                <RadioButtonUncheckedOutlined sx={{ fontSize: 16 }} className="mr-1.5" />
                 Reopen
               </Button>
             )}
@@ -366,7 +373,7 @@ export function TaskDetailModal({
             href={`/tasks/${task.id}/dependencies`}
             className="text-on-surface-variant hover:text-on-surface flex items-center gap-2 text-sm transition-colors"
           >
-            <GitBranch className="h-4 w-4" />
+            <AccountTreeOutlined sx={{ fontSize: 16 }} />
             View Dependencies
           </Link>
         </div>
@@ -376,7 +383,7 @@ export function TaskDetailModal({
       <div className="border-outline-variant flex items-center justify-between border-t px-4 py-3">
         <Button variant="text" size="sm" asChild>
           <Link href={`/tasks/${task.id}/edit`}>
-            <Edit className="mr-1.5 h-4 w-4" />
+            <EditOutlined sx={{ fontSize: 16 }} className="mr-1.5" />
             Edit
           </Link>
         </Button>
@@ -387,7 +394,7 @@ export function TaskDetailModal({
           disabled={isDeleting}
           className="text-error hover:text-error hover:bg-error/10"
         >
-          <Trash2 className="mr-1.5 h-4 w-4" />
+          <DeleteOutlined sx={{ fontSize: 16 }} className="mr-1.5" />
           {isDeleting ? 'Deleting...' : 'Delete'}
         </Button>
       </div>

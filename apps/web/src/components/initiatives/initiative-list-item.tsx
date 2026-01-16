@@ -10,7 +10,10 @@
 'use client';
 
 import Link from 'next/link';
-import { Target, Zap, ChevronRight, FolderKanban } from 'lucide-react';
+import GpsFixedOutlined from '@mui/icons-material/GpsFixedOutlined';
+import BoltOutlined from '@mui/icons-material/BoltOutlined';
+import ChevronRightOutlined from '@mui/icons-material/ChevronRightOutlined';
+import ViewKanbanOutlined from '@mui/icons-material/ViewKanbanOutlined';
 import { cn } from '@/lib/utils';
 import { ProgressBar } from '@/components/ui/progress-bar';
 import { CustomInitiativeStatusBadge } from './initiative-status-select';
@@ -142,7 +145,7 @@ export function InitiativeListItem({ initiative, className }: InitiativeListItem
       {/* Header: Icon, Name, Status */}
       <div className="flex items-start gap-3">
         <div className="bg-primary/10 text-primary flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg">
-          <Target className="h-5 w-5" />
+          <GpsFixedOutlined sx={{ fontSize: 20 }} />
         </div>
 
         <div className="min-w-0 flex-1">
@@ -158,7 +161,10 @@ export function InitiativeListItem({ initiative, className }: InitiativeListItem
           )}
         </div>
 
-        <ChevronRight className="text-on-surface-variant h-5 w-5 flex-shrink-0 opacity-0 transition-opacity group-hover:opacity-100" />
+        <ChevronRightOutlined
+          sx={{ fontSize: 20 }}
+          className="text-on-surface-variant flex-shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
+        />
       </div>
 
       {/* Metrics section */}
@@ -171,7 +177,7 @@ export function InitiativeListItem({ initiative, className }: InitiativeListItem
           {/* Project and task count */}
           <div className="text-on-surface-variant flex items-center gap-3 text-sm">
             <span className="flex items-center gap-1">
-              <FolderKanban className="h-3.5 w-3.5" />
+              <ViewKanbanOutlined sx={{ fontSize: 14 }} />
               {initiative.projectCount ?? 0} project{initiative.projectCount !== 1 ? 's' : ''}
             </span>
             {hasMetrics && (
@@ -200,7 +206,7 @@ export function InitiativeListItem({ initiative, className }: InitiativeListItem
       {/* Strategic priority indicator */}
       {initiative.isStrategicPriority && (
         <div className="text-tertiary mt-3 flex items-center gap-1.5 text-xs font-medium">
-          <Zap className="h-3.5 w-3.5" />
+          <BoltOutlined sx={{ fontSize: 14 }} />
           Strategic Priority
         </div>
       )}

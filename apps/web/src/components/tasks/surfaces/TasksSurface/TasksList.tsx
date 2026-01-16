@@ -11,7 +11,7 @@
 
 import { useState, memo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronRight } from 'lucide-react';
+import ChevronRightOutlined from '@mui/icons-material/ChevronRightOutlined';
 import { TaskRow } from '@/components/tasks/TaskRow';
 import { type Task } from '@/lib/api-client';
 import { type TaskSection, type TaskSort } from '@/hooks/useTasksSurface';
@@ -97,7 +97,7 @@ const TaskSectionView = memo(function TaskSectionView({
             )}
           >
             <motion.span animate={{ rotate: isCollapsed ? 0 : 90 }} transition={{ duration: 0.15 }}>
-              <ChevronRight className="h-4 w-4" />
+              <ChevronRightOutlined sx={{ fontSize: 16 }} />
             </motion.span>
             <span className="text-xs font-semibold tracking-wide uppercase">{section.title}</span>
           </button>

@@ -11,7 +11,9 @@
 
 import { memo } from 'react';
 import { motion } from 'framer-motion';
-import { Search, Plus, Sparkles } from 'lucide-react';
+import SearchOutlined from '@mui/icons-material/SearchOutlined';
+import AddOutlined from '@mui/icons-material/AddOutlined';
+import AutoAwesomeOutlined from '@mui/icons-material/AutoAwesomeOutlined';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -43,21 +45,21 @@ const emptyStateContent: Record<
   }
 > = {
   'no-tasks': {
-    icon: <Plus className="h-10 w-10" />,
+    icon: <AddOutlined sx={{ fontSize: 40 }} />,
     title: 'No tasks yet',
     description: 'Create your first task to get started.',
     showCreate: true,
     showClearFilters: false,
   },
   'filtered-empty': {
-    icon: <Search className="h-10 w-10" />,
+    icon: <SearchOutlined sx={{ fontSize: 40 }} />,
     title: 'No matching tasks',
     description: 'Try adjusting your filters to see more tasks.',
     showCreate: false,
     showClearFilters: true,
   },
   'all-done': {
-    icon: <Sparkles className="h-10 w-10" />,
+    icon: <AutoAwesomeOutlined sx={{ fontSize: 40 }} />,
     title: "You're all caught up!",
     description: 'Nice work. Time to relax or add something new.',
     showCreate: true,
@@ -128,7 +130,7 @@ export const TasksEmptyState = memo(function TasksEmptyState({
         {content.showCreate && onCreateClick && (
           <motion.div layoutId={createButtonLayoutId} className="inline-flex">
             <Button variant="filled" size="md" onClick={onCreateClick}>
-              <Plus className="mr-1.5 h-4 w-4" />
+              <AddOutlined sx={{ fontSize: 16 }} className="mr-1.5" />
               Create task
             </Button>
           </motion.div>

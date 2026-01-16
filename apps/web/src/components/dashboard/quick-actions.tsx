@@ -1,20 +1,24 @@
 'use client';
 
-import { Plus, Calendar, FolderPlus, Target } from 'lucide-react';
+import AddOutlined from '@mui/icons-material/AddOutlined';
+import CalendarTodayOutlined from '@mui/icons-material/CalendarTodayOutlined';
+import CreateNewFolderOutlined from '@mui/icons-material/CreateNewFolderOutlined';
+import GpsFixedOutlined from '@mui/icons-material/GpsFixedOutlined';
+import type { SvgIconComponent } from '@mui/icons-material';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface QuickAction {
   label: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: SvgIconComponent;
   href: string;
 }
 
 const actions: QuickAction[] = [
-  { label: 'New Task', icon: Plus, href: '/tasks/new' },
-  { label: 'New Event', icon: Calendar, href: '/calendar/new' },
-  { label: 'New Project', icon: FolderPlus, href: '/projects/new' },
-  { label: 'New Initiative', icon: Target, href: '/initiatives/new' },
+  { label: 'New Task', icon: AddOutlined, href: '/tasks/new' },
+  { label: 'New Event', icon: CalendarTodayOutlined, href: '/calendar/new' },
+  { label: 'New Project', icon: CreateNewFolderOutlined, href: '/projects/new' },
+  { label: 'New Initiative', icon: GpsFixedOutlined, href: '/initiatives/new' },
 ];
 
 export function QuickActions() {
@@ -33,7 +37,7 @@ export function QuickActions() {
               asChild
             >
               <a href={action.href}>
-                <action.icon className="h-5 w-5" />
+                <action.icon sx={{ fontSize: 20 }} />
                 <span className="text-sm">{action.label}</span>
               </a>
             </Button>

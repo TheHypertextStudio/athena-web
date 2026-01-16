@@ -10,7 +10,11 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback, memo } from 'react';
-import { Flag, Folder, Calendar, Sparkles, LayoutGrid } from 'lucide-react';
+import FlagOutlined from '@mui/icons-material/FlagOutlined';
+import FolderOutlined from '@mui/icons-material/FolderOutlined';
+import CalendarTodayOutlined from '@mui/icons-material/CalendarTodayOutlined';
+import AutoAwesomeOutlined from '@mui/icons-material/AutoAwesomeOutlined';
+import GridViewOutlined from '@mui/icons-material/GridViewOutlined';
 import { Button } from '@/components/ui/button';
 import { TransitionModal } from '@/components/ui/transition-modal';
 import {
@@ -161,7 +165,7 @@ export const TaskCreationModal = memo(function TaskCreationModal({
         <div className="bg-primary-container/30 rounded-t-3xl px-6 py-5">
           <div className="flex items-center gap-3">
             <div className="bg-primary/10 flex h-10 w-10 items-center justify-center rounded-full">
-              <Sparkles className="text-primary h-5 w-5" />
+              <AutoAwesomeOutlined sx={{ fontSize: 20 }} className="text-primary" />
             </div>
             <h2 className="text-on-surface text-xl font-semibold">New Task</h2>
           </div>
@@ -223,7 +227,7 @@ export const TaskCreationModal = memo(function TaskCreationModal({
                 deadline ? 'text-on-surface' : 'text-on-surface-variant',
               )}
             >
-              <Calendar className="h-4 w-4" />
+              <CalendarTodayOutlined sx={{ fontSize: 16 }} />
               <span>
                 {deadline
                   ? new Date(deadline + 'T00:00:00').toLocaleDateString('en-US', {
@@ -256,7 +260,7 @@ export const TaskCreationModal = memo(function TaskCreationModal({
                     'hover:opacity-80',
                   )}
                 >
-                  <Flag className={cn('h-4 w-4', selectedPriority?.color)} />
+                  <FlagOutlined sx={{ fontSize: 16 }} className={selectedPriority?.color} />
                   <span className={cn('text-sm font-medium', selectedPriority?.color)}>
                     {selectedPriority?.label}
                   </span>
@@ -271,7 +275,7 @@ export const TaskCreationModal = memo(function TaskCreationModal({
                     }}
                     className="rounded-xl"
                   >
-                    <Flag className={cn('mr-2 h-4 w-4', option.color)} />
+                    <FlagOutlined sx={{ fontSize: 16 }} className={cn('mr-2', option.color)} />
                     {option.label}
                   </DropdownMenuItem>
                 ))}
@@ -291,7 +295,7 @@ export const TaskCreationModal = memo(function TaskCreationModal({
                       'focus-visible:ring-primary/50 focus:outline-none focus-visible:ring-2',
                     )}
                   >
-                    <Folder className="text-on-surface-variant h-4 w-4" />
+                    <FolderOutlined sx={{ fontSize: 16 }} className="text-on-surface-variant" />
                     <span className="text-on-surface-variant text-sm">
                       {selectedProject?.name ?? 'No Project'}
                     </span>
@@ -342,7 +346,7 @@ export const TaskCreationModal = memo(function TaskCreationModal({
                         style={{ backgroundColor: selectedTimeBlock.color }}
                       />
                     ) : (
-                      <LayoutGrid className="h-4 w-4" />
+                      <GridViewOutlined sx={{ fontSize: 16 }} />
                     )}
                     <span className="text-sm">
                       {selectedTimeBlock?.label ?? 'Add to Time Block'}
@@ -365,7 +369,7 @@ export const TaskCreationModal = memo(function TaskCreationModal({
                             style={{ backgroundColor: block.color }}
                           />
                         ) : (
-                          <LayoutGrid className="h-3 w-3" />
+                          <GridViewOutlined sx={{ fontSize: 12 }} />
                         )}
                         {block.label}
                       </span>

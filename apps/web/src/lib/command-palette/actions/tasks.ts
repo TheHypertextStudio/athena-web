@@ -26,7 +26,11 @@
  * @packageDocumentation
  */
 
-import { Plus, Edit, Trash2, CheckCircle2, CheckSquare } from 'lucide-react';
+import AddOutlined from '@mui/icons-material/AddOutlined';
+import EditOutlined from '@mui/icons-material/EditOutlined';
+import DeleteOutlined from '@mui/icons-material/DeleteOutlined';
+import CheckCircleOutlined from '@mui/icons-material/CheckCircleOutlined';
+import CheckBoxOutlined from '@mui/icons-material/CheckBoxOutlined';
 import { z } from 'zod';
 
 import type { ExecutableAction, ActionGroup, Action } from '../types';
@@ -41,7 +45,7 @@ export const createTaskAction: ExecutableAction = {
   type: 'action',
   id: 'create-task',
   label: 'Create Task',
-  icon: Plus,
+  icon: AddOutlined,
   category: 'create',
   keywords: ['new', 'add', 'todo'],
   priority: 100,
@@ -117,7 +121,7 @@ export const editTaskAction: ExecutableAction = {
   type: 'action',
   id: 'edit-task',
   label: 'Edit Task',
-  icon: Edit,
+  icon: EditOutlined,
   category: 'entity',
   keywords: ['modify', 'update', 'change'],
   priority: 90,
@@ -190,7 +194,7 @@ export const deleteTaskAction: ExecutableAction = {
   type: 'action',
   id: 'delete-task',
   label: 'Delete Task',
-  icon: Trash2,
+  icon: DeleteOutlined,
   category: 'entity',
   keywords: ['remove', 'trash'],
   priority: 10,
@@ -265,7 +269,7 @@ export const completeTaskAction: ExecutableAction = {
   type: 'action',
   id: 'complete-task',
   label: 'Complete Task',
-  icon: CheckCircle2,
+  icon: CheckCircleOutlined,
   category: 'entity',
   keywords: ['done', 'finish', 'check'],
   priority: 80,
@@ -321,7 +325,7 @@ export const tasksGroup: ActionGroup = {
   type: 'group',
   id: 'tasks-group',
   label: 'Tasks',
-  icon: CheckSquare,
+  icon: CheckBoxOutlined,
   category: 'create',
   keywords: ['task', 'todo', 'work'],
   children: [createTaskAction, editTaskAction, completeTaskAction, deleteTaskAction],

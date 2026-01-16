@@ -8,7 +8,7 @@
 import Link from 'next/link';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { Target } from 'lucide-react';
+import GpsFixedOutlined from '@mui/icons-material/GpsFixedOutlined';
 import { AuthErrorBanner } from '@/components/auth';
 import { auth } from '@/lib/auth-server';
 
@@ -33,7 +33,7 @@ export default async function AuthLayout({ children }: { children: React.ReactNo
         <div className="flex justify-center">
           <Link href="/" className="flex items-center gap-2">
             <div className="bg-primary flex h-12 w-12 items-center justify-center rounded-xl">
-              <Target className="text-primary-foreground h-7 w-7" />
+              <GpsFixedOutlined sx={{ fontSize: 28 }} className="text-primary-foreground" />
             </div>
             <span className="text-2xl font-bold">Athena</span>
           </Link>

@@ -5,7 +5,13 @@
  * existing command palette infrastructure.
  */
 
-import { CheckCircle, Circle, Copy, Link, Trash2, Calendar, FolderInput } from 'lucide-react';
+import CheckCircleOutlined from '@mui/icons-material/CheckCircleOutlined';
+import RadioButtonUncheckedOutlined from '@mui/icons-material/RadioButtonUncheckedOutlined';
+import ContentCopyOutlined from '@mui/icons-material/ContentCopyOutlined';
+import LinkOutlined from '@mui/icons-material/LinkOutlined';
+import DeleteOutlined from '@mui/icons-material/DeleteOutlined';
+import CalendarTodayOutlined from '@mui/icons-material/CalendarTodayOutlined';
+import DriveFileMoveOutlined from '@mui/icons-material/DriveFileMoveOutlined';
 import type { ExecutableAction, ActionGroup, CommandContext } from '@/lib/command-palette';
 import { getActionRegistry } from '@/lib/command-palette';
 import type { AnyObject, ObjectType } from '../types';
@@ -45,7 +51,7 @@ function createDeleteAction(getSelection: SelectionGetter): ExecutableAction {
     type: 'action',
     id: 'object-delete',
     label: 'Delete',
-    icon: Trash2,
+    icon: DeleteOutlined,
     category: 'entity',
     keywords: ['remove', 'trash', 'destroy'],
     priority: -100, // Lower priority (dangerous action)
@@ -84,7 +90,7 @@ function createDuplicateAction(getSelection: SelectionGetter): ExecutableAction 
     type: 'action',
     id: 'object-duplicate',
     label: 'Duplicate',
-    icon: Copy,
+    icon: ContentCopyOutlined,
     category: 'entity',
     keywords: ['copy', 'clone'],
     priority: 50,
@@ -123,7 +129,7 @@ function createCopyLinkAction(getSelection: SelectionGetter): ExecutableAction {
     type: 'action',
     id: 'object-copy-link',
     label: 'Copy Link',
-    icon: Link,
+    icon: LinkOutlined,
     category: 'entity',
     keywords: ['share', 'url'],
     priority: 40,
@@ -160,7 +166,7 @@ function createCompleteAction(getSelection: SelectionGetter): ExecutableAction {
     type: 'action',
     id: 'object-complete',
     label: 'Mark Complete',
-    icon: CheckCircle,
+    icon: CheckCircleOutlined,
     category: 'entity',
     keywords: ['done', 'finish', 'check'],
     priority: 100,
@@ -203,7 +209,7 @@ function createUncompleteAction(getSelection: SelectionGetter): ExecutableAction
     type: 'action',
     id: 'object-uncomplete',
     label: 'Mark Incomplete',
-    icon: Circle,
+    icon: RadioButtonUncheckedOutlined,
     category: 'entity',
     keywords: ['undo', 'reopen', 'uncheck'],
     priority: 90,
@@ -246,7 +252,7 @@ function createScheduleAction(getSelection: SelectionGetter): ExecutableAction {
     type: 'action',
     id: 'object-schedule',
     label: 'Schedule...',
-    icon: Calendar,
+    icon: CalendarTodayOutlined,
     category: 'entity',
     keywords: ['calendar', 'time', 'block'],
     priority: 80,
@@ -288,7 +294,7 @@ function createMoveToProjectAction(getSelection: SelectionGetter): ExecutableAct
     type: 'action',
     id: 'object-move-to-project',
     label: 'Move to Project...',
-    icon: FolderInput,
+    icon: DriveFileMoveOutlined,
     category: 'entity',
     keywords: ['organize', 'folder'],
     priority: 70,
@@ -330,7 +336,7 @@ function createSelectionActionsGroup(getSelection: SelectionGetter): ActionGroup
     type: 'group',
     id: 'selection-actions',
     label: 'Selection',
-    icon: CheckCircle,
+    icon: CheckCircleOutlined,
     category: 'entity',
     keywords: ['selected', 'bulk', 'batch'],
 

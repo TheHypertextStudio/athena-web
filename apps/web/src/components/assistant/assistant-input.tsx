@@ -10,7 +10,8 @@
 'use client';
 
 import { useCallback, useRef, useState, type KeyboardEvent } from 'react';
-import { Send, Loader2 } from 'lucide-react';
+import SendOutlined from '@mui/icons-material/SendOutlined';
+import SyncOutlined from '@mui/icons-material/SyncOutlined';
 import { cn } from '@/lib/utils';
 import type { ChatVariant } from '@/lib/assistant';
 
@@ -163,9 +164,12 @@ export function AssistantInput({
         aria-label={isLoading ? 'Sending...' : 'Send message'}
       >
         {isLoading ? (
-          <Loader2 className={cn('animate-spin', variant === 'compact' ? 'h-4 w-4' : 'h-5 w-5')} />
+          <SyncOutlined
+            sx={{ fontSize: variant === 'compact' ? 16 : 20 }}
+            className="animate-spin"
+          />
         ) : (
-          <Send className={variant === 'compact' ? 'h-4 w-4' : 'h-5 w-5'} />
+          <SendOutlined sx={{ fontSize: variant === 'compact' ? 16 : 20 }} />
         )}
       </button>
     </div>

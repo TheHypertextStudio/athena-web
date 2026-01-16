@@ -12,18 +12,16 @@
 import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  Check,
-  Circle,
-  Clock,
-  Copy,
-  Trash2,
-  Calendar,
-  Flag,
-  Folder,
-  ChevronRight,
-  LayoutGrid,
-} from 'lucide-react';
+import CheckOutlined from '@mui/icons-material/CheckOutlined';
+import RadioButtonUncheckedOutlined from '@mui/icons-material/RadioButtonUncheckedOutlined';
+import ScheduleOutlined from '@mui/icons-material/ScheduleOutlined';
+import ContentCopyOutlined from '@mui/icons-material/ContentCopyOutlined';
+import DeleteOutlined from '@mui/icons-material/DeleteOutlined';
+import CalendarTodayOutlined from '@mui/icons-material/CalendarTodayOutlined';
+import FlagOutlined from '@mui/icons-material/FlagOutlined';
+import FolderOutlined from '@mui/icons-material/FolderOutlined';
+import ChevronRightOutlined from '@mui/icons-material/ChevronRightOutlined';
+import GridViewOutlined from '@mui/icons-material/GridViewOutlined';
 import { type Task, type TimeBlock } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 
@@ -104,8 +102,8 @@ function MenuItem({
     >
       {icon && <span className="flex-shrink-0">{icon}</span>}
       <span className="flex-1 text-left">{label}</span>
-      {checked && <Check className="h-4 w-4 flex-shrink-0" />}
-      {hasSubmenu && <ChevronRight className="h-4 w-4 flex-shrink-0" />}
+      {checked && <CheckOutlined sx={{ fontSize: 16 }} className="flex-shrink-0" />}
+      {hasSubmenu && <ChevronRightOutlined sx={{ fontSize: 16 }} className="flex-shrink-0" />}
     </button>
   );
 }
@@ -260,7 +258,13 @@ export const TaskContextMenu = memo(function TaskContextMenu({
       >
         {/* Status actions */}
         <MenuItem
-          icon={isCompleted ? <Circle className="h-4 w-4" /> : <Check className="h-4 w-4" />}
+          icon={
+            isCompleted ? (
+              <RadioButtonUncheckedOutlined sx={{ fontSize: 16 }} />
+            ) : (
+              <CheckOutlined sx={{ fontSize: 16 }} />
+            )
+          }
           label={isCompleted ? 'Mark as Incomplete' : 'Mark as Complete'}
           onClick={() => {
             void handleStatusToggle();
@@ -268,7 +272,7 @@ export const TaskContextMenu = memo(function TaskContextMenu({
         />
         {!isCompleted && !isInProgress && (
           <MenuItem
-            icon={<Clock className="h-4 w-4" />}
+            icon={<ScheduleOutlined sx={{ fontSize: 16 }} />}
             label="Start Working"
             onClick={() => {
               void handleStartWorking();
@@ -279,7 +283,11 @@ export const TaskContextMenu = memo(function TaskContextMenu({
         <MenuSeparator />
 
         {/* Quick actions */}
-        <MenuItem icon={<Calendar className="h-4 w-4" />} label="Set Due Date..." disabled />
+        <MenuItem
+          icon={<CalendarTodayOutlined sx={{ fontSize: 16 }} />}
+          label="Set Due Date..."
+          disabled
+        />
 
         {/* Priority submenu */}
         <div
@@ -291,7 +299,7 @@ export const TaskContextMenu = memo(function TaskContextMenu({
             setShowPrioritySubmenu(false);
           }}
         >
-          <MenuItem icon={<Flag className="h-4 w-4" />} label="Set Priority" hasSubmenu />
+          <MenuItem icon={<FlagOutlined sx={{ fontSize: 16 }} />} label="Set Priority" hasSubmenu />
           <AnimatePresence>
             {showPrioritySubmenu && (
               <motion.div
@@ -308,7 +316,7 @@ export const TaskContextMenu = memo(function TaskContextMenu({
                 {priorityOptions.map((option) => (
                   <MenuItem
                     key={option.value}
-                    icon={<Flag className={cn('h-4 w-4', option.color)} />}
+                    icon={<FlagOutlined sx={{ fontSize: 16 }} className={option.color} />}
                     label={option.label}
                     checked={task.priority === option.value}
                     onClick={() => void handlePriorityChange(option.value)}
@@ -330,7 +338,11 @@ export const TaskContextMenu = memo(function TaskContextMenu({
               setShowProjectSubmenu(false);
             }}
           >
-            <MenuItem icon={<Folder className="h-4 w-4" />} label="Move to Project" hasSubmenu />
+            <MenuItem
+              icon={<FolderOutlined sx={{ fontSize: 16 }} />}
+              label="Move to Project"
+              hasSubmenu
+            />
             <AnimatePresence>
               {showProjectSubmenu && (
                 <motion.div
@@ -376,7 +388,7 @@ export const TaskContextMenu = memo(function TaskContextMenu({
             }}
           >
             <MenuItem
-              icon={<LayoutGrid className="h-4 w-4" />}
+              icon={<GridViewOutlined sx={{ fontSize: 16 }} />}
               label="Add to Time Block"
               hasSubmenu
             />
@@ -403,7 +415,7 @@ export const TaskContextMenu = memo(function TaskContextMenu({
                             style={{ backgroundColor: block.color }}
                           />
                         ) : (
-                          <LayoutGrid className="h-4 w-4" />
+                          <GridViewOutlined sx={{ fontSize: 16 }} />
                         )
                       }
                       label={block.label}
@@ -419,13 +431,17 @@ export const TaskContextMenu = memo(function TaskContextMenu({
         <MenuSeparator />
 
         {/* Other actions */}
-        <MenuItem icon={<Copy className="h-4 w-4" />} label="Copy Link" onClick={handleCopyLink} />
+        <MenuItem
+          icon={<ContentCopyOutlined sx={{ fontSize: 16 }} />}
+          label="Copy Link"
+          onClick={handleCopyLink}
+        />
 
         <MenuSeparator />
 
         {/* Danger actions */}
         <MenuItem
-          icon={<Trash2 className="h-4 w-4" />}
+          icon={<DeleteOutlined sx={{ fontSize: 16 }} />}
           label="Delete"
           danger
           onClick={() => void handleDelete()}

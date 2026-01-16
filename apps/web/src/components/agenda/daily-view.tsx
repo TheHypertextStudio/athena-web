@@ -12,7 +12,9 @@
 
 import { useCallback, useState, useMemo } from 'react';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
-import { Target, Layers, Clock } from 'lucide-react';
+import GpsFixedOutlined from '@mui/icons-material/GpsFixedOutlined';
+import LayersOutlined from '@mui/icons-material/LayersOutlined';
+import ScheduleOutlined from '@mui/icons-material/ScheduleOutlined';
 import Link from 'next/link';
 import { useAgendaToday, useReorderTasks, isToday, getTodayDate } from '@/hooks/use-agenda';
 import { agendaKeys } from '@/lib/agenda-api';
@@ -58,7 +60,7 @@ function GroupByToggle({
             : 'text-on-surface-variant hover:text-on-surface',
         )}
       >
-        <Clock className="h-3.5 w-3.5" />
+        <ScheduleOutlined sx={{ fontSize: 14 }} />
         Time
       </button>
       <button
@@ -73,7 +75,7 @@ function GroupByToggle({
             : 'text-on-surface-variant hover:text-on-surface',
         )}
       >
-        <Target className="h-3.5 w-3.5" />
+        <GpsFixedOutlined sx={{ fontSize: 14 }} />
         Initiative
       </button>
     </div>
@@ -97,7 +99,7 @@ function InitiativeGroupHeader({ group }: { group: InitiativeGroup }) {
     return (
       <div className="flex items-center justify-between py-2">
         <div className="flex items-center gap-2">
-          <Layers className="text-on-surface-variant h-4 w-4" />
+          <LayersOutlined sx={{ fontSize: 16 }} className="text-on-surface-variant" />
           <span className="text-on-surface-variant text-sm font-medium">No Initiative</span>
         </div>
         <div className="text-on-surface-variant flex items-center gap-3 text-xs">
@@ -114,7 +116,7 @@ function InitiativeGroupHeader({ group }: { group: InitiativeGroup }) {
       className="group flex items-center justify-between py-2"
     >
       <div className="flex items-center gap-2">
-        <Target className="text-primary h-4 w-4" />
+        <GpsFixedOutlined sx={{ fontSize: 16 }} className="text-primary" />
         <span className="text-on-surface group-hover:text-primary text-sm font-medium transition-colors">
           {group.initiative.name}
         </span>

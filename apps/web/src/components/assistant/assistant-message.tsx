@@ -10,7 +10,9 @@
 'use client';
 
 import { useMemo } from 'react';
-import { User, Sparkles, AlertCircle } from 'lucide-react';
+import PersonOutlined from '@mui/icons-material/PersonOutlined';
+import AutoAwesomeOutlined from '@mui/icons-material/AutoAwesomeOutlined';
+import ErrorOutlineOutlined from '@mui/icons-material/ErrorOutlineOutlined';
 import { cn } from '@/lib/utils';
 import type { AssistantMessage as AssistantMessageType, ChatVariant } from '@/lib/assistant';
 import { AssistantTypingIndicator } from './assistant-typing-indicator';
@@ -81,9 +83,9 @@ export function AssistantMessage({
         aria-hidden="true"
       >
         {isUser ? (
-          <User className={variant === 'compact' ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
+          <PersonOutlined sx={{ fontSize: variant === 'compact' ? 14 : 16 }} />
         ) : (
-          <Sparkles className={variant === 'compact' ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
+          <AutoAwesomeOutlined sx={{ fontSize: variant === 'compact' ? 14 : 16 }} />
         )}
       </div>
 
@@ -110,7 +112,7 @@ export function AssistantMessage({
           {/* Error icon for error state */}
           {isError && (
             <div className="mb-1 flex items-center gap-1.5">
-              <AlertCircle className="h-4 w-4" />
+              <ErrorOutlineOutlined sx={{ fontSize: 16 }} />
               <span className="text-xs font-medium">Error</span>
             </div>
           )}

@@ -9,7 +9,7 @@
 import { use } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { motion, useReducedMotion } from 'framer-motion';
-import { ArrowLeft } from 'lucide-react';
+import ArrowBackOutlined from '@mui/icons-material/ArrowBackOutlined';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { SurfaceContainer } from '@/components/ui/surface';
@@ -94,7 +94,7 @@ export default function EditInitiativePage({ params }: EditInitiativePageProps) 
           <div className="mb-6">
             <Button variant="text" size="sm" asChild className="text-on-surface-variant">
               <Link href={`/initiatives/${id}`}>
-                <ArrowLeft className="mr-1 h-4 w-4" />
+                <ArrowBackOutlined sx={{ fontSize: 16 }} className="mr-1" />
                 Back
               </Link>
             </Button>

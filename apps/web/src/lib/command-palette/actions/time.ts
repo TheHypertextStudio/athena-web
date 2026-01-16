@@ -19,7 +19,8 @@
  * @packageDocumentation
  */
 
-import { Play, Square } from 'lucide-react';
+import PlayArrowOutlined from '@mui/icons-material/PlayArrowOutlined';
+import StopOutlined from '@mui/icons-material/StopOutlined';
 import { z } from 'zod';
 
 import type { ExecutableAction } from '../types';
@@ -35,7 +36,7 @@ export const startTimerAction: ExecutableAction = {
   type: 'action',
   id: 'start-timer',
   label: 'Start Timer',
-  icon: Play,
+  icon: PlayArrowOutlined,
   category: 'time',
   keywords: ['track', 'clock', 'timing', 'begin'],
   priority: 90,
@@ -102,7 +103,7 @@ export const stopTimerAction: ExecutableAction = {
   type: 'action',
   id: 'stop-timer',
   label: 'Stop Timer',
-  icon: Square,
+  icon: StopOutlined,
   category: 'time',
   keywords: ['end', 'finish', 'halt', 'log'],
   priority: 95, // Higher priority when visible (timer running)

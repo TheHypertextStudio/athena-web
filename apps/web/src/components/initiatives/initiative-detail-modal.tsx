@@ -9,7 +9,11 @@
 
 'use client';
 
-import { X, Maximize2, Target, Loader2, AlertCircle } from 'lucide-react';
+import CloseOutlined from '@mui/icons-material/CloseOutlined';
+import FullscreenOutlined from '@mui/icons-material/FullscreenOutlined';
+import GpsFixedOutlined from '@mui/icons-material/GpsFixedOutlined';
+import SyncOutlined from '@mui/icons-material/SyncOutlined';
+import ErrorOutlineOutlined from '@mui/icons-material/ErrorOutlineOutlined';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { ProgressBar } from '@/components/ui/progress-bar';
@@ -67,7 +71,7 @@ export function InitiativeDetailModal({
     return (
       <div className="bg-surface-container rounded-2xl p-6">
         <div className="flex items-center justify-center py-12">
-          <Loader2 className="text-primary h-8 w-8 animate-spin" />
+          <SyncOutlined sx={{ fontSize: 32 }} className="text-primary animate-spin" />
         </div>
       </div>
     );
@@ -79,11 +83,11 @@ export function InitiativeDetailModal({
       <div className="bg-surface-container rounded-2xl p-6">
         <div className="flex items-center justify-between">
           <div className="text-error flex items-center gap-2">
-            <AlertCircle className="h-5 w-5" />
+            <ErrorOutlineOutlined sx={{ fontSize: 20 }} />
             <span className="font-medium">Failed to load initiative</span>
           </div>
           <Button variant="text" size="icon" onClick={onClose}>
-            <X className="h-5 w-5" />
+            <CloseOutlined sx={{ fontSize: 20 }} />
           </Button>
         </div>
         <p className="text-on-surface-variant mt-2 text-sm">{error ?? 'Initiative not found'}</p>
@@ -97,7 +101,7 @@ export function InitiativeDetailModal({
       <div className="border-outline-variant flex items-center justify-between border-b p-4">
         <div className="flex items-center gap-3">
           <div className="bg-primary/10 flex h-10 w-10 items-center justify-center rounded-lg">
-            <Target className="text-primary h-5 w-5" />
+            <GpsFixedOutlined sx={{ fontSize: 20 }} className="text-primary" />
           </div>
           <div>
             <h2 className="text-on-surface font-semibold">{initiative.name}</h2>
@@ -106,10 +110,10 @@ export function InitiativeDetailModal({
         </div>
         <div className="flex items-center gap-1">
           <Button variant="text" size="icon" onClick={onExpand} title="Expand to full page">
-            <Maximize2 className="h-4 w-4" />
+            <FullscreenOutlined sx={{ fontSize: 16 }} />
           </Button>
           <Button variant="text" size="icon" onClick={onClose} title="Close">
-            <X className="h-5 w-5" />
+            <CloseOutlined sx={{ fontSize: 20 }} />
           </Button>
         </div>
       </div>

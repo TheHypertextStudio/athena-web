@@ -6,7 +6,7 @@
 
 'use client';
 
-import { Clock } from 'lucide-react';
+import ScheduleOutlined from '@mui/icons-material/ScheduleOutlined';
 import type { AgendaTodaySummary } from '@/lib/agenda-api';
 
 interface TimeUtilizationProps {
@@ -39,7 +39,7 @@ export function TimeUtilization({ summary }: TimeUtilizationProps) {
     <div className="bg-card rounded-lg border p-4">
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Clock className="text-muted-foreground h-4 w-4" />
+          <ScheduleOutlined sx={{ fontSize: 16 }} className="text-muted-foreground" />
           <span className="text-sm font-medium">Time Utilization</span>
         </div>
         <span className="text-muted-foreground text-sm">

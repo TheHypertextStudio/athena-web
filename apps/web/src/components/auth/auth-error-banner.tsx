@@ -6,7 +6,8 @@
 
 'use client';
 
-import { AlertCircle, X } from 'lucide-react';
+import ErrorOutlineOutlined from '@mui/icons-material/ErrorOutlineOutlined';
+import CloseOutlined from '@mui/icons-material/CloseOutlined';
 
 interface AuthErrorBannerProps {
   /** Error message to display */
@@ -24,7 +25,7 @@ export function AuthErrorBanner({ message, onDismiss }: AuthErrorBannerProps) {
       role="alert"
       className="bg-destructive/10 text-destructive flex items-start gap-3 rounded-lg p-4"
     >
-      <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0" />
+      <ErrorOutlineOutlined sx={{ fontSize: 20 }} className="mt-0.5 flex-shrink-0" />
       <p className="flex-1 text-sm">{message}</p>
       {onDismiss && (
         <button
@@ -33,7 +34,7 @@ export function AuthErrorBanner({ message, onDismiss }: AuthErrorBannerProps) {
           className="hover:bg-destructive/20 -mt-1 -mr-1 rounded p-1 transition-colors"
           aria-label="Dismiss error"
         >
-          <X className="h-4 w-4" />
+          <CloseOutlined sx={{ fontSize: 16 }} />
         </button>
       )}
     </div>

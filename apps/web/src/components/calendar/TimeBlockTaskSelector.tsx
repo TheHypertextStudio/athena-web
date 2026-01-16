@@ -11,7 +11,10 @@
 
 import { useState, useRef, useEffect, useMemo, memo } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, X, Check, Loader2 } from 'lucide-react';
+import SearchOutlined from '@mui/icons-material/SearchOutlined';
+import CloseOutlined from '@mui/icons-material/CloseOutlined';
+import CheckOutlined from '@mui/icons-material/CheckOutlined';
+import SyncOutlined from '@mui/icons-material/SyncOutlined';
 import { cn } from '@/lib/utils';
 import type { Task } from '@/lib/api-client';
 
@@ -162,8 +165,8 @@ function SelectableTaskRow({
             : 'border-outline-variant group-hover:border-primary',
         )}
       >
-        {isLinked && <Check className="h-2.5 w-2.5 text-white" />}
-        {isAdding && <Loader2 className="h-2.5 w-2.5 animate-spin" />}
+        {isLinked && <CheckOutlined sx={{ fontSize: 10 }} className="text-white" />}
+        {isAdding && <SyncOutlined sx={{ fontSize: 10 }} className="animate-spin" />}
       </div>
       <PriorityDot priority={task.priority} />
       <div className="min-w-0 flex-1">
@@ -326,7 +329,7 @@ export const TimeBlockTaskSelector = memo(function TimeBlockTaskSelector({
       {/* Search header */}
       <div className="border-outline-variant/20 shrink-0 border-b px-3 py-2.5">
         <div className="bg-surface-container-high flex items-center gap-2 rounded-full px-3 py-1.5">
-          <Search className="text-on-surface-variant h-4 w-4 shrink-0" />
+          <SearchOutlined sx={{ fontSize: 16 }} className="text-on-surface-variant shrink-0" />
           <input
             ref={inputRef}
             type="text"
@@ -349,7 +352,7 @@ export const TimeBlockTaskSelector = memo(function TimeBlockTaskSelector({
               }}
               className="text-on-surface-variant hover:text-on-surface shrink-0"
             >
-              <X className="h-3.5 w-3.5" />
+              <CloseOutlined sx={{ fontSize: 14 }} />
             </button>
           )}
         </div>
@@ -359,7 +362,7 @@ export const TimeBlockTaskSelector = memo(function TimeBlockTaskSelector({
       <div className="flex-1 overflow-y-auto px-2 py-2">
         {isLoading ? (
           <div className="flex items-center justify-center py-6">
-            <Loader2 className="text-on-surface-variant h-5 w-5 animate-spin" />
+            <SyncOutlined sx={{ fontSize: 20 }} className="text-on-surface-variant animate-spin" />
           </div>
         ) : sortedTasks.length > 0 ? (
           <div className="space-y-0.5">

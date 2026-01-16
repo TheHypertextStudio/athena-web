@@ -10,7 +10,9 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Plus, Target, Filter } from 'lucide-react';
+import AddOutlined from '@mui/icons-material/AddOutlined';
+import GpsFixedOutlined from '@mui/icons-material/GpsFixedOutlined';
+import FilterListOutlined from '@mui/icons-material/FilterListOutlined';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
@@ -43,7 +45,7 @@ function EmptyState({ hasFilter }: { hasFilter: boolean }) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
         <div className="bg-surface-container-high flex h-16 w-16 items-center justify-center rounded-full">
-          <Filter className="text-on-surface-variant h-8 w-8" />
+          <FilterListOutlined sx={{ fontSize: 32 }} className="text-on-surface-variant" />
         </div>
         <h3 className="text-on-surface mt-4 text-lg font-semibold">No matching initiatives</h3>
         <p className="text-on-surface-variant mt-1 text-sm">
@@ -56,7 +58,7 @@ function EmptyState({ hasFilter }: { hasFilter: boolean }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
       <div className="bg-primary/10 flex h-16 w-16 items-center justify-center rounded-full">
-        <Target className="text-primary h-8 w-8" />
+        <GpsFixedOutlined sx={{ fontSize: 32 }} className="text-primary" />
       </div>
       <h3 className="text-on-surface mt-4 text-lg font-semibold">No initiatives yet</h3>
       <p className="text-on-surface-variant mt-1 max-w-sm text-sm">
@@ -65,7 +67,7 @@ function EmptyState({ hasFilter }: { hasFilter: boolean }) {
       </p>
       <Button asChild className="mt-6">
         <Link href="/initiatives/new">
-          <Plus className="mr-2 h-4 w-4" />
+          <AddOutlined sx={{ fontSize: 16 }} className="mr-2" />
           Create Initiative
         </Link>
       </Button>
@@ -154,7 +156,7 @@ export function InitiativeListView({ initiatives, className }: InitiativeListVie
         {hasAnyInitiatives && (
           <Button asChild>
             <Link href="/initiatives/new">
-              <Plus className="mr-2 h-4 w-4" />
+              <AddOutlined sx={{ fontSize: 16 }} className="mr-2" />
               New Initiative
             </Link>
           </Button>

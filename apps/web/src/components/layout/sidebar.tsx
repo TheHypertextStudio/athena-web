@@ -4,19 +4,17 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import {
-  LayoutDashboard,
-  CheckSquare,
-  FolderKanban,
-  Target,
-  Calendar,
-  CalendarDays,
-  Clock,
-  Settings,
-  LogOut,
-  ChevronDown,
-  Zap,
-} from 'lucide-react';
+import DashboardOutlined from '@mui/icons-material/DashboardOutlined';
+import ChecklistOutlined from '@mui/icons-material/ChecklistOutlined';
+import ViewKanbanOutlined from '@mui/icons-material/ViewKanbanOutlined';
+import GpsFixedOutlined from '@mui/icons-material/GpsFixedOutlined';
+import CalendarTodayOutlined from '@mui/icons-material/CalendarTodayOutlined';
+import CalendarMonthOutlined from '@mui/icons-material/CalendarMonthOutlined';
+import ScheduleOutlined from '@mui/icons-material/ScheduleOutlined';
+import SettingsOutlined from '@mui/icons-material/SettingsOutlined';
+import LogoutOutlined from '@mui/icons-material/LogoutOutlined';
+import ExpandMoreOutlined from '@mui/icons-material/ExpandMoreOutlined';
+import BoltOutlined from '@mui/icons-material/BoltOutlined';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -35,16 +33,18 @@ interface NavItem {
 }
 
 const mainNavItems: NavItem[] = [
-  { href: '/home', label: 'Home', icon: CalendarDays },
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/tasks', label: 'Tasks', icon: CheckSquare },
-  { href: '/projects', label: 'Projects', icon: FolderKanban },
-  { href: '/initiatives', label: 'Initiatives', icon: Target },
-  { href: '/calendar', label: 'Calendar', icon: Calendar },
-  { href: '/moments', label: 'Moments', icon: Clock },
+  { href: '/home', label: 'Home', icon: CalendarMonthOutlined },
+  { href: '/dashboard', label: 'Dashboard', icon: DashboardOutlined },
+  { href: '/tasks', label: 'Tasks', icon: ChecklistOutlined },
+  { href: '/projects', label: 'Projects', icon: ViewKanbanOutlined },
+  { href: '/initiatives', label: 'Initiatives', icon: GpsFixedOutlined },
+  { href: '/calendar', label: 'Calendar', icon: CalendarTodayOutlined },
+  { href: '/moments', label: 'Moments', icon: ScheduleOutlined },
 ];
 
-const bottomNavItems: NavItem[] = [{ href: '/settings', label: 'Settings', icon: Settings }];
+const bottomNavItems: NavItem[] = [
+  { href: '/settings', label: 'Settings', icon: SettingsOutlined },
+];
 
 interface InitiativeWithProgress {
   id: string;
@@ -109,7 +109,7 @@ export function Sidebar({ onSignOut }: SidebarProps) {
       <div className="flex h-16 items-center border-b px-6">
         <Link href="/home" className="flex items-center gap-2">
           <div className="bg-primary flex h-8 w-8 items-center justify-center rounded-lg">
-            <Target className="text-primary-foreground h-5 w-5" />
+            <GpsFixedOutlined sx={{ fontSize: 20 }} className="text-primary-foreground" />
           </div>
           <span className="text-xl font-bold">Athena</span>
         </Link>
@@ -146,11 +146,9 @@ export function Sidebar({ onSignOut }: SidebarProps) {
               className="text-muted-foreground hover:text-foreground flex w-full items-center justify-between px-3 py-1 text-xs font-medium tracking-wide uppercase"
             >
               Active Initiatives
-              <ChevronDown
-                className={cn(
-                  'h-3.5 w-3.5 transition-transform',
-                  initiativesExpanded && 'rotate-180',
-                )}
+              <ExpandMoreOutlined
+                sx={{ fontSize: 14 }}
+                className={cn('transition-transform', initiativesExpanded && 'rotate-180')}
               />
             </button>
             {initiativesExpanded && (
@@ -167,9 +165,14 @@ export function Sidebar({ onSignOut }: SidebarProps) {
                     )}
                   >
                     <div className="flex items-center gap-1.5">
-                      <Target className="text-primary h-3.5 w-3.5 flex-shrink-0" />
+                      <GpsFixedOutlined
+                        sx={{ fontSize: 14 }}
+                        className="text-primary flex-shrink-0"
+                      />
                       <span className="flex-1 truncate text-sm font-medium">{initiative.name}</span>
-                      {initiative.isStrategicPriority && <Zap className="text-tertiary h-3 w-3" />}
+                      {initiative.isStrategicPriority && (
+                        <BoltOutlined sx={{ fontSize: 12 }} className="text-tertiary" />
+                      )}
                     </div>
                     <div className="mt-1.5 flex items-center gap-2">
                       <ProgressBar progress={initiative.progress} size="xs" className="bg-muted" />
@@ -218,7 +221,7 @@ export function Sidebar({ onSignOut }: SidebarProps) {
           className="text-muted-foreground hover:bg-accent hover:text-accent-foreground mt-1 w-full justify-start gap-3 px-3"
           onClick={onSignOut}
         >
-          <LogOut className="h-5 w-5" />
+          <LogoutOutlined sx={{ fontSize: 20 }} />
           Sign Out
         </Button>
       </div>

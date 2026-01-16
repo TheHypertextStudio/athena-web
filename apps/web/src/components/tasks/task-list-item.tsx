@@ -11,9 +11,27 @@
 
 import { useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
-import { CheckCircle2, Circle, Clock, GripVertical, AlertCircle } from 'lucide-react';
+import CheckCircleOutlined from '@mui/icons-material/CheckCircleOutlined';
+import RadioButtonUncheckedOutlined from '@mui/icons-material/RadioButtonUncheckedOutlined';
+import ScheduleOutlined from '@mui/icons-material/ScheduleOutlined';
+import DragIndicator from '@mui/icons-material/DragIndicator';
+import ErrorOutlineOutlined from '@mui/icons-material/ErrorOutlineOutlined';
+import GpsFixedOutlined from '@mui/icons-material/GpsFixedOutlined';
+import ChevronRightOutlined from '@mui/icons-material/ChevronRightOutlined';
 import { tasksApi, type Task } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
+
+/**
+ * Initiative context for ambient awareness.
+ */
+export interface TaskInitiativeContext {
+  /** Initiative ID */
+  initiativeId?: string;
+  /** Initiative name */
+  initiativeName?: string;
+  /** Project name */
+  projectName?: string;
+}
 
 /**
  * Priority indicator colors - subtle, not badges.
@@ -83,6 +101,10 @@ export interface TaskListItemProps {
   dragHandleProps?: Record<string, unknown>;
   /** Whether this item is being dragged */
   isDragging?: boolean;
+  /** Initiative/project context for ambient awareness */
+  context?: TaskInitiativeContext;
+  /** Whether to show initiative context (defaults to false, can be 'hover' or 'always') */
+  showContext?: false | 'hover' | 'always';
   /** Custom class name */
   className?: string;
 }
@@ -109,6 +131,8 @@ export function TaskListItem({
   onStatusChange,
   dragHandleProps,
   isDragging,
+  context,
+  showContext = false,
   className,
 }: TaskListItemProps) {
   const [isUpdating, setIsUpdating] = useState(false);
@@ -183,7 +207,7 @@ export function TaskListItem({
           tabIndex={-1}
           {...dragHandleProps}
         >
-          <GripVertical className="h-4 w-4" />
+          <DragIndicator sx={{ fontSize: 16 }} />
         </button>
       )}
 
@@ -207,11 +231,11 @@ export function TaskListItem({
         )}
       >
         {isCompleted ? (
-          <CheckCircle2 className="h-[18px] w-[18px]" />
+          <CheckCircleOutlined sx={{ fontSize: 18 }} />
         ) : isInProgress ? (
-          <Clock className="h-[18px] w-[18px]" />
+          <ScheduleOutlined sx={{ fontSize: 18 }} />
         ) : (
-          <Circle className="h-[18px] w-[18px]" />
+          <RadioButtonUncheckedOutlined sx={{ fontSize: 18 }} />
         )}
       </button>
 
@@ -219,57 +243,80 @@ export function TaskListItem({
       <Link
         href={`/tasks/${task.id}`}
         className={cn(
-          'flex min-w-0 flex-1 items-center gap-3',
+          'flex min-w-0 flex-1 flex-col gap-0.5',
           'focus-visible:ring-primary/50 focus:outline-none focus-visible:rounded focus-visible:ring-2',
         )}
       >
-        {/* Title */}
-        <span
-          className={cn(
-            'flex-1 truncate text-sm font-medium',
-            isCompleted && 'text-on-surface-variant line-through',
-            overdue && 'text-error',
-          )}
-        >
-          {task.title}
-        </span>
+        <div className="flex items-center gap-3">
+          {/* Title */}
+          <span
+            className={cn(
+              'flex-1 truncate text-sm font-medium',
+              isCompleted && 'text-on-surface-variant line-through',
+              overdue && 'text-error',
+            )}
+          >
+            {task.title}
+          </span>
 
-        {/* Metadata - contextual based on variant */}
-        <div className="flex shrink-0 items-center gap-2">
-          {/* Estimated time (agenda) */}
-          {variant === 'agenda' && task.estimatedMinutes && (
-            <span className="text-on-surface-variant flex items-center gap-1 text-xs tabular-nums">
-              {task.estimatedMinutes}m
-            </span>
-          )}
+          {/* Metadata - contextual based on variant */}
+          <div className="flex shrink-0 items-center gap-2">
+            {/* Estimated time (agenda) */}
+            {variant === 'agenda' && task.estimatedMinutes && (
+              <span className="text-on-surface-variant flex items-center gap-1 text-xs tabular-nums">
+                {task.estimatedMinutes}m
+              </span>
+            )}
 
-          {/* Deadline (list) */}
-          {variant === 'list' && task.deadline && (
-            <span
-              className={cn(
-                'flex items-center gap-1 text-xs',
-                overdue ? 'text-error font-medium' : 'text-on-surface-variant',
-              )}
-            >
-              {overdue && <AlertCircle className="h-3 w-3" />}
-              {formatDeadline(task.deadline)}
-            </span>
-          )}
+            {/* Deadline (list) */}
+            {variant === 'list' && task.deadline && (
+              <span
+                className={cn(
+                  'flex items-center gap-1 text-xs',
+                  overdue ? 'text-error font-medium' : 'text-on-surface-variant',
+                )}
+              >
+                {overdue && <ErrorOutlineOutlined sx={{ fontSize: 12 }} />}
+                {formatDeadline(task.deadline)}
+              </span>
+            )}
 
-          {/* Priority label - minimal, only for high/urgent */}
-          {(task.priority === 'urgent' || task.priority === 'high') && !isCompleted && (
-            <span
-              className={cn(
-                'rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase',
-                task.priority === 'urgent'
-                  ? 'bg-error/10 text-error'
-                  : 'bg-orange-500/10 text-orange-600 dark:text-orange-400',
-              )}
-            >
-              {task.priority}
-            </span>
-          )}
+            {/* Priority label - minimal, only for high/urgent */}
+            {(task.priority === 'urgent' || task.priority === 'high') && !isCompleted && (
+              <span
+                className={cn(
+                  'rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase',
+                  task.priority === 'urgent'
+                    ? 'bg-error/10 text-error'
+                    : 'bg-orange-500/10 text-orange-600 dark:text-orange-400',
+                )}
+              >
+                {task.priority}
+              </span>
+            )}
+          </div>
         </div>
+
+        {/* Initiative context breadcrumb - ambient awareness */}
+        {showContext && context && (context.initiativeName ?? context.projectName) && (
+          <div
+            className={cn(
+              'text-on-surface-variant/70 flex items-center gap-1 text-[11px]',
+              showContext === 'hover' && 'opacity-0 transition-opacity group-hover:opacity-100',
+            )}
+          >
+            {context.initiativeName && (
+              <>
+                <GpsFixedOutlined sx={{ fontSize: 12 }} />
+                <span className="truncate">{context.initiativeName}</span>
+              </>
+            )}
+            {context.initiativeName && context.projectName && (
+              <ChevronRightOutlined sx={{ fontSize: 12 }} className="flex-shrink-0" />
+            )}
+            {context.projectName && <span className="truncate">{context.projectName}</span>}
+          </div>
+        )}
       </Link>
     </div>
   );

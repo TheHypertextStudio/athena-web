@@ -93,10 +93,14 @@ function createDb(): Database {
     return drizzlePglite(client, { schema: fullSchema }) as unknown as Database;
   }
 
+  /* v8 ignore start -- live-DB driver IO boundary: opening a real postgres/Neon
+     connection can only be exercised against a running service (or a low-value
+     mock-wiring test), so it is verified by really connecting in dev/prod. */
   const pgUrl = url.startsWith('neon:') ? url.replace(/^neon:/, 'postgres:') : url;
   // `prepare:false` keeps the client compatible with Neon's pooled (pgbouncer) endpoint.
   const client = postgres(pgUrl, { prepare: false });
   return drizzlePostgres(client, { schema: fullSchema });
+  /* v8 ignore stop */
 }
 
 let cached: Database | undefined;

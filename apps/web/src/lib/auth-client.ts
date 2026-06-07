@@ -1,3 +1,4 @@
+import { passkeyClient } from '@better-auth/passkey/client';
 import { createAuthClient } from 'better-auth/react';
 
 /**
@@ -32,24 +33,40 @@ const AUTH_BASE_URL = `${resolveAuthOrigin()}/api/auth`;
  * session cookie set by the server flows back to the browser and is sent on every
  * subsequent request.
  *
- * Email/password is the only enabled method (`@docket/auth` config), so the relevant
- * calls are `authClient.signIn.email(...)` and `authClient.signUp.email(...)`.
+ * **Passwordless: passkeys are the primary credential.** The {@link passkeyClient} plugin
+ * mirrors the server's `@better-auth/passkey` plugin, exposing the WebAuthn ceremonies the
+ * auth screens drive:
+ *
+ * - `authClient.signIn.passkey({ autoFill })` — authenticate with an existing passkey
+ *   (Face ID / Touch ID / security key), optionally as a conditional-UI autofill prompt.
+ * - `authClient.passkey.addPasskey({ name, context })` — register a passkey. During
+ *   passwordless sign-UP there is no prior session, so the new account's identity rides in
+ *   as the server-signed `context` token (see `/passkey-intent`), which the server's
+ *   `registration.resolveUser` verifies before find-or-creating the user.
+ *
+ * Secondary OAuth (Google / GitHub / Linear) is reached via `authClient.signIn.social(...)`
+ * and is rendered only when the corresponding provider is configured (env-gated).
  */
-export const authClient = createAuthClient({ baseURL: AUTH_BASE_URL });
+export const authClient = createAuthClient({
+  baseURL: AUTH_BASE_URL,
+  plugins: [passkeyClient()],
+});
 
 /**
- * The email/password sign-in namespace (`signIn.email({ email, password })`).
+ * The sign-in namespace.
  *
- * @remarks Convenience re-export of {@link authClient.signIn}.
+ * @remarks
+ * Passwordless: the relevant call is `signIn.passkey(...)` (and `signIn.social(...)` for the
+ * env-gated OAuth providers). Email/password is intentionally not enabled on the server.
  */
 export const signIn = authClient.signIn;
 
 /**
- * The email/password sign-up namespace (`signUp.email({ email, password, name })`).
+ * The passkey namespace (`passkey.addPasskey(...)`, `passkey.listUserPasskeys()`, …).
  *
- * @remarks Convenience re-export of {@link authClient.signUp}.
+ * @remarks Convenience re-export of {@link authClient.passkey}.
  */
-export const signUp = authClient.signUp;
+export const passkey = authClient.passkey;
 
 /**
  * Sign the current user out, clearing the session cookie.

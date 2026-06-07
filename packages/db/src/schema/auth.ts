@@ -3,16 +3,17 @@
  *
  * @remarks
  * Owned by `@docket/db` (the single SQL owner). These mirror the Better Auth 1.6
- * drizzle schema for the enabled plugin set. Social providers (Google/GitHub/Linear)
- * and account linking reuse the core `account` table (no new tables). The
- * `oidcProvider` + `mcp` plugins share three additive oauth tables
+ * drizzle schema for the enabled plugin set. Docket auth is PASSWORDLESS: the
+ * {@link passkey} table (WebAuthn credentials) is the primary sign-in credential, backing
+ * the always-mounted `@better-auth/passkey` 1.6.14 plugin — email/password is removed, so
+ * `account.password` is only ever written by social-provider linking. Social providers
+ * (Google/GitHub/Linear) and account linking reuse the core `account` table (no new
+ * tables). The `oidcProvider` + `mcp` plugins share three additive oauth tables
  * ({@link oauthApplication}, {@link oauthAccessToken}, {@link oauthConsent}), mounted
- * env-gated in `@docket/auth`. Passkey ships separately (`@simplewebauthn/*`, not
- * installed) so the `passkey` table stays present but its plugin is not mounted; sso /
- * scim / stripe better-auth plugins are not installed and are deliberately skipped.
- * The drizzle property keys match Better Auth's model field names (camelCase) so the
- * adapter maps correctly; SQL column names are snake_case. IDs are 26-char ULIDs
- * (Better Auth `advanced.database.generateId` shares {@link genId}).
+ * env-gated in `@docket/auth`. sso / scim / stripe better-auth plugins are not installed
+ * and are deliberately skipped. The drizzle property keys match Better Auth's model field
+ * names (camelCase) so the adapter maps correctly; SQL column names are snake_case. IDs
+ * are 26-char ULIDs (Better Auth `advanced.database.generateId` shares {@link genId}).
  */
 import {
   boolean,
@@ -100,22 +101,43 @@ export const verification = pgTable('verification', {
     .$onUpdate(() => new Date()),
 });
 
-/** A registered WebAuthn passkey credential for a User (passkey-first sign-in). */
-export const passkey = pgTable('passkey', {
-  id: text('id').primaryKey().$defaultFn(genId),
-  name: text('name'),
-  publicKey: text('public_key').notNull(),
-  userId: text('user_id')
-    .notNull()
-    .references(() => user.id, { onDelete: 'cascade' }),
-  credentialID: text('credential_id').notNull(),
-  counter: integer('counter').notNull(),
-  deviceType: text('device_type').notNull(),
-  backedUp: boolean('backed_up').notNull(),
-  transports: text('transports'),
-  createdAt: timestamp('created_at').defaultNow(),
-  aaguid: text('aaguid'),
-});
+/**
+ * A registered WebAuthn passkey credential for a User — the primary, passwordless
+ * sign-in credential.
+ *
+ * @remarks
+ * Backs the `@better-auth/passkey` 1.6.14 plugin (mounted in `@docket/auth`). The
+ * drizzle property keys + column types mirror the plugin's `passkey` model field-for-field
+ * (`name?`, `publicKey`, `userId` FK→`user.id`, `credentialID`, `counter`, `deviceType`,
+ * `backedUp`, `transports?`, `createdAt?`, `aaguid?`), so the Better Auth drizzle adapter
+ * maps without a `schema` override. The plugin declares `userId` and `credentialID` as
+ * indexed (it scaffolds those indexes); they are mirrored here so the hand-authored schema
+ * stays byte-for-byte equivalent to what the plugin's codegen would emit:
+ * `userId` for per-user passkey lookups (list/exclude-credentials) and `credentialID`
+ * for the authentication lookup keyed on the asserted credential id.
+ */
+export const passkey = pgTable(
+  'passkey',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    name: text('name'),
+    publicKey: text('public_key').notNull(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    credentialID: text('credential_id').notNull(),
+    counter: integer('counter').notNull(),
+    deviceType: text('device_type').notNull(),
+    backedUp: boolean('backed_up').notNull(),
+    transports: text('transports'),
+    createdAt: timestamp('created_at').defaultNow(),
+    aaguid: text('aaguid'),
+  },
+  (t) => [
+    index('passkey_user_id_idx').on(t.userId),
+    index('passkey_credential_id_idx').on(t.credentialID),
+  ],
+);
 
 /**
  * An OAuth/OIDC client application registered with Docket as an OpenID Provider.

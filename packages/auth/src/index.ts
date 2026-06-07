@@ -5,19 +5,33 @@
  * One `betterAuth()` instance, built by {@link buildAuthOptions} from the validated
  * `@docket/env/api` contract: drizzle adapter over `@docket/db` (singular table names),
  * the shared ULID `genId` as the id generator (so `user`/`session`/`account` ids line up
- * with `actor.user_id`), email/password sign-in, and `nextCookies()` LAST. A
- * `databaseHooks.user.create.after` hook performs the user→hub birth so every account
- * gets its 1:1 Hub regardless of sign-in method.
+ * with `actor.user_id`), and `nextCookies()` LAST. A `databaseHooks.user.create.after`
+ * hook performs the user→hub birth so every account gets its 1:1 Hub regardless of
+ * sign-in method.
  *
- * **Env-gated plugin set (Better Auth 1.6.14).** Every optional capability mounts ONLY
- * when its credentials are present + real-shaped (`isRealValue` from `@docket/env`), so the
- * zero-account local build (placeholder/empty keys) keeps exactly today's behavior
- * (email/password + hub hook + `nextCookies`):
+ * **Passwordless: passkey is the primary credential.** Docket has NO email/password
+ * sign-in (`emailAndPassword` is removed). The `@better-auth/passkey` 1.6.14 plugin is
+ * ALWAYS mounted (its RP id/name come from the required `BETTER_AUTH_PASSKEY_RP_*` env
+ * vars) and configured for passkey-first onboarding: `registration.requireSession: false`
+ * with a {@link resolvePasskeyUser} hook. A new user signs UP with only a passkey — no
+ * prior session — by carrying their name/email through the WebAuthn ceremony as the
+ * HMAC-signed `context` token from {@link signPasskeyIntent}; `resolveUser` verifies it
+ * and creates (or finds) the `user` via Better Auth's internal adapter, which fires the
+ * `databaseHooks.user.create.after` Hub-birth exactly once. The passkey credential is then
+ * written against that user (FK `passkey.user_id → user.id`) and a session is issued on
+ * the subsequent authentication. Because passkey replaces credentials, `email-password` is
+ * no longer a trusted account-linking provider.
+ *
+ * **Env-gated plugin set (Better Auth 1.6.14).** Every OPTIONAL capability (social /
+ * oidc / mcp) mounts ONLY when its credentials are present + real-shaped (`isRealValue`
+ * from `@docket/env`), so the zero-account local build (placeholder/empty keys) reduces to
+ * exactly: passkey (always) + hub hook + `nextCookies`:
  * - **Social providers** — Google + GitHub + Linear (Linear is a native 1.6.14 provider,
  *   so no `genericOAuth` is needed). Each gated on `*_CLIENT_ID` **and** `*_CLIENT_SECRET`.
  *   They reuse the core `account` table (no new schema).
  * - **Account linking** — enabled automatically when ≥1 social provider mounts, with
- *   `trustedProviders` = the mounted set + `email-password` (`account.accountLinking`).
+ *   `trustedProviders` = the mounted social set (`account.accountLinking`). There is no
+ *   `email-password` provider to trust (Docket is passwordless).
  * - **`oidcProvider`** — mounted when `OIDC_LOGIN_PAGE_URL` is real (used as `loginPage`).
  *   (1.6.14 prints a deprecation notice nudging toward the separate, not-installed
  *   `@better-auth/oauth-provider`; the in-tree `oidcProvider` still ships + works, so it
@@ -31,11 +45,10 @@
  *   (`oauth_application`/`oauth_access_token`/`oauth_consent`) and are pushed BEFORE
  *   `nextCookies()`.
  *
- * **Deliberately skipped** (documented, not forced — see DECISIONS pins): `passkey`
- * (ships separately needing `@simplewebauthn/*`, not installed — the `passkey` table + the
- * HMAC passkey-intent signer below already exist and stay as-is), `sso`/`scim` (separate
- * `@better-auth/*` packages, not installed), and the Better-Auth `stripe` plugin (not
- * installed; billing is handled via `@docket/env` `STRIPE_*` + `BILLING_ENABLED` elsewhere).
+ * **Deliberately skipped** (documented, not forced — see DECISIONS pins): `sso`/`scim`
+ * (separate `@better-auth/*` packages, not installed — SSO/SAML is a tracked later task),
+ * and the Better-Auth `stripe` plugin (not installed; billing is handled via `@docket/env`
+ * `STRIPE_*` + `BILLING_ENABLED` elsewhere).
  *
  * **MCP server binding (follow-up).** Once `mcp` + `oidcProvider` are mounted (real
  * `OIDC_LOGIN_PAGE_URL` + `MCP_RESOURCE_URL`), the MCP server guard in `apps/api/src/mcp`
@@ -44,6 +57,7 @@
  * endpoints (all exported from `better-auth/plugins`). That wiring is intentionally out of
  * scope here so the existing guard keeps working; mounting the plugin first is the prereq.
  */
+import { passkey } from '@better-auth/passkey';
 import {
   account,
   db,
@@ -60,6 +74,8 @@ import { betterAuth, type BetterAuthOptions, type BetterAuthPlugin } from 'bette
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { mcp, oidcProvider } from 'better-auth/plugins';
 import { nextCookies } from 'better-auth/next-js';
+
+import { verifyPasskeyIntent } from './passkey-intent';
 
 export * from './passkey-intent';
 
@@ -80,6 +96,10 @@ export interface AuthEnv {
   readonly BETTER_AUTH_URL: string;
   /** Comma-separated trusted origins (parsed into the `trustedOrigins` array). */
   readonly BETTER_AUTH_TRUSTED_ORIGINS?: string | undefined;
+  /** WebAuthn relying-party id (the registrable domain; `docket.localhost` in dev). */
+  readonly BETTER_AUTH_PASSKEY_RP_ID: string;
+  /** WebAuthn relying-party display name (e.g. `Docket`). */
+  readonly BETTER_AUTH_PASSKEY_RP_NAME: string;
   /** Google OAuth client id (paired with secret). */
   readonly GOOGLE_CLIENT_ID?: string | undefined;
   /** Google OAuth client secret. */
@@ -114,22 +134,86 @@ function parseTrustedOrigins(raw: string | undefined): string[] {
 }
 
 /**
+ * The minimal Better Auth internal-adapter surface {@link resolvePasskeyUser} needs to
+ * find-or-create the signing-up user.
+ *
+ * @remarks
+ * A structural slice of Better Auth's `ctx.context.internalAdapter` (NOT a re-export) so
+ * the resolver is a pure, directly unit-testable function: tests pass a tiny fake adapter
+ * to exercise both the existing-user and new-user branches without booting a full WebAuthn
+ * endpoint context. Going through `internalAdapter.createUser` (rather than a raw
+ * `db.insert`) is what fires `databaseHooks.user.create.after`, so the user→hub birth holds
+ * for passwordless passkey sign-up exactly as it does for every other path.
+ */
+export interface PasskeyUserAdapter {
+  /** Look up an existing user by email (returns `{ user }` or `null`). */
+  findUserByEmail(email: string): Promise<{ user: { id: string; name: string } } | null>;
+  /** Create a user (fires the create hooks, incl. the hub-birth) and return it. */
+  createUser(data: {
+    name: string;
+    email: string;
+    emailVerified: boolean;
+  }): Promise<{ id: string; name: string }>;
+}
+
+/**
+ * Resolve the `user` a passkey is being registered for during passwordless (pre-session)
+ * sign-up: verify the HMAC-signed intent `context`, then find-or-create that user.
+ *
+ * @remarks
+ * Wired into the `@better-auth/passkey` plugin as `registration.resolveUser` (only invoked
+ * when there is no session and `requireSession: false`). The `context` is the opaque token
+ * minted by {@link signPasskeyIntent} carrying the new account's `{name,email}`;
+ * {@link verifyPasskeyIntent} rejects it if missing, tampered, or expired — so an attacker
+ * cannot forge an arbitrary identity. An existing user (same email) re-uses their row (a
+ * second passkey for an account created out-of-band); a new email creates the user via the
+ * internal adapter, firing the hub-birth hook. The returned `id` becomes the FK owner of
+ * the about-to-be-written `passkey` credential.
+ *
+ * @param adapter - The Better Auth internal-adapter slice (see {@link PasskeyUserAdapter}).
+ * @param context - The signed passkey-intent token from the registration request.
+ * @returns the `{ id, name }` of the resolved (existing or freshly-born) user.
+ * @throws {Error} when `context` is absent, or the intent token is malformed/expired.
+ */
+export async function resolvePasskeyUser(
+  adapter: PasskeyUserAdapter,
+  context: string | null | undefined,
+): Promise<{ id: string; name: string }> {
+  if (!context) throw new Error('passkey sign-up: registration context is required');
+  const intent = verifyPasskeyIntent(context);
+
+  const existing = await adapter.findUserByEmail(intent.email);
+  if (existing?.user) return { id: existing.user.id, name: existing.user.name };
+
+  const created = await adapter.createUser({
+    name: intent.name,
+    email: intent.email,
+    // The email is carried inside a server-signed, short-lived intent and bound to a
+    // completed WebAuthn ceremony, so it is treated as verified (mirrors magic-link).
+    emailVerified: true,
+  });
+  return { id: created.id, name: created.name };
+}
+
+/**
  * Build the Better Auth options from the validated environment, mounting each optional
  * social provider / plugin ONLY when its credentials are real-shaped (`isRealValue`).
  *
  * @remarks
  * Pure (no module-level side effects beyond reading the passed `e`), so both the
  * provider-present and provider-absent branches are unit-testable directly. With local
- * placeholders every gate is closed → the returned options equal the historical
- * email/password-only config (plus the hub hook and `nextCookies()`), which is why the
- * existing tests stay green. `nextCookies()` is always pushed LAST.
+ * placeholders every OPTIONAL gate is closed → the returned options reduce to the
+ * passwordless baseline: the always-on passkey plugin + the hub hook + `nextCookies()`
+ * (no email/password). `nextCookies()` is always pushed LAST.
  *
  * @param e - The validated server env slice (see {@link AuthEnv}).
  * @returns the fully-assembled `BetterAuthOptions` ready for `betterAuth()`.
  */
 export function buildAuthOptions(e: AuthEnv): BetterAuthOptions {
   const socialProviders: NonNullable<BetterAuthOptions['socialProviders']> = {};
-  const trustedProviders: string[] = ['email-password'];
+  // Passwordless: there is no `email-password` credential provider, so it is NOT a trusted
+  // account-linking provider. Linking trusts only the mounted social providers.
+  const trustedProviders: string[] = [];
 
   if (isRealValue(e.GOOGLE_CLIENT_ID) && isRealValue(e.GOOGLE_CLIENT_SECRET)) {
     socialProviders.google = { clientId: e.GOOGLE_CLIENT_ID, clientSecret: e.GOOGLE_CLIENT_SECRET };
@@ -146,7 +230,21 @@ export function buildAuthOptions(e: AuthEnv): BetterAuthOptions {
 
   const hasSocial = Object.keys(socialProviders).length > 0;
 
-  const plugins: BetterAuthPlugin[] = [];
+  const plugins: BetterAuthPlugin[] = [
+    // Passkey is the primary, passwordless credential — ALWAYS mounted (not env-gated).
+    // `requireSession: false` + `resolveUser` enable passkey-first sign-UP with no prior
+    // session: the new account's name/email ride in as the signed `context` token and
+    // `resolvePasskeyUser` find-or-creates the user (firing the hub-birth hook) before the
+    // credential is written against it.
+    passkey({
+      rpID: e.BETTER_AUTH_PASSKEY_RP_ID,
+      rpName: e.BETTER_AUTH_PASSKEY_RP_NAME,
+      registration: {
+        requireSession: false,
+        resolveUser: ({ ctx, context }) => resolvePasskeyUser(ctx.context.internalAdapter, context),
+      },
+    }),
+  ];
   if (isRealValue(e.OIDC_LOGIN_PAGE_URL)) {
     if (isRealValue(e.MCP_RESOURCE_URL)) {
       // `mcp` internally constructs `oidcProvider` (reuses its schema + endpoints) and adds
@@ -181,7 +279,8 @@ export function buildAuthOptions(e: AuthEnv): BetterAuthOptions {
         generateId: () => genId(),
       },
     },
-    emailAndPassword: { enabled: true },
+    // No `emailAndPassword`: Docket is passwordless (passkey-first). Sign-in is via the
+    // passkey plugin or an env-gated social provider; email/password is intentionally off.
     ...(hasSocial
       ? { socialProviders, account: { accountLinking: { enabled: true, trustedProviders } } }
       : {}),

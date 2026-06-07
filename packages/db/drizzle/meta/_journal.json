@@ -15,6 +15,13 @@
       "when": 1780727335205,
       "tag": "0001_careless_changeling",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1780824577907,
+      "tag": "0002_safe_ender_wiggin",
+      "breakpoints": true
     }
   ]
 }

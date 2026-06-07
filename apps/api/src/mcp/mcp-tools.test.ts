@@ -3,14 +3,16 @@ import { resolve } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type { CallToolResult, ReadResourceResult } from '@modelcontextprotocol/sdk/types.js';
+import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { Hono } from 'hono';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 // Stub Better Auth so we control the session per test without the heavy ESM chain.
-const getSession = vi.fn(async () => null as unknown);
+const getSession = vi.fn<
+  () => Promise<{ user: { id: string; name: string; email: string } } | null>
+>(async () => null);
 vi.mock('@docket/auth', () => ({ auth: { api: { getSession } } }));
 
 import type * as DbModule from '@docket/db';
@@ -650,7 +652,7 @@ describe('resources', () => {
   it('docket://orgs lists the caller memberships', async () => {
     const s = await seedOrg(['view']);
     const client = await connect(s.ctx);
-    const res = (await client.readResource({ uri: 'docket://orgs' })) as ReadResourceResult;
+    const res = await client.readResource({ uri: 'docket://orgs' });
     const items = JSON.parse((res.contents[0] as { text: string }).text) as { id: string }[];
     expect(items.some((o) => o.id === s.orgId)).toBe(true);
   });
@@ -665,9 +667,9 @@ describe('resources', () => {
       ['initiative', s.initiativeId],
       ['org', s.orgId],
     ] as const) {
-      const res = (await client.readResource({
+      const res = await client.readResource({
         uri: `docket://${s.orgId}/${type}/${id}`,
-      })) as ReadResourceResult;
+      });
       expect(res.contents).toHaveLength(1);
     }
   });
@@ -693,7 +695,7 @@ describe('mcpHandler success path (authenticated)', () => {
     const s = await seedOrg(['view']);
     getSession.mockResolvedValueOnce({
       user: { id: s.userId, name: 'Ada', email: 'a@e.com' },
-    } as never);
+    });
     const app = new Hono();
     app.on(['POST', 'GET'], '/mcp', mcpHandler);
     const res = await app.request('/mcp', {

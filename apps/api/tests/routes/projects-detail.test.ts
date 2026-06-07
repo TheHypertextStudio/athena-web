@@ -4,15 +4,18 @@ import type * as DbModule from '@docket/db';
 
 import { appWithActor, getDb, seedBaseOrg } from './harness.test';
 import type projectsRouter from '../../src/routes/projects';
+import type tasksRouter from '../../src/routes/tasks';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
 let projects!: typeof projectsRouter;
+let tasks!: typeof tasksRouter;
 
 beforeAll(async () => {
   schema = await getDb();
   db = schema.db;
   projects = (await import('../../src/routes/projects')).default;
+  tasks = (await import('../../src/routes/tasks')).default;
 });
 
 /** Parse a JSON response body as the given shape. */
@@ -377,5 +380,37 @@ describe('projects progress (weighted completion)', () => {
     expect(p.totalWeight).toBe(3);
     expect(p.taskCount).toBe(1);
     expect(p.percent).toBe(1);
+  });
+
+  it('counts a task CREATED directly in a completed state (end-to-end via the tasks router)', async () => {
+    // Regression for the headline bug: creating a task in a `done` (completed-type) state
+    // via the API must stamp completedAt, so the project progress roll-up reflects it
+    // instead of permanently reporting 0%.
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const projectWriter = appWithActor(projects, orgId, ['contribute'], humanActorId);
+    const taskWriter = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    const id = await seedProject(orgId, teamId, humanActorId);
+
+    // Two done tasks + two open tasks, all via the real create handler (no direct insert).
+    for (const state of ['done', 'done', 'backlog', 'todo']) {
+      const res = await taskWriter.request('/', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ title: 'T', teamId, projectId: id, state }),
+      });
+      expect(res.status).toBe(200);
+    }
+
+    const res = await projectWriter.request(`/${id}/progress`, { method: 'GET' });
+    const p = await json<{
+      percent: number;
+      completedCount: number;
+      completedWeight: number;
+      taskCount: number;
+    }>(res);
+    expect(p.completedCount).toBe(2);
+    expect(p.completedWeight).toBe(2);
+    expect(p.taskCount).toBe(4);
+    expect(p.percent).toBe(0.5);
   });
 });

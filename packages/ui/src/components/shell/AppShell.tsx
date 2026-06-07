@@ -19,7 +19,7 @@ import * as React from 'react';
 import { cn } from '../../lib/utils';
 import { ContextSidebar, type SidebarNavKey } from './ContextSidebar';
 import { useContextState } from './ContextProvider';
-import { GlobalRail, type RailOrg } from './GlobalRail';
+import { GlobalRail, type HubRailKey, type RailOrg } from './GlobalRail';
 
 /** Props for {@link AppShell}. */
 export interface AppShellProps {
@@ -27,8 +27,20 @@ export interface AppShellProps {
   orgs: readonly RailOrg[];
   /** The currently-active sidebar nav key. */
   activeNavKey?: SidebarNavKey;
+  /** The active Hub rail destination (highlights Inbox/Portfolio in the rail). */
+  activeHubKey?: HubRailKey;
+  /** The caller's cross-org unread count, surfaced as the rail's Inbox badge. */
+  unreadCount?: number;
   /** Invoked when a {@link ContextSidebar} row is selected. */
   onNavigate?: (key: SidebarNavKey) => void;
+  /** Invoked when a Hub destination (Inbox/Portfolio) is selected from the rail. */
+  onNavigateHub?: (key: HubRailKey) => void;
+  /** Invoked when an org avatar is selected from the rail (host navigates to that org). */
+  onSelectOrg?: (orgId: string) => void;
+  /** Invoked when the rail's Hub (Today) button is pressed. */
+  onSelectHome?: () => void;
+  /** Invoked when the rail's Search entry is selected (opens the command palette). */
+  onOpenSearch?: () => void;
   /** Invoked when the user requests to add/join an org from the rail. */
   onAddOrg?: () => void;
   /** Extra class names for the root shell element. */
@@ -48,7 +60,13 @@ export interface AppShellProps {
 export function AppShell({
   orgs,
   activeNavKey,
+  activeHubKey,
+  unreadCount,
   onNavigate,
+  onNavigateHub,
+  onSelectOrg,
+  onSelectHome,
+  onOpenSearch,
   onAddOrg,
   className,
   children,
@@ -64,7 +82,16 @@ export function AppShell({
         className,
       )}
     >
-      <GlobalRail orgs={orgs} onAddOrg={onAddOrg} />
+      <GlobalRail
+        orgs={orgs}
+        activeHubKey={activeHubKey}
+        unreadCount={unreadCount}
+        onNavigate={onNavigateHub}
+        onSelectOrg={onSelectOrg}
+        onSelectHome={onSelectHome}
+        onOpenSearch={onOpenSearch}
+        onAddOrg={onAddOrg}
+      />
       <ContextSidebar activeKey={activeNavKey} onNavigate={onNavigate} />
       <main className="flex-1 overflow-auto">{children}</main>
     </div>

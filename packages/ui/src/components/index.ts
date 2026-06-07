@@ -54,7 +54,9 @@ export {
   type AddOrgButtonProps,
   GlobalRail,
   type GlobalRailProps,
+  type HubRailKey,
   type RailOrg,
 } from './shell/GlobalRail';
+export { RailNavButton, type RailNavButtonProps } from './shell/RailNavButton';
 export { RailOrgAvatar, type RailOrgAvatarProps } from './shell/RailOrgAvatar';
 export { SidebarNavItem, type SidebarNavItemProps } from './shell/SidebarNavItem';

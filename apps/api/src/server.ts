@@ -17,7 +17,7 @@ import { sessionMiddleware } from './auth/session-middleware';
 import type { AppEnv } from './context';
 import { env } from './env';
 import { onError } from './error';
-import { mcpHandler } from './mcp/server';
+import { authorizationServerMetadata, mcpHandler, protectedResourceMetadata } from './mcp/server';
 import { registerOpenapi } from './openapi';
 import cron from './routes/cron';
 import webhooks from './routes/webhooks';
@@ -45,6 +45,12 @@ server.on(['POST', 'GET'], '/api/auth/*', (c) => auth.handler(c.req.raw));
 // `/api/auth`): it carries its own Origin + session guard and is not part of the RPC
 // contract consumed by `hc<AppType>`.
 server.on(['POST', 'GET'], '/mcp', mcpHandler);
+// OAuth 2.1 RS discovery (mcp-surface.md §2.3): the Protected Resource Metadata document
+// (RFC 9728, served at both the bare path and the `/mcp` sub-path) the `WWW-Authenticate`
+// challenge points at, plus the Authorization Server metadata pointer (RFC 8414).
+server.get('/.well-known/oauth-protected-resource', protectedResourceMetadata);
+server.get('/.well-known/oauth-protected-resource/mcp', protectedResourceMetadata);
+server.get('/.well-known/oauth-authorization-server', authorizationServerMetadata);
 // Non-RPC external edges (webhooks, cron) live OUTSIDE the typed `AppType` routes.
 server.route('/v1/billing', webhooks);
 server.route('/v1/cron', cron);

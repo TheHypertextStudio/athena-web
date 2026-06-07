@@ -19,6 +19,7 @@
     "clean": "rm -rf .next .turbo *.tsbuildinfo"
   },
   "dependencies": {
+    "@better-auth/passkey": "catalog:",
     "@docket/api": "workspace:*",
     "@docket/env": "workspace:*",
     "@docket/types": "workspace:*",

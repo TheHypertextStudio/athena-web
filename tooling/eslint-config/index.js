@@ -37,6 +37,10 @@ export const baseConfig = tseslint.config(
       '@typescript-eslint/require-await': 'off',
       // Interpolating numbers/booleans into template strings is intentional + safe.
       '@typescript-eslint/restrict-template-expressions': ['error', { allowNumber: true, allowBoolean: true }],
+      // TS's noPropertyAccessFromIndexSignature REQUIRES bracket access for index-signature
+      // properties (TS4111); without this, the dot-notation autofix rewrites them to dot
+      // access and breaks typecheck. Allow bracket access on index signatures.
+      '@typescript-eslint/dot-notation': ['error', { allowIndexSignaturePropertyAccess: true }],
     },
   },
   {

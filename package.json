@@ -27,7 +27,7 @@
     "proxy:install": "portless service install",
     "proxy:status": "portless service status",
     "proxy:uninstall": "portless service uninstall",
-    "db:up": "docker compose up -d --wait postgres",
+    "db:up": "dotenv -e .env.local -- tsx scripts/db-up.ts",
     "db:down": "docker compose down",
     "db:reset": "docker compose down -v && pnpm db:migrate",
     "db:generate": "dotenv -e .env.local -- turbo run db:generate --filter=@docket/db",

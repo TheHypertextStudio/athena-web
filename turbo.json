@@ -97,10 +97,13 @@
     "clean": {
       "cache": false
     },
-    // Root task (runs the root `db:up` script: `docker compose up -d --wait postgres`).
-    // db:migrate depends on it, so the container is healthy before migrations run.
+    // Root task (runs the root `db:up` script, which is scheme-aware: it starts + waits on
+    // the Docker Postgres for a `postgres:`/`neon:` DATABASE_URL, and is a no-op for the
+    // embedded `pglite:` mode). db:migrate depends on it, so a TCP DB is healthy before
+    // migrations run, while the zero-service PGlite mode needs no daemon.
     "//#db:up": {
-      "cache": false
+      "cache": false,
+      "env": ["DATABASE_URL"]
     },
     "db:generate": {
       "cache": false,

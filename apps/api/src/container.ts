@@ -25,15 +25,36 @@ export type { BoundaryContainer } from '@docket/boundaries';
 function toBoundaryEnv(): BoundaryEnv {
   return {
     APP_MODE: env.APP_MODE,
+    // billing (Stripe)
     ...(env.STRIPE_SECRET_KEY ? { STRIPE_SECRET_KEY: env.STRIPE_SECRET_KEY } : {}),
+    ...(env.STRIPE_WEBHOOK_SECRET ? { STRIPE_WEBHOOK_SECRET: env.STRIPE_WEBHOOK_SECRET } : {}),
     ...(env.STRIPE_PRICE_TEAM ? { STRIPE_PRICE_TEAM: env.STRIPE_PRICE_TEAM } : {}),
+    ...(env.DOCKET_PRICE_LOOKUP_TEAM
+      ? { DOCKET_PRICE_LOOKUP_TEAM: env.DOCKET_PRICE_LOOKUP_TEAM }
+      : {}),
     ...(env.STRIPE_BILLING_PORTAL_CONFIG_ID
       ? { STRIPE_BILLING_PORTAL_CONFIG_ID: env.STRIPE_BILLING_PORTAL_CONFIG_ID }
       : {}),
-    ...(env.ATHENA_AGENT_ENDPOINT ? { ATHENA_AGENT_ENDPOINT: env.ATHENA_AGENT_ENDPOINT } : {}),
-    ...(env.ATHENA_AGENT_API_KEY ? { ATHENA_AGENT_API_KEY: env.ATHENA_AGENT_API_KEY } : {}),
+    // agent runtime (Anthropic-backed Athena)
+    ...(env.ANTHROPIC_API_KEY ? { ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY } : {}),
+    // mailer (SMTP)
+    ...(env.SMTP_HOST ? { SMTP_HOST: env.SMTP_HOST } : {}),
+    ...(env.SMTP_PORT ? { SMTP_PORT: env.SMTP_PORT } : {}),
+    ...(env.SMTP_SECURE ? { SMTP_SECURE: env.SMTP_SECURE } : {}),
+    ...(env.SMTP_USER ? { SMTP_USER: env.SMTP_USER } : {}),
+    ...(env.SMTP_PASS ? { SMTP_PASS: env.SMTP_PASS } : {}),
+    ...(env.MAIL_FROM ? { MAIL_FROM: env.MAIL_FROM } : {}),
+    // blob (Vercel Blob)
     ...(env.BLOB_READ_WRITE_TOKEN ? { BLOB_READ_WRITE_TOKEN: env.BLOB_READ_WRITE_TOKEN } : {}),
     ...(env.EXPORT_BUCKET_URL ? { EXPORT_BUCKET_URL: env.EXPORT_BUCKET_URL } : {}),
+    // connector (per-provider API-base overrides; the OAuth token is per-connection)
+    ...(env.GITHUB_API_BASE ? { GITHUB_API_BASE: env.GITHUB_API_BASE } : {}),
+    ...(env.LINEAR_API_BASE ? { LINEAR_API_BASE: env.LINEAR_API_BASE } : {}),
+    ...(env.GOOGLE_DRIVE_API_BASE ? { GOOGLE_DRIVE_API_BASE: env.GOOGLE_DRIVE_API_BASE } : {}),
+    ...(env.GOOGLE_GMAIL_API_BASE ? { GOOGLE_GMAIL_API_BASE: env.GOOGLE_GMAIL_API_BASE } : {}),
+    ...(env.GOOGLE_CALENDAR_API_BASE
+      ? { GOOGLE_CALENDAR_API_BASE: env.GOOGLE_CALENDAR_API_BASE }
+      : {}),
   };
 }
 

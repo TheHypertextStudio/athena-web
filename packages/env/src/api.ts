@@ -12,6 +12,7 @@ import { createEnv } from '@t3-oss/env-core';
 import {
   agentServer,
   authServer,
+  connectorServer,
   dbServer,
   mcpServer,
   opsServer,
@@ -29,6 +30,7 @@ export const env = createEnv({
     ...mcpServer,
     ...agentServer,
     ...opsServer,
+    ...connectorServer,
   },
   runtimeEnv: process.env,
   emptyStringAsUndefined: true,
@@ -45,10 +47,6 @@ function assertCrossFieldRules(e: typeof env): void {
   const fail = (msg: string): never => {
     throw new Error(`Invalid environment (cross-field): ${msg}`);
   };
-
-  if (Boolean(e.ATHENA_AGENT_ENDPOINT) !== Boolean(e.ATHENA_AGENT_API_KEY)) {
-    fail('ATHENA_AGENT_ENDPOINT and ATHENA_AGENT_API_KEY must be set together (all-or-nothing).');
-  }
 
   if (e.BILLING_ENABLED) {
     if (!e.STRIPE_SECRET_KEY) fail('BILLING_ENABLED=true requires STRIPE_SECRET_KEY.');

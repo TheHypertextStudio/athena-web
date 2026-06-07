@@ -25,7 +25,7 @@ import type { Mailer } from './ports/mailer';
 import { RealStripeGateway } from './real/billing';
 import { RealProviderRuntime } from './real/agent-runtime';
 import { RealConnector } from './real/connector';
-import { RealMailer } from './real/mailer';
+import { SmtpMailer, smtpConfigFromEnv } from './real/mailer';
 import { RealBlob } from './real/blob';
 import type { HttpClient } from './real/http';
 
@@ -35,24 +35,45 @@ export interface BoundaryEnv {
   readonly APP_MODE?: AppMode;
   /** Stripe secret key — selects {@link RealStripeGateway} when real-shaped. */
   readonly STRIPE_SECRET_KEY?: string;
+  /** Stripe webhook signing secret (`whsec_...`) — enables {@link RealStripeGateway.verifyWebhook}. */
+  readonly STRIPE_WEBHOOK_SECRET?: string;
   /** Default Stripe price lookup key / price id. */
   readonly STRIPE_PRICE_TEAM?: string;
+  /** Stripe price `lookup_key` for the Team plan (alternative to {@link BoundaryEnv.STRIPE_PRICE_TEAM}). */
+  readonly DOCKET_PRICE_LOOKUP_TEAM?: string;
   /** Stripe billing portal configuration id. */
   readonly STRIPE_BILLING_PORTAL_CONFIG_ID?: string;
-  /** Athena agent runtime endpoint — paired with {@link BoundaryEnv.ATHENA_AGENT_API_KEY}. */
-  readonly ATHENA_AGENT_ENDPOINT?: string;
-  /** Athena agent runtime API key — selects {@link RealProviderRuntime} when real-shaped. */
-  readonly ATHENA_AGENT_API_KEY?: string;
-  /** Mailer endpoint — paired with {@link BoundaryEnv.MAILER_API_KEY}. */
-  readonly MAILER_ENDPOINT?: string;
-  /** Mailer API key — selects {@link RealMailer} when real-shaped. */
-  readonly MAILER_API_KEY?: string;
-  /** Mailer from-address. */
-  readonly MAILER_FROM?: string;
+  /**
+   * Anthropic API key — selects {@link RealProviderRuntime} (the built-in Athena runtime,
+   * backed by the Anthropic Messages API) when real-shaped.
+   */
+  readonly ANTHROPIC_API_KEY?: string;
+  /** SMTP relay host — selects {@link SmtpMailer} when present with {@link BoundaryEnv.MAIL_FROM}. */
+  readonly SMTP_HOST?: string;
+  /** SMTP port (string form; 587 STARTTLS, 465 implicit TLS, 1025 Mailpit). */
+  readonly SMTP_PORT?: string;
+  /** Whether SMTP uses implicit TLS from connect (`"true"`/`"false"`). */
+  readonly SMTP_SECURE?: string;
+  /** SMTP auth username (omit for unauthenticated relays such as Mailpit). */
+  readonly SMTP_USER?: string;
+  /** SMTP auth password (omit for unauthenticated relays such as Mailpit). */
+  readonly SMTP_PASS?: string;
+  /** From-address every transactional email is sent as; paired with {@link BoundaryEnv.SMTP_HOST}. */
+  readonly MAIL_FROM?: string;
   /** Vercel Blob read/write token — selects {@link RealBlob} when real-shaped. */
   readonly BLOB_READ_WRITE_TOKEN?: string;
   /** Export bucket base URL (paired with the blob token). */
   readonly EXPORT_BUCKET_URL?: string;
+  /** GitHub REST API base override (self-hosted/Enterprise); absent ⇒ public base. */
+  readonly GITHUB_API_BASE?: string;
+  /** Linear GraphQL API base override; absent ⇒ public base. */
+  readonly LINEAR_API_BASE?: string;
+  /** Google Drive REST API base override; absent ⇒ public base. */
+  readonly GOOGLE_DRIVE_API_BASE?: string;
+  /** Gmail REST API base override; absent ⇒ public base. */
+  readonly GOOGLE_GMAIL_API_BASE?: string;
+  /** Google Calendar REST API base override; absent ⇒ public base. */
+  readonly GOOGLE_CALENDAR_API_BASE?: string;
 }
 
 /** The set of named ports {@link selectAdapter} can resolve. */
@@ -90,6 +111,35 @@ function forcesMock(env: BoundaryEnv): boolean {
 }
 
 /**
+ * The optional per-provider API-base override from env, if any.
+ *
+ * @remarks
+ * Each value is an optional self-hosted/Enterprise base (e.g. GitHub Enterprise); absent
+ * ⇒ the provider's public API base is used by {@link RealConnector}.
+ *
+ * @param provider - The connector provider being bound.
+ * @param env - The boundary-relevant env slice.
+ * @returns the override base URL, or `undefined` when none is configured.
+ */
+function connectorApiBase(provider: ConnectorProvider, env: BoundaryEnv): string | undefined {
+  switch (provider) {
+    case 'github':
+      return env.GITHUB_API_BASE;
+    case 'linear':
+      return env.LINEAR_API_BASE;
+    case 'drive':
+      return env.GOOGLE_DRIVE_API_BASE;
+    case 'gmail':
+      return env.GOOGLE_GMAIL_API_BASE;
+    case 'calendar':
+      return env.GOOGLE_CALENDAR_API_BASE;
+    default:
+      /* v8 ignore next -- exhaustiveness guard: `provider` is `never` here. */
+      return undefined;
+  }
+}
+
+/**
  * Resolve a single port to its real or mock adapter from the validated env.
  *
  * @remarks
@@ -111,11 +161,15 @@ export function selectAdapter<P extends PortName>(
   switch (port) {
     case 'billing': {
       const useReal = !mock && isRealValue(env.STRIPE_SECRET_KEY);
+      // Prefer an explicit price id; otherwise use the lookup key (resolved to a price
+      // id by the gateway on demand).
+      const priceKey = env.STRIPE_PRICE_TEAM ?? env.DOCKET_PRICE_LOOKUP_TEAM;
       const adapter: BillingGateway = useReal
         ? new RealStripeGateway(
             {
               secretKey: env.STRIPE_SECRET_KEY,
-              ...(env.STRIPE_PRICE_TEAM ? { priceKey: env.STRIPE_PRICE_TEAM } : {}),
+              ...(priceKey ? { priceKey } : {}),
+              ...(env.STRIPE_WEBHOOK_SECRET ? { webhookSecret: env.STRIPE_WEBHOOK_SECRET } : {}),
               ...(env.STRIPE_BILLING_PORTAL_CONFIG_ID
                 ? { portalConfigId: env.STRIPE_BILLING_PORTAL_CONFIG_ID }
                 : {}),
@@ -126,36 +180,38 @@ export function selectAdapter<P extends PortName>(
       return adapter as PortMap[P];
     }
     case 'agentRuntime': {
-      const useReal =
-        !mock && isRealValue(env.ATHENA_AGENT_API_KEY) && isRealValue(env.ATHENA_AGENT_ENDPOINT);
+      // The built-in Athena runtime is the Anthropic Messages API; the SDK manages its
+      // own transport, so `options.http` is intentionally NOT threaded here.
+      const useReal = !mock && isRealValue(env.ANTHROPIC_API_KEY);
       const adapter: AgentRuntime = useReal
-        ? new RealProviderRuntime(
-            { endpoint: env.ATHENA_AGENT_ENDPOINT, apiKey: env.ATHENA_AGENT_API_KEY },
-            options.http,
-          )
+        ? new RealProviderRuntime({ apiKey: env.ANTHROPIC_API_KEY })
         : new MockAgentRuntime();
       return adapter as PortMap[P];
     }
     case 'connector': {
       const provider = options.connectorProvider ?? 'github';
       const useReal = !mock && isRealValue(options.connectorToken);
+      const apiBase = connectorApiBase(provider, env);
       const adapter: Connector = useReal
-        ? new RealConnector({ provider, accessToken: options.connectorToken }, options.http)
+        ? new RealConnector(
+            {
+              provider,
+              accessToken: options.connectorToken,
+              ...(apiBase ? { apiBase } : {}),
+            },
+            options.http,
+          )
         : new MockConnector();
       return adapter as PortMap[P];
     }
     case 'mailer': {
-      const useReal =
-        !mock &&
-        isRealValue(env.MAILER_API_KEY) &&
-        isRealValue(env.MAILER_ENDPOINT) &&
-        isRealValue(env.MAILER_FROM);
-      const adapter: Mailer = useReal
-        ? new RealMailer(
-            { endpoint: env.MAILER_ENDPOINT, apiKey: env.MAILER_API_KEY, from: env.MAILER_FROM },
-            options.http,
-          )
-        : new CaptureMailer();
+      // Transactional email goes over SMTP (Mailpit locally, a real relay in prod). The
+      // env is real-shaped only when both the relay host and the from-address are set;
+      // `smtpConfigFromEnv` then parses/validates the rest (and returns null if not
+      // configured), so a missing/placeholder relay falls back to the capture mock.
+      const smtpReal = !mock && isRealValue(env.SMTP_HOST) && isRealValue(env.MAIL_FROM);
+      const smtpConfig = smtpReal ? smtpConfigFromEnv(env) : null;
+      const adapter: Mailer = smtpConfig ? new SmtpMailer(smtpConfig) : new CaptureMailer();
       return adapter as PortMap[P];
     }
     case 'blob': {

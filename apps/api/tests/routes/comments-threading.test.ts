@@ -292,4 +292,92 @@ describe('comments router', () => {
     });
     expect(res.status).toBe(422);
   });
+
+  it('lets a non-author member NEITHER edit NOR delete another actor’s comment (403)', async () => {
+    const { orgId, humanActorId } = await seedOrg();
+    // Author posts the comment.
+    const author = appWithActor(comments, orgId, ['comment'], humanActorId);
+    const created = await body<CommentOut>(await createComment(author, { body: 'mine' }));
+
+    // A SECOND actor in the SAME org with `comment` (but not `manage`) cannot touch it.
+    const [other] = await db
+      .insert(schema.actor)
+      .values({ organizationId: orgId, kind: 'human', displayName: 'Other' })
+      .returning({ id: schema.actor.id });
+    const otherActorId = other!.id;
+    const intruder = appWithActor(comments, orgId, ['comment'], otherActorId);
+
+    expect(
+      (
+        await intruder.request(`/${created.id}`, {
+          method: 'PATCH',
+          headers: J,
+          body: JSON.stringify({ body: 'hijacked' }),
+        })
+      ).status,
+    ).toBe(403);
+    expect((await intruder.request(`/${created.id}`, { method: 'DELETE' })).status).toBe(403);
+
+    // The comment is untouched: still authored by the original actor, body unchanged.
+    const still = await body<CommentOut>(await author.request(`/${created.id}`));
+    expect(still.authorId).toBe(humanActorId);
+    expect(still.body).toBe('mine');
+  });
+
+  it('lets the author edit + delete their OWN comment', async () => {
+    const { orgId, humanActorId } = await seedOrg();
+    const author = appWithActor(comments, orgId, ['comment'], humanActorId);
+    const created = await body<CommentOut>(await createComment(author, { body: 'v1' }));
+
+    const patched = await author.request(`/${created.id}`, {
+      method: 'PATCH',
+      headers: J,
+      body: JSON.stringify({ body: 'v2' }),
+    });
+    expect(patched.status).toBe(200);
+    expect((await body<CommentOut>(patched)).body).toBe('v2');
+
+    const del = await author.request(`/${created.id}`, { method: 'DELETE' });
+    expect(del.status).toBe(200);
+  });
+
+  it('lets a `manage` holder edit + delete a comment they did NOT author', async () => {
+    const { orgId, humanActorId } = await seedOrg();
+    const author = appWithActor(comments, orgId, ['comment'], humanActorId);
+    const created = await body<CommentOut>(await createComment(author, { body: 'authored' }));
+
+    // A moderator (different actor, holds `manage`) may override the author gate.
+    const [mod] = await db
+      .insert(schema.actor)
+      .values({ organizationId: orgId, kind: 'human', displayName: 'Mod' })
+      .returning({ id: schema.actor.id });
+    const moderator = appWithActor(comments, orgId, ['manage'], mod!.id);
+
+    const patched = await moderator.request(`/${created.id}`, {
+      method: 'PATCH',
+      headers: J,
+      body: JSON.stringify({ body: 'moderated' }),
+    });
+    expect(patched.status).toBe(200);
+    expect((await body<CommentOut>(patched)).body).toBe('moderated');
+
+    expect((await moderator.request(`/${created.id}`, { method: 'DELETE' })).status).toBe(200);
+  });
+
+  it('404s (not 403) when the author gate would run on a cross-org/unknown id', async () => {
+    // A non-author should never learn whether an out-of-scope comment exists: the
+    // org-scoped load 404s before the author check can leak a 403.
+    const { orgId, humanActorId } = await seedOrg();
+    const w = appWithActor(comments, orgId, ['comment'], humanActorId);
+    expect(
+      (
+        await w.request(`/${MISSING}`, {
+          method: 'PATCH',
+          headers: J,
+          body: JSON.stringify({ body: 'x' }),
+        })
+      ).status,
+    ).toBe(404);
+    expect((await w.request(`/${MISSING}`, { method: 'DELETE' })).status).toBe(404);
+  });
 });

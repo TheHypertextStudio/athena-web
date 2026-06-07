@@ -532,3 +532,90 @@ describe('initiatives timeline roll-up', () => {
     expect((await viewerB.request(`/${idInA}/timeline`, { method: 'GET' })).status).toBe(404);
   });
 });
+
+describe('initiatives ownerId in-org validation', () => {
+  const J = { 'content-type': 'application/json' };
+
+  /** Insert a second human actor in the given org and return its id. */
+  async function seedActor(orgId: string, name = 'Owner'): Promise<string> {
+    const [row] = await db
+      .insert(schema.actor)
+      .values({ organizationId: orgId, kind: 'human', displayName: name })
+      .returning({ id: schema.actor.id });
+    return row!.id;
+  }
+
+  it('POST accepts an ownerId that is an actor in the caller’s org', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(initiatives, orgId, ['contribute'], humanActorId);
+    const ownerId = await seedActor(orgId);
+
+    const res = await writer.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ name: 'Owned', ownerId }),
+    });
+    expect(res.status).toBe(200);
+    expect((await json<{ ownerId: string }>(res)).ownerId).toBe(ownerId);
+  });
+
+  it('POST 404s when ownerId belongs to ANOTHER org (FK-class tenant isolation)', async () => {
+    const orgA = await seedBaseOrg(db, schema);
+    const orgB = await seedBaseOrg(db, schema);
+    const ownerInB = await seedActor(orgB.orgId);
+
+    const writerA = appWithActor(initiatives, orgA.orgId, ['contribute'], orgA.humanActorId);
+    const res = await writerA.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ name: 'CrossOwner', ownerId: ownerInB }),
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it('PATCH 404s on a cross-org ownerId but accepts an in-org one', async () => {
+    const orgA = await seedBaseOrg(db, schema);
+    const orgB = await seedBaseOrg(db, schema);
+    const id = await seedInitiative(orgA.orgId, orgA.humanActorId);
+    const ownerInB = await seedActor(orgB.orgId);
+    const ownerInA = await seedActor(orgA.orgId);
+
+    const writerA = appWithActor(initiatives, orgA.orgId, ['contribute'], orgA.humanActorId);
+    expect(
+      (
+        await writerA.request(`/${id}`, {
+          method: 'PATCH',
+          headers: J,
+          body: JSON.stringify({ ownerId: ownerInB }),
+        })
+      ).status,
+    ).toBe(404);
+
+    const ok = await writerA.request(`/${id}`, {
+      method: 'PATCH',
+      headers: J,
+      body: JSON.stringify({ ownerId: ownerInA }),
+    });
+    expect(ok.status).toBe(200);
+    expect((await json<{ ownerId: string }>(ok)).ownerId).toBe(ownerInA);
+  });
+
+  it('PATCH can clear ownerId to null (no validation on a null owner)', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const ownerId = await seedActor(orgId);
+    const [row] = await db
+      .insert(schema.initiative)
+      .values({ organizationId: orgId, name: 'Owned', createdBy: humanActorId, ownerId })
+      .returning({ id: schema.initiative.id });
+    const id = row!.id;
+
+    const writer = appWithActor(initiatives, orgId, ['contribute'], humanActorId);
+    const res = await writer.request(`/${id}`, {
+      method: 'PATCH',
+      headers: J,
+      body: JSON.stringify({ ownerId: null }),
+    });
+    expect(res.status).toBe(200);
+    expect((await json<{ ownerId: string | null }>(res)).ownerId).toBeNull();
+  });
+});

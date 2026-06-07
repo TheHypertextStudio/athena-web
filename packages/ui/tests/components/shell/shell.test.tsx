@@ -11,8 +11,8 @@ import { ContextProvider } from '../../../src/components/shell/ContextProvider';
 import { Sidebar } from '../../../src/components/shell/Sidebar';
 import type { Workspace } from '../../../src/components/shell/workspaces';
 
-const ACME: Workspace = { id: 'ORG00000000000000000000001', name: 'Acme Co', isPersonal: false };
-const GLOBEX: Workspace = { id: 'ORG00000000000000000000002', name: 'Globex', isPersonal: false };
+const ACME: Workspace = { id: 'ORG00000000000000000000001', name: 'Acme Co' };
+const GLOBEX: Workspace = { id: 'ORG00000000000000000000002', name: 'Globex' };
 const MOCK_WORKSPACES: readonly Workspace[] = [ACME, GLOBEX];
 
 const AGENCY_SKIN: VocabularySkin = { preset: 'agency' };
@@ -34,7 +34,6 @@ describe('AppShell + Sidebar', () => {
                 workspaces={MOCK_WORKSPACES}
                 hrefForHome={(key) => `/${key}`}
                 hrefForWorkspace={(orgId, key) => `/orgs/${orgId}/${key}`}
-                hrefForOrgHome={(orgId) => `/orgs/${orgId}/my-work`}
                 renderLink={renderLink}
                 onSelectWorkspace={() => undefined}
                 onOpenSearch={() => undefined}

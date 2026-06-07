@@ -3,13 +3,21 @@
  *
  * @remarks
  * Defines the workspace descriptor consumed by the {@link WorkspaceSwitcher} and the stable
- * nav keys used by the {@link Sidebar}'s two groups — the cross-org **Home** group and the
- * org-scoped **Workspace** group. Keeping the keys here (rather than inside the components)
+ * nav keys used by the {@link Sidebar}'s two sections — the cross-org **Home** section and the
+ * org-scoped **Workspace** section. Keeping the keys here (rather than inside the components)
  * lets the host app map each key to a route and resolve the active highlight in lockstep,
  * so the sidebar highlight and the navigation target never drift apart.
  */
 
-/** A workspace the caller can switch into: a concrete org (shared or personal). */
+/**
+ * A workspace the caller can switch into: a concrete org.
+ *
+ * @remarks
+ * Every org is presented uniformly in the {@link WorkspaceSwitcher} — there is no personal/
+ * shared partition — so this descriptor is purely presentational. Whether an org is the
+ * caller's personal space (used by the host to pick a sensible default workspace) is resolved
+ * from the host's org data, not from this descriptor.
+ */
 export interface Workspace {
   /** The org's id; drives the deterministic accent and the switch target. */
   readonly id: string;
@@ -17,8 +25,6 @@ export interface Workspace {
   readonly name: string;
   /** Optional avatar image URL. */
   readonly avatar?: string | null;
-  /** Whether this is the caller's Personal org (grouped separately in the switcher). */
-  readonly isPersonal: boolean;
   /** An attention count for this workspace, surfaced as a switcher badge. */
   readonly attentionCount?: number;
 }

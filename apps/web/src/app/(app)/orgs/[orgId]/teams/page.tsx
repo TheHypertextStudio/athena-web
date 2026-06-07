@@ -2,11 +2,12 @@
 
 import type { ProjectOut, TaskOut, TeamOut } from '@docket/types';
 import { useVocabulary } from '@docket/ui/hooks';
-import { Users } from '@docket/ui/icons';
-import { Skeleton } from '@docket/ui/primitives';
+import { Plus, Users } from '@docket/ui/icons';
+import { Button, Skeleton } from '@docket/ui/primitives';
 import { useParams } from 'next/navigation';
 import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 
+import { CreateTeamPanel } from '@/components/teams/create-team';
 import { TeamCard, type TeamCardData } from '@/components/teams/team-card';
 import { api } from '@/lib/api';
 import { readError, readProblem } from '@/lib/problem';
@@ -39,6 +40,7 @@ export default function TeamsListPage(): JSX.Element {
   const [tasks, setTasks] = useState<readonly TaskOut[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
 
   /** Load the org's teams and the slices needed to scope each card. */
   const load = useCallback(async (): Promise<void> => {
@@ -100,14 +102,44 @@ export default function TeamsListPage(): JSX.Element {
     [projectCountByTeam, taskCountByTeam],
   );
 
+  /** Prepend the freshly-created team to the roster (teams have no detail route to open). */
+  const handleCreated = useCallback((created: TeamOut): void => {
+    setTeams((current) => [created, ...current]);
+    setCreateOpen(false);
+  }, []);
+
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-8">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Teams</h1>
-        <p className="text-muted-foreground text-sm">
-          The units that own your work — each with its own workflow, cycles, and triage queue.
-        </p>
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-2xl font-semibold tracking-tight">Teams</h1>
+          <p className="text-muted-foreground text-sm">
+            The units that own your work — each with its own workflow, cycles, and triage queue.
+          </p>
+        </div>
+        {!createOpen ? (
+          <Button
+            type="button"
+            className="gap-1.5"
+            onClick={() => {
+              setCreateOpen(true);
+            }}
+          >
+            <Plus aria-hidden="true" className="size-4" />
+            New team
+          </Button>
+        ) : null}
       </header>
+
+      {createOpen ? (
+        <CreateTeamPanel
+          orgId={orgId}
+          onClose={() => {
+            setCreateOpen(false);
+          }}
+          onCreated={handleCreated}
+        />
+      ) : null}
 
       {loading ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2" aria-hidden="true">
@@ -122,7 +154,17 @@ export default function TeamsListPage(): JSX.Element {
       ) : teams.length === 0 ? (
         <EmptyState
           title="No teams yet"
-          body="Teams are the units that own work — each with its own workflow, cycles, and triage queue. They'll appear here once created."
+          body="Teams are the units that own work — each with its own workflow, cycles, and triage queue. Create one to start organizing your work."
+          cta={
+            createOpen
+              ? null
+              : {
+                  label: 'Create your first team',
+                  onClick: () => {
+                    setCreateOpen(true);
+                  },
+                }
+          }
         />
       ) : (
         <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -143,8 +185,16 @@ export default function TeamsListPage(): JSX.Element {
   );
 }
 
-/** A centered empty-state panel with an icon, title, and supporting copy. */
-function EmptyState({ title, body }: { title: string; body: string }): JSX.Element {
+/** A centered empty-state panel with an icon, title, supporting copy, and an optional CTA. */
+function EmptyState({
+  title,
+  body,
+  cta,
+}: {
+  title: string;
+  body: string;
+  cta?: { label: string; onClick: () => void } | null;
+}): JSX.Element {
   return (
     <div className="border-border flex flex-col items-center gap-3 rounded-xl border border-dashed p-12 text-center">
       <span className="bg-muted text-muted-foreground flex size-10 items-center justify-center rounded-full">
@@ -152,6 +202,12 @@ function EmptyState({ title, body }: { title: string; body: string }): JSX.Eleme
       </span>
       <p className="text-foreground text-sm font-medium">{title}</p>
       <p className="text-muted-foreground max-w-sm text-sm leading-relaxed">{body}</p>
+      {cta ? (
+        <Button type="button" variant="outline" className="mt-1 gap-1.5" onClick={cta.onClick}>
+          <Plus aria-hidden="true" className="size-4" />
+          {cta.label}
+        </Button>
+      ) : null}
     </div>
   );
 }

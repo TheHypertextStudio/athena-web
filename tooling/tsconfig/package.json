@@ -1,0 +1,11 @@
+{
+  "name": "@docket/tsconfig",
+  "description": "Docket shared TypeScript configurations.",
+  "version": "0.0.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "files": [
+    "base.json",
+    "nextjs.json"
+  ]
+}

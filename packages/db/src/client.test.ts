@@ -1,0 +1,157 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { isAbsolute, join } from 'node:path';
+
+import { sql as sqlTag } from 'drizzle-orm';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+/**
+ * Tests for the driver-selecting client. The postgres/neon scheme branches are
+ * exercised with mocked `postgres` + `drizzle-orm/postgres-js` so no real network
+ * connection is ever opened; the pglite branch uses a real in-memory PGlite.
+ *
+ * Each test resets the module registry so the module-level `cached` singleton and the
+ * top-level driver imports are re-evaluated against fresh mocks + env.
+ */
+
+const ORIGINAL_DATABASE_URL = process.env['DATABASE_URL'];
+
+interface PostgresCall {
+  url: string;
+  opts: unknown;
+}
+interface DrizzlePostgresCall {
+  client: unknown;
+  config: unknown;
+}
+
+// Captured constructor args for the mocked postgres-js driver path.
+const postgresCalls: PostgresCall[] = [];
+const drizzlePostgresCalls: DrizzlePostgresCall[] = [];
+
+vi.mock('postgres', () => ({
+  default: (url: string, opts: unknown) => {
+    postgresCalls.push({ url, opts });
+    return { __fakePostgresClient: true } as unknown;
+  },
+}));
+
+vi.mock('drizzle-orm/postgres-js', () => ({
+  drizzle: (client: unknown, config: unknown) => {
+    drizzlePostgresCalls.push({ client, config });
+    return { __fakeDrizzlePostgres: true, $client: client } as unknown;
+  },
+}));
+
+/** Read an arbitrary (non-typed) member off the lazy `db` Proxy without `this`-binding lint. */
+function touch(db: unknown, prop: string): unknown {
+  return (db as Record<string, unknown>)[prop];
+}
+
+beforeEach(() => {
+  postgresCalls.length = 0;
+  drizzlePostgresCalls.length = 0;
+  vi.resetModules();
+});
+
+afterEach(() => {
+  if (ORIGINAL_DATABASE_URL === undefined) {
+    delete process.env['DATABASE_URL'];
+  } else {
+    process.env['DATABASE_URL'] = ORIGINAL_DATABASE_URL;
+  }
+});
+
+describe('db client driver selection', () => {
+  it('throws a helpful error when DATABASE_URL is unset', async () => {
+    delete process.env['DATABASE_URL'];
+    const { db } = await import('./client');
+    // First property access triggers lazy construction → throws.
+    expect(() => touch(db, 'select')).toThrow(/DATABASE_URL is not set/);
+  });
+
+  it('builds a pglite client for a pglite:// memory URL', async () => {
+    process.env['DATABASE_URL'] = 'pglite://memory';
+    const { db } = await import('./client');
+    // A real pglite drizzle client exposes the query builder + relational `query`.
+    expect(typeof touch(db, 'select')).toBe('function');
+    expect(touch(db, 'query')).toBeTypeOf('object');
+  });
+
+  it('builds a pglite client for a bare pglite: URL (default memory)', async () => {
+    process.env['DATABASE_URL'] = 'pglite:';
+    const { db } = await import('./client');
+    expect(typeof touch(db, 'insert')).toBe('function');
+  });
+
+  it('builds a pglite client for an on-disk pglite path', async () => {
+    // Point at an existing temp dir so PGlite's nodefs can create its store there.
+    const dir = mkdtempSync(join(tmpdir(), 'docket-client-'));
+    process.env['DATABASE_URL'] = `pglite://${dir}`;
+    try {
+      const { db } = await import('./client');
+      expect(typeof touch(db, 'select')).toBe('function');
+      // Run a real query so PGlite's async on-disk init fully settles before cleanup.
+      await db.execute(sqlTag`select 1 as one`);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+    // Generous timeout: on-disk PGlite init does real filesystem + WASM work that can run
+    // slow under full-suite parallel CPU contention (it is fast in isolation).
+  }, 30_000);
+
+  it('uses the postgres-js driver for a postgres:// URL', async () => {
+    process.env['DATABASE_URL'] = 'postgres://user:pass@localhost:5432/docket';
+    const { db } = await import('./client');
+    // Touch a non-function property to exercise the Proxy non-bind branch.
+    touch(db, '$client');
+    expect(postgresCalls).toHaveLength(1);
+    expect(postgresCalls[0]?.url).toBe('postgres://user:pass@localhost:5432/docket');
+    expect(postgresCalls[0]?.opts).toEqual({ prepare: false });
+    expect(drizzlePostgresCalls).toHaveLength(1);
+  });
+
+  it('rewrites a neon: URL to postgres: before handing it to postgres-js', async () => {
+    process.env['DATABASE_URL'] = 'neon://user:pass@ep.neon.tech/docket';
+    const { db } = await import('./client');
+    touch(db, '$client');
+    expect(postgresCalls).toHaveLength(1);
+    expect(postgresCalls[0]?.url).toBe('postgres://user:pass@ep.neon.tech/docket');
+  });
+
+  it('caches the client so the driver is constructed only once', async () => {
+    process.env['DATABASE_URL'] = 'postgres://localhost/docket';
+    const { db } = await import('./client');
+    // Multiple accesses → still one construction (the `??=` cache branch).
+    touch(db, 'select');
+    touch(db, 'insert');
+    touch(db, '$client');
+    expect(postgresCalls).toHaveLength(1);
+  });
+
+  it('binds function members to the real client (Proxy bind branch)', async () => {
+    process.env['DATABASE_URL'] = 'pglite://memory';
+    const { db } = await import('./client');
+    const select = touch(db, 'select') as () => unknown;
+    expect(typeof select).toBe('function');
+    // Calling the detached reference must not throw on `this` (it was bound).
+    expect(() => select()).not.toThrow();
+  });
+
+  it('exposes the full schema namespace', async () => {
+    const { fullSchema } = await import('./client');
+    expect(fullSchema).toHaveProperty('organization');
+    expect(fullSchema).toHaveProperty('task');
+    expect(fullSchema).toHaveProperty('organizationRelations');
+  });
+
+  it('anchors a relative pglite data dir to the workspace root, not the cwd', async () => {
+    const { pgliteDataDir } = await import('./client');
+    const result = pgliteDataDir('pglite://.data/docket');
+    // A relative on-disk path resolves to an absolute path anchored above this package
+    // (the monorepo root) so migrations and the API open the same database file
+    // regardless of which directory the process runs from.
+    expect(isAbsolute(result)).toBe(true);
+    expect(result.endsWith('/.data/docket')).toBe(true);
+  });
+});

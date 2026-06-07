@@ -1,0 +1,37 @@
+{
+  "name": "@docket/auth",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "description": "Docket authentication — the Better Auth configuration and the passkey-intent signer.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf .turbo *.tsbuildinfo",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@docket/db": "workspace:*",
+    "@docket/env": "workspace:*",
+    "@docket/types": "workspace:*",
+    "better-auth": "catalog:"
+  },
+  "devDependencies": {
+    "@docket/eslint-config": "workspace:*",
+    "@docket/tsconfig": "workspace:*",
+    "@better-auth/cli": "catalog:",
+    "@electric-sql/pglite": "catalog:",
+    "@types/node": "24.13.0",
+    "drizzle-orm": "catalog:",
+    "vite": "^7.0.0",
+    "vitest": "^4.0.0"
+  }
+}

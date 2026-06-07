@@ -1,0 +1,76 @@
+import js from '@eslint/js';
+import tseslint from 'typescript-eslint';
+
+/**
+ * Shared flat ESLint config for all Docket workspace members (ESLint 9).
+ *
+ * Consumers import this and spread it into their own `eslint.config.js`,
+ * optionally appending package-specific overrides. The preset is
+ * type-checked-lint by default; packages that opt into it must point
+ * `parserOptions.projectService` at their own tsconfig (done here via
+ * `projectService: true`, which discovers the nearest tsconfig).
+ *
+ * @type {import('typescript-eslint').ConfigArray}
+ */
+export const baseConfig = tseslint.config(
+  js.configs.recommended,
+  ...tseslint.configs.strictTypeChecked,
+  ...tseslint.configs.stylisticTypeChecked,
+  {
+    languageOptions: {
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: process.cwd(),
+      },
+    },
+  },
+  {
+    rules: {
+      '@typescript-eslint/consistent-type-imports': 'error',
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      '@typescript-eslint/prefer-nullish-coalescing': 'error',
+      '@typescript-eslint/prefer-optional-chain': 'error',
+      '@typescript-eslint/no-floating-promises': 'error',
+      '@typescript-eslint/no-misused-promises': 'error',
+      // Async methods that implement an async port/interface need not `await` (the
+      // contract is async even when a mock is synchronous).
+      '@typescript-eslint/require-await': 'off',
+      // Interpolating numbers/booleans into template strings is intentional + safe.
+      '@typescript-eslint/restrict-template-expressions': ['error', { allowNumber: true, allowBoolean: true }],
+    },
+  },
+  {
+    // Tests legitimately use non-null assertions on known-seeded data and exercise
+    // `any`-typed fixture/driver values; keep the strict rules everywhere else.
+    files: ['**/*.test.ts', '**/*.test.tsx', '**/*.spec.ts', '**/*.spec.tsx'],
+    rules: {
+      '@typescript-eslint/no-non-null-assertion': 'off',
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-argument': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/no-unsafe-return': 'off',
+    },
+  },
+  {
+    ignores: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/.next/**',
+      '**/.turbo/**',
+      '**/coverage/**',
+      '**/drizzle/**',
+      '**/.claude/**',
+      '**/.lova/**',
+      '**/.lova.disabled/**',
+      '**/*.config.js',
+      '**/*.config.ts',
+      '**/*.config.mjs',
+      '**/postcss.config.js',
+      '**/next-env.d.ts',
+      '**/tooling/eslint-config/**',
+    ],
+  },
+);
+
+export default baseConfig;

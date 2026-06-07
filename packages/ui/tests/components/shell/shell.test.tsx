@@ -32,8 +32,8 @@ describe('AppShell', () => {
     expect(screen.getByRole('navigation', { name: 'Organizations' })).toBeInTheDocument();
     expect(screen.getByRole('complementary', { name: 'Navigation' })).toBeInTheDocument();
 
-    // The rail renders the Hub button plus one avatar button per mock org.
-    expect(screen.getByRole('button', { name: 'Hub' })).toBeInTheDocument();
+    // The rail renders the Hub (Today) button plus one avatar button per mock org.
+    expect(screen.getByRole('button', { name: 'Hub — Today' })).toBeInTheDocument();
     for (const org of MOCK_ORGS) {
       expect(screen.getByRole('button', { name: org.name })).toBeInTheDocument();
     }

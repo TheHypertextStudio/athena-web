@@ -4,6 +4,7 @@ import type { OrgSummary } from '@docket/types';
 import {
   AppShell,
   ContextProvider,
+  type HubRailKey,
   HUB_CONTEXT,
   type RailOrg,
   type SidebarNavKey,
@@ -14,9 +15,17 @@ import { usePathname, useRouter } from 'next/navigation';
 import { type JSX, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { ActiveOrgContext, useActiveOrg } from '@/components/active-org';
+import { CommandPaletteProvider, useCommandPalette } from '@/components/command-palette';
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
 import { readError } from '@/lib/problem';
+
+/** The Hub destination implied by the current cross-org pathname (Inbox/Portfolio). */
+function hubKeyFromPath(pathname: string): HubRailKey | undefined {
+  if (/^\/inbox(?:\/|$)/.test(pathname)) return 'inbox';
+  if (/^\/portfolio(?:\/|$)/.test(pathname)) return 'portfolio';
+  return undefined;
+}
 
 /** The org id embedded in an `(app)` route, or `null` for cross-org (Hub) routes. */
 function orgIdFromPath(pathname: string): string | null {
@@ -115,9 +124,15 @@ export function AppShellFrame({ children }: { children: ReactNode }): JSX.Elemen
   return (
     <ContextProvider initialContext={activeOrgId ?? HUB_CONTEXT}>
       <ActiveOrgContext orgs={orgs} activeOrgId={activeOrgId} orgsError={orgsError}>
-        <AppShellInner activeOrgId={activeOrgId} navKey={navKeyFromPath(pathname)}>
-          {children}
-        </AppShellInner>
+        <CommandPaletteProvider>
+          <AppShellInner
+            activeOrgId={activeOrgId}
+            navKey={navKeyFromPath(pathname)}
+            hubKey={hubKeyFromPath(pathname)}
+          >
+            {children}
+          </AppShellInner>
+        </CommandPaletteProvider>
       </ActiveOrgContext>
     </ContextProvider>
   );
@@ -129,6 +144,8 @@ interface AppShellInnerProps {
   activeOrgId: string | null;
   /** The active sidebar nav key for the current route. */
   navKey?: SidebarNavKey;
+  /** The active Hub rail destination for the current route (Inbox/Portfolio). */
+  hubKey?: HubRailKey;
   /** The routed page content. */
   children: ReactNode;
 }
@@ -138,32 +155,57 @@ interface AppShellInnerProps {
  *
  * @remarks
  * Split from {@link AppShellFrame} because it must read the shell context and active-org
- * state (only available inside their providers). It keeps the bound context in step with the
- * route, turns rail context rebinds into navigation (Hub → `/today`, org → `/orgs/[id]/my-work`),
- * maps sidebar nav keys to org-scoped routes, and skins entity nouns to the bound org via
- * {@link VocabularyProvider}.
+ * state (only available inside their providers). The route is the single source of truth: a
+ * one-directional effect mirrors it into the bound context, while every rail and palette
+ * selection navigates imperatively (Hub → `/today`, Inbox/Portfolio → `/[key]`, org →
+ * `/orgs/[id]/my-work`). It also maps sidebar nav keys to org-scoped routes and skins entity
+ * nouns to the bound org via {@link VocabularyProvider}.
  */
-function AppShellInner({ activeOrgId, navKey, children }: AppShellInnerProps): JSX.Element {
+function AppShellInner({ activeOrgId, navKey, hubKey, children }: AppShellInnerProps): JSX.Element {
   const router = useRouter();
-  const { context, setContext } = useContextState();
+  const { setContext } = useContextState();
   const { orgs, skin } = useActiveOrg();
+  const { openPalette } = useCommandPalette();
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const railOrgs = useMemo<readonly RailOrg[]>(
     () => orgs.map((o) => ({ id: o.id, name: o.name, avatar: o.avatar })),
     [orgs],
   );
 
-  // Keep the bound context aligned to the route on navigation.
+  // Mirror the route into the bound context — one-directional, never reversing navigation.
+  //
+  // This is the *only* coupling between the route and the context: the route is the source of
+  // truth, and the context follows it. Navigation is always driven imperatively from the rail
+  // and palette handlers below; the shell never derives a `router.push` from context state.
+  // (An earlier effect that pushed routes when `context` diverged from the route raced this
+  // sync — `activeOrgId` updates on the route change before `setContext` flushes — and bounced
+  // org → Hub navigation back to the org or to `/today`. Routing from the handlers removes the
+  // divergence the effect was watching for.)
   useEffect(() => {
     setContext(activeOrgId ?? HUB_CONTEXT);
   }, [activeOrgId, setContext]);
 
-  // When the rail rebinds the context, navigate to that destination.
+  // Poll the caller's cross-org unread count for the rail's Inbox attention badge.
   useEffect(() => {
-    const target = activeOrgId ?? HUB_CONTEXT;
-    if (context === target) return;
-    router.push(context === HUB_CONTEXT ? '/today' : `/orgs/${context}/my-work`);
-  }, [context, activeOrgId, router]);
+    const live = { current: true };
+    const refresh = async (): Promise<void> => {
+      try {
+        const res = await api.v1.notifications.count.$get();
+        if (!res.ok) return;
+        const { unread } = await res.json();
+        if (live.current) setUnreadCount(unread);
+      } catch {
+        // Non-fatal: the badge simply stays at its last value.
+      }
+    };
+    void refresh();
+    const interval = setInterval(() => void refresh(), 60_000);
+    return () => {
+      live.current = false;
+      clearInterval(interval);
+    };
+  }, []);
 
   /** Translate a sidebar nav selection into an org-scoped route. */
   const onNavigate = useCallback(
@@ -177,6 +219,27 @@ function AppShellInner({ activeOrgId, navKey, children }: AppShellInnerProps): J
     [activeOrgId, router],
   );
 
+  /** Translate a Hub rail destination selection into its cross-org route. */
+  const onNavigateHub = useCallback(
+    (key: HubRailKey): void => {
+      router.push(`/${key}`);
+    },
+    [router],
+  );
+
+  /** Translate an org-avatar selection into that org's home route (context rebind is handled by the rail). */
+  const onSelectOrg = useCallback(
+    (orgId: string): void => {
+      router.push(`/orgs/${orgId}/my-work`);
+    },
+    [router],
+  );
+
+  /** The Hub (Today) button routes to Today even from another cross-org surface. */
+  const onSelectHome = useCallback((): void => {
+    router.push('/today');
+  }, [router]);
+
   /** The add-org affordance routes to onboarding. */
   const onAddOrg = useCallback((): void => {
     router.push('/onboarding');
@@ -184,7 +247,18 @@ function AppShellInner({ activeOrgId, navKey, children }: AppShellInnerProps): J
 
   return (
     <VocabularyProvider skin={skin}>
-      <AppShell orgs={railOrgs} activeNavKey={navKey} onNavigate={onNavigate} onAddOrg={onAddOrg}>
+      <AppShell
+        orgs={railOrgs}
+        activeNavKey={navKey}
+        activeHubKey={hubKey}
+        unreadCount={unreadCount}
+        onNavigate={onNavigate}
+        onNavigateHub={onNavigateHub}
+        onSelectOrg={onSelectOrg}
+        onSelectHome={onSelectHome}
+        onOpenSearch={openPalette}
+        onAddOrg={onAddOrg}
+      >
         {children}
       </AppShell>
     </VocabularyProvider>

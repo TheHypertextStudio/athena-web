@@ -57,7 +57,7 @@ export function StepPersonalWelcome({ firstName }: StepPersonalWelcomeProps): JS
       {HIGHLIGHTS.map((highlight) => (
         <div
           key={highlight.title}
-          className="border-border bg-card flex items-start gap-4 rounded-xl border p-5"
+          className="border-outline-variant bg-surface-container-low flex items-start gap-4 rounded-xl border p-5"
         >
           <span
             aria-hidden
@@ -66,7 +66,7 @@ export function StepPersonalWelcome({ firstName }: StepPersonalWelcomeProps): JS
             <highlight.icon className="size-5" />
           </span>
           <div className="flex flex-col gap-1">
-            <span className="text-foreground text-base font-semibold leading-tight">
+            <span className="text-foreground text-base leading-tight font-semibold">
               {highlight.title}
             </span>
             <span className="text-muted-foreground text-sm leading-relaxed">{highlight.body}</span>

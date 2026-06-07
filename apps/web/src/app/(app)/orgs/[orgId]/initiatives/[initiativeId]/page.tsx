@@ -357,7 +357,7 @@ export default function InitiativeDetailPage(): JSX.Element {
         <div className="flex min-w-0 flex-col gap-6">
           <section
             aria-label="Health rollup"
-            className="border-border bg-card flex flex-col gap-3 rounded-xl border p-5"
+            className="border-outline-variant bg-surface-container-low flex flex-col gap-3 rounded-xl border p-5"
           >
             <h2 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
               Rolled-up health

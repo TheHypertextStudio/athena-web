@@ -210,7 +210,7 @@ export function IntegrationsTab({ orgId, canManage }: IntegrationsTabProps): JSX
               return (
                 <li
                   key={provider.provider}
-                  className="border-border bg-card overflow-hidden rounded-xl border"
+                  className="border-outline-variant bg-surface-container-low overflow-hidden rounded-xl border"
                 >
                   <div className="flex items-center gap-3 px-4 py-3">
                     <span className="bg-muted text-muted-foreground flex size-9 shrink-0 items-center justify-center rounded-lg">

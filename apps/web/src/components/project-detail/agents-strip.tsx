@@ -85,7 +85,7 @@ export function AgentsStrip({ agents }: AgentsStripProps): JSX.Element | null {
         {agents.map((agent) => (
           <li
             key={agent.sessionId}
-            className="bg-card border-border flex items-center gap-3 rounded-lg border px-3 py-2"
+            className="bg-surface-container-low border-outline-variant flex items-center gap-3 rounded-lg border px-3 py-2"
           >
             <ActorAvatar kind="agent" name={agent.agentName} size={28} />
             <div className="flex min-w-0 flex-1 flex-col">

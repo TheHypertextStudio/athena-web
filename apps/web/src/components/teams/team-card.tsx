@@ -67,7 +67,7 @@ export function TeamCard({
   const taskWord = team.taskCount === 1 ? taskNoun : taskNounPlural;
 
   return (
-    <article className="border-border bg-card flex flex-col gap-3 rounded-xl border p-5">
+    <article className="border-outline-variant bg-surface-container-low flex flex-col gap-3 rounded-xl border p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 font-mono text-xs font-medium tracking-wide uppercase">

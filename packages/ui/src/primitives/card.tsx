@@ -11,11 +11,23 @@ import * as React from 'react';
 
 import { cn } from '../lib/utils';
 
-/** Outer card surface — rounded, bordered, token-colored container. */
+/**
+ * Outer card surface — rounded, hairline-outlined, token-colored container.
+ *
+ * @remarks
+ * In the MD3 tonal system a card sits ABOVE a `bg-surface` panel, so it steps up the
+ * container ramp (`surface-container-low`) and uses an `outline-variant` hairline rather
+ * than the flat `bg-card` tone (which is near-indistinguishable from the panel). The same
+ * utilities read correctly in both light (a darker step) and dark (a lighter step) because
+ * the surface tokens encode that direction.
+ */
 export function Card({ className, ...props }: React.ComponentProps<'div'>): React.JSX.Element {
   return (
     <div
-      className={cn('bg-card text-card-foreground rounded-xl border shadow', className)}
+      className={cn(
+        'bg-surface-container-low text-on-surface border-outline-variant rounded-xl border shadow-sm',
+        className,
+      )}
       {...props}
     />
   );
@@ -31,7 +43,7 @@ export function CardHeader({
 
 /** Card title — prominent heading text within a {@link CardHeader}. */
 export function CardTitle({ className, ...props }: React.ComponentProps<'div'>): React.JSX.Element {
-  return <div className={cn('font-semibold leading-none tracking-tight', className)} {...props} />;
+  return <div className={cn('leading-none font-semibold tracking-tight', className)} {...props} />;
 }
 
 /** Card description — muted supporting text within a {@link CardHeader}. */

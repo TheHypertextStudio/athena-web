@@ -94,7 +94,7 @@ export function CalendarPane({ blocks, taskTitle, orgName }: CalendarPaneProps):
   }
 
   return (
-    <div className="border-border/60 bg-card/40 relative overflow-hidden rounded-lg border">
+    <div className="border-outline-variant bg-surface-container-low relative overflow-hidden rounded-lg border">
       <div className="relative" style={{ height: gridHeight }}>
         {/* Hour gridlines + gutter labels. */}
         {HOUR_LABELS.map((hour, i) => (

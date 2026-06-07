@@ -62,8 +62,8 @@ export function NotificationRow({
   return (
     <div
       className={cn(
-        'border-border/60 flex items-start gap-3 rounded-lg border px-3 py-3 transition-colors',
-        unread ? 'bg-card' : 'bg-card/40',
+        'border-outline-variant flex items-start gap-3 rounded-lg border px-3 py-3 transition-colors',
+        unread ? 'bg-surface-container-low' : 'bg-transparent',
       )}
     >
       {/* Unread accent + type glyph. */}
@@ -80,7 +80,7 @@ export function NotificationRow({
         {unread ? (
           <span
             aria-hidden="true"
-            className="bg-primary ring-card absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2"
+            className="bg-primary ring-surface-container-low absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2"
           />
         ) : null}
       </span>

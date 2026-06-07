@@ -56,8 +56,8 @@ export function CycleCard({ cycle, stats, cycleNoun, href }: CycleCardProps): JS
     <Link
       href={href}
       className={cn(
-        'group border-border bg-card focus-visible:ring-ring block rounded-xl border p-4 outline-none',
-        'hover:border-border/80 hover:bg-muted/30 transition-colors focus-visible:ring-1',
+        'group border-outline-variant bg-surface-container-low focus-visible:ring-ring block rounded-xl border p-4 outline-none',
+        'hover:bg-surface-container-high transition-colors focus-visible:ring-1',
       )}
     >
       <div className="flex items-start justify-between gap-3">

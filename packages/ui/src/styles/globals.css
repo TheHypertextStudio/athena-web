@@ -50,6 +50,28 @@
   --state-started: oklch(0.52 0.15 250);
   --state-completed: oklch(0.52 0.15 150);
   --state-canceled: oklch(0.5 0.03 25);
+
+  /*
+   * MD3 tonal surface system (light).
+   *
+   * The canvas is `--surface-container` — a subtly cool-tinted neutral just off pure white,
+   * NOT plain white. Floating rounded panels (sidebar + main content) use `--surface`, the
+   * brightest tone, so they read as lifted above the tinted canvas. Higher container tones
+   * step progressively DARKER (more recessed), giving MD3's tonal elevation in light mode.
+   * A faint cool tint (hue 250, chroma ~0.003–0.008) keeps the ramp from reading as pure gray
+   * while staying coherent with the existing neutral tokens.
+   */
+  --surface: oklch(0.995 0.003 250);
+  --surface-container-lowest: oklch(0.99 0.003 250);
+  --surface-container-low: oklch(0.98 0.004 250);
+  --surface-container: oklch(0.97 0.004 250);
+  --surface-container-high: oklch(0.95 0.005 250);
+  --surface-container-highest: oklch(0.93 0.006 250);
+  --surface-variant: oklch(0.93 0.006 250);
+  --on-surface: oklch(0.205 0.004 250);
+  --on-surface-variant: oklch(0.44 0.006 250);
+  --outline: oklch(0.6 0.006 250);
+  --outline-variant: oklch(0.9 0.005 250);
 }
 
 .dark {
@@ -78,6 +100,30 @@
   --state-started: oklch(0.78 0.13 250);
   --state-completed: oklch(0.78 0.14 150);
   --state-canceled: oklch(0.72 0.03 25);
+
+  /*
+   * MD3 tonal surface system (dark).
+   *
+   * The canvas is `--surface-container` — a dark cool-tinted neutral. Following MD3, elevation in
+   * dark mode reads as LIGHTER, so the floating rounded panels (sidebar + main content + active
+   * tab) take `--surface` which is set ABOVE the canvas tone: the canvas sits at 0.23 and the
+   * panels brighten to 0.265, so the lifted layers read as elevated rather than recessed. The
+   * container ramp is monotonic by lightness — lowest/low step DOWN below the canvas (recessed
+   * wells) and high/highest step UP above the panels (hover states, popovers, nested cards):
+   * 0.175 → 0.205 → 0.23 (canvas) → 0.265 (panels) → 0.305 → 0.34. The same faint cool tint
+   * (hue 250, chroma ~0.005–0.009) keeps it tinted rather than flat gray.
+   */
+  --surface: oklch(0.265 0.006 250);
+  --surface-container-lowest: oklch(0.175 0.005 250);
+  --surface-container-low: oklch(0.205 0.005 250);
+  --surface-container: oklch(0.23 0.006 250);
+  --surface-container-high: oklch(0.305 0.007 250);
+  --surface-container-highest: oklch(0.34 0.008 250);
+  --surface-variant: oklch(0.36 0.009 250);
+  --on-surface: oklch(0.945 0.004 250);
+  --on-surface-variant: oklch(0.78 0.006 250);
+  --outline: oklch(0.6 0.008 250);
+  --outline-variant: oklch(0.36 0.008 250);
 }
 
 @theme inline {
@@ -106,6 +152,24 @@
   --color-state-started: var(--state-started);
   --color-state-completed: var(--state-completed);
   --color-state-canceled: var(--state-canceled);
+
+  /*
+   * MD3 tonal surface utilities. These expose `bg-surface`, `bg-surface-container`,
+   * `bg-surface-container-{lowest,low,high,highest}`, `bg-surface-variant`,
+   * `text-on-surface`, `text-on-surface-variant`, and `border-outline` /
+   * `border-outline-variant` for the floating-panel-on-tinted-canvas composition.
+   */
+  --color-surface: var(--surface);
+  --color-surface-container-lowest: var(--surface-container-lowest);
+  --color-surface-container-low: var(--surface-container-low);
+  --color-surface-container: var(--surface-container);
+  --color-surface-container-high: var(--surface-container-high);
+  --color-surface-container-highest: var(--surface-container-highest);
+  --color-surface-variant: var(--surface-variant);
+  --color-on-surface: var(--on-surface);
+  --color-on-surface-variant: var(--on-surface-variant);
+  --color-outline: var(--outline);
+  --color-outline-variant: var(--outline-variant);
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);

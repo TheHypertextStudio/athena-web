@@ -77,7 +77,7 @@ export function ProgramCard({
       onClick={() => {
         onOpen(program.id);
       }}
-      className="group border-border bg-card hover:border-border/80 hover:bg-accent/30 focus-visible:ring-ring flex flex-col gap-3 rounded-xl border p-5 text-left transition-colors outline-none focus-visible:ring-1"
+      className="group border-outline-variant bg-surface-container-low hover:bg-surface-container-high focus-visible:ring-ring flex flex-col gap-3 rounded-xl border p-5 text-left transition-colors outline-none focus-visible:ring-1"
     >
       <div className="flex items-start justify-between gap-3">
         <h2 className="text-foreground min-w-0 flex-1 truncate text-base font-semibold tracking-tight">

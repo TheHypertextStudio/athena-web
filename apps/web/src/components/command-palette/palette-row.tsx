@@ -56,15 +56,12 @@ export function PaletteRow({
       onMouseMove={onHover}
       className={cn(
         'flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm',
-        active ? 'bg-accent text-accent-foreground' : 'text-foreground',
+        active ? 'bg-surface-container-highest text-on-surface' : 'text-on-surface',
       )}
     >
       <Icon
         aria-hidden="true"
-        className={cn(
-          'size-4 shrink-0',
-          active ? 'text-accent-foreground' : 'text-muted-foreground',
-        )}
+        className={cn('size-4 shrink-0', active ? 'text-on-surface' : 'text-on-surface-variant')}
       />
       <span className="min-w-0 flex-1 truncate font-medium">{item.label}</span>
 

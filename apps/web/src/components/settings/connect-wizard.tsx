@@ -112,10 +112,10 @@ export function ConnectWizard({
                   setPattern(value);
                 }}
                 className={cn(
-                  'focus-visible:ring-ring bg-card relative flex flex-col gap-1 rounded-lg border p-3 text-left transition-colors outline-none focus-visible:ring-2',
+                  'focus-visible:ring-ring bg-surface-container-low relative flex flex-col gap-1 rounded-lg border p-3 text-left transition-colors outline-none focus-visible:ring-2',
                   isSelected
                     ? 'border-primary bg-primary/5'
-                    : 'border-border hover:border-primary/40',
+                    : 'border-outline-variant hover:border-primary/40',
                 )}
               >
                 <span className="flex items-center justify-between gap-2">
@@ -135,7 +135,7 @@ export function ConnectWizard({
         </div>
       </fieldset>
 
-      <div className="border-border bg-card rounded-lg border p-3 text-sm">
+      <div className="border-outline-variant bg-surface-container-low rounded-lg border p-3 text-sm">
         <p className="text-foreground">
           {pattern === 'migration' ? (
             <>

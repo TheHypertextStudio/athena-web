@@ -45,6 +45,7 @@ import projects from './projects';
 import roles from './roles';
 import savedViews from './saved-views';
 import tasks from './tasks';
+import teams from './teams';
 import updates from './updates';
 
 type OrgRow = typeof organization.$inferSelect;
@@ -227,6 +228,7 @@ const orgs = new Hono<AppEnv>()
     return ok(c, OrgOut, toOrgOut(org));
   })
   .use('/:orgId/*', orgContextMiddleware)
+  .route('/:orgId/teams', teams)
   .route('/:orgId/projects', projects)
   .route('/:orgId/tasks', tasks)
   .route('/:orgId/initiatives', initiatives)

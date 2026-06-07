@@ -318,15 +318,15 @@ export default function MyWorkPage(): JSX.Element {
 
   const emptyCopy =
     tab === 'mine'
-      ? 'Nothing assigned to you here yet — add a task above to get started.'
-      : 'No work delegated to your agents, and nothing awaiting your approval. All clear.';
+      ? 'Nothing assigned to you yet — add a task above to get started.'
+      : 'Nothing delegated, nothing awaiting your approval. All clear.';
 
   return (
     <div className="mx-auto flex h-full w-full max-w-4xl flex-col gap-5 p-8">
       <header className="flex flex-col gap-1">
         <h1 className="text-2xl font-semibold tracking-tight">My Work</h1>
         <p className="text-muted-foreground text-sm">
-          What you own and what your agents are running, grouped by {projectsLabel.toLowerCase()}.
+          Your work and your agents&apos;, grouped by {projectsLabel.toLowerCase()}.
         </p>
       </header>
 

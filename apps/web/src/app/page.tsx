@@ -19,11 +19,11 @@ export default function HomePage(): JSX.Element {
           The calm command center for work
         </span>
 
-        <h1 className="text-balance text-5xl font-semibold tracking-tight sm:text-6xl">Docket</h1>
+        <h1 className="text-5xl font-semibold tracking-tight text-balance sm:text-6xl">Docket</h1>
 
-        <p className="text-muted-foreground max-w-xl text-balance text-lg">
-          One home for every organization you run. Plan the day across teams, keep work moving, and
-          let the noise settle.
+        <p className="text-muted-foreground max-w-xl text-lg text-balance">
+          One home for everything you run. Plan your day, keep work moving, and let the noise
+          settle.
         </p>
 
         <div className="flex flex-col items-center gap-3 sm:flex-row">

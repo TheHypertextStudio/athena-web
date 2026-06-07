@@ -8,7 +8,6 @@ import { Home } from '../../../src/icons';
 import { AppShell } from '../../../src/components/shell/AppShell';
 import {
   ContextProvider,
-  HUB_CONTEXT,
   useContextState,
   type ActiveContext,
 } from '../../../src/components/shell/ContextProvider';
@@ -18,13 +17,9 @@ import { TabBar, type OpenTab } from '../../../src/components/shell/TabBar';
 import { WorkspaceSwitcher } from '../../../src/components/shell/WorkspaceSwitcher';
 import type { Workspace } from '../../../src/components/shell/workspaces';
 
-const ACME: Workspace = { id: 'ORG00000000000000000000001', name: 'Acme Co', isPersonal: false };
-const GLOBEX: Workspace = { id: 'ORG00000000000000000000002', name: 'Globex', isPersonal: false };
-const PERSONAL: Workspace = {
-  id: 'ORG00000000000000000000009',
-  name: 'My Space',
-  isPersonal: true,
-};
+const ACME: Workspace = { id: 'ORG00000000000000000000001', name: 'Acme Co' };
+const GLOBEX: Workspace = { id: 'ORG00000000000000000000002', name: 'Globex' };
+const PERSONAL: Workspace = { id: 'ORG00000000000000000000009', name: 'My Space' };
 const WORKSPACES: readonly Workspace[] = [ACME, GLOBEX, PERSONAL];
 
 /** A test `renderLink` that mirrors the host's Next `Link` (a real anchor). */
@@ -32,12 +27,11 @@ function renderLink(href: string, content: React.ReactNode): React.ReactNode {
   return <a href={href}>{content}</a>;
 }
 
-/** The full set of href builders a {@link Sidebar} needs, plus spies. */
+/** The full set of href builders a {@link Sidebar} needs. */
 function sidebarHrefs() {
   return {
     hrefForHome: (key: 'today' | 'inbox' | 'portfolio') => `/${key}`,
     hrefForWorkspace: (orgId: string, key: string) => `/orgs/${orgId}/${key}`,
-    hrefForOrgHome: (orgId: string) => `/orgs/${orgId}/my-work`,
     renderLink,
   };
 }
@@ -49,23 +43,21 @@ function ctxWrapper(initial: ActiveContext) {
 }
 
 describe('ContextProvider / useContextState', () => {
-  it('defaults to the Hub with no accent and comfortable density', () => {
-    const { result } = renderHook(() => useContextState(), { wrapper: ctxWrapper(HUB_CONTEXT) });
-    expect(result.current.isHub).toBe(true);
+  it('defaults to no bound org with no accent and comfortable density', () => {
+    const { result } = renderHook(() => useContextState(), { wrapper: ctxWrapper(null) });
     expect(result.current.activeOrgId).toBeNull();
     expect(result.current.orgAccent).toBeNull();
     expect(result.current.density).toBe('comfortable');
   });
 
-  it('derives an org accent when an org context is bound', () => {
+  it('derives an org accent when an org is bound', () => {
     const { result } = renderHook(() => useContextState(), { wrapper: ctxWrapper(ACME.id) });
-    expect(result.current.isHub).toBe(false);
     expect(result.current.activeOrgId).toBe(ACME.id);
     expect(result.current.orgAccent).toMatch(/^oklch/);
   });
 
   it('setContext rebinds and setDensity updates density', () => {
-    const { result } = renderHook(() => useContextState(), { wrapper: ctxWrapper(HUB_CONTEXT) });
+    const { result } = renderHook(() => useContextState(), { wrapper: ctxWrapper(null) });
     act(() => {
       result.current.setContext(ACME.id);
     });
@@ -99,11 +91,11 @@ describe('AppShell', () => {
     expect(screen.getByText('tabs')).toBeInTheDocument();
   });
 
-  it('omits the --org-accent variable on the Hub (no bound org)', () => {
+  it('omits the --org-accent variable when no org is bound', () => {
     const { container } = render(
-      <ContextProvider initialContext={HUB_CONTEXT}>
+      <ContextProvider initialContext={null}>
         <AppShell sidebar={<nav aria-label="Navigation" />} className="shell-x">
-          <div>Hub main</div>
+          <div>No-org main</div>
         </AppShell>
       </ContextProvider>,
     );
@@ -114,7 +106,7 @@ describe('AppShell', () => {
 });
 
 describe('Sidebar', () => {
-  it('renders the Home group + the org Workspace group when an org is bound', () => {
+  it('renders the Home section + the active org Workspace section, both always present', () => {
     render(
       <ContextProvider initialContext={ACME.id}>
         <Sidebar
@@ -126,12 +118,12 @@ describe('Sidebar', () => {
         />
       </ContextProvider>,
     );
-    // Home group (cross-org) is always present.
+    // Home section (cross-org) is always present.
     expect(screen.getByRole('link', { name: 'Today' })).toHaveAttribute('href', '/today');
     expect(screen.getByRole('link', { name: 'Portfolio' })).toHaveAttribute('href', '/portfolio');
     expect(screen.getByRole('button', { name: 'Search' })).toBeInTheDocument();
 
-    // Workspace group (org-scoped) — entity rows fall back to the startup preset here.
+    // Workspace section (org-scoped) — entity rows fall back to the startup preset here.
     const projects = screen.getByRole('link', { name: 'Projects' });
     expect(projects).toHaveAttribute('href', `/orgs/${ACME.id}/projects`);
     expect(projects).toHaveAttribute('aria-current', 'page');
@@ -142,6 +134,28 @@ describe('Sidebar', () => {
     expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute(
       'href',
       `/orgs/${ACME.id}/settings`,
+    );
+  });
+
+  it('shows the Workspace section on a cross-org route (no Hub mode swap)', () => {
+    // No org in the path, but the host has resolved an active org for the context.
+    render(
+      <ContextProvider initialContext={ACME.id}>
+        <Sidebar
+          workspaces={WORKSPACES}
+          activeHomeKey="today"
+          {...sidebarHrefs()}
+          onSelectWorkspace={() => undefined}
+          onOpenSearch={() => undefined}
+        />
+      </ContextProvider>,
+    );
+    // The Home destination is highlighted…
+    expect(screen.getByRole('link', { name: 'Today' })).toHaveAttribute('aria-current', 'page');
+    // …and the Workspace section still reflects the active org (stable, never empty).
+    expect(screen.getByRole('link', { name: 'Triage' })).toHaveAttribute(
+      'href',
+      `/orgs/${ACME.id}/triage`,
     );
   });
 
@@ -176,34 +190,9 @@ describe('Sidebar', () => {
     expect(onOpenSearch).toHaveBeenCalledTimes(1);
   });
 
-  it('shows a Workspaces list (not org nav) on the Hub, with an add-org affordance', () => {
-    const onAddOrg = vi.fn();
+  it('never produces an /orgs/null href when no org is bound yet', () => {
     render(
-      <ContextProvider initialContext={HUB_CONTEXT}>
-        <Sidebar
-          workspaces={WORKSPACES}
-          {...sidebarHrefs()}
-          onSelectWorkspace={() => undefined}
-          onOpenSearch={() => undefined}
-          onAddOrg={onAddOrg}
-        />
-      </ContextProvider>,
-    );
-    // The Hub never shows the org nav (no My Work / Triage rows).
-    expect(screen.queryByRole('link', { name: 'Triage' })).not.toBeInTheDocument();
-    // It lists every workspace as an entry into the org.
-    expect(screen.getByRole('link', { name: 'Acme Co' })).toHaveAttribute(
-      'href',
-      `/orgs/${ACME.id}/my-work`,
-    );
-    expect(screen.getByRole('link', { name: 'Globex' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Add organization' }));
-    expect(onAddOrg).toHaveBeenCalledTimes(1);
-  });
-
-  it('never produces an /orgs/undefined href when no org is bound', () => {
-    render(
-      <ContextProvider initialContext={HUB_CONTEXT}>
+      <ContextProvider initialContext={null}>
         <Sidebar
           workspaces={WORKSPACES}
           {...sidebarHrefs()}
@@ -213,22 +202,10 @@ describe('Sidebar', () => {
       </ContextProvider>,
     );
     for (const link of screen.getAllByRole('link')) {
-      expect(link.getAttribute('href')).not.toContain('/orgs/undefined');
+      expect(link.getAttribute('href')).not.toContain('/orgs/null');
     }
-  });
-
-  it('renders an empty-state line when the caller has no workspaces', () => {
-    render(
-      <ContextProvider initialContext={HUB_CONTEXT}>
-        <Sidebar
-          workspaces={[]}
-          {...sidebarHrefs()}
-          onSelectWorkspace={() => undefined}
-          onOpenSearch={() => undefined}
-        />
-      </ContextProvider>,
-    );
-    expect(screen.getByText('No organizations yet.')).toBeInTheDocument();
+    // The Workspace section degrades to a placeholder rather than emitting bad hrefs.
+    expect(screen.getByText('No workspace yet.')).toBeInTheDocument();
   });
 });
 
@@ -239,21 +216,7 @@ function openMenu(trigger: HTMLElement): void {
 }
 
 describe('WorkspaceSwitcher', () => {
-  it('shows the Hub as the active workspace and switches to an org on selection', async () => {
-    const onSelect = vi.fn();
-    render(
-      <ContextProvider initialContext={HUB_CONTEXT}>
-        <WorkspaceSwitcher workspaces={WORKSPACES} hubBadge={2} onSelect={onSelect} />
-      </ContextProvider>,
-    );
-    openMenu(screen.getByRole('button', { name: /Workspace: Hub/ }));
-    // The Hub + each shared org + the personal org appear as menu items.
-    await waitFor(() => expect(screen.getByText('Acme Co')).toBeInTheDocument());
-    fireEvent.click(screen.getByText('Acme Co'));
-    expect(onSelect).toHaveBeenCalledWith(ACME.id);
-  });
-
-  it('selects the Hub (null) from the cross-organization entry', async () => {
+  it('shows the active org as the trigger and switches to another org on selection', async () => {
     const onSelect = vi.fn();
     render(
       <ContextProvider initialContext={ACME.id}>
@@ -261,23 +224,44 @@ describe('WorkspaceSwitcher', () => {
       </ContextProvider>,
     );
     openMenu(screen.getByRole('button', { name: /Workspace: Acme Co/ }));
-    await waitFor(() => {
-      expect(screen.getAllByText('Hub').length).toBeGreaterThan(0);
-    });
-    // The Hub menu item is the one inside the open menu (a menuitem role).
-    fireEvent.click(screen.getByRole('menuitem', { name: /^Hub/ }));
-    expect(onSelect).toHaveBeenCalledWith(null);
+    await waitFor(() => expect(screen.getByText('Globex')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Globex'));
+    expect(onSelect).toHaveBeenCalledWith(GLOBEX.id);
   });
 
-  it('groups personal orgs under a Personal section', async () => {
+  it('lists every org uniformly with no personal/shared partition and no Hub entry', async () => {
     render(
-      <ContextProvider initialContext={HUB_CONTEXT}>
+      <ContextProvider initialContext={ACME.id}>
         <WorkspaceSwitcher workspaces={WORKSPACES} onSelect={() => undefined} />
       </ContextProvider>,
     );
-    openMenu(screen.getByRole('button', { name: /Workspace: Hub/ }));
-    await waitFor(() => expect(screen.getByText('Personal')).toBeInTheDocument());
-    expect(screen.getByText('My Space')).toBeInTheDocument();
+    openMenu(screen.getByRole('button', { name: /Workspace: Acme Co/ }));
+    await waitFor(() =>
+      expect(screen.getByRole('menuitem', { name: /Globex/ })).toBeInTheDocument(),
+    );
+    // No 'Hub' entry and no 'Personal' section header — one uniform list.
+    expect(screen.queryByText('Hub')).not.toBeInTheDocument();
+    expect(screen.queryByText('Personal')).not.toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /Acme Co/ })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /My Space/ })).toBeInTheDocument();
+  });
+
+  it('falls back to the first org as the trigger when none is bound yet', () => {
+    render(
+      <ContextProvider initialContext={null}>
+        <WorkspaceSwitcher workspaces={WORKSPACES} onSelect={() => undefined} />
+      </ContextProvider>,
+    );
+    expect(screen.getByRole('button', { name: /Workspace: Acme Co/ })).toBeInTheDocument();
+  });
+
+  it('disables the switcher when the caller has no orgs', () => {
+    render(
+      <ContextProvider initialContext={null}>
+        <WorkspaceSwitcher workspaces={[]} onSelect={() => undefined} />
+      </ContextProvider>,
+    );
+    expect(screen.getByRole('button', { name: /Workspace: Workspace/ })).toBeDisabled();
   });
 });
 

@@ -115,9 +115,7 @@ export default function TodayPage(): JSX.Element {
         <div className="flex flex-col gap-1">
           <p className="text-muted-foreground text-sm font-medium">{heading}</p>
           <h1 className="text-2xl font-semibold tracking-tight">Today</h1>
-          <p className="text-muted-foreground text-sm">
-            Your plan and what needs attention, across every organization.
-          </p>
+          <p className="text-muted-foreground text-sm">Your plan and what needs you today.</p>
         </div>
         <Button
           variant="outline"
@@ -186,7 +184,7 @@ export default function TodayPage(): JSX.Element {
           ) : (
             <EmptyPane
               title="Nothing planned or due today"
-              body="Enjoy the calm — or pull work into your day from any organization."
+              body="Enjoy the calm — or pull work into your day."
             />
           )}
         </section>

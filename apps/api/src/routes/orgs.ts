@@ -135,14 +135,70 @@ const orgs = new Hono<AppEnv>()
     if (!session?.user) throw new AuthError();
     const body = c.req.valid('json');
     const displayName = session.user.name || session.user.email;
+    const userId = session.user.id;
+
+    // Personal space (org-of-one): the name/vocabulary are not prompted for, so default
+    // the name to 'Personal'. Team orgs keep `name` required (enforced by OrgCreate's
+    // superRefine), so `body.name` is always present when `isPersonal` is false.
+    const isPersonal = body.isPersonal;
+    const orgName = body.name ?? 'Personal';
+
+    // One personal space per user: if the caller already owns an `is_personal` org, return
+    // it instead of seeding a duplicate (idempotent on the user, per DECISIONS "personal
+    // space"). The unique org-slug index would also reject a second `personal` slug, so this
+    // guard both makes the call idempotent and avoids the collision.
+    if (isPersonal) {
+      const existing = await db
+        .select({ org: organization })
+        .from(actor)
+        .innerJoin(organization, eq(actor.organizationId, organization.id))
+        .where(
+          and(eq(actor.userId, userId), eq(actor.kind, 'human'), eq(organization.isPersonal, true)),
+        )
+        .limit(1);
+      const existingOrg = existing[0]?.org;
+      if (existingOrg) {
+        const existingTeam = await db
+          .select({ id: team.id, name: team.name, key: team.key })
+          .from(team)
+          .where(eq(team.organizationId, existingOrg.id))
+          .limit(1);
+        const existingOwner = await db
+          .select({ id: actor.id })
+          .from(actor)
+          .where(
+            and(
+              eq(actor.organizationId, existingOrg.id),
+              eq(actor.userId, userId),
+              eq(actor.kind, 'human'),
+            ),
+          )
+          .limit(1);
+        const dt = existingTeam[0];
+        const owner = existingOwner[0];
+        /* v8 ignore next -- @preserve defensive: a personal org always seeds a default team + owner actor */
+        if (dt && owner) {
+          const payload: z.input<typeof OrgCreateResult> = {
+            organization: toOrgOut(existingOrg),
+            defaultTeam: { id: dt.id, name: dt.name, key: dt.key } satisfies z.input<
+              typeof DefaultTeamOut
+            >,
+            ownerActorId: owner.id,
+          };
+          return ok(c, OrgCreateResult, payload);
+        }
+      }
+    }
 
     const result = await db.transaction(async (tx) => {
       const [org] = await tx
         .insert(organization)
         .values({
-          name: body.name,
-          slug: body.slug ?? slugify(body.name),
-          isPersonal: false,
+          name: orgName,
+          // Personal spaces use a per-user `personal-<userId>` slug so the unique
+          // org-slug index never collides across users; team orgs keep the readable slug.
+          slug: body.slug ?? (isPersonal ? `personal-${slugify(userId)}` : slugify(orgName)),
+          isPersonal,
           vocabulary: { preset: body.vocabulary },
         })
         .returning();

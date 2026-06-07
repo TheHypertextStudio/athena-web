@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
@@ -126,6 +126,111 @@ describe('orgs router', () => {
       body: JSON.stringify({ name: '!!!', vocabulary: 'startup' }),
     });
     expect(b.status).toBe(200);
+  });
+
+  it('POST / isPersonal:true creates a personal space (org-of-one) with no name, defaulting to "Personal"', async () => {
+    const { userId } = await seedUserWithHub();
+    const app = orgsApp(fakeSession(userId, 'Ada', 'ada@e.com'));
+
+    const created = await app.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ isPersonal: true }),
+    });
+    expect(created.status).toBe(200);
+    const result = await body<{
+      organization: { id: string; name: string; isPersonal: boolean };
+      defaultTeam: { id: string };
+      ownerActorId: string;
+    }>(created);
+    expect(result.organization.name).toBe('Personal');
+    expect(result.organization.isPersonal).toBe(true);
+
+    // It is seeded with the same machinery: a default team + an owning human actor.
+    const rows = await db
+      .select({ isPersonal: schema.organization.isPersonal })
+      .from(schema.organization)
+      .where(eq(schema.organization.id, result.organization.id))
+      .limit(1);
+    expect(rows[0]?.isPersonal).toBe(true);
+    expect(result.defaultTeam.id).toBeTruthy();
+    expect(result.ownerActorId).toBeTruthy();
+  });
+
+  it('POST / isPersonal:true is idempotent per user: a second call returns the existing personal space', async () => {
+    const { userId } = await seedUserWithHub();
+    const app = orgsApp(fakeSession(userId));
+
+    const first = await app.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ isPersonal: true }),
+    });
+    expect(first.status).toBe(200);
+    const firstId = (await body<{ organization: { id: string } }>(first)).organization.id;
+
+    const second = await app.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ isPersonal: true, name: 'Ignored' }),
+    });
+    expect(second.status).toBe(200);
+    const secondResult = await body<{
+      organization: { id: string };
+      defaultTeam: { id: string };
+      ownerActorId: string;
+    }>(second);
+    // Same org returned; no duplicate personal space was seeded.
+    expect(secondResult.organization.id).toBe(firstId);
+    expect(secondResult.defaultTeam.id).toBeTruthy();
+    expect(secondResult.ownerActorId).toBeTruthy();
+
+    const personalOrgs = await db
+      .select({ id: schema.organization.id })
+      .from(schema.actor)
+      .innerJoin(schema.organization, eq(schema.actor.organizationId, schema.organization.id))
+      .where(
+        and(
+          eq(schema.actor.userId, userId),
+          eq(schema.actor.kind, 'human'),
+          eq(schema.organization.isPersonal, true),
+        ),
+      );
+    expect(personalOrgs).toHaveLength(1);
+  });
+
+  it('POST / isPersonal:true does not block creating a separate team org for the same user', async () => {
+    const { userId } = await seedUserWithHub();
+    const app = orgsApp(fakeSession(userId));
+    expect(
+      (
+        await app.request('/', {
+          method: 'POST',
+          headers: J,
+          body: JSON.stringify({ isPersonal: true }),
+        })
+      ).status,
+    ).toBe(200);
+    const team = await app.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ name: 'Team Org' }),
+    });
+    expect(team.status).toBe(200);
+    expect(
+      (await body<{ organization: { isPersonal: boolean } }>(team)).organization.isPersonal,
+    ).toBe(false);
+  });
+
+  it('POST / rejects a team org with no name (422)', async () => {
+    const { userId } = await seedUserWithHub();
+    const app = orgsApp(fakeSession(userId));
+    const res = await app.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ vocabulary: 'startup' }),
+    });
+    expect(res.status).toBe(422);
   });
 
   it('GET /:orgId 404s for a non-member (existence-hiding)', async () => {
@@ -405,16 +510,14 @@ describe('hub router', () => {
       .insert(schema.actor)
       .values({ organizationId: orgId, kind: 'human', displayName: 'Ada', userId });
     const date = '2026-05-01';
-    await db
-      .insert(schema.task)
-      .values({
-        organizationId: orgId,
-        title: 'DueOnly',
-        teamId,
-        state: 'todo',
-        dueDate: new Date(date),
-        createdBy: humanActorId,
-      });
+    await db.insert(schema.task).values({
+      organizationId: orgId,
+      title: 'DueOnly',
+      teamId,
+      state: 'todo',
+      dueDate: new Date(date),
+      createdBy: humanActorId,
+    });
     const app = appWithSession(hub, fakeSession(userId));
     const today = await body<{ tasks: unknown[] }>(await app.request(`/today?date=${date}`));
     expect(today.tasks.length).toBeGreaterThanOrEqual(1);
@@ -445,24 +548,20 @@ describe('hub router', () => {
     await db
       .insert(schema.notification)
       .values({ userId, organizationId: orgId, type: 'mention', body: { title: 'hi' } });
-    await db
-      .insert(schema.project)
-      .values({
-        organizationId: orgId,
-        name: 'Searchable Project',
-        teamId,
-        status: 'active',
-        createdBy: humanActorId,
-      });
-    await db
-      .insert(schema.task)
-      .values({
-        organizationId: orgId,
-        title: 'Searchable Task',
-        teamId,
-        state: 'todo',
-        createdBy: humanActorId,
-      });
+    await db.insert(schema.project).values({
+      organizationId: orgId,
+      name: 'Searchable Project',
+      teamId,
+      status: 'active',
+      createdBy: humanActorId,
+    });
+    await db.insert(schema.task).values({
+      organizationId: orgId,
+      title: 'Searchable Task',
+      teamId,
+      state: 'todo',
+      createdBy: humanActorId,
+    });
 
     const app = appWithSession(hub, fakeSession(userId));
     expect(

@@ -105,14 +105,8 @@ export default function PortfolioPage(): JSX.Element {
     <div className="mx-auto flex h-full w-full max-w-7xl flex-col gap-6 p-6 md:p-8">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-1">
-          <p className="text-muted-foreground flex items-center gap-1.5 text-sm font-medium">
-            <LayoutGrid className="size-4" aria-hidden="true" />
-            Hub
-          </p>
           <h1 className="text-2xl font-semibold tracking-tight">Portfolio</h1>
-          <p className="text-muted-foreground text-sm">
-            One roadmap across every organization — programs as lanes, projects as bars.
-          </p>
+          <p className="text-muted-foreground text-sm">Every venture on one timeline.</p>
         </div>
         <div className="flex items-center gap-2">
           <ScaleMenu
@@ -158,12 +152,12 @@ export default function PortfolioPage(): JSX.Element {
       ) : !hasSwimlanes ? (
         <EmptyState
           title="No roadmap yet"
-          body="When you belong to an organization with in-flight projects, its roadmap appears here — one shared timeline across every org."
+          body="Once you have projects in flight, they appear here on one shared timeline."
         />
       ) : !layout.hasAnyBars || !scale ? (
         <EmptyState
           title="Nothing scheduled"
-          body="Your organizations have no in-flight projects with dates yet. Set project start and target dates to place them on the roadmap."
+          body="Set start and target dates on your projects to place them on the timeline."
         />
       ) : (
         <div className="flex min-w-0 flex-col gap-3">

@@ -19,10 +19,13 @@
  */
 import type { CycleOut, CycleStats } from '@docket/types';
 import { useVocabulary } from '@docket/ui/hooks';
-import { Skeleton } from '@docket/ui/primitives';
-import { useParams } from 'next/navigation';
+import { GanttChart, Plus } from '@docket/ui/icons';
+import { Button, Skeleton } from '@docket/ui/primitives';
+import { useParams, useRouter } from 'next/navigation';
 import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 
+import { useActiveOrg } from '@/components/active-org';
+import { CreateCyclePanel } from '@/components/cycles/create-cycle';
 import { CycleCard } from '@/components/cycles/cycle-card';
 import { CYCLE_SEGMENTS, SEGMENT_LABEL, segmentOf } from '@/components/cycles/cycle-status';
 import { api } from '@/lib/api';
@@ -32,8 +35,11 @@ import { readError, readProblem } from '@/lib/problem';
  * The org Cycles list page.
  */
 export default function CyclesPage(): JSX.Element {
+  const router = useRouter();
   const params = useParams<{ orgId: string }>();
   const orgId = params.orgId;
+
+  const { teams, defaultTeamId, teamsLoading } = useActiveOrg();
 
   const cycleNoun = useVocabulary('cycle');
   const cycleNounPlural = useVocabulary('cycle', { plural: true });
@@ -42,6 +48,7 @@ export default function CyclesPage(): JSX.Element {
   const [statsById, setStatsById] = useState<ReadonlyMap<string, CycleStats>>(new Map());
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
 
   /** Load the org's cycles, then their per-cycle stats in parallel. */
   const load = useCallback(async (): Promise<void> => {
@@ -96,15 +103,69 @@ export default function CyclesPage(): JSX.Element {
 
   const total = cycles.length;
 
+  /**
+   * The next team-local sequence number for a team: one past the highest existing cycle
+   * number on that team, or 1 when the team has none yet. Cycles are addressed by a
+   * team-scoped number ("{Cycle} 3"), and the create body requires it explicitly.
+   */
+  const nextNumberForTeam = useCallback(
+    (teamId: string): number => {
+      let max = 0;
+      for (const cycle of cycles) {
+        if (cycle.teamId === teamId && cycle.number > max) max = cycle.number;
+      }
+      return max + 1;
+    },
+    [cycles],
+  );
+
+  /** Prepend the freshly-created cycle to the roster, then open its detail. */
+  const handleCreated = useCallback(
+    (created: CycleOut): void => {
+      setCycles((current) => [created, ...current]);
+      router.push(`/orgs/${orgId}/cycles/${created.id}`);
+    },
+    [orgId, router],
+  );
+
   return (
     <div className="mx-auto flex h-full w-full max-w-5xl flex-col gap-6 p-8">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight">{cycleNounPlural}</h1>
-        <p className="text-muted-foreground text-sm">
-          Time-boxed cadences for your team — what&apos;s live now, what&apos;s coming up, and
-          what&apos;s wrapped.
-        </p>
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-2xl font-semibold tracking-tight">{cycleNounPlural}</h1>
+          <p className="text-muted-foreground text-sm">
+            Time-boxed cadences for your team — what&apos;s live now, what&apos;s coming up, and
+            what&apos;s wrapped.
+          </p>
+        </div>
+        {!createOpen ? (
+          <Button
+            type="button"
+            className="gap-1.5"
+            onClick={() => {
+              setCreateOpen(true);
+            }}
+          >
+            <Plus aria-hidden="true" className="size-4" />
+            New {cycleNoun}
+          </Button>
+        ) : null}
       </header>
+
+      {createOpen ? (
+        <CreateCyclePanel
+          orgId={orgId}
+          cycleNoun={cycleNoun}
+          teams={teams}
+          defaultTeamId={defaultTeamId}
+          teamsLoading={teamsLoading}
+          nextNumberForTeam={nextNumberForTeam}
+          onClose={() => {
+            setCreateOpen(false);
+          }}
+          onCreated={handleCreated}
+        />
+      ) : null}
 
       {loading ? (
         <ListSkeleton />
@@ -113,14 +174,30 @@ export default function CyclesPage(): JSX.Element {
           {loadError}
         </p>
       ) : total === 0 ? (
-        <div className="border-border/60 flex flex-col items-center justify-center gap-1 rounded-xl border border-dashed p-12 text-center">
+        <div className="border-border/60 flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed p-12 text-center">
+          <span className="bg-muted text-muted-foreground mb-1 flex size-10 items-center justify-center rounded-full">
+            <GanttChart aria-hidden="true" className="size-5" />
+          </span>
           <p className="text-foreground text-sm font-medium">
             No {cycleNounPlural.toLowerCase()} yet
           </p>
           <p className="text-muted-foreground max-w-sm text-sm">
-            When your team starts a {cycleNoun.toLowerCase()}, it shows up here with its pace and
-            carryover at a glance.
+            Start a {cycleNoun.toLowerCase()} to time-box your team&apos;s work and track its pace
+            and carryover at a glance.
           </p>
+          {!createOpen ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="mt-1 gap-1.5"
+              onClick={() => {
+                setCreateOpen(true);
+              }}
+            >
+              <Plus aria-hidden="true" className="size-4" />
+              Create your first {cycleNoun.toLowerCase()}
+            </Button>
+          ) : null}
         </div>
       ) : (
         <div className="flex flex-col gap-8">

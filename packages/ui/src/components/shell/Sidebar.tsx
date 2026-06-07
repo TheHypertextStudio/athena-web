@@ -5,20 +5,22 @@
  *
  * @remarks
  * Collapses Docket's former two-layer navigation (the left-edge org rail + the org-scoped
- * context sidebar) into one Linear-grade sidebar. Top: the {@link WorkspaceSwitcher} (the
- * current context + a one-click switch between the Hub, every org, and Personal). Below it,
- * two always-useful groups:
+ * context sidebar) into one Linear-grade sidebar with sections that are *always* visible —
+ * there is no separate "Hub" mode that swaps the sidebar's contents. Pinned at the top is the
+ * {@link WorkspaceSwitcher} (the active workspace + a one-click switch between every org the
+ * caller belongs to). Below it, two sections shown on every route:
  *
- * - **Home** (cross-org): Today · Inbox · Portfolio · Search (opens the command palette).
+ * - **Home** (cross-org, no header): Today · Inbox · Portfolio · Search (opens the command
+ *   palette). These route to `/today`, `/inbox`, `/portfolio` regardless of the active org.
  * - **Workspace** (the active org): My Work · Triage · Initiatives · Programs · Projects ·
  *   Cycles · Teams · Views · Agents · Settings — entity-noun labels skinned per org via
- *   `useVocabulary`.
+ *   `useVocabulary`, linking to `/orgs/<activeOrgId>/…`.
  *
- * On the Hub (no org bound) the Workspace group is replaced by a **Workspaces** list so the
- * caller can enter an org, never leaving the sidebar empty or useless. Every row is rendered
- * as a real anchor (via {@link SidebarNavItem} `asChild`) whose `href` comes from the host's
- * {@link SidebarProps.hrefForWorkspace} builder, so navigation is keyboard-accessible and the
- * host's router owns routing; the Search row is a button that opens the palette.
+ * The Workspace section always reflects the active org (route org ?? last-selected ?? personal),
+ * so the sidebar is stable on every route and never empties or mode-swaps. Every row is a real
+ * anchor (via {@link SidebarNavItem} `asChild`) whose `href` comes from the host's builders, so
+ * navigation is keyboard-accessible and the host's router owns routing; the Search row is a
+ * button that opens the palette.
  */
 import * as React from 'react';
 
@@ -30,7 +32,6 @@ import {
   Layers,
   LayoutGrid,
   type LucideIcon,
-  Plus,
   RefreshCw,
   Search,
   Settings,
@@ -39,8 +40,6 @@ import {
   Users,
 } from '../../icons';
 import { useVocabulary } from '../../hooks/useVocabulary';
-import { getOrgAccent } from '../../lib/org-accent';
-import { Button } from '../../primitives';
 import { useContextState } from './ContextProvider';
 import { SidebarNavItem } from './SidebarNavItem';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
@@ -48,28 +47,24 @@ import type { HomeNavKey, Workspace, WorkspaceNavKey } from './workspaces';
 
 /** Props for {@link Sidebar}. */
 export interface SidebarProps {
-  /** Every workspace the caller can switch into (drives the switcher + the Hub list). */
+  /** Every workspace the caller can switch into (drives the switcher). */
   readonly workspaces: readonly Workspace[];
   /** The active Home destination (highlights Today/Inbox/Portfolio), if any. */
   readonly activeHomeKey?: HomeNavKey;
   /** The active Workspace nav key (highlights the org-scoped row), if any. */
   readonly activeWorkspaceKey?: WorkspaceNavKey;
-  /** The caller's cross-org unread count, surfaced on the switcher's Hub entry + Inbox row. */
+  /** The caller's cross-org unread count, surfaced on the Inbox row. */
   readonly unreadCount?: number;
   /** Build the href for a cross-org Home destination (Today/Inbox/Portfolio). */
   readonly hrefForHome: (key: Exclude<HomeNavKey, 'search'>) => string;
   /** Build the href for an org-scoped Workspace destination under the active org. */
   readonly hrefForWorkspace: (orgId: string, key: WorkspaceNavKey) => string;
-  /** Build the home href for entering a workspace from the Hub list. */
-  readonly hrefForOrgHome: (orgId: string) => string;
   /** Render a routing link element around the row content (host's `Link`). */
   readonly renderLink: (href: string, children: React.ReactNode) => React.ReactNode;
-  /** Switch the active context: `null` selects the Hub, otherwise an org id. */
-  readonly onSelectWorkspace: (orgId: string | null) => void;
+  /** Switch the active workspace to an org id. */
+  readonly onSelectWorkspace: (orgId: string) => void;
   /** Open the command palette (the Search Home row). */
   readonly onOpenSearch: () => void;
-  /** Add/join an org (the foot affordance on the Hub). */
-  readonly onAddOrg?: () => void;
 }
 
 /** A resolved nav row descriptor (label is already vocabulary-resolved). */
@@ -82,7 +77,7 @@ interface NavRow<K extends string> {
   readonly icon: LucideIcon;
 }
 
-/** The section heading above each sidebar group. */
+/** The section heading above a sidebar group. */
 function GroupLabel({ children }: { readonly children: React.ReactNode }): React.JSX.Element {
   return (
     <p className="text-muted-foreground px-2 pt-3 pb-1 text-xs font-medium tracking-wide">
@@ -92,11 +87,13 @@ function GroupLabel({ children }: { readonly children: React.ReactNode }): React
 }
 
 /**
- * The single integrated navigation sidebar (workspace switcher + Home + Workspace groups).
+ * The single integrated navigation sidebar (workspace switcher + Home + Workspace sections).
  *
  * @remarks
  * Must be rendered inside a {@link ContextProvider}; wrap it (or its consumers) in a
  * `VocabularyProvider` so the org-scoped entity rows resolve to the active org's vocabulary.
+ * Both sections are always present: the Home section is cross-org, and the Workspace section
+ * reflects the active org (which the host resolves to route ?? last-selected ?? personal).
  */
 export function Sidebar({
   workspaces,
@@ -105,13 +102,11 @@ export function Sidebar({
   unreadCount,
   hrefForHome,
   hrefForWorkspace,
-  hrefForOrgHome,
   renderLink,
   onSelectWorkspace,
   onOpenSearch,
-  onAddOrg,
 }: SidebarProps): React.JSX.Element {
-  const { activeOrgId, isHub } = useContextState();
+  const { activeOrgId } = useContextState();
 
   const initiatives = useVocabulary('initiative', { plural: true });
   const programs = useVocabulary('program', { plural: true });
@@ -145,14 +140,9 @@ export function Sidebar({
       aria-label="Navigation"
       className="border-border bg-card flex h-full w-60 shrink-0 flex-col gap-0.5 overflow-y-auto border-r p-2"
     >
-      <WorkspaceSwitcher
-        workspaces={workspaces}
-        hubBadge={unreadCount}
-        onSelect={onSelectWorkspace}
-      />
+      <WorkspaceSwitcher workspaces={workspaces} onSelect={onSelectWorkspace} />
 
-      <GroupLabel>Home</GroupLabel>
-      <nav aria-label="Home" className="flex flex-col gap-0.5">
+      <nav aria-label="Home" className="flex flex-col gap-0.5 pt-2">
         {homeRows.map((row) => {
           const href = hrefForHome(row.key);
           const active = activeHomeKey === row.key;
@@ -173,54 +163,27 @@ export function Sidebar({
         <SidebarNavItem label="Search" icon={Search} onSelect={onOpenSearch} />
       </nav>
 
-      {isHub || !activeOrgId ? (
-        <>
-          <GroupLabel>Workspaces</GroupLabel>
-          <nav aria-label="Workspaces" className="flex min-h-0 flex-col gap-0.5">
-            {workspaces.length === 0 ? (
-              <p className="text-muted-foreground px-2 py-1.5 text-sm">No organizations yet.</p>
-            ) : (
-              workspaces.map((w) => (
-                <SidebarNavItem key={w.id} label={w.name} badge={w.attentionCount} asChild>
-                  {renderLink(hrefForOrgHome(w.id), <WorkspaceRowBody workspace={w} />)}
-                </SidebarNavItem>
-              ))
-            )}
-            {onAddOrg ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={onAddOrg}
-                className="text-muted-foreground hover:text-foreground mt-1 w-full justify-start gap-2 px-2 font-normal"
+      <GroupLabel>Workspace</GroupLabel>
+      {activeOrgId ? (
+        <nav aria-label="Workspace" className="flex flex-col gap-0.5">
+          {workspaceRows.map((row) => {
+            const href = hrefForWorkspace(activeOrgId, row.key);
+            const active = activeWorkspaceKey === row.key;
+            return (
+              <SidebarNavItem
+                key={row.key}
+                label={row.label}
+                icon={row.icon}
+                active={active}
+                asChild
               >
-                <Plus aria-hidden="true" className="size-4" />
-                <span>Add organization</span>
-              </Button>
-            ) : null}
-          </nav>
-        </>
+                {renderLink(href, <RowBody icon={row.icon} label={row.label} />)}
+              </SidebarNavItem>
+            );
+          })}
+        </nav>
       ) : (
-        <>
-          <GroupLabel>Workspace</GroupLabel>
-          <nav aria-label="Workspace" className="flex flex-col gap-0.5">
-            {workspaceRows.map((row) => {
-              const href = hrefForWorkspace(activeOrgId, row.key);
-              const active = activeWorkspaceKey === row.key;
-              return (
-                <SidebarNavItem
-                  key={row.key}
-                  label={row.label}
-                  icon={row.icon}
-                  active={active}
-                  asChild
-                >
-                  {renderLink(href, <RowBody icon={row.icon} label={row.label} />)}
-                </SidebarNavItem>
-              );
-            })}
-          </nav>
-        </>
+        <p className="text-muted-foreground px-2 py-1.5 text-sm">No workspace yet.</p>
       )}
     </aside>
   );
@@ -238,20 +201,6 @@ function RowBody({
     <>
       <Icon aria-hidden="true" className="size-4 shrink-0" />
       <span className="truncate">{label}</span>
-    </>
-  );
-}
-
-/** A workspace entry in the Hub's Workspaces list: an accent-tinted dot + the org name. */
-function WorkspaceRowBody({ workspace }: { readonly workspace: Workspace }): React.JSX.Element {
-  return (
-    <>
-      <span
-        aria-hidden="true"
-        className="size-4 shrink-0 rounded-[5px]"
-        style={{ backgroundColor: getOrgAccent(workspace.id) }}
-      />
-      <span className="truncate">{workspace.name}</span>
     </>
   );
 }

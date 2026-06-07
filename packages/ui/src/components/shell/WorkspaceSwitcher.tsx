@@ -1,20 +1,20 @@
 'use client';
 
 /**
- * `@docket/ui` — the integrated workspace switcher at the top of the {@link Sidebar}.
+ * `@docket/ui` — the integrated workspace switcher pinned at the top of the {@link Sidebar}.
  *
  * @remarks
- * Replaces the old left-edge org rail: a single styled dropdown that surfaces the *current
- * context* (the cross-org Hub, each org the caller belongs to, or their Personal space) with
- * avatars + per-workspace attention badges. The trigger shows the active workspace; opening it
- * lists every workspace so the caller can switch context in one click. Selecting a workspace
- * rebinds the active context via {@link useContextState} (so the org accent applies instantly)
- * and reports the selection through {@link WorkspaceSwitcherProps.onSelect} so the host can
- * navigate. The Hub entry rebinds to {@link HUB_CONTEXT} and reports `null`.
+ * Replaces the old left-edge org rail: a single styled dropdown that surfaces the *active
+ * workspace* and lists every org the caller belongs to in one uniform list — personal and
+ * shared orgs look and group identically, exactly like Linear. The trigger shows the active
+ * workspace; opening it lists every workspace so the caller can switch in one click.
+ * Selecting a workspace rebinds the active org via {@link useContextState} (so the org accent
+ * applies instantly) and reports the selection through {@link WorkspaceSwitcherProps.onSelect}
+ * so the host can navigate.
  */
 import * as React from 'react';
 
-import { Building, ChevronDown, Home } from '../../icons';
+import { ChevronDown } from '../../icons';
 import { cn } from '../../lib/utils';
 import { getOrgAccent } from '../../lib/org-accent';
 import {
@@ -26,7 +26,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '../../primitives';
 import { useContextState } from './ContextProvider';
@@ -34,17 +33,15 @@ import type { Workspace } from './workspaces';
 
 /** Props for {@link WorkspaceSwitcher}. */
 export interface WorkspaceSwitcherProps {
-  /** Every org the caller belongs to (personal orgs are surfaced under "Personal"). */
+  /** Every org the caller belongs to, listed uniformly (no personal/shared partition). */
   readonly workspaces: readonly Workspace[];
-  /** The caller's cross-org unread count, surfaced as the Hub's attention badge. */
-  readonly hubBadge?: number;
   /**
-   * Switch to a workspace: `null` selects the cross-org Hub, otherwise an org id.
+   * Switch to a workspace by org id.
    *
    * @remarks
    * Fires in addition to the local context rebind, so the host can navigate imperatively.
    */
-  readonly onSelect: (orgId: string | null) => void;
+  readonly onSelect: (orgId: string) => void;
 }
 
 /** Compute up-to-two-letter initials from a workspace name for the avatar fallback. */
@@ -87,19 +84,8 @@ function AttentionBadge({
   );
 }
 
-/** The workspace avatar: an org's accent-tinted initials avatar, or the Hub's home glyph. */
-function WorkspaceAvatar({
-  workspace,
-}: {
-  readonly workspace: Workspace | null;
-}): React.JSX.Element {
-  if (!workspace) {
-    return (
-      <span className="bg-muted text-muted-foreground flex h-6 w-6 shrink-0 items-center justify-center rounded-md">
-        <Home aria-hidden="true" className="size-4" />
-      </span>
-    );
-  }
+/** The workspace avatar: an org's accent-tinted initials avatar (or its image). */
+function WorkspaceAvatar({ workspace }: { readonly workspace: Workspace }): React.JSX.Element {
   return (
     <Avatar
       className="h-6 w-6 rounded-md ring-1"
@@ -117,15 +103,12 @@ function WorkspaceAvatar({
 function WorkspaceMenuRow({
   workspace,
   active,
-  badge,
   onSelect,
 }: {
-  readonly workspace: Workspace | null;
+  readonly workspace: Workspace;
   readonly active: boolean;
-  readonly badge?: number;
   readonly onSelect: () => void;
 }): React.JSX.Element {
-  const name = workspace?.name ?? 'Hub';
   return (
     <DropdownMenuItem
       onSelect={onSelect}
@@ -133,45 +116,42 @@ function WorkspaceMenuRow({
       className={cn('gap-2', active && 'bg-accent text-accent-foreground')}
     >
       <WorkspaceAvatar workspace={workspace} />
-      <span className="min-w-0 flex-1 truncate">{name}</span>
-      <AttentionBadge count={badge ?? 0} label="need attention" />
+      <span className="min-w-0 flex-1 truncate">{workspace.name}</span>
+      <AttentionBadge count={workspace.attentionCount ?? 0} label="need attention" />
     </DropdownMenuItem>
   );
 }
 
 /**
- * The integrated workspace switcher: the active context + a one-click switch between
- * the Hub, every org, and the caller's Personal space.
+ * The integrated workspace switcher: the active workspace + a one-click switch between every
+ * org the caller belongs to.
  *
  * @remarks
- * Must be rendered inside a {@link ContextProvider} (it reads + rebinds the active context).
- * Personal orgs (`isPersonal`) are grouped under a "Personal" section so a solo workspace
- * never gets lost among shared orgs.
+ * Must be rendered inside a {@link ContextProvider} (it reads + rebinds the active org). Every
+ * org is listed uniformly — there is no Hub entry and no personal/shared partition, so a solo
+ * workspace looks identical to a shared one, exactly like Linear's workspace switcher.
  */
 export function WorkspaceSwitcher({
   workspaces,
-  hubBadge,
   onSelect,
 }: WorkspaceSwitcherProps): React.JSX.Element {
-  const { activeOrgId, isHub } = useContextState();
+  const { activeOrgId } = useContextState();
   const [open, setOpen] = React.useState(false);
 
   const active = React.useMemo(
-    () => workspaces.find((w) => w.id === activeOrgId) ?? null,
+    () => workspaces.find((w) => w.id === activeOrgId) ?? workspaces.at(0) ?? null,
     [workspaces, activeOrgId],
   );
-  const shared = workspaces.filter((w) => !w.isPersonal);
-  const personal = workspaces.filter((w) => w.isPersonal);
 
   const select = React.useCallback(
-    (orgId: string | null): void => {
+    (orgId: string): void => {
       setOpen(false);
       onSelect(orgId);
     },
     [onSelect],
   );
 
-  const triggerLabel = isHub ? 'Hub' : (active?.name ?? 'Hub');
+  const triggerLabel = active?.name ?? 'Workspace';
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
@@ -179,68 +159,33 @@ export function WorkspaceSwitcher({
         <Button
           type="button"
           variant="ghost"
+          disabled={active === null}
           aria-label={`Workspace: ${triggerLabel}. Switch workspace`}
           className="h-auto w-full justify-start gap-2 px-2 py-1.5"
         >
-          <WorkspaceAvatar workspace={active} />
+          {active ? (
+            <WorkspaceAvatar workspace={active} />
+          ) : (
+            <span className="bg-muted size-6 shrink-0 rounded-md" aria-hidden="true" />
+          )}
           <span className="min-w-0 flex-1 truncate text-left text-sm font-semibold">
             {triggerLabel}
           </span>
-          {isHub ? <AttentionBadge count={hubBadge ?? 0} label="need attention" /> : null}
           <ChevronDown aria-hidden="true" className="text-muted-foreground size-4 shrink-0" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-[15rem]">
-        <DropdownMenuLabel className="text-muted-foreground text-xs">
-          Cross-organization
-        </DropdownMenuLabel>
-        <WorkspaceMenuRow
-          workspace={null}
-          active={isHub}
-          badge={hubBadge}
-          onSelect={() => {
-            select(null);
-          }}
-        />
-        {shared.length > 0 ? (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuLabel className="text-muted-foreground text-xs">
-              Organizations
-            </DropdownMenuLabel>
-            {shared.map((w) => (
-              <WorkspaceMenuRow
-                key={w.id}
-                workspace={w}
-                active={!isHub && active?.id === w.id}
-                badge={w.attentionCount}
-                onSelect={() => {
-                  select(w.id);
-                }}
-              />
-            ))}
-          </>
-        ) : null}
-        {personal.length > 0 ? (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuLabel className="text-muted-foreground flex items-center gap-1.5 text-xs">
-              <Building aria-hidden="true" className="size-3.5" />
-              Personal
-            </DropdownMenuLabel>
-            {personal.map((w) => (
-              <WorkspaceMenuRow
-                key={w.id}
-                workspace={w}
-                active={!isHub && active?.id === w.id}
-                badge={w.attentionCount}
-                onSelect={() => {
-                  select(w.id);
-                }}
-              />
-            ))}
-          </>
-        ) : null}
+        <DropdownMenuLabel className="text-muted-foreground text-xs">Workspaces</DropdownMenuLabel>
+        {workspaces.map((w) => (
+          <WorkspaceMenuRow
+            key={w.id}
+            workspace={w}
+            active={active?.id === w.id}
+            onSelect={() => {
+              select(w.id);
+            }}
+          />
+        ))}
       </DropdownMenuContent>
     </DropdownMenu>
   );

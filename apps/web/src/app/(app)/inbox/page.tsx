@@ -207,9 +207,7 @@ export default function InboxPage(): JSX.Element {
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-semibold tracking-tight">Inbox</h1>
-          <p className="text-muted-foreground text-sm">
-            Everything that needs a response, across every organization.
-          </p>
+          <p className="text-muted-foreground text-sm">Everything that needs a response.</p>
         </div>
         <Button
           variant="outline"
@@ -319,10 +317,7 @@ export default function InboxPage(): JSX.Element {
             <ActivityRow key={event.id} event={event} orgName={orgName(event.organizationId)} />
           ))
         ) : (
-          <EmptyState
-            title="Nothing yet"
-            body="Activity across your organizations will show up here as work happens."
-          />
+          <EmptyState title="Nothing yet" body="Activity will show up here as work happens." />
         )}
       </section>
     </div>

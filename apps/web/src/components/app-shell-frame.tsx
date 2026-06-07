@@ -5,7 +5,6 @@ import {
   AppShell,
   ContextProvider,
   type HomeNavKey,
-  HUB_CONTEXT,
   Sidebar,
   TabBar,
   useContextState,
@@ -32,7 +31,7 @@ function homeKeyFromPath(pathname: string): HomeNavKey | undefined {
   return undefined;
 }
 
-/** The org id embedded in an `(app)` route, or `null` for cross-org (Hub) routes. */
+/** The org id embedded in an `(app)` route, or `null` for cross-org routes (Today/Inbox/…). */
 function orgIdFromPath(pathname: string): string | null {
   const match = /^\/orgs\/([^/]+)(?:\/|$)/.exec(pathname);
   return match ? (match[1] ?? null) : null;
@@ -68,17 +67,67 @@ function workspaceKeyFromPath(pathname: string): WorkspaceNavKey | undefined {
   return undefined;
 }
 
+/** The `localStorage` key for a user's last-active workspace (persists across sessions). */
+function lastOrgStorageKey(userId: string): string {
+  return `docket:last-org:${userId}`;
+}
+
+/** Read the persisted last-active org id for a user, tolerating absent/blocked storage. */
+function readLastOrg(userId: string | null): string | null {
+  if (!userId || typeof window === 'undefined') return null;
+  try {
+    return window.localStorage.getItem(lastOrgStorageKey(userId));
+  } catch {
+    return null;
+  }
+}
+
+/** Persist the last-active org id for a user, ignoring storage failures (quota/private mode). */
+function writeLastOrg(userId: string | null, orgId: string): void {
+  if (!userId || typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(lastOrgStorageKey(userId), orgId);
+  } catch {
+    // Non-fatal: persistence is best-effort.
+  }
+}
+
 /**
- * The authenticated app-shell frame: the single integrated sidebar, the multi-document tab
- * bar, and the active context.
+ * Resolve the active workspace for the flattened, Linear-style sidebar.
+ *
+ * @remarks
+ * The sidebar's Workspace section is always present and stable, so it must reflect an org on
+ * every route — including the cross-org Home routes (Today/Inbox/Portfolio) where no org is in
+ * the path. Resolution order: the route's org, else the persisted last-used org (if the caller
+ * still belongs to it), else the caller's personal space, else their first org. Returns `null`
+ * only when the caller has no orgs at all.
+ *
+ * @param routeOrgId - The org id parsed from the path, or `null` on a cross-org route.
+ * @param orgs - Every org the caller belongs to.
+ * @param lastOrgId - The persisted last-used org id, if any.
+ */
+function resolveActiveOrg(
+  routeOrgId: string | null,
+  orgs: readonly OrgSummary[],
+  lastOrgId: string | null,
+): string | null {
+  if (routeOrgId) return routeOrgId;
+  if (orgs.length === 0) return null;
+  if (lastOrgId && orgs.some((o) => o.id === lastOrgId)) return lastOrgId;
+  const personal = orgs.find((o) => o.isPersonal);
+  return personal?.id ?? orgs[0]?.id ?? null;
+}
+
+/**
+ * The authenticated app-shell frame: the single flattened sidebar, the multi-document tab bar,
+ * and the active workspace.
  *
  * @remarks
  * Mounted by the `(app)` route-group layout so every authenticated page shares one shell.
- * It gates access on the Better Auth session (redirecting to `/sign-in` when signed out),
- * loads the caller's orgs once for the {@link Sidebar}'s workspace switcher, and binds the
- * active context to the route — the cross-org {@link HUB_CONTEXT} on the Home surfaces, or the
- * org id parsed from an `/orgs/[orgId]/…` path. Sidebar and tab selections are translated into
- * Next navigation.
+ * It gates access on the Better Auth session (redirecting to `/sign-in` when signed out) and
+ * loads the caller's orgs once for the {@link Sidebar}'s workspace switcher. There is no
+ * cross-org "Hub" mode that swaps the sidebar: the sidebar's Workspace section always reflects
+ * the active workspace, resolved as route org ?? persisted last-used ?? personal space.
  *
  * The orgs and the bound org's vocabulary skin are exposed to descendant pages through
  * {@link useActiveOrg} so they can render org chips and resolve entity nouns without refetching.
@@ -91,7 +140,7 @@ export function AppShellFrame({ children }: { children: ReactNode }): JSX.Elemen
   const [orgs, setOrgs] = useState<readonly OrgSummary[]>([]);
   const [orgsError, setOrgsError] = useState<string | null>(null);
 
-  const activeOrgId = orgIdFromPath(pathname);
+  const routeOrgId = orgIdFromPath(pathname);
   const userId = session?.user.id ?? null;
 
   // Redirect to sign-in once the session resolves to "signed out".
@@ -129,13 +178,19 @@ export function AppShellFrame({ children }: { children: ReactNode }): JSX.Elemen
     );
   }
 
+  // Seed the context with the best guess available before orgs load: the route org, else the
+  // persisted last-used org. The inner frame reconciles it to the full resolution once orgs
+  // arrive — keeping the org accent stable from first paint instead of flashing on hydration.
+  const initialOrgId = routeOrgId ?? readLastOrg(userId);
+
   return (
-    <ContextProvider initialContext={activeOrgId ?? HUB_CONTEXT}>
-      <ActiveOrgContext orgs={orgs} activeOrgId={activeOrgId} orgsError={orgsError}>
+    <ContextProvider initialContext={initialOrgId}>
+      <ActiveOrgContext orgs={orgs} activeOrgId={routeOrgId} orgsError={orgsError}>
         <CommandPaletteProvider>
           <OpenDocumentsProvider userId={userId}>
             <AppShellInner
-              activeOrgId={activeOrgId}
+              routeOrgId={routeOrgId}
+              userId={userId}
               workspaceKey={workspaceKeyFromPath(pathname)}
               homeKey={homeKeyFromPath(pathname)}
             >
@@ -150,8 +205,10 @@ export function AppShellFrame({ children }: { children: ReactNode }): JSX.Elemen
 
 /** Props for {@link AppShellInner}. */
 interface AppShellInnerProps {
-  /** The org id bound to this route, or `null` on the Hub. */
-  activeOrgId: string | null;
+  /** The org id bound to this route, or `null` on a cross-org route. */
+  routeOrgId: string | null;
+  /** The signed-in user's id; namespaces the persisted last-used workspace. */
+  userId: string | null;
   /** The active Workspace nav key for the current route. */
   workspaceKey?: WorkspaceNavKey;
   /** The active Home destination for the current route (Today/Inbox/Portfolio). */
@@ -170,13 +227,18 @@ function renderLink(href: string, content: ReactNode): ReactNode {
  *
  * @remarks
  * Split from {@link AppShellFrame} because it must read the shell context, active-org state,
- * and open-documents store (only available inside their providers). The route is the single
- * source of truth: a one-directional effect mirrors it into the bound context, while every
- * sidebar/switcher selection navigates imperatively (Hub → `/today`, an org → its My Work).
- * Entity nouns are skinned to the bound org via {@link VocabularyProvider}.
+ * and open-documents store (only available inside their providers). The flattened sidebar
+ * always shows both sections — the cross-org Home section and the active workspace's section —
+ * so the active workspace is resolved as route org ?? persisted last-used ?? personal space and
+ * mirrored into the shell context (driving the org accent + the Workspace section's hrefs).
+ * Every selection navigates imperatively (a cross-org row to its page, an org to its My Work),
+ * and the chosen org is persisted so it survives across sessions. Entity nouns in the Workspace
+ * section are skinned to the *route* org via {@link VocabularyProvider}; on a cross-org route
+ * they fall back to the default preset until the caller enters an org.
  */
 function AppShellInner({
-  activeOrgId,
+  routeOrgId,
+  userId,
   workspaceKey,
   homeKey,
   children,
@@ -194,22 +256,37 @@ function AppShellInner({
         id: o.id,
         name: o.name,
         avatar: o.avatar,
-        isPersonal: o.isPersonal,
       })),
     [orgs],
   );
 
-  // Mirror the route into the bound context — one-directional, never reversing navigation.
-  //
-  // This is the *only* coupling between the route and the context: the route is the source of
-  // truth, and the context follows it. Navigation is always driven imperatively from the
-  // sidebar/switcher handlers below; the shell never derives a `router.push` from context
-  // state, which is what keeps switching workspaces from racing the route-to-context sync.
+  // The persisted last-used workspace, read once on mount (re-reads on sign-in change).
+  const [lastOrgId, setLastOrgId] = useState<string | null>(() => readLastOrg(userId));
   useEffect(() => {
-    setContext(activeOrgId ?? HUB_CONTEXT);
-  }, [activeOrgId, setContext]);
+    setLastOrgId(readLastOrg(userId));
+  }, [userId]);
 
-  // Poll the caller's cross-org unread count for the switcher's Hub badge + the Inbox row.
+  // The active workspace for the flattened sidebar: route org ?? last-used ?? personal ?? first.
+  const resolvedOrgId = useMemo(
+    () => resolveActiveOrg(routeOrgId, orgs, lastOrgId),
+    [routeOrgId, orgs, lastOrgId],
+  );
+
+  // Mirror the resolved active workspace into the shell context — one-directional, never
+  // reversing navigation. The context drives the org accent and the Workspace section's hrefs;
+  // it follows the resolution (route ?? last-used ?? personal) so the sidebar's org section is
+  // stable on every route, including the cross-org Home routes. Navigation is always driven
+  // imperatively from the sidebar/switcher handlers below, so this never derives a `router.push`.
+  useEffect(() => {
+    if (resolvedOrgId) setContext(resolvedOrgId);
+  }, [resolvedOrgId, setContext]);
+
+  // Persist the resolved workspace so it is the last-used default on the next visit.
+  useEffect(() => {
+    if (resolvedOrgId) writeLastOrg(userId, resolvedOrgId);
+  }, [resolvedOrgId, userId]);
+
+  // Poll the caller's cross-org unread count for the Inbox row's attention badge.
   useEffect(() => {
     const live = { current: true };
     const refresh = async (): Promise<void> => {
@@ -230,19 +307,15 @@ function AppShellInner({
     };
   }, []);
 
-  /** Switch the active workspace: the Hub (`null`) routes to Today, an org to its My Work. */
+  /** Switch the active workspace from the switcher: persist it and route to its My Work. */
   const onSelectWorkspace = useCallback(
-    (orgId: string | null): void => {
-      setContext(orgId ?? HUB_CONTEXT);
-      router.push(orgId ? `/orgs/${orgId}/my-work` : '/today');
+    (orgId: string): void => {
+      setContext(orgId);
+      writeLastOrg(userId, orgId);
+      router.push(`/orgs/${orgId}/my-work`);
     },
-    [router, setContext],
+    [router, setContext, userId],
   );
-
-  /** The add-org affordance routes to onboarding. */
-  const onAddOrg = useCallback((): void => {
-    router.push('/onboarding');
-  }, [router]);
 
   const sidebar = (
     <Sidebar
@@ -252,11 +325,9 @@ function AppShellInner({
       unreadCount={unreadCount}
       hrefForHome={(key) => `/${key}`}
       hrefForWorkspace={(orgId, key) => `/orgs/${orgId}/${key}`}
-      hrefForOrgHome={(orgId) => `/orgs/${orgId}/my-work`}
       renderLink={renderLink}
       onSelectWorkspace={onSelectWorkspace}
       onOpenSearch={openPalette}
-      onAddOrg={onAddOrg}
     />
   );
 

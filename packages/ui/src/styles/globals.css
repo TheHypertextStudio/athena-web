@@ -111,4 +111,19 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+
+  /*
+   * Typography: IBM Plex is Docket's sole brand typeface. Each consuming app loads it via
+   * `next/font` in its root layout and publishes the families under `--font-ibm-plex-sans`
+   * / `--font-ibm-plex-mono`; these `inline` theme tokens point Tailwind's `font-sans` (the
+   * default body family) and `font-mono` utilities at those variables. The trailing stacks
+   * are metric-matched system fallbacks used while the webfont loads (`display: swap`) or if
+   * it is unavailable.
+   */
+  --font-sans:
+    var(--font-ibm-plex-sans), ui-sans-serif, system-ui, -apple-system, 'Segoe UI',
+    sans-serif;
+  --font-mono:
+    var(--font-ibm-plex-mono), ui-monospace, 'SFMono-Regular', 'Menlo', 'Consolas',
+    monospace;
 }

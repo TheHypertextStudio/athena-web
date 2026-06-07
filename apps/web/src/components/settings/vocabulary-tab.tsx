@@ -14,6 +14,11 @@
  * The org's current preset comes from its {@link VocabularySkin}. The selected preset is held
  * locally so the owner can compare options; {@link VocabularyTabProps.onApply} is invoked to
  * persist the choice.
+ *
+ * The copy is gated on {@link VocabularyTabProps.isPersonal}: a personal workspace is the
+ * caller's own space, not an organization with other people in it, so the intro prose, the
+ * permission note, and the multi-tenant `team` preview row are all dropped or reframed — no
+ * "organization"/"your team"/"Teams" wording surfaces there.
  */
 import type { VocabularyPreset, VocabularySkin } from '@docket/types';
 import { cn } from '@docket/ui';
@@ -46,7 +51,13 @@ const PRESETS: readonly { value: VocabularyPreset; name: string; tagline: string
   },
 ];
 
-/** The vocabulary keys shown in the preview, in reading order. */
+/**
+ * The vocabulary keys shown in the preview, in reading order.
+ *
+ * @remarks
+ * `team` is a multi-tenant noun (grouping members), so it is omitted in a personal workspace —
+ * see {@link previewKeys}. The remaining nouns are meaningful for one person.
+ */
 const PREVIEW_KEYS: readonly VocabularyKey[] = [
   'initiative',
   'program',
@@ -56,12 +67,30 @@ const PREVIEW_KEYS: readonly VocabularyKey[] = [
   'team',
 ];
 
+/**
+ * The preview keys for a given workspace.
+ *
+ * @param isPersonal - Whether the active workspace is the caller's personal space.
+ * @returns the preview keys, dropping the multi-tenant `team` row for a personal workspace.
+ */
+function previewKeys(isPersonal: boolean): readonly VocabularyKey[] {
+  return isPersonal ? PREVIEW_KEYS.filter((key) => key !== 'team') : PREVIEW_KEYS;
+}
+
 /** Props for {@link VocabularyTab}. */
 export interface VocabularyTabProps {
   /** The org's current vocabulary skin (its active preset + any overrides). */
   skin: VocabularySkin | null;
   /** Whether the caller can change the org's vocabulary. */
   canManage: boolean;
+  /**
+   * Whether the active workspace is the caller's personal space (`OrgSummary.isPersonal`).
+   *
+   * @remarks
+   * Purely presentational: a personal workspace drops the org/multi-tenant framing (intro prose,
+   * permission note, the `team` preview row). Defaults to `false` (shared-org framing).
+   */
+  isPersonal?: boolean;
   /** Whether an apply is currently in flight. */
   applying: boolean;
   /** A status note to surface after an apply attempt (success or failure). */
@@ -81,6 +110,7 @@ export interface VocabularyTabProps {
 export function VocabularyTab({
   skin,
   canManage,
+  isPersonal = false,
   applying,
   notice,
   noticeIsError,
@@ -90,6 +120,7 @@ export function VocabularyTab({
   const [selected, setSelected] = useState<VocabularyPreset>(currentPreset);
 
   const previewMap: VocabularyPresetMap = VOCABULARY_PRESETS[selected];
+  const keys = previewKeys(isPersonal);
   const dirty = selected !== currentPreset;
 
   const currentPresetName = useMemo(
@@ -101,8 +132,10 @@ export function VocabularyTab({
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
         <p className="text-muted-foreground text-sm leading-relaxed">
-          Docket speaks your organization&rsquo;s language. Pick the preset that fits how your team
-          works, and every screen relabels its nouns to match. You&rsquo;re currently using the{' '}
+          {isPersonal
+            ? 'Choose the words Docket uses across your space. Pick the preset that fits how you work, and every screen relabels its nouns to match.'
+            : 'Docket speaks your organization’s language. Pick the preset that fits how your team works, and every screen relabels its nouns to match.'}{' '}
+          You&rsquo;re currently using the{' '}
           <span className="text-foreground font-medium">{currentPresetName}</span> vocabulary.
         </p>
       </div>
@@ -157,7 +190,7 @@ export function VocabularyTab({
           </p>
         </div>
         <dl className="divide-border grid divide-y sm:grid-cols-2 sm:divide-y-0">
-          {PREVIEW_KEYS.map((key, index) => {
+          {keys.map((key, index) => {
             const term = previewMap[key];
             const defaultTerm = VOCABULARY_PRESETS.startup[key];
             const remapped = term.plural !== defaultTerm.plural;
@@ -224,7 +257,9 @@ export function VocabularyTab({
         </div>
       ) : (
         <p className="text-muted-foreground text-sm">
-          Only an owner or admin can change the organization&rsquo;s vocabulary.
+          {isPersonal
+            ? 'You don’t have permission to change this vocabulary.'
+            : 'Only an owner or admin can change the organization’s vocabulary.'}
         </p>
       )}
     </div>

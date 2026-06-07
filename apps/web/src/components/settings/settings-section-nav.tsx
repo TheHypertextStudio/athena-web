@@ -6,10 +6,15 @@
  * @remarks
  * Replaces the former in-page tab strip with a vertical, routed section list so Settings scales
  * as it grows toward a dozen sections. The list is driven entirely by the typed
- * {@link SETTINGS_SECTION_GROUPS} registry: each `available` section renders as a Next.js
+ * {@link settingsSectionGroups} registry: each `available` section renders as a Next.js
  * `Link` (so navigation is real routing, prefetched, and works with browser history), and each
  * `coming-soon` section renders as a visibly-disabled row with a "Soon" badge so the
  * information architecture reads as complete without promising routes that do not exist.
+ *
+ * The registry is gated on whether the active workspace is the caller's **personal** space: the
+ * nav reads `OrgSummary.isPersonal` from the shell-wide {@link useActiveOrg} context, so a
+ * personal workspace never shows org/team-only sections (Members & Access, Teams, Roles, org
+ * billing). It falls back to the org registry while the active org is still loading.
  *
  * The active row is resolved from the current pathname and exposes `aria-current="page"`; the
  * whole list is a `<nav>` landmark with labelled groups. Color comes from semantic tokens, and
@@ -21,7 +26,9 @@ import { Badge } from '@docket/ui/primitives';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-import { SETTINGS_SECTION_GROUPS, type SettingsSection, sectionHref } from './sections';
+import { useActiveOrg } from '@/components/active-org';
+
+import { type SettingsSection, sectionHref, settingsSectionGroups } from './sections';
 
 /** Props for {@link SettingsSectionNav}. */
 export interface SettingsSectionNavProps {
@@ -41,6 +48,9 @@ const ROW_BASE =
  */
 export function SettingsSectionNav({ orgId }: SettingsSectionNavProps): JSX.Element {
   const pathname = usePathname();
+  const { activeOrg } = useActiveOrg();
+  // Default to the org registry while the active org is still loading (isPersonal unknown).
+  const groups = settingsSectionGroups(activeOrg?.isPersonal ?? false);
 
   /** Whether a section's route is the one currently shown. */
   function isActive(section: SettingsSection): boolean {
@@ -50,7 +60,7 @@ export function SettingsSectionNav({ orgId }: SettingsSectionNavProps): JSX.Elem
 
   return (
     <nav aria-label="Settings sections" className="flex flex-col gap-5">
-      {SETTINGS_SECTION_GROUPS.map((group) => (
+      {groups.map((group) => (
         <div key={group.label} className="flex flex-col gap-1">
           <h2 className="text-muted-foreground px-2.5 text-xs font-semibold tracking-wide uppercase">
             {group.label}

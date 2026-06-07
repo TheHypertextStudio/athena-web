@@ -339,7 +339,20 @@ const tasks = new Hono<AppEnv>()
       await loadTask(orgId, body.parentTaskId);
     }
 
-    const state = body.state ?? teamRow.workflowStates[0]?.key ?? 'backlog';
+    // Derive the terminal timestamps from the target workflow state the same way
+    // PATCH/:id and POST/:id/state do — otherwise a task created directly in a
+    // `completed`/`canceled`-typed state lands with a null `completedAt`/`canceledAt`,
+    // which permanently under-reports project progress (computeProgress counts
+    // completion via `completedAt !== null`). `resolveStateTransition` both validates
+    // the key against the team's workflow_states and stamps the matching timestamp.
+    //
+    // A team with NO workflow states is a special case: there is nothing to validate
+    // or derive from, so fall back to a neutral `backlog` state with null timestamps
+    // (a stateless team can't have a terminal task).
+    const firstState = teamRow.workflowStates[0];
+    const { state, completedAt, canceledAt } = firstState
+      ? await resolveStateTransition(orgId, body.teamId, body.state ?? firstState.key)
+      : { state: body.state ?? 'backlog', completedAt: null, canceledAt: null };
 
     const inserted = await db
       .insert(task)
@@ -349,6 +362,8 @@ const tasks = new Hono<AppEnv>()
         description: body.description,
         teamId: body.teamId,
         state,
+        completedAt,
+        canceledAt,
         priority: body.priority ?? 'none',
         assigneeId: body.assigneeId,
         projectId: body.projectId,

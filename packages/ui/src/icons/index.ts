@@ -27,7 +27,9 @@ export { default as CircleDashed } from '@mui/icons-material/RadioButtonUnchecke
 export { default as CircleDot } from '@mui/icons-material/RadioButtonChecked';
 export { default as Ellipsis } from '@mui/icons-material/MoreHoriz';
 export { default as Filter } from '@mui/icons-material/FilterList';
+export { default as Flag } from '@mui/icons-material/OutlinedFlag';
 export { default as FolderKanban } from '@mui/icons-material/ViewKanban';
+export { default as ListChecks } from '@mui/icons-material/ChecklistRtl';
 export { default as Home } from '@mui/icons-material/Home';
 export { default as Inbox } from '@mui/icons-material/Inbox';
 export { default as LayoutGrid } from '@mui/icons-material/GridView';

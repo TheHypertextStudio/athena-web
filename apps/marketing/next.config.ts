@@ -10,6 +10,9 @@ import type { NextConfig } from 'next';
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   transpilePackages: ['@docket/ui', '@docket/env'],
+  // Portless serves dev over https://marketing.docket.localhost; allow its HMR/devtools
+  // resources so hot-reload works (Next 16 blocks cross-origin dev resources by default).
+  allowedDevOrigins: ['marketing.docket.localhost', '*.docket.localhost'],
 };
 
 export default nextConfig;

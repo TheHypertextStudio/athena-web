@@ -25,6 +25,9 @@ if (!API_ORIGIN) {
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   transpilePackages: ['@docket/ui', '@docket/types', '@docket/env'],
+  // Portless serves dev over https://admin.docket.localhost; allow its HMR/devtools
+  // resources so hot-reload works (Next 16 blocks cross-origin dev resources by default).
+  allowedDevOrigins: ['admin.docket.localhost', '*.docket.localhost'],
   async rewrites() {
     return [
       { source: '/v1/:path*', destination: `${API_ORIGIN}/v1/:path*` },

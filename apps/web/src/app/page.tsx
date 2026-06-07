@@ -1,24 +1,40 @@
+import { Button } from '@docket/ui/primitives';
 import Link from 'next/link';
-import { Button } from '@/components/ui/button';
+import type { JSX } from 'react';
 
-export default function HomePage() {
+/**
+ * The public landing page for the Docket product app.
+ *
+ * @remarks
+ * A static, token-styled hero (a Server Component — it neither reads the session nor
+ * touches the API, so it renders without a running backend). The two calls-to-action route
+ * to the email/password auth screens; the app shell and authenticated flows live behind
+ * them.
+ */
+export default function HomePage(): JSX.Element {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-24">
-      <div className="space-y-6 text-center">
-        <h1 className="text-4xl font-bold tracking-tight">Athena</h1>
-        <p className="text-muted-foreground max-w-md text-lg">
-          Your next-generation productivity platform. Organize tasks, manage projects, and achieve
-          your goals with AI-powered assistance.
+    <main className="bg-background text-foreground flex min-h-screen flex-col items-center justify-center px-6">
+      <section className="flex w-full max-w-2xl flex-col items-center gap-8 text-center">
+        <span className="border-border text-muted-foreground rounded-full border px-3 py-1 text-xs font-medium">
+          The calm command center for work
+        </span>
+
+        <h1 className="text-balance text-5xl font-semibold tracking-tight sm:text-6xl">Docket</h1>
+
+        <p className="text-muted-foreground max-w-xl text-balance text-lg">
+          One home for every organization you run. Plan the day across teams, keep work moving, and
+          let the noise settle.
         </p>
-        <div className="flex justify-center gap-4">
-          <Button asChild>
-            <Link href="/login">Sign In</Link>
+
+        <div className="flex flex-col items-center gap-3 sm:flex-row">
+          <Button asChild size="lg">
+            <Link href="/sign-up">Get started</Link>
           </Button>
-          <Button asChild variant="outline">
-            <Link href="/signup">Create Account</Link>
+          <Button asChild size="lg" variant="outline">
+            <Link href="/sign-in">Sign in</Link>
           </Button>
         </div>
-      </div>
+      </section>
     </main>
   );
 }

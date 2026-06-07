@@ -1,0 +1,32 @@
+# Local backend infrastructure for Docket development.
+#
+# `pnpm dev` brings this up automatically (see the root `db:up` script). Postgres is the
+# local development database — prod parity with the Neon/Postgres Drizzle driver — while
+# the test suite stays on embedded PGlite (no container required). The dev credentials
+# below are non-secret and MUST match the local `DATABASE_URL` in `.env.local`. Add future
+# backend infra (e.g. Redis for the MCP session store) as additional services here.
+#
+# Compose v2+ ignores the obsolete top-level `version:` key, so it is intentionally omitted.
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: docket-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: docket
+      POSTGRES_PASSWORD: docket
+      POSTGRES_DB: docket
+    # Host 5433 (not the default 5432) to avoid colliding with any other local Postgres.
+    # The local DATABASE_URL in .env.local must use this same host port.
+    ports:
+      - '5433:5432'
+    volumes:
+      - docket-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U docket -d docket']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  docket-pgdata:

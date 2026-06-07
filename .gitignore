@@ -10,10 +10,19 @@ build/
 out/
 *.tsbuildinfo
 
-# Environment
+# Local data (embedded PGlite database, local-disk blob store)
+.data/
+
+# Environment (per-app .env, never committed; schema lives in @docket/env)
+# NOTE: the root .env.local is intentionally NOT ignored — it is committed with safe
+# local defaults and protected from accidental secret commits via `git update-index
+# --skip-worktree .env.local` (armed by the `prepare` script). See docs/local-development.md.
 .env
-.env.local
 .env.*.local
+apps/*/.env
+apps/*/.env.local
+packages/*/.env
+.env.vercel.*
 
 # IDE
 .idea/
@@ -22,11 +31,18 @@ out/
 *.swo
 .DS_Store
 
+# Agent tooling (repo-shared config under .claude/ IS committed; local-only is not)
+.claude/settings.local.json
+.lova.disabled/
+
 # Testing
 coverage/
 .nyc_output/
 playwright-report/
 test-results/
+playwright/.auth/
+
+# NOTE: packages/db/drizzle (generated migrations) is committed — do NOT ignore it.
 
 # Logs
 logs/

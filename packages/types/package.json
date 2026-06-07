@@ -1,40 +1,29 @@
 {
-  "name": "@athena/types",
+  "name": "@docket/types",
   "version": "0.0.0",
   "private": true,
-  "description": "Shared TypeScript types for Project Athena",
   "type": "module",
+  "license": "UNLICENSED",
+  "description": "Docket shared types — branded primitives, DTO schemas, and the RPC AppType contract.",
   "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    },
-    "./api": {
-      "types": "./dist/api/index.d.ts",
-      "import": "./dist/api/index.js"
-    },
-    "./domain": {
-      "types": "./dist/domain/index.d.ts",
-      "import": "./dist/domain/index.js"
-    }
+    ".": "./src/index.ts",
+    "./api": "./src/api.ts"
   },
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "files": [
-    "dist"
-  ],
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
   "scripts": {
-    "build": "tsc",
-    "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src --ext .ts",
-    "lint:fix": "eslint src --ext .ts --fix"
+    "lint": "eslint .",
+    "clean": "rm -rf .turbo *.tsbuildinfo",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "zod": "^3.24.1"
+    "zod": "catalog:"
   },
   "devDependencies": {
-    "@types/node": "^25.0.3",
-    "typescript": "^5.7.2"
+    "@docket/eslint-config": "workspace:*",
+    "@docket/tsconfig": "workspace:*"
   }
 }

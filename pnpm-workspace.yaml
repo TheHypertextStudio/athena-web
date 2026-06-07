@@ -1,3 +1,98 @@
 packages:
   - 'apps/*'
   - 'packages/*'
+  - 'tooling/*'
+
+# Force a single @types/node (matching the Node 24 LTS engine pin) across the whole
+# graph so transitive peers don't drift to an older major. Keeps the dependency tree
+# deduped on one Node typings version, consistent with engines.node ">=24 <25".
+overrides:
+  '@types/node': 24.13.0
+  # Vitest 4 requires Vite 6/7, but its peer auto-resolves to Vite 5; pin the single
+  # vite consumer (vitest) to 7 so its `./module-runner` export exists. Nothing else
+  # in the graph depends on vite (Next has its own bundler).
+  vite: ^7.0.0
+  # better-auth@1.6.14 imports `kAPIErrorHeaderSymbol` from better-call@1.3.5; the
+  # @better-auth/cli (1.4.x line) drags in better-call@1.1.8, which lacks that export
+  # and shadows the correct one under the vitest loader. Pin the single compatible
+  # version (the CLI is a non-runtime dev tool, unaffected in practice).
+  better-call: 1.3.5
+
+# @types/node ships frequent same-day patch releases; exempt it from the supply-chain
+# release-age cooldown so the pinned 24.x typings resolve cleanly. The cooldown stays
+# in force for every other dependency. (pnpm supply-chain setting.)
+minimumReleaseAgeExclude:
+  - '@types/node'
+
+# Single source of truth for cross-cut versions that MUST be byte-identical
+# across every package (FROZEN: DECISIONS.md "turbo+node+pnpm pins" / pnpm catalog).
+# Every package.json references these via `catalog:`, never a literal range,
+# which is what mechanically guarantees the single Hono version the Hono RPC
+# AppType contract depends on, and the single Better Auth 1.6.14 used everywhere.
+catalog:
+  # Hono RPC contract — one byte-identical version everywhere (api + @docket/types)
+  hono: ^4.6.14
+  hono-openapi: ^0.4.3
+  '@scalar/hono-api-reference': ^0.5.165
+
+  # Validation — Zod v4 repo-wide
+  zod: ^4.0.0
+
+  # Better Auth — pinned EXACT 1.6.14 (not a range), incl. every runtime plugin package.
+  better-auth: 1.6.14
+  # @better-auth/cli is a *dev tool* (schema codegen for `db:auth:generate`), versioned
+  # on its own track: it has never published a 1.6.x — its latest line is 1.4.x (1.4.21
+  # `latest` / 1.4.22 `release-1.4`). DECISIONS.md §pins says "every @better-auth/* PLUGIN
+  # =1.6.14"; the CLI is not a runtime plugin and 1.6.14 is unsatisfiable on the registry,
+  # so it is pinned to its current line. The CLI reads the project's better-auth@1.6.14
+  # config to emit schema and is compatible across minor versions; the runtime contract
+  # (better-auth=1.6.14 exact, identical everywhere) is unaffected.
+  '@better-auth/cli': ^1.4.21
+
+  # Database — Drizzle + Neon serverless / node-postgres driver
+  drizzle-orm: ^0.38.2
+  drizzle-kit: ^0.30.1
+  '@neondatabase/serverless': ^0.10.4
+  postgres: ^3.4.5
+  # Embedded Postgres for the zero-external-accounts build/tests (boundaries.md §1): the
+  # Drizzle client selects its driver from the DATABASE_URL scheme (neon:/postgres:/pglite:);
+  # PGlite runs Postgres in-process so migrations + tests need no Docker or service.
+  '@electric-sql/pglite': ^0.5.1
+
+  # MCP
+  '@modelcontextprotocol/sdk': ^1.29.0
+
+  # Billing
+  stripe: ^22.0.0
+
+  # Env validation
+  '@t3-oss/env-core': ^0.13.0
+  '@t3-oss/env-nextjs': ^0.13.0
+
+  # Portless — named .localhost dev URLs (replaces hardcoded port numbers)
+  portless: ^0.14.0
+
+  # ID generation — single ULID generator repo-wide
+  ulid: ^2.3.0
+
+  # Next.js app stack (Next 16 + React 19 + React Compiler)
+  next: ^16.2.0
+  react: ^19.0.0
+  react-dom: ^19.0.0
+  '@types/react': ^19.0.0
+  '@types/react-dom': ^19.0.0
+
+# Postinstall/build scripts are blocked by default (pnpm 11 supply-chain default).
+# esbuild needs its install script to fetch its platform-native binary; it is pulled
+# in transitively by tsx/vitest/vite. Approve only this known-good build (pnpm 11
+# `allowBuilds` map — replaces the deprecated onlyBuiltDependencies list).
+allowBuilds:
+  esbuild: true
+  # Transitive-only native builds that Docket does not use at runtime (pulled in by
+  # tooling/optional deps). Their install scripts stay BLOCKED — Docket's DB layer is
+  # Postgres (Neon / node-postgres / PGlite), never Prisma or better-sqlite3, and no
+  # image pipeline needs sharp. Pinned to false so `pnpm install` is deterministic and
+  # never prompts (vs. leaving them as un-decided "ignored builds").
+  '@prisma/client': false
+  better-sqlite3: false
+  sharp: false

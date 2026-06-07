@@ -1,6 +1,20 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 
+/*
+ * Tailwind v4 auto-detects classes from the consuming app's tree but EXCLUDES node_modules
+ * — and @docket/ui is a workspace symlink under node_modules, so the utility classes used
+ * inside these shared primitives/components (bg-primary, the Button variants, etc.) would
+ * never be generated. Explicitly scan this package's own sources (paths are relative to
+ * THIS file: packages/ui/src/styles/ → ../ is packages/ui/src) so the design system's
+ * classes are always present in every app that imports this stylesheet.
+ */
+@source "../primitives";
+@source "../components";
+@source "../hooks";
+@source "../vocabulary";
+@source "../lib";
+
 @custom-variant dark (&:is(.dark *));
 
 /*

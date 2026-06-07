@@ -61,3 +61,9 @@ temp/
 
 # Sentry
 .sentryclirc
+
+# Next.js generated type shim (regenerated on dev/build; quote-style churns under prettier)
+**/next-env.d.ts
+
+# Playwright MCP debug artifacts (screenshots, snapshots, console logs)
+.playwright-mcp/

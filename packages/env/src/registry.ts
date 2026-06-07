@@ -15,6 +15,7 @@ import {
   agentServer,
   authServer,
   clientShared,
+  connectorServer,
   dbServer,
   mcpServer,
   opsServer,
@@ -23,7 +24,16 @@ import {
 } from './slices';
 
 /** The logical group a var belongs to (mirrors the slice files). */
-export type Slice = 'shared' | 'db' | 'auth' | 'stripe' | 'mcp' | 'agent' | 'ops' | 'client';
+export type Slice =
+  | 'shared'
+  | 'db'
+  | 'auth'
+  | 'stripe'
+  | 'mcp'
+  | 'agent'
+  | 'ops'
+  | 'connector'
+  | 'client';
 /** Whether a var is server-only or a public client var. */
 export type Scope = 'server' | 'client';
 /** Which deployable surface(s) consume a var. */
@@ -359,25 +369,6 @@ export const VAR_REGISTRY: readonly VarSpec[] = [
 
   // agent
   {
-    name: 'ATHENA_AGENT_ENDPOINT',
-    slice: 'agent',
-    scope: 'server',
-    targets: ['api'],
-    required: false,
-    zod: agentServer.ATHENA_AGENT_ENDPOINT,
-    where: 'Athena agent runtime endpoint (paired with ATHENA_AGENT_API_KEY)',
-  },
-  {
-    name: 'ATHENA_AGENT_API_KEY',
-    slice: 'agent',
-    scope: 'server',
-    targets: ['api'],
-    required: false,
-    zod: agentServer.ATHENA_AGENT_API_KEY,
-    where: 'Athena agent runtime API key',
-    sensitive: true,
-  },
-  {
     name: 'ANTHROPIC_API_KEY',
     slice: 'agent',
     scope: 'server',
@@ -437,6 +428,111 @@ export const VAR_REGISTRY: readonly VarSpec[] = [
     zod: opsServer.EXPORT_BUCKET_TOKEN,
     where: 'Bucket access token for exports',
     sensitive: true,
+  },
+  {
+    name: 'SMTP_HOST',
+    slice: 'ops',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: opsServer.SMTP_HOST,
+    where:
+      'SMTP relay host for transactional email. Local: localhost (Mailpit). Absent → mock CaptureMailer.',
+  },
+  {
+    name: 'SMTP_PORT',
+    slice: 'ops',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: opsServer.SMTP_PORT,
+    where: 'SMTP port (587 STARTTLS, 465 implicit TLS, 1025 Mailpit). Defaults to 587 when absent.',
+  },
+  {
+    name: 'SMTP_SECURE',
+    slice: 'ops',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: opsServer.SMTP_SECURE,
+    where: 'true|false — implicit TLS from connect. Defaults to true only on port 465.',
+  },
+  {
+    name: 'SMTP_USER',
+    slice: 'ops',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: opsServer.SMTP_USER,
+    where: 'SMTP auth username (omit for unauthenticated relays such as Mailpit).',
+  },
+  {
+    name: 'SMTP_PASS',
+    slice: 'ops',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: opsServer.SMTP_PASS,
+    where: 'SMTP auth password (omit for unauthenticated relays such as Mailpit).',
+    sensitive: true,
+  },
+  {
+    name: 'MAIL_FROM',
+    slice: 'ops',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: opsServer.MAIL_FROM,
+    where: 'From-address for transactional email, e.g. "Docket <no-reply@docket.dev>".',
+  },
+
+  // connector (per-provider API-base overrides; the OAuth token is per-connection, not env)
+  {
+    name: 'GITHUB_API_BASE',
+    slice: 'connector',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: connectorServer.GITHUB_API_BASE,
+    where:
+      'GitHub REST API base override for self-hosted/Enterprise (e.g. https://ghe.example.com/api/v3). Absent ⇒ https://api.github.com',
+  },
+  {
+    name: 'LINEAR_API_BASE',
+    slice: 'connector',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: connectorServer.LINEAR_API_BASE,
+    where: 'Linear GraphQL API base override. Absent ⇒ https://api.linear.app',
+  },
+  {
+    name: 'GOOGLE_DRIVE_API_BASE',
+    slice: 'connector',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: connectorServer.GOOGLE_DRIVE_API_BASE,
+    where: 'Google Drive REST API base override. Absent ⇒ https://www.googleapis.com/drive/v3',
+  },
+  {
+    name: 'GOOGLE_GMAIL_API_BASE',
+    slice: 'connector',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: connectorServer.GOOGLE_GMAIL_API_BASE,
+    where: 'Gmail REST API base override. Absent ⇒ https://gmail.googleapis.com/gmail/v1',
+  },
+  {
+    name: 'GOOGLE_CALENDAR_API_BASE',
+    slice: 'connector',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: connectorServer.GOOGLE_CALENDAR_API_BASE,
+    where:
+      'Google Calendar REST API base override. Absent ⇒ https://www.googleapis.com/calendar/v3',
   },
 
   // client

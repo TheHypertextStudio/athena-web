@@ -157,8 +157,6 @@ describe('slices', () => {
   });
 
   it('keeps genuinely-optional vars optional and fails fast on required ops/client vars', () => {
-    expect(agentServer.ATHENA_AGENT_ENDPOINT.parse(undefined)).toBeUndefined();
-    expect(agentServer.ATHENA_AGENT_API_KEY.parse(undefined)).toBeUndefined();
     expect(agentServer.ANTHROPIC_API_KEY.parse(undefined)).toBeUndefined();
 
     expect(() => opsServer.CRON_SECRET.parse(undefined)).toThrow();
@@ -282,35 +280,6 @@ describe('api composition', () => {
     // No required vars present, but skipping means no throw + no cross-field check.
     const mod = await import('../src/api');
     expect(mod.env).toBeDefined();
-  });
-
-  describe('cross-field: agent endpoint/key pairing', () => {
-    it('passes when both are set together', async () => {
-      stubEnv({
-        ...validApiEnv(),
-        ATHENA_AGENT_ENDPOINT: 'https://agent.example.com',
-        ATHENA_AGENT_API_KEY: 'agent-key',
-      });
-      const mod = await import('../src/api');
-      expect(mod.env.ATHENA_AGENT_ENDPOINT).toBe('https://agent.example.com');
-    });
-
-    it('throws when only the endpoint is set', async () => {
-      stubEnv({
-        ...validApiEnv(),
-        ATHENA_AGENT_ENDPOINT: 'https://agent.example.com',
-      });
-      await expect(import('../src/api')).rejects.toThrow(
-        'ATHENA_AGENT_ENDPOINT and ATHENA_AGENT_API_KEY must be set together',
-      );
-    });
-
-    it('throws when only the key is set', async () => {
-      stubEnv({ ...validApiEnv(), ATHENA_AGENT_API_KEY: 'agent-key' });
-      await expect(import('../src/api')).rejects.toThrow(
-        'ATHENA_AGENT_ENDPOINT and ATHENA_AGENT_API_KEY must be set together',
-      );
-    });
   });
 
   describe('cross-field: BILLING_ENABLED requires stripe key + price', () => {

@@ -1,5 +1,6 @@
 import type { JSX, ReactNode } from 'react';
 
+import { SettingsHeaderSubtitle } from '@/components/settings/settings-header-subtitle';
 import { SettingsSectionNav } from '@/components/settings/settings-section-nav';
 
 /**
@@ -33,9 +34,7 @@ export default async function SettingsLayout({
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 p-8">
       <header className="flex flex-col gap-1">
         <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-        <p className="text-muted-foreground text-sm">
-          Manage your organization&rsquo;s people, tools, and identity.
-        </p>
+        <SettingsHeaderSubtitle />
       </header>
 
       <div className="flex flex-col gap-8 md:flex-row md:gap-12">

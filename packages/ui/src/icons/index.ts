@@ -49,6 +49,7 @@ export { default as Search } from '@mui/icons-material/Search';
 export { default as Settings } from '@mui/icons-material/Settings';
 export { default as Sparkles } from '@mui/icons-material/AutoAwesome';
 export { default as Target } from '@mui/icons-material/TrackChanges';
+export { default as Trash2 } from '@mui/icons-material/DeleteOutlined';
 export { default as Users } from '@mui/icons-material/People';
 export { default as User } from '@mui/icons-material/Person';
 export { default as X } from '@mui/icons-material/Close';

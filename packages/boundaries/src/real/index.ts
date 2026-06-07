@@ -9,8 +9,24 @@
  * purely supplying env values; no third code path exists.
  */
 export { defaultHttpClient, type HttpClient } from './http';
-export { RealStripeGateway, type RealStripeGatewayConfig } from './billing';
+export {
+  RealStripeGateway,
+  type RealStripeGatewayConfig,
+  type EmbeddedCheckoutSessionResult,
+} from './billing';
 export { RealProviderRuntime, type RealProviderRuntimeConfig } from './agent-runtime';
 export { RealConnector, type RealConnectorConfig } from './connector';
-export { RealMailer, type RealMailerConfig } from './mailer';
+export {
+  RealMailer,
+  type RealMailerConfig,
+  SmtpMailer,
+  smtpConfigFromEnv,
+  toSendMailOptions,
+  defaultSmtpTransportFactory,
+  type SmtpMailerConfig,
+  type SmtpEnv,
+  type SendMailOptions,
+  type SmtpTransport,
+  type SmtpTransportFactory,
+} from './mailer';
 export { RealBlob, type RealBlobConfig } from './blob';

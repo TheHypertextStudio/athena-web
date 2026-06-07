@@ -9,7 +9,7 @@ import { LocalDiskBlob } from '../src/mock/blob';
 import { RealStripeGateway } from '../src/real/billing';
 import { RealProviderRuntime } from '../src/real/agent-runtime';
 import { RealConnector } from '../src/real/connector';
-import { RealMailer } from '../src/real/mailer';
+import { SmtpMailer } from '../src/real/mailer';
 import { RealBlob } from '../src/real/blob';
 
 describe('selectAdapter', () => {
@@ -17,11 +17,9 @@ describe('selectAdapter', () => {
     const env: BoundaryEnv = {
       APP_MODE: 'local',
       STRIPE_SECRET_KEY: 'sk_live_realkey',
-      ATHENA_AGENT_ENDPOINT: 'https://agent.example.com',
-      ATHENA_AGENT_API_KEY: 'real-agent-key',
-      MAILER_ENDPOINT: 'https://mail.example.com',
-      MAILER_API_KEY: 'real-mail-key',
-      MAILER_FROM: 'noreply@docket.dev',
+      ANTHROPIC_API_KEY: 'sk-ant-realkey',
+      SMTP_HOST: 'smtp.example.com',
+      MAIL_FROM: 'noreply@docket.dev',
       BLOB_READ_WRITE_TOKEN: 'real-blob-token',
       EXPORT_BUCKET_URL: 'https://blob.example.com',
     };
@@ -52,9 +50,9 @@ describe('selectAdapter', () => {
     const env: BoundaryEnv = {
       APP_MODE: 'production',
       STRIPE_SECRET_KEY: 'changeme',
-      ATHENA_AGENT_API_KEY: 'your-key-here',
-      ATHENA_AGENT_ENDPOINT: 'https://agent.example.com',
-      MAILER_API_KEY: 'placeholder',
+      ANTHROPIC_API_KEY: 'your-key-here',
+      SMTP_HOST: 'placeholder',
+      MAIL_FROM: 'placeholder',
       BLOB_READ_WRITE_TOKEN: 'mock',
     };
     expect(selectAdapter('billing', env)).toBeInstanceOf(InMemoryBillingGateway);
@@ -68,11 +66,10 @@ describe('selectAdapter', () => {
       APP_MODE: 'production',
       STRIPE_SECRET_KEY: 'sk_live_realkey',
       STRIPE_PRICE_TEAM: 'price_123',
-      ATHENA_AGENT_ENDPOINT: 'https://agent.example.com',
-      ATHENA_AGENT_API_KEY: 'real-agent-key',
-      MAILER_ENDPOINT: 'https://mail.example.com',
-      MAILER_API_KEY: 'real-mail-key',
-      MAILER_FROM: 'noreply@docket.dev',
+      ANTHROPIC_API_KEY: 'sk-ant-realkey',
+      SMTP_HOST: 'smtp.example.com',
+      SMTP_PORT: '587',
+      MAIL_FROM: 'noreply@docket.dev',
       BLOB_READ_WRITE_TOKEN: 'real-blob-token',
       EXPORT_BUCKET_URL: 'https://blob.example.com',
     };
@@ -81,22 +78,18 @@ describe('selectAdapter', () => {
     expect(selectAdapter('connector', env, { connectorToken: 'real-conn-token' })).toBeInstanceOf(
       RealConnector,
     );
-    expect(selectAdapter('mailer', env)).toBeInstanceOf(RealMailer);
+    expect(selectAdapter('mailer', env)).toBeInstanceOf(SmtpMailer);
     expect(selectAdapter('blob', env)).toBeInstanceOf(RealBlob);
   });
 
-  it('falls back to the mock when a paired env value is missing', () => {
-    // endpoint present but key missing -> mock; key present but endpoint missing -> mock
+  it('falls back to the mock agent runtime when ANTHROPIC_API_KEY is absent or a placeholder', () => {
+    expect(selectAdapter('agentRuntime', { APP_MODE: 'production' })).toBeInstanceOf(
+      MockAgentRuntime,
+    );
     expect(
       selectAdapter('agentRuntime', {
         APP_MODE: 'production',
-        ATHENA_AGENT_ENDPOINT: 'https://agent.example.com',
-      }),
-    ).toBeInstanceOf(MockAgentRuntime);
-    expect(
-      selectAdapter('agentRuntime', {
-        APP_MODE: 'production',
-        ATHENA_AGENT_API_KEY: 'real-agent-key',
+        ANTHROPIC_API_KEY: 'changeme',
       }),
     ).toBeInstanceOf(MockAgentRuntime);
   });
@@ -126,7 +119,9 @@ describe('selectAdapter', () => {
     );
     await gw.createCheckoutSession({
       referenceId: 'org_1',
-      priceKey: 'p',
+      // A `price_…` id skips the lookup-key resolution so this exercises a single
+      // Stripe SDK call (the embedded/hosted checkout create) through the injected http.
+      priceKey: 'price_override',
       successUrl: 's',
       cancelUrl: 'c',
     });
@@ -147,6 +142,70 @@ describe('selectAdapter', () => {
     expect(connector).toBeInstanceOf(RealConnector);
     await connector.connect({ provider: 'github', referenceId: 'org_1' });
     expect(calls[0]).toContain('https://api.github.com');
+  });
+
+  it('threads the per-provider API-base override from env into the real connector', async () => {
+    const calls: string[] = [];
+    const http = async (input: string): Promise<Response> => {
+      calls.push(input);
+      return new Response(JSON.stringify({ login: 'octocat' }), { status: 200 });
+    };
+    const connector = selectAdapter(
+      'connector',
+      { APP_MODE: 'production', GITHUB_API_BASE: 'https://ghe.example.com/api/v3' },
+      { http, connectorProvider: 'github', connectorToken: 'real-conn-token' },
+    );
+    expect(connector).toBeInstanceOf(RealConnector);
+    await connector.connect({ provider: 'github', referenceId: 'org_1' });
+    expect(calls[0]).toContain('https://ghe.example.com/api/v3');
+  });
+
+  it('maps each non-github provider to its API-base env override', async () => {
+    // Exercises the connectorApiBase mapping for linear/drive/gmail/calendar end-to-end:
+    // the override base must appear in the first outbound request URL.
+    const cases: { provider: 'linear' | 'drive' | 'gmail' | 'calendar'; env: BoundaryEnv }[] = [
+      {
+        provider: 'linear',
+        env: { APP_MODE: 'production', LINEAR_API_BASE: 'https://linear.test' },
+      },
+      {
+        provider: 'drive',
+        env: { APP_MODE: 'production', GOOGLE_DRIVE_API_BASE: 'https://drive.test' },
+      },
+      {
+        provider: 'gmail',
+        env: { APP_MODE: 'production', GOOGLE_GMAIL_API_BASE: 'https://gmail.test' },
+      },
+      {
+        provider: 'calendar',
+        env: { APP_MODE: 'production', GOOGLE_CALENDAR_API_BASE: 'https://cal.test' },
+      },
+    ];
+    for (const { provider, env } of cases) {
+      const calls: string[] = [];
+      const http = async (input: string): Promise<Response> => {
+        calls.push(input);
+        // A permissive payload that satisfies each provider client's identity lookup.
+        return new Response(
+          JSON.stringify({
+            data: { viewer: { name: 'Viewer' } },
+            user: { displayName: 'User', emailAddress: 'u@x' },
+            emailAddress: 'u@x',
+          }),
+          { status: 200 },
+        );
+      };
+      const connector = selectAdapter('connector', env, {
+        http,
+        connectorProvider: provider,
+        connectorToken: 'real-conn-token',
+      });
+      await connector.connect({ provider, referenceId: 'org_1' });
+      const overrideBase = Object.values(env).find(
+        (v): v is string => typeof v === 'string' && v.includes('.test'),
+      );
+      expect(calls[0]).toContain(overrideBase);
+    }
   });
 
   it('uses the provided blob root for the mock blob store', () => {

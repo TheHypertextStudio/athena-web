@@ -21,8 +21,6 @@ import type { z } from 'zod';
  */
 export function ok<T extends z.ZodType>(c: Context, schema: T, data: z.input<T>) {
   const body =
-    process.env['NODE_ENV'] === 'production'
-      ? (data as unknown as z.infer<T>)
-      : (schema.parse(data) as z.infer<T>);
+    process.env['NODE_ENV'] === 'production' ? (data as unknown as z.infer<T>) : schema.parse(data);
   return c.json(body);
 }

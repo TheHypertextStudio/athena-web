@@ -1,7 +1,7 @@
 'use client';
 
 import { getOrgAccent } from '@docket/ui/lib/org-accent';
-import type { CSSProperties, JSX } from 'react';
+import type { JSX } from 'react';
 
 /** Props for {@link OrgChip}. */
 export interface OrgChipProps {
@@ -25,7 +25,7 @@ export function OrgChip({ orgId, name }: OrgChipProps): JSX.Element {
       <span
         aria-hidden="true"
         className="h-2 w-2 shrink-0 rounded-full"
-        style={{ backgroundColor: getOrgAccent(orgId) } as CSSProperties}
+        style={{ backgroundColor: getOrgAccent(orgId) }}
       />
       <span className="truncate">{name}</span>
     </span>

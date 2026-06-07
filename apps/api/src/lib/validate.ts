@@ -16,7 +16,7 @@ export function zJson<T extends z.ZodType>(schema: T) {
   return validator('json', (value): z.infer<T> => {
     const result = schema.safeParse(value);
     if (!result.success) throw new ValidationError(result.error);
-    return result.data as z.infer<T>;
+    return result.data;
   });
 }
 
@@ -25,7 +25,7 @@ export function zQuery<T extends z.ZodType>(schema: T) {
   return validator('query', (value): z.infer<T> => {
     const result = schema.safeParse(value);
     if (!result.success) throw new ValidationError(result.error);
-    return result.data as z.infer<T>;
+    return result.data;
   });
 }
 
@@ -34,6 +34,6 @@ export function zParam<T extends z.ZodType>(schema: T) {
   return validator('param', (value): z.infer<T> => {
     const result = schema.safeParse(value);
     if (!result.success) throw new ValidationError(result.error);
-    return result.data as z.infer<T>;
+    return result.data;
   });
 }

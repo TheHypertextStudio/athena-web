@@ -69,7 +69,7 @@ import {
   ViewScope,
   ViewSort,
 } from './saved-view';
-import { TaskCreate, TaskOut, TaskProvenance, TaskUpdate } from './task';
+import { TaskCreate, TaskDependencyCreate, TaskOut, TaskProvenance, TaskUpdate } from './task';
 import { TeamOut } from './team';
 import { UpdateCreate, UpdateListQuery, UpdateOut, UpdateSubjectType } from './update';
 
@@ -1486,5 +1486,19 @@ describe('hub DTOs', () => {
         projects: [],
       }).success,
     ).toBe(false);
+  });
+});
+
+describe('TaskDependencyCreate DTO', () => {
+  it('accepts exactly one of blockingTaskId / blockedTaskId', () => {
+    expect(TaskDependencyCreate.safeParse({ blockingTaskId: ID }).success).toBe(true);
+    expect(TaskDependencyCreate.safeParse({ blockedTaskId: ID }).success).toBe(true);
+  });
+
+  it('rejects providing both endpoints or neither (exactly-one refine)', () => {
+    expect(TaskDependencyCreate.safeParse({ blockingTaskId: ID, blockedTaskId: ID2 }).success).toBe(
+      false,
+    );
+    expect(TaskDependencyCreate.safeParse({}).success).toBe(false);
   });
 });

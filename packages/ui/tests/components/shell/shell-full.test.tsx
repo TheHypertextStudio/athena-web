@@ -118,14 +118,18 @@ describe('AppShell', () => {
 });
 
 describe('GlobalRail', () => {
-  it('renders the Hub button (active) and one avatar per org', () => {
+  it('renders the Hub destinations (Today active) and one avatar per org', () => {
     render(
       <ContextProvider initialContext={HUB_CONTEXT}>
         <GlobalRail orgs={ORGS} />
       </ContextProvider>,
     );
-    const hub = screen.getByRole('button', { name: 'Hub' });
+    const hub = screen.getByRole('button', { name: 'Hub — Today' });
     expect(hub).toHaveAttribute('aria-current', 'page');
+    // The cross-org Hub cluster: Inbox · Portfolio · Search.
+    expect(screen.getByRole('button', { name: 'Inbox' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Portfolio' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Search' })).toBeInTheDocument();
     for (const org of ORGS) {
       expect(screen.getByRole('button', { name: org.name })).toBeInTheDocument();
     }
@@ -139,10 +143,58 @@ describe('GlobalRail', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Acme Co' }));
     expect(screen.getByRole('button', { name: 'Acme Co' })).toHaveAttribute('aria-current', 'true');
-    expect(screen.getByRole('button', { name: 'Hub' })).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('button', { name: 'Hub — Today' })).not.toHaveAttribute('aria-current');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Hub' }));
-    expect(screen.getByRole('button', { name: 'Hub' })).toHaveAttribute('aria-current', 'page');
+    fireEvent.click(screen.getByRole('button', { name: 'Hub — Today' }));
+    expect(screen.getByRole('button', { name: 'Hub — Today' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+  });
+
+  it('reports org-avatar selection through onSelectOrg in addition to the context rebind', () => {
+    const onSelectOrg = vi.fn();
+    render(
+      <ContextProvider initialContext={HUB_CONTEXT}>
+        <GlobalRail orgs={ORGS} onSelectOrg={onSelectOrg} />
+      </ContextProvider>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Globex' }));
+    // The host receives the org id (drives imperative navigation)…
+    expect(onSelectOrg).toHaveBeenCalledWith(GLOBEX.id);
+    // …and the context still rebinds locally (accent applies immediately).
+    expect(screen.getByRole('button', { name: 'Globex' })).toHaveAttribute('aria-current', 'true');
+  });
+
+  it('marks the active Hub destination and routes Inbox/Portfolio/Search/Home', () => {
+    const onNavigate = vi.fn();
+    const onOpenSearch = vi.fn();
+    const onSelectHome = vi.fn();
+    render(
+      <ContextProvider initialContext={HUB_CONTEXT}>
+        <GlobalRail
+          orgs={ORGS}
+          activeHubKey="inbox"
+          unreadCount={3}
+          onNavigate={onNavigate}
+          onOpenSearch={onOpenSearch}
+          onSelectHome={onSelectHome}
+        />
+      </ContextProvider>,
+    );
+    // With Inbox active, Today is no longer the current page; the Inbox badge is announced.
+    expect(screen.getByRole('button', { name: 'Hub — Today' })).not.toHaveAttribute('aria-current');
+    const inbox = screen.getByRole('button', { name: 'Inbox, 3 unread' });
+    expect(inbox).toHaveAttribute('aria-current', 'page');
+
+    fireEvent.click(inbox);
+    expect(onNavigate).toHaveBeenCalledWith('inbox');
+    fireEvent.click(screen.getByRole('button', { name: 'Portfolio' }));
+    expect(onNavigate).toHaveBeenCalledWith('portfolio');
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }));
+    expect(onOpenSearch).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Hub — Today' }));
+    expect(onSelectHome).toHaveBeenCalledTimes(1);
   });
 
   it('fires onAddOrg from the add-org affordance', () => {

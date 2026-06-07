@@ -7,7 +7,8 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 // Env MUST be set before importing `../src/index` (which pulls in `@docket/env/api` and the
 // Better Auth config at module load). Every required var is set explicitly — the env
 // contract has no hidden defaults. `pglite://memory` gives a fresh in-process Postgres;
-// `BETTER_AUTH_TRUSTED_ORIGINS` exercises the parse branch.
+// `BETTER_AUTH_TRUSTED_ORIGINS` exercises the parse branch. The passkey RP vars are
+// required (the plugin is always mounted) and used as the WebAuthn relying-party identity.
 process.env['APP_MODE'] = 'test';
 process.env['API_URL'] = 'http://localhost:4000';
 process.env['PORT'] = '4000';
@@ -84,6 +85,75 @@ describe('passkey intent', () => {
   });
 });
 
+describe('resolvePasskeyUser (passwordless sign-up resolver)', () => {
+  /**
+   * A tiny in-memory stand-in for Better Auth's internal-adapter slice. Records every
+   * `createUser` call so the test can assert the new-user branch fires (and the hub-birth
+   * hook would run, since the live wiring routes creation through this same method).
+   */
+  function fakeAdapter(seed?: { id: string; name: string; email: string }) {
+    const users = new Map<string, { id: string; name: string; email: string }>();
+    if (seed) users.set(seed.email, seed);
+    const created: { name: string; email: string; emailVerified: boolean }[] = [];
+    return {
+      created,
+      adapter: {
+        findUserByEmail: async (email: string) => {
+          const u = users.get(email);
+          return u ? { user: { id: u.id, name: u.name } } : null;
+        },
+        createUser: async (data: { name: string; email: string; emailVerified: boolean }) => {
+          created.push(data);
+          const u = { id: `user_${created.length}`, name: data.name, email: data.email };
+          users.set(data.email, u);
+          return { id: u.id, name: u.name };
+        },
+      },
+    };
+  }
+
+  it('throws when no registration context is supplied', async () => {
+    const { resolvePasskeyUser } = await import('../src/index');
+    const { adapter } = fakeAdapter();
+    await expect(resolvePasskeyUser(adapter, null)).rejects.toThrow('context is required');
+    await expect(resolvePasskeyUser(adapter, undefined)).rejects.toThrow('context is required');
+    await expect(resolvePasskeyUser(adapter, '')).rejects.toThrow('context is required');
+  });
+
+  it('propagates intent-verification failure (tampered/expired token)', async () => {
+    const { resolvePasskeyUser } = await import('../src/index');
+    const { adapter } = fakeAdapter();
+    await expect(resolvePasskeyUser(adapter, 'not-a-valid-token')).rejects.toThrow('malformed');
+  });
+
+  it('creates a new user (new email) — fires the create path exactly once', async () => {
+    const { resolvePasskeyUser, signPasskeyIntent } = await import('../src/index');
+    const { adapter, created } = fakeAdapter();
+    const token = signPasskeyIntent({ name: 'Grace', email: 'new@example.com' });
+
+    const resolved = await resolvePasskeyUser(adapter, token);
+
+    expect(resolved.name).toBe('Grace');
+    expect(resolved.id).toBe('user_1');
+    expect(created).toEqual([{ name: 'Grace', email: 'new@example.com', emailVerified: true }]);
+  });
+
+  it('reuses an existing user (same email) without creating a duplicate', async () => {
+    const { resolvePasskeyUser, signPasskeyIntent } = await import('../src/index');
+    const { adapter, created } = fakeAdapter({
+      id: 'existing-1',
+      name: 'Existing',
+      email: 'dup@example.com',
+    });
+    const token = signPasskeyIntent({ name: 'Ignored', email: 'dup@example.com' });
+
+    const resolved = await resolvePasskeyUser(adapter, token);
+
+    expect(resolved).toEqual({ id: 'existing-1', name: 'Existing' });
+    expect(created).toEqual([]); // no createUser call → no second hub
+  });
+});
+
 describe('auth config', () => {
   beforeAll(async () => {
     // Migrate the lazy `@docket/db` proxy's underlying PGlite instance so the
@@ -105,28 +175,49 @@ describe('auth config', () => {
     expect(auth.options.trustedOrigins).toEqual(['http://a.example.com', 'http://b.example.com']);
   });
 
-  it('births a 1:1 hub for every new user via databaseHooks.user.create.after', async () => {
+  it('is passwordless: no emailAndPassword and passkey endpoints are mounted', async () => {
     const { auth } = await import('../src/index');
-    const { db, hub } = await import('@docket/db');
-
-    const res = await auth.api.signUpEmail({
-      body: { name: 'Grace', email: 'grace@example.com', password: 'password-1234' },
-    });
-    expect(res.user.email).toBe('grace@example.com');
-
-    const hubs = await db.select().from(hub);
-    expect(hubs).toHaveLength(1);
-    expect(hubs[0]!.userId).toBe(res.user.id);
+    // Email/password sign-in is removed.
+    expect(auth.options.emailAndPassword).toBeUndefined();
+    // The passkey plugin exposes its registration/authentication endpoints at runtime.
+    // (`buildAuthOptions` returns the widened `BetterAuthOptions`, so these endpoints are
+    // present on the live `auth.api` but not in its static type — assert at runtime.)
+    const api = auth.api as Record<string, unknown>;
+    expect(typeof api['generatePasskeyRegistrationOptions']).toBe('function');
+    expect(typeof api['verifyPasskeyAuthentication']).toBe('function');
   });
 
-  it('mounts NO social providers / oidc / mcp plugins with placeholder env (today-behavior)', async () => {
-    // The live `auth` is built from the test env (gated vars unset) → every gate is
-    // closed. This pins the zero-account local build to email/password + nextCookies.
+  it('births a 1:1 hub on passwordless passkey sign-up (resolvePasskeyUser → create hook)', async () => {
+    // Passwordless sign-up runs `resolvePasskeyUser` against the LIVE internal adapter; it
+    // creates the user via the adapter, which fires `databaseHooks.user.create.after` →
+    // the 1:1 hub birth. This is the same code path the passkey plugin invokes during the
+    // pre-session WebAuthn registration ceremony.
+    const { auth, resolvePasskeyUser, signPasskeyIntent } = await import('../src/index');
+    const { db, hub, user } = await import('@docket/db');
+    const { eq } = await import('drizzle-orm');
+
+    const ctx = await auth.$context;
+    const token = signPasskeyIntent({ name: 'Grace', email: 'grace@example.com' });
+    const resolved = await resolvePasskeyUser(ctx.internalAdapter, token);
+
+    const users = await db.select().from(user).where(eq(user.email, 'grace@example.com'));
+    expect(users).toHaveLength(1);
+    expect(users[0]!.id).toBe(resolved.id);
+    expect(users[0]!.emailVerified).toBe(true);
+
+    const hubs = await db.select().from(hub).where(eq(hub.userId, resolved.id));
+    expect(hubs).toHaveLength(1);
+  });
+
+  it('mounts ONLY passkey + nextCookies with placeholder env (passwordless baseline)', async () => {
+    // The live `auth` is built from the test env (optional gated vars unset) → every
+    // OPTIONAL gate is closed. This pins the zero-account local build to passkey +
+    // nextCookies, with no social/oidc/mcp and no account-linking.
     const { auth } = await import('../src/index');
     expect(auth.options.socialProviders).toBeUndefined();
     expect(auth.options.account).toBeUndefined();
-    // Exactly one plugin (nextCookies); no oidc-provider / mcp.
-    expect(auth.options.plugins).toHaveLength(1);
+    const ids = (auth.options.plugins ?? []).map((p) => p.id);
+    expect(ids).toEqual(['passkey', 'next-cookies']);
   });
 
   // Runs LAST: it resets the module registry, which would orphan the migrated
@@ -148,19 +239,69 @@ describe('auth config', () => {
 });
 
 describe('buildAuthOptions env-gating', () => {
-  /** A minimal placeholder env: every optional gate closed (mirrors the local build). */
+  /** A minimal env: every OPTIONAL gate closed (mirrors the local passwordless build). */
   const baseEnv = {
     BETTER_AUTH_SECRET: SECRET,
     BETTER_AUTH_URL: 'http://localhost:3000',
+    BETTER_AUTH_PASSKEY_RP_ID: 'localhost',
+    BETTER_AUTH_PASSKEY_RP_NAME: 'Docket',
   } as const;
 
-  it('mounts nothing optional when no gated vars are real (== today)', async () => {
+  it('mounts ONLY passkey + nextCookies when no optional gated vars are real (== baseline)', async () => {
     const { buildAuthOptions } = await import('../src/index');
     const opts = buildAuthOptions(baseEnv);
     expect(opts.socialProviders).toBeUndefined();
     expect(opts.account).toBeUndefined();
-    expect(opts.plugins).toHaveLength(1); // nextCookies only
-    expect(opts.emailAndPassword).toEqual({ enabled: true });
+    expect((opts.plugins ?? []).map((p) => p.id)).toEqual(['passkey', 'next-cookies']);
+    // Passwordless: no email/password sign-in.
+    expect(opts.emailAndPassword).toBeUndefined();
+  });
+
+  it('configures passkey for passwordless (pre-session) registration', async () => {
+    const { buildAuthOptions } = await import('../src/index');
+    const opts = buildAuthOptions(baseEnv);
+    const pk = (opts.plugins ?? []).find((p) => p.id === 'passkey');
+    expect(pk).toBeDefined();
+    // The plugin records its received options under `.options` — assert passkey-first config.
+    const pkOptions = (pk as { options?: Record<string, unknown> }).options ?? {};
+    expect(pkOptions['rpID']).toBe('localhost');
+    expect(pkOptions['rpName']).toBe('Docket');
+    const registration = pkOptions['registration'] as Record<string, unknown> | undefined;
+    expect(registration?.['requireSession']).toBe(false);
+    expect(typeof registration?.['resolveUser']).toBe('function');
+  });
+
+  it("passkey's resolveUser wiring forwards ctx.context.internalAdapter + context", async () => {
+    // Invoke the configured `resolveUser` arrow directly so its forwarding to
+    // `resolvePasskeyUser(ctx.context.internalAdapter, context)` is exercised end-to-end:
+    // a fresh email creates the user via the fake adapter and round-trips the resolved id.
+    const { buildAuthOptions, signPasskeyIntent } = await import('../src/index');
+    const opts = buildAuthOptions(baseEnv);
+    const pk = (opts.plugins ?? []).find((p) => p.id === 'passkey');
+    const registration = (pk as { options?: { registration?: unknown } }).options?.registration as {
+      resolveUser: (args: {
+        ctx: { context: { internalAdapter: unknown } };
+        context: string;
+      }) => Promise<{ id: string; name: string }>;
+    };
+
+    const created: { name: string; email: string }[] = [];
+    const internalAdapter = {
+      findUserByEmail: async () => null,
+      createUser: async (data: { name: string; email: string; emailVerified: boolean }) => {
+        created.push({ name: data.name, email: data.email });
+        return { id: 'wired-1', name: data.name };
+      },
+    };
+
+    const token = signPasskeyIntent({ name: 'Wired', email: 'wired@example.com' });
+    const resolved = await registration.resolveUser({
+      ctx: { context: { internalAdapter } },
+      context: token,
+    });
+
+    expect(resolved).toEqual({ id: 'wired-1', name: 'Wired' });
+    expect(created).toEqual([{ name: 'Wired', email: 'wired@example.com' }]);
   });
 
   it('ignores half-configured social pairs (id without secret)', async () => {
@@ -185,7 +326,8 @@ describe('buildAuthOptions env-gating', () => {
       OIDC_LOGIN_PAGE_URL: '',
     });
     expect(opts.socialProviders).toBeUndefined();
-    expect(opts.plugins).toHaveLength(1);
+    // Still just passkey + nextCookies.
+    expect((opts.plugins ?? []).map((p) => p.id)).toEqual(['passkey', 'next-cookies']);
   });
 
   it('mounts Google + GitHub + Linear + account linking when all pairs are real', async () => {
@@ -210,8 +352,8 @@ describe('buildAuthOptions env-gating', () => {
       clientSecret: 'lin-secret',
     });
     expect(opts.account?.accountLinking?.enabled).toBe(true);
+    // Passwordless: `email-password` is NOT a trusted linking provider — only social ones.
     expect((opts.account?.accountLinking?.trustedProviders as string[]).sort()).toEqual([
-      'email-password',
       'github',
       'google',
       'linear',
@@ -224,10 +366,9 @@ describe('buildAuthOptions env-gating', () => {
       ...baseEnv,
       OIDC_LOGIN_PAGE_URL: 'https://docket.example/sign-in',
     });
-    // oidcProvider + nextCookies (no mcp).
-    expect(opts.plugins).toHaveLength(2);
+    // passkey + oidcProvider + nextCookies (no mcp).
     const ids = (opts.plugins ?? []).map((p) => p.id);
-    expect(ids).toContain('oidc-provider');
+    expect(ids).toEqual(['passkey', 'oidc-provider', 'next-cookies']);
     expect(ids).not.toContain('mcp');
     // nextCookies MUST remain last.
     expect(ids[ids.length - 1]).toBe('next-cookies');
@@ -235,16 +376,15 @@ describe('buildAuthOptions env-gating', () => {
 
   it('mounts mcp ONLY (before nextCookies) when both OIDC + MCP_RESOURCE_URL are real', async () => {
     // `mcp` internally bundles `oidcProvider`, so the standalone provider is NOT mounted
-    // separately — mcp + nextCookies is the full set.
+    // separately — passkey + mcp + nextCookies is the full set.
     const { buildAuthOptions } = await import('../src/index');
     const opts = buildAuthOptions({
       ...baseEnv,
       OIDC_LOGIN_PAGE_URL: 'https://docket.example/sign-in',
       MCP_RESOURCE_URL: 'https://docket.example/mcp',
     });
-    expect(opts.plugins).toHaveLength(2);
     const ids = (opts.plugins ?? []).map((p) => p.id);
-    expect(ids).toContain('mcp');
+    expect(ids).toEqual(['passkey', 'mcp', 'next-cookies']);
     expect(ids).not.toContain('oidc-provider');
     expect(ids[ids.length - 1]).toBe('next-cookies');
   });

@@ -19,9 +19,11 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@better-auth/passkey": "catalog:",
     "@docket/db": "workspace:*",
     "@docket/env": "workspace:*",
     "@docket/types": "workspace:*",
+    "@simplewebauthn/server": "catalog:",
     "better-auth": "catalog:"
   },
   "devDependencies": {

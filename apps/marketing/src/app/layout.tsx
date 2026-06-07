@@ -1,3 +1,4 @@
+import { AppRouterCacheProvider } from '@mui/material-nextjs/v16-appRouter';
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 
@@ -15,6 +16,14 @@ import './globals.css';
  * {@link SiteFooter}. The marketing site is fully static (Server Components only): there is
  * no session, no theme toggle, and no client providers, so it renders without a running
  * backend on the neutral light token set.
+ *
+ * The tree is wrapped in MUI's {@link AppRouterCacheProvider}, which collects Emotion's
+ * runtime styles during SSR and flushes them into `<head>` instead of emitting a
+ * `<style data-emotion>` insertion next to every `@mui/icons-material` `<svg>` (e.g. the
+ * FeatureGrid glyphs). Without it, the App Router does not coordinate Emotion's SSR
+ * injection, so the server HTML and the client render disagree and React reports a
+ * hydration mismatch. `enableCssLayer` wraps MUI's styles in `@layer mui` so Tailwind's
+ * utilities keep winning the cascade.
  */
 export const metadata: Metadata = {
   title: {
@@ -30,9 +39,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <body className="bg-background text-foreground min-h-screen antialiased">
-        <SiteHeader />
-        <main>{children}</main>
-        <SiteFooter />
+        <AppRouterCacheProvider options={{ key: 'mui', enableCssLayer: true }}>
+          <SiteHeader />
+          <main>{children}</main>
+          <SiteFooter />
+        </AppRouterCacheProvider>
       </body>
     </html>
   );

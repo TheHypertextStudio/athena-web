@@ -300,13 +300,13 @@ export function MembersTab({ orgId }: MembersTabProps): JSX.Element {
             <span className="text-muted-foreground font-normal">({members.length})</span>
           </h2>
         </div>
-        <div className="border-border bg-card overflow-hidden rounded-xl border">
+        <div className="border-outline-variant bg-surface-container-low overflow-hidden rounded-xl border">
           {members.length === 0 ? (
             <p className="text-muted-foreground p-6 text-center text-sm">
               No members yet — invite someone above to get started.
             </p>
           ) : (
-            <ul className="divide-border divide-y">
+            <ul className="divide-outline-variant divide-y">
               {members.map((member) => {
                 const isGuest = guestRoleId !== null && member.roleId === guestRoleId;
                 return (
@@ -338,7 +338,7 @@ export function MembersTab({ orgId }: MembersTabProps): JSX.Element {
 
       <section aria-label="Pending invitations" className="flex flex-col gap-2">
         <h2 className="text-foreground text-sm font-semibold">Pending invitations</h2>
-        <div className="border-border bg-card overflow-hidden rounded-xl border">
+        <div className="border-outline-variant bg-surface-container-low overflow-hidden rounded-xl border">
           <InvitationsList
             invitations={pendingInvitations}
             roleLabel={roleLabel}

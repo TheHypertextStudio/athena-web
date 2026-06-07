@@ -47,7 +47,7 @@ export function UnscheduledTray({ bars, dimmed }: UnscheduledTrayProps): JSX.Ele
               <Link
                 href={`/orgs/${bar.organizationId}/projects/${bar.id}`}
                 aria-label={`${bar.name} — ${statusLabel(bar.status)}, unscheduled, ${labelFor(health)}`}
-                className="border-border bg-card hover:bg-accent focus-visible:ring-ring inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:outline-none"
+                className="border-outline-variant bg-surface-container-low hover:bg-surface-container-high focus-visible:ring-ring inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:outline-none"
               >
                 <span aria-hidden="true" className={cn('size-2 rounded-full', fillFor(health))} />
                 <span className="text-foreground max-w-[14rem] truncate">{bar.name}</span>

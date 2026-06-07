@@ -98,7 +98,7 @@ export function StatsBanner({
   return (
     <section
       aria-label={`${cycleNoun} pace`}
-      className="border-border bg-card overflow-hidden rounded-xl border"
+      className="border-outline-variant bg-surface-container-low overflow-hidden rounded-xl border"
     >
       <button
         type="button"

@@ -68,7 +68,7 @@ export function AttentionCard({
   return (
     <div
       {...(emphasize ? { role: 'status' } : {})}
-      className="border-border/60 bg-card overflow-hidden rounded-xl border"
+      className="border-outline-variant bg-surface-container-low overflow-hidden rounded-xl border"
     >
       <button
         type="button"
@@ -78,7 +78,7 @@ export function AttentionCard({
         onClick={() => {
           setExpanded((v) => !v);
         }}
-        className="hover:bg-accent/40 focus-visible:ring-ring focus-visible:ring-offset-background flex w-full items-center gap-3 p-4 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset disabled:cursor-default disabled:hover:bg-transparent"
+        className="hover:bg-surface-container-high focus-visible:ring-ring focus-visible:ring-offset-background flex w-full items-center gap-3 p-4 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset disabled:cursor-default disabled:hover:bg-transparent"
       >
         <span
           aria-hidden="true"
@@ -107,7 +107,7 @@ export function AttentionCard({
       </button>
 
       {active && expanded ? (
-        <ul id={panelId} className="border-border/60 flex flex-col gap-1.5 border-t p-2">
+        <ul id={panelId} className="border-outline-variant flex flex-col gap-1.5 border-t p-2">
           {tasks.map((task) => (
             <li key={task.id}>
               <PlanRow task={task} orgName={orgName(task.organizationId)} />

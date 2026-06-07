@@ -24,7 +24,7 @@ import type { JSX } from 'react';
 export function StepConnect(): JSX.Element {
   return (
     <div className="flex flex-col gap-4">
-      <div className="border-border bg-card flex items-start gap-4 rounded-xl border p-5">
+      <div className="border-outline-variant bg-surface-container-low flex items-start gap-4 rounded-xl border p-5">
         <span
           aria-hidden
           className="border-primary/30 bg-primary/10 text-primary flex size-10 shrink-0 items-center justify-center rounded-lg border"
@@ -32,7 +32,7 @@ export function StepConnect(): JSX.Element {
           <LayoutGrid className="size-5" />
         </span>
         <div className="flex flex-col gap-1">
-          <span className="text-foreground text-base font-semibold leading-tight">
+          <span className="text-foreground text-base leading-tight font-semibold">
             Bring your tools together
           </span>
           <span className="text-muted-foreground text-sm leading-relaxed">

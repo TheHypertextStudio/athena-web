@@ -89,7 +89,7 @@ export function PropertiesPanel({
   const target = formatDate(targetDate);
 
   return (
-    <div className="border-border bg-card flex flex-col rounded-xl border px-4 py-2">
+    <div className="border-outline-variant bg-surface-container-low flex flex-col rounded-xl border px-4 py-2">
       <h2 className="sr-only">Properties</h2>
 
       <PropertyRow icon={<User className="size-4" />} label="Lead">

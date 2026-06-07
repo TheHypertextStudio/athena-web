@@ -526,7 +526,10 @@ export default function ProjectDetailPage(): JSX.Element {
           className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_18rem]"
         >
           <div className="flex min-w-0 flex-col gap-6">
-            <section aria-label="Progress" className="border-border bg-card rounded-xl border p-5">
+            <section
+              aria-label="Progress"
+              className="border-outline-variant bg-surface-container-low rounded-xl border p-5"
+            >
               {progress ? (
                 <WeightedProgress progress={progress} health={health} />
               ) : (

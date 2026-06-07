@@ -103,7 +103,7 @@ export function UpdatesPanel({
     <div className="flex flex-col gap-6">
       <form
         onSubmit={submit}
-        className="border-border bg-card flex flex-col gap-3 rounded-xl border p-4"
+        className="border-outline-variant bg-surface-container-low flex flex-col gap-3 rounded-xl border p-4"
       >
         <label htmlFor="program-update-body" className="text-foreground text-sm font-medium">
           Post an update

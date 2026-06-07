@@ -64,7 +64,7 @@ export function InviteForm({
 
   return (
     <form
-      className="border-border bg-card flex flex-col gap-3 rounded-xl border p-4"
+      className="border-outline-variant bg-surface-container-low flex flex-col gap-3 rounded-xl border p-4"
       onSubmit={(event) => {
         event.preventDefault();
         // `canSubmit` implies a non-null role id; bail otherwise (narrows `effectiveRoleId`).

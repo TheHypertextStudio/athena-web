@@ -6,7 +6,9 @@
  * @remarks
  * Collapses Docket's former two-layer navigation (the left-edge org rail + the org-scoped
  * context sidebar) into one Linear-grade sidebar with sections that are *always* visible —
- * there is no separate "Hub" mode that swaps the sidebar's contents. Pinned at the top is the
+ * there is no separate "Hub" mode that swaps the sidebar's contents. Rendered as a floating
+ * rounded MD3 `surface` panel (a hairline `outline-variant` border + soft elevation) that
+ * sits inset on the shell's tinted `surface-container` canvas. Pinned at the top is the
  * {@link WorkspaceSwitcher} (the active workspace + a one-click switch between every org the
  * caller belongs to). Below it, two sections shown on every route:
  *
@@ -80,7 +82,7 @@ interface NavRow<K extends string> {
 /** The section heading above a sidebar group. */
 function GroupLabel({ children }: { readonly children: React.ReactNode }): React.JSX.Element {
   return (
-    <p className="text-muted-foreground px-2 pt-3 pb-1 text-xs font-medium tracking-wide">
+    <p className="text-on-surface-variant px-2 pt-3 pb-1 text-xs font-medium tracking-wide">
       {children}
     </p>
   );
@@ -138,7 +140,7 @@ export function Sidebar({
   return (
     <aside
       aria-label="Navigation"
-      className="border-border bg-card flex h-full w-60 shrink-0 flex-col gap-0.5 overflow-y-auto border-r p-2"
+      className="bg-surface text-on-surface border-outline-variant flex h-full w-60 shrink-0 flex-col gap-0.5 overflow-y-auto rounded-xl border p-2 shadow-sm"
     >
       <WorkspaceSwitcher workspaces={workspaces} onSelect={onSelectWorkspace} />
 
@@ -183,7 +185,7 @@ export function Sidebar({
           })}
         </nav>
       ) : (
-        <p className="text-muted-foreground px-2 py-1.5 text-sm">No workspace yet.</p>
+        <p className="text-on-surface-variant px-2 py-1.5 text-sm">No workspace yet.</p>
       )}
     </aside>
   );

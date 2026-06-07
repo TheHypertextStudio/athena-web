@@ -74,7 +74,7 @@ export function InitiativeRow({
     <button
       type="button"
       onClick={onOpen}
-      className="border-border bg-card hover:bg-accent focus-visible:ring-ring group flex w-full flex-col gap-2 rounded-xl border p-4 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none"
+      className="border-outline-variant bg-surface-container-low hover:bg-surface-container-high focus-visible:ring-ring group flex w-full flex-col gap-2 rounded-xl border p-4 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2.5">

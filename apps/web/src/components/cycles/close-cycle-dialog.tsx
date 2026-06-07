@@ -150,7 +150,7 @@ export function CloseCycleDialog({
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={descId}
-        className="bg-card border-border relative flex max-h-[85vh] w-full max-w-lg flex-col rounded-xl border shadow-lg"
+        className="bg-surface-container-high border-outline-variant text-on-surface relative flex max-h-[85vh] w-full max-w-lg flex-col rounded-xl border shadow-lg"
       >
         <header className="border-border flex items-start justify-between gap-4 border-b px-5 py-4">
           <div className="flex flex-col gap-1">

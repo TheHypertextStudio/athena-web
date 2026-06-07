@@ -16,6 +16,8 @@
  */
 import type SvgIcon from '@mui/material/SvgIcon';
 
+export { default as ArrowRight } from '@mui/icons-material/ArrowForward';
+export { default as Building } from '@mui/icons-material/CorporateFare';
 export { default as Check } from '@mui/icons-material/Check';
 export { default as CheckCircle2 } from '@mui/icons-material/CheckCircle';
 export { default as ChevronDown } from '@mui/icons-material/KeyboardArrowDown';
@@ -25,10 +27,14 @@ export { default as ChevronUp } from '@mui/icons-material/KeyboardArrowUp';
 export { default as Circle } from '@mui/icons-material/Circle';
 export { default as CircleDashed } from '@mui/icons-material/RadioButtonUnchecked';
 export { default as CircleDot } from '@mui/icons-material/RadioButtonChecked';
+export { default as Command } from '@mui/icons-material/KeyboardCommandKey';
+export { default as CornerDownLeft } from '@mui/icons-material/SubdirectoryArrowLeft';
 export { default as Ellipsis } from '@mui/icons-material/MoreHoriz';
 export { default as Filter } from '@mui/icons-material/FilterList';
 export { default as Flag } from '@mui/icons-material/OutlinedFlag';
 export { default as FolderKanban } from '@mui/icons-material/ViewKanban';
+export { default as GanttChart } from '@mui/icons-material/ViewTimeline';
+export { default as Globe } from '@mui/icons-material/Public';
 export { default as ListChecks } from '@mui/icons-material/ChecklistRtl';
 export { default as Home } from '@mui/icons-material/Home';
 export { default as Inbox } from '@mui/icons-material/Inbox';

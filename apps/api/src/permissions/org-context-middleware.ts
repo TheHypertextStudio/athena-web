@@ -22,10 +22,15 @@ export const orgContextMiddleware: MiddlewareHandler<AppEnv> = async (c, next) =
   const orgId = c.req.param('orgId');
   if (!orgId) throw new NotFoundError();
 
+  // The role join is scoped by org (not just `actor.roleId = role.id`): `actor.roleId →
+  // role.id` is a bare global FK with no org constraint, so a stray cross-org roleId must
+  // NOT confer that other org's capabilities here. Pairing the join with
+  // `role.organizationId = orgId` means an out-of-org role resolves to no row → empty
+  // capabilities, defense-in-depth behind the members PATCH in-org role validation.
   const rows = await db
     .select({ actor, role })
     .from(actor)
-    .leftJoin(role, eq(actor.roleId, role.id))
+    .leftJoin(role, and(eq(actor.roleId, role.id), eq(role.organizationId, orgId)))
     .where(and(eq(actor.userId, session.user.id), eq(actor.organizationId, orgId)))
     .limit(1);
 

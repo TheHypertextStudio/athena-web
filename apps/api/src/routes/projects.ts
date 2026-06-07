@@ -1,7 +1,7 @@
 /**
  * `@docket/api` — projects router (mounted at `/v1/orgs/:orgId/projects`).
  */
-import { db, project, task } from '@docket/db';
+import { actor, db, program, project, task, team } from '@docket/db';
 import { pageOf, ProjectCreate, ProjectOut, ProjectProgress, ProjectUpdate } from '@docket/types';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -34,6 +34,41 @@ function toOut(p: ProjectRow): z.input<typeof ProjectOut> {
 
 /** Path-param schema for the single-project routes. */
 const idParam = z.object({ id: z.string() });
+
+/**
+ * Assert that a referenced row belongs to the caller's org, or throw {@link NotFoundError}.
+ *
+ * @remarks
+ * The work-layer FKs (`leadId → actor`, `programId → program`, `teamId → team`) target
+ * each table's *global* primary key with no `organization_id` constraint baked into the
+ * FK, so the database alone will happily accept a PATCH that points a project at an actor,
+ * program, or team owned by a *different* tenant (data-model §0.2: tenant isolation is
+ * enforced in the data-access layer, never by the bare FK). Before writing such a
+ * reference we therefore re-read the target scoped by `eq(table.organizationId, orgId)` —
+ * exactly as `POST /tasks` already does for its `teamId` — and 404 (existence-hiding: we
+ * do not reveal that the row exists in another org) when it is absent. A `null`/`undefined`
+ * `refId` is a no-op: clearing or leaving a nullable reference untouched needs no check.
+ *
+ * @param table - The org-scoped table the reference points at (`actor`/`program`/`team`).
+ * @param orgId - The tenant the reference must belong to.
+ * @param refId - The referenced row id (a no-op when `null`/`undefined`).
+ * @param notFoundMessage - The {@link NotFoundError} message when the row is out-of-org.
+ * @throws {NotFoundError} When the referenced row is missing or owned by another org.
+ */
+async function assertRefInOrg(
+  table: typeof actor | typeof program | typeof team,
+  orgId: string,
+  refId: string | null | undefined,
+  notFoundMessage: string,
+): Promise<void> {
+  if (refId === null || refId === undefined) return;
+  const rows = await db
+    .select({ id: table.id })
+    .from(table)
+    .where(and(eq(table.id, refId), eq(table.organizationId, orgId)))
+    .limit(1);
+  if (!rows[0]) throw new NotFoundError(notFoundMessage);
+}
 
 /**
  * Compute a Project's weighted completion roll-up from its Tasks.
@@ -78,6 +113,14 @@ const projects = new Hono<AppEnv>()
   .post('/', capabilityGuard('contribute'), zJson(ProjectCreate), async (c) => {
     const { orgId, actorId } = c.get('actorCtx');
     const body = c.req.valid('json');
+
+    // Tenant isolation: a body-provided lead/team must live in the caller's org. The bare
+    // FK references each table's global PK, so without this a CREATE could attach another
+    // tenant's actor/team to this project — exactly the gap PATCH already closes. Omitted
+    // fields are no-ops inside the helper. (`programId` is not on ProjectCreate.)
+    await assertRefInOrg(actor, orgId, body.leadId, 'Lead not found');
+    await assertRefInOrg(team, orgId, body.teamId, 'Team not found');
+
     const inserted = await db
       .insert(project)
       .values({
@@ -122,6 +165,15 @@ const projects = new Hono<AppEnv>()
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const body = c.req.valid('json');
+
+      // Tenant isolation: a re-pointed lead/program/team must live in the caller's org.
+      // The bare FK references each table's global PK, so without this a PATCH could
+      // attach another tenant's actor/program/team to this project. Clearing (null) or
+      // omitting a field is a no-op inside the helper.
+      await assertRefInOrg(actor, orgId, body.leadId, 'Lead not found');
+      await assertRefInOrg(program, orgId, body.programId, 'Program not found');
+      await assertRefInOrg(team, orgId, body.teamId, 'Team not found');
+
       const patch = {
         ...(body.name !== undefined ? { name: body.name } : {}),
         ...(body.description !== undefined ? { description: body.description } : {}),

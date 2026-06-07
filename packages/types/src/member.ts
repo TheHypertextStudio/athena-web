@@ -73,3 +73,23 @@ export const InvitationOut = z
   .meta({ id: 'InvitationOut', description: 'An organization invitation.' });
 /** Invitation representation value. */
 export type InvitationOut = z.infer<typeof InvitationOut>;
+
+/** Result of removing a member (a tombstone confirming the actor id removed). */
+export const MemberRemoveOut = z
+  .object({
+    id: ActorId,
+    removed: z.literal(true),
+  })
+  .meta({ id: 'MemberRemoveOut', description: 'Confirmation that a member was removed.' });
+/** Member-removal confirmation value. */
+export type MemberRemoveOut = z.infer<typeof MemberRemoveOut>;
+
+/** Result of revoking a pending invitation (a tombstone confirming the invitation id revoked). */
+export const InvitationRevokeOut = z
+  .object({
+    id: InvitationId,
+    revoked: z.literal(true),
+  })
+  .meta({ id: 'InvitationRevokeOut', description: 'Confirmation that an invitation was revoked.' });
+/** Invitation-revocation confirmation value. */
+export type InvitationRevokeOut = z.infer<typeof InvitationRevokeOut>;

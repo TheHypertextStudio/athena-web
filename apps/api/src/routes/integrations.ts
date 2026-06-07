@@ -9,13 +9,22 @@
  * work through the {@link getContainer | container}'s {@link Connector} (the
  * MockConnector under `APP_MODE=local`) and materializes each {@link ImportedItem} as
  * a linked {@link task} carrying its provenance, idempotently.
+ *
+ * `GET /directory` returns the categorized provider directory the connect wizard reads.
+ * `POST /:id/sync` (capability `manage`) refreshes a connector's read-only mirror via
+ * the same {@link Connector} port, recording a {@link SyncJob} whose status is read
+ * back through `GET /jobs/:jobId`. The Connector is never hardcoded to one provider —
+ * everything keys off the port's {@link ConnectorProvider} union.
  */
 import { db, integration, task, team } from '@docket/db';
 import {
   IntegrationCreate,
+  IntegrationDirectoryOut,
+  type IntegrationDirectoryProvider,
   IntegrationOut,
   IntegrationUpdate,
   pageOf,
+  SyncJobOut,
   TaskOut,
 } from '@docket/types';
 import type { ConnectorProvider, ImportedItem } from '@docket/boundaries';
@@ -42,9 +51,98 @@ const CONNECTOR_PROVIDERS: readonly ConnectorProvider[] = [
   'calendar',
 ];
 
+/**
+ * The connect-wizard directory entry for each {@link ConnectorProvider}.
+ *
+ * @remarks
+ * Keyed off the {@link Connector} port's provider union (never a single hardcoded
+ * provider): a Migration pattern *replaces* a tool, a Connector pattern *complements*
+ * one. Each row declares the integration roles the provider contributes and the
+ * category surfaced in the connect wizard.
+ */
+const PROVIDER_DIRECTORY: Readonly<
+  Record<ConnectorProvider, Omit<IntegrationDirectoryProvider, 'provider'>>
+> = {
+  github: {
+    name: 'GitHub',
+    pattern: 'connector',
+    roles: ['code', 'work'],
+    category: 'engineering',
+  },
+  linear: { name: 'Linear', pattern: 'migration', roles: ['work'], category: 'project-management' },
+  drive: { name: 'Google Drive', pattern: 'connector', roles: ['context'], category: 'documents' },
+  gmail: { name: 'Gmail', pattern: 'connector', roles: ['signal'], category: 'communication' },
+  calendar: {
+    name: 'Google Calendar',
+    pattern: 'connector',
+    roles: ['time'],
+    category: 'communication',
+  },
+};
+
 /** Narrow a stored integration `provider` string to a {@link ConnectorProvider}. */
 function asConnectorProvider(provider: string): ConnectorProvider | null {
   return CONNECTOR_PROVIDERS.find((p) => p === provider) ?? null;
+}
+
+/**
+ * A sync/import job, materialized in-process from a {@link Connector} run.
+ *
+ * @remarks
+ * The data model carries no `sync_job` table; a job is the auditable record of one
+ * {@link Connector.importWork} run against the boundary port. It is created
+ * synchronously (the run is deterministic against the mock connector) and retained in
+ * a process-scoped registry for follow-up status reads. Scoped by `organizationId` so
+ * `GET /jobs/:jobId` enforces tenant isolation.
+ */
+interface SyncJob {
+  /** The job id (also the registry key). */
+  readonly jobId: string;
+  /** The org the job belongs to (tenant-isolation key). */
+  readonly organizationId: string;
+  /** The integration the job synced. */
+  readonly integrationId: string;
+  /** The job's terminal/lifecycle status. */
+  readonly status: z.infer<typeof SyncJobOut>['status'];
+  /** Count of items materialized (new linked tasks created). */
+  readonly processed: number;
+  /** Count of items the connector returned for this run. */
+  readonly total: number;
+  /** Failure detail, when the job failed. */
+  readonly error: string | null;
+  /** ISO-8601 time the job was recorded. */
+  readonly createdAt: string;
+}
+
+/**
+ * The process-scoped registry of {@link SyncJob}s.
+ *
+ * @remarks
+ * In-memory because the data model has no `sync_job` table; this is the smallest store
+ * that satisfies the `POST /:id/sync` → `GET /jobs/:jobId` contract while keeping the
+ * connector behind its port. A monotonic counter yields deterministic, collision-free
+ * job ids within a process.
+ */
+const SYNC_JOBS = new Map<string, SyncJob>();
+let syncJobCounter = 0;
+
+/** Mint the next process-unique sync-job id. */
+function nextSyncJobId(): string {
+  syncJobCounter += 1;
+  return `syncjob_${syncJobCounter.toString().padStart(8, '0')}`;
+}
+
+/** Serialize a {@link SyncJob} to its {@link SyncJobOut} representation. */
+function toSyncJobOut(job: SyncJob): z.input<typeof SyncJobOut> {
+  return {
+    jobId: job.jobId,
+    integrationId: job.integrationId,
+    status: job.status,
+    processed: job.processed,
+    total: job.total,
+    error: job.error,
+    createdAt: job.createdAt,
+  };
 }
 
 /** Serialize a {@link task} row to its {@link TaskOut} representation. */
@@ -89,6 +187,7 @@ function toOut(i: IntegrationRow): z.input<typeof IntegrationOut> {
 }
 
 const idParam = z.object({ id: z.string() });
+const jobIdParam = z.object({ jobId: z.string() });
 
 /** Integrations router: org-scoped CRUD over external migrations + connectors. */
 const integrations = new Hono<AppEnv>()
@@ -118,6 +217,19 @@ const integrations = new Hono<AppEnv>()
     /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
     if (!row) throw new Error('integration insert returned no row');
     return ok(c, IntegrationOut, toOut(row));
+  })
+  .get('/directory', async (c) => {
+    const providers: z.input<typeof IntegrationDirectoryOut>['providers'] = CONNECTOR_PROVIDERS.map(
+      (provider) => ({ provider, ...PROVIDER_DIRECTORY[provider] }),
+    );
+    return ok(c, IntegrationDirectoryOut, { providers });
+  })
+  .get('/jobs/:jobId', zParam(jobIdParam), async (c) => {
+    const { orgId } = c.get('actorCtx');
+    const { jobId } = c.req.valid('param');
+    const job = SYNC_JOBS.get(jobId);
+    if (job?.organizationId !== orgId) throw new NotFoundError('Sync job not found');
+    return ok(c, SyncJobOut, toSyncJobOut(job));
   })
   .get('/:id', zParam(idParam), async (c) => {
     const { orgId } = c.get('actorCtx');
@@ -209,7 +321,47 @@ const integrations = new Hono<AppEnv>()
       const created = await importItems(orgId, actorId, row.id, teamId, items);
       return ok(c, pageOf(TaskOut), { items: created.map(toTaskOut) });
     },
-  );
+  )
+  .post('/:id/sync', capabilityGuard('manage'), zParam(idParam), async (c) => {
+    const { orgId, actorId } = c.get('actorCtx');
+    const { id } = c.req.valid('param');
+
+    const rows = await db
+      .select()
+      .from(integration)
+      .where(and(eq(integration.id, id), eq(integration.organizationId, orgId)))
+      .limit(1);
+    const row = rows[0];
+    if (!row) throw new NotFoundError('Integration not found');
+
+    const provider = asConnectorProvider(row.provider);
+    if (!provider) throw new ConflictError('Integration provider does not support sync');
+
+    const teamId = await resolveImportTeam(orgId, row);
+
+    const items = await getContainer().connector.importWork({
+      connectionId: row.id,
+      provider,
+      ...(row.connection.externalWorkspaceId
+        ? { externalWorkspaceId: row.connection.externalWorkspaceId }
+        : {}),
+    });
+
+    const created = await importItems(orgId, actorId, row.id, teamId, items);
+
+    const job: SyncJob = {
+      jobId: nextSyncJobId(),
+      organizationId: orgId,
+      integrationId: row.id,
+      status: 'succeeded',
+      processed: created.length,
+      total: items.length,
+      error: null,
+      createdAt: new Date().toISOString(),
+    };
+    SYNC_JOBS.set(job.jobId, job);
+    return ok(c, SyncJobOut, toSyncJobOut(job));
+  });
 
 /**
  * Resolve the team a linked task should land in for an import.

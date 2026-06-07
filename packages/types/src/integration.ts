@@ -70,6 +70,54 @@ export const IntegrationUpdate = z
 /** Validated integration-update body. */
 export type IntegrationUpdate = z.infer<typeof IntegrationUpdate>;
 
+/** A provider listed in the connect-wizard directory. */
+export const IntegrationDirectoryProvider = z
+  .object({
+    provider: z.string(),
+    name: z.string(),
+    pattern: IntegrationPattern,
+    roles: z.array(IntegrationRole),
+    category: z.string(),
+  })
+  .meta({
+    id: 'IntegrationDirectoryProvider',
+    description: 'An available integration provider with its pattern, roles, and category.',
+  });
+/** Directory-provider value. */
+export type IntegrationDirectoryProvider = z.infer<typeof IntegrationDirectoryProvider>;
+
+/** The categorized directory of available integration providers (connect-wizard data). */
+export const IntegrationDirectoryOut = z
+  .object({
+    providers: z.array(IntegrationDirectoryProvider),
+  })
+  .meta({
+    id: 'IntegrationDirectoryOut',
+    description: 'The set of providers Docket can connect to, with their patterns and roles.',
+  });
+/** Directory representation value. */
+export type IntegrationDirectoryOut = z.infer<typeof IntegrationDirectoryOut>;
+
+/** Lifecycle status of a connector sync / migration-import job. */
+export const SyncJobStatus = z.enum(['queued', 'running', 'succeeded', 'failed']);
+/** Sync-job-status value. */
+export type SyncJobStatus = z.infer<typeof SyncJobStatus>;
+
+/** The status of a sync (connector mirror refresh) or import (migration) job. */
+export const SyncJobOut = z
+  .object({
+    jobId: z.string(),
+    integrationId: IntegrationId,
+    status: SyncJobStatus,
+    processed: z.number().int().nonnegative(),
+    total: z.number().int().nonnegative(),
+    error: z.string().nullable(),
+    createdAt: z.string(),
+  })
+  .meta({ id: 'SyncJobOut', description: 'The progress/status of an integration sync job.' });
+/** Sync-job representation value. */
+export type SyncJobOut = z.infer<typeof SyncJobOut>;
+
 /** Full integration representation returned by reads. */
 export const IntegrationOut = z
   .object({

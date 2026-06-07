@@ -16,10 +16,10 @@ import { useParams, useRouter } from 'next/navigation';
 import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useSession } from '@/lib/auth-client';
-import { recallDefaultTeam, rememberDefaultTeam } from '@/lib/active-team';
 import { api } from '@/lib/api';
 import { readError, readProblem } from '@/lib/problem';
 import { STATE_GROUP_LABEL, STATE_GROUP_ORDER, stateTypeOf } from '@/lib/work-state';
+import { useActiveOrg } from '@/components/active-org';
 import {
   AgentTaskRow,
   type AgentTaskRowData,
@@ -27,6 +27,7 @@ import {
 } from '@/components/my-work/agent-task-row';
 import { type PillStatus, pillStatusOf } from '@/components/my-work/live-session-pill';
 import { SplitTabs } from '@/components/my-work/split-tabs';
+import { TeamPicker } from '@/components/teams/team-picker';
 
 /** The two halves of the agent-aware work split. */
 type WorkTab = 'mine' | 'delegated';
@@ -75,9 +76,10 @@ const SESSION_RANK: Record<SessionStatus, number> = {
  * awaiting-approval / paused / errored) that deep-links to the task detail / session; rows
  * open the task detail route. Inline task creation is preserved.
  *
- * Creating a task needs a `teamId`; since the RPC exposes no teams-list route, it uses the
- * default team id remembered at onboarding, falling back to the team id on any existing task.
- * Data is fetched at runtime, so the production build needs no running server.
+ * Creating a task needs a `teamId`; the active org's teams come from {@link useActiveOrg} (which
+ * loads `GET /v1/orgs/:orgId/teams`), defaulting to the org's "General" team and offering a
+ * {@link TeamPicker} when the org has more than one. Data is fetched at runtime, so the
+ * production build needs no running server.
  */
 export default function MyWorkPage(): JSX.Element {
   const router = useRouter();
@@ -86,6 +88,8 @@ export default function MyWorkPage(): JSX.Element {
   const { data: authSession } = useSession();
   const userId = authSession?.user.id ?? null;
 
+  const { teams, defaultTeamId, teamsLoading } = useActiveOrg();
+
   const projectsLabel = useVocabulary('project', { plural: true });
 
   const [tasks, setTasks] = useState<readonly TaskOut[]>([]);
@@ -93,7 +97,6 @@ export default function MyWorkPage(): JSX.Element {
   const [members, setMembers] = useState<readonly MemberOut[]>([]);
   const [agents, setAgents] = useState<readonly AgentOut[]>([]);
   const [sessions, setSessions] = useState<readonly AgentSessionOut[]>([]);
-  const [teamId, setTeamId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -101,6 +104,10 @@ export default function MyWorkPage(): JSX.Element {
   const [title, setTitle] = useState('');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+
+  // The team new tasks land in: a user override (via the picker) or the org's default team.
+  const [teamOverride, setTeamOverride] = useState<string | null>(null);
+  const teamId = teamOverride ?? defaultTeamId;
 
   /** Load the org's tasks, projects, members, agents, and sessions for the split. */
   const load = useCallback(async (): Promise<void> => {
@@ -120,7 +127,6 @@ export default function MyWorkPage(): JSX.Element {
       }
       const { items: taskItems } = await tasksRes.json();
       setTasks(taskItems);
-      setTeamId(recallDefaultTeam(orgId) ?? taskItems[0]?.teamId ?? null);
       if (projectsRes.ok) setProjects((await projectsRes.json()).items);
       if (membersRes.ok) setMembers((await membersRes.json()).items);
       if (agentsRes.ok) setAgents((await agentsRes.json()).items);
@@ -301,7 +307,6 @@ export default function MyWorkPage(): JSX.Element {
         return;
       }
       const created = await res.json();
-      rememberDefaultTeam(orgId, created.teamId);
       setTasks((current) => [created, ...current]);
       setTitle('');
     } catch (caught) {
@@ -341,7 +346,11 @@ export default function MyWorkPage(): JSX.Element {
               setTitle(e.target.value);
             }}
           />
-          <Button type="submit" disabled={creating || title.trim().length === 0}>
+          <TeamPicker teams={teams} value={teamId} onChange={setTeamOverride} disabled={creating} />
+          <Button
+            type="submit"
+            disabled={creating || teamsLoading || teamId === null || title.trim().length === 0}
+          >
             {creating ? 'Adding…' : 'Add task'}
           </Button>
         </div>

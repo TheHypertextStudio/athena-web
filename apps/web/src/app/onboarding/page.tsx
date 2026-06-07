@@ -13,7 +13,6 @@ import { StepPersonalWelcome } from '@/components/onboarding/step-personal-welco
 import { StepVocabulary } from '@/components/onboarding/step-vocabulary';
 import type { OnboardingIntent, OnboardingStep, Vocabulary } from '@/components/onboarding/types';
 import { WizardShell } from '@/components/onboarding/wizard-shell';
-import { rememberDefaultTeam } from '@/lib/active-team';
 import { api } from '@/lib/api';
 import { useSession } from '@/lib/auth-client';
 import { readError, readProblem } from '@/lib/problem';
@@ -60,10 +59,11 @@ function firstNameOf(name: string | undefined): string | undefined {
  *   the chosen name + vocabulary + intent and routes to My Work.
  *
  * The ordered step list is derived from the chosen intent so the progress indicator and
- * back/next navigation stay correct without hand-maintained branches. On success the returned
- * default team id is remembered (so the work view can create tasks immediately); on failure
- * the `Problem` response body is surfaced inline. Submission only ever fires from the React
- * click handler, so a pre-hydration click cannot trigger a half-initialised create.
+ * back/next navigation stay correct without hand-maintained branches. On success it routes to
+ * the new org's My Work, where the app shell loads the org's teams (so task creation works on a
+ * fresh session); on failure the `Problem` response body is surfaced inline. Submission only
+ * ever fires from the React click handler, so a pre-hydration click cannot trigger a
+ * half-initialised create.
  */
 export default function OnboardingPage(): JSX.Element {
   const router = useRouter();
@@ -112,7 +112,7 @@ export default function OnboardingPage(): JSX.Element {
     if (next) setStep(next);
   }, [steps, stepIndex]);
 
-  /** Create the org (personal or team), remember its default team, and route to My Work. */
+  /** Create the org (personal or team) and route to its My Work. */
   const finish = useCallback(async (): Promise<void> => {
     if (intent === null || pending) return;
     setError(null);
@@ -134,8 +134,7 @@ export default function OnboardingPage(): JSX.Element {
         );
         return;
       }
-      const { organization, defaultTeam } = (await res.json()) as OrgCreateResult;
-      rememberDefaultTeam(organization.id, defaultTeam.id);
+      const { organization } = (await res.json()) as OrgCreateResult;
       router.push(`/orgs/${organization.id}/my-work`);
     } catch (caught) {
       setError(

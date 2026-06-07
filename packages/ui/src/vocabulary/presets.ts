@@ -26,14 +26,22 @@ export const presetStartup: VocabularyPresetMap = {
   team: { singular: 'Team', plural: 'Teams' },
 };
 
-/** Nonprofit vocabulary — mission-oriented labels (programs, initiatives, etc.). */
+/**
+ * Nonprofit vocabulary — mission-oriented labels for programs and the people they serve.
+ *
+ * @remarks
+ * Deliberately distinct from {@link presetStartup}: `program` is the hero term, work is
+ * planned in `Season`s rather than engineering `Cycle`s, and the people doing the work are
+ * organised into `Chapter`s rather than product `Team`s. Only `project` and `task` — which
+ * read the same across every sector — match the startup defaults.
+ */
 export const presetNonprofit: VocabularyPresetMap = {
-  initiative: { singular: 'Initiative', plural: 'Initiatives' },
+  initiative: { singular: 'Campaign', plural: 'Campaigns' },
   program: { singular: 'Program', plural: 'Programs' },
   project: { singular: 'Project', plural: 'Projects' },
   task: { singular: 'Task', plural: 'Tasks' },
-  cycle: { singular: 'Cycle', plural: 'Cycles' },
-  team: { singular: 'Team', plural: 'Teams' },
+  cycle: { singular: 'Season', plural: 'Seasons' },
+  team: { singular: 'Chapter', plural: 'Chapters' },
 };
 
 /** Agency vocabulary — client-services labels (retainers, engagements, etc.). */

@@ -6,14 +6,41 @@ import { z } from 'zod';
 import { ActorId, OrganizationId, TeamId } from './primitives';
 import { VocabularySkin } from './vocabulary';
 
-/** Body for creating an Organization (the single un-nested create; `isPersonal` forced false). */
+/**
+ * Body for creating an Organization (the single un-nested create).
+ *
+ * @remarks
+ * Supports two shapes:
+ * - **Team org** (`isPersonal: false`, the default): `name` is REQUIRED and must be a
+ *   non-empty string. This is the classic "create a workspace" flow.
+ * - **Personal space** (`isPersonal: true`): an organization-of-one created without
+ *   prompting for a name or vocabulary. `name` is OPTIONAL here; the handler defaults
+ *   it to `'Personal'`. This backs the individual onboarding flow where a user gets a
+ *   personal space silently (see data-model §3.2 / DECISIONS "personal space").
+ *
+ * The `name`-required-for-team rule cannot be expressed in a flat object, so it is
+ * enforced with a {@link https://zod.dev | superRefine}: when `isPersonal` is false,
+ * `name` must be present and non-empty.
+ */
 export const OrgCreate = z
   .object({
-    name: z.string().min(1),
+    /** Display name. Required for team orgs; optional for personal spaces (defaults to `'Personal'`). */
+    name: z.string().min(1).optional(),
     slug: z.string().min(1).optional(),
     vocabulary: z.enum(['startup', 'nonprofit', 'agency']).default('startup'),
-    isPersonal: z.literal(false).default(false),
+    /** When true, create a personal space (org-of-one, `is_personal: true`). */
+    isPersonal: z.boolean().default(false),
     intent: z.enum(['startup', 'nonprofit', 'personal']).optional(),
+  })
+  .superRefine((val, ctx) => {
+    // Team orgs must be named; personal spaces may omit the name (handler defaults it).
+    if (!val.isPersonal && (val.name === undefined || val.name.length === 0)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['name'],
+        message: 'name is required for a team organization',
+      });
+    }
   })
   .meta({ id: 'OrgCreate', description: 'Create a new organization.' });
 /** Validated org-create body. */

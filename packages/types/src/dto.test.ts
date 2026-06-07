@@ -95,8 +95,27 @@ describe('organization DTOs', () => {
     expect(OrgCreate.safeParse({ name: '' }).success).toBe(false);
   });
 
-  it('OrgCreate rejects isPersonal true', () => {
-    expect(OrgCreate.safeParse({ name: 'X', isPersonal: true }).success).toBe(false);
+  it('OrgCreate accepts a personal space without a name', () => {
+    const parsed = OrgCreate.parse({ isPersonal: true });
+    expect(parsed.isPersonal).toBe(true);
+    expect(parsed.name).toBeUndefined();
+  });
+
+  it('OrgCreate accepts a personal space with an explicit name', () => {
+    const parsed = OrgCreate.parse({ name: 'My Space', isPersonal: true });
+    expect(parsed.name).toBe('My Space');
+  });
+
+  it('OrgCreate requires a name for a team org (isPersonal false)', () => {
+    const result = OrgCreate.safeParse({ isPersonal: false });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.some((i) => i.path[0] === 'name')).toBe(true);
+    }
+  });
+
+  it('OrgCreate (default, no isPersonal) still requires a name', () => {
+    expect(OrgCreate.safeParse({}).success).toBe(false);
   });
 
   it('OrgOut parses a full org', () => {

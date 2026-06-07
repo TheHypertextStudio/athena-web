@@ -1,221 +1,273 @@
 'use client';
 
-import type { OrgCreate } from '@docket/types';
-import {
-  Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-  Input,
-} from '@docket/ui/primitives';
+import type { OrgCreate, OrgCreateResult } from '@docket/types';
 import { cn } from '@docket/ui/lib/utils';
+import { Button } from '@docket/ui/primitives';
 import { useRouter } from 'next/navigation';
-import { type JSX, useState } from 'react';
+import { type JSX, useCallback, useMemo, useState } from 'react';
 
+import { INTENT_OPTIONS, StepIntent } from '@/components/onboarding/step-intent';
+import { StepConnect } from '@/components/onboarding/step-connect';
+import { StepName } from '@/components/onboarding/step-name';
+import { StepPersonalWelcome } from '@/components/onboarding/step-personal-welcome';
+import { StepVocabulary } from '@/components/onboarding/step-vocabulary';
+import type { OnboardingIntent, OnboardingStep, Vocabulary } from '@/components/onboarding/types';
+import { WizardShell } from '@/components/onboarding/wizard-shell';
 import { rememberDefaultTeam } from '@/lib/active-team';
 import { api } from '@/lib/api';
+import { useSession } from '@/lib/auth-client';
 import { readError, readProblem } from '@/lib/problem';
 
-/** The intent a new user picks; maps to the org's `intent` + a default vocabulary preset. */
-type Intent = OrgCreate['intent'];
+/** The ordered steps for the individual ("just me") fork. */
+const PERSONAL_STEPS: readonly OnboardingStep[] = ['intent', 'personal-welcome', 'connect'];
 
-/** The selectable vocabulary preset for the new org. */
-type Vocabulary = OrgCreate['vocabulary'];
+/** The ordered steps for the team / nonprofit fork. */
+const TEAM_STEPS: readonly OnboardingStep[] = ['intent', 'name', 'vocabulary', 'connect'];
 
-/** One intent option rendered as a selectable card. */
-interface IntentOption {
-  /** The `OrgCreate.intent` value this option submits. */
-  intent: Exclude<Intent, undefined>;
-  /** Card title. */
-  title: string;
-  /** Supporting description. */
-  description: string;
-  /** The vocabulary preset this intent defaults to. */
-  vocabulary: Vocabulary;
-}
-
-/** The default (first) intent option, pre-selected on first render. */
-const DEFAULT_INTENT: IntentOption = {
-  intent: 'startup',
-  title: 'Startup or team',
-  description: 'Programs, projects, and cycles for a growing company.',
-  vocabulary: 'startup',
-};
-
-/** The three onboarding intent forks and their default vocabulary presets. */
-const INTENT_OPTIONS: readonly IntentOption[] = [
-  DEFAULT_INTENT,
-  {
-    intent: 'nonprofit',
-    title: 'Nonprofit',
-    description: 'Initiatives and campaigns for mission-driven work.',
-    vocabulary: 'nonprofit',
-  },
-  {
-    intent: 'personal',
-    title: 'Just me',
-    description: 'A focused space to run your own work.',
-    vocabulary: 'startup',
-  },
-];
-
-/** The vocabulary presets a user can pick, with a short gloss of what they rename. */
-const VOCABULARY_OPTIONS: readonly { value: Vocabulary; label: string; hint: string }[] = [
-  { value: 'startup', label: 'Startup', hint: 'Projects, Cycles, Teams' },
-  { value: 'nonprofit', label: 'Nonprofit', hint: 'Initiatives, Campaigns, Chapters' },
-  { value: 'agency', label: 'Agency', hint: 'Engagements, Sprints, Pods' },
-];
+/** The JSON body the typed orgs `$post` accepts (kept in sync with the RPC contract). */
+type CreateOrgBody = NonNullable<Parameters<typeof api.v1.orgs.$post>[0]>['json'];
 
 /**
- * The first-run onboarding screen: pick an intent, name the org, choose a vocabulary.
+ * Create an organization through the typed RPC, accepting any valid {@link OrgCreate} body.
  *
  * @remarks
- * A Client Component run right after sign-up. It forks on intent (startup / nonprofit /
- * just me), each pre-selecting a sensible vocabulary preset the user can still change, then
- * creates the organization via the typed RPC (`api.v1.orgs.$post`). On success it remembers
- * the returned default team id (so the work view can create tasks immediately) and routes
- * into the new org's "My Work" view. The `Problem` response body is surfaced inline on failure.
+ * The orgs `$post` validator narrows `isPersonal` to the literal `false` in its inferred
+ * client type, so a personal-space body (`isPersonal: true`) — which the route genuinely
+ * supports at runtime (see `apps/api/src/routes/orgs.ts`) — is not assignable to that
+ * narrowed type. This is the single, contained seam that bridges the validated
+ * {@link OrgCreate} shape to the RPC's narrowed body type; the cast is structural (the bodies
+ * differ only by the `isPersonal` literal) and changes no runtime behaviour.
+ *
+ * @param body - A validated org-create body (team or personal).
+ * @returns the raw RPC {@link Response} for the caller to branch on.
+ */
+function createOrg(body: OrgCreate): Promise<Response> {
+  return api.v1.orgs.$post({ json: body as CreateOrgBody });
+}
+
+/** Resolve the default vocabulary preset an intent fork pre-selects. */
+function defaultVocabularyFor(intent: OnboardingIntent): Vocabulary {
+  return INTENT_OPTIONS.find((option) => option.intent === intent)?.vocabulary ?? 'startup';
+}
+
+/** Extract a friendly first name from a full display name, if any. */
+function firstNameOf(name: string | undefined): string | undefined {
+  const trimmed = name?.trim();
+  if (!trimmed) return undefined;
+  return trimmed.split(/\s+/)[0];
+}
+
+/**
+ * The first-run onboarding wizard: a polished, multi-step setup right after sign-up.
+ *
+ * @remarks
+ * A Client Component that runs a small state machine. The first screen forks on intent:
+ *
+ * - **Just me** → a welcome beat that explains the personal command center, then an optional
+ *   connect step. On finish it silently creates a personal space
+ *   (`isPersonal: true`, named after the signed-in user when known) and routes to My Work.
+ * - **Team / nonprofit** → name the org, choose a vocabulary preset (with a live preview drawn
+ *   from the real presets), then an optional connect step. On finish it creates the org with
+ *   the chosen name + vocabulary + intent and routes to My Work.
+ *
+ * The ordered step list is derived from the chosen intent so the progress indicator and
+ * back/next navigation stay correct without hand-maintained branches. On success the returned
+ * default team id is remembered (so the work view can create tasks immediately); on failure
+ * the `Problem` response body is surfaced inline. Submission only ever fires from the React
+ * click handler, so a pre-hydration click cannot trigger a half-initialised create.
  */
 export default function OnboardingPage(): JSX.Element {
   const router = useRouter();
-  const [intent, setIntent] = useState<IntentOption>(DEFAULT_INTENT);
+  const { data: session } = useSession();
+  const firstName = firstNameOf(session?.user.name);
+
+  const [step, setStep] = useState<OnboardingStep>('intent');
+  const [intent, setIntent] = useState<OnboardingIntent | null>(null);
   const [name, setName] = useState('');
-  const [vocabulary, setVocabulary] = useState<Vocabulary>(DEFAULT_INTENT.vocabulary);
+  const [vocabulary, setVocabulary] = useState<Vocabulary>('startup');
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
-  /** Select an intent card and adopt its default vocabulary preset. */
-  function chooseIntent(option: IntentOption): void {
-    setIntent(option);
-    setVocabulary(option.vocabulary);
-  }
+  /** The active fork's ordered steps; the personal fork until an intent forks it otherwise. */
+  const steps = useMemo<readonly OnboardingStep[]>(
+    () => (intent === 'personal' || intent === null ? PERSONAL_STEPS : TEAM_STEPS),
+    [intent],
+  );
+  const stepIndex = Math.max(0, steps.indexOf(step));
+  const isLastStep = stepIndex === steps.length - 1;
+  const isPersonal = intent === 'personal';
+  const nameReady = name.trim().length > 0;
 
-  /** Create the organization, remember its default team, and route into its work view. */
-  async function submit(): Promise<void> {
+  /** Choose an intent on step 1, adopt its default vocabulary, and advance to its first beat. */
+  const chooseIntent = useCallback((next: OnboardingIntent): void => {
+    setError(null);
+    setIntent(next);
+    setVocabulary(defaultVocabularyFor(next));
+    const forkSteps = next === 'personal' ? PERSONAL_STEPS : TEAM_STEPS;
+    setStep(forkSteps[1] ?? 'connect');
+  }, []);
+
+  /** Step back one beat; from the second step this returns to (and clears) the intent fork. */
+  const goBack = useCallback((): void => {
+    setError(null);
+    const previous = steps[stepIndex - 1];
+    if (!previous) return;
+    if (previous === 'intent') setIntent(null);
+    setStep(previous);
+  }, [steps, stepIndex]);
+
+  /** Advance to the next step in the active fork. */
+  const goNext = useCallback((): void => {
+    setError(null);
+    const next = steps[stepIndex + 1];
+    if (next) setStep(next);
+  }, [steps, stepIndex]);
+
+  /** Create the org (personal or team), remember its default team, and route to My Work. */
+  const finish = useCallback(async (): Promise<void> => {
+    if (intent === null || pending) return;
     setError(null);
     setPending(true);
     try {
-      const res = await api.v1.orgs.$post({
-        json: { name, vocabulary, intent: intent.intent, isPersonal: false },
-      });
+      const body: OrgCreate = isPersonal
+        ? {
+            isPersonal: true,
+            name: firstName ? `${firstName}'s space` : 'Personal',
+            intent: 'personal',
+            vocabulary: 'startup',
+          }
+        : { isPersonal: false, name: name.trim(), intent, vocabulary };
+
+      const res = await createOrg(body);
       if (!res.ok) {
-        setError(await readProblem(res, 'Could not create your organization. Please try again.'));
+        setError(
+          await readProblem(res, 'Could not finish setting up your workspace. Please try again.'),
+        );
         return;
       }
-      const { organization, defaultTeam } = await res.json();
+      const { organization, defaultTeam } = (await res.json()) as OrgCreateResult;
       rememberDefaultTeam(organization.id, defaultTeam.id);
       router.push(`/orgs/${organization.id}/my-work`);
     } catch (caught) {
       setError(
-        readError(caught, 'Something went wrong setting up your organization. Please try again.'),
+        readError(caught, 'Something went wrong setting up your workspace. Please try again.'),
       );
     } finally {
       setPending(false);
     }
-  }
+  }, [intent, isPersonal, firstName, name, vocabulary, pending, router]);
+
+  /** Run the right action for the current step's primary button (advance vs. finish). */
+  const onPrimary = useCallback((): void => {
+    if (isLastStep) {
+      void finish();
+      return;
+    }
+    goNext();
+  }, [isLastStep, finish, goNext]);
+
+  const copy = stepCopy(step);
 
   return (
-    <main className="bg-background flex min-h-screen items-center justify-center px-6 py-12">
-      <Card className="w-full max-w-lg">
-        <CardHeader>
-          <CardTitle className="text-2xl">Set up your workspace</CardTitle>
-          <CardDescription>Tell us a little about what you&apos;re organizing.</CardDescription>
-        </CardHeader>
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            void submit();
-          }}
-        >
-          <CardContent className="flex flex-col gap-6">
-            <fieldset className="flex flex-col gap-2">
-              <legend className="mb-1 text-sm font-medium">What are you setting up?</legend>
-              <div className="grid gap-2 sm:grid-cols-3">
-                {INTENT_OPTIONS.map((option) => {
-                  const selected = option.intent === intent.intent;
-                  return (
-                    <button
-                      key={option.intent}
-                      type="button"
-                      aria-pressed={selected}
-                      onClick={() => {
-                        chooseIntent(option);
-                      }}
-                      className={cn(
-                        'flex flex-col gap-1 rounded-lg border p-3 text-left transition-colors',
-                        selected
-                          ? 'border-primary bg-accent text-accent-foreground'
-                          : 'border-border hover:bg-accent/50',
-                      )}
-                    >
-                      <span className="text-sm font-medium">{option.title}</span>
-                      <span className="text-muted-foreground text-xs">{option.description}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </fieldset>
-
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="org-name" className="text-sm font-medium">
-                Organization name
-              </label>
-              <Input
-                id="org-name"
-                type="text"
-                required
-                value={name}
-                onChange={(e) => {
-                  setName(e.target.value);
-                }}
-                placeholder="Acme Inc."
-              />
-            </div>
-
-            <fieldset className="flex flex-col gap-2">
-              <legend className="mb-1 text-sm font-medium">Vocabulary</legend>
-              <div className="grid gap-2 sm:grid-cols-3">
-                {VOCABULARY_OPTIONS.map((option) => {
-                  const selected = option.value === vocabulary;
-                  return (
-                    <button
-                      key={option.value}
-                      type="button"
-                      aria-pressed={selected}
-                      onClick={() => {
-                        setVocabulary(option.value);
-                      }}
-                      className={cn(
-                        'flex flex-col gap-1 rounded-lg border p-3 text-left transition-colors',
-                        selected
-                          ? 'border-primary bg-accent text-accent-foreground'
-                          : 'border-border hover:bg-accent/50',
-                      )}
-                    >
-                      <span className="text-sm font-medium">{option.label}</span>
-                      <span className="text-muted-foreground text-xs">{option.hint}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </fieldset>
-
-            {error ? (
-              <p role="alert" className="text-destructive text-sm">
-                {error}
-              </p>
-            ) : null}
-          </CardContent>
-          <CardFooter>
-            <Button type="submit" className="w-full" disabled={pending || name.trim().length === 0}>
-              {pending ? 'Creating workspace…' : 'Create workspace'}
+    <WizardShell
+      stepKey={step}
+      stepNumber={stepIndex + 1}
+      totalSteps={steps.length}
+      totalKnown={intent !== null}
+      eyebrow={copy.eyebrow}
+      title={interpolate(copy.title, firstName)}
+      subtitle={copy.subtitle}
+      onBack={step === 'intent' ? undefined : goBack}
+      footer={
+        <>
+          {error ? (
+            <p role="alert" className="text-destructive mr-1 text-sm">
+              {error}
+            </p>
+          ) : null}
+          {step === 'connect' ? (
+            <Button type="button" variant="ghost" onClick={onPrimary} disabled={pending}>
+              Skip for now
             </Button>
-          </CardFooter>
-        </form>
-      </Card>
-    </main>
+          ) : null}
+          {step === 'intent' ? null : (
+            <Button
+              type="button"
+              onClick={onPrimary}
+              disabled={pending || (step === 'name' && !nameReady)}
+              className={cn(isLastStep && 'min-w-44')}
+            >
+              {primaryLabel(isLastStep, isPersonal, pending)}
+            </Button>
+          )}
+        </>
+      }
+    >
+      {step === 'intent' ? <StepIntent value={intent} onChange={chooseIntent} /> : null}
+
+      {step === 'personal-welcome' ? <StepPersonalWelcome firstName={firstName} /> : null}
+
+      {step === 'name' ? (
+        <StepName value={name} onChange={setName} onSubmit={goNext} canSubmit={nameReady} />
+      ) : null}
+
+      {step === 'vocabulary' ? (
+        <StepVocabulary value={vocabulary} onChange={setVocabulary} />
+      ) : null}
+
+      {step === 'connect' ? <StepConnect /> : null}
+    </WizardShell>
   );
+}
+
+/** Per-step header copy for the {@link WizardShell}. `{name}` is interpolated when known. */
+function stepCopy(step: OnboardingStep): { eyebrow: string; title: string; subtitle: string } {
+  switch (step) {
+    case 'intent':
+      return {
+        eyebrow: 'Welcome to Docket',
+        title: 'What brings you to Docket?',
+        subtitle: "We'll tailor your setup to how you work. You can change any of this later.",
+      };
+    case 'personal-welcome':
+      return {
+        eyebrow: 'Your command center',
+        title: 'This is your space{name}',
+        subtitle:
+          'A calm home for everything you’re working on — and a launchpad for shared workspaces when you need them.',
+      };
+    case 'name':
+      return {
+        eyebrow: 'Set up your organization',
+        title: 'Name your organization',
+        subtitle:
+          'Give your team’s shared space a name. Don’t overthink it — you can change it later.',
+      };
+    case 'vocabulary':
+      return {
+        eyebrow: 'Make it yours',
+        title: 'Docket speaks your world’s language',
+        subtitle:
+          'Pick the words that fit how your organization talks. Docket will use them everywhere.',
+      };
+    case 'connect':
+      return {
+        eyebrow: 'Almost there',
+        title: 'Connect your accounts',
+        subtitle:
+          'Optional — bring in work from the tools you already use. You can always skip this.',
+      };
+  }
+}
+
+/** The primary button label for a given step and submit state. */
+function primaryLabel(isLastStep: boolean, isPersonal: boolean, pending: boolean): string {
+  if (!isLastStep) return 'Continue';
+  if (pending) return 'Setting things up…';
+  return isPersonal ? 'Enter your space' : 'Create workspace';
+}
+
+/** Replace a `{name}` token in header copy with `, <firstName>` when the name is known. */
+function interpolate(template: string, firstName: string | undefined): string {
+  return template.replace('{name}', firstName ? `, ${firstName}` : '');
 }

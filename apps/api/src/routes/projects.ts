@@ -1,16 +1,17 @@
 /**
  * `@docket/api` — projects router (mounted at `/v1/orgs/:orgId/projects`).
  */
-import { db, project } from '@docket/db';
-import { pageOf, ProjectCreate, ProjectOut } from '@docket/types';
-import { eq } from 'drizzle-orm';
+import { db, project, task } from '@docket/db';
+import { pageOf, ProjectCreate, ProjectOut, ProjectProgress, ProjectUpdate } from '@docket/types';
+import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
-import type { z } from 'zod';
+import { z } from 'zod';
 
 import type { AppEnv } from '../context';
+import { NotFoundError } from '../error';
 import { ok } from '../lib/ok';
 import { capabilityGuard } from '../permissions/capability-guard';
-import { zJson } from '../lib/validate';
+import { zJson, zParam } from '../lib/validate';
 
 type ProjectRow = typeof project.$inferSelect;
 
@@ -31,7 +32,48 @@ function toOut(p: ProjectRow): z.input<typeof ProjectOut> {
   };
 }
 
-/** Projects router: create + list, org-scoped via the path's actor context. */
+/** Path-param schema for the single-project routes. */
+const idParam = z.object({ id: z.string() });
+
+/**
+ * Compute a Project's weighted completion roll-up from its Tasks.
+ *
+ * @remarks
+ * A Task is "completed" when its `completedAt` timestamp is set (data-model §3.3:
+ * lifecycle rows carry `completed_at`). Weight is the sum of Task estimates when ANY
+ * task in the project carries one; when no estimates exist it falls back to a plain
+ * Task count (each Task weighs `1`). `percent` is `completedWeight / totalWeight`, or
+ * `0` for an empty project.
+ *
+ * @param rows - The project's tasks (each with its `estimate` and `completedAt`).
+ * @returns the {@link ProjectProgress} payload.
+ */
+function computeProgress(
+  rows: { estimate: number | null; completedAt: Date | null }[],
+): z.input<typeof ProjectProgress> {
+  const taskCount = rows.length;
+  const completedCount = rows.filter((r) => r.completedAt !== null).length;
+  const hasEstimates = rows.some((r) => r.estimate !== null && r.estimate > 0);
+
+  let totalWeight: number;
+  let completedWeight: number;
+  if (hasEstimates) {
+    // Estimate-weighted: bigger tasks count for more. Treat a missing estimate as 0.
+    totalWeight = rows.reduce((sum, r) => sum + (r.estimate ?? 0), 0);
+    completedWeight = rows
+      .filter((r) => r.completedAt !== null)
+      .reduce((sum, r) => sum + (r.estimate ?? 0), 0);
+  } else {
+    // Count fallback: every task weighs 1.
+    totalWeight = taskCount;
+    completedWeight = completedCount;
+  }
+
+  const percent = totalWeight > 0 ? completedWeight / totalWeight : 0;
+  return { percent, completedWeight, totalWeight, taskCount, completedCount };
+}
+
+/** Projects router: org-scoped CRUD + weighted-progress; `contribute` to edit, `manage` to delete. */
 const projects = new Hono<AppEnv>()
   .post('/', capabilityGuard('contribute'), zJson(ProjectCreate), async (c) => {
     const { orgId, actorId } = c.get('actorCtx');
@@ -58,6 +100,90 @@ const projects = new Hono<AppEnv>()
     const { orgId } = c.get('actorCtx');
     const rows = await db.select().from(project).where(eq(project.organizationId, orgId));
     return ok(c, pageOf(ProjectOut), { items: rows.map(toOut) });
+  })
+  .get('/:id', zParam(idParam), async (c) => {
+    const { orgId } = c.get('actorCtx');
+    const { id } = c.req.valid('param');
+    const rows = await db
+      .select()
+      .from(project)
+      .where(and(eq(project.id, id), eq(project.organizationId, orgId)))
+      .limit(1);
+    const row = rows[0];
+    if (!row) throw new NotFoundError('Project not found');
+    return ok(c, ProjectOut, toOut(row));
+  })
+  .patch(
+    '/:id',
+    capabilityGuard('contribute'),
+    zParam(idParam),
+    zJson(ProjectUpdate),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { id } = c.req.valid('param');
+      const body = c.req.valid('json');
+      const patch = {
+        ...(body.name !== undefined ? { name: body.name } : {}),
+        ...(body.description !== undefined ? { description: body.description } : {}),
+        ...(body.leadId !== undefined ? { leadId: body.leadId } : {}),
+        ...(body.programId !== undefined ? { programId: body.programId } : {}),
+        ...(body.teamId !== undefined ? { teamId: body.teamId } : {}),
+        ...(body.status !== undefined ? { status: body.status } : {}),
+        ...(body.health !== undefined ? { health: body.health } : {}),
+        ...(body.startDate !== undefined
+          ? { startDate: body.startDate ? new Date(body.startDate) : null }
+          : {}),
+        ...(body.targetDate !== undefined
+          ? { targetDate: body.targetDate ? new Date(body.targetDate) : null }
+          : {}),
+      };
+      const where = and(eq(project.id, id), eq(project.organizationId, orgId));
+
+      // An empty patch body is a valid no-op: Drizzle rejects an empty `.set({})`, so
+      // re-read the row (still enforcing the org-scoped existence check) and return it.
+      if (Object.keys(patch).length === 0) {
+        const rows = await db.select().from(project).where(where).limit(1);
+        const existing = rows[0];
+        if (!existing) throw new NotFoundError('Project not found');
+        return ok(c, ProjectOut, toOut(existing));
+      }
+
+      const updated = await db.update(project).set(patch).where(where).returning();
+      const row = updated[0];
+      if (!row) throw new NotFoundError('Project not found');
+      return ok(c, ProjectOut, toOut(row));
+    },
+  )
+  .delete('/:id', capabilityGuard('manage'), zParam(idParam), async (c) => {
+    const { orgId } = c.get('actorCtx');
+    const { id } = c.req.valid('param');
+    const deleted = await db
+      .delete(project)
+      .where(and(eq(project.id, id), eq(project.organizationId, orgId)))
+      .returning();
+    const row = deleted[0];
+    if (!row) throw new NotFoundError('Project not found');
+    return ok(c, ProjectOut, toOut(row));
+  })
+  .get('/:id/progress', zParam(idParam), async (c) => {
+    const { orgId } = c.get('actorCtx');
+    const { id } = c.req.valid('param');
+
+    // Existence + tenant check: the project must live in the caller's org.
+    const projectRows = await db
+      .select({ id: project.id })
+      .from(project)
+      .where(and(eq(project.id, id), eq(project.organizationId, orgId)))
+      .limit(1);
+    if (!projectRows[0]) throw new NotFoundError('Project not found');
+
+    // Pull this project's tasks, scoped to the same org as a defense-in-depth check.
+    const taskRows = await db
+      .select({ estimate: task.estimate, completedAt: task.completedAt })
+      .from(task)
+      .where(and(eq(task.projectId, id), eq(task.organizationId, orgId)));
+
+    return ok(c, ProjectProgress, computeProgress(taskRows));
   });
 
 export default projects;

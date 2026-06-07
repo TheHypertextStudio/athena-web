@@ -9,7 +9,17 @@
  * inside a transaction before writing the edge.
  */
 import { type Capability, satisfies } from '@docket/authz';
-import { db, task, taskDependency, team } from '@docket/db';
+import {
+  actor,
+  cycle,
+  db,
+  milestone,
+  program,
+  project,
+  task,
+  taskDependency,
+  team,
+} from '@docket/db';
 import type { TaskRef } from '@docket/types';
 import {
   pageOf,
@@ -139,6 +149,72 @@ function toRef(t: Pick<TaskRow, 'id' | 'title' | 'state' | 'projectId'>): z.inpu
 const idParam = z.object({ id: z.string() });
 const depParam = z.object({ id: z.string(), depId: z.string() });
 
+/**
+ * Assert that a directly org-scoped referenced row belongs to the caller's org, or throw
+ * {@link NotFoundError}.
+ *
+ * @remarks
+ * The task FKs (`assigneeId`/`delegateId → actor`, `projectId → project`, `programId →
+ * program`, `cycleId → cycle`) target each table's *global* primary key with no
+ * `organization_id` constraint baked into the FK, so the database alone will happily
+ * accept a PATCH/subtask-create that points a task at an actor/project/program/cycle owned
+ * by a *different* tenant (data-model §0.2: tenant isolation is enforced in the
+ * data-access layer, never by the bare FK). Before writing such a reference we re-read the
+ * target scoped by `eq(table.organizationId, orgId)` — exactly as `POST /tasks` already
+ * does for its `teamId` — and 404 (existence-hiding: we never reveal a row exists in
+ * another org) when absent. A `null`/`undefined` `refId` is a no-op. The `milestone` table
+ * carries no `organization_id` of its own and is validated by {@link assertMilestoneInOrg}.
+ *
+ * @param table - The org-scoped table the reference points at.
+ * @param orgId - The tenant the reference must belong to.
+ * @param refId - The referenced row id (a no-op when `null`/`undefined`).
+ * @param notFoundMessage - The {@link NotFoundError} message when the row is out-of-org.
+ * @throws {NotFoundError} When the referenced row is missing or owned by another org.
+ */
+async function assertRefInOrg(
+  table: typeof actor | typeof project | typeof program | typeof cycle,
+  orgId: string,
+  refId: string | null | undefined,
+  notFoundMessage: string,
+): Promise<void> {
+  if (refId === null || refId === undefined) return;
+  const rows = await db
+    .select({ id: table.id })
+    .from(table)
+    .where(and(eq(table.id, refId), eq(table.organizationId, orgId)))
+    .limit(1);
+  if (!rows[0]) throw new NotFoundError(notFoundMessage);
+}
+
+/**
+ * Assert that a referenced Milestone belongs to the caller's org, or throw
+ * {@link NotFoundError}.
+ *
+ * @remarks
+ * Unlike the other task references, `milestone` has no `organization_id` column of its own
+ * (data-model §4: a Milestone is a Project attribute) — its tenant is its parent Project's.
+ * So we join `milestone → project` and scope the existence check by the *project's*
+ * `organization_id`, 404ing both when the milestone is missing and when it lives under
+ * another tenant's project. A `null`/`undefined` `milestoneId` is a no-op.
+ *
+ * @param orgId - The tenant the milestone's project must belong to.
+ * @param milestoneId - The referenced milestone id (a no-op when `null`/`undefined`).
+ * @throws {NotFoundError} When the milestone is missing or its project is in another org.
+ */
+async function assertMilestoneInOrg(
+  orgId: string,
+  milestoneId: string | null | undefined,
+): Promise<void> {
+  if (milestoneId === null || milestoneId === undefined) return;
+  const rows = await db
+    .select({ id: milestone.id })
+    .from(milestone)
+    .innerJoin(project, eq(milestone.projectId, project.id))
+    .where(and(eq(milestone.id, milestoneId), eq(project.organizationId, orgId)))
+    .limit(1);
+  if (!rows[0]) throw new NotFoundError('Milestone not found');
+}
+
 /** Load a single active task scoped to the org, or throw {@link NotFoundError}. */
 async function loadTask(orgId: string, id: string): Promise<TaskRow> {
   const rows = await db
@@ -250,6 +326,19 @@ const tasks = new Hono<AppEnv>()
     const teamRow = teamRows[0];
     if (!teamRow) throw new NotFoundError('Team not found');
 
+    // Tenant isolation: every body-provided reference must live in the caller's org. The
+    // bare FKs target each table's global PK, so without these a CREATE could attach
+    // another tenant's actor/project/program/milestone/cycle/parent-task to this task —
+    // exactly the gap PATCH/subtask-create already close. Omitted body fields are no-ops
+    // inside the helpers; `parentTaskId` is validated via the org-scoped `loadTask`.
+    await assertRefInOrg(actor, orgId, body.assigneeId, 'Assignee not found');
+    await assertRefInOrg(project, orgId, body.projectId, 'Project not found');
+    await assertRefInOrg(cycle, orgId, body.cycleId, 'Cycle not found');
+    await assertMilestoneInOrg(orgId, body.milestoneId);
+    if (body.parentTaskId !== undefined) {
+      await loadTask(orgId, body.parentTaskId);
+    }
+
     const state = body.state ?? teamRow.workflowStates[0]?.key ?? 'backlog';
 
     const inserted = await db
@@ -350,6 +439,17 @@ const tasks = new Hono<AppEnv>()
       const held = ctx.capabilities as Capability[];
       if (!held.some((cap) => satisfies(cap, 'assign'))) throw new CapabilityError();
     }
+
+    // Tenant isolation: every re-pointed reference must live in the caller's org. The
+    // bare FKs target each table's global PK, so without these a PATCH could attach
+    // another tenant's actor/project/program/milestone/cycle to this task. Clearing
+    // (null) or omitting a field is a no-op inside the helpers.
+    await assertRefInOrg(actor, orgId, body.assigneeId, 'Assignee not found');
+    await assertRefInOrg(actor, orgId, body.delegateId, 'Delegate not found');
+    await assertRefInOrg(project, orgId, body.projectId, 'Project not found');
+    await assertRefInOrg(program, orgId, body.programId, 'Program not found');
+    await assertRefInOrg(cycle, orgId, body.cycleId, 'Cycle not found');
+    await assertMilestoneInOrg(orgId, body.milestoneId);
 
     // `state` is validated against the team's workflow_states and carries terminal
     // timestamp derivation, identical to POST /:id/state — patching state directly must
@@ -465,6 +565,15 @@ const tasks = new Hono<AppEnv>()
       const { id } = c.req.valid('param');
       const body = c.req.valid('json');
       const parent = await loadTask(orgId, id);
+
+      // Tenant isolation: any body-provided reference must live in the caller's org (the
+      // bare FKs target each table's global PK). Values inherited from the in-org parent
+      // (`parent.projectId`, `parent.teamId`) need no check; omitted body fields are
+      // no-ops inside the helpers.
+      await assertRefInOrg(actor, orgId, body.assigneeId, 'Assignee not found');
+      await assertRefInOrg(project, orgId, body.projectId, 'Project not found');
+      await assertRefInOrg(cycle, orgId, body.cycleId, 'Cycle not found');
+      await assertMilestoneInOrg(orgId, body.milestoneId);
 
       const state = body.state ?? parent.state;
 

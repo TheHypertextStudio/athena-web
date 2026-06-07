@@ -57,3 +57,13 @@ export const CommentOut = z
   .meta({ id: 'CommentOut', description: 'A comment.' });
 /** Comment representation value. */
 export type CommentOut = z.infer<typeof CommentOut>;
+
+/** Acknowledgement returned when a Comment is deleted. */
+export const CommentRemoved = z
+  .object({
+    id: CommentId,
+    removed: z.literal(true),
+  })
+  .meta({ id: 'CommentRemoved', description: 'A deleted-comment acknowledgement.' });
+/** Removal acknowledgement value. */
+export type CommentRemoved = z.infer<typeof CommentRemoved>;

@@ -178,8 +178,12 @@ export const AdminImpersonationOut = z.object({
 /** Validated impersonation value. */
 export type AdminImpersonationOut = z.infer<typeof AdminImpersonationOut>;
 
-/** Query params for the operator audit feed. */
+/** Query params for the operator audit feed (superadmin-only; staff + type filterable). */
 export const AdminAuditQuery = z.object({
+  /** Optional exact filter on the acting staff-user id. */
+  staffUserId: z.string().optional(),
+  /** Optional exact filter on the audit-event type (e.g. `billing.reactivated`). */
+  type: z.string().optional(),
   /** Page size, 1..200 (default 50). */
   limit: z.coerce.number().int().min(1).max(200).default(50),
   /** Number of rows to skip (default 0). */
@@ -214,11 +218,80 @@ export const AdminLifecycleCount = z.object({
 /** Validated lifecycle-count value. */
 export type AdminLifecycleCount = z.infer<typeof AdminLifecycleCount>;
 
-/** The operator home-dashboard metrics: totals + org counts by lifecycle state. */
+/**
+ * The operator-queue health signals (mvp-plan §8.9: aggregate signals only).
+ *
+ * @remarks
+ * Deliberately high-level — never session contents. `stuckApprovals` counts agent
+ * sessions parked in `awaiting_approval` (work blocked on a human decision);
+ * `agentErrors` counts `failed` sessions; `agentVolume` is the total session count;
+ * `activeHolds` is the number of un-released lifecycle holds pausing the delete sweep.
+ */
+export const AdminQueues = z.object({
+  /** Agent sessions currently parked in `awaiting_approval`. */
+  stuckApprovals: z.number().int(),
+  /** Agent sessions in the `failed` terminal state. */
+  agentErrors: z.number().int(),
+  /** Total agent sessions ever created (the volume signal). */
+  agentVolume: z.number().int(),
+  /** Un-released lifecycle holds currently pausing the delete pipeline. */
+  activeHolds: z.number().int(),
+});
+/** Validated operator-queue value. */
+export type AdminQueues = z.infer<typeof AdminQueues>;
+
+/**
+ * The operator home-dashboard metrics: split counts + queues (mvp-plan §8.9).
+ *
+ * @remarks
+ * `counts` carries the steady-state totals (users, orgs, orgs-by-lifecycle); `queues`
+ * carries the actionable health signals the operator triages from the home screen.
+ */
 export const AdminMetricsOut = z.object({
   totalUsers: z.number().int(),
   totalOrgs: z.number().int(),
   orgsByLifecycle: z.array(AdminLifecycleCount),
+  queues: AdminQueues,
 });
 /** Validated metrics value. */
 export type AdminMetricsOut = z.infer<typeof AdminMetricsOut>;
+
+/** Query params for the paginated staff-user list (superadmin-only). */
+export const AdminStaffListQuery = z.object({
+  /** Page size, 1..100 (default 50). */
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  /** Number of rows to skip (default 0). */
+  offset: z.coerce.number().int().min(0).default(0),
+});
+/** Validated staff-list query value. */
+export type AdminStaffListQuery = z.infer<typeof AdminStaffListQuery>;
+
+/** A staff-user row (the operator, its underlying user, and its tier). */
+export const AdminStaffOut = z.object({
+  id: z.string(),
+  userId: z.string(),
+  role: StaffRoleDto,
+  userName: z.string(),
+  userEmail: z.string(),
+  createdAt: z.string(),
+});
+/** Validated staff-user value. */
+export type AdminStaffOut = z.infer<typeof AdminStaffOut>;
+
+/** A page of staff users with the total count for offset pagination. */
+export const AdminStaffPage = z.object({
+  items: z.array(AdminStaffOut),
+  total: z.number().int(),
+});
+/** Validated staff-page value. */
+export type AdminStaffPage = z.infer<typeof AdminStaffPage>;
+
+/** Body for granting (or re-granting) a user a staff tier. */
+export const CreateStaffBody = z.object({
+  /** The global user id to promote to staff. */
+  userId: z.string().min(1),
+  /** The tier to grant. */
+  role: StaffRoleDto,
+});
+/** Validated create-staff body. */
+export type CreateStaffBody = z.infer<typeof CreateStaffBody>;

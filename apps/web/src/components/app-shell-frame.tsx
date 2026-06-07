@@ -24,10 +24,33 @@ function orgIdFromPath(pathname: string): string | null {
   return match ? (match[1] ?? null) : null;
 }
 
+/**
+ * The org-scoped sidebar destinations, in mvp-plan §7 order.
+ *
+ * @remarks
+ * Each {@link SidebarNavKey} maps 1:1 to its route segment under `/orgs/[orgId]/…`, so
+ * {@link onNavigate} and {@link navKeyFromPath} stay in lockstep with the real route tree.
+ * Keeping them in one table is what guarantees the sidebar highlight and the navigation
+ * target never drift apart as screens are added.
+ */
+const NAV_SEGMENTS: readonly SidebarNavKey[] = [
+  'my-work',
+  'triage',
+  'initiatives',
+  'programs',
+  'projects',
+  'cycles',
+  'teams',
+  'views',
+  'agents',
+  'settings',
+];
+
 /** The active sidebar nav key implied by the current org-scoped pathname. */
 function navKeyFromPath(pathname: string): SidebarNavKey | undefined {
-  if (/^\/orgs\/[^/]+\/projects(?:\/|$)/.test(pathname)) return 'projects';
-  if (/^\/orgs\/[^/]+\/my-work(?:\/|$)/.test(pathname)) return 'my-work';
+  for (const key of NAV_SEGMENTS) {
+    if (new RegExp(`^/orgs/[^/]+/${key}(?:/|$)`).test(pathname)) return key;
+  }
   return undefined;
 }
 
@@ -149,9 +172,7 @@ function AppShellInner({ activeOrgId, navKey, children }: AppShellInnerProps): J
         router.push('/today');
         return;
       }
-      router.push(
-        key === 'projects' ? `/orgs/${activeOrgId}/projects` : `/orgs/${activeOrgId}/my-work`,
-      );
+      router.push(`/orgs/${activeOrgId}/${key}`);
     },
     [activeOrgId, router],
   );

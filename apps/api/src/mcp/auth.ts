@@ -16,13 +16,17 @@ import { and, eq } from 'drizzle-orm';
 
 import { env } from '../env';
 import { AuthError, NotFoundError } from '../error';
+import { MCP_SCOPES } from './scope';
 
 /**
- * The authenticated MCP caller: the Better Auth user the request resolved to.
+ * The authenticated MCP caller: the Better Auth user the request resolved to, plus the
+ * verified OAuth scopes its token carries.
  *
  * @remarks
  * Org membership is resolved lazily per call via {@link resolveActor}, because one
- * user may belong to many orgs and each tool/resource targets a specific one.
+ * user may belong to many orgs and each tool/resource targets a specific one. `scopes`
+ * is the FIRST authorization layer (mcp-surface.md §2.2): each tool/resource gates on it
+ * via {@link import('./scope').requireScope} BEFORE the per-org grant check.
  */
 export interface McpContext {
   /** The Better Auth user id behind the session. */
@@ -31,6 +35,27 @@ export interface McpContext {
   readonly userName: string | null;
   /** The user's email. */
   readonly userEmail: string;
+  /**
+   * The verified OAuth scopes the caller's token carries (mcp-surface.md §2.2). A
+   * first-party cookie session carries the full set (it has already consented to the
+   * whole app); a Bearer access token carries only its granted, audience-bound scopes.
+   */
+  readonly scopes: readonly string[];
+}
+
+/** The minimal `getMcpSession` result shape the RS reads (Better Auth `OAuthAccessToken`). */
+interface McpSession {
+  /** The bearer access token string. */
+  readonly accessToken: string;
+  /** The subject (Better Auth user id) the token was minted for. */
+  readonly userId: string;
+  /** The space-separated scope string the token carries. */
+  readonly scopes: string;
+}
+
+/** The slice of `auth.api` the Bearer path uses (present only once `mcp()` is mounted). */
+interface McpAuthApi {
+  getMcpSession?: (args: { headers: Headers }) => Promise<McpSession | null>;
 }
 
 /**
@@ -94,20 +119,96 @@ export function isOriginAllowed(headers: Headers): boolean {
   return false;
 }
 
+/** Whether the request presents an OAuth `Authorization: Bearer …` access token. */
+function bearerToken(headers: Headers): string | null {
+  const raw = headers.get('authorization');
+  if (!raw) return null;
+  const match = /^Bearer\s+(.+)$/i.exec(raw.trim());
+  return match ? (match[1]?.trim() ?? null) : null;
+}
+
 /**
- * Resolve the authenticated Docket user from request headers, or throw 401.
+ * Resolve an OAuth Bearer access token into an {@link McpContext}, enforcing the RS
+ * checks (audience + issuer binding + scope availability) of mcp-surface.md §2.5.
  *
  * @remarks
- * Delegates to Better Auth's `auth.api.getSession`, which accepts either a session
- * cookie or an `Authorization: Bearer …` token — the same resolution the RPC
- * {@link sessionMiddleware} uses. The Origin guard is applied first.
+ * Uses Better Auth's `auth.api.getMcpSession`, which is mounted only when the `mcp()`
+ * plugin is configured (real `MCP_RESOURCE_URL` + `OIDC_LOGIN_PAGE_URL`). The plugin
+ * resolves the token **bound to the configured `resource`** (the canonical RS URI), which
+ * IS the RFC 8707 audience binding: a token minted for any other resource does not resolve
+ * here. We additionally require the RS to be configured for OAuth (`MCP_RESOURCE_URL` +
+ * `MCP_ISSUER_URL`) so a deploy that never advertised an issuer cannot silently accept
+ * bearer tokens. The token's granted scopes (a space-separated string) become the caller's
+ * verified scope set; **no scope is granted that the token did not carry** — and the token
+ * itself is never forwarded downstream (no passthrough; connector calls use Integration
+ * credentials).
+ *
+ * @param headers - The incoming request headers (carrying the Bearer token).
+ * @param token - The extracted bearer token string.
+ * @returns the resolved {@link McpContext} with the token's verified scopes.
+ * @throws {AuthError} When OAuth is not configured, the helper is unavailable, or the
+ *   token does not resolve to an audience-bound session.
+ */
+async function resolveBearerContext(headers: Headers, token: string): Promise<McpContext> {
+  // Issuer binding (§2.5 item 3): the RS only accepts tokens once it advertises an issuer
+  // + canonical resource. Absent that config, a Bearer token is rejected outright (it
+  // cannot have been minted by *this* AS for *this* resource).
+  if (!env.MCP_ISSUER_URL || !env.MCP_RESOURCE_URL) {
+    throw new AuthError('Bearer tokens are not accepted on this resource');
+  }
+
+  const api = auth.api as unknown as McpAuthApi;
+  /* v8 ignore next -- @preserve defensive: getMcpSession exists whenever mcp() is mounted, which the issuer guard above requires */
+  if (typeof api.getMcpSession !== 'function') {
+    throw new AuthError('Bearer tokens are not accepted on this resource');
+  }
+
+  // `getMcpSession` validates the token AND its audience binding to the configured
+  // `resource` (RFC 8707) — a mismatched/foreign-audience token resolves to null here.
+  const session = await api.getMcpSession({ headers });
+  if (session?.accessToken !== token) throw new AuthError();
+
+  const scopes = session.scopes
+    .split(/\s+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  // The user record backs the display name/email the prompts/resources surface.
+  const user = await auth.api.getSession({ headers });
+  const name = user?.user.name ?? '';
+  return {
+    userId: session.userId,
+    // An empty display name normalizes to null, exactly like the cookie path.
+    userName: name === '' ? null : name,
+    userEmail: user?.user.email ?? '',
+    scopes,
+  };
+}
+
+/**
+ * Resolve the authenticated Docket caller from request headers, or throw 401.
+ *
+ * @remarks
+ * Two paths (mcp-surface.md §2.5):
+ * - **OAuth Bearer** — when an `Authorization: Bearer …` token is present, it is validated
+ *   as an audience-bound MCP access token via {@link resolveBearerContext}; the caller's
+ *   scope set is exactly what the token carries (the scope layer then gates each call).
+ * - **First-party cookie session** — a Better Auth session cookie (the same resolver the
+ *   RPC {@link sessionMiddleware} uses) authenticates first-party clients (Docket web,
+ *   Athena planner) that have already consented to the whole app; they carry the FULL
+ *   scope set, so the scope layer is a no-op and only the per-org grant cascade gates.
+ *
+ * The Origin guard (DNS-rebinding) is applied first in both cases.
  *
  * @param headers - The incoming request headers.
- * @returns the resolved {@link McpContext}.
- * @throws {AuthError} When the Origin is rejected or no valid session is present.
+ * @returns the resolved {@link McpContext} (incl. verified scopes).
+ * @throws {AuthError} When the Origin is rejected or no valid token/session is present.
  */
 export async function resolveMcpContext(headers: Headers): Promise<McpContext> {
   if (!isOriginAllowed(headers)) throw new AuthError('Origin not allowed');
+
+  const token = bearerToken(headers);
+  if (token) return resolveBearerContext(headers, token);
 
   const session = await auth.api.getSession({ headers });
   if (!session?.user) throw new AuthError();
@@ -116,6 +217,9 @@ export async function resolveMcpContext(headers: Headers): Promise<McpContext> {
     userId: session.user.id,
     userName: session.user.name || null,
     userEmail: session.user.email,
+    // A consented first-party session is granted the full scope set; the granular per-org
+    // grant cascade remains the binding authorization layer for it.
+    scopes: [...MCP_SCOPES],
   };
 }
 

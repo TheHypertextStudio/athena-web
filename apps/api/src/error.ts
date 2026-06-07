@@ -47,6 +47,26 @@ export class CapabilityError extends ApiError {
   }
 }
 
+/**
+ * 403 — the access token's OAuth scope set does not cover the requested operation
+ * (the MCP scope layer, mcp-surface.md §2.2/§2.6).
+ *
+ * @remarks
+ * This is the *token-level* (capability-class) gate that sits ABOVE the per-resource
+ * {@link CapabilityError} grant gate: a token may carry `work:read` yet attempt a
+ * mutation. It drives the `insufficient_scope` step-up `WWW-Authenticate` challenge so a
+ * read-only MCP client can re-authorize for the missing scope (RFC 6750 §3.1).
+ */
+export class InsufficientScopeError extends ApiError {
+  /** The scope the operation requires (the single missing capability-class scope). */
+  readonly requiredScope: string;
+
+  constructor(requiredScope: string, message = `Operation requires scope '${requiredScope}'`) {
+    super(403, 'forbidden', message);
+    this.requiredScope = requiredScope;
+  }
+}
+
 /** 404 — not found, or hidden by existence-hiding. */
 export class NotFoundError extends ApiError {
   constructor(message = 'Not found') {

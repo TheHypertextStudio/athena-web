@@ -82,10 +82,17 @@ describe('resolveMcpContext', () => {
     await expect(authMod.resolveMcpContext(hdrs())).rejects.toMatchObject({ status: 401 });
   });
 
-  it('resolves a context, mapping an empty name to null', async () => {
+  it('resolves a cookie-session context with the full scope set, mapping an empty name to null', async () => {
     getSession.mockResolvedValueOnce({ user: { id: 'u1', name: '', email: 'u1@e.com' } });
     const ctx = await authMod.resolveMcpContext(hdrs());
-    expect(ctx).toEqual({ userId: 'u1', userName: null, userEmail: 'u1@e.com' });
+    // A consented first-party cookie session is granted the full scope set (the per-org
+    // grant cascade remains the binding layer for it).
+    expect(ctx).toEqual({
+      userId: 'u1',
+      userName: null,
+      userEmail: 'u1@e.com',
+      scopes: ['work:read', 'work:write', 'agents:run', 'connectors:link'],
+    });
   });
 
   it('keeps a present name', async () => {
@@ -94,6 +101,18 @@ describe('resolveMcpContext', () => {
     });
     const ctx = await authMod.resolveMcpContext(hdrs());
     expect(ctx.userName).toBe('Ada');
+  });
+
+  it('rejects a Bearer token when the RS is not configured for OAuth (no issuer/resource)', async () => {
+    // This RS deploy never advertised an issuer + canonical resource, so a Bearer token
+    // cannot have been minted by *this* AS for *this* resource → 401 (mcp-surface.md §2.5).
+    delete process.env['MCP_ISSUER_URL'];
+    delete process.env['MCP_RESOURCE_URL'];
+    const h = new Headers();
+    h.set('authorization', 'Bearer some-token');
+    await expect(authMod.resolveMcpContext(h)).rejects.toMatchObject({ status: 401 });
+    // The cookie resolver was never consulted on the Bearer path.
+    expect(getSession).not.toHaveBeenCalled();
   });
 });
 
@@ -113,7 +132,7 @@ describe('resolveActor', () => {
       .values({ organizationId: org!.id, kind: 'human', displayName: 'A', userId: u!.id })
       .returning({ id: schema.actor.id });
     const actor = await authMod.resolveActor(
-      { userId: u!.id, userName: 'A', userEmail: 'a@e.com' },
+      { userId: u!.id, userName: 'A', userEmail: 'a@e.com', scopes: ['work:read'] },
       org!.id,
     );
     expect(actor).toEqual({ orgId: org!.id, actorId: a!.id });
@@ -126,7 +145,10 @@ describe('resolveActor', () => {
       .values({ name: slug, slug, lifecycleState: 'active' })
       .returning({ id: schema.organization.id });
     await expect(
-      authMod.resolveActor({ userId: 'ghost', userName: null, userEmail: 'g@e.com' }, org!.id),
+      authMod.resolveActor(
+        { userId: 'ghost', userName: null, userEmail: 'g@e.com', scopes: ['work:read'] },
+        org!.id,
+      ),
     ).rejects.toMatchObject({ status: 404 });
   });
 });

@@ -162,7 +162,12 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
     .returning({ id: schema.integration.id });
   const integrationId = intg!.id;
 
-  const ctx: McpContext = { userId, userName: 'Ada', userEmail: email };
+  const ctx: McpContext = {
+    userId,
+    userName: 'Ada',
+    userEmail: email,
+    scopes: ['work:read', 'work:write', 'agents:run', 'connectors:link'],
+  };
   return {
     userId,
     orgId,
@@ -580,7 +585,9 @@ describe('approve_action / reject_action tools', () => {
   }
 
   it('approve resolves to running', async () => {
-    const s = await seedOrg(['contribute']);
+    // Approving a gated agent action is an `assign`-level act (permissions §9.3), the
+    // same bar the agent-sessions RPC approve route enforces.
+    const s = await seedOrg(['assign']);
     const id = await seedAwaiting(s);
     const client = await connect(s.ctx);
     const res = (await client.callTool({
@@ -591,7 +598,7 @@ describe('approve_action / reject_action tools', () => {
   });
 
   it('reject resolves to canceled', async () => {
-    const s = await seedOrg(['contribute']);
+    const s = await seedOrg(['assign']);
     const id = await seedAwaiting(s);
     const client = await connect(s.ctx);
     const res = (await client.callTool({
@@ -602,7 +609,7 @@ describe('approve_action / reject_action tools', () => {
   });
 
   it('approve 404s on missing session, 409s when not awaiting / no proposed action', async () => {
-    const s = await seedOrg(['contribute']);
+    const s = await seedOrg(['assign']);
     const client = await connect(s.ctx);
     const missing = (await client.callTool({
       name: 'approve_action',

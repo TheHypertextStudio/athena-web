@@ -11,6 +11,7 @@ import {
   ConflictError,
   CycleError,
   IdempotencyConflictError,
+  InsufficientScopeError,
   NotFoundError,
   onError,
   ValidationError,
@@ -42,6 +43,15 @@ describe('ApiError subclasses', () => {
     expect(e.status).toBe(403);
     expect(e.code).toBe('forbidden');
     expect(new CapabilityError('x').message).toBe('x');
+  });
+
+  it('InsufficientScopeError → 403 forbidden carrying the required scope', () => {
+    const e = new InsufficientScopeError('work:write');
+    expect(e.status).toBe(403);
+    expect(e.code).toBe('forbidden');
+    expect(e.requiredScope).toBe('work:write');
+    expect(e.message).toContain('work:write');
+    expect(new InsufficientScopeError('agents:run', 'custom msg').message).toBe('custom msg');
   });
 
   it('NotFoundError → 404 not_found', () => {

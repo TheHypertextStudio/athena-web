@@ -13,13 +13,14 @@
  * row routes to its task detail. A composer at the top adds a task; the empty state invites
  * the first one.
  */
-import type { TaskOut } from '@docket/types';
+import type { TaskOut, TeamOut } from '@docket/types';
 import { type GroupKey, ListView, TaskRow, type TaskRowData } from '@docket/ui/components';
 import { Button, Input } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 import { useCallback, useMemo, useState } from 'react';
 
 import type { ActorDirectory } from './actor-directory';
+import { TeamPicker } from '@/components/teams/team-picker';
 import { formatCalendarDate } from '@/lib/format-date';
 import { STATE_GROUP_LABEL, STATE_GROUP_ORDER, stateTypeOf } from '@/lib/work-state';
 
@@ -52,6 +53,14 @@ export interface MilestoneTasksProps {
   createError: string | null;
   /** Create a task with the given title. */
   onCreate: (title: string) => void;
+  /** The org's teams; a picker appears in the composer when there is more than one. */
+  teams: readonly TeamOut[];
+  /** The team new tasks land in (the org default or a user override). */
+  teamId: string | null;
+  /** Notify the parent that a different create-target team was chosen. */
+  onTeamChange: (teamId: string) => void;
+  /** Whether the org's teams are still loading (disables the create affordance). */
+  teamsLoading: boolean;
 }
 
 /** Format an ISO date as a short day, or `null` when absent. */
@@ -74,6 +83,10 @@ export function MilestoneTasks({
   creating,
   createError,
   onCreate,
+  teams,
+  teamId,
+  onTeamChange,
+  teamsLoading,
 }: MilestoneTasksProps): JSX.Element {
   const [title, setTitle] = useState('');
 
@@ -157,7 +170,11 @@ export function MilestoneTasks({
               setTitle(event.target.value);
             }}
           />
-          <Button type="submit" disabled={creating || title.trim().length === 0}>
+          <TeamPicker teams={teams} value={teamId} onChange={onTeamChange} disabled={creating} />
+          <Button
+            type="submit"
+            disabled={creating || teamsLoading || teamId === null || title.trim().length === 0}
+          >
             {creating ? 'Adding…' : `Add ${taskNoun}`}
           </Button>
         </div>

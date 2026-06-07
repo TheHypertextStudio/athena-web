@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 
-import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
+import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import * as React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -12,14 +12,35 @@ import {
   useContextState,
   type ActiveContext,
 } from '../../../src/components/shell/ContextProvider';
-import { ContextSidebar } from '../../../src/components/shell/ContextSidebar';
-import { AddOrgButton, GlobalRail, type RailOrg } from '../../../src/components/shell/GlobalRail';
-import { RailOrgAvatar } from '../../../src/components/shell/RailOrgAvatar';
+import { Sidebar } from '../../../src/components/shell/Sidebar';
 import { SidebarNavItem } from '../../../src/components/shell/SidebarNavItem';
+import { TabBar, type OpenTab } from '../../../src/components/shell/TabBar';
+import { WorkspaceSwitcher } from '../../../src/components/shell/WorkspaceSwitcher';
+import type { Workspace } from '../../../src/components/shell/workspaces';
 
-const ACME: RailOrg = { id: 'ORG00000000000000000000001', name: 'Acme Co', avatar: null };
-const GLOBEX: RailOrg = { id: 'ORG00000000000000000000002', name: 'Globex', avatar: null };
-const ORGS: readonly RailOrg[] = [ACME, GLOBEX];
+const ACME: Workspace = { id: 'ORG00000000000000000000001', name: 'Acme Co', isPersonal: false };
+const GLOBEX: Workspace = { id: 'ORG00000000000000000000002', name: 'Globex', isPersonal: false };
+const PERSONAL: Workspace = {
+  id: 'ORG00000000000000000000009',
+  name: 'My Space',
+  isPersonal: true,
+};
+const WORKSPACES: readonly Workspace[] = [ACME, GLOBEX, PERSONAL];
+
+/** A test `renderLink` that mirrors the host's Next `Link` (a real anchor). */
+function renderLink(href: string, content: React.ReactNode): React.ReactNode {
+  return <a href={href}>{content}</a>;
+}
+
+/** The full set of href builders a {@link Sidebar} needs, plus spies. */
+function sidebarHrefs() {
+  return {
+    hrefForHome: (key: 'today' | 'inbox' | 'portfolio') => `/${key}`,
+    hrefForWorkspace: (orgId: string, key: string) => `/orgs/${orgId}/${key}`,
+    hrefForOrgHome: (orgId: string) => `/orgs/${orgId}/my-work`,
+    renderLink,
+  };
+}
 
 function ctxWrapper(initial: ActiveContext) {
   return function Wrapper({ children }: { children: React.ReactNode }): React.JSX.Element {
@@ -55,19 +76,6 @@ describe('ContextProvider / useContextState', () => {
     expect(result.current.density).toBe('compact');
   });
 
-  it('honors a non-default initial density', () => {
-    function Probe(): React.JSX.Element {
-      const { density } = useContextState();
-      return <span>{density}</span>;
-    }
-    render(
-      <ContextProvider initialDensity="compact">
-        <Probe />
-      </ContextProvider>,
-    );
-    expect(screen.getByText('compact')).toBeInTheDocument();
-  });
-
   it('throws when used outside a provider', () => {
     expect(() => renderHook(() => useContextState())).toThrow(
       'useContextState must be used within a <ContextProvider>.',
@@ -76,10 +84,10 @@ describe('ContextProvider / useContextState', () => {
 });
 
 describe('AppShell', () => {
-  it('applies --org-accent and data-density when an org is bound', () => {
+  it('applies --org-accent and data-density when an org is bound, around sidebar + tab bar', () => {
     const { container } = render(
       <ContextProvider initialContext={ACME.id} initialDensity="compact">
-        <AppShell orgs={ORGS}>
+        <AppShell sidebar={<nav aria-label="Navigation">side</nav>} tabBar={<div>tabs</div>}>
           <div>Main</div>
         </AppShell>
       </ContextProvider>,
@@ -88,12 +96,13 @@ describe('AppShell', () => {
     expect(root).toHaveAttribute('data-density', 'compact');
     expect(root.style.getPropertyValue('--org-accent')).toMatch(/oklch/);
     expect(screen.getByText('Main')).toBeInTheDocument();
+    expect(screen.getByText('tabs')).toBeInTheDocument();
   });
 
   it('omits the --org-accent variable on the Hub (no bound org)', () => {
     const { container } = render(
       <ContextProvider initialContext={HUB_CONTEXT}>
-        <AppShell orgs={ORGS} className="shell-x">
+        <AppShell sidebar={<nav aria-label="Navigation" />} className="shell-x">
           <div>Hub main</div>
         </AppShell>
       </ContextProvider>,
@@ -102,187 +111,232 @@ describe('AppShell', () => {
     expect(root.style.getPropertyValue('--org-accent')).toBe('');
     expect(root).toHaveClass('shell-x');
   });
-
-  it('forwards nav selection from the sidebar', () => {
-    const onNavigate = vi.fn();
-    render(
-      <ContextProvider initialContext={ACME.id}>
-        <AppShell orgs={ORGS} activeNavKey="projects" onNavigate={onNavigate}>
-          <div>x</div>
-        </AppShell>
-      </ContextProvider>,
-    );
-    fireEvent.click(screen.getByRole('button', { name: 'Triage' }));
-    expect(onNavigate).toHaveBeenCalledWith('triage');
-  });
 });
 
-describe('GlobalRail', () => {
-  it('renders the Hub destinations (Today active) and one avatar per org', () => {
+describe('Sidebar', () => {
+  it('renders the Home group + the org Workspace group when an org is bound', () => {
     render(
-      <ContextProvider initialContext={HUB_CONTEXT}>
-        <GlobalRail orgs={ORGS} />
-      </ContextProvider>,
-    );
-    const hub = screen.getByRole('button', { name: 'Hub — Today' });
-    expect(hub).toHaveAttribute('aria-current', 'page');
-    // The cross-org Hub cluster: Inbox · Portfolio · Search.
-    expect(screen.getByRole('button', { name: 'Inbox' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Portfolio' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Search' })).toBeInTheDocument();
-    for (const org of ORGS) {
-      expect(screen.getByRole('button', { name: org.name })).toBeInTheDocument();
-    }
-  });
-
-  it('selecting an org rebinds the context (Hub loses active), and Hub rebinds back', () => {
-    render(
-      <ContextProvider initialContext={HUB_CONTEXT}>
-        <GlobalRail orgs={ORGS} />
-      </ContextProvider>,
-    );
-    fireEvent.click(screen.getByRole('button', { name: 'Acme Co' }));
-    expect(screen.getByRole('button', { name: 'Acme Co' })).toHaveAttribute('aria-current', 'true');
-    expect(screen.getByRole('button', { name: 'Hub — Today' })).not.toHaveAttribute('aria-current');
-
-    fireEvent.click(screen.getByRole('button', { name: 'Hub — Today' }));
-    expect(screen.getByRole('button', { name: 'Hub — Today' })).toHaveAttribute(
-      'aria-current',
-      'page',
-    );
-  });
-
-  it('reports org-avatar selection through onSelectOrg in addition to the context rebind', () => {
-    const onSelectOrg = vi.fn();
-    render(
-      <ContextProvider initialContext={HUB_CONTEXT}>
-        <GlobalRail orgs={ORGS} onSelectOrg={onSelectOrg} />
-      </ContextProvider>,
-    );
-    fireEvent.click(screen.getByRole('button', { name: 'Globex' }));
-    // The host receives the org id (drives imperative navigation)…
-    expect(onSelectOrg).toHaveBeenCalledWith(GLOBEX.id);
-    // …and the context still rebinds locally (accent applies immediately).
-    expect(screen.getByRole('button', { name: 'Globex' })).toHaveAttribute('aria-current', 'true');
-  });
-
-  it('marks the active Hub destination and routes Inbox/Portfolio/Search/Home', () => {
-    const onNavigate = vi.fn();
-    const onOpenSearch = vi.fn();
-    const onSelectHome = vi.fn();
-    render(
-      <ContextProvider initialContext={HUB_CONTEXT}>
-        <GlobalRail
-          orgs={ORGS}
-          activeHubKey="inbox"
-          unreadCount={3}
-          onNavigate={onNavigate}
-          onOpenSearch={onOpenSearch}
-          onSelectHome={onSelectHome}
+      <ContextProvider initialContext={ACME.id}>
+        <Sidebar
+          workspaces={WORKSPACES}
+          activeWorkspaceKey="projects"
+          {...sidebarHrefs()}
+          onSelectWorkspace={() => undefined}
+          onOpenSearch={() => undefined}
         />
       </ContextProvider>,
     );
-    // With Inbox active, Today is no longer the current page; the Inbox badge is announced.
-    expect(screen.getByRole('button', { name: 'Hub — Today' })).not.toHaveAttribute('aria-current');
-    const inbox = screen.getByRole('button', { name: 'Inbox, 3 unread' });
-    expect(inbox).toHaveAttribute('aria-current', 'page');
+    // Home group (cross-org) is always present.
+    expect(screen.getByRole('link', { name: 'Today' })).toHaveAttribute('href', '/today');
+    expect(screen.getByRole('link', { name: 'Portfolio' })).toHaveAttribute('href', '/portfolio');
+    expect(screen.getByRole('button', { name: 'Search' })).toBeInTheDocument();
 
-    fireEvent.click(inbox);
-    expect(onNavigate).toHaveBeenCalledWith('inbox');
-    fireEvent.click(screen.getByRole('button', { name: 'Portfolio' }));
-    expect(onNavigate).toHaveBeenCalledWith('portfolio');
-    fireEvent.click(screen.getByRole('button', { name: 'Search' }));
-    expect(onOpenSearch).toHaveBeenCalledTimes(1);
-    fireEvent.click(screen.getByRole('button', { name: 'Hub — Today' }));
-    expect(onSelectHome).toHaveBeenCalledTimes(1);
+    // Workspace group (org-scoped) — entity rows fall back to the startup preset here.
+    const projects = screen.getByRole('link', { name: 'Projects' });
+    expect(projects).toHaveAttribute('href', `/orgs/${ACME.id}/projects`);
+    expect(projects).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: 'My Work' })).toHaveAttribute(
+      'href',
+      `/orgs/${ACME.id}/my-work`,
+    );
+    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute(
+      'href',
+      `/orgs/${ACME.id}/settings`,
+    );
   });
 
-  it('fires onAddOrg from the add-org affordance', () => {
-    const onAddOrg = vi.fn();
+  it('folds the unread count into the Inbox row name', () => {
     render(
-      <ContextProvider>
-        <GlobalRail orgs={ORGS} onAddOrg={onAddOrg} />
+      <ContextProvider initialContext={ACME.id}>
+        <Sidebar
+          workspaces={WORKSPACES}
+          unreadCount={4}
+          {...sidebarHrefs()}
+          onSelectWorkspace={() => undefined}
+          onOpenSearch={() => undefined}
+        />
       </ContextProvider>,
     );
+    expect(screen.getByRole('link', { name: 'Inbox, 4 unread' })).toHaveAttribute('href', '/inbox');
+  });
+
+  it('opens the palette from the Search row', () => {
+    const onOpenSearch = vi.fn();
+    render(
+      <ContextProvider initialContext={ACME.id}>
+        <Sidebar
+          workspaces={WORKSPACES}
+          {...sidebarHrefs()}
+          onSelectWorkspace={() => undefined}
+          onOpenSearch={onOpenSearch}
+        />
+      </ContextProvider>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }));
+    expect(onOpenSearch).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a Workspaces list (not org nav) on the Hub, with an add-org affordance', () => {
+    const onAddOrg = vi.fn();
+    render(
+      <ContextProvider initialContext={HUB_CONTEXT}>
+        <Sidebar
+          workspaces={WORKSPACES}
+          {...sidebarHrefs()}
+          onSelectWorkspace={() => undefined}
+          onOpenSearch={() => undefined}
+          onAddOrg={onAddOrg}
+        />
+      </ContextProvider>,
+    );
+    // The Hub never shows the org nav (no My Work / Triage rows).
+    expect(screen.queryByRole('link', { name: 'Triage' })).not.toBeInTheDocument();
+    // It lists every workspace as an entry into the org.
+    expect(screen.getByRole('link', { name: 'Acme Co' })).toHaveAttribute(
+      'href',
+      `/orgs/${ACME.id}/my-work`,
+    );
+    expect(screen.getByRole('link', { name: 'Globex' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Add organization' }));
     expect(onAddOrg).toHaveBeenCalledTimes(1);
   });
-});
 
-describe('AddOrgButton', () => {
-  it('renders without a handler and does not throw on click', () => {
-    render(<AddOrgButton />);
-    expect(() => {
-      fireEvent.click(screen.getByRole('button', { name: 'Add organization' }));
-    }).not.toThrow();
+  it('never produces an /orgs/undefined href when no org is bound', () => {
+    render(
+      <ContextProvider initialContext={HUB_CONTEXT}>
+        <Sidebar
+          workspaces={WORKSPACES}
+          {...sidebarHrefs()}
+          onSelectWorkspace={() => undefined}
+          onOpenSearch={() => undefined}
+        />
+      </ContextProvider>,
+    );
+    for (const link of screen.getAllByRole('link')) {
+      expect(link.getAttribute('href')).not.toContain('/orgs/undefined');
+    }
+  });
+
+  it('renders an empty-state line when the caller has no workspaces', () => {
+    render(
+      <ContextProvider initialContext={HUB_CONTEXT}>
+        <Sidebar
+          workspaces={[]}
+          {...sidebarHrefs()}
+          onSelectWorkspace={() => undefined}
+          onOpenSearch={() => undefined}
+        />
+      </ContextProvider>,
+    );
+    expect(screen.getByText('No organizations yet.')).toBeInTheDocument();
   });
 });
 
-describe('RailOrgAvatar', () => {
-  it('renders an inactive avatar with initials and selects on click', () => {
+/** Open a Radix dropdown trigger in jsdom (pointerDown + click). */
+function openMenu(trigger: HTMLElement): void {
+  fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false });
+  fireEvent.click(trigger);
+}
+
+describe('WorkspaceSwitcher', () => {
+  it('shows the Hub as the active workspace and switches to an org on selection', async () => {
     const onSelect = vi.fn();
-    render(<RailOrgAvatar orgId={ACME.id} name="Acme Co" onSelect={onSelect} />);
-    const btn = screen.getByRole('button', { name: 'Acme Co' });
-    expect(btn).not.toHaveAttribute('aria-current');
-    expect(btn).not.toHaveAttribute('data-active');
-    expect(screen.getByText('AC')).toBeInTheDocument();
-    fireEvent.click(btn);
+    render(
+      <ContextProvider initialContext={HUB_CONTEXT}>
+        <WorkspaceSwitcher workspaces={WORKSPACES} hubBadge={2} onSelect={onSelect} />
+      </ContextProvider>,
+    );
+    openMenu(screen.getByRole('button', { name: /Workspace: Hub/ }));
+    // The Hub + each shared org + the personal org appear as menu items.
+    await waitFor(() => expect(screen.getByText('Acme Co')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Acme Co'));
     expect(onSelect).toHaveBeenCalledWith(ACME.id);
   });
 
-  it('renders the active accent ring when active', () => {
-    render(<RailOrgAvatar orgId={ACME.id} name="Acme Co" active onSelect={() => undefined} />);
-    const btn = screen.getByRole('button', { name: 'Acme Co' });
-    expect(btn).toHaveAttribute('aria-current', 'true');
-    expect(btn).toHaveAttribute('data-active', '');
-    expect(btn).toHaveClass('ring-2');
-    expect(btn.style.getPropertyValue('--org-accent')).toMatch(/oklch/);
-  });
-
-  it('renders the image branch when an avatarUrl is provided', () => {
+  it('selects the Hub (null) from the cross-organization entry', async () => {
+    const onSelect = vi.fn();
     render(
-      <RailOrgAvatar
-        orgId={ACME.id}
-        name="Acme Co"
-        avatarUrl="https://example.com/a.png"
-        onSelect={() => undefined}
-      />,
+      <ContextProvider initialContext={ACME.id}>
+        <WorkspaceSwitcher workspaces={WORKSPACES} onSelect={onSelect} />
+      </ContextProvider>,
     );
-    // Fallback initials are still present in jsdom.
-    expect(screen.getByText('AC')).toBeInTheDocument();
+    openMenu(screen.getByRole('button', { name: /Workspace: Acme Co/ }));
+    await waitFor(() => {
+      expect(screen.getAllByText('Hub').length).toBeGreaterThan(0);
+    });
+    // The Hub menu item is the one inside the open menu (a menuitem role).
+    fireEvent.click(screen.getByRole('menuitem', { name: /^Hub/ }));
+    expect(onSelect).toHaveBeenCalledWith(null);
   });
 
-  it('uses "?" initials for a blank name and two-char prefix for a single word', () => {
-    const { rerender } = render(<RailOrgAvatar orgId="x" name="   " onSelect={() => undefined} />);
-    expect(screen.getByText('?')).toBeInTheDocument();
-    rerender(<RailOrgAvatar orgId="x" name="Globex" onSelect={() => undefined} />);
-    expect(screen.getByText('GL')).toBeInTheDocument();
+  it('groups personal orgs under a Personal section', async () => {
+    render(
+      <ContextProvider initialContext={HUB_CONTEXT}>
+        <WorkspaceSwitcher workspaces={WORKSPACES} onSelect={() => undefined} />
+      </ContextProvider>,
+    );
+    openMenu(screen.getByRole('button', { name: /Workspace: Hub/ }));
+    await waitFor(() => expect(screen.getByText('Personal')).toBeInTheDocument());
+    expect(screen.getByText('My Space')).toBeInTheDocument();
   });
 });
 
-describe('ContextSidebar', () => {
-  it('renders fixed and vocabulary-resolved rows (startup fallback) and highlights the active key', () => {
-    render(<ContextSidebar activeKey="projects" onNavigate={() => undefined} />);
-    expect(screen.getByRole('button', { name: 'My Work' })).toBeInTheDocument();
-    // Vocabulary rows fall back to the startup preset without a VocabularyProvider.
-    const projects = screen.getByRole('button', { name: 'Projects' });
-    expect(projects).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('button', { name: 'Cycles' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Teams' })).toBeInTheDocument();
+describe('TabBar', () => {
+  const TAB_A: OpenTab = {
+    key: 'task:o1:t1',
+    type: 'task',
+    orgId: 'o1',
+    id: 't1',
+    title: 'Fix the build',
+    href: '/orgs/o1/tasks/t1',
+  };
+  const TAB_B: OpenTab = {
+    key: 'project:o1:p1',
+    type: 'project',
+    orgId: 'o1',
+    id: 'p1',
+    title: 'Q3 Launch',
+    href: '/orgs/o1/projects/p1',
+  };
+
+  it('renders nothing when there are no open documents', () => {
+    const { container } = render(
+      <TabBar tabs={[]} renderLink={renderLink} onClose={() => undefined} />,
+    );
+    expect(container).toBeEmptyDOMElement();
   });
 
-  it('calls onNavigate with the selected key', () => {
-    const onNavigate = vi.fn();
-    render(<ContextSidebar onNavigate={onNavigate} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Agents' }));
-    expect(onNavigate).toHaveBeenCalledWith('agents');
+  it('renders each tab as a navigable link and marks the active one selected', () => {
+    render(
+      <TabBar
+        tabs={[TAB_A, TAB_B]}
+        activeKey={TAB_B.key}
+        renderLink={renderLink}
+        onClose={() => undefined}
+      />,
+    );
+    expect(screen.getByRole('link', { name: 'Fix the build' })).toHaveAttribute(
+      'href',
+      '/orgs/o1/tasks/t1',
+    );
+    const tabs = screen.getAllByRole('tab');
+    expect(tabs).toHaveLength(2);
+    const activeTab = screen.getByText('Q3 Launch').closest('[role="tab"]');
+    expect(activeTab).toHaveAttribute('aria-selected', 'true');
   });
 
-  it('renders without an onNavigate handler (rows are not selectable)', () => {
-    render(<ContextSidebar />);
-    expect(() => {
-      fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
-    }).not.toThrow();
+  it('closes a tab by key', () => {
+    const onClose = vi.fn();
+    render(
+      <TabBar
+        tabs={[TAB_A, TAB_B]}
+        activeKey={TAB_A.key}
+        renderLink={renderLink}
+        onClose={onClose}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Close Q3 Launch' }));
+    expect(onClose).toHaveBeenCalledWith(TAB_B.key);
   });
 });
 
@@ -290,14 +344,8 @@ describe('SidebarNavItem', () => {
   it('renders a button with an icon and calls onSelect', () => {
     const onSelect = vi.fn();
     render(<SidebarNavItem label="Home" icon={Home} onSelect={onSelect} />);
-    const btn = screen.getByRole('button', { name: 'Home' });
-    fireEvent.click(btn);
+    fireEvent.click(screen.getByRole('button', { name: 'Home' }));
     expect(onSelect).toHaveBeenCalledTimes(1);
-  });
-
-  it('renders without an icon', () => {
-    render(<SidebarNavItem label="Plain" />);
-    expect(screen.getByRole('button', { name: 'Plain' })).toBeInTheDocument();
   });
 
   it('marks the active row with aria-current', () => {
@@ -305,7 +353,12 @@ describe('SidebarNavItem', () => {
     expect(screen.getByRole('button', { name: 'Active' })).toHaveAttribute('aria-current', 'page');
   });
 
-  it('renders asChild onto a custom link element (active)', () => {
+  it('folds a badge count into the button accessible name', () => {
+    render(<SidebarNavItem label="Inbox" badge={3} />);
+    expect(screen.getByRole('button', { name: 'Inbox, 3 unread' })).toBeInTheDocument();
+  });
+
+  it('renders asChild onto a custom link element with the active highlight', () => {
     render(
       <SidebarNavItem label="Linked" asChild active>
         <a href="/dest">Linked</a>
@@ -316,12 +369,15 @@ describe('SidebarNavItem', () => {
     expect(link).toHaveClass('justify-start');
   });
 
-  it('renders asChild without active (no aria-current)', () => {
+  it('appends a badge inside the asChild link content', () => {
     render(
-      <SidebarNavItem label="Inactive" asChild>
-        <a href="/dest">Inactive</a>
+      <SidebarNavItem label="Inbox" asChild badge={5}>
+        <a href="/inbox">
+          <span>Inbox</span>
+        </a>
       </SidebarNavItem>,
     );
-    expect(screen.getByRole('link', { name: 'Inactive' })).not.toHaveAttribute('aria-current');
+    const link = screen.getByRole('link', { name: 'Inbox, 5 unread' });
+    expect(link).toHaveTextContent('5');
   });
 });

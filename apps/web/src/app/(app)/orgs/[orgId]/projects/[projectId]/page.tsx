@@ -33,7 +33,7 @@ import { HealthPill, WeightedProgress } from '@/components/project-detail/progre
 import { PropertiesPanel } from '@/components/project-detail/properties-panel';
 import { type TabItem, ProjectTabs } from '@/components/project-detail/tabs';
 import { UpdatesTab } from '@/components/project-detail/updates-tab';
-import { recallDefaultTeam, rememberDefaultTeam } from '@/lib/active-team';
+import { useActiveOrg } from '@/components/active-org';
 import { api } from '@/lib/api';
 import { readError, readProblem } from '@/lib/problem';
 
@@ -90,6 +90,7 @@ export default function ProjectDetailPage(): JSX.Element {
   const router = useRouter();
   const params = useParams<{ orgId: string; projectId: string }>();
   const { orgId, projectId } = params;
+  const { teams, defaultTeamId, teamsLoading } = useActiveOrg();
   const projectLabel = useVocabulary('project');
   const taskNoun = useVocabulary('task').toLowerCase();
   const taskNounPlural = useVocabulary('task', { plural: true }).toLowerCase();
@@ -98,7 +99,6 @@ export default function ProjectDetailPage(): JSX.Element {
   const [progress, setProgress] = useState<ProjectProgress | null>(null);
   const [milestones, setMilestones] = useState<readonly MilestoneOut[]>([]);
   const [milestoneTasks, setMilestoneTasks] = useState<readonly MilestoneTask[]>([]);
-  const [teamId, setTeamId] = useState<string | null>(null);
   const [agentsHere, setAgentsHere] = useState<readonly AgentHere[]>([]);
   const [agentActivity, setAgentActivity] = useState<readonly AgentActivityEntry[]>([]);
   const [resolveActor, setResolveActor] = useState<ActorDirectory>(() => () => ({
@@ -131,6 +131,9 @@ export default function ProjectDetailPage(): JSX.Element {
   // Task creation
   const [creatingTask, setCreatingTask] = useState(false);
   const [createTaskError, setCreateTaskError] = useState<string | null>(null);
+  // The team new tasks land in: a user override (via the picker) or the org's default team.
+  const [teamOverride, setTeamOverride] = useState<string | null>(null);
+  const teamId = teamOverride ?? defaultTeamId;
 
   /** Resolve which initiative (if any) this project belongs to, via initiative timelines. */
   const resolveInitiative = useCallback(
@@ -227,7 +230,6 @@ export default function ProjectDetailPage(): JSX.Element {
       // This project's tasks, then resolve each task's milestone (the list DTO omits it).
       const allTasks: readonly TaskOut[] = tasksRes.ok ? (await tasksRes.json()).items : [];
       const projectTasks = allTasks.filter((t) => t.projectId === projectId);
-      setTeamId(recallDefaultTeam(orgId) ?? projectTasks[0]?.teamId ?? allTasks[0]?.teamId ?? null);
 
       const enriched = await Promise.all(
         projectTasks.map(async (t): Promise<MilestoneTask> => {
@@ -427,7 +429,6 @@ export default function ProjectDetailPage(): JSX.Element {
           return;
         }
         const created = await res.json();
-        rememberDefaultTeam(orgId, created.teamId);
         setMilestoneTasks((current) => [...current, { task: created, milestoneId: null }]);
         // The weighted roll-up shifts with a new task; re-fetch the authoritative value.
         void refreshProgress();
@@ -586,6 +587,10 @@ export default function ProjectDetailPage(): JSX.Element {
             onCreate={(title) => {
               void createTask(title);
             }}
+            teams={teams}
+            teamId={teamId}
+            onTeamChange={setTeamOverride}
+            teamsLoading={teamsLoading}
           />
         </div>
       ) : null}

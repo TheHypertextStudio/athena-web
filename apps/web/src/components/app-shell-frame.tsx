@@ -4,24 +4,29 @@ import type { OrgSummary } from '@docket/types';
 import {
   AppShell,
   ContextProvider,
-  type HubRailKey,
+  type HomeNavKey,
   HUB_CONTEXT,
-  type RailOrg,
-  type SidebarNavKey,
+  Sidebar,
+  TabBar,
   useContextState,
+  type Workspace,
+  type WorkspaceNavKey,
 } from '@docket/ui/components';
 import { VocabularyProvider } from '@docket/ui/hooks';
+import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { type JSX, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { ActiveOrgContext, useActiveOrg } from '@/components/active-org';
 import { CommandPaletteProvider, useCommandPalette } from '@/components/command-palette';
+import { OpenDocumentsProvider, useOpenDocuments } from '@/components/tabs';
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
 import { readError } from '@/lib/problem';
 
-/** The Hub destination implied by the current cross-org pathname (Inbox/Portfolio). */
-function hubKeyFromPath(pathname: string): HubRailKey | undefined {
+/** The cross-org Home destination implied by the current pathname (Today/Inbox/Portfolio). */
+function homeKeyFromPath(pathname: string): HomeNavKey | undefined {
+  if (/^\/today(?:\/|$)/.test(pathname)) return 'today';
   if (/^\/inbox(?:\/|$)/.test(pathname)) return 'inbox';
   if (/^\/portfolio(?:\/|$)/.test(pathname)) return 'portfolio';
   return undefined;
@@ -37,12 +42,12 @@ function orgIdFromPath(pathname: string): string | null {
  * The org-scoped sidebar destinations, in mvp-plan §7 order.
  *
  * @remarks
- * Each {@link SidebarNavKey} maps 1:1 to its route segment under `/orgs/[orgId]/…`, so
- * {@link onNavigate} and {@link navKeyFromPath} stay in lockstep with the real route tree.
- * Keeping them in one table is what guarantees the sidebar highlight and the navigation
- * target never drift apart as screens are added.
+ * Each {@link WorkspaceNavKey} maps 1:1 to its route segment under `/orgs/[orgId]/…`, so the
+ * href builder and {@link workspaceKeyFromPath} stay in lockstep with the real route tree.
+ * Keeping them in one table is what guarantees the sidebar highlight and the navigation target
+ * never drift apart as screens are added.
  */
-const NAV_SEGMENTS: readonly SidebarNavKey[] = [
+const NAV_SEGMENTS: readonly WorkspaceNavKey[] = [
   'my-work',
   'triage',
   'initiatives',
@@ -55,8 +60,8 @@ const NAV_SEGMENTS: readonly SidebarNavKey[] = [
   'settings',
 ];
 
-/** The active sidebar nav key implied by the current org-scoped pathname. */
-function navKeyFromPath(pathname: string): SidebarNavKey | undefined {
+/** The active Workspace nav key implied by the current org-scoped pathname. */
+function workspaceKeyFromPath(pathname: string): WorkspaceNavKey | undefined {
   for (const key of NAV_SEGMENTS) {
     if (new RegExp(`^/orgs/[^/]+/${key}(?:/|$)`).test(pathname)) return key;
   }
@@ -64,14 +69,16 @@ function navKeyFromPath(pathname: string): SidebarNavKey | undefined {
 }
 
 /**
- * The authenticated app-shell frame: org rail, context sidebar, and the active context.
+ * The authenticated app-shell frame: the single integrated sidebar, the multi-document tab
+ * bar, and the active context.
  *
  * @remarks
  * Mounted by the `(app)` route-group layout so every authenticated page shares one shell.
  * It gates access on the Better Auth session (redirecting to `/sign-in` when signed out),
- * loads the caller's orgs once for the {@link GlobalRail}, and binds the active context to
- * the route — the cross-org {@link HUB_CONTEXT} on `/today`, or the org id parsed from an
- * `/orgs/[orgId]/…` path. Rail and sidebar selections are translated into Next navigation.
+ * loads the caller's orgs once for the {@link Sidebar}'s workspace switcher, and binds the
+ * active context to the route — the cross-org {@link HUB_CONTEXT} on the Home surfaces, or the
+ * org id parsed from an `/orgs/[orgId]/…` path. Sidebar and tab selections are translated into
+ * Next navigation.
  *
  * The orgs and the bound org's vocabulary skin are exposed to descendant pages through
  * {@link useActiveOrg} so they can render org chips and resolve entity nouns without refetching.
@@ -85,6 +92,7 @@ export function AppShellFrame({ children }: { children: ReactNode }): JSX.Elemen
   const [orgsError, setOrgsError] = useState<string | null>(null);
 
   const activeOrgId = orgIdFromPath(pathname);
+  const userId = session?.user.id ?? null;
 
   // Redirect to sign-in once the session resolves to "signed out".
   useEffect(() => {
@@ -125,13 +133,15 @@ export function AppShellFrame({ children }: { children: ReactNode }): JSX.Elemen
     <ContextProvider initialContext={activeOrgId ?? HUB_CONTEXT}>
       <ActiveOrgContext orgs={orgs} activeOrgId={activeOrgId} orgsError={orgsError}>
         <CommandPaletteProvider>
-          <AppShellInner
-            activeOrgId={activeOrgId}
-            navKey={navKeyFromPath(pathname)}
-            hubKey={hubKeyFromPath(pathname)}
-          >
-            {children}
-          </AppShellInner>
+          <OpenDocumentsProvider userId={userId}>
+            <AppShellInner
+              activeOrgId={activeOrgId}
+              workspaceKey={workspaceKeyFromPath(pathname)}
+              homeKey={homeKeyFromPath(pathname)}
+            >
+              {children}
+            </AppShellInner>
+          </OpenDocumentsProvider>
         </CommandPaletteProvider>
       </ActiveOrgContext>
     </ContextProvider>
@@ -142,51 +152,64 @@ export function AppShellFrame({ children }: { children: ReactNode }): JSX.Elemen
 interface AppShellInnerProps {
   /** The org id bound to this route, or `null` on the Hub. */
   activeOrgId: string | null;
-  /** The active sidebar nav key for the current route. */
-  navKey?: SidebarNavKey;
-  /** The active Hub rail destination for the current route (Inbox/Portfolio). */
-  hubKey?: HubRailKey;
+  /** The active Workspace nav key for the current route. */
+  workspaceKey?: WorkspaceNavKey;
+  /** The active Home destination for the current route (Today/Inbox/Portfolio). */
+  homeKey?: HomeNavKey;
   /** The routed page content. */
   children: ReactNode;
+}
+
+/** Render a Next `Link` carrying the row content (used by the sidebar + tab bar `asChild`). */
+function renderLink(href: string, content: ReactNode): ReactNode {
+  return <Link href={href}>{content}</Link>;
 }
 
 /**
  * The shell body that lives inside the providers and wires shell selections to navigation.
  *
  * @remarks
- * Split from {@link AppShellFrame} because it must read the shell context and active-org
- * state (only available inside their providers). The route is the single source of truth: a
- * one-directional effect mirrors it into the bound context, while every rail and palette
- * selection navigates imperatively (Hub → `/today`, Inbox/Portfolio → `/[key]`, org →
- * `/orgs/[id]/my-work`). It also maps sidebar nav keys to org-scoped routes and skins entity
- * nouns to the bound org via {@link VocabularyProvider}.
+ * Split from {@link AppShellFrame} because it must read the shell context, active-org state,
+ * and open-documents store (only available inside their providers). The route is the single
+ * source of truth: a one-directional effect mirrors it into the bound context, while every
+ * sidebar/switcher selection navigates imperatively (Hub → `/today`, an org → its My Work).
+ * Entity nouns are skinned to the bound org via {@link VocabularyProvider}.
  */
-function AppShellInner({ activeOrgId, navKey, hubKey, children }: AppShellInnerProps): JSX.Element {
+function AppShellInner({
+  activeOrgId,
+  workspaceKey,
+  homeKey,
+  children,
+}: AppShellInnerProps): JSX.Element {
   const router = useRouter();
   const { setContext } = useContextState();
   const { orgs, skin } = useActiveOrg();
   const { openPalette } = useCommandPalette();
+  const { tabs, activeKey, closeTab } = useOpenDocuments();
   const [unreadCount, setUnreadCount] = useState(0);
 
-  const railOrgs = useMemo<readonly RailOrg[]>(
-    () => orgs.map((o) => ({ id: o.id, name: o.name, avatar: o.avatar })),
+  const workspaces = useMemo<readonly Workspace[]>(
+    () =>
+      orgs.map((o) => ({
+        id: o.id,
+        name: o.name,
+        avatar: o.avatar,
+        isPersonal: o.isPersonal,
+      })),
     [orgs],
   );
 
   // Mirror the route into the bound context — one-directional, never reversing navigation.
   //
   // This is the *only* coupling between the route and the context: the route is the source of
-  // truth, and the context follows it. Navigation is always driven imperatively from the rail
-  // and palette handlers below; the shell never derives a `router.push` from context state.
-  // (An earlier effect that pushed routes when `context` diverged from the route raced this
-  // sync — `activeOrgId` updates on the route change before `setContext` flushes — and bounced
-  // org → Hub navigation back to the org or to `/today`. Routing from the handlers removes the
-  // divergence the effect was watching for.)
+  // truth, and the context follows it. Navigation is always driven imperatively from the
+  // sidebar/switcher handlers below; the shell never derives a `router.push` from context
+  // state, which is what keeps switching workspaces from racing the route-to-context sync.
   useEffect(() => {
     setContext(activeOrgId ?? HUB_CONTEXT);
   }, [activeOrgId, setContext]);
 
-  // Poll the caller's cross-org unread count for the rail's Inbox attention badge.
+  // Poll the caller's cross-org unread count for the switcher's Hub badge + the Inbox row.
   useEffect(() => {
     const live = { current: true };
     const refresh = async (): Promise<void> => {
@@ -207,58 +230,43 @@ function AppShellInner({ activeOrgId, navKey, hubKey, children }: AppShellInnerP
     };
   }, []);
 
-  /** Translate a sidebar nav selection into an org-scoped route. */
-  const onNavigate = useCallback(
-    (key: SidebarNavKey): void => {
-      if (!activeOrgId) {
-        router.push('/today');
-        return;
-      }
-      router.push(`/orgs/${activeOrgId}/${key}`);
+  /** Switch the active workspace: the Hub (`null`) routes to Today, an org to its My Work. */
+  const onSelectWorkspace = useCallback(
+    (orgId: string | null): void => {
+      setContext(orgId ?? HUB_CONTEXT);
+      router.push(orgId ? `/orgs/${orgId}/my-work` : '/today');
     },
-    [activeOrgId, router],
+    [router, setContext],
   );
-
-  /** Translate a Hub rail destination selection into its cross-org route. */
-  const onNavigateHub = useCallback(
-    (key: HubRailKey): void => {
-      router.push(`/${key}`);
-    },
-    [router],
-  );
-
-  /** Translate an org-avatar selection into that org's home route (context rebind is handled by the rail). */
-  const onSelectOrg = useCallback(
-    (orgId: string): void => {
-      router.push(`/orgs/${orgId}/my-work`);
-    },
-    [router],
-  );
-
-  /** The Hub (Today) button routes to Today even from another cross-org surface. */
-  const onSelectHome = useCallback((): void => {
-    router.push('/today');
-  }, [router]);
 
   /** The add-org affordance routes to onboarding. */
   const onAddOrg = useCallback((): void => {
     router.push('/onboarding');
   }, [router]);
 
+  const sidebar = (
+    <Sidebar
+      workspaces={workspaces}
+      activeHomeKey={homeKey}
+      activeWorkspaceKey={workspaceKey}
+      unreadCount={unreadCount}
+      hrefForHome={(key) => `/${key}`}
+      hrefForWorkspace={(orgId, key) => `/orgs/${orgId}/${key}`}
+      hrefForOrgHome={(orgId) => `/orgs/${orgId}/my-work`}
+      renderLink={renderLink}
+      onSelectWorkspace={onSelectWorkspace}
+      onOpenSearch={openPalette}
+      onAddOrg={onAddOrg}
+    />
+  );
+
+  const tabBar = (
+    <TabBar tabs={tabs} activeKey={activeKey} renderLink={renderLink} onClose={closeTab} />
+  );
+
   return (
     <VocabularyProvider skin={skin}>
-      <AppShell
-        orgs={railOrgs}
-        activeNavKey={navKey}
-        activeHubKey={hubKey}
-        unreadCount={unreadCount}
-        onNavigate={onNavigate}
-        onNavigateHub={onNavigateHub}
-        onSelectOrg={onSelectOrg}
-        onSelectHome={onSelectHome}
-        onOpenSearch={openPalette}
-        onAddOrg={onAddOrg}
-      >
+      <AppShell sidebar={sidebar} tabBar={tabBar}>
         {children}
       </AppShell>
     </VocabularyProvider>

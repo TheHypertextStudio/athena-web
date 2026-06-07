@@ -81,20 +81,34 @@ export const mcpServer = {
   MCP_SESSION_STORE_URL: z.string().optional(),
 };
 
-/** Agent runtime (Athena / Anthropic). Endpoint↔key paired at composition. */
+/** Agent runtime (the built-in Athena runtime, backed by the Anthropic Messages API). */
 export const agentServer = {
-  ATHENA_AGENT_ENDPOINT: z.string().optional(),
-  ATHENA_AGENT_API_KEY: z.string().optional(),
   ANTHROPIC_API_KEY: z.string().optional(),
 };
 
-/** Cron secret, observability, blob/export storage. */
+/** Cron secret, observability, blob/export storage, transactional email (SMTP). */
 export const opsServer = {
   CRON_SECRET: z.string().min(1),
   SENTRY_DSN: z.string().optional(),
   BLOB_READ_WRITE_TOKEN: z.string().optional(),
   EXPORT_BUCKET_URL: z.string().optional(),
   EXPORT_BUCKET_TOKEN: z.string().optional(),
+  /**
+   * SMTP relay host for transactional email (`SmtpMailer`). Local: Mailpit (`localhost`).
+   * Absent/placeholder ⇒ the mock `CaptureMailer` is used. Lenient (`min(1)`, optional);
+   * the `@docket/boundaries` resolver, not this schema, decides real-vs-mock.
+   */
+  SMTP_HOST: z.string().min(1).optional(),
+  /** SMTP port (string form; coerced/validated by the adapter). 587 STARTTLS, 465 TLS, 1025 Mailpit. */
+  SMTP_PORT: z.string().min(1).optional(),
+  /** Whether SMTP uses implicit TLS from the start (`"true"`/`"false"`; defaults per port). */
+  SMTP_SECURE: z.string().min(1).optional(),
+  /** SMTP auth username (omit for unauthenticated relays such as Mailpit). */
+  SMTP_USER: z.string().min(1).optional(),
+  /** SMTP auth password (omit for unauthenticated relays such as Mailpit). */
+  SMTP_PASS: z.string().min(1).optional(),
+  /** From-address every transactional email is sent as (`"Name <addr>"` or a bare address). */
+  MAIL_FROM: z.string().min(1).optional(),
 };
 
 /** Public client vars (Next.js `NEXT_PUBLIC_*`). */
@@ -102,4 +116,25 @@ export const clientShared = {
   NEXT_PUBLIC_API_URL: z.string().min(1),
   NEXT_PUBLIC_APP_URL: z.string().min(1),
   NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: z.string().optional(),
+};
+
+/**
+ * Third-party connectors (`RealConnector`). Each provider's OAuth token / API key is
+ * supplied per-connection from the stored credential (not env); these optional
+ * variables only override the provider API base for self-hosted / non-public hosts
+ * (e.g. GitHub Enterprise). Absent/placeholder ⇒ the provider's public API base is
+ * used. Lenient (`min(1)`, optional) so the local zero-account build boots on blanks;
+ * the `@docket/boundaries` resolver, not this schema, decides real-vs-mock.
+ */
+export const connectorServer = {
+  /** GitHub REST API base override (e.g. `https://ghe.example.com/api/v3`). */
+  GITHUB_API_BASE: z.string().min(1).optional(),
+  /** Linear GraphQL API base override (defaults to `https://api.linear.app`). */
+  LINEAR_API_BASE: z.string().min(1).optional(),
+  /** Google Drive REST API base override. */
+  GOOGLE_DRIVE_API_BASE: z.string().min(1).optional(),
+  /** Gmail REST API base override. */
+  GOOGLE_GMAIL_API_BASE: z.string().min(1).optional(),
+  /** Google Calendar REST API base override. */
+  GOOGLE_CALENDAR_API_BASE: z.string().min(1).optional(),
 };

@@ -39,7 +39,7 @@ beforeAll(() => {
       x: 0,
       y: 0,
       toJSON: () => ({}),
-    } as DOMRect;
+    };
   };
   restoreHeight = () => {
     if (heightDesc) Object.defineProperty(HTMLElement.prototype, 'offsetHeight', heightDesc);

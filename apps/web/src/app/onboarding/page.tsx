@@ -24,25 +24,14 @@ const PERSONAL_STEPS: readonly OnboardingStep[] = ['intent', 'personal-welcome',
 /** The ordered steps for the team / nonprofit fork. */
 const TEAM_STEPS: readonly OnboardingStep[] = ['intent', 'name', 'vocabulary', 'connect'];
 
-/** The JSON body the typed orgs `$post` accepts (kept in sync with the RPC contract). */
-type CreateOrgBody = NonNullable<Parameters<typeof api.v1.orgs.$post>[0]>['json'];
-
 /**
  * Create an organization through the typed RPC, accepting any valid {@link OrgCreate} body.
- *
- * @remarks
- * The orgs `$post` validator narrows `isPersonal` to the literal `false` in its inferred
- * client type, so a personal-space body (`isPersonal: true`) — which the route genuinely
- * supports at runtime (see `apps/api/src/routes/orgs.ts`) — is not assignable to that
- * narrowed type. This is the single, contained seam that bridges the validated
- * {@link OrgCreate} shape to the RPC's narrowed body type; the cast is structural (the bodies
- * differ only by the `isPersonal` literal) and changes no runtime behaviour.
  *
  * @param body - A validated org-create body (team or personal).
  * @returns the raw RPC {@link Response} for the caller to branch on.
  */
 function createOrg(body: OrgCreate): Promise<Response> {
-  return api.v1.orgs.$post({ json: body as CreateOrgBody });
+  return api.v1.orgs.$post({ json: body });
 }
 
 /** Resolve the default vocabulary preset an intent fork pre-selects. */

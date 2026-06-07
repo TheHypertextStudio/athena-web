@@ -63,7 +63,7 @@ function isSerializationFailure(err: unknown): boolean {
     typeof err === 'object' &&
     err !== null &&
     'code' in err &&
-    typeof (err as { code: unknown }).code === 'string' &&
+    typeof err.code === 'string' &&
     SERIALIZATION_RETRY_CODES.has((err as { code: string }).code)
   );
 }

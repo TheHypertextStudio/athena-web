@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type { CallToolResult, ReadResourceResult } from '@modelcontextprotocol/sdk/types.js';
+import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { Hono } from 'hono';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 import { eq } from 'drizzle-orm';
@@ -250,9 +250,9 @@ describe('docket:// entity resource', () => {
     const s = await seedOrg(['view']);
     const { client } = await harnessFor(s.ctx);
 
-    const result = (await client.readResource({
+    const result = await client.readResource({
       uri: `docket://${s.orgId}/task/${s.taskId}`,
-    })) as ReadResourceResult;
+    });
 
     expect(result.contents).toHaveLength(1);
     const content = result.contents[0]!;

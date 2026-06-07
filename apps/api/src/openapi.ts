@@ -6,7 +6,7 @@
  * server, the bearer + MCP-OAuth security schemes); the P6 api lane fills per-route
  * paths via `describeRoute`. Scalar renders it at `/v1/docs`.
  */
-import { apiReference } from '@scalar/hono-api-reference';
+import { Scalar } from '@scalar/hono-api-reference';
 import type { Hono } from 'hono';
 
 import type { AppEnv } from './context';
@@ -46,6 +46,6 @@ export function registerOpenapi(server: Hono<AppEnv>): void {
   server.get('/v1/openapi.json', (c) => c.json(buildOpenApiDocument()));
   // Scalar's config is a union whose object-literal excess-property check is over-strict;
   // the `{ url }` form is the documented runtime usage, so cast past the type quirk.
-  const docsConfig = { url: '/v1/openapi.json' } as unknown as Parameters<typeof apiReference>[0];
-  server.get('/v1/docs', apiReference(docsConfig));
+  const docsConfig = { url: '/v1/openapi.json' } as unknown as Parameters<typeof Scalar>[0];
+  server.get('/v1/docs', Scalar(docsConfig));
 }

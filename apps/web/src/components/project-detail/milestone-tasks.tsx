@@ -20,6 +20,7 @@ import type { JSX } from 'react';
 import { useCallback, useMemo, useState } from 'react';
 
 import type { ActorDirectory } from './actor-directory';
+import { formatCalendarDate } from '@/lib/format-date';
 import { STATE_GROUP_LABEL, STATE_GROUP_ORDER, stateTypeOf } from '@/lib/work-state';
 
 /** A task enriched with its resolved milestone association. */
@@ -55,8 +56,7 @@ export interface MilestoneTasksProps {
 
 /** Format an ISO date as a short day, or `null` when absent. */
 function shortDate(value: string | null | undefined): string | null {
-  if (!value) return null;
-  return new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return formatCalendarDate(value, { month: 'short', day: 'numeric' });
 }
 
 /**

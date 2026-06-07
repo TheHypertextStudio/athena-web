@@ -17,6 +17,8 @@ import {
   db,
   dailyPlanItem,
   hub,
+  initiativeProgram,
+  initiativeProject,
   milestone,
   notification,
   organization,
@@ -321,7 +323,39 @@ const hubRouter = new Hono<AppEnv>()
     if (!session?.user) throw new AuthError();
     const orgIds = await callerOrgIds(session.user.id);
     if (orgIds.length === 0) return ok(c, HubPortfolioOut, { swimlanes: [] });
-    const { from, to } = c.req.valid('query');
+    const { from, to, initiativeId } = c.req.valid('query');
+
+    // Initiative filter chip (api-rpc-contract §8.2): when present, restrict the swimlane
+    // programs/projects to those associated with that Initiative via the `initiative_*`
+    // m2m edges. The edges are org-scoped, so resolving them across the caller's orgs both
+    // applies the filter AND keeps tenant isolation (an out-of-scope initiative id resolves
+    // to no edges → empty swimlanes). `undefined` leaves everything in scope.
+    let initiativeProjectIds: Set<string> | undefined;
+    let initiativeProgramIds: Set<string> | undefined;
+    if (initiativeId !== undefined) {
+      const [projEdges, progEdges] = await Promise.all([
+        db
+          .select({ projectId: initiativeProject.projectId })
+          .from(initiativeProject)
+          .where(
+            and(
+              eq(initiativeProject.initiativeId, initiativeId),
+              inArray(initiativeProject.organizationId, orgIds),
+            ),
+          ),
+        db
+          .select({ programId: initiativeProgram.programId })
+          .from(initiativeProgram)
+          .where(
+            and(
+              eq(initiativeProgram.initiativeId, initiativeId),
+              inArray(initiativeProgram.organizationId, orgIds),
+            ),
+          ),
+      ]);
+      initiativeProjectIds = new Set(projEdges.map((e) => e.projectId));
+      initiativeProgramIds = new Set(progEdges.map((e) => e.programId));
+    }
 
     // Org chips (the swimlane bands) — only the caller's orgs, never merged.
     const orgs = await db
@@ -331,13 +365,13 @@ const hubRouter = new Hono<AppEnv>()
       .orderBy(organization.name);
 
     // In-flight programs + projects across scope, plus the projects' milestone diamonds.
-    const programs = await db
+    const allPrograms = await db
       .select()
       .from(program)
       .where(
         and(inArray(program.organizationId, orgIds), notInArray(program.status, ['archived'])),
       );
-    const projects = await db
+    const allProjects = await db
       .select()
       .from(project)
       .where(
@@ -346,6 +380,14 @@ const hubRouter = new Hono<AppEnv>()
           inArray(project.status, [...IN_FLIGHT_PROJECT_STATES]),
         ),
       );
+
+    // Apply the initiative association filter (a no-op when no `initiativeId` was given).
+    const programs = initiativeProgramIds
+      ? allPrograms.filter((p) => initiativeProgramIds.has(p.id))
+      : allPrograms;
+    const projects = initiativeProjectIds
+      ? allProjects.filter((p) => initiativeProjectIds.has(p.id))
+      : allProjects;
 
     const inWindow = (p: ProjectRow): boolean => {
       if (from && p.targetDate && p.targetDate < new Date(from)) return false;

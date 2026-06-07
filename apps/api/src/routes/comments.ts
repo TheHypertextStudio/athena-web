@@ -18,12 +18,13 @@ import {
   CommentUpdate,
   pageOf,
 } from '@docket/types';
+import { type Capability, satisfies } from '@docket/authz';
 import { and, asc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AppEnv } from '../context';
-import { NotFoundError, ValidationError } from '../error';
+import { CapabilityError, NotFoundError, ValidationError } from '../error';
 import { ok } from '../lib/ok';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
@@ -64,6 +65,29 @@ async function loadComment(orgId: string, id: string): Promise<CommentRow> {
   const row = rows[0];
   if (!row) throw new NotFoundError('Comment not found');
   return row;
+}
+
+/**
+ * Assert the caller may mutate (edit/delete) a comment they did not necessarily author.
+ *
+ * @remarks
+ * Per api-rpc-contract §3.8 a comment is editable/deletable by its **author** (the
+ * `comment` capability alone is not enough to touch someone else's comment), OR by an
+ * actor holding `manage` (a moderator override). The capability check has already run in
+ * the route guard; this adds the per-row author gate. We compare the stored `authorId`
+ * to the caller's `actorId`; a non-author without `manage` is `403` (the comment's
+ * existence is not hidden — tenant isolation already 404s a cross-org id in
+ * {@link loadComment}, so reaching here means the row is in-org and the caller can see it).
+ *
+ * @param row - The org-scoped comment row being mutated.
+ * @param actorId - The calling actor's id.
+ * @param held - The caller's org-level capabilities.
+ * @throws {CapabilityError} When the caller is neither the author nor a `manage` holder.
+ */
+function assertAuthorOrManage(row: CommentRow, actorId: string, held: readonly Capability[]): void {
+  if (row.authorId === actorId) return;
+  if (held.some((cap) => satisfies(cap, 'manage'))) return;
+  throw new CapabilityError('Only the author can modify this comment');
 }
 
 /**
@@ -154,21 +178,32 @@ const comments = new Hono<AppEnv>()
     return ok(c, CommentOut, toOut(row));
   })
   .patch('/:id', capabilityGuard('comment'), zParam(idParam), zJson(CommentUpdate), async (c) => {
-    const { orgId } = c.get('actorCtx');
+    const { orgId, actorId, capabilities } = c.get('actorCtx');
     const { id } = c.req.valid('param');
     const body = c.req.valid('json');
+
+    // Authorship gate: a `comment`-capable member may only edit their OWN comment unless
+    // they hold `manage`. Load first (404s a cross-org/unknown id) then check the author.
+    const existing = await loadComment(orgId, id);
+    assertAuthorOrManage(existing, actorId, capabilities as Capability[]);
+
     const updated = await db
       .update(comment)
       .set({ body: body.body, editedAt: new Date() })
       .where(and(eq(comment.id, id), eq(comment.organizationId, orgId)))
       .returning();
     const row = updated[0];
+    /* v8 ignore next -- @preserve defensive: loadComment already proved the row exists */
     if (!row) throw new NotFoundError('Comment not found');
     return ok(c, CommentOut, toOut(row));
   })
   .delete('/:id', capabilityGuard('comment'), zParam(idParam), async (c) => {
-    const { orgId } = c.get('actorCtx');
+    const { orgId, actorId, capabilities } = c.get('actorCtx');
     const { id } = c.req.valid('param');
+
+    // Authorship gate (same as PATCH): only the author or a `manage` holder may delete.
+    const existing = await loadComment(orgId, id);
+    assertAuthorOrManage(existing, actorId, capabilities as Capability[]);
 
     // Deleting a root comment must not orphan its replies into a dangling thread:
     // `parent_comment_id` carries no FK (it is plain text), so re-parent any replies to
@@ -185,6 +220,7 @@ const comments = new Hono<AppEnv>()
         .returning();
       return deleted[0];
     });
+    /* v8 ignore next -- @preserve defensive: loadComment already proved the row exists */
     if (!removed) throw new NotFoundError('Comment not found');
     return ok(c, CommentRemoved, { id: removed.id, removed: true });
   });

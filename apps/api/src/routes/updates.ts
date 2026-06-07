@@ -1,14 +1,15 @@
 /**
  * `@docket/api` — updates router (mounted at `/v1/orgs/:orgId/updates`).
  */
+import { type Capability, satisfies } from '@docket/authz';
 import { db, initiative, program, project, update } from '@docket/db';
-import { pageOf, UpdateCreate, UpdateListQuery, UpdateOut } from '@docket/types';
+import { pageOf, UpdateCreate, UpdateListQuery, UpdateOut, UpdateRemoved } from '@docket/types';
 import { and, desc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AppEnv } from '../context';
-import { NotFoundError } from '../error';
+import { CapabilityError, NotFoundError } from '../error';
 import { ok } from '../lib/ok';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
@@ -54,6 +55,68 @@ async function loadUpdate(orgId: string, id: string): Promise<UpdateRow> {
   const row = rows[0];
   if (!row) throw new NotFoundError('Update not found');
   return row;
+}
+
+/**
+ * Assert the caller may delete an Update they did not necessarily author.
+ *
+ * @remarks
+ * Per api-rpc-contract §3.9 an Update is deletable by its **author** (the `contribute`
+ * capability the route guard already required is not enough to delete someone else's
+ * Update) OR by an actor holding `manage`. We compare the stored `authorId` to the
+ * caller's `actorId`; a non-author without `manage` is `403`. Tenant isolation already
+ * 404s a cross-org id in {@link loadUpdate}, so reaching here means the row is in-org.
+ *
+ * @param row - The org-scoped update row being deleted.
+ * @param actorId - The calling actor's id.
+ * @param held - The caller's org-level capabilities.
+ * @throws {CapabilityError} When the caller is neither the author nor a `manage` holder.
+ */
+function assertAuthorOrManage(row: UpdateRow, actorId: string, held: readonly Capability[]): void {
+  if (row.authorId === actorId) return;
+  if (held.some((cap) => satisfies(cap, 'manage'))) return;
+  throw new CapabilityError('Only the author can delete this update');
+}
+
+/**
+ * Recompute a subject's current `health` from its remaining Updates after a delete.
+ *
+ * @remarks
+ * api-rpc-contract §3.9: "Latest update sets the subject's current health". After
+ * removing an Update we re-derive the subject health from the newest *remaining* Update
+ * that carries a health (older healthless posts are skipped, matching POST which only
+ * writes health when the post sets one). When no health-bearing Update remains the
+ * subject health is cleared to `null`. Scoped to the org throughout for tenant isolation.
+ *
+ * @param tx - The active transaction.
+ * @param orgId - The owning org.
+ * @param subjectType - The deleted update's subject type.
+ * @param subjectId - The deleted update's subject id.
+ */
+async function recomputeSubjectHealth(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  orgId: string,
+  subjectType: UpdateRow['subjectType'],
+  subjectId: string,
+): Promise<void> {
+  const remaining = await tx
+    .select({ health: update.health })
+    .from(update)
+    .where(
+      and(
+        eq(update.organizationId, orgId),
+        eq(update.subjectType, subjectType),
+        eq(update.subjectId, subjectId),
+      ),
+    )
+    .orderBy(desc(update.createdAt));
+  // Newest remaining update that actually set a health wins; null when none remain.
+  const latestHealth = remaining.find((r) => r.health !== null)?.health ?? null;
+  const table = subjectTable[subjectType];
+  await tx
+    .update(table)
+    .set({ health: latestHealth })
+    .where(and(eq(table.id, subjectId), eq(table.organizationId, orgId)));
 }
 
 /**
@@ -120,6 +183,25 @@ const updates = new Hono<AppEnv>()
     const { id } = c.req.valid('param');
     const row = await loadUpdate(orgId, id);
     return ok(c, UpdateOut, toOut(row));
+  })
+  .delete('/:id', capabilityGuard('contribute'), zParam(idParam), async (c) => {
+    const { orgId, actorId, capabilities } = c.get('actorCtx');
+    const { id } = c.req.valid('param');
+
+    // Authorship gate: a `contribute`-capable member may only delete their OWN update
+    // unless they hold `manage`. Load first (404s a cross-org/unknown id) then check.
+    const existing = await loadUpdate(orgId, id);
+    assertAuthorOrManage(existing, actorId, capabilities as Capability[]);
+
+    // Hard delete (the `update` table carries no soft-delete column), then recompute the
+    // subject health from the newest remaining health-bearing update — in one transaction
+    // so a concurrent read never sees the row gone but the stale health still attached.
+    await db.transaction(async (tx) => {
+      await tx.delete(update).where(and(eq(update.id, id), eq(update.organizationId, orgId)));
+      await recomputeSubjectHealth(tx, orgId, existing.subjectType, existing.subjectId);
+    });
+
+    return ok(c, UpdateRemoved, { id, removed: true });
   });
 
 export default updates;

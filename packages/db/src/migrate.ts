@@ -32,7 +32,10 @@ const migrationsFolder = resolve(dirname(fileURLToPath(import.meta.url)), '../dr
  * @returns a promise that resolves once migrations are applied and the client closed.
  */
 export async function main(): Promise<void> {
-  const url = process.env['DATABASE_URL_UNPOOLED'] ?? process.env['DATABASE_URL'];
+  // Prefer the unpooled URL for migrations, but treat an empty string (the common local
+  // case — `.env.local` sets `DATABASE_URL_UNPOOLED=`) as absent and fall back to DATABASE_URL.
+  const unpooled = process.env['DATABASE_URL_UNPOOLED'];
+  const url = unpooled !== undefined && unpooled !== '' ? unpooled : process.env['DATABASE_URL'];
   if (!url) {
     throw new Error('DATABASE_URL is not set — see .env.example (local: pglite://.data/docket).');
   }

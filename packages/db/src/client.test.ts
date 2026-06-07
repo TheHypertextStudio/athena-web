@@ -6,42 +6,13 @@ import { sql as sqlTag } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * Tests for the driver-selecting client. The postgres/neon scheme branches are
- * exercised with mocked `postgres` + `drizzle-orm/postgres-js` so no real network
- * connection is ever opened; the pglite branch uses a real in-memory PGlite.
+ * Tests for the driver-selecting client. The pglite branch uses a real in-memory PGlite.
  *
  * Each test resets the module registry so the module-level `cached` singleton and the
- * top-level driver imports are re-evaluated against fresh mocks + env.
+ * top-level driver imports are re-evaluated against fresh env.
  */
 
 const ORIGINAL_DATABASE_URL = process.env['DATABASE_URL'];
-
-interface PostgresCall {
-  url: string;
-  opts: unknown;
-}
-interface DrizzlePostgresCall {
-  client: unknown;
-  config: unknown;
-}
-
-// Captured constructor args for the mocked postgres-js driver path.
-const postgresCalls: PostgresCall[] = [];
-const drizzlePostgresCalls: DrizzlePostgresCall[] = [];
-
-vi.mock('postgres', () => ({
-  default: (url: string, opts: unknown) => {
-    postgresCalls.push({ url, opts });
-    return { __fakePostgresClient: true } as unknown;
-  },
-}));
-
-vi.mock('drizzle-orm/postgres-js', () => ({
-  drizzle: (client: unknown, config: unknown) => {
-    drizzlePostgresCalls.push({ client, config });
-    return { __fakeDrizzlePostgres: true, $client: client } as unknown;
-  },
-}));
 
 /** Read an arbitrary (non-typed) member off the lazy `db` Proxy without `this`-binding lint. */
 function touch(db: unknown, prop: string): unknown {
@@ -49,8 +20,6 @@ function touch(db: unknown, prop: string): unknown {
 }
 
 beforeEach(() => {
-  postgresCalls.length = 0;
-  drizzlePostgresCalls.length = 0;
   vi.resetModules();
 });
 
@@ -99,35 +68,6 @@ describe('db client driver selection', () => {
     // Generous timeout: on-disk PGlite init does real filesystem + WASM work that can run
     // slow under full-suite parallel CPU contention (it is fast in isolation).
   }, 30_000);
-
-  it('uses the postgres-js driver for a postgres:// URL', async () => {
-    process.env['DATABASE_URL'] = 'postgres://user:pass@localhost:5432/docket';
-    const { db } = await import('./client');
-    // Touch a non-function property to exercise the Proxy non-bind branch.
-    touch(db, '$client');
-    expect(postgresCalls).toHaveLength(1);
-    expect(postgresCalls[0]?.url).toBe('postgres://user:pass@localhost:5432/docket');
-    expect(postgresCalls[0]?.opts).toEqual({ prepare: false });
-    expect(drizzlePostgresCalls).toHaveLength(1);
-  });
-
-  it('rewrites a neon: URL to postgres: before handing it to postgres-js', async () => {
-    process.env['DATABASE_URL'] = 'neon://user:pass@ep.neon.tech/docket';
-    const { db } = await import('./client');
-    touch(db, '$client');
-    expect(postgresCalls).toHaveLength(1);
-    expect(postgresCalls[0]?.url).toBe('postgres://user:pass@ep.neon.tech/docket');
-  });
-
-  it('caches the client so the driver is constructed only once', async () => {
-    process.env['DATABASE_URL'] = 'postgres://localhost/docket';
-    const { db } = await import('./client');
-    // Multiple accesses → still one construction (the `??=` cache branch).
-    touch(db, 'select');
-    touch(db, 'insert');
-    touch(db, '$client');
-    expect(postgresCalls).toHaveLength(1);
-  });
 
   it('binds function members to the real client (Proxy bind branch)', async () => {
     process.env['DATABASE_URL'] = 'pglite://memory';

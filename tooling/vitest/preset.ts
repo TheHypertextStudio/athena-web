@@ -53,7 +53,7 @@ export function docketVitest(options: DocketVitestOptions = {}) {
       globals: true,
       environment,
       setupFiles,
-      include: ['src/**/*.{test,spec}.{ts,tsx}'],
+      include: ['tests/**/*.{test,spec}.{ts,tsx}'],
       // Turbo runs every package's vitest concurrently, so the machine is heavily
       // oversubscribed during `pnpm test`. The default 5s timeout false-fails
       // otherwise-passing tests (e.g. crypto/pglite-heavy ones) purely from CPU

@@ -44,19 +44,13 @@ export {
   HUB_CONTEXT,
   useContextState,
 } from './shell/ContextProvider';
-export {
-  ContextSidebar,
-  type ContextSidebarProps,
-  type SidebarNavKey,
-} from './shell/ContextSidebar';
-export {
-  AddOrgButton,
-  type AddOrgButtonProps,
-  GlobalRail,
-  type GlobalRailProps,
-  type HubRailKey,
-  type RailOrg,
-} from './shell/GlobalRail';
-export { RailNavButton, type RailNavButtonProps } from './shell/RailNavButton';
-export { RailOrgAvatar, type RailOrgAvatarProps } from './shell/RailOrgAvatar';
+export { Sidebar, type SidebarProps } from './shell/Sidebar';
 export { SidebarNavItem, type SidebarNavItemProps } from './shell/SidebarNavItem';
+export { WorkspaceSwitcher, type WorkspaceSwitcherProps } from './shell/WorkspaceSwitcher';
+export {
+  type EntityWorkspaceNavKey,
+  type HomeNavKey,
+  type Workspace,
+  type WorkspaceNavKey,
+} from './shell/workspaces';
+export { type OpenTab, TabBar, type TabBarProps, type TabDocType } from './shell/TabBar';

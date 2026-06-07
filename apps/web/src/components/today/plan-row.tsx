@@ -39,7 +39,7 @@ export function PlanRow({ task, orgName }: PlanRowProps): JSX.Element {
   return (
     <Link
       href={taskHref(task)}
-      className="group border-border/60 bg-card hover:border-border hover:bg-accent/40 focus-visible:ring-ring focus-visible:ring-offset-background flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
+      className="group border-outline-variant bg-surface-container-low hover:bg-surface-container-high focus-visible:ring-ring focus-visible:ring-offset-background flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
     >
       <StatusIcon type={stateTypeOf(task.state)} />
       <span className="text-foreground min-w-0 flex-1 truncate text-sm font-medium">

@@ -125,7 +125,7 @@ export function VocabularyTab({
                 'focus-visible:ring-ring relative flex flex-col gap-1 rounded-xl border p-4 text-left transition-colors outline-none focus-visible:ring-2',
                 isSelected
                   ? 'border-primary bg-primary/5'
-                  : 'border-border bg-card hover:border-primary/40',
+                  : 'border-outline-variant bg-surface-container-low hover:border-primary/40',
                 !canManage && 'cursor-not-allowed opacity-70',
               )}
             >
@@ -144,8 +144,11 @@ export function VocabularyTab({
         })}
       </div>
 
-      <section aria-label="Vocabulary preview" className="border-border bg-card rounded-xl border">
-        <div className="border-border border-b px-4 py-3">
+      <section
+        aria-label="Vocabulary preview"
+        className="border-outline-variant bg-surface-container-low rounded-xl border"
+      >
+        <div className="border-outline-variant border-b px-4 py-3">
           <h3 className="text-foreground text-sm font-semibold">
             How the {PRESETS.find((p) => p.value === selected)?.name ?? 'selected'} vocabulary reads
           </h3>

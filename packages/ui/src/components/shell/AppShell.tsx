@@ -14,6 +14,13 @@
  * The shell takes the sidebar and tab-bar as nodes rather than rebuilding them, so the host
  * app owns the routing/store wiring while the shell owns the layout and the accent rebinding.
  * {@link AppShell} reads context state and so must be rendered inside a `ContextProvider`.
+ *
+ * @remarks Visual model — an MD3 tonal surface system. The shell root is the tinted **canvas**
+ * (`surface-container`); the {@link Sidebar} and the `<main>` content are **floating rounded
+ * surface panels** (`surface`) inset from the window edges by a uniform gutter applied here
+ * (so spacing stays consistent — panels never set their own outer margins). The optional
+ * {@link TabBar} sits in its **own bar on the canvas** above the main panel — its active tab
+ * shares the panel's tone so the two read as one continuous surface.
  */
 import * as React from 'react';
 
@@ -53,14 +60,18 @@ export function AppShell({
       data-density={density}
       style={orgAccent ? ({ '--org-accent': orgAccent } as React.CSSProperties) : undefined}
       className={cn(
-        'bg-background text-foreground flex h-screen w-full overflow-hidden',
+        // The tinted MD3 canvas: the whole app sits on `surface-container`, with a uniform
+        // gutter (p-2) so the sidebar + content panels float inset from the window edges.
+        'bg-surface-container text-on-surface flex h-screen w-full gap-2 overflow-hidden p-2',
         className,
       )}
     >
       {sidebar}
       <div className="flex min-w-0 flex-1 flex-col">
         {tabBar}
-        <main className="min-h-0 flex-1 overflow-auto">{children}</main>
+        <main className="bg-surface border-outline-variant min-h-0 flex-1 overflow-auto rounded-xl border shadow-sm">
+          {children}
+        </main>
       </div>
     </div>
   );

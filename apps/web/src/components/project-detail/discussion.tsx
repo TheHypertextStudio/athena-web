@@ -185,7 +185,7 @@ export function Discussion({
             {agentActivity.map((entry) => (
               <li
                 key={entry.id}
-                className="border-border bg-card flex items-start gap-3 rounded-lg border px-3 py-2"
+                className="border-outline-variant bg-surface-container-low flex items-start gap-3 rounded-lg border px-3 py-2"
               >
                 <ActorAvatar kind="agent" name={entry.agentName} size={24} />
                 <div className="flex min-w-0 flex-1 flex-col">

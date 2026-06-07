@@ -71,8 +71,8 @@ export function OrgFilterChips({
             className={cn(
               'focus-visible:ring-ring inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:outline-none',
               active
-                ? 'border-foreground/20 bg-accent text-foreground'
-                : 'border-border bg-card text-muted-foreground hover:bg-accent/50 hover:text-foreground',
+                ? 'border-outline bg-surface-container-highest text-on-surface'
+                : 'border-outline-variant bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface',
             )}
           >
             <span

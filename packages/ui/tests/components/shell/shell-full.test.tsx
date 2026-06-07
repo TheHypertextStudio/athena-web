@@ -103,6 +103,25 @@ describe('AppShell', () => {
     expect(root.style.getPropertyValue('--org-accent')).toBe('');
     expect(root).toHaveClass('shell-x');
   });
+
+  it('is the tinted MD3 canvas with a gutter, hosting a floating rounded main surface panel', () => {
+    const { container } = render(
+      <ContextProvider initialContext={null}>
+        <AppShell sidebar={<nav aria-label="Navigation" />}>
+          <div>Main</div>
+        </AppShell>
+      </ContextProvider>,
+    );
+    // Root = the tinted canvas tone (surface-container), inset by a uniform gutter so the
+    // panels float — NOT the old flat bg-background, and never bg-card/bg-background again.
+    const root = container.firstElementChild as HTMLElement;
+    expect(root).toHaveClass('bg-surface-container', 'text-on-surface', 'p-2');
+    expect(root).not.toHaveClass('bg-background', 'bg-card');
+    // The main content is a floating rounded surface panel on that canvas.
+    const main = screen.getByRole('main');
+    expect(main).toHaveClass('bg-surface', 'rounded-xl', 'border-outline-variant');
+    expect(main).not.toHaveClass('bg-background', 'bg-card');
+  });
 });
 
 describe('Sidebar', () => {
@@ -135,6 +154,28 @@ describe('Sidebar', () => {
       'href',
       `/orgs/${ACME.id}/settings`,
     );
+  });
+
+  it('is a floating rounded MD3 surface panel, not a flush bordered wall', () => {
+    render(
+      <ContextProvider initialContext={ACME.id}>
+        <Sidebar
+          workspaces={WORKSPACES}
+          {...sidebarHrefs()}
+          onSelectWorkspace={() => undefined}
+          onOpenSearch={() => undefined}
+        />
+      </ContextProvider>,
+    );
+    const aside = screen.getByRole('complementary', { name: 'Navigation' });
+    // Panel tone + rounded floating panel with a hairline outline — no full-bleed divider wall.
+    expect(aside).toHaveClass(
+      'bg-surface',
+      'text-on-surface',
+      'rounded-xl',
+      'border-outline-variant',
+    );
+    expect(aside).not.toHaveClass('border-r', 'bg-card', 'bg-background');
   });
 
   it('shows the Workspace section on a cross-org route (no Hub mode swap)', () => {
@@ -321,6 +362,28 @@ describe('TabBar', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Close Q3 Launch' }));
     expect(onClose).toHaveBeenCalledWith(TAB_B.key);
+  });
+
+  it('is its own bar on the canvas, with the active tab fused to the main panel surface', () => {
+    render(
+      <TabBar
+        tabs={[TAB_A, TAB_B]}
+        activeKey={TAB_B.key}
+        renderLink={renderLink}
+        onClose={() => undefined}
+      />,
+    );
+    // The bar reads as its own chrome on the canvas tone — not a panel surface, no divider border.
+    const tablist = screen.getByRole('tablist', { name: 'Open documents' });
+    expect(tablist).toHaveClass('bg-surface-container');
+    expect(tablist).not.toHaveClass('bg-card', 'border-b');
+    // The active tab takes the panel surface tone with top-only rounding so it joins the panel
+    // below; the inactive tab stays on the canvas in the muted on-surface-variant tone.
+    const activeTab = screen.getByText('Q3 Launch').closest('[role="tab"]');
+    expect(activeTab).toHaveClass('bg-surface', 'rounded-t-lg', 'text-on-surface');
+    const inactiveTab = screen.getByText('Fix the build').closest('[role="tab"]');
+    expect(inactiveTab).toHaveClass('text-on-surface-variant');
+    expect(inactiveTab).not.toHaveClass('bg-surface');
   });
 });
 

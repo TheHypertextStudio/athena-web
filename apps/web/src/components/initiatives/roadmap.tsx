@@ -237,7 +237,7 @@ export function Roadmap({
             No scheduled {projectNounPlural.toLowerCase()} on the roadmap yet.
           </p>
         ) : window ? (
-          <div className="border-border bg-card overflow-hidden rounded-xl border">
+          <div className="border-outline-variant bg-surface-container-low overflow-hidden rounded-xl border">
             {/* Axis ticks */}
             <div className="border-border relative h-7 border-b">
               {window.ticks.map((tick, index) =>
@@ -324,7 +324,7 @@ export function Roadmap({
                     aria-label={`${bar.name} — ${statusLabel(bar.status)}, unscheduled${
                       bar.health ? `, ${HEALTH_LABEL[bar.health]}` : ''
                     }`}
-                    className="border-border bg-card hover:bg-accent focus-visible:ring-ring inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none"
+                    className="border-outline-variant bg-surface-container-low hover:bg-surface-container-high focus-visible:ring-ring inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none"
                   >
                     <span
                       aria-hidden="true"

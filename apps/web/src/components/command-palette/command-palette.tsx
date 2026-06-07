@@ -177,7 +177,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
         aria-modal="true"
         aria-label="Command palette"
         onKeyDown={onKeyDown}
-        className="bg-popover text-popover-foreground border-border animate-in fade-in-0 zoom-in-95 relative flex max-h-[70vh] w-full max-w-xl flex-col overflow-hidden rounded-xl border shadow-2xl duration-150"
+        className="bg-surface-container-high text-on-surface border-outline-variant animate-in fade-in-0 zoom-in-95 relative flex max-h-[70vh] w-full max-w-xl flex-col overflow-hidden rounded-xl border shadow-2xl duration-150"
       >
         {/* Search input + scope toggle */}
         <div className="border-border/70 flex items-center gap-2 border-b px-3">

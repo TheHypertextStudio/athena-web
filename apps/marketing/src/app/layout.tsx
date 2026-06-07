@@ -1,11 +1,38 @@
 import { AppRouterCacheProvider } from '@mui/material-nextjs/v16-appRouter';
 import type { Metadata } from 'next';
+import { IBM_Plex_Mono, IBM_Plex_Sans } from 'next/font/google';
 import type { ReactNode } from 'react';
 
 import { SiteFooter } from '@/components/site-footer';
 import { SiteHeader } from '@/components/site-header';
 
 import './globals.css';
+
+/**
+ * IBM Plex Sans — Docket's sole brand typeface. Loaded once at the app root and
+ * self-hosted by `next/font` (no runtime request to Google). Published as the
+ * `--font-ibm-plex-sans` CSS variable that `@docket/ui`'s Tailwind theme resolves
+ * `font-sans` (the default body family) to, so every surface inherits it without
+ * per-component wiring. `display: 'swap'` paints text immediately with the metric-matched
+ * fallback to avoid invisible text on first load.
+ */
+const sans = IBM_Plex_Sans({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-ibm-plex-sans',
+  display: 'swap',
+});
+
+/**
+ * IBM Plex Mono — the monospace companion behind Tailwind's `font-mono` utility. Published
+ * as the `--font-ibm-plex-mono` CSS variable the theme resolves `font-mono` to.
+ */
+const mono = IBM_Plex_Mono({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-ibm-plex-mono',
+  display: 'swap',
+});
 
 /**
  * Root layout for the Docket marketing/landing site.
@@ -37,7 +64,7 @@ export const metadata: Metadata = {
 /** The App Router root layout wrapping every page in the marketing site. */
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${sans.variable} ${mono.variable}`}>
       <body className="bg-background text-foreground min-h-screen antialiased">
         <AppRouterCacheProvider options={{ key: 'mui', enableCssLayer: true }}>
           <SiteHeader />

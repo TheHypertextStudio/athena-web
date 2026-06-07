@@ -2,11 +2,13 @@
 
 import type { MemberOut, ProjectOut, TaskOut } from '@docket/types';
 import { useVocabulary } from '@docket/ui/hooks';
-import { FolderKanban } from '@docket/ui/icons';
-import { Skeleton } from '@docket/ui/primitives';
+import { FolderKanban, Plus } from '@docket/ui/icons';
+import { Button, Skeleton } from '@docket/ui/primitives';
 import { useParams, useRouter } from 'next/navigation';
 import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 
+import { useActiveOrg } from '@/components/active-org';
+import { CreateProjectPanel } from '@/components/projects/create-project';
 import { ProjectCard, type ProjectCardData } from '@/components/projects/project-card';
 import { type StatusFilter, StatusFilterMenu } from '@/components/projects/project-status';
 import { api } from '@/lib/api';
@@ -33,6 +35,8 @@ export default function ProjectsListPage(): JSX.Element {
   const params = useParams<{ orgId: string }>();
   const orgId = params.orgId;
 
+  const { teams, defaultTeamId, teamsLoading } = useActiveOrg();
+
   const projectLabel = useVocabulary('project');
   const projectsLabel = useVocabulary('project', { plural: true });
   const taskNoun = useVocabulary('task').toLowerCase();
@@ -44,6 +48,7 @@ export default function ProjectsListPage(): JSX.Element {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [filter, setFilter] = useState<StatusFilter>('all');
+  const [createOpen, setCreateOpen] = useState(false);
 
   /** Load the org's projects and the slices needed to scope + attribute each card. */
   const load = useCallback(async (): Promise<void> => {
@@ -127,6 +132,15 @@ export default function ProjectsListPage(): JSX.Element {
     [projects, filter],
   );
 
+  /** Prepend the freshly-created project to the roster, then open its detail. */
+  const handleCreated = useCallback(
+    (created: ProjectOut): void => {
+      setProjects((current) => [created, ...current]);
+      router.push(`/orgs/${orgId}/projects/${created.id}`);
+    },
+    [orgId, router],
+  );
+
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-8">
       <header className="flex flex-wrap items-center justify-between gap-3">
@@ -136,10 +150,38 @@ export default function ProjectsListPage(): JSX.Element {
             Bounded efforts with a finish line — tracked by status, health, and scope.
           </p>
         </div>
-        {!loading && !loadError && projects.length > 0 ? (
-          <StatusFilterMenu value={filter} counts={counts} onChange={setFilter} />
-        ) : null}
+        <div className="flex items-center gap-2">
+          {!loading && !loadError && projects.length > 0 ? (
+            <StatusFilterMenu value={filter} counts={counts} onChange={setFilter} />
+          ) : null}
+          {!createOpen ? (
+            <Button
+              type="button"
+              className="gap-1.5"
+              onClick={() => {
+                setCreateOpen(true);
+              }}
+            >
+              <Plus aria-hidden="true" className="size-4" />
+              New {projectLabel}
+            </Button>
+          ) : null}
+        </div>
       </header>
+
+      {createOpen ? (
+        <CreateProjectPanel
+          orgId={orgId}
+          projectNoun={projectLabel}
+          teams={teams}
+          defaultTeamId={defaultTeamId}
+          teamsLoading={teamsLoading}
+          onClose={() => {
+            setCreateOpen(false);
+          }}
+          onCreated={handleCreated}
+        />
+      ) : null}
 
       {loading ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2" aria-hidden="true">
@@ -154,7 +196,17 @@ export default function ProjectsListPage(): JSX.Element {
       ) : projects.length === 0 ? (
         <EmptyState
           title={`No ${projectsLabel.toLowerCase()} yet`}
-          body={`${projectsLabel} are bounded efforts with a clear finish line. They'll appear here once created.`}
+          body={`${projectsLabel} are bounded efforts with a clear finish line. Create one to start tracking its status, health, and scope.`}
+          cta={
+            createOpen
+              ? null
+              : {
+                  label: `Create your first ${projectLabel.toLowerCase()}`,
+                  onClick: () => {
+                    setCreateOpen(true);
+                  },
+                }
+          }
         />
       ) : visibleProjects.length === 0 ? (
         <EmptyState
@@ -181,8 +233,16 @@ export default function ProjectsListPage(): JSX.Element {
   );
 }
 
-/** A centered empty-state panel with an icon, title, and supporting copy. */
-function EmptyState({ title, body }: { title: string; body: string }): JSX.Element {
+/** A centered empty-state panel with an icon, title, supporting copy, and an optional CTA. */
+function EmptyState({
+  title,
+  body,
+  cta,
+}: {
+  title: string;
+  body: string;
+  cta?: { label: string; onClick: () => void } | null;
+}): JSX.Element {
   return (
     <div className="border-border flex flex-col items-center gap-3 rounded-xl border border-dashed p-12 text-center">
       <span className="bg-muted text-muted-foreground flex size-10 items-center justify-center rounded-full">
@@ -190,6 +250,12 @@ function EmptyState({ title, body }: { title: string; body: string }): JSX.Eleme
       </span>
       <p className="text-foreground text-sm font-medium">{title}</p>
       <p className="text-muted-foreground max-w-sm text-sm leading-relaxed">{body}</p>
+      {cta ? (
+        <Button type="button" variant="outline" className="mt-1 gap-1.5" onClick={cta.onClick}>
+          <Plus aria-hidden="true" className="size-4" />
+          {cta.label}
+        </Button>
+      ) : null}
     </div>
   );
 }

@@ -41,7 +41,6 @@ export {
   type ContextState,
   type ActiveContext,
   type Density,
-  HUB_CONTEXT,
   useContextState,
 } from './shell/ContextProvider';
 export { Sidebar, type SidebarProps } from './shell/Sidebar';

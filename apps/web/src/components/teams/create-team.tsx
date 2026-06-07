@@ -111,7 +111,7 @@ export function CreateTeamPanel({ orgId, onClose, onCreated }: CreateTeamPanelPr
       onKeyDown={(event) => {
         if (event.key === 'Escape' && !creating) onClose();
       }}
-      className="bg-card text-card-foreground flex flex-col gap-3 rounded-xl border p-4 shadow"
+      className="bg-surface-container-high text-on-surface border-outline-variant flex flex-col gap-3 rounded-xl border p-4 shadow-lg"
       aria-label="New team"
     >
       <div className="flex flex-col gap-3 sm:flex-row">

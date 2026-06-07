@@ -197,7 +197,7 @@ function EmptyState({ title, body }: EmptyStateProps): JSX.Element {
 /** Loading placeholder for the roadmap: an axis header strip over a few swimlane bands. */
 function TimelineSkeleton(): JSX.Element {
   return (
-    <div className="border-border bg-card overflow-hidden rounded-xl border">
+    <div className="border-outline-variant bg-surface-container-low overflow-hidden rounded-xl border">
       <div className="border-border flex items-center gap-6 border-b px-4 py-2.5">
         <Skeleton className="h-3 w-24" />
         <Skeleton className="h-3 w-12" />

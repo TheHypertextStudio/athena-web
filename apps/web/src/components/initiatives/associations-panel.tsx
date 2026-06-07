@@ -212,7 +212,7 @@ export function AssociationsPanel({
   onUnlinkProject,
 }: AssociationsPanelProps): JSX.Element {
   return (
-    <div className="border-border bg-card flex flex-col gap-5 rounded-xl border p-5">
+    <div className="border-outline-variant bg-surface-container-low flex flex-col gap-5 rounded-xl border p-5">
       <h2 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
         Associated work
       </h2>

@@ -68,7 +68,7 @@ export function FlowSnapshot({
   return (
     <section
       aria-label="Health and flow"
-      className="border-border bg-card flex flex-col gap-5 rounded-xl border p-5"
+      className="border-outline-variant bg-surface-container-low flex flex-col gap-5 rounded-xl border p-5"
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">

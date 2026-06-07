@@ -12,6 +12,13 @@
  * presentational — the open-documents store lives in the host app, which feeds tabs in and
  * handles {@link TabBarProps.onClose}. It renders nothing when no documents are open, so it
  * costs no vertical space until the caller actually opens one.
+ *
+ * @remarks Surface model — the bar is its **own bar on the canvas**: its container inherits the
+ * shell's tinted `surface-container` tone (no panel surface, no divider border), so it reads as
+ * chrome floating above the main content panel rather than a strip *inside* it. The **active**
+ * tab takes the panel's `surface` tone with rounded top corners and a flush bottom edge, so it
+ * visually fuses with the rounded `<main>` surface directly below it; **inactive** tabs sit on
+ * the canvas in muted `on-surface-variant`, stepping up the container ramp on hover.
  */
 import * as React from 'react';
 
@@ -86,7 +93,7 @@ export function TabBar({
     <div
       role="tablist"
       aria-label="Open documents"
-      className="border-border bg-card flex h-10 shrink-0 items-stretch gap-0.5 overflow-x-auto border-b px-1.5"
+      className="bg-surface-container flex h-10 shrink-0 items-end gap-0.5 overflow-x-auto px-1.5 pt-1.5"
     >
       {tabs.map((tab) => {
         const Icon = TYPE_ICON[tab.type];
@@ -97,10 +104,12 @@ export function TabBar({
             role="tab"
             aria-selected={active}
             className={cn(
-              'group relative flex max-w-52 min-w-0 items-center self-center rounded-md text-sm',
+              'group relative flex max-w-52 min-w-0 items-center text-sm',
               active
-                ? 'bg-accent text-accent-foreground'
-                : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
+                ? // The active tab fuses with the rounded main panel below: it takes the panel's
+                  // surface tone, rounds only its top corners, and runs flush to the bar's bottom.
+                  'text-on-surface bg-surface self-stretch rounded-t-lg'
+                : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface mb-1 self-center rounded-md',
             )}
           >
             {renderLink(
@@ -116,7 +125,7 @@ export function TabBar({
               onClick={() => {
                 onClose(tab.key);
               }}
-              className="hover:bg-background/80 focus-visible:ring-ring mr-1 flex size-5 shrink-0 items-center justify-center rounded opacity-60 transition-opacity hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:outline-none"
+              className="hover:bg-surface-container-highest focus-visible:ring-ring mr-1 flex size-5 shrink-0 items-center justify-center rounded opacity-60 transition-opacity hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:outline-none"
             >
               <X aria-hidden="true" className="size-3.5" />
             </button>

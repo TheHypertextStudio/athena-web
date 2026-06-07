@@ -125,7 +125,7 @@ export function OverviewSummary({
     return (
       <section
         aria-label="Status breakdown"
-        className="border-border bg-card text-muted-foreground rounded-xl border p-5 text-sm"
+        className="border-outline-variant bg-surface-container-low text-muted-foreground rounded-xl border p-5 text-sm"
       >
         No {taskNounPlural} yet — add one from the Tasks tab to see the breakdown here.
       </section>
@@ -135,7 +135,7 @@ export function OverviewSummary({
   return (
     <section
       aria-label="Status breakdown"
-      className="border-border bg-card flex flex-col gap-5 rounded-xl border p-5"
+      className="border-outline-variant bg-surface-container-low flex flex-col gap-5 rounded-xl border p-5"
     >
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-2">

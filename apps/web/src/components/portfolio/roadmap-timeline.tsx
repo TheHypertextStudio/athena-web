@@ -66,7 +66,7 @@ export function RoadmapTimeline({ rows, scale, focusedOrgId }: RoadmapTimelinePr
 
   return (
     <div
-      className="border-border bg-card overflow-hidden rounded-xl border"
+      className="border-outline-variant bg-surface-container-low overflow-hidden rounded-xl border"
       style={
         {
           '--label-col': LABEL_COL,
@@ -77,8 +77,8 @@ export function RoadmapTimeline({ rows, scale, focusedOrgId }: RoadmapTimelinePr
         {/* The inner canvas: pinned label column + a track sized to the tick density. */}
         <div style={{ minWidth: `calc(${LABEL_COL} + ${trackWidth}px)` }}>
           {/* ── Sticky axis header ───────────────────────────────────────── */}
-          <div className="bg-card/95 supports-[backdrop-filter]:bg-card/80 border-border sticky top-0 z-30 grid grid-cols-[var(--label-col)_1fr] border-b backdrop-blur">
-            <div className="bg-card/95 border-border sticky left-0 z-10 flex items-center border-r px-4 py-2.5">
+          <div className="bg-surface-container-low/95 supports-[backdrop-filter]:bg-surface-container-low/80 border-outline-variant sticky top-0 z-30 grid grid-cols-[var(--label-col)_1fr] border-b backdrop-blur">
+            <div className="bg-surface-container-low/95 border-outline-variant sticky left-0 z-10 flex items-center border-r px-4 py-2.5">
               <span className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
                 Organization
               </span>

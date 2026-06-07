@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { type JSX, useEffect, useState } from 'react';
 
-import { passkey } from '@/lib/auth-client';
+import { passkey, signIn } from '@/lib/auth-client';
 import { readError } from '@/lib/problem';
 
 import { AuthError, Spinner } from '../_components/auth-feedback';
@@ -96,6 +96,21 @@ export default function SignUpPage(): JSX.Element {
           passkeyErrorMessage(
             passkeyError,
             'We could not finish setting up your passkey. Please try again.',
+          ),
+        );
+        return;
+      }
+      // Passkey REGISTRATION (verify-registration) creates the account + credential but does
+      // NOT start a session, so we immediately authenticate with the just-created passkey
+      // (verify-authentication, which mints the session cookie) before entering onboarding —
+      // otherwise onboarding's first authenticated call (create-org) 401s ("Authentication
+      // required") on a brand-new account.
+      const { error: signInError } = await signIn.passkey();
+      if (signInError) {
+        setError(
+          passkeyErrorMessage(
+            signInError,
+            'Your account was created. Please sign in with your passkey to continue.',
           ),
         );
         return;

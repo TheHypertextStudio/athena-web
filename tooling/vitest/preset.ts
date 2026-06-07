@@ -27,6 +27,17 @@ export interface DocketVitestOptions {
    * those lines; they're verified by really running in dev/prod.
    */
   coverageExclude?: string[];
+  /**
+   * Globs (relative to package root) that coverage is measured over.
+   *
+   * Defaults to `['src/**\/*.{ts,tsx}']` — every source file, which is right for a
+   * library or service where the whole package is unit-tested. A large *app* (e.g.
+   * `@docket/web`) is verified primarily by typecheck/lint and by running it, not by
+   * unit-testing every component; such a package narrows this to the small set of
+   * pure, behavior-bearing modules that warrant their own unit test, so coverage
+   * stays a meaningful gate rather than a chase over wiring/UI code.
+   */
+  coverageInclude?: string[];
 }
 
 /**
@@ -46,6 +57,7 @@ export function docketVitest(options: DocketVitestOptions = {}) {
     setupFiles = [],
     coverageThreshold = 90,
     coverageExclude = [],
+    coverageInclude = ['src/**/*.{ts,tsx}'],
   } = options;
   return defineConfig({
     plugins: useReact ? [react()] : [],
@@ -69,7 +81,7 @@ export function docketVitest(options: DocketVitestOptions = {}) {
         provider: 'v8',
         all: true,
         reporter: ['text', 'json-summary', 'json'],
-        include: ['src/**/*.{ts,tsx}'],
+        include: coverageInclude,
         exclude: ['src/**/*.{test,spec}.{ts,tsx}', 'src/**/*.d.ts', ...coverageExclude],
         thresholds: {
           statements: coverageThreshold,

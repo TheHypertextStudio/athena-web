@@ -67,6 +67,19 @@ export interface SidebarProps {
   readonly onSelectWorkspace: (orgId: string) => void;
   /** Open the command palette (the Search Home row). */
   readonly onOpenSearch: () => void;
+  /**
+   * Whether the active workspace is the caller's personal space.
+   *
+   * @remarks
+   * A personal workspace is the user's own space, not an organization with members or teams, so
+   * when `true` the Workspace section omits the **Teams** row (there are no other members to
+   * organize into teams). This is a *presentation* gate only — the workspace still has its hidden
+   * default team under the hood; this prop simply doesn't surface team-management chrome. Every
+   * other row (My Work, Triage, Initiatives, Programs, Projects, Cycles, Views, Agents, Settings)
+   * stays, as each is meaningful for a single person. Defaults to `false` (a shared org), so
+   * existing consumers are unaffected.
+   */
+  readonly personalWorkspace?: boolean;
 }
 
 /** A resolved nav row descriptor (label is already vocabulary-resolved). */
@@ -107,6 +120,7 @@ export function Sidebar({
   renderLink,
   onSelectWorkspace,
   onOpenSearch,
+  personalWorkspace = false,
 }: SidebarProps): React.JSX.Element {
   const { activeOrgId } = useContextState();
 
@@ -123,7 +137,14 @@ export function Sidebar({
     { key: 'portfolio', label: 'Portfolio', icon: GanttChart },
   ];
 
-  /** The org-scoped Workspace rows, vocabulary-skinned for entity nouns. */
+  /**
+   * The org-scoped Workspace rows, vocabulary-skinned for entity nouns.
+   *
+   * @remarks
+   * In a personal workspace the **Teams** row is dropped — a personal space is the user's own
+   * space, not an organization with members to organize into teams. Every other row stays, since
+   * each is meaningful for a single person.
+   */
   const workspaceRows: readonly NavRow<WorkspaceNavKey>[] = [
     { key: 'my-work', label: 'My Work', icon: Home },
     { key: 'triage', label: 'Triage', icon: Inbox },
@@ -131,7 +152,7 @@ export function Sidebar({
     { key: 'programs', label: programs, icon: Layers },
     { key: 'projects', label: projects, icon: FolderKanban },
     { key: 'cycles', label: cycles, icon: RefreshCw },
-    { key: 'teams', label: teams, icon: Users },
+    ...(personalWorkspace ? [] : [{ key: 'teams' as const, label: teams, icon: Users }]),
     { key: 'views', label: 'Views', icon: LayoutGrid },
     { key: 'agents', label: 'Agents', icon: Sparkles },
     { key: 'settings', label: 'Settings', icon: Settings },

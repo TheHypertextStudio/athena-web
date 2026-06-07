@@ -16,11 +16,13 @@
 import {
   type Database,
   actor,
+  agentSession,
   db,
   impersonationSession,
   lifecycleHold,
   operatorAuditEvent,
   organization,
+  staffUser,
   user,
 } from '@docket/db';
 import { and, count, desc, eq, ilike, isNull, or, type SQL } from 'drizzle-orm';
@@ -36,9 +38,13 @@ import {
   AdminOrgListQuery,
   AdminOrgOut,
   AdminOrgPage,
+  AdminStaffListQuery,
+  AdminStaffOut,
+  AdminStaffPage,
   AdminUserDetail,
   AdminUserListQuery,
   AdminUserPage,
+  CreateStaffBody,
   ExtendTrialBody,
   LifecycleState,
   PlaceHoldBody,
@@ -47,7 +53,7 @@ import {
 } from '../admin-dto';
 import type { AppEnv } from '../context';
 import { onReactivated, onTrialOrPaymentTerminal } from '../billing/lifecycle';
-import { NotFoundError } from '../error';
+import { ConflictError, NotFoundError } from '../error';
 import { ok } from '../lib/ok';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { requireStaffRole, staffMiddleware } from '../permissions/staff-guard';
@@ -58,6 +64,7 @@ type OrgRow = typeof organization.$inferSelect;
 type HoldRow = typeof lifecycleHold.$inferSelect;
 type ImpersonationRow = typeof impersonationSession.$inferSelect;
 type AuditRow = typeof operatorAuditEvent.$inferSelect;
+type StaffRow = typeof staffUser.$inferSelect;
 
 /** The lifecycle states, in pipeline order, used to build the board + metrics. */
 const LIFECYCLE_STATES = LifecycleState.options;
@@ -125,6 +132,21 @@ function toAuditOut(a: AuditRow) {
   };
 }
 
+/** Serialize a staff-user row (joined with its global user) into its DTO shape. */
+function toStaffOut(
+  s: StaffRow,
+  u: Pick<UserRow, 'name' | 'email'>,
+): z.input<typeof AdminStaffOut> {
+  return {
+    id: s.id,
+    userId: s.userId,
+    role: s.role,
+    userName: u.name,
+    userEmail: u.email,
+    createdAt: s.createdAt.toISOString(),
+  };
+}
+
 /** Extract the scalar from a single-row `count()` query result. */
 function countOf(rows: readonly { n: number }[]): number {
   /* v8 ignore next -- @preserve a `count()` aggregate always returns exactly one row */
@@ -156,6 +178,7 @@ async function loadOrg(id: string): Promise<OrgRow> {
 const idParam = z.object({ id: z.string() });
 const holdParam = z.object({ id: z.string(), holdId: z.string() });
 const impersonationParam = z.object({ id: z.string() });
+const staffParam = z.object({ id: z.string() });
 
 /** The staff-gated operator back-office router. */
 const admin = new Hono<AppEnv>()
@@ -374,27 +397,97 @@ const admin = new Hono<AppEnv>()
     });
     return ok(c, AdminImpersonationOut, toImpersonationOut(sess));
   })
-  // ---- Audit feed ---------------------------------------------------------
-  .get('/audit', zQuery(AdminAuditQuery), async (c) => {
-    const { limit, offset } = c.req.valid('query');
+  // ---- Audit feed (superadmin-only; staff + type filterable) --------------
+  .get('/audit', requireStaffRole('superadmin'), zQuery(AdminAuditQuery), async (c) => {
+    const { staffUserId, type, limit, offset } = c.req.valid('query');
+    const filters: SQL[] = [];
+    if (staffUserId) filters.push(eq(operatorAuditEvent.staffUserId, staffUserId));
+    if (type) filters.push(eq(operatorAuditEvent.type, type));
+    const where = filters.length > 0 ? and(...filters) : undefined;
     const rows = await db
       .select()
       .from(operatorAuditEvent)
+      .where(where)
       .orderBy(desc(operatorAuditEvent.createdAt))
       .limit(limit)
       .offset(offset);
     return ok(c, AdminAuditPage, { items: rows.map(toAuditOut) });
   })
-  // ---- Metrics (home dashboard) -------------------------------------------
-  .get('/metrics', async (c) => {
-    const [userTotals, orgTotals, byState] = await Promise.all([
-      db.select({ n: count() }).from(user),
-      db.select({ n: count() }).from(organization),
+  // ---- Staff management (superadmin-only) ---------------------------------
+  .get('/staff', requireStaffRole('superadmin'), zQuery(AdminStaffListQuery), async (c) => {
+    const { limit, offset } = c.req.valid('query');
+    const [items, totals] = await Promise.all([
       db
-        .select({ state: organization.lifecycleState, n: count() })
-        .from(organization)
-        .groupBy(organization.lifecycleState),
+        .select({ staff: staffUser, name: user.name, email: user.email })
+        .from(staffUser)
+        .innerJoin(user, eq(staffUser.userId, user.id))
+        .orderBy(desc(staffUser.createdAt))
+        .limit(limit)
+        .offset(offset),
+      db.select({ n: count() }).from(staffUser),
     ]);
+    return ok(c, AdminStaffPage, {
+      items: items.map((r) => toStaffOut(r.staff, { name: r.name, email: r.email })),
+      total: countOf(totals),
+    });
+  })
+  .post('/staff', requireStaffRole('superadmin'), zJson(CreateStaffBody), async (c) => {
+    const { userId, role } = c.req.valid('json');
+    const { staffUserId } = c.get('staffCtx');
+    const userRows = await db
+      .select({ name: user.name, email: user.email })
+      .from(user)
+      .where(eq(user.id, userId))
+      .limit(1);
+    const u = userRows[0];
+    if (!u) throw new NotFoundError('User not found');
+    const existing = await db
+      .select({ id: staffUser.id })
+      .from(staffUser)
+      .where(eq(staffUser.userId, userId))
+      .limit(1);
+    if (existing[0]) throw new ConflictError('User is already a staff member');
+    const inserted = await db.insert(staffUser).values({ userId, role }).returning();
+    const staff = inserted[0];
+    /* v8 ignore next -- @preserve defensive: insert always returns the inserted row */
+    if (!staff) throw new NotFoundError('Staff insert returned no row');
+    await audit(db, staffUserId, 'staff.granted', 'staff_user', staff.id, {
+      targetUserId: userId,
+      role,
+    });
+    return ok(c, AdminStaffOut, toStaffOut(staff, u));
+  })
+  .delete('/staff/:id', requireStaffRole('superadmin'), zParam(staffParam), async (c) => {
+    const { id } = c.req.valid('param');
+    const { staffUserId } = c.get('staffCtx');
+    if (id === staffUserId) throw new ConflictError('Cannot revoke your own staff access');
+    const deleted = await db.delete(staffUser).where(eq(staffUser.id, id)).returning();
+    const staff = deleted[0];
+    if (!staff) throw new NotFoundError('Staff member not found');
+    await audit(db, staffUserId, 'staff.revoked', 'staff_user', staff.id, {
+      targetUserId: staff.userId,
+      role: staff.role,
+    });
+    return ok(c, AdminStaffOut, toStaffOut(staff, { name: '', email: '' }));
+  })
+  // ---- Metrics (split counts + queues home, mvp-plan §8.9) ----------------
+  .get('/metrics', async (c) => {
+    const [userTotals, orgTotals, byState, holdTotals, agentVolume, agentErrors, stuckApprovals] =
+      await Promise.all([
+        db.select({ n: count() }).from(user),
+        db.select({ n: count() }).from(organization),
+        db
+          .select({ state: organization.lifecycleState, n: count() })
+          .from(organization)
+          .groupBy(organization.lifecycleState),
+        db.select({ n: count() }).from(lifecycleHold).where(isNull(lifecycleHold.releasedAt)),
+        db.select({ n: count() }).from(agentSession),
+        db.select({ n: count() }).from(agentSession).where(eq(agentSession.status, 'failed')),
+        db
+          .select({ n: count() })
+          .from(agentSession)
+          .where(eq(agentSession.status, 'awaiting_approval')),
+      ]);
     const counts = new Map(byState.map((r) => [r.state, r.n]));
     return ok(c, AdminMetricsOut, {
       totalUsers: countOf(userTotals),
@@ -403,6 +496,12 @@ const admin = new Hono<AppEnv>()
         lifecycleState: state,
         count: counts.get(state) ?? 0,
       })),
+      queues: {
+        stuckApprovals: countOf(stuckApprovals),
+        agentErrors: countOf(agentErrors),
+        agentVolume: countOf(agentVolume),
+        activeHolds: countOf(holdTotals),
+      },
     });
   });
 

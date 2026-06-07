@@ -423,6 +423,36 @@ describe('members router', () => {
     expect(ok.status).toBe(200);
   });
 
+  it("patch: rejects setting a member's roleId to a role in another org (404, no mutation)", async () => {
+    // `actor.roleId → role.id` is a bare global FK with no org constraint, and org-context
+    // resolves capabilities from the joined role — so a cross-org roleId would silently
+    // confer ANOTHER org's role capabilities (tenant break + privilege escalation). The
+    // PATCH must reject an out-of-org role 404 before persisting.
+    const a = await seedOrgWithOwner();
+    const b = await seedOrgWithOwner();
+    const w = appWithActor(members, a.orgId, ['manage'], a.ownerActorId);
+
+    const [m] = await db
+      .insert(schema.actor)
+      .values({ organizationId: a.orgId, kind: 'human', displayName: 'M', roleId: a.memberRoleId })
+      .returning({ id: schema.actor.id });
+
+    const res = await w.request(`/${m!.id}`, {
+      method: 'PATCH',
+      headers: J,
+      body: JSON.stringify({ roleId: b.memberRoleId }),
+    });
+    expect(res.status).toBe(404);
+    expect((await body<{ code: string }>(res)).code).toBe('not_found');
+
+    // The member still carries org A's original role — never re-pointed at org B's.
+    const [row] = await db
+      .select({ roleId: schema.actor.roleId })
+      .from(schema.actor)
+      .where(eq(schema.actor.id, m!.id));
+    expect(row!.roleId).toBe(a.memberRoleId);
+  });
+
   it('patch: when the org has no owner role, the guard is skipped', async () => {
     // Seed an org without an owner role so ownerRoleId resolves to null.
     const slug = `noowner-${Math.random().toString(36).slice(2, 10)}`;

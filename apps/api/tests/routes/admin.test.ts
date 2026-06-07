@@ -559,7 +559,7 @@ describe('impersonation', () => {
 
 describe('audit feed and metrics', () => {
   it('returns the operator audit feed (paginated)', async () => {
-    const { userId } = await makeStaff('support');
+    const { userId } = await makeStaff('superadmin');
     const orgId = await makeOrg('export_window');
     const app = adminApp(fakeSession(userId));
     // Generate an audit event.

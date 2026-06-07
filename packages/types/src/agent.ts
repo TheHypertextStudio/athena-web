@@ -177,3 +177,40 @@ export const AgentSessionDetailOut = AgentSessionOut.extend({
 }).meta({ id: 'AgentSessionDetailOut', description: 'An agent session with its activity stream.' });
 /** Agent-session-detail representation value. */
 export type AgentSessionDetailOut = z.infer<typeof AgentSessionDetailOut>;
+
+/**
+ * Body for deciding on a proposed agent action (the approval gate, permissions §9).
+ *
+ * @remarks
+ * `decision` records the approver's choice; on `approve` the gated `action` activity
+ * advances `proposed → approved → applied` and an `audit_event` is written. `scope`
+ * controls whether the decision applies to this single action (`this`, default) or to
+ * every still-proposed action in the session (`all_in_session`).
+ */
+export const SessionApprovalDecision = z
+  .object({
+    decision: z.enum(['approve', 'reject']),
+    scope: z.enum(['this', 'all_in_session']).optional(),
+  })
+  .meta({
+    id: 'SessionApprovalDecision',
+    description: 'An approver decision on a proposed agent action.',
+  });
+/** Validated approval-decision body. */
+export type SessionApprovalDecision = z.infer<typeof SessionApprovalDecision>;
+
+/**
+ * Body for replying to an agent's `elicitation` activity (steers / answers the agent).
+ *
+ * @remarks
+ * Appends a human `response` activity to the session stream and, when the session was
+ * `awaiting_input`, resumes it to `running` so the agent can proceed (contract §3.11
+ * `POST /:sessionId/messages`).
+ */
+export const SessionReplyBody = z
+  .object({
+    body: z.string().min(1),
+  })
+  .meta({ id: 'SessionReplyBody', description: 'A human reply to a session elicitation.' });
+/** Validated session-reply body. */
+export type SessionReplyBody = z.infer<typeof SessionReplyBody>;

@@ -25,13 +25,13 @@
     "better-auth": "catalog:"
   },
   "devDependencies": {
+    "@better-auth/cli": "catalog:",
     "@docket/eslint-config": "workspace:*",
     "@docket/tsconfig": "workspace:*",
-    "@better-auth/cli": "catalog:",
     "@electric-sql/pglite": "catalog:",
-    "@types/node": "24.13.0",
+    "@types/node": "25.9.2",
     "drizzle-orm": "catalog:",
-    "vite": "^7.0.0",
-    "vitest": "^4.0.0"
+    "vite": "^8.0.16",
+    "vitest": "^4.1.8"
   }
 }

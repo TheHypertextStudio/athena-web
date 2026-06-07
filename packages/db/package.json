@@ -34,9 +34,9 @@
   "devDependencies": {
     "@docket/eslint-config": "workspace:*",
     "@docket/tsconfig": "workspace:*",
-    "@types/node": "24.13.0",
+    "@types/node": "25.9.2",
     "drizzle-kit": "catalog:",
-    "tsx": "^4.19.2",
-    "vitest": "^4.0.0"
+    "tsx": "^4.22.4",
+    "vitest": "^4.1.8"
   }
 }

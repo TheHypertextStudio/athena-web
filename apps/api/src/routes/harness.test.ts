@@ -86,7 +86,7 @@ export function fakeSession(userId: string, name = 'Ada', email = 'ada@example.c
       createdAt: new Date(),
       updatedAt: new Date(),
     },
-  } as unknown as AuthSession;
+  };
 }
 
 /** Seed a base org with a team and a human actor; returns the relevant ids. */

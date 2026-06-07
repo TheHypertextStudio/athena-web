@@ -121,7 +121,7 @@ function initDb(): Database {
 export const db: Database = new Proxy({} as Database, {
   get(_target, prop, _receiver) {
     const real = initDb();
-    const value = Reflect.get(real as object, prop, real) as unknown;
+    const value = Reflect.get(real, prop, real) as unknown;
     return typeof value === 'function' ? (value.bind(real) as unknown) : value;
   },
 });

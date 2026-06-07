@@ -3,7 +3,9 @@ import { resolve } from 'node:path';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
-const getSession = vi.fn(async () => null as unknown);
+const getSession = vi.fn<
+  () => Promise<{ user: { id: string; name: string; email: string } } | null>
+>(async () => null);
 vi.mock('@docket/auth', () => ({ auth: { api: { getSession } } }));
 
 import type * as DbModule from '@docket/db';
@@ -81,7 +83,7 @@ describe('resolveMcpContext', () => {
   });
 
   it('resolves a context, mapping an empty name to null', async () => {
-    getSession.mockResolvedValueOnce({ user: { id: 'u1', name: '', email: 'u1@e.com' } } as never);
+    getSession.mockResolvedValueOnce({ user: { id: 'u1', name: '', email: 'u1@e.com' } });
     const ctx = await authMod.resolveMcpContext(hdrs());
     expect(ctx).toEqual({ userId: 'u1', userName: null, userEmail: 'u1@e.com' });
   });
@@ -89,7 +91,7 @@ describe('resolveMcpContext', () => {
   it('keeps a present name', async () => {
     getSession.mockResolvedValueOnce({
       user: { id: 'u2', name: 'Ada', email: 'u2@e.com' },
-    } as never);
+    });
     const ctx = await authMod.resolveMcpContext(hdrs());
     expect(ctx.userName).toBe('Ada');
   });

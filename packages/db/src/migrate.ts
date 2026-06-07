@@ -51,7 +51,7 @@ export async function main(): Promise<void> {
       // every re-run. postgres.js prints NOTICEs by default; silence just these two so a
       // no-op migrate (the common case on `pnpm dev`) stays quiet. Real notices surface.
       onnotice: (notice) => {
-        if (notice.code === '42P06' || notice.code === '42P07') return;
+        if (notice['code'] === '42P06' || notice['code'] === '42P07') return;
         console.warn(notice);
       },
     });

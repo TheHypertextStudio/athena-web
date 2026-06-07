@@ -13,7 +13,9 @@ import { db } from '@docket/db';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 
 import { ApiError, CapabilityError, NotFoundError } from '../error';
-import type { McpActor } from './auth';
+import type { McpActor, McpContext } from './auth';
+import { resolveActor } from './auth';
+import { type McpScope, requireScope } from './scope';
 
 /**
  * Build a successful tool result carrying a JSON payload as pretty-printed text.
@@ -57,6 +59,32 @@ export async function runTool(body: () => Promise<CallToolResult>): Promise<Call
     if (err instanceof ApiError) return errorResult(`${err.code}: ${err.message}`);
     return errorResult('Internal error');
   }
+}
+
+/**
+ * Apply the MCP scope layer, then resolve the caller's per-org Actor (the grant layer).
+ *
+ * @remarks
+ * The single entry point that enforces mcp-surface.md §2.2's TWO-layer authorization in
+ * the mandated order: first {@link requireScope} (the token-level capability-class gate —
+ * a `work:read` token can never reach a `work:write` mutation), then {@link resolveActor}
+ * (which proves org membership and yields the actor id every {@link authorize} call needs).
+ * Every tool resolves its actor through here, so no mutation can skip the scope check.
+ *
+ * @param ctx - The authenticated caller (carrying verified scopes).
+ * @param orgId - The organization the call targets.
+ * @param required - The scope this tool requires (mcp-surface.md §3.2).
+ * @returns the caller's resolved {@link McpActor}.
+ * @throws {InsufficientScopeError} When the token lacks `required`.
+ * @throws {NotFoundError} When the caller has no actor in the org.
+ */
+export async function scopedActor(
+  ctx: McpContext,
+  orgId: string,
+  required: McpScope,
+): Promise<McpActor> {
+  requireScope(ctx.scopes, required);
+  return resolveActor(ctx, orgId);
 }
 
 /**

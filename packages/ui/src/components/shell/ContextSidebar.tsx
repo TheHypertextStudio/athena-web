@@ -4,12 +4,12 @@
  * `@docket/ui` — the org-scoped navigation sidebar.
  *
  * @remarks
- * Renders the standard org nav (My Work, Triage, Projects, Cycles, Teams, Views, Agents,
- * Settings). Entity-noun rows (Projects, Cycles, Teams) resolve their labels through
- * `useVocabulary` so they honor the active org's vocabulary skin — an agency sees
- * "Sprints" and "Pods" where a startup sees "Cycles" and "Teams". Non-entity rows use
- * fixed labels. Selecting a row reports its key via `onNavigate`; routing is owned by the
- * host app.
+ * Renders the standard org nav (My Work, Triage, Initiatives, Programs, Projects, Cycles,
+ * Teams, Views, Agents, Settings). Entity-noun rows (Initiatives, Programs, Projects,
+ * Cycles, Teams) resolve their labels through `useVocabulary` so they honor the active org's
+ * vocabulary skin — an agency sees "Engagements", "Retainers", "Sprints", and "Pods" where a
+ * startup sees "Initiatives", "Programs", "Cycles", and "Teams". Non-entity rows use fixed
+ * labels. Selecting a row reports its key via `onNavigate`; routing is owned by the host app.
  */
 import * as React from 'react';
 
@@ -17,11 +17,13 @@ import {
   FolderKanban,
   Home,
   Inbox,
+  Layers,
   LayoutGrid,
   type LucideIcon,
   RefreshCw,
   Settings,
   Sparkles,
+  Target,
   Users,
 } from '../../icons';
 import { useVocabulary } from '../../hooks/useVocabulary';
@@ -31,6 +33,8 @@ import { SidebarNavItem } from './SidebarNavItem';
 export type SidebarNavKey =
   | 'my-work'
   | 'triage'
+  | 'initiatives'
+  | 'programs'
   | 'projects'
   | 'cycles'
   | 'teams'
@@ -64,6 +68,8 @@ interface NavRow {
  * org's vocabulary; outside one (or on the Hub) labels fall back to the startup preset.
  */
 export function ContextSidebar({ activeKey, onNavigate }: ContextSidebarProps): React.JSX.Element {
+  const initiatives = useVocabulary('initiative', { plural: true });
+  const programs = useVocabulary('program', { plural: true });
   const projects = useVocabulary('project', { plural: true });
   const cycles = useVocabulary('cycle', { plural: true });
   const teams = useVocabulary('team', { plural: true });
@@ -71,6 +77,8 @@ export function ContextSidebar({ activeKey, onNavigate }: ContextSidebarProps): 
   const rows: readonly NavRow[] = [
     { key: 'my-work', label: 'My Work', icon: Home },
     { key: 'triage', label: 'Triage', icon: Inbox },
+    { key: 'initiatives', label: initiatives, icon: Target },
+    { key: 'programs', label: programs, icon: Layers },
     { key: 'projects', label: projects, icon: FolderKanban },
     { key: 'cycles', label: cycles, icon: RefreshCw },
     { key: 'teams', label: teams, icon: Users },

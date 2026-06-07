@@ -5,10 +5,9 @@
     "declaration": false,
     "declarationMap": false,
     "noEmit": true,
-    "rootDir": "src",
     "outDir": "dist",
     "types": ["node"]
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "tests/**/*.ts"],
   "exclude": ["node_modules", "dist"]
 }

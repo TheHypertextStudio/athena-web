@@ -46,6 +46,62 @@ async function createTask(
   return (await json<{ id: string }>(res)).id;
 }
 
+describe('tasks create (POST /)', () => {
+  it('derives completedAt when CREATED directly in a terminal (completed) state', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+
+    // A task born in a completed-type state MUST stamp completedAt on insert — exactly
+    // like POST /:id/state and PATCH /:id. Otherwise project progress (which counts
+    // completion via completedAt !== null) permanently under-reports for such tasks.
+    const id = await createTask(writer, teamId, { state: 'done' });
+
+    const detail = await json<{
+      state: string;
+      completedAt: string | null;
+      canceledAt: string | null;
+    }>(await writer.request(`/${id}`, { method: 'GET' }));
+    expect(detail.state).toBe('done');
+    expect(detail.completedAt).not.toBeNull();
+    expect(detail.canceledAt).toBeNull();
+  });
+
+  it('stamps canceledAt (not completedAt) when CREATED in a canceled state', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    const id = await createTask(writer, teamId, { state: 'canceled' });
+
+    const detail = await json<{ completedAt: string | null; canceledAt: string | null }>(
+      await writer.request(`/${id}`, { method: 'GET' }),
+    );
+    expect(detail.completedAt).toBeNull();
+    expect(detail.canceledAt).not.toBeNull();
+  });
+
+  it('leaves terminal timestamps null when CREATED in the default (non-terminal) state', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    const id = await createTask(writer, teamId);
+
+    const detail = await json<{ completedAt: string | null; canceledAt: string | null }>(
+      await writer.request(`/${id}`, { method: 'GET' }),
+    );
+    expect(detail.completedAt).toBeNull();
+    expect(detail.canceledAt).toBeNull();
+  });
+
+  it('422s when CREATED with a state not in the team workflow_states', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    const res = await writer.request('/', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ title: 'T', teamId, state: 'not_a_real_state' }),
+    });
+    expect(res.status).toBe(422);
+  });
+});
+
 describe('tasks detail (GET /:id)', () => {
   it('returns the task with empty dependency + subtask lists', async () => {
     const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);

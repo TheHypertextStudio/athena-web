@@ -1,9 +1,9 @@
 /**
  * `@docket/api` — projects router (mounted at `/v1/orgs/:orgId/projects`).
  */
-import { actor, db, program, project, task, team } from '@docket/db';
+import { actor, db, initiative, initiativeProject, program, project, task, team } from '@docket/db';
 import { pageOf, ProjectCreate, ProjectOut, ProjectProgress, ProjectUpdate } from '@docket/types';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
@@ -71,6 +71,39 @@ async function assertRefInOrg(
 }
 
 /**
+ * Validate that every requested Initiative association lives in the caller's org, or 404.
+ *
+ * @remarks
+ * `ProjectCreate.initiativeIds` writes `initiative_project` join rows. The join keeps a
+ * frozen `organization_id`, but the bare FK to `initiative.id` does not constrain the
+ * tenant, so without this check a CREATE could link the new project to another tenant's
+ * Initiative. We re-read each id scoped by `eq(initiative.organizationId, orgId)` and 404
+ * (existence-hiding) on any miss. Duplicate ids in the request are de-duplicated so the
+ * join's composite PK never collides within a single create.
+ *
+ * @param orgId - The tenant the initiatives must belong to.
+ * @param initiativeIds - The requested association ids (may be empty/undefined).
+ * @returns the de-duplicated, validated initiative ids to link.
+ * @throws {NotFoundError} When any id is missing or owned by another org.
+ */
+async function validatedInitiativeIds(
+  orgId: string,
+  initiativeIds: readonly string[] | undefined,
+): Promise<string[]> {
+  if (!initiativeIds || initiativeIds.length === 0) return [];
+  const unique = [...new Set(initiativeIds)];
+  const rows = await db
+    .select({ id: initiative.id })
+    .from(initiative)
+    .where(and(inArray(initiative.id, unique), eq(initiative.organizationId, orgId)));
+  const found = new Set(rows.map((r) => r.id));
+  for (const id of unique) {
+    if (!found.has(id)) throw new NotFoundError('Initiative not found');
+  }
+  return unique;
+}
+
+/**
  * Compute a Project's weighted completion roll-up from its Tasks.
  *
  * @remarks
@@ -121,22 +154,42 @@ const projects = new Hono<AppEnv>()
     await assertRefInOrg(actor, orgId, body.leadId, 'Lead not found');
     await assertRefInOrg(team, orgId, body.teamId, 'Team not found');
 
-    const inserted = await db
-      .insert(project)
-      .values({
-        organizationId: orgId,
-        name: body.name,
-        description: body.description,
-        leadId: body.leadId,
-        teamId: body.teamId,
-        startDate: body.startDate ? new Date(body.startDate) : undefined,
-        targetDate: body.targetDate ? new Date(body.targetDate) : undefined,
-        createdBy: actorId,
-      })
-      .returning();
-    const row = inserted[0];
-    /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
-    if (!row) throw new Error('project insert returned no row');
+    // `initiativeIds` writes `initiative_project` association rows; validate each lives in
+    // the caller's org BEFORE the transaction so a bad id rejects the whole create.
+    const initiativeIds = await validatedInitiativeIds(orgId, body.initiativeIds);
+
+    const row = await db.transaction(async (tx) => {
+      const inserted = await tx
+        .insert(project)
+        .values({
+          organizationId: orgId,
+          name: body.name,
+          description: body.description,
+          leadId: body.leadId,
+          teamId: body.teamId,
+          startDate: body.startDate ? new Date(body.startDate) : undefined,
+          targetDate: body.targetDate ? new Date(body.targetDate) : undefined,
+          createdBy: actorId,
+        })
+        .returning();
+      const created = inserted[0];
+      /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
+      if (!created) throw new Error('project insert returned no row');
+
+      // Persist the m2m Initiative links inside the same transaction so a partial create
+      // (project saved, links lost) is impossible.
+      if (initiativeIds.length > 0) {
+        await tx.insert(initiativeProject).values(
+          initiativeIds.map((initiativeId) => ({
+            initiativeId,
+            projectId: created.id,
+            organizationId: orgId,
+          })),
+        );
+      }
+      return created;
+    });
+
     return ok(c, ProjectOut, toOut(row));
   })
   .get('/', async (c) => {

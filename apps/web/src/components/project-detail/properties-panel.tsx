@@ -17,6 +17,8 @@ import { useVocabulary } from '@docket/ui/hooks';
 import { FolderKanban, LayoutGrid, RefreshCw, User } from '@docket/ui/icons';
 import type { JSX, ReactNode } from 'react';
 
+import { formatCalendarDate } from '@/lib/format-date';
+
 import type { ActorInfo } from './actor-directory';
 
 /** A single labeled row in the properties panel. */
@@ -51,12 +53,7 @@ function NotSet(): JSX.Element {
 
 /** Format an ISO date as a short, locale-aware day, or `null` when absent. */
 function formatDate(value: string | null | undefined): string | null {
-  if (!value) return null;
-  return new Date(value).toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
+  return formatCalendarDate(value);
 }
 
 /** Props for {@link PropertiesPanel}. */

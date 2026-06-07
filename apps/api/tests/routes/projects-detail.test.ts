@@ -1,3 +1,4 @@
+import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
@@ -412,5 +413,108 @@ describe('projects progress (weighted completion)', () => {
     expect(p.completedWeight).toBe(2);
     expect(p.taskCount).toBe(4);
     expect(p.percent).toBe(0.5);
+  });
+});
+
+describe('projects create with initiative associations', () => {
+  const J = { 'content-type': 'application/json' };
+
+  /** Insert an initiative row in the given org and return its id. */
+  async function seedInitiative(orgId: string, createdBy: string, name = 'Theme'): Promise<string> {
+    const [row] = await db
+      .insert(schema.initiative)
+      .values({ organizationId: orgId, name, createdBy })
+      .returning({ id: schema.initiative.id });
+    return row!.id;
+  }
+
+  /** Count the initiative_project links for a given project. */
+  async function linkedInitiatives(projectId: string): Promise<string[]> {
+    const rows = await db
+      .select({ initiativeId: schema.initiativeProject.initiativeId })
+      .from(schema.initiativeProject)
+      .where(eq(schema.initiativeProject.projectId, projectId));
+    return rows.map((r) => r.initiativeId).sort();
+  }
+
+  it('persists initiative_project links on create', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(projects, orgId, ['contribute'], humanActorId);
+    const initA = await seedInitiative(orgId, humanActorId, 'A');
+    const initB = await seedInitiative(orgId, humanActorId, 'B');
+
+    const res = await writer.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ name: 'Linked', teamId, initiativeIds: [initA, initB] }),
+    });
+    expect(res.status).toBe(200);
+    const created = await json<{ id: string }>(res);
+
+    expect(await linkedInitiatives(created.id)).toEqual([initA, initB].sort());
+  });
+
+  it('de-duplicates repeated initiativeIds so the join PK never collides', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(projects, orgId, ['contribute'], humanActorId);
+    const init = await seedInitiative(orgId, humanActorId);
+
+    const res = await writer.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ name: 'Dup', teamId, initiativeIds: [init, init] }),
+    });
+    expect(res.status).toBe(200);
+    const created = await json<{ id: string }>(res);
+    expect(await linkedInitiatives(created.id)).toEqual([init]);
+  });
+
+  it('creates with no links when initiativeIds is omitted or empty', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(projects, orgId, ['contribute'], humanActorId);
+
+    const omitted = await writer.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ name: 'None', teamId }),
+    });
+    expect(omitted.status).toBe(200);
+    expect(await linkedInitiatives((await json<{ id: string }>(omitted)).id)).toEqual([]);
+
+    const empty = await writer.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ name: 'Empty', teamId, initiativeIds: [] }),
+    });
+    expect(empty.status).toBe(200);
+    expect(await linkedInitiatives((await json<{ id: string }>(empty)).id)).toEqual([]);
+  });
+
+  it('404s (and writes nothing) when an initiativeId is in another org', async () => {
+    const orgA = await seedBaseOrg(db, schema);
+    const orgB = await seedBaseOrg(db, schema);
+    const initInA = await seedInitiative(orgA.orgId, orgA.humanActorId, 'A');
+    const initInB = await seedInitiative(orgB.orgId, orgB.humanActorId, 'B');
+
+    const writerA = appWithActor(projects, orgA.orgId, ['contribute'], orgA.humanActorId);
+    const before = await db.select().from(schema.project);
+
+    const res = await writerA.request('/', {
+      method: 'POST',
+      headers: J,
+      // One valid (in-org) + one cross-tenant id — the whole create must reject.
+      body: JSON.stringify({
+        name: 'Cross',
+        teamId: orgA.teamId,
+        initiativeIds: [initInA, initInB],
+      }),
+    });
+    expect(res.status).toBe(404);
+
+    // No project row was created (validation happens before the transaction).
+    const after = await db.select().from(schema.project);
+    expect(after.length).toBe(before.length);
+    // And no stray links exist for the in-org initiative either.
+    expect(await linkedInitiatives(initInA)).toEqual([]);
   });
 });

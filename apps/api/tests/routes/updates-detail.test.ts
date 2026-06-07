@@ -270,6 +270,154 @@ describe('updates post -> latest health propagates to the subject', () => {
   });
 });
 
+describe('updates delete (DELETE /:id)', () => {
+  /** Insert a second human actor in the given org and return its id. */
+  async function seedActor(orgId: string, name = 'Other'): Promise<string> {
+    const [row] = await db
+      .insert(schema.actor)
+      .values({ organizationId: orgId, kind: 'human', displayName: name })
+      .returning({ id: schema.actor.id });
+    return row!.id;
+  }
+
+  it('lets the author delete their update and recomputes the subject health to the prior post', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const w = appWithActor(updates, orgId, ['contribute'], humanActorId);
+    const subjectId = await seedProject(orgId, teamId, humanActorId);
+
+    // Two posts; the latest (on_track) is the current health.
+    await postUpdate(w, { subjectType: 'project', subjectId, health: 'at_risk', body: 'first' });
+    const second = await postUpdate(w, {
+      subjectType: 'project',
+      subjectId,
+      health: 'on_track',
+      body: 'second',
+    });
+
+    const current = await db
+      .select({ health: schema.project.health })
+      .from(schema.project)
+      .where(eq(schema.project.id, subjectId))
+      .limit(1);
+    expect(current[0]?.health).toBe('on_track');
+
+    // Delete the latest -> health falls back to the prior post (at_risk).
+    const del = await w.request(`/${second}`, { method: 'DELETE' });
+    expect(del.status).toBe(200);
+    expect(await json<{ id: string; removed: boolean }>(del)).toEqual({
+      id: second,
+      removed: true,
+    });
+
+    const after = await db
+      .select({ health: schema.project.health })
+      .from(schema.project)
+      .where(eq(schema.project.id, subjectId))
+      .limit(1);
+    expect(after[0]?.health).toBe('at_risk');
+
+    // Re-deleting the now-gone update 404s.
+    expect((await w.request(`/${second}`, { method: 'DELETE' })).status).toBe(404);
+  });
+
+  it('clears the subject health to null when the last update is deleted', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const w = appWithActor(updates, orgId, ['contribute'], humanActorId);
+    const subjectId = await seedProject(orgId, teamId, humanActorId);
+
+    const only = await postUpdate(w, {
+      subjectType: 'project',
+      subjectId,
+      health: 'off_track',
+      body: 'lone',
+    });
+    expect((await w.request(`/${only}`, { method: 'DELETE' })).status).toBe(200);
+
+    const after = await db
+      .select({ health: schema.project.health })
+      .from(schema.project)
+      .where(eq(schema.project.id, subjectId))
+      .limit(1);
+    expect(after[0]?.health).toBeNull();
+  });
+
+  it('skips healthless posts when recomputing — falls back to the newest update that set a health', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const w = appWithActor(updates, orgId, ['contribute'], humanActorId);
+    const subjectId = await seedProject(orgId, teamId, humanActorId);
+
+    await postUpdate(w, { subjectType: 'project', subjectId, health: 'at_risk', body: 'h1' });
+    await postUpdate(w, { subjectType: 'project', subjectId, body: 'no-health' });
+    const latestHealthful = await postUpdate(w, {
+      subjectType: 'project',
+      subjectId,
+      health: 'on_track',
+      body: 'h2',
+    });
+
+    // Delete the newest health-bearing post: the next health-bearing one (at_risk) wins,
+    // even though a later healthless post still exists.
+    expect((await w.request(`/${latestHealthful}`, { method: 'DELETE' })).status).toBe(200);
+    const after = await db
+      .select({ health: schema.project.health })
+      .from(schema.project)
+      .where(eq(schema.project.id, subjectId))
+      .limit(1);
+    expect(after[0]?.health).toBe('at_risk');
+  });
+
+  it('403s when a non-author member (without manage) deletes another actor’s update', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const author = appWithActor(updates, orgId, ['contribute'], humanActorId);
+    const subjectId = await seedProject(orgId, teamId, humanActorId);
+    const id = await postUpdate(author, { subjectType: 'project', subjectId, body: 'mine' });
+
+    const otherActorId = await seedActor(orgId);
+    const intruder = appWithActor(updates, orgId, ['contribute'], otherActorId);
+    expect((await intruder.request(`/${id}`, { method: 'DELETE' })).status).toBe(403);
+
+    // The update survives.
+    expect((await author.request(`/${id}`)).status).toBe(200);
+  });
+
+  it('lets a manage holder delete an update they did not author', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const author = appWithActor(updates, orgId, ['contribute'], humanActorId);
+    const subjectId = await seedProject(orgId, teamId, humanActorId);
+    const id = await postUpdate(author, { subjectType: 'project', subjectId, body: 'authored' });
+
+    const modId = await seedActor(orgId, 'Mod');
+    const moderator = appWithActor(updates, orgId, ['manage'], modId);
+    expect((await moderator.request(`/${id}`, { method: 'DELETE' })).status).toBe(200);
+  });
+
+  it('403s when the actor lacks contribute (view-only) on DELETE', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const author = appWithActor(updates, orgId, ['contribute'], humanActorId);
+    const subjectId = await seedProject(orgId, teamId, humanActorId);
+    const id = await postUpdate(author, { subjectType: 'project', subjectId, body: 'x' });
+
+    const viewer = appWithActor(updates, orgId, ['view'], humanActorId);
+    expect((await viewer.request(`/${id}`, { method: 'DELETE' })).status).toBe(403);
+  });
+
+  it('404s deleting an unknown id and isolates tenants (no cross-org delete)', async () => {
+    const a = await seedBaseOrg(db, schema);
+    const b = await seedBaseOrg(db, schema);
+    const writerA = appWithActor(updates, a.orgId, ['contribute'], a.humanActorId);
+    const subjectId = await seedProject(a.orgId, a.teamId, a.humanActorId);
+    const id = await postUpdate(writerA, { subjectType: 'project', subjectId, body: 'a-only' });
+
+    expect((await writerA.request(`/${MISSING_ULID}`, { method: 'DELETE' })).status).toBe(404);
+
+    // Org B cannot delete org A's update (existence-hiding 404).
+    const writerB = appWithActor(updates, b.orgId, ['contribute'], b.humanActorId);
+    expect((await writerB.request(`/${id}`, { method: 'DELETE' })).status).toBe(404);
+    // Org A's update is still there.
+    expect((await writerA.request(`/${id}`)).status).toBe(200);
+  });
+});
+
 describe('updates capability + validation', () => {
   it('403s when the actor lacks contribute on POST', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);

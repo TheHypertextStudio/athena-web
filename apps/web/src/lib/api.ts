@@ -1,0 +1,28 @@
+import type { AppType } from '@docket/api';
+import { hc } from 'hono/client';
+
+/**
+ * The typed Hono RPC client for the Docket API.
+ *
+ * @remarks
+ * Built from the `@docket/api` {@link AppType} contract, so every call is fully typed
+ * end-to-end (e.g. `api.v1.orgs.$get()`, `api.v1.orgs[':orgId'].tasks.$post(...)`).
+ *
+ * The base URL is empty (same-origin): requests resolve to relative paths (`/v1/*`,
+ * `/api/auth/*`) which the Next `rewrites` proxy to the API origin. Because the browser
+ * stays same-origin, the Better Auth session cookie is attached automatically; the
+ * `credentials: 'include'` fetch option ensures the cookie is sent even when the client
+ * is reconfigured to a cross-origin base.
+ *
+ * @example
+ * ```ts
+ * const res = await api.v1.orgs.$get();
+ * if (res.ok) {
+ *   const { items } = await res.json();
+ * }
+ * ```
+ */
+export const api = hc<AppType>('', {
+  fetch: ((input: RequestInfo | URL, init?: RequestInit) =>
+    fetch(input, { ...init, credentials: 'include' })) as typeof fetch,
+});

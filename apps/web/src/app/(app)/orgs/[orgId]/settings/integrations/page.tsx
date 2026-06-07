@@ -10,17 +10,21 @@
  * the org, which this page resolves via {@link useCanManageOrg} — previously this was threaded
  * down from the single Settings screen; now each routed section derives it independently.
  *
+ * The header copy is gated on whether the active workspace is the caller's **personal** space:
+ * it is resolved from {@link settingsSections} for that workspace (rather than the static org
+ * registry), so a personal workspace shows its own framing ("Integrations & import") with no
+ * "organization"/"your team" wording, matching the section nav. It falls back to the org
+ * registry while the active org is still loading.
+ *
  * Data is fetched at runtime, so the production build needs no running server.
  */
 import { use, type JSX } from 'react';
 
+import { useActiveOrg } from '@/components/active-org';
 import { IntegrationsTab } from '@/components/settings/integrations-tab';
 import { SectionHeader } from '@/components/settings/section-header';
-import { SETTINGS_SECTIONS } from '@/components/settings/sections';
+import { settingsSections } from '@/components/settings/sections';
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
-
-/** The registry entry for this section (its title + description copy). */
-const SECTION = SETTINGS_SECTIONS.find((s) => s.key === 'integrations');
 
 /**
  * The Integrations section page.
@@ -34,13 +38,20 @@ export default function IntegrationsSettingsPage({
   params: Promise<{ orgId: string }>;
 }): JSX.Element {
   const { orgId } = use(params);
+  const { activeOrg } = useActiveOrg();
   const { canManage } = useCanManageOrg(orgId);
+
+  // Resolve the header copy from the registry for this workspace (personal vs shared org), so a
+  // personal workspace shows its own framing rather than the org-framed copy.
+  const section = settingsSections(activeOrg?.isPersonal ?? false).find(
+    (s) => s.key === 'integrations',
+  );
 
   return (
     <div className="flex flex-col gap-6">
       <SectionHeader
-        title={SECTION?.label ?? 'Integrations'}
-        description={SECTION?.description ?? 'Connect the tools your team already uses.'}
+        title={section?.label ?? 'Integrations'}
+        description={section?.description ?? 'Connect the tools your team already uses.'}
       />
       <IntegrationsTab orgId={orgId} canManage={canManage} />
     </div>

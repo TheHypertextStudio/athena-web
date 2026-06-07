@@ -231,6 +231,47 @@ describe('Sidebar', () => {
     expect(onOpenSearch).toHaveBeenCalledTimes(1);
   });
 
+  it('shows the Teams row for a shared org (the default, non-personal workspace)', () => {
+    render(
+      <ContextProvider initialContext={ACME.id}>
+        <Sidebar
+          workspaces={WORKSPACES}
+          {...sidebarHrefs()}
+          onSelectWorkspace={() => undefined}
+          onOpenSearch={() => undefined}
+        />
+      </ContextProvider>,
+    );
+    // A shared org organizes members into teams, so the Teams row is present and links out.
+    expect(screen.getByRole('link', { name: 'Teams' })).toHaveAttribute(
+      'href',
+      `/orgs/${ACME.id}/teams`,
+    );
+  });
+
+  it('omits ONLY the Teams row in a personal workspace, keeping every other row', () => {
+    render(
+      <ContextProvider initialContext={PERSONAL.id}>
+        <Sidebar
+          workspaces={WORKSPACES}
+          personalWorkspace
+          {...sidebarHrefs()}
+          onSelectWorkspace={() => undefined}
+          onOpenSearch={() => undefined}
+        />
+      </ContextProvider>,
+    );
+    // A personal space is the user's own space, not an org with members — no Teams row.
+    expect(screen.queryByRole('link', { name: 'Teams' })).not.toBeInTheDocument();
+    // Every other Workspace row stays — each is meaningful for a single person.
+    for (const name of ['My Work', 'Triage', 'Views', 'Agents', 'Settings']) {
+      expect(screen.getByRole('link', { name })).toHaveAttribute(
+        'href',
+        `/orgs/${PERSONAL.id}/${name === 'My Work' ? 'my-work' : name.toLowerCase()}`,
+      );
+    }
+  });
+
   it('never produces an /orgs/null href when no org is bound yet', () => {
     render(
       <ContextProvider initialContext={null}>

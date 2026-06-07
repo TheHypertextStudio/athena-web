@@ -272,6 +272,15 @@ function AppShellInner({
     [routeOrgId, orgs, lastOrgId],
   );
 
+  // Whether the resolved active workspace is the caller's personal space. Read from the SAME org
+  // the Workspace section reflects so the sidebar's chrome (e.g. omitting Teams) always matches
+  // the visible workspace. A personal space is the user's own space, not an organization — its
+  // `isPersonal === true` is an engineering convenience that must not surface team-management UI.
+  const resolvedOrgIsPersonal = useMemo(
+    () => orgs.find((o) => o.id === resolvedOrgId)?.isPersonal ?? false,
+    [orgs, resolvedOrgId],
+  );
+
   // Mirror the resolved active workspace into the shell context — one-directional, never
   // reversing navigation. The context drives the org accent and the Workspace section's hrefs;
   // it follows the resolution (route ?? last-used ?? personal) so the sidebar's org section is
@@ -328,6 +337,7 @@ function AppShellInner({
       renderLink={renderLink}
       onSelectWorkspace={onSelectWorkspace}
       onOpenSearch={openPalette}
+      personalWorkspace={resolvedOrgIsPersonal}
     />
   );
 

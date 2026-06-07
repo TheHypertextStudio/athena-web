@@ -13,6 +13,13 @@
  *
  * Whether the caller can change the vocabulary is resolved via {@link useCanManageOrg}.
  *
+ * The header copy and the tab's intro prose are gated on whether the active workspace is the
+ * caller's **personal** space: the header is resolved from {@link settingsSections} for that
+ * workspace (rather than the static org registry), and `isPersonal` is threaded into
+ * {@link VocabularyTab} so it drops all "organization"/"your team" framing. A personal workspace
+ * therefore reads as the caller's own space ("Language"), matching the section nav. It falls back
+ * to the org registry while the active org is still loading.
+ *
  * Data is fetched at runtime, so the production build needs no running server.
  */
 import type { VocabularyPreset, VocabularySkin } from '@docket/types';
@@ -20,12 +27,9 @@ import { use, type JSX, useCallback, useEffect, useState } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 import { SectionHeader } from '@/components/settings/section-header';
-import { SETTINGS_SECTIONS } from '@/components/settings/sections';
+import { settingsSections } from '@/components/settings/sections';
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
 import { VocabularyTab } from '@/components/settings/vocabulary-tab';
-
-/** The registry entry for this section (its title + description copy). */
-const SECTION = SETTINGS_SECTIONS.find((s) => s.key === 'vocabulary');
 
 /**
  * The Vocabulary section page.
@@ -39,8 +43,13 @@ export default function VocabularySettingsPage({
   params: Promise<{ orgId: string }>;
 }): JSX.Element {
   const { orgId } = use(params);
-  const { skin: orgSkin } = useActiveOrg();
+  const { skin: orgSkin, activeOrg } = useActiveOrg();
   const { canManage } = useCanManageOrg(orgId);
+
+  const isPersonal = activeOrg?.isPersonal ?? false;
+  // Resolve the header copy from the registry for this workspace (personal vs shared org), so a
+  // personal workspace shows its own framing ("Language") rather than the org-framed copy.
+  const section = settingsSections(isPersonal).find((s) => s.key === 'vocabulary');
 
   // The org's vocabulary skin: seeded from the shell-wide active-org skin, then refined locally
   // as the owner applies a new preset (no org-update RPC exists, so the applied preset becomes
@@ -77,14 +86,15 @@ export default function VocabularySettingsPage({
   return (
     <div className="flex flex-col gap-6">
       <SectionHeader
-        title={SECTION?.label ?? 'Vocabulary'}
+        title={section?.label ?? 'Vocabulary'}
         description={
-          SECTION?.description ?? 'Choose the language Docket speaks across this organization.'
+          section?.description ?? 'Choose the language Docket speaks across this organization.'
         }
       />
       <VocabularyTab
         skin={skin}
         canManage={canManage}
+        isPersonal={isPersonal}
         applying={applying}
         notice={notice}
         noticeIsError={false}

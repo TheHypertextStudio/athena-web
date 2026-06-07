@@ -1,45 +1,56 @@
 {
-  "name": "@athena/api",
+  "name": "@docket/api",
   "version": "0.0.0",
   "private": true,
-  "description": "Athena API backend service",
   "type": "module",
-  "main": "./dist/index.js",
+  "license": "UNLICENSED",
+  "description": "Docket backend: authentication, the typed RPC API, billing and cron, and the MCP server.",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "main": "./src/index.ts",
   "types": "./dist/index.d.ts",
+  "portless": {
+    "name": "api.docket",
+    "script": "dev:app"
+  },
   "scripts": {
-    "build": "tsc",
-    "dev": "tsx watch src/index.ts",
-    "start": "node dist/index.js",
-    "clean": "rm -rf dist",
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "portless",
+    "dev:app": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src --ext .ts",
-    "lint:fix": "eslint src --ext .ts --fix",
+    "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
-    "db:generate": "drizzle-kit generate",
-    "db:push": "drizzle-kit push",
-    "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio"
+    "clean": "rm -rf dist .turbo *.tsbuildinfo",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@athena/shared": "workspace:*",
-    "@athena/types": "workspace:*",
-    "@better-auth/passkey": "^1.4.10",
-    "@hono/zod-openapi": "^0.18.3",
-    "better-auth": "^1.4.10",
-    "drizzle-orm": "^0.41.0",
-    "hono": "^4.6.14",
-    "pino": "^9.5.0",
-    "postgres": "^3.4.5",
-    "zod": "^3.24.1"
+    "@docket/auth": "workspace:*",
+    "@docket/authz": "workspace:*",
+    "@docket/boundaries": "workspace:*",
+    "@docket/db": "workspace:*",
+    "@docket/env": "workspace:*",
+    "@docket/types": "workspace:*",
+    "@hono/node-server": "^1.13.0",
+    "@modelcontextprotocol/sdk": "catalog:",
+    "@scalar/hono-api-reference": "catalog:",
+    "drizzle-orm": "catalog:",
+    "hono": "catalog:",
+    "hono-openapi": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
-    "@athena/test-utils": "workspace:*",
-    "@types/node": "^25.0.3",
-    "drizzle-kit": "^0.31.4",
+    "@docket/eslint-config": "workspace:*",
+    "@docket/tsconfig": "workspace:*",
+    "@electric-sql/pglite": "catalog:",
+    "@types/node": "24.13.0",
     "tsx": "^4.19.2",
-    "typescript": "^5.7.2",
-    "vitest": "^2.1.8"
+    "vite": "^7.0.0",
+    "vitest": "^4.0.0"
   }
 }

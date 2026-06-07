@@ -1,0 +1,217 @@
+/**
+ * `@docket/db` — Better Auth tables (core + passkey + oidc/mcp oauth tables).
+ *
+ * @remarks
+ * Owned by `@docket/db` (the single SQL owner). These mirror the Better Auth 1.6
+ * drizzle schema for the enabled plugin set. Social providers (Google/GitHub/Linear)
+ * and account linking reuse the core `account` table (no new tables). The
+ * `oidcProvider` + `mcp` plugins share three additive oauth tables
+ * ({@link oauthApplication}, {@link oauthAccessToken}, {@link oauthConsent}), mounted
+ * env-gated in `@docket/auth`. Passkey ships separately (`@simplewebauthn/*`, not
+ * installed) so the `passkey` table stays present but its plugin is not mounted; sso /
+ * scim / stripe better-auth plugins are not installed and are deliberately skipped.
+ * The drizzle property keys match Better Auth's model field names (camelCase) so the
+ * adapter maps correctly; SQL column names are snake_case. IDs are 26-char ULIDs
+ * (Better Auth `advanced.database.generateId` shares {@link genId}).
+ */
+import {
+  boolean,
+  index,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+} from 'drizzle-orm/pg-core';
+
+import { genId } from '../id';
+
+/** The global User identity (persists past org membership); 1:1 with a Hub. */
+export const user = pgTable(
+  'user',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    name: text('name').notNull(),
+    email: text('email').notNull(),
+    emailVerified: boolean('email_verified').notNull().default(false),
+    image: text('image'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at')
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [uniqueIndex('user_email_uq').on(t.email)],
+);
+
+/** A Better Auth session (cookie-backed), owned by a User. */
+export const session = pgTable(
+  'session',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    expiresAt: timestamp('expires_at').notNull(),
+    token: text('token').notNull(),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at')
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    ipAddress: text('ip_address'),
+    userAgent: text('user_agent'),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+  },
+  (t) => [uniqueIndex('session_token_uq').on(t.token)],
+);
+
+/** A linked credential/provider account for a User (passkeys live in `passkey`). */
+export const account = pgTable('account', {
+  id: text('id').primaryKey().$defaultFn(genId),
+  accountId: text('account_id').notNull(),
+  providerId: text('provider_id').notNull(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => user.id, { onDelete: 'cascade' }),
+  accessToken: text('access_token'),
+  refreshToken: text('refresh_token'),
+  idToken: text('id_token'),
+  accessTokenExpiresAt: timestamp('access_token_expires_at'),
+  refreshTokenExpiresAt: timestamp('refresh_token_expires_at'),
+  scope: text('scope'),
+  password: text('password'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at')
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
+
+/** Short-lived verification tokens (email, etc.). */
+export const verification = pgTable('verification', {
+  id: text('id').primaryKey().$defaultFn(genId),
+  identifier: text('identifier').notNull(),
+  value: text('value').notNull(),
+  expiresAt: timestamp('expires_at').notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at')
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
+
+/** A registered WebAuthn passkey credential for a User (passkey-first sign-in). */
+export const passkey = pgTable('passkey', {
+  id: text('id').primaryKey().$defaultFn(genId),
+  name: text('name'),
+  publicKey: text('public_key').notNull(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => user.id, { onDelete: 'cascade' }),
+  credentialID: text('credential_id').notNull(),
+  counter: integer('counter').notNull(),
+  deviceType: text('device_type').notNull(),
+  backedUp: boolean('backed_up').notNull(),
+  transports: text('transports'),
+  createdAt: timestamp('created_at').defaultNow(),
+  aaguid: text('aaguid'),
+});
+
+/**
+ * An OAuth/OIDC client application registered with Docket as an OpenID Provider.
+ *
+ * @remarks
+ * Shared by the Better Auth `oidcProvider` + `mcp` plugins (mounted env-gated in
+ * `@docket/auth`). `clientId` is unique because the access-token + consent tables
+ * reference it as their foreign key target. `userId` is the optional registering owner
+ * (cascades from `user`). Mirrors the plugins' `oauthApplication` model exactly.
+ */
+export const oauthApplication = pgTable(
+  'oauth_application',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    name: text('name').notNull(),
+    icon: text('icon'),
+    metadata: text('metadata'),
+    clientId: text('client_id').notNull().unique('oauth_application_client_id_uq'),
+    clientSecret: text('client_secret'),
+    redirectUrls: text('redirect_urls').notNull(),
+    type: text('type').notNull(),
+    disabled: boolean('disabled').default(false),
+    userId: text('user_id').references(() => user.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at')
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [index('oauth_application_user_id_idx').on(t.userId)],
+);
+
+/**
+ * An OAuth/OIDC access + refresh token pair issued to an {@link oauthApplication}.
+ *
+ * @remarks
+ * Used by the `oidcProvider` + `mcp` plugins for bearer/token flows. `accessToken` and
+ * `refreshToken` are each unique; `clientId` references {@link oauthApplication.clientId}
+ * (its unique column) and `userId` references the resource owner. Mirrors the plugins'
+ * `oauthAccessToken` model exactly.
+ */
+export const oauthAccessToken = pgTable(
+  'oauth_access_token',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    accessToken: text('access_token').notNull(),
+    refreshToken: text('refresh_token').notNull(),
+    accessTokenExpiresAt: timestamp('access_token_expires_at').notNull(),
+    refreshTokenExpiresAt: timestamp('refresh_token_expires_at').notNull(),
+    clientId: text('client_id')
+      .notNull()
+      .references(() => oauthApplication.clientId, { onDelete: 'cascade' }),
+    userId: text('user_id').references(() => user.id, { onDelete: 'cascade' }),
+    scopes: text('scopes').notNull(),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at')
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    uniqueIndex('oauth_access_token_access_token_uq').on(t.accessToken),
+    uniqueIndex('oauth_access_token_refresh_token_uq').on(t.refreshToken),
+    index('oauth_access_token_client_id_idx').on(t.clientId),
+    index('oauth_access_token_user_id_idx').on(t.userId),
+  ],
+);
+
+/**
+ * A user's recorded consent grant for an {@link oauthApplication}'s requested scopes.
+ *
+ * @remarks
+ * Written by the `oidcProvider` consent screen so a returning user skips re-prompting.
+ * `clientId` references {@link oauthApplication.clientId}; `userId` references the
+ * consenting `user`. Mirrors the plugins' `oauthConsent` model exactly.
+ */
+export const oauthConsent = pgTable(
+  'oauth_consent',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    clientId: text('client_id')
+      .notNull()
+      .references(() => oauthApplication.clientId, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    scopes: text('scopes').notNull(),
+    consentGiven: boolean('consent_given').notNull(),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at')
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    index('oauth_consent_client_id_idx').on(t.clientId),
+    index('oauth_consent_user_id_idx').on(t.userId),
+  ],
+);

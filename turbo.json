@@ -1,14 +1,68 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "ui": "tui",
+  "envMode": "strict",
+  "globalEnv": [
+    "NODE_ENV",
+    "APP_MODE",
+    "CI",
+    "PORT",
+    "API_URL",
+    "SKIP_ENV_VALIDATION",
+    "CRON_SECRET",
+    "DATABASE_URL",
+    "DATABASE_URL_UNPOOLED",
+    "BETTER_AUTH_*",
+    "STRIPE_*",
+    "DOCKET_PRICE_*",
+    "MCP_*",
+    "OIDC_*",
+    "GOOGLE_*",
+    "GITHUB_*",
+    "LINEAR_*",
+    "ATHENA_*",
+    "ANTHROPIC_API_KEY",
+    "SENTRY_DSN",
+    "BLOB_READ_WRITE_TOKEN",
+    "EXPORT_BUCKET_*",
+    "NEXT_PUBLIC_*",
+    "BILLING_ENABLED"
+  ],
+  "globalPassThroughEnv": ["VERCEL", "VERCEL_*"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"],
+      "env": [
+        "NODE_ENV",
+        "API_URL",
+        "DATABASE_URL",
+        "DATABASE_URL_UNPOOLED",
+        "BETTER_AUTH_*",
+        "STRIPE_*",
+        "DOCKET_PRICE_*",
+        "MCP_*",
+        "OIDC_*",
+        "GOOGLE_*",
+        "GITHUB_*",
+        "LINEAR_*",
+        "ATHENA_*",
+        "ANTHROPIC_API_KEY",
+        "CRON_SECRET",
+        "SENTRY_DSN",
+        "BLOB_READ_WRITE_TOKEN",
+        "EXPORT_BUCKET_*",
+        "NEXT_PUBLIC_*",
+        "BILLING_ENABLED"
+      ]
     },
     "dev": {
       "cache": false,
-      "persistent": true
+      "persistent": true,
+      // Bring the DB up and migrated before any app server starts, natively via the task
+      // graph: dev → (^)db:migrate → //#db:up. Apps that don't depend on @docket/db
+      // (marketing) simply skip it. Replaces the old `db:up && db:migrate &&` shell chain.
+      "dependsOn": ["^db:migrate"]
     },
     "lint": {
       "dependsOn": ["^build"],
@@ -24,7 +78,8 @@
     },
     "test": {
       "dependsOn": ["^build"],
-      "outputs": []
+      "outputs": [],
+      "env": ["NODE_ENV", "DATABASE_URL", "DATABASE_URL_UNPOOLED", "SKIP_ENV_VALIDATION"]
     },
     "test:watch": {
       "cache": false,
@@ -36,23 +91,34 @@
     },
     "test:e2e": {
       "dependsOn": ["build"],
-      "outputs": ["playwright-report/**", "test-results/**"]
+      "outputs": ["playwright-report/**", "test-results/**"],
+      "env": ["NODE_ENV", "API_URL", "NEXT_PUBLIC_*", "DATABASE_URL", "DATABASE_URL_UNPOOLED"]
     },
     "clean": {
       "cache": false
     },
-    "db:generate": {
+    // Root task (runs the root `db:up` script: `docker compose up -d --wait postgres`).
+    // db:migrate depends on it, so the container is healthy before migrations run.
+    "//#db:up": {
       "cache": false
     },
-    "db:push": {
-      "cache": false
+    "db:generate": {
+      "cache": false,
+      "env": ["DATABASE_URL", "DATABASE_URL_UNPOOLED"]
     },
     "db:migrate": {
-      "cache": false
+      "cache": false,
+      "dependsOn": ["//#db:up"],
+      "env": ["DATABASE_URL", "DATABASE_URL_UNPOOLED"]
     },
     "db:studio": {
       "cache": false,
-      "persistent": true
+      "persistent": true,
+      "env": ["DATABASE_URL", "DATABASE_URL_UNPOOLED"]
+    },
+    "db:auth:generate": {
+      "cache": false,
+      "env": ["DATABASE_URL", "DATABASE_URL_UNPOOLED", "BETTER_AUTH_*"]
     }
   }
 }

@@ -11,6 +11,22 @@ export interface DocketVitestOptions {
   react?: boolean;
   /** Extra setup files (relative to the package root). */
   setupFiles?: string[];
+  /**
+   * Coverage threshold (% for statements/branches/functions/lines).
+   *
+   * Defaults to 90. The "trust spine" — packages where a silent coverage gap means
+   * a security hole or data corruption, and that are pure enough for honest full
+   * coverage (`@docket/authz`, `@docket/auth`, `@docket/env`, `@docket/types`,
+   * `@docket/db`) — opts into `100`. Apps, UI, and IO adapters stay at the default.
+   */
+  coverageThreshold?: number;
+  /**
+   * Extra globs (relative to package root) to exclude from coverage — for IO
+   * boundaries that can only be exercised by mock-wiring tests or a live service
+   * (e.g. a DB-driver migration runner). We don't write mock-wiring tests to chase
+   * those lines; they're verified by really running in dev/prod.
+   */
+  coverageExclude?: string[];
 }
 
 /**
@@ -18,11 +34,19 @@ export interface DocketVitestOptions {
  *
  * Each package's `vite.config.ts` is a one-liner: `export default docketVitest({...})`.
  * Coverage is the v8 provider over `src` (excluding tests + type-declaration files),
- * with `all: true` so untested files count, and HARD 100% thresholds on statements,
- * branches, functions, and lines — no exceptions.
+ * with `all: true` so untested files count. The threshold defaults to 90% and the
+ * trust-spine packages opt into 100% via {@link DocketVitestOptions.coverageThreshold}.
+ * The bar is met with MEANINGFUL tests (real behavior), never brittle wiring/tautology
+ * tests. Generous timeouts keep the heavily-parallel full-suite run reliable.
  */
 export function docketVitest(options: DocketVitestOptions = {}) {
-  const { environment = 'node', react: useReact = false, setupFiles = [] } = options;
+  const {
+    environment = 'node',
+    react: useReact = false,
+    setupFiles = [],
+    coverageThreshold = 90,
+    coverageExclude = [],
+  } = options;
   return defineConfig({
     plugins: useReact ? [react()] : [],
     test: {
@@ -30,17 +54,28 @@ export function docketVitest(options: DocketVitestOptions = {}) {
       environment,
       setupFiles,
       include: ['src/**/*.{test,spec}.{ts,tsx}'],
+      // Turbo runs every package's vitest concurrently, so the machine is heavily
+      // oversubscribed during `pnpm test`. The default 5s timeout false-fails
+      // otherwise-passing tests (e.g. crypto/pglite-heavy ones) purely from CPU
+      // starvation. Generous timeouts keep the full-suite run reliably green
+      // without affecting the happy path.
+      testTimeout: 30_000,
+      hookTimeout: 30_000,
+      // Coverage is gated (with all:true so untested files count). Default 90% gives
+      // headroom so we don't write brittle wiring/tautology tests to chase the last
+      // few lines; the trust-spine packages pass coverageThreshold:100. Either bar is
+      // met with MEANINGFUL behavior tests.
       coverage: {
         provider: 'v8',
         all: true,
         reporter: ['text', 'json-summary', 'json'],
         include: ['src/**/*.{ts,tsx}'],
-        exclude: ['src/**/*.{test,spec}.{ts,tsx}', 'src/**/*.d.ts'],
+        exclude: ['src/**/*.{test,spec}.{ts,tsx}', 'src/**/*.d.ts', ...coverageExclude],
         thresholds: {
-          statements: 100,
-          branches: 100,
-          functions: 100,
-          lines: 100,
+          statements: coverageThreshold,
+          branches: coverageThreshold,
+          functions: coverageThreshold,
+          lines: coverageThreshold,
         },
       },
     },

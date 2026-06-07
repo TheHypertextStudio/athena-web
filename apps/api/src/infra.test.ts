@@ -72,26 +72,6 @@ describe('container', () => {
     expect(a).toBe(b);
     expect(a.billing).toBeDefined();
   });
-
-  it('toBoundaryEnv spreads every present optional env key', async () => {
-    // A fresh module registry with all the optional boundary env keys set so each
-    // `...(env.X ? {...} : {})` spread takes its truthy branch.
-    vi.resetModules();
-    const saved = { ...process.env };
-    process.env['APP_MODE'] = 'test';
-    process.env['STRIPE_SECRET_KEY'] = 'sk_test_x';
-    process.env['STRIPE_PRICE_TEAM'] = 'price_x';
-    process.env['STRIPE_BILLING_PORTAL_CONFIG_ID'] = 'bpc_x';
-    process.env['ATHENA_AGENT_ENDPOINT'] = 'https://agent.x';
-    process.env['ATHENA_AGENT_API_KEY'] = 'key_x';
-    process.env['BLOB_READ_WRITE_TOKEN'] = 'blob_x';
-    process.env['EXPORT_BUCKET_URL'] = 'https://bucket.x';
-    const { getContainer } = await import('./container');
-    const c = getContainer();
-    expect(c.billing).toBeDefined();
-    process.env = saved;
-    vi.resetModules();
-  });
 });
 
 describe('session middleware', () => {

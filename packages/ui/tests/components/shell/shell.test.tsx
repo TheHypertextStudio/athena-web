@@ -8,36 +8,49 @@ import { describe, expect, it } from 'vitest';
 import { useVocabulary, VocabularyProvider } from '../../../src/hooks/useVocabulary';
 import { AppShell } from '../../../src/components/shell/AppShell';
 import { ContextProvider } from '../../../src/components/shell/ContextProvider';
-import type { RailOrg } from '../../../src/components/shell/GlobalRail';
+import { Sidebar } from '../../../src/components/shell/Sidebar';
+import type { Workspace } from '../../../src/components/shell/workspaces';
 
-const ACME: RailOrg = { id: 'ORG00000000000000000000001', name: 'Acme Co', avatar: null };
-const GLOBEX: RailOrg = { id: 'ORG00000000000000000000002', name: 'Globex', avatar: null };
-const MOCK_ORGS: readonly RailOrg[] = [ACME, GLOBEX];
+const ACME: Workspace = { id: 'ORG00000000000000000000001', name: 'Acme Co', isPersonal: false };
+const GLOBEX: Workspace = { id: 'ORG00000000000000000000002', name: 'Globex', isPersonal: false };
+const MOCK_WORKSPACES: readonly Workspace[] = [ACME, GLOBEX];
 
 const AGENCY_SKIN: VocabularySkin = { preset: 'agency' };
 const STARTUP_SKIN: VocabularySkin = { preset: 'startup' };
 
-describe('AppShell', () => {
-  it('renders the GlobalRail and ContextSidebar regions inside the providers', () => {
+/** A test `renderLink` mirroring the host's Next `Link` (a real anchor). */
+function renderLink(href: string, content: React.ReactNode): React.ReactNode {
+  return <a href={href}>{content}</a>;
+}
+
+describe('AppShell + Sidebar', () => {
+  it('renders the integrated sidebar inside the providers, skinned to the active org', () => {
     render(
       <ContextProvider initialContext={ACME.id}>
         <VocabularyProvider skin={AGENCY_SKIN}>
-          <AppShell orgs={MOCK_ORGS}>
+          <AppShell
+            sidebar={
+              <Sidebar
+                workspaces={MOCK_WORKSPACES}
+                hrefForHome={(key) => `/${key}`}
+                hrefForWorkspace={(orgId, key) => `/orgs/${orgId}/${key}`}
+                hrefForOrgHome={(orgId) => `/orgs/${orgId}/my-work`}
+                renderLink={renderLink}
+                onSelectWorkspace={() => undefined}
+                onOpenSearch={() => undefined}
+              />
+            }
+          >
             <div>Main content</div>
           </AppShell>
         </VocabularyProvider>
       </ContextProvider>,
     );
 
-    expect(screen.getByRole('navigation', { name: 'Organizations' })).toBeInTheDocument();
     expect(screen.getByRole('complementary', { name: 'Navigation' })).toBeInTheDocument();
-
-    // The rail renders the Hub (Today) button plus one avatar button per mock org.
-    expect(screen.getByRole('button', { name: 'Hub — Today' })).toBeInTheDocument();
-    for (const org of MOCK_ORGS) {
-      expect(screen.getByRole('button', { name: org.name })).toBeInTheDocument();
-    }
-
+    // The switcher leads with the active org; the org nav is skinned (agency → "Retainers").
+    expect(screen.getByRole('button', { name: /Workspace: Acme Co/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Retainers' })).toBeInTheDocument();
     expect(screen.getByText('Main content')).toBeInTheDocument();
   });
 });

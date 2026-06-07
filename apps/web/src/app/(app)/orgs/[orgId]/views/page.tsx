@@ -5,7 +5,7 @@
  *
  * @remarks
  * A Client Component reached at `/orgs/[orgId]/views`, rendered in the app-shell main region
- * (the shell's GlobalRail + ContextSidebar already wrap `(app)` routes). A saved view is a
+ * (the shell's integrated sidebar already wraps `(app)` routes). A saved view is a
  * stored filter/grouping/sort over the org's tasks, with a sharing {@link ViewScope} (personal
  * / team / org). The screen does three things:
  *
@@ -43,12 +43,12 @@ import { Button, Separator, Skeleton } from '@docket/ui/primitives';
 import { useParams, useRouter } from 'next/navigation';
 import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 
+import { useActiveOrg } from '@/components/active-org';
 import { FilterBuilder } from '@/components/views/filter-builder';
 import { SaveViewComposer } from '@/components/views/save-view-composer';
 import { type RunnerActor, ViewRunner } from '@/components/views/view-runner';
 import { ViewList } from '@/components/views/view-list';
 import { fieldSpec } from '@/components/views/view-engine';
-import { recallDefaultTeam } from '@/lib/active-team';
 import { api } from '@/lib/api';
 import { readError, readProblem } from '@/lib/problem';
 
@@ -81,6 +81,7 @@ export default function ViewsPage(): JSX.Element {
   const router = useRouter();
   const params = useParams<{ orgId: string }>();
   const orgId = params.orgId;
+  const { defaultTeamId } = useActiveOrg();
 
   const projectLabel = useVocabulary('project');
   const programLabel = useVocabulary('program');
@@ -227,10 +228,7 @@ export default function ViewsPage(): JSX.Element {
   }, []);
 
   /** Whether the org has a team id available to attach a team-scoped view to. */
-  const canScopeToTeam = useMemo(
-    () => Boolean(recallDefaultTeam(orgId) ?? tasks[0]?.teamId),
-    [orgId, tasks],
-  );
+  const canScopeToTeam = useMemo(() => Boolean(defaultTeamId), [defaultTeamId]);
 
   /** Save the working query as a new saved view and prepend it to the directory. */
   const saveView = useCallback(
@@ -238,12 +236,13 @@ export default function ViewsPage(): JSX.Element {
       setSaving(true);
       setSaveError(null);
       try {
-        const teamId = recallDefaultTeam(orgId) ?? tasks[0]?.teamId ?? null;
         const res = await api.v1.orgs[':orgId']['saved-views'].$post({
           param: { orgId },
           json: {
             ...payload,
-            ...(payload.scope === 'team' && teamId ? { teamId: TeamId.parse(teamId) } : {}),
+            ...(payload.scope === 'team' && defaultTeamId
+              ? { teamId: TeamId.parse(defaultTeamId) }
+              : {}),
           },
         });
         if (!res.ok) {
@@ -260,7 +259,7 @@ export default function ViewsPage(): JSX.Element {
         setSaving(false);
       }
     },
-    [orgId, tasks],
+    [orgId, defaultTeamId],
   );
 
   const openViewName = useMemo(

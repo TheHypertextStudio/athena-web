@@ -25,7 +25,13 @@ import {
   CommentSubjectType,
   CommentUpdate,
 } from '../src/comment';
-import { CycleCreate, CycleOut, CycleStatus, CycleUpdate } from '../src/cycle';
+import {
+  CycleCarryoverDecision,
+  CycleCreate,
+  CycleOut,
+  CycleStatus,
+  CycleUpdate,
+} from '../src/cycle';
 import {
   DailyPlanItemCreate,
   DailyPlanItemOut,
@@ -34,6 +40,7 @@ import {
 } from '../src/daily-plan';
 import { GrantOut, GrantResourceKind, GrantSubjectKind, GrantUpsert } from '../src/grant';
 import {
+  HubActivityOut,
   HubInboxOut,
   HubPortfolioOut,
   HubProjectItem,
@@ -555,6 +562,15 @@ describe('cycle DTOs', () => {
   it('CycleUpdate parses nullable name + rejects empty name', () => {
     expect(CycleUpdate.parse({ name: null }).name).toBeNull();
     expect(CycleUpdate.safeParse({ name: '' }).success).toBe(false);
+  });
+
+  it('CycleCarryoverDecision requires targetCycleId only when action is move', () => {
+    expect(CycleCarryoverDecision.safeParse({ taskId: ID, action: 'keep' }).success).toBe(true);
+    expect(CycleCarryoverDecision.safeParse({ taskId: ID, action: 'triage' }).success).toBe(true);
+    expect(CycleCarryoverDecision.safeParse({ taskId: ID, action: 'move' }).success).toBe(false);
+    expect(
+      CycleCarryoverDecision.safeParse({ taskId: ID, action: 'move', targetCycleId: ID2 }).success,
+    ).toBe(true);
   });
 
   it('CycleOut parses', () => {
@@ -1475,9 +1491,19 @@ describe('hub DTOs', () => {
   it('HubTodayOut parses', () => {
     const parsed = HubTodayOut.parse({
       date: '2026-01-01',
-      tasks: [{ id: ID, organizationId: ID2, title: 'T', state: 'todo', priority: 'none' }],
+      plan: [{ id: ID, organizationId: ID2, title: 'T', state: 'todo', priority: 'none' }],
+      calendar: [
+        {
+          taskId: ID,
+          organizationId: ID2,
+          startsAt: '2026-01-01T09:00:00.000Z',
+          endsAt: '2026-01-01T10:00:00.000Z',
+        },
+      ],
+      needsAttention: { approvals: [], blocked: [], dueToday: [], inbox: 2 },
     });
-    expect(parsed.tasks).toHaveLength(1);
+    expect(parsed.plan).toHaveLength(1);
+    expect(parsed.needsAttention.inbox).toBe(2);
   });
 
   it('HubInboxOut parses', () => {
@@ -1489,25 +1515,69 @@ describe('hub DTOs', () => {
 
   it('HubPortfolioOut parses', () => {
     const parsed = HubPortfolioOut.parse({
-      projects: [{ id: ID, organizationId: ID2, name: 'P', status: 'started' }],
+      swimlanes: [
+        {
+          organization: { id: ID2, name: 'Acme', slug: 'acme' },
+          programs: [
+            {
+              program: { id: ID, organizationId: ID2, name: 'Ops', status: 'active' },
+              projects: [
+                {
+                  id: ID,
+                  organizationId: ID2,
+                  name: 'P',
+                  status: 'active',
+                  startDate: null,
+                  targetDate: null,
+                  milestones: [{ id: ID, name: 'M1', targetDate: null }],
+                },
+              ],
+            },
+          ],
+          unassigned: [],
+        },
+      ],
     });
-    expect(parsed.projects).toHaveLength(1);
+    expect(parsed.swimlanes).toHaveLength(1);
+    expect(parsed.swimlanes[0]?.programs[0]?.projects[0]?.milestones).toHaveLength(1);
   });
 
-  it('HubSearchOut parses + rejects a bad nested task', () => {
+  it('HubSearchOut parses + rejects a bad hit type', () => {
     const parsed = HubSearchOut.parse({
       query: 'q',
-      tasks: [{ id: ID, organizationId: ID2, title: 'T', state: 'todo', priority: 'low' }],
-      projects: [{ id: ID, organizationId: ID2, name: 'P', status: 'started' }],
+      results: [
+        { organizationId: ID2, type: 'task', id: ID, title: 'T' },
+        { organizationId: ID2, type: 'project', id: ID, title: 'P' },
+        { organizationId: ID2, type: 'program', id: ID, title: 'Prog' },
+      ],
     });
     expect(parsed.query).toBe('q');
+    expect(parsed.results).toHaveLength(3);
     expect(
       HubSearchOut.safeParse({
         query: 'q',
-        tasks: [{ id: ID, organizationId: ID2, title: 'T', state: 'todo', priority: 'invalid' }],
-        projects: [],
+        results: [{ organizationId: ID2, type: 'nonsense', id: ID, title: 'T' }],
       }).success,
     ).toBe(false);
+  });
+
+  it('HubActivityOut parses with a cursor', () => {
+    const parsed = HubActivityOut.parse({
+      items: [
+        {
+          id: ID,
+          organizationId: ID2,
+          subjectType: 'task',
+          subjectId: 'sub',
+          type: 'created',
+          metadata: {},
+          createdAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+      nextCursor: 'cur',
+    });
+    expect(parsed.items).toHaveLength(1);
+    expect(parsed.nextCursor).toBe('cur');
   });
 });
 

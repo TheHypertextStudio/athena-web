@@ -45,17 +45,16 @@ export default function TodayPage(): JSX.Element {
     setError(null);
     const date = todayISODate();
     try {
-      const [todayRes, portfolioRes] = await Promise.all([
-        api.v1.hub.today.$get({ query: { date } }),
-        api.v1.hub.portfolio.$get(),
-      ]);
+      const todayRes = await api.v1.hub.today.$get({ query: { date } });
       if (!todayRes.ok) {
         setError(await readProblem(todayRes, 'Could not load your day.'));
         return;
       }
       const today = await todayRes.json();
-      const projects = portfolioRes.ok ? (await portfolioRes.json()).projects : [];
-      setData({ date: today.date, tasks: today.tasks, projects });
+      // NOTE: interim — the full three-pane cockpit (calendar + needs-attention from
+      // today.needsAttention, portfolio swimlanes) is built in Frontend lane A. For now
+      // render the daily plan; the needs-attention column shows its empty state.
+      setData({ date: today.date, tasks: today.plan, projects: [] });
     } catch (caught) {
       setError(readError(caught, 'Something went wrong loading your day.'));
     } finally {

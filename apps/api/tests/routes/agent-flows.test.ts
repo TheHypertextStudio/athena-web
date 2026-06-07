@@ -221,7 +221,9 @@ describe('POST /:id/run (agent session via the AgentRuntime port)', () => {
   it('approve resolves the proposed action and advances the session to running', async () => {
     const s = await seedOrg();
     const sessionId = await seedSession(s);
-    const app = appFor(agentSessions, s.orgId, ['contribute']);
+    // `assign` satisfies the `contribute` needed to run and the `assign` needed to approve
+    // (approving an agent's proposed write is an `assign`-level act, permissions §9.3).
+    const app = appFor(agentSessions, s.orgId, ['assign']);
 
     const ran = await app.request(`/${sessionId}/run`, {
       method: 'POST',

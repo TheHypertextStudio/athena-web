@@ -446,17 +446,20 @@ describe('hub router', () => {
 
   it('empty-org-set aggregations return empty', async () => {
     const app = appWithSession(hub, fakeSession('user_no_orgs'));
-    expect(
-      (await body<{ tasks: unknown[] }>(await app.request('/today?date=2026-01-01'))).tasks,
-    ).toHaveLength(0);
-    expect(
-      (await body<{ projects: unknown[] }>(await app.request('/portfolio'))).projects,
-    ).toHaveLength(0);
-    const search = await body<{ tasks: unknown[]; projects: unknown[] }>(
-      await app.request('/search?q=x'),
+    const today = await body<{ plan: unknown[]; needsAttention: { inbox: number } }>(
+      await app.request('/today?date=2026-01-01'),
     );
-    expect(search.tasks).toHaveLength(0);
-    expect(search.projects).toHaveLength(0);
+    expect(today.plan).toHaveLength(0);
+    expect(today.needsAttention.inbox).toBe(0);
+    expect(
+      (await body<{ swimlanes: unknown[] }>(await app.request('/portfolio'))).swimlanes,
+    ).toHaveLength(0);
+    expect(
+      (await body<{ results: unknown[] }>(await app.request('/search?q=x'))).results,
+    ).toHaveLength(0);
+    expect((await body<{ items: unknown[] }>(await app.request('/activity'))).items).toHaveLength(
+      0,
+    );
     // Inbox is filtered by user, not org, so it is allowed even with no orgs.
     expect((await body<{ items: unknown[] }>(await app.request('/inbox'))).items).toHaveLength(0);
   });
@@ -497,8 +500,8 @@ describe('hub router', () => {
       .values({ hubId, refOrganizationId: orgId, refTaskId: planned!.id, date });
 
     const app = appWithSession(hub, fakeSession(userId));
-    const today = await body<{ tasks: { id: string }[] }>(await app.request(`/today?date=${date}`));
-    const ids = today.tasks.map((t) => t.id);
+    const today = await body<{ plan: { id: string }[] }>(await app.request(`/today?date=${date}`));
+    const ids = today.plan.map((t) => t.id);
     expect(ids).toContain(due!.id);
     expect(ids).toContain(planned!.id);
   });
@@ -519,8 +522,8 @@ describe('hub router', () => {
       createdBy: humanActorId,
     });
     const app = appWithSession(hub, fakeSession(userId));
-    const today = await body<{ tasks: unknown[] }>(await app.request(`/today?date=${date}`));
-    expect(today.tasks.length).toBeGreaterThanOrEqual(1);
+    const today = await body<{ plan: unknown[] }>(await app.request(`/today?date=${date}`));
+    expect(today.plan.length).toBeGreaterThanOrEqual(1);
   });
 
   it('today: user with org membership but no hub row uses the empty-planned branch', async () => {
@@ -534,8 +537,8 @@ describe('hub router', () => {
       .insert(schema.actor)
       .values({ organizationId: orgId, kind: 'human', displayName: 'NoHub', userId: user!.id });
     const app = appWithSession(hub, fakeSession(user!.id));
-    const today = await body<{ tasks: unknown[] }>(await app.request('/today?date=2026-06-01'));
-    expect(today.tasks).toHaveLength(0);
+    const today = await body<{ plan: unknown[] }>(await app.request('/today?date=2026-06-01'));
+    expect(today.plan).toHaveLength(0);
   });
 
   it('inbox, portfolio, and search return scoped items', async () => {
@@ -567,14 +570,15 @@ describe('hub router', () => {
     expect(
       (await body<{ items: unknown[] }>(await app.request('/inbox'))).items.length,
     ).toBeGreaterThanOrEqual(1);
-    expect(
-      (await body<{ projects: unknown[] }>(await app.request('/portfolio'))).projects.length,
-    ).toBeGreaterThanOrEqual(1);
-    const search = await body<{ tasks: unknown[]; projects: unknown[] }>(
+    const portfolio = await body<{ swimlanes: { organization: { id: string } }[] }>(
+      await app.request('/portfolio'),
+    );
+    expect(portfolio.swimlanes.length).toBeGreaterThanOrEqual(1);
+    const search = await body<{ results: { type: string }[] }>(
       await app.request('/search?q=Searchable'),
     );
-    expect(search.tasks.length).toBeGreaterThanOrEqual(1);
-    expect(search.projects.length).toBeGreaterThanOrEqual(1);
+    expect(search.results.some((r) => r.type === 'task')).toBe(true);
+    expect(search.results.some((r) => r.type === 'project')).toBe(true);
   });
 });
 
@@ -673,7 +677,9 @@ describe('agent-sessions router (list/get + approve/reject conflict paths)', () 
 
   it('approve/reject: 404 missing, 409 not-awaiting, 409 no-proposed-action', async () => {
     const pending = await seedSession('pending');
-    const w = appWithActor(agentSessions, pending.orgId, ['contribute']);
+    // Approving/rejecting is an `assign`-level act (permissions §9.3), so the actor here
+    // holds `assign` to reach the conflict paths below.
+    const w = appWithActor(agentSessions, pending.orgId, ['assign']);
     expect(
       (await w.request(`/${MISSING}/approve`, { method: 'POST', headers: J, body: '{}' })).status,
     ).toBe(404);
@@ -685,7 +691,7 @@ describe('agent-sessions router (list/get + approve/reject conflict paths)', () 
 
     // Awaiting approval but no proposed action row → 409.
     const awaiting = await seedSession('awaiting_approval');
-    const wa = appWithActor(agentSessions, awaiting.orgId, ['contribute']);
+    const wa = appWithActor(agentSessions, awaiting.orgId, ['assign']);
     expect(
       (
         await wa.request(`/${awaiting.sessionId}/reject`, {
@@ -710,6 +716,28 @@ describe('agent-sessions router (list/get + approve/reject conflict paths)', () 
       (await v.request(`/${pending.sessionId}/reject`, { method: 'POST', headers: J, body: '{}' }))
         .status,
     ).toBe(403);
+
+    // 403 for a contribute-only member: approve/reject sit above `contribute` at `assign`
+    // (the legacy session-level shortcut must not undercut the activity-scoped gate).
+    const cont = appWithActor(agentSessions, pending.orgId, ['contribute']);
+    expect(
+      (
+        await cont.request(`/${pending.sessionId}/approve`, {
+          method: 'POST',
+          headers: J,
+          body: '{}',
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await cont.request(`/${pending.sessionId}/reject`, {
+          method: 'POST',
+          headers: J,
+          body: '{}',
+        })
+      ).status,
+    ).toBe(403);
   });
 
   it('reject: flips a proposed action to rejected and cancels the session', async () => {
@@ -722,7 +750,8 @@ describe('agent-sessions router (list/get + approve/reject conflict paths)', () 
       body: { action: { kind: 'update_task', summary: 'x' } },
       approvalStatus: 'proposed',
     });
-    const w = appWithActor(agentSessions, awaiting.orgId, ['contribute']);
+    // Rejecting is an `assign`-level act (permissions §9.3).
+    const w = appWithActor(agentSessions, awaiting.orgId, ['assign']);
     const res = await w.request(`/${awaiting.sessionId}/reject`, {
       method: 'POST',
       headers: J,

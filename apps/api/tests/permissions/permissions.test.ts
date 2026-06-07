@@ -104,6 +104,57 @@ describe('orgContextMiddleware', () => {
     expect(ctx.capabilities).toEqual([]);
   });
 
+  it('does NOT confer capabilities from a role belonging to another org (org-scoped join)', async () => {
+    // Defense-in-depth behind the members PATCH in-org role validation: even if an actor's
+    // roleId somehow points at ANOTHER org's role (the FK is a bare global PK), the
+    // org-scoped role join must resolve no row → empty capabilities, never that other
+    // org's capabilities.
+    const slugA = `mwx-${Math.random().toString(36).slice(2, 10)}`;
+    const [orgA] = await db
+      .insert(schema.organization)
+      .values({ name: slugA, slug: slugA, lifecycleState: 'active' })
+      .returning({ id: schema.organization.id });
+    const slugB = `mwy-${Math.random().toString(36).slice(2, 10)}`;
+    const [orgB] = await db
+      .insert(schema.organization)
+      .values({ name: slugB, slug: slugB, lifecycleState: 'active' })
+      .returning({ id: schema.organization.id });
+
+    // A privileged role in org B (NOT org A).
+    const [roleB] = await db
+      .insert(schema.role)
+      .values({
+        organizationId: orgB!.id,
+        key: 'owner',
+        name: 'Owner',
+        isSystem: true,
+        capabilities: ['manage'],
+      })
+      .returning({ id: schema.role.id });
+
+    const [user] = await db
+      .insert(schema.user)
+      .values({ name: 'Eve', email: `${slugA}@e.com` })
+      .returning({ id: schema.user.id });
+    const userId = user!.id;
+
+    // The org-A actor carries org B's roleId (the cross-org confusion vector).
+    await db.insert(schema.actor).values({
+      organizationId: orgA!.id,
+      kind: 'human',
+      displayName: 'Eve',
+      userId,
+      roleId: roleB!.id,
+    });
+
+    const res = await ctxApp(fakeSession(userId)).request(`/${orgA!.id}/probe`);
+    expect(res.status).toBe(200);
+    const ctx = (await res.json()) as { roleId: string | null; capabilities: string[] };
+    // The actor's roleId field is still surfaced, but the join confers NO capabilities.
+    expect(ctx.roleId).toBe(roleB!.id);
+    expect(ctx.capabilities).toEqual([]);
+  });
+
   it('404s when the session user is not a member of the org (existence-hiding)', async () => {
     const slug = `mw3-${Math.random().toString(36).slice(2, 10)}`;
     const [org] = await db

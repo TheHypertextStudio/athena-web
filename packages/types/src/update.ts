@@ -48,3 +48,13 @@ export const UpdateOut = z
   .meta({ id: 'UpdateOut', description: 'A status update.' });
 /** Update representation value. */
 export type UpdateOut = z.infer<typeof UpdateOut>;
+
+/** Acknowledgement returned when an Update is deleted (the subject health is recomputed). */
+export const UpdateRemoved = z
+  .object({
+    id: UpdateId,
+    removed: z.literal(true),
+  })
+  .meta({ id: 'UpdateRemoved', description: 'A deleted-update acknowledgement.' });
+/** Removal acknowledgement value. */
+export type UpdateRemoved = z.infer<typeof UpdateRemoved>;

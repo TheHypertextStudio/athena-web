@@ -12,7 +12,15 @@
  * `contribute` to link/patch, `manage` to delete); association edges never cascade
  * permission. Every query is scoped by `actorCtx.orgId`.
  */
-import { db, initiative, initiativeProgram, initiativeProject, program, project } from '@docket/db';
+import {
+  actor,
+  db,
+  initiative,
+  initiativeProgram,
+  initiativeProject,
+  program,
+  project,
+} from '@docket/db';
 import type { Health } from '@docket/types';
 import {
   InitiativeCreate,
@@ -76,6 +84,32 @@ async function loadInitiative(orgId: string, id: string): Promise<InitiativeRow>
   const row = rows[0];
   if (!row) throw new NotFoundError('Initiative not found');
   return row;
+}
+
+/**
+ * Assert a body-provided `ownerId` references an Actor in the caller's org, or 404.
+ *
+ * @remarks
+ * `initiative.owner_id → actor.id` is a bare FK against the actor's *global* PK with no
+ * `organization_id` constraint baked in (data-model §0.2: tenant isolation lives in the
+ * data-access layer, never the bare FK), so the database alone would accept an `ownerId`
+ * pointing at another tenant's actor. This is the same FK-class hardening `POST`/`PATCH`
+ * on tasks and projects already apply: before writing the reference we re-read the actor
+ * scoped by `eq(actor.organizationId, orgId)` and 404 (existence-hiding) when it is absent.
+ * A `null`/`undefined` `ownerId` is a no-op (clearing or leaving the owner untouched).
+ *
+ * @param orgId - The tenant the owner must belong to.
+ * @param ownerId - The candidate owner actor id (a no-op when `null`/`undefined`).
+ * @throws {NotFoundError} When the owner is missing or owned by another org.
+ */
+async function assertOwnerInOrg(orgId: string, ownerId: string | null | undefined): Promise<void> {
+  if (ownerId === null || ownerId === undefined) return;
+  const rows = await db
+    .select({ id: actor.id })
+    .from(actor)
+    .where(and(eq(actor.id, ownerId), eq(actor.organizationId, orgId)))
+    .limit(1);
+  if (!rows[0]) throw new NotFoundError('Owner not found');
 }
 
 /**
@@ -184,6 +218,12 @@ const initiatives = new Hono<AppEnv>()
   .post('/', capabilityGuard('contribute'), zJson(InitiativeCreate), async (c) => {
     const { orgId, actorId } = c.get('actorCtx');
     const body = c.req.valid('json');
+
+    // Tenant isolation: a body-provided owner must be an actor in the caller's org. The
+    // bare FK references the actor's global PK, so without this a CREATE could attach
+    // another tenant's actor as the initiative owner.
+    await assertOwnerInOrg(orgId, body.ownerId);
+
     const inserted = await db
       .insert(initiative)
       .values({
@@ -239,6 +279,12 @@ const initiatives = new Hono<AppEnv>()
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const body = c.req.valid('json');
+
+      // Tenant isolation: a re-pointed owner must be an actor in the caller's org. The
+      // bare FK references the actor's global PK, so without this a PATCH could attach
+      // another tenant's actor as the initiative owner. Omitting `ownerId` is a no-op.
+      await assertOwnerInOrg(orgId, body.ownerId);
+
       const updated = await db
         .update(initiative)
         .set({

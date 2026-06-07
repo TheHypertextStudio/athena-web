@@ -482,6 +482,128 @@ describe('hub /portfolio (org swimlanes → program lanes → project bars)', ()
     );
     expect(portfolio.swimlanes.every((s) => s.organization.id !== foreign.orgId)).toBe(true);
   });
+
+  it('the initiativeId chip filters swimlanes to the initiative’s associated programs/projects', async () => {
+    const { userId } = await seedUserWithHub();
+    const org = await seedBaseOrg(db, schema);
+    await joinOrg(userId, org.orgId);
+
+    // An initiative the user filters by, plus a program + two projects.
+    const [init] = await db
+      .insert(schema.initiative)
+      .values({ organizationId: org.orgId, name: 'Q3 Push', createdBy: org.humanActorId })
+      .returning({ id: schema.initiative.id });
+
+    const [linkedProgram] = await db
+      .insert(schema.program)
+      .values({
+        organizationId: org.orgId,
+        name: 'Linked Prog',
+        status: 'active',
+        createdBy: org.humanActorId,
+      })
+      .returning({ id: schema.program.id });
+    const [otherProgram] = await db
+      .insert(schema.program)
+      .values({
+        organizationId: org.orgId,
+        name: 'Other Prog',
+        status: 'active',
+        createdBy: org.humanActorId,
+      })
+      .returning({ id: schema.program.id });
+
+    const [linkedProject] = await db
+      .insert(schema.project)
+      .values({
+        organizationId: org.orgId,
+        name: 'Linked Proj',
+        teamId: org.teamId,
+        status: 'active',
+        createdBy: org.humanActorId,
+      })
+      .returning({ id: schema.project.id });
+    const [unlinkedProject] = await db
+      .insert(schema.project)
+      .values({
+        organizationId: org.orgId,
+        name: 'Unlinked Proj',
+        teamId: org.teamId,
+        status: 'active',
+        createdBy: org.humanActorId,
+      })
+      .returning({ id: schema.project.id });
+
+    // Associate ONLY linkedProgram + linkedProject with the initiative.
+    await db
+      .insert(schema.initiativeProgram)
+      .values({ initiativeId: init!.id, programId: linkedProgram!.id, organizationId: org.orgId });
+    await db
+      .insert(schema.initiativeProject)
+      .values({ initiativeId: init!.id, projectId: linkedProject!.id, organizationId: org.orgId });
+
+    const app = appWithSession(hub, fakeSession(userId));
+    const filtered = await body<{
+      swimlanes: {
+        organization: { id: string };
+        programs: { program: { id: string } }[];
+        unassigned: { id: string }[];
+      }[];
+    }>(await app.request(`/portfolio?initiativeId=${init!.id}`));
+
+    const lane = filtered.swimlanes.find((s) => s.organization.id === org.orgId)!;
+    expect(lane).toBeDefined();
+    // Only the linked program lane is present.
+    expect(lane.programs.map((p) => p.program.id)).toEqual([linkedProgram!.id]);
+    // Only the linked project appears in the unassigned bucket (it has no programId).
+    expect(lane.unassigned.map((p) => p.id)).toEqual([linkedProject!.id]);
+    expect(lane.unassigned.map((p) => p.id)).not.toContain(unlinkedProject!.id);
+
+    // Without the chip, BOTH programs and projects show.
+    const unfiltered = await body<{
+      swimlanes: {
+        organization: { id: string };
+        programs: { program: { id: string } }[];
+        unassigned: { id: string }[];
+      }[];
+    }>(await app.request('/portfolio'));
+    const fullLane = unfiltered.swimlanes.find((s) => s.organization.id === org.orgId)!;
+    expect(fullLane.programs.map((p) => p.program.id).sort()).toEqual(
+      [linkedProgram!.id, otherProgram!.id].sort(),
+    );
+    expect(fullLane.unassigned.map((p) => p.id).sort()).toEqual(
+      [linkedProject!.id, unlinkedProject!.id].sort(),
+    );
+  });
+
+  it('an initiativeId in a foreign org yields empty swimlane content (tenant isolation)', async () => {
+    const { userId } = await seedUserWithHub();
+    const mine = await seedBaseOrg(db, schema);
+    const foreign = await seedBaseOrg(db, schema);
+    await joinOrg(userId, mine.orgId);
+
+    // An in-flight project in MY org, but the filter names a FOREIGN initiative.
+    await db.insert(schema.project).values({
+      organizationId: mine.orgId,
+      name: 'Mine',
+      teamId: mine.teamId,
+      status: 'active',
+      createdBy: mine.humanActorId,
+    });
+    const [foreignInit] = await db
+      .insert(schema.initiative)
+      .values({ organizationId: foreign.orgId, name: 'Theirs', createdBy: foreign.humanActorId })
+      .returning({ id: schema.initiative.id });
+
+    const app = appWithSession(hub, fakeSession(userId));
+    const portfolio = await body<{
+      swimlanes: { organization: { id: string }; programs: unknown[]; unassigned: unknown[] }[];
+    }>(await app.request(`/portfolio?initiativeId=${foreignInit!.id}`));
+    const lane = portfolio.swimlanes.find((s) => s.organization.id === mine.orgId)!;
+    // The foreign initiative resolves to no in-scope edges → nothing shows for my org.
+    expect(lane.programs).toEqual([]);
+    expect(lane.unassigned).toEqual([]);
+  });
 });
 
 describe('hub /search (cross-org typed hits)', () => {

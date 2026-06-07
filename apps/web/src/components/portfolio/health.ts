@@ -53,12 +53,35 @@ export const HEALTH_FILL_CLASS: Record<Health, string> = {
 /** The dot/swatch fill for a health verdict (legend chips, program-lane swatches). */
 export const HEALTH_DOT_CLASS = HEALTH_FILL_CLASS;
 
-/** The fill used for a bar/lane with no verdict yet (the neutral bucket). */
-export const HEALTH_UNKNOWN_FILL_CLASS = 'bg-muted-foreground/30';
+/**
+ * The dot/swatch fill used for a bar/lane with no verdict yet (the neutral bucket).
+ *
+ * @remarks
+ * Used for the small legend swatch and the program-lane / unscheduled-tray dots, this is a
+ * *solid* mid-grey (`muted-foreground`) so a tiny no-verdict marker stays clearly visible in
+ * both light and dark themes — a translucent wash (the old `/30`) was effectively invisible.
+ */
+export const HEALTH_UNKNOWN_FILL_CLASS = 'bg-muted-foreground';
 
-/** The fill class for a bar/swatch, defaulting to the neutral no-verdict fill. */
+/** The fill class for a swatch/dot, defaulting to the neutral no-verdict fill. */
 export function fillFor(health: Health | null): string {
   return health ? HEALTH_FILL_CLASS[health] : HEALTH_UNKNOWN_FILL_CLASS;
+}
+
+/**
+ * The full class string for a *project bar* body, keyed by verdict.
+ *
+ * @remarks
+ * A bar is a large surface carrying a label, so contrast matters more than for a dot. The
+ * three verdict bars take a saturated fill with white text and no border; a *no-verdict* bar
+ * takes the neutral `secondary` surface + its theme-aware foreground (never washed-out white
+ * on a light grey) plus a visible `border`, so every bar — verdict or not — reads as a solid,
+ * legible bar against the timeline grid.
+ */
+export function barClassFor(health: Health | null): string {
+  return health
+    ? `${HEALTH_FILL_CLASS[health]} border-transparent text-white`
+    : 'bg-secondary text-secondary-foreground border-border';
 }
 
 /** The display label for a health verdict, defaulting to the no-verdict label. */

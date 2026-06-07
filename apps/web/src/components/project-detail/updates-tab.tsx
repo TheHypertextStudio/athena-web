@@ -8,13 +8,24 @@
  * timestamp, the health verdict it set, and its body. A composer at the top posts a new
  * update via `POST …/updates`; the newest update's health also becomes the project's current
  * health (api-rpc-contract §3.9), so the page lifts the posted update back up to refresh the
- * overview. Loading uses {@link Skeleton} rows; the empty state invites the first post; a
- * failed load is announced via `role="alert"`.
+ * overview. The health picker is a styled `@docket/ui` {@link DropdownMenu} (never a bare
+ * `<select>`), matching the program updates panel: a calm bordered trigger showing the chosen
+ * verdict with its token dot. Loading uses {@link Skeleton} rows; the empty state invites the
+ * first post; a failed load is announced via `role="alert"`.
  */
 import type { Health, UpdateOut } from '@docket/types';
 import { cn } from '@docket/ui';
 import { ActorAvatar } from '@docket/ui/components';
-import { Button, Skeleton } from '@docket/ui/primitives';
+import { ChevronDown } from '@docket/ui/icons';
+import {
+  Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+  Skeleton,
+} from '@docket/ui/primitives';
 import type { JSX } from 'react';
 import { useState } from 'react';
 
@@ -22,13 +33,21 @@ import type { ActorDirectory } from './actor-directory';
 import { relativeTime } from './format-time';
 import { HEALTH_DOT_CLASS, HEALTH_LABEL } from './health';
 
+/** A composer health choice (empty string = "no health change"). */
+type HealthChoice = Health | '';
+
 /** The selectable health verdicts in the composer (plus a "no change" option). */
-const HEALTH_OPTIONS: readonly { value: Health | ''; label: string }[] = [
+const HEALTH_OPTIONS: readonly { value: HealthChoice; label: string }[] = [
   { value: '', label: 'No health change' },
-  { value: 'on_track', label: 'On track' },
-  { value: 'at_risk', label: 'At risk' },
-  { value: 'off_track', label: 'Off track' },
+  { value: 'on_track', label: HEALTH_LABEL.on_track },
+  { value: 'at_risk', label: HEALTH_LABEL.at_risk },
+  { value: 'off_track', label: HEALTH_LABEL.off_track },
 ];
+
+/** Resolve a composer health choice to its menu/trigger label. */
+function choiceLabel(choice: HealthChoice): string {
+  return HEALTH_OPTIONS.find((option) => option.value === choice)?.label ?? 'No health change';
+}
 
 /** Props for {@link UpdatesTab}. */
 export interface UpdatesTabProps {
@@ -64,7 +83,7 @@ export function UpdatesTab({
   onPost,
 }: UpdatesTabProps): JSX.Element {
   const [body, setBody] = useState('');
-  const [health, setHealth] = useState<Health | ''>('');
+  const [health, setHealth] = useState<HealthChoice>('');
 
   function submit(event: React.SyntheticEvent): void {
     event.preventDefault();
@@ -94,23 +113,45 @@ export function UpdatesTab({
           className="border-input bg-background placeholder:text-muted-foreground focus-visible:ring-ring min-h-20 w-full resize-y rounded-md border px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1"
         />
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <label className="text-muted-foreground flex items-center gap-2 text-sm">
-            Set health
-            <select
-              aria-label="Update health"
-              value={health}
-              onChange={(event) => {
-                setHealth(event.target.value as Health | '');
-              }}
-              className="border-input bg-background focus-visible:ring-ring text-foreground rounded-md border px-2 py-1 text-sm shadow-sm outline-none focus-visible:ring-1"
-            >
-              {HEALTH_OPTIONS.map((opt) => (
-                <option key={opt.value || 'none'} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="flex items-center gap-2">
+            <span className="text-muted-foreground text-sm">Set health</span>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-1.5" aria-label="Update health">
+                  {health !== '' ? (
+                    <span
+                      aria-hidden="true"
+                      className={cn('size-1.5 rounded-full', HEALTH_DOT_CLASS[health])}
+                    />
+                  ) : null}
+                  <span>{choiceLabel(health)}</span>
+                  <ChevronDown className="h-4 w-4 opacity-60" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="min-w-[12rem]">
+                <DropdownMenuRadioGroup
+                  value={health}
+                  onValueChange={(next) => {
+                    setHealth(next as HealthChoice);
+                  }}
+                >
+                  {HEALTH_OPTIONS.map((option) => (
+                    <DropdownMenuRadioItem key={option.value || 'none'} value={option.value}>
+                      <span className="flex items-center gap-2">
+                        {option.value !== '' ? (
+                          <span
+                            aria-hidden="true"
+                            className={cn('size-1.5 rounded-full', HEALTH_DOT_CLASS[option.value])}
+                          />
+                        ) : null}
+                        {option.label}
+                      </span>
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
           <Button type="submit" size="sm" disabled={posting || body.trim().length === 0}>
             {posting ? 'Posting…' : 'Post update'}
           </Button>

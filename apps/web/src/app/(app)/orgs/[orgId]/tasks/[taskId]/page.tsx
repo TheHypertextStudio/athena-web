@@ -4,6 +4,7 @@ import {
   type AgentOut,
   type CommentOut,
   type MemberOut,
+  type MilestoneOut,
   type Priority,
   type ProgramOut,
   type ProjectOut,
@@ -24,17 +25,13 @@ import { PropertyRow } from '@/components/task-detail/PropertyRow';
 import { StatusPicker } from '@/components/task-detail/StatusPicker';
 import { Subtasks } from '@/components/task-detail/Subtasks';
 import { api } from '@/lib/api';
+import { formatCalendarDate } from '@/lib/format-date';
 import { readError, readProblem } from '@/lib/problem';
 import { stateTypeOf } from '@/lib/work-state';
 
 /** Format an ISO date/datetime string as a short, locale-aware day, or a dash when absent. */
 function formatDate(value: string | null | undefined): string {
-  if (!value) return '—';
-  return new Date(value).toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
+  return formatCalendarDate(value) ?? '—';
 }
 
 /**
@@ -69,6 +66,7 @@ export default function TaskDetailPage(): JSX.Element {
   const [programs, setPrograms] = useState<readonly ProgramOut[]>([]);
   const [members, setMembers] = useState<readonly MemberOut[]>([]);
   const [agents, setAgents] = useState<readonly AgentOut[]>([]);
+  const [milestones, setMilestones] = useState<readonly MilestoneOut[]>([]);
   const [comments, setComments] = useState<readonly CommentOut[]>([]);
   const [activities, setActivities] = useState<readonly SessionActivityOut[]>([]);
 
@@ -93,27 +91,37 @@ export default function TaskDetailPage(): JSX.Element {
       const detail = await taskRes.json();
       setTask(detail);
 
-      const [teamRes, projectsRes, programsRes, membersRes, agentsRes, commentsRes, sessionsRes] =
-        await Promise.all([
-          api.v1.orgs[':orgId'].teams[':teamId'].$get({
-            param: { orgId, teamId: detail.teamId },
-          }),
-          api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
-          api.v1.orgs[':orgId'].programs.$get({ param: { orgId } }),
-          api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
-          api.v1.orgs[':orgId'].agents.$get({ param: { orgId } }),
-          api.v1.orgs[':orgId'].comments.$get({
-            param: { orgId },
-            query: { subjectType: 'task', subjectId: taskId },
-          }),
-          api.v1.orgs[':orgId'].sessions.$get({ param: { orgId }, query: {} }),
-        ]);
+      const [
+        teamRes,
+        projectsRes,
+        programsRes,
+        membersRes,
+        agentsRes,
+        milestonesRes,
+        commentsRes,
+        sessionsRes,
+      ] = await Promise.all([
+        api.v1.orgs[':orgId'].teams[':teamId'].$get({
+          param: { orgId, teamId: detail.teamId },
+        }),
+        api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
+        api.v1.orgs[':orgId'].programs.$get({ param: { orgId } }),
+        api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
+        api.v1.orgs[':orgId'].agents.$get({ param: { orgId } }),
+        api.v1.orgs[':orgId'].milestones.$get({ param: { orgId }, query: {} }),
+        api.v1.orgs[':orgId'].comments.$get({
+          param: { orgId },
+          query: { subjectType: 'task', subjectId: taskId },
+        }),
+        api.v1.orgs[':orgId'].sessions.$get({ param: { orgId }, query: {} }),
+      ]);
 
       if (teamRes.ok) setWorkflowStates((await teamRes.json()).workflowStates);
       if (projectsRes.ok) setProjects((await projectsRes.json()).items);
       if (programsRes.ok) setPrograms((await programsRes.json()).items);
       if (membersRes.ok) setMembers((await membersRes.json()).items);
       if (agentsRes.ok) setAgents((await agentsRes.json()).items);
+      if (milestonesRes.ok) setMilestones((await milestonesRes.json()).items);
       if (commentsRes.ok) setComments((await commentsRes.json()).items);
 
       // The task's agent session (if any) carries the inline activity stream. Sessions are
@@ -155,6 +163,13 @@ export default function TaskDetailPage(): JSX.Element {
     (programId: string): string =>
       programs.find((program) => program.id === programId)?.name ?? programLabel,
     [programs, programLabel],
+  );
+
+  /** Resolve a milestone id to its name, or `null` when it cannot be found. */
+  const milestoneName = useCallback(
+    (milestoneId: string): string | null =>
+      milestones.find((milestone) => milestone.id === milestoneId)?.name ?? null,
+    [milestones],
   );
 
   /** Resolve an actor id to display info: humans from members, agents tagged from the agent list. */
@@ -477,7 +492,7 @@ export default function TaskDetailPage(): JSX.Element {
 
             <PropertyRow label="Milestone">
               {task.milestoneId ? (
-                <span className="font-mono text-xs">{task.milestoneId}</span>
+                <span>{milestoneName(task.milestoneId) ?? 'Unknown milestone'}</span>
               ) : (
                 <span className="text-muted-foreground">None</span>
               )}

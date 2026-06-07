@@ -21,7 +21,7 @@ import Link from 'next/link';
 import type { JSX } from 'react';
 
 import { formatDate, spanCopy, statusLabel } from './format';
-import { asHealth, fillFor, labelFor } from './health';
+import { asHealth, barClassFor, labelFor } from './health';
 import { type TimeScale, pct } from './time-scale';
 
 /** The minimum bar width (% of the window) so a thin/single-date span stays clickable. */
@@ -79,8 +79,8 @@ export function ProjectBar({ bar, start, end, scale, dimmed }: ProjectBarProps):
         aria-label={ariaLabel}
         title={`${bar.name} · ${span}`}
         className={cn(
-          'focus-visible:ring-ring group absolute top-0 flex h-8 min-w-0 items-center gap-2 rounded-md px-2.5 text-left text-xs font-medium text-white shadow-sm transition-[filter,opacity] hover:brightness-110 focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:outline-none',
-          fillFor(health),
+          'focus-visible:ring-ring group absolute top-0 flex h-8 min-w-0 items-center gap-2 rounded-md border px-2.5 text-left text-xs font-medium shadow-sm transition-[filter,opacity] hover:brightness-110 focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:outline-none',
+          barClassFor(health),
           dimmed && 'opacity-30',
         )}
         style={{ left: `${left}%`, width: `${width}%` }}

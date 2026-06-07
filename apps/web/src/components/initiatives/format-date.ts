@@ -8,9 +8,15 @@
  * with the platform `Intl.DateTimeFormat` (locale-aware) into the short, axis-friendly
  * forms the timeline uses, and parse ISO date strings to epoch millis for layout math.
  */
+import { formatCalendarDate } from '@/lib/format-date';
 
 /**
  * Format an ISO date (or date-time) as a short, locale-aware calendar date.
+ *
+ * @remarks
+ * Delegates to {@link formatCalendarDate} so a bare `YYYY-MM-DD` (a project span endpoint or
+ * an initiative's target) renders as that same calendar day in every timezone, rather than
+ * rolling back a day in zones behind UTC.
  *
  * @param iso - The ISO date string, or null/undefined when unscheduled.
  * @returns a short date like `Jun 7, 2026`, or null when no date is set.
@@ -22,14 +28,7 @@
  * ```
  */
 export function formatDate(iso: string | null | undefined): string | null {
-  if (!iso) return null;
-  const ms = Date.parse(iso);
-  if (Number.isNaN(ms)) return null;
-  return new Date(ms).toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
+  return formatCalendarDate(iso);
 }
 
 /**

@@ -129,7 +129,7 @@ export default function CyclesPage(): JSX.Element {
   );
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-5xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
+    <div className="mx-auto flex h-full w-full max-w-7xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
       <header className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
         <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-semibold tracking-tight">{cycleNounPlural}</h1>
@@ -214,7 +214,7 @@ export default function CyclesPage(): JSX.Element {
                     {inSegment.length}
                   </span>
                 </div>
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div className="grid grid-cols-1 gap-3 @3xl:grid-cols-2 @6xl:grid-cols-3">
                   {inSegment.map((cycle) => (
                     <CycleCard
                       key={cycle.id}
@@ -241,7 +241,7 @@ function ListSkeleton(): JSX.Element {
       {[0, 1].map((section) => (
         <div key={section} className="flex flex-col gap-3">
           <Skeleton className="h-3 w-20" />
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 @3xl:grid-cols-2 @6xl:grid-cols-3">
             <Skeleton className="h-28 w-full rounded-xl" />
             <Skeleton className="h-28 w-full rounded-xl" />
           </div>

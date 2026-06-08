@@ -31,9 +31,20 @@ const GLOBEX: Workspace = { id: 'ORG00000000000000000000002', name: 'Globex' };
 const PERSONAL: Workspace = { id: 'ORG00000000000000000000009', name: 'My Space' };
 const WORKSPACES: readonly Workspace[] = [ACME, GLOBEX, PERSONAL];
 
-/** A test `renderLink` that mirrors the host's Next `Link` (a real anchor). */
-function renderLink(href: string, content: React.ReactNode): React.ReactNode {
-  return <a href={href}>{content}</a>;
+/**
+ * A test `renderLink` that mirrors the host's Next `Link` (a real anchor).
+ *
+ * @remarks
+ * Accepts the optional `className` the {@link TabBar} hands its anchors so the link becomes the
+ * flexing child of the tab row (matching the production `renderLink`). The sidebar calls it with
+ * two args and the class is simply absent.
+ */
+function renderLink(href: string, content: React.ReactNode, className?: string): React.ReactNode {
+  return (
+    <a href={href} className={className}>
+      {content}
+    </a>
+  );
 }
 
 /** The full set of href builders a {@link Sidebar} needs. */
@@ -526,7 +537,7 @@ describe('TabBar', () => {
   });
 
   it('is its own bar on the canvas, with the active tab fused to the main panel surface', () => {
-    render(
+    const { container } = render(
       <TabBar
         tabs={[TAB_A, TAB_B]}
         activeKey={TAB_B.key}
@@ -535,9 +546,9 @@ describe('TabBar', () => {
       />,
     );
     // The bar reads as its own chrome on the canvas tone — not a panel surface, no divider border.
-    const tablist = screen.getByRole('tablist', { name: 'Open documents' });
-    expect(tablist).toHaveClass('bg-surface-container');
-    expect(tablist).not.toHaveClass('bg-card', 'border-b');
+    const bar = container.firstElementChild as HTMLElement;
+    expect(bar).toHaveClass('bg-surface-container');
+    expect(bar).not.toHaveClass('bg-card', 'border-b');
     // The active tab takes the panel surface tone with top-only rounding so it joins the panel
     // below; the inactive tab stays on the canvas in the muted on-surface-variant tone.
     const activeTab = screen.getByText('Q3 Launch').closest('[role="tab"]');
@@ -545,6 +556,93 @@ describe('TabBar', () => {
     const inactiveTab = screen.getByText('Fix the build').closest('[role="tab"]');
     expect(inactiveTab).toHaveClass('text-on-surface-variant');
     expect(inactiveTab).not.toHaveClass('bg-surface');
+  });
+
+  it('gives each tab a fixed width with a flexing, truncating title and a right-pinned close', () => {
+    render(
+      <TabBar
+        tabs={[TAB_A, TAB_B]}
+        activeKey={TAB_A.key}
+        renderLink={renderLink}
+        onClose={() => undefined}
+      />,
+    );
+    const tab = screen.getByText('Fix the build').closest<HTMLElement>('[role="tab"]')!;
+    // Fixed width, never shrinks (so a crowded bar scrolls instead of squishing tabs).
+    expect(tab).toHaveClass('w-40', 'shrink-0');
+    // The title is the routing anchor itself, made the flexing child so it fills + truncates.
+    const link = within(tab).getByRole('link', { name: 'Fix the build' });
+    expect(link).toHaveClass('flex-1', 'min-w-0');
+    // The title text node truncates with an ellipsis.
+    expect(screen.getByText('Fix the build')).toHaveClass('truncate', 'min-w-0');
+    // The close button is the last child of the tab and never shrinks, so it pins to the right
+    // edge regardless of title length.
+    const close = within(tab).getByRole('button', { name: 'Close Fix the build' });
+    expect(close).toHaveClass('shrink-0');
+    expect(tab.lastElementChild).toBe(close);
+  });
+
+  it('scrolls horizontally only — the strip never scrolls vertically or grows a second row', () => {
+    const { container } = render(
+      <TabBar
+        tabs={[TAB_A, TAB_B]}
+        activeKey={TAB_A.key}
+        renderLink={renderLink}
+        onClose={() => undefined}
+      />,
+    );
+    // The outer bar is a fixed-height strip that clips overflow entirely.
+    const bar = container.firstElementChild as HTMLElement;
+    expect(bar).toHaveClass('h-10', 'overflow-hidden');
+    // The scroll track scrolls on X but CLIPS Y, so a tall tab never makes the chrome scroll
+    // vertically or wrap to a second row.
+    const tablist = screen.getByRole('tablist', { name: 'Open documents' });
+    expect(tablist).toHaveClass('overflow-x-auto', 'overflow-y-hidden');
+    expect(tablist).not.toHaveClass('overflow-y-auto', 'overflow-y-scroll', 'flex-wrap');
+  });
+
+  it('pins an overflow menu listing every open document to jump to', async () => {
+    render(
+      <TabBar
+        tabs={[TAB_A, TAB_B]}
+        activeKey={TAB_B.key}
+        renderLink={renderLink}
+        onClose={() => undefined}
+      />,
+    );
+    // The pinned control announces the open-document count and lives outside the scroll track.
+    const trigger = screen.getByRole('button', { name: 'Open documents (2)' });
+    openMenu(trigger);
+    // It lists every open document by title (type glyph + title), even those scrolled out of
+    // view — the strategy for a crowded bar. The active row is marked.
+    await waitFor(() => expect(screen.getByRole('menu')).toBeInTheDocument());
+    const menu = screen.getByRole('menu');
+    const jumpA = within(menu).getByRole('link', { name: 'Fix the build' });
+    expect(jumpA).toHaveAttribute('href', '/orgs/o1/tasks/t1');
+    expect(within(menu).getByRole('link', { name: 'Q3 Launch' })).toHaveAttribute(
+      'href',
+      '/orgs/o1/projects/p1',
+    );
+    expect(within(menu).getByRole('menuitem', { name: /Q3 Launch/ })).toHaveAttribute(
+      'aria-current',
+      'true',
+    );
+  });
+
+  it('closes any open document from the overflow menu', async () => {
+    const onClose = vi.fn();
+    render(
+      <TabBar
+        tabs={[TAB_A, TAB_B]}
+        activeKey={TAB_A.key}
+        renderLink={renderLink}
+        onClose={onClose}
+      />,
+    );
+    openMenu(screen.getByRole('button', { name: 'Open documents (2)' }));
+    const menu = await screen.findByRole('menu');
+    fireEvent.click(within(menu).getByRole('button', { name: 'Close Q3 Launch' }));
+    expect(onClose).toHaveBeenCalledWith(TAB_B.key);
   });
 });
 

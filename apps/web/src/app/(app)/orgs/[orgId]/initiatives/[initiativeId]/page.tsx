@@ -287,11 +287,11 @@ export default function InitiativeDetailPage(): JSX.Element {
 
   if (loading) {
     return (
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
         <Skeleton className="h-4 w-32" />
         <Skeleton className="h-9 w-80" />
         <Skeleton className="h-4 w-full max-w-xl" />
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_18rem]">
+        <div className="grid grid-cols-1 gap-6 @4xl:grid-cols-[minmax(0,1fr)_18rem]">
           <Skeleton className="h-80 w-full rounded-xl" />
           <Skeleton className="h-64 w-full rounded-xl" />
         </div>
@@ -301,7 +301,7 @@ export default function InitiativeDetailPage(): JSX.Element {
 
   if (error) {
     return (
-      <div className="mx-auto w-full max-w-5xl p-4 sm:p-6 lg:p-8">
+      <div className="mx-auto w-full max-w-6xl p-4 sm:p-6 lg:p-8">
         <p role="alert" className="border-border text-destructive rounded-lg border p-4 text-sm">
           {error}
         </p>
@@ -311,7 +311,7 @@ export default function InitiativeDetailPage(): JSX.Element {
 
   if (!detail) {
     return (
-      <div className="mx-auto w-full max-w-5xl p-4 sm:p-6 lg:p-8">
+      <div className="mx-auto w-full max-w-6xl p-4 sm:p-6 lg:p-8">
         <p className="border-border text-muted-foreground rounded-xl border border-dashed p-8 text-center text-sm">
           This {initiativeNounLower} could not be found.
         </p>
@@ -322,7 +322,7 @@ export default function InitiativeDetailPage(): JSX.Element {
   const targetDateLabel = formatDate(detail.targetDate ?? null);
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
       <button
         type="button"
         onClick={() => {
@@ -353,7 +353,7 @@ export default function InitiativeDetailPage(): JSX.Element {
         ) : null}
       </header>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_18rem]">
+      <div className="grid grid-cols-1 gap-6 @4xl:grid-cols-[minmax(0,1fr)_18rem]">
         <div className="flex min-w-0 flex-col gap-6">
           <section
             aria-label="Health rollup"

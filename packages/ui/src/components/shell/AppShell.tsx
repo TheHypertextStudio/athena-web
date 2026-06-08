@@ -23,7 +23,12 @@
  * {@link TabBar} sits in its **own bar on the canvas** above the main panel — its active tab
  * shares the panel's tone so the two read as one continuous surface.
  *
- * @remarks Responsive model — `lg` is the desktop threshold.
+ * @remarks Responsive model — `lg` is the desktop threshold for the shell frame itself, but the
+ * `<main>` panel is also a **container-query context** (`@container`). Because the panel's width is
+ * the viewport minus the sidebar and gutters — not the viewport — page content lays itself out
+ * against the panel's own inline size (`@md`/`@lg`/`@xl`/`@…` variants) rather than viewport
+ * breakpoints. This keeps multi-column layouts from collapsing or overflowing at the medium widths
+ * where the panel is much narrower than the window, and lets content grow to use wide panels.
  * - **Desktop (`lg` and up):** the canvas-blended sidebar is static at the left, the content
  *   column (tab bar + main panel) fills the rest, and the uniform gutter floats the main panel.
  * - **Below `lg`:** the static sidebar is hidden. A slim **mobile top bar** appears with a
@@ -156,7 +161,7 @@ export function AppShell({
         <main
           id="main-content"
           tabIndex={-1}
-          className="bg-surface lg:border-outline-variant min-h-0 flex-1 scrollbar-gutter-stable overflow-auto outline-none lg:rounded-xl lg:border lg:shadow-sm"
+          className="bg-surface lg:border-outline-variant @container min-h-0 flex-1 scrollbar-gutter-stable overflow-auto outline-none lg:rounded-xl lg:border lg:shadow-sm"
         >
           {children}
         </main>

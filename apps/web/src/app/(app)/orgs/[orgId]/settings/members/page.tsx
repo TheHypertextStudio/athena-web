@@ -70,7 +70,7 @@ export default function MembersSettingsPage({
       <SectionHeader
         title={SECTION?.label ?? 'Members & Access'}
         description={
-          SECTION?.description ?? 'Manage who belongs to this organization and what they can do.'
+          SECTION?.description ?? 'Manage who belongs to this workspace and what they can do.'
         }
       />
       <MembersTab orgId={orgId} />

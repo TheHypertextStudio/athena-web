@@ -214,7 +214,7 @@ export default function OnboardingPage(): JSX.Element {
               {error}
             </p>
           ) : null}
-          {isConnectStep ? (
+          {isConnectStep && mirroredTotal === 0 ? (
             <Button type="button" variant="ghost" onClick={enterWorkspace}>
               Skip for now
             </Button>

@@ -27,7 +27,7 @@ const SECTION_ORDER: readonly { section: PaletteSection; label: string }[] = [
   { section: 'results', label: 'Search results' },
   { section: 'navigation', label: 'Navigate' },
   { section: 'actions', label: 'Actions' },
-  { section: 'organizations', label: 'Switch organization' },
+  { section: 'organizations', label: 'Switch workspace' },
 ];
 
 /** Props for {@link CommandPalette}. */

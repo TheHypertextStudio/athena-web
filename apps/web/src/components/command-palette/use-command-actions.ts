@@ -125,9 +125,9 @@ export function useCommandActions({ scope, close }: CommandActionsInput): readon
       {
         id: 'action:new-org',
         section: 'actions',
-        label: 'Add an organization',
+        label: 'Add a workspace',
         icon: Plus,
-        keywords: ['create', 'join', 'workspace', 'new'],
+        keywords: ['create', 'join', 'organization', 'new'],
         run: go('/onboarding'),
       },
       {

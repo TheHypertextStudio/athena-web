@@ -25,7 +25,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
-import { CreateCyclePanel } from '@/components/cycles/create-cycle';
+import { CreateCycleDialog } from '@/components/cycles/create-cycle';
 import { CycleCard } from '@/components/cycles/cycle-card';
 import { CYCLE_SEGMENTS, SEGMENT_LABEL, segmentOf } from '@/components/cycles/cycle-status';
 import { api } from '@/lib/api';
@@ -138,34 +138,29 @@ export default function CyclesPage(): JSX.Element {
             what&apos;s wrapped.
           </p>
         </div>
-        {!createOpen ? (
-          <Button
-            type="button"
-            className="gap-1.5"
-            onClick={() => {
-              setCreateOpen(true);
-            }}
-          >
-            <Plus aria-hidden="true" className="size-4" />
-            New {cycleNoun}
-          </Button>
-        ) : null}
+        <Button
+          type="button"
+          className="gap-1.5"
+          onClick={() => {
+            setCreateOpen(true);
+          }}
+        >
+          <Plus aria-hidden="true" className="size-4" />
+          New {cycleNoun}
+        </Button>
       </header>
 
-      {createOpen ? (
-        <CreateCyclePanel
-          orgId={orgId}
-          cycleNoun={cycleNoun}
-          teams={teams}
-          defaultTeamId={defaultTeamId}
-          teamsLoading={teamsLoading}
-          nextNumberForTeam={nextNumberForTeam}
-          onClose={() => {
-            setCreateOpen(false);
-          }}
-          onCreated={handleCreated}
-        />
-      ) : null}
+      <CreateCycleDialog
+        orgId={orgId}
+        cycleNoun={cycleNoun}
+        teams={teams}
+        defaultTeamId={defaultTeamId}
+        teamsLoading={teamsLoading}
+        nextNumberForTeam={nextNumberForTeam}
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCreated={handleCreated}
+      />
 
       {loading ? (
         <ListSkeleton />
@@ -185,19 +180,17 @@ export default function CyclesPage(): JSX.Element {
             Start a {cycleNoun.toLowerCase()} to time-box your team&apos;s work and track its pace
             and carryover at a glance.
           </p>
-          {!createOpen ? (
-            <Button
-              type="button"
-              variant="outline"
-              className="mt-1 gap-1.5"
-              onClick={() => {
-                setCreateOpen(true);
-              }}
-            >
-              <Plus aria-hidden="true" className="size-4" />
-              Create your first {cycleNoun.toLowerCase()}
-            </Button>
-          ) : null}
+          <Button
+            type="button"
+            variant="outline"
+            className="mt-1 gap-1.5"
+            onClick={() => {
+              setCreateOpen(true);
+            }}
+          >
+            <Plus aria-hidden="true" className="size-4" />
+            Create your first {cycleNoun.toLowerCase()}
+          </Button>
         </div>
       ) : (
         <div className="flex flex-col gap-8">

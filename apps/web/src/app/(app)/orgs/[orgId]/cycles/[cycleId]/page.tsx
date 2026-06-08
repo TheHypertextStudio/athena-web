@@ -414,24 +414,21 @@ export default function CycleDetailPage(): JSX.Element {
         )}
       </section>
 
-      {dialogOpen ? (
-        <CloseCycleDialog
-          cycleName={title}
-          cycleNoun={cycleNounLower}
-          items={decisions}
-          targets={moveTargets}
-          closing={closing}
-          closeError={closeError}
-          onActionChange={onActionChange}
-          onTargetChange={onTargetChange}
-          onConfirm={() => {
-            void confirmClose();
-          }}
-          onCancel={() => {
-            if (!closing) setDialogOpen(false);
-          }}
-        />
-      ) : null}
+      <CloseCycleDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        cycleName={title}
+        cycleNoun={cycleNounLower}
+        items={decisions}
+        targets={moveTargets}
+        closing={closing}
+        closeError={closeError}
+        onActionChange={onActionChange}
+        onTargetChange={onTargetChange}
+        onConfirm={() => {
+          void confirmClose();
+        }}
+      />
     </div>
   );
 }

@@ -1,31 +1,42 @@
 'use client';
 
 /**
- * The inline "New {cycle}" create composer for the Cycles list.
+ * The "New {cycle}" create dialog for the Cycles list.
  *
  * @remarks
  * A Cycle is a *team-scoped* time-box, so creating one needs a team and a date range, and the
  * API requires an explicit, team-local sequence `number` (cycles are "{Cycle} 3", "Sprint 12",
- * …). This composer collects the minimal fields — team (defaulting to the org's default team,
+ * …). This dialog collects the minimal fields — team (defaulting to the org's default team,
  * shown only when the org has more than one), a date range (pre-filled to a sensible upcoming
  * two-week window), and an optional name override — and derives the next `number` from the
- * existing cycles on the chosen team via {@link CreateCyclePanelProps.nextNumberForTeam}.
+ * existing cycles on the chosen team via {@link CreateCycleDialogProps.nextNumberForTeam}.
  *
- * Rather than a bare `prompt`, it renders a styled, dismissable composer panel: a card-framed
- * form with focused inputs and Create / Cancel actions. The panel is rendered by the page only
- * while its create composer is open (so the page's header "New {cycle}" button and its
- * empty-state "Create your first {cycle}" CTA both open the *same* composer). It owns only the
- * form's transient field state; the parent owns the roster and is handed the created
- * {@link CycleOut} via {@link CreateCyclePanelProps.onCreated} so it can optimistically prepend
- * the new row and route to its detail, and is told to close via
- * {@link CreateCyclePanelProps.onClose}.
+ * Following the Linear pattern, it renders a focused, dismissable modal {@link Dialog}: a
+ * centered surface panel with focused inputs and Create / Cancel actions. The dialog is
+ * *controlled* by the host page so the page's header "New {cycle}" button and its empty-state
+ * "Create your first {cycle}" CTA both open the *same* dialog — the page owns `open` and passes
+ * it in via {@link CreateCycleDialogProps.open} / {@link CreateCycleDialogProps.onOpenChange}.
+ * This component owns only the form's transient field state (reset whenever the dialog closes).
+ * The parent owns the roster and is handed the created {@link CycleOut} via
+ * {@link CreateCycleDialogProps.onCreated} so it can optimistically prepend the new row and
+ * route to its detail; on a successful create this component closes the dialog itself.
  *
  * @see {@link useActiveOrg} for the `teams` + `defaultTeamId` the team picker is driven from.
  */
 import { type CycleOut, TeamId, type TeamOut } from '@docket/types';
 import { Plus } from '@docket/ui/icons';
-import { Button, Input } from '@docket/ui/primitives';
-import { type JSX, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Button,
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  Input,
+} from '@docket/ui/primitives';
+import { type JSX, useCallback, useMemo, useState } from 'react';
 
 import { api } from '@/lib/api';
 import { readError, readProblem } from '@/lib/problem';
@@ -42,8 +53,8 @@ function addDaysISO(startISO: string, days: number): string {
   return todayISODate(start);
 }
 
-/** Props for {@link CreateCyclePanel}. */
-export interface CreateCyclePanelProps {
+/** Props for {@link CreateCycleDialog}. */
+export interface CreateCycleDialogProps {
   /** The org the cycle is created in (from the route). */
   orgId: string;
   /** The singular, vocabulary-skinned cycle noun (e.g. "Cycle", "Sprint"). */
@@ -56,28 +67,31 @@ export interface CreateCyclePanelProps {
   teamsLoading: boolean;
   /** The next team-local sequence number to assign on a given team (max existing + 1). */
   nextNumberForTeam: (teamId: string) => number;
-  /** Notify the parent to close (dismiss) the composer. */
-  onClose: () => void;
+  /** Whether the dialog is open (the host page owns this state). */
+  open: boolean;
+  /** Notify the parent that the open state changed (Esc, backdrop, X, Cancel, or success). */
+  onOpenChange: (open: boolean) => void;
   /** Notify the parent that a cycle was created, so it can prepend + route. */
   onCreated: (cycle: CycleOut) => void;
 }
 
 /**
- * The dismissable composer panel for creating a new cycle.
+ * The focused modal dialog for creating a new cycle.
  *
- * @param props - The {@link CreateCyclePanelProps}.
- * @returns the rendered composer form.
+ * @param props - The {@link CreateCycleDialogProps}.
+ * @returns the rendered create dialog.
  */
-export function CreateCyclePanel({
+export function CreateCycleDialog({
   orgId,
   cycleNoun,
   teams,
   defaultTeamId,
   teamsLoading,
   nextNumberForTeam,
-  onClose,
+  open,
+  onOpenChange,
   onCreated,
-}: CreateCyclePanelProps): JSX.Element {
+}: CreateCycleDialogProps): JSX.Element {
   const cycleNounLower = cycleNoun.toLowerCase();
 
   const today = useMemo(() => todayISODate(), []);
@@ -89,19 +103,30 @@ export function CreateCyclePanel({
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const nameRef = useRef<HTMLInputElement>(null);
   const teamId = teamOverride ?? defaultTeamId;
 
-  // The team-local sequence number this cycle will take (shown in the heading + placeholder).
+  // The team-local sequence number this cycle will take (shown in the placeholder).
   const nextNumber = teamId ? nextNumberForTeam(teamId) : 1;
-
-  // Focus the name field on mount so the composer is immediately typeable.
-  useEffect(() => {
-    nameRef.current?.focus();
-  }, []);
 
   /** Whether the chosen date range is valid (end strictly after start). */
   const rangeValid = startsAt.length > 0 && endsAt.length > 0 && endsAt > startsAt;
+
+  /** Reset transient form state whenever the dialog closes (next range re-derives from today). */
+  const handleOpenChange = useCallback(
+    (next: boolean): void => {
+      if (creating) return;
+      if (!next) {
+        const freshStart = todayISODate();
+        setName('');
+        setTeamOverride(null);
+        setStartsAt(freshStart);
+        setEndsAt(addDaysISO(freshStart, DEFAULT_CYCLE_DAYS));
+        setError(null);
+      }
+      onOpenChange(next);
+    },
+    [creating, onOpenChange],
+  );
 
   /** Create the cycle, then hand it to the parent for optimistic insertion + routing. */
   const submit = useCallback(async (): Promise<void> => {
@@ -132,6 +157,7 @@ export function CreateCyclePanel({
         return;
       }
       const created = await res.json();
+      onOpenChange(false);
       onCreated(created);
     } catch (caught) {
       setError(readError(caught, `Something went wrong creating the ${cycleNounLower}.`));
@@ -147,80 +173,89 @@ export function CreateCyclePanel({
     endsAt,
     cycleNounLower,
     nextNumberForTeam,
+    onOpenChange,
     onCreated,
   ]);
 
   return (
-    <form
-      onSubmit={(event) => {
-        event.preventDefault();
-        void submit();
-      }}
-      onKeyDown={(event) => {
-        if (event.key === 'Escape' && !creating) onClose();
-      }}
-      className="bg-surface-container-high text-on-surface border-outline-variant flex flex-col gap-3 rounded-xl border p-4 shadow-lg"
-      aria-label={`New ${cycleNounLower}`}
-    >
-      <Input
-        ref={nameRef}
-        aria-label={`${cycleNoun} name (optional)`}
-        placeholder={`${cycleNoun} ${String(nextNumber)} — name optional`}
-        value={name}
-        disabled={creating}
-        onChange={(event) => {
-          setName(event.target.value);
-        }}
-      />
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <label className="flex flex-col gap-1.5">
-          <span className="text-muted-foreground text-xs font-medium">Starts</span>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>New {cycleNoun}</DialogTitle>
+          <DialogDescription>
+            Pick a team and a date range to time-box your work. Name it, or leave it as {cycleNoun}{' '}
+            {String(nextNumber)}.
+          </DialogDescription>
+        </DialogHeader>
+        <form
+          id="create-cycle-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submit();
+          }}
+          className="flex flex-col gap-3"
+        >
           <Input
-            type="date"
-            aria-label={`${cycleNoun} start date`}
-            value={startsAt}
-            max={endsAt || undefined}
+            aria-label={`${cycleNoun} name (optional)`}
+            placeholder={`${cycleNoun} ${String(nextNumber)} — name optional`}
+            value={name}
             disabled={creating}
             onChange={(event) => {
-              setStartsAt(event.target.value);
+              setName(event.target.value);
             }}
           />
-        </label>
-        <label className="flex flex-col gap-1.5">
-          <span className="text-muted-foreground text-xs font-medium">Ends</span>
-          <Input
-            type="date"
-            aria-label={`${cycleNoun} end date`}
-            value={endsAt}
-            min={startsAt || undefined}
-            disabled={creating}
-            onChange={(event) => {
-              setEndsAt(event.target.value);
-            }}
-          />
-        </label>
-      </div>
-      {error ? (
-        <p role="alert" className="text-destructive text-sm">
-          {error}
-        </p>
-      ) : null}
-      <div className="flex items-center justify-between gap-2">
-        <TeamPicker teams={teams} value={teamId} onChange={setTeamOverride} disabled={creating} />
-        <div className="ml-auto flex items-center gap-2">
-          <Button type="button" variant="ghost" disabled={creating} onClick={onClose}>
-            Cancel
-          </Button>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <label className="flex flex-col gap-1.5">
+              <span className="text-muted-foreground text-xs font-medium">Starts</span>
+              <Input
+                type="date"
+                aria-label={`${cycleNoun} start date`}
+                value={startsAt}
+                max={endsAt || undefined}
+                disabled={creating}
+                onChange={(event) => {
+                  setStartsAt(event.target.value);
+                }}
+              />
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-muted-foreground text-xs font-medium">Ends</span>
+              <Input
+                type="date"
+                aria-label={`${cycleNoun} end date`}
+                value={endsAt}
+                min={startsAt || undefined}
+                disabled={creating}
+                onChange={(event) => {
+                  setEndsAt(event.target.value);
+                }}
+              />
+            </label>
+          </div>
+          <TeamPicker teams={teams} value={teamId} onChange={setTeamOverride} disabled={creating} />
+          {error ? (
+            <p role="alert" className="text-destructive text-sm">
+              {error}
+            </p>
+          ) : null}
+        </form>
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button type="button" variant="ghost" disabled={creating}>
+              Cancel
+            </Button>
+          </DialogClose>
           <Button
             type="submit"
+            form="create-cycle-form"
             disabled={creating || teamsLoading || teamId === null || !rangeValid}
             className="gap-1.5"
           >
             <Plus aria-hidden="true" className="size-4" />
             {creating ? 'Creating…' : `Create ${cycleNoun}`}
           </Button>
-        </div>
-      </div>
-    </form>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

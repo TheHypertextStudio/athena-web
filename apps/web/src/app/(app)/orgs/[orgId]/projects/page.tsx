@@ -8,7 +8,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
-import { CreateProjectPanel } from '@/components/projects/create-project';
+import { CreateProjectDialog } from '@/components/projects/create-project';
 import { ProjectCard, type ProjectCardData } from '@/components/projects/project-card';
 import { type StatusFilter, StatusFilterMenu } from '@/components/projects/project-status';
 import { api } from '@/lib/api';
@@ -154,34 +154,29 @@ export default function ProjectsListPage(): JSX.Element {
           {!loading && !loadError && projects.length > 0 ? (
             <StatusFilterMenu value={filter} counts={counts} onChange={setFilter} />
           ) : null}
-          {!createOpen ? (
-            <Button
-              type="button"
-              className="gap-1.5"
-              onClick={() => {
-                setCreateOpen(true);
-              }}
-            >
-              <Plus aria-hidden="true" className="size-4" />
-              New {projectLabel}
-            </Button>
-          ) : null}
+          <Button
+            type="button"
+            className="gap-1.5"
+            onClick={() => {
+              setCreateOpen(true);
+            }}
+          >
+            <Plus aria-hidden="true" className="size-4" />
+            New {projectLabel}
+          </Button>
         </div>
       </header>
 
-      {createOpen ? (
-        <CreateProjectPanel
-          orgId={orgId}
-          projectNoun={projectLabel}
-          teams={teams}
-          defaultTeamId={defaultTeamId}
-          teamsLoading={teamsLoading}
-          onClose={() => {
-            setCreateOpen(false);
-          }}
-          onCreated={handleCreated}
-        />
-      ) : null}
+      <CreateProjectDialog
+        orgId={orgId}
+        projectNoun={projectLabel}
+        teams={teams}
+        defaultTeamId={defaultTeamId}
+        teamsLoading={teamsLoading}
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCreated={handleCreated}
+      />
 
       {loading ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2" aria-hidden="true">
@@ -197,16 +192,12 @@ export default function ProjectsListPage(): JSX.Element {
         <EmptyState
           title={`No ${projectsLabel.toLowerCase()} yet`}
           body={`${projectsLabel} are bounded efforts with a clear finish line. Create one to start tracking its status, health, and scope.`}
-          cta={
-            createOpen
-              ? null
-              : {
-                  label: `Create your first ${projectLabel.toLowerCase()}`,
-                  onClick: () => {
-                    setCreateOpen(true);
-                  },
-                }
-          }
+          cta={{
+            label: `Create your first ${projectLabel.toLowerCase()}`,
+            onClick: () => {
+              setCreateOpen(true);
+            },
+          }}
         />
       ) : visibleProjects.length === 0 ? (
         <EmptyState

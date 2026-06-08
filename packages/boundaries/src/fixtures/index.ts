@@ -67,8 +67,8 @@ export const CONNECTOR_ITEMS: Readonly<Record<ConnectorProvider, readonly Import
     {
       id: '01HZ0000000000000000LN0001',
       kind: 'issue',
-      title: 'Design the cross-org Hub',
-      body: 'Spec the Hub landing surface and density preferences.',
+      title: 'Design the home dashboard',
+      body: 'Spec the landing screen layout and density preferences.',
       provenance: {
         provider: 'linear',
         externalId: 'DOC-7',

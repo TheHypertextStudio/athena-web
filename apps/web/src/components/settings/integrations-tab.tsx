@@ -21,7 +21,16 @@ import type {
   IntegrationRole,
 } from '@docket/types';
 import { Badge, Skeleton } from '@docket/ui/primitives';
-import { Sparkles } from '@docket/ui/icons';
+import {
+  Calendar,
+  Folder,
+  Github,
+  Layers,
+  type LucideIcon,
+  Mail,
+  Sparkles,
+  TaskAlt,
+} from '@docket/ui/icons';
 import type { JSX } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -36,6 +45,37 @@ export interface IntegrationsTabProps {
   orgId: string;
   /** Whether the caller can connect integrations. */
   canManage: boolean;
+  /**
+   * Whether the active workspace is the caller's personal space (`OrgSummary.isPersonal`).
+   *
+   * @remarks
+   * Purely presentational: a personal workspace has no team, so the intro copy reads "the tools
+   * you already use" rather than "the tools your team already uses". Defaults to `false`.
+   */
+  isPersonal?: boolean;
+}
+
+/**
+ * The leading glyph for each directory provider, keyed by its provider slug.
+ *
+ * @remarks
+ * Mirrors the per-tool glyphs the onboarding connect step shows for the same providers
+ * (`calendar` → Calendar, `gtasks` → TaskAlt, `linear` → Layers), extended to the remaining
+ * directory providers so every tile reads as its own tool rather than a generic placeholder.
+ * Any provider not listed here falls back to {@link Sparkles}.
+ */
+const PROVIDER_ICON: Record<string, LucideIcon> = {
+  github: Github,
+  linear: Layers,
+  drive: Folder,
+  gmail: Mail,
+  calendar: Calendar,
+  gtasks: TaskAlt,
+};
+
+/** Resolve a provider slug to its glyph, falling back to a neutral placeholder. */
+function providerIcon(provider: string): LucideIcon {
+  return PROVIDER_ICON[provider] ?? Sparkles;
 }
 
 /** Human labels for the directory categories. */
@@ -73,7 +113,11 @@ function categoryLabel(category: string): string {
  * @param props - The {@link IntegrationsTabProps}.
  * @returns the rendered tab panel body.
  */
-export function IntegrationsTab({ orgId, canManage }: IntegrationsTabProps): JSX.Element {
+export function IntegrationsTab({
+  orgId,
+  canManage,
+  isPersonal = false,
+}: IntegrationsTabProps): JSX.Element {
   const [directory, setDirectory] = useState<readonly IntegrationDirectoryProvider[]>([]);
   const [integrations, setIntegrations] = useState<readonly IntegrationOut[]>([]);
   const [loading, setLoading] = useState(true);
@@ -188,10 +232,12 @@ export function IntegrationsTab({ orgId, canManage }: IntegrationsTabProps): JSX
   return (
     <div className="flex flex-col gap-6">
       <p className="text-muted-foreground text-sm leading-relaxed">
-        Connect the tools your team already uses. Choose a{' '}
-        <span className="text-foreground font-medium">Migration</span> to move fully into Docket, or
-        a <span className="text-foreground font-medium">Connector</span> to mirror a tool that stays
-        the source of truth — you decide per tool when you connect.
+        {isPersonal
+          ? 'Connect the tools you already use.'
+          : 'Connect the tools your team already uses.'}{' '}
+        Choose a <span className="text-foreground font-medium">Migration</span> to move fully into
+        Docket, or a <span className="text-foreground font-medium">Connector</span> to mirror a tool
+        that stays the source of truth — you decide per tool when you connect.
       </p>
 
       {grouped.map(({ category, providers }) => (
@@ -207,6 +253,7 @@ export function IntegrationsTab({ orgId, canManage }: IntegrationsTabProps): JSX
             {providers.map((provider) => {
               const existing = byProvider.get(provider.provider);
               const isOpen = openProvider === provider.provider;
+              const ProviderIcon = providerIcon(provider.provider);
               return (
                 <li
                   key={provider.provider}
@@ -214,7 +261,7 @@ export function IntegrationsTab({ orgId, canManage }: IntegrationsTabProps): JSX
                 >
                   <div className="flex items-center gap-3 px-4 py-3">
                     <span className="bg-muted text-muted-foreground flex size-9 shrink-0 items-center justify-center rounded-lg">
-                      <Sparkles aria-hidden="true" className="size-4" />
+                      <ProviderIcon aria-hidden="true" className="size-4" />
                     </span>
                     <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                       <span className="text-foreground text-sm font-medium">{provider.name}</span>

@@ -41,11 +41,10 @@ export default function IntegrationsSettingsPage({
   const { activeOrg } = useActiveOrg();
   const { canManage } = useCanManageOrg(orgId);
 
+  const isPersonal = activeOrg?.isPersonal ?? false;
   // Resolve the header copy from the registry for this workspace (personal vs shared org), so a
   // personal workspace shows its own framing rather than the org-framed copy.
-  const section = settingsSections(activeOrg?.isPersonal ?? false).find(
-    (s) => s.key === 'integrations',
-  );
+  const section = settingsSections(isPersonal).find((s) => s.key === 'integrations');
 
   return (
     <div className="flex flex-col gap-6">
@@ -53,7 +52,7 @@ export default function IntegrationsSettingsPage({
         title={section?.label ?? 'Integrations'}
         description={section?.description ?? 'Connect the tools your team already uses.'}
       />
-      <IntegrationsTab orgId={orgId} canManage={canManage} />
+      <IntegrationsTab orgId={orgId} canManage={canManage} isPersonal={isPersonal} />
     </div>
   );
 }

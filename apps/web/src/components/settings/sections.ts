@@ -22,7 +22,16 @@
  * Shared orgs keep the full org registry unchanged.
  */
 import type { LucideIcon } from '@docket/ui/icons';
-import { ListChecks, Settings as SettingsIcon, Sparkles, Trash2 } from '@docket/ui/icons';
+import {
+  Cable,
+  CreditCard,
+  ListChecks,
+  Shield,
+  Sparkles,
+  Translate,
+  Trash2,
+  Users,
+} from '@docket/ui/icons';
 
 /** A settings section's availability: a live routed page, or a planned ("coming soon") stub. */
 export type SectionStatus = 'available' | 'coming-soon';
@@ -74,8 +83,8 @@ export const SETTINGS_SECTION_GROUPS: readonly SettingsSectionGroup[] = [
       {
         key: 'members',
         label: 'Members & Access',
-        description: 'Manage who belongs to this organization and what they can do.',
-        icon: SettingsIcon,
+        description: 'Manage who belongs to this workspace and what they can do.',
+        icon: Users,
         href: 'members',
         status: 'available',
       },
@@ -91,7 +100,7 @@ export const SETTINGS_SECTION_GROUPS: readonly SettingsSectionGroup[] = [
         key: 'roles',
         label: 'Roles & Permissions',
         description: 'Define what each role can see and change.',
-        icon: SettingsIcon,
+        icon: Shield,
         href: 'roles',
         status: 'coming-soon',
       },
@@ -99,7 +108,7 @@ export const SETTINGS_SECTION_GROUPS: readonly SettingsSectionGroup[] = [
         key: 'billing',
         label: 'Billing',
         description: 'Manage your plan, seats, and invoices.',
-        icon: SettingsIcon,
+        icon: CreditCard,
         href: 'billing',
         status: 'coming-soon',
       },
@@ -112,15 +121,15 @@ export const SETTINGS_SECTION_GROUPS: readonly SettingsSectionGroup[] = [
         key: 'integrations',
         label: 'Integrations',
         description: 'Connect the tools your team already uses.',
-        icon: ListChecks,
+        icon: Cable,
         href: 'integrations',
         status: 'available',
       },
       {
         key: 'vocabulary',
-        label: 'Vocabulary',
+        label: 'Language',
         description: 'Choose the language Docket speaks across this organization.',
-        icon: Sparkles,
+        icon: Translate,
         href: 'vocabulary',
         status: 'available',
       },
@@ -167,7 +176,7 @@ export const PERSONAL_SETTINGS_SECTION_GROUPS: readonly SettingsSectionGroup[] =
         key: 'vocabulary',
         label: 'Language',
         description: 'Choose the words Docket uses across your space.',
-        icon: Sparkles,
+        icon: Translate,
         href: 'vocabulary',
         status: 'available',
       },
@@ -175,7 +184,7 @@ export const PERSONAL_SETTINGS_SECTION_GROUPS: readonly SettingsSectionGroup[] =
         key: 'integrations',
         label: 'Integrations & import',
         description: 'Connect your tools and bring your existing work into Docket.',
-        icon: ListChecks,
+        icon: Cable,
         href: 'integrations',
         status: 'available',
       },

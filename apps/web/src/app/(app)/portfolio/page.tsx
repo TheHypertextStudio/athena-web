@@ -183,10 +183,10 @@ interface EmptyStateProps {
   body: string;
 }
 
-/** A calm, centered empty state for the portfolio. */
+/** A calm, content-sized empty state for the portfolio. */
 function EmptyState({ title, body }: EmptyStateProps): JSX.Element {
   return (
-    <div className="border-border/60 flex flex-1 flex-col items-center justify-center gap-2 rounded-xl border border-dashed p-12 text-center">
+    <div className="border-border/60 flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed p-12 text-center">
       <LayoutGrid className="text-muted-foreground/60 size-7" aria-hidden="true" />
       <p className="text-foreground text-sm font-medium">{title}</p>
       <p className="text-muted-foreground max-w-md text-sm">{body}</p>

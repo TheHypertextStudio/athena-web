@@ -2,7 +2,7 @@
 
 import type { MemberOut, ProgramOut, ProjectOut, TaskOut } from '@docket/types';
 import { useVocabulary } from '@docket/ui/hooks';
-import { FolderKanban, Plus } from '@docket/ui/icons';
+import { Layers, Plus } from '@docket/ui/icons';
 import { Button, Skeleton } from '@docket/ui/primitives';
 import { useParams, useRouter } from 'next/navigation';
 import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
@@ -269,7 +269,7 @@ function EmptyState({
   return (
     <div className="border-border flex flex-col items-center gap-3 rounded-xl border border-dashed p-12 text-center">
       <span className="bg-muted text-muted-foreground flex size-10 items-center justify-center rounded-full">
-        <FolderKanban aria-hidden="true" className="size-5" />
+        <Layers aria-hidden="true" className="size-5" />
       </span>
       <p className="text-foreground text-sm font-medium">{title}</p>
       <p className="text-muted-foreground max-w-sm text-sm leading-relaxed">{body}</p>

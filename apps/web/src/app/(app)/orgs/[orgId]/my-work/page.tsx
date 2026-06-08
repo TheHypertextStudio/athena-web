@@ -11,6 +11,7 @@ import {
 } from '@docket/types';
 import { type GroupKey, ListView } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
+import { ListChecks } from '@docket/ui/icons';
 import { Button, Input, Skeleton } from '@docket/ui/primitives';
 import { useParams, useRouter } from 'next/navigation';
 import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
@@ -90,7 +91,7 @@ export default function MyWorkPage(): JSX.Element {
 
   const { teams, defaultTeamId, teamsLoading } = useActiveOrg();
 
-  const projectsLabel = useVocabulary('project', { plural: true });
+  const projectNoun = useVocabulary('project');
 
   const [tasks, setTasks] = useState<readonly TaskOut[]>([]);
   const [projects, setProjects] = useState<readonly ProjectOut[]>([]);
@@ -316,17 +317,20 @@ export default function MyWorkPage(): JSX.Element {
     }
   }
 
-  const emptyCopy =
+  const empty =
     tab === 'mine'
-      ? 'Nothing assigned to you yet — add a task above to get started.'
-      : 'Nothing delegated, nothing awaiting your approval. All clear.';
+      ? { title: 'Nothing assigned to you yet', body: 'Add a task above to get started.' }
+      : {
+          title: 'All clear',
+          body: 'Nothing delegated, nothing awaiting your approval.',
+        };
 
   return (
     <div className="mx-auto flex h-full w-full max-w-4xl flex-col gap-5 p-8">
       <header className="flex flex-col gap-1">
         <h1 className="text-2xl font-semibold tracking-tight">My Work</h1>
         <p className="text-muted-foreground text-sm">
-          Your work and your agents&apos;, grouped by {projectsLabel.toLowerCase()}.
+          Your work and your agents&apos; work, grouped by {projectNoun.toLowerCase()}.
         </p>
       </header>
 
@@ -380,7 +384,11 @@ export default function MyWorkPage(): JSX.Element {
         id={`tabpanel-${tab}`}
         role="tabpanel"
         aria-labelledby={`tab-${tab}`}
-        className="border-border flex-1 overflow-hidden rounded-lg border"
+        className={
+          visibleTasks.length === 0 && !loading && !loadError
+            ? undefined
+            : 'border-border flex-1 overflow-hidden rounded-lg border'
+        }
       >
         {loading ? (
           <div className="flex flex-col gap-2 p-3" aria-hidden="true">
@@ -393,7 +401,16 @@ export default function MyWorkPage(): JSX.Element {
             {loadError}
           </p>
         ) : visibleTasks.length === 0 ? (
-          <p className="text-muted-foreground p-6 text-center text-sm">{emptyCopy}</p>
+          <div className="border-border/60 flex flex-col items-center gap-3 rounded-xl border border-dashed p-10 text-center">
+            <span
+              aria-hidden="true"
+              className="bg-muted text-muted-foreground flex size-10 items-center justify-center rounded-full"
+            >
+              <ListChecks className="size-5" />
+            </span>
+            <p className="text-foreground text-sm font-medium">{empty.title}</p>
+            <p className="text-muted-foreground max-w-xs text-sm leading-relaxed">{empty.body}</p>
+          </div>
         ) : (
           <ListView
             items={visibleTasks}

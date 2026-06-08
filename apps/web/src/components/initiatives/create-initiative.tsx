@@ -1,42 +1,45 @@
 'use client';
 
 /**
- * The "New {initiative}" create dialog for the Initiatives list.
+ * The robust "New {initiative}" create composer for the Initiatives list.
  *
  * @remarks
  * An Initiative is a cross-cutting *theme* that holds no work of its own — it associates
- * many-to-many with Projects + Programs — so the minimal create collects just a name; the
- * associations come later on the detail screen. Following the Linear pattern, this renders a
- * focused, dismissable modal {@link Dialog}: a centered surface panel with a focused name field
- * and Create / Cancel actions.
+ * many-to-many with Projects + Programs (those links come later on the detail screen). The
+ * composer still captures the framing fields: a title + description body, and an inline strip of
+ * compact pickers — its owner, its status (active / completed), its target date, and its health
+ * verdict. Sensible defaults keep it fast: only a name is required; status defaults to "Active".
+ * Built on the shared {@link ComposerShell} + the `@docket/ui` compact pickers.
  *
- * The dialog is *controlled* by the host page so the page's header "New {initiative}" button and
- * its empty-state CTA both open the *same* dialog — the page owns `open` and passes it in via
- * {@link CreateInitiativeDialogProps.open} / {@link CreateInitiativeDialogProps.onOpenChange}.
- * This component owns only the form's transient field state (reset whenever the dialog closes).
- * The parent owns the roster and is handed the created {@link InitiativeOut} via
- * {@link CreateInitiativeDialogProps.onCreated} so it can route to its (empty) detail; on a
- * successful create this component closes the dialog itself. The entity noun is passed in
- * (already vocabulary-skinned by the page) so this component never reaches for
- * {@link useVocabulary} itself.
+ * The dialog is *controlled* by the host page so its header "New {initiative}" button and
+ * empty-state CTA open the *same* dialog. This component owns only the form's transient field
+ * state (reset whenever the dialog closes). The parent is handed the created {@link InitiativeOut}
+ * through {@link CreateInitiativeDialogProps.onCreated} so it can route to its (empty) detail.
+ *
+ * @see {@link useComposerOptions} for the owner option source.
  */
-import type { InitiativeOut } from '@docket/types';
-import { Plus } from '@docket/ui/icons';
-import {
-  Button,
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  Input,
-} from '@docket/ui/primitives';
+import { ActorId, type Health, type InitiativeOut, type InitiativeStatus } from '@docket/types';
+import { ActorPicker, DatePicker, EnumPicker } from '@docket/ui/components';
 import { type JSX, useCallback, useState } from 'react';
 
 import { api } from '@/lib/api';
+import { ComposerShell } from '@/components/composer/composer-shell';
+import { DERIVED_STATUS_LABEL } from '@/components/initiatives/derived-status';
+import { enumOptions, HEALTH_OPTIONS } from '@/components/pickers/options';
+import { useComposerOptions } from '@/components/pickers/use-composer-options';
+import { formatCalendarDate } from '@/lib/format-date';
 import { readError, readProblem } from '@/lib/problem';
+
+/** The lists this composer's pickers draw from. */
+const COMPOSER_INCLUDE = ['actors'] as const;
+
+/** The Initiative statuses, ordered open → done. */
+const INITIATIVE_STATUS_ORDER: readonly InitiativeStatus[] = ['active', 'completed'];
+
+/** Format an ISO date for a picker trigger, narrowing the app helper's `null` to `undefined`. */
+function triggerDate(value: string | null): string | undefined {
+  return formatCalendarDate(value, { month: 'short', day: 'numeric' }) ?? undefined;
+}
 
 /** Props for {@link CreateInitiativeDialog}. */
 export interface CreateInitiativeDialogProps {
@@ -53,10 +56,10 @@ export interface CreateInitiativeDialogProps {
 }
 
 /**
- * The focused modal dialog for creating a new initiative.
+ * The robust initiative-create composer dialog.
  *
  * @param props - The {@link CreateInitiativeDialogProps}.
- * @returns the rendered create dialog.
+ * @returns the rendered composer.
  */
 export function CreateInitiativeDialog({
   orgId,
@@ -67,33 +70,54 @@ export function CreateInitiativeDialog({
 }: CreateInitiativeDialogProps): JSX.Element {
   const initiativeNounLower = initiativeNoun.toLowerCase();
 
+  const options = useComposerOptions(orgId, COMPOSER_INCLUDE, open);
+
   const [name, setName] = useState('');
+  const [body, setBody] = useState('');
+  const [ownerId, setOwnerId] = useState<string | null>(null);
+  const [status, setStatus] = useState<InitiativeStatus>('active');
+  const [targetDate, setTargetDate] = useState<string | null>(null);
+  const [health, setHealth] = useState<Health | null>(null);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   /** Reset transient form state whenever the dialog closes. */
   const handleOpenChange = useCallback(
     (next: boolean): void => {
-      if (creating) return;
       if (!next) {
         setName('');
+        setBody('');
+        setOwnerId(null);
+        setStatus('active');
+        setTargetDate(null);
+        setHealth(null);
         setError(null);
       }
       onOpenChange(next);
     },
-    [creating, onOpenChange],
+    [onOpenChange],
   );
 
-  /** Create the theme, then hand it to the parent to route to its detail. */
+  const canSubmit = name.trim().length > 0;
+
+  /** Create the theme with all set properties, then hand it to the parent. */
   const submit = useCallback(async (): Promise<void> => {
     const trimmed = name.trim();
     if (trimmed.length === 0) return;
     setCreating(true);
     setError(null);
     try {
+      const trimmedBody = body.trim();
       const res = await api.v1.orgs[':orgId'].initiatives.$post({
         param: { orgId },
-        json: { name: trimmed },
+        json: {
+          name: trimmed,
+          status,
+          ...(trimmedBody.length > 0 ? { description: trimmedBody } : {}),
+          ...(ownerId ? { ownerId: ActorId.parse(ownerId) } : {}),
+          ...(targetDate ? { targetDate } : {}),
+          ...(health ? { health } : {}),
+        },
       });
       if (!res.ok) {
         setError(await readProblem(res, `Could not create the ${initiativeNounLower}.`));
@@ -107,58 +131,77 @@ export function CreateInitiativeDialog({
     } finally {
       setCreating(false);
     }
-  }, [name, orgId, initiativeNounLower, onOpenChange, onCreated]);
+  }, [
+    name,
+    body,
+    status,
+    ownerId,
+    targetDate,
+    health,
+    orgId,
+    initiativeNounLower,
+    onOpenChange,
+    onCreated,
+  ]);
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>New {initiativeNoun}</DialogTitle>
-          <DialogDescription>
-            Name a cross-cutting theme — associate {initiativeNounLower}s with work later on its
-            detail screen.
-          </DialogDescription>
-        </DialogHeader>
-        <form
-          id="create-initiative-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void submit();
-          }}
-          className="flex flex-col gap-3"
-        >
-          <Input
-            aria-label={`${initiativeNoun} name`}
-            placeholder={`Name your ${initiativeNounLower}…`}
-            value={name}
-            disabled={creating}
-            onChange={(event) => {
-              setName(event.target.value);
-            }}
-          />
-          {error ? (
-            <p role="alert" className="text-destructive text-sm">
-              {error}
-            </p>
-          ) : null}
-        </form>
-        <DialogFooter>
-          <DialogClose asChild>
-            <Button type="button" variant="ghost" disabled={creating}>
-              Cancel
-            </Button>
-          </DialogClose>
-          <Button
-            type="submit"
-            form="create-initiative-form"
-            disabled={creating || name.trim().length === 0}
-            className="gap-1.5"
-          >
-            <Plus aria-hidden="true" className="size-4" />
-            {creating ? 'Creating…' : `Create ${initiativeNoun}`}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <ComposerShell
+      open={open}
+      onOpenChange={handleOpenChange}
+      heading={`New ${initiativeNoun}`}
+      description={`Name a cross-cutting theme — set its owner, target, and health now, then associate work later.`}
+      title={name}
+      onTitleChange={setName}
+      titlePlaceholder={`${initiativeNoun} name`}
+      body={body}
+      onBodyChange={setBody}
+      bodyPlaceholder="Add a description…"
+      error={error}
+      creating={creating}
+      canSubmit={canSubmit}
+      onSubmit={() => void submit()}
+      submitLabel={`Create ${initiativeNoun}`}
+    >
+      <ActorPicker
+        triggerVariant="outline"
+        options={options.actorOptions}
+        value={ownerId}
+        onChange={setOwnerId}
+        placeholder="Set owner"
+        clearLabel="No owner"
+        ariaLabel="Owner"
+        disabled={creating}
+      />
+      <EnumPicker
+        triggerVariant="outline"
+        options={enumOptions(INITIATIVE_STATUS_ORDER, DERIVED_STATUS_LABEL)}
+        value={status}
+        onChange={(next) => {
+          if (next) setStatus(next);
+        }}
+        placeholder="Status"
+        ariaLabel="Status"
+        disabled={creating}
+      />
+      <DatePicker
+        triggerVariant="outline"
+        value={targetDate}
+        onChange={setTargetDate}
+        placeholder="Set target"
+        formatLabel={triggerDate}
+        ariaLabel="Target date"
+        disabled={creating}
+      />
+      <EnumPicker
+        triggerVariant="outline"
+        options={HEALTH_OPTIONS}
+        value={health}
+        onChange={setHealth}
+        placeholder="Set health"
+        clearLabel="No health"
+        ariaLabel="Health"
+        disabled={creating}
+      />
+    </ComposerShell>
   );
 }

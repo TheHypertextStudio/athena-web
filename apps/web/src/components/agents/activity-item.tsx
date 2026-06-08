@@ -19,11 +19,11 @@
  * pending/error state; this component is purely presentational beyond firing them.
  */
 import type { SessionActivityOut } from '@docket/types';
-import { CheckCircle2, Sparkles, XCircle } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
-import { Badge, Button } from '@docket/ui/primitives';
+import { Button } from '@docket/ui/primitives';
 import { type JSX, useState } from 'react';
 
+import { ApprovalStatusBadge } from './approval-status-badge';
 import { relativeTime } from './format-time';
 
 /** Read the free-text body off an activity (thought/response/elicitation/error). */
@@ -174,7 +174,11 @@ function ActionBody({
     <div
       className={cn(
         'rounded-lg border p-3',
-        isProposed ? 'border-primary/40 bg-primary/5' : 'border-border bg-muted/30',
+        // A proposed action is the one row that needs a human — give it a stronger fill and a
+        // primary left accent so it reads as the focal point of the stream, not a faint tint.
+        isProposed
+          ? 'border-primary/40 bg-primary/10 border-l-primary border-l-2'
+          : 'border-border bg-muted/30',
       )}
     >
       <div className="flex items-start justify-between gap-3">
@@ -184,7 +188,7 @@ function ActionBody({
           </code>
           <p className="text-foreground text-sm leading-relaxed">{summary}</p>
         </div>
-        <ApprovalState status={approvalStatus} />
+        <ApprovalStatusBadge status={approvalStatus} />
       </div>
 
       {diffText !== null ? (
@@ -233,40 +237,6 @@ function ActionBody({
       ) : null}
     </div>
   );
-}
-
-/** A small resolved-state marker for a decided (or not-yet-gated) action. */
-function ApprovalState({
-  status,
-}: {
-  status: SessionActivityOut['approvalStatus'] | null;
-}): JSX.Element | null {
-  switch (status) {
-    case 'proposed':
-      return (
-        <Badge variant="outline" className="border-primary/40 text-primary shrink-0 gap-1">
-          <Sparkles className="h-3 w-3" /> Proposed
-        </Badge>
-      );
-    case 'approved':
-    case 'applied':
-      return (
-        <Badge
-          variant="outline"
-          className="text-state-completed border-state-completed/40 shrink-0 gap-1"
-        >
-          <CheckCircle2 className="h-3 w-3" /> {status === 'applied' ? 'Applied' : 'Approved'}
-        </Badge>
-      );
-    case 'rejected':
-      return (
-        <Badge variant="outline" className="text-destructive border-destructive/40 shrink-0 gap-1">
-          <XCircle className="h-3 w-3" /> Rejected
-        </Badge>
-      );
-    default:
-      return null;
-  }
 }
 
 /** The inline reply box shown under an `elicitation`. */

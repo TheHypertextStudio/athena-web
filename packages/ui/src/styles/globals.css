@@ -191,3 +191,51 @@
     var(--font-ibm-plex-mono), ui-monospace, 'SFMono-Regular', 'Menlo', 'Consolas',
     monospace;
 }
+
+/*
+ * Scrollbars — a subtle, token-colored, thin treatment applied to every overflow region so
+ * scrolling looks intentional and consistent cross-platform. macOS draws overlay scrollbars
+ * (mostly invisible) but Windows/Linux render chunky default scrollbars that would clash with
+ * the calm aesthetic; these rules normalize both. The thumb uses the `outline` token (a quiet
+ * mid-tone present in both light and dark) over a transparent track, and brightens on hover.
+ * Firefox gets the equivalent via `scrollbar-width`/`scrollbar-color`.
+ */
+@layer base {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--outline) transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 0.625rem;
+    height: 0.625rem;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background-color: var(--outline);
+    border: 3px solid transparent;
+    border-radius: 9999px;
+    background-clip: padding-box;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: var(--on-surface-variant);
+  }
+
+  *::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+}
+
+/*
+ * `scrollbar-gutter: stable` reserves the scrollbar's space whether or not it is showing, so a
+ * vertical scrollbar appearing on load (or as content grows) never shifts the layout. Applied to
+ * the app's primary scroll container(s) via this utility class.
+ */
+@utility scrollbar-gutter-stable {
+  scrollbar-gutter: stable;
+}

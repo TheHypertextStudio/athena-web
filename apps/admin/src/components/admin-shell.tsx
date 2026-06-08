@@ -3,7 +3,7 @@
 import { Button } from '@docket/ui/primitives';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { type JSX, type ReactNode, useState } from 'react';
+import { type JSX, type ReactNode, useEffect, useState } from 'react';
 
 import { ViewingAsBanner } from '@/components/viewing-as-banner';
 import { signOut, useSession } from '@/lib/auth-client';
@@ -46,12 +46,27 @@ export interface AdminShellProps {
  * route group's layout. The session line shows the signed-in operator's email and a
  * sign-out action that returns to `/sign-in`. The {@link ViewingAsBanner} is pinned above
  * the content so an active impersonation is always visible.
+ *
+ * @remarks Visual model — the same MD3 tonal surface system the product app uses. The shell root
+ * is the tinted `surface-container` canvas; the sidebar blends into it with no hard divider; the
+ * routed content sits in a single floating, rounded `surface` panel inset by a uniform gutter.
+ *
+ * @remarks Auth — when the reactive session resolves to "signed out" the shell redirects to
+ * `/sign-in` rather than stranding an unauthenticated visitor on inert chrome. A signed-in but
+ * non-staff visitor keeps the shell (they have a session) and the API's 403 surfaces inline on
+ * each screen with a recovery action.
  */
 export function AdminShell({ children }: AdminShellProps): JSX.Element {
   const pathname = usePathname();
   const router = useRouter();
-  const { data: session } = useSession();
+  const { data: session, isPending } = useSession();
   const [signingOut, setSigningOut] = useState(false);
+
+  // Redirect to sign-in once the session resolves to "signed out" — an unauthenticated visitor
+  // has no usable destination in the shell, so surface the sign-in screen instead of inert chrome.
+  useEffect(() => {
+    if (!isPending && !session) router.replace('/sign-in');
+  }, [isPending, session, router]);
 
   /** Sign the operator out and return to the sign-in screen. */
   async function handleSignOut(): Promise<void> {
@@ -61,11 +76,11 @@ export function AdminShell({ children }: AdminShellProps): JSX.Element {
   }
 
   return (
-    <div className="bg-background text-foreground flex min-h-screen">
-      <aside className="border-border bg-card flex w-60 shrink-0 flex-col gap-6 border-r px-4 py-6">
+    <div className="bg-surface-container text-on-surface flex min-h-screen gap-2 p-2">
+      <aside className="flex w-60 shrink-0 flex-col gap-6 px-2 py-4">
         <div className="px-2">
-          <p className="text-sm font-semibold tracking-tight">Docket</p>
-          <p className="text-muted-foreground text-xs">Service admin</p>
+          <p className="text-on-surface text-sm font-semibold tracking-tight">Docket</p>
+          <p className="text-on-surface-variant text-xs">Service admin</p>
         </div>
         <nav className="flex flex-col gap-1" aria-label="Primary">
           {NAV.map((item) => (
@@ -73,10 +88,10 @@ export function AdminShell({ children }: AdminShellProps): JSX.Element {
               key={item.href}
               href={item.href}
               aria-current={isActive(pathname, item.href) ? 'page' : undefined}
-              className={`rounded-md px-3 py-2 text-sm transition-colors ${
+              className={`focus-visible:ring-ring rounded-lg px-3 py-2 text-sm transition-colors focus-visible:ring-1 focus-visible:outline-none ${
                 isActive(pathname, item.href)
-                  ? 'bg-accent text-accent-foreground font-medium'
-                  : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+                  ? 'bg-surface-container-highest text-on-surface font-medium'
+                  : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface'
               }`}
             >
               {item.label}
@@ -85,7 +100,7 @@ export function AdminShell({ children }: AdminShellProps): JSX.Element {
         </nav>
         <div className="mt-auto flex flex-col gap-2 px-1">
           {session?.user.email ? (
-            <p className="text-muted-foreground truncate text-xs" title={session.user.email}>
+            <p className="text-on-surface-variant truncate text-xs" title={session.user.email}>
               {session.user.email}
             </p>
           ) : null}
@@ -99,9 +114,9 @@ export function AdminShell({ children }: AdminShellProps): JSX.Element {
           </Button>
         </div>
       </aside>
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="bg-surface border-outline-variant flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl border shadow-sm">
         <ViewingAsBanner />
-        <main className="min-w-0 flex-1">{children}</main>
+        <main className="min-w-0 flex-1 overflow-auto">{children}</main>
       </div>
     </div>
   );

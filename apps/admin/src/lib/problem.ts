@@ -37,3 +37,18 @@ export async function readProblem(response: Response, fallback: string): Promise
 export function readError(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
 }
+
+/**
+ * Whether a failed response is an authentication/authorization failure (401 or 403).
+ *
+ * @remarks
+ * The common admin case is a 403 when the signed-in account is not staff. Screens use this to
+ * decide whether to offer a sign-in recovery affordance alongside the inline error (versus a
+ * transient network/server error, which should not steer the operator to re-authenticate).
+ *
+ * @param response - The non-OK {@link Response}.
+ * @returns `true` when the status is 401 or 403.
+ */
+export function isAuthError(response: Response): boolean {
+  return response.status === 401 || response.status === 403;
+}

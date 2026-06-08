@@ -7,7 +7,7 @@ import { Button, Skeleton } from '@docket/ui/primitives';
 import { useParams } from 'next/navigation';
 import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 
-import { CreateTeamPanel } from '@/components/teams/create-team';
+import { CreateTeamDialog } from '@/components/teams/create-team';
 import { TeamCard, type TeamCardData } from '@/components/teams/team-card';
 import { api } from '@/lib/api';
 import { readError, readProblem } from '@/lib/problem';
@@ -117,29 +117,24 @@ export default function TeamsListPage(): JSX.Element {
             The units that own your work — each with its own workflow, cycles, and triage queue.
           </p>
         </div>
-        {!createOpen ? (
-          <Button
-            type="button"
-            className="gap-1.5"
-            onClick={() => {
-              setCreateOpen(true);
-            }}
-          >
-            <Plus aria-hidden="true" className="size-4" />
-            New team
-          </Button>
-        ) : null}
+        <Button
+          type="button"
+          className="gap-1.5"
+          onClick={() => {
+            setCreateOpen(true);
+          }}
+        >
+          <Plus aria-hidden="true" className="size-4" />
+          New team
+        </Button>
       </header>
 
-      {createOpen ? (
-        <CreateTeamPanel
-          orgId={orgId}
-          onClose={() => {
-            setCreateOpen(false);
-          }}
-          onCreated={handleCreated}
-        />
-      ) : null}
+      <CreateTeamDialog
+        orgId={orgId}
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCreated={handleCreated}
+      />
 
       {loading ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2" aria-hidden="true">
@@ -155,16 +150,12 @@ export default function TeamsListPage(): JSX.Element {
         <EmptyState
           title="No teams yet"
           body="Teams are the units that own work — each with its own workflow, cycles, and triage queue. Create one to start organizing your work."
-          cta={
-            createOpen
-              ? null
-              : {
-                  label: 'Create your first team',
-                  onClick: () => {
-                    setCreateOpen(true);
-                  },
-                }
-          }
+          cta={{
+            label: 'Create your first team',
+            onClick: () => {
+              setCreateOpen(true);
+            },
+          }}
         />
       ) : (
         <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2">

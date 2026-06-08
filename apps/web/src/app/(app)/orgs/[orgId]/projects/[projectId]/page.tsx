@@ -458,11 +458,11 @@ export default function ProjectDetailPage(): JSX.Element {
 
   if (loading) {
     return (
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
         <Skeleton className="h-9 w-72" />
         <Skeleton className="h-4 w-full max-w-xl" />
         <Skeleton className="h-10 w-64" />
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_18rem]">
+        <div className="grid grid-cols-1 gap-6 @4xl:grid-cols-[minmax(0,1fr)_18rem]">
           <Skeleton className="h-64 w-full rounded-xl" />
           <Skeleton className="h-64 w-full rounded-xl" />
         </div>
@@ -472,7 +472,7 @@ export default function ProjectDetailPage(): JSX.Element {
 
   if (error) {
     return (
-      <div className="mx-auto w-full max-w-5xl p-4 sm:p-6 lg:p-8">
+      <div className="mx-auto w-full max-w-6xl p-4 sm:p-6 lg:p-8">
         <p role="alert" className="border-border text-destructive rounded-lg border p-4 text-sm">
           {error}
         </p>
@@ -482,7 +482,7 @@ export default function ProjectDetailPage(): JSX.Element {
 
   if (!project) {
     return (
-      <div className="mx-auto w-full max-w-5xl p-4 sm:p-6 lg:p-8">
+      <div className="mx-auto w-full max-w-6xl p-4 sm:p-6 lg:p-8">
         <p className="border-border text-muted-foreground rounded-xl border border-dashed p-8 text-center text-sm">
           This {projectLabel.toLowerCase()} could not be found.
         </p>
@@ -493,7 +493,7 @@ export default function ProjectDetailPage(): JSX.Element {
   const health = project.health ?? null;
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
       <header className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-2xl font-semibold tracking-tight">{project.name}</h1>
@@ -523,7 +523,7 @@ export default function ProjectDetailPage(): JSX.Element {
           role="tabpanel"
           id="tabpanel-overview"
           aria-labelledby="tab-overview"
-          className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_18rem]"
+          className="grid grid-cols-1 gap-6 @4xl:grid-cols-[minmax(0,1fr)_18rem]"
         >
           <div className="flex min-w-0 flex-col gap-6">
             <section

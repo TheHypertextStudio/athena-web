@@ -58,4 +58,10 @@ export {
   type Workspace,
   type WorkspaceNavKey,
 } from './shell/workspaces';
-export { type OpenTab, TabBar, type TabBarProps, type TabDocType } from './shell/TabBar';
+export {
+  type OpenTab,
+  TabBar,
+  type TabBarProps,
+  type TabDocType,
+  type TabRenderLink,
+} from './shell/TabBar';

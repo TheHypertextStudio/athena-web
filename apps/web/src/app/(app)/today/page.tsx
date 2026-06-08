@@ -148,7 +148,11 @@ export default function TodayPage(): JSX.Element {
         </div>
       ) : null}
 
-      <div className="grid flex-1 gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1.1fr)]">
+      {/* Container-relative panes: the grid reflows against the main panel's own width, not the
+          viewport. Below `@2xl` (~672px panel) the three panes stack; from `@2xl` Plan + Calendar
+          sit side-by-side with Needs-attention beneath; from `@5xl` (~1024px panel) all three sit
+          in one row. Every column is `minmax(0,…)`/`min-w-0` so nothing clips at medium widths. */}
+      <div className="grid flex-1 gap-6 @2xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] @5xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1.1fr)]">
         {/* ── Pane 1: PLAN ─────────────────────────────────────────────── */}
         <section className="flex min-w-0 flex-col gap-3" aria-labelledby="today-plan-heading">
           <div className="flex items-center justify-between">
@@ -202,7 +206,12 @@ export default function TodayPage(): JSX.Element {
         </section>
 
         {/* ── Pane 3: NEEDS ATTENTION ──────────────────────────────────── */}
-        <section className="flex min-w-0 flex-col gap-3" aria-labelledby="today-attention-heading">
+        {/* Spans the full width in the 2-column intermediate (sits beneath Plan + Calendar); becomes
+            its own third column only once the panel is wide enough (`@5xl`). */}
+        <section
+          className="flex min-w-0 flex-col gap-3 @2xl:col-span-2 @5xl:col-span-1"
+          aria-labelledby="today-attention-heading"
+        >
           <div className="flex items-center justify-between">
             <h2 id="today-attention-heading" className="text-foreground text-sm font-semibold">
               Needs attention

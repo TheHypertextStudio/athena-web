@@ -251,7 +251,7 @@ export default function ProgramDetailPage(): JSX.Element {
 
   if (loading) {
     return (
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
         <Skeleton className="h-9 w-72" />
         <Skeleton className="h-4 w-full max-w-xl" />
         <Skeleton className="h-40 w-full rounded-xl" />
@@ -263,7 +263,7 @@ export default function ProgramDetailPage(): JSX.Element {
 
   if (error) {
     return (
-      <div className="mx-auto w-full max-w-5xl p-4 sm:p-6 lg:p-8">
+      <div className="mx-auto w-full max-w-6xl p-4 sm:p-6 lg:p-8">
         <p role="alert" className="border-border text-destructive rounded-lg border p-4 text-sm">
           {error}
         </p>
@@ -273,7 +273,7 @@ export default function ProgramDetailPage(): JSX.Element {
 
   if (!program) {
     return (
-      <div className="mx-auto w-full max-w-5xl p-4 sm:p-6 lg:p-8">
+      <div className="mx-auto w-full max-w-6xl p-4 sm:p-6 lg:p-8">
         <p className="border-border text-muted-foreground rounded-xl border border-dashed p-8 text-center text-sm">
           This {programLabel.toLowerCase()} could not be found.
         </p>
@@ -284,7 +284,7 @@ export default function ProgramDetailPage(): JSX.Element {
   const health = program.health ?? null;
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
       <header className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-2xl font-semibold tracking-tight">{program.name}</h1>

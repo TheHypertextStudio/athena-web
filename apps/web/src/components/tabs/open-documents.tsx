@@ -21,6 +21,7 @@
  * The store is read through {@link useOpenDocuments}; the shell frame wires it to the
  * {@link TabBar} and the router.
  */
+import { ULID_REGEX } from '@docket/types';
 import type { OpenTab } from '@docket/ui/components';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -65,17 +66,23 @@ function readPersisted(userId: string): readonly OpenTab[] {
     if (!raw) return [];
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    // Keep only well-formed entries (defensive against schema drift across sessions).
-    return parsed.filter(
-      (t): t is OpenTab =>
-        typeof t === 'object' &&
-        t !== null &&
-        typeof (t as OpenTab).key === 'string' &&
-        typeof (t as OpenTab).id === 'string' &&
-        typeof (t as OpenTab).orgId === 'string' &&
-        typeof (t as OpenTab).href === 'string' &&
-        typeof (t as OpenTab).title === 'string',
-    );
+    // Keep only well-formed entries (defensive against schema drift across sessions). The org
+    // and document ids must be real ULIDs, so any junk tab persisted before the route guard
+    // landed — e.g. a stale "Session undefined" with `id: 'undefined'` — is dropped on hydration
+    // rather than resurrected.
+    return parsed.filter((t): t is OpenTab => {
+      if (typeof t !== 'object' || t === null) return false;
+      const tab = t as OpenTab;
+      return (
+        typeof tab.key === 'string' &&
+        typeof tab.id === 'string' &&
+        typeof tab.orgId === 'string' &&
+        typeof tab.href === 'string' &&
+        typeof tab.title === 'string' &&
+        ULID_REGEX.test(tab.id) &&
+        ULID_REGEX.test(tab.orgId)
+      );
+    });
   } catch {
     return [];
   }

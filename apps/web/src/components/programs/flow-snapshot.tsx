@@ -88,7 +88,10 @@ export function FlowSnapshot({
         ) : null}
       </div>
 
-      <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      {/* Auto-fit so the metric cells wrap against the actual available width (this sits inside a
+          detail page's narrow main column, beside a rail) rather than a viewport breakpoint that
+          would force five columns into a cramped column at medium widths. */}
+      <dl className="grid grid-cols-[repeat(auto-fit,minmax(7rem,1fr))] gap-3">
         <Metric
           icon={<CircleDot className="size-4" />}
           label="In flight"

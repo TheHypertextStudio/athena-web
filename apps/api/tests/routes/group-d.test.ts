@@ -233,6 +233,52 @@ describe('orgs router', () => {
     expect(res.status).toBe(422);
   });
 
+  it('POST / disambiguates a colliding auto-derived slug instead of 500ing (regression)', async () => {
+    // Two different users naming their workspace the same derive the same slug; the second
+    // would otherwise violate the unique org-slug index and abort the seed transaction as an
+    // opaque 500. The handler must instead suffix the slug so the second create still succeeds.
+    const a = await seedUserWithHub();
+    const b = await seedUserWithHub();
+    const first = await orgsApp(fakeSession(a.userId)).request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ name: 'Acme Robotics' }),
+    });
+    expect(first.status).toBe(200);
+    const firstSlug = (await body<{ organization: { slug: string } }>(first)).organization.slug;
+    expect(firstSlug).toBe('acme-robotics');
+
+    const second = await orgsApp(fakeSession(b.userId)).request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ name: 'Acme Robotics' }),
+    });
+    expect(second.status).toBe(200);
+    const secondSlug = (await body<{ organization: { slug: string } }>(second)).organization.slug;
+    // Same readable base, but disambiguated (a suffix appended) so it is globally unique.
+    expect(secondSlug).not.toBe(firstSlug);
+    expect(secondSlug.startsWith('acme-robotics-')).toBe(true);
+  });
+
+  it('POST / 409s when an EXPLICIT slug is already taken (never silently mutated)', async () => {
+    const a = await seedUserWithHub();
+    const b = await seedUserWithHub();
+    const first = await orgsApp(fakeSession(a.userId)).request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ name: 'Beta Org', slug: 'beta-team' }),
+    });
+    expect(first.status).toBe(200);
+
+    const second = await orgsApp(fakeSession(b.userId)).request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ name: 'Beta Org', slug: 'beta-team' }),
+    });
+    expect(second.status).toBe(409);
+    expect((await body<{ code: string }>(second)).code).toBe('conflict');
+  });
+
   it('GET /:orgId 404s for a non-member (existence-hiding)', async () => {
     const { orgId } = await seedBaseOrg(db, schema);
     const app = orgsApp(fakeSession('user_outsider'));

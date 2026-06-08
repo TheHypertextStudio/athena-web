@@ -24,7 +24,7 @@ import { Hono } from 'hono';
 import type { z } from 'zod';
 
 import type { AppEnv } from '../context';
-import { AuthError } from '../error';
+import { AuthError, ConflictError } from '../error';
 import { ok } from '../lib/ok';
 import { zJson } from '../lib/validate';
 import { orgContextMiddleware } from '../permissions/org-context-middleware';
@@ -71,6 +71,52 @@ function slugify(name: string): string {
       .replace(/^-+|-+$/g, '')
       .slice(0, 48) || 'org'
   );
+}
+
+/** A short, slug-safe random suffix used to disambiguate a colliding auto-derived slug. */
+function slugSuffix(): string {
+  return Math.random().toString(36).slice(2, 8);
+}
+
+/**
+ * Resolve a slug that is free on the unique `organization_slug_uq` index.
+ *
+ * @remarks
+ * Org slugs are globally unique, so two team orgs named the same (e.g. two people both
+ * naming their workspace "Acme") would otherwise collide and abort the create transaction —
+ * surfacing as an opaque 500. This pre-resolves a free slug before the seed transaction runs:
+ *
+ * - An **auto-derived** slug (the common onboarding path, where `name` is slugified) is
+ *   silently disambiguated by appending a short random suffix until it is free, so a repeated
+ *   workspace name still succeeds.
+ * - An **explicit** slug the caller chose is never silently mutated; a collision throws a
+ *   clean {@link ConflictError} (409) so the caller learns the slug is taken.
+ *
+ * @param base - The candidate slug.
+ * @param explicit - Whether the caller supplied the slug explicitly (vs. derived from `name`).
+ * @returns a slug not currently used by any organization.
+ * @throws {ConflictError} when `explicit` is true and the slug is already taken.
+ */
+async function resolveUniqueSlug(base: string, explicit: boolean): Promise<string> {
+  const taken = async (s: string): Promise<boolean> => {
+    const rows = await db
+      .select({ id: organization.id })
+      .from(organization)
+      .where(eq(organization.slug, s))
+      .limit(1);
+    return rows.length > 0;
+  };
+
+  if (!(await taken(base))) return base;
+  if (explicit) throw new ConflictError(`The slug '${base}' is already taken.`);
+
+  // Disambiguate the auto-derived slug, trimming the base so the suffix fits in 48 chars.
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const candidate = `${base.slice(0, 41)}-${slugSuffix()}`;
+    if (!(await taken(candidate))) return candidate;
+  }
+  /* v8 ignore next -- @preserve defensive: six random 6-char suffixes practically never all collide */
+  throw new ConflictError('Could not allocate a unique slug for the organization.');
 }
 
 /** The 4 seeded system roles + their org-root base capability. */
@@ -190,14 +236,20 @@ const orgs = new Hono<AppEnv>()
       }
     }
 
+    // Resolve a slug that is free on the unique `organization_slug_uq` index BEFORE the seed
+    // transaction: a collision inside the transaction (e.g. two team orgs named the same) would
+    // otherwise abort it and surface as an opaque 500. An explicit slug collision is a clean
+    // 409; an auto-derived one is silently disambiguated so a repeated workspace name succeeds.
+    // Personal spaces use a per-user `personal-<userId>` slug that never collides across users.
+    const baseSlug = body.slug ?? (isPersonal ? `personal-${slugify(userId)}` : slugify(orgName));
+    const slug = await resolveUniqueSlug(baseSlug, body.slug !== undefined);
+
     const result = await db.transaction(async (tx) => {
       const [org] = await tx
         .insert(organization)
         .values({
           name: orgName,
-          // Personal spaces use a per-user `personal-<userId>` slug so the unique
-          // org-slug index never collides across users; team orgs keep the readable slug.
-          slug: body.slug ?? (isPersonal ? `personal-${slugify(userId)}` : slugify(orgName)),
+          slug,
           isPersonal,
           vocabulary: { preset: body.vocabulary },
         })

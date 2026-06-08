@@ -18,7 +18,9 @@
  * fetched at runtime, so the production build needs no running server.
  */
 import type { AgentOut, AgentSessionOut, MemberOut, TaskOut } from '@docket/types';
+import { EmptyState } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
+import { Sparkles } from '@docket/ui/icons';
 import { Skeleton } from '@docket/ui/primitives';
 import { useParams, useRouter } from 'next/navigation';
 import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
@@ -139,10 +141,16 @@ export default function AgentsFeedPage(): JSX.Element {
     [router, orgId],
   );
 
-  const emptyCopy =
+  const empty =
     filter === 'all'
-      ? 'No agent sessions yet. When an agent picks up work, you can watch it happen here.'
-      : 'No sessions match this filter right now.';
+      ? {
+          title: 'No agent sessions yet',
+          body: 'When an agent picks up work, you can watch it happen here.',
+        }
+      : {
+          title: 'No sessions match this filter',
+          body: 'Try a different status filter to see other sessions.',
+        };
 
   return (
     <div className="mx-auto flex h-full w-full max-w-4xl flex-col gap-5 p-4 sm:p-6 lg:p-8">
@@ -167,15 +175,20 @@ export default function AgentsFeedPage(): JSX.Element {
         className="border-border flex-1 overflow-hidden rounded-lg border"
       >
         {loading ? (
+          // The default Skeleton's `bg-accent` tone is near-invisible against the `bg-surface`
+          // panel in dark mode, so the loading state reads as an empty box. Override the shimmer
+          // to `bg-surface-container-high` (a visible step above the panel in both themes) so the
+          // panel clearly reads as loading. Row count/height mirror typical session rows — no
+          // layout shift, since loaded + loading both fill the `flex-1` section.
           <div className="flex flex-col gap-1 p-3" aria-hidden="true">
             {[0, 1, 2, 3].map((index) => (
               <div key={index} className="flex items-center gap-4 px-1 py-2">
-                <Skeleton className="h-7 w-7 rounded-lg" />
+                <Skeleton className="bg-surface-container-high h-7 w-7 rounded-lg" />
                 <div className="flex flex-1 flex-col gap-1.5">
-                  <Skeleton className="h-4 w-2/3" />
-                  <Skeleton className="h-3 w-1/3" />
+                  <Skeleton className="bg-surface-container-high h-4 w-2/3" />
+                  <Skeleton className="bg-surface-container-high h-3 w-1/3" />
                 </div>
-                <Skeleton className="h-5 w-24 rounded-full" />
+                <Skeleton className="bg-surface-container-high h-5 w-24 rounded-full" />
               </div>
             ))}
           </div>
@@ -184,7 +197,14 @@ export default function AgentsFeedPage(): JSX.Element {
             {loadError}
           </p>
         ) : visible.length === 0 ? (
-          <p className="text-muted-foreground p-8 text-center text-sm">{emptyCopy}</p>
+          // Drop the EmptyState's own dashed border (`border-none`) since it already sits inside
+          // the bordered feed `<section>`; a nested second border would read as heavy.
+          <EmptyState
+            icon={Sparkles}
+            title={empty.title}
+            body={empty.body}
+            className="border-none p-12"
+          />
         ) : (
           <ul className="divide-border flex flex-col divide-y p-1">
             {visible.map((session) => (

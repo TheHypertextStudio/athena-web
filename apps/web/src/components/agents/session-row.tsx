@@ -60,7 +60,11 @@ export interface SessionRowProps {
 export function SessionRow({ session, onOpen }: SessionRowProps): JSX.Element {
   const startStamp = relativeTime(session.startedAt ?? session.createdAt);
   const span = elapsed(session.startedAt, session.endedAt);
-  const inFlight = session.endedAt === null && session.startedAt !== null;
+  // The leading verb must match the lifecycle: only a genuinely-running session "runs". An
+  // ended session "ran"; a started-but-not-running one (awaiting approval/input, etc.) has
+  // simply been "open" for the span — never claim it is "running" when its pill says Paused.
+  const spanVerb =
+    session.endedAt !== null ? 'ran ' : session.status === 'running' ? 'running ' : 'open ';
 
   return (
     <button
@@ -95,15 +99,17 @@ export function SessionRow({ session, onOpen }: SessionRowProps): JSX.Element {
         </span>
       </span>
 
-      {/* Status pill. */}
-      <SessionStatusPill status={session.status} />
+      {/* Status pill — fixed-width cell so pills share a clean left edge down the list. */}
+      <span className="flex w-32 shrink-0 justify-start">
+        <SessionStatusPill status={session.status} />
+      </span>
 
       {/* When + how long. */}
       <span className="text-muted-foreground hidden w-28 shrink-0 flex-col items-end gap-0.5 text-right text-xs sm:flex">
         <span>{startStamp}</span>
         {span ? (
           <span className="tabular-nums">
-            {inFlight ? 'running ' : 'ran '}
+            {spanVerb}
             {span}
           </span>
         ) : null}

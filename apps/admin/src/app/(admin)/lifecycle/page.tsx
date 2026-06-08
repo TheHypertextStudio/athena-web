@@ -4,10 +4,10 @@ import { Skeleton } from '@docket/ui/primitives';
 import Link from 'next/link';
 import { type JSX, useCallback, useEffect, useState } from 'react';
 
-import { EmptyState, ErrorBanner, PageHeader } from '@/components/ui-bits';
+import { EmptyState, ErrorBanner, PageHeader, ROW_CLASS, SignInAction } from '@/components/ui-bits';
 import { api } from '@/lib/api';
 import { formatTimestamp, lifecycleLabel } from '@/lib/lifecycle';
-import { readError, readProblem } from '@/lib/problem';
+import { isAuthError, readError, readProblem } from '@/lib/problem';
 import type { AdminLifecycleBoard } from '@/lib/types';
 
 /**
@@ -24,14 +24,17 @@ export default function LifecyclePage(): JSX.Element {
   const [board, setBoard] = useState<AdminLifecycleBoard | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [authFailed, setAuthFailed] = useState(false);
 
   /** Load the lifecycle board. */
   const load = useCallback(async (): Promise<void> => {
     setLoading(true);
     setError(null);
+    setAuthFailed(false);
     try {
       const res = await api.v1.admin.lifecycle.$get();
       if (!res.ok) {
+        setAuthFailed(isAuthError(res));
         setError(await readProblem(res, 'Could not load the lifecycle board.'));
         return;
       }
@@ -53,7 +56,7 @@ export default function LifecyclePage(): JSX.Element {
         title="Data lifecycle"
         description="Every organization by its position in the data-retention pipeline."
       />
-      <ErrorBanner message={error} />
+      <ErrorBanner message={error} action={authFailed ? <SignInAction /> : null} />
 
       {loading ? (
         <BoardSkeleton />
@@ -62,12 +65,14 @@ export default function LifecyclePage(): JSX.Element {
           {board.columns.map((column) => (
             <section
               key={column.lifecycleState}
-              className="border-border bg-muted/30 flex w-72 shrink-0 flex-col gap-3 rounded-lg border p-3"
+              className="border-outline-variant bg-surface-container flex w-72 shrink-0 flex-col gap-3 rounded-lg border p-3"
               aria-label={lifecycleLabel(column.lifecycleState)}
             >
               <header className="flex items-center justify-between">
-                <h2 className="text-sm font-medium">{lifecycleLabel(column.lifecycleState)}</h2>
-                <span className="bg-background text-muted-foreground rounded-full px-2 py-0.5 text-xs tabular-nums">
+                <h2 className="text-on-surface text-sm font-medium">
+                  {lifecycleLabel(column.lifecycleState)}
+                </h2>
+                <span className="bg-surface-container-highest text-on-surface-variant rounded-full px-2 py-0.5 text-xs tabular-nums">
                   {column.orgs.length}
                 </span>
               </header>
@@ -77,10 +82,10 @@ export default function LifecyclePage(): JSX.Element {
                     <li key={org.id}>
                       <Link
                         href={`/orgs/${org.id}`}
-                        className="border-border bg-card hover:bg-accent/50 flex flex-col gap-1 rounded-md border px-3 py-2 transition-colors"
+                        className={`${ROW_CLASS} flex-col gap-1 rounded-md px-3 py-2`}
                       >
                         <span className="truncate text-sm font-medium">{org.name}</span>
-                        <span className="text-muted-foreground truncate text-xs">
+                        <span className="text-on-surface-variant truncate text-xs">
                           {org.deleteAfterAt
                             ? `Delete after ${formatTimestamp(org.deleteAfterAt)}`
                             : org.exportReadyAt

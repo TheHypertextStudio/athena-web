@@ -67,21 +67,44 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
 
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  // The element focused when the palette opened — restored on close so a keyboard user lands
+  // back where they were (Radix Dialog/Sheet do this for free; this composed overlay does not).
+  const openerRef = useRef<HTMLElement | null>(null);
+  // Latest `activeOrgId`, read by the open effect without making it a dependency (so an org
+  // change mid-session does not re-run the open effect and refocus the input).
+  const activeOrgIdRef = useRef(activeOrgId);
+  activeOrgIdRef.current = activeOrgId;
   const listboxId = useId();
   const baseRowId = useId();
 
-  // Reset transient state each time the palette opens, and focus the input.
+  // Whether the panel is mid-close (kept mounted briefly so its exit animation can play before
+  // unmount), matching the open/close motion the Dialog/Sheet/Dropdown primitives already use.
+  const [closing, setClosing] = useState(false);
+
+  // Reset transient state each time the palette opens, capture the opener, and focus the input.
+  // Keyed only on `open` so an `activeOrgId` change mid-session never re-runs this and steals
+  // focus back to the input; the scope fallback below reads `activeOrgId` without depending on it.
   useEffect(() => {
     if (!open) return;
+    setClosing(false);
     setQuery('');
     setActiveIndex(0);
     // org-local is meaningless without a bound org → fall back to hub on the Hub.
-    setScope((prev) => (activeOrgId ? prev : 'hub'));
+    setScope((prev) => (activeOrgIdRef.current ? prev : 'hub'));
+    const active = document.activeElement;
+    openerRef.current = active instanceof HTMLElement ? active : null;
     const frame = requestAnimationFrame(() => inputRef.current?.focus());
     return () => {
       cancelAnimationFrame(frame);
+      const opener = openerRef.current;
+      openerRef.current = null;
+      // Keep the panel mounted for one exit-animation pass, then restore focus to the opener
+      // (Radix Dialog/Sheet do this for free; this composed overlay must do it explicitly).
+      setClosing(true);
+      if (opener?.isConnected) opener.focus();
     };
-  }, [open, activeOrgId]);
+  }, [open]);
 
   const commands = useCommandActions({ scope, close: onClose });
   const { results, loading, error, hasQuery } = useHubSearch({ query, scope, close: onClose });
@@ -131,11 +154,27 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
           event.preventDefault();
           onClose();
           break;
-        case 'Tab':
-          // Trap focus inside the single-input dialog.
+        case 'Tab': {
+          // Trap focus inside the dialog, but cycle through ALL its tabbable controls (the search
+          // input + the scope-toggle radios) rather than pinning to the input — so the scope
+          // toggle stays keyboard-reachable. The list rows are `aria-activedescendant`-driven
+          // `option`s, not tab stops, so they are intentionally excluded.
+          const dialog = dialogRef.current;
+          if (!dialog) break;
+          const tabbables = Array.from(
+            dialog.querySelectorAll<HTMLElement>(
+              'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+            ),
+          ).filter((el) => el.offsetParent !== null || el === document.activeElement);
+          if (tabbables.length === 0) break;
           event.preventDefault();
-          inputRef.current?.focus();
+          const current = document.activeElement as HTMLElement | null;
+          const index = current ? tabbables.indexOf(current) : -1;
+          const delta = event.shiftKey ? -1 : 1;
+          const next = tabbables[(index + delta + tabbables.length) % tabbables.length];
+          next?.focus();
           break;
+        }
         default:
           break;
       }
@@ -143,7 +182,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
     [items.length, runActive, onClose],
   );
 
-  if (!open) return null;
+  if (!open && !closing) return null;
 
   /** Flat index of an item within `items`, for the row id + active marker. */
   const indexOf = (item: PaletteItem): number => items.indexOf(item);
@@ -157,27 +196,37 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
   const showResultsSkeleton = hasQuery && loading && results.length === 0;
   const showEmpty = items.length === 0 && !showResultsSkeleton && !error;
 
+  // While closing, run the same `tw-animate-css` exit motion the Dialog/Sheet/Dropdown primitives
+  // use; on the panel's `animationend` we fully unmount by clearing the closing flag.
+  const motionState = open ? 'open' : 'closed';
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-[12vh]"
       role="presentation"
     >
-      {/* Backdrop */}
+      {/* Backdrop — `bg-black/40` (no blur) to match the Dialog/Sheet overlay treatment. */}
       <button
         type="button"
         aria-label="Close command palette"
         tabIndex={-1}
         onClick={onClose}
-        className="bg-background/70 absolute inset-0 backdrop-blur-sm"
+        data-state={motionState}
+        className="data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 absolute inset-0 bg-black/40"
       />
 
       {/* Dialog */}
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="Command palette"
         onKeyDown={onKeyDown}
-        className="bg-surface-container-high text-on-surface border-outline-variant animate-in fade-in-0 zoom-in-95 relative flex max-h-[70vh] w-full max-w-xl flex-col overflow-hidden rounded-xl border shadow-2xl duration-150"
+        data-state={motionState}
+        onAnimationEnd={() => {
+          if (!open) setClosing(false);
+        }}
+        className="bg-surface-container-high text-on-surface border-outline-variant data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95 relative flex max-h-[70vh] w-full max-w-xl flex-col overflow-hidden rounded-xl border shadow-2xl duration-150"
       >
         {/* Search input + scope toggle */}
         <div className="border-border/70 flex items-center gap-2 border-b px-3">

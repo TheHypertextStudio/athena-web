@@ -51,7 +51,7 @@ export default function SignInPage(): JSX.Element {
   }
 
   return (
-    <main className="bg-background flex min-h-screen items-center justify-center px-6">
+    <main className="bg-surface-container text-on-surface flex min-h-screen items-center justify-center px-6">
       <Card className="w-full max-w-sm">
         <CardHeader>
           <CardTitle className="text-2xl">Docket service admin</CardTitle>
@@ -106,7 +106,7 @@ export default function SignInPage(): JSX.Element {
             <Button type="submit" disabled={pending}>
               {pending ? 'Signing in…' : 'Sign in'}
             </Button>
-            <p className="text-muted-foreground text-center text-xs">
+            <p className="text-on-surface-variant text-center text-xs">
               Operator access only. Non-staff accounts are rejected.
             </p>
           </CardFooter>

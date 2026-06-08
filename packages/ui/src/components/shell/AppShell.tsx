@@ -104,6 +104,16 @@ export function AppShell({
         className,
       )}
     >
+      {/* Skip-to-content — the first focusable element, visually hidden until focused. Lets a
+          keyboard user jump past the workspace switcher + full nav + open document tabs straight
+          to the page content (the `<main>` region below is a focus target via `tabIndex={-1}`). */}
+      <a
+        href="#main-content"
+        className="bg-surface text-on-surface border-outline-variant focus-visible:ring-ring sr-only z-50 rounded-md border px-3 py-2 text-sm font-medium shadow-sm transition-colors focus-visible:not-sr-only focus-visible:absolute focus-visible:top-2 focus-visible:left-2 focus-visible:ring-2 focus-visible:outline-none"
+      >
+        Skip to content
+      </a>
+
       {/* Mobile top bar — shown only below `lg`; opens the sidebar drawer. */}
       <div className="border-outline-variant flex h-12 shrink-0 items-center gap-2 border-b px-2 lg:hidden">
         <button
@@ -143,7 +153,11 @@ export function AppShell({
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {tabBar}
-        <main className="bg-surface lg:border-outline-variant min-h-0 flex-1 overflow-auto lg:rounded-xl lg:border lg:shadow-sm">
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="bg-surface lg:border-outline-variant min-h-0 flex-1 scrollbar-gutter-stable overflow-auto outline-none lg:rounded-xl lg:border lg:shadow-sm"
+        >
           {children}
         </main>
       </div>

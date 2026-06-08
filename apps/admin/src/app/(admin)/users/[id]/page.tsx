@@ -14,10 +14,17 @@ import { useParams } from 'next/navigation';
 import { type JSX, useCallback, useEffect, useState } from 'react';
 
 import { useImpersonation } from '@/components/impersonation';
-import { EmptyState, ErrorBanner, LifecycleBadge, PageHeader } from '@/components/ui-bits';
+import {
+  EmptyState,
+  ErrorBanner,
+  LifecycleBadge,
+  PageHeader,
+  ROW_CLASS,
+  SignInAction,
+} from '@/components/ui-bits';
 import { api } from '@/lib/api';
 import { formatTimestamp } from '@/lib/lifecycle';
-import { readError, readProblem } from '@/lib/problem';
+import { isAuthError, readError, readProblem } from '@/lib/problem';
 import type { AdminUserDetail } from '@/lib/types';
 
 /** Default impersonation session lifetime, in minutes (the API caps this at 480). */
@@ -39,6 +46,7 @@ export default function UserDetailPage(): JSX.Element {
   const [detail, setDetail] = useState<AdminUserDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [authFailed, setAuthFailed] = useState(false);
 
   const [reason, setReason] = useState('');
   const [impersonating, setImpersonating] = useState(false);
@@ -48,9 +56,11 @@ export default function UserDetailPage(): JSX.Element {
   const load = useCallback(async (): Promise<void> => {
     setLoading(true);
     setError(null);
+    setAuthFailed(false);
     try {
       const res = await api.v1.admin.users[':id'].$get({ param: { id: params.id } });
       if (!res.ok) {
+        setAuthFailed(isAuthError(res));
         setError(await readProblem(res, 'Could not load this user.'));
         return;
       }
@@ -98,7 +108,7 @@ export default function UserDetailPage(): JSX.Element {
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 p-8">
       <Link
         href="/users"
-        className="text-muted-foreground text-sm underline-offset-4 hover:underline"
+        className="text-on-surface-variant hover:text-on-surface focus-visible:ring-ring w-fit rounded-sm text-sm underline-offset-4 transition-colors hover:underline focus-visible:ring-1 focus-visible:outline-none"
       >
         ← Back to users
       </Link>
@@ -129,7 +139,7 @@ export default function UserDetailPage(): JSX.Element {
               <CardTitle className="text-sm">View as user</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
-              <p className="text-muted-foreground text-sm">
+              <p className="text-on-surface-variant text-sm">
                 Start a time-boxed impersonation session. A reason is recorded in the audit log.
               </p>
               <ErrorBanner message={impersonateError} />
@@ -158,7 +168,7 @@ export default function UserDetailPage(): JSX.Element {
           </Card>
 
           <section className="flex flex-col gap-3" aria-labelledby="memberships-heading">
-            <h2 id="memberships-heading" className="text-muted-foreground text-sm font-medium">
+            <h2 id="memberships-heading" className="text-on-surface-variant text-sm font-medium">
               Organization memberships ({detail.memberships.length})
             </h2>
             {detail.memberships.length > 0 ? (
@@ -167,11 +177,11 @@ export default function UserDetailPage(): JSX.Element {
                   <li key={m.actorId}>
                     <Link
                       href={`/orgs/${m.organizationId}`}
-                      className="border-border bg-card hover:bg-accent/50 flex items-center justify-between gap-3 rounded-lg border px-4 py-3 transition-colors"
+                      className={`${ROW_CLASS} items-center justify-between gap-3 rounded-lg px-4 py-3`}
                     >
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium">{m.organizationName}</p>
-                        <p className="text-muted-foreground truncate text-xs">
+                        <p className="text-on-surface-variant truncate text-xs">
                           {m.organizationSlug}
                         </p>
                       </div>
@@ -186,7 +196,7 @@ export default function UserDetailPage(): JSX.Element {
           </section>
         </>
       ) : (
-        <ErrorBanner message={error} />
+        <ErrorBanner message={error} action={authFailed ? <SignInAction /> : null} />
       )}
     </div>
   );
@@ -204,7 +214,7 @@ function Field({
 }): JSX.Element {
   return (
     <div className="flex flex-col gap-0.5">
-      <span className="text-muted-foreground text-xs uppercase tracking-wide">{label}</span>
+      <span className="text-on-surface-variant text-xs tracking-wide uppercase">{label}</span>
       <span className={`text-sm ${mono ? 'truncate font-mono text-xs' : ''}`} title={value}>
         {value}
       </span>

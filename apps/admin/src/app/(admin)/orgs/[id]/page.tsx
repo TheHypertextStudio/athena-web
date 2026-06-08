@@ -13,15 +13,11 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { type JSX, useCallback, useEffect, useState } from 'react';
 
-import { ErrorBanner, LifecycleBadge, PageHeader } from '@/components/ui-bits';
+import { LifecycleStateMenu } from '@/components/lifecycle-filter';
+import { ErrorBanner, LifecycleBadge, PageHeader, SignInAction } from '@/components/ui-bits';
 import { api } from '@/lib/api';
-import {
-  LIFECYCLE_STATES,
-  type LifecycleState,
-  formatTimestamp,
-  lifecycleLabel,
-} from '@/lib/lifecycle';
-import { readError, readProblem } from '@/lib/problem';
+import { type LifecycleState, formatTimestamp } from '@/lib/lifecycle';
+import { isAuthError, readError, readProblem } from '@/lib/problem';
 import type { AdminHold, AdminOrg } from '@/lib/types';
 
 /**
@@ -41,6 +37,7 @@ export default function OrgDetailPage(): JSX.Element {
   const [org, setOrg] = useState<AdminOrg | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [authFailed, setAuthFailed] = useState(false);
 
   const [actionError, setActionError] = useState<string | null>(null);
   const [pending, setPending] = useState<string | null>(null);
@@ -55,9 +52,11 @@ export default function OrgDetailPage(): JSX.Element {
   const load = useCallback(async (): Promise<void> => {
     setLoading(true);
     setError(null);
+    setAuthFailed(false);
     try {
       const res = await api.v1.admin.orgs[':id'].$get({ param: { id: params.id } });
       if (!res.ok) {
+        setAuthFailed(isAuthError(res));
         setError(await readProblem(res, 'Could not load this organization.'));
         return;
       }
@@ -176,7 +175,7 @@ export default function OrgDetailPage(): JSX.Element {
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 p-8">
       <Link
         href="/orgs"
-        className="text-muted-foreground text-sm underline-offset-4 hover:underline"
+        className="text-on-surface-variant hover:text-on-surface focus-visible:ring-ring w-fit rounded-sm text-sm underline-offset-4 transition-colors hover:underline focus-visible:ring-1 focus-visible:outline-none"
       >
         ← Back to organizations
       </Link>
@@ -213,7 +212,7 @@ export default function OrgDetailPage(): JSX.Element {
             </CardHeader>
             <CardContent className="flex flex-col gap-5">
               <div className="flex flex-col gap-2">
-                <label htmlFor="trial-days" className="text-muted-foreground text-xs font-medium">
+                <label htmlFor="trial-days" className="text-on-surface-variant text-xs font-medium">
                   Extend trial
                 </label>
                 <div className="flex gap-2">
@@ -235,7 +234,7 @@ export default function OrgDetailPage(): JSX.Element {
               </div>
 
               <div className="flex flex-col gap-2">
-                <span className="text-muted-foreground text-xs font-medium">Reactivate</span>
+                <span className="text-on-surface-variant text-xs font-medium">Reactivate</span>
                 <div>
                   <Button variant="outline" disabled={pending !== null} onClick={reactivate}>
                     {pending === 'reactivate' ? 'Reactivating…' : 'Reactivate'}
@@ -244,24 +243,18 @@ export default function OrgDetailPage(): JSX.Element {
               </div>
 
               <div className="flex flex-col gap-2">
-                <label htmlFor="target-state" className="text-muted-foreground text-xs font-medium">
+                <label
+                  htmlFor="target-state"
+                  className="text-on-surface-variant text-xs font-medium"
+                >
                   Set lifecycle state
                 </label>
                 <div className="flex gap-2">
-                  <select
+                  <LifecycleStateMenu
                     id="target-state"
                     value={targetState}
-                    onChange={(e) => {
-                      setTargetState(e.target.value as LifecycleState);
-                    }}
-                    className="border-input focus-visible:ring-ring h-9 rounded-md border bg-transparent px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1"
-                  >
-                    {LIFECYCLE_STATES.map((state) => (
-                      <option key={state} value={state}>
-                        {lifecycleLabel(state)}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={setTargetState}
+                  />
                   <Button variant="outline" disabled={pending !== null} onClick={setLifecycle}>
                     {pending === 'lifecycle' ? 'Setting…' : 'Set state'}
                   </Button>
@@ -275,7 +268,7 @@ export default function OrgDetailPage(): JSX.Element {
               <CardTitle className="text-sm">Lifecycle holds</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
-              <p className="text-muted-foreground text-xs">
+              <p className="text-on-surface-variant text-xs">
                 A hold blocks automated lifecycle progression (export, deletion) until released.
               </p>
               <form
@@ -308,11 +301,11 @@ export default function OrgDetailPage(): JSX.Element {
                   {holds.map((hold) => (
                     <li
                       key={hold.id}
-                      className="border-border bg-card flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5"
+                      className="border-outline-variant bg-surface-container-low flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5"
                     >
                       <div className="min-w-0">
                         <p className="truncate text-sm">{hold.reason}</p>
-                        <p className="text-muted-foreground text-xs">
+                        <p className="text-on-surface-variant text-xs">
                           Placed {formatTimestamp(hold.createdAt)}
                         </p>
                       </div>
@@ -328,13 +321,13 @@ export default function OrgDetailPage(): JSX.Element {
                   ))}
                 </ul>
               ) : (
-                <p className="text-muted-foreground text-xs">No holds placed in this session.</p>
+                <p className="text-on-surface-variant text-xs">No holds placed in this session.</p>
               )}
             </CardContent>
           </Card>
         </>
       ) : (
-        <ErrorBanner message={error} />
+        <ErrorBanner message={error} action={authFailed ? <SignInAction /> : null} />
       )}
     </div>
   );
@@ -352,7 +345,7 @@ function Field({
 }): JSX.Element {
   return (
     <div className="flex flex-col gap-0.5">
-      <span className="text-muted-foreground text-xs uppercase tracking-wide">{label}</span>
+      <span className="text-on-surface-variant text-xs tracking-wide uppercase">{label}</span>
       <span className={`text-sm ${mono ? 'truncate font-mono text-xs' : ''}`} title={value}>
         {value}
       </span>

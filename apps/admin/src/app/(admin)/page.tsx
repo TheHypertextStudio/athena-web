@@ -4,10 +4,17 @@ import { Card, CardContent, CardHeader, CardTitle, Skeleton } from '@docket/ui/p
 import Link from 'next/link';
 import { type JSX, useCallback, useEffect, useState } from 'react';
 
-import { EmptyState, ErrorBanner, LifecycleBadge, PageHeader } from '@/components/ui-bits';
+import {
+  EmptyState,
+  ErrorBanner,
+  LifecycleBadge,
+  PageHeader,
+  ROW_CLASS,
+  SignInAction,
+} from '@/components/ui-bits';
 import { api } from '@/lib/api';
 import { lifecycleLabel } from '@/lib/lifecycle';
-import { readError, readProblem } from '@/lib/problem';
+import { isAuthError, readError, readProblem } from '@/lib/problem';
 import type { AdminMetrics, AdminOrg } from '@/lib/types';
 
 /** The dashboard's loaded data: headline metrics and the at-risk org queues. */
@@ -34,11 +41,13 @@ export default function DashboardPage(): JSX.Element {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [authFailed, setAuthFailed] = useState(false);
 
   /** Load metrics and the at-risk org queues in parallel. */
   const load = useCallback(async (): Promise<void> => {
     setLoading(true);
     setError(null);
+    setAuthFailed(false);
     try {
       const [metricsRes, exportRes, deleteRes] = await Promise.all([
         api.v1.admin.metrics.$get(),
@@ -50,6 +59,7 @@ export default function DashboardPage(): JSX.Element {
         }),
       ]);
       if (!metricsRes.ok) {
+        setAuthFailed(isAuthError(metricsRes));
         setError(await readProblem(metricsRes, 'Could not load the dashboard.'));
         return;
       }
@@ -74,14 +84,14 @@ export default function DashboardPage(): JSX.Element {
         title="Operator dashboard"
         description="Platform health and the organizations that need attention."
       />
-      <ErrorBanner message={error} />
+      <ErrorBanner message={error} action={authFailed ? <SignInAction /> : null} />
 
       {loading ? (
         <DashboardSkeleton />
       ) : data ? (
         <div className="grid gap-8 lg:grid-cols-[1.4fr_1fr]">
           <section className="flex flex-col gap-4" aria-labelledby="metrics-heading">
-            <h2 id="metrics-heading" className="text-muted-foreground text-sm font-medium">
+            <h2 id="metrics-heading" className="text-on-surface-variant text-sm font-medium">
               Platform metrics
             </h2>
             <div className="grid grid-cols-2 gap-3">
@@ -100,7 +110,7 @@ export default function DashboardPage(): JSX.Element {
           </section>
 
           <section className="flex flex-col gap-4" aria-labelledby="queues-heading">
-            <h2 id="queues-heading" className="text-muted-foreground text-sm font-medium">
+            <h2 id="queues-heading" className="text-on-surface-variant text-sm font-medium">
               Needs attention
             </h2>
             <OrgQueue
@@ -125,7 +135,7 @@ function MetricCard({ label, value }: { label: string; value: number }): JSX.Ele
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="text-muted-foreground text-xs font-medium">{label}</CardTitle>
+        <CardTitle className="text-on-surface-variant text-xs font-medium">{label}</CardTitle>
       </CardHeader>
       <CardContent>
         <p className="text-2xl font-semibold tabular-nums">{value}</p>
@@ -153,7 +163,7 @@ function OrgQueue({
             <li key={org.id}>
               <Link
                 href={`/orgs/${org.id}`}
-                className="border-border bg-card hover:bg-accent/50 flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5 transition-colors"
+                className={`${ROW_CLASS} items-center justify-between gap-3 rounded-lg px-3 py-2.5`}
               >
                 <span className="min-w-0 truncate text-sm font-medium">{org.name}</span>
                 <LifecycleBadge state={org.lifecycleState} />

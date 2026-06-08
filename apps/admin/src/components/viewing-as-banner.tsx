@@ -47,11 +47,11 @@ export function ViewingAsBanner(): JSX.Element | null {
   return (
     <div
       role="status"
-      className="flex flex-wrap items-center justify-between gap-3 border-b border-amber-500/40 bg-amber-500/15 px-6 py-2.5 text-sm"
+      className="border-state-started/30 bg-state-started/10 flex flex-wrap items-center justify-between gap-3 border-b px-6 py-2.5 text-sm"
     >
-      <p className="text-amber-900 dark:text-amber-200">
+      <p className="text-state-started">
         <span className="font-semibold">Viewing as {active.targetLabel}</span>
-        <span className="text-amber-900/70 dark:text-amber-200/70">
+        <span className="text-state-started/70">
           {' '}
           · expires {formatTimestamp(active.expiresAt)}
         </span>

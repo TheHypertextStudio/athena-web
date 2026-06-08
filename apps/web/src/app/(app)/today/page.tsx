@@ -110,11 +110,11 @@ export default function TodayPage(): JSX.Element {
   const inbox = data?.needsAttention.inbox ?? 0;
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-7xl flex-col gap-8 p-6 md:p-8">
+    <div className="mx-auto flex h-full w-full max-w-7xl flex-col gap-6 p-4 sm:p-6 lg:gap-8 lg:p-8">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-1">
           <p className="text-muted-foreground text-sm font-medium">{heading}</p>
-          <h1 className="text-2xl font-semibold tracking-tight">Today</h1>
+          <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Today</h1>
           <p className="text-muted-foreground text-sm">Your plan and what needs you today.</p>
         </div>
         <Button

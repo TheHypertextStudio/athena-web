@@ -319,7 +319,7 @@ export default function TaskDetailPage(): JSX.Element {
 
   if (loading) {
     return (
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-8">
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
         <Skeleton className="h-9 w-2/3" />
         <div className="flex gap-2">
           <Skeleton className="h-8 w-32" />
@@ -334,7 +334,7 @@ export default function TaskDetailPage(): JSX.Element {
 
   if (loadError) {
     return (
-      <div className="mx-auto w-full max-w-5xl p-8">
+      <div className="mx-auto w-full max-w-5xl p-4 sm:p-6 lg:p-8">
         <p role="alert" className="border-border text-destructive rounded-lg border p-4 text-sm">
           {loadError}
         </p>
@@ -344,7 +344,7 @@ export default function TaskDetailPage(): JSX.Element {
 
   if (!task) {
     return (
-      <div className="mx-auto w-full max-w-5xl p-8">
+      <div className="mx-auto w-full max-w-5xl p-4 sm:p-6 lg:p-8">
         <p className="border-border text-muted-foreground rounded-lg border border-dashed p-6 text-center text-sm">
           This task could not be found.
         </p>
@@ -355,7 +355,7 @@ export default function TaskDetailPage(): JSX.Element {
   const provenance = task.provenance;
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 p-8">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 p-4 sm:p-6 lg:p-8">
       {/* Header: title, editable status + priority, assignee/delegate, due date. */}
       <header className="flex flex-col gap-4">
         <h1 className="text-2xl leading-tight font-semibold tracking-tight">{task.title}</h1>
@@ -453,10 +453,12 @@ export default function TaskDetailPage(): JSX.Element {
           />
         </div>
 
-        {/* Properties panel: project / program / milestone / cycle / labels / links. */}
+        {/* Properties panel: project / program / milestone / cycle / labels / links.
+            On mobile/tablet the grid stacks, so the panel takes a top divider; at `lg` it
+            sits in the right rail and takes a left divider instead. */}
         <aside
           aria-labelledby="properties-heading"
-          className="lg:border-border lg:border-l lg:pl-6"
+          className="border-border border-t pt-6 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-6"
         >
           <h2
             id="properties-heading"

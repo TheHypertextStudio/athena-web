@@ -282,7 +282,7 @@ export default function SessionViewPage(): JSX.Element {
 
   if (loading) {
     return (
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-8">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
         <Skeleton className="h-5 w-48" />
         <Skeleton className="h-8 w-2/3" />
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
@@ -299,7 +299,7 @@ export default function SessionViewPage(): JSX.Element {
 
   if (loadError) {
     return (
-      <div className="mx-auto w-full max-w-6xl p-8">
+      <div className="mx-auto w-full max-w-6xl p-4 sm:p-6 lg:p-8">
         <p role="alert" className="border-border text-destructive rounded-lg border p-4 text-sm">
           {loadError}
         </p>
@@ -309,7 +309,7 @@ export default function SessionViewPage(): JSX.Element {
 
   if (!session) {
     return (
-      <div className="mx-auto w-full max-w-6xl p-8">
+      <div className="mx-auto w-full max-w-6xl p-4 sm:p-6 lg:p-8">
         <p className="border-border text-muted-foreground rounded-lg border border-dashed p-6 text-center text-sm">
           This session could not be found.
         </p>
@@ -320,7 +320,7 @@ export default function SessionViewPage(): JSX.Element {
   const canAct = controls.canCancel || session.status === 'awaiting_approval';
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-8">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
       {/* Header: back-to-task link + org chip + status. */}
       <header className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-3">

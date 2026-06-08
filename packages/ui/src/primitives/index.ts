@@ -3,8 +3,8 @@
  *
  * @remarks
  * Re-exports every hand-authored primitive (button, input, card, badge, avatar,
- * skeleton, dropdown-menu, dialog, separator) so consumers can import from a single subpath:
- * `import { Button, Card } from '@docket/ui/primitives'`.
+ * skeleton, dropdown-menu, dialog, sheet, separator) so consumers can import from a single
+ * subpath: `import { Button, Card } from '@docket/ui/primitives'`.
  */
 export { Avatar, AvatarFallback, AvatarImage } from './avatar';
 export { Badge, badgeVariants, type BadgeProps } from './badge';
@@ -40,5 +40,16 @@ export {
   DropdownMenuTrigger,
 } from './dropdown-menu';
 export { Input, type InputProps } from './input';
+export {
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetDescription,
+  SheetOverlay,
+  SheetPortal,
+  type SheetSide,
+  SheetTitle,
+  SheetTrigger,
+} from './sheet';
 export { Separator } from './separator';
 export { Skeleton } from './skeleton';

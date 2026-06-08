@@ -1,6 +1,14 @@
 import '@testing-library/jest-dom/vitest';
 
-import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import * as React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -11,6 +19,7 @@ import {
   useContextState,
   type ActiveContext,
 } from '../../../src/components/shell/ContextProvider';
+import { ShellDrawerProvider } from '../../../src/components/shell/ShellDrawerContext';
 import { Sidebar } from '../../../src/components/shell/Sidebar';
 import { SidebarNavItem } from '../../../src/components/shell/SidebarNavItem';
 import { TabBar, type OpenTab } from '../../../src/components/shell/TabBar';
@@ -104,7 +113,7 @@ describe('AppShell', () => {
     expect(root).toHaveClass('shell-x');
   });
 
-  it('is the tinted MD3 canvas with a gutter, hosting a floating rounded main surface panel', () => {
+  it('is the tinted MD3 canvas, floating the main surface panel with a gutter on desktop only', () => {
     const { container } = render(
       <ContextProvider initialContext={null}>
         <AppShell sidebar={<nav aria-label="Navigation" />}>
@@ -112,15 +121,84 @@ describe('AppShell', () => {
         </AppShell>
       </ContextProvider>,
     );
-    // Root = the tinted canvas tone (surface-container), inset by a uniform gutter so the
-    // panels float — NOT the old flat bg-background, and never bg-card/bg-background again.
+    // Root = the tinted canvas tone (surface-container). The uniform gutter that floats the
+    // panels is a DESKTOP affordance (`lg:p-2`) so mobile content can go full-bleed; the canvas
+    // is never the old flat bg-background, and never bg-card/bg-background again.
     const root = container.firstElementChild as HTMLElement;
-    expect(root).toHaveClass('bg-surface-container', 'text-on-surface', 'p-2');
+    expect(root).toHaveClass('bg-surface-container', 'text-on-surface', 'lg:p-2');
     expect(root).not.toHaveClass('bg-background', 'bg-card');
-    // The main content is a floating rounded surface panel on that canvas.
+    // The main content is the single distinct surface panel: it carries the panel surface tone
+    // always, and the rounded/bordered/elevated panel chrome at the desktop breakpoint, going
+    // full-bleed (no rounding/border) below `lg`.
     const main = screen.getByRole('main');
-    expect(main).toHaveClass('bg-surface', 'rounded-xl', 'border-outline-variant');
+    expect(main).toHaveClass('bg-surface', 'lg:rounded-xl', 'lg:border-outline-variant');
     expect(main).not.toHaveClass('bg-background', 'bg-card');
+  });
+
+  it('renders a mobile menu trigger and the static desktop sidebar (the same nav node)', () => {
+    render(
+      <ContextProvider initialContext={null}>
+        <AppShell sidebar={<nav aria-label="Navigation">side</nav>}>
+          <div>Main</div>
+        </AppShell>
+      </ContextProvider>,
+    );
+    // A hamburger affordance opens the off-canvas drawer below `lg`.
+    expect(screen.getByRole('button', { name: 'Open navigation' })).toBeInTheDocument();
+    // The static (desktop) sidebar node is mounted; the drawer's copy is not until opened.
+    expect(screen.getByRole('navigation', { name: 'Navigation' })).toBeInTheDocument();
+  });
+
+  it('opens the off-canvas drawer from the hamburger and closes it on Escape', async () => {
+    render(
+      <ContextProvider initialContext={null}>
+        <AppShell sidebar={<nav aria-label="Navigation">drawer side</nav>}>
+          <div>Main</div>
+        </AppShell>
+      </ContextProvider>,
+    );
+    const trigger = screen.getByRole('button', { name: 'Open navigation' });
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+
+    // Opening surfaces a focus-trapped dialog drawer (Radix Sheet) labelled "Navigation".
+    fireEvent.click(trigger);
+    const drawer = await screen.findByRole('dialog', { name: 'Navigation' });
+    expect(drawer).toBeInTheDocument();
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+
+    // Esc dismisses it (Radix focus trap → return focus + close).
+    fireEvent.keyDown(drawer, { key: 'Escape' });
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Navigation' })).not.toBeInTheDocument(),
+    );
+  });
+
+  it('closes the drawer when a nav row inside it is selected (the real Sidebar in the drawer)', async () => {
+    render(
+      <ContextProvider initialContext={ACME.id}>
+        <AppShell
+          sidebar={
+            <Sidebar
+              workspaces={WORKSPACES}
+              {...sidebarHrefs()}
+              onSelectWorkspace={() => undefined}
+              onOpenSearch={() => undefined}
+            />
+          }
+        >
+          <div>Main</div>
+        </AppShell>
+      </ContextProvider>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Open navigation' }));
+    const drawer = await screen.findByRole('dialog', { name: 'Navigation' });
+
+    // The drawer hosts the SAME sidebar; selecting a nav row dismisses the drawer.
+    const myWork = within(drawer).getByRole('link', { name: 'My Work' });
+    fireEvent.click(myWork);
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Navigation' })).not.toBeInTheDocument(),
+    );
   });
 });
 
@@ -156,7 +234,7 @@ describe('Sidebar', () => {
     );
   });
 
-  it('is a floating rounded MD3 surface panel, not a flush bordered wall', () => {
+  it('blends into the canvas — no separate-container chrome (fill, border, rounding, shadow)', () => {
     render(
       <ContextProvider initialContext={ACME.id}>
         <Sidebar
@@ -168,14 +246,56 @@ describe('Sidebar', () => {
       </ContextProvider>,
     );
     const aside = screen.getByRole('complementary', { name: 'Navigation' });
-    // Panel tone + rounded floating panel with a hairline outline — no full-bleed divider wall.
-    expect(aside).toHaveClass(
+    // The nav reads as part of the background: it shares the canvas tone (only `text-on-surface`
+    // for legibility) and carries NO distinct-panel chrome — no surface fill, no border (of any
+    // edge), no rounding, no elevation. Only the `<main>` content stays a distinct panel.
+    expect(aside).toHaveClass('text-on-surface');
+    expect(aside).not.toHaveClass(
       'bg-surface',
-      'text-on-surface',
-      'rounded-xl',
+      'bg-card',
+      'bg-background',
+      'border',
+      'border-r',
       'border-outline-variant',
+      'rounded-xl',
+      'shadow-sm',
     );
-    expect(aside).not.toHaveClass('border-r', 'bg-card', 'bg-background');
+  });
+
+  it('closes the drawer on a nav selection when rendered inside a drawer provider', () => {
+    const dismiss = vi.fn();
+    render(
+      <ContextProvider initialContext={ACME.id}>
+        <ShellDrawerProvider dismiss={dismiss}>
+          <Sidebar
+            workspaces={WORKSPACES}
+            {...sidebarHrefs()}
+            onSelectWorkspace={() => undefined}
+            onOpenSearch={() => undefined}
+          />
+        </ShellDrawerProvider>
+      </ContextProvider>,
+    );
+    // Selecting any nav row inside the drawer dismisses it so the destination is visible.
+    fireEvent.click(screen.getByRole('link', { name: 'My Work' }));
+    expect(dismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not dismiss anything when rendered as the static (non-drawer) sidebar', () => {
+    // No drawer provider → `useShellDrawer()` is null → a nav click is a no-op dismissal.
+    render(
+      <ContextProvider initialContext={ACME.id}>
+        <Sidebar
+          workspaces={WORKSPACES}
+          {...sidebarHrefs()}
+          onSelectWorkspace={() => undefined}
+          onOpenSearch={() => undefined}
+        />
+      </ContextProvider>,
+    );
+    // Clicking a row must not throw (there is simply no drawer to close on the static rail).
+    fireEvent.click(screen.getByRole('link', { name: 'My Work' }));
+    expect(screen.getByRole('link', { name: 'My Work' })).toBeInTheDocument();
   });
 
   it('shows the Workspace section on a cross-org route (no Hub mode swap)', () => {

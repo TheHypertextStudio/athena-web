@@ -429,6 +429,54 @@ describe('onboarding connect + import (the exact path the connect step calls)', 
     }
   });
 
+  it('reconnecting a source is idempotent: it reuses the integration, so re-import does not duplicate mirrored work', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const owner = appWithActor(integrations, orgId, OWNER_CAPS, humanActorId);
+
+    // First connect + import mirrors the gtasks fixture in full.
+    const first = await connect(owner, 'gtasks');
+    const firstImport = await body<{ items: ImportedTaskRes[] }>(
+      await owner.request(`/${first.id}/import`, { method: 'POST', headers: J, body: '{}' }),
+    );
+    expect(firstImport.items.length).toBeGreaterThan(0);
+
+    // Reconnecting the same provider (as re-running onboarding does) reuses the SAME
+    // integration rather than minting a fresh one.
+    const second = await connect(owner, 'gtasks');
+    expect(second.id).toBe(first.id);
+
+    // Only one integration row exists for this provider in the org.
+    const intgRows = await db
+      .select({ id: schema.integration.id })
+      .from(schema.integration)
+      .where(
+        and(
+          eq(schema.integration.organizationId, orgId),
+          eq(schema.integration.provider, 'gtasks'),
+        ),
+      );
+    expect(intgRows).toHaveLength(1);
+
+    // Re-importing through the reused integration mirrors nothing new (dedupe by external id).
+    const secondImport = await body<{ items: ImportedTaskRes[] }>(
+      await owner.request(`/${second.id}/import`, { method: 'POST', headers: J, body: '{}' }),
+    );
+    expect(secondImport.items).toHaveLength(0);
+
+    // The org holds exactly the first import's mirrored tasks — no duplicates.
+    const taskRows = await db
+      .select({ id: schema.task.id })
+      .from(schema.task)
+      .where(
+        and(
+          eq(schema.task.organizationId, orgId),
+          eq(schema.task.source, 'linked'),
+          eq(schema.task.sourceIntegrationId, first.id),
+        ),
+      );
+    expect(taskRows).toHaveLength(firstImport.items.length);
+  });
+
   it('a member without manage cannot create an integration during connect (403)', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
     const member = appWithActor(integrations, orgId, ['contribute', 'view'], humanActorId);

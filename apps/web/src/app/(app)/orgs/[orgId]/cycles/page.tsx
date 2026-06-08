@@ -19,7 +19,7 @@
  */
 import type { CycleOut, CycleStats } from '@docket/types';
 import { useVocabulary } from '@docket/ui/hooks';
-import { GanttChart, Plus } from '@docket/ui/icons';
+import { Plus, RefreshCw } from '@docket/ui/icons';
 import { Button, Skeleton } from '@docket/ui/primitives';
 import { useParams, useRouter } from 'next/navigation';
 import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
@@ -176,7 +176,7 @@ export default function CyclesPage(): JSX.Element {
       ) : total === 0 ? (
         <div className="border-border/60 flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed p-12 text-center">
           <span className="bg-muted text-muted-foreground mb-1 flex size-10 items-center justify-center rounded-full">
-            <GanttChart aria-hidden="true" className="size-5" />
+            <RefreshCw aria-hidden="true" className="size-5" />
           </span>
           <p className="text-foreground text-sm font-medium">
             No {cycleNounPlural.toLowerCase()} yet

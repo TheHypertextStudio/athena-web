@@ -160,11 +160,8 @@ export default function InitiativesListPage(): JSX.Element {
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 p-8">
-      <header className="flex flex-col gap-1.5">
-        <div className="flex items-center gap-2.5">
-          <Target aria-hidden="true" className="text-muted-foreground size-5" />
-          <h1 className="text-2xl font-semibold tracking-tight">{initiativeNounPlural}</h1>
-        </div>
+      <header className="flex flex-col gap-1">
+        <h1 className="text-2xl font-semibold tracking-tight">{initiativeNounPlural}</h1>
         <p className="text-muted-foreground text-sm">
           Cross-cutting themes that roll up the health of the {programNoun}s and {projectNoun}s
           beneath them — no work lives here directly.

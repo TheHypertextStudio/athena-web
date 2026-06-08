@@ -30,7 +30,7 @@ export default function HomePage(): JSX.Element {
           <Button asChild size="lg">
             <Link href="/sign-up">Get started</Link>
           </Button>
-          <Button asChild size="lg" variant="outline">
+          <Button asChild size="lg" variant="outline" className="dark:border-outline">
             <Link href="/sign-in">Sign in</Link>
           </Button>
         </div>

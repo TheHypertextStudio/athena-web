@@ -219,17 +219,45 @@ const integrations = new Hono<AppEnv>()
   .post('/', capabilityGuard('manage'), zJson(IntegrationCreate), async (c) => {
     const { orgId, actorId } = c.get('actorCtx');
     const body = c.req.valid('json');
+
+    // Connecting a provider is idempotent per (org, provider): reconnecting an
+    // already-connected source reuses the existing integration (refreshing the supplied
+    // fields) rather than inserting a duplicate. This keeps the integration id — and so each
+    // mirrored task's `sourceIntegrationId` — stable across reconnects, so re-importing
+    // dedupes against the prior mirror instead of producing duplicate linked tasks.
+    const fields = {
+      ...(body.roles !== undefined ? { roles: body.roles } : {}),
+      ...(body.connection !== undefined ? { connection: body.connection } : {}),
+      ...(body.status !== undefined ? { status: body.status } : {}),
+      ...(body.config !== undefined ? { config: body.config } : {}),
+      ...(body.syncMode !== undefined ? { syncMode: body.syncMode } : {}),
+    };
+
+    const existing = await db
+      .select({ id: integration.id })
+      .from(integration)
+      .where(and(eq(integration.organizationId, orgId), eq(integration.provider, body.provider)))
+      .limit(1);
+
+    if (existing[0]) {
+      const updated = await db
+        .update(integration)
+        .set({ pattern: body.pattern, ...fields })
+        .where(eq(integration.id, existing[0].id))
+        .returning();
+      const row = updated[0];
+      /* v8 ignore next -- @preserve defensive: the row was just verified to exist */
+      if (!row) throw new Error('integration update returned no row');
+      return ok(c, IntegrationOut, toOut(row));
+    }
+
     const inserted = await db
       .insert(integration)
       .values({
         organizationId: orgId,
         provider: body.provider,
         pattern: body.pattern,
-        ...(body.roles !== undefined ? { roles: body.roles } : {}),
-        ...(body.connection !== undefined ? { connection: body.connection } : {}),
-        ...(body.status !== undefined ? { status: body.status } : {}),
-        ...(body.config !== undefined ? { config: body.config } : {}),
-        ...(body.syncMode !== undefined ? { syncMode: body.syncMode } : {}),
+        ...fields,
         createdBy: actorId,
       })
       .returning();

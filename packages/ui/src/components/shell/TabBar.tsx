@@ -28,7 +28,7 @@ import {
   Layers,
   type LucideIcon,
   RefreshCw,
-  Sparkles,
+  TaskAlt,
   Target,
   X,
 } from '../../icons';
@@ -67,9 +67,10 @@ export interface TabBarProps {
 
 /** Glyph for each document kind. */
 const TYPE_ICON: Record<TabDocType, LucideIcon> = {
-  task: Target,
+  task: TaskAlt,
   project: FolderKanban,
-  initiative: Sparkles,
+  // The 'target' glyph reads as an initiative (a goal to aim at), not a task.
+  initiative: Target,
   program: Layers,
   cycle: RefreshCw,
   session: GanttChart,
@@ -108,7 +109,9 @@ export function TabBar({
               active
                 ? // The active tab fuses with the rounded main panel below: it takes the panel's
                   // surface tone, rounds only its top corners, and runs flush to the bar's bottom.
-                  'text-on-surface bg-surface self-stretch rounded-t-lg'
+                  // A soft shadow lifts it off the tinted strip so the selected tab stays legible
+                  // even in light mode, where the panel surface and strip are both near-white.
+                  'text-on-surface bg-surface self-stretch rounded-t-lg shadow-sm'
                 : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface mb-1 self-center rounded-md',
             )}
           >

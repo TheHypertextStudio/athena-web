@@ -25,7 +25,7 @@ import { Cable, Calendar, CheckCircle2, Layers, TaskAlt } from '@docket/ui/icons
 import type { LucideIcon } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import { Button } from '@docket/ui/primitives';
-import { type JSX, useCallback, useMemo, useState } from 'react';
+import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { api } from '@/lib/api';
 import { readError, readProblem } from '@/lib/problem';
@@ -198,6 +198,16 @@ export function StepConnect({
     linear: INITIAL_CARD_STATE,
   });
 
+  /**
+   * The running total of items mirrored across all providers, derived from `states`. Reported
+   * to the orchestrator in an effect (never inside a state updater) so we don't update the
+   * parent while this component is rendering.
+   */
+  const mirroredTotal = ONBOARDING_PROVIDERS.reduce((sum, key) => sum + states[key].mirrored, 0);
+  useEffect(() => {
+    onMirroredTotalChange?.(mirroredTotal);
+  }, [mirroredTotal, onMirroredTotalChange]);
+
   /** A provider is live when the mock backs it (dev) or its prod OAuth is configured. */
   const isLive = useCallback((card: ProviderCard): boolean => isMockMode() || card.prodEnabled, []);
 
@@ -231,15 +241,10 @@ export function StepConnect({
         }
         const { items } = (await importRes.json()) as { items: TaskOut[] };
 
-        setStates((prev) => {
-          const next = {
-            ...prev,
-            [provider]: { phase: 'connected' as const, mirrored: items.length, error: null },
-          };
-          const total = ONBOARDING_PROVIDERS.reduce((sum, key) => sum + next[key].mirrored, 0);
-          onMirroredTotalChange?.(total);
-          return next;
-        });
+        setStates((prev) => ({
+          ...prev,
+          [provider]: { phase: 'connected' as const, mirrored: items.length, error: null },
+        }));
       } catch (caught) {
         const message = readError(caught, 'Something went wrong connecting this source.');
         setStates((prev) => ({
@@ -248,7 +253,7 @@ export function StepConnect({
         }));
       }
     },
-    [orgId, createIntegration, importWork, onMirroredTotalChange],
+    [orgId, createIntegration, importWork],
   );
 
   return (

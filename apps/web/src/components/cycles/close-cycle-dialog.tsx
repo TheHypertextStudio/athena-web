@@ -12,22 +12,35 @@
  * `…/cycles/:id/close` call never fails validation. A cycle with nothing open skips straight
  * to a one-click confirm.
  *
- * The dialog is a self-contained, accessible overlay rendered through a portal: `role="dialog"`
- * + `aria-modal`, an initial-focus target, Escape-to-dismiss, a focus trap, and a click-outside
- * close. All chrome uses `@docket/ui` primitives and semantic tokens — no bare HTML controls,
- * no hardcoded color.
+ * The dialog is built on the shared {@link Dialog} primitive (Radix-backed), so the
+ * accessibility hard parts — `role="dialog"` + `aria-modal`, focus trap, Escape-to-dismiss,
+ * click-outside close, scroll-lock, return-focus, and the `aria-labelledby`/`aria-describedby`
+ * wiring — come for free; this component only supplies the carryover body, the summary, and the
+ * Cancel / Close actions. All chrome uses `@docket/ui` primitives and semantic tokens — no bare
+ * HTML controls, no hardcoded color.
  */
 import type { CycleCarryoverAction } from '@docket/types';
-import { X } from '@docket/ui/icons';
-import { Button } from '@docket/ui/primitives';
+import {
+  Button,
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
-import { type JSX, type KeyboardEvent, useCallback, useEffect, useId, useRef } from 'react';
-import { createPortal } from 'react-dom';
+import { type JSX } from 'react';
 
 import { type CarryoverItem, CarryoverRow, type CarryoverTarget } from './carryover-row';
 
 /** Props for {@link CloseCycleDialog}. */
 export interface CloseCycleDialogProps {
+  /** Whether the dialog is open (the host page owns this state). */
+  open: boolean;
+  /** Notify the parent that the open state changed (Esc, backdrop, X, or Cancel). */
+  onOpenChange: (open: boolean) => void;
   /** The cycle's display name (for the dialog title). */
   cycleName: string;
   /** The (vocabulary-resolved) singular cycle noun, lowercased for inline copy. */
@@ -46,8 +59,6 @@ export interface CloseCycleDialogProps {
   onTargetChange: (taskId: string, targetCycleId: string) => void;
   /** Confirm the close (submit the carryover decisions). */
   onConfirm: () => void;
-  /** Dismiss the dialog without closing the cycle. */
-  onCancel: () => void;
 }
 
 /** Tally the chosen decisions into a short human summary. */
@@ -72,10 +83,12 @@ function summarize(items: readonly CarryoverItem[]): string {
  *
  * @example
  * ```tsx
- * <CloseCycleDialog cycleName="Cycle 6" cycleNoun="cycle" items={items} targets={targets} … />
+ * <CloseCycleDialog open={open} onOpenChange={setOpen} cycleName="Cycle 6" cycleNoun="cycle" … />
  * ```
  */
 export function CloseCycleDialog({
+  open,
+  onOpenChange,
   cycleName,
   cycleNoun,
   items,
@@ -85,96 +98,32 @@ export function CloseCycleDialog({
   onActionChange,
   onTargetChange,
   onConfirm,
-  onCancel,
 }: CloseCycleDialogProps): JSX.Element {
-  const titleId = useId();
-  const descId = useId();
-  const panelRef = useRef<HTMLDivElement | null>(null);
-  const confirmRef = useRef<HTMLButtonElement | null>(null);
-
-  // Move focus into the dialog on open (the confirm button is the primary action).
-  useEffect(() => {
-    confirmRef.current?.focus();
-  }, []);
-
-  // Escape dismisses; Tab is trapped within the panel.
-  const onKeyDown = useCallback(
-    (event: KeyboardEvent<HTMLDivElement>) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        onCancel();
-        return;
-      }
-      if (event.key !== 'Tab') return;
-      const panel = panelRef.current;
-      if (!panel) return;
-      const focusable = panel.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), [href], input, [tabindex]:not([tabindex="-1"])',
-      );
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (!first || !last) return;
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    },
-    [onCancel],
-  );
-
   const everyMoveHasTarget = items.every(
     (item) => item.action !== 'move' || item.targetCycleId !== null,
   );
   const summary = summarize(items);
 
-  // Rendered into the body so the overlay escapes any clipped/scrolled ancestor.
-  if (typeof document === 'undefined') return <></>;
-
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onKeyDown={onKeyDown}>
-      {/* Backdrop — click to dismiss. */}
-      <button
-        type="button"
-        aria-label="Dismiss"
-        tabIndex={-1}
-        onClick={onCancel}
-        className="bg-background/70 absolute inset-0 cursor-default backdrop-blur-sm"
-      />
-
-      <div
-        ref={panelRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        aria-describedby={descId}
-        className="bg-surface-container-high border-outline-variant text-on-surface relative flex max-h-[85vh] w-full max-w-lg flex-col rounded-xl border shadow-lg"
-      >
-        <header className="border-border flex items-start justify-between gap-4 border-b px-5 py-4">
-          <div className="flex flex-col gap-1">
-            <h2 id={titleId} className="text-foreground text-base font-semibold">
-              Close {cycleName}
-            </h2>
-            <p id={descId} className="text-muted-foreground text-sm">
-              {items.length === 0
-                ? `Everything committed to this ${cycleNoun} is complete — nothing to carry over.`
-                : `Review what happens to ${String(items.length)} open ${
-                    items.length === 1 ? 'task' : 'tasks'
-                  } before this ${cycleNoun} rolls.`}
-            </p>
-          </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onCancel}
-            aria-label="Cancel"
-            className="-mt-1 -mr-1 shrink-0"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </header>
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        // A close in flight must not be interrupted by Esc/backdrop/X.
+        if (closing) return;
+        onOpenChange(next);
+      }}
+    >
+      <DialogContent className="gap-0 p-0">
+        <DialogHeader className="border-outline-variant gap-1 border-b px-5 py-4 pr-12">
+          <DialogTitle>Close {cycleName}</DialogTitle>
+          <DialogDescription>
+            {items.length === 0
+              ? `Everything committed to this ${cycleNoun} is complete — nothing to carry over.`
+              : `Review what happens to ${String(items.length)} open ${
+                  items.length === 1 ? 'task' : 'tasks'
+                } before this ${cycleNoun} rolls.`}
+          </DialogDescription>
+        </DialogHeader>
 
         {items.length > 0 ? (
           <div className="min-h-0 flex-1 overflow-y-auto px-5 py-1">
@@ -200,16 +149,17 @@ export function CloseCycleDialog({
           </p>
         ) : null}
 
-        <footer className="border-border flex items-center justify-between gap-4 border-t px-5 py-4">
+        <DialogFooter className="border-outline-variant items-center justify-between border-t px-5 py-4 sm:justify-between">
           <span className="text-muted-foreground text-xs">
             {items.length === 0 ? 'Ready to close' : summary}
           </span>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={onCancel} disabled={closing}>
-              Cancel
-            </Button>
+            <DialogClose asChild>
+              <Button variant="ghost" size="sm" disabled={closing}>
+                Cancel
+              </Button>
+            </DialogClose>
             <Button
-              ref={confirmRef}
               size="sm"
               onClick={onConfirm}
               disabled={closing || !everyMoveHasTarget}
@@ -218,9 +168,8 @@ export function CloseCycleDialog({
               {closing ? 'Closing…' : `Close ${cycleNoun}`}
             </Button>
           </div>
-        </footer>
-      </div>
-    </div>,
-    document.body,
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

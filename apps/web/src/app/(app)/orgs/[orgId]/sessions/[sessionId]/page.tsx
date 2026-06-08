@@ -21,8 +21,9 @@
  * runtime, so the production build needs no running server.
  */
 import type { AgentOut, AgentSessionDetailOut, MemberOut, SessionActivityOut } from '@docket/types';
+import { EmptyState } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
-import { ChevronLeft } from '@docket/ui/icons';
+import { ChevronLeft, Sparkles } from '@docket/ui/icons';
 import { Skeleton } from '@docket/ui/primitives';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -362,9 +363,11 @@ export default function SessionViewPage(): JSX.Element {
             Activity
           </h2>
           {session.activities.length === 0 ? (
-            <p className="text-muted-foreground border-border rounded-lg border border-dashed p-6 text-center text-sm">
-              No activity yet. When the agent starts working, its steps will appear here.
-            </p>
+            <EmptyState
+              icon={Sparkles}
+              title="No activity yet"
+              body="When the agent starts working, its steps will appear here."
+            />
           ) : (
             <ul className="flex flex-col gap-4">
               {session.activities.map((activity) => (

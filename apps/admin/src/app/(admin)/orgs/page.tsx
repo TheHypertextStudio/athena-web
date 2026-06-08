@@ -4,17 +4,25 @@ import { Input, Skeleton } from '@docket/ui/primitives';
 import Link from 'next/link';
 import { type JSX, useCallback, useEffect, useState } from 'react';
 
-import { EmptyState, ErrorBanner, LifecycleBadge, PageHeader } from '@/components/ui-bits';
+import {
+  ALL_STATES,
+  LifecycleFilter,
+  type LifecycleFilterValue,
+} from '@/components/lifecycle-filter';
+import {
+  EmptyState,
+  ErrorBanner,
+  LifecycleBadge,
+  PageHeader,
+  ROW_CLASS,
+  SignInAction,
+} from '@/components/ui-bits';
 import { api } from '@/lib/api';
-import { LIFECYCLE_STATES, type LifecycleState, lifecycleLabel } from '@/lib/lifecycle';
-import { readError, readProblem } from '@/lib/problem';
+import { isAuthError, readError, readProblem } from '@/lib/problem';
 import type { AdminOrg } from '@/lib/types';
 
 /** Page size for the org list. */
 const PAGE_SIZE = 50;
-
-/** The "all states" sentinel for the lifecycle filter select. */
-const ALL_STATES = 'all';
 
 /**
  * The organization list with search and a lifecycle-state filter.
@@ -27,41 +35,41 @@ const ALL_STATES = 'all';
  */
 export default function OrgsPage(): JSX.Element {
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<LifecycleState | typeof ALL_STATES>(ALL_STATES);
+  const [filter, setFilter] = useState<LifecycleFilterValue>(ALL_STATES);
   const [orgs, setOrgs] = useState<readonly AdminOrg[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [authFailed, setAuthFailed] = useState(false);
 
   /** Load the first page of orgs matching the current search + filter. */
-  const load = useCallback(
-    async (term: string, state: LifecycleState | typeof ALL_STATES): Promise<void> => {
-      setLoading(true);
-      setError(null);
-      try {
-        const res = await api.v1.admin.orgs.$get({
-          query: {
-            search: term || undefined,
-            lifecycleState: state === ALL_STATES ? undefined : state,
-            limit: String(PAGE_SIZE),
-            offset: '0',
-          },
-        });
-        if (!res.ok) {
-          setError(await readProblem(res, 'Could not load organizations.'));
-          return;
-        }
-        const page = await res.json();
-        setOrgs(page.items);
-        setTotal(page.total);
-      } catch (caught) {
-        setError(readError(caught, 'Something went wrong loading organizations.'));
-      } finally {
-        setLoading(false);
+  const load = useCallback(async (term: string, state: LifecycleFilterValue): Promise<void> => {
+    setLoading(true);
+    setError(null);
+    setAuthFailed(false);
+    try {
+      const res = await api.v1.admin.orgs.$get({
+        query: {
+          search: term || undefined,
+          lifecycleState: state === ALL_STATES ? undefined : state,
+          limit: String(PAGE_SIZE),
+          offset: '0',
+        },
+      });
+      if (!res.ok) {
+        setAuthFailed(isAuthError(res));
+        setError(await readProblem(res, 'Could not load organizations.'));
+        return;
       }
-    },
-    [],
-  );
+      const page = await res.json();
+      setOrgs(page.items);
+      setTotal(page.total);
+    } catch (caught) {
+      setError(readError(caught, 'Something went wrong loading organizations.'));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     const handle = setTimeout(() => void load(search, filter), 250);
@@ -77,21 +85,7 @@ export default function OrgsPage(): JSX.Element {
         description={loading ? 'Loading…' : `${total} organization${total === 1 ? '' : 's'} total`}
         actions={
           <>
-            <select
-              value={filter}
-              onChange={(e) => {
-                setFilter(e.target.value as LifecycleState | typeof ALL_STATES);
-              }}
-              aria-label="Filter by lifecycle state"
-              className="border-input focus-visible:ring-ring h-9 rounded-md border bg-transparent px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1"
-            >
-              <option value={ALL_STATES}>All states</option>
-              {LIFECYCLE_STATES.map((state) => (
-                <option key={state} value={state}>
-                  {lifecycleLabel(state)}
-                </option>
-              ))}
-            </select>
+            <LifecycleFilter value={filter} onChange={setFilter} />
             <Input
               type="search"
               value={search}
@@ -105,7 +99,7 @@ export default function OrgsPage(): JSX.Element {
           </>
         }
       />
-      <ErrorBanner message={error} />
+      <ErrorBanner message={error} action={authFailed ? <SignInAction /> : null} />
 
       {loading ? (
         <ListSkeleton />
@@ -115,11 +109,11 @@ export default function OrgsPage(): JSX.Element {
             <li key={org.id}>
               <Link
                 href={`/orgs/${org.id}`}
-                className="border-border bg-card hover:bg-accent/50 flex items-center justify-between gap-4 rounded-lg border px-4 py-3 transition-colors"
+                className={`${ROW_CLASS} items-center justify-between gap-4 rounded-lg px-4 py-3`}
               >
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium">{org.name}</p>
-                  <p className="text-muted-foreground truncate text-xs">{org.slug}</p>
+                  <p className="text-on-surface-variant truncate text-xs">{org.slug}</p>
                 </div>
                 <LifecycleBadge state={org.lifecycleState} />
               </Link>

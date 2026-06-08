@@ -16,6 +16,7 @@
  */
 import type SvgIcon from '@mui/material/SvgIcon';
 
+export { default as Activity } from '@mui/icons-material/Timeline';
 export { default as ArrowRight } from '@mui/icons-material/ArrowForward';
 export { default as Building } from '@mui/icons-material/CorporateFare';
 export { default as Cable } from '@mui/icons-material/Cable';
@@ -39,6 +40,7 @@ export { default as Folder } from '@mui/icons-material/FolderOpen';
 export { default as FolderKanban } from '@mui/icons-material/ViewKanban';
 export { default as GanttChart } from '@mui/icons-material/ViewTimeline';
 export { default as Github } from '@mui/icons-material/GitHub';
+export { default as Heart } from '@mui/icons-material/FavoriteBorder';
 export { default as Globe } from '@mui/icons-material/Public';
 export { default as ListChecks } from '@mui/icons-material/ChecklistRtl';
 export { default as Home } from '@mui/icons-material/Home';
@@ -55,6 +57,7 @@ export { default as Search } from '@mui/icons-material/Search';
 export { default as Settings } from '@mui/icons-material/Settings';
 export { default as Shield } from '@mui/icons-material/ShieldOutlined';
 export { default as Sparkles } from '@mui/icons-material/AutoAwesome';
+export { default as Tag } from '@mui/icons-material/LocalOfferOutlined';
 export { default as Target } from '@mui/icons-material/TrackChanges';
 export { default as TaskAlt } from '@mui/icons-material/TaskAlt';
 export { default as Translate } from '@mui/icons-material/Translate';

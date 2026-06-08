@@ -11,7 +11,7 @@ import {
 } from '@docket/types';
 import { type GroupKey, ListView } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
-import { ListChecks } from '@docket/ui/icons';
+import { ListChecks, Plus } from '@docket/ui/icons';
 import { Button, Input, Skeleton } from '@docket/ui/primitives';
 import { useParams, useRouter } from 'next/navigation';
 import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
@@ -28,6 +28,7 @@ import {
 } from '@/components/my-work/agent-task-row';
 import { type PillStatus, pillStatusOf } from '@/components/my-work/live-session-pill';
 import { SplitTabs } from '@/components/my-work/split-tabs';
+import { CreateTaskDialog } from '@/components/tasks/create-task';
 import { TeamPicker } from '@/components/teams/team-picker';
 
 /** The two halves of the agent-aware work split. */
@@ -105,6 +106,7 @@ export default function MyWorkPage(): JSX.Element {
   const [title, setTitle] = useState('');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [composerOpen, setComposerOpen] = useState(false);
 
   // The team new tasks land in: a user override (via the picker) or the org's default team.
   const [teamOverride, setTeamOverride] = useState<string | null>(null);
@@ -327,12 +329,37 @@ export default function MyWorkPage(): JSX.Element {
 
   return (
     <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-on-surface text-xl font-semibold tracking-tight">My Work</h1>
-        <p className="text-on-surface-variant text-xs">
-          Your work and your agents&apos; work, grouped by {projectNoun.toLowerCase()}.
-        </p>
+      <header className="flex flex-col gap-3 @2xl:flex-row @2xl:items-start @2xl:justify-between">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-on-surface text-xl font-semibold tracking-tight">My Work</h1>
+          <p className="text-on-surface-variant text-xs">
+            Your work and your agents&apos; work, grouped by {projectNoun.toLowerCase()}.
+          </p>
+        </div>
+        <Button
+          type="button"
+          className="gap-1.5 self-start"
+          onClick={() => {
+            setComposerOpen(true);
+          }}
+        >
+          <Plus aria-hidden="true" className="size-4" />
+          New task
+        </Button>
       </header>
+
+      <CreateTaskDialog
+        orgId={orgId}
+        teams={teams}
+        defaultTeamId={defaultTeamId}
+        teamsLoading={teamsLoading}
+        open={composerOpen}
+        onOpenChange={setComposerOpen}
+        onCreated={(created) => {
+          setTasks((current) => [created, ...current]);
+        }}
+        defaultAssigneeId={tab === 'mine' ? myActorId : null}
+      />
 
       <form
         onSubmit={(event) => {

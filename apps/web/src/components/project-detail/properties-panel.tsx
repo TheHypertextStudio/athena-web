@@ -1,142 +1,195 @@
 'use client';
 
 /**
- * The project properties panel — lead, dates, program, and initiative.
+ * The project properties panel — lead, status, health, timeline, program, and initiative.
  *
  * @remarks
- * A sidebar-style summary of the project's structural metadata, mirroring Linear's project
- * properties rail. The lead renders as an {@link ActorAvatar} + name; dates as short
- * locale-aware days; the program and initiative as entity chips whose nouns are resolved
- * through {@link useVocabulary} so an agency sees "Retainer"/"Engagement" where a startup
- * sees "Program"/"Initiative". Every row degrades to a muted "Not set" when its value is
- * absent, so the panel always reads as a complete, scannable list.
+ * The right-rail summary of a project's structural metadata, mirroring Linear's project
+ * properties. Per directive A every row is *interactive*: clicking a property opens a compact
+ * picker that assigns it through the project PATCH RPC (the host page owns the optimistic
+ * mutation + rollback), and an unset property reads as a calm "Set <field>" affordance rather
+ * than a dead "Not set" row. The lead is an {@link ActorPicker} over the org's members; status
+ * and health are {@link EnumPicker}s; the timeline is a {@link DateRangePicker} over
+ * start/target; program and initiative are {@link EntityPicker}s whose nouns are
+ * vocabulary-skinned by the host page. When the actor lacks `contribute` the rows render
+ * read-only (plain value text / em-dash) so the panel still reads as complete.
+ *
+ * The panel is presentational + controlled: it takes pre-resolved {@link PickerOption}s and the
+ * current values, and reports each change through a typed `onChange` callback. The host page
+ * resolves members/programs/initiatives into options and owns the PATCH, exactly as the picker
+ * family is designed to be used.
  */
-import { cn } from '@docket/ui';
-import { ActorAvatar } from '@docket/ui/components';
+import { type Health, type ProjectStatus } from '@docket/types';
+import {
+  ActorPicker,
+  DateRangePicker,
+  EntityPicker,
+  EnumPicker,
+  type PickerOption,
+} from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
-import { FolderKanban, LayoutGrid, RefreshCw, User } from '@docket/ui/icons';
-import type { JSX, ReactNode } from 'react';
+import { Activity, FolderKanban, Heart, LayoutGrid, RefreshCw, User } from '@docket/ui/icons';
+import type { JSX } from 'react';
 
+import { PropertyPanel, PropertyPanelRow } from '@/components/property-pickers/property-panel';
+import { healthOptions, projectStatusOptions } from '@/components/property-pickers/options';
 import { formatCalendarDate } from '@/lib/format-date';
-
-import type { ActorInfo } from './actor-directory';
-
-/** A single labeled row in the properties panel. */
-function PropertyRow({
-  icon,
-  label,
-  children,
-}: {
-  icon: ReactNode;
-  label: string;
-  children: ReactNode;
-}): JSX.Element {
-  return (
-    <div className="flex items-start gap-3 py-2.5">
-      <span aria-hidden="true" className="text-on-surface-variant mt-0.5 flex size-4 shrink-0">
-        {icon}
-      </span>
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="text-on-surface-variant text-xs font-medium tracking-wide uppercase">
-          {label}
-        </span>
-        <div className="text-on-surface min-w-0 text-sm">{children}</div>
-      </div>
-    </div>
-  );
-}
-
-/** A muted "Not set" placeholder for an absent property value. */
-function NotSet(): JSX.Element {
-  return <span className="text-on-surface-variant italic">Not set</span>;
-}
-
-/** Format an ISO date as a short, locale-aware day, or `null` when absent. */
-function formatDate(value: string | null | undefined): string | null {
-  return formatCalendarDate(value);
-}
 
 /** Props for {@link PropertiesPanel}. */
 export interface PropertiesPanelProps {
-  /** The resolved project lead, or `null` when unassigned. */
-  lead: ActorInfo | null;
+  /** The current lead actor id, or `null` when unassigned. */
+  leadId: string | null;
+  /** Member options for the lead picker (each carrying an `ActorAvatar`). */
+  memberOptions: readonly PickerOption[];
+  /** The current project status. */
+  status: ProjectStatus;
+  /** The current health verdict, or `null` when unset. */
+  health: Health | null;
   /** ISO start date, when scheduled. */
-  startDate: string | null | undefined;
+  startDate: string | null;
   /** ISO target date, when scheduled. */
-  targetDate: string | null | undefined;
-  /** The parent program's name, or `null` when none. */
-  programName: string | null;
-  /** The associated initiative's name, or `null` when none. */
-  initiativeName: string | null;
+  targetDate: string | null;
+  /** The current parent program id, or `null` when none. */
+  programId: string | null;
+  /** Program options for the program picker. */
+  programOptions: readonly PickerOption[];
+  /** The current associated initiative id, or `null` when none. */
+  initiativeId: string | null;
+  /** Initiative options for the initiative picker. */
+  initiativeOptions: readonly PickerOption[];
+  /** Whether the actor may edit (holds `contribute`); rows are read-only when false. */
+  canEdit: boolean;
+  /** Whether a mutation is in flight (disables every picker). */
+  pending: boolean;
+  /** Assign the lead (or `null` to clear). */
+  onLeadChange: (leadId: string | null) => void;
+  /** Set the project status. */
+  onStatusChange: (status: ProjectStatus) => void;
+  /** Set the health verdict (or `null` to clear). */
+  onHealthChange: (health: Health | null) => void;
+  /** Set the start/target timeline (either bound may be `null`). */
+  onTimelineChange: (range: { start: string | null; end: string | null }) => void;
+  /** Attach to a program (or `null` to detach). */
+  onProgramChange: (programId: string | null) => void;
+  /** Associate with an initiative (or `null` to disassociate). */
+  onInitiativeChange: (initiativeId: string | null) => void;
 }
 
 /**
- * The project properties panel.
+ * The interactive project properties panel.
  *
  * @param props - The {@link PropertiesPanelProps}.
  * @returns the rendered panel.
  */
 export function PropertiesPanel({
-  lead,
+  leadId,
+  memberOptions,
+  status,
+  health,
   startDate,
   targetDate,
-  programName,
-  initiativeName,
+  programId,
+  programOptions,
+  initiativeId,
+  initiativeOptions,
+  canEdit,
+  pending,
+  onLeadChange,
+  onStatusChange,
+  onHealthChange,
+  onTimelineChange,
+  onProgramChange,
+  onInitiativeChange,
 }: PropertiesPanelProps): JSX.Element {
   const programLabel = useVocabulary('program');
   const initiativeLabel = useVocabulary('initiative');
-  const start = formatDate(startDate);
-  const target = formatDate(targetDate);
+  const programLower = programLabel.toLowerCase();
+  const initiativeLower = initiativeLabel.toLowerCase();
+  const readOnly = !canEdit;
 
   return (
-    <div className="border-outline-variant bg-surface-container-low flex flex-col rounded-xl border px-4 py-2">
-      <h2 className="sr-only">Properties</h2>
+    <PropertyPanel>
+      <PropertyPanelRow icon={<User className="size-4" />} label="Lead">
+        <ActorPicker
+          options={memberOptions}
+          value={leadId}
+          onChange={onLeadChange}
+          placeholder="Set lead"
+          clearLabel="No lead"
+          ariaLabel="Lead"
+          readOnly={readOnly}
+          disabled={pending}
+        />
+      </PropertyPanelRow>
 
-      <PropertyRow icon={<User className="size-4" />} label="Lead">
-        {lead ? (
-          <span className="flex items-center gap-2">
-            <ActorAvatar kind={lead.kind} name={lead.name} size={20} />
-            <span className="truncate">{lead.name}</span>
-          </span>
-        ) : (
-          <NotSet />
-        )}
-      </PropertyRow>
+      <PropertyPanelRow divided icon={<Activity className="size-4" />} label="Status">
+        <EnumPicker<ProjectStatus>
+          options={projectStatusOptions()}
+          value={status}
+          onChange={(next) => {
+            if (next) onStatusChange(next);
+          }}
+          placeholder="Set status"
+          ariaLabel="Status"
+          readOnly={readOnly}
+          disabled={pending}
+        />
+      </PropertyPanelRow>
 
-      <div className="border-outline-variant border-t" />
-      <PropertyRow icon={<RefreshCw className="size-4" />} label="Timeline">
-        {start || target ? (
-          <span className="tabular-nums">
-            {start ?? '—'} <span className="text-on-surface-variant">→</span> {target ?? '—'}
-          </span>
-        ) : (
-          <NotSet />
-        )}
-      </PropertyRow>
+      <PropertyPanelRow divided icon={<Heart className="size-4" />} label="Health">
+        <EnumPicker<Health>
+          options={healthOptions()}
+          value={health}
+          onChange={onHealthChange}
+          placeholder="Set health"
+          clearLabel="No health"
+          ariaLabel="Health"
+          readOnly={readOnly}
+          disabled={pending}
+        />
+      </PropertyPanelRow>
 
-      <div className="border-outline-variant border-t" />
-      <PropertyRow icon={<FolderKanban className="size-4" />} label={programLabel}>
-        {programName ? <EntityChip name={programName} /> : <NotSet />}
-      </PropertyRow>
+      <PropertyPanelRow divided icon={<RefreshCw className="size-4" />} label="Timeline">
+        <DateRangePicker
+          value={{ start: startDate, end: targetDate }}
+          onChange={onTimelineChange}
+          placeholder="Set timeline"
+          formatLabel={(value) => formatCalendarDate(value) ?? undefined}
+          ariaLabel="Timeline"
+          startLabel="Start"
+          endLabel="Target"
+          readOnly={readOnly}
+          disabled={pending}
+        />
+      </PropertyPanelRow>
 
-      <div className="border-outline-variant border-t" />
-      <PropertyRow icon={<LayoutGrid className="size-4" />} label={initiativeLabel}>
-        {initiativeName ? <EntityChip name={initiativeName} /> : <NotSet />}
-      </PropertyRow>
-    </div>
-  );
-}
+      <PropertyPanelRow divided icon={<FolderKanban className="size-4" />} label={programLabel}>
+        <EntityPicker
+          options={programOptions}
+          value={programId}
+          onChange={onProgramChange}
+          placeholder={`Set ${programLower}`}
+          clearLabel={`No ${programLower}`}
+          searchPlaceholder={`Search ${programLabel.toLowerCase()}s…`}
+          ariaLabel={programLabel}
+          readOnly={readOnly}
+          disabled={pending}
+        />
+      </PropertyPanelRow>
 
-/** A small inline chip for a related entity (program / initiative). */
-function EntityChip({ name, className }: { name: string; className?: string }): JSX.Element {
-  return (
-    <span
-      className={cn(
-        'bg-surface-container text-on-surface ring-outline-variant inline-flex max-w-full items-center rounded-md px-2 py-0.5 text-xs font-medium ring-1 ring-inset',
-        className,
-      )}
-    >
-      <span className="truncate">{name}</span>
-    </span>
+      <PropertyPanelRow divided icon={<LayoutGrid className="size-4" />} label={initiativeLabel}>
+        <EntityPicker
+          options={initiativeOptions}
+          value={initiativeId}
+          onChange={onInitiativeChange}
+          placeholder={`Set ${initiativeLower}`}
+          clearLabel={`No ${initiativeLower}`}
+          searchPlaceholder={`Search ${initiativeLabel.toLowerCase()}s…`}
+          ariaLabel={initiativeLabel}
+          readOnly={readOnly}
+          disabled={pending}
+        />
+      </PropertyPanelRow>
+    </PropertyPanel>
   );
 }

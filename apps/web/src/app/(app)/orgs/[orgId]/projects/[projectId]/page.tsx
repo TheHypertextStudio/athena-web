@@ -1,20 +1,26 @@
 'use client';
 
 import {
+  ActorId,
   type AgentSessionOut,
   type CommentOut,
   type Health,
   type InitiativeOut,
+  type MemberOut,
   type MilestoneOut,
+  ProgramId,
   type ProgramOut,
   ProjectId,
   type ProjectOut,
   type ProjectProgress,
+  type ProjectStatus,
+  type RoleOut,
   type SessionActivityOut,
   type TaskOut,
   TeamId,
   type UpdateOut,
 } from '@docket/types';
+import type { PickerOption } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Badge, Skeleton } from '@docket/ui/primitives';
 import { useParams, useRouter } from 'next/navigation';
@@ -22,9 +28,14 @@ import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 
 import {
   type ActorDirectory,
-  type ActorInfo,
   buildActorDirectory,
 } from '@/components/project-detail/actor-directory';
+import {
+  initiativeOptions as toInitiativeOptions,
+  memberActorOptions,
+  programOptions as toProgramOptions,
+} from '@/components/property-pickers/options';
+import { useOrgCapability } from '@/lib/use-org-capability';
 import { type AgentHere, AgentsStrip } from '@/components/project-detail/agents-strip';
 import { type AgentActivityEntry, Discussion } from '@/components/project-detail/discussion';
 import { type MilestoneTask, MilestoneTasks } from '@/components/project-detail/milestone-tasks';
@@ -48,6 +59,14 @@ const STATUS_LABEL: Record<string, string> = {
 /** Statuses that count as terminal/quiet, rendered with the muted badge. */
 function statusBadgeVariant(status: string): 'default' | 'secondary' {
   return status === 'active' ? 'default' : 'secondary';
+}
+
+/** The known project lifecycle statuses, used to narrow the wire `string` to a {@link ProjectStatus}. */
+const PROJECT_STATUSES = new Set<ProjectStatus>(['planned', 'active', 'completed', 'canceled']);
+
+/** Narrow a project's wire `status` string to a {@link ProjectStatus}, defaulting to `planned`. */
+function projectStatusOf(status: string): ProjectStatus {
+  return PROJECT_STATUSES.has(status as ProjectStatus) ? (status as ProjectStatus) : 'planned';
 }
 
 /** The three top-level tabs of the project-detail screen. */
@@ -105,12 +124,20 @@ export default function ProjectDetailPage(): JSX.Element {
     name: 'System',
     kind: 'human' as const,
   }));
-  const [lead, setLead] = useState<ActorInfo | null>(null);
-  const [programName, setProgramName] = useState<string | null>(null);
-  const [initiativeName, setInitiativeName] = useState<string | null>(null);
+  const [members, setMembers] = useState<readonly MemberOut[]>([]);
+  const [roles, setRoles] = useState<readonly RoleOut[]>([]);
+  const [programs, setPrograms] = useState<readonly ProgramOut[]>([]);
+  const [initiatives, setInitiatives] = useState<readonly InitiativeOut[]>([]);
+  // Which initiative this project is associated with (resolved from initiative timelines, since
+  // the association is an m2m edge rather than a column on the project).
+  const [currentInitiativeId, setCurrentInitiativeId] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Properties-panel mutation state (optimistic PATCH + association link/unlink).
+  const [propsPending, setPropsPending] = useState(false);
+  const [propsError, setPropsError] = useState<string | null>(null);
 
   const [tab, setTab] = useState<TabId>('overview');
 
@@ -135,21 +162,21 @@ export default function ProjectDetailPage(): JSX.Element {
   const [teamOverride, setTeamOverride] = useState<string | null>(null);
   const teamId = teamOverride ?? defaultTeamId;
 
-  /** Resolve which initiative (if any) this project belongs to, via initiative timelines. */
-  const resolveInitiative = useCallback(
-    async (initiatives: readonly InitiativeOut[]): Promise<string | null> => {
-      const timelines = await Promise.all(
-        initiatives.map(async (init) => {
+  /** Resolve which initiative id (if any) this project is associated with, via timelines. */
+  const resolveInitiativeId = useCallback(
+    async (candidates: readonly InitiativeOut[]): Promise<string | null> => {
+      const matches = await Promise.all(
+        candidates.map(async (init): Promise<string | null> => {
           const res = await api.v1.orgs[':orgId'].initiatives[':id'].timeline.$get({
             param: { orgId, id: init.id },
             query: {},
           });
           if (!res.ok) return null;
           const { projects } = await res.json();
-          return projects.some((p) => p.id === projectId) ? init.name : null;
+          return projects.some((p) => p.id === projectId) ? init.id : null;
         }),
       );
-      return timelines.find((name): name is string => name !== null) ?? null;
+      return matches.find((id) => id !== null) ?? null;
     },
     [orgId, projectId],
   );
@@ -169,6 +196,7 @@ export default function ProjectDetailPage(): JSX.Element {
         sessionsRes,
         programsRes,
         initiativesRes,
+        rolesRes,
       ] = await Promise.all([
         api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
         api.v1.orgs[':orgId'].projects[':id'].progress.$get({ param: { orgId, id: projectId } }),
@@ -182,6 +210,7 @@ export default function ProjectDetailPage(): JSX.Element {
         api.v1.orgs[':orgId'].sessions.$get({ param: { orgId }, query: {} }),
         api.v1.orgs[':orgId'].programs.$get({ param: { orgId } }),
         api.v1.orgs[':orgId'].initiatives.$get({ param: { orgId } }),
+        api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
       ]);
 
       if (!projectsRes.ok) {
@@ -196,32 +225,34 @@ export default function ProjectDetailPage(): JSX.Element {
       if (progressRes.ok) setProgress(await progressRes.json());
 
       // Member + agent directory (shared by lead, authors, agent rows).
-      const members = membersRes.ok ? (await membersRes.json()).items : [];
+      const memberItems = membersRes.ok ? (await membersRes.json()).items : [];
       const agents = agentsRes.ok ? (await agentsRes.json()).items : [];
       // The agent's display name lives on its Actor, which the RPC surface does not expose a
       // name for; fall back to a short, stable label keyed off the agent's actor id.
       const agentActorByAgentId = new Map(agents.map((a) => [a.id, a.actorId]));
       const directory = buildActorDirectory({
-        members: members.map((m) => ({ actorId: m.actorId, displayName: m.displayName })),
+        members: memberItems.map((m) => ({ actorId: m.actorId, displayName: m.displayName })),
         agents: agents.map((a) => ({
           actorId: a.actorId,
           name: `Agent ${a.actorId.slice(0, 6)}`,
         })),
       });
       setResolveActor(() => directory);
-      setLead(found.leadId ? directory(found.leadId) : null);
+      setMembers(memberItems);
+      if (rolesRes.ok) setRoles((await rolesRes.json()).items);
 
-      // Program + initiative names for the properties panel.
-      const programs: readonly ProgramOut[] = programsRes.ok
+      // Program + initiative option sources for the (now-interactive) properties panel.
+      const programItems: readonly ProgramOut[] = programsRes.ok
         ? (await programsRes.json()).items
         : [];
-      setProgramName(
-        found.programId ? (programs.find((p) => p.id === found.programId)?.name ?? null) : null,
-      );
-      const initiatives: readonly InitiativeOut[] = initiativesRes.ok
+      setPrograms(programItems);
+      const initiativeItems: readonly InitiativeOut[] = initiativesRes.ok
         ? (await initiativesRes.json()).items
         : [];
-      setInitiativeName(initiatives.length > 0 ? await resolveInitiative(initiatives) : null);
+      setInitiatives(initiativeItems);
+      setCurrentInitiativeId(
+        initiativeItems.length > 0 ? await resolveInitiativeId(initiativeItems) : null,
+      );
 
       // Milestones for this project (ordered by sort from the API).
       const milestoneItems = milestonesRes.ok ? (await milestonesRes.json()).items : [];
@@ -292,11 +323,107 @@ export default function ProjectDetailPage(): JSX.Element {
     } finally {
       setLoading(false);
     }
-  }, [orgId, projectId, resolveInitiative]);
+  }, [orgId, projectId, resolveInitiativeId]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  /**
+   * Optimistically patch the project: apply the change locally, fire the PATCH, and roll back
+   * to the prior snapshot on failure (surfacing the problem). Disables the panel while pending.
+   */
+  const patchProject = useCallback(
+    async (patch: {
+      leadId?: string | null;
+      status?: ProjectStatus;
+      health?: Health | null;
+      startDate?: string | null;
+      targetDate?: string | null;
+      programId?: string | null;
+    }): Promise<void> => {
+      if (!project) return;
+      const previous = project;
+      // One branded patch body, reused for the optimistic snapshot AND the request, so the wire
+      // shape and the local mirror never drift.
+      const body = {
+        ...(patch.leadId !== undefined
+          ? { leadId: patch.leadId === null ? null : ActorId.parse(patch.leadId) }
+          : {}),
+        ...(patch.status !== undefined ? { status: patch.status } : {}),
+        ...(patch.health !== undefined ? { health: patch.health } : {}),
+        ...(patch.startDate !== undefined ? { startDate: patch.startDate } : {}),
+        ...(patch.targetDate !== undefined ? { targetDate: patch.targetDate } : {}),
+        ...(patch.programId !== undefined
+          ? { programId: patch.programId === null ? null : ProgramId.parse(patch.programId) }
+          : {}),
+      };
+      setProject({ ...project, ...body });
+      setPropsPending(true);
+      setPropsError(null);
+      try {
+        const res = await api.v1.orgs[':orgId'].projects[':id'].$patch({
+          param: { orgId, id: projectId },
+          json: body,
+        });
+        if (!res.ok) {
+          setProject(previous);
+          setPropsError(await readProblem(res, 'Could not update the project.'));
+          return;
+        }
+        setProject(await res.json());
+      } catch (caught) {
+        setProject(previous);
+        setPropsError(readError(caught, 'Something went wrong updating the project.'));
+      } finally {
+        setPropsPending(false);
+      }
+    },
+    [project, orgId, projectId],
+  );
+
+  /**
+   * Change the project's associated initiative: unlink the old association, then link the new
+   * one (the association is an m2m edge, not a project column). Optimistic with rollback.
+   */
+  const setProjectInitiative = useCallback(
+    async (nextInitiativeId: string | null): Promise<void> => {
+      const previous = currentInitiativeId;
+      if (previous === nextInitiativeId) return;
+      setCurrentInitiativeId(nextInitiativeId);
+      setPropsPending(true);
+      setPropsError(null);
+      try {
+        if (previous) {
+          const unlinkRes = await api.v1.orgs[':orgId'].initiatives[':id'].projects[
+            ':projectId'
+          ].$delete({ param: { orgId, id: previous, projectId } });
+          if (!unlinkRes.ok) {
+            setCurrentInitiativeId(previous);
+            setPropsError(await readProblem(unlinkRes, 'Could not update the association.'));
+            return;
+          }
+        }
+        if (nextInitiativeId) {
+          const linkRes = await api.v1.orgs[':orgId'].initiatives[':id'].projects.$post({
+            param: { orgId, id: nextInitiativeId },
+            json: { projectId: ProjectId.parse(projectId) },
+          });
+          if (!linkRes.ok) {
+            setCurrentInitiativeId(previous);
+            setPropsError(await readProblem(linkRes, 'Could not update the association.'));
+            return;
+          }
+        }
+      } catch (caught) {
+        setCurrentInitiativeId(previous);
+        setPropsError(readError(caught, 'Something went wrong updating the association.'));
+      } finally {
+        setPropsPending(false);
+      }
+    },
+    [currentInitiativeId, orgId, projectId],
+  );
 
   /** Re-fetch only the weighted-progress roll-up (after a task mutation). */
   const refreshProgress = useCallback(async (): Promise<void> => {
@@ -456,6 +583,21 @@ export default function ProjectDetailPage(): JSX.Element {
     [taskCount, updates.length],
   );
 
+  // Editing a project property requires `contribute`; gate the panel's affordances on it.
+  const canEdit = useOrgCapability(members, roles, 'contribute');
+  const memberOptions = useMemo<readonly PickerOption[]>(
+    () => memberActorOptions(members),
+    [members],
+  );
+  const programOptions = useMemo<readonly PickerOption[]>(
+    () => toProgramOptions(programs),
+    [programs],
+  );
+  const initiativeOptions = useMemo<readonly PickerOption[]>(
+    () => toInitiativeOptions(initiatives),
+    [initiatives],
+  );
+
   if (loading) {
     return (
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
@@ -564,12 +706,42 @@ export default function ProjectDetailPage(): JSX.Element {
 
           <aside className="flex flex-col gap-4">
             <PropertiesPanel
-              lead={lead}
-              startDate={project.startDate}
-              targetDate={project.targetDate}
-              programName={programName}
-              initiativeName={initiativeName}
+              leadId={project.leadId ?? null}
+              memberOptions={memberOptions}
+              status={projectStatusOf(project.status)}
+              health={health}
+              startDate={project.startDate ?? null}
+              targetDate={project.targetDate ?? null}
+              programId={project.programId ?? null}
+              programOptions={programOptions}
+              initiativeId={currentInitiativeId}
+              initiativeOptions={initiativeOptions}
+              canEdit={canEdit}
+              pending={propsPending}
+              onLeadChange={(leadId) => {
+                void patchProject({ leadId });
+              }}
+              onStatusChange={(status) => {
+                void patchProject({ status });
+              }}
+              onHealthChange={(next) => {
+                void patchProject({ health: next });
+              }}
+              onTimelineChange={({ start, end }) => {
+                void patchProject({ startDate: start, targetDate: end });
+              }}
+              onProgramChange={(programId) => {
+                void patchProject({ programId });
+              }}
+              onInitiativeChange={(initiativeId) => {
+                void setProjectInitiative(initiativeId);
+              }}
             />
+            {propsError ? (
+              <p role="alert" className="text-destructive px-1 text-sm">
+                {propsError}
+              </p>
+            ) : null}
           </aside>
         </div>
       ) : null}

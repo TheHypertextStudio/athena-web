@@ -63,7 +63,7 @@ export function SplitTabs<TValue extends string>({
     <div
       role="tablist"
       aria-label={label}
-      className="border-border flex items-center gap-1 border-b"
+      className="border-border flex items-center gap-1 overflow-x-auto border-b"
     >
       {tabs.map((tab) => {
         const selected = tab.value === value;

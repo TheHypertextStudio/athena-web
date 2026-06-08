@@ -31,15 +31,17 @@ export default async function SettingsLayout({
   const { orgId } = await params;
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 p-8">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:gap-8 sm:p-6 lg:p-8">
       <header className="flex flex-col gap-1">
         <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
         <SettingsHeaderSubtitle />
       </header>
 
-      <div className="flex flex-col gap-8 md:flex-row md:gap-12">
-        <aside className="md:w-56 md:shrink-0">
-          <div className="md:sticky md:top-8">
+      {/* Two-pane on `lg` (a sticky section rail beside the content); below `lg` the panes stack
+          with the section list on top so neither pane needs horizontal room on a narrow screen. */}
+      <div className="flex flex-col gap-6 lg:flex-row lg:gap-12">
+        <aside className="lg:w-56 lg:shrink-0">
+          <div className="lg:sticky lg:top-8">
             <SettingsSectionNav orgId={orgId} />
           </div>
         </aside>

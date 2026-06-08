@@ -166,8 +166,8 @@ export default function ProgramsListPage(): JSX.Element {
   );
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-8">
-      <header className="flex flex-wrap items-center justify-between gap-3">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
+      <header className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-semibold tracking-tight">{programsLabel}</h1>
           <p className="text-muted-foreground text-sm">

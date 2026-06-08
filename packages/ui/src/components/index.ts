@@ -43,6 +43,11 @@ export {
   type Density,
   useContextState,
 } from './shell/ContextProvider';
+export {
+  ShellDrawerProvider,
+  type ShellDrawerDismiss,
+  useShellDrawer,
+} from './shell/ShellDrawerContext';
 export { Sidebar, type SidebarProps } from './shell/Sidebar';
 export { SidebarNavItem, type SidebarNavItemProps } from './shell/SidebarNavItem';
 export { WorkspaceSwitcher, type WorkspaceSwitcherProps } from './shell/WorkspaceSwitcher';

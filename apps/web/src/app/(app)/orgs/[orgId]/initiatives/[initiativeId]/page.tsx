@@ -287,7 +287,7 @@ export default function InitiativeDetailPage(): JSX.Element {
 
   if (loading) {
     return (
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-8">
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
         <Skeleton className="h-4 w-32" />
         <Skeleton className="h-9 w-80" />
         <Skeleton className="h-4 w-full max-w-xl" />
@@ -301,7 +301,7 @@ export default function InitiativeDetailPage(): JSX.Element {
 
   if (error) {
     return (
-      <div className="mx-auto w-full max-w-5xl p-8">
+      <div className="mx-auto w-full max-w-5xl p-4 sm:p-6 lg:p-8">
         <p role="alert" className="border-border text-destructive rounded-lg border p-4 text-sm">
           {error}
         </p>
@@ -311,7 +311,7 @@ export default function InitiativeDetailPage(): JSX.Element {
 
   if (!detail) {
     return (
-      <div className="mx-auto w-full max-w-5xl p-8">
+      <div className="mx-auto w-full max-w-5xl p-4 sm:p-6 lg:p-8">
         <p className="border-border text-muted-foreground rounded-xl border border-dashed p-8 text-center text-sm">
           This {initiativeNounLower} could not be found.
         </p>
@@ -322,7 +322,7 @@ export default function InitiativeDetailPage(): JSX.Element {
   const targetDateLabel = formatDate(detail.targetDate ?? null);
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-8">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
       <button
         type="button"
         onClick={() => {

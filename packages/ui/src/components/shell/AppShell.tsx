@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * `@docket/ui` — the top-level app shell layout.
+ * `@docket/ui` — the top-level, responsive app shell layout.
  *
  * @remarks
  * Composes the persistent shell regions — the single integrated {@link Sidebar}, an optional
@@ -16,16 +16,30 @@
  * {@link AppShell} reads context state and so must be rendered inside a `ContextProvider`.
  *
  * @remarks Visual model — an MD3 tonal surface system. The shell root is the tinted **canvas**
- * (`surface-container`); the {@link Sidebar} and the `<main>` content are **floating rounded
- * surface panels** (`surface`) inset from the window edges by a uniform gutter applied here
- * (so spacing stays consistent — panels never set their own outer margins). The optional
+ * (`surface-container`). The `<main>` content is the single distinct **floating rounded surface
+ * panel** (`surface`), inset from the window edges by a uniform gutter applied here. The
+ * {@link Sidebar} deliberately carries **no panel chrome** — it blends into the canvas tone so
+ * the navigation reads as part of the background, not a separate container. The optional
  * {@link TabBar} sits in its **own bar on the canvas** above the main panel — its active tab
  * shares the panel's tone so the two read as one continuous surface.
+ *
+ * @remarks Responsive model — `lg` is the desktop threshold.
+ * - **Desktop (`lg` and up):** the canvas-blended sidebar is static at the left, the content
+ *   column (tab bar + main panel) fills the rest, and the uniform gutter floats the main panel.
+ * - **Below `lg`:** the static sidebar is hidden. A slim **mobile top bar** appears with a
+ *   hamburger that opens the *same* {@link Sidebar} as a left **off-canvas drawer** (a focus-
+ *   trapped {@link Sheet}: `Escape`/backdrop dismiss, scroll-lock, return-focus; selecting a nav
+ *   row closes it via {@link ShellDrawerProvider}). The main panel goes **full-bleed** (no gutter,
+ *   no rounding) so content uses the full width. The tab bar still scrolls horizontally and never
+ *   forces horizontal page overflow.
  */
 import * as React from 'react';
 
+import { Menu } from '../../icons';
 import { cn } from '../../lib/utils';
+import { Sheet, SheetContent, SheetTitle } from '../../primitives';
 import { useContextState } from './ContextProvider';
+import { ShellDrawerProvider } from './ShellDrawerContext';
 
 /** Props for {@link AppShell}. */
 export interface AppShellProps {
@@ -33,6 +47,17 @@ export interface AppShellProps {
   sidebar: React.ReactNode;
   /** The optional multi-document {@link TabBar}, rendered above the content. */
   tabBar?: React.ReactNode;
+  /**
+   * Optional brand content for the **mobile top bar** (shown below `lg`), e.g. the active
+   * workspace name/avatar. Rendered between the hamburger and the trailing actions; defaults to
+   * the product name when omitted.
+   */
+  mobileBrand?: React.ReactNode;
+  /**
+   * Optional trailing actions for the **mobile top bar** (shown below `lg`), e.g. a search
+   * affordance. Rendered at the bar's right edge.
+   */
+  mobileActions?: React.ReactNode;
   /** Extra class names for the root shell element. */
   className?: string;
   /** The main-area content. */
@@ -40,36 +65,85 @@ export interface AppShellProps {
 }
 
 /**
- * The Docket app shell: Sidebar + TabBar + main, with org-accent rebinding.
+ * The Docket app shell: a responsive Sidebar + TabBar + main layout, with org-accent rebinding.
  *
  * @remarks
  * On context rebind the active org's accent is applied as `--org-accent` on the shell root
  * and `data-density` reflects the current density, so the bound org is visually unambiguous
- * throughout the subtree.
+ * throughout the subtree. The same `sidebar` node renders in two slots — the static desktop
+ * rail (`lg` and up) and the mobile off-canvas drawer (below `lg`) — so the navigation stays
+ * a single source of truth across breakpoints.
  */
 export function AppShell({
   sidebar,
   tabBar,
+  mobileBrand,
+  mobileActions,
   className,
   children,
 }: AppShellProps): React.JSX.Element {
   const { orgAccent, density } = useContextState();
+  const [drawerOpen, setDrawerOpen] = React.useState(false);
+
+  // Stable dismiss callback handed to the drawer-rendered sidebar so a nav selection closes the
+  // drawer (the static desktop rail sits under a `null` provider, so it never closes anything).
+  const closeDrawer = React.useCallback(() => {
+    setDrawerOpen(false);
+  }, []);
 
   return (
     <div
       data-density={density}
       style={orgAccent ? ({ '--org-accent': orgAccent } as React.CSSProperties) : undefined}
       className={cn(
-        // The tinted MD3 canvas: the whole app sits on `surface-container`, with a uniform
-        // gutter (p-2) so the sidebar + content panels float inset from the window edges.
-        'bg-surface-container text-on-surface flex h-screen w-full gap-2 overflow-hidden p-2',
+        // The tinted MD3 canvas: the whole app sits on `surface-container`. Below `lg` the shell
+        // is a vertical stack (mobile top bar over the content) with no gutter so the main panel
+        // goes full-bleed; at `lg` and up it becomes a horizontal row with a uniform gutter (p-2)
+        // so the blended sidebar + floating main panel inset from the window edges.
+        'bg-surface-container text-on-surface flex h-screen w-full flex-col overflow-hidden lg:flex-row lg:gap-2 lg:p-2',
         className,
       )}
     >
-      {sidebar}
-      <div className="flex min-w-0 flex-1 flex-col">
+      {/* Mobile top bar — shown only below `lg`; opens the sidebar drawer. */}
+      <div className="border-outline-variant flex h-12 shrink-0 items-center gap-2 border-b px-2 lg:hidden">
+        <button
+          type="button"
+          aria-label="Open navigation"
+          aria-expanded={drawerOpen}
+          onClick={() => {
+            setDrawerOpen(true);
+          }}
+          className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-ring flex size-9 shrink-0 items-center justify-center rounded-lg transition-colors focus-visible:ring-2 focus-visible:outline-none"
+        >
+          <Menu aria-hidden="true" className="size-5" />
+        </button>
+        <div className="flex min-w-0 flex-1 items-center">
+          {mobileBrand ?? <span className="truncate text-sm font-semibold">Docket</span>}
+        </div>
+        {mobileActions}
+      </div>
+
+      {/* Off-canvas navigation drawer — the SAME sidebar node, shown below `lg` on demand. */}
+      <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
+        <SheetContent
+          side="left"
+          aria-label="Navigation"
+          aria-describedby={undefined}
+          className="lg:hidden"
+        >
+          <SheetTitle className="sr-only">Navigation</SheetTitle>
+          <ShellDrawerProvider dismiss={closeDrawer}>{sidebar}</ShellDrawerProvider>
+        </SheetContent>
+      </Sheet>
+
+      {/* Static desktop rail — the canvas-blended sidebar, shown at `lg` and up. */}
+      <div className="hidden lg:block">
+        <ShellDrawerProvider dismiss={null}>{sidebar}</ShellDrawerProvider>
+      </div>
+
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {tabBar}
-        <main className="bg-surface border-outline-variant min-h-0 flex-1 overflow-auto rounded-xl border shadow-sm">
+        <main className="bg-surface lg:border-outline-variant min-h-0 flex-1 overflow-auto lg:rounded-xl lg:border lg:shadow-sm">
           {children}
         </main>
       </div>

@@ -112,18 +112,21 @@ export function StatsBanner({
       >
         <Chevron aria-hidden="true" className="text-muted-foreground h-4 w-4 shrink-0" />
         <span className="text-foreground text-sm font-semibold">Pace</span>
-        <span className="text-muted-foreground text-xs">{runway}</span>
-        {/* Collapsed summary strip: the headline numbers stay visible when folded. */}
-        <span className="text-muted-foreground ml-auto flex items-center gap-3 text-xs tabular-nums">
+        {/* The runway phrase is supplementary; hide it on the narrowest screens so the
+            headline numbers never collide with it. */}
+        <span className="text-muted-foreground hidden text-xs sm:inline">{runway}</span>
+        {/* Collapsed summary strip: the headline numbers stay visible when folded. It can wrap
+            below the label on small screens rather than force horizontal overflow. */}
+        <span className="text-muted-foreground ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-xs tabular-nums">
           <span>
             <span className="text-foreground font-medium">{stats.completed}</span>/{stats.committed}{' '}
             done
           </span>
-          <span aria-hidden="true" className="bg-border h-3 w-px" />
+          <span aria-hidden="true" className="bg-border hidden h-3 w-px sm:inline-block" />
           <span>{pacePct}% of capacity</span>
           {stats.carryover > 0 ? (
             <>
-              <span aria-hidden="true" className="bg-border h-3 w-px" />
+              <span aria-hidden="true" className="bg-border hidden h-3 w-px sm:inline-block" />
               <span className="text-state-started font-medium">{stats.carryover} carryover</span>
             </>
           ) : null}

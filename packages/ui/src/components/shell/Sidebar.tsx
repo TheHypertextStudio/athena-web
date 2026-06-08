@@ -6,9 +6,11 @@
  * @remarks
  * Collapses Docket's former two-layer navigation (the left-edge org rail + the org-scoped
  * context sidebar) into one Linear-grade sidebar with sections that are *always* visible —
- * there is no separate "Hub" mode that swaps the sidebar's contents. Rendered as a floating
- * rounded MD3 `surface` panel (a hairline `outline-variant` border + soft elevation) that
- * sits inset on the shell's tinted `surface-container` canvas. Pinned at the top is the
+ * there is no separate "Hub" mode that swaps the sidebar's contents. The nav **blends into the
+ * shell canvas**: it carries no panel chrome of its own — no `surface` fill, border, rounding,
+ * or elevation — so it reads as part of the tinted `surface-container` background rather than a
+ * separate floating container (only the `<main>` content stays a distinct rounded surface
+ * panel). It keeps its own padding, width, and scroll. Pinned at the top is the
  * {@link WorkspaceSwitcher} (the active workspace + a one-click switch between every org the
  * caller belongs to). Below it, two sections shown on every route:
  *
@@ -43,6 +45,7 @@ import {
 } from '../../icons';
 import { useVocabulary } from '../../hooks/useVocabulary';
 import { useContextState } from './ContextProvider';
+import { useShellDrawer } from './ShellDrawerContext';
 import { SidebarNavItem } from './SidebarNavItem';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 import type { HomeNavKey, Workspace, WorkspaceNavKey } from './workspaces';
@@ -123,6 +126,19 @@ export function Sidebar({
   personalWorkspace = false,
 }: SidebarProps): React.JSX.Element {
   const { activeOrgId } = useContextState();
+  const dismissDrawer = useShellDrawer();
+
+  // When rendered inside the mobile off-canvas drawer, a nav selection should close the drawer
+  // so the chosen destination is visible. Every nav row is a link or button, so a bubbled click
+  // landing on an interactive control means a selection was made; closing then is correct. On
+  // the static desktop rail `dismissDrawer` is `null`, so this is a no-op there.
+  const handleNavActivate = React.useCallback(
+    (event: React.MouseEvent<HTMLElement>): void => {
+      if (!dismissDrawer) return;
+      if ((event.target as HTMLElement).closest('a,button')) dismissDrawer();
+    },
+    [dismissDrawer],
+  );
 
   const initiatives = useVocabulary('initiative', { plural: true });
   const programs = useVocabulary('program', { plural: true });
@@ -161,11 +177,11 @@ export function Sidebar({
   return (
     <aside
       aria-label="Navigation"
-      className="bg-surface text-on-surface border-outline-variant flex h-full w-60 shrink-0 flex-col gap-0.5 overflow-y-auto rounded-xl border p-2 shadow-sm"
+      className="text-on-surface flex h-full w-full shrink-0 flex-col gap-0.5 overflow-y-auto p-2 lg:w-60"
     >
       <WorkspaceSwitcher workspaces={workspaces} onSelect={onSelectWorkspace} />
 
-      <nav aria-label="Home" className="flex flex-col gap-0.5 pt-2">
+      <nav aria-label="Home" className="flex flex-col gap-0.5 pt-2" onClick={handleNavActivate}>
         {homeRows.map((row) => {
           const href = hrefForHome(row.key);
           const active = activeHomeKey === row.key;
@@ -188,7 +204,7 @@ export function Sidebar({
 
       <GroupLabel>Workspace</GroupLabel>
       {activeOrgId ? (
-        <nav aria-label="Workspace" className="flex flex-col gap-0.5">
+        <nav aria-label="Workspace" className="flex flex-col gap-0.5" onClick={handleNavActivate}>
           {workspaceRows.map((row) => {
             const href = hrefForWorkspace(activeOrgId, row.key);
             const active = activeWorkspaceKey === row.key;

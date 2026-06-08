@@ -1,24 +1,37 @@
 'use client';
 
 import type { ProjectOut, TaskOut, TeamOut } from '@docket/types';
+import { EntityList, EntityListRow, RowMeta } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
-import { Plus, Users } from '@docket/ui/icons';
-import { Button, Skeleton } from '@docket/ui/primitives';
+import { FolderKanban, ListChecks, Plus, Users, Workflow } from '@docket/ui/icons';
+import { Badge, Button, Skeleton } from '@docket/ui/primitives';
 import { useParams } from 'next/navigation';
 import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { CreateTeamDialog } from '@/components/teams/create-team';
-import { TeamCard, type TeamCardData } from '@/components/teams/team-card';
 import { api } from '@/lib/api';
 import { readError, readProblem } from '@/lib/problem';
 
+/** The row view-model derived for one Team (scope + workflow roll-up). */
+interface TeamRow {
+  team: TeamOut;
+  projectCount: number;
+  taskCount: number;
+  workflowStateCount: number;
+}
+
 /**
- * The org Teams list — the roster of first-class units within the org (§7).
+ * The org Teams list — the roster of first-class units within the org (§7), as dense rows.
  *
  * @remarks
  * A Client Component reached at `/orgs/[orgId]/teams`. A Team owns its own workflow states,
- * cycles, and Triage queue ({@link TeamOut}); each {@link TeamCard} surfaces the team's key,
- * name, whether its Triage queue is enabled, and a scope roll-up ("N projects · M tasks").
+ * cycles, and Triage queue ({@link TeamOut}); each {@link EntityListRow} leads with the team
+ * `key` as a monospace chip and surfaces the team name, its workflow-state count, and its scope
+ * roll-up ("N projects" + "M tasks"), with a Triage {@link Badge} in the trailing slot when the
+ * queue is enabled. The former card grid is replaced by one clean bordered list of
+ * hairline-divided rows (design-system §5.1). The rows are *presentational* (`interactive`
+ * disabled): there is no team-detail screen yet, so a row deliberately offers no click target
+ * that would 404 — mirroring the old non-interactive card.
  *
  * It composes three slices in parallel — teams, projects, and tasks — and rolls up the
  * per-team scope client-side (a project belongs via `project.teamId`; a task belongs via
@@ -42,7 +55,7 @@ export default function TeamsListPage(): JSX.Element {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
 
-  /** Load the org's teams and the slices needed to scope each card. */
+  /** Load the org's teams and the slices needed to scope each row. */
   const load = useCallback(async (): Promise<void> => {
     setLoading(true);
     setLoadError(null);
@@ -88,18 +101,16 @@ export default function TeamsListPage(): JSX.Element {
     return counts;
   }, [tasks]);
 
-  /** Adapt a Team DTO to its card view-model (scope roll-up). */
-  const toCard = useCallback(
-    (team: TeamOut): TeamCardData => ({
-      id: team.id,
-      name: team.name,
-      key: team.key,
-      description: team.description,
-      triageEnabled: team.triageEnabled,
-      projectCount: projectCountByTeam.get(team.id) ?? 0,
-      taskCount: taskCountByTeam.get(team.id) ?? 0,
-    }),
-    [projectCountByTeam, taskCountByTeam],
+  /** Adapt the teams to their row view-models (scope + workflow roll-up). */
+  const rows = useMemo<readonly TeamRow[]>(
+    () =>
+      teams.map((team) => ({
+        team,
+        projectCount: projectCountByTeam.get(team.id) ?? 0,
+        taskCount: taskCountByTeam.get(team.id) ?? 0,
+        workflowStateCount: team.workflowStates?.length ?? 0,
+      })),
+    [teams, projectCountByTeam, taskCountByTeam],
   );
 
   /** Prepend the freshly-created team to the roster (teams have no detail route to open). */
@@ -137,14 +148,7 @@ export default function TeamsListPage(): JSX.Element {
       />
 
       {loading ? (
-        <div
-          className="grid grid-cols-1 gap-4 @2xl:grid-cols-2 @5xl:grid-cols-3"
-          aria-hidden="true"
-        >
-          {[0, 1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-36 w-full rounded-xl" />
-          ))}
-        </div>
+        <ListSkeleton />
       ) : loadError ? (
         <p
           role="alert"
@@ -164,20 +168,63 @@ export default function TeamsListPage(): JSX.Element {
           }}
         />
       ) : (
-        <ul className="grid grid-cols-1 gap-4 @2xl:grid-cols-2 @5xl:grid-cols-3">
-          {teams.map((team) => (
-            <li key={team.id}>
-              <TeamCard
-                team={toCard(team)}
-                projectNoun={projectNoun}
-                projectNounPlural={projectNounPlural}
-                taskNoun={taskNoun}
-                taskNounPlural={taskNounPlural}
+        <EntityList aria-label="Teams">
+          {rows.map(({ team, projectCount, taskCount, workflowStateCount }) => {
+            const projectWord = projectCount === 1 ? projectNoun : projectNounPlural;
+            const taskWord = taskCount === 1 ? taskNoun : taskNounPlural;
+            return (
+              <EntityListRow
+                key={team.id}
+                interactive={false}
+                aria-label={`${team.key} ${team.name}`}
+                leading={
+                  <span className="bg-surface-container text-on-surface-variant rounded px-1.5 py-0.5 font-mono text-xs font-medium tracking-wide uppercase">
+                    {team.key}
+                  </span>
+                }
+                title={team.name}
+                meta={
+                  <>
+                    {workflowStateCount > 0 ? (
+                      <RowMeta tabular>
+                        <Workflow aria-hidden="true" className="size-3.5" />
+                        {workflowStateCount} states
+                      </RowMeta>
+                    ) : null}
+                    <RowMeta tabular>
+                      <FolderKanban aria-hidden="true" className="size-3.5" />
+                      {projectCount} {projectWord}
+                    </RowMeta>
+                    <RowMeta tabular>
+                      <ListChecks aria-hidden="true" className="size-3.5" />
+                      {taskCount} {taskWord}
+                    </RowMeta>
+                  </>
+                }
+                trailing={team.triageEnabled ? <Badge variant="secondary">Triage</Badge> : null}
               />
-            </li>
-          ))}
-        </ul>
+            );
+          })}
+        </EntityList>
       )}
+    </div>
+  );
+}
+
+/** Loading placeholder: a bordered list of slim row skeletons. */
+function ListSkeleton(): JSX.Element {
+  return (
+    <div
+      className="border-outline-variant divide-outline-variant flex flex-col divide-y overflow-hidden rounded-xl border"
+      aria-hidden="true"
+    >
+      {[0, 1, 2, 3, 4].map((i) => (
+        <div key={i} className="flex items-center gap-3 px-3 py-2.5">
+          <Skeleton className="h-5 w-10 rounded" />
+          <Skeleton className="h-4 w-44" />
+          <Skeleton className="ml-auto h-4 w-24" />
+        </div>
+      ))}
     </div>
   );
 }

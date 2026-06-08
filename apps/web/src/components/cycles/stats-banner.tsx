@@ -52,16 +52,16 @@ function Stat({
 }): JSX.Element {
   return (
     <div className="flex flex-col gap-0.5">
-      <dt className="text-muted-foreground text-xs font-medium">{label}</dt>
+      <dt className="text-on-surface-variant text-xs font-medium">{label}</dt>
       <dd
         className={cn(
-          'text-foreground text-lg font-semibold tabular-nums',
+          'text-on-surface text-lg font-semibold tabular-nums',
           tone === 'warning' && 'text-state-started',
         )}
       >
         {value}
       </dd>
-      {hint ? <p className="text-muted-foreground text-xs">{hint}</p> : null}
+      {hint ? <p className="text-on-surface-variant text-xs">{hint}</p> : null}
     </div>
   );
 }
@@ -106,27 +106,33 @@ export function StatsBanner({
         aria-expanded={expanded}
         aria-controls="cycle-stats-body"
         className={cn(
-          'focus-visible:ring-ring flex w-full items-center gap-3 px-5 py-3 text-left outline-none',
-          'hover:bg-muted/40 transition-colors focus-visible:ring-1 focus-visible:ring-inset',
+          'focus-visible:ring-ring flex w-full items-center gap-3 px-4 py-3 text-left outline-none',
+          'hover:bg-surface-container-high transition-colors focus-visible:ring-1 focus-visible:ring-inset',
         )}
       >
-        <Chevron aria-hidden="true" className="text-muted-foreground h-4 w-4 shrink-0" />
-        <span className="text-foreground text-sm font-semibold">Pace</span>
-        {/* The runway phrase is supplementary; hide it on the narrowest screens so the
+        <Chevron aria-hidden="true" className="text-on-surface-variant h-4 w-4 shrink-0" />
+        <span className="text-on-surface text-sm font-semibold">Pace</span>
+        {/* The runway phrase is supplementary; hide it on the narrowest panels so the
             headline numbers never collide with it. */}
-        <span className="text-muted-foreground hidden text-xs sm:inline">{runway}</span>
+        <span className="text-on-surface-variant hidden text-xs @2xl:inline">{runway}</span>
         {/* Collapsed summary strip: the headline numbers stay visible when folded. It can wrap
-            below the label on small screens rather than force horizontal overflow. */}
-        <span className="text-muted-foreground ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-xs tabular-nums">
+            below the label on narrow panels rather than force horizontal overflow. */}
+        <span className="text-on-surface-variant ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-xs tabular-nums">
           <span>
-            <span className="text-foreground font-medium">{stats.completed}</span>/{stats.committed}{' '}
+            <span className="text-on-surface font-medium">{stats.completed}</span>/{stats.committed}{' '}
             done
           </span>
-          <span aria-hidden="true" className="bg-border hidden h-3 w-px sm:inline-block" />
+          <span
+            aria-hidden="true"
+            className="bg-outline-variant hidden h-3 w-px @2xl:inline-block"
+          />
           <span>{pacePct}% of capacity</span>
           {stats.carryover > 0 ? (
             <>
-              <span aria-hidden="true" className="bg-border hidden h-3 w-px sm:inline-block" />
+              <span
+                aria-hidden="true"
+                className="bg-outline-variant hidden h-3 w-px @2xl:inline-block"
+              />
               <span className="text-state-started font-medium">{stats.carryover} carryover</span>
             </>
           ) : null}
@@ -134,10 +140,10 @@ export function StatsBanner({
       </button>
 
       {expanded ? (
-        <div id="cycle-stats-body" className="flex flex-col gap-5 px-5 pb-5">
+        <div id="cycle-stats-body" className="flex flex-col gap-4 px-4 pb-4">
           <BurnupChart burnup={burnup} window={window} />
 
-          <dl className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4">
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-4 @2xl:grid-cols-4">
             <Stat
               label="Committed"
               value={String(stats.committed)}

@@ -36,7 +36,7 @@ export function UnscheduledTray({ bars, dimmed }: UnscheduledTrayProps): JSX.Ele
   if (bars.length === 0) return null;
   return (
     <div className={cn('flex flex-col gap-1.5 pt-1', dimmed && 'opacity-30')}>
-      <span className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
+      <span className="text-on-surface-variant text-[11px] font-medium tracking-wide uppercase">
         Unscheduled
       </span>
       <ul className="flex flex-wrap gap-1.5">
@@ -50,8 +50,8 @@ export function UnscheduledTray({ bars, dimmed }: UnscheduledTrayProps): JSX.Ele
                 className="border-outline-variant bg-surface-container-low hover:bg-surface-container-high focus-visible:ring-ring inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:outline-none"
               >
                 <span aria-hidden="true" className={cn('size-2 rounded-full', fillFor(health))} />
-                <span className="text-foreground max-w-[14rem] truncate">{bar.name}</span>
-                <span className="text-muted-foreground">{statusLabel(bar.status)}</span>
+                <span className="text-on-surface max-w-[14rem] truncate">{bar.name}</span>
+                <span className="text-on-surface-variant">{statusLabel(bar.status)}</span>
               </Link>
             </li>
           );

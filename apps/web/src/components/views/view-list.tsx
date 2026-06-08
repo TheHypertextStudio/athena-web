@@ -87,15 +87,15 @@ export function ViewList({
               className={cn(
                 'group focus-visible:ring-ring flex w-full flex-col gap-1.5 rounded-lg border px-4 py-3 text-left transition-colors outline-none focus-visible:ring-1',
                 active
-                  ? 'border-primary/40 bg-accent'
-                  : 'border-border hover:border-border hover:bg-accent/50',
+                  ? 'border-primary/40 bg-surface-container-highest'
+                  : 'border-outline-variant hover:bg-surface-container-high',
               )}
             >
               <div className="flex items-center justify-between gap-3">
-                <span className="text-foreground truncate text-sm font-medium">{view.name}</span>
+                <span className="text-on-surface truncate text-sm font-medium">{view.name}</span>
                 <ViewScopeBadge scope={view.scope} />
               </div>
-              <div className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+              <div className="text-on-surface-variant flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                 <span className="inline-flex items-center gap-1">
                   <Filter className="size-3" aria-hidden="true" />
                   {summary.filters}

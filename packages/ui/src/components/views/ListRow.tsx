@@ -63,8 +63,9 @@ export function ListCell({ children, className }: ListCellProps): React.JSX.Elem
  * The generic virtualized-list row primitive.
  *
  * @remarks
- * Renders `role="row"` with selection/active styling driven by tokens (`bg-accent`,
- * `text-foreground`). Activating the row (click or Enter handled by the row's `onKeyDown`)
+ * Renders `role="row"` with selection/active styling driven by the MD3 surface tones
+ * (`bg-surface-container-highest` for active/selected, `hover:bg-surface-container-high`).
+ * Activating the row (click or Enter handled by the row's `onKeyDown`)
  * calls `onActivate`. Keyboard *navigation between* rows is owned by `useListKeyboard` at
  * the {@link ListView} level; this row only handles its own activation.
  */
@@ -90,10 +91,10 @@ export function ListRow({
         }
       }}
       className={cn(
-        'border-border flex h-full w-full cursor-pointer items-center gap-2 border-b px-2 text-sm outline-none',
-        'hover:bg-accent/50 focus-visible:bg-accent focus-visible:ring-ring focus-visible:ring-1 focus-visible:ring-inset',
-        active && 'bg-accent',
-        selected && 'bg-accent/70',
+        'border-outline-variant flex h-full w-full cursor-pointer items-center gap-2 border-b px-3 text-sm transition-colors outline-none',
+        'hover:bg-surface-container-high focus-visible:bg-surface-container-high focus-visible:ring-ring focus-visible:ring-1 focus-visible:ring-inset',
+        active && 'bg-surface-container-highest',
+        selected && 'bg-surface-container-highest',
         className,
       )}
     >
@@ -158,7 +159,7 @@ export function TaskRow({
         <StatusIcon type={task.stateType} />
       </ListCell>
       <ListCell className="flex-1">
-        <span className="text-foreground truncate">{task.title}</span>
+        <span className="text-on-surface truncate">{task.title}</span>
       </ListCell>
       {task.assigneeName ? (
         <ListCell className="shrink-0">

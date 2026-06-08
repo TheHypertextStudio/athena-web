@@ -95,7 +95,7 @@ export function ProjectBar({ bar, start, end, scale, dimmed }: ProjectBarProps):
           aria-hidden="true"
           title={`${milestone.name}${milestone.targetDate ? ` · ${formatDate(milestone.targetDate)}` : ''}`}
           className={cn(
-            'border-background bg-background pointer-events-none absolute top-1/2 z-[1] size-2.5 -translate-x-1/2 -translate-y-1/2 rotate-45 rounded-[2px] border shadow-sm transition-opacity',
+            'border-surface bg-surface pointer-events-none absolute top-1/2 z-[1] size-2.5 -translate-x-1/2 -translate-y-1/2 rotate-45 rounded-[2px] border shadow-sm transition-opacity',
             dimmed && 'opacity-30',
           )}
           style={{ left: `${pct(at, scale)}%` }}

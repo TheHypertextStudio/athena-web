@@ -268,10 +268,10 @@ export default function ViewsPage(): JSX.Element {
   );
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
+    <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
       <header className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Views</h1>
-        <p className="text-muted-foreground text-sm">
+        <h1 className="text-on-surface text-xl font-semibold tracking-tight">Views</h1>
+        <p className="text-on-surface-variant text-xs">
           Saved filters over your {viewsLabel.toLowerCase()} — open one, tweak it, or save the
           current filter as a new view. Shared views show each person only the work they can see.
         </p>
@@ -291,12 +291,12 @@ export default function ViewsPage(): JSX.Element {
         <div className="flex flex-col gap-6">
           <section aria-label="Saved views" className="flex flex-col gap-3">
             <div className="flex items-center justify-between gap-3">
-              <h2 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+              <h2 className="text-on-surface-variant text-xs font-medium tracking-wide uppercase">
                 {views.length === 0 ? 'No saved views yet' : `${String(views.length)} saved`}
               </h2>
             </div>
             {views.length === 0 ? (
-              <div className="border-border text-muted-foreground flex flex-col items-center gap-2 rounded-lg border border-dashed p-8 text-center text-sm">
+              <div className="border-outline-variant text-on-surface-variant flex flex-col items-center gap-2 rounded-xl border border-dashed p-8 text-center text-sm">
                 <LayoutGrid className="size-6 opacity-60" aria-hidden="true" />
                 <p>
                   Build a filter below and save it to create your first view. Views can stay
@@ -318,7 +318,9 @@ export default function ViewsPage(): JSX.Element {
 
           <section aria-label="Working view" className="flex min-h-0 flex-1 flex-col gap-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-sm font-semibold">{openViewName ?? 'New view'}</h2>
+              <h2 className="text-on-surface text-sm font-semibold">
+                {openViewName ?? 'New view'}
+              </h2>
               <Button
                 variant="outline"
                 size="sm"
@@ -369,7 +371,7 @@ export default function ViewsPage(): JSX.Element {
               />
             ) : null}
 
-            <div className="border-border min-h-64 flex-1 overflow-hidden rounded-lg border">
+            <div className="border-outline-variant min-h-64 flex-1 overflow-hidden rounded-xl border">
               <ViewRunner
                 tasks={tasks}
                 filters={query.filters}

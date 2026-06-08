@@ -189,7 +189,7 @@ export default function SignUpPage(): JSX.Element {
         <AuthError message={error} />
 
         {!passkeySupported && hydrated ? (
-          <p className="text-muted-foreground text-sm" role="status">
+          <p className="text-on-surface-variant text-sm" role="status">
             This browser does not support passkeys. You can still continue with one of the options
             below if available.
           </p>
@@ -206,7 +206,7 @@ export default function SignUpPage(): JSX.Element {
           )}
         </Button>
 
-        <p className="text-muted-foreground text-center text-xs leading-relaxed">
+        <p className="text-on-surface-variant text-center text-xs leading-relaxed">
           No passwords. Your device&rsquo;s Face ID, Touch ID, or security key becomes your secure
           key to Docket.
         </p>

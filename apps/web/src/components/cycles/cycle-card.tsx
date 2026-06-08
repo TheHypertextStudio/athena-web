@@ -63,14 +63,14 @@ export function CycleCard({ cycle, stats, cycleNoun, href }: CycleCardProps): JS
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-0.5">
           <span className="flex items-center gap-2">
-            <span className="text-foreground truncate text-sm font-semibold">{title}</span>
+            <span className="text-on-surface truncate text-sm font-semibold">{title}</span>
             {cycle.name ? (
-              <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
+              <span className="text-on-surface-variant shrink-0 text-xs tabular-nums">
                 {cycleNoun} {cycle.number}
               </span>
             ) : null}
           </span>
-          <span className="text-muted-foreground text-xs">
+          <span className="text-on-surface-variant text-xs">
             {formatWindow(cycle.startsAt, cycle.endsAt)}
           </span>
         </div>
@@ -84,7 +84,7 @@ export function CycleCard({ cycle, stats, cycleNoun, href }: CycleCardProps): JS
         {stats ? (
           <>
             <div
-              className="bg-muted relative h-1.5 w-full overflow-hidden rounded-full"
+              className="bg-surface-container relative h-1.5 w-full overflow-hidden rounded-full"
               role="progressbar"
               aria-valuemin={0}
               aria-valuemax={100}
@@ -104,9 +104,9 @@ export function CycleCard({ cycle, stats, cycleNoun, href }: CycleCardProps): JS
                 />
               ) : null}
             </div>
-            <div className="text-muted-foreground flex items-center justify-between gap-3 text-xs tabular-nums">
+            <div className="text-on-surface-variant flex items-center justify-between gap-3 text-xs tabular-nums">
               <span>
-                <span className="text-foreground font-medium">{stats.completed}</span>/
+                <span className="text-on-surface font-medium">{stats.completed}</span>/
                 {stats.committed} tasks · {taskPct}%
               </span>
               {stats.carryover > 0 && cycle.status !== 'completed' ? (

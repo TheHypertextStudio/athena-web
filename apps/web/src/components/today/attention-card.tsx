@@ -58,12 +58,12 @@ export function AttentionCard({
     ? 'bg-destructive/10 text-destructive'
     : active
       ? 'bg-primary/10 text-primary'
-      : 'bg-muted text-muted-foreground';
+      : 'bg-surface-container text-on-surface-variant';
   const countTone = emphasize
     ? 'text-destructive'
     : active
-      ? 'text-foreground'
-      : 'text-muted-foreground';
+      ? 'text-on-surface'
+      : 'text-on-surface-variant';
 
   return (
     <div
@@ -89,19 +89,19 @@ export function AttentionCard({
 
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex items-baseline gap-2">
-            <span className="text-foreground text-sm font-semibold">{title}</span>
+            <span className="text-on-surface text-sm font-semibold">{title}</span>
             <span className={`text-sm font-semibold tabular-nums ${countTone}`}>{count}</span>
           </div>
-          <span className="text-muted-foreground text-xs text-balance">
+          <span className="text-on-surface-variant text-xs text-balance">
             {active ? activeDescription : clearDescription}
           </span>
         </div>
 
         {active ? (
           expanded ? (
-            <ChevronDown aria-hidden="true" className="text-muted-foreground h-4 w-4 shrink-0" />
+            <ChevronDown aria-hidden="true" className="text-on-surface-variant h-4 w-4 shrink-0" />
           ) : (
-            <ChevronRight aria-hidden="true" className="text-muted-foreground h-4 w-4 shrink-0" />
+            <ChevronRight aria-hidden="true" className="text-on-surface-variant h-4 w-4 shrink-0" />
           )
         ) : null}
       </button>

@@ -128,7 +128,7 @@ export function SaveViewComposer({
               <DropdownMenuTrigger asChild>
                 <Button type="button" variant="outline" className="w-fit gap-2">
                   <span>{activeScope?.label ?? 'Personal'}</span>
-                  <span className="text-muted-foreground text-xs">{activeScope?.hint}</span>
+                  <span className="text-on-surface-variant text-xs">{activeScope?.hint}</span>
                   <ChevronDown className="size-4 opacity-60" aria-hidden="true" />
                 </Button>
               </DropdownMenuTrigger>
@@ -143,7 +143,7 @@ export function SaveViewComposer({
                     <DropdownMenuRadioItem key={option.value} value={option.value}>
                       <span className="flex w-full items-center justify-between gap-6">
                         <span>{option.label}</span>
-                        <span className="text-muted-foreground text-xs">{option.hint}</span>
+                        <span className="text-on-surface-variant text-xs">{option.hint}</span>
                       </span>
                     </DropdownMenuRadioItem>
                   ))}
@@ -152,8 +152,8 @@ export function SaveViewComposer({
             </DropdownMenu>
           </div>
 
-          <p className="text-muted-foreground text-xs">
-            Captures: <span className="text-foreground">{summary}</span>
+          <p className="text-on-surface-variant text-xs">
+            Captures: <span className="text-on-surface">{summary}</span>
           </p>
 
           {error ? (

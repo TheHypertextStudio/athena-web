@@ -42,7 +42,7 @@ export const HEALTH_FILL_CLASS: Record<Health, string> = {
 };
 
 /** The fill color used for children that carry no health verdict yet (the neutral bucket). */
-export const HEALTH_UNKNOWN_FILL_CLASS = 'bg-muted-foreground/30';
+export const HEALTH_UNKNOWN_FILL_CLASS = 'bg-on-surface-variant/30';
 
 /** The label used for the no-verdict bucket in distribution legends. */
 export const HEALTH_UNKNOWN_LABEL = 'No verdict';

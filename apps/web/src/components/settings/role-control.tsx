@@ -77,7 +77,7 @@ export function RoleControl({
   if (!canEdit) {
     return (
       <span
-        className="text-muted-foreground inline-flex h-8 items-center px-2 text-sm"
+        className="text-on-surface-variant inline-flex h-8 items-center px-2 text-sm"
         aria-label={ariaLabel}
       >
         {currentLabel}
@@ -117,9 +117,11 @@ export function RoleControl({
                 value={option.id}
                 className="flex-col items-start gap-0.5 py-2"
               >
-                <span className="text-foreground font-medium">{copy?.label ?? option.key}</span>
+                <span className="text-on-surface font-medium">{copy?.label ?? option.key}</span>
                 {copy ? (
-                  <span className="text-muted-foreground text-xs leading-snug">{copy.summary}</span>
+                  <span className="text-on-surface-variant text-xs leading-snug">
+                    {copy.summary}
+                  </span>
                 ) : null}
               </DropdownMenuRadioItem>
             );

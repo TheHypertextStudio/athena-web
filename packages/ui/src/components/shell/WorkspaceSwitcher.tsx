@@ -77,7 +77,7 @@ function AttentionBadge({
   return (
     <span
       aria-label={`${count} ${label}`}
-      className="bg-primary text-primary-foreground ring-card flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] leading-none font-semibold tabular-nums ring-2"
+      className="bg-primary text-primary-foreground ring-surface flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] leading-none font-semibold tabular-nums ring-2"
     >
       {badgeText(count)}
     </span>
@@ -113,7 +113,7 @@ function WorkspaceMenuRow({
     <DropdownMenuItem
       onSelect={onSelect}
       aria-current={active ? 'true' : undefined}
-      className={cn('gap-2', active && 'bg-accent text-accent-foreground')}
+      className={cn('gap-2', active && 'bg-surface-container-highest text-on-surface')}
     >
       <WorkspaceAvatar workspace={workspace} />
       <span className="min-w-0 flex-1 truncate">{workspace.name}</span>
@@ -166,16 +166,21 @@ export function WorkspaceSwitcher({
           {active ? (
             <WorkspaceAvatar workspace={active} />
           ) : (
-            <span className="bg-muted size-6 shrink-0 rounded-md" aria-hidden="true" />
+            <span
+              className="bg-surface-container-high size-6 shrink-0 rounded-md"
+              aria-hidden="true"
+            />
           )}
           <span className="min-w-0 flex-1 truncate text-left text-sm font-semibold">
             {triggerLabel}
           </span>
-          <ChevronDown aria-hidden="true" className="text-muted-foreground size-4 shrink-0" />
+          <ChevronDown aria-hidden="true" className="text-on-surface-variant size-4 shrink-0" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-[15rem]">
-        <DropdownMenuLabel className="text-muted-foreground text-xs">Workspaces</DropdownMenuLabel>
+        <DropdownMenuLabel className="text-on-surface-variant text-xs">
+          Workspaces
+        </DropdownMenuLabel>
         {workspaces.map((w) => (
           <WorkspaceMenuRow
             key={w.id}

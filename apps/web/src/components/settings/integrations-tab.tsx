@@ -223,7 +223,10 @@ export function IntegrationsTab({
 
   if (loadError) {
     return (
-      <p role="alert" className="border-border text-destructive rounded-lg border p-4 text-sm">
+      <p
+        role="alert"
+        className="border-outline-variant text-destructive rounded-lg border p-4 text-sm"
+      >
         {loadError}
       </p>
     );
@@ -231,12 +234,12 @@ export function IntegrationsTab({
 
   return (
     <div className="flex flex-col gap-6">
-      <p className="text-muted-foreground text-sm leading-relaxed">
+      <p className="text-on-surface-variant text-sm leading-relaxed">
         {isPersonal
           ? 'Connect the tools you already use.'
           : 'Connect the tools your team already uses.'}{' '}
-        Choose a <span className="text-foreground font-medium">Migration</span> to move fully into
-        Docket, or a <span className="text-foreground font-medium">Connector</span> to mirror a tool
+        Choose a <span className="text-on-surface font-medium">Migration</span> to move fully into
+        Docket, or a <span className="text-on-surface font-medium">Connector</span> to mirror a tool
         that stays the source of truth — you decide per tool when you connect.
       </p>
 
@@ -244,9 +247,9 @@ export function IntegrationsTab({
         <section
           key={category}
           aria-label={categoryLabel(category)}
-          className="flex flex-col gap-2"
+          className="flex flex-col gap-3"
         >
-          <h2 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+          <h2 className="text-on-surface-variant text-xs font-medium tracking-wide uppercase">
             {categoryLabel(category)}
           </h2>
           <ul className="flex flex-col gap-2">
@@ -259,13 +262,13 @@ export function IntegrationsTab({
                   key={provider.provider}
                   className="border-outline-variant bg-surface-container-low overflow-hidden rounded-xl border"
                 >
-                  <div className="flex items-center gap-3 px-4 py-3">
-                    <span className="bg-muted text-muted-foreground flex size-9 shrink-0 items-center justify-center rounded-lg">
+                  <div className="flex items-center gap-3 p-4">
+                    <span className="bg-surface-container text-on-surface-variant flex size-9 shrink-0 items-center justify-center rounded-lg">
                       <ProviderIcon aria-hidden="true" className="size-4" />
                     </span>
                     <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                      <span className="text-foreground text-sm font-medium">{provider.name}</span>
-                      <span className="text-muted-foreground text-xs">
+                      <span className="text-on-surface text-sm font-medium">{provider.name}</span>
+                      <span className="text-on-surface-variant text-xs">
                         {existing
                           ? `Connected as ${existing.pattern === 'migration' ? 'a migration' : 'a connector'}`
                           : `Recommended: ${provider.pattern === 'migration' ? 'Migration' : 'Connector'}`}
@@ -286,12 +289,14 @@ export function IntegrationsTab({
                           setConnectError(null);
                           setOpenProvider(isOpen ? null : provider.provider);
                         }}
-                        className="focus-visible:ring-ring text-primary hover:bg-accent rounded-md px-3 py-1.5 text-sm font-medium transition-colors outline-none focus-visible:ring-1"
+                        className="focus-visible:ring-ring text-primary hover:bg-surface-container-high rounded-md px-3 py-1.5 text-sm font-medium transition-colors outline-none focus-visible:ring-1"
                       >
                         {isOpen ? 'Close' : 'Configure'}
                       </button>
                     ) : (
-                      <span className="text-muted-foreground text-xs">Available to configure</span>
+                      <span className="text-on-surface-variant text-xs">
+                        Available to configure
+                      </span>
                     )}
                   </div>
 

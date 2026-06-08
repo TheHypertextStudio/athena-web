@@ -52,14 +52,14 @@ const STATUS_TREATMENT: Record<SessionStatus, StatusTreatment> = {
     label: 'Paused',
     hint: 'Paused — awaiting your input',
     Glyph: CircleDot,
-    tone: 'border-border bg-muted text-muted-foreground',
+    tone: 'border-outline-variant bg-surface-container text-on-surface-variant',
     pulse: false,
   },
   pending: {
     label: 'Queued',
     hint: 'Run queued, not yet started',
     Glyph: CircleDashed,
-    tone: 'border-border bg-muted text-muted-foreground',
+    tone: 'border-outline-variant bg-surface-container text-on-surface-variant',
     pulse: false,
   },
   completed: {
@@ -80,7 +80,7 @@ const STATUS_TREATMENT: Record<SessionStatus, StatusTreatment> = {
     label: 'Canceled',
     hint: 'Run canceled',
     Glyph: XCircle,
-    tone: 'border-border bg-muted text-muted-foreground',
+    tone: 'border-outline-variant bg-surface-container text-on-surface-variant',
     pulse: false,
   },
 };

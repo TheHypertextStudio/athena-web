@@ -31,9 +31,9 @@ export default async function SettingsLayout({
   const { orgId } = await params;
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 sm:gap-8 sm:p-6 lg:p-8">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
       <header className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
+        <h1 className="text-on-surface text-xl font-semibold tracking-tight">Settings</h1>
         <SettingsHeaderSubtitle />
       </header>
 

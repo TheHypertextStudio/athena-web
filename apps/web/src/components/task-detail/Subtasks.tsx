@@ -77,14 +77,14 @@ export function Subtasks({
           Subtasks
         </h2>
         {subtasks.length > 0 ? (
-          <span className="text-muted-foreground text-xs tabular-nums">
+          <span className="text-on-surface-variant text-xs tabular-nums">
             {doneCount}/{subtasks.length}
           </span>
         ) : null}
       </div>
 
       {subtasks.length === 0 ? (
-        <p className="text-muted-foreground text-sm">No subtasks yet.</p>
+        <p className="text-on-surface-variant text-sm">No subtasks yet.</p>
       ) : (
         <ul className="flex flex-col">
           {subtasks.map((subtask) => {
@@ -93,7 +93,7 @@ export function Subtasks({
             return (
               <li
                 key={subtask.id}
-                className="group hover:bg-accent/50 -mx-2 flex items-center gap-2 rounded-md px-2 py-1.5"
+                className="group hover:bg-surface-container-high -mx-2 flex items-center gap-2 rounded-md px-2 py-1.5"
               >
                 <button
                   type="button"
@@ -116,7 +116,7 @@ export function Subtasks({
                   }}
                   className="focus-visible:ring-ring min-w-0 flex-1 truncate rounded text-left text-sm hover:underline focus-visible:ring-1 focus-visible:outline-none"
                 >
-                  <span className={done ? 'text-muted-foreground line-through' : ''}>
+                  <span className={done ? 'text-on-surface-variant line-through' : ''}>
                     {subtask.title}
                   </span>
                 </button>

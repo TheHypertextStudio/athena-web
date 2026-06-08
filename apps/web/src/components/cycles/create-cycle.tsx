@@ -206,7 +206,7 @@ export function CreateCycleDialog({
           />
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="flex flex-col gap-1.5">
-              <span className="text-muted-foreground text-xs font-medium">Starts</span>
+              <span className="text-on-surface-variant text-xs font-medium">Starts</span>
               <Input
                 type="date"
                 aria-label={`${cycleNoun} start date`}
@@ -219,7 +219,7 @@ export function CreateCycleDialog({
               />
             </label>
             <label className="flex flex-col gap-1.5">
-              <span className="text-muted-foreground text-xs font-medium">Ends</span>
+              <span className="text-on-surface-variant text-xs font-medium">Ends</span>
               <Input
                 type="date"
                 aria-label={`${cycleNoun} end date`}

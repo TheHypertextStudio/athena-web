@@ -229,8 +229,8 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
         className="bg-surface-container-high text-on-surface border-outline-variant data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95 relative flex max-h-[70vh] w-full max-w-xl flex-col overflow-hidden rounded-xl border shadow-2xl duration-150"
       >
         {/* Search input + scope toggle */}
-        <div className="border-border/70 flex items-center gap-2 border-b px-3">
-          <Search aria-hidden="true" className="text-muted-foreground size-4 shrink-0" />
+        <div className="border-outline-variant flex items-center gap-2 border-b px-3">
+          <Search aria-hidden="true" className="text-on-surface-variant size-4 shrink-0" />
           <input
             ref={inputRef}
             type="text"
@@ -249,7 +249,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
             placeholder={
               scope === 'org' ? `Search ${orgLocalLabel}…` : 'Search everything, or jump to…'
             }
-            className="text-foreground placeholder:text-muted-foreground h-12 flex-1 bg-transparent text-sm outline-none"
+            className="text-on-surface placeholder:text-on-surface-variant h-12 flex-1 bg-transparent text-sm outline-none"
           />
           <ScopeToggle
             scope={scope}
@@ -283,8 +283,8 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
 
           {showEmpty ? (
             <div className="flex flex-col items-center justify-center gap-1 px-4 py-10 text-center">
-              <p className="text-foreground text-sm font-medium">No matches</p>
-              <p className="text-muted-foreground max-w-xs text-sm">
+              <p className="text-on-surface text-sm font-medium">No matches</p>
+              <p className="text-on-surface-variant max-w-xs text-sm">
                 {hasQuery
                   ? 'Nothing matched your search. Try a different term or switch scope.'
                   : 'Start typing to search across your organizations.'}
@@ -296,7 +296,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
             <ul ref={listRef} role="listbox" id={listboxId} aria-label="Commands">
               {grouped.map((group) => (
                 <li key={group.section} role="presentation">
-                  <p className="text-muted-foreground px-3 pt-2 pb-1 text-xs font-medium tracking-wide uppercase">
+                  <p className="text-on-surface-variant px-3 pt-2 pb-1 text-xs font-medium tracking-wide uppercase">
                     {group.label}
                     {group.section === 'results' && loading ? ' · searching…' : ''}
                   </p>
@@ -324,7 +324,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
         </div>
 
         {/* Footer hint bar */}
-        <div className="border-border/70 text-muted-foreground flex items-center justify-between gap-3 border-t px-3 py-2 text-[11px]">
+        <div className="border-outline-variant text-on-surface-variant flex items-center justify-between gap-3 border-t px-3 py-2 text-[11px]">
           <span className="flex items-center gap-1.5">
             <Command aria-hidden="true" className="size-3" />K to toggle
           </span>
@@ -364,7 +364,7 @@ function ScopeToggle({ scope, orgBound, orgLabel, onChange }: ScopeToggleProps):
     <div
       role="radiogroup"
       aria-label="Search scope"
-      className="border-border/70 flex shrink-0 items-center gap-0.5 rounded-md border p-0.5"
+      className="border-outline-variant flex shrink-0 items-center gap-0.5 rounded-md border p-0.5"
     >
       <button
         type="button"
@@ -377,7 +377,7 @@ function ScopeToggle({ scope, orgBound, orgLabel, onChange }: ScopeToggleProps):
           'focus-visible:ring-ring flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors focus-visible:ring-1 focus-visible:outline-none',
           scope === 'hub'
             ? 'bg-secondary text-secondary-foreground'
-            : 'text-muted-foreground hover:text-foreground',
+            : 'text-on-surface-variant hover:text-on-surface',
         )}
       >
         <Globe aria-hidden="true" className="size-3.5" />
@@ -396,7 +396,7 @@ function ScopeToggle({ scope, orgBound, orgLabel, onChange }: ScopeToggleProps):
           'focus-visible:ring-ring flex max-w-[8rem] items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors focus-visible:ring-1 focus-visible:outline-none disabled:opacity-40',
           scope === 'org'
             ? 'bg-secondary text-secondary-foreground'
-            : 'text-muted-foreground hover:text-foreground',
+            : 'text-on-surface-variant hover:text-on-surface',
         )}
       >
         <Building aria-hidden="true" className="size-3.5 shrink-0" />

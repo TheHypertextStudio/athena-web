@@ -70,7 +70,10 @@ export function WorkBoard({
 
   if (error) {
     return (
-      <p role="alert" className="border-border text-destructive rounded-lg border p-4 text-sm">
+      <p
+        role="alert"
+        className="border-outline-variant text-destructive rounded-xl border p-4 text-sm"
+      >
         {error}
       </p>
     );
@@ -84,7 +87,7 @@ export function WorkBoard({
 
   if (totalTasks === 0) {
     return (
-      <div className="border-border text-muted-foreground rounded-xl border border-dashed p-8 text-center text-sm">
+      <div className="border-outline-variant text-on-surface-variant rounded-xl border border-dashed p-8 text-center text-sm">
         No {taskNounPlural} under this program yet. Attach work to a {projectNoun} or a{' '}
         {cycleLabel.toLowerCase()} to see it flow here.
       </div>
@@ -92,7 +95,7 @@ export function WorkBoard({
   }
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-6">
       {groups.map((group, groupIndex) => {
         const cycleTitle = group.cycle.id
           ? (group.cycle.name ??
@@ -107,13 +110,15 @@ export function WorkBoard({
             className="flex flex-col gap-3"
           >
             <div className="flex items-center gap-2">
-              <h3 className="text-foreground text-sm font-semibold tracking-tight">{cycleTitle}</h3>
-              <span className="bg-muted text-muted-foreground inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-medium tabular-nums">
+              <h3 className="text-on-surface text-base font-semibold tracking-tight">
+                {cycleTitle}
+              </h3>
+              <span className="bg-surface-container text-on-surface-variant inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-medium tabular-nums">
                 {groupCount}
               </span>
             </div>
 
-            <div className="flex flex-col gap-5">
+            <div className="flex flex-col gap-6">
               {group.segments.map((segment, segmentIndex) => {
                 const projectTitle = segment.project.id
                   ? (segment.project.name ?? projectNoun)
@@ -123,10 +128,10 @@ export function WorkBoard({
                     key={segment.project.id ?? `no-project-${segmentIndex}`}
                     className="flex flex-col gap-1.5"
                   >
-                    <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+                    <p className="text-on-surface-variant text-xs font-medium tracking-wide uppercase">
                       {projectTitle}
                     </p>
-                    <ul className="border-border overflow-hidden rounded-lg border">
+                    <ul className="border-outline-variant overflow-hidden rounded-lg border">
                       {segment.tasks.map((task) => (
                         <li key={task.id}>
                           <TaskLine
@@ -164,10 +169,10 @@ function TaskLine({
     <button
       type="button"
       onClick={onOpen}
-      className="group border-border hover:bg-accent/50 focus-visible:bg-accent focus-visible:ring-ring flex w-full items-center gap-2.5 border-b px-3 py-2.5 text-left transition-colors outline-none last:border-b-0 focus-visible:ring-1 focus-visible:ring-inset"
+      className="group border-outline-variant hover:bg-surface-container-high focus-visible:bg-surface-container-high focus-visible:ring-ring flex min-h-10 w-full items-center gap-2 border-b px-3 text-left transition-colors outline-none last:border-b-0 focus-visible:ring-1 focus-visible:ring-inset"
     >
       <StatusIcon type={stateType} className="size-4 shrink-0" />
-      <span className="text-foreground min-w-0 flex-1 truncate text-sm">{title}</span>
+      <span className="text-on-surface min-w-0 flex-1 truncate text-sm">{title}</span>
     </button>
   );
 }

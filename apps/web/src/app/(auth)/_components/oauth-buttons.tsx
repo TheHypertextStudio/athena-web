@@ -51,11 +51,11 @@ export function OAuthButtons({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-3" aria-hidden="true">
-        <span className="bg-border h-px flex-1" />
-        <span className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+        <span className="bg-outline-variant h-px flex-1" />
+        <span className="text-on-surface-variant text-xs font-medium tracking-wide uppercase">
           or continue with
         </span>
-        <span className="bg-border h-px flex-1" />
+        <span className="bg-outline-variant h-px flex-1" />
       </div>
       <div className="flex flex-col gap-2">
         {providers.map((provider) => (

@@ -85,7 +85,7 @@ export function StepVocabulary({ value, onChange }: StepVocabularyProps): JSX.El
               {PREVIEW_KEYS.map((key) => (
                 <li
                   key={key}
-                  className="border-border bg-muted/60 text-muted-foreground rounded-md border px-2 py-0.5 text-xs font-medium"
+                  className="border-outline-variant bg-surface-container text-on-surface-variant rounded-md border px-2 py-0.5 text-xs font-medium"
                 >
                   {preset[key].plural}
                 </li>

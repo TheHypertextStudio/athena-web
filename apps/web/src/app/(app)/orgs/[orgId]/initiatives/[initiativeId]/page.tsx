@@ -287,7 +287,7 @@ export default function InitiativeDetailPage(): JSX.Element {
 
   if (loading) {
     return (
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
         <Skeleton className="h-4 w-32" />
         <Skeleton className="h-9 w-80" />
         <Skeleton className="h-4 w-full max-w-xl" />
@@ -301,8 +301,11 @@ export default function InitiativeDetailPage(): JSX.Element {
 
   if (error) {
     return (
-      <div className="mx-auto w-full max-w-6xl p-4 sm:p-6 lg:p-8">
-        <p role="alert" className="border-border text-destructive rounded-lg border p-4 text-sm">
+      <div className="mx-auto w-full max-w-6xl p-4 @2xl:p-6 @4xl:p-8">
+        <p
+          role="alert"
+          className="border-outline-variant text-destructive rounded-lg border p-4 text-sm"
+        >
           {error}
         </p>
       </div>
@@ -311,8 +314,8 @@ export default function InitiativeDetailPage(): JSX.Element {
 
   if (!detail) {
     return (
-      <div className="mx-auto w-full max-w-6xl p-4 sm:p-6 lg:p-8">
-        <p className="border-border text-muted-foreground rounded-xl border border-dashed p-8 text-center text-sm">
+      <div className="mx-auto w-full max-w-6xl p-4 @2xl:p-6 @4xl:p-8">
+        <p className="border-outline-variant text-on-surface-variant rounded-xl border border-dashed p-8 text-center text-sm">
           This {initiativeNounLower} could not be found.
         </p>
       </div>
@@ -322,13 +325,13 @@ export default function InitiativeDetailPage(): JSX.Element {
   const targetDateLabel = formatDate(detail.targetDate ?? null);
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
       <button
         type="button"
         onClick={() => {
           router.push(`/orgs/${orgId}/initiatives`);
         }}
-        className="text-muted-foreground hover:text-foreground focus-visible:ring-ring -ml-1 inline-flex w-fit items-center gap-1 rounded text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none"
+        className="text-on-surface-variant hover:text-on-surface focus-visible:ring-ring -ml-1 inline-flex w-fit items-center gap-1 rounded text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none"
       >
         <ChevronLeft aria-hidden="true" className="size-4" />
         All {initiativeNounPlural.toLowerCase()}
@@ -336,20 +339,20 @@ export default function InitiativeDetailPage(): JSX.Element {
 
       <header className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-3">
-          <Target aria-hidden="true" className="text-muted-foreground size-5 shrink-0" />
-          <h1 className="text-2xl font-semibold tracking-tight">{detail.name}</h1>
+          <Target aria-hidden="true" className="text-on-surface-variant size-5 shrink-0" />
+          <h1 className="text-on-surface text-xl font-semibold tracking-tight">{detail.name}</h1>
           <Badge variant={derivedStatusVariant(detail.derivedStatus)}>
             {DERIVED_STATUS_LABEL[detail.derivedStatus]}
           </Badge>
           <RolledUpHealthPill health={detail.rolledUpHealth} />
         </div>
         {detail.description ? (
-          <p className="text-muted-foreground max-w-2xl text-sm leading-relaxed">
+          <p className="text-on-surface-variant max-w-2xl text-sm leading-relaxed">
             {detail.description}
           </p>
         ) : null}
         {targetDateLabel ? (
-          <p className="text-muted-foreground text-xs">Target — {targetDateLabel}</p>
+          <p className="text-on-surface-variant text-xs">Target — {targetDateLabel}</p>
         ) : null}
       </header>
 
@@ -357,9 +360,9 @@ export default function InitiativeDetailPage(): JSX.Element {
         <div className="flex min-w-0 flex-col gap-6">
           <section
             aria-label="Health rollup"
-            className="border-outline-variant bg-surface-container-low flex flex-col gap-3 rounded-xl border p-5"
+            className="border-outline-variant bg-surface-container-low flex flex-col gap-3 rounded-xl border p-4"
           >
-            <h2 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+            <h2 className="text-on-surface-variant text-xs font-medium tracking-wide uppercase">
               Rolled-up health
             </h2>
             <DistributionBar

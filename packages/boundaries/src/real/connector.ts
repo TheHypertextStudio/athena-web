@@ -15,8 +15,8 @@
  *   importable work, and link resolution to the canonical `html_url`.
  * - **Linear** — GraphQL: the `viewer`, the migration import of issues
  *   (`id`/`identifier`/`title`/`description`/`url`), and link resolution.
- * - **Drive / Gmail / Calendar** — Google REST APIs with an OAuth bearer token, used
- *   for the read-only link/mirror/signal surface.
+ * - **Drive / Gmail / Calendar / Google Tasks** — Google REST APIs with an OAuth bearer
+ *   token, used for the read-only work/link/mirror/signal surface.
  *
  * The Migration-vs-Connector + import/mirror business logic lives in the app layer —
  * this is only the provider I/O edge (`boundaries.md` §5). Every request-building and
@@ -57,6 +57,7 @@ export const PROVIDER_API_BASE: Readonly<Record<ConnectorProvider, string>> = {
   drive: 'https://www.googleapis.com/drive/v3',
   gmail: 'https://gmail.googleapis.com/gmail/v1',
   calendar: 'https://www.googleapis.com/calendar/v3',
+  gtasks: 'https://tasks.googleapis.com/tasks/v1',
 };
 
 /**
@@ -304,19 +305,20 @@ export class LinearProviderClient implements ConnectorProviderClient {
 }
 
 /** The Google product a {@link GoogleProviderClient} targets. */
-type GoogleProduct = Extract<ConnectorProvider, 'drive' | 'gmail' | 'calendar'>;
+type GoogleProduct = Extract<ConnectorProvider, 'drive' | 'gmail' | 'calendar' | 'gtasks'>;
 
 /**
- * The Google connector client (Drive / Gmail / Calendar REST, OAuth bearer).
+ * The Google connector client (Drive / Gmail / Calendar / Tasks REST, OAuth bearer).
  *
  * @remarks
- * Google's products are read here for the link/mirror/signal surface rather than a
+ * Google's products are read here for the work/link/mirror/signal surface rather than a
  * full migration import: `resolveAccount` reads the product's identity endpoint;
  * `importWork` lists the product's primary collection (Drive files, Gmail messages,
- * Calendar events) and normalizes each into an {@link ImportedItem}; `mirrorStatus`
- * sizes the same listing; `resolveExternalUrl` reconstructs the canonical product URL.
- * One {@link GoogleProviderClient} is parameterized by the concrete product so the
- * three providers share the bearer-token transport and mapping scaffolding.
+ * Calendar events, Google Tasks) and normalizes each into an {@link ImportedItem};
+ * `mirrorStatus` sizes the same listing; `resolveExternalUrl` reconstructs the
+ * canonical product URL. One {@link GoogleProviderClient} is parameterized by the
+ * concrete product so the providers share the bearer-token transport and mapping
+ * scaffolding.
  */
 export class GoogleProviderClient implements ConnectorProviderClient {
   /**
@@ -340,6 +342,15 @@ export class GoogleProviderClient implements ConnectorProviderClient {
       const json = (await this.http.getJson('/users/me/profile')) as { emailAddress?: string };
       return json.emailAddress;
     }
+    if (this.product === 'gtasks') {
+      // Google Tasks has no identity endpoint; the default task list's title is the
+      // closest stable account label.
+      const json = (await this.http.getJson('/users/@me/lists?maxResults=1')) as {
+        items?: { id?: string; title?: string }[];
+      };
+      const list = json.items?.[0];
+      return list?.title ?? list?.id;
+    }
     // calendar — the primary calendar's id is the user's email address.
     const json = (await this.http.getJson('/calendars/primary')) as {
       id?: string;
@@ -352,6 +363,7 @@ export class GoogleProviderClient implements ConnectorProviderClient {
   async importWork(_input: ImportWorkInput, importedAt: string): Promise<ImportedItem[]> {
     if (this.product === 'drive') return this.importDrive(importedAt);
     if (this.product === 'gmail') return this.importGmail(importedAt);
+    if (this.product === 'gtasks') return this.importTasks(importedAt);
     return this.importCalendar(importedAt);
   }
 
@@ -409,6 +421,33 @@ export class GoogleProviderClient implements ConnectorProviderClient {
     }));
   }
 
+  /** List the user's open Google Tasks (default list) and map them onto work {@link ImportedItem}s. */
+  private async importTasks(importedAt: string): Promise<ImportedItem[]> {
+    const json = (await this.http.getJson(
+      '/lists/@default/tasks?showCompleted=false&maxResults=100',
+    )) as {
+      items?: {
+        id: string;
+        title?: string;
+        notes?: string;
+        status?: string;
+        webViewLink?: string;
+      }[];
+    };
+    return (json.items ?? []).map((t) => ({
+      id: t.id,
+      kind: 'issue' as const,
+      title: t.title && t.title.length > 0 ? t.title : '(untitled task)',
+      ...(t.notes ? { body: t.notes } : {}),
+      provenance: {
+        provider: 'gtasks' as const,
+        externalId: t.id,
+        ...(t.webViewLink ? { externalUrl: t.webViewLink } : {}),
+        importedAt,
+      },
+    }));
+  }
+
   /** {@inheritDoc ConnectorProviderClient.mirrorStatus} */
   async mirrorStatus(input: MirrorStatusInput): Promise<MirrorResult> {
     const items = await this.importWork(
@@ -422,6 +461,7 @@ export class GoogleProviderClient implements ConnectorProviderClient {
   async resolveExternalUrl(input: LinkResourceInput): Promise<string | undefined> {
     if (this.product === 'drive') return `https://drive.google.com/file/d/${input.externalId}`;
     if (this.product === 'gmail') return `https://mail.google.com/mail/#all/${input.externalId}`;
+    if (this.product === 'gtasks') return `https://tasks.google.com/task/${input.externalId}`;
     return `https://calendar.google.com/calendar/event?eid=${input.externalId}`;
   }
 }
@@ -446,6 +486,7 @@ export function createProviderClient(
     case 'drive':
     case 'gmail':
     case 'calendar':
+    case 'gtasks':
       return new GoogleProviderClient(config.provider, providerHttp);
     /* v8 ignore start -- unreachable exhaustiveness guard: every `ConnectorProvider` is handled above; this only narrows the union to `never`. */
     default: {

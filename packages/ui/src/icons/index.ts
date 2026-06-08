@@ -18,6 +18,8 @@ import type SvgIcon from '@mui/material/SvgIcon';
 
 export { default as ArrowRight } from '@mui/icons-material/ArrowForward';
 export { default as Building } from '@mui/icons-material/CorporateFare';
+export { default as Cable } from '@mui/icons-material/Cable';
+export { default as Calendar } from '@mui/icons-material/CalendarMonth';
 export { default as Check } from '@mui/icons-material/Check';
 export { default as CheckCircle2 } from '@mui/icons-material/CheckCircle';
 export { default as ChevronDown } from '@mui/icons-material/KeyboardArrowDown';
@@ -49,6 +51,7 @@ export { default as Search } from '@mui/icons-material/Search';
 export { default as Settings } from '@mui/icons-material/Settings';
 export { default as Sparkles } from '@mui/icons-material/AutoAwesome';
 export { default as Target } from '@mui/icons-material/TrackChanges';
+export { default as TaskAlt } from '@mui/icons-material/TaskAlt';
 export { default as Trash2 } from '@mui/icons-material/DeleteOutlined';
 export { default as Users } from '@mui/icons-material/People';
 export { default as User } from '@mui/icons-material/Person';

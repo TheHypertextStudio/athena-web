@@ -49,6 +49,7 @@ const CONNECTOR_PROVIDERS: readonly ConnectorProvider[] = [
   'linear',
   'gmail',
   'calendar',
+  'gtasks',
 ];
 
 /**
@@ -77,6 +78,12 @@ const PROVIDER_DIRECTORY: Readonly<
     pattern: 'connector',
     roles: ['time'],
     category: 'communication',
+  },
+  gtasks: {
+    name: 'Google Tasks',
+    pattern: 'connector',
+    roles: ['work'],
+    category: 'project-management',
   },
 };
 
@@ -189,6 +196,19 @@ function toOut(i: IntegrationRow): z.input<typeof IntegrationOut> {
 const idParam = z.object({ id: z.string() });
 const jobIdParam = z.object({ jobId: z.string() });
 
+/**
+ * The `POST /:id/import` request body.
+ *
+ * @remarks
+ * `assignToImporter` (default `false`) assigns each newly-mirrored linked task to the actor
+ * running the import. Onboarding sets this so the owner's connected work appears under My Work's
+ * "Assigned to me" — a visibly populated landing screen — while the general/sync import path
+ * leaves it off, keeping org-wide mirrored work unassigned (surfaced in Triage).
+ */
+const ImportBody = z.object({
+  assignToImporter: z.boolean().optional().default(false),
+});
+
 /** Integrations router: org-scoped CRUD over external migrations + connectors. */
 const integrations = new Hono<AppEnv>()
   .get('/', async (c) => {
@@ -292,10 +312,11 @@ const integrations = new Hono<AppEnv>()
     '/:id/import',
     capabilityGuard('contribute'),
     zParam(idParam),
-    zJson(z.object({})),
+    zJson(ImportBody),
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
+      const { assignToImporter } = c.req.valid('json');
 
       const rows = await db
         .select()
@@ -318,7 +339,12 @@ const integrations = new Hono<AppEnv>()
           : {}),
       });
 
-      const created = await importItems(orgId, actorId, row.id, teamId, items);
+      // Onboarding sends `assignToImporter: true` so the owner's freshly-mirrored work lands
+      // under My Work's "Assigned to me" (a populated landing screen). The general sync path
+      // omits it, keeping org-wide mirrored work unassigned (it surfaces in Triage).
+      const created = await importItems(orgId, actorId, row.id, teamId, items, {
+        assigneeId: assignToImporter ? actorId : null,
+      });
       return ok(c, pageOf(TaskOut), { items: created.map(toTaskOut) });
     },
   )
@@ -347,7 +373,7 @@ const integrations = new Hono<AppEnv>()
         : {}),
     });
 
-    const created = await importItems(orgId, actorId, row.id, teamId, items);
+    const created = await importItems(orgId, actorId, row.id, teamId, items, { assigneeId: null });
 
     const job: SyncJob = {
       jobId: nextSyncJobId(),
@@ -395,6 +421,18 @@ async function resolveImportTeam(orgId: string, row: IntegrationRow): Promise<st
   return firstTeam[0].id;
 }
 
+/** Options controlling how imported items are materialized. */
+interface ImportItemsOptions {
+  /**
+   * The actor to assign each newly-mirrored linked task to, or `null` to leave it unassigned.
+   *
+   * @remarks
+   * Onboarding passes the importing owner so the mirrored work lands under My Work's "Assigned
+   * to me"; the general/sync path passes `null`, keeping org-wide mirrored work unassigned.
+   */
+  readonly assigneeId: string | null;
+}
+
 /**
  * Materialize imported items as linked tasks, skipping any already imported.
  *
@@ -409,6 +447,7 @@ async function resolveImportTeam(orgId: string, row: IntegrationRow): Promise<st
  * @param integrationId - The source integration id.
  * @param teamId - The team the linked tasks attach to.
  * @param items - The imported items to materialize.
+ * @param options - Materialization options (e.g. whether to assign to the importer).
  * @returns the newly created task rows (existing ones are omitted).
  */
 async function importItems(
@@ -417,6 +456,7 @@ async function importItems(
   integrationId: string,
   teamId: string,
   items: readonly ImportedItem[],
+  options: ImportItemsOptions,
 ): Promise<TaskRow[]> {
   const teamRows = await db
     .select({ workflowStates: team.workflowStates })
@@ -450,6 +490,7 @@ async function importItems(
         description: item.body ?? null,
         teamId,
         state,
+        ...(options.assigneeId !== null ? { assigneeId: options.assigneeId } : {}),
         source: 'linked',
         sourceIntegrationId: integrationId,
         externalId,

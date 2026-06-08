@@ -46,6 +46,9 @@ export default tseslint.config(
       '**/node_modules/**',
       '**/dist/**',
       '**/.next/**',
+      // Next.js build output is never linted. Cover backup/corrupt variants the
+      // dev server can leave behind (e.g. `.next.corrupt-bak`) as well.
+      '**/.next.*/**',
       '**/.turbo/**',
       '**/coverage/**',
       '**/drizzle/**',

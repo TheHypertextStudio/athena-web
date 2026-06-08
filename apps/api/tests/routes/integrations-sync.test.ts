@@ -1,3 +1,4 @@
+import { and, eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
@@ -54,6 +55,27 @@ interface SyncJobRes {
   error: string | null;
   createdAt: string;
 }
+interface IntegrationRes {
+  id: string;
+  organizationId: string;
+  provider: string;
+  pattern: string;
+  roles: string[];
+}
+interface ImportedTaskRes {
+  id: string;
+  organizationId: string;
+  title: string;
+  teamId: string;
+  assigneeId: string | null;
+  provenance: {
+    source: string;
+    sourceIntegrationId: string | null;
+    externalId: string | null;
+    externalUrl: string | null;
+    syncMode: string;
+  };
+}
 
 describe('integrations directory', () => {
   it('lists every connector provider with pattern/roles/category (view capability)', async () => {
@@ -65,13 +87,28 @@ describe('integrations directory', () => {
     const dir = await body<DirectoryRes>(res);
 
     const providers = dir.providers.map((p) => p.provider).sort();
-    expect(providers).toEqual(['calendar', 'drive', 'github', 'gmail', 'linear']);
+    expect(providers).toEqual(['calendar', 'drive', 'github', 'gmail', 'gtasks', 'linear']);
 
     const github = dir.providers.find((p) => p.provider === 'github')!;
     expect(github.name).toBe('GitHub');
     expect(github.pattern).toBe('connector');
     expect(github.roles).toContain('code');
     expect(github.category).toBe('engineering');
+
+    // The three onboarding connect sources are all present with sensible directory entries.
+    const gtasks = dir.providers.find((p) => p.provider === 'gtasks')!;
+    expect(gtasks.name).toBe('Google Tasks');
+    expect(gtasks.pattern).toBe('connector');
+    expect(gtasks.roles).toContain('work');
+    expect(gtasks.category).toBe('project-management');
+
+    const calendar = dir.providers.find((p) => p.provider === 'calendar')!;
+    expect(calendar.name).toBe('Google Calendar');
+    expect(calendar.roles).toContain('time');
+
+    const linear = dir.providers.find((p) => p.provider === 'linear')!;
+    expect(linear.name).toBe('Linear');
+    expect(linear.roles).toContain('work');
 
     // Migration vs connector patterns are both represented (decided up front).
     const patterns = new Set(dir.providers.map((p) => p.pattern));
@@ -114,12 +151,12 @@ describe('integrations sync', () => {
     const first = await body<SyncJobRes>(
       await w.request(`/${id}/sync`, { method: 'POST', headers: J }),
     );
-    expect(first.processed).toBe(1);
+    expect(first.processed).toBe(2); // the linear fixture yields two issues
 
     const second = await body<SyncJobRes>(
       await w.request(`/${id}/sync`, { method: 'POST', headers: J }),
     );
-    expect(second.total).toBe(1);
+    expect(second.total).toBe(2);
     expect(second.processed).toBe(0); // already imported, nothing new
     expect(second.status).toBe('succeeded');
     expect(second.jobId).not.toBe(first.jobId);
@@ -245,5 +282,161 @@ describe('integrations job status', () => {
     // Org B is hidden from it (existence-hiding 404, not 403).
     const wB = appWithActor(integrations, b.orgId, ['view'], b.humanActorId);
     expect((await wB.request(`/jobs/${job.jobId}`)).status).toBe(404);
+  });
+});
+
+describe('onboarding connect + import (the exact path the connect step calls)', () => {
+  // The onboarding user is the org OWNER and so carries both `manage` (to create the
+  // integration) and `contribute` (to import). This is the one-click connect→mirror the
+  // web connect step performs: POST / to create, then POST /:id/import to mirror work in.
+  const OWNER_CAPS = ['manage', 'contribute'] as const;
+
+  /** Create an integration for `provider` exactly as the connect step does, returning its id. */
+  async function connect(
+    app: ReturnType<typeof appWithActor>,
+    provider: string,
+  ): Promise<IntegrationRes> {
+    const res = await app.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ provider, pattern: 'connector', roles: ['work'] }),
+    });
+    expect(res.status).toBe(200);
+    return body<IntegrationRes>(res);
+  }
+
+  it.each([
+    { provider: 'linear', count: 2 },
+    { provider: 'gtasks', count: 3 },
+    { provider: 'calendar', count: 2 },
+  ])(
+    'an org owner connects $provider and mirrors its work into the org as linked tasks',
+    async ({ provider, count }) => {
+      const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+      const owner = appWithActor(integrations, orgId, OWNER_CAPS, humanActorId);
+
+      // 1) Connect: create the integration (no real OAuth/connection fields needed for mock).
+      const created = await connect(owner, provider);
+      expect(created.organizationId).toBe(orgId);
+      expect(created.provider).toBe(provider);
+
+      // 2) Import: mirror the provider's work into the org.
+      const importRes = await owner.request(`/${created.id}/import`, {
+        method: 'POST',
+        headers: J,
+        body: '{}',
+      });
+      expect(importRes.status).toBe(200);
+      const imported = await body<{ items: ImportedTaskRes[] }>(importRes);
+      expect(imported.items).toHaveLength(count);
+
+      // Every mirrored task is a read-only linked mirror scoped to THIS org + team.
+      for (const t of imported.items) {
+        expect(t.organizationId).toBe(orgId);
+        expect(t.teamId).toBe(teamId);
+        expect(t.provenance.source).toBe('linked');
+        expect(t.provenance.syncMode).toBe('mirror');
+        expect(t.provenance.sourceIntegrationId).toBe(created.id);
+        expect(t.provenance.externalId).toBeTruthy();
+      }
+
+      // The linked tasks are actually persisted in the org.
+      const rows = await db
+        .select()
+        .from(schema.task)
+        .where(
+          and(
+            eq(schema.task.organizationId, orgId),
+            eq(schema.task.source, 'linked'),
+            eq(schema.task.sourceIntegrationId, created.id),
+          ),
+        );
+      expect(rows).toHaveLength(count);
+    },
+  );
+
+  it('mirrors work from all three onboarding sources together into one populated workspace', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const owner = appWithActor(integrations, orgId, OWNER_CAPS, humanActorId);
+
+    for (const provider of ['linear', 'gtasks', 'calendar']) {
+      const created = await connect(owner, provider);
+      const importRes = await owner.request(`/${created.id}/import`, {
+        method: 'POST',
+        headers: J,
+        body: '{}',
+      });
+      expect(importRes.status).toBe(200);
+    }
+
+    // The workspace now holds every mirrored item (2 linear + 3 gtasks + 2 calendar).
+    const rows = await db
+      .select({ id: schema.task.id })
+      .from(schema.task)
+      .where(and(eq(schema.task.organizationId, orgId), eq(schema.task.source, 'linked')));
+    expect(rows).toHaveLength(7);
+  });
+
+  it('assignToImporter assigns mirrored work to the owner so it lands in My Work', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const owner = appWithActor(integrations, orgId, OWNER_CAPS, humanActorId);
+
+    const created = await connect(owner, 'gtasks');
+    // The connect step sends `assignToImporter: true` so the owner's connected work is theirs.
+    const importRes = await owner.request(`/${created.id}/import`, {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ assignToImporter: true }),
+    });
+    expect(importRes.status).toBe(200);
+    const imported = await body<{ items: ImportedTaskRes[] }>(importRes);
+    expect(imported.items.length).toBeGreaterThan(0);
+
+    // Every mirrored task is assigned to the importing owner (visible under "Assigned to me").
+    for (const t of imported.items) {
+      expect(t.assigneeId).toBe(humanActorId);
+    }
+    const rows = await db
+      .select({ assigneeId: schema.task.assigneeId })
+      .from(schema.task)
+      .where(
+        and(
+          eq(schema.task.organizationId, orgId),
+          eq(schema.task.source, 'linked'),
+          eq(schema.task.sourceIntegrationId, created.id),
+        ),
+      );
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) expect(row.assigneeId).toBe(humanActorId);
+  });
+
+  it('a default import leaves mirrored work unassigned (the general/sync path)', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const owner = appWithActor(integrations, orgId, OWNER_CAPS, humanActorId);
+
+    const created = await connect(owner, 'gtasks');
+    // No `assignToImporter` ⇒ mirrored work stays unassigned (surfaced org-wide in Triage).
+    const importRes = await owner.request(`/${created.id}/import`, {
+      method: 'POST',
+      headers: J,
+      body: '{}',
+    });
+    expect(importRes.status).toBe(200);
+    const imported = await body<{ items: ImportedTaskRes[] }>(importRes);
+    expect(imported.items.length).toBeGreaterThan(0);
+    for (const t of imported.items) {
+      expect(t.assigneeId).toBeNull();
+    }
+  });
+
+  it('a member without manage cannot create an integration during connect (403)', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const member = appWithActor(integrations, orgId, ['contribute', 'view'], humanActorId);
+    const res = await member.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ provider: 'gtasks', pattern: 'connector', roles: ['work'] }),
+    });
+    expect(res.status).toBe(403);
   });
 });

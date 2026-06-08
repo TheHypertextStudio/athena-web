@@ -68,7 +68,7 @@ export function StatusPicker({
         <Button variant="outline" size="sm" disabled={pending} className="gap-2">
           <StatusIcon type={type} />
           {label}
-          <ChevronDown className="text-muted-foreground" />
+          <ChevronDown className="text-on-surface-variant" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-56">
@@ -84,7 +84,7 @@ export function StatusPicker({
           >
             <StatusIcon type={state.type} />
             <span className="flex-1">{state.name}</span>
-            {state.key === current ? <Check className="text-muted-foreground size-4" /> : null}
+            {state.key === current ? <Check className="text-on-surface-variant size-4" /> : null}
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>

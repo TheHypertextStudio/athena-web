@@ -92,17 +92,17 @@ export function ActivityItem({
     <li className="flex gap-3">
       <span
         aria-hidden="true"
-        className="bg-muted text-muted-foreground flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm leading-none"
+        className="bg-surface-container text-on-surface-variant flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm leading-none"
       >
         {badge.emoji}
       </span>
 
       <div className="flex min-w-0 flex-1 flex-col gap-1.5 pb-1">
         <div className="flex items-center gap-2">
-          <span className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+          <span className="text-on-surface-variant text-xs font-medium tracking-wide uppercase">
             {badge.label}
           </span>
-          <span className="text-muted-foreground/70 text-xs">
+          <span className="text-on-surface-variant/70 text-xs">
             {relativeTime(activity.createdAt)}
           </span>
         </div>
@@ -113,7 +113,7 @@ export function ActivityItem({
             {text || 'The agent reported an error.'}
           </p>
         ) : activity.type === 'thought' ? (
-          <p className="text-muted-foreground text-sm leading-relaxed italic">{text}</p>
+          <p className="text-on-surface-variant text-sm leading-relaxed italic">{text}</p>
         ) : action ? (
           <ActionBody
             activityId={activity.id}
@@ -127,7 +127,7 @@ export function ActivityItem({
             onReject={onReject}
           />
         ) : (
-          <p className="text-foreground text-sm leading-relaxed whitespace-pre-wrap">{text}</p>
+          <p className="text-on-surface text-sm leading-relaxed whitespace-pre-wrap">{text}</p>
         )}
 
         {/* Elicitation reply affordance. */}
@@ -178,15 +178,15 @@ function ActionBody({
         // primary left accent so it reads as the focal point of the stream, not a faint tint.
         isProposed
           ? 'border-primary/40 bg-primary/10 border-l-primary border-l-2'
-          : 'border-border bg-muted/30',
+          : 'border-outline-variant bg-surface-container',
       )}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-1">
-          <code className="text-muted-foreground text-[0.6875rem] tracking-wide uppercase">
+          <code className="text-on-surface-variant text-[0.6875rem] tracking-wide uppercase">
             {kind}
           </code>
-          <p className="text-foreground text-sm leading-relaxed">{summary}</p>
+          <p className="text-on-surface text-sm leading-relaxed">{summary}</p>
         </div>
         <ApprovalStatusBadge status={approvalStatus} />
       </div>
@@ -205,7 +205,7 @@ function ActionBody({
             {showDiff ? 'Hide details' : 'Review details'}
           </Button>
           {showDiff ? (
-            <pre className="border-border bg-background text-muted-foreground mt-1.5 max-h-48 overflow-auto rounded-md border p-2 text-xs whitespace-pre-wrap">
+            <pre className="border-outline-variant bg-surface-container-high text-on-surface-variant mt-1.5 max-h-48 overflow-auto rounded-md border p-2 text-xs whitespace-pre-wrap">
               {diffText}
             </pre>
           ) : null}
@@ -275,7 +275,7 @@ function ReplyBox({
           setValue(event.target.value);
         }}
         className={cn(
-          'border-input bg-background placeholder:text-muted-foreground focus-visible:ring-ring w-full resize-y rounded-md border px-3 py-2 text-sm',
+          'border-outline-variant bg-surface-container placeholder:text-on-surface-variant focus-visible:ring-ring w-full resize-y rounded-md border px-3 py-2 text-sm',
           'transition-colors outline-none focus-visible:ring-1 disabled:opacity-50',
         )}
       />

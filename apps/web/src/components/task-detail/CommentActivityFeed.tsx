@@ -107,12 +107,12 @@ function CommentEntry({
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
           <span className="text-sm font-medium">{author.name}</span>
-          <span className="text-muted-foreground text-xs">{formatTime(comment.createdAt)}</span>
+          <span className="text-on-surface-variant text-xs">{formatTime(comment.createdAt)}</span>
           {comment.editedAt ? (
-            <span className="text-muted-foreground text-xs">(edited)</span>
+            <span className="text-on-surface-variant text-xs">(edited)</span>
           ) : null}
         </div>
-        <p className="text-foreground mt-0.5 text-sm whitespace-pre-wrap">{comment.body}</p>
+        <p className="text-on-surface mt-0.5 text-sm whitespace-pre-wrap">{comment.body}</p>
       </div>
     </li>
   );
@@ -129,16 +129,16 @@ function ActivityEntry({ activity }: { activity: SessionActivityOut }): JSX.Elem
     <li className="flex gap-3">
       <span
         aria-hidden="true"
-        className="bg-muted text-primary mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg"
+        className="bg-surface-container-high text-primary mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg"
       >
         <Sparkles className="size-3.5" />
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-baseline gap-2">
           <span className="text-sm font-medium">Agent</span>
-          <span className="text-muted-foreground text-xs">{ACTIVITY_LABEL[activity.type]}</span>
-          <span className="text-muted-foreground text-xs">·</span>
-          <span className="text-muted-foreground text-xs">{formatTime(activity.createdAt)}</span>
+          <span className="text-on-surface-variant text-xs">{ACTIVITY_LABEL[activity.type]}</span>
+          <span className="text-on-surface-variant text-xs">·</span>
+          <span className="text-on-surface-variant text-xs">{formatTime(activity.createdAt)}</span>
           {badge ? (
             <Badge variant={badge.variant} className="ml-1">
               {badge.label}
@@ -148,7 +148,7 @@ function ActivityEntry({ activity }: { activity: SessionActivityOut }): JSX.Elem
         {text ? (
           <p
             className={`mt-0.5 text-sm whitespace-pre-wrap ${
-              isError ? 'text-destructive' : 'text-muted-foreground'
+              isError ? 'text-destructive' : 'text-on-surface-variant'
             }`}
           >
             {text}
@@ -221,7 +221,7 @@ export function CommentActivityFeed({
       </h2>
 
       {entries.length === 0 ? (
-        <p className="text-muted-foreground text-sm">
+        <p className="text-on-surface-variant text-sm">
           No activity yet. Start the conversation below.
         </p>
       ) : (
@@ -267,10 +267,10 @@ export function CommentActivityFeed({
               }}
               rows={3}
               placeholder="Leave a comment…"
-              className="border-input bg-background placeholder:text-muted-foreground focus-visible:ring-ring w-full resize-y rounded-md border px-3 py-2 text-sm shadow-sm focus-visible:ring-1 focus-visible:outline-none"
+              className="border-outline-variant bg-surface-container placeholder:text-on-surface-variant focus-visible:ring-ring w-full resize-y rounded-md border px-3 py-2 text-sm shadow-sm focus-visible:ring-1 focus-visible:outline-none"
             />
             <div className="flex items-center justify-between">
-              <span className="text-muted-foreground text-xs">⌘↵ to send</span>
+              <span className="text-on-surface-variant text-xs">⌘↵ to send</span>
               <Button type="submit" size="sm" disabled={posting || body.trim().length === 0}>
                 {posting ? 'Posting…' : 'Comment'}
               </Button>

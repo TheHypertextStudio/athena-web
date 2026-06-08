@@ -74,8 +74,8 @@ export function InviteForm({
       }}
     >
       <div className="flex flex-col gap-1">
-        <h3 className="text-foreground text-sm font-semibold">Invite someone</h3>
-        <p className="text-muted-foreground text-xs">
+        <h3 className="text-on-surface text-base font-semibold">Invite someone</h3>
+        <p className="text-on-surface-variant text-xs">
           They&rsquo;ll get an email invitation to join this organization.
         </p>
       </div>
@@ -105,7 +105,7 @@ export function InviteForm({
         </Button>
       </div>
 
-      <label className="text-muted-foreground flex w-fit cursor-pointer items-center gap-2 text-sm">
+      <label className="text-on-surface-variant flex w-fit cursor-pointer items-center gap-2 text-sm">
         <input
           type="checkbox"
           className="accent-primary size-4 rounded"
@@ -115,7 +115,7 @@ export function InviteForm({
           }}
         />
         <span>
-          Invite as a <span className="text-foreground font-medium">guest</span> — a limited outside
+          Invite as a <span className="text-on-surface font-medium">guest</span> — a limited outside
           collaborator
         </span>
       </label>

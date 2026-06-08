@@ -68,7 +68,7 @@ export function FlowSnapshot({
   return (
     <section
       aria-label="Health and flow"
-      className="border-outline-variant bg-surface-container-low flex flex-col gap-5 rounded-xl border p-5"
+      className="border-outline-variant bg-surface-container-low flex flex-col gap-6 rounded-xl border p-4"
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
@@ -76,15 +76,15 @@ export function FlowSnapshot({
             aria-hidden="true"
             className={cn(
               'size-2.5 rounded-full',
-              health ? HEALTH_DOT_CLASS[health] : 'bg-muted-foreground/50',
+              health ? HEALTH_DOT_CLASS[health] : 'bg-on-surface-variant/50',
             )}
           />
-          <span className="text-foreground text-lg font-semibold tracking-tight">
+          <span className="text-on-surface text-lg font-semibold tracking-tight">
             {health ? HEALTH_LABEL[health] : 'No health set'}
           </span>
         </div>
         {healthAsOf ? (
-          <span className="text-muted-foreground text-xs">as of {relativeTime(healthAsOf)}</span>
+          <span className="text-on-surface-variant text-xs">as of {relativeTime(healthAsOf)}</span>
         ) : null}
       </div>
 
@@ -131,7 +131,7 @@ export function FlowSnapshot({
 const TONE_CLASS: Record<'started' | 'completed' | 'muted', string> = {
   started: 'text-state-started',
   completed: 'text-state-completed',
-  muted: 'text-foreground',
+  muted: 'text-on-surface',
 };
 
 /** One flow metric tile: an icon, a tabular value, and a muted label. */
@@ -147,18 +147,18 @@ function Metric({
   tone: 'started' | 'completed' | 'muted';
 }): JSX.Element {
   return (
-    <div className="border-border bg-background flex flex-col gap-1 rounded-lg border p-3">
+    <div className="border-outline-variant bg-surface-container flex flex-col gap-1 rounded-lg border p-3">
       <span
         aria-hidden="true"
         className={cn(
           'flex items-center',
-          tone === 'muted' ? 'text-muted-foreground' : TONE_CLASS[tone],
+          tone === 'muted' ? 'text-on-surface-variant' : TONE_CLASS[tone],
         )}
       >
         {icon}
       </span>
       <dd className={cn('text-2xl font-semibold tabular-nums', TONE_CLASS[tone])}>{value}</dd>
-      <dt className="text-muted-foreground text-xs">{label}</dt>
+      <dt className="text-on-surface-variant text-xs">{label}</dt>
     </div>
   );
 }

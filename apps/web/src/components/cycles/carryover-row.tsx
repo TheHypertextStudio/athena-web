@@ -94,10 +94,10 @@ export function CarryoverRow({
   const noTargets = targets.length === 0;
 
   return (
-    <div className="border-border flex flex-wrap items-center gap-3 border-b py-2.5 last:border-b-0">
+    <div className="border-outline-variant flex flex-wrap items-center gap-3 border-b py-2.5 last:border-b-0">
       <span className="flex min-w-0 flex-1 items-center gap-2">
         <StatusIcon type={item.stateType} className="shrink-0" />
-        <span className="text-foreground truncate text-sm">{item.title}</span>
+        <span className="text-on-surface truncate text-sm">{item.title}</span>
       </span>
 
       {/* Action picker. */}
@@ -136,7 +136,7 @@ export function CarryoverRow({
               variant="outline"
               size="sm"
               disabled={noTargets}
-              className={cn('gap-1.5', !item.targetCycleId && 'text-muted-foreground')}
+              className={cn('gap-1.5', !item.targetCycleId && 'text-on-surface-variant')}
             >
               <span>{noTargets ? 'No cycle to move to' : targetLabel}</span>
               <ChevronDown className="h-4 w-4 opacity-60" />

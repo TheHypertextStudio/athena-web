@@ -35,11 +35,11 @@ export function RolledUpHealthPill({ health, className }: RolledUpHealthPillProp
     return (
       <span
         className={cn(
-          'text-muted-foreground bg-muted ring-border inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset',
+          'text-on-surface-variant bg-surface-container ring-outline-variant inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset',
           className,
         )}
       >
-        <span aria-hidden="true" className="bg-muted-foreground/60 size-1.5 rounded-full" />
+        <span aria-hidden="true" className="bg-on-surface-variant/60 size-1.5 rounded-full" />
         No verdict yet
       </span>
     );

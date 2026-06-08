@@ -54,20 +54,20 @@ export function SelectableCard({
       aria-pressed={selected}
       onClick={onSelect}
       className={cn(
-        'focus-visible:ring-ring group relative flex flex-col gap-3 rounded-xl border p-5 text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2',
+        'focus-visible:ring-ring group relative flex flex-col gap-3 rounded-xl border p-5 text-left transition-all duration-200 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none',
         selected
-          ? 'border-primary bg-accent/60 shadow-sm'
-          : 'border-border hover:border-foreground/20 hover:bg-accent/30 hover:shadow-sm',
+          ? 'border-primary bg-surface-container-highest shadow-sm'
+          : 'border-outline-variant hover:border-outline hover:bg-surface-container-high hover:shadow-sm',
         className,
       )}
     >
       <span
         aria-hidden
         className={cn(
-          'absolute right-4 top-4 flex size-5 items-center justify-center rounded-full border transition-all duration-200',
+          'absolute top-4 right-4 flex size-5 items-center justify-center rounded-full border transition-all duration-200',
           selected
             ? 'border-primary bg-primary text-primary-foreground scale-100 opacity-100'
-            : 'border-border scale-90 opacity-0 group-hover:opacity-40',
+            : 'border-outline-variant scale-90 opacity-0 group-hover:opacity-40',
         )}
       >
         <Check className="size-3" />
@@ -80,7 +80,7 @@ export function SelectableCard({
             'flex size-10 items-center justify-center rounded-lg border transition-colors duration-200',
             selected
               ? 'border-primary/30 bg-primary/10 text-primary'
-              : 'border-border bg-muted text-muted-foreground group-hover:text-foreground',
+              : 'border-outline-variant bg-surface-container-high text-on-surface-variant group-hover:text-on-surface',
           )}
         >
           <Icon className="size-5" />
@@ -88,8 +88,8 @@ export function SelectableCard({
       ) : null}
 
       <span className="flex flex-col gap-1 pr-6">
-        <span className="text-foreground text-base font-semibold leading-tight">{title}</span>
-        <span className="text-muted-foreground text-sm leading-relaxed">{description}</span>
+        <span className="text-on-surface text-base leading-tight font-semibold">{title}</span>
+        <span className="text-on-surface-variant text-sm leading-relaxed">{description}</span>
       </span>
 
       {children}

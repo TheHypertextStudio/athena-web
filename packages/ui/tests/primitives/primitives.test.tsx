@@ -60,9 +60,9 @@ describe('Button', () => {
   it.each<[NonNullable<ButtonProps['variant']>, string]>([
     ['default', 'bg-primary'],
     ['destructive', 'bg-destructive'],
-    ['outline', 'border-input'],
+    ['outline', 'border-outline-variant'],
     ['secondary', 'bg-secondary'],
-    ['ghost', 'hover:bg-accent'],
+    ['ghost', 'hover:bg-surface-container-high'],
     ['link', 'underline-offset-4'],
   ])('applies the %s variant class', (variant, cls) => {
     render(<Button variant={variant}>{variant}</Button>);
@@ -97,7 +97,7 @@ describe('Badge', () => {
     ['default', 'bg-primary'],
     ['secondary', 'bg-secondary'],
     ['destructive', 'bg-destructive'],
-    ['outline', 'text-foreground'],
+    ['outline', 'text-on-surface'],
   ])('applies the %s variant class', (variant, cls) => {
     render(<Badge variant={variant}>{variant}</Badge>);
     expect(screen.getByText(variant)).toHaveClass(cls);
@@ -149,7 +149,7 @@ describe('Card family', () => {
       </Card>,
     );
     expect(screen.getByText('Title')).toHaveClass('font-semibold', 'title-x');
-    expect(screen.getByText('Description')).toHaveClass('text-muted-foreground', 'desc-x');
+    expect(screen.getByText('Description')).toHaveClass('text-on-surface-variant', 'desc-x');
     expect(screen.getByText('Body')).toHaveClass('content-x');
     expect(screen.getByText('Footer')).toHaveClass('footer-x');
   });
@@ -187,7 +187,13 @@ describe('Skeleton', () => {
   it('renders an animated placeholder and merges className', () => {
     const { container } = render(<Skeleton className="h-4 w-10" />);
     const el = container.firstChild as HTMLElement;
-    expect(el).toHaveClass('animate-pulse', 'rounded-md', 'bg-accent', 'h-4', 'w-10');
+    expect(el).toHaveClass(
+      'animate-pulse',
+      'rounded-md',
+      'bg-surface-container-high',
+      'h-4',
+      'w-10',
+    );
   });
 });
 

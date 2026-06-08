@@ -179,19 +179,19 @@ export function Roadmap({
       : null;
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-6">
       <section aria-label={`${programNoun} lanes`} className="flex flex-col gap-3">
         <div className="flex items-center gap-2">
-          <Flag aria-hidden="true" className="text-muted-foreground size-4" />
-          <h2 className="text-foreground text-sm font-semibold">
+          <Flag aria-hidden="true" className="text-on-surface-variant size-4" />
+          <h2 className="text-on-surface text-base font-semibold">
             {programNoun} lanes
-            <span className="text-muted-foreground ml-2 font-normal tabular-nums">
+            <span className="text-on-surface-variant ml-2 font-normal tabular-nums">
               {lanes.length}
             </span>
           </h2>
         </div>
         {lanes.length === 0 ? (
-          <p className="border-border text-muted-foreground rounded-lg border border-dashed p-4 text-center text-sm">
+          <p className="border-outline-variant text-on-surface-variant rounded-lg border border-dashed p-4 text-center text-sm">
             No {programNoun.toLowerCase()} lanes — link a {programNoun.toLowerCase()} to this theme
             to track it as an ongoing lane.
           </p>
@@ -200,19 +200,19 @@ export function Roadmap({
             {lanes.map((lane) => (
               <li
                 key={lane.id}
-                className="border-border bg-muted/30 flex items-center gap-3 rounded-lg border px-3 py-2.5"
+                className="border-outline-variant bg-surface-container flex min-h-10 items-center gap-3 rounded-lg border px-3"
               >
                 <span
                   aria-hidden="true"
                   className={cn('size-2.5 shrink-0 rounded-full', fillFor(lane.health))}
                 />
-                <span className="text-foreground min-w-0 flex-1 truncate text-sm font-medium">
+                <span className="text-on-surface min-w-0 flex-1 truncate text-sm font-medium">
                   {lane.name}
                 </span>
-                <span className="text-muted-foreground shrink-0 text-xs">
+                <span className="text-on-surface-variant shrink-0 text-xs">
                   {statusLabel(lane.status)}
                 </span>
-                <span className="text-muted-foreground shrink-0 text-xs">
+                <span className="text-on-surface-variant shrink-0 text-xs">
                   {lane.health ? HEALTH_LABEL[lane.health] : 'No verdict'}
                 </span>
               </li>
@@ -223,29 +223,29 @@ export function Roadmap({
 
       <section aria-label={`${projectNoun} timeline`} className="flex flex-col gap-3">
         <div className="flex items-center gap-2">
-          <FolderKanban aria-hidden="true" className="text-muted-foreground size-4" />
-          <h2 className="text-foreground text-sm font-semibold">
+          <FolderKanban aria-hidden="true" className="text-on-surface-variant size-4" />
+          <h2 className="text-on-surface text-base font-semibold">
             {projectNoun} roadmap
-            <span className="text-muted-foreground ml-2 font-normal tabular-nums">
+            <span className="text-on-surface-variant ml-2 font-normal tabular-nums">
               {bars.length}
             </span>
           </h2>
         </div>
 
         {placed.length === 0 ? (
-          <p className="border-border text-muted-foreground rounded-lg border border-dashed p-4 text-center text-sm">
+          <p className="border-outline-variant text-on-surface-variant rounded-lg border border-dashed p-4 text-center text-sm">
             No scheduled {projectNounPlural.toLowerCase()} on the roadmap yet.
           </p>
         ) : window ? (
           <div className="border-outline-variant bg-surface-container-low overflow-hidden rounded-xl border">
             {/* Axis ticks */}
-            <div className="border-border relative h-7 border-b">
+            <div className="border-outline-variant relative h-7 border-b">
               {window.ticks.map((tick, index) =>
                 // Skip the final boundary tick label to avoid clipping at the right edge.
                 index === window.ticks.length - 1 ? null : (
                   <div
                     key={tick}
-                    className="text-muted-foreground absolute top-0 flex h-full items-center px-2 text-[11px] tabular-nums"
+                    className="text-on-surface-variant absolute top-0 flex h-full items-center px-2 text-[11px] tabular-nums"
                     style={{ left: `${pct(tick, window)}%` }}
                   >
                     {formatAxisTick(tick)}
@@ -270,7 +270,7 @@ export function Roadmap({
                 {window.ticks.map((tick) => (
                   <div
                     key={tick}
-                    className="border-border/40 absolute inset-y-0 border-l"
+                    className="border-outline-variant/40 absolute inset-y-0 border-l"
                     style={{ left: `calc(${pct(tick, window)}% + 0.75rem)` }}
                   />
                 ))}
@@ -310,7 +310,7 @@ export function Roadmap({
 
         {unscheduled.length > 0 ? (
           <div className="flex flex-col gap-2">
-            <h3 className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+            <h3 className="text-on-surface-variant text-xs font-medium tracking-wide uppercase">
               Unscheduled
             </h3>
             <ul className="flex flex-wrap gap-2">
@@ -330,8 +330,8 @@ export function Roadmap({
                       aria-hidden="true"
                       className={cn('size-2 rounded-full', fillFor(bar.health))}
                     />
-                    <span className="text-foreground truncate">{bar.name}</span>
-                    <span className="text-muted-foreground">{statusLabel(bar.status)}</span>
+                    <span className="text-on-surface truncate">{bar.name}</span>
+                    <span className="text-on-surface-variant">{statusLabel(bar.status)}</span>
                   </button>
                 </li>
               ))}

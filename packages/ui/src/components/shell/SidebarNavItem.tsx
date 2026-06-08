@@ -56,7 +56,7 @@ function NavBadge({ count }: { readonly count: number }): React.JSX.Element {
   return (
     <span
       aria-hidden="true"
-      className="bg-muted text-muted-foreground ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] leading-none font-semibold tabular-nums"
+      className="bg-surface-container-highest text-on-surface-variant ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] leading-none font-semibold tabular-nums"
     >
       {badgeText(count)}
     </span>
@@ -84,7 +84,9 @@ export function SidebarNavItem({
   const accessibleName = count > 0 ? `${label}, ${count} ${badgeLabel}` : label;
   const className = cn(
     'w-full justify-start gap-2 px-2 font-normal',
-    active ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground',
+    active
+      ? 'bg-surface-container-highest text-on-surface'
+      : 'text-on-surface-variant hover:text-on-surface',
   );
 
   if (asChild) {

@@ -29,9 +29,9 @@ function glyphFor(type: AuditEventOut['type']): { icon: LucideIcon; tone: string
       return { icon: CheckCircle2, tone: 'text-state-completed' };
     case 'rejected':
     case 'deleted':
-      return { icon: XCircle, tone: 'text-muted-foreground' };
+      return { icon: XCircle, tone: 'text-on-surface-variant' };
     default:
-      return { icon: Sparkles, tone: 'text-muted-foreground' };
+      return { icon: Sparkles, tone: 'text-on-surface-variant' };
   }
 }
 
@@ -55,19 +55,19 @@ export function ActivityRow({ event, orgName }: ActivityRowProps): JSX.Element {
     <RowShell href={href}>
       <span
         aria-hidden="true"
-        className="bg-muted mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
+        className="bg-surface-container mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
       >
         <Icon className={cn('h-4 w-4', tone)} />
       </span>
 
       <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <p className="text-foreground/90 text-sm leading-snug">{description}</p>
+        <p className="text-on-surface/90 text-sm leading-snug">{description}</p>
         <div className="flex flex-wrap items-center gap-2">
           <OrgChip orgId={event.organizationId} name={orgName} />
-          <span aria-hidden="true" className="text-muted-foreground/50 text-xs">
+          <span aria-hidden="true" className="text-on-surface-variant/50 text-xs">
             ·
           </span>
-          <span className="text-muted-foreground/70 text-xs">{relativeTime(event.createdAt)}</span>
+          <span className="text-on-surface-variant text-xs">{relativeTime(event.createdAt)}</span>
         </div>
       </div>
     </RowShell>
@@ -83,7 +83,7 @@ function RowShell({ href, children }: { href: string | null; children: ReactNode
       href={href}
       className={cn(
         base,
-        'hover:bg-accent/40 focus-visible:ring-ring focus-visible:ring-offset-background focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:outline-none',
+        'hover:bg-surface-container-high focus-visible:ring-ring focus-visible:ring-offset-background focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:outline-none',
       )}
     >
       {children}

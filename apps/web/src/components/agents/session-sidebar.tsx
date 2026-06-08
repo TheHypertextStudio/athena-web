@@ -91,28 +91,28 @@ export function SessionSidebar({
   const noControls = !controls.canPause && !controls.canTakeOver && !controls.canCancel;
 
   return (
-    <aside className="flex flex-col gap-6">
+    <aside className="flex flex-col gap-4">
       {/* Changes this session — the receipt. */}
       <section aria-labelledby="changes-heading" className="flex flex-col gap-2">
         <h2
           id="changes-heading"
-          className="text-muted-foreground text-xs font-medium tracking-wide uppercase"
+          className="text-on-surface-variant text-xs font-medium tracking-wide uppercase"
         >
           Changes this session
         </h2>
         {changes.length === 0 ? (
-          <p className="text-muted-foreground border-border rounded-lg border border-dashed p-3 text-xs">
+          <p className="text-on-surface-variant border-outline-variant rounded-lg border border-dashed p-3 text-xs">
             No changes yet. The agent hasn’t proposed or made any changes.
           </p>
         ) : (
-          <ul className="divide-border border-border flex flex-col divide-y overflow-hidden rounded-lg border">
+          <ul className="divide-outline-variant border-outline-variant flex flex-col divide-y overflow-hidden rounded-lg border">
             {changes.map((change) => (
               <li key={change.id} className="flex items-start justify-between gap-2 p-3">
                 <div className="flex min-w-0 flex-col gap-0.5">
-                  <code className="text-muted-foreground text-[0.625rem] tracking-wide uppercase">
+                  <code className="text-on-surface-variant text-[0.625rem] tracking-wide uppercase">
                     {change.kind}
                   </code>
-                  <p className="text-foreground text-xs leading-snug">{change.summary}</p>
+                  <p className="text-on-surface text-xs leading-snug">{change.summary}</p>
                 </div>
                 <ApprovalStatusBadge status={change.approvalStatus} size="compact" />
               </li>
@@ -125,16 +125,16 @@ export function SessionSidebar({
       <section aria-labelledby="accountability-heading" className="flex flex-col gap-2">
         <h2
           id="accountability-heading"
-          className="text-muted-foreground text-xs font-medium tracking-wide uppercase"
+          className="text-on-surface-variant text-xs font-medium tracking-wide uppercase"
         >
           Accountability
         </h2>
-        <div className="border-border flex flex-col gap-3 rounded-lg border p-3">
+        <div className="border-outline-variant flex flex-col gap-3 rounded-lg border p-3">
           <div className="flex items-center gap-2">
             <ActorAvatar kind="agent" name={agentName} avatarUrl={agentAvatarUrl} size={28} />
             <div className="flex min-w-0 flex-col">
-              <span className="text-foreground truncate text-sm font-medium">{agentName}</span>
-              <span className="text-muted-foreground text-xs">
+              <span className="text-on-surface truncate text-sm font-medium">{agentName}</span>
+              <span className="text-on-surface-variant text-xs">
                 {ownerName ? `on behalf of ${ownerName}` : 'no accountable owner'}
               </span>
             </div>
@@ -142,8 +142,8 @@ export function SessionSidebar({
           {initiatorName ? (
             <>
               <Separator />
-              <p className="text-muted-foreground text-xs">
-                Started by <span className="text-foreground/80 font-medium">{initiatorName}</span>
+              <p className="text-on-surface-variant text-xs">
+                Started by <span className="text-on-surface font-medium">{initiatorName}</span>
               </p>
             </>
           ) : null}
@@ -154,12 +154,12 @@ export function SessionSidebar({
       <section aria-labelledby="controls-heading" className="flex flex-col gap-2">
         <h2
           id="controls-heading"
-          className="text-muted-foreground text-xs font-medium tracking-wide uppercase"
+          className="text-on-surface-variant text-xs font-medium tracking-wide uppercase"
         >
           Controls
         </h2>
         {noControls ? (
-          <p className="text-muted-foreground text-xs">
+          <p className="text-on-surface-variant text-xs">
             This session is {status.replace(/_/g, ' ')} — nothing to control.
           </p>
         ) : (

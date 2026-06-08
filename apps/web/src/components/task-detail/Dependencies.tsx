@@ -40,11 +40,11 @@ function DependencyRow({
         onClick={() => {
           onOpen(task.id);
         }}
-        className="hover:bg-accent/50 focus-visible:ring-ring -mx-2 flex w-[calc(100%+1rem)] items-center gap-2 rounded-md px-2 py-1.5 text-left focus-visible:ring-1 focus-visible:outline-none"
+        className="hover:bg-surface-container-high focus-visible:ring-ring -mx-2 flex w-[calc(100%+1rem)] items-center gap-2 rounded-md px-2 py-1.5 text-left focus-visible:ring-1 focus-visible:outline-none"
       >
         <StatusIcon type={stateTypeOf(task.state)} />
         <span className="min-w-0 flex-1 truncate text-sm">{task.title}</span>
-        <span className="text-muted-foreground shrink-0 text-xs">
+        <span className="text-on-surface-variant shrink-0 text-xs">
           {task.projectId ? projectName(task.projectId) : `No ${projectLabel.toLowerCase()}`}
         </span>
       </button>
@@ -78,12 +78,12 @@ export function Dependencies({
       </h2>
 
       {empty ? (
-        <p className="text-muted-foreground text-sm">No dependencies.</p>
+        <p className="text-on-surface-variant text-sm">No dependencies.</p>
       ) : (
         <div className="flex flex-col gap-4">
           {blockedBy.length > 0 ? (
             <div className="flex flex-col gap-1">
-              <div className="text-muted-foreground flex items-center gap-1.5 text-xs font-medium tracking-wide uppercase">
+              <div className="text-on-surface-variant flex items-center gap-1.5 text-xs font-medium tracking-wide uppercase">
                 <ChevronLeft className="size-3.5" />
                 Blocked by
               </div>
@@ -103,7 +103,7 @@ export function Dependencies({
 
           {blocking.length > 0 ? (
             <div className="flex flex-col gap-1">
-              <div className="text-muted-foreground flex items-center gap-1.5 text-xs font-medium tracking-wide uppercase">
+              <div className="text-on-surface-variant flex items-center gap-1.5 text-xs font-medium tracking-wide uppercase">
                 <ChevronRight className="size-3.5" />
                 Blocking
               </div>

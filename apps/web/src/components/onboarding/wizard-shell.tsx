@@ -70,15 +70,15 @@ export function WizardShell({
   onBack,
 }: WizardShellProps): JSX.Element {
   return (
-    <main className="bg-background text-foreground flex min-h-screen flex-col px-6 py-10 sm:py-16">
+    <main className="bg-surface text-on-surface flex min-h-screen flex-col px-6 py-10 sm:py-16">
       <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col">
         <header className="mb-10 flex flex-col gap-6">
           <div className="flex items-center justify-between">
-            <span className="text-foreground flex items-center gap-2 text-sm font-semibold tracking-tight">
+            <span className="text-on-surface flex items-center gap-2 text-sm font-semibold tracking-tight">
               <Sparkles className="text-primary size-4" />
               Docket
             </span>
-            <span className="text-muted-foreground text-xs font-medium tabular-nums">
+            <span className="text-on-surface-variant text-xs font-medium tabular-nums">
               {totalKnown ? `Step ${stepNumber} of ${totalSteps}` : 'Getting started'}
             </span>
           </div>
@@ -98,7 +98,7 @@ export function WizardShell({
                   aria-hidden
                   className={cn(
                     'h-1.5 flex-1 rounded-full transition-colors duration-300',
-                    i < stepNumber ? 'bg-primary' : 'bg-border',
+                    i < stepNumber ? 'bg-primary' : 'bg-surface-container-high',
                   )}
                 />
               ))}
@@ -115,7 +115,7 @@ export function WizardShell({
               {/* Total unknown until the wizard forks: a single, un-committed lead segment
                   so the bar doesn't claim a step count it will immediately have to change. */}
               <span aria-hidden className="bg-primary h-1.5 w-10 rounded-full" />
-              <span aria-hidden className="bg-border h-1.5 flex-1 rounded-full" />
+              <span aria-hidden className="bg-surface-container-high h-1.5 flex-1 rounded-full" />
             </div>
           )}
         </header>
@@ -125,13 +125,13 @@ export function WizardShell({
           className="animate-in fade-in slide-in-from-bottom-2 flex flex-1 flex-col duration-300"
         >
           <div className="mb-8 flex flex-col gap-2">
-            <span className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
+            <span className="text-on-surface-variant text-xs font-medium tracking-wide uppercase">
               {eyebrow}
             </span>
-            <h1 className="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
+            <h1 className="text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
               {title}
             </h1>
-            <p className="text-muted-foreground max-w-xl text-balance text-base">{subtitle}</p>
+            <p className="text-on-surface-variant max-w-xl text-base text-balance">{subtitle}</p>
           </div>
 
           <div className="flex-1">{children}</div>

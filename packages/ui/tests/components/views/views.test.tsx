@@ -139,13 +139,13 @@ describe('ListRow', () => {
     expect(row).toHaveAttribute('data-active', '');
     expect(row).toHaveAttribute('aria-selected', 'true');
     expect(row).toHaveAttribute('tabindex', '0');
-    // active adds `bg-accent`; selected adds `bg-accent/70`; twMerge keeps the last.
-    expect(row).toHaveClass('bg-accent/70', 'row-x');
+    // active + selected both apply the MD3 `bg-surface-container-highest` selected tone.
+    expect(row).toHaveClass('bg-surface-container-highest', 'row-x');
   });
 
-  it('applies only bg-accent when active but not selected', () => {
+  it('applies the selected surface tone when active but not selected', () => {
     render(<ListRow active>r</ListRow>);
-    expect(screen.getByRole('row')).toHaveClass('bg-accent');
+    expect(screen.getByRole('row')).toHaveClass('bg-surface-container-highest');
   });
 
   it('calls onActivate on click', () => {

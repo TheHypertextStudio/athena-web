@@ -38,7 +38,7 @@ interface PillTreatment {
  * glyph so an active run reads as alive; `awaiting_approval` escalates to the `destructive`
  * token because it is the one state that needs the human, mirroring how `urgent` priority
  * draws the eye; `awaiting_input` (a paused, steerable session) and `pending` (queued) stay
- * calm on the `muted` token; `failed` is a quiet `destructive` outline so an errored run is
+ * calm on the `surface-container` tone; `failed` is a quiet `destructive` outline so an errored run is
  * unmistakable without shouting.
  */
 const PILL_TREATMENT: Record<PillStatus, PillTreatment> = {
@@ -60,14 +60,14 @@ const PILL_TREATMENT: Record<PillStatus, PillTreatment> = {
     label: 'Paused',
     hint: 'Paused — awaiting input',
     Glyph: CircleDot,
-    tone: 'border-border bg-muted text-muted-foreground',
+    tone: 'border-outline-variant bg-surface-container text-on-surface-variant',
     pulse: false,
   },
   pending: {
     label: 'Queued',
     hint: 'Run queued',
     Glyph: Sparkles,
-    tone: 'border-border bg-muted text-muted-foreground',
+    tone: 'border-outline-variant bg-surface-container text-on-surface-variant',
     pulse: false,
   },
   failed: {

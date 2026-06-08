@@ -59,10 +59,10 @@ export function SettingsSectionNav({ orgId }: SettingsSectionNavProps): JSX.Elem
   }
 
   return (
-    <nav aria-label="Settings sections" className="flex flex-col gap-5">
+    <nav aria-label="Settings sections" className="flex flex-col gap-6">
       {groups.map((group) => (
         <div key={group.label} className="flex flex-col gap-1">
-          <h2 className="text-muted-foreground px-2.5 text-xs font-semibold tracking-wide uppercase">
+          <h2 className="text-on-surface-variant px-2.5 text-xs font-medium tracking-wide uppercase">
             {group.label}
           </h2>
           <ul className="flex flex-col gap-0.5">
@@ -75,7 +75,7 @@ export function SettingsSectionNav({ orgId }: SettingsSectionNavProps): JSX.Elem
                     <span
                       aria-disabled="true"
                       title="Coming soon"
-                      className={cn(ROW_BASE, 'text-muted-foreground/60 cursor-not-allowed')}
+                      className={cn(ROW_BASE, 'text-on-surface-variant/60 cursor-not-allowed')}
                     >
                       <Icon aria-hidden="true" className="size-4 shrink-0" />
                       <span className="flex-1 truncate">{section.label}</span>
@@ -97,8 +97,8 @@ export function SettingsSectionNav({ orgId }: SettingsSectionNavProps): JSX.Elem
                       ROW_BASE,
                       'focus-visible:ring-ring outline-none focus-visible:ring-2',
                       active
-                        ? 'bg-accent text-accent-foreground font-medium'
-                        : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
+                        ? 'bg-surface-container-highest text-on-surface font-medium'
+                        : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface',
                     )}
                   >
                     <Icon aria-hidden="true" className="size-4 shrink-0" />

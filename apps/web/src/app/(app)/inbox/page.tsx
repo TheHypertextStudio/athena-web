@@ -203,23 +203,25 @@ export default function InboxPage(): JSX.Element {
   const panelId = (id: InboxTab): string => `inbox-${id}-panel`;
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-4xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
-      <header className="flex flex-wrap items-end justify-between gap-4">
+    <div className="mx-auto flex h-full w-full max-w-4xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
+      <header className="flex flex-col gap-3 @2xl:flex-row @2xl:flex-wrap @2xl:items-center @2xl:justify-between">
         <div className="flex flex-col gap-1">
-          <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Inbox</h1>
-          <p className="text-muted-foreground text-sm">Everything that needs a response.</p>
+          <h1 className="text-on-surface text-xl font-semibold tracking-tight">Inbox</h1>
+          <p className="text-on-surface-variant text-xs">Everything that needs a response.</p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            void load(false);
-          }}
-          disabled={loading || refreshing}
-        >
-          <RefreshCw className={refreshing ? 'animate-spin' : undefined} />
-          {refreshing ? 'Refreshing…' : 'Refresh'}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              void load(false);
+            }}
+            disabled={loading || refreshing}
+          >
+            <RefreshCw className={refreshing ? 'animate-spin' : undefined} />
+            {refreshing ? 'Refreshing…' : 'Refresh'}
+          </Button>
+        </div>
       </header>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -275,7 +277,7 @@ export default function InboxPage(): JSX.Element {
         id={panelId('inbox')}
         aria-labelledby={`${panelId('inbox')}-tab`}
         hidden={tab !== 'inbox'}
-        className="flex min-w-0 flex-col gap-2"
+        className="flex min-w-0 flex-col gap-1.5"
       >
         {loading ? (
           <FeedSkeleton />
@@ -308,7 +310,7 @@ export default function InboxPage(): JSX.Element {
         id={panelId('activity')}
         aria-labelledby={`${panelId('activity')}-tab`}
         hidden={tab !== 'activity'}
-        className="flex min-w-0 flex-col gap-0.5"
+        className="flex min-w-0 flex-col gap-1.5"
       >
         {loading ? (
           <FeedSkeleton />
@@ -335,15 +337,15 @@ interface EmptyStateProps {
 /** A calm, centered empty state for a feed with no content. */
 function EmptyState({ title, body }: EmptyStateProps): JSX.Element {
   return (
-    <div className="border-border/60 mt-2 flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed p-10 text-center">
+    <div className="border-outline-variant mt-2 flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed p-10 text-center">
       <span
         aria-hidden="true"
-        className="bg-muted text-muted-foreground flex h-10 w-10 items-center justify-center rounded-full"
+        className="bg-surface-container text-on-surface-variant flex h-10 w-10 items-center justify-center rounded-full"
       >
         <InboxIcon className="h-5 w-5" />
       </span>
-      <p className="text-foreground text-sm font-medium">{title}</p>
-      <p className="text-muted-foreground max-w-xs text-sm">{body}</p>
+      <p className="text-on-surface text-sm font-medium">{title}</p>
+      <p className="text-on-surface-variant max-w-xs text-xs">{body}</p>
     </div>
   );
 }

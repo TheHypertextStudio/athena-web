@@ -33,14 +33,14 @@ function PropertyRow({
 }): JSX.Element {
   return (
     <div className="flex items-start gap-3 py-2.5">
-      <span aria-hidden="true" className="text-muted-foreground mt-0.5 flex size-4 shrink-0">
+      <span aria-hidden="true" className="text-on-surface-variant mt-0.5 flex size-4 shrink-0">
         {icon}
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+        <span className="text-on-surface-variant text-xs font-medium tracking-wide uppercase">
           {label}
         </span>
-        <div className="text-foreground min-w-0 text-sm">{children}</div>
+        <div className="text-on-surface min-w-0 text-sm">{children}</div>
       </div>
     </div>
   );
@@ -48,7 +48,7 @@ function PropertyRow({
 
 /** A muted "Not set" placeholder for an absent property value. */
 function NotSet(): JSX.Element {
-  return <span className="text-muted-foreground italic">Not set</span>;
+  return <span className="text-on-surface-variant italic">Not set</span>;
 }
 
 /** Format an ISO date as a short, locale-aware day, or `null` when absent. */
@@ -103,23 +103,23 @@ export function PropertiesPanel({
         )}
       </PropertyRow>
 
-      <div className="border-border border-t" />
+      <div className="border-outline-variant border-t" />
       <PropertyRow icon={<RefreshCw className="size-4" />} label="Timeline">
         {start || target ? (
           <span className="tabular-nums">
-            {start ?? '—'} <span className="text-muted-foreground">→</span> {target ?? '—'}
+            {start ?? '—'} <span className="text-on-surface-variant">→</span> {target ?? '—'}
           </span>
         ) : (
           <NotSet />
         )}
       </PropertyRow>
 
-      <div className="border-border border-t" />
+      <div className="border-outline-variant border-t" />
       <PropertyRow icon={<FolderKanban className="size-4" />} label={programLabel}>
         {programName ? <EntityChip name={programName} /> : <NotSet />}
       </PropertyRow>
 
-      <div className="border-border border-t" />
+      <div className="border-outline-variant border-t" />
       <PropertyRow icon={<LayoutGrid className="size-4" />} label={initiativeLabel}>
         {initiativeName ? <EntityChip name={initiativeName} /> : <NotSet />}
       </PropertyRow>
@@ -132,7 +132,7 @@ function EntityChip({ name, className }: { name: string; className?: string }): 
   return (
     <span
       className={cn(
-        'bg-muted text-foreground ring-border inline-flex max-w-full items-center rounded-md px-2 py-0.5 text-xs font-medium ring-1 ring-inset',
+        'bg-surface-container text-on-surface ring-outline-variant inline-flex max-w-full items-center rounded-md px-2 py-0.5 text-xs font-medium ring-1 ring-inset',
         className,
       )}
     >

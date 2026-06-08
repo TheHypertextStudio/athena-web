@@ -28,8 +28,8 @@ export interface HealthPillProps {
 export function HealthPill({ health }: HealthPillProps): JSX.Element {
   if (!health) {
     return (
-      <span className="text-muted-foreground bg-muted ring-border inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset">
-        <span aria-hidden="true" className="bg-muted-foreground/60 size-1.5 rounded-full" />
+      <span className="text-on-surface-variant bg-surface-container ring-outline-variant inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset">
+        <span aria-hidden="true" className="bg-on-surface-variant/60 size-1.5 rounded-full" />
         No health set
       </span>
     );
@@ -70,10 +70,10 @@ export function WeightedProgress({ progress, health }: WeightedProgressProps): J
     <div className="flex flex-col gap-2">
       <div className="flex items-baseline justify-between">
         <div className="flex items-center gap-2">
-          <CheckCircle2 aria-hidden="true" className="text-muted-foreground size-4" />
-          <span className="text-foreground text-sm font-medium">Progress</span>
+          <CheckCircle2 aria-hidden="true" className="text-on-surface-variant size-4" />
+          <span className="text-on-surface text-sm font-medium">Progress</span>
         </div>
-        <span className="text-foreground text-sm font-semibold tabular-nums">{pct}%</span>
+        <span className="text-on-surface text-sm font-semibold tabular-nums">{pct}%</span>
       </div>
       <div
         role="progressbar"
@@ -81,14 +81,14 @@ export function WeightedProgress({ progress, health }: WeightedProgressProps): J
         aria-valuemin={0}
         aria-valuemax={100}
         aria-label={label}
-        className="bg-muted h-2 w-full overflow-hidden rounded-full"
+        className="bg-surface-container h-2 w-full overflow-hidden rounded-full"
       >
         <div
           className={cn('h-full rounded-full transition-[width] duration-500 ease-out', fillClass)}
           style={{ width: `${pct}%` }}
         />
       </div>
-      <p className="text-muted-foreground text-xs tabular-nums">
+      <p className="text-on-surface-variant text-xs tabular-nums">
         {progress.completedCount} of {progress.taskCount}{' '}
         {progress.taskCount === 1 ? 'task' : 'tasks'} complete
       </p>

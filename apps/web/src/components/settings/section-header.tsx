@@ -27,12 +27,12 @@ export interface SectionHeaderProps {
  */
 export function SectionHeader({ title, description, action }: SectionHeaderProps): JSX.Element {
   return (
-    <header className="border-border flex items-start justify-between gap-4 border-b pb-4">
+    <header className="border-outline-variant flex flex-col gap-3 border-b pb-4 @2xl:flex-row @2xl:flex-wrap @2xl:items-center @2xl:justify-between">
       <div className="flex flex-col gap-1">
-        <h1 className="text-foreground text-lg font-semibold tracking-tight">{title}</h1>
-        <p className="text-muted-foreground text-sm">{description}</p>
+        <h2 className="text-on-surface text-base font-semibold">{title}</h2>
+        <p className="text-on-surface-variant text-sm">{description}</p>
       </div>
-      {action ? <div className="shrink-0">{action}</div> : null}
+      {action ? <div className="flex shrink-0 items-center gap-2">{action}</div> : null}
     </header>
   );
 }

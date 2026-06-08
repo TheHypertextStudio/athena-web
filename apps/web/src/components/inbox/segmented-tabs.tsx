@@ -104,7 +104,7 @@ export function SegmentedTabs<TId extends string>({
     <div
       role="tablist"
       aria-label={label}
-      className="border-border flex items-center gap-1 border-b"
+      className="border-outline-variant flex items-center gap-1 border-b"
     >
       {segments.map((segment, index) => {
         const selected = segment.id === value;
@@ -131,18 +131,18 @@ export function SegmentedTabs<TId extends string>({
             className={cn(
               'focus-visible:ring-ring -mb-px inline-flex items-center gap-2 rounded-t-md border-b-2 px-3 py-2 text-sm font-medium transition-colors outline-none focus-visible:ring-1',
               selected
-                ? 'border-primary text-foreground'
-                : 'text-muted-foreground hover:text-foreground border-transparent',
+                ? 'border-primary text-on-surface'
+                : 'text-on-surface-variant hover:text-on-surface border-transparent',
             )}
           >
             {segment.label}
             {showCount ? (
               <span
                 className={cn(
-                  'inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-xs font-semibold tabular-nums',
+                  'inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-semibold tabular-nums',
                   segment.emphasis
                     ? 'bg-destructive/10 text-destructive'
-                    : 'bg-muted text-muted-foreground',
+                    : 'bg-surface-container text-on-surface-variant',
                 )}
               >
                 {segment.count}

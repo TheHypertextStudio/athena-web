@@ -105,7 +105,7 @@ export function UpdatesPanel({
         onSubmit={submit}
         className="border-outline-variant bg-surface-container-low flex flex-col gap-3 rounded-xl border p-4"
       >
-        <label htmlFor="program-update-body" className="text-foreground text-sm font-medium">
+        <label htmlFor="program-update-body" className="text-on-surface text-sm font-medium">
           Post an update
         </label>
         <textarea
@@ -116,11 +116,11 @@ export function UpdatesPanel({
           }}
           rows={3}
           placeholder="Share how this line of work is flowing — wins, risks, or what changed…"
-          className="border-input bg-background placeholder:text-muted-foreground focus-visible:ring-ring min-h-20 w-full resize-y rounded-md border px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1"
+          className="border-outline-variant bg-surface-container placeholder:text-on-surface-variant focus-visible:ring-ring min-h-20 w-full resize-y rounded-md border px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1"
         />
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <span className="text-muted-foreground text-sm">Set health</span>
+            <span className="text-on-surface-variant text-sm">Set health</span>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="gap-1.5">
@@ -182,15 +182,18 @@ export function UpdatesPanel({
           ))}
         </div>
       ) : error ? (
-        <p role="alert" className="border-border text-destructive rounded-lg border p-4 text-sm">
+        <p
+          role="alert"
+          className="border-outline-variant text-destructive rounded-xl border p-4 text-sm"
+        >
           {error}
         </p>
       ) : updates.length === 0 ? (
-        <div className="border-border text-muted-foreground rounded-xl border border-dashed p-8 text-center text-sm">
+        <div className="border-outline-variant text-on-surface-variant rounded-xl border border-dashed p-8 text-center text-sm">
           No updates yet. Post the first one to keep stakeholders in the loop.
         </div>
       ) : (
-        <ol className="flex flex-col gap-5">
+        <ol className="flex flex-col gap-6">
           {updates.map((update) => {
             const author = resolveActor(update.authorId);
             return (
@@ -198,12 +201,12 @@ export function UpdatesPanel({
                 <ActorAvatar kind={author.kind} name={author.name} size={32} />
                 <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-foreground text-sm font-medium">{author.name}</span>
-                    <span className="text-muted-foreground text-xs">
+                    <span className="text-on-surface text-sm font-medium">{author.name}</span>
+                    <span className="text-on-surface-variant text-xs">
                       {relativeTime(update.createdAt)}
                     </span>
                     {update.health ? (
-                      <span className="text-muted-foreground inline-flex items-center gap-1.5 text-xs">
+                      <span className="text-on-surface-variant inline-flex items-center gap-1.5 text-xs">
                         <span
                           aria-hidden="true"
                           className={cn('size-1.5 rounded-full', HEALTH_DOT_CLASS[update.health])}
@@ -212,7 +215,7 @@ export function UpdatesPanel({
                       </span>
                     ) : null}
                   </div>
-                  <p className="text-foreground/90 text-sm leading-relaxed whitespace-pre-wrap">
+                  <p className="text-on-surface text-sm leading-relaxed whitespace-pre-wrap">
                     {update.body}
                   </p>
                 </div>

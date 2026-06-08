@@ -77,10 +77,10 @@ export function ProgramCard({
       onClick={() => {
         onOpen(program.id);
       }}
-      className="group border-outline-variant bg-surface-container-low hover:bg-surface-container-high focus-visible:ring-ring flex flex-col gap-3 rounded-xl border p-5 text-left transition-colors outline-none focus-visible:ring-1"
+      className="group border-outline-variant bg-surface-container-low hover:bg-surface-container-high focus-visible:ring-ring flex flex-col gap-3 rounded-xl border p-4 text-left transition-colors outline-none focus-visible:ring-1"
     >
       <div className="flex items-start justify-between gap-3">
-        <h2 className="text-foreground min-w-0 flex-1 truncate text-base font-semibold tracking-tight">
+        <h2 className="text-on-surface min-w-0 flex-1 truncate text-base font-semibold tracking-tight">
           {program.name}
         </h2>
         <ProgramStatusBadge status={program.status} />
@@ -89,17 +89,17 @@ export function ProgramCard({
       <HealthPill health={program.health} />
 
       {program.description ? (
-        <p className="text-muted-foreground line-clamp-2 text-sm leading-relaxed">
+        <p className="text-on-surface-variant line-clamp-2 text-sm leading-relaxed">
           {program.description}
         </p>
       ) : null}
 
-      <div className="border-border text-muted-foreground mt-auto flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t pt-3 text-xs">
+      <div className="border-outline-variant text-on-surface-variant mt-auto flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t pt-3 text-xs">
         <span className="flex items-center gap-1.5">
           {program.ownerName ? (
             <>
               <ActorAvatar kind="human" name={program.ownerName} size={18} />
-              <span className="text-foreground/80 font-medium">{program.ownerName}</span>
+              <span className="text-on-surface font-medium">{program.ownerName}</span>
             </>
           ) : (
             <span className="italic">No owner</span>

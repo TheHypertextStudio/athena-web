@@ -64,8 +64,8 @@ export interface HealthPillProps {
 export function HealthPill({ health }: HealthPillProps): JSX.Element {
   if (!health) {
     return (
-      <span className="text-muted-foreground bg-muted ring-border inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset">
-        <span aria-hidden="true" className="bg-muted-foreground/60 size-1.5 rounded-full" />
+      <span className="text-on-surface-variant bg-surface-container ring-outline-variant inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset">
+        <span aria-hidden="true" className="bg-on-surface-variant/60 size-1.5 rounded-full" />
         No health set
       </span>
     );
@@ -141,7 +141,7 @@ export function StatusFilterMenu({ value, counts, onChange }: StatusFilterMenuPr
             <DropdownMenuRadioItem key={option.value} value={option.value}>
               <span className="flex w-full items-center justify-between gap-6">
                 <span>{option.label}</span>
-                <span className="text-muted-foreground text-xs tabular-nums">
+                <span className="text-on-surface-variant text-xs tabular-nums">
                   {counts[option.value]}
                 </span>
               </span>

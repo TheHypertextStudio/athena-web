@@ -105,13 +105,13 @@ export function TriageRow({
   onDismiss,
 }: TriageRowProps): JSX.Element {
   return (
-    <ListRow active={active} onActivate={onActivate} className="gap-3 py-1">
+    <ListRow active={active} onActivate={onActivate}>
       <ListCell className="shrink-0">
         <StatusIcon type={task.stateType} />
       </ListCell>
 
       <ListCell className="min-w-0 flex-1">
-        <span className="text-foreground truncate">{task.title}</span>
+        <span className="text-on-surface truncate">{task.title}</span>
       </ListCell>
 
       <ListCell className="shrink-0">

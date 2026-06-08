@@ -66,16 +66,18 @@ export function StepPersonalWelcome({ firstName }: StepPersonalWelcomeProps): JS
             <highlight.icon className="size-5" />
           </span>
           <div className="flex flex-col gap-1">
-            <span className="text-foreground text-base leading-tight font-semibold">
+            <span className="text-on-surface text-base leading-tight font-semibold">
               {highlight.title}
             </span>
-            <span className="text-muted-foreground text-sm leading-relaxed">{highlight.body}</span>
+            <span className="text-on-surface-variant text-sm leading-relaxed">
+              {highlight.body}
+            </span>
           </div>
         </div>
       ))}
 
       {firstName ? (
-        <p className="text-muted-foreground mt-2 text-sm">
+        <p className="text-on-surface-variant mt-2 text-sm">
           Ready when you are, {firstName}
           {' — '}we&apos;ll set up your space in a moment.
         </p>

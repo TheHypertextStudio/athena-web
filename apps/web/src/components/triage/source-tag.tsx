@@ -52,7 +52,7 @@ export interface SourceTagProps {
 export function SourceTag({ provenance, providerName }: SourceTagProps): JSX.Element {
   if (provenance.source === 'native') {
     return (
-      <Badge variant="outline" className="text-muted-foreground gap-1 font-medium">
+      <Badge variant="outline" className="text-on-surface-variant gap-1 font-medium">
         <Sparkles className="h-3 w-3" />
         Native
       </Badge>

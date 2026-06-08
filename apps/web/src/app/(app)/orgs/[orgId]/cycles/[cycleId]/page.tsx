@@ -29,9 +29,12 @@ import {
   type CycleDetail,
   CycleId,
   type CycleOut,
+  type CycleStatus,
   type CycleTaskGroupBy,
+  type MemberOut,
   type ProgramOut,
   type ProjectOut,
+  type RoleOut,
   TaskId,
   type TaskOut,
 } from '@docket/types';
@@ -44,12 +47,14 @@ import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 import { buildActorDirectory, type ActorDirectory } from '@/components/agents/actor-directory';
 import { CloseCycleDialog } from '@/components/cycles/close-cycle-dialog';
 import { type CarryoverItem, type CarryoverTarget } from '@/components/cycles/carryover-row';
+import { CyclePropertiesPanel } from '@/components/cycles/properties-panel';
 import { STATUS_LABEL, statusBadgeVariant } from '@/components/cycles/cycle-status';
 import { formatWindow, windowProgress } from '@/components/cycles/format-window';
 import { GroupByMenu } from '@/components/cycles/group-by-menu';
 import { StatsBanner } from '@/components/cycles/stats-banner';
 import { api } from '@/lib/api';
 import { readError, readProblem } from '@/lib/problem';
+import { useOrgCapability } from '@/lib/use-org-capability';
 import { STATE_GROUP_LABEL, STATE_GROUP_ORDER, stateTypeOf } from '@/lib/work-state';
 
 /**
@@ -71,6 +76,8 @@ export default function CycleDetailPage(): JSX.Element {
   const [projectName, setProjectName] = useState<ReadonlyMap<string, string>>(new Map());
   const [programName, setProgramName] = useState<ReadonlyMap<string, string>>(new Map());
   const [otherCycles, setOtherCycles] = useState<readonly CycleOut[]>([]);
+  const [members, setMembers] = useState<readonly MemberOut[]>([]);
+  const [roles, setRoles] = useState<readonly RoleOut[]>([]);
   const [resolveActor, setResolveActor] = useState<ActorDirectory['resolve']>(() => () => ({
     name: 'Someone',
     kind: 'human' as const,
@@ -78,6 +85,10 @@ export default function CycleDetailPage(): JSX.Element {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Properties-panel mutation state (optimistic PATCH + rollback).
+  const [propsPending, setPropsPending] = useState(false);
+  const [propsError, setPropsError] = useState<string | null>(null);
 
   const [groupBy, setGroupBy] = useState<CycleTaskGroupBy>('project');
   const [bannerExpanded, setBannerExpanded] = useState(true);
@@ -102,6 +113,7 @@ export default function CycleDetailPage(): JSX.Element {
         membersRes,
         agentsRes,
         cyclesRes,
+        rolesRes,
       ] = await Promise.all([
         api.v1.orgs[':orgId'].cycles[':id'].$get({ param: { orgId, id: cycleId } }),
         api.v1.orgs[':orgId'].cycles[':id'].burnup.$get({ param: { orgId, id: cycleId } }),
@@ -114,6 +126,7 @@ export default function CycleDetailPage(): JSX.Element {
         api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
         api.v1.orgs[':orgId'].agents.$get({ param: { orgId } }),
         api.v1.orgs[':orgId'].cycles.$get({ param: { orgId } }),
+        api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
       ]);
 
       if (!cycleRes.ok) {
@@ -141,10 +154,12 @@ export default function CycleDetailPage(): JSX.Element {
         : [];
       setProgramName(new Map(programs.map((p) => [p.id, p.name])));
 
-      const members = membersRes.ok ? (await membersRes.json()).items : [];
+      const memberItems = membersRes.ok ? (await membersRes.json()).items : [];
       const agents = agentsRes.ok ? (await agentsRes.json()).items : [];
-      const directory = buildActorDirectory(members, agents);
+      const directory = buildActorDirectory(memberItems, agents);
       setResolveActor(() => directory.resolve);
+      setMembers(memberItems);
+      if (rolesRes.ok) setRoles((await rolesRes.json()).items);
 
       // Other cycles on the SAME team are the only valid "move to" targets at close (cycles are
       // team-scoped), and only open ones make sense to roll into.
@@ -300,6 +315,47 @@ export default function CycleDetailPage(): JSX.Element {
     }
   }, [orgId, cycleId, decisions, cycleNounLower, load]);
 
+  /**
+   * Optimistically patch the cycle's status / window: apply locally, fire the PATCH, roll back
+   * on failure. A Cycle's window bounds are mandatory, so a window patch only sends the bounds
+   * that are set — clearing a bound in the picker leaves the prior value untouched. Editing a
+   * Cycle requires `contribute` (gated by {@link canEdit}).
+   */
+  const patchCycle = useCallback(
+    async (patch: { status?: CycleStatus; startsAt?: string; endsAt?: string }): Promise<void> => {
+      if (!cycle) return;
+      const previous = cycle;
+      setCycle({ ...cycle, ...patch });
+      setPropsPending(true);
+      setPropsError(null);
+      try {
+        const res = await api.v1.orgs[':orgId'].cycles[':id'].$patch({
+          param: { orgId, id: cycleId },
+          json: patch,
+        });
+        if (!res.ok) {
+          setCycle(previous);
+          setPropsError(await readProblem(res, `Could not update this ${cycleNounLower}.`));
+          return;
+        }
+        // The PATCH read-back is the base cycle shape; preserve the detail-only stats roll-up.
+        const updated = await res.json();
+        setCycle((current) =>
+          current ? { ...current, ...updated, stats: current.stats } : current,
+        );
+      } catch (caught) {
+        setCycle(previous);
+        setPropsError(readError(caught, `Something went wrong updating this ${cycleNounLower}.`));
+      } finally {
+        setPropsPending(false);
+      }
+    },
+    [cycle, orgId, cycleId, cycleNounLower],
+  );
+
+  // Editing a cycle requires `contribute`; gate the panel's affordances on it.
+  const canEditCycle = useOrgCapability(members, roles, 'contribute');
+
   if (loading) {
     return (
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
@@ -367,6 +423,30 @@ export default function CycleDetailPage(): JSX.Element {
           </Button>
         ) : null}
       </header>
+
+      <div className="flex flex-col gap-2 @2xl:max-w-sm">
+        <CyclePropertiesPanel
+          status={cycle.status}
+          startsAt={cycle.startsAt.slice(0, 10)}
+          endsAt={cycle.endsAt.slice(0, 10)}
+          canEdit={canEditCycle && !isCompleted}
+          pending={propsPending}
+          onStatusChange={(status) => {
+            void patchCycle({ status });
+          }}
+          onWindowChange={({ start, end }) => {
+            void patchCycle({
+              ...(start ? { startsAt: start } : {}),
+              ...(end ? { endsAt: end } : {}),
+            });
+          }}
+        />
+        {propsError ? (
+          <p role="alert" className="text-destructive px-1 text-sm">
+            {propsError}
+          </p>
+        ) : null}
+      </div>
 
       {burnup ? (
         <StatsBanner

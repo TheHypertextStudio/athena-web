@@ -1,41 +1,54 @@
 'use client';
 
 /**
- * The "New {program}" create dialog for the Programs list.
+ * The robust "New {program}" create composer for the Programs list.
  *
  * @remarks
- * A Program is an *ongoing* line of work, not team-scoped, so the minimal create collects just
- * a name — the owner, health, and visibility are set later on the detail screen. Following the
- * Linear pattern, this renders a focused, dismissable modal {@link Dialog}: a centered surface
- * panel with a focused name field and Create / Cancel actions.
+ * A Program is an *ongoing* line of work (not team-scoped, no finish line). The composer captures
+ * the fields that frame it: a title + description body, and an inline strip of compact pickers —
+ * its owner, its lifecycle status (active / paused / archived), its health verdict, and its
+ * visibility (public / private). Sensible defaults keep it fast: only a name is required; status
+ * defaults to "Active" and visibility to "Public". Built on the shared {@link ComposerShell} + the
+ * `@docket/ui` compact pickers.
  *
- * The dialog is *controlled* by the host page so the page's header "New {program}" button and
- * its empty-state "Create your first {program}" CTA both open the *same* dialog — the page owns
- * `open` and passes it in via {@link CreateProgramDialogProps.open} /
- * {@link CreateProgramDialogProps.onOpenChange}. This component owns only the form's transient
- * field state (reset whenever the dialog closes). The parent owns the roster and is handed the
- * created {@link ProgramOut} via {@link CreateProgramDialogProps.onCreated} so it can
- * optimistically prepend the new row and route to its detail; on a successful create this
- * component closes the dialog itself. The entity noun is passed in (already vocabulary-skinned
- * by the page) so this component never reaches for {@link useVocabulary} itself.
+ * The dialog is *controlled* by the host page so its header "New {program}" button and empty-state
+ * CTA open the *same* dialog. This component owns only the form's transient field state (reset
+ * whenever the dialog closes). The parent is handed the created {@link ProgramOut} through
+ * {@link CreateProgramDialogProps.onCreated} so it can optimistically prepend the new row + route.
+ *
+ * @see {@link useComposerOptions} for the owner option source.
  */
-import type { ProgramOut } from '@docket/types';
-import { Plus } from '@docket/ui/icons';
 import {
-  Button,
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  Input,
-} from '@docket/ui/primitives';
+  ActorId,
+  type Health,
+  type ProgramOut,
+  type ProgramStatus,
+  type Visibility,
+} from '@docket/types';
+import { ActorPicker, EnumPicker } from '@docket/ui/components';
 import { type JSX, useCallback, useState } from 'react';
 
 import { api } from '@/lib/api';
+import { ComposerShell } from '@/components/composer/composer-shell';
+import { enumOptions, HEALTH_OPTIONS } from '@/components/pickers/options';
+import { useComposerOptions } from '@/components/pickers/use-composer-options';
+import { STATUS_LABEL } from '@/components/programs/program-status';
 import { readError, readProblem } from '@/lib/problem';
+
+/** The lists this composer's pickers draw from. */
+const COMPOSER_INCLUDE = ['actors'] as const;
+
+/** The Program lifecycle statuses, ordered live → quiet. */
+const PROGRAM_STATUS_ORDER: readonly ProgramStatus[] = ['active', 'paused', 'archived'];
+
+/** Visibility choices for a Program. */
+const VISIBILITY_ORDER: readonly Visibility[] = ['public', 'private'];
+
+/** Human labels for {@link Visibility}. */
+const VISIBILITY_LABEL: Record<Visibility, string> = {
+  public: 'Public',
+  private: 'Private',
+};
 
 /** Props for {@link CreateProgramDialog}. */
 export interface CreateProgramDialogProps {
@@ -52,10 +65,10 @@ export interface CreateProgramDialogProps {
 }
 
 /**
- * The focused modal dialog for creating a new program.
+ * The robust program-create composer dialog.
  *
  * @param props - The {@link CreateProgramDialogProps}.
- * @returns the rendered create dialog.
+ * @returns the rendered composer.
  */
 export function CreateProgramDialog({
   orgId,
@@ -66,33 +79,54 @@ export function CreateProgramDialog({
 }: CreateProgramDialogProps): JSX.Element {
   const programNounLower = programNoun.toLowerCase();
 
+  const options = useComposerOptions(orgId, COMPOSER_INCLUDE, open);
+
   const [name, setName] = useState('');
+  const [body, setBody] = useState('');
+  const [ownerId, setOwnerId] = useState<string | null>(null);
+  const [status, setStatus] = useState<ProgramStatus>('active');
+  const [health, setHealth] = useState<Health | null>(null);
+  const [visibility, setVisibility] = useState<Visibility>('public');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   /** Reset transient form state whenever the dialog closes. */
   const handleOpenChange = useCallback(
     (next: boolean): void => {
-      if (creating) return;
       if (!next) {
         setName('');
+        setBody('');
+        setOwnerId(null);
+        setStatus('active');
+        setHealth(null);
+        setVisibility('public');
         setError(null);
       }
       onOpenChange(next);
     },
-    [creating, onOpenChange],
+    [onOpenChange],
   );
 
-  /** Create the program, then hand it to the parent for optimistic insertion + routing. */
+  const canSubmit = name.trim().length > 0;
+
+  /** Create the program with all set properties, then hand it to the parent. */
   const submit = useCallback(async (): Promise<void> => {
     const trimmed = name.trim();
     if (trimmed.length === 0) return;
     setCreating(true);
     setError(null);
     try {
+      const trimmedBody = body.trim();
       const res = await api.v1.orgs[':orgId'].programs.$post({
         param: { orgId },
-        json: { name: trimmed },
+        json: {
+          name: trimmed,
+          status,
+          visibility,
+          ...(trimmedBody.length > 0 ? { description: trimmedBody } : {}),
+          ...(ownerId ? { ownerId: ActorId.parse(ownerId) } : {}),
+          ...(health ? { health } : {}),
+        },
       });
       if (!res.ok) {
         setError(await readProblem(res, `Could not create the ${programNounLower}.`));
@@ -106,58 +140,79 @@ export function CreateProgramDialog({
     } finally {
       setCreating(false);
     }
-  }, [name, orgId, programNounLower, onOpenChange, onCreated]);
+  }, [
+    name,
+    body,
+    status,
+    visibility,
+    ownerId,
+    health,
+    orgId,
+    programNounLower,
+    onOpenChange,
+    onCreated,
+  ]);
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>New {programNoun}</DialogTitle>
-          <DialogDescription>
-            Name your {programNounLower} to get started — set the owner, health, and visibility
-            later.
-          </DialogDescription>
-        </DialogHeader>
-        <form
-          id="create-program-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void submit();
-          }}
-          className="flex flex-col gap-3"
-        >
-          <Input
-            aria-label={`${programNoun} name`}
-            placeholder={`Name your ${programNounLower}…`}
-            value={name}
-            disabled={creating}
-            onChange={(event) => {
-              setName(event.target.value);
-            }}
-          />
-          {error ? (
-            <p role="alert" className="text-destructive text-sm">
-              {error}
-            </p>
-          ) : null}
-        </form>
-        <DialogFooter>
-          <DialogClose asChild>
-            <Button type="button" variant="ghost" disabled={creating}>
-              Cancel
-            </Button>
-          </DialogClose>
-          <Button
-            type="submit"
-            form="create-program-form"
-            disabled={creating || name.trim().length === 0}
-            className="gap-1.5"
-          >
-            <Plus aria-hidden="true" className="size-4" />
-            {creating ? 'Creating…' : `Create ${programNoun}`}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <ComposerShell
+      open={open}
+      onOpenChange={handleOpenChange}
+      heading={`New ${programNoun}`}
+      description={`Name your ${programNounLower}, then set its owner, status, and health now — or later.`}
+      title={name}
+      onTitleChange={setName}
+      titlePlaceholder={`${programNoun} name`}
+      body={body}
+      onBodyChange={setBody}
+      bodyPlaceholder="Add a description…"
+      error={error}
+      creating={creating}
+      canSubmit={canSubmit}
+      onSubmit={() => void submit()}
+      submitLabel={`Create ${programNoun}`}
+    >
+      <ActorPicker
+        triggerVariant="outline"
+        options={options.actorOptions}
+        value={ownerId}
+        onChange={setOwnerId}
+        placeholder="Set owner"
+        clearLabel="No owner"
+        ariaLabel="Owner"
+        disabled={creating}
+      />
+      <EnumPicker
+        triggerVariant="outline"
+        options={enumOptions(PROGRAM_STATUS_ORDER, STATUS_LABEL)}
+        value={status}
+        onChange={(next) => {
+          if (next) setStatus(next);
+        }}
+        placeholder="Status"
+        ariaLabel="Status"
+        disabled={creating}
+      />
+      <EnumPicker
+        triggerVariant="outline"
+        options={HEALTH_OPTIONS}
+        value={health}
+        onChange={setHealth}
+        placeholder="Set health"
+        clearLabel="No health"
+        ariaLabel="Health"
+        disabled={creating}
+      />
+      <EnumPicker
+        triggerVariant="outline"
+        options={enumOptions(VISIBILITY_ORDER, VISIBILITY_LABEL)}
+        value={visibility}
+        onChange={(next) => {
+          if (next) setVisibility(next);
+        }}
+        placeholder="Visibility"
+        ariaLabel="Visibility"
+        disabled={creating}
+      />
+    </ComposerShell>
   );
 }

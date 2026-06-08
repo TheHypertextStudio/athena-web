@@ -8,109 +8,148 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-  Input,
 } from '@docket/ui/primitives';
 import { useRouter } from 'next/navigation';
-import { type JSX, useState } from 'react';
+import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 
 import { authClient } from '@/lib/auth-client';
 import { readError } from '@/lib/problem';
 
+/** Whether this browser exposes the WebAuthn API at all. */
+function isWebAuthnSupported(): boolean {
+  return typeof window !== 'undefined' && typeof window.PublicKeyCredential === 'function';
+}
+
+/** Whether the browser supports conditional-mediation (passkey autofill). */
+async function isConditionalMediationSupported(): Promise<boolean> {
+  try {
+    return (
+      isWebAuthnSupported() &&
+      typeof window.PublicKeyCredential.isConditionalMediationAvailable === 'function' &&
+      (await window.PublicKeyCredential.isConditionalMediationAvailable())
+    );
+  } catch {
+    return false;
+  }
+}
+
 /**
- * The operator email/password sign-in screen.
+ * The passwordless, passkey-first operator sign-in screen.
  *
  * @remarks
- * A Client Component that owns form state and calls the Better Auth client. The admin
- * console assumes the signed-in user is staff — the API 403s every admin route otherwise,
- * which the authenticated screens surface inline. On success it routes to the operator
- * dashboard (`/`). Errors from Better Auth are surfaced inline via `error.message`.
+ * A Client Component. Docket has NO passwords anywhere — including the admin console. The
+ * primary action runs a WebAuthn ceremony via `authClient.signIn.passkey()` (Face ID / Touch
+ * ID / security key); where the browser supports it, a passkey autofill prompt is also armed on
+ * mount. On success it routes to the operator dashboard (`/`); the admin API then 403s the
+ * session unless it resolves to a `staff_user` row, which the dashboard surfaces inline. There
+ * is no admin sign-up — staff accounts (and their passkeys, registered on the product app) are
+ * provisioned out of band.
  */
 export default function SignInPage(): JSX.Element {
   const router = useRouter();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+  const [passkeySupported, setPasskeySupported] = useState(true);
+  const conditionalArmed = useRef(false);
 
-  /** Sign in, then route to the operator dashboard. */
-  async function submit(): Promise<void> {
-    setError(null);
-    setPending(true);
-    try {
-      const { error: authError } = await authClient.signIn.email({ email, password });
-      if (authError) {
-        setError(authError.message ?? 'Could not sign in. Check your email and password.');
-        return;
+  /**
+   * Run a passkey authentication ceremony and route to the dashboard on success.
+   *
+   * @param autoFill - When `true`, arm the browser's conditional-UI autofill prompt instead of
+   * opening the modal picker; a user-cancelled autofill prompt is treated as a silent no-op.
+   */
+  const authenticate = useCallback(
+    async (autoFill: boolean): Promise<void> => {
+      if (!autoFill) setPending(true);
+      setError(null);
+      try {
+        const { error: passkeyError } = await authClient.signIn.passkey({ autoFill });
+        if (passkeyError) {
+          if (!autoFill) {
+            setError(
+              passkeyError.message ?? 'Could not sign in with that passkey. Please try again.',
+            );
+          }
+          return;
+        }
+        router.push('/');
+      } catch (caught) {
+        if (!autoFill) {
+          setError(readError(caught, 'Something went wrong signing in. Please try again.'));
+        }
+      } finally {
+        if (!autoFill) setPending(false);
       }
-      router.push('/');
-    } catch (caught) {
-      setError(readError(caught, 'Something went wrong signing in. Please try again.'));
-    } finally {
-      setPending(false);
-    }
-  }
+    },
+    [router],
+  );
+
+  // After hydration, reflect real WebAuthn capability and arm the autofill prompt once.
+  useEffect(() => {
+    setHydrated(true);
+    const supported = isWebAuthnSupported();
+    setPasskeySupported(supported);
+    if (!supported) return;
+    void (async () => {
+      if (conditionalArmed.current) return;
+      if (await isConditionalMediationSupported()) {
+        conditionalArmed.current = true;
+        void authenticate(true);
+      }
+    })();
+  }, [authenticate]);
+
+  const canSubmit = hydrated && passkeySupported && !pending;
 
   return (
     <main className="bg-surface-container text-on-surface flex min-h-screen items-center justify-center px-6">
       <Card className="w-full max-w-sm">
         <CardHeader>
           <CardTitle className="text-2xl">Docket service admin</CardTitle>
-          <CardDescription>Sign in with your operator account.</CardDescription>
+          <CardDescription>Sign in with your operator passkey.</CardDescription>
         </CardHeader>
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            void submit();
-          }}
-        >
-          <CardContent className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="email" className="text-sm font-medium">
-                Email
-              </label>
-              <Input
-                id="email"
-                type="email"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={(e) => {
-                  setEmail(e.target.value);
-                }}
-                placeholder="operator@docket.com"
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="password" className="text-sm font-medium">
-                Password
-              </label>
-              <Input
-                id="password"
-                type="password"
-                autoComplete="current-password"
-                required
-                value={password}
-                onChange={(e) => {
-                  setPassword(e.target.value);
-                }}
-                placeholder="••••••••"
-              />
-            </div>
-            {error ? (
-              <p role="alert" className="text-destructive text-sm">
-                {error}
-              </p>
-            ) : null}
-          </CardContent>
-          <CardFooter className="flex flex-col items-stretch gap-3">
-            <Button type="submit" disabled={pending}>
-              {pending ? 'Signing in…' : 'Sign in'}
-            </Button>
-            <p className="text-on-surface-variant text-center text-xs">
-              Operator access only. Non-staff accounts are rejected.
+        <CardContent className="flex flex-col gap-4">
+          {/* Carries the webauthn autocomplete token so browsers with conditional mediation can
+              surface saved passkeys in their native autofill UI. */}
+          <input
+            type="text"
+            name="passkey"
+            autoComplete="username webauthn"
+            aria-hidden="true"
+            tabIndex={-1}
+            className="sr-only"
+            readOnly
+            value=""
+          />
+
+          {error ? (
+            <p role="alert" className="text-destructive text-sm">
+              {error}
             </p>
-          </CardFooter>
-        </form>
+          ) : null}
+
+          {!passkeySupported && hydrated ? (
+            <p className="text-on-surface-variant text-sm" role="status">
+              This browser does not support passkeys, so operator sign-in is unavailable here. Use a
+              device with Face ID / Touch ID or a security key.
+            </p>
+          ) : null}
+        </CardContent>
+        <CardFooter className="flex flex-col items-stretch gap-3">
+          <Button
+            type="button"
+            disabled={!canSubmit}
+            onClick={() => {
+              void authenticate(false);
+            }}
+          >
+            {pending ? 'Waiting for your passkey…' : 'Sign in with a passkey'}
+          </Button>
+          <p className="text-on-surface-variant text-center text-xs">
+            Operator access only. Non-staff accounts are rejected.
+          </p>
+        </CardFooter>
       </Card>
     </main>
   );

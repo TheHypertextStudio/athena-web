@@ -105,7 +105,10 @@ export function TabBar({
             role="tab"
             aria-selected={active}
             className={cn(
-              'group relative flex max-w-52 min-w-0 items-center text-sm',
+              // Tabs keep a fixed width and never shrink, so a crowded bar scrolls horizontally
+              // (the container is overflow-x-auto) instead of squishing tabs until their content
+              // overlaps — important at narrow/mobile widths. The inner label truncates within.
+              'group relative flex w-40 shrink-0 items-center text-sm',
               active
                 ? // The active tab fuses with the rounded main panel below: it takes the panel's
                   // surface tone, rounds only its top corners, and runs flush to the bar's bottom.

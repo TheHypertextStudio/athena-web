@@ -1,25 +1,26 @@
 'use client';
 
 /**
- * The "New {program}" create dialog for the Programs list.
+ * The "New {initiative}" create dialog for the Initiatives list.
  *
  * @remarks
- * A Program is an *ongoing* line of work, not team-scoped, so the minimal create collects just
- * a name — the owner, health, and visibility are set later on the detail screen. Following the
- * Linear pattern, this renders a focused, dismissable modal {@link Dialog}: a centered surface
- * panel with a focused name field and Create / Cancel actions.
+ * An Initiative is a cross-cutting *theme* that holds no work of its own — it associates
+ * many-to-many with Projects + Programs — so the minimal create collects just a name; the
+ * associations come later on the detail screen. Following the Linear pattern, this renders a
+ * focused, dismissable modal {@link Dialog}: a centered surface panel with a focused name field
+ * and Create / Cancel actions.
  *
- * The dialog is *controlled* by the host page so the page's header "New {program}" button and
- * its empty-state "Create your first {program}" CTA both open the *same* dialog — the page owns
- * `open` and passes it in via {@link CreateProgramDialogProps.open} /
- * {@link CreateProgramDialogProps.onOpenChange}. This component owns only the form's transient
- * field state (reset whenever the dialog closes). The parent owns the roster and is handed the
- * created {@link ProgramOut} via {@link CreateProgramDialogProps.onCreated} so it can
- * optimistically prepend the new row and route to its detail; on a successful create this
- * component closes the dialog itself. The entity noun is passed in (already vocabulary-skinned
- * by the page) so this component never reaches for {@link useVocabulary} itself.
+ * The dialog is *controlled* by the host page so the page's header "New {initiative}" button and
+ * its empty-state CTA both open the *same* dialog — the page owns `open` and passes it in via
+ * {@link CreateInitiativeDialogProps.open} / {@link CreateInitiativeDialogProps.onOpenChange}.
+ * This component owns only the form's transient field state (reset whenever the dialog closes).
+ * The parent owns the roster and is handed the created {@link InitiativeOut} via
+ * {@link CreateInitiativeDialogProps.onCreated} so it can route to its (empty) detail; on a
+ * successful create this component closes the dialog itself. The entity noun is passed in
+ * (already vocabulary-skinned by the page) so this component never reaches for
+ * {@link useVocabulary} itself.
  */
-import type { ProgramOut } from '@docket/types';
+import type { InitiativeOut } from '@docket/types';
 import { Plus } from '@docket/ui/icons';
 import {
   Button,
@@ -37,34 +38,34 @@ import { type JSX, useCallback, useState } from 'react';
 import { api } from '@/lib/api';
 import { readError, readProblem } from '@/lib/problem';
 
-/** Props for {@link CreateProgramDialog}. */
-export interface CreateProgramDialogProps {
-  /** The org the program is created in (from the route). */
+/** Props for {@link CreateInitiativeDialog}. */
+export interface CreateInitiativeDialogProps {
+  /** The org the initiative is created in (from the route). */
   orgId: string;
-  /** The singular, vocabulary-skinned program noun (e.g. "Program", "Service line"). */
-  programNoun: string;
+  /** The singular, vocabulary-skinned initiative noun (e.g. "Initiative", "Theme"). */
+  initiativeNoun: string;
   /** Whether the dialog is open (the host page owns this state). */
   open: boolean;
   /** Notify the parent that the open state changed (Esc, backdrop, X, Cancel, or success). */
   onOpenChange: (open: boolean) => void;
-  /** Notify the parent that a program was created, so it can prepend + route. */
-  onCreated: (program: ProgramOut) => void;
+  /** Notify the parent that an initiative was created, so it can route to its detail. */
+  onCreated: (initiative: InitiativeOut) => void;
 }
 
 /**
- * The focused modal dialog for creating a new program.
+ * The focused modal dialog for creating a new initiative.
  *
- * @param props - The {@link CreateProgramDialogProps}.
+ * @param props - The {@link CreateInitiativeDialogProps}.
  * @returns the rendered create dialog.
  */
-export function CreateProgramDialog({
+export function CreateInitiativeDialog({
   orgId,
-  programNoun,
+  initiativeNoun,
   open,
   onOpenChange,
   onCreated,
-}: CreateProgramDialogProps): JSX.Element {
-  const programNounLower = programNoun.toLowerCase();
+}: CreateInitiativeDialogProps): JSX.Element {
+  const initiativeNounLower = initiativeNoun.toLowerCase();
 
   const [name, setName] = useState('');
   const [creating, setCreating] = useState(false);
@@ -83,43 +84,43 @@ export function CreateProgramDialog({
     [creating, onOpenChange],
   );
 
-  /** Create the program, then hand it to the parent for optimistic insertion + routing. */
+  /** Create the theme, then hand it to the parent to route to its detail. */
   const submit = useCallback(async (): Promise<void> => {
     const trimmed = name.trim();
     if (trimmed.length === 0) return;
     setCreating(true);
     setError(null);
     try {
-      const res = await api.v1.orgs[':orgId'].programs.$post({
+      const res = await api.v1.orgs[':orgId'].initiatives.$post({
         param: { orgId },
         json: { name: trimmed },
       });
       if (!res.ok) {
-        setError(await readProblem(res, `Could not create the ${programNounLower}.`));
+        setError(await readProblem(res, `Could not create the ${initiativeNounLower}.`));
         return;
       }
       const created = await res.json();
       onOpenChange(false);
       onCreated(created);
     } catch (caught) {
-      setError(readError(caught, `Something went wrong creating the ${programNounLower}.`));
+      setError(readError(caught, `Something went wrong creating the ${initiativeNounLower}.`));
     } finally {
       setCreating(false);
     }
-  }, [name, orgId, programNounLower, onOpenChange, onCreated]);
+  }, [name, orgId, initiativeNounLower, onOpenChange, onCreated]);
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>New {programNoun}</DialogTitle>
+          <DialogTitle>New {initiativeNoun}</DialogTitle>
           <DialogDescription>
-            Name your {programNounLower} to get started — set the owner, health, and visibility
-            later.
+            Name a cross-cutting theme — associate {initiativeNounLower}s with work later on its
+            detail screen.
           </DialogDescription>
         </DialogHeader>
         <form
-          id="create-program-form"
+          id="create-initiative-form"
           onSubmit={(event) => {
             event.preventDefault();
             void submit();
@@ -127,8 +128,8 @@ export function CreateProgramDialog({
           className="flex flex-col gap-3"
         >
           <Input
-            aria-label={`${programNoun} name`}
-            placeholder={`Name your ${programNounLower}…`}
+            aria-label={`${initiativeNoun} name`}
+            placeholder={`Name your ${initiativeNounLower}…`}
             value={name}
             disabled={creating}
             onChange={(event) => {
@@ -149,12 +150,12 @@ export function CreateProgramDialog({
           </DialogClose>
           <Button
             type="submit"
-            form="create-program-form"
+            form="create-initiative-form"
             disabled={creating || name.trim().length === 0}
             className="gap-1.5"
           >
             <Plus aria-hidden="true" className="size-4" />
-            {creating ? 'Creating…' : `Create ${programNoun}`}
+            {creating ? 'Creating…' : `Create ${initiativeNoun}`}
           </Button>
         </DialogFooter>
       </DialogContent>

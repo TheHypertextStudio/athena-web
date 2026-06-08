@@ -20,13 +20,14 @@
  */
 import type { InitiativeDetail, InitiativeOut, InitiativeStatus } from '@docket/types';
 import { useVocabulary } from '@docket/ui/hooks';
-import { Button, Input, Skeleton } from '@docket/ui/primitives';
+import { Button, Skeleton } from '@docket/ui/primitives';
 import { Plus, Target } from '@docket/ui/icons';
 import { useParams, useRouter } from 'next/navigation';
 import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { api } from '@/lib/api';
 import { readError, readProblem } from '@/lib/problem';
+import { CreateInitiativeDialog } from '@/components/initiatives/create-initiative';
 import { InitiativeRow, type InitiativeRowData } from '@/components/initiatives/initiative-row';
 
 /** An enriched initiative row (the stored row joined with its child roll-up). */
@@ -78,10 +79,7 @@ export default function InitiativesListPage(): JSX.Element {
   const [initiatives, setInitiatives] = useState<readonly EnrichedInitiative[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  const [name, setName] = useState('');
-  const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
 
   /** Load the org's initiatives, then enrich each with its detail roll-up in parallel. */
   const load = useCallback(async (): Promise<void> => {
@@ -116,32 +114,13 @@ export default function InitiativesListPage(): JSX.Element {
     void load();
   }, [load]);
 
-  /** Create a new theme from the name, then route to its (empty) timeline-first detail. */
-  const createInitiative = useCallback(async (): Promise<void> => {
-    const trimmed = name.trim();
-    if (trimmed.length === 0) return;
-    setCreating(true);
-    setCreateError(null);
-    try {
-      const res = await api.v1.orgs[':orgId'].initiatives.$post({
-        param: { orgId },
-        json: { name: trimmed },
-      });
-      if (!res.ok) {
-        setCreateError(await readProblem(res, `Could not create the ${initiativeNounLower}.`));
-        return;
-      }
-      const created = await res.json();
-      setName('');
+  /** Route to the freshly-created theme's (empty) timeline-first detail. */
+  const handleCreated = useCallback(
+    (created: InitiativeOut): void => {
       router.push(`/orgs/${orgId}/initiatives/${created.id}`);
-    } catch (caught) {
-      setCreateError(
-        readError(caught, `Something went wrong creating the ${initiativeNounLower}.`),
-      );
-    } finally {
-      setCreating(false);
-    }
-  }, [name, orgId, initiativeNounLower, router]);
+    },
+    [orgId, router],
+  );
 
   /** The rows partitioned by derived status, each section newest-first. */
   const sections = useMemo(() => {
@@ -160,41 +139,33 @@ export default function InitiativesListPage(): JSX.Element {
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 p-8">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight">{initiativeNounPlural}</h1>
-        <p className="text-muted-foreground text-sm">
-          Cross-cutting themes that roll up the health of the {programNoun}s and {projectNoun}s
-          beneath them — no work lives here directly.
-        </p>
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-2xl font-semibold tracking-tight">{initiativeNounPlural}</h1>
+          <p className="text-muted-foreground text-sm">
+            Cross-cutting themes that roll up the health of the {programNoun}s and {projectNoun}s
+            beneath them — no work lives here directly.
+          </p>
+        </div>
+        <Button
+          type="button"
+          className="gap-1.5"
+          onClick={() => {
+            setCreateOpen(true);
+          }}
+        >
+          <Plus aria-hidden="true" className="size-4" />
+          New {initiativeNoun}
+        </Button>
       </header>
 
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          void createInitiative();
-        }}
-        className="flex flex-col gap-2"
-      >
-        <div className="flex gap-2">
-          <Input
-            aria-label={`New ${initiativeNounLower} name`}
-            placeholder={`Name a new ${initiativeNounLower}…`}
-            value={name}
-            onChange={(event) => {
-              setName(event.target.value);
-            }}
-          />
-          <Button type="submit" disabled={creating || name.trim().length === 0} className="gap-1.5">
-            <Plus aria-hidden="true" className="size-4" />
-            {creating ? 'Creating…' : `New ${initiativeNoun}`}
-          </Button>
-        </div>
-        {createError ? (
-          <p role="alert" className="text-destructive text-sm">
-            {createError}
-          </p>
-        ) : null}
-      </form>
+      <CreateInitiativeDialog
+        orgId={orgId}
+        initiativeNoun={initiativeNoun}
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCreated={handleCreated}
+      />
 
       {loading ? (
         <div className="flex flex-col gap-3" aria-hidden="true">
@@ -207,14 +178,25 @@ export default function InitiativesListPage(): JSX.Element {
           {error}
         </p>
       ) : sections.length === 0 ? (
-        <div className="border-border text-muted-foreground rounded-xl border border-dashed p-10 text-center">
-          <Target aria-hidden="true" className="mx-auto mb-3 size-6 opacity-60" />
+        <div className="border-border text-muted-foreground flex flex-col items-center rounded-xl border border-dashed p-10 text-center">
+          <Target aria-hidden="true" className="mb-3 size-6 opacity-60" />
           <p className="text-foreground text-sm font-medium">
             No {initiativeNounPlural.toLowerCase()} yet
           </p>
           <p className="mt-1 text-sm">
-            Create a theme above to start grouping {programNoun}s and {projectNoun}s into a roadmap.
+            Create a theme to start grouping {programNoun}s and {projectNoun}s into a roadmap.
           </p>
+          <Button
+            type="button"
+            variant="outline"
+            className="mt-4 gap-1.5"
+            onClick={() => {
+              setCreateOpen(true);
+            }}
+          >
+            <Plus aria-hidden="true" className="size-4" />
+            Create your first {initiativeNounLower}
+          </Button>
         </div>
       ) : (
         <div className="flex flex-col gap-6">

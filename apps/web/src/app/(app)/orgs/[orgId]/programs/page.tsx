@@ -7,7 +7,7 @@ import { Button, Skeleton } from '@docket/ui/primitives';
 import { useParams, useRouter } from 'next/navigation';
 import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 
-import { CreateProgramPanel } from '@/components/programs/create-program';
+import { CreateProgramDialog } from '@/components/programs/create-program';
 import { ProgramCard, type ProgramCardData } from '@/components/programs/program-card';
 import { type StatusFilter, StatusFilterMenu } from '@/components/programs/program-status';
 import { api } from '@/lib/api';
@@ -178,31 +178,26 @@ export default function ProgramsListPage(): JSX.Element {
           {!loading && !loadError && programs.length > 0 ? (
             <StatusFilterMenu value={filter} counts={counts} onChange={setFilter} />
           ) : null}
-          {!createOpen ? (
-            <Button
-              type="button"
-              className="gap-1.5"
-              onClick={() => {
-                setCreateOpen(true);
-              }}
-            >
-              <Plus aria-hidden="true" className="size-4" />
-              New {programLabel}
-            </Button>
-          ) : null}
+          <Button
+            type="button"
+            className="gap-1.5"
+            onClick={() => {
+              setCreateOpen(true);
+            }}
+          >
+            <Plus aria-hidden="true" className="size-4" />
+            New {programLabel}
+          </Button>
         </div>
       </header>
 
-      {createOpen ? (
-        <CreateProgramPanel
-          orgId={orgId}
-          programNoun={programLabel}
-          onClose={() => {
-            setCreateOpen(false);
-          }}
-          onCreated={handleCreated}
-        />
-      ) : null}
+      <CreateProgramDialog
+        orgId={orgId}
+        programNoun={programLabel}
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCreated={handleCreated}
+      />
 
       {loading ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2" aria-hidden="true">
@@ -218,16 +213,12 @@ export default function ProgramsListPage(): JSX.Element {
         <EmptyState
           title={`No ${programsLabel.toLowerCase()} yet`}
           body={`${programsLabel} are ongoing lines of work — your funded areas, retainers, or recurring operations. Create one to start tracking its health.`}
-          cta={
-            createOpen
-              ? null
-              : {
-                  label: `Create your first ${programLabel.toLowerCase()}`,
-                  onClick: () => {
-                    setCreateOpen(true);
-                  },
-                }
-          }
+          cta={{
+            label: `Create your first ${programLabel.toLowerCase()}`,
+            onClick: () => {
+              setCreateOpen(true);
+            },
+          }}
         />
       ) : visiblePrograms.length === 0 ? (
         <EmptyState

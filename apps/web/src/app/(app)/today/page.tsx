@@ -262,10 +262,10 @@ interface EmptyPaneProps {
   body: string;
 }
 
-/** A calm, centered empty state for a pane with no content. */
+/** A calm, content-sized empty state for a pane with no content. */
 function EmptyPane({ title, body }: EmptyPaneProps): JSX.Element {
   return (
-    <div className="border-border/60 flex flex-1 flex-col items-center justify-center gap-1 rounded-lg border border-dashed p-8 text-center">
+    <div className="border-border/60 flex flex-col items-center justify-center gap-1 rounded-lg border border-dashed p-8 text-center">
       <p className="text-foreground text-sm font-medium">{title}</p>
       <p className="text-muted-foreground max-w-xs text-sm">{body}</p>
     </div>

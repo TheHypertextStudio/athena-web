@@ -133,7 +133,7 @@ export function VocabularyTab({
       <div className="flex flex-col gap-1">
         <p className="text-muted-foreground text-sm leading-relaxed">
           {isPersonal
-            ? 'Choose the words Docket uses across your space. Pick the preset that fits how you work, and every screen relabels its nouns to match.'
+            ? 'Pick the preset that fits how you work, and every screen relabels its nouns to match.'
             : 'Docket speaks your organization’s language. Pick the preset that fits how your team works, and every screen relabels its nouns to match.'}{' '}
           You&rsquo;re currently using the{' '}
           <span className="text-foreground font-medium">{currentPresetName}</span> vocabulary.

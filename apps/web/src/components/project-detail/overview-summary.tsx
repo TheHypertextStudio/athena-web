@@ -22,6 +22,7 @@
  * color, so the breakdown stays consistent with the status glyphs everywhere else.
  */
 import type { TaskOut } from '@docket/types';
+import { cn } from '@docket/ui';
 import { StatusIcon, type WorkflowStateType } from '@docket/ui/components';
 import { Flag, ListChecks } from '@docket/ui/icons';
 import type { JSX } from 'react';
@@ -143,9 +144,15 @@ export function OverviewSummary({
           <h2 className="text-foreground text-sm font-medium">Status</h2>
         </div>
 
-        {/* Segmented bar: one slice per non-empty state type, widths proportional to count. */}
+        {/* Distribution bar: one rounded slice per non-empty state type, widths proportional to
+            count, paired with the chip legend below. It is deliberately styled to read as a
+            categorical *breakdown* — not the weighted-progress bar above it: the slices are thinner
+            (h-1.5 vs the progress bar's h-2), gapped, individually rounded, and softened to 90%
+            opacity. That keeps a single-state project (e.g. all Backlog) from reading as a crisp
+            100%-complete fill sitting under the empty 0% Progress bar; the legend names the
+            state. */}
         <div
-          className="bg-muted flex h-2 w-full overflow-hidden rounded-full"
+          className="flex h-1.5 w-full items-stretch gap-0.5"
           role="img"
           aria-label={byState
             .filter((s) => s.count > 0)
@@ -157,7 +164,7 @@ export function OverviewSummary({
             .map((s) => (
               <div
                 key={s.type}
-                className={STATE_BAR_CLASS[s.type]}
+                className={cn('rounded-full opacity-90', STATE_BAR_CLASS[s.type])}
                 style={{ width: `${(s.count / total) * 100}%` }}
               />
             ))}

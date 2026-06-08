@@ -92,7 +92,7 @@ export function AttentionCard({
             <span className="text-foreground text-sm font-semibold">{title}</span>
             <span className={`text-sm font-semibold tabular-nums ${countTone}`}>{count}</span>
           </div>
-          <span className="text-muted-foreground truncate text-xs">
+          <span className="text-muted-foreground text-xs text-balance">
             {active ? activeDescription : clearDescription}
           </span>
         </div>

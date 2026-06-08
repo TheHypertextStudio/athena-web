@@ -1,15 +1,18 @@
 'use client';
 
 /**
- * A keyboard-navigable segmented control for the Inbox's two feeds.
+ * A keyboard-navigable underline tab control for the Inbox's two feeds.
  *
  * @remarks
  * The Inbox splits everything that needs a response ("Inbox") from a quieter passive
- * awareness feed ("Activity"). This renders that split as a single, pill-styled `tablist`:
- * each segment is a real `tab` with `aria-selected`, an optional count badge, and roving
- * arrow-key focus (Left/Right/Home/End) per the WAI-ARIA tabs pattern, so the control is
- * fully operable without a mouse and announces correctly to assistive tech. Selection is
- * controlled by the parent (it owns which feed is shown and the panel `id`s).
+ * awareness feed ("Activity"). This renders that split as a single `tablist` in the same
+ * underline style My Work and the project-detail sections use, so in-page tabs read as one
+ * visual language across the app: each segment is a real `tab` with `aria-selected`, an
+ * optional count badge, and roving arrow-key focus (Left/Right/Home/End) per the WAI-ARIA
+ * tabs pattern, so the control is fully operable without a mouse and announces correctly to
+ * assistive tech. The active segment carries a `border-primary` underline (legible even
+ * without color); selection is controlled by the parent (it owns which feed is shown and the
+ * panel `id`s).
  */
 import { cn } from '@docket/ui/lib/utils';
 import { type JSX, type KeyboardEvent as ReactKeyboardEvent, useRef } from 'react';
@@ -41,7 +44,7 @@ export interface SegmentedTabsProps<TId extends string> {
 }
 
 /**
- * A roving-tabindex segmented tab control.
+ * A roving-tabindex underline tab control.
  *
  * @example
  * ```tsx
@@ -101,7 +104,7 @@ export function SegmentedTabs<TId extends string>({
     <div
       role="tablist"
       aria-label={label}
-      className="bg-muted/60 inline-flex items-center gap-1 rounded-lg p-1"
+      className="border-border flex items-center gap-1 border-b"
     >
       {segments.map((segment, index) => {
         const selected = segment.id === value;
@@ -126,22 +129,20 @@ export function SegmentedTabs<TId extends string>({
               onKeyDown(event, index);
             }}
             className={cn(
-              'focus-visible:ring-ring focus-visible:ring-offset-background inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:outline-none',
+              'focus-visible:ring-ring -mb-px inline-flex items-center gap-2 rounded-t-md border-b-2 px-3 py-2 text-sm font-medium transition-colors outline-none focus-visible:ring-1',
               selected
-                ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground',
+                ? 'border-primary text-foreground'
+                : 'text-muted-foreground hover:text-foreground border-transparent',
             )}
           >
             {segment.label}
             {showCount ? (
               <span
                 className={cn(
-                  'inline-flex min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-semibold tabular-nums',
+                  'inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-xs font-semibold tabular-nums',
                   segment.emphasis
                     ? 'bg-destructive/10 text-destructive'
-                    : selected
-                      ? 'bg-muted text-muted-foreground'
-                      : 'bg-background/60 text-muted-foreground',
+                    : 'bg-muted text-muted-foreground',
                 )}
               >
                 {segment.count}

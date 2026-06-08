@@ -3,15 +3,22 @@
  *
  * @remarks
  * The single typed edge to an external work/context provider
- * (GitHub/Drive/Linear/Gmail/Calendar). The real adapters call the provider API with
- * an OAuth token; the mock returns fixture issues/docs/events carrying provenance.
+ * (GitHub/Drive/Linear/Gmail/Calendar/Google Tasks). The real adapters call the
+ * provider API with an OAuth token; the mock returns fixture issues/docs/events/tasks
+ * carrying provenance.
  * The Migration-vs-Connector logic and import / read-only-mirror are real business
  * logic exercised against this port — only the I/O edge is swapped (`boundaries.md`
  * §5).
  */
 
-/** The external providers Docket can connect to. */
-export type ConnectorProvider = 'github' | 'drive' | 'linear' | 'gmail' | 'calendar';
+/**
+ * The external providers Docket can connect to.
+ *
+ * @remarks
+ * `gtasks` is Google Tasks (the user's personal to-dos), distinct from `calendar`
+ * (Google Calendar events) and the Google document/mail surfaces (`drive`/`gmail`).
+ */
+export type ConnectorProvider = 'github' | 'drive' | 'linear' | 'gmail' | 'calendar' | 'gtasks';
 
 /** Input to establish a connection to a provider for an org scope. */
 export interface ConnectInput {

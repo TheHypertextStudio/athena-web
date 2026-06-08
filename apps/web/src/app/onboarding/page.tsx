@@ -51,19 +51,23 @@ function firstNameOf(name: string | undefined): string | undefined {
  * @remarks
  * A Client Component that runs a small state machine. The first screen forks on intent:
  *
- * - **Just me** → a welcome beat that explains the personal command center, then an optional
- *   connect step. On finish it silently creates a personal space
- *   (`isPersonal: true`, named after the signed-in user when known) and routes to My Work.
+ * - **Just me** → a welcome beat that explains the personal command center, then the live
+ *   connect step. The personal space (`isPersonal: true`, named after the signed-in user when
+ *   known) is created silently when the user leaves the welcome beat.
  * - **Team / nonprofit** → name the org, choose a vocabulary preset (with a live preview drawn
- *   from the real presets), then an optional connect step. On finish it creates the org with
- *   the chosen name + vocabulary + intent and routes to My Work.
+ *   from the real presets), then the live connect step. The org is created with the chosen
+ *   name + vocabulary + intent when the user leaves the vocabulary beat.
  *
+ * Crucially the workspace is created when the user *enters* the connect step — not at the very
+ * end — so the connect step has a real org to mirror work into (create integration → import).
  * The ordered step list is derived from the chosen intent so the progress indicator and
- * back/next navigation stay correct without hand-maintained branches. On success it routes to
- * the new org's My Work, where the app shell loads the org's teams (so task creation works on a
- * fresh session); on failure the `Problem` response body is surfaced inline. Submission only
- * ever fires from the React click handler, so a pre-hydration click cannot trigger a
- * half-initialised create.
+ * back/next navigation stay correct without hand-maintained branches. Once the org exists the
+ * user is committed: back navigation is disabled, and both "Skip for now" and "Enter your
+ * workspace" route to the new org's My Work — populated by whatever was mirrored, or empty but
+ * usable when skipped. If the create call fails, the wizard stays on the setup step and
+ * surfaces the `Problem` response body inline rather than advancing to a connect step with no
+ * org behind it. Submission only ever fires from the React click handler, so a pre-hydration
+ * click cannot trigger a half-initialised create.
  */
 export default function OnboardingPage(): JSX.Element {
   const router = useRouter();
@@ -77,13 +81,18 @@ export default function OnboardingPage(): JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
+  /** The created org's id, set when the user enters the connect step (commits them). */
+  const [orgId, setOrgId] = useState<string | null>(null);
+  /** Running total of items mirrored on the connect step (promotes the primary action). */
+  const [mirroredTotal, setMirroredTotal] = useState(0);
+
   /** The active fork's ordered steps; the personal fork until an intent forks it otherwise. */
   const steps = useMemo<readonly OnboardingStep[]>(
     () => (intent === 'personal' || intent === null ? PERSONAL_STEPS : TEAM_STEPS),
     [intent],
   );
   const stepIndex = Math.max(0, steps.indexOf(step));
-  const isLastStep = stepIndex === steps.length - 1;
+  const isConnectStep = step === 'connect';
   const isPersonal = intent === 'personal';
   const nameReady = name.trim().length > 0;
 
@@ -96,38 +105,52 @@ export default function OnboardingPage(): JSX.Element {
     setStep(forkSteps[1] ?? 'connect');
   }, []);
 
-  /** Step back one beat; from the second step this returns to (and clears) the intent fork. */
+  /**
+   * Step back one beat; from the second step this returns to (and clears) the intent fork.
+   *
+   * @remarks
+   * Once the org has been created (the connect step) the user is committed, so back navigation
+   * is unavailable — there is nothing to step back into without un-creating the workspace.
+   */
   const goBack = useCallback((): void => {
+    if (orgId !== null) return;
     setError(null);
     const previous = steps[stepIndex - 1];
     if (!previous) return;
     if (previous === 'intent') setIntent(null);
     setStep(previous);
-  }, [steps, stepIndex]);
+  }, [steps, stepIndex, orgId]);
 
-  /** Advance to the next step in the active fork. */
-  const goNext = useCallback((): void => {
-    setError(null);
-    const next = steps[stepIndex + 1];
-    if (next) setStep(next);
-  }, [steps, stepIndex]);
+  /** Build the org-create body for the chosen fork. */
+  const orgBody = useCallback((): OrgCreate => {
+    return isPersonal
+      ? {
+          isPersonal: true,
+          name: firstName ? `${firstName}'s space` : 'Personal',
+          intent: 'personal',
+          vocabulary: 'startup',
+        }
+      : { isPersonal: false, name: name.trim(), intent: intent ?? 'startup', vocabulary };
+  }, [isPersonal, firstName, name, intent, vocabulary]);
 
-  /** Create the org (personal or team) and route to its My Work. */
-  const finish = useCallback(async (): Promise<void> => {
+  /**
+   * Create the org (personal or team) and advance into the connect step bound to it.
+   *
+   * @remarks
+   * Idempotent against re-entry: once {@link orgId} is set this is a no-op, so a double-click
+   * never creates two orgs. On failure the wizard stays on the current setup step and surfaces
+   * the server's message — it never advances to a connect step without a real org behind it.
+   */
+  const enterConnect = useCallback(async (): Promise<void> => {
     if (intent === null || pending) return;
+    if (orgId !== null) {
+      setStep('connect');
+      return;
+    }
     setError(null);
     setPending(true);
     try {
-      const body: OrgCreate = isPersonal
-        ? {
-            isPersonal: true,
-            name: firstName ? `${firstName}'s space` : 'Personal',
-            intent: 'personal',
-            vocabulary: 'startup',
-          }
-        : { isPersonal: false, name: name.trim(), intent, vocabulary };
-
-      const res = await createOrg(body);
+      const res = await createOrg(orgBody());
       if (!res.ok) {
         setError(
           await readProblem(res, 'Could not finish setting up your workspace. Please try again.'),
@@ -135,7 +158,8 @@ export default function OnboardingPage(): JSX.Element {
         return;
       }
       const { organization } = (await res.json()) as OrgCreateResult;
-      router.push(`/orgs/${organization.id}/my-work`);
+      setOrgId(organization.id);
+      setStep('connect');
     } catch (caught) {
       setError(
         readError(caught, 'Something went wrong setting up your workspace. Please try again.'),
@@ -143,16 +167,33 @@ export default function OnboardingPage(): JSX.Element {
     } finally {
       setPending(false);
     }
-  }, [intent, isPersonal, firstName, name, vocabulary, pending, router]);
+  }, [intent, pending, orgId, orgBody]);
 
-  /** Run the right action for the current step's primary button (advance vs. finish). */
+  /** Route into the (now real) workspace's My Work — used by both Skip and Enter. */
+  const enterWorkspace = useCallback((): void => {
+    if (orgId === null) return;
+    router.push(`/orgs/${orgId}/my-work`);
+  }, [orgId, router]);
+
+  /** Advance to the next step; the setup→connect hop creates the org first. */
+  const goNext = useCallback((): void => {
+    setError(null);
+    const next = steps[stepIndex + 1];
+    if (next === 'connect') {
+      void enterConnect();
+      return;
+    }
+    if (next) setStep(next);
+  }, [steps, stepIndex, enterConnect]);
+
+  /** Run the right action for the current step's primary button. */
   const onPrimary = useCallback((): void => {
-    if (isLastStep) {
-      void finish();
+    if (isConnectStep) {
+      enterWorkspace();
       return;
     }
     goNext();
-  }, [isLastStep, finish, goNext]);
+  }, [isConnectStep, enterWorkspace, goNext]);
 
   const copy = stepCopy(step);
 
@@ -165,7 +206,7 @@ export default function OnboardingPage(): JSX.Element {
       eyebrow={copy.eyebrow}
       title={interpolate(copy.title, firstName)}
       subtitle={copy.subtitle}
-      onBack={step === 'intent' ? undefined : goBack}
+      onBack={step === 'intent' || orgId !== null ? undefined : goBack}
       footer={
         <>
           {error ? (
@@ -173,8 +214,8 @@ export default function OnboardingPage(): JSX.Element {
               {error}
             </p>
           ) : null}
-          {step === 'connect' ? (
-            <Button type="button" variant="ghost" onClick={onPrimary} disabled={pending}>
+          {isConnectStep ? (
+            <Button type="button" variant="ghost" onClick={enterWorkspace}>
               Skip for now
             </Button>
           ) : null}
@@ -183,9 +224,9 @@ export default function OnboardingPage(): JSX.Element {
               type="button"
               onClick={onPrimary}
               disabled={pending || (step === 'name' && !nameReady)}
-              className={cn(isLastStep && 'min-w-44')}
+              className={cn(isConnectStep && 'min-w-44')}
             >
-              {primaryLabel(isLastStep, isPersonal, pending)}
+              {primaryLabel(step, isConnectStep, isPersonal, pending, mirroredTotal)}
             </Button>
           )}
         </>
@@ -203,7 +244,9 @@ export default function OnboardingPage(): JSX.Element {
         <StepVocabulary value={vocabulary} onChange={setVocabulary} />
       ) : null}
 
-      {step === 'connect' ? <StepConnect /> : null}
+      {step === 'connect' && orgId !== null ? (
+        <StepConnect orgId={orgId} onMirroredTotalChange={setMirroredTotal} />
+      ) : null}
     </WizardShell>
   );
 }
@@ -240,19 +283,37 @@ function stepCopy(step: OnboardingStep): { eyebrow: string; title: string; subti
       };
     case 'connect':
       return {
-        eyebrow: 'Almost there',
-        title: 'Connect your accounts',
+        eyebrow: 'Bring in your work',
+        title: 'Start with what you already use',
         subtitle:
-          'Optional — bring in work from the tools you already use. You can always skip this.',
+          'Connect a tool to fill your workspace with your real tasks and deadlines. Connect as many as you like — or skip and start fresh.',
       };
   }
 }
 
-/** The primary button label for a given step and submit state. */
-function primaryLabel(isLastStep: boolean, isPersonal: boolean, pending: boolean): string {
-  if (!isLastStep) return 'Continue';
-  if (pending) return 'Setting things up…';
-  return isPersonal ? 'Enter your space' : 'Create workspace';
+/**
+ * The primary button label for a given step and state.
+ *
+ * @remarks
+ * On the connect step the label promotes from a neutral "Continue without connecting" to a
+ * confident "Enter your workspace" once anything has been mirrored, so the primary action
+ * always reads true to what the user will land in.
+ */
+function primaryLabel(
+  step: OnboardingStep,
+  isConnectStep: boolean,
+  isPersonal: boolean,
+  pending: boolean,
+  mirroredTotal: number,
+): string {
+  if (isConnectStep) {
+    return mirroredTotal > 0 ? 'Enter your workspace' : 'Continue without connecting';
+  }
+  if (step === 'vocabulary' || step === 'personal-welcome') {
+    if (pending) return 'Setting things up…';
+    return isPersonal ? 'Create your space' : 'Create workspace';
+  }
+  return 'Continue';
 }
 
 /** Replace a `{name}` token in header copy with `, <firstName>` when the name is known. */

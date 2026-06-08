@@ -1,27 +1,54 @@
 'use client';
 
 import type { MemberOut, ProjectOut, TaskOut } from '@docket/types';
+import { ActorAvatar, EntityList, EntityListRow, RowMeta, StatusIcon } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
-import { FolderKanban, Plus } from '@docket/ui/icons';
+import { Calendar, FolderKanban, ListChecks, Plus } from '@docket/ui/icons';
 import { Button, Skeleton } from '@docket/ui/primitives';
 import { useParams, useRouter } from 'next/navigation';
 import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 import { CreateProjectDialog } from '@/components/projects/create-project';
-import { ProjectCard, type ProjectCardData } from '@/components/projects/project-card';
-import { type StatusFilter, StatusFilterMenu } from '@/components/projects/project-status';
+import {
+  HealthDot,
+  ProjectStatusBadge,
+  type StatusFilter,
+  StatusFilterMenu,
+  statusGlyphType,
+  statusLabel,
+} from '@/components/projects/project-status';
 import { api } from '@/lib/api';
 import { readError, readProblem } from '@/lib/problem';
 
+/** A short, year-less day formatter for a project's target date (e.g. "Jun 21"). */
+const TARGET_DATE_FMT = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' });
+
+/** Format a project's nullable target date for the row's meta band, or `null` when unset. */
+function formatTargetDate(targetDate: string | null | undefined): string | null {
+  if (!targetDate) return null;
+  const date = new Date(targetDate);
+  if (Number.isNaN(date.getTime())) return null;
+  return TARGET_DATE_FMT.format(date);
+}
+
+/** The row view-model derived for one Project (lead + task-scope roll-up). */
+interface ProjectRow {
+  project: ProjectOut;
+  leadName: string | null;
+  taskCount: number;
+}
+
 /**
- * The org Projects list — the roster of bounded efforts (§8.4).
+ * The org Projects list — the roster of bounded efforts (§8.4), rendered as dense rows.
  *
  * @remarks
  * A Client Component reached at `/orgs/[orgId]/projects`. A Project is a *bounded* effort, so
- * each {@link ProjectCard} leads with identity, lifecycle status (`planned | active |
- * completed | canceled`), its {@link import('@/components/projects/project-status').HealthPill |
- * health verdict}, its lead, and a task-scope count ("N tasks").
+ * each {@link EntityListRow} leads with a lifecycle status glyph and surfaces its lead, target
+ * date, task-scope count ("N tasks"), and — in the trailing slot — its lifecycle
+ * {@link ProjectStatusBadge} and {@link HealthPill}. The card grid is gone: the roster is one
+ * clean bordered list of hairline-divided rows (design-system §5.1), so a long roster scans by
+ * row, not by tile.
  *
  * It composes two slices in parallel — projects and tasks — and rolls up the per-project task
  * count client-side (a task belongs to a project via `task.projectId`), so the roster renders
@@ -50,7 +77,7 @@ export default function ProjectsListPage(): JSX.Element {
   const [filter, setFilter] = useState<StatusFilter>('all');
   const [createOpen, setCreateOpen] = useState(false);
 
-  /** Load the org's projects and the slices needed to scope + attribute each card. */
+  /** Load the org's projects and the slices needed to scope + attribute each row. */
   const load = useCallback(async (): Promise<void> => {
     setLoading(true);
     setLoadError(null);
@@ -82,7 +109,7 @@ export default function ProjectsListPage(): JSX.Element {
     void load();
   }, [load]);
 
-  /** Lead display name by actor id (for the card footer attribution). */
+  /** Lead display name by actor id (for the row attribution). */
   const leadNameById = useMemo(
     () => new Map(members.map((m) => [m.actorId, m.displayName])),
     [members],
@@ -96,20 +123,6 @@ export default function ProjectsListPage(): JSX.Element {
     }
     return counts;
   }, [tasks]);
-
-  /** Adapt a Project DTO to its card view-model (lead + task scope roll-up). */
-  const toCard = useCallback(
-    (project: ProjectOut): ProjectCardData => ({
-      id: project.id,
-      name: project.name,
-      description: project.description,
-      status: project.status,
-      health: project.health ?? null,
-      leadName: project.leadId ? (leadNameById.get(project.leadId) ?? null) : null,
-      taskCount: taskCountByProject.get(project.id) ?? 0,
-    }),
-    [leadNameById, taskCountByProject],
-  );
 
   /** Per-bucket counts for the filter menu (always computed over the full roster). */
   const counts = useMemo<Record<StatusFilter, number>>(() => {
@@ -126,11 +139,16 @@ export default function ProjectsListPage(): JSX.Element {
     return tally;
   }, [projects]);
 
-  /** The projects shown under the active filter. */
-  const visibleProjects = useMemo(
-    () => (filter === 'all' ? projects : projects.filter((project) => project.status === filter)),
-    [projects, filter],
-  );
+  /** The projects shown under the active filter, adapted to their row view-model. */
+  const visibleRows = useMemo<readonly ProjectRow[]>(() => {
+    const visible =
+      filter === 'all' ? projects : projects.filter((project) => project.status === filter);
+    return visible.map((project) => ({
+      project,
+      leadName: project.leadId ? (leadNameById.get(project.leadId) ?? null) : null,
+      taskCount: taskCountByProject.get(project.id) ?? 0,
+    }));
+  }, [projects, filter, leadNameById, taskCountByProject]);
 
   /** Prepend the freshly-created project to the roster, then open its detail. */
   const handleCreated = useCallback(
@@ -179,14 +197,7 @@ export default function ProjectsListPage(): JSX.Element {
       />
 
       {loading ? (
-        <div
-          className="grid grid-cols-1 gap-4 @2xl:grid-cols-2 @5xl:grid-cols-3"
-          aria-hidden="true"
-        >
-          {[0, 1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-44 w-full rounded-xl" />
-          ))}
-        </div>
+        <ListSkeleton />
       ) : loadError ? (
         <p
           role="alert"
@@ -205,27 +216,78 @@ export default function ProjectsListPage(): JSX.Element {
             },
           }}
         />
-      ) : visibleProjects.length === 0 ? (
+      ) : visibleRows.length === 0 ? (
         <EmptyState
           title={`No ${filter} ${projectsLabel.toLowerCase()}`}
           body={`No ${projectLabel.toLowerCase()} matches this filter. Try a different status.`}
         />
       ) : (
-        <ul className="grid grid-cols-1 gap-4 @2xl:grid-cols-2 @5xl:grid-cols-3">
-          {visibleProjects.map((project) => (
-            <li key={project.id}>
-              <ProjectCard
-                project={toCard(project)}
-                taskNoun={taskNoun}
-                taskNounPlural={taskNounPlural}
-                onOpen={(id) => {
-                  router.push(`/orgs/${orgId}/projects/${id}`);
+        <EntityList aria-label={projectsLabel}>
+          {visibleRows.map(({ project, leadName, taskCount }) => {
+            const targetDate = formatTargetDate(project.targetDate);
+            const taskWord = taskCount === 1 ? taskNoun : taskNounPlural;
+            return (
+              <EntityListRow
+                key={project.id}
+                leading={
+                  <StatusIcon
+                    type={statusGlyphType(project.status)}
+                    label={statusLabel(project.status)}
+                  />
+                }
+                title={project.name}
+                onActivate={() => {
+                  router.push(`/orgs/${orgId}/projects/${project.id}`);
                 }}
+                meta={
+                  <>
+                    {leadName ? (
+                      <RowMeta>
+                        <ActorAvatar kind="human" name={leadName} size={18} />
+                        <span className="text-on-surface/80 font-medium">{leadName}</span>
+                      </RowMeta>
+                    ) : null}
+                    {targetDate ? (
+                      <RowMeta tabular>
+                        <Calendar aria-hidden="true" className="size-3.5" />
+                        {targetDate}
+                      </RowMeta>
+                    ) : null}
+                    <RowMeta tabular>
+                      <ListChecks aria-hidden="true" className="size-3.5" />
+                      {taskCount} {taskWord}
+                    </RowMeta>
+                  </>
+                }
+                trailing={
+                  <>
+                    <HealthDot health={project.health ?? null} />
+                    <ProjectStatusBadge status={project.status} />
+                  </>
+                }
               />
-            </li>
-          ))}
-        </ul>
+            );
+          })}
+        </EntityList>
       )}
+    </div>
+  );
+}
+
+/** Loading placeholder: a bordered list of slim row skeletons. */
+function ListSkeleton(): JSX.Element {
+  return (
+    <div
+      className="border-outline-variant divide-outline-variant flex flex-col divide-y overflow-hidden rounded-xl border"
+      aria-hidden="true"
+    >
+      {[0, 1, 2, 3, 4].map((i) => (
+        <div key={i} className="flex items-center gap-3 px-3 py-2.5">
+          <Skeleton className="size-4 rounded-full" />
+          <Skeleton className="h-4 w-48" />
+          <Skeleton className="ml-auto h-4 w-24" />
+        </div>
+      ))}
     </div>
   );
 }

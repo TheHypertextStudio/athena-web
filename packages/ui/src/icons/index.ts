@@ -61,6 +61,7 @@ export { default as Translate } from '@mui/icons-material/Translate';
 export { default as Trash2 } from '@mui/icons-material/DeleteOutlined';
 export { default as Users } from '@mui/icons-material/People';
 export { default as User } from '@mui/icons-material/Person';
+export { default as Workflow } from '@mui/icons-material/AccountTree';
 export { default as X } from '@mui/icons-material/Close';
 export { default as XCircle } from '@mui/icons-material/Cancel';
 

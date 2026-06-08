@@ -14,6 +14,17 @@ export {
   type StatusIconProps,
   type WorkflowStateType,
 } from './atoms/StatusIcon';
+export {
+  EntityList,
+  type EntityListProps,
+  EntityListRow,
+  type EntityListRowProps,
+  type EntityRowRenderProps,
+  RowMeta,
+  type RowMetaProps,
+  RowProgress,
+  type RowProgressProps,
+} from './views/EntityListRow';
 export { GroupHeader, type GroupHeaderProps } from './views/GroupHeader';
 export { ListGroup, type ListGroupProps } from './views/ListGroup';
 export {

@@ -12,7 +12,7 @@ export const ORG_ACCENT_PALETTE: readonly string[] = [
   'oklch(0.55 0.18 250)', // blue
   'oklch(0.55 0.17 300)', // violet
   'oklch(0.55 0.18 350)', // pink
-  'oklch(0.5 0.2 25)', // red
+  'oklch(0.62 0.13 30)', // coral (calm; deliberately distinct from the destructive/error red)
   'oklch(0.55 0.15 60)', // amber
   'oklch(0.52 0.16 150)', // green
   'oklch(0.55 0.12 200)', // teal

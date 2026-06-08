@@ -1,3 +1,4 @@
+import { passkeyClient } from '@better-auth/passkey/client';
 import { createAuthClient } from 'better-auth/react';
 
 /**
@@ -33,16 +34,19 @@ const AUTH_BASE_URL = `${resolveAuthOrigin()}/api/auth`;
  * subsequent request; the admin API gates every route on that session resolving to a
  * `staff_user` row.
  *
- * Email/password is the only enabled method (`@docket/auth` config), so the relevant
- * call is `authClient.signIn.email(...)`. The admin console assumes the signed-in user is
- * staff — the API returns 403 otherwise.
+ * **Passwordless: passkey is the only credential** — identical to the product app, and the
+ * only method the `@docket/auth` server config enables (`emailAndPassword` is removed). The
+ * {@link passkeyClient} plugin exposes `authClient.signIn.passkey({ autoFill })`; an operator
+ * authenticates with their existing passkey (registered on their Docket account), and the
+ * admin API returns 403 unless that user resolves to a `staff_user` row. There is no admin
+ * sign-up — staff accounts are provisioned out of band.
  */
-export const authClient = createAuthClient({ baseURL: AUTH_BASE_URL });
+export const authClient = createAuthClient({ baseURL: AUTH_BASE_URL, plugins: [passkeyClient()] });
 
 /**
- * The email/password sign-in namespace (`signIn.email({ email, password })`).
+ * The sign-in namespace (`signIn.passkey({ autoFill })`).
  *
- * @remarks Convenience re-export of {@link authClient.signIn}.
+ * @remarks Convenience re-export of {@link authClient.signIn}. Passwordless — no `signIn.email`.
  */
 export const signIn = authClient.signIn;
 

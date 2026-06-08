@@ -11,6 +11,7 @@
  * variants — never hardcoded.
  */
 import type { CycleStatus } from '@docket/types';
+import type { WorkflowStateType } from '@docket/ui/components';
 
 /** The three list segments the Cycles list groups cycles into, current-first. */
 export const CYCLE_SEGMENTS = ['active', 'upcoming', 'completed'] as const;
@@ -44,6 +45,26 @@ export const STATUS_LABEL: Record<CycleStatus, string> = {
  */
 export function statusBadgeVariant(status: CycleStatus): 'default' | 'secondary' {
   return status === 'active' ? 'default' : 'secondary';
+}
+
+/**
+ * The canonical workflow-state type a cycle status reads as, for the leading
+ * {@link import('@docket/ui/components').StatusIcon | StatusIcon} glyph on a list row.
+ *
+ * @remarks
+ * The live `active` cadence shows the in-progress dot, an `upcoming` (not-yet-started) cadence
+ * a plain unstarted ring, and a `completed` cadence the completed check — the same glyph
+ * vocabulary a task carries, so a cycle row reads as one of the family.
+ */
+export function statusGlyphType(status: CycleStatus): WorkflowStateType {
+  switch (status) {
+    case 'active':
+      return 'started';
+    case 'upcoming':
+      return 'unstarted';
+    case 'completed':
+      return 'completed';
+  }
 }
 
 /**

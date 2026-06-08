@@ -131,16 +131,16 @@ export function VocabularyTab({
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
-        <p className="text-muted-foreground text-sm leading-relaxed">
+        <p className="text-on-surface-variant text-sm leading-relaxed">
           {isPersonal
             ? 'Pick the preset that fits how you work, and every screen relabels its nouns to match.'
             : 'Docket speaks your organization’s language. Pick the preset that fits how your team works, and every screen relabels its nouns to match.'}{' '}
           You&rsquo;re currently using the{' '}
-          <span className="text-foreground font-medium">{currentPresetName}</span> vocabulary.
+          <span className="text-on-surface font-medium">{currentPresetName}</span> vocabulary.
         </p>
       </div>
 
-      <div role="radiogroup" aria-label="Vocabulary preset" className="grid gap-3 sm:grid-cols-3">
+      <div role="radiogroup" aria-label="Vocabulary preset" className="grid gap-4 @2xl:grid-cols-3">
         {PRESETS.map((preset) => {
           const isSelected = preset.value === selected;
           const isCurrent = preset.value === currentPreset;
@@ -163,12 +163,12 @@ export function VocabularyTab({
               )}
             >
               <span className="flex items-center justify-between">
-                <span className="text-foreground text-sm font-semibold">{preset.name}</span>
+                <span className="text-on-surface text-sm font-semibold">{preset.name}</span>
                 {isSelected ? <Check aria-hidden="true" className="text-primary size-4" /> : null}
               </span>
-              <span className="text-muted-foreground text-xs leading-snug">{preset.tagline}</span>
+              <span className="text-on-surface-variant text-xs leading-snug">{preset.tagline}</span>
               {isCurrent ? (
-                <span className="text-muted-foreground mt-1 text-[0.625rem] font-medium tracking-wide uppercase">
+                <span className="text-on-surface-variant mt-1 text-[0.625rem] font-medium tracking-wide uppercase">
                   Current
                 </span>
               ) : null}
@@ -182,14 +182,14 @@ export function VocabularyTab({
         className="border-outline-variant bg-surface-container-low rounded-xl border"
       >
         <div className="border-outline-variant border-b px-4 py-3">
-          <h3 className="text-foreground text-sm font-semibold">
+          <h3 className="text-on-surface text-sm font-semibold">
             How the {PRESETS.find((p) => p.value === selected)?.name ?? 'selected'} vocabulary reads
           </h3>
-          <p className="text-muted-foreground text-xs">
+          <p className="text-on-surface-variant text-xs">
             The words Docket uses across the app when this preset is active.
           </p>
         </div>
-        <dl className="divide-border grid divide-y sm:grid-cols-2 sm:divide-y-0">
+        <dl className="divide-outline-variant grid divide-y @2xl:grid-cols-2 @2xl:divide-y-0">
           {keys.map((key, index) => {
             const term = previewMap[key];
             const defaultTerm = VOCABULARY_PRESETS.startup[key];
@@ -199,19 +199,19 @@ export function VocabularyTab({
                 key={key}
                 className={cn(
                   'flex items-center justify-between gap-3 px-4 py-3',
-                  // Add the column divider on wider screens for the right column.
-                  index % 2 === 1 && 'sm:border-border sm:border-l',
+                  // Add the column divider once the panel is wide enough for the right column.
+                  index % 2 === 1 && '@2xl:border-outline-variant @2xl:border-l',
                 )}
               >
-                <dt className="text-muted-foreground text-xs capitalize">{key}</dt>
+                <dt className="text-on-surface-variant text-xs capitalize">{key}</dt>
                 <dd
                   className={cn(
                     'text-sm font-medium',
-                    remapped ? 'text-primary' : 'text-foreground',
+                    remapped ? 'text-primary' : 'text-on-surface',
                   )}
                 >
                   {term.singular}
-                  <span className="text-muted-foreground font-normal"> / {term.plural}</span>
+                  <span className="text-on-surface-variant font-normal"> / {term.plural}</span>
                 </dd>
               </div>
             );
@@ -226,7 +226,7 @@ export function VocabularyTab({
             'rounded-lg border p-3 text-sm',
             noticeIsError
               ? 'border-destructive/40 text-destructive bg-destructive/5'
-              : 'border-border text-muted-foreground',
+              : 'border-outline-variant text-on-surface-variant',
           )}
         >
           {notice}
@@ -234,7 +234,7 @@ export function VocabularyTab({
       ) : null}
 
       {canManage ? (
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <Button
             disabled={!dirty || applying}
             onClick={() => {
@@ -256,7 +256,7 @@ export function VocabularyTab({
           ) : null}
         </div>
       ) : (
-        <p className="text-muted-foreground text-sm">
+        <p className="text-on-surface-variant text-sm">
           {isPersonal
             ? 'You don’t have permission to change this vocabulary.'
             : 'Only an owner or admin can change the organization’s vocabulary.'}

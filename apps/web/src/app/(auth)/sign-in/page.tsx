@@ -152,7 +152,7 @@ export default function SignInPage(): JSX.Element {
         <AuthError message={error} />
 
         {!passkeySupported && hydrated ? (
-          <p className="text-muted-foreground text-sm" role="status">
+          <p className="text-on-surface-variant text-sm" role="status">
             This browser does not support passkeys. You can still continue with one of the options
             below if available.
           </p>

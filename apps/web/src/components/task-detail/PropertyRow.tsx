@@ -20,7 +20,7 @@ interface PropertyRowProps {
 export function PropertyRow({ label, children }: PropertyRowProps): JSX.Element {
   return (
     <div className="flex min-h-8 items-start gap-3 py-1.5 text-sm">
-      <span className="text-muted-foreground w-28 shrink-0 pt-0.5">{label}</span>
+      <span className="text-on-surface-variant w-28 shrink-0 pt-0.5">{label}</span>
       <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">{children}</div>
     </div>
   );

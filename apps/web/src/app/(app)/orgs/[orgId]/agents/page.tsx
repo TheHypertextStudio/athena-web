@@ -153,10 +153,10 @@ export default function AgentsFeedPage(): JSX.Element {
         };
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-5 p-4 sm:p-6 lg:p-8">
+    <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
       <header className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Agents</h1>
-        <p className="text-muted-foreground text-sm">
+        <h1 className="text-on-surface text-xl font-semibold tracking-tight">Agents</h1>
+        <p className="text-on-surface-variant text-sm">
           A live feed of what your agents are working on — watch the work happen.
         </p>
       </header>
@@ -164,7 +164,7 @@ export default function AgentsFeedPage(): JSX.Element {
       <div className="flex items-center justify-between gap-3">
         <SessionFilterMenu value={filter} counts={counts} onChange={setFilter} />
         {!loading && !loadError ? (
-          <p className="text-muted-foreground text-xs">
+          <p className="text-on-surface-variant text-xs">
             {visible.length} {visible.length === 1 ? 'session' : 'sessions'}
           </p>
         ) : null}
@@ -172,7 +172,7 @@ export default function AgentsFeedPage(): JSX.Element {
 
       <section
         aria-label="Agent sessions"
-        className="border-border flex-1 overflow-hidden rounded-lg border"
+        className="border-outline-variant flex-1 overflow-hidden rounded-lg border"
       >
         {loading ? (
           // The default Skeleton's `bg-accent` tone is near-invisible against the `bg-surface`
@@ -206,7 +206,7 @@ export default function AgentsFeedPage(): JSX.Element {
             className="border-none p-12"
           />
         ) : (
-          <ul className="divide-border flex flex-col divide-y p-1">
+          <ul className="divide-outline-variant flex flex-col divide-y p-1">
             {visible.map((session) => (
               <li key={session.id}>
                 <SessionRow session={toRow(session)} onOpen={openSession} />

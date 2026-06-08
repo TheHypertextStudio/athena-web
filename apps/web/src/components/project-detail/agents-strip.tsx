@@ -43,13 +43,13 @@ const STATUS_LABEL: Record<SessionStatus, string> = {
 
 /** Token classes for each session-status pill (active vs needs-human vs terminal). */
 const STATUS_CLASS: Record<SessionStatus, string> = {
-  pending: 'text-muted-foreground bg-muted ring-border',
+  pending: 'text-on-surface-variant bg-surface-container ring-outline-variant',
   running: 'text-state-started bg-state-started/10 ring-state-started/30',
   awaiting_input: 'text-state-canceled bg-state-canceled/10 ring-state-canceled/30',
   awaiting_approval: 'text-state-canceled bg-state-canceled/10 ring-state-canceled/30',
   completed: 'text-state-completed bg-state-completed/10 ring-state-completed/30',
   failed: 'text-destructive bg-destructive/10 ring-destructive/30',
-  canceled: 'text-muted-foreground bg-muted ring-border',
+  canceled: 'text-on-surface-variant bg-surface-container ring-outline-variant',
 };
 
 /** Whether a status should pulse to draw the eye (live or human-blocked). */
@@ -78,8 +78,8 @@ export function AgentsStrip({ agents }: AgentsStripProps): JSX.Element | null {
     >
       <div className="flex items-center gap-2">
         <Sparkles aria-hidden="true" className="text-primary size-4" />
-        <h2 className="text-foreground text-sm font-semibold">Agents working here</h2>
-        <span className="text-muted-foreground text-xs tabular-nums">{agents.length}</span>
+        <h2 className="text-on-surface text-sm font-semibold">Agents working here</h2>
+        <span className="text-on-surface-variant text-xs tabular-nums">{agents.length}</span>
       </div>
       <ul className="flex flex-col gap-2">
         {agents.map((agent) => (
@@ -89,11 +89,11 @@ export function AgentsStrip({ agents }: AgentsStripProps): JSX.Element | null {
           >
             <ActorAvatar kind="agent" name={agent.agentName} size={28} />
             <div className="flex min-w-0 flex-1 flex-col">
-              <span className="text-foreground truncate text-sm font-medium">
+              <span className="text-on-surface truncate text-sm font-medium">
                 {agent.agentName}
               </span>
-              <span className="text-muted-foreground truncate text-xs">
-                Working <span className="text-foreground/80">{agent.taskTitle}</span>
+              <span className="text-on-surface-variant truncate text-xs">
+                Working <span className="text-on-surface">{agent.taskTitle}</span>
               </span>
             </div>
             <span

@@ -185,9 +185,9 @@ export function MilestoneTasks({
         ) : null}
       </form>
 
-      <div className="border-border h-[calc(100vh-24rem)] min-h-80 overflow-hidden rounded-xl border">
+      <div className="border-outline-variant h-[calc(100vh-24rem)] min-h-80 overflow-hidden rounded-xl border">
         {tasks.length === 0 ? (
-          <div className="text-muted-foreground p-8 text-center text-sm">
+          <div className="text-on-surface-variant p-8 text-center text-sm">
             No {taskNoun}s yet — add the first one above.
           </div>
         ) : (
@@ -195,6 +195,7 @@ export function MilestoneTasks({
             items={orderedTasks}
             label="Project tasks by milestone"
             getItemKey={(t) => t.task.id}
+            rowHeight={40}
             groupBy={groupBy}
             subGroupBy={subGroupBy}
             renderRow={(t, ctx) => (

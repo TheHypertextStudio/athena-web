@@ -173,7 +173,7 @@ export function AppShellFrame({ children }: { children: ReactNode }): JSX.Elemen
 
   if (isPending || !session) {
     return (
-      <main className="bg-background text-muted-foreground flex min-h-screen items-center justify-center text-sm">
+      <main className="bg-surface text-on-surface-variant flex min-h-screen items-center justify-center text-sm">
         Loading your workspace…
       </main>
     );

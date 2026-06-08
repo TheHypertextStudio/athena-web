@@ -21,7 +21,7 @@ export interface OrgChipProps {
  */
 export function OrgChip({ orgId, name }: OrgChipProps): JSX.Element {
   return (
-    <span className="text-muted-foreground inline-flex items-center gap-1.5 text-xs">
+    <span className="text-on-surface-variant inline-flex items-center gap-1.5 text-xs">
       <span
         aria-hidden="true"
         className="h-2 w-2 shrink-0 rounded-full"

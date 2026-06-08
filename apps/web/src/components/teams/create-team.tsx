@@ -149,7 +149,7 @@ export function CreateTeamDialog({
         >
           <div className="flex flex-col gap-3 sm:flex-row">
             <label className="flex flex-1 flex-col gap-1.5">
-              <span className="text-muted-foreground text-xs font-medium">Name</span>
+              <span className="text-on-surface-variant text-xs font-medium">Name</span>
               <Input
                 aria-label="Team name"
                 placeholder="e.g. Engineering"
@@ -161,7 +161,7 @@ export function CreateTeamDialog({
               />
             </label>
             <label className="flex flex-col gap-1.5 sm:w-32">
-              <span className="text-muted-foreground text-xs font-medium">Key</span>
+              <span className="text-on-surface-variant text-xs font-medium">Key</span>
               <Input
                 aria-label="Team key"
                 placeholder="ENG"
@@ -176,7 +176,7 @@ export function CreateTeamDialog({
               />
             </label>
           </div>
-          <p className="text-muted-foreground text-xs">
+          <p className="text-on-surface-variant text-xs">
             The key prefixes the team&apos;s identifiers and must be unique in this workspace.
           </p>
           {error ? (

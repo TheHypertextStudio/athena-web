@@ -95,7 +95,7 @@ export function ViewRunner({
 
   if (visible.length === 0) {
     return (
-      <p className="text-muted-foreground p-8 text-center text-sm">
+      <p className="text-on-surface-variant p-8 text-center text-sm">
         No tasks match this view. Adjust the filters above, or check back as work comes in.
       </p>
     );
@@ -107,6 +107,7 @@ export function ViewRunner({
       label={label}
       getItemKey={(task) => task.id}
       groupBy={groupBy}
+      rowHeight={40}
       renderRow={(task, ctx) => (
         <TaskRow task={toRow(task)} active={ctx.active} onActivate={ctx.onActivate} />
       )}

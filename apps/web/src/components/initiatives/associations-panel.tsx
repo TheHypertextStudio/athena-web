@@ -69,9 +69,9 @@ function AssociationGroup({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
-        <h3 className="text-foreground text-sm font-semibold">
+        <h3 className="text-on-surface text-sm font-semibold">
           {title}
-          <span className="text-muted-foreground ml-2 font-normal tabular-nums">
+          <span className="text-on-surface-variant ml-2 font-normal tabular-nums">
             {linked.length}
           </span>
         </h3>
@@ -112,15 +112,15 @@ function AssociationGroup({
       </div>
 
       {linked.length === 0 ? (
-        <p className="text-muted-foreground text-xs">No {noun}s linked.</p>
+        <p className="text-on-surface-variant text-xs">No {noun}s linked.</p>
       ) : (
         <ul className="flex flex-col gap-1">
           {linked.map((item) => (
             <li
               key={item.id}
-              className="border-border/60 group flex items-center gap-2 rounded-md border px-2.5 py-1.5"
+              className="border-outline-variant group flex items-center gap-2 rounded-md border px-2.5 py-1.5"
             >
-              <span className="text-foreground min-w-0 flex-1 truncate text-sm">{item.name}</span>
+              <span className="text-on-surface min-w-0 flex-1 truncate text-sm">{item.name}</span>
               {canEdit ? (
                 <button
                   type="button"
@@ -129,7 +129,7 @@ function AssociationGroup({
                   }}
                   disabled={busy}
                   aria-label={`Unlink ${item.name}`}
-                  className="text-muted-foreground hover:text-destructive focus-visible:ring-ring rounded p-0.5 transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50"
+                  className="text-on-surface-variant hover:text-destructive focus-visible:ring-ring rounded p-0.5 transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50"
                 >
                   <X aria-hidden="true" className="size-3.5" />
                 </button>
@@ -212,8 +212,8 @@ export function AssociationsPanel({
   onUnlinkProject,
 }: AssociationsPanelProps): JSX.Element {
   return (
-    <div className="border-outline-variant bg-surface-container-low flex flex-col gap-5 rounded-xl border p-5">
-      <h2 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+    <div className="border-outline-variant bg-surface-container-low flex flex-col gap-4 rounded-xl border p-4">
+      <h2 className="text-on-surface-variant text-xs font-medium tracking-wide uppercase">
         Associated work
       </h2>
       <AssociationGroup

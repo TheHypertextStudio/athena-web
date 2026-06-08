@@ -72,7 +72,9 @@ export function NotificationRow({
           aria-hidden="true"
           className={cn(
             'flex h-8 w-8 items-center justify-center rounded-lg',
-            approval && unread ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground',
+            approval && unread
+              ? 'bg-primary/10 text-primary'
+              : 'bg-surface-container text-on-surface-variant',
           )}
         >
           <Icon className="h-4 w-4" />
@@ -88,10 +90,10 @@ export function NotificationRow({
       {/* Body. */}
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex items-center gap-2">
-          <span className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+          <span className="text-on-surface-variant text-xs font-medium tracking-wide uppercase">
             {label}
           </span>
-          <span className="text-muted-foreground/70 text-xs">
+          <span className="text-on-surface-variant text-xs">
             {relativeTime(notification.createdAt)}
           </span>
           {unread ? <span className="sr-only">Unread</span> : null}
@@ -99,13 +101,13 @@ export function NotificationRow({
 
         <TitleLine href={href}>
           <span
-            className={cn('text-sm', unread ? 'text-foreground font-medium' : 'text-foreground/80')}
+            className={cn('text-sm', unread ? 'text-on-surface font-medium' : 'text-on-surface/80')}
           >
             {notification.body.title}
           </span>
         </TitleLine>
 
-        {summary ? <p className="text-muted-foreground line-clamp-2 text-sm">{summary}</p> : null}
+        {summary ? <p className="text-on-surface-variant line-clamp-2 text-sm">{summary}</p> : null}
 
         {notification.organizationId ? (
           <div className="mt-0.5">

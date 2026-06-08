@@ -73,8 +73,8 @@ export function SessionRow({ session, onOpen }: SessionRowProps): JSX.Element {
         onOpen(session.id);
       }}
       className={cn(
-        'group focus-visible:ring-ring flex w-full items-center gap-4 rounded-lg px-4 py-3 text-left',
-        'hover:bg-muted/50 transition-colors outline-none focus-visible:ring-1',
+        'group focus-visible:ring-ring flex min-h-10 w-full items-center gap-3 px-3 py-2 text-left',
+        'hover:bg-surface-container-high transition-colors outline-none focus-visible:ring-1',
       )}
     >
       {/* Agent identity. */}
@@ -87,13 +87,13 @@ export function SessionRow({ session, onOpen }: SessionRowProps): JSX.Element {
 
       {/* Task + attribution. */}
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="text-foreground truncate text-sm font-medium">{session.taskTitle}</span>
-        <span className="text-muted-foreground truncate text-xs">
-          <span className="text-foreground/80 font-medium">{session.agentName}</span>
+        <span className="text-on-surface truncate text-sm font-medium">{session.taskTitle}</span>
+        <span className="text-on-surface-variant truncate text-xs">
+          <span className="text-on-surface font-medium">{session.agentName}</span>
           {session.ownerName ? (
             <>
               {' · on behalf of '}
-              <span className="text-foreground/80 font-medium">{session.ownerName}</span>
+              <span className="text-on-surface font-medium">{session.ownerName}</span>
             </>
           ) : null}
         </span>
@@ -105,7 +105,7 @@ export function SessionRow({ session, onOpen }: SessionRowProps): JSX.Element {
       </span>
 
       {/* When + how long. */}
-      <span className="text-muted-foreground hidden w-28 shrink-0 flex-col items-end gap-0.5 text-right text-xs sm:flex">
+      <span className="text-on-surface-variant hidden w-28 shrink-0 flex-col items-end gap-0.5 text-right text-xs @2xl:flex">
         <span>{startStamp}</span>
         {span ? (
           <span className="tabular-nums">

@@ -38,7 +38,7 @@ export function CardHeader({
   className,
   ...props
 }: React.ComponentProps<'div'>): React.JSX.Element {
-  return <div className={cn('flex flex-col space-y-1.5 p-6', className)} {...props} />;
+  return <div className={cn('flex flex-col gap-1 p-4', className)} {...props} />;
 }
 
 /** Card title — prominent heading text within a {@link CardHeader}. */
@@ -51,7 +51,7 @@ export function CardDescription({
   className,
   ...props
 }: React.ComponentProps<'div'>): React.JSX.Element {
-  return <div className={cn('text-muted-foreground text-sm', className)} {...props} />;
+  return <div className={cn('text-on-surface-variant text-sm', className)} {...props} />;
 }
 
 /** Card content region — padded body below the header. */
@@ -59,7 +59,7 @@ export function CardContent({
   className,
   ...props
 }: React.ComponentProps<'div'>): React.JSX.Element {
-  return <div className={cn('p-6 pt-0', className)} {...props} />;
+  return <div className={cn('p-4 pt-0', className)} {...props} />;
 }
 
 /** Card footer region — padded action row, typically holds buttons. */
@@ -67,5 +67,5 @@ export function CardFooter({
   className,
   ...props
 }: React.ComponentProps<'div'>): React.JSX.Element {
-  return <div className={cn('flex items-center p-6 pt-0', className)} {...props} />;
+  return <div className={cn('flex items-center p-4 pt-0', className)} {...props} />;
 }

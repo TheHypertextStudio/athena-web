@@ -78,17 +78,17 @@ export function InitiativeRow({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2.5">
-          <Target aria-hidden="true" className="text-muted-foreground size-4 shrink-0" />
-          <span className="text-foreground truncate text-sm font-semibold">{name}</span>
+          <Target aria-hidden="true" className="text-on-surface-variant size-4 shrink-0" />
+          <span className="text-on-surface truncate text-sm font-semibold">{name}</span>
         </div>
         <RolledUpHealthPill health={rolledUpHealth} className="shrink-0" />
       </div>
 
       {description ? (
-        <p className="text-muted-foreground line-clamp-1 pl-[26px] text-sm">{description}</p>
+        <p className="text-on-surface-variant line-clamp-1 pl-[26px] text-sm">{description}</p>
       ) : null}
 
-      <p className="text-muted-foreground pl-[26px] text-xs">
+      <p className="text-on-surface-variant pl-[26px] text-xs">
         Spans {countLabel(programCount, programNoun)} and {countLabel(projectCount, projectNoun)}
       </p>
     </button>

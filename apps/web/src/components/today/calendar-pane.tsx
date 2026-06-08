@@ -87,23 +87,23 @@ export function CalendarPane({ blocks, taskTitle, orgName }: CalendarPaneProps):
 
   if (blocks.length === 0) {
     return (
-      <div className="border-border/60 text-muted-foreground flex flex-col items-center justify-center rounded-lg border border-dashed p-6 text-center text-sm">
+      <div className="border-outline-variant text-on-surface-variant flex flex-col items-center justify-center rounded-xl border border-dashed p-6 text-center text-sm">
         No timeboxed blocks today. Drag tasks onto your calendar to plan focus time.
       </div>
     );
   }
 
   return (
-    <div className="border-outline-variant bg-surface-container-low relative overflow-hidden rounded-lg border">
+    <div className="border-outline-variant bg-surface-container-low relative overflow-hidden rounded-xl border">
       <div className="relative" style={{ height: gridHeight }}>
         {/* Hour gridlines + gutter labels. */}
         {HOUR_LABELS.map((hour, i) => (
           <div
             key={hour}
-            className="border-border/40 absolute inset-x-0 border-t"
+            className="border-outline-variant absolute inset-x-0 border-t"
             style={{ top: i * HOUR_HEIGHT }}
           >
-            <span className="text-muted-foreground absolute -top-2 left-2 bg-transparent text-[10px] tabular-nums">
+            <span className="text-on-surface-variant absolute -top-2 left-2 bg-transparent text-[10px] tabular-nums">
               {formatHour(hour)}
             </span>
           </div>
@@ -118,10 +118,10 @@ export function CalendarPane({ blocks, taskTitle, orgName }: CalendarPaneProps):
               style={{ top, height }}
               className="group bg-primary/10 hover:bg-primary/15 border-primary/30 focus-visible:ring-ring focus-visible:ring-offset-background absolute inset-x-0 flex flex-col gap-0.5 overflow-hidden rounded-md border-l-2 px-2.5 py-1.5 transition-colors focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:outline-none"
             >
-              <span className="text-foreground truncate text-xs font-medium">
+              <span className="text-on-surface truncate text-xs font-medium">
                 {taskTitle(block.taskId)}
               </span>
-              <span className="text-muted-foreground truncate text-[11px] tabular-nums">
+              <span className="text-on-surface-variant truncate text-[11px] tabular-nums">
                 {formatClock(block.startsAt)} – {formatClock(block.endsAt)}
               </span>
               {height >= HOUR_HEIGHT ? (

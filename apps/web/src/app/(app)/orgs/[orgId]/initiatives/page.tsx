@@ -138,11 +138,13 @@ export default function InitiativesListPage(): JSX.Element {
   }, [initiatives]);
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
-      <header className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
+      <header className="flex flex-col gap-3 @2xl:flex-row @2xl:flex-wrap @2xl:items-center @2xl:justify-between">
         <div className="flex flex-col gap-1">
-          <h1 className="text-2xl font-semibold tracking-tight">{initiativeNounPlural}</h1>
-          <p className="text-muted-foreground text-sm">
+          <h1 className="text-on-surface text-xl font-semibold tracking-tight">
+            {initiativeNounPlural}
+          </h1>
+          <p className="text-on-surface-variant text-xs">
             Cross-cutting themes that roll up the health of the {programNoun}s and {projectNoun}s
             beneath them — no work lives here directly.
           </p>
@@ -174,13 +176,16 @@ export default function InitiativesListPage(): JSX.Element {
           <Skeleton className="h-[88px] w-full rounded-xl" />
         </div>
       ) : error ? (
-        <p role="alert" className="border-border text-destructive rounded-lg border p-4 text-sm">
+        <p
+          role="alert"
+          className="border-outline-variant text-destructive rounded-xl border p-4 text-sm"
+        >
           {error}
         </p>
       ) : sections.length === 0 ? (
-        <div className="border-border text-muted-foreground flex flex-col items-center rounded-xl border border-dashed p-10 text-center">
+        <div className="border-outline-variant text-on-surface-variant flex flex-col items-center rounded-xl border border-dashed p-10 text-center">
           <Target aria-hidden="true" className="mb-3 size-6 opacity-60" />
-          <p className="text-foreground text-sm font-medium">
+          <p className="text-on-surface text-sm font-medium">
             No {initiativeNounPlural.toLowerCase()} yet
           </p>
           <p className="mt-1 text-sm">
@@ -204,13 +209,13 @@ export default function InitiativesListPage(): JSX.Element {
             <section
               key={section.status}
               aria-label={SECTION_LABEL[section.status]}
-              className="flex flex-col gap-2.5"
+              className="flex flex-col gap-3"
             >
-              <h2 className="text-muted-foreground flex items-center gap-2 text-xs font-semibold tracking-wide uppercase">
+              <h2 className="text-on-surface-variant flex items-center gap-2 text-xs font-medium tracking-wide uppercase">
                 {SECTION_LABEL[section.status]}
                 <span className="tabular-nums">{section.items.length}</span>
               </h2>
-              <ul className="flex flex-col gap-2.5">
+              <ul className="flex flex-col gap-2">
                 {section.items.map((item) => (
                   <li key={item.id}>
                     <InitiativeRow

@@ -68,15 +68,15 @@ export function PaletteRow({
       {item.org ? <OrgChip orgId={item.org.id} name={item.org.name} /> : null}
 
       {item.hitType ? (
-        <span className="text-muted-foreground border-border/70 shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-medium tracking-wide uppercase">
+        <span className="text-on-surface-variant border-outline-variant shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-medium tracking-wide uppercase">
           {HIT_TYPE_LABEL[item.hitType]}
         </span>
       ) : item.hint ? (
-        <span className="text-muted-foreground shrink-0 text-xs">{item.hint}</span>
+        <span className="text-on-surface-variant shrink-0 text-xs">{item.hint}</span>
       ) : null}
 
       {active ? (
-        <CornerDownLeft aria-hidden="true" className="text-muted-foreground size-3.5 shrink-0" />
+        <CornerDownLeft aria-hidden="true" className="text-on-surface-variant size-3.5 shrink-0" />
       ) : null}
     </li>
   );

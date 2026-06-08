@@ -458,7 +458,7 @@ export default function ProjectDetailPage(): JSX.Element {
 
   if (loading) {
     return (
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
         <Skeleton className="h-9 w-72" />
         <Skeleton className="h-4 w-full max-w-xl" />
         <Skeleton className="h-10 w-64" />
@@ -472,8 +472,11 @@ export default function ProjectDetailPage(): JSX.Element {
 
   if (error) {
     return (
-      <div className="mx-auto w-full max-w-6xl p-4 sm:p-6 lg:p-8">
-        <p role="alert" className="border-border text-destructive rounded-lg border p-4 text-sm">
+      <div className="mx-auto w-full max-w-6xl p-4 @2xl:p-6 @4xl:p-8">
+        <p
+          role="alert"
+          className="border-outline-variant text-destructive rounded-xl border p-4 text-sm"
+        >
           {error}
         </p>
       </div>
@@ -482,8 +485,8 @@ export default function ProjectDetailPage(): JSX.Element {
 
   if (!project) {
     return (
-      <div className="mx-auto w-full max-w-6xl p-4 sm:p-6 lg:p-8">
-        <p className="border-border text-muted-foreground rounded-xl border border-dashed p-8 text-center text-sm">
+      <div className="mx-auto w-full max-w-6xl p-4 @2xl:p-6 @4xl:p-8">
+        <p className="border-outline-variant text-on-surface-variant rounded-xl border border-dashed p-8 text-center text-sm">
           This {projectLabel.toLowerCase()} could not be found.
         </p>
       </div>
@@ -493,17 +496,17 @@ export default function ProjectDetailPage(): JSX.Element {
   const health = project.health ?? null;
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
       <header className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-semibold tracking-tight">{project.name}</h1>
+          <h1 className="text-on-surface text-xl font-semibold tracking-tight">{project.name}</h1>
           <Badge variant={statusBadgeVariant(project.status)}>
             {STATUS_LABEL[project.status] ?? project.status}
           </Badge>
           <HealthPill health={health} />
         </div>
         {project.description ? (
-          <p className="text-muted-foreground max-w-2xl text-sm leading-relaxed">
+          <p className="text-on-surface-variant max-w-2xl text-sm leading-relaxed">
             {project.description}
           </p>
         ) : null}
@@ -528,12 +531,12 @@ export default function ProjectDetailPage(): JSX.Element {
           <div className="flex min-w-0 flex-col gap-6">
             <section
               aria-label="Progress"
-              className="border-outline-variant bg-surface-container-low rounded-xl border p-5"
+              className="border-outline-variant bg-surface-container-low rounded-xl border p-4"
             >
               {progress ? (
                 <WeightedProgress progress={progress} health={health} />
               ) : (
-                <p className="text-muted-foreground text-sm">Progress is unavailable.</p>
+                <p className="text-on-surface-variant text-sm">Progress is unavailable.</p>
               )}
             </section>
 

@@ -59,7 +59,7 @@ export function GroupHeader({
       aria-expanded={expanded}
       data-level={level}
       className={cn(
-        'border-border bg-muted/40 text-foreground hover:bg-muted/70 flex h-full w-full cursor-pointer select-none items-center gap-1.5 border-b px-2 text-sm font-medium',
+        'border-outline-variant bg-surface-container text-on-surface hover:bg-surface-container-high flex h-full w-full cursor-pointer items-center gap-1.5 border-b px-3 text-sm font-medium transition-colors select-none',
         className,
       )}
       onClick={onToggle}
@@ -71,11 +71,13 @@ export function GroupHeader({
       }}
       style={level > 0 ? { paddingLeft: `${String(level * 1.25 + 0.5)}rem` } : undefined}
     >
-      <Chevron aria-hidden="true" className="text-muted-foreground h-4 w-4 shrink-0" />
+      <Chevron aria-hidden="true" className="text-on-surface-variant h-4 w-4 shrink-0" />
       {decoration ? <span className="flex shrink-0 items-center">{decoration}</span> : null}
       <span className="truncate">{label}</span>
       {typeof count === 'number' ? (
-        <span className="text-muted-foreground ml-1 shrink-0 text-xs font-normal">{count}</span>
+        <span className="text-on-surface-variant ml-1 shrink-0 text-xs font-normal tabular-nums">
+          {count}
+        </span>
       ) : null}
     </div>
   );

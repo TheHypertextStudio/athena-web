@@ -84,7 +84,7 @@ export function ProgramTabs({ tabs, value, onValueChange, label }: ProgramTabsPr
     <div
       role="tablist"
       aria-label={label}
-      className="border-border flex items-center gap-1 border-b"
+      className="border-outline-variant flex items-center gap-1 border-b"
     >
       {tabs.map((tab, index) => {
         const selected = tab.id === value;
@@ -109,8 +109,8 @@ export function ProgramTabs({ tabs, value, onValueChange, label }: ProgramTabsPr
             className={cn(
               'focus-visible:ring-ring relative -mb-px flex items-center gap-2 rounded-t-md px-3 py-2 text-sm font-medium transition-colors outline-none focus-visible:ring-1',
               selected
-                ? 'text-foreground'
-                : 'text-muted-foreground hover:text-foreground hover:bg-accent/50',
+                ? 'text-on-surface'
+                : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high',
             )}
           >
             <span>{tab.label}</span>
@@ -120,7 +120,7 @@ export function ProgramTabs({ tabs, value, onValueChange, label }: ProgramTabsPr
                   'inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-medium tabular-nums',
                   selected
                     ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted text-muted-foreground',
+                    : 'bg-surface-container text-on-surface-variant',
                 )}
               >
                 {tab.count}

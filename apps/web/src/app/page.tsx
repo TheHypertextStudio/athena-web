@@ -13,15 +13,15 @@ import type { JSX } from 'react';
  */
 export default function HomePage(): JSX.Element {
   return (
-    <main className="bg-background text-foreground flex min-h-screen flex-col items-center justify-center px-6">
+    <main className="bg-surface text-on-surface flex min-h-screen flex-col items-center justify-center px-6">
       <section className="flex w-full max-w-2xl flex-col items-center gap-8 text-center">
-        <span className="border-border text-muted-foreground rounded-full border px-3 py-1 text-xs font-medium">
+        <span className="border-outline-variant text-on-surface-variant rounded-full border px-3 py-1 text-xs font-medium">
           The calm command center for work
         </span>
 
         <h1 className="text-5xl font-semibold tracking-tight text-balance sm:text-6xl">Docket</h1>
 
-        <p className="text-muted-foreground max-w-xl text-lg text-balance">
+        <p className="text-on-surface-variant max-w-xl text-lg text-balance">
           One home for everything you run. Plan your day, keep work moving, and let the noise
           settle.
         </p>

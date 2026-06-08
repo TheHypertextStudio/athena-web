@@ -113,7 +113,7 @@ export function Discussion({
   return (
     <section aria-label="Discussion" className="flex flex-col gap-6">
       <div className="flex flex-col gap-4">
-        <h2 className="text-foreground text-sm font-semibold">Comments</h2>
+        <h2 className="text-on-surface text-sm font-semibold">Comments</h2>
 
         {loading ? (
           <div className="flex flex-col gap-4">
@@ -125,11 +125,14 @@ export function Discussion({
             ))}
           </div>
         ) : error ? (
-          <p role="alert" className="border-border text-destructive rounded-lg border p-4 text-sm">
+          <p
+            role="alert"
+            className="border-outline-variant text-destructive rounded-lg border p-4 text-sm"
+          >
             {error}
           </p>
         ) : threads.length === 0 ? (
-          <div className="border-border text-muted-foreground rounded-xl border border-dashed p-6 text-center text-sm">
+          <div className="border-outline-variant text-on-surface-variant rounded-xl border border-dashed p-6 text-center text-sm">
             No comments yet. Start the conversation below.
           </div>
         ) : (
@@ -138,7 +141,7 @@ export function Discussion({
               <li key={root.id} className="flex flex-col gap-3">
                 <CommentBubble comment={root} resolveActor={resolveActor} />
                 {replies.length > 0 ? (
-                  <ol className="border-border ml-4 flex flex-col gap-3 border-l pl-4">
+                  <ol className="border-outline-variant ml-4 flex flex-col gap-3 border-l pl-4">
                     {replies.map((reply) => (
                       <li key={reply.id}>
                         <CommentBubble comment={reply} resolveActor={resolveActor} />
@@ -160,7 +163,7 @@ export function Discussion({
             }}
             rows={2}
             placeholder="Write a comment…"
-            className="border-input bg-background placeholder:text-muted-foreground focus-visible:ring-ring min-h-16 w-full resize-y rounded-md border px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1"
+            className="border-outline-variant bg-surface-container placeholder:text-on-surface-variant focus-visible:ring-ring min-h-16 w-full resize-y rounded-md border px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1"
           />
           <div className="flex items-center justify-end gap-2">
             {postError ? (
@@ -179,7 +182,7 @@ export function Discussion({
         <div className="flex flex-col gap-3">
           <div className="flex items-center gap-2">
             <Sparkles aria-hidden="true" className="text-primary size-4" />
-            <h2 className="text-foreground text-sm font-semibold">Recent agent activity</h2>
+            <h2 className="text-on-surface text-sm font-semibold">Recent agent activity</h2>
           </div>
           <ul className="flex flex-col gap-2">
             {agentActivity.map((entry) => (
@@ -189,13 +192,13 @@ export function Discussion({
               >
                 <ActorAvatar kind="agent" name={entry.agentName} size={24} />
                 <div className="flex min-w-0 flex-1 flex-col">
-                  <span className="text-foreground text-sm">
+                  <span className="text-on-surface text-sm">
                     <span className="font-medium">{entry.agentName}</span>{' '}
-                    <span className="text-muted-foreground">{ACTIVITY_VERB[entry.type]}</span>
+                    <span className="text-on-surface-variant">{ACTIVITY_VERB[entry.type]}</span>
                   </span>
-                  <span className="text-muted-foreground truncate text-xs">{entry.summary}</span>
+                  <span className="text-on-surface-variant truncate text-xs">{entry.summary}</span>
                 </div>
-                <span className="text-muted-foreground shrink-0 text-xs">
+                <span className="text-on-surface-variant shrink-0 text-xs">
                   {relativeTime(entry.createdAt)}
                 </span>
               </li>
@@ -221,15 +224,15 @@ function CommentBubble({
       <ActorAvatar kind={author.kind} name={author.name} size={28} />
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-foreground text-sm font-medium">{author.name}</span>
-          <span className="text-muted-foreground text-xs">{relativeTime(comment.createdAt)}</span>
+          <span className="text-on-surface text-sm font-medium">{author.name}</span>
+          <span className="text-on-surface-variant text-xs">{relativeTime(comment.createdAt)}</span>
           {comment.editedAt ? (
-            <span className="text-muted-foreground text-xs italic">(edited)</span>
+            <span className="text-on-surface-variant text-xs italic">(edited)</span>
           ) : null}
         </div>
         <div
           className={cn(
-            'bg-muted/50 text-foreground/90 rounded-lg px-3 py-2 text-sm leading-relaxed',
+            'bg-surface-container text-on-surface rounded-lg px-3 py-2 text-sm leading-relaxed',
           )}
         >
           <p className="whitespace-pre-wrap">{comment.body}</p>

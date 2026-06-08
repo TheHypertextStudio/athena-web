@@ -319,7 +319,7 @@ export default function TaskDetailPage(): JSX.Element {
 
   if (loading) {
     return (
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
         <Skeleton className="h-9 w-2/3" />
         <div className="flex gap-2">
           <Skeleton className="h-8 w-32" />
@@ -334,8 +334,11 @@ export default function TaskDetailPage(): JSX.Element {
 
   if (loadError) {
     return (
-      <div className="mx-auto w-full max-w-6xl p-4 sm:p-6 lg:p-8">
-        <p role="alert" className="border-border text-destructive rounded-lg border p-4 text-sm">
+      <div className="mx-auto w-full max-w-6xl p-4 @2xl:p-6 @4xl:p-8">
+        <p
+          role="alert"
+          className="border-outline-variant text-destructive rounded-lg border p-4 text-sm"
+        >
           {loadError}
         </p>
       </div>
@@ -344,8 +347,8 @@ export default function TaskDetailPage(): JSX.Element {
 
   if (!task) {
     return (
-      <div className="mx-auto w-full max-w-6xl p-4 sm:p-6 lg:p-8">
-        <p className="border-border text-muted-foreground rounded-lg border border-dashed p-6 text-center text-sm">
+      <div className="mx-auto w-full max-w-6xl p-4 @2xl:p-6 @4xl:p-8">
+        <p className="border-outline-variant text-on-surface-variant rounded-lg border border-dashed p-6 text-center text-sm">
           This task could not be found.
         </p>
       </div>
@@ -355,10 +358,12 @@ export default function TaskDetailPage(): JSX.Element {
   const provenance = task.provenance;
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 p-4 sm:p-6 lg:p-8">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
       {/* Header: title, editable status + priority, assignee/delegate, due date. */}
       <header className="flex flex-col gap-4">
-        <h1 className="text-2xl leading-tight font-semibold tracking-tight">{task.title}</h1>
+        <h1 className="text-on-surface text-xl leading-tight font-semibold tracking-tight">
+          {task.title}
+        </h1>
 
         <div className="flex flex-wrap items-center gap-2">
           <StatusPicker
@@ -385,24 +390,24 @@ export default function TaskDetailPage(): JSX.Element {
                 name={assignee.name}
                 avatarUrl={assignee.avatarUrl}
               />
-              <span className="text-muted-foreground">{assignee.name}</span>
+              <span className="text-on-surface-variant">{assignee.name}</span>
             </span>
           ) : (
-            <span className="text-muted-foreground text-sm">Unassigned</span>
+            <span className="text-on-surface-variant text-sm">Unassigned</span>
           )}
           {delegate ? (
             <span className="flex items-center gap-1.5 text-sm">
-              <span className="text-muted-foreground text-xs">delegate</span>
+              <span className="text-on-surface-variant text-xs">delegate</span>
               <ActorAvatar
                 kind={delegate.kind}
                 name={delegate.name}
                 avatarUrl={delegate.avatarUrl}
               />
-              <span className="text-muted-foreground">{delegate.name}</span>
+              <span className="text-on-surface-variant">{delegate.name}</span>
             </span>
           ) : null}
           <Separator orientation="vertical" className="h-6" />
-          <span className="text-muted-foreground text-sm">Due {formatDate(task.dueDate)}</span>
+          <span className="text-on-surface-variant text-sm">Due {formatDate(task.dueDate)}</span>
         </div>
 
         {actionError ? (
@@ -412,19 +417,19 @@ export default function TaskDetailPage(): JSX.Element {
         ) : null}
       </header>
 
-      <div className="grid grid-cols-1 gap-8 @4xl:grid-cols-[minmax(0,1fr)_18rem]">
+      <div className="grid grid-cols-1 gap-6 @4xl:grid-cols-[minmax(0,1fr)_18rem]">
         {/* Main column: description, subtasks, dependencies, activity. */}
-        <div className="flex min-w-0 flex-col gap-8">
+        <div className="flex min-w-0 flex-col gap-6">
           <section aria-labelledby="description-heading" className="flex flex-col gap-2">
             <h2 id="description-heading" className="sr-only">
               Description
             </h2>
             {task.description ? (
-              <p className="text-foreground text-sm leading-relaxed whitespace-pre-wrap">
+              <p className="text-on-surface text-sm leading-relaxed whitespace-pre-wrap">
                 {task.description}
               </p>
             ) : (
-              <p className="text-muted-foreground text-sm">No description.</p>
+              <p className="text-on-surface-variant text-sm">No description.</p>
             )}
           </section>
 
@@ -454,19 +459,19 @@ export default function TaskDetailPage(): JSX.Element {
         </div>
 
         {/* Properties panel: project / program / milestone / cycle / labels / links.
-            On mobile/tablet the grid stacks, so the panel takes a top divider; at `lg` it
+            On a narrow panel the grid stacks, so the panel takes a top divider; at `@4xl` it
             sits in the right rail and takes a left divider instead. */}
         <aside
           aria-labelledby="properties-heading"
-          className="border-border border-t pt-6 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-6"
+          className="border-outline-variant border-t pt-6 @4xl:border-t-0 @4xl:border-l @4xl:pt-0 @4xl:pl-6"
         >
           <h2
             id="properties-heading"
-            className="text-muted-foreground mb-2 text-xs font-medium tracking-wide uppercase"
+            className="text-on-surface-variant mb-2 text-xs font-medium tracking-wide uppercase"
           >
             Properties
           </h2>
-          <div className="divide-border flex flex-col divide-y">
+          <div className="divide-outline-variant flex flex-col divide-y">
             <PropertyRow label={projectLabel}>
               {task.projectId ? (
                 <Button
@@ -480,7 +485,7 @@ export default function TaskDetailPage(): JSX.Element {
                   {projectName(task.projectId)}
                 </Button>
               ) : (
-                <span className="text-muted-foreground">None</span>
+                <span className="text-on-surface-variant">None</span>
               )}
             </PropertyRow>
 
@@ -488,7 +493,7 @@ export default function TaskDetailPage(): JSX.Element {
               {task.programId ? (
                 <span>{programName(task.programId)}</span>
               ) : (
-                <span className="text-muted-foreground">None</span>
+                <span className="text-on-surface-variant">None</span>
               )}
             </PropertyRow>
 
@@ -496,7 +501,7 @@ export default function TaskDetailPage(): JSX.Element {
               {task.milestoneId ? (
                 <span>{milestoneName(task.milestoneId) ?? 'Unknown milestone'}</span>
               ) : (
-                <span className="text-muted-foreground">None</span>
+                <span className="text-on-surface-variant">None</span>
               )}
             </PropertyRow>
 
@@ -504,7 +509,7 @@ export default function TaskDetailPage(): JSX.Element {
               {task.cycleId ? (
                 <span className="font-mono text-xs">{task.cycleId}</span>
               ) : (
-                <span className="text-muted-foreground">None</span>
+                <span className="text-on-surface-variant">None</span>
               )}
             </PropertyRow>
 
@@ -514,7 +519,7 @@ export default function TaskDetailPage(): JSX.Element {
                   {task.estimate} {task.estimate === 1 ? 'point' : 'points'}
                 </span>
               ) : (
-                <span className="text-muted-foreground">None</span>
+                <span className="text-on-surface-variant">None</span>
               )}
             </PropertyRow>
 
@@ -536,7 +541,7 @@ export default function TaskDetailPage(): JSX.Element {
             </PropertyRow>
 
             <PropertyRow label="Created">
-              <span className="text-muted-foreground">{formatDate(task.createdAt)}</span>
+              <span className="text-on-surface-variant">{formatDate(task.createdAt)}</span>
             </PropertyRow>
           </div>
         </aside>

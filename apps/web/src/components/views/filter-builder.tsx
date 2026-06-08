@@ -117,7 +117,7 @@ export function FilterBuilder({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm" className="gap-1.5">
-              <span className="text-muted-foreground">Group by</span>
+              <span className="text-on-surface-variant">Group by</span>
               <span>{groupSpec ? fieldLabel(groupSpec.field, groupSpec.label) : 'None'}</span>
               <ChevronDown className="size-4 opacity-60" />
             </Button>
@@ -149,7 +149,7 @@ export function FilterBuilder({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm" className="gap-1.5">
-              <span className="text-muted-foreground">Sort by</span>
+              <span className="text-on-surface-variant">Sort by</span>
               <span>{sortSpec ? fieldLabel(sortSpec.field, sortSpec.label) : 'Default'}</span>
               <ChevronDown className="size-4 opacity-60" />
             </Button>
@@ -202,8 +202,8 @@ export function FilterBuilder({
         <ul className="flex flex-wrap items-center gap-2" aria-label="Active filters">
           {filters.map((filter, index) => (
             <li key={`${filter.field}-${filter.op}-${index}`}>
-              <span className="border-border bg-muted/40 inline-flex items-center gap-1.5 rounded-md border py-1 pr-1 pl-2.5 text-xs">
-                <Filter className="text-muted-foreground size-3" aria-hidden="true" />
+              <span className="border-outline-variant bg-surface-container inline-flex items-center gap-1.5 rounded-md border py-1 pr-1 pl-2.5 text-xs">
+                <Filter className="text-on-surface-variant size-3" aria-hidden="true" />
                 <span>
                   {describeFilter(filter, (field, value) =>
                     resolveLabelWith(field, value, resolveLabel),
@@ -215,7 +215,7 @@ export function FilterBuilder({
                     removeFilter(index);
                   }}
                   aria-label={`Remove filter ${describeFilter(filter, (f, v) => resolveLabelWith(f, v, resolveLabel))}`}
-                  className="hover:bg-accent focus-visible:ring-ring rounded p-0.5 outline-none focus-visible:ring-1"
+                  className="hover:bg-surface-container-high focus-visible:ring-ring rounded p-0.5 outline-none focus-visible:ring-1"
                 >
                   <X className="size-3" aria-hidden="true" />
                 </button>

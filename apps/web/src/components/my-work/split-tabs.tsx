@@ -34,8 +34,8 @@ export interface SplitTabsProps<TValue extends string> {
  * Renders an ARIA `tablist` of underline tabs ("Assigned to me" vs "Delegated …") with a
  * count badge per tab. Selection is roving-tabindex and arrow-key navigable per the WAI-ARIA
  * tabs pattern: only the active tab is in the tab order, and Left/Right (with Home/End) move
- * the selection. The active tab carries a `border-primary` underline and `text-foreground`;
- * inactive tabs stay quiet on `text-muted-foreground`. A tab whose `emphasis` is set tints
+ * the selection. The active tab carries a `border-primary` underline and `text-on-surface`;
+ * inactive tabs stay quiet on `text-on-surface-variant`. A tab whose `emphasis` is set tints
  * its badge with the `destructive` token so a "needs you" count (e.g. pending approvals)
  * draws the eye. All colors come from semantic design tokens — never hardcoded.
  *
@@ -63,7 +63,7 @@ export function SplitTabs<TValue extends string>({
     <div
       role="tablist"
       aria-label={label}
-      className="border-border flex items-center gap-1 overflow-x-auto border-b"
+      className="border-outline-variant flex items-center gap-1 overflow-x-auto border-b"
     >
       {tabs.map((tab) => {
         const selected = tab.value === value;
@@ -98,18 +98,18 @@ export function SplitTabs<TValue extends string>({
               'focus-visible:ring-ring -mb-px inline-flex items-center gap-2 rounded-t-md border-b-2 px-3 py-2',
               'text-sm font-medium transition-colors outline-none focus-visible:ring-1',
               selected
-                ? 'border-primary text-foreground'
-                : 'text-muted-foreground hover:text-foreground border-transparent',
+                ? 'border-primary text-on-surface'
+                : 'text-on-surface-variant hover:text-on-surface border-transparent',
             )}
           >
             <span>{tab.label}</span>
             {tab.count !== undefined ? (
               <span
                 className={cn(
-                  'inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1.5 py-0.5 text-xs font-semibold tabular-nums',
+                  'inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-semibold tabular-nums',
                   tab.emphasis && tab.count > 0
                     ? 'bg-destructive/10 text-destructive'
-                    : 'bg-muted text-muted-foreground',
+                    : 'bg-surface-container text-on-surface-variant',
                 )}
               >
                 {tab.count}

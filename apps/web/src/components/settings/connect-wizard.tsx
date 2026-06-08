@@ -88,13 +88,13 @@ export function ConnectWizard({
   const [pattern, setPattern] = useState<IntegrationPattern>(recommendedPattern);
 
   return (
-    <div className="border-border bg-muted/30 flex flex-col gap-4 border-t p-4">
+    <div className="border-outline-variant bg-surface-container flex flex-col gap-4 border-t p-4">
       <fieldset className="flex flex-col gap-2">
-        <legend className="text-foreground mb-1 text-xs font-semibold tracking-wide uppercase">
+        <legend className="text-on-surface-variant mb-1 text-xs font-medium tracking-wide uppercase">
           How should Docket connect {providerName}?
         </legend>
         <div
-          className="grid gap-2 sm:grid-cols-2"
+          className="grid gap-2 @2xl:grid-cols-2"
           role="radiogroup"
           aria-label="Connection pattern"
         >
@@ -119,13 +119,13 @@ export function ConnectWizard({
                 )}
               >
                 <span className="flex items-center justify-between gap-2">
-                  <span className="text-foreground text-sm font-semibold">{copy.title}</span>
+                  <span className="text-on-surface text-sm font-semibold">{copy.title}</span>
                   {isSelected ? <Check aria-hidden="true" className="text-primary size-4" /> : null}
                 </span>
-                <span className="text-foreground text-xs font-medium">{copy.consequence}</span>
-                <span className="text-muted-foreground text-xs leading-snug">{copy.detail}</span>
+                <span className="text-on-surface text-xs font-medium">{copy.consequence}</span>
+                <span className="text-on-surface-variant text-xs leading-snug">{copy.detail}</span>
                 {isRecommended ? (
-                  <span className="text-muted-foreground mt-1 text-[0.625rem] font-medium tracking-wide uppercase">
+                  <span className="text-on-surface-variant mt-1 text-[0.625rem] font-medium tracking-wide uppercase">
                     Recommended
                   </span>
                 ) : null}
@@ -136,7 +136,7 @@ export function ConnectWizard({
       </fieldset>
 
       <div className="border-outline-variant bg-surface-container-low rounded-lg border p-3 text-sm">
-        <p className="text-foreground">
+        <p className="text-on-surface">
           {pattern === 'migration' ? (
             <>
               Docket will <span className="font-semibold">take over from {providerName}</span> and
@@ -150,7 +150,7 @@ export function ConnectWizard({
           )}
         </p>
         {roles.length > 0 ? (
-          <p className="text-muted-foreground mt-1 text-xs">
+          <p className="text-on-surface-variant mt-1 text-xs">
             Brings in: {roles.map((role) => ROLE_LABEL[role]).join(', ')}.
           </p>
         ) : null}

@@ -67,13 +67,13 @@ export function TeamCard({
   const taskWord = team.taskCount === 1 ? taskNoun : taskNounPlural;
 
   return (
-    <article className="border-outline-variant bg-surface-container-low flex flex-col gap-3 rounded-xl border p-5">
+    <article className="border-outline-variant bg-surface-container-low flex flex-col gap-3 rounded-xl border p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-1 items-center gap-2">
-          <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 font-mono text-xs font-medium tracking-wide uppercase">
+          <span className="bg-surface-container text-on-surface-variant rounded px-1.5 py-0.5 font-mono text-xs font-medium tracking-wide uppercase">
             {team.key}
           </span>
-          <h2 className="text-foreground min-w-0 flex-1 truncate text-base font-semibold tracking-tight">
+          <h2 className="text-on-surface min-w-0 flex-1 truncate text-base font-semibold tracking-tight">
             {team.name}
           </h2>
         </div>
@@ -81,12 +81,12 @@ export function TeamCard({
       </div>
 
       {team.description ? (
-        <p className="text-muted-foreground line-clamp-2 text-sm leading-relaxed">
+        <p className="text-on-surface-variant line-clamp-2 text-sm leading-relaxed">
           {team.description}
         </p>
       ) : null}
 
-      <div className="border-border text-muted-foreground mt-auto flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t pt-3 text-xs">
+      <div className="border-outline-variant text-on-surface-variant mt-auto flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t pt-3 text-xs">
         <span className="flex items-center gap-1.5 tabular-nums">
           <Users aria-hidden="true" className="size-3.5" />
           {team.projectCount} {projectWord}

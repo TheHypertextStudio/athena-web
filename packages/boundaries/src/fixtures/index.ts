@@ -76,6 +76,18 @@ export const CONNECTOR_ITEMS: Readonly<Record<ConnectorProvider, readonly Import
         importedAt: FIXED_NOW,
       },
     },
+    {
+      id: '01HZ0000000000000000LN0002',
+      kind: 'issue',
+      title: 'Wire up onboarding connect step',
+      body: 'Mirror Linear, Google Tasks, and Calendar into a fresh workspace.',
+      provenance: {
+        provider: 'linear',
+        externalId: 'DOC-12',
+        externalUrl: 'https://linear.app/docket/issue/DOC-12',
+        importedAt: FIXED_NOW,
+      },
+    },
   ],
   drive: [
     {
@@ -106,7 +118,61 @@ export const CONNECTOR_ITEMS: Readonly<Record<ConnectorProvider, readonly Import
       kind: 'event',
       title: 'Weekly planning',
       body: 'Recurring Monday planning sync.',
-      provenance: { provider: 'calendar', externalId: 'cal-event-123', importedAt: FIXED_NOW },
+      provenance: {
+        provider: 'calendar',
+        externalId: 'cal-event-123',
+        externalUrl: 'https://calendar.google.com/calendar/event?eid=cal-event-123',
+        importedAt: FIXED_NOW,
+      },
+    },
+    {
+      id: '01HZ0000000000000000CL0002',
+      kind: 'event',
+      title: 'Design review with Priya',
+      body: 'Walk through the onboarding flow before launch.',
+      provenance: {
+        provider: 'calendar',
+        externalId: 'cal-event-456',
+        externalUrl: 'https://calendar.google.com/calendar/event?eid=cal-event-456',
+        importedAt: FIXED_NOW,
+      },
+    },
+  ],
+  gtasks: [
+    {
+      id: '01HZ0000000000000000GT0001',
+      kind: 'issue',
+      title: 'Send the contractor agreement',
+      body: 'Draft and send the signed agreement to legal.',
+      provenance: {
+        provider: 'gtasks',
+        externalId: 'gtasks-task-001',
+        externalUrl: 'https://tasks.google.com/task/gtasks-task-001',
+        importedAt: FIXED_NOW,
+      },
+    },
+    {
+      id: '01HZ0000000000000000GT0002',
+      kind: 'issue',
+      title: 'Book the venue for the offsite',
+      body: 'Compare two quotes and reserve by Friday.',
+      provenance: {
+        provider: 'gtasks',
+        externalId: 'gtasks-task-002',
+        externalUrl: 'https://tasks.google.com/task/gtasks-task-002',
+        importedAt: FIXED_NOW,
+      },
+    },
+    {
+      id: '01HZ0000000000000000GT0003',
+      kind: 'issue',
+      title: 'Reply to the partnership email',
+      provenance: {
+        provider: 'gtasks',
+        externalId: 'gtasks-task-003',
+        externalUrl: 'https://tasks.google.com/task/gtasks-task-003',
+        importedAt: FIXED_NOW,
+      },
     },
   ],
 };

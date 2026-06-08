@@ -10,9 +10,9 @@
  * (`NEXT_PUBLIC_OAUTH_*`). In local dev none are set, so {@link configuredOAuthProviders}
  * returns an empty list and the OAuth section is omitted entirely (passkey-only).
  *
- * Each flag is read via a LITERAL `process.env['NEXT_PUBLIC_…']` access (not a computed key)
- * so the Next.js bundler can statically inline it into the client bundle. The provider `id`
- * matches the Better Auth `socialProviders` key passed to `authClient.signIn.social`.
+ * Each flag is read via a DOT-notation `process.env.NEXT_PUBLIC_…` access (not a bracket/computed
+ * key) so the Next/Turbopack bundler statically inlines it into the client bundle. The provider
+ * `id` matches the Better Auth `socialProviders` key passed to `authClient.signIn.social`.
  */
 
 /** A secondary OAuth provider the sign-in/up screens can offer when it is configured. */
@@ -42,13 +42,13 @@ function isEnabled(flag: string | undefined): boolean {
  */
 export function configuredOAuthProviders(): readonly OAuthProvider[] {
   const providers: OAuthProvider[] = [];
-  if (isEnabled(process.env['NEXT_PUBLIC_OAUTH_GOOGLE'])) {
+  if (isEnabled(process.env.NEXT_PUBLIC_OAUTH_GOOGLE)) {
     providers.push({ id: 'google', label: 'Continue with Google' });
   }
-  if (isEnabled(process.env['NEXT_PUBLIC_OAUTH_GITHUB'])) {
+  if (isEnabled(process.env.NEXT_PUBLIC_OAUTH_GITHUB)) {
     providers.push({ id: 'github', label: 'Continue with GitHub' });
   }
-  if (isEnabled(process.env['NEXT_PUBLIC_OAUTH_LINEAR'])) {
+  if (isEnabled(process.env.NEXT_PUBLIC_OAUTH_LINEAR)) {
     providers.push({ id: 'linear', label: 'Continue with Linear' });
   }
   return providers;

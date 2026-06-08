@@ -74,6 +74,8 @@ export interface BoundaryEnv {
   readonly GOOGLE_GMAIL_API_BASE?: string;
   /** Google Calendar REST API base override; absent ⇒ public base. */
   readonly GOOGLE_CALENDAR_API_BASE?: string;
+  /** Google Tasks REST API base override; absent ⇒ public base. */
+  readonly GOOGLE_TASKS_API_BASE?: string;
 }
 
 /** The set of named ports {@link selectAdapter} can resolve. */
@@ -133,6 +135,8 @@ function connectorApiBase(provider: ConnectorProvider, env: BoundaryEnv): string
       return env.GOOGLE_GMAIL_API_BASE;
     case 'calendar':
       return env.GOOGLE_CALENDAR_API_BASE;
+    case 'gtasks':
+      return env.GOOGLE_TASKS_API_BASE;
     default:
       /* v8 ignore next -- exhaustiveness guard: `provider` is `never` here. */
       return undefined;

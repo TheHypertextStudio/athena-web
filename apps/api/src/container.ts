@@ -55,6 +55,7 @@ function toBoundaryEnv(): BoundaryEnv {
     ...(env.GOOGLE_CALENDAR_API_BASE
       ? { GOOGLE_CALENDAR_API_BASE: env.GOOGLE_CALENDAR_API_BASE }
       : {}),
+    ...(env.GOOGLE_TASKS_API_BASE ? { GOOGLE_TASKS_API_BASE: env.GOOGLE_TASKS_API_BASE } : {}),
   };
 }
 

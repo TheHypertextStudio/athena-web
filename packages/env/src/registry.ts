@@ -534,6 +534,15 @@ export const VAR_REGISTRY: readonly VarSpec[] = [
     where:
       'Google Calendar REST API base override. Absent ⇒ https://www.googleapis.com/calendar/v3',
   },
+  {
+    name: 'GOOGLE_TASKS_API_BASE',
+    slice: 'connector',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: connectorServer.GOOGLE_TASKS_API_BASE,
+    where: 'Google Tasks REST API base override. Absent ⇒ https://tasks.googleapis.com/tasks/v1',
+  },
 
   // client
   {

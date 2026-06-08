@@ -481,6 +481,86 @@ describe('RealConnector — Google (Drive / Gmail / Calendar REST)', () => {
     );
   });
 
+  it('Tasks: resolves the default-list account, defaults the API base, and imports open tasks', async () => {
+    const { http, calls } = fakeHttp([
+      new Response(JSON.stringify({ items: [{ id: 'list1', title: 'My Tasks' }] }), {
+        status: 200,
+      }),
+      new Response(
+        JSON.stringify({
+          items: [
+            {
+              id: 'gt1',
+              title: 'Send the agreement',
+              notes: 'To legal by Friday.',
+              status: 'needsAction',
+              webViewLink: 'https://tasks.google.com/task/gt1',
+            },
+            { id: 'gt2', status: 'needsAction' },
+          ],
+        }),
+        { status: 200 },
+      ),
+    ]);
+    const connector = new RealConnector({ provider: 'gtasks', accessToken: 'g_tok' }, http);
+    const conn = await connector.connect({ provider: 'gtasks', referenceId: 'org_1' });
+    expect(conn).toEqual({
+      connectionId: 'gtasks:org_1',
+      provider: 'gtasks',
+      status: 'connected',
+      account: 'My Tasks',
+    });
+    expect(calls[0]!.url).toBe(
+      'https://tasks.googleapis.com/tasks/v1/users/@me/lists?maxResults=1',
+    );
+    expect(header(calls[0]!, 'Authorization')).toBe('Bearer g_tok');
+
+    const items = await connector.importWork({ connectionId: 'c1', provider: 'gtasks' });
+    expect(calls[1]!.url).toBe(
+      'https://tasks.googleapis.com/tasks/v1/lists/@default/tasks?showCompleted=false&maxResults=100',
+    );
+    expect(items[0]).toEqual({
+      id: 'gt1',
+      kind: 'issue',
+      title: 'Send the agreement',
+      body: 'To legal by Friday.',
+      provenance: {
+        provider: 'gtasks',
+        externalId: 'gt1',
+        externalUrl: 'https://tasks.google.com/task/gt1',
+        importedAt: items[0]!.provenance.importedAt,
+      },
+    });
+    // An untitled task falls back to a placeholder and omits body + externalUrl.
+    expect(items[1]?.title).toBe('(untitled task)');
+    expect(items[1]).not.toHaveProperty('body');
+    expect(items[1]?.provenance).not.toHaveProperty('externalUrl');
+  });
+
+  it('Tasks: falls back to the list id when the default list has no title, and resolves the task url', async () => {
+    const { http } = fakeHttp([
+      new Response(JSON.stringify({ items: [{ id: 'list-only-id' }] }), { status: 200 }),
+    ]);
+    const connector = new RealConnector({ provider: 'gtasks', accessToken: 'tok' }, http);
+    expect((await connector.connect({ provider: 'gtasks', referenceId: 'o' })).account).toBe(
+      'list-only-id',
+    );
+    const link = await connector.linkResource({
+      connectionId: 'c1',
+      provider: 'gtasks',
+      resourceId: 'r1',
+      externalId: 'gt1',
+    });
+    expect(link.externalUrl).toBe('https://tasks.google.com/task/gt1');
+  });
+
+  it('Tasks: tolerates an empty task list and reports a zero-sized mirror', async () => {
+    const { http } = fakeHttp([new Response(JSON.stringify({}), { status: 200 })]);
+    const connector = new RealConnector({ provider: 'gtasks', accessToken: 'tok' }, http);
+    const status = await connector.mirrorStatus({ connectionId: 'c1', provider: 'gtasks' });
+    expect(status).toEqual({ connectionId: 'c1', status: 'idle', itemCount: 0 });
+  });
+
   it('reports mirror status sized from the product listing', async () => {
     const { http } = fakeHttp([
       new Response(

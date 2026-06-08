@@ -7,17 +7,18 @@
  * A Client Component reached at `/orgs/[orgId]/cycles`. It lists the org's time-boxed
  * cadences in three segments — **Current** (the live, `active` cadence), **Upcoming**
  * (planned but not yet started), and **Completed** (already rolled). The cycles list read
- * (`GET …/cycles`) returns the cycles newest-first; each is summarized as a {@link CycleCard}
+ * (`GET …/cycles`) returns the cycles newest-first; each is summarized as a {@link CycleRow}
  * that links to its detail.
  *
  * A cycle's pace numbers (committed/completed, capacity, carryover) live on the single-cycle
  * read, not the list, so the page fetches each cycle's `…/cycles/:id` stats in parallel after
- * the list lands and threads them into the cards as they arrive — the cards show a slim
+ * the list lands and threads them into the rows as they arrive — the rows show a slim
  * skeleton until then, so nothing jumps. The cycle noun routes through {@link useVocabulary}
  * so an org's skin (e.g. "Sprint") shows through. Data is fetched at runtime, so the
  * production build needs no running server.
  */
 import type { CycleOut, CycleStats } from '@docket/types';
+import { EntityList } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Plus, RefreshCw } from '@docket/ui/icons';
 import { Button, Skeleton } from '@docket/ui/primitives';
@@ -26,7 +27,7 @@ import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 import { CreateCycleDialog } from '@/components/cycles/create-cycle';
-import { CycleCard } from '@/components/cycles/cycle-card';
+import { CycleRow } from '@/components/cycles/cycle-row';
 import { CYCLE_SEGMENTS, SEGMENT_LABEL, segmentOf } from '@/components/cycles/cycle-status';
 import { api } from '@/lib/api';
 import { readError, readProblem } from '@/lib/problem';
@@ -65,7 +66,7 @@ export default function CyclesPage(): JSX.Element {
       setLoading(false);
 
       // Pace numbers live on the single-cycle read; fetch them per cycle and thread each in as
-      // it lands so the cards fill without blocking the list's first paint.
+      // it lands so the rows fill without blocking the list's first paint.
       await Promise.all(
         items.map(async (cycle) => {
           const detailRes = await api.v1.orgs[':orgId'].cycles[':id'].$get({
@@ -219,9 +220,11 @@ export default function CyclesPage(): JSX.Element {
                     {inSegment.length}
                   </span>
                 </div>
-                <div className="grid grid-cols-1 gap-3 @3xl:grid-cols-2 @6xl:grid-cols-3">
+                <EntityList
+                  aria-label={`${SEGMENT_LABEL[segment]} ${cycleNounPlural.toLowerCase()}`}
+                >
                   {inSegment.map((cycle) => (
-                    <CycleCard
+                    <CycleRow
                       key={cycle.id}
                       cycle={cycle}
                       stats={statsById.get(cycle.id) ?? null}
@@ -229,7 +232,7 @@ export default function CyclesPage(): JSX.Element {
                       href={`/orgs/${orgId}/cycles/${cycle.id}`}
                     />
                   ))}
-                </div>
+                </EntityList>
               </section>
             );
           })}
@@ -239,16 +242,24 @@ export default function CyclesPage(): JSX.Element {
   );
 }
 
-/** Loading placeholder for the list: two labeled segments of cycle cards. */
+/** Loading placeholder for the list: two labeled segments of cycle rows. */
 function ListSkeleton(): JSX.Element {
   return (
     <div className="flex flex-col gap-6" aria-hidden="true">
       {[0, 1].map((section) => (
         <div key={section} className="flex flex-col gap-3">
           <Skeleton className="h-3 w-20" />
-          <div className="grid grid-cols-1 gap-3 @3xl:grid-cols-2 @6xl:grid-cols-3">
-            <Skeleton className="h-28 w-full rounded-xl" />
-            <Skeleton className="h-28 w-full rounded-xl" />
+          <div className="border-outline-variant divide-outline-variant flex flex-col divide-y overflow-hidden rounded-xl border">
+            {[0, 1].map((row) => (
+              <div key={row} className="flex items-center gap-3 px-3 py-2.5">
+                <Skeleton className="size-4 rounded-full" />
+                <div className="flex flex-col gap-1">
+                  <Skeleton className="h-4 w-40" />
+                  <Skeleton className="h-3 w-24" />
+                </div>
+                <Skeleton className="ml-auto h-4 w-20" />
+              </div>
+            ))}
           </div>
         </div>
       ))}

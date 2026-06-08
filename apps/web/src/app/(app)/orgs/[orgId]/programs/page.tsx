@@ -1,27 +1,42 @@
 'use client';
 
 import type { MemberOut, ProgramOut, ProjectOut, TaskOut } from '@docket/types';
+import { ActorAvatar, EntityList, EntityListRow, RowMeta, StatusIcon } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
-import { Layers, Plus } from '@docket/ui/icons';
+import { FolderKanban, Layers, ListChecks, Plus } from '@docket/ui/icons';
 import { Button, Skeleton } from '@docket/ui/primitives';
 import { useParams, useRouter } from 'next/navigation';
 import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { CreateProgramDialog } from '@/components/programs/create-program';
-import { ProgramCard, type ProgramCardData } from '@/components/programs/program-card';
-import { type StatusFilter, StatusFilterMenu } from '@/components/programs/program-status';
+import {
+  HealthDot,
+  ProgramStatusBadge,
+  STATUS_LABEL,
+  type StatusFilter,
+  StatusFilterMenu,
+  statusGlyphType,
+} from '@/components/programs/program-status';
 import { api } from '@/lib/api';
 import { readError, readProblem } from '@/lib/problem';
 
+/** The row view-model derived for one Program (owner + child-work roll-up). */
+interface ProgramRow {
+  program: ProgramOut;
+  ownerName: string | null;
+  projectCount: number;
+  taskCount: number;
+}
+
 /**
- * The org Programs list — the roster of ongoing operational lines of work (§8.4).
+ * The org Programs list — the roster of ongoing operational lines of work (§8.4), as dense rows.
  *
  * @remarks
- * A Client Component reached at `/orgs/[orgId]/programs`. Programs are *ongoing*, so the
- * list leads with health + lifecycle rather than completion: each {@link ProgramCard}
- * carries the program's name, its lifecycle status (`active | paused | archived`), its
- * {@link import('@/components/programs/program-status').HealthPill | health verdict}, its
- * owner, and a child-work scope ("N projects · M tasks").
+ * A Client Component reached at `/orgs/[orgId]/programs`. Programs are *ongoing*, so each
+ * {@link EntityListRow} leads with a liveness status glyph and surfaces the program's owner,
+ * its child-work scope ("N projects" + "M tasks"), and — in the trailing slot — its
+ * {@link HealthDot | health} and lifecycle {@link ProgramStatusBadge}. The former card grid is
+ * replaced by one clean bordered list of hairline-divided rows (design-system §5.1).
  *
  * It composes three slices in parallel — programs, projects, and tasks — and rolls up the
  * per-program scope client-side (a project belongs to a program via `project.programId`; a
@@ -52,7 +67,7 @@ export default function ProgramsListPage(): JSX.Element {
   const [filter, setFilter] = useState<StatusFilter>('all');
   const [createOpen, setCreateOpen] = useState(false);
 
-  /** Load the org's programs and the slices needed to scope + attribute each card. */
+  /** Load the org's programs and the slices needed to scope + attribute each row. */
   const load = useCallback(async (): Promise<void> => {
     setLoading(true);
     setLoadError(null);
@@ -86,7 +101,7 @@ export default function ProgramsListPage(): JSX.Element {
     void load();
   }, [load]);
 
-  /** Owner display name by actor id (for the card footer attribution). */
+  /** Owner display name by actor id (for the row attribution). */
   const ownerNameById = useMemo(
     () => new Map(members.map((m) => [m.actorId, m.displayName])),
     [members],
@@ -123,21 +138,6 @@ export default function ProgramsListPage(): JSX.Element {
     return counts;
   }, [tasks, programByProjectId]);
 
-  /** Adapt a Program DTO to its card view-model (owner + scope roll-up). */
-  const toCard = useCallback(
-    (program: ProgramOut): ProgramCardData => ({
-      id: program.id,
-      name: program.name,
-      description: program.description,
-      status: program.status,
-      health: program.health ?? null,
-      ownerName: program.ownerId ? (ownerNameById.get(program.ownerId) ?? null) : null,
-      projectCount: projectCountByProgram.get(program.id) ?? 0,
-      taskCount: taskCountByProgram.get(program.id) ?? 0,
-    }),
-    [ownerNameById, projectCountByProgram, taskCountByProgram],
-  );
-
   /** Per-bucket counts for the filter menu (always computed over the full roster). */
   const counts = useMemo<Record<StatusFilter, number>>(() => {
     const tally: Record<StatusFilter, number> = {
@@ -150,11 +150,17 @@ export default function ProgramsListPage(): JSX.Element {
     return tally;
   }, [programs]);
 
-  /** The programs shown under the active filter. */
-  const visiblePrograms = useMemo(
-    () => (filter === 'all' ? programs : programs.filter((program) => program.status === filter)),
-    [programs, filter],
-  );
+  /** The programs shown under the active filter, adapted to their row view-model. */
+  const visibleRows = useMemo<readonly ProgramRow[]>(() => {
+    const visible =
+      filter === 'all' ? programs : programs.filter((program) => program.status === filter);
+    return visible.map((program) => ({
+      program,
+      ownerName: program.ownerId ? (ownerNameById.get(program.ownerId) ?? null) : null,
+      projectCount: projectCountByProgram.get(program.id) ?? 0,
+      taskCount: taskCountByProgram.get(program.id) ?? 0,
+    }));
+  }, [programs, filter, ownerNameById, projectCountByProgram, taskCountByProgram]);
 
   /** Prepend the freshly-created program to the roster, then open its detail. */
   const handleCreated = useCallback(
@@ -200,14 +206,7 @@ export default function ProgramsListPage(): JSX.Element {
       />
 
       {loading ? (
-        <div
-          className="grid grid-cols-1 gap-4 @2xl:grid-cols-2 @5xl:grid-cols-3"
-          aria-hidden="true"
-        >
-          {[0, 1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-44 w-full rounded-xl" />
-          ))}
-        </div>
+        <ListSkeleton />
       ) : loadError ? (
         <p
           role="alert"
@@ -226,29 +225,76 @@ export default function ProgramsListPage(): JSX.Element {
             },
           }}
         />
-      ) : visiblePrograms.length === 0 ? (
+      ) : visibleRows.length === 0 ? (
         <EmptyState
           title={`No ${filter} ${programsLabel.toLowerCase()}`}
           body={`No ${programLabel.toLowerCase()} matches this filter. Try a different status.`}
         />
       ) : (
-        <ul className="grid grid-cols-1 gap-4 @2xl:grid-cols-2 @5xl:grid-cols-3">
-          {visiblePrograms.map((program) => (
-            <li key={program.id}>
-              <ProgramCard
-                program={toCard(program)}
-                projectNoun={projectNoun}
-                projectNounPlural={projectNounPlural}
-                taskNoun={taskNoun}
-                taskNounPlural={taskNounPlural}
-                onOpen={(id) => {
-                  router.push(`/orgs/${orgId}/programs/${id}`);
+        <EntityList aria-label={programsLabel}>
+          {visibleRows.map(({ program, ownerName, projectCount, taskCount }) => {
+            const projectWord = projectCount === 1 ? projectNoun : projectNounPlural;
+            const taskWord = taskCount === 1 ? taskNoun : taskNounPlural;
+            return (
+              <EntityListRow
+                key={program.id}
+                leading={
+                  <StatusIcon
+                    type={statusGlyphType(program.status)}
+                    label={STATUS_LABEL[program.status]}
+                  />
+                }
+                title={program.name}
+                onActivate={() => {
+                  router.push(`/orgs/${orgId}/programs/${program.id}`);
                 }}
+                meta={
+                  <>
+                    {ownerName ? (
+                      <RowMeta>
+                        <ActorAvatar kind="human" name={ownerName} size={18} />
+                        <span className="text-on-surface/80 font-medium">{ownerName}</span>
+                      </RowMeta>
+                    ) : null}
+                    <RowMeta tabular>
+                      <FolderKanban aria-hidden="true" className="size-3.5" />
+                      {projectCount} {projectWord}
+                    </RowMeta>
+                    <RowMeta tabular>
+                      <ListChecks aria-hidden="true" className="size-3.5" />
+                      {taskCount} {taskWord}
+                    </RowMeta>
+                  </>
+                }
+                trailing={
+                  <>
+                    <HealthDot health={program.health ?? null} />
+                    <ProgramStatusBadge status={program.status} />
+                  </>
+                }
               />
-            </li>
-          ))}
-        </ul>
+            );
+          })}
+        </EntityList>
       )}
+    </div>
+  );
+}
+
+/** Loading placeholder: a bordered list of slim row skeletons. */
+function ListSkeleton(): JSX.Element {
+  return (
+    <div
+      className="border-outline-variant divide-outline-variant flex flex-col divide-y overflow-hidden rounded-xl border"
+      aria-hidden="true"
+    >
+      {[0, 1, 2, 3, 4].map((i) => (
+        <div key={i} className="flex items-center gap-3 px-3 py-2.5">
+          <Skeleton className="size-4 rounded-full" />
+          <Skeleton className="h-4 w-48" />
+          <Skeleton className="ml-auto h-4 w-24" />
+        </div>
+      ))}
     </div>
   );
 }

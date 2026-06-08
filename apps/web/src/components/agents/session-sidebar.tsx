@@ -19,9 +19,10 @@
  */
 import type { SessionActivityOut, SessionStatus } from '@docket/types';
 import { ActorAvatar } from '@docket/ui/components';
-import { CheckCircle2, Sparkles, XCircle } from '@docket/ui/icons';
-import { Badge, Button, Separator } from '@docket/ui/primitives';
+import { Button, Separator } from '@docket/ui/primitives';
 import type { JSX } from 'react';
+
+import { ApprovalStatusBadge } from './approval-status-badge';
 
 /** A condensed view-model of one `action` activity for the changes receipt. */
 export interface ChangeReceiptItem {
@@ -113,7 +114,7 @@ export function SessionSidebar({
                   </code>
                   <p className="text-foreground text-xs leading-snug">{change.summary}</p>
                 </div>
-                <ChangeState status={change.approvalStatus} />
+                <ApprovalStatusBadge status={change.approvalStatus} size="compact" />
               </li>
             ))}
           </ul>
@@ -201,44 +202,4 @@ export function SessionSidebar({
       </section>
     </aside>
   );
-}
-
-/** A compact approval-state marker for a change-receipt row. */
-function ChangeState({
-  status,
-}: {
-  status: SessionActivityOut['approvalStatus'] | null;
-}): JSX.Element | null {
-  switch (status) {
-    case 'proposed':
-      return (
-        <Badge
-          variant="outline"
-          className="border-primary/40 text-primary shrink-0 gap-1 text-[0.625rem]"
-        >
-          <Sparkles className="h-2.5 w-2.5" /> Proposed
-        </Badge>
-      );
-    case 'approved':
-    case 'applied':
-      return (
-        <Badge
-          variant="outline"
-          className="text-state-completed border-state-completed/40 shrink-0 gap-1 text-[0.625rem]"
-        >
-          <CheckCircle2 className="h-2.5 w-2.5" /> {status === 'applied' ? 'Applied' : 'Approved'}
-        </Badge>
-      );
-    case 'rejected':
-      return (
-        <Badge
-          variant="outline"
-          className="text-destructive border-destructive/40 shrink-0 gap-1 text-[0.625rem]"
-        >
-          <XCircle className="h-2.5 w-2.5" /> Rejected
-        </Badge>
-      );
-    default:
-      return null;
-  }
 }

@@ -4,10 +4,10 @@ import { Input, Skeleton } from '@docket/ui/primitives';
 import Link from 'next/link';
 import { type JSX, useCallback, useEffect, useState } from 'react';
 
-import { EmptyState, ErrorBanner, PageHeader } from '@/components/ui-bits';
+import { EmptyState, ErrorBanner, PageHeader, ROW_CLASS, SignInAction } from '@/components/ui-bits';
 import { api } from '@/lib/api';
 import { formatTimestamp } from '@/lib/lifecycle';
-import { readError, readProblem } from '@/lib/problem';
+import { isAuthError, readError, readProblem } from '@/lib/problem';
 import type { AdminUser } from '@/lib/types';
 
 /** Page size for the user list. */
@@ -27,16 +27,19 @@ export default function UsersPage(): JSX.Element {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [authFailed, setAuthFailed] = useState(false);
 
   /** Load the first page of users matching the current search term. */
   const load = useCallback(async (term: string): Promise<void> => {
     setLoading(true);
     setError(null);
+    setAuthFailed(false);
     try {
       const res = await api.v1.admin.users.$get({
         query: { search: term || undefined, limit: String(PAGE_SIZE), offset: '0' },
       });
       if (!res.ok) {
+        setAuthFailed(isAuthError(res));
         setError(await readProblem(res, 'Could not load users.'));
         return;
       }
@@ -75,7 +78,7 @@ export default function UsersPage(): JSX.Element {
           />
         }
       />
-      <ErrorBanner message={error} />
+      <ErrorBanner message={error} action={authFailed ? <SignInAction /> : null} />
 
       {loading ? (
         <ListSkeleton />
@@ -85,13 +88,13 @@ export default function UsersPage(): JSX.Element {
             <li key={u.id}>
               <Link
                 href={`/users/${u.id}`}
-                className="border-border bg-card hover:bg-accent/50 flex items-center justify-between gap-4 rounded-lg border px-4 py-3 transition-colors"
+                className={`${ROW_CLASS} items-center justify-between gap-4 rounded-lg px-4 py-3`}
               >
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium">{u.name || u.email}</p>
-                  <p className="text-muted-foreground truncate text-xs">{u.email}</p>
+                  <p className="text-on-surface-variant truncate text-xs">{u.email}</p>
                 </div>
-                <span className="text-muted-foreground shrink-0 text-xs">
+                <span className="text-on-surface-variant shrink-0 text-xs">
                   {formatTimestamp(u.createdAt)}
                 </span>
               </Link>

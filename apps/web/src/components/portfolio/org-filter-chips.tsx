@@ -81,7 +81,7 @@ export function OrgFilterChips({
               style={{ backgroundColor: getOrgAccent(option.id) }}
             />
             <span className="max-w-[12rem] truncate">{option.name}</span>
-            <span className="text-muted-foreground tabular-nums">{option.count}</span>
+            <span className="text-on-surface-variant tabular-nums">{option.count}</span>
           </button>
         );
       })}

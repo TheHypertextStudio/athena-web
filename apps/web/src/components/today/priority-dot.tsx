@@ -9,12 +9,12 @@ import type { JSX } from 'react';
  * @remarks
  * Static keys (no string interpolation) keep the classes discoverable by Tailwind's
  * content scanner. `none` reads as a muted hairline ring; the actionable priorities
- * escalate from the calm `muted-foreground` through to the `destructive` token for
+ * escalate from the calm `on-surface-variant` through to the `destructive` token for
  * `urgent`, so a glance down the plan surfaces what matters without a legend.
  */
 const PRIORITY_TINT: Record<Priority, string> = {
-  none: 'bg-transparent ring-1 ring-inset ring-border',
-  low: 'bg-muted-foreground/40',
+  none: 'bg-transparent ring-1 ring-inset ring-outline-variant',
+  low: 'bg-on-surface-variant/40',
   medium: 'bg-state-started/70',
   high: 'bg-state-backlog',
   urgent: 'bg-destructive',

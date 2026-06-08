@@ -79,7 +79,7 @@ export function RoadmapTimeline({ rows, scale, focusedOrgId }: RoadmapTimelinePr
           {/* ── Sticky axis header ───────────────────────────────────────── */}
           <div className="bg-surface-container-low/95 supports-[backdrop-filter]:bg-surface-container-low/80 border-outline-variant sticky top-0 z-30 grid grid-cols-[var(--label-col)_1fr] border-b backdrop-blur">
             <div className="bg-surface-container-low/95 border-outline-variant sticky left-0 z-10 flex items-center border-r px-4 py-2.5">
-              <span className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+              <span className="text-on-surface-variant text-xs font-medium tracking-wide uppercase">
                 Organization
               </span>
             </div>
@@ -89,7 +89,7 @@ export function RoadmapTimeline({ rows, scale, focusedOrgId }: RoadmapTimelinePr
                 index === scale.ticks.length - 1 ? null : (
                   <div
                     key={tick.at}
-                    className="text-muted-foreground absolute top-0 flex h-full items-center px-2 text-[11px] font-medium tabular-nums"
+                    className="text-on-surface-variant absolute top-0 flex h-full items-center px-2 text-[11px] font-medium tabular-nums"
                     style={{ left: `${pct(tick.at, scale)}%` }}
                   >
                     {tick.label}
@@ -123,18 +123,18 @@ export function RoadmapTimeline({ rows, scale, focusedOrgId }: RoadmapTimelinePr
       </div>
 
       {/* ── Health legend ──────────────────────────────────────────────── */}
-      <div className="border-border flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t px-4 py-2.5">
-        <span className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
+      <div className="border-outline-variant flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t px-4 py-2.5">
+        <span className="text-on-surface-variant text-[11px] font-medium tracking-wide uppercase">
           Health
         </span>
         {(Object.keys(HEALTH_LABEL) as (keyof typeof HEALTH_LABEL)[]).map((key) => (
           <LegendItem key={key} fill={HEALTH_FILL_CLASS[key]} label={HEALTH_LABEL[key]} />
         ))}
         <LegendItem fill={HEALTH_UNKNOWN_FILL_CLASS} label={HEALTH_UNKNOWN_LABEL} />
-        <span className="text-muted-foreground inline-flex items-center gap-1.5 text-[11px]">
+        <span className="text-on-surface-variant inline-flex items-center gap-1.5 text-[11px]">
           <span
             aria-hidden="true"
-            className="bg-background border-border size-2 rotate-45 rounded-[1px] border"
+            className="bg-surface border-outline-variant size-2 rotate-45 rounded-[1px] border"
           />
           Milestone
         </span>
@@ -154,7 +154,7 @@ interface LegendItemProps {
 /** A single health legend entry: a colored swatch + its label. */
 function LegendItem({ fill, label }: LegendItemProps): JSX.Element {
   return (
-    <span className="text-muted-foreground inline-flex items-center gap-1.5 text-[11px]">
+    <span className="text-on-surface-variant inline-flex items-center gap-1.5 text-[11px]">
       <span aria-hidden="true" className={cn('size-2.5 rounded-sm', fill)} />
       {label}
     </span>

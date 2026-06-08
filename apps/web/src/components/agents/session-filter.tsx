@@ -115,7 +115,7 @@ export function SessionFilterMenu({
             <DropdownMenuRadioItem key={option.value} value={option.value}>
               <span className="flex w-full items-center justify-between gap-6">
                 <span>{option.label}</span>
-                <span className="text-muted-foreground text-xs tabular-nums">
+                <span className="text-on-surface-variant text-xs tabular-nums">
                   {counts[option.value]}
                 </span>
               </span>

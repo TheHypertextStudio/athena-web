@@ -56,7 +56,7 @@ export function Swimlane({ row, scale, todayLeft, dimmed }: SwimlaneProps): JSX.
   return (
     <div className={cn('grid grid-cols-[var(--label-col)_1fr]', dimmed && 'opacity-40')}>
       {/* ── Sticky org label column ─────────────────────────────────────── */}
-      <div className="bg-background border-border sticky left-0 z-20 flex items-start border-r border-b px-4 py-3">
+      <div className="bg-surface-container-low border-outline-variant sticky left-0 z-20 flex items-start border-r border-b px-4 py-3">
         <Link
           href={`/orgs/${row.organization.id}/programs`}
           className="focus-visible:ring-ring group flex min-w-0 items-center gap-2 rounded-md focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:outline-none"
@@ -67,14 +67,14 @@ export function Swimlane({ row, scale, todayLeft, dimmed }: SwimlaneProps): JSX.
             className="size-2.5 shrink-0 rounded-full"
             style={{ backgroundColor: orgAccent }}
           />
-          <span className="text-foreground group-hover:text-foreground/80 min-w-0 truncate text-sm font-semibold">
+          <span className="text-on-surface group-hover:text-on-surface/80 min-w-0 truncate text-sm font-semibold">
             {row.organization.name}
           </span>
         </Link>
       </div>
 
       {/* ── Track region (aligned to the shared axis) ───────────────────── */}
-      <div className="border-border relative border-b">
+      <div className="border-outline-variant relative border-b">
         {/* Vertical gridlines (+ the today rule), behind everything in the track. */}
         <Gridlines scale={scale} todayLeft={todayLeft} />
 
@@ -132,13 +132,13 @@ function ProgramLane({ laneRow, scale, dimmed }: ProgramLaneProps): JSX.Element 
   return (
     <section
       aria-label={`${program.name} — ${statusLabel(program.status)}, ${labelFor(health)}`}
-      className="bg-muted/20 rounded-md py-1.5"
+      className="bg-surface-container rounded-md py-1.5"
     >
       <header className="flex items-center gap-2 px-3 pb-1">
-        <FolderKanban aria-hidden="true" className="text-muted-foreground size-3.5" />
+        <FolderKanban aria-hidden="true" className="text-on-surface-variant size-3.5" />
         <span aria-hidden="true" className={cn('size-2 shrink-0 rounded-full', fillFor(health))} />
-        <span className="text-foreground min-w-0 truncate text-xs font-medium">{program.name}</span>
-        <span className="text-muted-foreground shrink-0 text-[11px]">
+        <span className="text-on-surface min-w-0 truncate text-xs font-medium">{program.name}</span>
+        <span className="text-on-surface-variant shrink-0 text-[11px]">
           {statusLabel(program.status)}
         </span>
       </header>
@@ -178,7 +178,7 @@ function Gridlines({ scale, todayLeft }: GridlinesProps): JSX.Element {
       {scale.ticks.map((tick) => (
         <div
           key={tick.at}
-          className="border-border/40 absolute inset-y-0 border-l"
+          className="border-outline-variant absolute inset-y-0 border-l"
           style={{ left: `${span > 0 ? ((tick.at - scale.min) / span) * 100 : 0}%` }}
         />
       ))}

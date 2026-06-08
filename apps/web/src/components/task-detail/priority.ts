@@ -29,14 +29,14 @@ export const PRIORITY_ORDER: readonly Priority[] = ['urgent', 'high', 'medium', 
  *
  * @remarks
  * Colors come exclusively from semantic design tokens (`bg-destructive`,
- * `bg-foreground`, `bg-muted-foreground`, `bg-muted`) — never hardcoded — so the glyph
- * adapts to light/dark themes. `urgent` borrows the destructive token to read as the
- * loudest signal; descending levels step down in emphasis toward the muted `none`.
+ * `bg-on-surface`, `bg-on-surface-variant`, `bg-surface-container-high`) — never hardcoded —
+ * so the glyph adapts to light/dark themes. `urgent` borrows the destructive token to read as
+ * the loudest signal; descending levels step down in emphasis toward the muted `none`.
  */
 export const PRIORITY_BAR_CLASS: Record<Priority, string> = {
   urgent: 'bg-destructive',
-  high: 'bg-foreground',
-  medium: 'bg-foreground/70',
-  low: 'bg-muted-foreground',
-  none: 'bg-muted',
+  high: 'bg-on-surface',
+  medium: 'bg-on-surface/70',
+  low: 'bg-on-surface-variant',
+  none: 'bg-surface-container-high',
 };

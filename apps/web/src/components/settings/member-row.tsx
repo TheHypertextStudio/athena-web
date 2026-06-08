@@ -72,11 +72,11 @@ export function MemberRow({
   const canRemove = canManage && !isSelf;
 
   return (
-    <li className="flex items-center gap-3 px-4 py-3">
+    <li className="hover:bg-surface-container-high flex min-h-14 items-center gap-3 px-3 py-2 transition-colors">
       <ActorAvatar kind="human" name={displayName} avatarUrl={avatarUrl} size={32} />
       <div className="flex min-w-0 flex-1 items-center gap-2">
-        <span className="text-foreground truncate text-sm font-medium">{displayName}</span>
-        {isSelf ? <span className="text-muted-foreground text-xs font-normal">You</span> : null}
+        <span className="text-on-surface truncate text-sm font-medium">{displayName}</span>
+        {isSelf ? <span className="text-on-surface-variant text-xs font-normal">You</span> : null}
         {isGuest ? (
           <Badge variant="secondary" className="font-normal">
             Guest
@@ -121,7 +121,7 @@ export function MemberRow({
           <Button
             variant="ghost"
             size="icon"
-            className="text-muted-foreground hover:text-destructive size-8"
+            className="text-on-surface-variant hover:text-destructive size-8"
             aria-label={`Remove ${displayName}`}
             onClick={() => {
               setConfirming(true);

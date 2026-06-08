@@ -59,7 +59,7 @@ export default function MembersSettingsPage({
 
   if (isPersonal) {
     return (
-      <p className="text-muted-foreground text-sm" role="status">
+      <p className="text-on-surface-variant text-sm" role="status">
         Opening settings&hellip;
       </p>
     );

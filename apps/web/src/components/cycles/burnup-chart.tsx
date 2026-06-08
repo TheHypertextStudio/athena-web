@@ -144,7 +144,7 @@ export function BurnupChart({ burnup, window, className }: BurnupChartProps): JS
         />
 
         {/* Remaining-work band: the gap between planned and completed. */}
-        <path d={areaPath} className="text-muted-foreground/15" fill="currentColor" />
+        <path d={areaPath} className="text-on-surface-variant/15" fill="currentColor" />
 
         {/* "Today" marker — where the window currently sits. */}
         {!window.ended ? (
@@ -165,7 +165,7 @@ export function BurnupChart({ burnup, window, className }: BurnupChartProps): JS
         <polyline
           points={plannedPoints}
           fill="none"
-          className="text-muted-foreground"
+          className="text-on-surface-variant"
           stroke="currentColor"
           strokeWidth={1.5}
           strokeLinejoin="round"
@@ -186,16 +186,16 @@ export function BurnupChart({ burnup, window, className }: BurnupChartProps): JS
         />
       </svg>
 
-      <figcaption className="text-muted-foreground flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+      <figcaption className="text-on-surface-variant flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
         <span className="flex items-center gap-1.5">
           <span aria-hidden="true" className="bg-state-started h-0.5 w-4 rounded-full" />
           Completed
         </span>
         <span className="flex items-center gap-1.5">
-          <span aria-hidden="true" className="bg-muted-foreground h-0.5 w-4 rounded-full" />
+          <span aria-hidden="true" className="bg-on-surface-variant h-0.5 w-4 rounded-full" />
           Planned capacity
         </span>
-        <span className="text-muted-foreground/70 tabular-nums">
+        <span className="text-on-surface-variant tabular-nums">
           peak {maxY} {maxY === 1 ? 'point' : 'points'}
         </span>
       </figcaption>

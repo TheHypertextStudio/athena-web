@@ -283,10 +283,10 @@ export default function SessionViewPage(): JSX.Element {
 
   if (loading) {
     return (
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
         <Skeleton className="h-5 w-48" />
         <Skeleton className="h-8 w-2/3" />
-        <div className="grid grid-cols-1 gap-8 @4xl:grid-cols-[minmax(0,1fr)_20rem]">
+        <div className="grid grid-cols-1 gap-6 @4xl:grid-cols-[minmax(0,1fr)_18rem]">
           <div className="flex flex-col gap-4">
             <Skeleton className="h-16 w-full rounded-lg" />
             <Skeleton className="h-16 w-full rounded-lg" />
@@ -300,8 +300,11 @@ export default function SessionViewPage(): JSX.Element {
 
   if (loadError) {
     return (
-      <div className="mx-auto w-full max-w-7xl p-4 sm:p-6 lg:p-8">
-        <p role="alert" className="border-border text-destructive rounded-lg border p-4 text-sm">
+      <div className="mx-auto w-full max-w-6xl p-4 @2xl:p-6 @4xl:p-8">
+        <p
+          role="alert"
+          className="border-outline-variant text-destructive rounded-lg border p-4 text-sm"
+        >
           {loadError}
         </p>
       </div>
@@ -310,8 +313,8 @@ export default function SessionViewPage(): JSX.Element {
 
   if (!session) {
     return (
-      <div className="mx-auto w-full max-w-7xl p-4 sm:p-6 lg:p-8">
-        <p className="border-border text-muted-foreground rounded-lg border border-dashed p-6 text-center text-sm">
+      <div className="mx-auto w-full max-w-6xl p-4 @2xl:p-6 @4xl:p-8">
+        <p className="border-outline-variant text-on-surface-variant rounded-lg border border-dashed p-6 text-center text-sm">
           This session could not be found.
         </p>
       </div>
@@ -321,26 +324,26 @@ export default function SessionViewPage(): JSX.Element {
   const canAct = controls.canCancel || session.status === 'awaiting_approval';
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
       {/* Header: back-to-task link + org chip + status. */}
       <header className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-3">
           {session.taskId ? (
             <Link
               href={`/orgs/${orgId}/tasks/${session.taskId}`}
-              className="text-muted-foreground hover:text-foreground focus-visible:ring-ring -ml-1 inline-flex items-center gap-1 rounded px-1 text-sm transition-colors outline-none focus-visible:ring-1"
+              className="text-on-surface-variant hover:text-on-surface focus-visible:ring-ring -ml-1 inline-flex items-center gap-1 rounded px-1 text-sm transition-colors outline-none focus-visible:ring-1"
             >
               <ChevronLeft className="h-4 w-4" />
               Back to {taskTitle ?? taskLabel.toLowerCase()}
             </Link>
           ) : (
-            <span className="text-muted-foreground text-sm">Ad-hoc session</span>
+            <span className="text-on-surface-variant text-sm">Ad-hoc session</span>
           )}
           {orgName ? <OrgChip orgId={orgId} name={orgName} /> : null}
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl leading-tight font-semibold tracking-tight">
+          <h1 className="text-on-surface text-xl leading-tight font-semibold tracking-tight">
             {taskTitle ?? `${agentActor.name}’s session`}
           </h1>
           <SessionStatusPill status={session.status} />
@@ -353,12 +356,12 @@ export default function SessionViewPage(): JSX.Element {
         ) : null}
       </header>
 
-      <div className="grid grid-cols-1 gap-8 @4xl:grid-cols-[minmax(0,1fr)_20rem]">
+      <div className="grid grid-cols-1 gap-6 @4xl:grid-cols-[minmax(0,1fr)_18rem]">
         {/* LEFT: the activity stream. */}
         <section aria-labelledby="activity-heading" className="flex min-w-0 flex-col gap-3">
           <h2
             id="activity-heading"
-            className="text-muted-foreground text-xs font-medium tracking-wide uppercase"
+            className="text-on-surface-variant text-xs font-medium tracking-wide uppercase"
           >
             Activity
           </h2>

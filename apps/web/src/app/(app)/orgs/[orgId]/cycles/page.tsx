@@ -129,11 +129,13 @@ export default function CyclesPage(): JSX.Element {
   );
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-7xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
-      <header className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+    <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
+      <header className="flex flex-col gap-3 @2xl:flex-row @2xl:flex-wrap @2xl:items-center @2xl:justify-between">
         <div className="flex flex-col gap-1">
-          <h1 className="text-2xl font-semibold tracking-tight">{cycleNounPlural}</h1>
-          <p className="text-muted-foreground text-sm">
+          <h1 className="text-on-surface text-xl font-semibold tracking-tight">
+            {cycleNounPlural}
+          </h1>
+          <p className="text-on-surface-variant text-xs">
             Time-boxed cadences for your team — what&apos;s live now, what&apos;s coming up, and
             what&apos;s wrapped.
           </p>
@@ -165,18 +167,21 @@ export default function CyclesPage(): JSX.Element {
       {loading ? (
         <ListSkeleton />
       ) : loadError ? (
-        <p role="alert" className="border-border text-destructive rounded-lg border p-4 text-sm">
+        <p
+          role="alert"
+          className="border-outline-variant text-destructive rounded-xl border p-4 text-sm"
+        >
           {loadError}
         </p>
       ) : total === 0 ? (
-        <div className="border-border/60 flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed p-12 text-center">
-          <span className="bg-muted text-muted-foreground mb-1 flex size-10 items-center justify-center rounded-full">
+        <div className="border-outline-variant flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed p-12 text-center">
+          <span className="bg-surface-container text-on-surface-variant mb-1 flex size-10 items-center justify-center rounded-full">
             <RefreshCw aria-hidden="true" className="size-5" />
           </span>
-          <p className="text-foreground text-sm font-medium">
+          <p className="text-on-surface text-sm font-medium">
             No {cycleNounPlural.toLowerCase()} yet
           </p>
-          <p className="text-muted-foreground max-w-sm text-sm">
+          <p className="text-on-surface-variant max-w-sm text-sm">
             Start a {cycleNoun.toLowerCase()} to time-box your team&apos;s work and track its pace
             and carryover at a glance.
           </p>
@@ -193,7 +198,7 @@ export default function CyclesPage(): JSX.Element {
           </Button>
         </div>
       ) : (
-        <div className="flex flex-col gap-8">
+        <div className="flex flex-col gap-6">
           {CYCLE_SEGMENTS.map((segment) => {
             const inSegment = segments.get(segment) ?? [];
             if (inSegment.length === 0) return null;
@@ -206,11 +211,11 @@ export default function CyclesPage(): JSX.Element {
                 <div className="flex items-center gap-2">
                   <h2
                     id={`cycles-${segment}`}
-                    className="text-muted-foreground text-xs font-semibold tracking-wide uppercase"
+                    className="text-on-surface-variant text-xs font-medium tracking-wide uppercase"
                   >
                     {SEGMENT_LABEL[segment]}
                   </h2>
-                  <span className="text-muted-foreground/70 text-xs tabular-nums">
+                  <span className="text-on-surface-variant text-xs tabular-nums">
                     {inSegment.length}
                   </span>
                 </div>
@@ -237,7 +242,7 @@ export default function CyclesPage(): JSX.Element {
 /** Loading placeholder for the list: two labeled segments of cycle cards. */
 function ListSkeleton(): JSX.Element {
   return (
-    <div className="flex flex-col gap-8" aria-hidden="true">
+    <div className="flex flex-col gap-6" aria-hidden="true">
       {[0, 1].map((section) => (
         <div key={section} className="flex flex-col gap-3">
           <Skeleton className="h-3 w-20" />

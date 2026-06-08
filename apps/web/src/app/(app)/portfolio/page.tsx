@@ -102,13 +102,13 @@ export default function PortfolioPage(): JSX.Element {
   const hasSwimlanes = layout.rows.length > 0;
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-7xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
-      <header className="flex flex-wrap items-end justify-between gap-4">
+    <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
+      <header className="flex flex-col gap-3 @2xl:flex-row @2xl:flex-wrap @2xl:items-center @2xl:justify-between">
         <div className="flex flex-col gap-1">
-          <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Portfolio</h1>
-          <p className="text-muted-foreground text-sm">Every venture on one timeline.</p>
+          <h1 className="text-on-surface text-xl font-semibold tracking-tight">Portfolio</h1>
+          <p className="text-on-surface-variant text-xs">Every venture on one timeline.</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-2">
           <ScaleMenu
             value={granularity}
             resolved={scale?.granularity ?? null}
@@ -186,10 +186,10 @@ interface EmptyStateProps {
 /** A calm, content-sized empty state for the portfolio. */
 function EmptyState({ title, body }: EmptyStateProps): JSX.Element {
   return (
-    <div className="border-border/60 flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed p-12 text-center">
-      <LayoutGrid className="text-muted-foreground/60 size-7" aria-hidden="true" />
-      <p className="text-foreground text-sm font-medium">{title}</p>
-      <p className="text-muted-foreground max-w-md text-sm">{body}</p>
+    <div className="border-outline-variant flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed p-12 text-center">
+      <LayoutGrid className="text-on-surface-variant/60 size-7" aria-hidden="true" />
+      <p className="text-on-surface text-sm font-medium">{title}</p>
+      <p className="text-on-surface-variant max-w-md text-xs">{body}</p>
     </div>
   );
 }
@@ -198,7 +198,7 @@ function EmptyState({ title, body }: EmptyStateProps): JSX.Element {
 function TimelineSkeleton(): JSX.Element {
   return (
     <div className="border-outline-variant bg-surface-container-low overflow-hidden rounded-xl border">
-      <div className="border-border flex items-center gap-6 border-b px-4 py-2.5">
+      <div className="border-outline-variant flex items-center gap-6 border-b px-4 py-2.5">
         <Skeleton className="h-3 w-24" />
         <Skeleton className="h-3 w-12" />
         <Skeleton className="h-3 w-12" />
@@ -206,8 +206,8 @@ function TimelineSkeleton(): JSX.Element {
         <Skeleton className="h-3 w-12" />
       </div>
       {[0, 1, 2].map((band) => (
-        <div key={band} className="border-border grid grid-cols-[12rem_1fr] border-b">
-          <div className="border-border flex items-center border-r px-4 py-4">
+        <div key={band} className="border-outline-variant grid grid-cols-[12rem_1fr] border-b">
+          <div className="border-outline-variant flex items-center border-r px-4 py-4">
             <Skeleton className="h-4 w-28" />
           </div>
           <div className="flex flex-col gap-2 p-3">

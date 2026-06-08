@@ -29,7 +29,7 @@ export interface AuthShellProps {
  */
 export function AuthShell({ title, description, children, footer }: AuthShellProps): JSX.Element {
   return (
-    <main className="bg-background flex min-h-screen items-center justify-center px-6 py-12">
+    <main className="bg-surface flex min-h-screen items-center justify-center px-6 py-12">
       <Card className="w-full max-w-sm">
         <CardHeader className="items-center text-center">
           <span
@@ -43,7 +43,7 @@ export function AuthShell({ title, description, children, footer }: AuthShellPro
         </CardHeader>
         <CardContent className="flex flex-col gap-6">
           {children}
-          <div className="text-muted-foreground text-center text-sm">{footer}</div>
+          <div className="text-on-surface-variant text-center text-sm">{footer}</div>
         </CardContent>
       </Card>
     </main>

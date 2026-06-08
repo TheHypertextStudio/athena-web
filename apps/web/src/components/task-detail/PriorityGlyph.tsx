@@ -42,7 +42,7 @@ export function PriorityGlyph({ priority, className }: PriorityGlyphProps): JSX.
         <span
           key={height}
           className={`w-1 rounded-[1px] ${height} ${
-            index < filled ? PRIORITY_BAR_CLASS[priority] : 'bg-muted'
+            index < filled ? PRIORITY_BAR_CLASS[priority] : 'bg-surface-container-high'
           }`}
         />
       ))}

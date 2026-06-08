@@ -66,7 +66,7 @@ export function AgentTaskRow({ task, active, onActivate }: AgentTaskRowProps): J
         <StatusIcon type={task.stateType} />
       </ListCell>
       <ListCell className="flex-1">
-        <span className="text-foreground truncate">{task.title}</span>
+        <span className="text-on-surface truncate">{task.title}</span>
       </ListCell>
       {task.session ? (
         <ListCell className="shrink-0">

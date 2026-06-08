@@ -31,13 +31,13 @@ export function CommandPaletteTrigger({ className }: CommandPaletteTriggerProps)
       aria-keyshortcuts="Meta+K Control+K"
       aria-label="Open command palette"
       className={cn(
-        'border-input bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring flex h-9 items-center gap-2 rounded-md border px-3 text-sm shadow-sm transition-colors focus-visible:ring-1 focus-visible:outline-none',
+        'border-outline-variant text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-ring flex h-9 items-center gap-2 rounded-md border bg-transparent px-3 text-sm shadow-sm transition-colors focus-visible:ring-1 focus-visible:outline-none',
         className,
       )}
     >
       <Search aria-hidden="true" className="size-4 shrink-0" />
       <span className="flex-1 text-left">Search…</span>
-      <kbd className="bg-muted text-muted-foreground pointer-events-none inline-flex h-5 items-center gap-0.5 rounded border px-1.5 text-[10px] font-medium">
+      <kbd className="bg-surface-container text-on-surface-variant pointer-events-none inline-flex h-5 items-center gap-0.5 rounded border px-1.5 text-[10px] font-medium">
         <Command aria-hidden="true" className="size-3" />K
       </kbd>
     </button>

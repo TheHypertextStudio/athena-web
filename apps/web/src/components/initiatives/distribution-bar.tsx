@@ -90,7 +90,7 @@ export function DistributionBar({
 
   if (total === 0) {
     return (
-      <p className="text-muted-foreground text-sm">
+      <p className="text-on-surface-variant text-sm">
         No {childNounPlural} are associated yet — link some below to roll up their health here.
       </p>
     );
@@ -98,7 +98,10 @@ export function DistributionBar({
 
   return (
     <div className="flex flex-col gap-3">
-      <div aria-hidden="true" className="bg-muted flex h-2.5 w-full overflow-hidden rounded-full">
+      <div
+        aria-hidden="true"
+        className="bg-surface-container flex h-2.5 w-full overflow-hidden rounded-full"
+      >
         {segments
           .filter((segment) => segment.count > 0)
           .map((segment) => (
@@ -115,8 +118,8 @@ export function DistributionBar({
           .map((segment) => (
             <li key={segment.key} className="flex items-center gap-1.5 text-xs">
               <span aria-hidden="true" className={cn('size-2 rounded-full', segment.fill)} />
-              <span className="text-foreground font-medium tabular-nums">{segment.count}</span>
-              <span className="text-muted-foreground">{segment.label}</span>
+              <span className="text-on-surface font-medium tabular-nums">{segment.count}</span>
+              <span className="text-on-surface-variant">{segment.label}</span>
             </li>
           ))}
       </ul>

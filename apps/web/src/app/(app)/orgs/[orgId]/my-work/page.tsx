@@ -326,10 +326,10 @@ export default function MyWorkPage(): JSX.Element {
         };
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-7xl flex-col gap-5 p-4 sm:p-6 lg:p-8">
+    <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
       <header className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight">My Work</h1>
-        <p className="text-muted-foreground text-sm">
+        <h1 className="text-on-surface text-xl font-semibold tracking-tight">My Work</h1>
+        <p className="text-on-surface-variant text-xs">
           Your work and your agents&apos; work, grouped by {projectNoun.toLowerCase()}.
         </p>
       </header>
@@ -341,7 +341,7 @@ export default function MyWorkPage(): JSX.Element {
         }}
         className="flex flex-col gap-2"
       >
-        <div className="flex flex-col gap-2 sm:flex-row">
+        <div className="flex flex-col gap-2 @2xl:flex-row">
           <Input
             aria-label="New task title"
             placeholder="Add a task…"
@@ -359,7 +359,7 @@ export default function MyWorkPage(): JSX.Element {
             />
             <Button
               type="submit"
-              className="flex-1 sm:flex-none"
+              className="flex-1 @2xl:flex-none"
               disabled={creating || teamsLoading || teamId === null || title.trim().length === 0}
             >
               {creating ? 'Adding…' : 'Add task'}
@@ -395,7 +395,7 @@ export default function MyWorkPage(): JSX.Element {
         className={
           visibleTasks.length === 0 && !loading && !loadError
             ? undefined
-            : 'border-border flex-1 overflow-hidden rounded-lg border'
+            : 'border-outline-variant flex-1 overflow-hidden rounded-xl border'
         }
       >
         {loading ? (
@@ -409,15 +409,15 @@ export default function MyWorkPage(): JSX.Element {
             {loadError}
           </p>
         ) : visibleTasks.length === 0 ? (
-          <div className="border-border/60 flex flex-col items-center gap-3 rounded-xl border border-dashed p-10 text-center">
+          <div className="border-outline-variant flex flex-col items-center gap-3 rounded-xl border border-dashed p-10 text-center">
             <span
               aria-hidden="true"
-              className="bg-muted text-muted-foreground flex size-10 items-center justify-center rounded-full"
+              className="bg-surface-container text-on-surface-variant flex size-10 items-center justify-center rounded-full"
             >
               <ListChecks className="size-5" />
             </span>
-            <p className="text-foreground text-sm font-medium">{empty.title}</p>
-            <p className="text-muted-foreground max-w-xs text-sm leading-relaxed">{empty.body}</p>
+            <p className="text-on-surface text-sm font-medium">{empty.title}</p>
+            <p className="text-on-surface-variant max-w-xs text-sm leading-relaxed">{empty.body}</p>
           </div>
         ) : (
           <ListView
@@ -426,6 +426,7 @@ export default function MyWorkPage(): JSX.Element {
             getItemKey={(task) => task.id}
             groupBy={groupBy}
             subGroupBy={subGroupBy}
+            rowHeight={40}
             renderRow={(task, ctx) => (
               <AgentTaskRow task={toRow(task)} active={ctx.active} onActivate={ctx.onActivate} />
             )}

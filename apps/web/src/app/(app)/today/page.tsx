@@ -110,24 +110,26 @@ export default function TodayPage(): JSX.Element {
   const inbox = data?.needsAttention.inbox ?? 0;
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-7xl flex-col gap-6 p-4 sm:p-6 lg:gap-8 lg:p-8">
-      <header className="flex flex-wrap items-end justify-between gap-4">
+    <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
+      <header className="flex flex-col gap-3 @2xl:flex-row @2xl:flex-wrap @2xl:items-center @2xl:justify-between">
         <div className="flex flex-col gap-1">
-          <p className="text-muted-foreground text-sm font-medium">{heading}</p>
-          <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Today</h1>
-          <p className="text-muted-foreground text-sm">Your plan and what needs you today.</p>
+          <p className="text-on-surface-variant text-xs">{heading}</p>
+          <h1 className="text-on-surface text-xl font-semibold tracking-tight">Today</h1>
+          <p className="text-on-surface-variant text-xs">Your plan and what needs you today.</p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            void load(false);
-          }}
-          disabled={loading || refreshing}
-        >
-          <RefreshCw className={refreshing ? 'animate-spin' : undefined} />
-          {refreshing ? 'Refreshing…' : 'Plan day'}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              void load(false);
+            }}
+            disabled={loading || refreshing}
+          >
+            <RefreshCw className={refreshing ? 'animate-spin' : undefined} />
+            {refreshing ? 'Refreshing…' : 'Plan day'}
+          </Button>
+        </div>
       </header>
 
       {error ? (
@@ -156,11 +158,11 @@ export default function TodayPage(): JSX.Element {
         {/* ── Pane 1: PLAN ─────────────────────────────────────────────── */}
         <section className="flex min-w-0 flex-col gap-3" aria-labelledby="today-plan-heading">
           <div className="flex items-center justify-between">
-            <h2 id="today-plan-heading" className="text-foreground text-sm font-semibold">
+            <h2 id="today-plan-heading" className="text-on-surface text-base font-semibold">
               Plan
             </h2>
             {!loading && planCount > 0 ? (
-              <span className="text-muted-foreground text-xs tabular-nums">
+              <span className="text-on-surface-variant text-xs tabular-nums">
                 {planCount} {planCount === 1 ? 'task' : 'tasks'}
               </span>
             ) : null}
@@ -169,10 +171,10 @@ export default function TodayPage(): JSX.Element {
           {loading ? (
             <PlanSkeleton />
           ) : planGroups.length > 0 ? (
-            <div className="flex flex-col gap-5">
+            <div className="flex flex-col gap-6">
               {planGroups.map((group) => (
                 <div key={group.orgId} className="flex flex-col gap-1.5">
-                  <h3 className="text-muted-foreground px-1 text-xs font-medium tracking-wide uppercase">
+                  <h3 className="text-on-surface-variant px-3 text-xs font-medium tracking-wide uppercase">
                     {group.orgName}
                   </h3>
                   <ul className="flex flex-col gap-1.5">
@@ -195,7 +197,7 @@ export default function TodayPage(): JSX.Element {
 
         {/* ── Pane 2: CALENDAR ─────────────────────────────────────────── */}
         <section className="flex min-w-0 flex-col gap-3" aria-labelledby="today-calendar-heading">
-          <h2 id="today-calendar-heading" className="text-foreground text-sm font-semibold">
+          <h2 id="today-calendar-heading" className="text-on-surface text-base font-semibold">
             Calendar
           </h2>
           {loading ? (
@@ -213,7 +215,7 @@ export default function TodayPage(): JSX.Element {
           aria-labelledby="today-attention-heading"
         >
           <div className="flex items-center justify-between">
-            <h2 id="today-attention-heading" className="text-foreground text-sm font-semibold">
+            <h2 id="today-attention-heading" className="text-on-surface text-base font-semibold">
               Needs attention
             </h2>
             {!loading && inbox > 0 ? (
@@ -227,7 +229,7 @@ export default function TodayPage(): JSX.Element {
           {loading ? (
             <AttentionSkeleton />
           ) : data ? (
-            <div className="flex flex-col gap-2.5">
+            <div className="flex flex-col gap-3">
               <AttentionCard
                 icon={CheckCircle2}
                 title="Approvals"
@@ -274,9 +276,9 @@ interface EmptyPaneProps {
 /** A calm, content-sized empty state for a pane with no content. */
 function EmptyPane({ title, body }: EmptyPaneProps): JSX.Element {
   return (
-    <div className="border-border/60 flex flex-col items-center justify-center gap-1 rounded-lg border border-dashed p-8 text-center">
-      <p className="text-foreground text-sm font-medium">{title}</p>
-      <p className="text-muted-foreground max-w-xs text-sm">{body}</p>
+    <div className="border-outline-variant flex flex-col items-center justify-center gap-1 rounded-xl border border-dashed p-8 text-center">
+      <p className="text-on-surface text-sm font-medium">{title}</p>
+      <p className="text-on-surface-variant max-w-xs text-xs">{body}</p>
     </div>
   );
 }
@@ -296,7 +298,7 @@ function PlanSkeleton(): JSX.Element {
 /** Loading placeholder for the needs-attention pane: three digest cards. */
 function AttentionSkeleton(): JSX.Element {
   return (
-    <div className="flex flex-col gap-2.5">
+    <div className="flex flex-col gap-3">
       <Skeleton className="h-[4.5rem] w-full rounded-xl" />
       <Skeleton className="h-[4.5rem] w-full rounded-xl" />
       <Skeleton className="h-[4.5rem] w-full rounded-xl" />

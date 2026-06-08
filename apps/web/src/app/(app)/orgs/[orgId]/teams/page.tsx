@@ -109,11 +109,11 @@ export default function TeamsListPage(): JSX.Element {
   }, []);
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
-      <header className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
+      <header className="flex flex-col gap-3 @2xl:flex-row @2xl:flex-wrap @2xl:items-center @2xl:justify-between">
         <div className="flex flex-col gap-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Teams</h1>
-          <p className="text-muted-foreground text-sm">
+          <h1 className="text-on-surface text-xl font-semibold tracking-tight">Teams</h1>
+          <p className="text-on-surface-variant text-xs">
             The units that own your work — each with its own workflow, cycles, and triage queue.
           </p>
         </div>
@@ -146,7 +146,10 @@ export default function TeamsListPage(): JSX.Element {
           ))}
         </div>
       ) : loadError ? (
-        <p role="alert" className="border-border text-destructive rounded-lg border p-4 text-sm">
+        <p
+          role="alert"
+          className="border-outline-variant text-destructive rounded-xl border p-4 text-sm"
+        >
           {loadError}
         </p>
       ) : teams.length === 0 ? (
@@ -190,12 +193,12 @@ function EmptyState({
   cta?: { label: string; onClick: () => void } | null;
 }): JSX.Element {
   return (
-    <div className="border-border flex flex-col items-center gap-3 rounded-xl border border-dashed p-12 text-center">
-      <span className="bg-muted text-muted-foreground flex size-10 items-center justify-center rounded-full">
+    <div className="border-outline-variant flex flex-col items-center gap-3 rounded-xl border border-dashed p-12 text-center">
+      <span className="bg-surface-container text-on-surface-variant flex size-10 items-center justify-center rounded-full">
         <Users aria-hidden="true" className="size-5" />
       </span>
-      <p className="text-foreground text-sm font-medium">{title}</p>
-      <p className="text-muted-foreground max-w-sm text-sm leading-relaxed">{body}</p>
+      <p className="text-on-surface text-sm font-medium">{title}</p>
+      <p className="text-on-surface-variant max-w-sm text-sm leading-relaxed">{body}</p>
       {cta ? (
         <Button type="button" variant="outline" className="mt-1 gap-1.5" onClick={cta.onClick}>
           <Plus aria-hidden="true" className="size-4" />

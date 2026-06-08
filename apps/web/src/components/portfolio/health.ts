@@ -58,10 +58,10 @@ export const HEALTH_DOT_CLASS = HEALTH_FILL_CLASS;
  *
  * @remarks
  * Used for the small legend swatch and the program-lane / unscheduled-tray dots, this is a
- * *solid* mid-grey (`muted-foreground`) so a tiny no-verdict marker stays clearly visible in
+ * *solid* mid-grey (`on-surface-variant`) so a tiny no-verdict marker stays clearly visible in
  * both light and dark themes — a translucent wash (the old `/30`) was effectively invisible.
  */
-export const HEALTH_UNKNOWN_FILL_CLASS = 'bg-muted-foreground';
+export const HEALTH_UNKNOWN_FILL_CLASS = 'bg-on-surface-variant';
 
 /** The fill class for a swatch/dot, defaulting to the neutral no-verdict fill. */
 export function fillFor(health: Health | null): string {
@@ -81,7 +81,7 @@ export function fillFor(health: Health | null): string {
 export function barClassFor(health: Health | null): string {
   return health
     ? `${HEALTH_FILL_CLASS[health]} border-transparent text-white`
-    : 'bg-secondary text-secondary-foreground border-border';
+    : 'bg-secondary text-secondary-foreground border-outline-variant';
 }
 
 /** The display label for a health verdict, defaulting to the no-verdict label. */

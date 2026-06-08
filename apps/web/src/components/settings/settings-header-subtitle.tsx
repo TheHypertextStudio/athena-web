@@ -29,5 +29,5 @@ export function SettingsHeaderSubtitle(): JSX.Element {
   const { activeOrg } = useActiveOrg();
   const subtitle = activeOrg?.isPersonal ? PERSONAL_SUBTITLE : ORG_SUBTITLE;
 
-  return <p className="text-muted-foreground text-sm">{subtitle}</p>;
+  return <p className="text-on-surface-variant text-sm">{subtitle}</p>;
 }

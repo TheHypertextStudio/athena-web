@@ -57,7 +57,7 @@ export function PriorityPicker({ current, onSelect, pending }: PriorityPickerPro
           >
             <PriorityGlyph priority={priority} />
             <span className="flex-1">{PRIORITY_LABEL[priority]}</span>
-            {priority === current ? <Check className="text-muted-foreground size-4" /> : null}
+            {priority === current ? <Check className="text-on-surface-variant size-4" /> : null}
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>

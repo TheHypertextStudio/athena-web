@@ -320,7 +320,7 @@ function ProviderRow({ card, live, state, onConnect }: ProviderRowProps): JSX.El
       </span>
 
       <div className="flex min-w-0 flex-col gap-0.5">
-        <span className="text-foreground text-sm leading-tight font-semibold">{card.name}</span>
+        <span className="text-on-surface text-sm leading-tight font-semibold">{card.name}</span>
         {connected ? (
           <span className="text-primary text-sm leading-snug">{mirroredLabel}</span>
         ) : phase === 'error' ? (
@@ -328,13 +328,13 @@ function ProviderRow({ card, live, state, onConnect }: ProviderRowProps): JSX.El
             {state.error}
           </span>
         ) : (
-          <span className="text-muted-foreground text-sm leading-snug">{card.blurb}</span>
+          <span className="text-on-surface-variant text-sm leading-snug">{card.blurb}</span>
         )}
       </div>
 
       <div className="ml-auto shrink-0">
         {!live ? (
-          <span className="text-muted-foreground border-outline-variant rounded-md border px-3 py-1.5 text-xs font-medium">
+          <span className="text-on-surface-variant border-outline-variant rounded-md border px-3 py-1.5 text-xs font-medium">
             Available soon
           </span>
         ) : connected ? (

@@ -14,8 +14,8 @@
  * - `team` — rounded-square; a dashed ring, signalling a collective rather than an
  *   individual.
  *
- * All colors come from semantic tokens (`ring-border`, `ring-primary`, `bg-muted`) — never
- * hardcoded.
+ * All colors come from semantic tokens (`ring-outline-variant`, `ring-primary`,
+ * `bg-surface-container-high`) — never hardcoded.
  */
 import * as React from 'react';
 
@@ -44,9 +44,9 @@ function initialsOf(name: string): string {
 
 /** Per-kind shape + ring classes that make each actor kind visually distinct. */
 const KIND_SHAPE_CLASS: Record<ActorKind, string> = {
-  human: 'rounded-full ring-1 ring-border',
+  human: 'rounded-full ring-1 ring-outline-variant',
   agent: 'rounded-lg ring-1 ring-primary',
-  team: 'rounded-md ring-1 ring-dashed ring-border',
+  team: 'rounded-md ring-1 ring-dashed ring-outline-variant',
 };
 
 /** Props for {@link ActorAvatar}. */
@@ -95,7 +95,10 @@ export function ActorAvatar({
           <AvatarImage src={avatarUrl} alt={name} className={KIND_SHAPE_CLASS[kind]} />
         ) : null}
         <AvatarFallback
-          className={cn('bg-muted text-[0.625rem] font-medium', KIND_SHAPE_CLASS[kind])}
+          className={cn(
+            'bg-surface-container-high text-on-surface-variant text-[0.625rem] font-medium',
+            KIND_SHAPE_CLASS[kind],
+          )}
         >
           {initialsOf(name)}
         </AvatarFallback>
@@ -103,7 +106,7 @@ export function ActorAvatar({
       {kind === 'agent' ? (
         <Sparkles
           aria-hidden="true"
-          className="bg-background text-primary absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full"
+          className="bg-surface text-primary absolute -right-0.5 -bottom-0.5 h-2.5 w-2.5 rounded-full"
         />
       ) : null}
     </span>

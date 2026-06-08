@@ -255,7 +255,10 @@ export function MembersTab({ orgId }: MembersTabProps): JSX.Element {
 
   if (loadError) {
     return (
-      <p role="alert" className="border-border text-destructive rounded-lg border p-4 text-sm">
+      <p
+        role="alert"
+        className="border-outline-variant text-destructive rounded-lg border p-4 text-sm"
+      >
         {loadError}
       </p>
     );
@@ -292,17 +295,19 @@ export function MembersTab({ orgId }: MembersTabProps): JSX.Element {
         </p>
       ) : null}
 
-      <section aria-label="Members" className="flex flex-col gap-2">
+      <section aria-label="Members" className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-foreground flex items-center gap-2 text-sm font-semibold">
+          <h2 className="text-on-surface flex items-center gap-2 text-base font-semibold">
             <Users aria-hidden="true" className="size-4" />
             Members
-            <span className="text-muted-foreground font-normal">({members.length})</span>
+            <span className="text-on-surface-variant font-normal tabular-nums">
+              ({members.length})
+            </span>
           </h2>
         </div>
         <div className="border-outline-variant bg-surface-container-low overflow-hidden rounded-xl border">
           {members.length === 0 ? (
-            <p className="text-muted-foreground p-6 text-center text-sm">
+            <p className="text-on-surface-variant p-6 text-center text-sm">
               No members yet — invite someone above to get started.
             </p>
           ) : (
@@ -336,8 +341,8 @@ export function MembersTab({ orgId }: MembersTabProps): JSX.Element {
         </div>
       </section>
 
-      <section aria-label="Pending invitations" className="flex flex-col gap-2">
-        <h2 className="text-foreground text-sm font-semibold">Pending invitations</h2>
+      <section aria-label="Pending invitations" className="flex flex-col gap-3">
+        <h2 className="text-on-surface text-base font-semibold">Pending invitations</h2>
         <div className="border-outline-variant bg-surface-container-low overflow-hidden rounded-xl border">
           <InvitationsList
             invitations={pendingInvitations}

@@ -126,7 +126,7 @@ export function OverviewSummary({
     return (
       <section
         aria-label="Status breakdown"
-        className="border-outline-variant bg-surface-container-low text-muted-foreground rounded-xl border p-5 text-sm"
+        className="border-outline-variant bg-surface-container-low text-on-surface-variant rounded-xl border p-4 text-sm"
       >
         No {taskNounPlural} yet — add one from the Tasks tab to see the breakdown here.
       </section>
@@ -136,12 +136,12 @@ export function OverviewSummary({
   return (
     <section
       aria-label="Status breakdown"
-      className="border-outline-variant bg-surface-container-low flex flex-col gap-5 rounded-xl border p-5"
+      className="border-outline-variant bg-surface-container-low flex flex-col gap-6 rounded-xl border p-4"
     >
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-2">
-          <ListChecks aria-hidden="true" className="text-muted-foreground size-4" />
-          <h2 className="text-foreground text-sm font-medium">Status</h2>
+          <ListChecks aria-hidden="true" className="text-on-surface-variant size-4" />
+          <h2 className="text-on-surface text-base font-semibold">Status</h2>
         </div>
 
         {/* Distribution bar: one rounded slice per non-empty state type, widths proportional to
@@ -177,17 +177,17 @@ export function OverviewSummary({
             .map((s) => (
               <li key={s.type} className="flex items-center gap-1.5 text-xs">
                 <StatusIcon type={s.type} className="size-3.5" label={STATE_GROUP_LABEL[s.type]} />
-                <span className="text-muted-foreground">{STATE_GROUP_LABEL[s.type]}</span>
-                <span className="text-foreground font-medium tabular-nums">{s.count}</span>
+                <span className="text-on-surface-variant">{STATE_GROUP_LABEL[s.type]}</span>
+                <span className="text-on-surface font-medium tabular-nums">{s.count}</span>
               </li>
             ))}
         </ul>
       </div>
 
-      <div className="border-border flex flex-col gap-3 border-t pt-4">
+      <div className="border-outline-variant flex flex-col gap-3 border-t pt-4">
         <div className="flex items-center gap-2">
-          <Flag aria-hidden="true" className="text-muted-foreground size-4" />
-          <h2 className="text-foreground text-sm font-medium">By milestone</h2>
+          <Flag aria-hidden="true" className="text-on-surface-variant size-4" />
+          <h2 className="text-on-surface text-base font-semibold">By milestone</h2>
         </div>
 
         <ul className="flex flex-col gap-3">
@@ -196,8 +196,8 @@ export function OverviewSummary({
             return (
               <li key={m.id} className="flex flex-col gap-1.5">
                 <div className="flex items-baseline justify-between gap-3">
-                  <span className="text-foreground truncate text-sm">{m.label}</span>
-                  <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
+                  <span className="text-on-surface truncate text-sm">{m.label}</span>
+                  <span className="text-on-surface-variant shrink-0 text-xs tabular-nums">
                     {m.done}/{m.total}
                   </span>
                 </div>
@@ -207,7 +207,7 @@ export function OverviewSummary({
                   aria-valuemin={0}
                   aria-valuemax={100}
                   aria-label={`${m.label}: ${pct}% complete`}
-                  className="bg-muted h-1.5 w-full overflow-hidden rounded-full"
+                  className="bg-surface-container h-1.5 w-full overflow-hidden rounded-full"
                 >
                   <div
                     className="bg-state-completed h-full rounded-full transition-[width] duration-500 ease-out"

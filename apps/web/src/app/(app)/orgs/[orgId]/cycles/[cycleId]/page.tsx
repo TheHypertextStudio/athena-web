@@ -302,12 +302,12 @@ export default function CycleDetailPage(): JSX.Element {
 
   if (loading) {
     return (
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
         <Skeleton className="h-9 w-72" />
         <Skeleton className="h-4 w-48" />
         <Skeleton className="h-44 w-full rounded-xl" />
         <Skeleton className="h-10 w-48" />
-        <div className="border-border flex flex-col gap-2 rounded-lg border p-3">
+        <div className="border-outline-variant flex flex-col gap-2 rounded-xl border p-3">
           <Skeleton className="h-8 w-full" />
           <Skeleton className="h-8 w-full" />
           <Skeleton className="h-8 w-full" />
@@ -318,8 +318,11 @@ export default function CycleDetailPage(): JSX.Element {
 
   if (error) {
     return (
-      <div className="mx-auto w-full max-w-6xl p-4 sm:p-6 lg:p-8">
-        <p role="alert" className="border-border text-destructive rounded-lg border p-4 text-sm">
+      <div className="mx-auto w-full max-w-6xl p-4 @2xl:p-6 @4xl:p-8">
+        <p
+          role="alert"
+          className="border-outline-variant text-destructive rounded-xl border p-4 text-sm"
+        >
           {error}
         </p>
       </div>
@@ -328,8 +331,8 @@ export default function CycleDetailPage(): JSX.Element {
 
   if (!cycle) {
     return (
-      <div className="mx-auto w-full max-w-6xl p-4 sm:p-6 lg:p-8">
-        <p className="border-border text-muted-foreground rounded-xl border border-dashed p-8 text-center text-sm">
+      <div className="mx-auto w-full max-w-6xl p-4 @2xl:p-6 @4xl:p-8">
+        <p className="border-outline-variant text-on-surface-variant rounded-xl border border-dashed p-8 text-center text-sm">
           This {cycleNounLower} could not be found.
         </p>
       </div>
@@ -341,19 +344,19 @@ export default function CycleDetailPage(): JSX.Element {
   const isCompleted = cycle.status === 'completed';
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex flex-col gap-1.5">
+    <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
+      <header className="flex flex-col gap-3 @2xl:flex-row @2xl:flex-wrap @2xl:items-center @2xl:justify-between">
+        <div className="flex flex-col gap-1">
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+            <h1 className="text-on-surface text-xl font-semibold tracking-tight">{title}</h1>
             {cycle.name ? (
-              <span className="text-muted-foreground text-sm tabular-nums">
+              <span className="text-on-surface-variant text-xs tabular-nums">
                 {cycleNoun} {cycle.number}
               </span>
             ) : null}
             <Badge variant={statusBadgeVariant(cycle.status)}>{STATUS_LABEL[cycle.status]}</Badge>
           </div>
-          <p className="text-muted-foreground text-sm">
+          <p className="text-on-surface-variant text-xs">
             {formatWindow(cycle.startsAt, cycle.endsAt)}
           </p>
         </div>
@@ -384,17 +387,17 @@ export default function CycleDetailPage(): JSX.Element {
           projectNoun={projectNoun}
           programNoun={programNoun}
         />
-        <p className="text-muted-foreground text-xs tabular-nums">
+        <p className="text-on-surface-variant text-xs tabular-nums">
           {orderedTasks.length} {orderedTasks.length === 1 ? 'task' : 'tasks'}
         </p>
       </div>
 
       <section
         aria-label={`${cycleNounLower} tasks`}
-        className="border-border min-h-[16rem] flex-1 overflow-hidden rounded-lg border"
+        className="border-outline-variant min-h-[16rem] flex-1 overflow-hidden rounded-xl border"
       >
         {orderedTasks.length === 0 ? (
-          <p className="text-muted-foreground p-8 text-center text-sm">
+          <p className="text-on-surface-variant p-8 text-center text-sm">
             Nothing is committed to this {cycleNounLower} yet.
           </p>
         ) : (
@@ -404,6 +407,7 @@ export default function CycleDetailPage(): JSX.Element {
             getItemKey={(task) => task.id}
             groupBy={groupForTask}
             subGroupBy={subGroupForTask}
+            rowHeight={40}
             renderRow={(task, ctx) => (
               <TaskRow task={toRow(task)} active={ctx.active} onActivate={ctx.onActivate} />
             )}

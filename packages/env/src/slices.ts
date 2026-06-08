@@ -137,4 +137,6 @@ export const connectorServer = {
   GOOGLE_GMAIL_API_BASE: z.string().min(1).optional(),
   /** Google Calendar REST API base override. */
   GOOGLE_CALENDAR_API_BASE: z.string().min(1).optional(),
+  /** Google Tasks REST API base override. */
+  GOOGLE_TASKS_API_BASE: z.string().min(1).optional(),
 };

@@ -1,3 +1,5 @@
+import { fileURLToPath } from 'node:url';
+
 import { docketVitest } from '../../tooling/vitest/preset';
 
 /**
@@ -14,10 +16,21 @@ import { docketVitest } from '../../tooling/vitest/preset';
  *
  * Tests live under `tests/` (never colocated in `src/`), mirroring every other Docket package.
  * jsdom + the React plugin are enabled so component/DOM tests can be added here without a config
- * change.
+ * change. The `@/` alias mirrors `tsconfig.json`'s `paths` so component tests can import app
+ * modules by the same specifier the app uses (Vitest does not read `tsconfig` paths on its own).
  */
-export default docketVitest({
+const config = docketVitest({
   environment: 'jsdom',
   react: true,
   coverageInclude: ['src/components/settings/sections.ts'],
 });
+
+config.resolve = {
+  ...config.resolve,
+  alias: {
+    ...config.resolve?.alias,
+    '@': fileURLToPath(new URL('./src', import.meta.url)),
+  },
+};
+
+export default config;

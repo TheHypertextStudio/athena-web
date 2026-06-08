@@ -155,6 +155,15 @@ describe('MockConnector', () => {
     expect(items[0]?.provenance.importedAt).toBe(FIXED_NOW);
   });
 
+  it('imports Google Tasks fixtures as work items with gtasks provenance', async () => {
+    const c = new MockConnector();
+    const items = await c.importWork({ connectionId: 'conn_1', provider: 'gtasks' });
+    expect(items.length).toBeGreaterThan(0);
+    expect(items.every((i) => i.provenance.provider === 'gtasks')).toBe(true);
+    expect(items.every((i) => i.kind === 'issue')).toBe(true);
+    expect(items[0]?.title).toBe('Send the contractor agreement');
+  });
+
   it('reports a mirror status sized to the fixture', async () => {
     const c = new MockConnector();
     const status = await c.mirrorStatus({ connectionId: 'conn_1', provider: 'drive' });

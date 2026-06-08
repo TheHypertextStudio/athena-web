@@ -161,9 +161,12 @@ describe('selectAdapter', () => {
   });
 
   it('maps each non-github provider to its API-base env override', async () => {
-    // Exercises the connectorApiBase mapping for linear/drive/gmail/calendar end-to-end:
-    // the override base must appear in the first outbound request URL.
-    const cases: { provider: 'linear' | 'drive' | 'gmail' | 'calendar'; env: BoundaryEnv }[] = [
+    // Exercises the connectorApiBase mapping for linear/drive/gmail/calendar/gtasks
+    // end-to-end: the override base must appear in the first outbound request URL.
+    const cases: {
+      provider: 'linear' | 'drive' | 'gmail' | 'calendar' | 'gtasks';
+      env: BoundaryEnv;
+    }[] = [
       {
         provider: 'linear',
         env: { APP_MODE: 'production', LINEAR_API_BASE: 'https://linear.test' },
@@ -180,6 +183,10 @@ describe('selectAdapter', () => {
         provider: 'calendar',
         env: { APP_MODE: 'production', GOOGLE_CALENDAR_API_BASE: 'https://cal.test' },
       },
+      {
+        provider: 'gtasks',
+        env: { APP_MODE: 'production', GOOGLE_TASKS_API_BASE: 'https://tasks.test' },
+      },
     ];
     for (const { provider, env } of cases) {
       const calls: string[] = [];
@@ -191,6 +198,7 @@ describe('selectAdapter', () => {
             data: { viewer: { name: 'Viewer' } },
             user: { displayName: 'User', emailAddress: 'u@x' },
             emailAddress: 'u@x',
+            items: [{ id: 'list1', title: 'My Tasks' }],
           }),
           { status: 200 },
         );

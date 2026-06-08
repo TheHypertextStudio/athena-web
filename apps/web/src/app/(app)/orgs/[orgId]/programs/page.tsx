@@ -166,7 +166,7 @@ export default function ProgramsListPage(): JSX.Element {
   );
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
       <header className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-semibold tracking-tight">{programsLabel}</h1>
@@ -200,7 +200,10 @@ export default function ProgramsListPage(): JSX.Element {
       />
 
       {loading ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2" aria-hidden="true">
+        <div
+          className="grid grid-cols-1 gap-4 @2xl:grid-cols-2 @5xl:grid-cols-3"
+          aria-hidden="true"
+        >
           {[0, 1, 2, 3].map((i) => (
             <Skeleton key={i} className="h-44 w-full rounded-xl" />
           ))}
@@ -226,7 +229,7 @@ export default function ProgramsListPage(): JSX.Element {
           body={`No ${programLabel.toLowerCase()} matches this filter. Try a different status.`}
         />
       ) : (
-        <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <ul className="grid grid-cols-1 gap-4 @2xl:grid-cols-2 @5xl:grid-cols-3">
           {visiblePrograms.map((program) => (
             <li key={program.id}>
               <ProgramCard

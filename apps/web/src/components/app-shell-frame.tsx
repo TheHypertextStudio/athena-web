@@ -218,9 +218,21 @@ interface AppShellInnerProps {
   children: ReactNode;
 }
 
-/** Render a Next `Link` carrying the row content (used by the sidebar + tab bar `asChild`). */
-function renderLink(href: string, content: ReactNode): ReactNode {
-  return <Link href={href}>{content}</Link>;
+/**
+ * Render a Next `Link` carrying the row content (used by the sidebar + tab bar).
+ *
+ * @remarks
+ * Shared by the {@link Sidebar} and the {@link TabBar}. The optional `className` lets the tab
+ * bar hand the anchor its flex classes so the link becomes a real flex child of the tab row
+ * (a flexing, truncating title with a right-pinned close button); the sidebar omits it. The
+ * argument is optional so this single function satisfies both callers' `renderLink` contracts.
+ */
+function renderLink(href: string, content: ReactNode, className?: string): ReactNode {
+  return (
+    <Link href={href} className={className}>
+      {content}
+    </Link>
+  );
 }
 
 /**

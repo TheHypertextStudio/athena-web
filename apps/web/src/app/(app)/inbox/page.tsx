@@ -203,7 +203,7 @@ export default function InboxPage(): JSX.Element {
   const panelId = (id: InboxTab): string => `inbox-${id}-panel`;
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-3xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
+    <div className="mx-auto flex h-full w-full max-w-4xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-1">
           <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Inbox</h1>

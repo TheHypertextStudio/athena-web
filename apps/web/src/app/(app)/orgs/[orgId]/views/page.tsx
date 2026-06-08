@@ -268,7 +268,7 @@ export default function ViewsPage(): JSX.Element {
   );
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-5xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
+    <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
       <header className="flex flex-col gap-1">
         <h1 className="text-2xl font-semibold tracking-tight">Views</h1>
         <p className="text-muted-foreground text-sm">

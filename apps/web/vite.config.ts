@@ -22,7 +22,12 @@ import { docketVitest } from '../../tooling/vitest/preset';
 const config = docketVitest({
   environment: 'jsdom',
   react: true,
-  coverageInclude: ['src/components/settings/sections.ts'],
+  coverageInclude: [
+    'src/components/settings/sections.ts',
+    // The open-documents route matcher is pure logic with a behavioral guard (it rejects
+    // malformed ids so no junk "Session undefined" tab is ever opened), so it earns its own gate.
+    'src/components/tabs/route-tabs.ts',
+  ],
 });
 
 config.resolve = {

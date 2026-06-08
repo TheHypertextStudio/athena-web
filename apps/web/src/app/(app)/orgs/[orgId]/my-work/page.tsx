@@ -326,7 +326,7 @@ export default function MyWorkPage(): JSX.Element {
         };
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-4xl flex-col gap-5 p-8">
+    <div className="mx-auto flex h-full w-full max-w-4xl flex-col gap-5 p-4 sm:p-6 lg:p-8">
       <header className="flex flex-col gap-1">
         <h1 className="text-2xl font-semibold tracking-tight">My Work</h1>
         <p className="text-muted-foreground text-sm">
@@ -341,7 +341,7 @@ export default function MyWorkPage(): JSX.Element {
         }}
         className="flex flex-col gap-2"
       >
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row">
           <Input
             aria-label="New task title"
             placeholder="Add a task…"
@@ -350,13 +350,21 @@ export default function MyWorkPage(): JSX.Element {
               setTitle(e.target.value);
             }}
           />
-          <TeamPicker teams={teams} value={teamId} onChange={setTeamOverride} disabled={creating} />
-          <Button
-            type="submit"
-            disabled={creating || teamsLoading || teamId === null || title.trim().length === 0}
-          >
-            {creating ? 'Adding…' : 'Add task'}
-          </Button>
+          <div className="flex gap-2">
+            <TeamPicker
+              teams={teams}
+              value={teamId}
+              onChange={setTeamOverride}
+              disabled={creating}
+            />
+            <Button
+              type="submit"
+              className="flex-1 sm:flex-none"
+              disabled={creating || teamsLoading || teamId === null || title.trim().length === 0}
+            >
+              {creating ? 'Adding…' : 'Add task'}
+            </Button>
+          </div>
         </div>
         {createError ? (
           <p role="alert" className="text-destructive text-sm">

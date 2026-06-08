@@ -302,7 +302,7 @@ export default function CycleDetailPage(): JSX.Element {
 
   if (loading) {
     return (
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-8">
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
         <Skeleton className="h-9 w-72" />
         <Skeleton className="h-4 w-48" />
         <Skeleton className="h-44 w-full rounded-xl" />
@@ -318,7 +318,7 @@ export default function CycleDetailPage(): JSX.Element {
 
   if (error) {
     return (
-      <div className="mx-auto w-full max-w-5xl p-8">
+      <div className="mx-auto w-full max-w-5xl p-4 sm:p-6 lg:p-8">
         <p role="alert" className="border-border text-destructive rounded-lg border p-4 text-sm">
           {error}
         </p>
@@ -328,7 +328,7 @@ export default function CycleDetailPage(): JSX.Element {
 
   if (!cycle) {
     return (
-      <div className="mx-auto w-full max-w-5xl p-8">
+      <div className="mx-auto w-full max-w-5xl p-4 sm:p-6 lg:p-8">
         <p className="border-border text-muted-foreground rounded-xl border border-dashed p-8 text-center text-sm">
           This {cycleNounLower} could not be found.
         </p>
@@ -341,7 +341,7 @@ export default function CycleDetailPage(): JSX.Element {
   const isCompleted = cycle.status === 'completed';
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-5xl flex-col gap-6 p-8">
+    <div className="mx-auto flex h-full w-full max-w-5xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex flex-col gap-1.5">
           <div className="flex flex-wrap items-center gap-3">

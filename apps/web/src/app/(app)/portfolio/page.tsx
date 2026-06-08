@@ -102,13 +102,13 @@ export default function PortfolioPage(): JSX.Element {
   const hasSwimlanes = layout.rows.length > 0;
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-7xl flex-col gap-6 p-6 md:p-8">
+    <div className="mx-auto flex h-full w-full max-w-7xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Portfolio</h1>
+          <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Portfolio</h1>
           <p className="text-muted-foreground text-sm">Every venture on one timeline.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <ScaleMenu
             value={granularity}
             resolved={scale?.granularity ?? null}

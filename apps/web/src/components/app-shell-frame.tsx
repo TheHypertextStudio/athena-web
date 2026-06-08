@@ -12,6 +12,7 @@ import {
   type WorkspaceNavKey,
 } from '@docket/ui/components';
 import { VocabularyProvider } from '@docket/ui/hooks';
+import { Search } from '@docket/ui/icons';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { type JSX, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
@@ -345,9 +346,38 @@ function AppShellInner({
     <TabBar tabs={tabs} activeKey={activeKey} renderLink={renderLink} onClose={closeTab} />
   );
 
+  // The active workspace name for the mobile top bar (shown below `lg`); falls back to the
+  // product name when no workspace has resolved yet.
+  const activeWorkspaceName = useMemo(
+    () => workspaces.find((w) => w.id === resolvedOrgId)?.name,
+    [workspaces, resolvedOrgId],
+  );
+
+  const mobileBrand = (
+    <span className="truncate text-sm font-semibold">{activeWorkspaceName ?? 'Docket'}</span>
+  );
+
+  // A search affordance for the mobile top bar that opens the same command palette as the
+  // sidebar's Search row.
+  const mobileActions = (
+    <button
+      type="button"
+      aria-label="Search"
+      onClick={openPalette}
+      className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-ring flex size-9 shrink-0 items-center justify-center rounded-lg transition-colors focus-visible:ring-2 focus-visible:outline-none"
+    >
+      <Search aria-hidden="true" className="size-5" />
+    </button>
+  );
+
   return (
     <VocabularyProvider skin={skin}>
-      <AppShell sidebar={sidebar} tabBar={tabBar}>
+      <AppShell
+        sidebar={sidebar}
+        tabBar={tabBar}
+        mobileBrand={mobileBrand}
+        mobileActions={mobileActions}
+      >
         {children}
       </AppShell>
     </VocabularyProvider>

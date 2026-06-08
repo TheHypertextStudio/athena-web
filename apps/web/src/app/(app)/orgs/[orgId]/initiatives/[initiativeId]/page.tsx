@@ -20,6 +20,7 @@
  * {@link useVocabulary}; data is fetched at runtime so the production build needs no server.
  */
 import {
+  ActorId,
   type InitiativeDetail,
   type InitiativeTimelineOut,
   type MemberOut,
@@ -29,6 +30,7 @@ import {
   type ProjectOut,
   type RoleOut,
 } from '@docket/types';
+import type { PickerOption } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Badge, Skeleton } from '@docket/ui/primitives';
 import { ChevronLeft, Target } from '@docket/ui/icons';
@@ -38,6 +40,7 @@ import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 import { useSession } from '@/lib/auth-client';
 import { api } from '@/lib/api';
 import { readError, readProblem } from '@/lib/problem';
+import { memberActorOptions } from '@/components/property-pickers/options';
 import {
   AssociationsPanel,
   type AssociationItem,
@@ -49,6 +52,7 @@ import {
 import { DistributionBar } from '@/components/initiatives/distribution-bar';
 import { formatDate } from '@/components/initiatives/format-date';
 import { RolledUpHealthPill } from '@/components/initiatives/health-pill';
+import { InitiativePropertiesPanel } from '@/components/initiatives/properties-panel';
 import { Roadmap } from '@/components/initiatives/roadmap';
 
 /** Roles that cannot contribute (read-only). Everyone else may link/unlink children. */
@@ -95,6 +99,10 @@ export default function InitiativeDetailPage(): JSX.Element {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Properties-panel mutation state (optimistic PATCH + rollback).
+  const [propsPending, setPropsPending] = useState(false);
+  const [propsError, setPropsError] = useState<string | null>(null);
 
   const [programBusy, setProgramBusy] = useState(false);
   const [projectBusy, setProjectBusy] = useState(false);
@@ -285,6 +293,65 @@ export default function InitiativeDetailPage(): JSX.Element {
     [orgId, initiativeId, projectNounLower, refreshTimeline, refreshDetail],
   );
 
+  /**
+   * Optimistically patch the initiative's owner / target date: apply locally, fire the PATCH,
+   * roll back on failure. Editing an Initiative requires `contribute` (gated by {@link canEdit}).
+   */
+  const patchInitiative = useCallback(
+    async (patch: { ownerId?: string | null; targetDate?: string | null }): Promise<void> => {
+      if (!detail) return;
+      const previous = detail;
+      const body = {
+        ...(patch.ownerId !== undefined
+          ? { ownerId: patch.ownerId === null ? null : ActorId.parse(patch.ownerId) }
+          : {}),
+        ...(patch.targetDate !== undefined ? { targetDate: patch.targetDate } : {}),
+      };
+      setDetail({ ...detail, ...body });
+      setPropsPending(true);
+      setPropsError(null);
+      try {
+        const res = await api.v1.orgs[':orgId'].initiatives[':id'].$patch({
+          param: { orgId, id: initiativeId },
+          json: body,
+        });
+        if (!res.ok) {
+          setDetail(previous);
+          setPropsError(await readProblem(res, `Could not update the ${initiativeNounLower}.`));
+          return;
+        }
+        // The PATCH read-back is the base {@link InitiativeOut}; preserve the detail-only
+        // derived roll-up (childMix / distribution / rolledUpHealth / derivedStatus) from prior.
+        const updated = await res.json();
+        setDetail((current) =>
+          current
+            ? {
+                ...current,
+                ...updated,
+                childMix: current.childMix,
+                distribution: current.distribution,
+                rolledUpHealth: current.rolledUpHealth,
+                derivedStatus: current.derivedStatus,
+              }
+            : current,
+        );
+      } catch (caught) {
+        setDetail(previous);
+        setPropsError(
+          readError(caught, `Something went wrong updating the ${initiativeNounLower}.`),
+        );
+      } finally {
+        setPropsPending(false);
+      }
+    },
+    [detail, orgId, initiativeId, initiativeNounLower],
+  );
+
+  const memberOptions = useMemo<readonly PickerOption[]>(
+    () => memberActorOptions(members),
+    [members],
+  );
+
   if (loading) {
     return (
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
@@ -385,6 +452,25 @@ export default function InitiativeDetailPage(): JSX.Element {
         </div>
 
         <aside className="flex flex-col gap-4">
+          <InitiativePropertiesPanel
+            ownerId={detail.ownerId ?? null}
+            memberOptions={memberOptions}
+            targetDate={detail.targetDate ? detail.targetDate.slice(0, 10) : null}
+            canEdit={canEdit}
+            pending={propsPending}
+            onOwnerChange={(ownerId) => {
+              void patchInitiative({ ownerId });
+            }}
+            onTargetDateChange={(targetDate) => {
+              void patchInitiative({ targetDate });
+            }}
+          />
+          {propsError ? (
+            <p role="alert" className="text-destructive px-1 text-sm">
+              {propsError}
+            </p>
+          ) : null}
+
           <AssociationsPanel
             programNounPlural={programNounPlural}
             programNoun={programNounLower}

@@ -1,41 +1,29 @@
 'use client';
 
 /**
- * The "New team" create dialog for the Teams list.
+ * The robust "New team" create composer for the Teams list.
  *
  * @remarks
  * A Team is a first-class unit that owns its own workflow states, cycles, and Triage queue.
- * Creating one needs a display name and a short, org-unique `key` (the prefix that fronts the
- * team's identifiers, e.g. "ENG"). This dialog collects both: the key is auto-suggested from
- * the name (uppercased, alphanumeric, trimmed to a few characters) as the user types, but stays
- * fully editable — once the user edits the key by hand we stop overwriting it. The team is
- * created with the API's default five-state workflow and Triage enabled.
+ * Creating one needs a display name (the title) and a short, org-unique `key` (the prefix that
+ * fronts the team's identifiers, e.g. "ENG"); the key is auto-suggested from the name and stays
+ * editable. The composer additionally captures the team's framing fields: a description body, a
+ * Triage toggle (a team's intake queue, on by default), and optional agent guidance (a short brief
+ * the team's agents follow). The team is created with the API's default five-state workflow. Built
+ * on the shared {@link ComposerShell}; the key + Triage controls sit in its property strip.
  *
- * Following the Linear pattern, it renders a focused, dismissable modal {@link Dialog}: a
- * centered surface panel with focused inputs and Create / Cancel actions. The dialog is
- * *controlled* by the host page so the page's header "New team" button and its empty-state
- * "Create your first team" CTA both open the *same* dialog — the page owns `open` and passes it
- * in via {@link CreateTeamDialogProps.open} / {@link CreateTeamDialogProps.onOpenChange}. This
- * component owns only the form's transient field state (reset whenever the dialog closes). Teams
- * have no detail route, so on success the parent simply prepends the new row via
- * {@link CreateTeamDialogProps.onCreated}; this component closes the dialog itself.
+ * The dialog is *controlled* by the host page so its header "New team" button and empty-state CTA
+ * open the *same* dialog. Teams have no detail route, so on success the parent simply prepends the
+ * new row via {@link CreateTeamDialogProps.onCreated}; this component closes the dialog itself.
  */
 import type { TeamOut } from '@docket/types';
-import { Plus } from '@docket/ui/icons';
-import {
-  Button,
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  Input,
-} from '@docket/ui/primitives';
-import { type JSX, useCallback, useState } from 'react';
+import { Check } from '@docket/ui/icons';
+import { cn } from '@docket/ui/lib/utils';
+import { Input } from '@docket/ui/primitives';
+import { type JSX, useCallback, useId, useState } from 'react';
 
 import { api } from '@/lib/api';
+import { ComposerShell } from '@/components/composer/composer-shell';
 import { readError, readProblem } from '@/lib/problem';
 
 /** The longest auto-suggested key length (matches typical Linear-style team prefixes). */
@@ -62,10 +50,10 @@ export interface CreateTeamDialogProps {
 }
 
 /**
- * The focused modal dialog for creating a new team.
+ * The robust team-create composer dialog.
  *
  * @param props - The {@link CreateTeamDialogProps}.
- * @returns the rendered create dialog.
+ * @returns the rendered composer.
  */
 export function CreateTeamDialog({
   orgId,
@@ -73,10 +61,16 @@ export function CreateTeamDialog({
   onOpenChange,
   onCreated,
 }: CreateTeamDialogProps): JSX.Element {
+  const keyFieldId = useId();
+  const guidanceFieldId = useId();
+
   const [name, setName] = useState('');
   const [key, setKey] = useState('');
   // Once the user edits the key directly we stop deriving it from the name.
   const [keyDirty, setKeyDirty] = useState(false);
+  const [description, setDescription] = useState('');
+  const [triageEnabled, setTriageEnabled] = useState(true);
+  const [agentGuidance, setAgentGuidance] = useState('');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -94,27 +88,37 @@ export function CreateTeamDialog({
   /** Reset transient form state whenever the dialog closes. */
   const handleOpenChange = useCallback(
     (next: boolean): void => {
-      if (creating) return;
       if (!next) {
         setName('');
         setKey('');
         setKeyDirty(false);
+        setDescription('');
+        setTriageEnabled(true);
+        setAgentGuidance('');
         setError(null);
       }
       onOpenChange(next);
     },
-    [creating, onOpenChange],
+    [onOpenChange],
   );
 
-  /** Create the team with the default workflow + Triage, then prepend it via the parent. */
+  /** Create the team with the default workflow, then prepend it via the parent. */
   const submit = useCallback(async (): Promise<void> => {
     if (!canSubmit) return;
     setCreating(true);
     setError(null);
     try {
+      const trimmedDescription = description.trim();
+      const trimmedGuidance = agentGuidance.trim();
       const res = await api.v1.orgs[':orgId'].teams.$post({
         param: { orgId },
-        json: { name: name.trim(), key: key.trim().toUpperCase() },
+        json: {
+          name: name.trim(),
+          key: key.trim().toUpperCase(),
+          triageEnabled,
+          ...(trimmedDescription.length > 0 ? { description: trimmedDescription } : {}),
+          ...(trimmedGuidance.length > 0 ? { agentGuidance: trimmedGuidance } : {}),
+        },
       });
       if (!res.ok) {
         setError(await readProblem(res, 'Could not create the team.'));
@@ -128,80 +132,94 @@ export function CreateTeamDialog({
     } finally {
       setCreating(false);
     }
-  }, [canSubmit, name, key, orgId, onOpenChange, onCreated]);
+  }, [
+    canSubmit,
+    name,
+    key,
+    triageEnabled,
+    description,
+    agentGuidance,
+    orgId,
+    onOpenChange,
+    onCreated,
+  ]);
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>New team</DialogTitle>
-          <DialogDescription>
-            A team owns its own workflow, cycles, and triage queue. Give it a name and a short key.
-          </DialogDescription>
-        </DialogHeader>
-        <form
-          id="create-team-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void submit();
+    <ComposerShell
+      open={open}
+      onOpenChange={handleOpenChange}
+      heading="New team"
+      description="A team owns its own workflow, cycles, and triage queue. Give it a name and a short key."
+      title={name}
+      onTitleChange={onNameChange}
+      titlePlaceholder="Team name"
+      body={description}
+      onBodyChange={setDescription}
+      bodyPlaceholder="What does this team own? (optional)"
+      error={error}
+      creating={creating}
+      canSubmit={canSubmit}
+      onSubmit={() => void submit()}
+      submitLabel="Create team"
+    >
+      <div className="flex flex-1 flex-wrap items-end gap-x-4 gap-y-3">
+        <label htmlFor={keyFieldId} className="flex flex-col gap-1.5">
+          <span className="text-on-surface-variant text-xs font-medium">Key</span>
+          <Input
+            id={keyFieldId}
+            aria-label="Team key"
+            placeholder="ENG"
+            value={key}
+            maxLength={10}
+            disabled={creating}
+            className="h-8 w-28 uppercase"
+            onChange={(event) => {
+              setKeyDirty(true);
+              setKey(event.target.value.toUpperCase());
+            }}
+          />
+        </label>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={triageEnabled}
+          aria-label="Triage queue"
+          disabled={creating}
+          onClick={() => {
+            setTriageEnabled((current) => !current);
           }}
-          className="flex flex-col gap-3"
+          className="flex h-8 items-center gap-2 text-sm disabled:opacity-50"
         >
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <label className="flex flex-1 flex-col gap-1.5">
-              <span className="text-on-surface-variant text-xs font-medium">Name</span>
-              <Input
-                aria-label="Team name"
-                placeholder="e.g. Engineering"
-                value={name}
-                disabled={creating}
-                onChange={(event) => {
-                  onNameChange(event.target.value);
-                }}
-              />
-            </label>
-            <label className="flex flex-col gap-1.5 sm:w-32">
-              <span className="text-on-surface-variant text-xs font-medium">Key</span>
-              <Input
-                aria-label="Team key"
-                placeholder="ENG"
-                value={key}
-                maxLength={10}
-                disabled={creating}
-                className="uppercase"
-                onChange={(event) => {
-                  setKeyDirty(true);
-                  setKey(event.target.value.toUpperCase());
-                }}
-              />
-            </label>
-          </div>
-          <p className="text-on-surface-variant text-xs">
-            The key prefixes the team&apos;s identifiers and must be unique in this workspace.
-          </p>
-          {error ? (
-            <p role="alert" className="text-destructive text-sm">
-              {error}
-            </p>
-          ) : null}
-        </form>
-        <DialogFooter>
-          <DialogClose asChild>
-            <Button type="button" variant="ghost" disabled={creating}>
-              Cancel
-            </Button>
-          </DialogClose>
-          <Button
-            type="submit"
-            form="create-team-form"
-            disabled={creating || !canSubmit}
-            className="gap-1.5"
+          <span
+            aria-hidden="true"
+            className={cn(
+              'flex size-4 items-center justify-center rounded border',
+              triageEnabled
+                ? 'border-primary bg-primary text-primary-foreground'
+                : 'border-outline-variant',
+            )}
           >
-            <Plus aria-hidden="true" className="size-4" />
-            {creating ? 'Creating…' : 'Create team'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+            {triageEnabled ? <Check className="size-3" /> : null}
+          </span>
+          <span className="text-on-surface">Triage queue</span>
+        </button>
+        <label htmlFor={guidanceFieldId} className="flex min-w-48 flex-1 flex-col gap-1.5">
+          <span className="text-on-surface-variant text-xs font-medium">
+            Agent guidance (optional)
+          </span>
+          <Input
+            id={guidanceFieldId}
+            aria-label="Agent guidance"
+            placeholder="How agents should work in this team…"
+            value={agentGuidance}
+            disabled={creating}
+            className="h-8"
+            onChange={(event) => {
+              setAgentGuidance(event.target.value);
+            }}
+          />
+        </label>
+      </div>
+    </ComposerShell>
   );
 }

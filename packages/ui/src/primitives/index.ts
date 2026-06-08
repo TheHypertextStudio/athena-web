@@ -40,6 +40,7 @@ export {
   DropdownMenuTrigger,
 } from './dropdown-menu';
 export { Input, type InputProps } from './input';
+export { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from './popover';
 export {
   Sheet,
   SheetClose,

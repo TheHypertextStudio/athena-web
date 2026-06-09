@@ -220,6 +220,7 @@ describe.each([
   });
 
   it('throws fail-fast when the required public URLs are absent (no hidden default)', async () => {
+    vi.stubEnv('SKIP_ENV_VALIDATION', '');
     await expect(load()).rejects.toThrow();
   });
 
@@ -266,11 +267,13 @@ describe('api composition', () => {
   });
 
   it('throws fail-fast when a required var is missing', async () => {
+    vi.stubEnv('SKIP_ENV_VALIDATION', '');
     // Missing DATABASE_URL + BETTER_AUTH_SECRET.
     await expect(import('../src/api')).rejects.toThrow('Invalid environment variables');
   });
 
   it('throws fail-fast when a required var is invalid', async () => {
+    vi.stubEnv('SKIP_ENV_VALIDATION', '');
     stubEnv({ ...validApiEnv(), BETTER_AUTH_SECRET: 'too-short' });
     await expect(import('../src/api')).rejects.toThrow('Invalid environment variables');
   });

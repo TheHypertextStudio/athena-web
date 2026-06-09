@@ -68,3 +68,7 @@ temp/
 
 # Playwright MCP debug artifacts (screenshots, snapshots, console logs)
 .playwright-mcp/
+
+# UI verification screenshots (captured by agents during dev sessions)
+*-verify-*.png
+*-verify-*.jpg

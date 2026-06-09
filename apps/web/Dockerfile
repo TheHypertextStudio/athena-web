@@ -7,7 +7,7 @@ RUN corepack enable
 FROM base AS builder
 WORKDIR /app
 COPY . .
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --no-frozen-lockfile
 # Build-time env: API_URL for next.config rewrites, NEXT_PUBLIC_* get inlined into the bundle
 ARG API_URL
 ARG NEXT_PUBLIC_API_URL

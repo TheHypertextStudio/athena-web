@@ -138,6 +138,9 @@ interface Config {
   region: string;
   repo: string; // owner/repo
   domain: string; // registrable domain for passkeys (e.g. example.com)
+  webUrl: string; // e.g. https://docket.example.com
+  apiUrl: string; // e.g. https://docket-api.example.com
+  adminUrl: string; // e.g. https://docket-admin.example.com
   neonProjectId: string;
   neonApiKey: string;
   databaseUrl: string;
@@ -171,6 +174,13 @@ async function gatherConfig(): Promise<Config> {
     process.exit(1);
   }
 
+  // Derive default service URLs from the domain label structure.
+  // e.g. docket.hypertext.studio → base = hypertext.studio
+  const base = domain.includes('.') ? domain.slice(domain.indexOf('.') + 1) : domain;
+  const webUrl = await prompt('Web app URL', `https://${domain}`);
+  const apiUrl = await prompt('API URL', `https://docket-api.${base}`);
+  const adminUrl = await prompt('Admin URL', `https://docket-admin.${base}`);
+
   console.log('\n  Neon (free tier: neon.tech → New project → Connection details)');
   const neonProjectId = await prompt('Neon project ID');
   const neonApiKey = await prompt('Neon API key (from neon.tech → Account → API keys)');
@@ -190,6 +200,9 @@ async function gatherConfig(): Promise<Config> {
     region,
     repo,
     domain,
+    webUrl,
+    apiUrl,
+    adminUrl,
     neonProjectId,
     neonApiKey,
     databaseUrl,
@@ -354,11 +367,9 @@ function setupGithub(cfg: Config, saEmail: string, wifProvider: string): void {
     GCP_WIF_PROVIDER: wifProvider,
     PASSKEY_RP_ID: cfg.domain,
     NEON_PROJECT_ID: cfg.neonProjectId,
-    // Set placeholder URLs so BETTER_AUTH_TRUSTED_ORIGINS is never a bare comma
-    // on the first deploy. Update after services are live (step 4 of next steps).
-    API_URL: 'https://api.example.com',
-    WEB_URL: 'https://app.example.com',
-    ADMIN_URL: 'https://admin.example.com',
+    API_URL: cfg.apiUrl,
+    WEB_URL: cfg.webUrl,
+    ADMIN_URL: cfg.adminUrl,
   };
 
   for (const [key, value] of Object.entries(vars)) {

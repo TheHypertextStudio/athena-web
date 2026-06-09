@@ -15,13 +15,21 @@
  * enriches each row by fetching its detail in parallel (the same enrich-per-item idiom the
  * project-detail screen uses for task milestones). That composite read is cached + kept live
  * through the dynamic-data layer (auto-refetch on focus + after a create), so there is no manual
- * refresh control. Rows are then partitioned into Active and Completed sections by their derived
- * status. A header "New {initiative}" affordance creates a theme from a name; the entity noun
- * routes through {@link useVocabulary} so vocabulary skins apply. Data is fetched at runtime, so
- * the production build needs no running server.
+ * refresh control.
+ *
+ * The bespoke Active/Completed partition is gone: the roster adopts the unified
+ * {@link FilterToolbar} over the initiative {@link buildInitiativeCatalog | catalog}, so it can
+ * be filtered by status / health, grouped, and sorted — all applied **client-side** over the
+ * already-loaded {@link useApiQuery} results (the enrich-per-item data flow is preserved; no
+ * manual refresh). The view state is held in the URL by {@link useViewState}, defaulting to a
+ * group-by-status grouping so the familiar sectioned look is preserved, but now user-changeable.
+ *
+ * A header "New {initiative}" affordance creates a theme from a name; the entity noun routes
+ * through {@link useVocabulary} so vocabulary skins apply. Data is fetched at runtime, so the
+ * production build needs no running server.
  */
-import type { InitiativeDetail, InitiativeOut, InitiativeStatus } from '@docket/types';
-import { EmptyState } from '@docket/ui/components';
+import type { InitiativeDetail, InitiativeOut } from '@docket/types';
+import { EmptyState, StatusIcon } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Button, Skeleton } from '@docket/ui/primitives';
 import { Plus, Target } from '@docket/ui/icons';
@@ -29,23 +37,26 @@ import { useParams, useRouter } from 'next/navigation';
 import { type JSX, useCallback, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 
+import {
+  buildInitiativeCatalog,
+  type InitiativeCatalogRow,
+} from '@/components/initiatives/initiative-catalog';
+import { CreateInitiativeDialog } from '@/components/initiatives/create-initiative';
+import { InitiativeRow } from '@/components/initiatives/initiative-row';
+import { applyView, EMPTY_GROUP_ID } from '@/components/views/apply-view';
+import type { WorkflowStateType } from '@docket/ui/components';
+import { FilterToolbar } from '@/components/views/filter-toolbar';
+import { useViewState } from '@/components/views/use-view-state';
+import { type ViewState } from '@/components/views/field-catalog';
+import { isEmptyViewState } from '@/components/views/view-state-url';
 import { api } from '@/lib/api';
 import { type RpcResponse, queryKeys, useApiQuery } from '@/lib/query';
-import { CreateInitiativeDialog } from '@/components/initiatives/create-initiative';
-import { InitiativeRow, type InitiativeRowData } from '@/components/initiatives/initiative-row';
 
-/** An enriched initiative row (the stored row joined with its child roll-up). */
-interface EnrichedInitiative extends InitiativeRowData {
-  readonly createdAt: string;
-}
-
-/** The two derived-status sections of the list, rendered in this order. */
-const SECTION_ORDER: readonly InitiativeStatus[] = ['active', 'completed'];
-
-/** The heading for each derived-status section. */
-const SECTION_LABEL: Record<InitiativeStatus, string> = {
-  active: 'Active',
-  completed: 'Completed',
+/** The default view applied when the URL carries none: group by status (the legacy sections). */
+const DEFAULT_VIEW: ViewState = {
+  filters: [],
+  groupBy: { field: 'derivedStatus' },
+  sort: [],
 };
 
 /**
@@ -60,19 +71,19 @@ const SECTION_LABEL: Record<InitiativeStatus, string> = {
  */
 function fetchEnrichedInitiatives(
   orgId: string,
-): () => Promise<RpcResponse<readonly EnrichedInitiative[]>> {
+): () => Promise<RpcResponse<readonly InitiativeCatalogRow[]>> {
   return async () => {
     const listRes = await api.v1.orgs[':orgId'].initiatives.$get({ param: { orgId } });
     if (!listRes.ok) {
       return {
         ok: false,
         status: listRes.status,
-        json: () => listRes.json() as unknown as Promise<readonly EnrichedInitiative[]>,
+        json: () => listRes.json() as unknown as Promise<readonly InitiativeCatalogRow[]>,
       };
     }
     const { items } = await listRes.json();
     const enriched = await Promise.all(
-      items.map(async (base): Promise<EnrichedInitiative> => {
+      items.map(async (base): Promise<InitiativeCatalogRow> => {
         const detailRes = await api.v1.orgs[':orgId'].initiatives[':id'].$get({
           param: { orgId, id: base.id },
         });
@@ -84,7 +95,7 @@ function fetchEnrichedInitiatives(
 }
 
 /** Reduce an Initiative + its detail roll-up into the enriched row view-model. */
-function toEnriched(base: InitiativeOut, detail: InitiativeDetail | null): EnrichedInitiative {
+function toEnriched(base: InitiativeOut, detail: InitiativeDetail | null): InitiativeCatalogRow {
   return {
     id: base.id,
     name: base.name,
@@ -117,6 +128,7 @@ export default function InitiativesListPage(): JSX.Element {
   const projectNoun = useVocabulary('project').toLowerCase();
 
   const [createOpen, setCreateOpen] = useState(false);
+  const { state, setFilters, setGroupBy, setSort } = useViewState();
 
   const initiativesQ = useApiQuery(
     queryKeys.initiatives(orgId),
@@ -127,6 +139,18 @@ export default function InitiativesListPage(): JSX.Element {
   const initiatives = useMemo(() => initiativesQ.data ?? [], [initiativesQ.data]);
   const loading = initiativesQ.isPending;
   const error = initiativesQ.isError ? initiativesQ.error.message : null;
+
+  /** The initiative field catalog driving the toolbar + the apply engine. */
+  const catalog = useMemo(() => buildInitiativeCatalog(), []);
+
+  /** Default to the legacy group-by-status sections until the user configures the view. */
+  const effectiveState = useMemo(() => (isEmptyViewState(state) ? DEFAULT_VIEW : state), [state]);
+
+  /** Filter + sort + group the loaded roster client-side per the active view state. */
+  const applied = useMemo(
+    () => applyView(initiatives, effectiveState, catalog),
+    [initiatives, effectiveState, catalog],
+  );
 
   /**
    * Refetch the roster from the server (prefix-matched, so this also refreshes any open
@@ -140,23 +164,25 @@ export default function InitiativesListPage(): JSX.Element {
     [orgId, router, queryClient],
   );
 
-  /** The rows partitioned by derived status, each section newest-first. */
-  const sections = useMemo(() => {
-    const byStatus = new Map<InitiativeStatus, EnrichedInitiative[]>();
-    for (const status of SECTION_ORDER) byStatus.set(status, []);
-    for (const item of initiatives) {
-      (byStatus.get(item.derivedStatus) ?? byStatus.get('active'))?.push(item);
-    }
-    return SECTION_ORDER.map((status) => ({
-      status,
-      items: (byStatus.get(status) ?? []).sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-      ),
-    })).filter((section) => section.items.length > 0);
-  }, [initiatives]);
+  /** Render one initiative row (shared by the flat + grouped renders). */
+  const renderRow = useCallback(
+    (item: InitiativeCatalogRow): JSX.Element => (
+      <li key={item.id}>
+        <InitiativeRow
+          initiative={item}
+          programNoun={programNoun}
+          projectNoun={projectNoun}
+          onOpen={() => {
+            router.push(`/orgs/${orgId}/initiatives/${item.id}`);
+          }}
+        />
+      </li>
+    ),
+    [orgId, programNoun, projectNoun, router],
+  );
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 p-4 @2xl:p-6 @4xl:p-8">
       <header className="flex flex-col gap-3 @2xl:flex-row @2xl:flex-wrap @2xl:items-center @2xl:justify-between">
         <div className="flex flex-col gap-1">
           <h1 className="text-on-surface text-xl font-semibold tracking-tight">
@@ -187,6 +213,16 @@ export default function InitiativesListPage(): JSX.Element {
         onCreated={handleCreated}
       />
 
+      {!loading && !error && initiatives.length > 0 ? (
+        <FilterToolbar
+          catalog={catalog}
+          state={effectiveState}
+          onFiltersChange={setFilters}
+          onGroupByChange={setGroupBy}
+          onSortChange={setSort}
+        />
+      ) : null}
+
       {loading ? (
         <div className="flex flex-col gap-3" aria-hidden="true">
           <Skeleton className="h-[88px] w-full rounded-xl" />
@@ -200,7 +236,7 @@ export default function InitiativesListPage(): JSX.Element {
         >
           {error}
         </p>
-      ) : sections.length === 0 ? (
+      ) : initiatives.length === 0 ? (
         <EmptyState
           icon={Target}
           title={`No ${initiativeNounPlural.toLowerCase()} yet`}
@@ -212,35 +248,31 @@ export default function InitiativesListPage(): JSX.Element {
             },
           }}
         />
-      ) : (
+      ) : applied.rows.length === 0 ? (
+        <EmptyState
+          icon={Target}
+          title={`No matching ${initiativeNounPlural.toLowerCase()}`}
+          body={`No ${initiativeNounLower} matches the active filters. Adjust or clear them to see more.`}
+        />
+      ) : applied.groups ? (
         <div className="flex flex-col gap-6">
-          {sections.map((section) => (
-            <section
-              key={section.status}
-              aria-label={SECTION_LABEL[section.status]}
-              className="flex flex-col gap-3"
-            >
+          {applied.groups.map((group) => (
+            <section key={group.id} aria-label={group.label} className="flex flex-col gap-3">
               <h2 className="text-on-surface-variant flex items-center gap-2 text-xs font-medium">
-                {SECTION_LABEL[section.status]}
-                <span className="tabular-nums">{section.items.length}</span>
+                {effectiveState.groupBy?.field === 'derivedStatus' &&
+                group.hint &&
+                group.id !== EMPTY_GROUP_ID ? (
+                  <StatusIcon type={group.hint as WorkflowStateType} label={group.label} />
+                ) : null}
+                <span>{group.label}</span>
+                <span className="tabular-nums">{group.rows.length}</span>
               </h2>
-              <ul className="flex flex-col gap-2">
-                {section.items.map((item) => (
-                  <li key={item.id}>
-                    <InitiativeRow
-                      initiative={item}
-                      programNoun={programNoun}
-                      projectNoun={projectNoun}
-                      onOpen={() => {
-                        router.push(`/orgs/${orgId}/initiatives/${item.id}`);
-                      }}
-                    />
-                  </li>
-                ))}
-              </ul>
+              <ul className="flex flex-col gap-2">{group.rows.map(renderRow)}</ul>
             </section>
           ))}
         </div>
+      ) : (
+        <ul className="flex flex-col gap-2">{applied.rows.map(renderRow)}</ul>
       )}
     </div>
   );

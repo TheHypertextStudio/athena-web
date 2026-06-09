@@ -10,13 +10,21 @@
  * a row opens that view in the runner; the active row is highlighted and exposes
  * `aria-current`. The list is a single keyboard-navigable column of buttons with visible focus
  * rings. All color comes from semantic tokens.
+ *
+ * A view's stored filters/grouping describe themselves through the shared task
+ * {@link FieldCatalog} (the same one the toolbar drives), so the summary text matches the chips
+ * the filter toolbar shows once the view is open.
  */
-import type { SavedViewOut } from '@docket/types';
+import type { SavedViewOut, TaskOut } from '@docket/types';
 import { Filter, Layers } from '@docket/ui/icons';
 import { cn } from '@docket/ui';
+import { focusRing } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
-import { type LabelResolver, describeFilter } from './view-engine';
+import { describeFilterTerm } from './apply-view';
+import type { FieldCatalog } from './field-catalog';
+import { findField } from './field-catalog';
+import { toViewState } from './task-catalog';
 import { ViewScopeBadge } from './view-scope-badge';
 
 /** Props for {@link ViewList}. */
@@ -27,34 +35,38 @@ export interface ViewListProps {
   activeId: string | null;
   /** Open a view. */
   onOpen: (view: SavedViewOut) => void;
-  /** Resolve an entity-id value/grouping field to its display label. */
-  resolveLabel: LabelResolver;
-  /** Resolve a grouping field to its (vocabulary) label. */
-  groupingLabel: (field: string) => string;
+  /** The task field catalog (resolves filter + grouping labels for the summary). */
+  catalog: FieldCatalog<TaskOut>;
 }
 
 /**
  * A compact, plain-language summary of a view's filters + grouping for its list row.
  *
  * @remarks
- * Reads as "2 filters · grouped by Project", "No filters", etc. — enough to recognize a view
- * at a glance without rendering every predicate. The full predicates are visible once the view
- * is open (as removable chips in the filter builder).
+ * Reads as "2 filters · Grouped by Project", "No filters", etc. — enough to recognize a view at a
+ * glance without rendering every predicate. The full predicates are visible once the view is open
+ * (as removable chips in the filter toolbar).
  */
 function summarize(
   view: SavedViewOut,
-  resolveLabel: LabelResolver,
-  groupingLabel: (field: string) => string,
+  catalog: FieldCatalog<TaskOut>,
 ): { filters: string; grouping: string | null } {
-  const count = view.filters.length;
-  const only = view.filters[0];
+  const state = toViewState({
+    filters: view.filters,
+    grouping: view.grouping ?? null,
+    sort: view.sort,
+  });
+  const count = state.filters.length;
+  const only = state.filters[0];
   const filters =
     count === 0
       ? 'No filters'
       : count === 1 && only
-        ? describeFilter(only, resolveLabel)
+        ? describeFilterTerm(only, catalog)
         : `${String(count)} filters`;
-  const grouping = view.grouping ? `Grouped by ${groupingLabel(view.grouping.by)}` : null;
+  const grouping = state.groupBy
+    ? `Grouped by ${findField(catalog, state.groupBy.field)?.label ?? state.groupBy.field}`
+    : null;
   return { filters, grouping };
 }
 
@@ -64,18 +76,12 @@ function summarize(
  * @param props - The {@link ViewListProps}.
  * @returns the rendered list of view rows.
  */
-export function ViewList({
-  views,
-  activeId,
-  onOpen,
-  resolveLabel,
-  groupingLabel,
-}: ViewListProps): JSX.Element {
+export function ViewList({ views, activeId, onOpen, catalog }: ViewListProps): JSX.Element {
   return (
     <ul className="flex flex-col gap-1.5" aria-label="Saved views">
       {views.map((view) => {
         const active = view.id === activeId;
-        const summary = summarize(view, resolveLabel, groupingLabel);
+        const summary = summarize(view, catalog);
         return (
           <li key={view.id}>
             <button
@@ -85,7 +91,8 @@ export function ViewList({
               }}
               aria-current={active ? 'true' : undefined}
               className={cn(
-                'group focus-visible:ring-ring flex w-full flex-col gap-1.5 rounded-lg border px-4 py-3 text-left transition-colors outline-none focus-visible:ring-1',
+                'group flex w-full flex-col gap-1.5 rounded-lg border px-4 py-3 text-left transition-colors outline-none',
+                focusRing,
                 active
                   ? 'border-primary/40 bg-surface-container-highest'
                   : 'border-outline-variant hover:bg-surface-container-high',
@@ -97,12 +104,12 @@ export function ViewList({
               </div>
               <div className="text-on-surface-variant flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                 <span className="inline-flex items-center gap-1">
-                  <Filter className="size-3" aria-hidden="true" />
+                  <Filter className="size-3.5" aria-hidden="true" />
                   {summary.filters}
                 </span>
                 {summary.grouping ? (
                   <span className="inline-flex items-center gap-1">
-                    <Layers className="size-3" aria-hidden="true" />
+                    <Layers className="size-3.5" aria-hidden="true" />
                     {summary.grouping}
                   </span>
                 ) : null}

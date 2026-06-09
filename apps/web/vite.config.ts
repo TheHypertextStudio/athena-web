@@ -27,6 +27,13 @@ const config = docketVitest({
     // The open-documents route matcher is pure logic with a behavioral guard (it rejects
     // malformed ids so no junk "Session undefined" tab is ever opened), so it earns its own gate.
     'src/components/tabs/route-tabs.ts',
+    // The unified filtering engine: the field-catalog model, the pure filter/group/sort apply
+    // function, and the ViewState↔URL codec are pure, behavior-bearing logic every list page
+    // depends on (a malformed predicate or a hand-edited URL must degrade, never blank a list),
+    // so each earns its own gate independent of the React tree that renders the toolbar.
+    'src/components/views/field-catalog.ts',
+    'src/components/views/apply-view.ts',
+    'src/components/views/view-state-url.ts',
   ],
 });
 

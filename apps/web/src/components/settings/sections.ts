@@ -25,6 +25,7 @@ import type { LucideIcon } from '@docket/ui/icons';
 import {
   Cable,
   CreditCard,
+  Link,
   ListChecks,
   Shield,
   Sparkles,
@@ -186,6 +187,14 @@ export const PERSONAL_SETTINGS_SECTION_GROUPS: readonly SettingsSectionGroup[] =
         description: 'Connect your tools and bring your existing work into Docket.',
         icon: Cable,
         href: 'integrations',
+        status: 'available',
+      },
+      {
+        key: 'connected-apps',
+        label: 'Connected apps',
+        description: 'MCP clients authorized to read and act on your Docket account.',
+        icon: Link,
+        href: 'connected-apps',
         status: 'available',
       },
       {

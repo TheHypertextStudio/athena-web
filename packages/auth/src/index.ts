@@ -251,7 +251,29 @@ export function buildAuthOptions(e: AuthEnv): BetterAuthOptions {
       // the OAuth 2.1 protected-resource metadata, so mounting `mcp` alone gives the full
       // OIDC-provider behavior plus MCP — without referencing the deprecated `oidcProvider`
       // symbol. The shared oauth tables in `@docket/db` back both.
-      plugins.push(mcp({ loginPage: e.OIDC_LOGIN_PAGE_URL, resource: e.MCP_RESOURCE_URL }));
+      // Derive the consent page URL from the login page's origin so no extra env var is needed.
+      // When an authenticated user's MCP client requests scopes, Better Auth redirects to this
+      // URL with consent_code, client_id, and scope params (authorize.mjs §consentPage branch).
+      let consentPage: string | undefined;
+      try {
+        consentPage = new URL('/oauth/authorize', new URL(e.OIDC_LOGIN_PAGE_URL).origin).toString();
+      } catch {
+        consentPage = undefined;
+      }
+      plugins.push(
+        mcp({
+          loginPage: e.OIDC_LOGIN_PAGE_URL,
+          resource: e.MCP_RESOURCE_URL,
+          oidcConfig: {
+            loginPage: e.OIDC_LOGIN_PAGE_URL,
+            scopes: ['work:read', 'work:write', 'agents:run', 'connectors:link'],
+            defaultScope: 'work:read',
+            accessTokenExpiresIn: 60 * 15,
+            refreshTokenExpiresIn: 60 * 60 * 24 * 30,
+            ...(consentPage ? { consentPage } : {}),
+          },
+        }),
+      );
     } else {
       // OIDC-provider only (no MCP resource): the standalone `oidcProvider` is the available
       // implementation. It is flagged `@deprecated` in 1.6.14 in favor of the separate

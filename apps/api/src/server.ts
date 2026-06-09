@@ -59,6 +59,11 @@ server.get('/v1/health', (c) => c.json({ status: 'ok' as const }));
 registerOpenapi(server);
 server.onError(onError);
 
-serve({ fetch: server.fetch, port: env.PORT });
+const nodeServer = serve({ fetch: server.fetch, port: env.PORT });
 
 console.log(`▶ Docket API listening on :${String(env.PORT)}`);
+
+// Cloud Run sends SIGTERM before SIGKILL; finish in-flight requests then exit cleanly.
+process.on('SIGTERM', () => {
+  nodeServer.close(() => process.exit(0));
+});

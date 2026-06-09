@@ -214,3 +214,44 @@ export const SessionReplyBody = z
   .meta({ id: 'SessionReplyBody', description: 'A human reply to a session elicitation.' });
 /** Validated session-reply body. */
 export type SessionReplyBody = z.infer<typeof SessionReplyBody>;
+
+/**
+ * Body for the UI-callable create-and-run-from-prompt session path
+ * (`POST /v1/orgs/:orgId/sessions`).
+ *
+ * @remarks
+ * The hybrid Home prompt box's "ask Athena to plan" escalation: a freeform `prompt`
+ * becomes the agent's task brief. `agentId` binds the session to a specific registered
+ * agent; when omitted the server resolves (lazily creating if needed) the org's default
+ * agent so escalation works with no pre-setup. The handler creates the session, threads
+ * the prompt through as the brief, runs it against the agent runtime, and returns the
+ * settled session.
+ */
+export const SessionFromPromptBody = z
+  .object({
+    prompt: z.string().min(1),
+    agentId: AgentId.optional(),
+  })
+  .meta({
+    id: 'SessionFromPromptBody',
+    description: 'Create and run an agent session from a freeform prompt.',
+  });
+/** Validated create-from-prompt session body. */
+export type SessionFromPromptBody = z.infer<typeof SessionFromPromptBody>;
+
+/**
+ * Body for quick-capture (`POST /v1/orgs/:orgId/capture`).
+ *
+ * @remarks
+ * The hybrid Home prompt box's default path: freeform `text` is captured into a task
+ * (title derived from the text, assigned to the caller, attached to the current cycle
+ * when one is resolvable) without invoking an agent. Escalation to a planned session is
+ * the separate {@link SessionFromPromptBody} path.
+ */
+export const CaptureBody = z
+  .object({
+    text: z.string().min(1),
+  })
+  .meta({ id: 'CaptureBody', description: 'Quick-capture freeform text into a task.' });
+/** Validated quick-capture body. */
+export type CaptureBody = z.infer<typeof CaptureBody>;

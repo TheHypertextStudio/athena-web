@@ -16,6 +16,7 @@ import { sql } from 'drizzle-orm';
 import {
   boolean,
   index,
+  integer,
   jsonb,
   pgTable,
   primaryKey,
@@ -78,6 +79,7 @@ export const organization = pgTable(
     id: text('id').primaryKey().$defaultFn(genId),
     name: text('name').notNull(),
     slug: text('slug').notNull(),
+    purpose: text('purpose'),
     avatar: text('avatar'),
     isPersonal: boolean('is_personal').notNull().default(false),
     vocabulary: jsonb('vocabulary').$type<VocabularySkin>().notNull().default(presetStartup),
@@ -144,6 +146,16 @@ export const team = pgTable(
       .notNull()
       .default([...defaultWorkflowStates]),
     triageEnabled: boolean('triage_enabled').notNull().default(true),
+    /**
+     * Cycle cadence in weeks for this team's auto-rolled cycles (default 1 = weekly).
+     *
+     * @remarks
+     * Cycles are team-scoped (`work.ts` `cycle.teamId`) and auto-generated on a rolling
+     * window so users never create them by hand (DECISION: configurable cadence, weekly
+     * default; weekly for personal). The Logic phase derives each cycle's
+     * `starts_at`/`ends_at` from a week-aligned anchor stepping by this many weeks.
+     */
+    cycleCadenceWeeks: integer('cycle_cadence_weeks').notNull().default(1),
     agentGuidance: text('agent_guidance'),
     approvalRouting: jsonb('approval_routing').$type<ApprovalRouting>(),
     visibility: visibility('visibility').notNull().default('public'),

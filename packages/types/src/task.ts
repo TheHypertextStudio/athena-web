@@ -30,6 +30,7 @@ export const TaskCreate = z
     cycleId: CycleId.optional(),
     parentTaskId: TaskId.optional(),
     estimate: z.number().int().optional(),
+    estimateMinutes: z.number().int().nullable().optional(),
     dueDate: z.iso.date().optional(),
     labels: z.array(LabelId).optional(),
   })
@@ -64,6 +65,7 @@ export const TaskOut = z
     delegateId: ActorId.nullable().optional(),
     projectId: ProjectId.nullable().optional(),
     programId: ProgramId.nullable().optional(),
+    estimateMinutes: z.number().int().nullable().optional(),
     dueDate: z.string().nullable().optional(),
     provenance: TaskProvenance,
     createdAt: z.string(),
@@ -86,6 +88,7 @@ export const TaskUpdate = z
     milestoneId: MilestoneId.nullable().optional(),
     cycleId: CycleId.nullable().optional(),
     estimate: z.number().int().optional(),
+    estimateMinutes: z.number().int().nullable().optional(),
     dueDate: z.iso.date().nullable().optional(),
     labels: z.array(LabelId).optional(),
   })
@@ -114,6 +117,7 @@ export const SubtaskCreate = z
     milestoneId: MilestoneId.optional(),
     cycleId: CycleId.optional(),
     estimate: z.number().int().optional(),
+    estimateMinutes: z.number().int().nullable().optional(),
     dueDate: z.iso.date().optional(),
     labels: z.array(LabelId).optional(),
   })
@@ -145,6 +149,7 @@ export const TaskDetail = TaskOut.extend({
   cycleId: CycleId.nullable().optional(),
   parentTaskId: TaskId.nullable().optional(),
   estimate: z.number().int().nullable().optional(),
+  estimateMinutes: z.number().int().nullable().optional(),
   completedAt: z.string().nullable().optional(),
   canceledAt: z.string().nullable().optional(),
   blocking: z.array(TaskRef),

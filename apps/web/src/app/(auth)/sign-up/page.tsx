@@ -199,10 +199,10 @@ export default function SignUpPage(): JSX.Element {
           {pending ? (
             <>
               <Spinner />
-              Setting up your passkey…
+              Creating account…
             </>
           ) : (
-            'Create account with a passkey'
+            'Create account'
           )}
         </Button>
 

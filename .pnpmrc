@@ -1,0 +1,2 @@
+# pnpm v10+ requires this for pnpm deploy to work in monorepos
+inject-workspace-packages=true

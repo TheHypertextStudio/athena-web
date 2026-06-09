@@ -6,7 +6,7 @@
   "description": "Docket - workflow platform monorepo",
   "repository": {
     "type": "git",
-    "url": "https://github.com/hypertext-studio/athena-service.git"
+    "url": "https://github.com/TheHypertextStudio/athena-web.git"
   },
   "license": "UNLICENSED",
   "scripts": {

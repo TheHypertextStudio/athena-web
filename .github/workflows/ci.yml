@@ -16,9 +16,9 @@ jobs:
     name: Lint & Types
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4.2
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4.1
+      - uses: actions/setup-node@v4
         with:
           node-version-file: '.node-version'
 
@@ -27,7 +27,7 @@ jobs:
       # Turbo task cache — on exact SHA hit turbo replays outputs without re-running.
       # restore-keys falls back to the nearest ancestor commit's cache so only
       # tasks whose inputs changed are re-executed.
-      - uses: actions/cache@v4.1
+      - uses: actions/cache@v4
         with:
           path: .turbo
           key: turbo-quality-${{ runner.os }}-${{ github.sha }}

@@ -3,6 +3,7 @@ lockfileVersion: '9.0'
 settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
+  injectWorkspacePackages: true
 
 catalogs:
   default:
@@ -199,7 +200,7 @@ importers:
     devDependencies:
       '@docket/eslint-config':
         specifier: workspace:*
-        version: link:../../tooling/eslint-config
+        version: file:tooling/eslint-config(eslint@10.4.1(jiti@2.7.0))(typescript@6.0.3)
       '@docket/tsconfig':
         specifier: workspace:*
         version: link:../../tooling/tsconfig
@@ -223,7 +224,7 @@ importers:
     dependencies:
       '@docket/auth':
         specifier: workspace:*
-        version: link:../../packages/auth
+        version: file:packages/auth(@better-auth/core@1.6.14(@better-auth/utils@0.4.1)(@better-fetch/fetch@1.1.21)(better-call@1.3.5(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0))(@better-auth/utils@0.4.1)(@better-fetch/fetch@1.1.21)(@prisma/client@5.22.0)(@types/pg@8.20.0)(better-call@1.3.5(zod@4.4.3))(better-sqlite3@12.10.0)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@electric-sql/pglite@0.5.1)(@neondatabase/serverless@1.1.0)(@prisma/client@5.22.0)(@types/pg@8.20.0)(better-sqlite3@12.10.0)(kysely@0.29.2)(pg@8.21.0)(postgres@3.4.9))(kysely@0.29.2)(nanostores@1.3.0)(next@16.2.7(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(pg@8.21.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(typescript@6.0.3)(vitest@4.1.8)
       '@docket/authz':
         specifier: workspace:*
         version: link:../../packages/authz
@@ -266,7 +267,7 @@ importers:
     devDependencies:
       '@docket/eslint-config':
         specifier: workspace:*
-        version: link:../../tooling/eslint-config
+        version: file:tooling/eslint-config(eslint@10.4.1(jiti@2.7.0))(typescript@6.0.3)
       '@docket/tsconfig':
         specifier: workspace:*
         version: link:../../tooling/tsconfig
@@ -333,7 +334,7 @@ importers:
     devDependencies:
       '@docket/eslint-config':
         specifier: workspace:*
-        version: link:../../tooling/eslint-config
+        version: file:tooling/eslint-config(eslint@10.4.1(jiti@2.7.0))(typescript@6.0.3)
       '@docket/tsconfig':
         specifier: workspace:*
         version: link:../../tooling/tsconfig
@@ -400,7 +401,7 @@ importers:
         version: 1.4.21(@better-fetch/fetch@1.1.21)(@electric-sql/pglite@0.5.1)(@neondatabase/serverless@1.1.0)(better-call@1.3.5(zod@4.4.3))(drizzle-kit@0.31.10)(jose@6.2.3)(kysely@0.29.2)(magicast@0.5.3)(nanostores@1.3.0)(next@16.2.7(@babel/core@7.29.7)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(postgres@3.4.9)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@4.1.8)
       '@docket/eslint-config':
         specifier: workspace:*
-        version: link:../../tooling/eslint-config
+        version: file:tooling/eslint-config(eslint@10.4.1(jiti@2.7.0))(typescript@6.0.3)
       '@docket/tsconfig':
         specifier: workspace:*
         version: link:../../tooling/tsconfig
@@ -434,7 +435,7 @@ importers:
     devDependencies:
       '@docket/eslint-config':
         specifier: workspace:*
-        version: link:../../tooling/eslint-config
+        version: file:tooling/eslint-config(eslint@10.4.1(jiti@2.7.0))(typescript@6.0.3)
       '@docket/tsconfig':
         specifier: workspace:*
         version: link:../../tooling/tsconfig
@@ -480,7 +481,7 @@ importers:
     devDependencies:
       '@docket/eslint-config':
         specifier: workspace:*
-        version: link:../../tooling/eslint-config
+        version: file:tooling/eslint-config(eslint@10.4.1(jiti@2.7.0))(typescript@6.0.3)
       '@docket/tsconfig':
         specifier: workspace:*
         version: link:../../tooling/tsconfig
@@ -523,7 +524,7 @@ importers:
     devDependencies:
       '@docket/eslint-config':
         specifier: workspace:*
-        version: link:../../tooling/eslint-config
+        version: file:tooling/eslint-config(eslint@10.4.1(jiti@2.7.0))(typescript@6.0.3)
       '@docket/tsconfig':
         specifier: workspace:*
         version: link:../../tooling/tsconfig
@@ -554,7 +555,7 @@ importers:
     devDependencies:
       '@docket/eslint-config':
         specifier: workspace:*
-        version: link:../../tooling/eslint-config
+        version: file:tooling/eslint-config(eslint@10.4.1(jiti@2.7.0))(typescript@6.0.3)
       '@docket/tsconfig':
         specifier: workspace:*
         version: link:../../tooling/tsconfig
@@ -576,7 +577,7 @@ importers:
     devDependencies:
       '@docket/eslint-config':
         specifier: workspace:*
-        version: link:../../tooling/eslint-config
+        version: file:tooling/eslint-config(eslint@10.4.1(jiti@2.7.0))(typescript@6.0.3)
       '@docket/tsconfig':
         specifier: workspace:*
         version: link:../../tooling/tsconfig
@@ -598,7 +599,7 @@ importers:
     devDependencies:
       '@docket/eslint-config':
         specifier: workspace:*
-        version: link:../../tooling/eslint-config
+        version: file:tooling/eslint-config(eslint@10.4.1(jiti@2.7.0))(typescript@6.0.3)
       '@docket/tsconfig':
         specifier: workspace:*
         version: link:../../tooling/tsconfig
@@ -671,7 +672,7 @@ importers:
     devDependencies:
       '@docket/eslint-config':
         specifier: workspace:*
-        version: link:../../tooling/eslint-config
+        version: file:tooling/eslint-config(eslint@10.4.1(jiti@2.7.0))(typescript@6.0.3)
       '@docket/tsconfig':
         specifier: workspace:*
         version: link:../../tooling/tsconfig
@@ -1171,6 +1172,23 @@ packages:
   '@csstools/css-tokenizer@4.0.0':
     resolution: {integrity: sha512-QxULHAm7cNu72w97JUNCBFODFaXpbDg+dP8b/oWFAZ2MTRppA3U00Y2L1HqaS4J6yBqxwa/Y3nMBaxVKbB/NsA==}
     engines: {node: '>=20.19.0'}
+
+  '@docket/auth@file:packages/auth':
+    resolution: {directory: packages/auth, type: directory}
+
+  '@docket/db@file:packages/db':
+    resolution: {directory: packages/db, type: directory}
+
+  '@docket/env@file:packages/env':
+    resolution: {directory: packages/env, type: directory}
+
+  '@docket/eslint-config@file:tooling/eslint-config':
+    resolution: {directory: tooling/eslint-config, type: directory}
+    peerDependencies:
+      eslint: ^9.17.0
+
+  '@docket/types@file:packages/types':
+    resolution: {directory: packages/types, type: directory}
 
   '@drizzle-team/brocli@0.10.2':
     resolution: {integrity: sha512-z33Il7l5dKjUgGULTqBsQBQwckHh5AbIuxhdsIxDDiZAzBOrZO6q9ogcWC65kU382AfynTfgNumVcNIjuIua6w==}
@@ -7394,6 +7412,127 @@ snapshots:
       css-tree: 3.2.1
 
   '@csstools/css-tokenizer@4.0.0': {}
+
+  '@docket/auth@file:packages/auth(@better-auth/core@1.6.14(@better-auth/utils@0.4.1)(@better-fetch/fetch@1.1.21)(better-call@1.3.5(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0))(@better-auth/utils@0.4.1)(@better-fetch/fetch@1.1.21)(@prisma/client@5.22.0)(@types/pg@8.20.0)(better-call@1.3.5(zod@4.4.3))(better-sqlite3@12.10.0)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@electric-sql/pglite@0.5.1)(@neondatabase/serverless@1.1.0)(@prisma/client@5.22.0)(@types/pg@8.20.0)(better-sqlite3@12.10.0)(kysely@0.29.2)(pg@8.21.0)(postgres@3.4.9))(kysely@0.29.2)(nanostores@1.3.0)(next@16.2.7(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(pg@8.21.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(typescript@6.0.3)(vitest@4.1.8)':
+    dependencies:
+      '@better-auth/passkey': 1.6.14(@better-auth/core@1.6.14(@better-auth/utils@0.4.1)(@better-fetch/fetch@1.1.21)(better-call@1.3.5(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0))(@better-auth/utils@0.4.1)(@better-fetch/fetch@1.1.21)(better-auth@1.6.14(@prisma/client@5.22.0)(better-sqlite3@12.10.0)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@electric-sql/pglite@0.5.1)(@neondatabase/serverless@1.1.0)(@prisma/client@5.22.0)(@types/pg@8.20.0)(better-sqlite3@12.10.0)(kysely@0.29.2)(pg@8.21.0)(postgres@3.4.9))(next@16.2.7(@babel/core@7.29.7)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(pg@8.21.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@4.1.8))(better-call@1.3.5(zod@4.4.3))(nanostores@1.3.0)
+      '@docket/db': file:packages/db(@prisma/client@5.22.0)(@types/pg@8.20.0)(better-sqlite3@12.10.0)(kysely@0.29.2)(pg@8.21.0)(typescript@6.0.3)
+      '@docket/env': file:packages/env(typescript@6.0.3)
+      '@docket/types': file:packages/types
+      '@simplewebauthn/server': 13.3.1
+      better-auth: 1.6.14(@prisma/client@5.22.0)(better-sqlite3@12.10.0)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@electric-sql/pglite@0.5.1)(@neondatabase/serverless@1.1.0)(@prisma/client@5.22.0)(@types/pg@8.20.0)(better-sqlite3@12.10.0)(kysely@0.29.2)(pg@8.21.0)(postgres@3.4.9))(next@16.2.7(@babel/core@7.29.7)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(pg@8.21.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@4.1.8)
+    transitivePeerDependencies:
+      - '@aws-sdk/client-rds-data'
+      - '@better-auth/core'
+      - '@better-auth/utils'
+      - '@better-fetch/fetch'
+      - '@cloudflare/workers-types'
+      - '@libsql/client'
+      - '@libsql/client-wasm'
+      - '@lynx-js/react'
+      - '@op-engineering/op-sqlite'
+      - '@opentelemetry/api'
+      - '@planetscale/database'
+      - '@prisma/client'
+      - '@sveltejs/kit'
+      - '@tanstack/react-start'
+      - '@tanstack/solid-start'
+      - '@tidbcloud/serverless'
+      - '@types/better-sqlite3'
+      - '@types/pg'
+      - '@types/sql.js'
+      - '@upstash/redis'
+      - '@vercel/postgres'
+      - '@xata.io/client'
+      - arktype
+      - better-call
+      - better-sqlite3
+      - bun-types
+      - drizzle-kit
+      - drizzle-orm
+      - expo-sqlite
+      - gel
+      - knex
+      - kysely
+      - mongodb
+      - mysql2
+      - nanostores
+      - next
+      - pg
+      - prisma
+      - react
+      - react-dom
+      - solid-js
+      - sql.js
+      - sqlite3
+      - svelte
+      - typescript
+      - valibot
+      - vitest
+      - vue
+
+  '@docket/db@file:packages/db(@prisma/client@5.22.0)(@types/pg@8.20.0)(better-sqlite3@12.10.0)(kysely@0.29.2)(pg@8.21.0)(typescript@6.0.3)':
+    dependencies:
+      '@docket/env': file:packages/env(typescript@6.0.3)
+      '@docket/types': file:packages/types
+      '@electric-sql/pglite': 0.5.1
+      '@neondatabase/serverless': 1.1.0
+      drizzle-orm: 0.45.2(@electric-sql/pglite@0.5.1)(@neondatabase/serverless@1.1.0)(@prisma/client@5.22.0)(@types/pg@8.20.0)(better-sqlite3@12.10.0)(kysely@0.29.2)(pg@8.21.0)(postgres@3.4.9)
+      postgres: 3.4.9
+      ulid: 3.0.2
+    transitivePeerDependencies:
+      - '@aws-sdk/client-rds-data'
+      - '@cloudflare/workers-types'
+      - '@libsql/client'
+      - '@libsql/client-wasm'
+      - '@op-engineering/op-sqlite'
+      - '@opentelemetry/api'
+      - '@planetscale/database'
+      - '@prisma/client'
+      - '@tidbcloud/serverless'
+      - '@types/better-sqlite3'
+      - '@types/pg'
+      - '@types/sql.js'
+      - '@upstash/redis'
+      - '@vercel/postgres'
+      - '@xata.io/client'
+      - arktype
+      - better-sqlite3
+      - bun-types
+      - expo-sqlite
+      - gel
+      - knex
+      - kysely
+      - mysql2
+      - pg
+      - prisma
+      - sql.js
+      - sqlite3
+      - typescript
+      - valibot
+
+  '@docket/env@file:packages/env(typescript@6.0.3)':
+    dependencies:
+      '@t3-oss/env-core': 0.13.11(typescript@6.0.3)(zod@4.4.3)
+      '@t3-oss/env-nextjs': 0.13.11(typescript@6.0.3)(zod@4.4.3)
+      zod: 4.4.3
+    transitivePeerDependencies:
+      - arktype
+      - typescript
+      - valibot
+
+  '@docket/eslint-config@file:tooling/eslint-config(eslint@10.4.1(jiti@2.7.0))(typescript@6.0.3)':
+    dependencies:
+      '@eslint/js': 10.0.1(eslint@10.4.1(jiti@2.7.0))
+      eslint: 10.4.1(jiti@2.7.0)
+      typescript-eslint: 8.60.1(eslint@10.4.1(jiti@2.7.0))(typescript@6.0.3)
+    transitivePeerDependencies:
+      - supports-color
+      - typescript
+
+  '@docket/types@file:packages/types':
+    dependencies:
+      zod: 4.4.3
 
   '@drizzle-team/brocli@0.10.2': {}
 

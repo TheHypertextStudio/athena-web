@@ -59,22 +59,22 @@ SENTRY_DSN=https://...
 
 ## Development Commands
 
-| Command | Description |
-|---------|-------------|
-| `pnpm dev` | Start all services in development mode |
-| `pnpm build` | Build all packages |
-| `pnpm test` | Run all tests |
-| `pnpm test:watch` | Run tests in watch mode |
-| `pnpm test:coverage` | Run tests with coverage |
-| `pnpm test:e2e` | Run E2E tests |
-| `pnpm lint` | Run ESLint |
-| `pnpm lint:fix` | Fix linting issues |
-| `pnpm typecheck` | Run TypeScript type checking |
-| `pnpm format` | Format code with Prettier |
-| `pnpm db:push` | Push schema changes to database |
-| `pnpm db:generate` | Generate migrations |
-| `pnpm db:migrate` | Run migrations |
-| `pnpm db:studio` | Open Drizzle Studio |
+| Command              | Description                            |
+| -------------------- | -------------------------------------- |
+| `pnpm dev`           | Start all services in development mode |
+| `pnpm build`         | Build all packages                     |
+| `pnpm test`          | Run all tests                          |
+| `pnpm test:watch`    | Run tests in watch mode                |
+| `pnpm test:coverage` | Run tests with coverage                |
+| `pnpm test:e2e`      | Run E2E tests                          |
+| `pnpm lint`          | Run ESLint                             |
+| `pnpm lint:fix`      | Fix linting issues                     |
+| `pnpm typecheck`     | Run TypeScript type checking           |
+| `pnpm format`        | Format code with Prettier              |
+| `pnpm db:push`       | Push schema changes to database        |
+| `pnpm db:generate`   | Generate migrations                    |
+| `pnpm db:migrate`    | Run migrations                         |
+| `pnpm db:studio`     | Open Drizzle Studio                    |
 
 ## Branch Strategy
 
@@ -90,6 +90,7 @@ main                           # Production-ready code
 ```
 
 **Examples:**
+
 ```
 feature/AUTH-001-google-signin
 fix/TASK-123-deadline-timezone
@@ -121,6 +122,7 @@ git checkout -b feature/AUTH-001-google-signin
 ### 2. Make Changes
 
 Follow these guidelines:
+
 - Write tests first (TDD encouraged)
 - Follow [Code Style Guide](./code-style.md)
 - Keep commits atomic and focused
@@ -167,6 +169,7 @@ git commit -m "changes"
 | `ci` | CI/CD |
 
 **Scopes:**
+
 - `api` - Backend API
 - `web` - Frontend
 - `auth` - Authentication
@@ -205,22 +208,27 @@ gh pr create --title "feat(auth): add Google OAuth sign-in flow" --body "..."
 
 ```markdown
 ## Summary
+
 Brief description of changes.
 
 ## Changes
+
 - Added Google OAuth sign-in flow
 - Implemented token refresh logic
 - Added sign-in button to auth page
 
 ## Testing
+
 - [ ] Unit tests added/updated
 - [ ] Integration tests added/updated
 - [ ] Manual testing completed
 
 ## Screenshots
+
 (If UI changes)
 
 ## Checklist
+
 - [ ] Code follows style guide
 - [ ] Documentation updated
 - [ ] Tests pass locally
@@ -279,6 +287,7 @@ git push -u origin release/v1.2.0
 ### Common Issues
 
 **pnpm install fails:**
+
 ```bash
 # Clear pnpm cache
 pnpm store prune
@@ -289,12 +298,14 @@ pnpm install
 ```
 
 **TypeScript errors after pulling:**
+
 ```bash
 # Regenerate types
 pnpm typecheck
 ```
 
 **Database connection issues:**
+
 ```bash
 # Check PostgreSQL is running
 pg_isready -h localhost -p 5432
@@ -304,6 +315,7 @@ pnpm db:push --force
 ```
 
 **Tests failing unexpectedly:**
+
 ```bash
 # Clear test cache
 pnpm test --clearCache
@@ -321,6 +333,7 @@ IDLE → PLANNING → RESEARCHING → IMPLEMENTING → VALIDATING → DOCUMENTIN
 ```
 
 Key requirements:
+
 1. Update WORKLOG.md before starting work
 2. Plan before implementing non-trivial changes
 3. Validate before committing
@@ -329,4 +342,4 @@ Key requirements:
 
 ---
 
-*See also: [Code Style](./code-style.md), [Testing Strategy](../engineering/testing-strategy.md)*
+_See also: [Code Style](./code-style.md), [Testing Strategy](../engineering/testing-strategy.md)_

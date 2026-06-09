@@ -18,28 +18,32 @@ Create or update documentation for code, APIs, or processes. Ensures documentati
 ## Actions
 
 ### Analyze
+
 1. Scan codebase for undocumented exports
 2. Check for outdated documentation
 3. Report documentation gaps
 
 ### API Documentation
+
 1. Ensure OpenAPI specs are complete
 2. Verify Scalar documentation is accurate
 3. Check for missing endpoint documentation
 
 ### File/Module Documentation
+
 1. Add TSDoc comments to exported items
 2. Create/update module README if needed
 3. Ensure examples are current
 
 ### Check
+
 1. Verify all exports have TSDoc
 2. Check documentation links are valid
 3. Ensure README files are current
 
 ## TSDoc Template
 
-```typescript
+````typescript
 /**
  * Brief description.
  *
@@ -54,7 +58,7 @@ Create or update documentation for code, APIs, or processes. Ensures documentati
  * // Usage example
  * ```
  */
-```
+````
 
 ## Notes
 

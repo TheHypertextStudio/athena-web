@@ -19,6 +19,8 @@ import {
   CycleTasksOut,
   CycleTasksQuery,
   CycleUpdate,
+  CycleWindow,
+  CycleWindowQuery,
   pageOf,
   type TaskOut,
 } from '@docket/types';
@@ -28,6 +30,12 @@ import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { NotFoundError, ValidationError } from '../error';
+import {
+  type CycleWindowSlot,
+  isWithinWindow,
+  normalizeCadenceWeeks,
+  rollingWindow,
+} from '../lib/cycle-window';
 import { ok } from '../lib/ok';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
@@ -35,7 +43,15 @@ import { capabilityGuard } from '../permissions/capability-guard';
 type CycleRow = typeof cycle.$inferSelect;
 type TaskRow = typeof task.$inferSelect;
 
-function toOut(cy: CycleRow): z.input<typeof CycleOut> {
+/**
+ * Project a cycle row into the {@link CycleOut} wire shape.
+ *
+ * @param cy - The cycle row.
+ * @param now - When provided, populates the date-derived `isCurrent` flag (today within
+ *   `[startsAt, endsAt]`); omitted leaves `isCurrent` undefined for reads that don't
+ *   resolve a "current" cycle.
+ */
+function toOut(cy: CycleRow, now?: Date): z.input<typeof CycleOut> {
   return {
     id: cy.id,
     organizationId: cy.organizationId,
@@ -45,6 +61,7 @@ function toOut(cy: CycleRow): z.input<typeof CycleOut> {
     startsAt: cy.startsAt.toISOString(),
     endsAt: cy.endsAt.toISOString(),
     status: cy.status,
+    ...(now ? { isCurrent: isWithinWindow(now, cy.startsAt, cy.endsAt) } : {}),
     createdAt: cy.createdAt.toISOString(),
   };
 }
@@ -77,6 +94,8 @@ function taskToOut(t: TaskRow): z.input<typeof TaskOut> {
 
 const idParam = z.object({ id: z.string() });
 
+type TeamRow = typeof team.$inferSelect;
+
 /** Load a single cycle scoped to the org, or throw {@link NotFoundError}. */
 async function loadCycle(orgId: string, id: string): Promise<CycleRow> {
   const rows = await db
@@ -87,6 +106,96 @@ async function loadCycle(orgId: string, id: string): Promise<CycleRow> {
   const row = rows[0];
   if (!row) throw new NotFoundError('Cycle not found');
   return row;
+}
+
+/** Load a team scoped to the org, or throw {@link NotFoundError}. */
+async function loadTeam(orgId: string, teamId: string): Promise<TeamRow> {
+  const rows = await db
+    .select()
+    .from(team)
+    .where(and(eq(team.id, teamId), eq(team.organizationId, orgId)))
+    .limit(1);
+  const row = rows[0];
+  if (!row) throw new NotFoundError('Team not found');
+  return row;
+}
+
+/** Seed status for an auto-rolled slot from its position relative to `now`. */
+function deriveStatus(slot: CycleWindowSlot, now: Date): CycleRow['status'] {
+  if (now.getTime() > slot.endsAt.getTime()) return 'completed';
+  if (now.getTime() < slot.startsAt.getTime()) return 'upcoming';
+  return 'active';
+}
+
+/**
+ * Lazily ensure the rolling window of auto-rolled cycles exists for a team, then return
+ * the team's cycles ordered by `number`.
+ *
+ * @remarks
+ * DECISION: cycles auto-roll on a configurable cadence so the user never creates them by
+ * hand. This computes the week-aligned, cadence-stepped window around `now` (a few past +
+ * the current + a few upcoming) and inserts only the windows that don't already exist for
+ * the team — keyed on the stable, epoch-anchored cycle `number` (which never changes for
+ * a given calendar window), so the pass is idempotent and re-running never duplicates or
+ * renumbers a cycle. Manual cycles (any `number` outside the computed window) are left
+ * untouched and still returned.
+ *
+ * The insert tolerates a concurrent writer via `onConflictDoNothing` on the
+ * `(team_id, number)` uniqueness constraint, then re-reads so the caller always sees the
+ * full, consistent set.
+ *
+ * @param orgId - The tenant.
+ * @param teamId - The team whose window to ensure (must belong to `orgId`).
+ * @param cadenceWeeks - The team's cadence in weeks (normalized to >= 1).
+ * @param actorId - The creator stamped on auto-generated cycles.
+ * @param now - The reference instant ("today").
+ * @returns Every cycle for the team, ordered ascending by `number`.
+ */
+async function ensureCycleWindow(
+  orgId: string,
+  teamId: string,
+  cadenceWeeks: number,
+  actorId: string | null,
+  now: Date,
+): Promise<CycleRow[]> {
+  const slots: CycleWindowSlot[] = rollingWindow(now, cadenceWeeks);
+
+  const existing = await db
+    .select()
+    .from(cycle)
+    .where(and(eq(cycle.teamId, teamId), eq(cycle.organizationId, orgId)));
+  const existingNumbers = new Set(existing.map((c) => c.number));
+
+  const toInsert = slots
+    .filter((s) => !existingNumbers.has(s.number))
+    .map((s) => ({
+      organizationId: orgId,
+      teamId,
+      number: s.number,
+      startsAt: s.startsAt,
+      endsAt: s.endsAt,
+      // The real source of truth for "current" is the date window (`isCurrent`), not this
+      // column; we still seed a sensible status from the window's position relative to
+      // `now` so reads/UI that display it stay coherent (past → completed, the window
+      // containing today → active, future → upcoming).
+      status: deriveStatus(s, now),
+      createdBy: actorId,
+    }));
+
+  if (toInsert.length > 0) {
+    await db
+      .insert(cycle)
+      .values(toInsert)
+      .onConflictDoNothing({
+        target: [cycle.teamId, cycle.number],
+      });
+  }
+
+  return db
+    .select()
+    .from(cycle)
+    .where(and(eq(cycle.teamId, teamId), eq(cycle.organizationId, orgId)))
+    .orderBy(cycle.number);
 }
 
 /** Whether a task counts as completed (its workflow state stamped a `completed_at`). */
@@ -140,12 +249,41 @@ function computeStats(cy: CycleRow, tasks: TaskRow[]): CycleStats {
 const cycles = new Hono<AppEnv>()
   .get('/', async (c) => {
     const { orgId } = c.get('actorCtx');
+    const now = new Date();
     const rows = await db
       .select()
       .from(cycle)
       .where(eq(cycle.organizationId, orgId))
       .orderBy(desc(cycle.startsAt));
-    return ok(c, pageOf(CycleOut), { items: rows.map(toOut) });
+    // Surface the date-derived `isCurrent` on every listed cycle (whichever window
+    // contains today), so callers don't have to re-derive it client-side.
+    return ok(c, pageOf(CycleOut), { items: rows.map((r) => toOut(r, now)) });
+  })
+  .get('/current', zQuery(CycleWindowQuery), async (c) => {
+    const { orgId, actorId } = c.get('actorCtx');
+    const { teamId } = c.req.valid('query');
+    const now = new Date();
+
+    // Auto-roll: lazily ensure the rolling window exists for the team (idempotent), then
+    // derive the current cycle by date. The team must belong to the org (404 otherwise).
+    const teamRow = await loadTeam(orgId, teamId);
+    const cadenceWeeks = normalizeCadenceWeeks(teamRow.cycleCadenceWeeks);
+    const rows = await ensureCycleWindow(orgId, teamId, cadenceWeeks, actorId, now);
+
+    // The current cycle is whichever window contains today; on the (impossible for
+    // auto-rolled, possible for overlapping manual) tie, the earliest-starting wins.
+    const current =
+      rows
+        .filter((r) => isWithinWindow(now, r.startsAt, r.endsAt))
+        .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime())[0] ?? null;
+
+    const payload: z.input<typeof CycleWindow> = {
+      teamId,
+      cadenceWeeks,
+      current: current ? toOut(current, now) : null,
+      cycles: rows.map((r) => toOut(r, now)),
+    };
+    return ok(c, CycleWindow, payload);
   })
   .post('/', capabilityGuard('contribute'), zJson(CycleCreate), async (c) => {
     const { orgId, actorId } = c.get('actorCtx');
@@ -182,7 +320,7 @@ const cycles = new Hono<AppEnv>()
     const row = await loadCycle(orgId, id);
     const tasks = await committedTasks(orgId, id);
     const detail: z.input<typeof CycleDetail> = {
-      ...toOut(row),
+      ...toOut(row, new Date()),
       stats: computeStats(row, tasks),
     };
     return ok(c, CycleDetail, detail);

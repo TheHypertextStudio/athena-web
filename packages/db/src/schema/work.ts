@@ -142,6 +142,7 @@ export const task = pgTable(
     cycleId: text('cycle_id').references(() => cycle.id, { onDelete: 'set null' }),
     parentTaskId: text('parent_task_id'),
     estimate: integer('estimate'),
+    estimateMinutes: integer('estimate_minutes'),
     dueDate: timestamp('due_date'),
     // Provenance (single inline triple): native vs linked-from-an-integration.
     source: provenanceSource('source').notNull().default('native'),

@@ -1285,20 +1285,37 @@ export function registerTools(server: McpServer, ctx: McpContext): void {
           if (!taskRows[0]) throw new NotFoundError('Task not found');
         }
 
-        const inserted = await db
-          .insert(agentSession)
-          .values({
-            organizationId: input.orgId,
-            agentId: input.agentId,
-            taskId: input.taskId,
-            trigger: input.trigger ?? 'delegation',
-            status: 'pending',
-            initiatorId: actorCtx.actorId,
-          })
-          .returning();
-        const row = inserted[0];
-        /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
-        if (!row) throw new Error('agent session insert returned no row');
+        const row = await db.transaction(async (tx) => {
+          const inserted = await tx
+            .insert(agentSession)
+            .values({
+              organizationId: input.orgId,
+              agentId: input.agentId,
+              taskId: input.taskId,
+              trigger: input.trigger ?? 'delegation',
+              status: 'pending',
+              initiatorId: actorCtx.actorId,
+            })
+            .returning();
+          const created = inserted[0];
+          /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
+          if (!created) throw new Error('agent session insert returned no row');
+
+          // Thread the freeform prompt through to the run: persist it as the session's
+          // first `response` activity (no schema brief column), so `runSession` derives
+          // it as the runtime `task` brief when the session is not task-bound. A
+          // task-bound session keeps the task title as its brief; the prompt still rides
+          // along as the opening human entry in the visible stream.
+          if (input.prompt !== undefined) {
+            await tx.insert(sessionActivity).values({
+              sessionId: created.id,
+              organizationId: input.orgId,
+              type: 'response',
+              body: { text: input.prompt },
+            });
+          }
+          return created;
+        });
         return jsonResult({ id: row.id, status: row.status });
       }),
   );

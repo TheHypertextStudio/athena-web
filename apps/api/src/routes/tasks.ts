@@ -129,6 +129,7 @@ function toOut(t: TaskRow): z.input<typeof TaskOut> {
     delegateId: t.delegateId,
     projectId: t.projectId,
     programId: t.programId,
+    estimateMinutes: t.estimateMinutes,
     dueDate: t.dueDate?.toISOString() ?? null,
     provenance: {
       source: t.source,
@@ -371,6 +372,7 @@ const tasks = new Hono<AppEnv>()
         cycleId: body.cycleId,
         parentTaskId: body.parentTaskId,
         estimate: body.estimate,
+        estimateMinutes: body.estimateMinutes,
         dueDate: body.dueDate ? new Date(body.dueDate) : undefined,
         source: 'native',
         createdBy: actorId,
@@ -435,6 +437,7 @@ const tasks = new Hono<AppEnv>()
       cycleId: row.cycleId,
       parentTaskId: row.parentTaskId,
       estimate: row.estimate,
+      estimateMinutes: row.estimateMinutes,
       completedAt: row.completedAt?.toISOString() ?? null,
       canceledAt: row.canceledAt?.toISOString() ?? null,
       blocking: blockingRows.map(toRef),
@@ -493,6 +496,7 @@ const tasks = new Hono<AppEnv>()
       ...(body.milestoneId !== undefined ? { milestoneId: body.milestoneId } : {}),
       ...(body.cycleId !== undefined ? { cycleId: body.cycleId } : {}),
       ...(body.estimate !== undefined ? { estimate: body.estimate } : {}),
+      ...(body.estimateMinutes !== undefined ? { estimateMinutes: body.estimateMinutes } : {}),
       ...(body.dueDate !== undefined
         ? { dueDate: body.dueDate ? new Date(body.dueDate) : null }
         : {}),
@@ -607,6 +611,7 @@ const tasks = new Hono<AppEnv>()
           cycleId: body.cycleId,
           parentTaskId: parent.id,
           estimate: body.estimate,
+          estimateMinutes: body.estimateMinutes,
           dueDate: body.dueDate ? new Date(body.dueDate) : undefined,
           source: 'native',
           createdBy: actorId,

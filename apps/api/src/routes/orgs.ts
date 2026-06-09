@@ -32,6 +32,7 @@ import activity from './activity';
 import agentSessions from './agent-sessions';
 import agents from './agents';
 import billing from './billing';
+import capture from './capture';
 import comments from './comments';
 import cycles from './cycles';
 import grants from './grants';
@@ -55,6 +56,7 @@ function toOrgOut(o: OrgRow): z.input<typeof OrgOut> {
     id: o.id,
     name: o.name,
     slug: o.slug,
+    purpose: o.purpose,
     avatar: o.avatar,
     isPersonal: o.isPersonal,
     vocabulary: o.vocabulary,
@@ -250,6 +252,7 @@ const orgs = new Hono<AppEnv>()
         .values({
           name: orgName,
           slug,
+          purpose: body.purpose,
           isPersonal,
           vocabulary: { preset: body.vocabulary },
         })
@@ -352,6 +355,7 @@ const orgs = new Hono<AppEnv>()
   .route('/:orgId/grants', grants)
   .route('/:orgId/agents', agents)
   .route('/:orgId/sessions', agentSessions)
+  .route('/:orgId/capture', capture)
   .route('/:orgId/integrations', integrations)
   .route('/:orgId/billing', billing)
   .route('/:orgId/activity', activity);

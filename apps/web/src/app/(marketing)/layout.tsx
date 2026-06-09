@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { SiteFooter } from '@/components/marketing/site-footer';
 import { SiteHeader } from '@/components/marketing/site-header';
 
+/** Metadata for marketing pages. */
 export const metadata: Metadata = {
   title: {
     default: 'Docket — the command center for everything you run',
@@ -12,6 +13,7 @@ export const metadata: Metadata = {
   description:
     'Docket is the calm command center for every organization you run — startups, nonprofits, and personal projects — unified in one daily view.',
 };
+/** Marketing site layout. */
 
 export default function MarketingLayout({ children }: { children: ReactNode }) {
   return (

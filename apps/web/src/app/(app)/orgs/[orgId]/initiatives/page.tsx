@@ -5,46 +5,53 @@
  *
  * @remarks
  * A Client Component reached at `/orgs/[orgId]/initiatives`. An Initiative is a cross-cutting
- * *theme* that holds no work of its own — it associates many-to-many with Projects + Programs
- * — so this list is a portfolio of themes, not a work queue. Each row leads with the theme
- * name + description, its auto-derived status, the rolled-up (worst-child) health verdict, and
- * the membership mix (how many Programs / Projects it spans).
+ * *theme* that holds no work of its own — it associates many-to-many with Projects + Programs —
+ * so this list is a portfolio of themes, not a work queue. The roster renders through the shared
+ * {@link EntityTable}: a leading derived-status glyph, a flexing **Title** column, and the theme's
+ * key properties — status, rolled-up health, and the membership mix (how many Programs / Projects
+ * it spans) — in **aligned** columns under a light header. This is the same column-aligned surface
+ * the Projects roster renders through (the user's mandate: "structured the same … just like
+ * Linear"); an Initiative simply differs in its trailing scope columns, since it carries no lead or
+ * target date of its own.
  *
  * The list endpoint returns only the stored Initiative rows; the per-theme roll-up
- * (`childMix` / `derivedStatus` / `rolledUpHealth`) lives on the detail read, so the page
- * enriches each row by fetching its detail in parallel (the same enrich-per-item idiom the
- * project-detail screen uses for task milestones). That composite read is cached + kept live
- * through the dynamic-data layer (auto-refetch on focus + after a create), so there is no manual
- * refresh control.
+ * (`childMix` / `derivedStatus` / `rolledUpHealth`) lives on the detail read, so the page enriches
+ * each row by fetching its detail in parallel (the same enrich-per-item idiom the project-detail
+ * screen uses for task milestones). That composite read is cached + kept live through the
+ * dynamic-data layer (auto-refetch on focus + after a create), so there is no manual refresh.
  *
- * The bespoke Active/Completed partition is gone: the roster adopts the unified
- * {@link FilterToolbar} over the initiative {@link buildInitiativeCatalog | catalog}, so it can
- * be filtered by status / health, grouped, and sorted — all applied **client-side** over the
- * already-loaded {@link useApiQuery} results (the enrich-per-item data flow is preserved; no
- * manual refresh). The view state is held in the URL by {@link useViewState}, defaulting to a
- * group-by-status grouping so the familiar sectioned look is preserved, but now user-changeable.
+ * The roster adopts the unified {@link FilterToolbar} over the initiative
+ * {@link buildInitiativeCatalog | catalog}, and the table's columns are derived from that same
+ * catalog ({@link initiativeColumns}) so the toolbar's group/sort fields and the table headers read
+ * from one source of truth. It can be filtered by status / health, grouped, and sorted — all
+ * applied **client-side** over the already-loaded {@link useApiQuery} results (the enrich-per-item
+ * data flow is preserved; no manual refresh). The view state is held in the URL by
+ * {@link useViewState}, defaulting to a group-by-status grouping so the familiar sectioned look is
+ * preserved, but now user-changeable; grouping renders full-width {@link GroupHeader} boundary rows
+ * that span every column.
  *
  * A header "New {initiative}" affordance creates a theme from a name; the entity noun routes
  * through {@link useVocabulary} so vocabulary skins apply. Data is fetched at runtime, so the
  * production build needs no running server.
  */
 import type { InitiativeDetail, InitiativeOut } from '@docket/types';
-import { EmptyState, StatusIcon } from '@docket/ui/components';
+import { EmptyState, EntityTable, StatusIcon } from '@docket/ui/components';
+import type { WorkflowStateType } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
-import { Button, Skeleton } from '@docket/ui/primitives';
 import { Plus, Target } from '@docket/ui/icons';
+import { Button, Skeleton } from '@docket/ui/primitives';
+import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { type JSX, useCallback, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 
 import {
   buildInitiativeCatalog,
+  initiativeColumns,
   type InitiativeCatalogRow,
 } from '@/components/initiatives/initiative-catalog';
 import { CreateInitiativeDialog } from '@/components/initiatives/create-initiative';
-import { InitiativeRow } from '@/components/initiatives/initiative-row';
 import { applyView, EMPTY_GROUP_ID } from '@/components/views/apply-view';
-import type { WorkflowStateType } from '@docket/ui/components';
 import { FilterToolbar } from '@/components/views/filter-toolbar';
 import { useViewState } from '@/components/views/use-view-state';
 import { type ViewState } from '@/components/views/field-catalog';
@@ -125,7 +132,11 @@ export default function InitiativesListPage(): JSX.Element {
   const initiativeNounLower = initiativeNoun.toLowerCase();
   const initiativeNounPlural = useVocabulary('initiative', { plural: true });
   const programNoun = useVocabulary('program').toLowerCase();
+  const programNounPlural = useVocabulary('program', { plural: true }).toLowerCase();
+  const programsHeader = useVocabulary('program', { plural: true });
   const projectNoun = useVocabulary('project').toLowerCase();
+  const projectNounPlural = useVocabulary('project', { plural: true }).toLowerCase();
+  const projectsHeader = useVocabulary('project', { plural: true });
 
   const [createOpen, setCreateOpen] = useState(false);
   const { state, setFilters, setGroupBy, setSort } = useViewState();
@@ -140,8 +151,30 @@ export default function InitiativesListPage(): JSX.Element {
   const loading = initiativesQ.isPending;
   const error = initiativesQ.isError ? initiativesQ.error.message : null;
 
-  /** The initiative field catalog driving the toolbar + the apply engine. */
+  /** The initiative field catalog driving the toolbar + the apply engine + the table columns. */
   const catalog = useMemo(() => buildInitiativeCatalog(), []);
+
+  /** The aligned table columns, derived from the same catalog the toolbar drives. */
+  const columns = useMemo(
+    () =>
+      initiativeColumns(catalog, {
+        programsHeader,
+        programNoun,
+        programNounPlural,
+        projectsHeader,
+        projectNoun,
+        projectNounPlural,
+      }),
+    [
+      catalog,
+      programsHeader,
+      programNoun,
+      programNounPlural,
+      projectsHeader,
+      projectNoun,
+      projectNounPlural,
+    ],
+  );
 
   /** Default to the legacy group-by-status sections until the user configures the view. */
   const effectiveState = useMemo(() => (isEmptyViewState(state) ? DEFAULT_VIEW : state), [state]);
@@ -151,6 +184,21 @@ export default function InitiativesListPage(): JSX.Element {
     () => applyView(initiatives, effectiveState, catalog),
     [initiatives, effectiveState, catalog],
   );
+
+  /** Map an `applyView` bucket onto an {@link EntityTable} group (status buckets carry a glyph). */
+  const groups = useMemo(() => {
+    if (!applied.groups) return undefined;
+    const isStatusGroup = effectiveState.groupBy?.field === 'derivedStatus';
+    return applied.groups.map((group) => ({
+      id: group.id,
+      label: group.label,
+      decoration:
+        isStatusGroup && group.hint && group.id !== EMPTY_GROUP_ID ? (
+          <StatusIcon type={group.hint as WorkflowStateType} label={group.label} />
+        ) : undefined,
+      rows: group.rows,
+    }));
+  }, [applied.groups, effectiveState.groupBy]);
 
   /**
    * Refetch the roster from the server (prefix-matched, so this also refreshes any open
@@ -162,23 +210,6 @@ export default function InitiativesListPage(): JSX.Element {
       router.push(`/orgs/${orgId}/initiatives/${created.id}`);
     },
     [orgId, router, queryClient],
-  );
-
-  /** Render one initiative row (shared by the flat + grouped renders). */
-  const renderRow = useCallback(
-    (item: InitiativeCatalogRow): JSX.Element => (
-      <li key={item.id}>
-        <InitiativeRow
-          initiative={item}
-          programNoun={programNoun}
-          projectNoun={projectNoun}
-          onOpen={() => {
-            router.push(`/orgs/${orgId}/initiatives/${item.id}`);
-          }}
-        />
-      </li>
-    ),
-    [orgId, programNoun, projectNoun, router],
   );
 
   return (
@@ -224,11 +255,7 @@ export default function InitiativesListPage(): JSX.Element {
       ) : null}
 
       {loading ? (
-        <div className="flex flex-col gap-3" aria-hidden="true">
-          <Skeleton className="h-[88px] w-full rounded-xl" />
-          <Skeleton className="h-[88px] w-full rounded-xl" />
-          <Skeleton className="h-[88px] w-full rounded-xl" />
-        </div>
+        <ListSkeleton />
       ) : error ? (
         <p
           role="alert"
@@ -254,26 +281,45 @@ export default function InitiativesListPage(): JSX.Element {
           title={`No matching ${initiativeNounPlural.toLowerCase()}`}
           body={`No ${initiativeNounLower} matches the active filters. Adjust or clear them to see more.`}
         />
-      ) : applied.groups ? (
-        <div className="flex flex-col gap-6">
-          {applied.groups.map((group) => (
-            <section key={group.id} aria-label={group.label} className="flex flex-col gap-3">
-              <h2 className="text-on-surface-variant flex items-center gap-2 text-xs font-medium">
-                {effectiveState.groupBy?.field === 'derivedStatus' &&
-                group.hint &&
-                group.id !== EMPTY_GROUP_ID ? (
-                  <StatusIcon type={group.hint as WorkflowStateType} label={group.label} />
-                ) : null}
-                <span>{group.label}</span>
-                <span className="tabular-nums">{group.rows.length}</span>
-              </h2>
-              <ul className="flex flex-col gap-2">{group.rows.map(renderRow)}</ul>
-            </section>
-          ))}
-        </div>
       ) : (
-        <ul className="flex flex-col gap-2">{applied.rows.map(renderRow)}</ul>
+        <EntityTable
+          aria-label={initiativeNounPlural}
+          columns={columns}
+          groups={groups}
+          rows={applied.rows}
+          getRowKey={(initiative) => initiative.id}
+          rowHref={(initiative) => `/orgs/${orgId}/initiatives/${initiative.id}`}
+          renderRowLink={(lp) => (
+            <Link
+              href={lp.href}
+              className={lp.className}
+              onClick={lp.onClick}
+              tabIndex={lp.tabIndex}
+              aria-current={lp['aria-current']}
+            >
+              {lp.children}
+            </Link>
+          )}
+        />
       )}
+    </div>
+  );
+}
+
+/** Loading placeholder: a bordered list of slim row skeletons matching the table density. */
+function ListSkeleton(): JSX.Element {
+  return (
+    <div
+      className="border-outline-variant divide-outline-variant flex flex-col divide-y overflow-hidden rounded-xl border"
+      aria-hidden="true"
+    >
+      {[0, 1, 2, 3, 4].map((i) => (
+        <div key={i} className="flex min-h-9 items-center gap-2 px-3 py-1.5">
+          <Skeleton className="size-3.5 rounded-full" />
+          <Skeleton className="h-4 w-48" />
+          <Skeleton className="ml-auto h-4 w-24" />
+        </div>
+      ))}
     </div>
   );
 }

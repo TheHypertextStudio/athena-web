@@ -4,25 +4,29 @@
  * The Tasks tab body — the project's tasks grouped into milestone sections.
  *
  * @remarks
- * Elevates the existing flat task list into milestone-scoped sections. Tasks are grouped by
- * their `milestoneId` (resolved per-task, since the list DTO omits it), with each milestone
- * rendered as a {@link ListView} top-level group labeled by the milestone name + target
- * date, and sub-grouped by canonical workflow state so the {@link StatusIcon} reads
- * correctly. Tasks with no milestone fall into an "Unscheduled" bucket so nothing is
- * dropped. Each milestone header also shows a compact done/total count. Activating a task
- * row routes to its task detail. A composer at the top adds a task; the empty state invites
- * the first one.
+ * Renders the project's tasks through the shared, aligned-column {@link TaskTable} — the same
+ * surface a cycle's tasks and an entity roster use — so every task list in the app reads
+ * identically: a leading status glyph, a flexing title, then aligned assignee / due-date /
+ * estimate columns under a light header. Tasks are grouped by their `milestoneId` (resolved
+ * per-task, since the list DTO omits it) into full-width milestone sections labeled by the
+ * milestone name + target date, and within each section ordered by canonical workflow state so
+ * the list still reads progress-down. Tasks with no milestone fall into an "Unscheduled" bucket
+ * so nothing is dropped. Each milestone header shows a compact row count. Activating a task row
+ * routes to its task detail. A composer at the top adds a task; the empty state invites the first
+ * one.
  */
 import type { TaskOut, TeamOut } from '@docket/types';
-import { type GroupKey, ListView, TaskRow, type TaskRowData } from '@docket/ui/components';
+import { type EntityTableGroup } from '@docket/ui/components';
 import { Button, Input } from '@docket/ui/primitives';
 import type { JSX } from 'react';
-import { useCallback, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import type { ActorDirectory } from './actor-directory';
 import { TeamPicker } from '@/components/teams/team-picker';
+import { buildTaskCatalog } from '@/components/views/task-catalog';
+import { buildTaskColumns, TaskTable } from '@/components/views/task-table';
 import { formatCalendarDate } from '@/lib/format-date';
-import { STATE_GROUP_LABEL, STATE_GROUP_ORDER, stateTypeOf } from '@/lib/work-state';
+import { STATE_GROUP_ORDER, stateTypeOf } from '@/lib/work-state';
 
 /** A task enriched with its resolved milestone association. */
 export interface MilestoneTask {
@@ -61,6 +65,8 @@ export interface MilestoneTasksProps {
   onTeamChange: (teamId: string) => void;
   /** Whether the org's teams are still loading (disables the create affordance). */
   teamsLoading: boolean;
+  /** The org id, for building the per-row task-detail link target. */
+  orgId: string;
 }
 
 /** Format an ISO date as a short day, or `null` when absent. */
@@ -87,6 +93,7 @@ export function MilestoneTasks({
   teamId,
   onTeamChange,
   teamsLoading,
+  orgId,
 }: MilestoneTasksProps): JSX.Element {
   const [title, setTitle] = useState('');
 
@@ -108,48 +115,53 @@ export function MilestoneTasks({
     return (id: string): string => byId.get(id) ?? 'Milestone';
   }, [milestones]);
 
-  /** Tasks ordered by milestone, then canonical workflow state. */
-  const orderedTasks = useMemo(() => {
+  /** The shared aligned-column spec, derived from the task catalog (labels stay consistent). */
+  const columns = useMemo(() => {
+    const catalog = buildTaskCatalog({
+      projectLabel: 'Project',
+      programLabel: 'Program',
+      resolveProject: (id) => id,
+      resolveProgram: (id) => id,
+      resolveAssignee: (id) => resolveActor(id).name,
+      assigneeOptions: () => [],
+      projectOptions: () => [],
+      programOptions: () => [],
+    });
+    return buildTaskColumns({ catalog, resolveActor: (id) => resolveActor(id) });
+  }, [resolveActor]);
+
+  /** Tasks bucketed into milestone sections, ordered by milestone then canonical workflow state. */
+  const groups = useMemo<EntityTableGroup<TaskOut>[]>(() => {
     const milestoneOf = (t: MilestoneTask): string => t.milestoneId ?? UNSCHEDULED_ID;
     const stateRank = (t: MilestoneTask): number =>
       STATE_GROUP_ORDER.indexOf(stateTypeOf(t.task.state));
-    return [...tasks].sort((a, b) => {
+    const ordered = [...tasks].sort((a, b) => {
       const ma = milestoneRank.get(milestoneOf(a)) ?? Number.MAX_SAFE_INTEGER;
       const mb = milestoneRank.get(milestoneOf(b)) ?? Number.MAX_SAFE_INTEGER;
       if (ma !== mb) return ma - mb;
       return stateRank(a) - stateRank(b);
     });
-  }, [tasks, milestoneRank]);
 
-  /** Group a task into its milestone section (or the Unscheduled bucket). */
-  const groupBy = useCallback(
-    (t: MilestoneTask): GroupKey =>
-      t.milestoneId
-        ? { id: t.milestoneId, label: milestoneLabel(t.milestoneId) }
-        : { id: UNSCHEDULED_ID, label: 'Unscheduled' },
-    [milestoneLabel],
-  );
-
-  /** Sub-group a task by its canonical workflow-state type. */
-  const subGroupBy = useCallback((t: MilestoneTask): GroupKey => {
-    const stateType = stateTypeOf(t.task.state);
-    return { id: stateType, label: STATE_GROUP_LABEL[stateType], stateType };
-  }, []);
-
-  /** Adapt an enriched task into the design-system row shape, with assignee resolved. */
-  const toRowData = useCallback(
-    (t: MilestoneTask): TaskRowData => {
-      const assignee = t.task.assigneeId ? resolveActor(t.task.assigneeId) : null;
-      return {
-        id: t.task.id,
-        title: t.task.title,
-        stateType: stateTypeOf(t.task.state),
-        assigneeName: assignee?.name ?? null,
-        assigneeKind: assignee?.kind,
-      };
-    },
-    [resolveActor],
-  );
+    // Bucket the (already milestone-then-state ordered) tasks into milestone sections, in the
+    // order their milestone is first encountered (which is the milestone display order above).
+    const byId = new Map<string, TaskOut[]>();
+    const order: string[] = [];
+    for (const entry of ordered) {
+      const id = milestoneOf(entry);
+      let bucket = byId.get(id);
+      if (!bucket) {
+        bucket = [];
+        byId.set(id, bucket);
+        order.push(id);
+      }
+      bucket.push(entry.task);
+    }
+    return order.map((id) => ({
+      id,
+      label: id === UNSCHEDULED_ID ? 'Unscheduled' : milestoneLabel(id),
+      rows: byId.get(id) ?? [],
+    }));
+  }, [tasks, milestoneRank, milestoneLabel]);
 
   function submit(event: React.SyntheticEvent): void {
     event.preventDefault();
@@ -185,28 +197,21 @@ export function MilestoneTasks({
         ) : null}
       </form>
 
-      <div className="border-outline-variant h-[calc(100vh-24rem)] min-h-80 overflow-hidden rounded-xl border">
-        {tasks.length === 0 ? (
-          <div className="text-on-surface-variant p-8 text-center text-sm">
-            No {taskNoun}s yet — add the first one above.
-          </div>
-        ) : (
-          <ListView
-            items={orderedTasks}
-            label="Project tasks by milestone"
-            getItemKey={(t) => t.task.id}
-            rowHeight={40}
-            groupBy={groupBy}
-            subGroupBy={subGroupBy}
-            renderRow={(t, ctx) => (
-              <TaskRow task={toRowData(t)} active={ctx.active} onActivate={ctx.onActivate} />
-            )}
-            onActivateItem={(t) => {
-              onOpenTask(t.task.id);
-            }}
-          />
-        )}
-      </div>
+      {tasks.length === 0 ? (
+        <div className="border-outline-variant text-on-surface-variant rounded-xl border border-dashed p-8 text-center text-sm">
+          No {taskNoun}s yet — add the first one above.
+        </div>
+      ) : (
+        <TaskTable
+          label="Project tasks by milestone"
+          columns={columns}
+          groups={groups}
+          taskHref={(task) => `/orgs/${orgId}/tasks/${task.id}`}
+          onOpenTask={(task) => {
+            onOpenTask(task.id);
+          }}
+        />
+      )}
     </div>
   );
 }

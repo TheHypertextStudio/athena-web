@@ -49,6 +49,16 @@ export const CycleOut = z
     startsAt: z.string(),
     endsAt: z.string(),
     status: CycleStatus,
+    /**
+     * Whether today falls within this cycle's `[startsAt, endsAt]` window.
+     *
+     * @remarks
+     * Date-derived "current" cycle (DECISION: cycles auto-roll on a configurable cadence,
+     * so the current cycle is whichever window contains today, not a manually-set status).
+     * The Logic phase computes and populates this; reads that don't resolve a window may
+     * omit it.
+     */
+    isCurrent: z.boolean().optional(),
     createdAt: z.string(),
   })
   .meta({ id: 'CycleOut', description: 'A cycle.' });
@@ -91,6 +101,42 @@ export const CycleDetail = CycleOut.extend({
 }).meta({ id: 'CycleDetail', description: 'A cycle with its rolled-up stats.' });
 /** Detailed cycle representation value. */
 export type CycleDetail = z.infer<typeof CycleDetail>;
+
+/** Query for the rolling-window / current-cycle read (which team's window to resolve). */
+export const CycleWindowQuery = z
+  .object({
+    teamId: TeamId,
+  })
+  .meta({ id: 'CycleWindowQuery', description: "Which team's cycle window to resolve." });
+/** Validated cycle-window query value. */
+export type CycleWindowQuery = z.infer<typeof CycleWindowQuery>;
+
+/**
+ * The auto-rolled cycle window for a team: the rolling set of cycles around today
+ * plus the date-derived current cycle.
+ *
+ * @remarks
+ * DECISION: cycles auto-roll on a configurable cadence (`team.cycle_cadence_weeks`,
+ * default 1 = weekly), so the user never creates cycles by hand. This read lazily
+ * ensures a rolling window of cycles exists (a few past + the current + a few
+ * upcoming, anchored to a week-aligned start stepping by the team's cadence), then
+ * returns them with the `current` cycle broken out. `current` is whichever window
+ * contains today (`startsAt <= now <= endsAt`); each cycle in `cycles` carries an
+ * `isCurrent` flag for the same derivation. `cadenceWeeks` echoes the team's setting.
+ */
+export const CycleWindow = z
+  .object({
+    teamId: TeamId,
+    cadenceWeeks: z.number().int(),
+    current: CycleOut.nullable(),
+    cycles: z.array(CycleOut),
+  })
+  .meta({
+    id: 'CycleWindow',
+    description: "A team's rolling cycle window with its current cycle.",
+  });
+/** Cycle window value. */
+export type CycleWindow = z.infer<typeof CycleWindow>;
 
 /** How a cycle's committed tasks are grouped on the detail screen. */
 export const CycleTaskGroupBy = z.enum(['project', 'program']);

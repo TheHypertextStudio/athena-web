@@ -823,14 +823,12 @@ describe('hydrated resources', () => {
       parentTaskId: s.taskId,
       createdBy: s.actorId,
     });
-    await db
-      .insert(schema.milestone)
-      .values({
-        organizationId: s.orgId,
-        projectId: s.projectId,
-        name: 'M1',
-        createdBy: s.actorId,
-      });
+    await db.insert(schema.milestone).values({
+      organizationId: s.orgId,
+      projectId: s.projectId,
+      name: 'M1',
+      createdBy: s.actorId,
+    });
     await db.insert(schema.initiativeProject).values({
       organizationId: s.orgId,
       initiativeId: s.initiativeId,
@@ -1139,5 +1137,40 @@ describe('trigger_agent with a prompt argument', () => {
         ),
       );
     expect(sessions[0]?.status).toBe('pending');
+  });
+
+  it('threads the prompt through as the session’s opening response activity', async () => {
+    const s = await seedOrg(['contribute']);
+    const client = await connect(s.ctx);
+    // Task-less trigger: the prompt is the only brief available to the run.
+    const res = (await client.callTool({
+      name: 'trigger_agent',
+      arguments: { orgId: s.orgId, agentId: s.agentId, prompt: 'plan outreach strategy' },
+    })) as CallToolResult;
+    expect(res.isError).toBeFalsy();
+    const sessionId = payload(res)['id'] as string;
+
+    const activities = await db
+      .select()
+      .from(schema.sessionActivity)
+      .where(eq(schema.sessionActivity.sessionId, sessionId));
+    expect(activities).toHaveLength(1);
+    expect(activities[0]?.type).toBe('response');
+    expect(activities[0]?.body).toMatchObject({ text: 'plan outreach strategy' });
+  });
+
+  it('persists no prompt activity when none is supplied', async () => {
+    const s = await seedOrg(['contribute']);
+    const client = await connect(s.ctx);
+    const res = (await client.callTool({
+      name: 'trigger_agent',
+      arguments: { orgId: s.orgId, agentId: s.agentId, taskId: s.taskId },
+    })) as CallToolResult;
+    const sessionId = payload(res)['id'] as string;
+    const activities = await db
+      .select()
+      .from(schema.sessionActivity)
+      .where(eq(schema.sessionActivity.sessionId, sessionId));
+    expect(activities).toHaveLength(0);
   });
 });

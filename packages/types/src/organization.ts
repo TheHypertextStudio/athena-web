@@ -26,6 +26,8 @@ export const OrgCreate = z
   .object({
     /** Display name. Required for team orgs; optional for personal spaces (defaults to `'Personal'`). */
     name: z.string().min(1).optional(),
+    /** A short statement of what the organization is for; backs the create-org form (name + purpose). */
+    purpose: z.string().optional(),
     slug: z.string().min(1).optional(),
     vocabulary: z.enum(['startup', 'nonprofit', 'agency']).default('startup'),
     /** When true, create a personal space (org-of-one, `is_personal: true`). */
@@ -52,6 +54,7 @@ export const OrgOut = z
     id: OrganizationId,
     name: z.string(),
     slug: z.string(),
+    purpose: z.string().nullable().optional(),
     avatar: z.string().nullable().optional(),
     isPersonal: z.boolean(),
     vocabulary: VocabularySkin,

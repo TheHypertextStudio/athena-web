@@ -30,6 +30,7 @@ import {
   AgentSessionOut,
   pageOf,
   SessionActivityOut,
+  SessionFromPromptBody,
   SessionReplyBody,
   SessionStatus,
 } from '@docket/types';
@@ -43,6 +44,7 @@ import { z } from 'zod';
 import type { AppEnv } from '../context';
 import { getContainer } from '../container';
 import { ConflictError, NotFoundError } from '../error';
+import { ensureDefaultAgent } from '../lib/default-agent';
 import { ok } from '../lib/ok';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
@@ -98,6 +100,12 @@ const agentSessions = new Hono<AppEnv>()
       .where(where)
       .orderBy(desc(agentSession.createdAt));
     return ok(c, pageOf(AgentSessionOut), { items: rows.map(toSessionOut) });
+  })
+  .post('/', capabilityGuard('contribute'), zJson(SessionFromPromptBody), async (c) => {
+    const { orgId, actorId } = c.get('actorCtx');
+    const { prompt, agentId } = c.req.valid('json');
+    const settled = await createAndRunFromPrompt(orgId, actorId, prompt, agentId);
+    return ok(c, AgentSessionOut, toSessionOut(settled));
   })
   .get('/:id', zParam(idParam), async (c) => {
     const { orgId } = c.get('actorCtx');
@@ -275,6 +283,72 @@ function toActivityBody(activity: SessionActivity): SessionActivityBody {
 }
 
 /**
+ * Create a session bound to an agent from a freeform prompt, then run it.
+ *
+ * @remarks
+ * The UI-callable "ask Athena to plan" escalation (DECISION: hybrid prompt→Athena). The
+ * session binds to the supplied `agentId` (validated in-org) or — when omitted — the
+ * org's lazily-resolved default agent, so escalation works with no agent pre-setup. The
+ * prompt is persisted as the session's first `response` activity (there is no schema
+ * brief column) so {@link runSession} threads it through as the runtime `task` brief;
+ * the session then runs and settles like any other. Trigger is `delegation` (a human
+ * delegating planning to the agent), matching `trigger_agent`'s default.
+ *
+ * @param orgId - The active organization id.
+ * @param actorId - The caller's actor id (the session initiator + prompt author).
+ * @param prompt - The freeform brief the agent should plan against.
+ * @param agentId - An explicit agent to bind to; the default agent is used when omitted.
+ * @returns the settled session row.
+ * @throws {NotFoundError} When an explicit `agentId` is not a registered agent in the org.
+ */
+async function createAndRunFromPrompt(
+  orgId: string,
+  actorId: string,
+  prompt: string,
+  agentId?: string,
+): Promise<SessionRow> {
+  let boundAgentId: string;
+  if (agentId !== undefined) {
+    const agentRows = await db
+      .select({ id: agent.id })
+      .from(agent)
+      .where(and(eq(agent.id, agentId), eq(agent.organizationId, orgId)))
+      .limit(1);
+    if (!agentRows[0]) throw new NotFoundError('Agent not found');
+    boundAgentId = agentRows[0].id;
+  } else {
+    boundAgentId = (await ensureDefaultAgent(orgId, actorId)).id;
+  }
+
+  const sessionId = await db.transaction(async (tx) => {
+    const [created] = await tx
+      .insert(agentSession)
+      .values({
+        organizationId: orgId,
+        agentId: boundAgentId,
+        trigger: 'delegation',
+        status: 'pending',
+        initiatorId: actorId,
+      })
+      .returning({ id: agentSession.id });
+    /* v8 ignore next -- @preserve defensive: insert always returns a row */
+    if (!created) throw new Error('session insert returned no row');
+
+    // Persist the freeform prompt as the session's first activity so the brief survives
+    // to `runSession` (a `response` is a human-authored stream entry, like a reply).
+    await tx.insert(sessionActivity).values({
+      sessionId: created.id,
+      organizationId: orgId,
+      type: 'response',
+      body: { text: prompt },
+    });
+    return created.id;
+  });
+
+  return runSession(orgId, sessionId);
+}
+
+/**
  * Run a hosted session against the container's {@link AgentRuntime}.
  *
  * @remarks
@@ -313,6 +387,11 @@ async function runSession(orgId: string, sessionId: string): Promise<SessionRow>
   const agentRow = agentRows[0];
   if (!agentRow) throw new NotFoundError('Agent not found');
 
+  // Derive the brief the runtime works on: a linked task's title when the session is
+  // task-bound, else the freeform prompt the session was seeded with (a `response`
+  // activity authored at create time — the "ask Athena to plan" / trigger_agent prompt),
+  // else the session id as a last resort. This is how a freeform prompt reaches
+  // `startSession.task` with no schema brief column.
   let taskBrief = sessionId;
   if (session.taskId) {
     const taskRows = await db
@@ -321,6 +400,15 @@ async function runSession(orgId: string, sessionId: string): Promise<SessionRow>
       .where(and(eq(task.id, session.taskId), eq(task.organizationId, orgId)))
       .limit(1);
     if (taskRows[0]) taskBrief = taskRows[0].title;
+  } else {
+    const promptRows = await db
+      .select({ body: sessionActivity.body })
+      .from(sessionActivity)
+      .where(and(eq(sessionActivity.sessionId, sessionId), eq(sessionActivity.type, 'response')))
+      .orderBy(asc(sessionActivity.createdAt))
+      .limit(1);
+    const promptText = promptRows[0]?.body.text;
+    if (promptText) taskBrief = promptText;
   }
 
   await db

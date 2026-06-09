@@ -3,6 +3,7 @@ import type { JSX } from 'react';
 
 import { CtaBand } from '@/components/marketing/cta-band';
 
+/** About page metadata. */
 export const metadata: Metadata = {
   title: 'About',
   description:
@@ -32,6 +33,7 @@ const PRINCIPLES: readonly Principle[] = [
     body: 'Agents are teammates you can hand work to and supervise — never a black box. You always see the steps and approve what matters.',
   },
 ];
+/** About page. */
 
 export default function AboutPage(): JSX.Element {
   return (

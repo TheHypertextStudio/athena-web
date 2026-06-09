@@ -212,7 +212,7 @@ export default function CyclesPage(): JSX.Element {
                 <div className="flex items-center gap-2">
                   <h2
                     id={`cycles-${segment}`}
-                    className="text-on-surface-variant text-xs font-medium tracking-wide uppercase"
+                    className="text-on-surface-variant text-xs font-medium"
                   >
                     {SEGMENT_LABEL[segment]}
                   </h2>

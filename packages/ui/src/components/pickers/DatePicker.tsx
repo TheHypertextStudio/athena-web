@@ -15,9 +15,21 @@
 import * as React from 'react';
 
 import { Calendar } from '../../icons';
-import { Button, Popover, PopoverContent, PopoverTrigger } from '../../primitives';
+import { cn } from '../../lib/utils';
+import { Button, focusRing, Popover, PopoverContent, PopoverTrigger } from '../../primitives';
 
 import { PropertyTrigger } from './PropertyTrigger';
+
+/**
+ * Shared class for the native `<input type="date">` fields inside the date popovers.
+ *
+ * @remarks
+ * A boxed field with breathing room (not a packed row), so it composes the standalone
+ * {@link focusRing} rather than a hand-written ring. The 36px height + `px-3` matches the
+ * standard interactive control rhythm.
+ */
+const DATE_FIELD_CLASS =
+  'border-outline-variant text-on-surface h-9 rounded-md border bg-transparent px-3 text-sm';
 
 /** Default short, locale-aware label for an ISO `YYYY-MM-DD` date, or `undefined` when absent. */
 function defaultFormat(value: string | null): string | undefined {
@@ -100,7 +112,7 @@ export function DatePicker({
             onChange={(event) => {
               onChange(event.target.value === '' ? null : event.target.value);
             }}
-            className="border-outline-variant text-on-surface focus-visible:ring-ring h-9 rounded-md border bg-transparent px-3 text-sm focus-visible:ring-1 focus-visible:outline-none"
+            className={cn(DATE_FIELD_CLASS, focusRing)}
           />
           {value ? (
             <Button
@@ -216,7 +228,7 @@ export function DateRangePicker({
                   start: event.target.value === '' ? null : event.target.value,
                 });
               }}
-              className="border-outline-variant text-on-surface focus-visible:ring-ring h-9 rounded-md border bg-transparent px-3 text-sm focus-visible:ring-1 focus-visible:outline-none"
+              className={cn(DATE_FIELD_CLASS, focusRing)}
             />
           </label>
           <label className="text-on-surface-variant flex flex-col gap-1 text-xs font-medium">
@@ -229,7 +241,7 @@ export function DateRangePicker({
               onChange={(event) => {
                 onChange({ ...value, end: event.target.value === '' ? null : event.target.value });
               }}
-              className="border-outline-variant text-on-surface focus-visible:ring-ring h-9 rounded-md border bg-transparent px-3 text-sm focus-visible:ring-1 focus-visible:outline-none"
+              className={cn(DATE_FIELD_CLASS, focusRing)}
             />
           </label>
           {value.start || value.end ? (

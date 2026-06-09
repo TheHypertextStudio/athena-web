@@ -17,11 +17,12 @@
 import * as React from 'react';
 
 import { cn } from '../../lib/utils';
+import { focusRingInset } from '../../primitives/focus';
 import { ActorAvatar, type ActorKind } from '../atoms/ActorAvatar';
 import { StatusIcon, type WorkflowStateType } from '../atoms/StatusIcon';
 
 /** Props for {@link ListRow}. */
-export interface ListRowProps {
+export interface ListRowProps extends React.ComponentPropsWithoutRef<'div'> {
   /** The row's cells, each typically a {@link ListCell} (`role="gridcell"`). */
   children: React.ReactNode;
   /** Whether the row is the active (keyboard-focused) row. */
@@ -68,17 +69,23 @@ export function ListCell({ children, className }: ListCellProps): React.JSX.Elem
  * Activating the row (click or Enter handled by the row's `onKeyDown`)
  * calls `onActivate`. Keyboard *navigation between* rows is owned by `useListKeyboard` at
  * the {@link ListView} level; this row only handles its own activation.
+ *
+ * Density is the shared row rhythm — `min-h-9 px-3 py-1.5 gap-2` (36px tall) — so a virtualized
+ * task list and a plain {@link EntityListRow} entity list read as the same component family. The
+ * keyboard-focus treatment is the dense-row {@link focusRingInset} so adjacent flush rows never
+ * collide rings.
+ *
+ * It forwards its ref and spreads any extra DOM props onto the row `<div>`, so it can serve as a
+ * `ContextMenuTrigger asChild` child (right-click row actions) without an extra wrapper element —
+ * keeping the virtualized list's row measurement intact.
  */
-export function ListRow({
-  children,
-  active = false,
-  selected = false,
-  onActivate,
-  tabIndex = -1,
-  className,
-}: ListRowProps): React.JSX.Element {
+export const ListRow = React.forwardRef<HTMLDivElement, ListRowProps>(function ListRow(
+  { children, active = false, selected = false, onActivate, tabIndex = -1, className, ...rest },
+  ref,
+): React.JSX.Element {
   return (
     <div
+      ref={ref}
       role="row"
       aria-selected={selected}
       data-active={active ? '' : undefined}
@@ -90,9 +97,11 @@ export function ListRow({
           onActivate?.();
         }
       }}
+      {...rest}
       className={cn(
-        'border-outline-variant flex h-full w-full cursor-pointer items-center gap-2 border-b px-3 text-sm transition-colors outline-none',
-        'hover:bg-surface-container-high focus-visible:bg-surface-container-high focus-visible:ring-ring focus-visible:ring-1 focus-visible:ring-inset',
+        'border-outline-variant flex min-h-9 w-full cursor-pointer items-center gap-2 border-b px-3 py-1.5 text-sm transition-colors outline-none',
+        'hover:bg-surface-container-high focus-visible:bg-surface-container-high',
+        focusRingInset,
         active && 'bg-surface-container-highest',
         selected && 'bg-surface-container-highest',
         className,
@@ -101,7 +110,7 @@ export function ListRow({
       {children}
     </div>
   );
-}
+});
 
 /** The minimal task shape the {@link TaskRow} preset renders. */
 export interface TaskRowData {

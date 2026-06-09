@@ -1,9 +1,10 @@
 import '@testing-library/jest-dom/vitest';
 
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 
 import { ActorAvatar, type ActorKind } from '../../../src/components/atoms/ActorAvatar';
+import { EmptyState } from '../../../src/components/atoms/EmptyState';
 import {
   StatusIcon,
   STATE_TYPE_TOKEN_CLASS,
@@ -80,5 +81,52 @@ describe('ActorAvatar', () => {
     const box = screen.getByLabelText('Ops');
     expect(box).toHaveStyle({ height: '32px', width: '32px' });
     expect(box).toHaveClass('extra-cls');
+  });
+});
+
+describe('EmptyState', () => {
+  it('renders the title and body with a default neutral glyph disc when no icon is given', () => {
+    const { container } = render(<EmptyState title="Nothing yet" body="It will show up here." />);
+    expect(screen.getByText('Nothing yet')).toBeInTheDocument();
+    expect(screen.getByText('It will show up here.')).toBeInTheDocument();
+    // The default glyph still renders (so an omitted icon reads as intentional).
+    expect(container.querySelector('svg')).toBeInTheDocument();
+    expect(container.querySelector('[aria-hidden="true"]')).toHaveClass(
+      'bg-surface-container-high',
+    );
+  });
+
+  it('renders a primary action button from the cta and fires its onClick', () => {
+    const onClick = vi.fn();
+    render(
+      <EmptyState
+        title="No projects yet"
+        body="Create one to get started."
+        cta={{ label: 'Create your first project', onClick }}
+      />,
+    );
+    const button = screen.getByRole('button', { name: 'Create your first project' });
+    fireEvent.click(button);
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('tints the glyph disc for a positive tone', () => {
+    const { container } = render(
+      <EmptyState tone="positive" title="Inbox zero" body="Nothing needs you." />,
+    );
+    expect(container.querySelector('[aria-hidden="true"]')).toHaveClass('text-state-completed');
+  });
+
+  it('renders a custom action node and merges a className override', () => {
+    render(
+      <EmptyState
+        title="Framed"
+        body="Already inside a bordered panel."
+        className="border-none"
+        action={<a href="/learn">Learn more</a>}
+      />,
+    );
+    expect(screen.getByRole('link', { name: 'Learn more' })).toBeInTheDocument();
+    expect(screen.getByText('Framed').parentElement).toHaveClass('border-none');
   });
 });

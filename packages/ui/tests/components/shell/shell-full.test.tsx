@@ -417,8 +417,8 @@ describe('Sidebar', () => {
     for (const link of screen.getAllByRole('link')) {
       expect(link.getAttribute('href')).not.toContain('/orgs/null');
     }
-    // The Workspace section degrades to a placeholder rather than emitting bad hrefs.
-    expect(screen.getByText('No workspace yet.')).toBeInTheDocument();
+    // The Workspace section degrades to a calm empty treatment rather than emitting bad hrefs.
+    expect(screen.getByText('No workspace yet')).toBeInTheDocument();
   });
 });
 
@@ -536,7 +536,7 @@ describe('TabBar', () => {
     expect(onClose).toHaveBeenCalledWith(TAB_B.key);
   });
 
-  it('is its own bar on the canvas, with the active tab fused to the main panel surface', () => {
+  it('is its own bar on the canvas, with each tab a detached floating pill', () => {
     const { container } = render(
       <TabBar
         tabs={[TAB_A, TAB_B]}
@@ -549,13 +549,24 @@ describe('TabBar', () => {
     const bar = container.firstElementChild as HTMLElement;
     expect(bar).toHaveClass('bg-surface-container');
     expect(bar).not.toHaveClass('bg-card', 'border-b');
-    // The active tab takes the panel surface tone with top-only rounding so it joins the panel
-    // below; the inactive tab stays on the canvas in the muted on-surface-variant tone.
-    const activeTab = screen.getByText('Q3 Launch').closest('[role="tab"]');
-    expect(activeTab).toHaveClass('bg-surface', 'rounded-t-lg', 'text-on-surface');
-    const inactiveTab = screen.getByText('Fix the build').closest('[role="tab"]');
+    // Every tab is a fully-rounded floating pill, NOT welded to the panel below: no top-only
+    // rounding, no self-stretch, no panel surface fill.
+    const activeTab = screen.getByText('Q3 Launch').closest<HTMLElement>('[role="tab"]')!;
+    const inactiveTab = screen.getByText('Fix the build').closest<HTMLElement>('[role="tab"]')!;
+    for (const tab of [activeTab, inactiveTab]) {
+      expect(tab).toHaveClass('rounded-lg');
+      expect(tab).not.toHaveClass('rounded-t-lg', 'self-stretch', 'bg-surface');
+    }
+    // The active pill is lifted: a stepped-up container fill plus a ring + shadow, inked in
+    // on-surface; the inactive pill stays transparent and calm in the muted on-surface-variant.
+    expect(activeTab).toHaveClass(
+      'bg-surface-container-highest',
+      'ring-1',
+      'shadow-sm',
+      'text-on-surface',
+    );
     expect(inactiveTab).toHaveClass('text-on-surface-variant');
-    expect(inactiveTab).not.toHaveClass('bg-surface');
+    expect(inactiveTab).not.toHaveClass('bg-surface-container-highest', 'ring-1', 'shadow-sm');
   });
 
   it('gives each tab a fixed width with a flexing, truncating title and a right-pinned close', () => {

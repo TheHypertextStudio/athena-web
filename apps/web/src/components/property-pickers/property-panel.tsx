@@ -7,8 +7,8 @@
  * Directive A: a detail surface's property rail must read as a complete, scannable list where
  * every property is an *interactive* affordance — never a dead "Not set" row. This is the
  * common chrome the project / program / initiative / cycle detail panels share: a calm bordered
- * card titled "Properties", a stack of {@link PropertyPanelRow}s (a muted icon + uppercase label
- * gutter, then the value), with a hairline between rows. The value slot hosts an inline picker
+ * card titled "Properties", a stack of {@link PropertyPanelRow}s (a muted icon + a calm field
+ * label gutter, then the value), with a hairline between rows. The value slot hosts an inline picker
  * trigger (ghost weight) so an empty property renders as a calm "Set <field>" prompt that opens
  * a picker, and a set property renders its value chip — both clickable unless the row is
  * capability-gated read-only, in which case the picker itself renders plain text.
@@ -48,7 +48,7 @@ export function PropertyPanel({ children, className }: PropertyPanelProps): JSX.
 export interface PropertyPanelRowProps {
   /** The leading field glyph (a muted MUI icon). */
   icon: ReactNode;
-  /** The uppercase field label (e.g. "Lead", "Timeline"). */
+  /** The field label (e.g. "Lead", "Timeline"). */
   label: string;
   /** The value slot — typically an inline picker trigger. */
   children: ReactNode;
@@ -57,7 +57,7 @@ export interface PropertyPanelRowProps {
 }
 
 /**
- * One labeled property row: a muted icon + uppercase label, then an interactive value slot.
+ * One labeled property row: a muted icon + a calm field label, then an interactive value slot.
  *
  * @remarks
  * The value slot is left-padded to align with picker triggers (which carry their own
@@ -80,9 +80,7 @@ export function PropertyPanelRow({
           {icon}
         </span>
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="text-on-surface-variant text-xs font-medium tracking-wide uppercase">
-            {label}
-          </span>
+          <span className="text-on-surface-variant text-xs font-medium">{label}</span>
           <div className="text-on-surface -ml-2 min-w-0 text-sm">{children}</div>
         </div>
       </div>

@@ -310,9 +310,7 @@ export function Roadmap({
 
         {unscheduled.length > 0 ? (
           <div className="flex flex-col gap-2">
-            <h3 className="text-on-surface-variant text-xs font-medium tracking-wide uppercase">
-              Unscheduled
-            </h3>
+            <h3 className="text-on-surface-variant text-xs font-medium">Unscheduled</h3>
             <ul className="flex flex-wrap gap-2">
               {unscheduled.map((bar) => (
                 <li key={bar.id}>

@@ -99,9 +99,7 @@ export function ActivityItem({
 
       <div className="flex min-w-0 flex-1 flex-col gap-1.5 pb-1">
         <div className="flex items-center gap-2">
-          <span className="text-on-surface-variant text-xs font-medium tracking-wide uppercase">
-            {badge.label}
-          </span>
+          <span className="text-on-surface-variant text-xs font-medium">{badge.label}</span>
           <span className="text-on-surface-variant/70 text-xs">
             {relativeTime(activity.createdAt)}
           </span>
@@ -183,9 +181,7 @@ function ActionBody({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-1">
-          <code className="text-on-surface-variant text-[0.6875rem] tracking-wide uppercase">
-            {kind}
-          </code>
+          <code className="text-on-surface-variant text-xs">{kind}</code>
           <p className="text-on-surface text-sm leading-relaxed">{summary}</p>
         </div>
         <ApprovalStatusBadge status={approvalStatus} />

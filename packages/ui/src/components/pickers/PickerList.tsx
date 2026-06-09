@@ -16,6 +16,7 @@ import * as React from 'react';
 
 import { Check, Search, X } from '../../icons';
 import { cn } from '../../lib/utils';
+import { focusRingInset } from '../../primitives';
 
 import { type PickerOption, optionMatches } from './types';
 
@@ -142,8 +143,8 @@ export function PickerList<TValue extends string = string>({
   return (
     <div className="flex flex-col">
       {searchable ? (
-        <div className="border-outline-variant flex items-center gap-2 border-b px-2.5 py-1.5">
-          <Search aria-hidden="true" className="text-on-surface-variant size-4 shrink-0" />
+        <div className="border-outline-variant flex items-center gap-2 border-b px-2 py-1.5">
+          <Search aria-hidden="true" className="text-on-surface-variant size-3.5 shrink-0" />
           <input
             // A bare input (not the boxed Input primitive) so the search field reads as part
             // of the popover chrome, like Linear's command-style pickers.
@@ -174,7 +175,10 @@ export function PickerList<TValue extends string = string>({
         className="max-h-64 overflow-y-auto p-1"
       >
         {rows.length === 0 ? (
-          <li className="text-on-surface-variant px-2 py-3 text-center text-sm">{emptyText}</li>
+          <li className="flex flex-col items-center gap-1.5 px-2 py-6 text-center">
+            <Search aria-hidden="true" className="text-on-surface-variant size-5 opacity-40" />
+            <span className="text-on-surface-variant text-sm">{emptyText}</span>
+          </li>
         ) : (
           rows.map((row, index) => {
             const active = index === activeIndex;
@@ -190,11 +194,12 @@ export function PickerList<TValue extends string = string>({
                       setActiveIndex(index);
                     }}
                     className={cn(
-                      'text-on-surface-variant flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm outline-none',
+                      'text-on-surface-variant flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm',
+                      focusRingInset,
                       active && 'bg-surface-container-highest',
                     )}
                   >
-                    <X aria-hidden="true" className="size-4 shrink-0 opacity-70" />
+                    <X aria-hidden="true" className="size-3.5 shrink-0 opacity-70" />
                     <span className="truncate">{clear?.label}</span>
                   </button>
                 </li>
@@ -215,16 +220,16 @@ export function PickerList<TValue extends string = string>({
                     setActiveIndex(index);
                   }}
                   className={cn(
-                    'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm outline-none',
+                    'text-on-surface flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm',
                     'disabled:pointer-events-none disabled:opacity-50',
+                    focusRingInset,
                     active && 'bg-surface-container-highest',
-                    chosen ? 'text-on-surface' : 'text-on-surface',
                   )}
                 >
                   {option.icon ? (
                     <span
                       aria-hidden="true"
-                      className="flex size-4 shrink-0 items-center justify-center"
+                      className="flex size-3.5 shrink-0 items-center justify-center"
                     >
                       {option.icon}
                     </span>
@@ -236,7 +241,10 @@ export function PickerList<TValue extends string = string>({
                     </span>
                   ) : null}
                   {chosen ? (
-                    <Check aria-hidden="true" className="text-on-surface-variant size-4 shrink-0" />
+                    <Check
+                      aria-hidden="true"
+                      className="text-on-surface-variant size-3.5 shrink-0"
+                    />
                   ) : null}
                 </button>
               </li>

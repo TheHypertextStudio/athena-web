@@ -18,7 +18,7 @@ import * as React from 'react';
 
 import type { LucideIcon } from '../../icons';
 import { cn } from '../../lib/utils';
-import { Button } from '../../primitives';
+import { Button, focusRingInset } from '../../primitives';
 
 /** Props for {@link SidebarNavItem}. */
 export interface SidebarNavItemProps {
@@ -82,11 +82,17 @@ export function SidebarNavItem({
 }: SidebarNavItemProps): React.JSX.Element {
   const count = badge && badge > 0 ? badge : 0;
   const accessibleName = count > 0 ? `${label}, ${count} ${badgeLabel}` : label;
+  // A dense, edge-to-edge sidebar row: `px-3 gap-2` matches the standard row rhythm, the label
+  // reads at `text-sm` (overriding Button `size="sm"`'s `text-xs`), and the inline glyph drops to
+  // `size-3.5` (overriding the Button's baked-in `[&_svg]:size-4`) so it sits optically balanced
+  // beside the label. `focusRingInset` swaps the Button's standalone 2px ring for the 1px inset
+  // ring so adjacent flush rows never clip an overlapping outline.
   const className = cn(
-    'w-full justify-start gap-2 px-2 font-normal',
+    'w-full justify-start gap-2 px-3 text-sm font-normal [&_svg]:size-3.5',
     active
       ? 'bg-surface-container-highest text-on-surface'
       : 'text-on-surface-variant hover:text-on-surface',
+    focusRingInset,
   );
 
   if (asChild) {
@@ -114,7 +120,7 @@ export function SidebarNavItem({
       onClick={onSelect}
       className={className}
     >
-      {Icon ? <Icon aria-hidden="true" className="size-4 shrink-0" /> : null}
+      {Icon ? <Icon aria-hidden="true" className="size-3.5 shrink-0" /> : null}
       <span className="truncate">{label}</span>
       {count > 0 ? <NavBadge count={count} /> : null}
     </Button>

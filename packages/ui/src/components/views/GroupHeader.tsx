@@ -12,11 +12,16 @@
  *
  * Both {@link ListGroup} and {@link ListSubGroup} render through this component; `level`
  * adjusts the indentation so nested sub-groups read as subordinate.
+ *
+ * Density follows the shared row rhythm — `h-9 px-3 gap-2`, a real `text-sm font-medium` title
+ * (never an uppercase / `tracking-wide` eyebrow), and the inset keyboard-focus ring
+ * ({@link focusRingInset}) so a focused header rings exactly like the data rows beneath it.
  */
 import * as React from 'react';
 
 import { ChevronDown, ChevronRight } from '../../icons';
 import { cn } from '../../lib/utils';
+import { focusRingInset } from '../../primitives/focus';
 
 /** Props for {@link GroupHeader}. */
 export interface GroupHeaderProps {
@@ -59,7 +64,8 @@ export function GroupHeader({
       aria-expanded={expanded}
       data-level={level}
       className={cn(
-        'border-outline-variant bg-surface-container text-on-surface hover:bg-surface-container-high flex h-full w-full cursor-pointer items-center gap-1.5 border-b px-3 text-sm font-medium transition-colors select-none',
+        'border-outline-variant bg-surface-container text-on-surface hover:bg-surface-container-high flex h-9 w-full cursor-pointer items-center gap-2 border-b px-3 text-sm font-medium transition-colors outline-none select-none',
+        focusRingInset,
         className,
       )}
       onClick={onToggle}
@@ -71,7 +77,7 @@ export function GroupHeader({
       }}
       style={level > 0 ? { paddingLeft: `${String(level * 1.25 + 0.5)}rem` } : undefined}
     >
-      <Chevron aria-hidden="true" className="text-on-surface-variant h-4 w-4 shrink-0" />
+      <Chevron aria-hidden="true" className="text-on-surface-variant size-3.5 shrink-0" />
       {decoration ? <span className="flex shrink-0 items-center">{decoration}</span> : null}
       <span className="truncate">{label}</span>
       {typeof count === 'number' ? (

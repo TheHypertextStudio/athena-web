@@ -11,6 +11,11 @@
  * still gets the `started` treatment. Colors come exclusively from the `--color-state-*`
  * design tokens in `@docket/ui/styles/globals.css` via the `text-state-*` utility classes —
  * never hardcoded.
+ *
+ * The glyph renders at the inline-row size (`size-3.5`, 14px) so it reads as optically congruent
+ * beside the ~13px (`text-xs`/`text-sm`) labels in list rows, group headers, and pickers — never
+ * the oversized 16px the design-system review flagged. Callers may override the glyph size with a
+ * `[&>svg]:size-*` utility in `className` when a larger accent is warranted.
  */
 import * as React from 'react';
 
@@ -86,12 +91,12 @@ export function StatusIcon({ type, label, className }: StatusIconProps): React.J
       aria-label={label ?? type}
       data-state-type={type}
       className={cn(
-        'inline-flex shrink-0 items-center justify-center',
+        'inline-flex shrink-0 items-center justify-center [&>svg]:size-3.5',
         STATE_TYPE_TOKEN_CLASS[type],
         className,
       )}
     >
-      <Glyph className="h-4 w-4" />
+      <Glyph />
     </span>
   );
 }

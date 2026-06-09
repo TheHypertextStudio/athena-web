@@ -291,7 +291,7 @@ export default function ViewsPage(): JSX.Element {
         <div className="flex flex-col gap-6">
           <section aria-label="Saved views" className="flex flex-col gap-3">
             <div className="flex items-center justify-between gap-3">
-              <h2 className="text-on-surface-variant text-xs font-medium tracking-wide uppercase">
+              <h2 className="text-on-surface-variant text-xs font-medium">
                 {views.length === 0 ? 'No saved views yet' : `${String(views.length)} saved`}
               </h2>
             </div>

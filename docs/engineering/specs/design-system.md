@@ -407,7 +407,7 @@ Rules: **no decorative motion.** Group collapse animates height/opacity; Cmd+K f
 
 ```css
 @import '@docket/ui/styles/globals.css'; /* the file in §1 */
-@source "../../packages/ui/src/**/*.{ts,tsx}"; /* v4 content detection across the workspace */
+@source '../../packages/ui/src/**/*.{ts,tsx}'; /* v4 content detection across the workspace */
 ```
 
 ### 2.3 Theme provider (dark/light)

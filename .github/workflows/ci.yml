@@ -36,7 +36,7 @@ jobs:
           key: turbo-quality-${{ runner.os }}-${{ github.sha }}
           restore-keys: turbo-quality-${{ runner.os }}-
 
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install
 
       - run: pnpm turbo run lint typecheck --cache-dir=.turbo
 
@@ -65,7 +65,7 @@ jobs:
           key: turbo-test-${{ runner.os }}-${{ github.sha }}
           restore-keys: turbo-test-${{ runner.os }}-
 
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install
 
       - run: pnpm turbo run test --cache-dir=.turbo
 

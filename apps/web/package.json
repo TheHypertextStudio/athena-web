@@ -6,7 +6,7 @@
   "license": "UNLICENSED",
   "description": "The Docket product application.",
   "portless": {
-    "name": "web.docket",
+    "name": "docket",
     "script": "dev:app"
   },
   "scripts": {

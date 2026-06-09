@@ -403,7 +403,7 @@ DATABASE_URL_UNPOOLED=postgres://docket:docket@localhost:5433/docket
 # Auth
 BETTER_AUTH_SECRET=${authSecret}
 BETTER_AUTH_URL=https://api.docket.localhost
-BETTER_AUTH_TRUSTED_ORIGINS=https://web.docket.localhost,https://admin.docket.localhost
+BETTER_AUTH_TRUSTED_ORIGINS=https://docket.localhost,https://admin.docket.localhost
 BETTER_AUTH_PASSKEY_RP_ID=docket.localhost
 BETTER_AUTH_PASSKEY_RP_NAME=Docket (local)
 
@@ -415,7 +415,7 @@ MCP_CIMD_STRICT=false
 
 # Client (picked up by Next.js apps)
 NEXT_PUBLIC_API_URL=https://api.docket.localhost
-NEXT_PUBLIC_APP_URL=https://web.docket.localhost
+NEXT_PUBLIC_APP_URL=https://docket.localhost
 `;
 
   writeFileSync(envPath, content, 'utf8');

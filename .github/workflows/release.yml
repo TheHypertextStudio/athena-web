@@ -25,7 +25,7 @@ jobs:
         with:
           node-version-file: '.node-version'
       - run: corepack enable
-      - run: pnpm install
+      - run: pnpm install --no-frozen-lockfile
       - name: Run semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

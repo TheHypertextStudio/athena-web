@@ -18,19 +18,66 @@
  * production build needs no running server.
  */
 import type { CycleOut, CycleStats } from '@docket/types';
-import { EntityList } from '@docket/ui/components';
+import { EmptyState, EntityList } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Plus, RefreshCw } from '@docket/ui/icons';
 import { Button, Skeleton } from '@docket/ui/primitives';
 import { useParams, useRouter } from 'next/navigation';
-import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
+import { type JSX, useCallback, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { useActiveOrg } from '@/components/active-org';
 import { CreateCycleDialog } from '@/components/cycles/create-cycle';
 import { CycleRow } from '@/components/cycles/cycle-row';
 import { CYCLE_SEGMENTS, SEGMENT_LABEL, segmentOf } from '@/components/cycles/cycle-status';
 import { api } from '@/lib/api';
-import { readError, readProblem } from '@/lib/problem';
+import { type RpcResponse, queryKeys, useApiQuery } from '@/lib/query';
+
+/** The cycles roster joined with each cycle's pace stats (from its single-cycle read). */
+interface CyclesWithStats {
+  readonly cycles: readonly CycleOut[];
+  readonly statsById: ReadonlyMap<string, CycleStats>;
+}
+
+/**
+ * Fetch the org's cycles and each cycle's pace stats, returning a {@link RpcResponse}-shaped
+ * result so it can drive {@link useApiQuery} directly.
+ *
+ * @remarks
+ * Pace numbers (committed/completed, capacity, carryover) live on the single-cycle read, not the
+ * list, so each cycle is joined with its `…/cycles/:id` stats in parallel after the list lands.
+ * The composite resolves `ok`/`status` from the gating list read; a failed *stats* read simply
+ * omits that cycle's stats (the row shows a slim skeleton) rather than failing the whole list.
+ */
+function fetchCyclesWithStats(orgId: string): () => Promise<RpcResponse<CyclesWithStats>> {
+  return async () => {
+    const listRes = await api.v1.orgs[':orgId'].cycles.$get({ param: { orgId } });
+    if (!listRes.ok) {
+      return {
+        ok: false,
+        status: listRes.status,
+        json: () => listRes.json() as unknown as Promise<CyclesWithStats>,
+      };
+    }
+    const { items } = await listRes.json();
+    const statsById = new Map<string, CycleStats>();
+    await Promise.all(
+      items.map(async (cycle) => {
+        const detailRes = await api.v1.orgs[':orgId'].cycles[':id'].$get({
+          param: { orgId, id: cycle.id },
+        });
+        if (!detailRes.ok) return;
+        const detail = await detailRes.json();
+        statsById.set(cycle.id, detail.stats);
+      }),
+    );
+    return {
+      ok: true,
+      status: listRes.status,
+      json: () => Promise.resolve({ cycles: items, statsById }),
+    };
+  };
+}
 
 /**
  * The org Cycles list page.
@@ -39,57 +86,28 @@ export default function CyclesPage(): JSX.Element {
   const router = useRouter();
   const params = useParams<{ orgId: string }>();
   const orgId = params.orgId;
+  const queryClient = useQueryClient();
 
   const { teams, defaultTeamId, teamsLoading } = useActiveOrg();
 
   const cycleNoun = useVocabulary('cycle');
   const cycleNounPlural = useVocabulary('cycle', { plural: true });
 
-  const [cycles, setCycles] = useState<readonly CycleOut[]>([]);
-  const [statsById, setStatsById] = useState<ReadonlyMap<string, CycleStats>>(new Map());
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
 
-  /** Load the org's cycles, then their per-cycle stats in parallel. */
-  const load = useCallback(async (): Promise<void> => {
-    setLoading(true);
-    setLoadError(null);
-    try {
-      const res = await api.v1.orgs[':orgId'].cycles.$get({ param: { orgId } });
-      if (!res.ok) {
-        setLoadError(await readProblem(res, 'Could not load your cycles.'));
-        return;
-      }
-      const { items } = await res.json();
-      setCycles(items);
-      setLoading(false);
+  const cyclesQ = useApiQuery(
+    queryKeys.cycles(orgId),
+    fetchCyclesWithStats(orgId),
+    'Could not load your cycles.',
+  );
 
-      // Pace numbers live on the single-cycle read; fetch them per cycle and thread each in as
-      // it lands so the rows fill without blocking the list's first paint.
-      await Promise.all(
-        items.map(async (cycle) => {
-          const detailRes = await api.v1.orgs[':orgId'].cycles[':id'].$get({
-            param: { orgId, id: cycle.id },
-          });
-          if (!detailRes.ok) return;
-          const detail = await detailRes.json();
-          setStatsById((current) => {
-            const next = new Map(current);
-            next.set(cycle.id, detail.stats);
-            return next;
-          });
-        }),
-      );
-    } catch (caught) {
-      setLoadError(readError(caught, 'Something went wrong loading your cycles.'));
-      setLoading(false);
-    }
-  }, [orgId]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const cycles = useMemo(() => cyclesQ.data?.cycles ?? [], [cyclesQ.data]);
+  const statsById = useMemo<ReadonlyMap<string, CycleStats>>(
+    () => cyclesQ.data?.statsById ?? new Map(),
+    [cyclesQ.data],
+  );
+  const loading = cyclesQ.isPending;
+  const loadError = cyclesQ.isError ? cyclesQ.error.message : null;
 
   /** Partition the cycles into the three list segments (preserving the API's newest-first order). */
   const segments = useMemo(() => {
@@ -120,13 +138,16 @@ export default function CyclesPage(): JSX.Element {
     [cycles],
   );
 
-  /** Prepend the freshly-created cycle to the roster, then open its detail. */
+  /**
+   * Refetch the roster from the server (prefix-matched, so this also refreshes any open
+   * cycle-detail beneath it), then open the freshly-created cycle's detail.
+   */
   const handleCreated = useCallback(
     (created: CycleOut): void => {
-      setCycles((current) => [created, ...current]);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.cycles(orgId) });
       router.push(`/orgs/${orgId}/cycles/${created.id}`);
     },
-    [orgId, router],
+    [orgId, router, queryClient],
   );
 
   return (
@@ -175,29 +196,17 @@ export default function CyclesPage(): JSX.Element {
           {loadError}
         </p>
       ) : total === 0 ? (
-        <div className="border-outline-variant flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed p-12 text-center">
-          <span className="bg-surface-container text-on-surface-variant mb-1 flex size-10 items-center justify-center rounded-full">
-            <RefreshCw aria-hidden="true" className="size-5" />
-          </span>
-          <p className="text-on-surface text-sm font-medium">
-            No {cycleNounPlural.toLowerCase()} yet
-          </p>
-          <p className="text-on-surface-variant max-w-sm text-sm">
-            Start a {cycleNoun.toLowerCase()} to time-box your team&apos;s work and track its pace
-            and carryover at a glance.
-          </p>
-          <Button
-            type="button"
-            variant="outline"
-            className="mt-1 gap-1.5"
-            onClick={() => {
+        <EmptyState
+          icon={RefreshCw}
+          title={`No ${cycleNounPlural.toLowerCase()} yet`}
+          body={`Start a ${cycleNoun.toLowerCase()} to time-box your team's work and track its pace and carryover at a glance.`}
+          cta={{
+            label: `Create your first ${cycleNoun.toLowerCase()}`,
+            onClick: () => {
               setCreateOpen(true);
-            }}
-          >
-            <Plus aria-hidden="true" className="size-4" />
-            Create your first {cycleNoun.toLowerCase()}
-          </Button>
-        </div>
+            },
+          }}
+        />
       ) : (
         <div className="flex flex-col gap-6">
           {CYCLE_SEGMENTS.map((segment) => {

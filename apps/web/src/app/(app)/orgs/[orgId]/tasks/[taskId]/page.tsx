@@ -3,6 +3,7 @@
 import {
   ActorId,
   type AgentOut,
+  type AgentSessionOut,
   type CommentOut,
   CycleId,
   type CycleOut,
@@ -17,6 +18,7 @@ import {
   type RoleOut,
   type SessionActivityOut,
   type TaskDetail,
+  type TaskOut,
   type WorkflowState,
 } from '@docket/types';
 import {
@@ -28,8 +30,9 @@ import {
 } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Badge, Separator, Skeleton } from '@docket/ui/primitives';
+import { type QueryKey, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
-import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
+import { type JSX, useCallback, useMemo } from 'react';
 
 import { formatWindow } from '@/components/cycles/format-window';
 import { CommentActivityFeed, type FeedActor } from '@/components/task-detail/CommentActivityFeed';
@@ -46,7 +49,7 @@ import {
 } from '@/components/property-pickers/options';
 import { api } from '@/lib/api';
 import { formatCalendarDate } from '@/lib/format-date';
-import { readError, readProblem } from '@/lib/problem';
+import { queryKeys, unwrap, useApiQuery, useApiMutation } from '@/lib/query';
 import { useOrgCapability } from '@/lib/use-org-capability';
 import { stateTypeOf } from '@/lib/work-state';
 
@@ -80,118 +83,129 @@ function isoDateOf(value: string): string {
  * description is followed by an inline {@link Subtasks} checklist; a dedicated
  * {@link Dependencies} section shows the cross-project blocking / blocked-by graph; and a
  * {@link CommentActivityFeed} merges human comments with the task's agent-session activity
- * inline. Entity nouns route through {@link useVocabulary}. All mutations re-read the
- * affected slice. Data is fetched at runtime, so the production build needs no server.
+ * inline. Entity nouns route through {@link useVocabulary}.
+ *
+ * Reads run through {@link useApiQuery}, so every slice auto-refetches on window focus and
+ * after any mutation — there is no manual refresh. Mutations run through {@link useApiMutation}
+ * with optimistic cache updates against the task-detail key (rolled back on failure) and a
+ * settle-time invalidation of that key (and the org's task list) so the UI feels instant while
+ * staying authoritative. Data is fetched at runtime, so the production build needs no server.
  */
 export default function TaskDetailPage(): JSX.Element {
   const router = useRouter();
   const params = useParams<{ orgId: string; taskId: string }>();
   const { orgId, taskId } = params;
+  const queryClient = useQueryClient();
 
   const projectLabel = useVocabulary('project');
   const programLabel = useVocabulary('program');
   const cycleLabel = useVocabulary('cycle');
 
-  const [task, setTask] = useState<TaskDetail | null>(null);
-  const [workflowStates, setWorkflowStates] = useState<readonly WorkflowState[] | null>(null);
-  const [projects, setProjects] = useState<readonly ProjectOut[]>([]);
-  const [programs, setPrograms] = useState<readonly ProgramOut[]>([]);
-  const [members, setMembers] = useState<readonly MemberOut[]>([]);
-  const [agents, setAgents] = useState<readonly AgentOut[]>([]);
-  const [milestones, setMilestones] = useState<readonly MilestoneOut[]>([]);
-  const [cycles, setCycles] = useState<readonly CycleOut[]>([]);
-  const [roles, setRoles] = useState<readonly RoleOut[]>([]);
-  const [comments, setComments] = useState<readonly CommentOut[]>([]);
-  const [activities, setActivities] = useState<readonly SessionActivityOut[]>([]);
+  // The canonical detail key every mutation invalidates + optimistically writes against.
+  const detailKey = useMemo<QueryKey>(() => queryKeys.task(orgId, taskId), [orgId, taskId]);
 
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [statusPending, setStatusPending] = useState(false);
-  const [priorityPending, setPriorityPending] = useState(false);
-  // Pending flag for the right-rail property pickers (assignee/project/program/…/labels).
-  const [propsPending, setPropsPending] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
+  // The primary read: the rich task detail (carries dependencies + subtasks).
+  const taskQ = useApiQuery(
+    detailKey,
+    () => api.v1.orgs[':orgId'].tasks[':id'].$get({ param: { orgId, id: taskId } }),
+    'Could not load this task.',
+  );
+  const task = taskQ.data ?? null;
+  const teamId = task?.teamId ?? null;
 
-  /** Load the task detail and every slice the surface composes. */
-  const load = useCallback(async (): Promise<void> => {
-    setLoading(true);
-    setLoadError(null);
-    try {
-      const taskRes = await api.v1.orgs[':orgId'].tasks[':id'].$get({
-        param: { orgId, id: taskId },
-      });
-      if (!taskRes.ok) {
-        setLoadError(await readProblem(taskRes, 'Could not load this task.'));
-        return;
-      }
-      const detail = await taskRes.json();
-      setTask(detail);
+  // The task's team carries the workflow states that bound the editable status. Gated on the
+  // team id, which only resolves after the detail loads. The hook's single generic is the full
+  // body, so the slice (`.workflowStates`) is read off `.data` rather than via `select`.
+  const teamQ = useApiQuery(
+    [...queryKeys.team(orgId, teamId ?? ''), 'workflow'],
+    () => api.v1.orgs[':orgId'].teams[':teamId'].$get({ param: { orgId, teamId: teamId ?? '' } }),
+    'Could not load the workflow.',
+    { enabled: Boolean(teamId) },
+  );
+  const workflowStates: readonly WorkflowState[] | null = teamQ.data?.workflowStates ?? null;
 
-      const [
-        teamRes,
-        projectsRes,
-        programsRes,
-        membersRes,
-        agentsRes,
-        milestonesRes,
-        cyclesRes,
-        rolesRes,
-        commentsRes,
-        sessionsRes,
-      ] = await Promise.all([
-        api.v1.orgs[':orgId'].teams[':teamId'].$get({
-          param: { orgId, teamId: detail.teamId },
-        }),
-        api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
-        api.v1.orgs[':orgId'].programs.$get({ param: { orgId } }),
-        api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
-        api.v1.orgs[':orgId'].agents.$get({ param: { orgId } }),
-        api.v1.orgs[':orgId'].milestones.$get({ param: { orgId }, query: {} }),
-        api.v1.orgs[':orgId'].cycles.$get({ param: { orgId } }),
-        api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
-        api.v1.orgs[':orgId'].comments.$get({
-          param: { orgId },
-          query: { subjectType: 'task', subjectId: taskId },
-        }),
-        api.v1.orgs[':orgId'].sessions.$get({ param: { orgId }, query: {} }),
-      ]);
+  // The org rosters the pickers + actor resolution draw from. Each read resolves the full
+  // `{ items }` body; the `.items` slice is read off `.data` (the hook keys on the whole body).
+  const projectsQ = useApiQuery(
+    queryKeys.projects(orgId),
+    () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
+    'Could not load projects.',
+  );
+  const programsQ = useApiQuery(
+    queryKeys.programs(orgId),
+    () => api.v1.orgs[':orgId'].programs.$get({ param: { orgId } }),
+    'Could not load programs.',
+  );
+  const membersQ = useApiQuery(
+    queryKeys.members(orgId),
+    () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
+    'Could not load members.',
+  );
+  const agentsQ = useApiQuery(
+    ['org', orgId, 'agents'],
+    () => api.v1.orgs[':orgId'].agents.$get({ param: { orgId } }),
+    'Could not load agents.',
+  );
+  const milestonesQ = useApiQuery(
+    ['org', orgId, 'milestones'],
+    () => api.v1.orgs[':orgId'].milestones.$get({ param: { orgId }, query: {} }),
+    'Could not load milestones.',
+  );
+  const cyclesQ = useApiQuery(
+    queryKeys.cycles(orgId),
+    () => api.v1.orgs[':orgId'].cycles.$get({ param: { orgId } }),
+    'Could not load cycles.',
+  );
+  const rolesQ = useApiQuery(
+    queryKeys.roles(orgId),
+    () => api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
+    'Could not load roles.',
+  );
 
-      if (teamRes.ok) setWorkflowStates((await teamRes.json()).workflowStates);
-      if (projectsRes.ok) setProjects((await projectsRes.json()).items);
-      if (programsRes.ok) setPrograms((await programsRes.json()).items);
-      if (membersRes.ok) setMembers((await membersRes.json()).items);
-      if (agentsRes.ok) setAgents((await agentsRes.json()).items);
-      if (milestonesRes.ok) setMilestones((await milestonesRes.json()).items);
-      if (cyclesRes.ok) setCycles((await cyclesRes.json()).items);
-      if (rolesRes.ok) setRoles((await rolesRes.json()).items);
-      if (commentsRes.ok) setComments((await commentsRes.json()).items);
+  const projects: readonly ProjectOut[] = projectsQ.data?.items ?? [];
+  const programs: readonly ProgramOut[] = programsQ.data?.items ?? [];
+  const members: readonly MemberOut[] = membersQ.data?.items ?? [];
+  const agents: readonly AgentOut[] = agentsQ.data?.items ?? [];
+  const milestones: readonly MilestoneOut[] = milestonesQ.data?.items ?? [];
+  const cycles: readonly CycleOut[] = cyclesQ.data?.items ?? [];
+  const roles: readonly RoleOut[] = rolesQ.data?.items ?? [];
 
-      // The task's agent session (if any) carries the inline activity stream. Sessions are
-      // listed org-wide, so pick the most recent one bound to this task, then read its
-      // ordered activity. Absent a session, the feed shows comments only.
-      if (sessionsRes.ok) {
-        const { items: sessionItems } = await sessionsRes.json();
-        const taskSession = sessionItems.find((session) => session.taskId === taskId);
-        if (taskSession) {
-          const activityRes = await api.v1.orgs[':orgId'].sessions[':id'].activity.$get({
-            param: { orgId, id: taskSession.id },
-          });
-          if (activityRes.ok) setActivities((await activityRes.json()).items);
-          else setActivities([]);
-        } else {
-          setActivities([]);
-        }
-      }
-    } catch (caught) {
-      setLoadError(readError(caught, 'Something went wrong loading this task.'));
-    } finally {
-      setLoading(false);
-    }
-  }, [orgId, taskId]);
+  // The task's comment stream (subject-scoped). Keyed under the task so a comment mutation can
+  // invalidate it by prefix.
+  const commentsKey = useMemo<QueryKey>(() => [...detailKey, 'comments'], [detailKey]);
+  const commentsQ = useApiQuery(
+    commentsKey,
+    () =>
+      api.v1.orgs[':orgId'].comments.$get({
+        param: { orgId },
+        query: { subjectType: 'task', subjectId: taskId },
+      }),
+    'Could not load comments.',
+  );
+  const comments: readonly CommentOut[] = commentsQ.data?.items ?? [];
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  // The task's agent session (if any) carries the inline activity stream. Sessions are listed
+  // org-wide, so pick the most recent one bound to this task; keyed under the task.
+  const sessionQ = useApiQuery(
+    [...detailKey, 'session'],
+    () => api.v1.orgs[':orgId'].sessions.$get({ param: { orgId }, query: {} }),
+    'Could not load sessions.',
+  );
+  const taskSession: AgentSessionOut | null =
+    sessionQ.data?.items.find((session) => session.taskId === taskId) ?? null;
+
+  // The chosen session's ordered activity. Gated on a resolved session; absent one, the feed
+  // shows comments only.
+  const activityQ = useApiQuery(
+    [...detailKey, 'activity', taskSession?.id ?? ''],
+    () =>
+      api.v1.orgs[':orgId'].sessions[':id'].activity.$get({
+        param: { orgId, id: taskSession?.id ?? '' },
+      }),
+    'Could not load activity.',
+    { enabled: Boolean(taskSession) },
+  );
+  const activities: readonly SessionActivityOut[] = activityQ.data?.items ?? [];
 
   /** Resolve a project id to its display name (used by the dependencies section). */
   const projectName = useCallback(
@@ -213,74 +227,109 @@ export default function TaskDetailPage(): JSX.Element {
     [members, agents],
   );
 
-  /** Change the task's workflow state, then re-read the detail. */
-  const setState = useCallback(
-    async (stateKey: string): Promise<void> => {
-      setActionError(null);
-      setStatusPending(true);
-      try {
-        const res = await api.v1.orgs[':orgId'].tasks[':id'].state.$post({
-          param: { orgId, id: taskId },
-          json: { state: stateKey },
-        });
-        if (!res.ok) {
-          setActionError(await readProblem(res, 'Could not update the status.'));
-          return;
-        }
-        await load();
-      } catch (caught) {
-        setActionError(readError(caught, 'Something went wrong updating the status.'));
-      } finally {
-        setStatusPending(false);
-      }
+  /**
+   * Optimistically merge a partial task patch into the detail-key cache, preserving the
+   * detail-only fields (`blocking` / `blockedBy` / `subtasks` and the relations the base
+   * `TaskOut` read-back omits) so a `TaskOut`-shaped server response never drops them.
+   */
+  const writeDetail = useCallback(
+    (patch: Partial<TaskDetail>): TaskDetail | undefined => {
+      const previous = queryClient.getQueryData<TaskDetail>(detailKey);
+      queryClient.setQueryData<TaskDetail>(detailKey, (current) =>
+        current ? { ...current, ...patch } : current,
+      );
+      return previous;
     },
-    [orgId, taskId, load],
+    [queryClient, detailKey],
   );
 
-  /** Change the task's priority, then re-read the detail. */
-  const setPriority = useCallback(
-    async (priority: Priority): Promise<void> => {
-      setActionError(null);
-      setPriorityPending(true);
-      try {
-        const res = await api.v1.orgs[':orgId'].tasks[':id'].$patch({
-          param: { orgId, id: taskId },
-          json: { priority },
-        });
-        if (!res.ok) {
-          setActionError(await readProblem(res, 'Could not update the priority.'));
-          return;
-        }
-        await load();
-      } catch (caught) {
-        setActionError(readError(caught, 'Something went wrong updating the priority.'));
-      } finally {
-        setPriorityPending(false);
-      }
+  /** Adopt a `TaskOut` server read-back into the cache while keeping the detail-only fields. */
+  const adoptTaskOut = useCallback(
+    (updated: TaskOut): void => {
+      queryClient.setQueryData<TaskDetail>(detailKey, (current) =>
+        current
+          ? {
+              ...current,
+              ...updated,
+              blocking: current.blocking,
+              blockedBy: current.blockedBy,
+              subtasks: current.subtasks,
+            }
+          : current,
+      );
     },
-    [orgId, taskId, load],
+    [queryClient, detailKey],
   );
+
+  /** Change the task's workflow state: optimistic write, settle-time invalidation. */
+  const stateMutation = useApiMutation<TaskOut, string, { previous?: TaskDetail }>({
+    mutationFn: (stateKey) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].tasks[':id'].state.$post({
+            param: { orgId, id: taskId },
+            json: { state: stateKey },
+          }),
+        'Could not update the status.',
+      ),
+    onMutate: async (stateKey) => {
+      await queryClient.cancelQueries({ queryKey: detailKey });
+      return { previous: writeDetail({ state: stateKey }) };
+    },
+    onError: (_err, _stateKey, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(detailKey, ctx.previous);
+    },
+    onSuccess: (updated) => {
+      adoptTaskOut(updated);
+    },
+    invalidateKeys: [detailKey, queryKeys.tasks(orgId)],
+  });
+
+  /** Change the task's priority: optimistic write, settle-time invalidation. */
+  const priorityMutation = useApiMutation<TaskOut, Priority, { previous?: TaskDetail }>({
+    mutationFn: (priority) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].tasks[':id'].$patch({
+            param: { orgId, id: taskId },
+            json: { priority },
+          }),
+        'Could not update the priority.',
+      ),
+    onMutate: async (priority) => {
+      await queryClient.cancelQueries({ queryKey: detailKey });
+      return { previous: writeDetail({ priority }) };
+    },
+    onError: (_err, _priority, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(detailKey, ctx.previous);
+    },
+    onSuccess: (updated) => {
+      adoptTaskOut(updated);
+    },
+    invalidateKeys: [detailKey, queryKeys.tasks(orgId)],
+  });
 
   /**
-   * Optimistically patch a right-rail task property (assignee / project / program / milestone /
-   * cycle / due date): apply the change locally, fire the PATCH, roll back on failure.
+   * The right-rail property patch (assignee / project / program / milestone / cycle / due date):
+   * optimistic write, rollback on failure, settle-time invalidation.
    *
    * @remarks
-   * Each field is a nullable relation/date the {@link TaskUpdate} DTO accepts; `null` clears it.
-   * The optimistic snapshot and the request share one branded body so they never drift, and the
-   * picker is disabled (`propsPending`) while the request is in flight.
+   * Each field is a nullable relation/date the `TaskUpdate` DTO accepts; `null` clears it. The
+   * optimistic snapshot and the request share one branded body so they never drift.
    */
-  const patchTask = useCallback(
-    async (patch: {
+  const patchMutation = useApiMutation<
+    TaskOut,
+    {
       assigneeId?: string | null;
       projectId?: string | null;
       programId?: string | null;
       milestoneId?: string | null;
       cycleId?: string | null;
       dueDate?: string | null;
-    }): Promise<void> => {
-      if (!task) return;
-      const previous = task;
+    },
+    { previous?: TaskDetail }
+  >({
+    mutationFn: (patch) => {
       const body = {
         ...(patch.assigneeId !== undefined
           ? { assigneeId: patch.assigneeId === null ? null : ActorId.parse(patch.assigneeId) }
@@ -301,108 +350,123 @@ export default function TaskDetailPage(): JSX.Element {
           : {}),
         ...(patch.dueDate !== undefined ? { dueDate: patch.dueDate } : {}),
       };
-      setTask({ ...task, ...body });
-      setActionError(null);
-      setPropsPending(true);
-      try {
-        const res = await api.v1.orgs[':orgId'].tasks[':id'].$patch({
-          param: { orgId, id: taskId },
-          json: body,
-        });
-        if (!res.ok) {
-          setTask(previous);
-          setActionError(await readProblem(res, 'Could not update the task.'));
-          return;
-        }
-        // The patch read-back carries only the base task shape; preserve the detail-only fields
-        // (dependencies, subtasks) from the prior detail while adopting the updated columns.
-        const updated = await res.json();
-        setTask((current) =>
-          current
-            ? {
-                ...current,
-                ...updated,
-                blocking: current.blocking,
-                blockedBy: current.blockedBy,
-                subtasks: current.subtasks,
-              }
-            : current,
-        );
-      } catch (caught) {
-        setTask(previous);
-        setActionError(readError(caught, 'Something went wrong updating the task.'));
-      } finally {
-        setPropsPending(false);
-      }
+      return unwrap(
+        () =>
+          api.v1.orgs[':orgId'].tasks[':id'].$patch({
+            param: { orgId, id: taskId },
+            json: body,
+          }),
+        'Could not update the task.',
+      );
     },
-    [task, orgId, taskId],
-  );
+    onMutate: async (patch) => {
+      await queryClient.cancelQueries({ queryKey: detailKey });
+      // Mirror the request's null-clears / set semantics into the optimistic cache.
+      return { previous: writeDetail(patch as Partial<TaskDetail>) };
+    },
+    onError: (_err, _patch, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(detailKey, ctx.previous);
+    },
+    onSuccess: (updated) => {
+      adoptTaskOut(updated);
+    },
+    invalidateKeys: [detailKey, queryKeys.tasks(orgId)],
+  });
 
-  /** Add a subtask under this task by title, then re-read the detail. */
+  /** Add a subtask under this task by title; invalidate the detail so the checklist re-reads. */
+  const addSubtaskMutation = useApiMutation<TaskOut, string>({
+    mutationFn: (title) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].tasks[':id'].subtasks.$post({
+            param: { orgId, id: taskId },
+            json: { title },
+          }),
+        'Could not add the subtask.',
+      ),
+    invalidateKeys: [detailKey, queryKeys.tasks(orgId)],
+  });
+
+  /**
+   * Toggle a subtask's completion via its own state transition, with an optimistic flip of the
+   * subtask ref in the parent's cached `subtasks` list.
+   */
+  const toggleSubtaskMutation = useApiMutation<
+    TaskOut,
+    { subtaskId: string; done: boolean },
+    { previous?: TaskDetail }
+  >({
+    mutationFn: ({ subtaskId, done }) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].tasks[':id'].state.$post({
+            param: { orgId, id: subtaskId },
+            json: { state: done ? 'done' : 'todo' },
+          }),
+        'Could not update the subtask.',
+      ),
+    onMutate: async ({ subtaskId, done }) => {
+      await queryClient.cancelQueries({ queryKey: detailKey });
+      const previous = queryClient.getQueryData<TaskDetail>(detailKey);
+      queryClient.setQueryData<TaskDetail>(detailKey, (current) =>
+        current
+          ? {
+              ...current,
+              subtasks: current.subtasks.map((subtask) =>
+                subtask.id === subtaskId ? { ...subtask, state: done ? 'done' : 'todo' } : subtask,
+              ),
+            }
+          : current,
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(detailKey, ctx.previous);
+    },
+    invalidateKeys: [detailKey, queryKeys.tasks(orgId)],
+  });
+
+  /** Post a comment on this task; invalidate the comment stream so it re-reads. */
+  const commentMutation = useApiMutation<CommentOut, string>({
+    mutationFn: (body) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].comments.$post({
+            param: { orgId },
+            json: { subjectType: 'task', subjectId: taskId, body },
+          }),
+        'Could not post the comment.',
+      ),
+    invalidateKeys: [commentsKey],
+  });
+
+  const setState = useCallback(
+    (stateKey: string): Promise<void> => stateMutation.mutateAsync(stateKey).then(() => undefined),
+    [stateMutation],
+  );
+  const setPriority = useCallback(
+    (priority: Priority): Promise<void> =>
+      priorityMutation.mutateAsync(priority).then(() => undefined),
+    [priorityMutation],
+  );
+  const patchTask = useCallback(
+    (patch: Parameters<typeof patchMutation.mutateAsync>[0]): void => {
+      patchMutation.mutate(patch);
+    },
+    [patchMutation],
+  );
   const addSubtask = useCallback(
-    async (title: string): Promise<void> => {
-      setActionError(null);
-      try {
-        const res = await api.v1.orgs[':orgId'].tasks[':id'].subtasks.$post({
-          param: { orgId, id: taskId },
-          json: { title },
-        });
-        if (!res.ok) {
-          setActionError(await readProblem(res, 'Could not add the subtask.'));
-          return;
-        }
-        await load();
-      } catch (caught) {
-        setActionError(readError(caught, 'Something went wrong adding the subtask.'));
-      }
-    },
-    [orgId, taskId, load],
+    (title: string): Promise<void> => addSubtaskMutation.mutateAsync(title).then(() => undefined),
+    [addSubtaskMutation],
   );
-
-  /** Toggle a subtask's completion via its own state transition, then re-read the detail. */
   const toggleSubtask = useCallback(
-    async (subtaskId: string, done: boolean): Promise<void> => {
-      setActionError(null);
-      try {
-        const res = await api.v1.orgs[':orgId'].tasks[':id'].state.$post({
-          param: { orgId, id: subtaskId },
-          json: { state: done ? 'done' : 'todo' },
-        });
-        if (!res.ok) {
-          setActionError(await readProblem(res, 'Could not update the subtask.'));
-          return;
-        }
-        await load();
-      } catch (caught) {
-        setActionError(readError(caught, 'Something went wrong updating the subtask.'));
-      }
-    },
-    [orgId, taskId, load],
+    (subtaskId: string, done: boolean): Promise<void> =>
+      toggleSubtaskMutation.mutateAsync({ subtaskId, done }).then(() => undefined),
+    [toggleSubtaskMutation],
   );
-
-  /** Post a comment on this task, then re-read the comment stream. */
   const addComment = useCallback(
-    async (body: string): Promise<void> => {
-      setActionError(null);
-      try {
-        const res = await api.v1.orgs[':orgId'].comments.$post({
-          param: { orgId },
-          json: { subjectType: 'task', subjectId: taskId, body },
-        });
-        if (!res.ok) {
-          setActionError(await readProblem(res, 'Could not post the comment.'));
-          return;
-        }
-        const commentsRes = await api.v1.orgs[':orgId'].comments.$get({
-          param: { orgId },
-          query: { subjectType: 'task', subjectId: taskId },
-        });
-        if (commentsRes.ok) setComments((await commentsRes.json()).items);
-      } catch (caught) {
-        setActionError(readError(caught, 'Something went wrong posting the comment.'));
-      }
-    },
-    [orgId, taskId],
+    (body: string): Promise<void> => commentMutation.mutateAsync(body).then(() => undefined),
+    [commentMutation],
   );
 
   /** Navigate to another task's detail (subtask / dependency links). */
@@ -445,7 +509,21 @@ export default function TaskDetailPage(): JSX.Element {
     [milestones, task?.projectId],
   );
 
-  if (loading) {
+  // Any in-flight write disables the rail's pickers; the status/priority chips track their own.
+  const propsPending = patchMutation.isPending;
+  const statusPending = stateMutation.isPending;
+  const priorityPending = priorityMutation.isPending;
+  // The first authoritative error surfaced by any mutation (newest takes precedence).
+  const actionError =
+    patchMutation.error?.message ??
+    stateMutation.error?.message ??
+    priorityMutation.error?.message ??
+    addSubtaskMutation.error?.message ??
+    toggleSubtaskMutation.error?.message ??
+    commentMutation.error?.message ??
+    null;
+
+  if (taskQ.isPending) {
     return (
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
         <Skeleton className="h-9 w-2/3" />
@@ -460,14 +538,14 @@ export default function TaskDetailPage(): JSX.Element {
     );
   }
 
-  if (loadError) {
+  if (taskQ.isError) {
     return (
       <div className="mx-auto w-full max-w-6xl p-4 @2xl:p-6 @4xl:p-8">
         <p
           role="alert"
           className="border-outline-variant text-destructive rounded-lg border p-4 text-sm"
         >
-          {loadError}
+          {taskQ.error.message}
         </p>
       </div>
     );
@@ -515,7 +593,7 @@ export default function TaskDetailPage(): JSX.Element {
             options={memberOptions}
             value={task.assigneeId ?? null}
             onChange={(assigneeId) => {
-              void patchTask({ assigneeId });
+              patchTask({ assigneeId });
             }}
             placeholder="Assign"
             clearLabel="Unassigned"
@@ -539,7 +617,7 @@ export default function TaskDetailPage(): JSX.Element {
           <DatePicker
             value={task.dueDate ? isoDateOf(task.dueDate) : null}
             onChange={(dueDate) => {
-              void patchTask({ dueDate });
+              patchTask({ dueDate });
             }}
             placeholder="Set due date"
             formatLabel={(value) => formatCalendarDate(value) ?? undefined}
@@ -614,7 +692,7 @@ export default function TaskDetailPage(): JSX.Element {
                 options={projectOptions}
                 value={task.projectId ?? null}
                 onChange={(projectId) => {
-                  void patchTask({ projectId });
+                  patchTask({ projectId });
                 }}
                 placeholder={`Set ${projectLabel.toLowerCase()}`}
                 clearLabel={`No ${projectLabel.toLowerCase()}`}
@@ -630,7 +708,7 @@ export default function TaskDetailPage(): JSX.Element {
                 options={programOptions}
                 value={task.programId ?? null}
                 onChange={(programId) => {
-                  void patchTask({ programId });
+                  patchTask({ programId });
                 }}
                 placeholder={`Set ${programLabel.toLowerCase()}`}
                 clearLabel={`No ${programLabel.toLowerCase()}`}
@@ -646,7 +724,7 @@ export default function TaskDetailPage(): JSX.Element {
                 options={milestoneOptions}
                 value={task.milestoneId ?? null}
                 onChange={(milestoneId) => {
-                  void patchTask({ milestoneId });
+                  patchTask({ milestoneId });
                 }}
                 placeholder={
                   task.projectId ? 'Set milestone' : `Set a ${projectLabel.toLowerCase()} first`
@@ -669,7 +747,7 @@ export default function TaskDetailPage(): JSX.Element {
                 options={cycleOptions}
                 value={task.cycleId ?? null}
                 onChange={(cycleId) => {
-                  void patchTask({ cycleId });
+                  patchTask({ cycleId });
                 }}
                 placeholder={`Set ${cycleLabel.toLowerCase()}`}
                 clearLabel={`No ${cycleLabel.toLowerCase()}`}

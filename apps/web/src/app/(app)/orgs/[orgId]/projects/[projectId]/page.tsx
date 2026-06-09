@@ -3,7 +3,6 @@
 import {
   ActorId,
   type AgentSessionOut,
-  type CommentOut,
   type Health,
   type InitiativeOut,
   type MemberOut,
@@ -14,17 +13,18 @@ import {
   type ProjectOut,
   type ProjectProgress,
   type ProjectStatus,
+  type ProjectUpdate,
   type RoleOut,
   type SessionActivityOut,
   type TaskOut,
   TeamId,
-  type UpdateOut,
 } from '@docket/types';
 import type { PickerOption } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Badge, Skeleton } from '@docket/ui/primitives';
 import { useParams, useRouter } from 'next/navigation';
-import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
+import { type JSX, useCallback, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 
 import {
   type ActorDirectory,
@@ -46,7 +46,7 @@ import { type TabItem, ProjectTabs } from '@/components/project-detail/tabs';
 import { UpdatesTab } from '@/components/project-detail/updates-tab';
 import { useActiveOrg } from '@/components/active-org';
 import { api } from '@/lib/api';
-import { readError, readProblem } from '@/lib/problem';
+import { type RpcResponse, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
 
 /** Human label for each project lifecycle status. */
 const STATUS_LABEL: Record<string, string> = {
@@ -72,6 +72,40 @@ function projectStatusOf(status: string): ProjectStatus {
 /** The three top-level tabs of the project-detail screen. */
 type TabId = 'overview' | 'tasks' | 'updates';
 
+/** The unbranded properties-panel patch surface. */
+interface ProjectPatch {
+  leadId?: string | null;
+  status?: ProjectStatus;
+  health?: Health | null;
+  startDate?: string | null;
+  targetDate?: string | null;
+  programId?: string | null;
+}
+
+/**
+ * Build the branded project PATCH body from a {@link ProjectPatch}, omitting untouched fields.
+ *
+ * @remarks
+ * One branded body, reused for the optimistic cache snapshot AND the request, so the wire shape
+ * and the local mirror never drift. Returns the validated {@link ProjectUpdate} body, whose fields
+ * are a subset of {@link ProjectOut} so it can be spread onto the cached project without widening
+ * its branded fields.
+ */
+function toProjectPatchBody(patch: ProjectPatch): ProjectUpdate {
+  return {
+    ...(patch.leadId !== undefined
+      ? { leadId: patch.leadId === null ? null : ActorId.parse(patch.leadId) }
+      : {}),
+    ...(patch.status !== undefined ? { status: patch.status } : {}),
+    ...(patch.health !== undefined ? { health: patch.health } : {}),
+    ...(patch.startDate !== undefined ? { startDate: patch.startDate } : {}),
+    ...(patch.targetDate !== undefined ? { targetDate: patch.targetDate } : {}),
+    ...(patch.programId !== undefined
+      ? { programId: patch.programId === null ? null : ProgramId.parse(patch.programId) }
+      : {}),
+  };
+}
+
 /** Pull a short human summary out of a session-activity body (action vs text shapes). */
 function activitySummary(activity: SessionActivityOut): string {
   const body = activity.body;
@@ -85,493 +119,425 @@ function activitySummary(activity: SessionActivityOut): string {
   return activity.type;
 }
 
+/** The composite project-detail payload assembled from the typed RPC surface. */
+interface ProjectDetailData {
+  readonly project: ProjectOut | null;
+  readonly progress: ProjectProgress | null;
+  readonly milestones: readonly MilestoneOut[];
+  readonly milestoneTasks: readonly MilestoneTask[];
+  readonly agentsHere: readonly AgentHere[];
+  readonly agentActivity: readonly AgentActivityEntry[];
+  readonly resolveActor: ActorDirectory;
+  readonly members: readonly MemberOut[];
+  readonly roles: readonly RoleOut[];
+  readonly programs: readonly ProgramOut[];
+  readonly initiatives: readonly InitiativeOut[];
+  /**
+   * The initiative this project is associated with, resolved from initiative timelines (the
+   * association is an m2m edge rather than a column on the project).
+   */
+  readonly currentInitiativeId: string | null;
+}
+
+/**
+ * Build the composite project-detail fetcher, returning a {@link RpcResponse}-shaped result so it
+ * can drive {@link useApiQuery} directly.
+ *
+ * @remarks
+ * Composes the project's depth from the typed RPC surface in parallel — the projects roster (to
+ * find this project), its progress roll-up, its tasks (enriched with each task's milestone, which
+ * the list DTO omits), its milestones, members/agents (for the actor directory + "agents here"),
+ * the agent sessions whose task lives in this project, and the program/initiative/role option
+ * sources for the properties panel. The composite resolves `ok`/`status` from the gating projects
+ * read; sub-reads degrade to benign defaults so the screen still renders.
+ */
+function fetchProjectDetail(
+  orgId: string,
+  projectId: string,
+): () => Promise<RpcResponse<ProjectDetailData>> {
+  return async () => {
+    const [
+      projectsRes,
+      progressRes,
+      tasksRes,
+      milestonesRes,
+      membersRes,
+      agentsRes,
+      sessionsRes,
+      programsRes,
+      initiativesRes,
+      rolesRes,
+    ] = await Promise.all([
+      api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
+      api.v1.orgs[':orgId'].projects[':id'].progress.$get({ param: { orgId, id: projectId } }),
+      api.v1.orgs[':orgId'].tasks.$get({ param: { orgId } }),
+      api.v1.orgs[':orgId'].milestones.$get({
+        param: { orgId },
+        query: { projectId: ProjectId.parse(projectId) },
+      }),
+      api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
+      api.v1.orgs[':orgId'].agents.$get({ param: { orgId } }),
+      api.v1.orgs[':orgId'].sessions.$get({ param: { orgId }, query: {} }),
+      api.v1.orgs[':orgId'].programs.$get({ param: { orgId } }),
+      api.v1.orgs[':orgId'].initiatives.$get({ param: { orgId } }),
+      api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
+    ]);
+
+    if (!projectsRes.ok) {
+      return {
+        ok: false,
+        status: projectsRes.status,
+        json: () => projectsRes.json() as unknown as Promise<ProjectDetailData>,
+      };
+    }
+
+    const { items: projectItems } = await projectsRes.json();
+    const found = projectItems.find((p) => p.id === projectId) ?? null;
+
+    const progress = progressRes.ok ? await progressRes.json() : null;
+
+    // Member + agent directory (shared by lead, authors, agent rows).
+    const memberItems = membersRes.ok ? (await membersRes.json()).items : [];
+    const agents = agentsRes.ok ? (await agentsRes.json()).items : [];
+    // The agent's display name lives on its Actor, which the RPC surface does not expose a name
+    // for; fall back to a short, stable label keyed off the agent's actor id.
+    const agentActorByAgentId = new Map(agents.map((a) => [a.id, a.actorId]));
+    const directory = buildActorDirectory({
+      members: memberItems.map((m) => ({ actorId: m.actorId, displayName: m.displayName })),
+      agents: agents.map((a) => ({ actorId: a.actorId, name: `Agent ${a.actorId.slice(0, 6)}` })),
+    });
+    const roles = rolesRes.ok ? (await rolesRes.json()).items : [];
+
+    // Program + initiative option sources for the (interactive) properties panel.
+    const programs: readonly ProgramOut[] = programsRes.ok ? (await programsRes.json()).items : [];
+    const initiatives: readonly InitiativeOut[] = initiativesRes.ok
+      ? (await initiativesRes.json()).items
+      : [];
+
+    // Milestones for this project (ordered by sort from the API).
+    const milestones = milestonesRes.ok ? (await milestonesRes.json()).items : [];
+
+    // This project's tasks, then resolve each task's milestone (the list DTO omits it).
+    const allTasks: readonly TaskOut[] = tasksRes.ok ? (await tasksRes.json()).items : [];
+    const projectTasks = allTasks.filter((t) => t.projectId === projectId);
+
+    const milestoneTasks = await Promise.all(
+      projectTasks.map(async (t): Promise<MilestoneTask> => {
+        const detailRes = await api.v1.orgs[':orgId'].tasks[':id'].$get({
+          param: { orgId, id: t.id },
+        });
+        if (!detailRes.ok) return { task: t, milestoneId: null };
+        const detail = await detailRes.json();
+        return { task: t, milestoneId: detail.milestoneId ?? null };
+      }),
+    );
+
+    // Which initiative this project is associated with (resolved from initiative timelines).
+    const initiativeMatches = await Promise.all(
+      initiatives.map(async (init): Promise<string | null> => {
+        const res = await api.v1.orgs[':orgId'].initiatives[':id'].timeline.$get({
+          param: { orgId, id: init.id },
+          query: {},
+        });
+        if (!res.ok) return null;
+        const { projects } = await res.json();
+        return projects.some((p) => p.id === projectId) ? init.id : null;
+      }),
+    );
+    const currentInitiativeId = initiativeMatches.find((id) => id !== null) ?? null;
+
+    // Agents here: sessions whose task belongs to this project.
+    const projectTaskIds = new Set<string>(projectTasks.map((t) => t.id));
+    const projectTaskTitle = new Map<string, string>(projectTasks.map((t) => [t.id, t.title]));
+    const sessions: readonly AgentSessionOut[] = sessionsRes.ok
+      ? (await sessionsRes.json()).items
+      : [];
+    const here = sessions.filter(
+      (s): s is AgentSessionOut & { taskId: string } =>
+        typeof s.taskId === 'string' && projectTaskIds.has(s.taskId),
+    );
+    const agentsHere: readonly AgentHere[] = here.map((s) => ({
+      sessionId: s.id,
+      agentName: directory(agentActorByAgentId.get(s.agentId) ?? null).name,
+      taskTitle: s.taskId ? (projectTaskTitle.get(s.taskId) ?? 'a task') : 'a task',
+      status: s.status,
+    }));
+
+    // Recent agent activity from those sessions (newest-first, capped).
+    const activityLists = await Promise.all(
+      here.slice(0, 5).map(async (s) => {
+        const detailRes = await api.v1.orgs[':orgId'].sessions[':id'].$get({
+          param: { orgId, id: s.id },
+        });
+        if (!detailRes.ok) return [];
+        const detail = await detailRes.json();
+        const agentName = directory(agentActorByAgentId.get(s.agentId) ?? null).name;
+        return detail.activities.map(
+          (a): AgentActivityEntry => ({
+            id: a.id,
+            agentName,
+            type: a.type,
+            summary: activitySummary(a),
+            createdAt: a.createdAt,
+          }),
+        );
+      }),
+    );
+    const agentActivity = activityLists
+      .flat()
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 8);
+
+    const data: ProjectDetailData = {
+      project: found,
+      progress,
+      milestones,
+      milestoneTasks,
+      agentsHere,
+      agentActivity,
+      resolveActor: directory,
+      members: memberItems,
+      roles,
+      programs,
+      initiatives,
+      currentInitiativeId,
+    };
+    return { ok: true, status: projectsRes.status, json: () => Promise.resolve(data) };
+  };
+}
+
 /**
  * The project detail view — overview, milestone-grouped tasks, and updates.
  *
  * @remarks
- * A Client Component reached at `/orgs/[orgId]/projects/[projectId]`. It composes the
- * project's depth from the typed RPC surface:
+ * A Client Component reached at `/orgs/[orgId]/projects/[projectId]`. It composes the project's
+ * depth from the typed RPC surface through the dynamic-data layer:
  *
- * - **Overview** — leads with a weighted-progress bar (`…/projects/:id/progress`, which fills
- *   by estimate so bigger tasks count for more) and a health pill, an "agents here" strip
- *   (agent sessions whose task lives in this project), a properties panel
+ * - **Overview** — leads with a weighted-progress bar (`…/projects/:id/progress`, which fills by
+ *   estimate so bigger tasks count for more) and a health pill, an "agents here" strip (agent
+ *   sessions whose task lives in this project), a properties panel
  *   (lead/timeline/program/initiative), and the comments + recent-agent-activity discussion.
  * - **Tasks** — the project's tasks grouped into milestone sections (`…/milestones`), then by
  *   workflow state; task milestones are resolved per-task since the list DTO omits them.
  * - **Updates** — the project's status updates (`…/updates?subject=project`) with a composer;
- *   posting a health verdict also updates the project's current health, so the overview
- *   refreshes.
+ *   posting a health verdict also updates the project's current health, so the overview refreshes.
  *
- * Entity nouns route through {@link useVocabulary}; data is fetched at runtime so the
- * production build needs no running server.
+ * The detail, comments, and updates each stay live (auto-refetch on focus) without a manual
+ * refresh control, and every property edit / comment / update / task create runs as an optimistic
+ * mutation that reconciles against the server on settle. Entity nouns route through
+ * {@link useVocabulary}; data is fetched at runtime so the production build needs no running server.
  */
 export default function ProjectDetailPage(): JSX.Element {
   const router = useRouter();
   const params = useParams<{ orgId: string; projectId: string }>();
   const { orgId, projectId } = params;
+  const queryClient = useQueryClient();
   const { teams, defaultTeamId, teamsLoading } = useActiveOrg();
   const projectLabel = useVocabulary('project');
   const taskNoun = useVocabulary('task').toLowerCase();
   const taskNounPlural = useVocabulary('task', { plural: true }).toLowerCase();
 
-  const [project, setProject] = useState<ProjectOut | null>(null);
-  const [progress, setProgress] = useState<ProjectProgress | null>(null);
-  const [milestones, setMilestones] = useState<readonly MilestoneOut[]>([]);
-  const [milestoneTasks, setMilestoneTasks] = useState<readonly MilestoneTask[]>([]);
-  const [agentsHere, setAgentsHere] = useState<readonly AgentHere[]>([]);
-  const [agentActivity, setAgentActivity] = useState<readonly AgentActivityEntry[]>([]);
-  const [resolveActor, setResolveActor] = useState<ActorDirectory>(() => () => ({
-    name: 'System',
-    kind: 'human' as const,
-  }));
-  const [members, setMembers] = useState<readonly MemberOut[]>([]);
-  const [roles, setRoles] = useState<readonly RoleOut[]>([]);
-  const [programs, setPrograms] = useState<readonly ProgramOut[]>([]);
-  const [initiatives, setInitiatives] = useState<readonly InitiativeOut[]>([]);
-  // Which initiative this project is associated with (resolved from initiative timelines, since
-  // the association is an m2m edge rather than a column on the project).
-  const [currentInitiativeId, setCurrentInitiativeId] = useState<string | null>(null);
-
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  // Properties-panel mutation state (optimistic PATCH + association link/unlink).
-  const [propsPending, setPropsPending] = useState(false);
-  const [propsError, setPropsError] = useState<string | null>(null);
+  const detailKey = queryKeys.project(orgId, projectId);
+  const commentsKey = useMemo(() => [...detailKey, 'comments'] as const, [detailKey]);
+  const updatesKey = useMemo(() => [...detailKey, 'updates'] as const, [detailKey]);
 
   const [tab, setTab] = useState<TabId>('overview');
-
-  // Comments
-  const [comments, setComments] = useState<readonly CommentOut[]>([]);
-  const [commentsLoading, setCommentsLoading] = useState(true);
-  const [commentsError, setCommentsError] = useState<string | null>(null);
-  const [postingComment, setPostingComment] = useState(false);
-  const [commentError, setCommentError] = useState<string | null>(null);
-
-  // Updates
-  const [updates, setUpdates] = useState<readonly UpdateOut[]>([]);
-  const [updatesLoading, setUpdatesLoading] = useState(true);
-  const [updatesError, setUpdatesError] = useState<string | null>(null);
-  const [postingUpdate, setPostingUpdate] = useState(false);
-  const [updateError, setUpdateError] = useState<string | null>(null);
-
-  // Task creation
-  const [creatingTask, setCreatingTask] = useState(false);
-  const [createTaskError, setCreateTaskError] = useState<string | null>(null);
   // The team new tasks land in: a user override (via the picker) or the org's default team.
   const [teamOverride, setTeamOverride] = useState<string | null>(null);
   const teamId = teamOverride ?? defaultTeamId;
 
-  /** Resolve which initiative id (if any) this project is associated with, via timelines. */
-  const resolveInitiativeId = useCallback(
-    async (candidates: readonly InitiativeOut[]): Promise<string | null> => {
-      const matches = await Promise.all(
-        candidates.map(async (init): Promise<string | null> => {
-          const res = await api.v1.orgs[':orgId'].initiatives[':id'].timeline.$get({
-            param: { orgId, id: init.id },
-            query: {},
-          });
-          if (!res.ok) return null;
-          const { projects } = await res.json();
-          return projects.some((p) => p.id === projectId) ? init.id : null;
-        }),
-      );
-      return matches.find((id) => id !== null) ?? null;
-    },
-    [orgId, projectId],
+  const detailQ = useApiQuery(
+    detailKey,
+    fetchProjectDetail(orgId, projectId),
+    'Could not load this project.',
+  );
+  const detail = detailQ.data ?? null;
+  const project = detail?.project ?? null;
+
+  const commentsQ = useApiQuery(
+    commentsKey,
+    () =>
+      api.v1.orgs[':orgId'].comments.$get({
+        param: { orgId },
+        query: { subjectType: 'project', subjectId: projectId },
+      }),
+    'Could not load comments.',
+  );
+  const updatesQ = useApiQuery(
+    updatesKey,
+    () =>
+      api.v1.orgs[':orgId'].updates.$get({
+        param: { orgId },
+        query: { subjectType: 'project', subjectId: projectId },
+      }),
+    'Could not load updates.',
   );
 
-  /** Load the project, its progress, milestones, tasks, related entities, and agents. */
-  const load = useCallback(async (): Promise<void> => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [
-        projectsRes,
-        progressRes,
-        tasksRes,
-        milestonesRes,
-        membersRes,
-        agentsRes,
-        sessionsRes,
-        programsRes,
-        initiativesRes,
-        rolesRes,
-      ] = await Promise.all([
-        api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
-        api.v1.orgs[':orgId'].projects[':id'].progress.$get({ param: { orgId, id: projectId } }),
-        api.v1.orgs[':orgId'].tasks.$get({ param: { orgId } }),
-        api.v1.orgs[':orgId'].milestones.$get({
-          param: { orgId },
-          query: { projectId: ProjectId.parse(projectId) },
-        }),
-        api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
-        api.v1.orgs[':orgId'].agents.$get({ param: { orgId } }),
-        api.v1.orgs[':orgId'].sessions.$get({ param: { orgId }, query: {} }),
-        api.v1.orgs[':orgId'].programs.$get({ param: { orgId } }),
-        api.v1.orgs[':orgId'].initiatives.$get({ param: { orgId } }),
-        api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
-      ]);
+  const comments = useMemo(() => commentsQ.data?.items ?? [], [commentsQ.data]);
+  const updates = useMemo(() => updatesQ.data?.items ?? [], [updatesQ.data]);
 
-      if (!projectsRes.ok) {
-        setError(await readProblem(projectsRes, 'Could not load this project.'));
-        return;
-      }
-      const { items: projectItems } = await projectsRes.json();
-      const found = projectItems.find((p) => p.id === projectId) ?? null;
-      setProject(found);
-      if (!found) return;
-
-      if (progressRes.ok) setProgress(await progressRes.json());
-
-      // Member + agent directory (shared by lead, authors, agent rows).
-      const memberItems = membersRes.ok ? (await membersRes.json()).items : [];
-      const agents = agentsRes.ok ? (await agentsRes.json()).items : [];
-      // The agent's display name lives on its Actor, which the RPC surface does not expose a
-      // name for; fall back to a short, stable label keyed off the agent's actor id.
-      const agentActorByAgentId = new Map(agents.map((a) => [a.id, a.actorId]));
-      const directory = buildActorDirectory({
-        members: memberItems.map((m) => ({ actorId: m.actorId, displayName: m.displayName })),
-        agents: agents.map((a) => ({
-          actorId: a.actorId,
-          name: `Agent ${a.actorId.slice(0, 6)}`,
-        })),
-      });
-      setResolveActor(() => directory);
-      setMembers(memberItems);
-      if (rolesRes.ok) setRoles((await rolesRes.json()).items);
-
-      // Program + initiative option sources for the (now-interactive) properties panel.
-      const programItems: readonly ProgramOut[] = programsRes.ok
-        ? (await programsRes.json()).items
-        : [];
-      setPrograms(programItems);
-      const initiativeItems: readonly InitiativeOut[] = initiativesRes.ok
-        ? (await initiativesRes.json()).items
-        : [];
-      setInitiatives(initiativeItems);
-      setCurrentInitiativeId(
-        initiativeItems.length > 0 ? await resolveInitiativeId(initiativeItems) : null,
+  /** Apply a partial change to the cached project, preserving the rest of the composite payload. */
+  const patchCachedProject = useCallback(
+    (apply: (project: ProjectOut) => ProjectOut): ProjectDetailData | undefined => {
+      const previous = queryClient.getQueryData<ProjectDetailData>(detailKey);
+      queryClient.setQueryData<ProjectDetailData>(detailKey, (cur) =>
+        cur && cur.project ? { ...cur, project: apply(cur.project) } : cur,
       );
+      return previous;
+    },
+    [queryClient, detailKey],
+  );
 
-      // Milestones for this project (ordered by sort from the API).
-      const milestoneItems = milestonesRes.ok ? (await milestonesRes.json()).items : [];
-      setMilestones(milestoneItems);
+  /**
+   * Optimistically patch the project: apply the change to the cached composite payload, fire the
+   * PATCH, roll back to the prior snapshot on failure, and reconcile against the server on settle.
+   */
+  const patch = useApiMutation<ProjectOut, ProjectPatch, { previous?: ProjectDetailData }>({
+    mutationFn: (patchBody) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].projects[':id'].$patch({
+            param: { orgId, id: projectId },
+            json: toProjectPatchBody(patchBody),
+          }),
+        'Could not update the project.',
+      ),
+    onMutate: async (patchBody) => {
+      await queryClient.cancelQueries({ queryKey: detailKey });
+      const body = toProjectPatchBody(patchBody);
+      const previous = patchCachedProject((cur) => ({ ...cur, ...body }));
+      return { previous };
+    },
+    onError: (_err, _body, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(detailKey, ctx.previous);
+    },
+    onSuccess: (updated) => {
+      patchCachedProject(() => updated);
+    },
+    invalidateKeys: [detailKey, queryKeys.projects(orgId)],
+  });
+  const patchProject = patch.mutate;
+  const patchError = patch.error?.message ?? null;
 
-      // This project's tasks, then resolve each task's milestone (the list DTO omits it).
-      const allTasks: readonly TaskOut[] = tasksRes.ok ? (await tasksRes.json()).items : [];
-      const projectTasks = allTasks.filter((t) => t.projectId === projectId);
-
-      const enriched = await Promise.all(
-        projectTasks.map(async (t): Promise<MilestoneTask> => {
-          const detailRes = await api.v1.orgs[':orgId'].tasks[':id'].$get({
-            param: { orgId, id: t.id },
-          });
-          if (!detailRes.ok) return { task: t, milestoneId: null };
-          const detail = await detailRes.json();
-          return { task: t, milestoneId: detail.milestoneId ?? null };
-        }),
-      );
-      setMilestoneTasks(enriched);
-
-      // Agents here: sessions whose task belongs to this project.
-      const projectTaskIds = new Set<string>(projectTasks.map((t) => t.id));
-      const projectTaskTitle = new Map<string, string>(projectTasks.map((t) => [t.id, t.title]));
-      const sessions: readonly AgentSessionOut[] = sessionsRes.ok
-        ? (await sessionsRes.json()).items
-        : [];
-      const here = sessions.filter(
-        (s): s is AgentSessionOut & { taskId: string } =>
-          typeof s.taskId === 'string' && projectTaskIds.has(s.taskId),
-      );
-      setAgentsHere(
-        here.map((s) => ({
-          sessionId: s.id,
-          agentName: directory(agentActorByAgentId.get(s.agentId) ?? null).name,
-          taskTitle: s.taskId ? (projectTaskTitle.get(s.taskId) ?? 'a task') : 'a task',
-          status: s.status,
-        })),
-      );
-
-      // Recent agent activity from those sessions (newest-first, capped).
-      const activityLists = await Promise.all(
-        here.slice(0, 5).map(async (s) => {
-          const detailRes = await api.v1.orgs[':orgId'].sessions[':id'].$get({
-            param: { orgId, id: s.id },
-          });
-          if (!detailRes.ok) return [];
-          const detail = await detailRes.json();
-          const agentName = directory(agentActorByAgentId.get(s.agentId) ?? null).name;
-          return detail.activities.map(
-            (a): AgentActivityEntry => ({
-              id: a.id,
-              agentName,
-              type: a.type,
-              summary: activitySummary(a),
-              createdAt: a.createdAt,
+  /**
+   * Change the project's associated initiative: unlink the old association, then link the new one
+   * (the association is an m2m edge, not a project column). Optimistic with rollback.
+   */
+  const setInitiative = useApiMutation<undefined, string | null, { previous?: ProjectDetailData }>({
+    mutationFn: async (nextInitiativeId) => {
+      const current =
+        queryClient.getQueryData<ProjectDetailData>(detailKey)?.currentInitiativeId ?? null;
+      if (current === nextInitiativeId) return undefined;
+      if (current) {
+        await unwrap(
+          () =>
+            api.v1.orgs[':orgId'].initiatives[':id'].projects[':projectId'].$delete({
+              param: { orgId, id: current, projectId },
             }),
-          );
-        }),
+          'Could not update the association.',
+        );
+      }
+      if (nextInitiativeId) {
+        await unwrap(
+          () =>
+            api.v1.orgs[':orgId'].initiatives[':id'].projects.$post({
+              param: { orgId, id: nextInitiativeId },
+              json: { projectId: ProjectId.parse(projectId) },
+            }),
+          'Could not update the association.',
+        );
+      }
+      return undefined;
+    },
+    onMutate: async (nextInitiativeId) => {
+      await queryClient.cancelQueries({ queryKey: detailKey });
+      const previous = queryClient.getQueryData<ProjectDetailData>(detailKey);
+      queryClient.setQueryData<ProjectDetailData>(detailKey, (cur) =>
+        cur ? { ...cur, currentInitiativeId: nextInitiativeId } : cur,
       );
-      const flatActivity = activityLists
-        .flat()
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-        .slice(0, 8);
-      setAgentActivity(flatActivity);
-    } catch (caught) {
-      setError(readError(caught, 'Something went wrong loading this project.'));
-    } finally {
-      setLoading(false);
-    }
-  }, [orgId, projectId, resolveInitiativeId]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  /**
-   * Optimistically patch the project: apply the change locally, fire the PATCH, and roll back
-   * to the prior snapshot on failure (surfacing the problem). Disables the panel while pending.
-   */
-  const patchProject = useCallback(
-    async (patch: {
-      leadId?: string | null;
-      status?: ProjectStatus;
-      health?: Health | null;
-      startDate?: string | null;
-      targetDate?: string | null;
-      programId?: string | null;
-    }): Promise<void> => {
-      if (!project) return;
-      const previous = project;
-      // One branded patch body, reused for the optimistic snapshot AND the request, so the wire
-      // shape and the local mirror never drift.
-      const body = {
-        ...(patch.leadId !== undefined
-          ? { leadId: patch.leadId === null ? null : ActorId.parse(patch.leadId) }
-          : {}),
-        ...(patch.status !== undefined ? { status: patch.status } : {}),
-        ...(patch.health !== undefined ? { health: patch.health } : {}),
-        ...(patch.startDate !== undefined ? { startDate: patch.startDate } : {}),
-        ...(patch.targetDate !== undefined ? { targetDate: patch.targetDate } : {}),
-        ...(patch.programId !== undefined
-          ? { programId: patch.programId === null ? null : ProgramId.parse(patch.programId) }
-          : {}),
-      };
-      setProject({ ...project, ...body });
-      setPropsPending(true);
-      setPropsError(null);
-      try {
-        const res = await api.v1.orgs[':orgId'].projects[':id'].$patch({
-          param: { orgId, id: projectId },
-          json: body,
-        });
-        if (!res.ok) {
-          setProject(previous);
-          setPropsError(await readProblem(res, 'Could not update the project.'));
-          return;
-        }
-        setProject(await res.json());
-      } catch (caught) {
-        setProject(previous);
-        setPropsError(readError(caught, 'Something went wrong updating the project.'));
-      } finally {
-        setPropsPending(false);
-      }
+      return { previous };
     },
-    [project, orgId, projectId],
-  );
-
-  /**
-   * Change the project's associated initiative: unlink the old association, then link the new
-   * one (the association is an m2m edge, not a project column). Optimistic with rollback.
-   */
-  const setProjectInitiative = useCallback(
-    async (nextInitiativeId: string | null): Promise<void> => {
-      const previous = currentInitiativeId;
-      if (previous === nextInitiativeId) return;
-      setCurrentInitiativeId(nextInitiativeId);
-      setPropsPending(true);
-      setPropsError(null);
-      try {
-        if (previous) {
-          const unlinkRes = await api.v1.orgs[':orgId'].initiatives[':id'].projects[
-            ':projectId'
-          ].$delete({ param: { orgId, id: previous, projectId } });
-          if (!unlinkRes.ok) {
-            setCurrentInitiativeId(previous);
-            setPropsError(await readProblem(unlinkRes, 'Could not update the association.'));
-            return;
-          }
-        }
-        if (nextInitiativeId) {
-          const linkRes = await api.v1.orgs[':orgId'].initiatives[':id'].projects.$post({
-            param: { orgId, id: nextInitiativeId },
-            json: { projectId: ProjectId.parse(projectId) },
-          });
-          if (!linkRes.ok) {
-            setCurrentInitiativeId(previous);
-            setPropsError(await readProblem(linkRes, 'Could not update the association.'));
-            return;
-          }
-        }
-      } catch (caught) {
-        setCurrentInitiativeId(previous);
-        setPropsError(readError(caught, 'Something went wrong updating the association.'));
-      } finally {
-        setPropsPending(false);
-      }
+    onError: (_err, _next, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(detailKey, ctx.previous);
     },
-    [currentInitiativeId, orgId, projectId],
-  );
+    invalidateKeys: [detailKey],
+  });
+  const propsPending = patch.isPending || setInitiative.isPending;
+  const propsError = patchError ?? setInitiative.error?.message ?? null;
 
-  /** Re-fetch only the weighted-progress roll-up (after a task mutation). */
-  const refreshProgress = useCallback(async (): Promise<void> => {
-    const res = await api.v1.orgs[':orgId'].projects[':id'].progress.$get({
-      param: { orgId, id: projectId },
-    });
-    if (res.ok) setProgress(await res.json());
-  }, [orgId, projectId]);
-
-  /** Load the project's comments (subjectType=project). */
-  const loadComments = useCallback(async (): Promise<void> => {
-    setCommentsLoading(true);
-    setCommentsError(null);
-    try {
-      const res = await api.v1.orgs[':orgId'].comments.$get({
-        param: { orgId },
-        query: { subjectType: 'project', subjectId: projectId },
-      });
-      if (!res.ok) {
-        setCommentsError(await readProblem(res, 'Could not load comments.'));
-        return;
-      }
-      setComments((await res.json()).items);
-    } catch (caught) {
-      setCommentsError(readError(caught, 'Something went wrong loading comments.'));
-    } finally {
-      setCommentsLoading(false);
-    }
-  }, [orgId, projectId]);
-
-  /** Load the project's status updates (subjectType=project). */
-  const loadUpdates = useCallback(async (): Promise<void> => {
-    setUpdatesLoading(true);
-    setUpdatesError(null);
-    try {
-      const res = await api.v1.orgs[':orgId'].updates.$get({
-        param: { orgId },
-        query: { subjectType: 'project', subjectId: projectId },
-      });
-      if (!res.ok) {
-        setUpdatesError(await readProblem(res, 'Could not load updates.'));
-        return;
-      }
-      setUpdates((await res.json()).items);
-    } catch (caught) {
-      setUpdatesError(readError(caught, 'Something went wrong loading updates.'));
-    } finally {
-      setUpdatesLoading(false);
-    }
-  }, [orgId, projectId]);
-
-  useEffect(() => {
-    void loadComments();
-    void loadUpdates();
-  }, [loadComments, loadUpdates]);
-
-  /** Post a new root comment, then prepend it (after a reload to keep order canonical). */
-  const postComment = useCallback(
-    async (body: string): Promise<void> => {
-      setPostingComment(true);
-      setCommentError(null);
-      try {
-        const res = await api.v1.orgs[':orgId'].comments.$post({
-          param: { orgId },
-          json: { subjectType: 'project', subjectId: projectId, body },
-        });
-        if (!res.ok) {
-          setCommentError(await readProblem(res, 'Could not post your comment.'));
-          return;
-        }
-        const created = await res.json();
-        setComments((current) => [...current, created]);
-      } catch (caught) {
-        setCommentError(readError(caught, 'Something went wrong posting your comment.'));
-      } finally {
-        setPostingComment(false);
-      }
-    },
-    [orgId, projectId],
-  );
+  /** Post a new root comment; append it optimistically and reconcile on settle. */
+  const postCommentM = useApiMutation({
+    mutationFn: (body: string) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].comments.$post({
+            param: { orgId },
+            json: { subjectType: 'project', subjectId: projectId, body },
+          }),
+        'Could not post your comment.',
+      ),
+    invalidateKeys: [commentsKey],
+  });
 
   /** Post a status update; a health verdict also moves the project's current health. */
-  const postUpdate = useCallback(
-    async (body: string, health: Health | undefined): Promise<void> => {
-      setPostingUpdate(true);
-      setUpdateError(null);
-      try {
-        const res = await api.v1.orgs[':orgId'].updates.$post({
-          param: { orgId },
-          json: {
-            subjectType: 'project',
-            subjectId: projectId,
-            body,
-            ...(health ? { health } : {}),
-          },
-        });
-        if (!res.ok) {
-          setUpdateError(await readProblem(res, 'Could not post your update.'));
-          return;
-        }
-        const created = await res.json();
-        setUpdates((current) => [created, ...current]);
-        // The newest health becomes the project's current health — reflect it locally.
-        if (health) setProject((current) => (current ? { ...current, health } : current));
-      } catch (caught) {
-        setUpdateError(readError(caught, 'Something went wrong posting your update.'));
-      } finally {
-        setPostingUpdate(false);
-      }
+  const postUpdateM = useApiMutation({
+    mutationFn: ({ body, health }: { body: string; health: Health | undefined }) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].updates.$post({
+            param: { orgId },
+            json: {
+              subjectType: 'project',
+              subjectId: projectId,
+              body,
+              ...(health ? { health } : {}),
+            },
+          }),
+        'Could not post your update.',
+      ),
+    onSuccess: (_created, { health }) => {
+      // The newest health becomes the project's current health — reflect it locally.
+      if (health) patchCachedProject((cur) => ({ ...cur, health }));
     },
-    [orgId, projectId],
+    invalidateKeys: [updatesKey, detailKey],
+  });
+
+  /** Create a task on the project's team; the milestone bucket resolves on the detail refetch. */
+  const createTaskM = useApiMutation({
+    mutationFn: (title: string) => {
+      if (!teamId)
+        return Promise.reject(new Error('No team is available yet to create a task in.'));
+      return unwrap(
+        () =>
+          api.v1.orgs[':orgId'].tasks.$post({
+            param: { orgId },
+            json: { title, teamId: TeamId.parse(teamId), projectId: ProjectId.parse(projectId) },
+          }),
+        'Could not create the task.',
+      );
+    },
+    // A new task shifts the milestone buckets AND the weighted-progress roll-up; refetch the
+    // composite detail (which recomputes both) and the org task list.
+    invalidateKeys: [detailKey, queryKeys.tasks(orgId)],
+  });
+
+  const loading = detailQ.isPending;
+  const error = detailQ.isError ? detailQ.error.message : null;
+
+  const members = detail?.members ?? [];
+  const roles = detail?.roles ?? [];
+  const programs = detail?.programs ?? [];
+  const initiatives = detail?.initiatives ?? [];
+  const milestones = detail?.milestones ?? [];
+  const milestoneTasks = useMemo(() => detail?.milestoneTasks ?? [], [detail]);
+  const resolveActor = useMemo<ActorDirectory>(
+    () => detail?.resolveActor ?? (() => ({ name: 'System', kind: 'human' as const })),
+    [detail],
   );
 
-  /** Create a task on the project's team; reload so its milestone bucket resolves. */
-  const createTask = useCallback(
-    async (title: string): Promise<void> => {
-      if (!teamId) {
-        setCreateTaskError('No team is available yet to create a task in.');
-        return;
-      }
-      setCreatingTask(true);
-      setCreateTaskError(null);
-      try {
-        const res = await api.v1.orgs[':orgId'].tasks.$post({
-          param: { orgId },
-          json: { title, teamId: TeamId.parse(teamId), projectId: ProjectId.parse(projectId) },
-        });
-        if (!res.ok) {
-          setCreateTaskError(await readProblem(res, 'Could not create the task.'));
-          return;
-        }
-        const created = await res.json();
-        setMilestoneTasks((current) => [...current, { task: created, milestoneId: null }]);
-        // The weighted roll-up shifts with a new task; re-fetch the authoritative value.
-        void refreshProgress();
-      } catch (caught) {
-        setCreateTaskError(readError(caught, 'Something went wrong creating the task.'));
-      } finally {
-        setCreatingTask(false);
-      }
-    },
-    [orgId, projectId, teamId, refreshProgress],
-  );
-
-  // One canonical task-count definition shared by the Tasks-tab badge AND the Overview
-  // breakdown: every task that belongs to this project (subtasks included, matching the
-  // `…/progress` denominator). Previously the badge showed only the open count while the
-  // progress card showed the total, so the same project read with two different totals.
+  // One canonical task-count definition shared by the Tasks-tab badge AND the Overview breakdown:
+  // every task that belongs to this project (subtasks included, matching the `…/progress`
+  // denominator).
   const taskCount = milestoneTasks.length;
 
   const tabs: readonly TabItem[] = useMemo(
@@ -636,6 +602,10 @@ export default function ProjectDetailPage(): JSX.Element {
   }
 
   const health = project.health ?? null;
+  const progress = detail?.progress ?? null;
+  const agentsHere = detail?.agentsHere ?? [];
+  const agentActivity = detail?.agentActivity ?? [];
+  const currentInitiativeId = detail?.currentInitiativeId ?? null;
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
@@ -692,14 +662,14 @@ export default function ProjectDetailPage(): JSX.Element {
 
             <Discussion
               comments={comments}
-              loading={commentsLoading}
-              error={commentsError}
+              loading={commentsQ.isPending}
+              error={commentsQ.isError ? commentsQ.error.message : null}
               resolveActor={resolveActor}
               agentActivity={agentActivity}
-              posting={postingComment}
-              postError={commentError}
+              posting={postCommentM.isPending}
+              postError={postCommentM.error?.message ?? null}
               onPost={(body) => {
-                void postComment(body);
+                postCommentM.mutate(body);
               }}
             />
           </div>
@@ -719,22 +689,22 @@ export default function ProjectDetailPage(): JSX.Element {
               canEdit={canEdit}
               pending={propsPending}
               onLeadChange={(leadId) => {
-                void patchProject({ leadId });
+                patchProject({ leadId });
               }}
               onStatusChange={(status) => {
-                void patchProject({ status });
+                patchProject({ status });
               }}
               onHealthChange={(next) => {
-                void patchProject({ health: next });
+                patchProject({ health: next });
               }}
               onTimelineChange={({ start, end }) => {
-                void patchProject({ startDate: start, targetDate: end });
+                patchProject({ startDate: start, targetDate: end });
               }}
               onProgramChange={(programId) => {
-                void patchProject({ programId });
+                patchProject({ programId });
               }}
               onInitiativeChange={(initiativeId) => {
-                void setProjectInitiative(initiativeId);
+                setInitiative.mutate(initiativeId);
               }}
             />
             {propsError ? (
@@ -760,10 +730,10 @@ export default function ProjectDetailPage(): JSX.Element {
             onOpenTask={(taskId) => {
               router.push(`/orgs/${orgId}/tasks/${taskId}`);
             }}
-            creating={creatingTask}
-            createError={createTaskError}
+            creating={createTaskM.isPending}
+            createError={createTaskM.error?.message ?? null}
             onCreate={(title) => {
-              void createTask(title);
+              createTaskM.mutate(title);
             }}
             teams={teams}
             teamId={teamId}
@@ -777,13 +747,13 @@ export default function ProjectDetailPage(): JSX.Element {
         <div role="tabpanel" id="tabpanel-updates" aria-labelledby="tab-updates">
           <UpdatesTab
             updates={updates}
-            loading={updatesLoading}
-            error={updatesError}
+            loading={updatesQ.isPending}
+            error={updatesQ.isError ? updatesQ.error.message : null}
             resolveActor={resolveActor}
-            posting={postingUpdate}
-            postError={updateError}
+            posting={postUpdateM.isPending}
+            postError={postUpdateM.error?.message ?? null}
             onPost={(body, postHealth) => {
-              void postUpdate(body, postHealth);
+              postUpdateM.mutate({ body, health: postHealth });
             }}
           />
         </div>

@@ -40,8 +40,9 @@ import {
 import { LayoutGrid, Plus } from '@docket/ui/icons';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Button, Separator, Skeleton } from '@docket/ui/primitives';
+import { useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
-import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
+import { type JSX, useCallback, useMemo, useState } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 import { FilterBuilder } from '@/components/views/filter-builder';
@@ -50,7 +51,7 @@ import { type RunnerActor, ViewRunner } from '@/components/views/view-runner';
 import { ViewList } from '@/components/views/view-list';
 import { fieldSpec } from '@/components/views/view-engine';
 import { api } from '@/lib/api';
-import { readError, readProblem } from '@/lib/problem';
+import { queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
 
 /** The active working query the builder edits, the runner renders, and the composer saves. */
 interface WorkingQuery {
@@ -87,54 +88,53 @@ export default function ViewsPage(): JSX.Element {
   const programLabel = useVocabulary('program');
   const viewsLabel = useVocabulary('task', { plural: true });
 
-  const [views, setViews] = useState<readonly SavedViewOut[]>([]);
-  const [tasks, setTasks] = useState<readonly TaskOut[]>([]);
-  const [projects, setProjects] = useState<readonly ProjectOut[]>([]);
-  const [programs, setPrograms] = useState<readonly ProgramOut[]>([]);
-  const [members, setMembers] = useState<readonly MemberOut[]>([]);
-  const [agents, setAgents] = useState<readonly AgentOut[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const savedViewsKey = queryKeys.savedViews(orgId);
+
+  // The saved-views read governs whether the screen can render; the tasks + entity reads are
+  // best-effort overlays used to resolve labels (a failed one just leaves a value un-skinned).
+  const viewsQ = useApiQuery(
+    savedViewsKey,
+    () => api.v1.orgs[':orgId']['saved-views'].$get({ param: { orgId } }),
+    'Could not load your saved views.',
+  );
+  const tasksQ = useApiQuery(
+    queryKeys.tasks(orgId),
+    () => api.v1.orgs[':orgId'].tasks.$get({ param: { orgId } }),
+    'Could not load tasks.',
+  );
+  const projectsQ = useApiQuery(
+    queryKeys.projects(orgId),
+    () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
+    'Could not load projects.',
+  );
+  const programsQ = useApiQuery(
+    queryKeys.programs(orgId),
+    () => api.v1.orgs[':orgId'].programs.$get({ param: { orgId } }),
+    'Could not load programs.',
+  );
+  const membersQ = useApiQuery(
+    queryKeys.members(orgId),
+    () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
+    'Could not load members.',
+  );
+  const agentsQ = useApiQuery(
+    queryKeys.agents(orgId),
+    () => api.v1.orgs[':orgId'].agents.$get({ param: { orgId } }),
+    'Could not load agents.',
+  );
+
+  const views: readonly SavedViewOut[] = viewsQ.data?.items ?? [];
+  const tasks: readonly TaskOut[] = tasksQ.data?.items ?? [];
+  const projects: readonly ProjectOut[] = projectsQ.data?.items ?? [];
+  const programs: readonly ProgramOut[] = programsQ.data?.items ?? [];
+  const members: readonly MemberOut[] = membersQ.data?.items ?? [];
+  const agents: readonly AgentOut[] = agentsQ.data?.items ?? [];
+  const loading = viewsQ.isPending;
+  const loadError = viewsQ.isError ? viewsQ.error.message : null;
 
   const [query, setQuery] = useState<WorkingQuery>(EMPTY_QUERY);
   const [composerOpen, setComposerOpen] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-
-  /** Load the org's saved views, plus the tasks + entities used to resolve labels. */
-  const load = useCallback(async (): Promise<void> => {
-    setLoading(true);
-    setLoadError(null);
-    try {
-      const [viewsRes, tasksRes, projectsRes, programsRes, membersRes, agentsRes] =
-        await Promise.all([
-          api.v1.orgs[':orgId']['saved-views'].$get({ param: { orgId } }),
-          api.v1.orgs[':orgId'].tasks.$get({ param: { orgId } }),
-          api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
-          api.v1.orgs[':orgId'].programs.$get({ param: { orgId } }),
-          api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
-          api.v1.orgs[':orgId'].agents.$get({ param: { orgId } }),
-        ]);
-      if (!viewsRes.ok) {
-        setLoadError(await readProblem(viewsRes, 'Could not load your saved views.'));
-        return;
-      }
-      setViews((await viewsRes.json()).items);
-      if (tasksRes.ok) setTasks((await tasksRes.json()).items);
-      if (projectsRes.ok) setProjects((await projectsRes.json()).items);
-      if (programsRes.ok) setPrograms((await programsRes.json()).items);
-      if (membersRes.ok) setMembers((await membersRes.json()).items);
-      if (agentsRes.ok) setAgents((await agentsRes.json()).items);
-    } catch (caught) {
-      setLoadError(readError(caught, 'Something went wrong loading your saved views.'));
-    } finally {
-      setLoading(false);
-    }
-  }, [orgId]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
 
   /** Project/program name lookups for resolving entity-id field values to labels. */
   const projectName = useMemo(
@@ -215,51 +215,53 @@ export default function ViewsPage(): JSX.Element {
     return parts.join(' · ');
   }, [groupingLabel, query]);
 
-  /** Open a saved view: its stored config becomes the active working query. */
-  const openView = useCallback((view: SavedViewOut): void => {
-    setComposerOpen(false);
-    setSaveError(null);
-    setQuery({
-      sourceViewId: view.id,
-      filters: view.filters,
-      grouping: view.grouping ?? null,
-      sort: view.sort,
-    });
-  }, []);
-
   /** Whether the org has a team id available to attach a team-scoped view to. */
   const canScopeToTeam = useMemo(() => Boolean(defaultTeamId), [defaultTeamId]);
 
   /** Save the working query as a new saved view and prepend it to the directory. */
-  const saveView = useCallback(
-    async (payload: SavedViewCreate): Promise<void> => {
-      setSaving(true);
-      setSaveError(null);
-      try {
-        const res = await api.v1.orgs[':orgId']['saved-views'].$post({
-          param: { orgId },
-          json: {
-            ...payload,
-            ...(payload.scope === 'team' && defaultTeamId
-              ? { teamId: TeamId.parse(defaultTeamId) }
-              : {}),
-          },
-        });
-        if (!res.ok) {
-          setSaveError(await readProblem(res, 'Could not save the view. Please try again.'));
-          return;
-        }
-        const created = await res.json();
-        setViews((current) => [created, ...current]);
-        setComposerOpen(false);
-        setQuery((current) => ({ ...current, sourceViewId: created.id }));
-      } catch (caught) {
-        setSaveError(readError(caught, 'Something went wrong saving the view.'));
-      } finally {
-        setSaving(false);
-      }
+  const saveMutation = useApiMutation({
+    mutationFn: (payload: SavedViewCreate) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId']['saved-views'].$post({
+            param: { orgId },
+            json: {
+              ...payload,
+              ...(payload.scope === 'team' && defaultTeamId
+                ? { teamId: TeamId.parse(defaultTeamId) }
+                : {}),
+            },
+          }),
+        'Could not save the view. Please try again.',
+      ),
+    onSuccess: (created) => {
+      // Prepend the created view so it appears instantly; the invalidation below reconciles with
+      // the server's authoritative directory. The cache holds the full list body, so map over
+      // `.items` while preserving the rest. Open the new view as the working query's source.
+      queryClient.setQueryData<NonNullable<typeof viewsQ.data>>(savedViewsKey, (current) =>
+        current ? { ...current, items: [created, ...current.items] } : { items: [created] },
+      );
+      setComposerOpen(false);
+      setQuery((current) => ({ ...current, sourceViewId: created.id }));
     },
-    [orgId, defaultTeamId],
+    invalidateKeys: [savedViewsKey],
+  });
+  const saving = saveMutation.isPending;
+  const saveError = saveMutation.isError ? saveMutation.error.message : null;
+
+  /** Open a saved view: its stored config becomes the active working query. */
+  const openView = useCallback(
+    (view: SavedViewOut): void => {
+      setComposerOpen(false);
+      saveMutation.reset();
+      setQuery({
+        sourceViewId: view.id,
+        filters: view.filters,
+        grouping: view.grouping ?? null,
+        sort: view.sort,
+      });
+    },
+    [saveMutation],
   );
 
   const openViewName = useMemo(
@@ -326,7 +328,7 @@ export default function ViewsPage(): JSX.Element {
                 size="sm"
                 className="gap-1.5"
                 onClick={() => {
-                  setSaveError(null);
+                  saveMutation.reset();
                   setComposerOpen((open) => !open);
                 }}
                 aria-expanded={composerOpen}
@@ -363,7 +365,7 @@ export default function ViewsPage(): JSX.Element {
                 saving={saving}
                 error={saveError}
                 onSave={(payload) => {
-                  void saveView(payload);
+                  saveMutation.mutate(payload);
                 }}
                 onCancel={() => {
                   setComposerOpen(false);

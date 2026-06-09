@@ -18,11 +18,19 @@
  * needs no extra fetch.
  */
 import type { Health, ProjectOut } from '@docket/types';
+import { ActorAvatar, type Column, StatusIcon } from '@docket/ui/components';
+import { Calendar, ListChecks } from '@docket/ui/icons';
+import { createElement, type ReactNode } from 'react';
 
-import { type FieldCatalog, type FieldOption } from '@/components/views/field-catalog';
+import {
+  type FieldCatalog,
+  type FieldOption,
+  findField,
+  labelForValue,
+} from '@/components/views/field-catalog';
 
-import { HEALTH_LABEL } from './health';
-import { STATUS_LABEL, statusGlyphType } from './project-status';
+import { HEALTH_DOT_CLASS, HEALTH_LABEL } from './health';
+import { ProjectStatusBadge, STATUS_LABEL, statusGlyphType, statusLabel } from './project-status';
 
 /** The project lifecycle statuses, in workflow order, with their glyph hints. */
 const STATUS_OPTIONS: readonly FieldOption[] = (
@@ -125,6 +133,164 @@ export function buildProjectCatalog(deps: ProjectCatalogDeps): FieldCatalog<Proj
       type: 'text',
       accessor: (project) => project.name,
       sortable: true,
+    },
+  ];
+}
+
+/** A short, year-less day formatter for a project's target date (e.g. "Jun 21"). */
+const TARGET_DATE_FMT = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' });
+
+/** Format a project's nullable target date for the table cell, or `null` when unset/invalid. */
+function formatTargetDate(targetDate: string | null | undefined): string | null {
+  if (!targetDate) return null;
+  const date = new Date(targetDate);
+  if (Number.isNaN(date.getTime())) return null;
+  return TARGET_DATE_FMT.format(date);
+}
+
+/** Page-supplied roll-ups the table cells need beyond the project row itself (task scope). */
+export interface ProjectColumnDeps {
+  /** The number of tasks scoped to a project (rolled up client-side from the tasks slice). */
+  taskCountFor: (project: ProjectOut) => number;
+  /** Singular task noun (vocabulary-resolved, lower-cased). */
+  taskNoun: string;
+  /** Plural task noun (vocabulary-resolved, lower-cased). */
+  taskNounPlural: string;
+}
+
+/** Render a muted dash for an unset value, keeping aligned columns visually quiet but present. */
+function emDash(): ReactNode {
+  return createElement('span', { className: 'text-on-surface-variant/60' }, '—');
+}
+
+/**
+ * Derive the {@link EntityTable} columns for the Projects roster from its {@link FieldCatalog}.
+ *
+ * @remarks
+ * Columns are derived from the catalog so the table headers + the toolbar's group/sort fields read
+ * from one source of truth: each property column borrows its header from the matching
+ * {@link FieldDescriptor.label}, and relation cells (Lead) resolve their label through the same
+ * {@link labelForValue} the toolbar uses. The shape is the **shared entity-table vocabulary** every
+ * Docket roster uses — a leading status glyph, a flexing **Title**, then aligned property columns —
+ * with Projects differing only in its trailing properties (lead, target date, task scope). The
+ * responsive `priority` tiers shed the least-important columns first so the app never overflows.
+ *
+ * @param catalog - The project catalog (built by {@link buildProjectCatalog}).
+ * @param deps - The page-supplied task-scope roll-up + nouns.
+ * @returns the ordered table columns over {@link ProjectOut}.
+ */
+export function projectColumns(
+  catalog: FieldCatalog<ProjectOut>,
+  deps: ProjectColumnDeps,
+): readonly Column<ProjectOut>[] {
+  const status = findField(catalog, 'status');
+  const lead = findField(catalog, 'leadId');
+  const health = findField(catalog, 'health');
+  const targetDate = findField(catalog, 'targetDate');
+
+  return [
+    // Leading lifecycle glyph — the shared, always-kept leading column.
+    {
+      key: 'glyph',
+      header: '',
+      width: '1.25rem',
+      priority: 'always',
+      render: (project) =>
+        createElement(StatusIcon, {
+          type: statusGlyphType(project.status),
+          label: statusLabel(project.status),
+        }),
+    },
+    // TITLE — the one flexing, truncating column (never hidden).
+    {
+      key: 'name',
+      header: 'Title',
+      flex: true,
+      render: (project) =>
+        createElement('span', { className: 'text-on-surface truncate font-medium' }, project.name),
+    },
+    // STATUS badge — header + value labels come straight from the catalog field.
+    {
+      key: 'status',
+      header: status?.label ?? 'Status',
+      width: '7rem',
+      priority: 1,
+      render: (project) => createElement(ProjectStatusBadge, { status: project.status }),
+    },
+    // HEALTH — a small token dot + label (shared baseline property).
+    {
+      key: 'health',
+      header: health?.label ?? 'Health',
+      minWidth: '7rem',
+      priority: 2,
+      render: (project) =>
+        project.health
+          ? createElement(
+              'span',
+              {
+                className: 'text-on-surface-variant flex items-center gap-1.5 text-xs font-medium',
+              },
+              createElement('span', {
+                'aria-hidden': true,
+                className: `size-1.5 rounded-full ${HEALTH_DOT_CLASS[project.health]}`,
+              }),
+              HEALTH_LABEL[project.health],
+            )
+          : emDash(),
+    },
+    // LEAD/OWNER avatar — relation field; resolveLabel turns the id into a display name.
+    {
+      key: 'leadId',
+      header: lead?.label ?? 'Lead',
+      minWidth: '8rem',
+      priority: 2,
+      render: (project) => {
+        if (!lead || !project.leadId) return emDash();
+        const name = labelForValue(lead, project.leadId);
+        return createElement(
+          'span',
+          { className: 'flex min-w-0 items-center gap-1.5' },
+          createElement(ActorAvatar, { kind: 'human', name, size: 18 }),
+          createElement('span', { className: 'text-on-surface truncate' }, name),
+        );
+      },
+    },
+    // TARGET DATE — end-aligned, tabular.
+    {
+      key: 'targetDate',
+      header: targetDate?.label ?? 'Target date',
+      align: 'end',
+      width: '6.5rem',
+      priority: 3,
+      render: (project) => {
+        const formatted = formatTargetDate(project.targetDate);
+        return formatted
+          ? createElement(
+              'span',
+              { className: 'text-on-surface-variant flex items-center gap-1.5 tabular-nums' },
+              createElement(Calendar, { 'aria-hidden': true, className: 'size-3.5' }),
+              formatted,
+            )
+          : emDash();
+      },
+    },
+    // SCOPE — the project's task count (end-aligned, tabular).
+    {
+      key: 'scope',
+      header: 'Scope',
+      align: 'end',
+      width: '6.5rem',
+      priority: 3,
+      render: (project) => {
+        const count = deps.taskCountFor(project);
+        const word = count === 1 ? deps.taskNoun : deps.taskNounPlural;
+        return createElement(
+          'span',
+          { className: 'text-on-surface-variant flex items-center gap-1.5 tabular-nums' },
+          createElement(ListChecks, { 'aria-hidden': true, className: 'size-3.5' }),
+          `${String(count)} ${word}`,
+        );
+      },
     },
   ];
 }

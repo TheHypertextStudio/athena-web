@@ -719,6 +719,7 @@ export default function ProjectDetailPage(): JSX.Element {
       {tab === 'tasks' ? (
         <div role="tabpanel" id="tabpanel-tasks" aria-labelledby="tab-tasks">
           <MilestoneTasks
+            orgId={orgId}
             tasks={milestoneTasks}
             milestones={milestones.map((m) => ({
               id: m.id,

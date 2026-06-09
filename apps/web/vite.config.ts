@@ -34,6 +34,9 @@ const config = docketVitest({
     'src/components/views/field-catalog.ts',
     'src/components/views/apply-view.ts',
     'src/components/views/view-state-url.ts',
+    // The task estimate formatter is pure, behavior-bearing display logic (an unset/zero estimate
+    // must collapse to a neutral placeholder, not "0m"), shared by every aligned task table.
+    'src/lib/format-estimate.ts',
   ],
 });
 

@@ -21,10 +21,13 @@
  * field's domain glyph.
  */
 import type { Health } from '@docket/types';
+import { type Column, StatusIcon } from '@docket/ui/components';
+import { FolderKanban, Layers } from '@docket/ui/icons';
+import { createElement, type ReactNode } from 'react';
 
-import { HEALTH_LABEL } from '@/components/projects/health';
+import { HEALTH_DOT_CLASS, HEALTH_LABEL } from '@/components/projects/health';
 import { statusGlyphType } from '@/components/projects/project-status';
-import { type FieldCatalog, type FieldOption } from '@/components/views/field-catalog';
+import { type FieldCatalog, type FieldOption, findField } from '@/components/views/field-catalog';
 
 import type { InitiativeRowData } from './initiative-row';
 
@@ -115,6 +118,148 @@ export function buildInitiativeCatalog(): FieldCatalog<InitiativeCatalogRow> {
       type: 'date',
       accessor: (initiative) => initiative.createdAt,
       sortable: true,
+    },
+  ];
+}
+
+/** Render a muted dash for an unset value, keeping aligned columns visually quiet but present. */
+function emDash(): ReactNode {
+  return createElement('span', { className: 'text-on-surface-variant/60' }, '—');
+}
+
+/** A compact scope cell: an icon + a "N noun" count (end-aligned, tabular). */
+function scopeCell(
+  icon: typeof FolderKanban,
+  count: number,
+  noun: string,
+  nounPlural: string,
+): ReactNode {
+  return createElement(
+    'span',
+    { className: 'text-on-surface-variant flex items-center gap-1.5 tabular-nums' },
+    createElement(icon, { 'aria-hidden': true, className: 'size-3.5' }),
+    `${String(count)} ${count === 1 ? noun : nounPlural}`,
+  );
+}
+
+/** Page-supplied vocabulary nouns the initiative scope columns need. */
+export interface InitiativeColumnDeps {
+  /** Header label for the Programs scope column (vocabulary-resolved plural, title-cased). */
+  programsHeader: string;
+  /** Singular Program noun (vocabulary-resolved, lower-cased) for the cell count. */
+  programNoun: string;
+  /** Plural Program noun (vocabulary-resolved, lower-cased) for the cell count. */
+  programNounPlural: string;
+  /** Header label for the Projects scope column (vocabulary-resolved plural, title-cased). */
+  projectsHeader: string;
+  /** Singular Project noun (vocabulary-resolved, lower-cased) for the cell count. */
+  projectNoun: string;
+  /** Plural Project noun (vocabulary-resolved, lower-cased) for the cell count. */
+  projectNounPlural: string;
+}
+
+/**
+ * Derive the {@link EntityTable} columns for the Initiatives roster from its {@link FieldCatalog}.
+ *
+ * @remarks
+ * Columns are derived from the catalog so the table headers + the toolbar's group/sort fields read
+ * from one source of truth: the Status and Health columns borrow their header from the matching
+ * {@link FieldDescriptor.label}. The shape is the **same shared entity-table vocabulary** the
+ * Projects roster uses — a leading status glyph, a flexing **Title**, then aligned Status + Health
+ * columns — so an initiative roster and a project roster read identically. An Initiative carries no
+ * work of its own, so where a Project surfaces a lead + target date, an Initiative surfaces its
+ * *membership mix* (how many Programs / Projects it spans) as its trailing scope columns. Responsive
+ * `priority` tiers shed the least-important columns first so the app never overflows.
+ *
+ * @param catalog - The initiative catalog (built by {@link buildInitiativeCatalog}).
+ * @param deps - The page-supplied vocabulary nouns for the scope columns.
+ * @returns the ordered table columns over {@link InitiativeCatalogRow}.
+ */
+export function initiativeColumns(
+  catalog: FieldCatalog<InitiativeCatalogRow>,
+  deps: InitiativeColumnDeps,
+): readonly Column<InitiativeCatalogRow>[] {
+  const status = findField(catalog, 'derivedStatus');
+  const health = findField(catalog, 'rolledUpHealth');
+
+  return [
+    // Leading derived-status glyph — the shared, always-kept leading column.
+    {
+      key: 'glyph',
+      header: '',
+      width: '1.25rem',
+      priority: 'always',
+      render: (initiative) =>
+        createElement(StatusIcon, {
+          type: statusGlyphType(initiative.derivedStatus),
+          label: STATUS_LABEL[initiative.derivedStatus] ?? initiative.derivedStatus,
+        }),
+    },
+    // TITLE — the one flexing, truncating column (never hidden).
+    {
+      key: 'name',
+      header: 'Title',
+      flex: true,
+      render: (initiative) =>
+        createElement(
+          'span',
+          { className: 'text-on-surface truncate font-medium' },
+          initiative.name,
+        ),
+    },
+    // STATUS — a quiet text label (an Initiative's status is auto-derived, no badge weight needed).
+    {
+      key: 'derivedStatus',
+      header: status?.label ?? 'Status',
+      width: '7rem',
+      priority: 1,
+      render: (initiative) =>
+        createElement(
+          'span',
+          { className: 'text-on-surface-variant text-xs font-medium' },
+          STATUS_LABEL[initiative.derivedStatus] ?? initiative.derivedStatus,
+        ),
+    },
+    // HEALTH — the rolled-up (worst-child) verdict as a token dot + label (shared baseline).
+    {
+      key: 'rolledUpHealth',
+      header: health?.label ?? 'Health',
+      minWidth: '7rem',
+      priority: 2,
+      render: (initiative) =>
+        initiative.rolledUpHealth
+          ? createElement(
+              'span',
+              {
+                className: 'text-on-surface-variant flex items-center gap-1.5 text-xs font-medium',
+              },
+              createElement('span', {
+                'aria-hidden': true,
+                className: `size-1.5 rounded-full ${HEALTH_DOT_CLASS[initiative.rolledUpHealth]}`,
+              }),
+              HEALTH_LABEL[initiative.rolledUpHealth],
+            )
+          : emDash(),
+    },
+    // PROGRAMS scope — how many Programs the theme spans (end-aligned, tabular).
+    {
+      key: 'programCount',
+      header: deps.programsHeader,
+      align: 'end',
+      width: '7rem',
+      priority: 3,
+      render: (initiative) =>
+        scopeCell(Layers, initiative.programCount, deps.programNoun, deps.programNounPlural),
+    },
+    // PROJECTS scope — how many Projects the theme spans (end-aligned, tabular).
+    {
+      key: 'projectCount',
+      header: deps.projectsHeader,
+      align: 'end',
+      width: '7rem',
+      priority: 3,
+      render: (initiative) =>
+        scopeCell(FolderKanban, initiative.projectCount, deps.projectNoun, deps.projectNounPlural),
     },
   ];
 }

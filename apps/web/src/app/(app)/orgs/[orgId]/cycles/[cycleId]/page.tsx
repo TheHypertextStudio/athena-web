@@ -11,10 +11,12 @@
  *   a planned-vs-completed burn-up line over the window, capacity, scope creep, and carryover,
  *   plus the window runway. It collapses to a dense summary strip so the list can take the
  *   height.
- * - **List** — the cycle's committed tasks (`…/cycles/:id/tasks`) in the design-system
- *   {@link ListView}, grouped by {@link useVocabulary | project} or {@link useVocabulary | program}
- *   (toggled by a styled {@link GroupByMenu}) and sub-grouped by canonical workflow state so
- *   the {@link StatusIcon} reads correctly. Rows open the task detail.
+ * - **List** — the cycle's committed tasks (`…/cycles/:id/tasks`) in the shared, aligned-column
+ *   {@link TaskTable} (the same surface every task list uses): a leading status glyph, a flexing
+ *   title, then aligned assignee / due-date / estimate columns under a light header. The tasks are
+ *   grouped by {@link useVocabulary | project} or {@link useVocabulary | program} (toggled by a
+ *   styled {@link GroupByMenu}) into full-width sections, ordered within each section by canonical
+ *   workflow state so the list reads progress-down. Rows open the task detail.
  * - **Close flow** — "Close {cycle}" opens the {@link CloseCycleDialog}, which reviews every
  *   still-open task (keep / move-to-next / return-to-triage) *before* it rolls, then
  *   `POST …/cycles/:id/close`. An already-completed cycle shows its final stats read-only.
@@ -38,7 +40,7 @@ import {
   TaskId,
   type TaskOut,
 } from '@docket/types';
-import { type GroupKey, ListView, TaskRow, type TaskRowData } from '@docket/ui/components';
+import { type EntityTableGroup } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Badge, Button, Skeleton } from '@docket/ui/primitives';
 import { useParams, useRouter } from 'next/navigation';
@@ -53,10 +55,12 @@ import { STATUS_LABEL, statusBadgeVariant } from '@/components/cycles/cycle-stat
 import { formatWindow, windowProgress } from '@/components/cycles/format-window';
 import { GroupByMenu } from '@/components/cycles/group-by-menu';
 import { StatsBanner } from '@/components/cycles/stats-banner';
+import { buildTaskCatalog } from '@/components/views/task-catalog';
+import { buildTaskColumns, TaskTable } from '@/components/views/task-table';
 import { api } from '@/lib/api';
 import { type RpcResponse, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
 import { useOrgCapability } from '@/lib/use-org-capability';
-import { STATE_GROUP_LABEL, STATE_GROUP_ORDER, stateTypeOf } from '@/lib/work-state';
+import { STATE_GROUP_ORDER, stateTypeOf } from '@/lib/work-state';
 
 /** A stable empty name map, used as the default before the detail lands. */
 const EMPTY_NAME_MAP: ReadonlyMap<string, string> = new Map();
@@ -122,7 +126,7 @@ function fetchCycleDetail(
     const burnup = burnupRes.ok ? await burnupRes.json() : null;
 
     // The grouped read carries the cycle's committed tasks; flatten both axes' groups into a single
-    // task list and let the ListView re-group client-side as the axis toggles.
+    // task list and let the task table re-group client-side as the axis toggles.
     const tasks: readonly TaskOut[] = tasksRes.ok
       ? (await tasksRes.json()).groups.flatMap((group) => group.tasks)
       : [];
@@ -202,48 +206,62 @@ export default function CycleDetailPage(): JSX.Element {
   const [decisions, setDecisions] = useState<readonly CarryoverItem[]>([]);
   const [closeError, setCloseError] = useState<string | null>(null);
 
-  /** Adapt a task DTO to the design-system task-row view-model (state glyph + assignee). */
-  const toRow = useCallback(
-    (task: TaskOut): TaskRowData => {
-      const actor = task.assigneeId ? resolveActor(task.assigneeId) : null;
-      return {
-        id: task.id,
-        title: task.title,
-        stateType: stateTypeOf(task.state),
-        assigneeName: actor?.name ?? null,
-        assigneeKind: actor?.kind ?? 'human',
-        assigneeAvatarUrl: actor?.avatarUrl,
-      };
-    },
-    [resolveActor],
-  );
-
-  /** Group a task by the active axis (project or program), or the synthesized no-group bucket. */
-  const groupForTask = useCallback(
-    (task: TaskOut): GroupKey | null => {
-      if (groupBy === 'project') {
-        return task.projectId
-          ? { id: task.projectId, label: projectName.get(task.projectId) ?? projectNoun }
-          : null;
-      }
-      return task.programId
-        ? { id: task.programId, label: programName.get(task.programId) ?? programNoun }
-        : null;
-    },
-    [groupBy, projectName, programName, projectNoun, programNoun],
-  );
-
-  /** Sub-group a task by its canonical workflow-state type (for the state status header). */
-  const subGroupForTask = useCallback((task: TaskOut): GroupKey => {
-    const stateType = stateTypeOf(task.state);
-    return { id: stateType, label: STATE_GROUP_LABEL[stateType], stateType };
-  }, []);
+  /** The shared aligned-column spec, derived from the task catalog (labels stay consistent). */
+  const columns = useMemo(() => {
+    const catalog = buildTaskCatalog({
+      projectLabel: projectNoun,
+      programLabel: programNoun,
+      resolveProject: (id) => projectName.get(id) ?? id,
+      resolveProgram: (id) => programName.get(id) ?? id,
+      resolveAssignee: (id) => resolveActor(id).name,
+      assigneeOptions: () => [],
+      projectOptions: () => [],
+      programOptions: () => [],
+    });
+    return buildTaskColumns({ catalog, resolveActor: (id) => resolveActor(id) });
+  }, [projectNoun, programNoun, projectName, programName, resolveActor]);
 
   /** The committed tasks ordered by canonical workflow state (so the list reads progress-down). */
   const orderedTasks = useMemo(() => {
     const rank = (task: TaskOut): number => STATE_GROUP_ORDER.indexOf(stateTypeOf(task.state));
     return [...tasks].sort((a, b) => rank(a) - rank(b));
   }, [tasks]);
+
+  /**
+   * The committed tasks bucketed under the active grouping axis (project or program) — full-width
+   * group sections spanning every column — with each bucket's tasks in canonical workflow-state
+   * order. Tasks with no value for the axis fall into a synthesized "No {axis}" bucket, last.
+   */
+  const taskGroups = useMemo<EntityTableGroup<TaskOut>[]>(() => {
+    const axisValue = (task: TaskOut): string | null =>
+      groupBy === 'project' ? (task.projectId ?? null) : (task.programId ?? null);
+    const axisLabel = (id: string): string =>
+      groupBy === 'project'
+        ? (projectName.get(id) ?? projectNoun)
+        : (programName.get(id) ?? programNoun);
+    const NONE_ID = '__none__';
+    const noneLabel = groupBy === 'project' ? `No ${projectNoun}` : `No ${programNoun}`;
+
+    const byId = new Map<string, TaskOut[]>();
+    const order: string[] = [];
+    for (const task of orderedTasks) {
+      const id = axisValue(task) ?? NONE_ID;
+      let bucket = byId.get(id);
+      if (!bucket) {
+        bucket = [];
+        byId.set(id, bucket);
+        order.push(id);
+      }
+      bucket.push(task);
+    }
+    // The synthesized "no axis" bucket always trails the named groups.
+    order.sort((a, b) => (a === NONE_ID ? 1 : 0) - (b === NONE_ID ? 1 : 0));
+    return order.map((id) => ({
+      id,
+      label: id === NONE_ID ? noneLabel : axisLabel(id),
+      rows: byId.get(id) ?? [],
+    }));
+  }, [orderedTasks, groupBy, projectName, programName, projectNoun, programNoun]);
 
   /** The still-incomplete committed tasks — the ones a close must review. */
   const incompleteTasks = useMemo(
@@ -504,31 +522,25 @@ export default function CycleDetailPage(): JSX.Element {
         </p>
       </div>
 
-      <section
-        aria-label={`${cycleNounLower} tasks`}
-        className="border-outline-variant min-h-[16rem] flex-1 overflow-hidden rounded-xl border"
-      >
-        {orderedTasks.length === 0 ? (
-          <p className="text-on-surface-variant p-8 text-center text-sm">
-            Nothing is committed to this {cycleNounLower} yet.
-          </p>
-        ) : (
-          <ListView
-            items={orderedTasks}
-            label={`${title} tasks`}
-            getItemKey={(task) => task.id}
-            groupBy={groupForTask}
-            subGroupBy={subGroupForTask}
-            rowHeight={40}
-            renderRow={(task, ctx) => (
-              <TaskRow task={toRow(task)} active={ctx.active} onActivate={ctx.onActivate} />
-            )}
-            onActivateItem={(task) => {
-              router.push(`/orgs/${orgId}/tasks/${task.id}`);
-            }}
-          />
-        )}
-      </section>
+      {orderedTasks.length === 0 ? (
+        <section
+          aria-label={`${cycleNounLower} tasks`}
+          className="border-outline-variant text-on-surface-variant min-h-[16rem] flex-1 rounded-xl border p-8 text-center text-sm"
+        >
+          Nothing is committed to this {cycleNounLower} yet.
+        </section>
+      ) : (
+        <TaskTable
+          label={`${title} tasks`}
+          columns={columns}
+          groups={taskGroups}
+          taskHref={(task) => `/orgs/${orgId}/tasks/${task.id}`}
+          onOpenTask={(task) => {
+            router.push(`/orgs/${orgId}/tasks/${task.id}`);
+          }}
+          className="min-h-[16rem] flex-1"
+        />
+      )}
 
       <CloseCycleDialog
         open={dialogOpen}

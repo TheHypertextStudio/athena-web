@@ -72,17 +72,17 @@ Agents operate in a defined state machine to ensure predictable, autonomous beha
 
 ### State Definitions
 
-| State | Description | Exit Criteria |
-|-------|-------------|---------------|
-| **IDLE** | Awaiting new task or user input | Task received |
-| **PLANNING** | Analyzing requirements, breaking down work | Plan documented in WORKLOG.md |
-| **RESEARCHING** | Gathering information, reading code, web searches | Sufficient context obtained |
-| **CLARIFYING** | Awaiting user input for ambiguous requirements | User response received |
-| **IMPLEMENTING** | Writing code, creating files, making changes | All code changes complete |
-| **VALIDATING** | Running tests, linting, type-checking | All validations pass |
-| **DOCUMENTING** | Writing/updating documentation | Docs reflect changes |
-| **COMMITTING** | Staging and committing changes (with user approval) | Changes committed |
-| **RETROSPECTING** | Reviewing work, updating WORKLOG.md | Entry complete |
+| State             | Description                                         | Exit Criteria                 |
+| ----------------- | --------------------------------------------------- | ----------------------------- |
+| **IDLE**          | Awaiting new task or user input                     | Task received                 |
+| **PLANNING**      | Analyzing requirements, breaking down work          | Plan documented in WORKLOG.md |
+| **RESEARCHING**   | Gathering information, reading code, web searches   | Sufficient context obtained   |
+| **CLARIFYING**    | Awaiting user input for ambiguous requirements      | User response received        |
+| **IMPLEMENTING**  | Writing code, creating files, making changes        | All code changes complete     |
+| **VALIDATING**    | Running tests, linting, type-checking               | All validations pass          |
+| **DOCUMENTING**   | Writing/updating documentation                      | Docs reflect changes          |
+| **COMMITTING**    | Staging and committing changes (with user approval) | Changes committed             |
+| **RETROSPECTING** | Reviewing work, updating WORKLOG.md                 | Entry complete                |
 
 ### State Transition Rules
 
@@ -118,7 +118,7 @@ Every significant piece of work MUST include:
 
 ### Documentation Standards
 
-```typescript
+````typescript
 /**
  * Brief description of what this does.
  *
@@ -136,18 +136,18 @@ Every significant piece of work MUST include:
  * @see {@link RelatedFunction} for related functionality
  * @throws {ErrorType} When this error condition occurs
  */
-```
+````
 
 ### Documentation Locations
 
-| Type | Location |
-|------|----------|
-| Product specs | `docs/core/` |
-| Engineering specs | `docs/engineering/` |
-| API documentation | Auto-generated via Scalar/OpenAPI |
-| Work history | `docs/WORKLOG.md` |
-| Agent guidelines | `AGENTS.md` (this file) |
-| Repo-specific config | `.claude/` |
+| Type                 | Location                          |
+| -------------------- | --------------------------------- |
+| Product specs        | `docs/core/`                      |
+| Engineering specs    | `docs/engineering/`               |
+| API documentation    | Auto-generated via Scalar/OpenAPI |
+| Work history         | `docs/WORKLOG.md`                 |
+| Agent guidelines     | `AGENTS.md` (this file)           |
+| Repo-specific config | `.claude/`                        |
 
 ---
 
@@ -166,6 +166,7 @@ All commits MUST follow [Conventional Commits](https://www.conventionalcommits.o
 ```
 
 **Types:**
+
 - `feat`: New feature
 - `fix`: Bug fix
 - `docs`: Documentation only
@@ -177,6 +178,7 @@ All commits MUST follow [Conventional Commits](https://www.conventionalcommits.o
 - `ci`: CI/CD changes
 
 **Examples:**
+
 ```
 feat(api): add user authentication endpoints
 fix(calendar): resolve timezone offset calculation
@@ -205,6 +207,7 @@ main
 **AUTO-COMMIT ENABLED** - Commits are made automatically after completing tasks.
 
 Commit behavior:
+
 1. Commit atomically after each completed task
 2. Use Conventional Commits format
 3. Include meaningful descriptions
@@ -224,6 +227,7 @@ All work MUST be tracked in `docs/WORKLOG.md`:
 ## Active Tasks
 
 ### [TASK-ID] Task Title
+
 - **Status**: IN_PROGRESS | BLOCKED | REVIEW
 - **Started**: YYYY-MM-DD
 - **Priority**: P0 | P1 | P2 | P3
@@ -239,6 +243,7 @@ All work MUST be tracked in `docs/WORKLOG.md`:
 ## Completed Tasks
 
 ### [TASK-ID] Task Title
+
 - **Completed**: YYYY-MM-DD
 - **Duration**: X hours/days
 - **Summary**: What was accomplished
@@ -250,6 +255,7 @@ All work MUST be tracked in `docs/WORKLOG.md`:
 ## Backlog
 
 ### [TASK-ID] Task Title
+
 - **Priority**: P0 | P1 | P2 | P3
 - **Description**: Brief description
 - **Dependencies**: Required prior work
@@ -336,6 +342,7 @@ A task is ONLY complete when:
 - **NO placeholder content** without implementation plan
 
 If a task cannot be completed:
+
 1. Document the blocker in WORKLOG.md
 2. Create explicit subtask for the remaining work
 3. Notify user with specific details
@@ -365,12 +372,12 @@ Agents SHOULD create reusable utilities when:
 
 ### Tool Locations
 
-| Type | Location | Purpose |
-|------|----------|---------|
-| CLI scripts | `scripts/` | Build, deploy, maintenance |
-| Shared utilities | `packages/shared/` | Cross-package code |
-| Type definitions | `packages/types/` | Shared TypeScript types |
-| Test utilities | `packages/test-utils/` | Testing helpers |
+| Type             | Location               | Purpose                    |
+| ---------------- | ---------------------- | -------------------------- |
+| CLI scripts      | `scripts/`             | Build, deploy, maintenance |
+| Shared utilities | `packages/shared/`     | Cross-package code         |
+| Type definitions | `packages/types/`      | Shared TypeScript types    |
+| Test utilities   | `packages/test-utils/` | Testing helpers            |
 
 ### Claude Code Skills
 
@@ -382,9 +389,11 @@ Create skills in `.claude/skills/` for repeated workflows:
 Run all tests with coverage report.
 
 ## Invocation
+
 /run-tests [package-name]
 
 ## Actions
+
 1. Run vitest with coverage
 2. Check coverage threshold (80%)
 3. Report failures with context
@@ -422,6 +431,7 @@ This file SHOULD be updated when:
 ### Protected Sections
 
 These sections MUST NOT be weakened:
+
 - Task Completion Standards
 - NO Stubs or TODOs
 - Commit Approval requirement
@@ -450,6 +460,7 @@ Research is REQUIRED when:
 ### Research Documentation
 
 Document research findings in:
+
 - `docs/research/` for significant explorations
 - WORKLOG.md task notes for task-specific research
 - Code comments for implementation decisions
@@ -473,30 +484,37 @@ Enter planning mode for:
 ## Plan: [Task Title]
 
 ### Objective
+
 What we're trying to accomplish
 
 ### Approach
+
 How we'll accomplish it
 
 ### Steps
+
 1. Step 1 description
 2. Step 2 description
 3. ...
 
 ### Files to Modify
+
 - `path/to/file.ts` - What changes
 
 ### Risks
+
 - Potential issue 1
 - Potential issue 2
 
 ### Validation
+
 How we'll verify success
 ```
 
 ### Plan Approval
 
 For significant changes:
+
 1. Write plan to WORKLOG.md
 2. Present plan to user
 3. Await explicit approval
@@ -518,6 +536,7 @@ After completing each significant task:
 ### Documentation
 
 Record retrospections in:
+
 - WORKLOG.md task completion entry
 - AGENTS.md if process changes warranted
 - `docs/research/` if significant learnings
@@ -525,6 +544,7 @@ Record retrospections in:
 ### Periodic Review
 
 Agents SHOULD periodically review:
+
 - Recent WORKLOG.md entries
 - Common patterns across tasks
 - Recurring blockers or issues
@@ -588,30 +608,30 @@ Before considering work complete:
 
 ### State Commands
 
-| Current State | Action | Next State |
-|---------------|--------|------------|
-| IDLE | Receive task | PLANNING |
-| PLANNING | Plan complete | RESEARCHING |
-| RESEARCHING | Research complete | IMPLEMENTING |
-| IMPLEMENTING | Code complete | VALIDATING |
-| VALIDATING | Tests pass | DOCUMENTING |
-| DOCUMENTING | Docs complete | COMMITTING |
-| COMMITTING | Committed | RETROSPECTING |
-| RETROSPECTING | Complete | IDLE |
+| Current State | Action            | Next State    |
+| ------------- | ----------------- | ------------- |
+| IDLE          | Receive task      | PLANNING      |
+| PLANNING      | Plan complete     | RESEARCHING   |
+| RESEARCHING   | Research complete | IMPLEMENTING  |
+| IMPLEMENTING  | Code complete     | VALIDATING    |
+| VALIDATING    | Tests pass        | DOCUMENTING   |
+| DOCUMENTING   | Docs complete     | COMMITTING    |
+| COMMITTING    | Committed         | RETROSPECTING |
+| RETROSPECTING | Complete          | IDLE          |
 
 ### File Locations
 
-| Purpose | Path |
-|---------|------|
-| Agent guidelines | `AGENTS.md` |
-| Work tracking | `docs/WORKLOG.md` |
-| Product specs | `docs/core/` |
+| Purpose           | Path                |
+| ----------------- | ------------------- |
+| Agent guidelines  | `AGENTS.md`         |
+| Work tracking     | `docs/WORKLOG.md`   |
+| Product specs     | `docs/core/`        |
 | Engineering specs | `docs/engineering/` |
-| Research notes | `docs/research/` |
-| Claude config | `.claude/` |
-| Scripts | `scripts/` |
-| Shared packages | `packages/` |
+| Research notes    | `docs/research/`    |
+| Claude config     | `.claude/`          |
+| Scripts           | `scripts/`          |
+| Shared packages   | `packages/`         |
 
 ---
 
-*This document is self-governing. Agents are encouraged to propose improvements through the established modification protocol.*
+_This document is self-governing. Agents are encouraged to propose improvements through the established modification protocol._

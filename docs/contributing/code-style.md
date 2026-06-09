@@ -36,12 +36,14 @@ TypeScript is configured with strict mode. All code must pass:
 ### Type Annotations
 
 **Always annotate:**
+
 - Function parameters
 - Public function return types
 - Class properties
 - Exported types
 
 **Let TypeScript infer:**
+
 - Local variables with obvious types
 - Return types of simple functions
 - Array literals
@@ -55,8 +57,8 @@ export function calculatePriority(task: Task): Priority {
 }
 
 // Good: Inference for simple cases
-const tasks = await getTasks();  // Type inferred from getTasks()
-const count = tasks.length;      // Obviously number
+const tasks = await getTasks(); // Type inferred from getTasks()
+const count = tasks.length; // Obviously number
 
 // Bad: Over-annotating
 const count: number = tasks.length;
@@ -170,8 +172,8 @@ function createTask(input: CreateTaskInput): Task {
 const taskCount = 10;
 const isCompleted = false;
 
-function calculatePriority(task: Task): Priority { }
-async function fetchUserTasks(userId: UserId): Promise<Task[]> { }
+function calculatePriority(task: Task): Priority {}
+async function fetchUserTasks(userId: UserId): Promise<Task[]> {}
 
 // Boolean variables: is, has, can, should
 const isLoading = true;
@@ -189,12 +191,12 @@ const userIds: UserId[] = [];
 ```typescript
 // PascalCase for types, interfaces, classes
 type Priority = 'low' | 'medium' | 'high';
-interface TaskRepository { }
-class TaskService { }
+interface TaskRepository {}
+class TaskService {}
 
 // Descriptive, domain-focused names
-interface CreateTaskInput { }  // Not: TaskCreateDTO
-interface TaskListResponse { } // Not: GetTasksResult
+interface CreateTaskInput {} // Not: TaskCreateDTO
+interface TaskListResponse {} // Not: GetTasksResult
 ```
 
 ### Constants
@@ -338,6 +340,7 @@ async function getTask(taskId: TaskId): Promise<Task> {
 ### Required Documentation
 
 Document all:
+
 - Exported functions
 - Exported classes and their methods
 - Exported types/interfaces
@@ -345,7 +348,7 @@ Document all:
 
 ### TSDoc Format
 
-```typescript
+````typescript
 /**
  * Creates a new task with the specified attributes.
  *
@@ -371,7 +374,7 @@ Document all:
 export async function createTask(input: CreateTaskInput): Promise<Task> {
   // ...
 }
-```
+````
 
 ### When NOT to Document
 
@@ -482,10 +485,7 @@ import { revalidatePath } from 'next/cache';
 import { CreateTaskSchema } from '@athena/types';
 import { createTask } from '@/lib/api';
 
-export async function createTaskAction(
-  prevState: unknown,
-  formData: FormData,
-) {
+export async function createTaskAction(prevState: unknown, formData: FormData) {
   const result = CreateTaskSchema.safeParse({
     title: formData.get('title'),
     description: formData.get('description'),
@@ -533,8 +533,7 @@ describe('TaskService', () => {
       const input = { title: '' };
 
       // Act & Assert
-      await expect(service.createTask(input))
-        .rejects.toThrow(ValidationError);
+      await expect(service.createTask(input)).rejects.toThrow(ValidationError);
     });
   });
 });
@@ -543,6 +542,7 @@ describe('TaskService', () => {
 ## Import Order
 
 Organize imports in this order:
+
 1. Node.js built-ins
 2. External dependencies
 3. Internal packages (`@athena/*`)
@@ -577,10 +577,7 @@ export default [
       '@typescript-eslint/consistent-type-imports': 'error',
 
       // No unused variables (with exceptions)
-      '@typescript-eslint/no-unused-vars': [
-        'error',
-        { argsIgnorePattern: '^_' },
-      ],
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
 
       // Require explicit return types on public APIs
       '@typescript-eslint/explicit-module-boundary-types': 'error',
@@ -600,4 +597,4 @@ export default [
 
 ---
 
-*See also: [Development Workflow](./workflow.md), [Testing Strategy](../engineering/testing-strategy.md)*
+_See also: [Development Workflow](./workflow.md), [Testing Strategy](../engineering/testing-strategy.md)_

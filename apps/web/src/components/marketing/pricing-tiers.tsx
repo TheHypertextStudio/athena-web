@@ -47,6 +47,7 @@ const TIERS: readonly Tier[] = [
   },
 ];
 
+/** Pricing tiers display for marketing site. */
 export function PricingTiers(): JSX.Element {
   return (
     <section id="pricing" className="mx-auto w-full max-w-6xl scroll-mt-20 px-6 py-20">

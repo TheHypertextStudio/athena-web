@@ -183,6 +183,8 @@ export const queryKeys = {
   views: (orgId: string) => ['org', orgId, 'views'] as const,
   /** The org's settings payload (a settings tab's backing data). */
   settings: (orgId: string, tab: string) => ['org', orgId, 'settings', tab] as const,
+  /** The signed-in account's authorized MCP clients (user-scoped, not org-scoped). */
+  connectedApps: () => ['me', 'connected-apps'] as const,
   /** The signed-in account's org list (cross-org account scope). */
   orgs: () => ['me', 'orgs'] as const,
   /** The signed-in account's cross-org portfolio timeline (cross-org account scope). */

@@ -214,11 +214,12 @@ export function IntegrationsTab({
     <div className="flex flex-col gap-6">
       <p className="text-on-surface-variant text-sm leading-relaxed">
         {isPersonal
-          ? 'Connect the tools you already use.'
-          : 'Connect the tools your team already uses.'}{' '}
-        Choose a <span className="text-on-surface font-medium">Migration</span> to move fully into
-        Docket, or a <span className="text-on-surface font-medium">Connector</span> to mirror a tool
-        that stays the source of truth — you decide per tool when you connect.
+          ? 'Docket connects to the tools you already use'
+          : 'Docket connects to the tools your team already uses'}{' '}
+        — pulling your existing work in. Choose a{' '}
+        <span className="text-on-surface font-medium">Migration</span> to move fully into Docket, or
+        a <span className="text-on-surface font-medium">Connector</span> to mirror a tool that stays
+        the source of truth.
       </p>
 
       {grouped.map(({ category, providers }) => (

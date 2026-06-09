@@ -4,6 +4,7 @@ import type { JSX } from 'react';
 
 import { signUpUrl } from '@/lib/marketing-links';
 
+/** Call-to-action banner displayed on the marketing site. */
 export function CtaBand(): JSX.Element {
   return (
     <section className="mx-auto w-full max-w-6xl px-6 py-20">

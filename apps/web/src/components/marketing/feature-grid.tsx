@@ -48,6 +48,7 @@ const FEATURES: readonly Feature[] = [
   },
 ];
 
+/** Feature grid display showcasing key product capabilities. */
 export function FeatureGrid(): JSX.Element {
   return (
     <section id="features" className="mx-auto w-full max-w-6xl scroll-mt-20 px-6 py-20">

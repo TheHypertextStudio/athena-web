@@ -15,7 +15,7 @@
  * `border-outline-variant` divider, `hover:bg-surface-container-high`, the
  * `bg-surface-container-highest` active/selected tone, and the inset `focus-visible` ring —
  * so a virtualized {@link ListView} of tasks and a plain list of entities read as the same
- * component family. Density follows the spec (`min-h-10`, `px-3`, `gap-3`).
+ * component family. Density follows the shared row rhythm (`min-h-9`, `px-3`, `py-1.5`, `gap-2`).
  *
  * The row is polymorphic over its activation affordance: pass `href` to render a real
  * `<a>` (keyboard-operable, right-clickable, prefetchable by a router `Link` slot), or omit
@@ -29,6 +29,7 @@
 import * as React from 'react';
 
 import { cn } from '../../lib/utils';
+import { focusRingInset } from '../../primitives/focus';
 
 /** Props for {@link EntityListRow}. */
 export interface EntityListRowProps {
@@ -119,11 +120,12 @@ export interface EntityRowRenderProps {
  * @remarks
  * The chrome common to both interactive and presentational rows: the `@container/row` so the
  * meta band can auto-hide when narrow, the `group/row` so `revealTrailingOnHover` can key off
- * hover, the hairline `border-b` divider (dropped on the last row), and the spec density
- * (`min-h-10`, `px-3`, `gap-3`). Kept as a constant so a single edit retints every preset.
+ * hover, the hairline `border-b` divider (dropped on the last row), and the shared row density
+ * (`min-h-9`, `px-3`, `py-1.5`, `gap-2`) — identical to {@link ListRow} so the two row families
+ * share one 36px vertical rhythm. Kept as a constant so a single edit retints every preset.
  */
 const ROW_BASE =
-  '@container/row group/row border-outline-variant relative flex min-h-10 w-full items-center gap-3 border-b px-3 py-1.5 text-left text-sm last:border-b-0';
+  '@container/row group/row border-outline-variant relative flex min-h-9 w-full items-center gap-2 border-b px-3 py-1.5 text-left text-sm last:border-b-0';
 
 /**
  * The interactive affordances layered onto {@link ROW_BASE} for a focusable row.
@@ -133,8 +135,10 @@ const ROW_BASE =
  * identical in spirit to {@link ListRow} so the two stay visually reconciled. Omitted for a
  * presentational (`interactive={false}`) row so it offers no click affordance.
  */
-const ROW_INTERACTIVE =
-  'cursor-pointer transition-colors outline-none hover:bg-surface-container-high focus-visible:bg-surface-container-high focus-visible:ring-ring focus-visible:ring-1 focus-visible:ring-inset';
+const ROW_INTERACTIVE = cn(
+  'cursor-pointer transition-colors outline-none hover:bg-surface-container-high focus-visible:bg-surface-container-high',
+  focusRingInset,
+);
 
 /**
  * The canonical, customizable entity list row.

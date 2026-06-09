@@ -168,9 +168,7 @@ export function VocabularyTab({
               </span>
               <span className="text-on-surface-variant text-xs leading-snug">{preset.tagline}</span>
               {isCurrent ? (
-                <span className="text-on-surface-variant mt-1 text-[0.625rem] font-medium tracking-wide uppercase">
-                  Current
-                </span>
+                <span className="text-on-surface-variant mt-1 text-xs font-medium">Current</span>
               ) : null}
             </button>
           );

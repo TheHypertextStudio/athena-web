@@ -79,9 +79,7 @@ export function RoadmapTimeline({ rows, scale, focusedOrgId }: RoadmapTimelinePr
           {/* ── Sticky axis header ───────────────────────────────────────── */}
           <div className="bg-surface-container-low/95 supports-[backdrop-filter]:bg-surface-container-low/80 border-outline-variant sticky top-0 z-30 grid grid-cols-[var(--label-col)_1fr] border-b backdrop-blur">
             <div className="bg-surface-container-low/95 border-outline-variant sticky left-0 z-10 flex items-center border-r px-4 py-2.5">
-              <span className="text-on-surface-variant text-xs font-medium tracking-wide uppercase">
-                Organization
-              </span>
+              <span className="text-on-surface-variant text-xs font-medium">Organization</span>
             </div>
             <div className="relative h-9">
               {scale.ticks.map((tick, index) =>
@@ -124,9 +122,7 @@ export function RoadmapTimeline({ rows, scale, focusedOrgId }: RoadmapTimelinePr
 
       {/* ── Health legend ──────────────────────────────────────────────── */}
       <div className="border-outline-variant flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t px-4 py-2.5">
-        <span className="text-on-surface-variant text-[11px] font-medium tracking-wide uppercase">
-          Health
-        </span>
+        <span className="text-on-surface-variant text-xs font-medium">Health</span>
         {(Object.keys(HEALTH_LABEL) as (keyof typeof HEALTH_LABEL)[]).map((key) => (
           <LegendItem key={key} fill={HEALTH_FILL_CLASS[key]} label={HEALTH_LABEL[key]} />
         ))}

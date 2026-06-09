@@ -249,9 +249,7 @@ export function IntegrationsTab({
           aria-label={categoryLabel(category)}
           className="flex flex-col gap-3"
         >
-          <h2 className="text-on-surface-variant text-xs font-medium tracking-wide uppercase">
-            {categoryLabel(category)}
-          </h2>
+          <h2 className="text-on-surface-variant text-xs font-medium">{categoryLabel(category)}</h2>
           <ul className="flex flex-col gap-2">
             {providers.map((provider) => {
               const existing = byProvider.get(provider.provider);

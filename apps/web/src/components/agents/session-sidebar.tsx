@@ -94,10 +94,7 @@ export function SessionSidebar({
     <aside className="flex flex-col gap-4">
       {/* Changes this session — the receipt. */}
       <section aria-labelledby="changes-heading" className="flex flex-col gap-2">
-        <h2
-          id="changes-heading"
-          className="text-on-surface-variant text-xs font-medium tracking-wide uppercase"
-        >
+        <h2 id="changes-heading" className="text-on-surface-variant text-xs font-medium">
           Changes this session
         </h2>
         {changes.length === 0 ? (
@@ -109,9 +106,7 @@ export function SessionSidebar({
             {changes.map((change) => (
               <li key={change.id} className="flex items-start justify-between gap-2 p-3">
                 <div className="flex min-w-0 flex-col gap-0.5">
-                  <code className="text-on-surface-variant text-[0.625rem] tracking-wide uppercase">
-                    {change.kind}
-                  </code>
+                  <code className="text-on-surface-variant text-xs">{change.kind}</code>
                   <p className="text-on-surface text-xs leading-snug">{change.summary}</p>
                 </div>
                 <ApprovalStatusBadge status={change.approvalStatus} size="compact" />
@@ -123,10 +118,7 @@ export function SessionSidebar({
 
       {/* Accountability. */}
       <section aria-labelledby="accountability-heading" className="flex flex-col gap-2">
-        <h2
-          id="accountability-heading"
-          className="text-on-surface-variant text-xs font-medium tracking-wide uppercase"
-        >
+        <h2 id="accountability-heading" className="text-on-surface-variant text-xs font-medium">
           Accountability
         </h2>
         <div className="border-outline-variant flex flex-col gap-3 rounded-lg border p-3">
@@ -152,10 +144,7 @@ export function SessionSidebar({
 
       {/* Controls. */}
       <section aria-labelledby="controls-heading" className="flex flex-col gap-2">
-        <h2
-          id="controls-heading"
-          className="text-on-surface-variant text-xs font-medium tracking-wide uppercase"
-        >
+        <h2 id="controls-heading" className="text-on-surface-variant text-xs font-medium">
           Controls
         </h2>
         {noControls ? (

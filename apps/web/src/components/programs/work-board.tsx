@@ -128,9 +128,7 @@ export function WorkBoard({
                     key={segment.project.id ?? `no-project-${segmentIndex}`}
                     className="flex flex-col gap-1.5"
                   >
-                    <p className="text-on-surface-variant text-xs font-medium tracking-wide uppercase">
-                      {projectTitle}
-                    </p>
+                    <p className="text-on-surface-variant text-xs font-medium">{projectTitle}</p>
                     <ul className="border-outline-variant overflow-hidden rounded-lg border">
                       {segment.tasks.map((task) => (
                         <li key={task.id}>

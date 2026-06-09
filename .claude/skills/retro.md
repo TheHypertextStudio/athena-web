@@ -29,18 +29,22 @@ Perform a retrospective analysis of recently completed work. This follows the RE
 ### Retrospective: [Task ID]
 
 **What went well:**
+
 - Point 1
 - Point 2
 
 **What could improve:**
+
 - Point 1
 - Point 2
 
 **Learnings:**
+
 - Learning 1
 - Learning 2
 
 **Process changes (if any):**
+
 - Suggested change
 ```
 

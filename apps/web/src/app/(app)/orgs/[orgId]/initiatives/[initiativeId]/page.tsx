@@ -22,7 +22,9 @@
 import {
   ActorId,
   type InitiativeDetail,
+  type InitiativeOut,
   type InitiativeTimelineOut,
+  type InitiativeUpdate,
   type MemberOut,
   ProgramId,
   type ProgramOut,
@@ -35,11 +37,12 @@ import { useVocabulary } from '@docket/ui/hooks';
 import { Badge, Skeleton } from '@docket/ui/primitives';
 import { ChevronLeft, Target } from '@docket/ui/icons';
 import { useParams, useRouter } from 'next/navigation';
-import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
+import { type JSX, useMemo } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { useSession } from '@/lib/auth-client';
 import { api } from '@/lib/api';
-import { readError, readProblem } from '@/lib/problem';
+import { type RpcResponse, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
 import { memberActorOptions } from '@/components/property-pickers/options';
 import {
   AssociationsPanel,
@@ -57,6 +60,80 @@ import { Roadmap } from '@/components/initiatives/roadmap';
 
 /** Roles that cannot contribute (read-only). Everyone else may link/unlink children. */
 const READ_ONLY_ROLE_KEYS = new Set(['guest']);
+
+/** The composite initiative-detail payload (the detail joined with link candidates + access info). */
+interface InitiativeDetailData {
+  readonly detail: InitiativeDetail;
+  readonly allProjects: readonly ProjectOut[];
+  readonly allPrograms: readonly ProgramOut[];
+  readonly members: readonly MemberOut[];
+  readonly roles: readonly RoleOut[];
+}
+
+/** The unbranded properties-panel patch surface. */
+interface InitiativePatch {
+  ownerId?: string | null;
+  targetDate?: string | null;
+}
+
+/**
+ * Build the branded initiative PATCH body from an {@link InitiativePatch}, omitting untouched
+ * fields.
+ *
+ * @remarks
+ * One branded body, reused for the optimistic cache snapshot AND the request. Returns the validated
+ * {@link InitiativeUpdate} body, whose fields are a subset of {@link InitiativeDetail} so it can be
+ * spread onto the cached detail without widening its branded fields.
+ */
+function toInitiativePatchBody(patch: InitiativePatch): InitiativeUpdate {
+  return {
+    ...(patch.ownerId !== undefined
+      ? { ownerId: patch.ownerId === null ? null : ActorId.parse(patch.ownerId) }
+      : {}),
+    ...(patch.targetDate !== undefined ? { targetDate: patch.targetDate } : {}),
+  };
+}
+
+/**
+ * Build the composite initiative-detail fetcher, returning a {@link RpcResponse}-shaped result so
+ * it can drive {@link useApiQuery} directly.
+ *
+ * @remarks
+ * Composes the detail roll-up, the org's projects/programs (the link candidates), and the members/
+ * roles (the access info) in parallel. The composite resolves `ok`/`status` from the gating detail
+ * read; the candidate + access sub-reads degrade to empty lists.
+ */
+function fetchInitiativeDetail(
+  orgId: string,
+  initiativeId: string,
+): () => Promise<RpcResponse<InitiativeDetailData>> {
+  return async () => {
+    const [detailRes, projectsRes, programsRes, membersRes, rolesRes] = await Promise.all([
+      api.v1.orgs[':orgId'].initiatives[':id'].$get({ param: { orgId, id: initiativeId } }),
+      api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
+      api.v1.orgs[':orgId'].programs.$get({ param: { orgId } }),
+      api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
+      api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
+    ]);
+    if (!detailRes.ok) {
+      return {
+        ok: false,
+        status: detailRes.status,
+        json: () => detailRes.json() as unknown as Promise<InitiativeDetailData>,
+      };
+    }
+    const detail = await detailRes.json();
+    const allProjects = projectsRes.ok ? (await projectsRes.json()).items : [];
+    const allPrograms = programsRes.ok ? (await programsRes.json()).items : [];
+    const members = membersRes.ok ? (await membersRes.json()).items : [];
+    const roles = rolesRes.ok ? (await rolesRes.json()).items : [];
+    return {
+      ok: true,
+      status: detailRes.status,
+      json: () => Promise.resolve({ detail, allProjects, allPrograms, members, roles }),
+    };
+  };
+}
 
 /** Reduce a list of id/name entities to {@link AssociationItem} candidates, excluding linked ids. */
 function candidatesOf(
@@ -77,6 +154,7 @@ export default function InitiativeDetailPage(): JSX.Element {
   const router = useRouter();
   const params = useParams<{ orgId: string; initiativeId: string }>();
   const { orgId, initiativeId } = params;
+  const queryClient = useQueryClient();
   const { data: authSession } = useSession();
   const userId = authSession?.user.id ?? null;
 
@@ -90,80 +168,40 @@ export default function InitiativeDetailPage(): JSX.Element {
   const projectNounLower = projectNoun.toLowerCase();
   const projectNounPlural = useVocabulary('project', { plural: true });
 
-  const [detail, setDetail] = useState<InitiativeDetail | null>(null);
-  const [timeline, setTimeline] = useState<InitiativeTimelineOut | null>(null);
-  const [allProjects, setAllProjects] = useState<readonly ProjectOut[]>([]);
-  const [allPrograms, setAllPrograms] = useState<readonly ProgramOut[]>([]);
-  const [members, setMembers] = useState<readonly MemberOut[]>([]);
-  const [roles, setRoles] = useState<readonly RoleOut[]>([]);
+  const detailKey = queryKeys.initiative(orgId, initiativeId);
+  const timelineKey = useMemo(() => [...detailKey, 'timeline'] as const, [detailKey]);
 
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const detailQ = useApiQuery(
+    detailKey,
+    fetchInitiativeDetail(orgId, initiativeId),
+    `Could not load this ${initiativeNounLower}.`,
+  );
+  const data = detailQ.data ?? null;
+  const detail = data?.detail ?? null;
+  const allProjects = data?.allProjects ?? [];
+  const allPrograms = data?.allPrograms ?? [];
+  const members = data?.members ?? [];
+  const roles = data?.roles ?? [];
+  const loading = detailQ.isPending;
+  const error = detailQ.isError ? detailQ.error.message : null;
 
-  // Properties-panel mutation state (optimistic PATCH + rollback).
-  const [propsPending, setPropsPending] = useState(false);
-  const [propsError, setPropsError] = useState<string | null>(null);
+  const timelineQ = useApiQuery(
+    timelineKey,
+    () =>
+      api.v1.orgs[':orgId'].initiatives[':id'].timeline.$get({
+        param: { orgId, id: initiativeId },
+        query: {},
+      }),
+    'Could not load the timeline.',
+  );
+  const timeline: InitiativeTimelineOut | null = timelineQ.data ?? null;
 
-  const [programBusy, setProgramBusy] = useState(false);
-  const [projectBusy, setProjectBusy] = useState(false);
-  const [programError, setProgramError] = useState<string | null>(null);
-  const [projectError, setProjectError] = useState<string | null>(null);
-
-  /** Re-read the derived roll-up (`derivedStatus` / `rolledUpHealth` / `distribution`). */
-  const refreshDetail = useCallback(async (): Promise<void> => {
-    const res = await api.v1.orgs[':orgId'].initiatives[':id'].$get({
-      param: { orgId, id: initiativeId },
-    });
-    if (res.ok) setDetail(await res.json());
-  }, [orgId, initiativeId]);
-
-  /** Re-read the timeline roll-up (Program lanes + Project bars). */
-  const refreshTimeline = useCallback(async (): Promise<void> => {
-    const res = await api.v1.orgs[':orgId'].initiatives[':id'].timeline.$get({
-      param: { orgId, id: initiativeId },
-      query: {},
-    });
-    if (res.ok) setTimeline(await res.json());
-  }, [orgId, initiativeId]);
-
-  /** Load the detail roll-up, the timeline, the org's projects/programs, and access info. */
-  const load = useCallback(async (): Promise<void> => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [detailRes, timelineRes, projectsRes, programsRes, membersRes, rolesRes] =
-        await Promise.all([
-          api.v1.orgs[':orgId'].initiatives[':id'].$get({ param: { orgId, id: initiativeId } }),
-          api.v1.orgs[':orgId'].initiatives[':id'].timeline.$get({
-            param: { orgId, id: initiativeId },
-            query: {},
-          }),
-          api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
-          api.v1.orgs[':orgId'].programs.$get({ param: { orgId } }),
-          api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
-          api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
-        ]);
-
-      if (!detailRes.ok) {
-        setError(await readProblem(detailRes, `Could not load this ${initiativeNounLower}.`));
-        return;
-      }
-      setDetail(await detailRes.json());
-      if (timelineRes.ok) setTimeline(await timelineRes.json());
-      if (projectsRes.ok) setAllProjects((await projectsRes.json()).items);
-      if (programsRes.ok) setAllPrograms((await programsRes.json()).items);
-      if (membersRes.ok) setMembers((await membersRes.json()).items);
-      if (rolesRes.ok) setRoles((await rolesRes.json()).items);
-    } catch (caught) {
-      setError(readError(caught, `Something went wrong loading this ${initiativeNounLower}.`));
-    } finally {
-      setLoading(false);
-    }
-  }, [orgId, initiativeId, initiativeNounLower]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  // Any link/unlink mutation re-reads both the timeline (so the roadmap repositions) and the
+  // detail (so the derived status + distribution update). Both keys are invalidated on settle.
+  const associationKeys = useMemo(
+    () => [timelineKey, detailKey] as const,
+    [timelineKey, detailKey],
+  );
 
   /** Whether the caller may edit associations (contribute): everyone but a guest. */
   const canEdit = useMemo(() => {
@@ -196,156 +234,118 @@ export default function InitiativeDetailPage(): JSX.Element {
   );
 
   /** Link a Program, then re-read the roll-ups so the lane + distribution appear. */
-  const linkProgram = useCallback(
-    async (programId: string): Promise<void> => {
-      setProgramBusy(true);
-      setProgramError(null);
-      try {
-        const res = await api.v1.orgs[':orgId'].initiatives[':id'].programs.$post({
-          param: { orgId, id: initiativeId },
-          json: { programId: ProgramId.parse(programId) },
-        });
-        if (!res.ok) {
-          setProgramError(await readProblem(res, `Could not link the ${programNounLower}.`));
-          return;
-        }
-        await Promise.all([refreshTimeline(), refreshDetail()]);
-      } catch (caught) {
-        setProgramError(readError(caught, `Something went wrong linking the ${programNounLower}.`));
-      } finally {
-        setProgramBusy(false);
-      }
-    },
-    [orgId, initiativeId, programNounLower, refreshTimeline, refreshDetail],
-  );
+  const linkProgramM = useApiMutation({
+    mutationFn: (programId: string) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].initiatives[':id'].programs.$post({
+            param: { orgId, id: initiativeId },
+            json: { programId: ProgramId.parse(programId) },
+          }),
+        `Could not link the ${programNounLower}.`,
+      ),
+    invalidateKeys: associationKeys,
+  });
 
   /** Unlink a Program, then re-read the roll-ups. */
-  const unlinkProgram = useCallback(
-    async (programId: string): Promise<void> => {
-      setProgramBusy(true);
-      setProgramError(null);
-      try {
-        const res = await api.v1.orgs[':orgId'].initiatives[':id'].programs[':programId'].$delete({
-          param: { orgId, id: initiativeId, programId },
-        });
-        if (!res.ok) {
-          setProgramError(await readProblem(res, `Could not unlink the ${programNounLower}.`));
-          return;
-        }
-        await Promise.all([refreshTimeline(), refreshDetail()]);
-      } catch (caught) {
-        setProgramError(
-          readError(caught, `Something went wrong unlinking the ${programNounLower}.`),
-        );
-      } finally {
-        setProgramBusy(false);
-      }
-    },
-    [orgId, initiativeId, programNounLower, refreshTimeline, refreshDetail],
-  );
+  const unlinkProgramM = useApiMutation({
+    mutationFn: (programId: string) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].initiatives[':id'].programs[':programId'].$delete({
+            param: { orgId, id: initiativeId, programId },
+          }),
+        `Could not unlink the ${programNounLower}.`,
+      ),
+    invalidateKeys: associationKeys,
+  });
 
   /** Link a Project, then re-read the roll-ups so the bar + distribution appear. */
-  const linkProject = useCallback(
-    async (projectId: string): Promise<void> => {
-      setProjectBusy(true);
-      setProjectError(null);
-      try {
-        const res = await api.v1.orgs[':orgId'].initiatives[':id'].projects.$post({
-          param: { orgId, id: initiativeId },
-          json: { projectId: ProjectId.parse(projectId) },
-        });
-        if (!res.ok) {
-          setProjectError(await readProblem(res, `Could not link the ${projectNounLower}.`));
-          return;
-        }
-        await Promise.all([refreshTimeline(), refreshDetail()]);
-      } catch (caught) {
-        setProjectError(readError(caught, `Something went wrong linking the ${projectNounLower}.`));
-      } finally {
-        setProjectBusy(false);
-      }
-    },
-    [orgId, initiativeId, projectNounLower, refreshTimeline, refreshDetail],
-  );
+  const linkProjectM = useApiMutation({
+    mutationFn: (projectId: string) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].initiatives[':id'].projects.$post({
+            param: { orgId, id: initiativeId },
+            json: { projectId: ProjectId.parse(projectId) },
+          }),
+        `Could not link the ${projectNounLower}.`,
+      ),
+    invalidateKeys: associationKeys,
+  });
 
   /** Unlink a Project, then re-read the roll-ups. */
-  const unlinkProject = useCallback(
-    async (projectId: string): Promise<void> => {
-      setProjectBusy(true);
-      setProjectError(null);
-      try {
-        const res = await api.v1.orgs[':orgId'].initiatives[':id'].projects[':projectId'].$delete({
-          param: { orgId, id: initiativeId, projectId },
-        });
-        if (!res.ok) {
-          setProjectError(await readProblem(res, `Could not unlink the ${projectNounLower}.`));
-          return;
-        }
-        await Promise.all([refreshTimeline(), refreshDetail()]);
-      } catch (caught) {
-        setProjectError(
-          readError(caught, `Something went wrong unlinking the ${projectNounLower}.`),
-        );
-      } finally {
-        setProjectBusy(false);
-      }
-    },
-    [orgId, initiativeId, projectNounLower, refreshTimeline, refreshDetail],
-  );
+  const unlinkProjectM = useApiMutation({
+    mutationFn: (projectId: string) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].initiatives[':id'].projects[':projectId'].$delete({
+            param: { orgId, id: initiativeId, projectId },
+          }),
+        `Could not unlink the ${projectNounLower}.`,
+      ),
+    invalidateKeys: associationKeys,
+  });
+
+  const programBusy = linkProgramM.isPending || unlinkProgramM.isPending;
+  const projectBusy = linkProjectM.isPending || unlinkProjectM.isPending;
+  const programError = linkProgramM.error?.message ?? unlinkProgramM.error?.message ?? null;
+  const projectError = linkProjectM.error?.message ?? unlinkProjectM.error?.message ?? null;
 
   /**
-   * Optimistically patch the initiative's owner / target date: apply locally, fire the PATCH,
-   * roll back on failure. Editing an Initiative requires `contribute` (gated by {@link canEdit}).
+   * Optimistically patch the initiative's owner / target date: apply to the cached detail, fire the
+   * PATCH, roll back on failure, and reconcile on settle. Editing an Initiative requires
+   * `contribute` (gated by {@link canEdit}). The PATCH read-back is the base {@link InitiativeOut},
+   * so success preserves the detail-only derived roll-up.
    */
-  const patchInitiative = useCallback(
-    async (patch: { ownerId?: string | null; targetDate?: string | null }): Promise<void> => {
-      if (!detail) return;
-      const previous = detail;
-      const body = {
-        ...(patch.ownerId !== undefined
-          ? { ownerId: patch.ownerId === null ? null : ActorId.parse(patch.ownerId) }
-          : {}),
-        ...(patch.targetDate !== undefined ? { targetDate: patch.targetDate } : {}),
-      };
-      setDetail({ ...detail, ...body });
-      setPropsPending(true);
-      setPropsError(null);
-      try {
-        const res = await api.v1.orgs[':orgId'].initiatives[':id'].$patch({
-          param: { orgId, id: initiativeId },
-          json: body,
-        });
-        if (!res.ok) {
-          setDetail(previous);
-          setPropsError(await readProblem(res, `Could not update the ${initiativeNounLower}.`));
-          return;
-        }
-        // The PATCH read-back is the base {@link InitiativeOut}; preserve the detail-only
-        // derived roll-up (childMix / distribution / rolledUpHealth / derivedStatus) from prior.
-        const updated = await res.json();
-        setDetail((current) =>
-          current
+  const patch = useApiMutation<InitiativeOut, InitiativePatch, { previous?: InitiativeDetailData }>(
+    {
+      mutationFn: (patchBody) =>
+        unwrap(
+          () =>
+            api.v1.orgs[':orgId'].initiatives[':id'].$patch({
+              param: { orgId, id: initiativeId },
+              json: toInitiativePatchBody(patchBody),
+            }),
+          `Could not update the ${initiativeNounLower}.`,
+        ),
+      onMutate: async (patchBody) => {
+        await queryClient.cancelQueries({ queryKey: detailKey });
+        const body = toInitiativePatchBody(patchBody);
+        const previous = queryClient.getQueryData<InitiativeDetailData>(detailKey);
+        queryClient.setQueryData<InitiativeDetailData>(detailKey, (cur) =>
+          cur ? { ...cur, detail: { ...cur.detail, ...body } } : cur,
+        );
+        return { previous };
+      },
+      onError: (_err, _body, ctx) => {
+        if (ctx?.previous) queryClient.setQueryData(detailKey, ctx.previous);
+      },
+      onSuccess: (updated) => {
+        // Preserve the detail-only derived roll-up (childMix / distribution / rolledUpHealth /
+        // derivedStatus); only the base fields come back from the PATCH.
+        queryClient.setQueryData<InitiativeDetailData>(detailKey, (cur) =>
+          cur
             ? {
-                ...current,
-                ...updated,
-                childMix: current.childMix,
-                distribution: current.distribution,
-                rolledUpHealth: current.rolledUpHealth,
-                derivedStatus: current.derivedStatus,
+                ...cur,
+                detail: {
+                  ...cur.detail,
+                  ...updated,
+                  childMix: cur.detail.childMix,
+                  distribution: cur.detail.distribution,
+                  rolledUpHealth: cur.detail.rolledUpHealth,
+                  derivedStatus: cur.detail.derivedStatus,
+                },
               }
-            : current,
+            : cur,
         );
-      } catch (caught) {
-        setDetail(previous);
-        setPropsError(
-          readError(caught, `Something went wrong updating the ${initiativeNounLower}.`),
-        );
-      } finally {
-        setPropsPending(false);
-      }
+      },
+      invalidateKeys: [detailKey],
     },
-    [detail, orgId, initiativeId, initiativeNounLower],
   );
+  const patchInitiative = patch.mutate;
+  const propsPending = patch.isPending;
+  const propsError = patch.error?.message ?? null;
 
   const memberOptions = useMemo<readonly PickerOption[]>(
     () => memberActorOptions(members),
@@ -457,10 +457,10 @@ export default function InitiativeDetailPage(): JSX.Element {
             canEdit={canEdit}
             pending={propsPending}
             onOwnerChange={(ownerId) => {
-              void patchInitiative({ ownerId });
+              patchInitiative({ ownerId });
             }}
             onTargetDateChange={(targetDate) => {
-              void patchInitiative({ targetDate });
+              patchInitiative({ targetDate });
             }}
           />
           {propsError ? (
@@ -484,16 +484,16 @@ export default function InitiativeDetailPage(): JSX.Element {
             programError={programError}
             projectError={projectError}
             onLinkProgram={(id) => {
-              void linkProgram(id);
+              linkProgramM.mutate(id);
             }}
             onUnlinkProgram={(id) => {
-              void unlinkProgram(id);
+              unlinkProgramM.mutate(id);
             }}
             onLinkProject={(id) => {
-              void linkProject(id);
+              linkProjectM.mutate(id);
             }}
             onUnlinkProject={(id) => {
-              void unlinkProject(id);
+              unlinkProjectM.mutate(id);
             }}
           />
         </aside>

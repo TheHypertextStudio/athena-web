@@ -1,16 +1,17 @@
 'use client';
 
-import type { ProjectOut, TaskOut, TeamOut } from '@docket/types';
-import { EntityList, EntityListRow, RowMeta } from '@docket/ui/components';
+import type { TeamOut } from '@docket/types';
+import { EmptyState, EntityList, EntityListRow, RowMeta } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { FolderKanban, ListChecks, Plus, Users, Workflow } from '@docket/ui/icons';
 import { Badge, Button, Skeleton } from '@docket/ui/primitives';
 import { useParams } from 'next/navigation';
-import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
+import { type JSX, useCallback, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { CreateTeamDialog } from '@/components/teams/create-team';
 import { api } from '@/lib/api';
-import { readError, readProblem } from '@/lib/problem';
+import { queryKeys, useApiQuery } from '@/lib/query';
 
 /** The row view-model derived for one Team (scope + workflow roll-up). */
 interface TeamRow {
@@ -33,55 +34,49 @@ interface TeamRow {
  * disabled): there is no team-detail screen yet, so a row deliberately offers no click target
  * that would 404 — mirroring the old non-interactive card.
  *
- * It composes three slices in parallel — teams, projects, and tasks — and rolls up the
- * per-team scope client-side (a project belongs via `project.teamId`; a task belongs via
- * `task.teamId`), so the roster renders without an N-round-trip detail fan-out. Entity nouns
- * route through {@link useVocabulary}; data is fetched at runtime so the production build needs
- * no running server.
+ * It composes three slices through the dynamic-data layer — teams, projects, and tasks — so each
+ * stays live (auto-refetch on focus + after a create) without a manual refresh control, and rolls
+ * up the per-team scope client-side (a project belongs via `project.teamId`; a task belongs via
+ * `task.teamId`) so the roster renders without an N-round-trip detail fan-out. Entity nouns route
+ * through {@link useVocabulary}; data is fetched at runtime so the production build needs no
+ * running server.
  */
 export default function TeamsListPage(): JSX.Element {
   const params = useParams<{ orgId: string }>();
   const orgId = params.orgId;
+  const queryClient = useQueryClient();
 
   const projectNoun = useVocabulary('project').toLowerCase();
   const projectNounPlural = useVocabulary('project', { plural: true }).toLowerCase();
   const taskNoun = useVocabulary('task').toLowerCase();
   const taskNounPlural = useVocabulary('task', { plural: true }).toLowerCase();
 
-  const [teams, setTeams] = useState<readonly TeamOut[]>([]);
-  const [projects, setProjects] = useState<readonly ProjectOut[]>([]);
-  const [tasks, setTasks] = useState<readonly TaskOut[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
 
-  /** Load the org's teams and the slices needed to scope each row. */
-  const load = useCallback(async (): Promise<void> => {
-    setLoading(true);
-    setLoadError(null);
-    try {
-      const [teamsRes, projectsRes, tasksRes] = await Promise.all([
-        api.v1.orgs[':orgId'].teams.$get({ param: { orgId } }),
-        api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
-        api.v1.orgs[':orgId'].tasks.$get({ param: { orgId } }),
-      ]);
-      if (!teamsRes.ok) {
-        setLoadError(await readProblem(teamsRes, 'Could not load your teams.'));
-        return;
-      }
-      setTeams((await teamsRes.json()).items);
-      if (projectsRes.ok) setProjects((await projectsRes.json()).items);
-      if (tasksRes.ok) setTasks((await tasksRes.json()).items);
-    } catch (caught) {
-      setLoadError(readError(caught, 'Something went wrong loading your teams.'));
-    } finally {
-      setLoading(false);
-    }
-  }, [orgId]);
+  // The roster is the primary slice (its load gates the page); projects + tasks enrich each row's
+  // scope roll-up and degrade gracefully (an empty list) if they fail, mirroring prior behavior.
+  const teamsQ = useApiQuery(
+    queryKeys.teams(orgId),
+    () => api.v1.orgs[':orgId'].teams.$get({ param: { orgId } }),
+    'Could not load your teams.',
+  );
+  const projectsQ = useApiQuery(
+    queryKeys.projects(orgId),
+    () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
+    'Could not load projects.',
+  );
+  const tasksQ = useApiQuery(
+    queryKeys.tasks(orgId),
+    () => api.v1.orgs[':orgId'].tasks.$get({ param: { orgId } }),
+    'Could not load tasks.',
+  );
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const teams = useMemo(() => teamsQ.data?.items ?? [], [teamsQ.data]);
+  const projects = useMemo(() => projectsQ.data?.items ?? [], [projectsQ.data]);
+  const tasks = useMemo(() => tasksQ.data?.items ?? [], [tasksQ.data]);
+
+  const loading = teamsQ.isPending;
+  const loadError = teamsQ.isError ? teamsQ.error.message : null;
 
   /** Per-team project counts (a project belongs via `project.teamId`). */
   const projectCountByTeam = useMemo(() => {
@@ -113,11 +108,14 @@ export default function TeamsListPage(): JSX.Element {
     [teams, projectCountByTeam, taskCountByTeam],
   );
 
-  /** Prepend the freshly-created team to the roster (teams have no detail route to open). */
-  const handleCreated = useCallback((created: TeamOut): void => {
-    setTeams((current) => [created, ...current]);
-    setCreateOpen(false);
-  }, []);
+  /** Refetch the roster from the server (teams have no detail route to open), then close the dialog. */
+  const handleCreated = useCallback(
+    (_created: TeamOut): void => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.teams(orgId) });
+      setCreateOpen(false);
+    },
+    [orgId, queryClient],
+  );
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
@@ -158,6 +156,7 @@ export default function TeamsListPage(): JSX.Element {
         </p>
       ) : teams.length === 0 ? (
         <EmptyState
+          icon={Users}
           title="No teams yet"
           body="Teams are the units that own work — each with its own workflow, cycles, and triage queue. Create one to start organizing your work."
           cta={{
@@ -225,33 +224,6 @@ function ListSkeleton(): JSX.Element {
           <Skeleton className="ml-auto h-4 w-24" />
         </div>
       ))}
-    </div>
-  );
-}
-
-/** A centered empty-state panel with an icon, title, supporting copy, and an optional CTA. */
-function EmptyState({
-  title,
-  body,
-  cta,
-}: {
-  title: string;
-  body: string;
-  cta?: { label: string; onClick: () => void } | null;
-}): JSX.Element {
-  return (
-    <div className="border-outline-variant flex flex-col items-center gap-3 rounded-xl border border-dashed p-12 text-center">
-      <span className="bg-surface-container text-on-surface-variant flex size-10 items-center justify-center rounded-full">
-        <Users aria-hidden="true" className="size-5" />
-      </span>
-      <p className="text-on-surface text-sm font-medium">{title}</p>
-      <p className="text-on-surface-variant max-w-sm text-sm leading-relaxed">{body}</p>
-      {cta ? (
-        <Button type="button" variant="outline" className="mt-1 gap-1.5" onClick={cta.onClick}>
-          <Plus aria-hidden="true" className="size-4" />
-          {cta.label}
-        </Button>
-      ) : null}
     </div>
   );
 }

@@ -1,12 +1,19 @@
 'use client';
 
-import type { MemberOut, ProjectOut, TaskOut } from '@docket/types';
-import { ActorAvatar, EntityList, EntityListRow, RowMeta, StatusIcon } from '@docket/ui/components';
+import type { ProjectOut } from '@docket/types';
+import {
+  ActorAvatar,
+  EmptyState,
+  EntityList,
+  EntityListRow,
+  RowMeta,
+  StatusIcon,
+} from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Calendar, FolderKanban, ListChecks, Plus } from '@docket/ui/icons';
 import { Button, Skeleton } from '@docket/ui/primitives';
 import { useParams, useRouter } from 'next/navigation';
-import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
+import { type JSX, useCallback, useMemo, useState } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 import { CreateProjectDialog } from '@/components/projects/create-project';
@@ -19,7 +26,8 @@ import {
   statusLabel,
 } from '@/components/projects/project-status';
 import { api } from '@/lib/api';
-import { readError, readProblem } from '@/lib/problem';
+import { queryKeys, useApiQuery } from '@/lib/query';
+import { useQueryClient } from '@tanstack/react-query';
 
 /** A short, year-less day formatter for a project's target date (e.g. "Jun 21"). */
 const TARGET_DATE_FMT = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' });
@@ -46,16 +54,17 @@ interface ProjectRow {
  * A Client Component reached at `/orgs/[orgId]/projects`. A Project is a *bounded* effort, so
  * each {@link EntityListRow} leads with a lifecycle status glyph and surfaces its lead, target
  * date, task-scope count ("N tasks"), and — in the trailing slot — its lifecycle
- * {@link ProjectStatusBadge} and {@link HealthPill}. The card grid is gone: the roster is one
+ * {@link ProjectStatusBadge} and {@link HealthDot}. The card grid is gone: the roster is one
  * clean bordered list of hairline-divided rows (design-system §5.1), so a long roster scans by
  * row, not by tile.
  *
- * It composes two slices in parallel — projects and tasks — and rolls up the per-project task
- * count client-side (a task belongs to a project via `task.projectId`), so the roster renders
- * without an N-round-trip detail fan-out. Members name each project's lead. A styled
- * {@link StatusFilterMenu} narrows the roster by lifecycle bucket with live counts. Entity
- * nouns route through {@link useVocabulary}; data is fetched at runtime so the production build
- * needs no running server.
+ * It composes three slices through the dynamic-data layer — projects, tasks, and members — so
+ * each stays live (auto-refetch on focus + after a create) without a manual refresh control, and
+ * rolls up the per-project task count client-side (a task belongs to a project via
+ * `task.projectId`) so the roster renders without an N-round-trip detail fan-out. Members name
+ * each project's lead. A styled {@link StatusFilterMenu} narrows the roster by lifecycle bucket
+ * with live counts. Entity nouns route through {@link useVocabulary}; data is fetched at runtime
+ * so the production build needs no running server.
  */
 export default function ProjectsListPage(): JSX.Element {
   const router = useRouter();
@@ -63,51 +72,40 @@ export default function ProjectsListPage(): JSX.Element {
   const orgId = params.orgId;
 
   const { teams, defaultTeamId, teamsLoading } = useActiveOrg();
+  const queryClient = useQueryClient();
 
   const projectLabel = useVocabulary('project');
   const projectsLabel = useVocabulary('project', { plural: true });
   const taskNoun = useVocabulary('task').toLowerCase();
   const taskNounPlural = useVocabulary('task', { plural: true }).toLowerCase();
 
-  const [projects, setProjects] = useState<readonly ProjectOut[]>([]);
-  const [tasks, setTasks] = useState<readonly TaskOut[]>([]);
-  const [members, setMembers] = useState<readonly MemberOut[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [filter, setFilter] = useState<StatusFilter>('all');
   const [createOpen, setCreateOpen] = useState(false);
 
-  /** Load the org's projects and the slices needed to scope + attribute each row. */
-  const load = useCallback(async (): Promise<void> => {
-    setLoading(true);
-    setLoadError(null);
-    try {
-      const [projectsRes, tasksRes, membersRes] = await Promise.all([
-        api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
-        api.v1.orgs[':orgId'].tasks.$get({ param: { orgId } }),
-        api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
-      ]);
-      if (!projectsRes.ok) {
-        setLoadError(
-          await readProblem(projectsRes, `Could not load ${projectsLabel.toLowerCase()}.`),
-        );
-        return;
-      }
-      setProjects((await projectsRes.json()).items);
-      if (tasksRes.ok) setTasks((await tasksRes.json()).items);
-      if (membersRes.ok) setMembers((await membersRes.json()).items);
-    } catch (caught) {
-      setLoadError(
-        readError(caught, `Something went wrong loading ${projectsLabel.toLowerCase()}.`),
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [orgId, projectsLabel]);
+  // The roster is the primary slice (its load gates the page); tasks + members enrich each row
+  // and degrade gracefully (an empty list) if they fail, mirroring the prior behavior.
+  const projectsQ = useApiQuery(
+    queryKeys.projects(orgId),
+    () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
+    `Could not load ${projectsLabel.toLowerCase()}.`,
+  );
+  const tasksQ = useApiQuery(
+    queryKeys.tasks(orgId),
+    () => api.v1.orgs[':orgId'].tasks.$get({ param: { orgId } }),
+    'Could not load tasks.',
+  );
+  const membersQ = useApiQuery(
+    queryKeys.members(orgId),
+    () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
+    'Could not load members.',
+  );
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const projects = useMemo(() => projectsQ.data?.items ?? [], [projectsQ.data]);
+  const tasks = useMemo(() => tasksQ.data?.items ?? [], [tasksQ.data]);
+  const members = useMemo(() => membersQ.data?.items ?? [], [membersQ.data]);
+
+  const loading = projectsQ.isPending;
+  const loadError = projectsQ.isError ? projectsQ.error.message : null;
 
   /** Lead display name by actor id (for the row attribution). */
   const leadNameById = useMemo(
@@ -150,13 +148,16 @@ export default function ProjectsListPage(): JSX.Element {
     }));
   }, [projects, filter, leadNameById, taskCountByProject]);
 
-  /** Prepend the freshly-created project to the roster, then open its detail. */
+  /**
+   * Refetch the roster from the server (prefix-matched, so this also refreshes any open
+   * project-detail beneath it), then open the freshly-created project's detail.
+   */
   const handleCreated = useCallback(
     (created: ProjectOut): void => {
-      setProjects((current) => [created, ...current]);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.projects(orgId) });
       router.push(`/orgs/${orgId}/projects/${created.id}`);
     },
-    [orgId, router],
+    [orgId, router, queryClient],
   );
 
   return (
@@ -207,6 +208,7 @@ export default function ProjectsListPage(): JSX.Element {
         </p>
       ) : projects.length === 0 ? (
         <EmptyState
+          icon={FolderKanban}
           title={`No ${projectsLabel.toLowerCase()} yet`}
           body={`${projectsLabel} are bounded efforts with a clear finish line. Create one to start tracking its status, health, and scope.`}
           cta={{
@@ -218,6 +220,7 @@ export default function ProjectsListPage(): JSX.Element {
         />
       ) : visibleRows.length === 0 ? (
         <EmptyState
+          icon={FolderKanban}
           title={`No ${filter} ${projectsLabel.toLowerCase()}`}
           body={`No ${projectLabel.toLowerCase()} matches this filter. Try a different status.`}
         />
@@ -288,33 +291,6 @@ function ListSkeleton(): JSX.Element {
           <Skeleton className="ml-auto h-4 w-24" />
         </div>
       ))}
-    </div>
-  );
-}
-
-/** A centered empty-state panel with an icon, title, supporting copy, and an optional CTA. */
-function EmptyState({
-  title,
-  body,
-  cta,
-}: {
-  title: string;
-  body: string;
-  cta?: { label: string; onClick: () => void } | null;
-}): JSX.Element {
-  return (
-    <div className="border-outline-variant flex flex-col items-center gap-3 rounded-xl border border-dashed p-12 text-center">
-      <span className="bg-surface-container text-on-surface-variant flex size-10 items-center justify-center rounded-full">
-        <FolderKanban aria-hidden="true" className="size-5" />
-      </span>
-      <p className="text-on-surface text-sm font-medium">{title}</p>
-      <p className="text-on-surface-variant max-w-sm text-sm leading-relaxed">{body}</p>
-      {cta ? (
-        <Button type="button" variant="outline" className="mt-1 gap-1.5" onClick={cta.onClick}>
-          <Plus aria-hidden="true" className="size-4" />
-          {cta.label}
-        </Button>
-      ) : null}
     </div>
   );
 }

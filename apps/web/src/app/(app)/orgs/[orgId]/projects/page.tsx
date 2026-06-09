@@ -1,79 +1,56 @@
 'use client';
 
+/**
+ * The org Projects list — the roster of bounded efforts (§8.4).
+ *
+ * @remarks
+ * A Client Component reached at `/orgs/[orgId]/projects`. A Project is a *bounded* effort, so the
+ * roster renders through the shared {@link EntityTable}: a leading lifecycle status glyph, a
+ * flexing **Title** column, and the project's key properties — status, lead, health, target date,
+ * and task scope — in **aligned** columns under a light header. This is the same column-aligned
+ * surface Initiatives (and, later, Tasks) render through, so a project roster and an initiative
+ * roster share one visual hierarchy (the user's mandate: "structured the same … just like Linear");
+ * only the trailing property columns differ a little per entity.
+ *
+ * Columns are derived from the project {@link buildProjectCatalog | catalog} where natural
+ * ({@link projectColumns}), so the toolbar's groupable/sortable fields and the table's headers read
+ * from one source of truth. The {@link FilterToolbar} stays mounted above the table over the same
+ * catalog: the roster can be filtered by status / health / lead / team, grouped, and sorted — all
+ * applied **client-side** over the already-loaded {@link useApiQuery} results (Phase B data flow is
+ * preserved; no manual refresh). The view state is held in the URL by {@link useViewState}, so a
+ * filtered roster is shareable and survives a reload. Grouping renders full-width
+ * {@link GroupHeader} boundary rows that span every column.
+ *
+ * It composes three slices through the dynamic-data layer — projects, tasks, and members — so each
+ * stays live (auto-refetch on focus + after a create) and rolls up the per-project task count
+ * client-side. Members + teams name each project's lead and team; entity nouns route through
+ * {@link useVocabulary}; data is fetched at runtime so the production build needs no running server.
+ */
 import type { ProjectOut } from '@docket/types';
-import {
-  ActorAvatar,
-  EmptyState,
-  EntityList,
-  EntityListRow,
-  RowMeta,
-  StatusIcon,
-} from '@docket/ui/components';
+import { EmptyState, EntityTable, StatusIcon } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
-import { Calendar, FolderKanban, ListChecks, Plus } from '@docket/ui/icons';
+import { FolderKanban, Plus } from '@docket/ui/icons';
 import { Button, Skeleton } from '@docket/ui/primitives';
+import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { type JSX, useCallback, useMemo } from 'react';
+import { type JSX, useCallback, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { useActiveOrg } from '@/components/active-org';
 import { CreateProjectDialog } from '@/components/projects/create-project';
-import { buildProjectCatalog } from '@/components/projects/project-catalog';
-import {
-  HealthDot,
-  ProjectStatusBadge,
-  statusGlyphType,
-  statusLabel,
-} from '@/components/projects/project-status';
+import { buildProjectCatalog, projectColumns } from '@/components/projects/project-catalog';
+import { statusGlyphType } from '@/components/projects/project-status';
 import { applyView, EMPTY_GROUP_ID } from '@/components/views/apply-view';
 import type { FieldOption } from '@/components/views/field-catalog';
 import { FilterToolbar } from '@/components/views/filter-toolbar';
 import { useViewState } from '@/components/views/use-view-state';
 import { api } from '@/lib/api';
 import { queryKeys, useApiQuery } from '@/lib/query';
-import { useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
-
-/** A short, year-less day formatter for a project's target date (e.g. "Jun 21"). */
-const TARGET_DATE_FMT = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' });
-
-/** Format a project's nullable target date for the row's meta band, or `null` when unset. */
-function formatTargetDate(targetDate: string | null | undefined): string | null {
-  if (!targetDate) return null;
-  const date = new Date(targetDate);
-  if (Number.isNaN(date.getTime())) return null;
-  return TARGET_DATE_FMT.format(date);
-}
-
-/** The row view-model derived for one Project (lead + task-scope roll-up). */
-interface ProjectRow {
-  project: ProjectOut;
-  leadName: string | null;
-  taskCount: number;
-}
 
 /**
- * The org Projects list — the roster of bounded efforts (§8.4), rendered as dense rows.
+ * The Projects list page.
  *
- * @remarks
- * A Client Component reached at `/orgs/[orgId]/projects`. A Project is a *bounded* effort, so
- * each {@link EntityListRow} leads with a lifecycle status glyph and surfaces its lead, target
- * date, task-scope count ("N tasks"), and — in the trailing slot — its lifecycle
- * {@link ProjectStatusBadge} and {@link HealthDot}. The card grid is gone: the roster is one
- * clean bordered list of hairline-divided rows (design-system §5.1), so a long roster scans by
- * row, not by tile.
- *
- * This is the reference application of the unified filtering engine. A single
- * {@link FilterToolbar} over the project {@link buildProjectCatalog | catalog} replaces the old
- * bespoke status menu: the roster can be filtered by status / health / lead / team, grouped, and
- * sorted — all applied **client-side** over the already-loaded {@link useApiQuery} results (Phase
- * B data flow is preserved; no manual refresh). The view state is held in the URL by
- * {@link useViewState}, so a filtered roster is shareable and survives a reload.
- *
- * It composes three slices through the dynamic-data layer — projects, tasks, and members — so
- * each stays live (auto-refetch on focus + after a create) and rolls up the per-project task
- * count client-side. Members + teams name each project's lead and team; entity nouns route
- * through {@link useVocabulary}; data is fetched at runtime so the production build needs no
- * running server.
+ * @returns the rendered roster.
  */
 export default function ProjectsListPage(): JSX.Element {
   const router = useRouter();
@@ -117,7 +94,7 @@ export default function ProjectsListPage(): JSX.Element {
   const loading = projectsQ.isPending;
   const loadError = projectsQ.isError ? projectsQ.error.message : null;
 
-  /** Lead display name by actor id (for the row attribution + filter labels). */
+  /** Lead display name by actor id (for the lead column + filter labels). */
   const leadNameById = useMemo(
     () => new Map<string, string>(members.map((m) => [m.actorId, m.displayName])),
     [members],
@@ -137,7 +114,7 @@ export default function ProjectsListPage(): JSX.Element {
     return counts;
   }, [tasks]);
 
-  /** The project field catalog driving the toolbar + the apply engine. */
+  /** The project field catalog driving the toolbar + the apply engine + the table columns. */
   const catalog = useMemo(
     () =>
       buildProjectCatalog({
@@ -153,18 +130,34 @@ export default function ProjectsListPage(): JSX.Element {
     [leadNameById, members, teamLabel, teamNameById, teams],
   );
 
+  /** The aligned table columns, derived from the same catalog the toolbar drives. */
+  const columns = useMemo(
+    () =>
+      projectColumns(catalog, {
+        taskCountFor: (project) => taskCountByProject.get(project.id) ?? 0,
+        taskNoun,
+        taskNounPlural,
+      }),
+    [catalog, taskCountByProject, taskNoun, taskNounPlural],
+  );
+
   /** Filter + sort + group the loaded roster client-side per the active view state. */
   const applied = useMemo(() => applyView(projects, state, catalog), [projects, state, catalog]);
 
-  /** Adapt a project to its dense-row view-model. */
-  const toRow = useCallback(
-    (project: ProjectOut): ProjectRow => ({
-      project,
-      leadName: project.leadId ? (leadNameById.get(project.leadId) ?? null) : null,
-      taskCount: taskCountByProject.get(project.id) ?? 0,
-    }),
-    [leadNameById, taskCountByProject],
-  );
+  /** Map an `applyView` bucket onto an {@link EntityTable} group (status buckets carry a glyph). */
+  const groups = useMemo(() => {
+    if (!applied.groups) return undefined;
+    const isStatusGroup = state.groupBy?.field === 'status';
+    return applied.groups.map((group) => ({
+      id: group.id,
+      label: group.label,
+      decoration:
+        isStatusGroup && group.id !== EMPTY_GROUP_ID ? (
+          <StatusIcon type={statusGlyphType(group.id)} label={group.label} />
+        ) : undefined,
+      rows: group.rows,
+    }));
+  }, [applied.groups, state.groupBy]);
 
   /**
    * Refetch the roster from the server (prefix-matched, so this also refreshes any open
@@ -247,122 +240,32 @@ export default function ProjectsListPage(): JSX.Element {
           title={`No matching ${projectsLabel.toLowerCase()}`}
           body={`No ${projectLabel.toLowerCase()} matches the active filters. Adjust or clear them to see more.`}
         />
-      ) : applied.groups ? (
-        <div className="flex flex-col gap-4">
-          {applied.groups.map((group) => (
-            <section key={group.id} className="flex flex-col gap-2">
-              <h2 className="text-on-surface-variant flex items-center gap-2 px-1 text-xs font-medium">
-                {state.groupBy?.field === 'status' && group.id !== EMPTY_GROUP_ID ? (
-                  <StatusIcon type={statusGlyphType(group.id)} label={group.label} />
-                ) : null}
-                <span>{group.label}</span>
-                <span className="text-on-surface-variant/70 tabular-nums">{group.rows.length}</span>
-              </h2>
-              <ProjectRows
-                rows={group.rows.map(toRow)}
-                orgId={orgId}
-                taskNoun={taskNoun}
-                taskNounPlural={taskNounPlural}
-                ariaLabel={`${projectsLabel} — ${group.label}`}
-                onOpen={(id) => {
-                  router.push(`/orgs/${orgId}/projects/${id}`);
-                }}
-              />
-            </section>
-          ))}
-        </div>
       ) : (
-        <ProjectRows
-          rows={applied.rows.map(toRow)}
-          orgId={orgId}
-          taskNoun={taskNoun}
-          taskNounPlural={taskNounPlural}
-          ariaLabel={projectsLabel}
-          onOpen={(id) => {
-            router.push(`/orgs/${orgId}/projects/${id}`);
-          }}
+        <EntityTable
+          aria-label={projectsLabel}
+          columns={columns}
+          groups={groups}
+          rows={applied.rows}
+          getRowKey={(project) => project.id}
+          rowHref={(project) => `/orgs/${orgId}/projects/${project.id}`}
+          renderRowLink={(lp) => (
+            <Link
+              href={lp.href}
+              className={lp.className}
+              onClick={lp.onClick}
+              tabIndex={lp.tabIndex}
+              aria-current={lp['aria-current']}
+            >
+              {lp.children}
+            </Link>
+          )}
         />
       )}
     </div>
   );
 }
 
-/** Props for {@link ProjectRows}. */
-interface ProjectRowsProps {
-  /** The adapted rows to render. */
-  rows: readonly ProjectRow[];
-  /** The active org id (for row navigation). */
-  orgId: string;
-  /** Singular task noun (vocabulary-resolved). */
-  taskNoun: string;
-  /** Plural task noun (vocabulary-resolved). */
-  taskNounPlural: string;
-  /** Accessible label for the list. */
-  ariaLabel: string;
-  /** Open a project's detail. */
-  onOpen: (projectId: string) => void;
-}
-
-/** A bordered {@link EntityList} of project rows (shared by the flat + grouped renders). */
-function ProjectRows({
-  rows,
-  taskNoun,
-  taskNounPlural,
-  ariaLabel,
-  onOpen,
-}: ProjectRowsProps): JSX.Element {
-  return (
-    <EntityList aria-label={ariaLabel}>
-      {rows.map(({ project, leadName, taskCount }) => {
-        const targetDate = formatTargetDate(project.targetDate);
-        const taskWord = taskCount === 1 ? taskNoun : taskNounPlural;
-        return (
-          <EntityListRow
-            key={project.id}
-            leading={
-              <StatusIcon
-                type={statusGlyphType(project.status)}
-                label={statusLabel(project.status)}
-              />
-            }
-            title={project.name}
-            onActivate={() => {
-              onOpen(project.id);
-            }}
-            meta={
-              <>
-                {leadName ? (
-                  <RowMeta>
-                    <ActorAvatar kind="human" name={leadName} size={18} />
-                    <span className="text-on-surface/80 font-medium">{leadName}</span>
-                  </RowMeta>
-                ) : null}
-                {targetDate ? (
-                  <RowMeta tabular>
-                    <Calendar aria-hidden="true" className="size-3.5" />
-                    {targetDate}
-                  </RowMeta>
-                ) : null}
-                <RowMeta tabular>
-                  <ListChecks aria-hidden="true" className="size-3.5" />
-                  {taskCount} {taskWord}
-                </RowMeta>
-              </>
-            }
-            trailing={
-              <>
-                <HealthDot health={project.health ?? null} />
-                <ProjectStatusBadge status={project.status} />
-              </>
-            }
-          />
-        );
-      })}
-    </EntityList>
-  );
-}
-
-/** Loading placeholder: a bordered list of slim row skeletons. */
+/** Loading placeholder: a bordered list of slim row skeletons matching the table density. */
 function ListSkeleton(): JSX.Element {
   return (
     <div
@@ -370,8 +273,8 @@ function ListSkeleton(): JSX.Element {
       aria-hidden="true"
     >
       {[0, 1, 2, 3, 4].map((i) => (
-        <div key={i} className="flex items-center gap-3 px-3 py-2.5">
-          <Skeleton className="size-4 rounded-full" />
+        <div key={i} className="flex min-h-9 items-center gap-2 px-3 py-1.5">
+          <Skeleton className="size-3.5 rounded-full" />
           <Skeleton className="h-4 w-48" />
           <Skeleton className="ml-auto h-4 w-24" />
         </div>

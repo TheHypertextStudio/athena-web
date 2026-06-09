@@ -53,6 +53,14 @@ export {
   PropertyTrigger,
   type PropertyTriggerProps,
 } from './pickers';
+export {
+  type Column,
+  type ColumnPriority,
+  EntityTable,
+  type EntityTableGroup,
+  type EntityTableProps,
+  type EntityTableRowLinkProps,
+} from './views/EntityTable';
 export { GroupHeader, type GroupHeaderProps } from './views/GroupHeader';
 export { ListGroup, type ListGroupProps } from './views/ListGroup';
 export {

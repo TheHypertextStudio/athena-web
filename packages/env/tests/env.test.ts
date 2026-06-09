@@ -22,6 +22,9 @@ import {
 
 beforeEach(() => {
   vi.resetModules();
+  // Clear SKIP_ENV_VALIDATION by default so tests that expect validation to fail can run.
+  // Tests that want to skip validation can set it to '1' explicitly.
+  vi.stubEnv('SKIP_ENV_VALIDATION', '');
   // Silence the `console.error("❌ Invalid environment variables", ...)` that
   // @t3-oss/env emits before it throws on an invalid contract.
   vi.spyOn(console, 'error').mockImplementation(() => undefined);

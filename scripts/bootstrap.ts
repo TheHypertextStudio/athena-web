@@ -174,6 +174,10 @@ async function gatherConfig(): Promise<Config> {
   console.log('\n  Neon (free tier: neon.tech → New project → Connection details)');
   const neonProjectId = await prompt('Neon project ID');
   const neonApiKey = await prompt('Neon API key (from neon.tech → Account → API keys)');
+  if (!neonApiKey) {
+    console.error('Neon API key is required (used to create preview branches in CI).');
+    process.exit(1);
+  }
   const databaseUrl = await prompt('Neon DATABASE_URL (pooled)');
   const databaseUrlUnpooled = await prompt(
     'Neon DATABASE_URL_UNPOOLED (for migrations)',
@@ -204,6 +208,8 @@ function setupGcp(cfg: Config): { saEmail: string; wifProvider: string } {
     'secretmanager.googleapis.com',
     'iam.googleapis.com',
     'iamcredentials.googleapis.com',
+    'sts.googleapis.com', // required for WIF OIDC token exchange
+    'cloudresourcemanager.googleapis.com',
   ];
   step(`enabling ${apis.length} APIs (may take ~30s)…`);
   exec(`gcloud services enable ${apis.join(' ')} --project=${cfg.project}`);
@@ -348,14 +354,14 @@ function setupGithub(cfg: Config, saEmail: string, wifProvider: string): void {
     GCP_WIF_PROVIDER: wifProvider,
     PASSKEY_RP_ID: cfg.domain,
     NEON_PROJECT_ID: cfg.neonProjectId,
-    // URL vars are set after first deploy — placeholders silenced by a note below
-    API_URL: '',
-    WEB_URL: '',
-    ADMIN_URL: '',
+    // Set placeholder URLs so BETTER_AUTH_TRUSTED_ORIGINS is never a bare comma
+    // on the first deploy. Update after services are live (step 4 of next steps).
+    API_URL: 'https://api.example.com',
+    WEB_URL: 'https://app.example.com',
+    ADMIN_URL: 'https://admin.example.com',
   };
 
   for (const [key, value] of Object.entries(vars)) {
-    if (!value) continue; // skip empty (URL vars deferred)
     exec(`gh variable set ${key} --body "${value}" --repo ${cfg.repo}`);
     ok(key);
   }

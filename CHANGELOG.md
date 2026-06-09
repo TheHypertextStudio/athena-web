@@ -1,3 +1,9 @@
+## [1.0.3](https://github.com/TheHypertextStudio/athena-web/compare/v1.0.2...v1.0.3) (2026-06-09)
+
+### Bug Fixes
+
+- **pnpm:** properly configure inject-workspace-packages in .pnpmrc ([24632f0](https://github.com/TheHypertextStudio/athena-web/commit/24632f01f8403bb20da5ab4a530cade76ec0fa46))
+
 ## [1.0.2](https://github.com/TheHypertextStudio/athena-web/compare/v1.0.1...v1.0.2) (2026-06-09)
 
 ### Bug Fixes

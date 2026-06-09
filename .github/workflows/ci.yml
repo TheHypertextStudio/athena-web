@@ -17,7 +17,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-      PNPM_CONFIG_INJECT_WORKSPACE_PACKAGES: 'true'
     steps:
       - uses: actions/checkout@v6
 
@@ -49,7 +48,6 @@ jobs:
       # Tests run in local/pglite mode — skip prod env validation.
       SKIP_ENV_VALIDATION: '1'
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-      PNPM_CONFIG_INJECT_WORKSPACE_PACKAGES: 'true'
     steps:
       - uses: actions/checkout@v6
 

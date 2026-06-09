@@ -15,10 +15,12 @@ jobs:
   quality:
     name: Lint & Types
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version-file: '.node-version'
 
@@ -27,7 +29,7 @@ jobs:
       # Turbo task cache — on exact SHA hit turbo replays outputs without re-running.
       # restore-keys falls back to the nearest ancestor commit's cache so only
       # tasks whose inputs changed are re-executed.
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           path: .turbo
           key: turbo-quality-${{ runner.os }}-${{ github.sha }}
@@ -45,16 +47,17 @@ jobs:
     env:
       # Tests run in local/pglite mode — skip prod env validation.
       SKIP_ENV_VALIDATION: '1'
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version-file: '.node-version'
 
       - run: corepack enable
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           path: .turbo
           key: turbo-test-${{ runner.os }}-${{ github.sha }}
@@ -65,7 +68,7 @@ jobs:
       - run: pnpm turbo run test --cache-dir=.turbo
 
       # Upload even on partial test failure so coverage doesn't silently drop.
-      - uses: codecov/codecov-action@v5
+      - uses: codecov/codecov-action@v7
         if: always()
         with:
           token: ${{ secrets.CODECOV_TOKEN }}

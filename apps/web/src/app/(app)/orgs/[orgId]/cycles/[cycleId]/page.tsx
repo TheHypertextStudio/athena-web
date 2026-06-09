@@ -42,7 +42,8 @@ import { type GroupKey, ListView, TaskRow, type TaskRowData } from '@docket/ui/c
 import { useVocabulary } from '@docket/ui/hooks';
 import { Badge, Button, Skeleton } from '@docket/ui/primitives';
 import { useParams, useRouter } from 'next/navigation';
-import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
+import { type JSX, useCallback, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { buildActorDirectory, type ActorDirectory } from '@/components/agents/actor-directory';
 import { CloseCycleDialog } from '@/components/cycles/close-cycle-dialog';
@@ -53,9 +54,107 @@ import { formatWindow, windowProgress } from '@/components/cycles/format-window'
 import { GroupByMenu } from '@/components/cycles/group-by-menu';
 import { StatsBanner } from '@/components/cycles/stats-banner';
 import { api } from '@/lib/api';
-import { readError, readProblem } from '@/lib/problem';
+import { type RpcResponse, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
 import { useOrgCapability } from '@/lib/use-org-capability';
 import { STATE_GROUP_LABEL, STATE_GROUP_ORDER, stateTypeOf } from '@/lib/work-state';
+
+/** A stable empty name map, used as the default before the detail lands. */
+const EMPTY_NAME_MAP: ReadonlyMap<string, string> = new Map();
+
+/** The composite cycle-detail payload assembled from the typed RPC surface. */
+interface CycleDetailData {
+  readonly cycle: CycleDetail;
+  readonly burnup: CycleBurnupOut | null;
+  readonly tasks: readonly TaskOut[];
+  readonly projectName: ReadonlyMap<string, string>;
+  readonly programName: ReadonlyMap<string, string>;
+  /** Open cycles on the same team — the only valid "move to" targets at close. */
+  readonly otherCycles: readonly CycleOut[];
+  readonly members: readonly MemberOut[];
+  readonly roles: readonly RoleOut[];
+  readonly resolveActor: ActorDirectory['resolve'];
+}
+
+/**
+ * Build the composite cycle-detail fetcher, returning a {@link RpcResponse}-shaped result so it can
+ * drive {@link useApiQuery} directly.
+ *
+ * @remarks
+ * Composes the cycle, its burn-up, its committed tasks, the naming directories (projects/programs/
+ * members/agents), and the sibling cycles in parallel. The composite resolves `ok`/`status` from
+ * the gating cycle read; sub-reads degrade to benign defaults.
+ */
+function fetchCycleDetail(
+  orgId: string,
+  cycleId: string,
+): () => Promise<RpcResponse<CycleDetailData>> {
+  return async () => {
+    const [
+      cycleRes,
+      burnupRes,
+      tasksRes,
+      projectsRes,
+      programsRes,
+      membersRes,
+      agentsRes,
+      cyclesRes,
+      rolesRes,
+    ] = await Promise.all([
+      api.v1.orgs[':orgId'].cycles[':id'].$get({ param: { orgId, id: cycleId } }),
+      api.v1.orgs[':orgId'].cycles[':id'].burnup.$get({ param: { orgId, id: cycleId } }),
+      api.v1.orgs[':orgId'].cycles[':id'].tasks.$get({ param: { orgId, id: cycleId }, query: {} }),
+      api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
+      api.v1.orgs[':orgId'].programs.$get({ param: { orgId } }),
+      api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
+      api.v1.orgs[':orgId'].agents.$get({ param: { orgId } }),
+      api.v1.orgs[':orgId'].cycles.$get({ param: { orgId } }),
+      api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
+    ]);
+
+    if (!cycleRes.ok) {
+      return {
+        ok: false,
+        status: cycleRes.status,
+        json: () => cycleRes.json() as unknown as Promise<CycleDetailData>,
+      };
+    }
+    const cycle = await cycleRes.json();
+    const burnup = burnupRes.ok ? await burnupRes.json() : null;
+
+    // The grouped read carries the cycle's committed tasks; flatten both axes' groups into a single
+    // task list and let the ListView re-group client-side as the axis toggles.
+    const tasks: readonly TaskOut[] = tasksRes.ok
+      ? (await tasksRes.json()).groups.flatMap((group) => group.tasks)
+      : [];
+
+    const projects: readonly ProjectOut[] = projectsRes.ok ? (await projectsRes.json()).items : [];
+    const programs: readonly ProgramOut[] = programsRes.ok ? (await programsRes.json()).items : [];
+    const memberItems = membersRes.ok ? (await membersRes.json()).items : [];
+    const agents = agentsRes.ok ? (await agentsRes.json()).items : [];
+    const directory = buildActorDirectory(memberItems, agents);
+    const roles = rolesRes.ok ? (await rolesRes.json()).items : [];
+
+    // Other cycles on the SAME team are the only valid "move to" targets at close (cycles are
+    // team-scoped), and only open ones make sense to roll into.
+    const allCycles: readonly CycleOut[] = cyclesRes.ok ? (await cyclesRes.json()).items : [];
+    const otherCycles = allCycles.filter(
+      (c) => c.id !== cycleId && c.teamId === cycle.teamId && c.status !== 'completed',
+    );
+
+    const data: CycleDetailData = {
+      cycle,
+      burnup,
+      tasks,
+      projectName: new Map(projects.map((p) => [p.id, p.name])),
+      programName: new Map(programs.map((p) => [p.id, p.name])),
+      otherCycles,
+      members: memberItems,
+      roles,
+      resolveActor: directory.resolve,
+    };
+    return { ok: true, status: cycleRes.status, json: () => Promise.resolve(data) };
+  };
+}
 
 /**
  * The cycle detail page.
@@ -64,31 +163,36 @@ export default function CycleDetailPage(): JSX.Element {
   const router = useRouter();
   const params = useParams<{ orgId: string; cycleId: string }>();
   const { orgId, cycleId } = params;
+  const queryClient = useQueryClient();
 
   const cycleNoun = useVocabulary('cycle');
   const cycleNounLower = cycleNoun.toLowerCase();
   const projectNoun = useVocabulary('project');
   const programNoun = useVocabulary('program');
 
-  const [cycle, setCycle] = useState<CycleDetail | null>(null);
-  const [burnup, setBurnup] = useState<CycleBurnupOut | null>(null);
-  const [tasks, setTasks] = useState<readonly TaskOut[]>([]);
-  const [projectName, setProjectName] = useState<ReadonlyMap<string, string>>(new Map());
-  const [programName, setProgramName] = useState<ReadonlyMap<string, string>>(new Map());
-  const [otherCycles, setOtherCycles] = useState<readonly CycleOut[]>([]);
-  const [members, setMembers] = useState<readonly MemberOut[]>([]);
-  const [roles, setRoles] = useState<readonly RoleOut[]>([]);
-  const [resolveActor, setResolveActor] = useState<ActorDirectory['resolve']>(() => () => ({
-    name: 'Someone',
-    kind: 'human' as const,
-  }));
+  const detailKey = queryKeys.cycle(orgId, cycleId);
 
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const detailQ = useApiQuery(
+    detailKey,
+    fetchCycleDetail(orgId, cycleId),
+    `Could not load this ${cycleNounLower}.`,
+  );
+  const data = detailQ.data ?? null;
+  const cycle = data?.cycle ?? null;
+  const burnup = data?.burnup ?? null;
+  const tasks = useMemo(() => data?.tasks ?? [], [data]);
+  const projectName = data?.projectName ?? EMPTY_NAME_MAP;
+  const programName = data?.programName ?? EMPTY_NAME_MAP;
+  const otherCycles = useMemo(() => data?.otherCycles ?? [], [data]);
+  const members = data?.members ?? [];
+  const roles = data?.roles ?? [];
+  const resolveActor = useMemo<ActorDirectory['resolve']>(
+    () => data?.resolveActor ?? (() => ({ name: 'Someone', kind: 'human' as const })),
+    [data],
+  );
 
-  // Properties-panel mutation state (optimistic PATCH + rollback).
-  const [propsPending, setPropsPending] = useState(false);
-  const [propsError, setPropsError] = useState<string | null>(null);
+  const loading = detailQ.isPending;
+  const error = detailQ.isError ? detailQ.error.message : null;
 
   const [groupBy, setGroupBy] = useState<CycleTaskGroupBy>('project');
   const [bannerExpanded, setBannerExpanded] = useState(true);
@@ -96,91 +200,7 @@ export default function CycleDetailPage(): JSX.Element {
   // Close-cycle flow state.
   const [dialogOpen, setDialogOpen] = useState(false);
   const [decisions, setDecisions] = useState<readonly CarryoverItem[]>([]);
-  const [closing, setClosing] = useState(false);
   const [closeError, setCloseError] = useState<string | null>(null);
-
-  /** Load the cycle, its burn-up, its committed tasks, and the naming directories. */
-  const load = useCallback(async (): Promise<void> => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [
-        cycleRes,
-        burnupRes,
-        tasksRes,
-        projectsRes,
-        programsRes,
-        membersRes,
-        agentsRes,
-        cyclesRes,
-        rolesRes,
-      ] = await Promise.all([
-        api.v1.orgs[':orgId'].cycles[':id'].$get({ param: { orgId, id: cycleId } }),
-        api.v1.orgs[':orgId'].cycles[':id'].burnup.$get({ param: { orgId, id: cycleId } }),
-        api.v1.orgs[':orgId'].cycles[':id'].tasks.$get({
-          param: { orgId, id: cycleId },
-          query: {},
-        }),
-        api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
-        api.v1.orgs[':orgId'].programs.$get({ param: { orgId } }),
-        api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
-        api.v1.orgs[':orgId'].agents.$get({ param: { orgId } }),
-        api.v1.orgs[':orgId'].cycles.$get({ param: { orgId } }),
-        api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
-      ]);
-
-      if (!cycleRes.ok) {
-        setError(await readProblem(cycleRes, `Could not load this ${cycleNounLower}.`));
-        return;
-      }
-      const detail = await cycleRes.json();
-      setCycle(detail);
-
-      if (burnupRes.ok) setBurnup(await burnupRes.json());
-
-      // The grouped read carries the cycle's committed tasks; flatten both axes' groups into a
-      // single task list and let the ListView re-group client-side as the axis toggles.
-      if (tasksRes.ok) {
-        const { groups } = await tasksRes.json();
-        setTasks(groups.flatMap((group) => group.tasks));
-      }
-
-      const projects: readonly ProjectOut[] = projectsRes.ok
-        ? (await projectsRes.json()).items
-        : [];
-      setProjectName(new Map(projects.map((p) => [p.id, p.name])));
-      const programs: readonly ProgramOut[] = programsRes.ok
-        ? (await programsRes.json()).items
-        : [];
-      setProgramName(new Map(programs.map((p) => [p.id, p.name])));
-
-      const memberItems = membersRes.ok ? (await membersRes.json()).items : [];
-      const agents = agentsRes.ok ? (await agentsRes.json()).items : [];
-      const directory = buildActorDirectory(memberItems, agents);
-      setResolveActor(() => directory.resolve);
-      setMembers(memberItems);
-      if (rolesRes.ok) setRoles((await rolesRes.json()).items);
-
-      // Other cycles on the SAME team are the only valid "move to" targets at close (cycles are
-      // team-scoped), and only open ones make sense to roll into.
-      if (cyclesRes.ok) {
-        const { items } = await cyclesRes.json();
-        setOtherCycles(
-          items.filter(
-            (c) => c.id !== cycleId && c.teamId === detail.teamId && c.status !== 'completed',
-          ),
-        );
-      }
-    } catch (caught) {
-      setError(readError(caught, `Something went wrong loading this ${cycleNounLower}.`));
-    } finally {
-      setLoading(false);
-    }
-  }, [orgId, cycleId, cycleNounLower]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
 
   /** Adapt a task DTO to the design-system task-row view-model (state glyph + assignee). */
   const toRow = useCallback(
@@ -285,73 +305,85 @@ export default function CycleDetailPage(): JSX.Element {
     );
   }, []);
 
-  /** Submit the reviewed carryover decisions, then reload the (now-closed) cycle. */
-  const confirmClose = useCallback(async (): Promise<void> => {
-    setClosing(true);
-    setCloseError(null);
-    try {
-      const res = await api.v1.orgs[':orgId'].cycles[':id'].close.$post({
-        param: { orgId, id: cycleId },
-        json: {
-          carryover: decisions.map((item) => ({
-            taskId: TaskId.parse(item.taskId),
-            action: item.action,
-            ...(item.action === 'move' && item.targetCycleId
-              ? { targetCycleId: CycleId.parse(item.targetCycleId) }
-              : {}),
-          })),
-        },
-      });
-      if (!res.ok) {
-        setCloseError(await readProblem(res, `Could not close this ${cycleNounLower}.`));
-        return;
-      }
+  /**
+   * Submit the reviewed carryover decisions, then refetch the (now-closed) cycle. A close moves
+   * tasks between cycles and rolls this one, so it also refreshes the org cycle roster.
+   */
+  const closeM = useApiMutation({
+    mutationFn: (items: readonly CarryoverItem[]) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].cycles[':id'].close.$post({
+            param: { orgId, id: cycleId },
+            json: {
+              carryover: items.map((item) => ({
+                taskId: TaskId.parse(item.taskId),
+                action: item.action,
+                ...(item.action === 'move' && item.targetCycleId
+                  ? { targetCycleId: CycleId.parse(item.targetCycleId) }
+                  : {}),
+              })),
+            },
+          }),
+        `Could not close this ${cycleNounLower}.`,
+      ),
+    onSuccess: () => {
       setDialogOpen(false);
-      await load();
-    } catch (caught) {
-      setCloseError(readError(caught, `Something went wrong closing this ${cycleNounLower}.`));
-    } finally {
-      setClosing(false);
-    }
-  }, [orgId, cycleId, decisions, cycleNounLower, load]);
+    },
+    onError: (err) => {
+      // Mirror the failure into the dialog's local error so reopening (which clears it) resets it.
+      setCloseError(err.message);
+    },
+    invalidateKeys: [queryKeys.cycles(orgId)],
+  });
+  const confirmClose = useCallback((): void => {
+    setCloseError(null);
+    closeM.mutate(decisions);
+  }, [closeM, decisions]);
+  const closing = closeM.isPending;
 
   /**
-   * Optimistically patch the cycle's status / window: apply locally, fire the PATCH, roll back
-   * on failure. A Cycle's window bounds are mandatory, so a window patch only sends the bounds
-   * that are set — clearing a bound in the picker leaves the prior value untouched. Editing a
-   * Cycle requires `contribute` (gated by {@link canEdit}).
+   * Optimistically patch the cycle's status / window: apply to the cached payload, fire the PATCH,
+   * roll back on failure, and reconcile on settle. A Cycle's window bounds are mandatory, so a
+   * window patch only sends the bounds that are set — clearing a bound in the picker leaves the
+   * prior value untouched. Editing a Cycle requires `contribute` (gated by {@link canEditCycle}).
+   * The PATCH read-back is the base cycle shape, so success preserves the detail-only stats roll-up.
    */
-  const patchCycle = useCallback(
-    async (patch: { status?: CycleStatus; startsAt?: string; endsAt?: string }): Promise<void> => {
-      if (!cycle) return;
-      const previous = cycle;
-      setCycle({ ...cycle, ...patch });
-      setPropsPending(true);
-      setPropsError(null);
-      try {
-        const res = await api.v1.orgs[':orgId'].cycles[':id'].$patch({
-          param: { orgId, id: cycleId },
-          json: patch,
-        });
-        if (!res.ok) {
-          setCycle(previous);
-          setPropsError(await readProblem(res, `Could not update this ${cycleNounLower}.`));
-          return;
-        }
-        // The PATCH read-back is the base cycle shape; preserve the detail-only stats roll-up.
-        const updated = await res.json();
-        setCycle((current) =>
-          current ? { ...current, ...updated, stats: current.stats } : current,
-        );
-      } catch (caught) {
-        setCycle(previous);
-        setPropsError(readError(caught, `Something went wrong updating this ${cycleNounLower}.`));
-      } finally {
-        setPropsPending(false);
-      }
+  const patch = useApiMutation<
+    CycleOut,
+    { status?: CycleStatus; startsAt?: string; endsAt?: string },
+    { previous?: CycleDetailData }
+  >({
+    mutationFn: (patchBody) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].cycles[':id'].$patch({
+            param: { orgId, id: cycleId },
+            json: patchBody,
+          }),
+        `Could not update this ${cycleNounLower}.`,
+      ),
+    onMutate: async (patchBody) => {
+      await queryClient.cancelQueries({ queryKey: detailKey });
+      const previous = queryClient.getQueryData<CycleDetailData>(detailKey);
+      queryClient.setQueryData<CycleDetailData>(detailKey, (cur) =>
+        cur ? { ...cur, cycle: { ...cur.cycle, ...patchBody } } : cur,
+      );
+      return { previous };
     },
-    [cycle, orgId, cycleId, cycleNounLower],
-  );
+    onError: (_err, _body, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(detailKey, ctx.previous);
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData<CycleDetailData>(detailKey, (cur) =>
+        cur ? { ...cur, cycle: { ...cur.cycle, ...updated, stats: cur.cycle.stats } } : cur,
+      );
+    },
+    invalidateKeys: [detailKey, queryKeys.cycles(orgId)],
+  });
+  const patchCycle = patch.mutate;
+  const propsPending = patch.isPending;
+  const propsError = patch.error?.message ?? null;
 
   // Editing a cycle requires `contribute`; gate the panel's affordances on it.
   const canEditCycle = useOrgCapability(members, roles, 'contribute');
@@ -432,10 +464,10 @@ export default function CycleDetailPage(): JSX.Element {
           canEdit={canEditCycle && !isCompleted}
           pending={propsPending}
           onStatusChange={(status) => {
-            void patchCycle({ status });
+            patchCycle({ status });
           }}
           onWindowChange={({ start, end }) => {
-            void patchCycle({
+            patchCycle({
               ...(start ? { startsAt: start } : {}),
               ...(end ? { endsAt: end } : {}),
             });
@@ -510,7 +542,7 @@ export default function CycleDetailPage(): JSX.Element {
         onActionChange={onActionChange}
         onTargetChange={onTargetChange}
         onConfirm={() => {
-          void confirmClose();
+          confirmClose();
         }}
       />
     </div>

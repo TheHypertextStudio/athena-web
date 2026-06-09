@@ -6,7 +6,9 @@ import {
   type Health,
   type MemberOut,
   type ProgramDetail,
+  type ProgramOut,
   type ProgramStatus,
+  type ProgramUpdate,
   type ProgramWorkOut,
   type RoleOut,
   type UpdateOut,
@@ -16,7 +18,8 @@ import type { PickerOption } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Skeleton } from '@docket/ui/primitives';
 import { useParams, useRouter } from 'next/navigation';
-import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
+import { type JSX, useCallback, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { FlowSnapshot, type FlowMetrics } from '@/components/programs/flow-snapshot';
 import { HealthPill, ProgramStatusBadge } from '@/components/programs/program-status';
@@ -26,12 +29,86 @@ import { type ResolveActor, UpdatesPanel } from '@/components/programs/updates-p
 import { WorkBoard } from '@/components/programs/work-board';
 import { memberActorOptions } from '@/components/property-pickers/options';
 import { api } from '@/lib/api';
-import { readError, readProblem } from '@/lib/problem';
+import { type RpcResponse, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
 import { useOrgCapability } from '@/lib/use-org-capability';
 import { stateTypeOf } from '@/lib/work-state';
 
 /** The two top-level tabs of the Program detail screen. */
 type TabId = 'work' | 'updates';
+
+/** The composite program-detail payload (the program joined with its naming directories). */
+interface ProgramDetailData {
+  readonly program: ProgramDetail;
+  readonly members: readonly MemberOut[];
+  readonly agents: readonly AgentOut[];
+  readonly roles: readonly RoleOut[];
+}
+
+/** The unbranded properties-panel patch surface. */
+interface ProgramPatch {
+  ownerId?: string | null;
+  status?: ProgramStatus;
+  health?: Health | null;
+  visibility?: Visibility;
+}
+
+/**
+ * Build the branded program PATCH body from a {@link ProgramPatch}, omitting untouched fields.
+ *
+ * @remarks
+ * One branded body, reused for the optimistic cache snapshot AND the request. Returns the validated
+ * {@link ProgramUpdate} body, whose fields are a subset of {@link ProgramDetail} so it can be spread
+ * onto the cached program without widening its branded fields.
+ */
+function toProgramPatchBody(patch: ProgramPatch): ProgramUpdate {
+  return {
+    ...(patch.ownerId !== undefined
+      ? { ownerId: patch.ownerId === null ? null : ActorId.parse(patch.ownerId) }
+      : {}),
+    ...(patch.status !== undefined ? { status: patch.status } : {}),
+    ...(patch.health !== undefined ? { health: patch.health } : {}),
+    ...(patch.visibility !== undefined ? { visibility: patch.visibility } : {}),
+  };
+}
+
+/**
+ * Build the composite program-detail fetcher, returning a {@link RpcResponse}-shaped result so it
+ * can drive {@link useApiQuery} directly.
+ *
+ * @remarks
+ * Composes the program detail, its members, and its agents in parallel (members + agents build the
+ * actor directory that names the owner and update authors). The composite resolves `ok`/`status`
+ * from the gating detail read; the directory sub-reads degrade to empty lists.
+ */
+function fetchProgramDetail(
+  orgId: string,
+  programId: string,
+): () => Promise<RpcResponse<ProgramDetailData>> {
+  return async () => {
+    const [detailRes, membersRes, agentsRes, rolesRes] = await Promise.all([
+      api.v1.orgs[':orgId'].programs[':id'].$get({ param: { orgId, id: programId } }),
+      api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
+      api.v1.orgs[':orgId'].agents.$get({ param: { orgId } }),
+      api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
+    ]);
+    if (!detailRes.ok) {
+      return {
+        ok: false,
+        status: detailRes.status,
+        json: () => detailRes.json() as unknown as Promise<ProgramDetailData>,
+      };
+    }
+    const program = await detailRes.json();
+    const members = membersRes.ok ? (await membersRes.json()).items : [];
+    const agents = agentsRes.ok ? (await agentsRes.json()).items : [];
+    const roles = rolesRes.ok ? (await rolesRes.json()).items : [];
+    return {
+      ok: true,
+      status: detailRes.status,
+      json: () => Promise.resolve({ program, members, agents, roles }),
+    };
+  };
+}
 
 /**
  * The Program detail view — an ongoing line of work, led by health + flow (§8.4).
@@ -50,15 +127,17 @@ type TabId = 'work' | 'updates';
  *   ({@link UpdatesPanel}). Posting a health verdict also moves the program's current
  *   health, so the snapshot refreshes.
  *
- * It composes the detail, work, updates, members, and agents slices in parallel; members +
- * agents build the actor directory that names the owner and update authors. Entity nouns
- * route through {@link useVocabulary}; data is fetched at runtime so the production build
- * needs no running server.
+ * The detail, work, and updates slices each stay live (auto-refetch on focus) without a manual
+ * refresh control; members + agents build the actor directory that names the owner and update
+ * authors, and a property edit / update post runs as an optimistic mutation. Entity nouns route
+ * through {@link useVocabulary}; data is fetched at runtime so the production build needs no
+ * running server.
  */
 export default function ProgramDetailPage(): JSX.Element {
   const router = useRouter();
   const params = useParams<{ orgId: string; programId: string }>();
   const { orgId, programId } = params;
+  const queryClient = useQueryClient();
 
   const programLabel = useVocabulary('program');
   const projectNoun = useVocabulary('project').toLowerCase();
@@ -67,105 +146,42 @@ export default function ProgramDetailPage(): JSX.Element {
   const cyclesLabel = useVocabulary('cycle', { plural: true });
   const taskNounPlural = useVocabulary('task', { plural: true }).toLowerCase();
 
-  const [program, setProgram] = useState<ProgramDetail | null>(null);
-  const [work, setWork] = useState<ProgramWorkOut | null>(null);
-  const [members, setMembers] = useState<readonly MemberOut[]>([]);
-  const [agents, setAgents] = useState<readonly AgentOut[]>([]);
-  const [roles, setRoles] = useState<readonly RoleOut[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  // Properties-panel mutation state (optimistic PATCH + rollback).
-  const [propsPending, setPropsPending] = useState(false);
-  const [propsError, setPropsError] = useState<string | null>(null);
-
-  const [workLoading, setWorkLoading] = useState(true);
-  const [workError, setWorkError] = useState<string | null>(null);
-
-  const [updates, setUpdates] = useState<readonly UpdateOut[]>([]);
-  const [updatesLoading, setUpdatesLoading] = useState(true);
-  const [updatesError, setUpdatesError] = useState<string | null>(null);
-  const [posting, setPosting] = useState(false);
-  const [postError, setPostError] = useState<string | null>(null);
+  const detailKey = queryKeys.program(orgId, programId);
+  const workKey = useMemo(() => [...detailKey, 'work'] as const, [detailKey]);
+  const updatesKey = useMemo(() => [...detailKey, 'updates'] as const, [detailKey]);
 
   const [tab, setTab] = useState<TabId>('work');
 
-  /** Load the program detail, its members, and its agents (for owner + author names). */
-  const load = useCallback(async (): Promise<void> => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [detailRes, membersRes, agentsRes, rolesRes] = await Promise.all([
-        api.v1.orgs[':orgId'].programs[':id'].$get({ param: { orgId, id: programId } }),
-        api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
-        api.v1.orgs[':orgId'].agents.$get({ param: { orgId } }),
-        api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
-      ]);
-      if (!detailRes.ok) {
-        setError(
-          await readProblem(detailRes, `Could not load this ${programLabel.toLowerCase()}.`),
-        );
-        return;
-      }
-      setProgram(await detailRes.json());
-      if (membersRes.ok) setMembers((await membersRes.json()).items);
-      if (agentsRes.ok) setAgents((await agentsRes.json()).items);
-      if (rolesRes.ok) setRoles((await rolesRes.json()).items);
-    } catch (caught) {
-      setError(
-        readError(caught, `Something went wrong loading this ${programLabel.toLowerCase()}.`),
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [orgId, programId, programLabel]);
+  const detailQ = useApiQuery(
+    detailKey,
+    fetchProgramDetail(orgId, programId),
+    `Could not load this ${programLabel.toLowerCase()}.`,
+  );
+  const detail = detailQ.data ?? null;
+  const program = detail?.program ?? null;
+  const members = detail?.members ?? [];
+  const agents = detail?.agents ?? [];
+  const roles = detail?.roles ?? [];
+  const loading = detailQ.isPending;
+  const error = detailQ.isError ? detailQ.error.message : null;
 
-  /** Load the program's work (cycle-grouped, project-segmented). */
-  const loadWork = useCallback(async (): Promise<void> => {
-    setWorkLoading(true);
-    setWorkError(null);
-    try {
-      const res = await api.v1.orgs[':orgId'].programs[':id'].work.$get({
+  const workQ = useApiQuery(
+    workKey,
+    () =>
+      api.v1.orgs[':orgId'].programs[':id'].work.$get({
         param: { orgId, id: programId },
         query: {},
-      });
-      if (!res.ok) {
-        setWorkError(await readProblem(res, 'Could not load this program’s work.'));
-        return;
-      }
-      setWork(await res.json());
-    } catch (caught) {
-      setWorkError(readError(caught, 'Something went wrong loading this program’s work.'));
-    } finally {
-      setWorkLoading(false);
-    }
-  }, [orgId, programId]);
+      }),
+    'Could not load this program’s work.',
+  );
+  const work: ProgramWorkOut | null = workQ.data ?? null;
 
-  /** Load the program's status updates. */
-  const loadUpdates = useCallback(async (): Promise<void> => {
-    setUpdatesLoading(true);
-    setUpdatesError(null);
-    try {
-      const res = await api.v1.orgs[':orgId'].programs[':id'].updates.$get({
-        param: { orgId, id: programId },
-      });
-      if (!res.ok) {
-        setUpdatesError(await readProblem(res, 'Could not load updates.'));
-        return;
-      }
-      setUpdates((await res.json()).items);
-    } catch (caught) {
-      setUpdatesError(readError(caught, 'Something went wrong loading updates.'));
-    } finally {
-      setUpdatesLoading(false);
-    }
-  }, [orgId, programId]);
-
-  useEffect(() => {
-    void load();
-    void loadWork();
-    void loadUpdates();
-  }, [load, loadWork, loadUpdates]);
+  const updatesQ = useApiQuery(
+    updatesKey,
+    () => api.v1.orgs[':orgId'].programs[':id'].updates.$get({ param: { orgId, id: programId } }),
+    'Could not load updates.',
+  );
+  const updates = useMemo<readonly UpdateOut[]>(() => updatesQ.data?.items ?? [], [updatesQ.data]);
 
   /** Resolve an actor id to its display name + kind: humans from members, agents tagged. */
   const resolveActor = useMemo<ResolveActor>(() => {
@@ -218,91 +234,75 @@ export default function ProgramDetailPage(): JSX.Element {
   /** The most recent update timestamp, to ground the health verdict in time. */
   const healthAsOf = updates[0]?.createdAt ?? null;
 
-  /** Post a status update; a health verdict also moves the program's current health. */
-  const postUpdate = useCallback(
-    async (body: string, health: Health | undefined): Promise<void> => {
-      setPosting(true);
-      setPostError(null);
-      try {
-        const res = await api.v1.orgs[':orgId'].updates.$post({
-          param: { orgId },
-          json: {
-            subjectType: 'program',
-            subjectId: programId,
-            body,
-            ...(health ? { health } : {}),
-          },
-        });
-        if (!res.ok) {
-          setPostError(await readProblem(res, 'Could not post your update.'));
-          return;
-        }
-        const created = await res.json();
-        setUpdates((current) => [created, ...current]);
-        // The newest health becomes the program's current health — reflect it locally.
-        if (health) setProgram((current) => (current ? { ...current, health } : current));
-      } catch (caught) {
-        setPostError(readError(caught, 'Something went wrong posting your update.'));
-      } finally {
-        setPosting(false);
-      }
+  /** Apply a partial change to the cached program, preserving its detail-only roll-up. */
+  const patchCachedProgram = useCallback(
+    (apply: (program: ProgramDetail) => ProgramDetail): ProgramDetailData | undefined => {
+      const previous = queryClient.getQueryData<ProgramDetailData>(detailKey);
+      queryClient.setQueryData<ProgramDetailData>(detailKey, (cur) =>
+        cur ? { ...cur, program: apply(cur.program) } : cur,
+      );
+      return previous;
     },
-    [orgId, programId],
+    [queryClient, detailKey],
   );
 
-  /**
-   * Optimistically patch the program (owner / status / health / visibility): apply locally,
-   * fire the PATCH, and roll back to the prior snapshot on failure. A Program PATCH requires
-   * `manage`, gated by {@link canEdit}; the picker is disabled while the request is in flight.
-   */
-  const patchProgram = useCallback(
-    async (patch: {
-      ownerId?: string | null;
-      status?: ProgramStatus;
-      health?: Health | null;
-      visibility?: Visibility;
-    }): Promise<void> => {
-      if (!program) return;
-      const previous = program;
-      const body = {
-        ...(patch.ownerId !== undefined
-          ? { ownerId: patch.ownerId === null ? null : ActorId.parse(patch.ownerId) }
-          : {}),
-        ...(patch.status !== undefined ? { status: patch.status } : {}),
-        ...(patch.health !== undefined ? { health: patch.health } : {}),
-        ...(patch.visibility !== undefined ? { visibility: patch.visibility } : {}),
-      };
-      setProgram({ ...program, ...body });
-      setPropsPending(true);
-      setPropsError(null);
-      try {
-        const res = await api.v1.orgs[':orgId'].programs[':id'].$patch({
-          param: { orgId, id: programId },
-          json: body,
-        });
-        if (!res.ok) {
-          setProgram(previous);
-          setPropsError(
-            await readProblem(res, `Could not update this ${programLabel.toLowerCase()}.`),
-          );
-          return;
-        }
-        // The PATCH read-back is the base program shape; preserve the detail-only roll-up.
-        const updated = await res.json();
-        setProgram((current) =>
-          current ? { ...current, ...updated, rollup: current.rollup } : current,
-        );
-      } catch (caught) {
-        setProgram(previous);
-        setPropsError(
-          readError(caught, `Something went wrong updating this ${programLabel.toLowerCase()}.`),
-        );
-      } finally {
-        setPropsPending(false);
-      }
+  /** Post a status update; a health verdict also moves the program's current health. */
+  const postUpdateM = useApiMutation({
+    mutationFn: ({ body, health }: { body: string; health: Health | undefined }) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].updates.$post({
+            param: { orgId },
+            json: {
+              subjectType: 'program',
+              subjectId: programId,
+              body,
+              ...(health ? { health } : {}),
+            },
+          }),
+        'Could not post your update.',
+      ),
+    onSuccess: (_created, { health }) => {
+      // The newest health becomes the program's current health — reflect it locally.
+      if (health) patchCachedProgram((cur) => ({ ...cur, health }));
     },
-    [program, orgId, programId, programLabel],
-  );
+    invalidateKeys: [updatesKey, detailKey],
+  });
+
+  /**
+   * Optimistically patch the program (owner / status / health / visibility): apply to the cached
+   * payload, fire the PATCH, roll back on failure, and reconcile on settle. A Program PATCH
+   * requires `manage`, gated by {@link canEdit}; the picker is disabled while the request is in
+   * flight. The PATCH read-back is the base program shape, so success preserves the detail-only
+   * roll-up.
+   */
+  const patch = useApiMutation<ProgramOut, ProgramPatch, { previous?: ProgramDetailData }>({
+    mutationFn: (patchBody) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].programs[':id'].$patch({
+            param: { orgId, id: programId },
+            json: toProgramPatchBody(patchBody),
+          }),
+        `Could not update this ${programLabel.toLowerCase()}.`,
+      ),
+    onMutate: async (patchBody) => {
+      await queryClient.cancelQueries({ queryKey: detailKey });
+      const body = toProgramPatchBody(patchBody);
+      const previous = patchCachedProgram((cur) => ({ ...cur, ...body }));
+      return { previous };
+    },
+    onError: (_err, _body, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(detailKey, ctx.previous);
+    },
+    onSuccess: (updated) => {
+      patchCachedProgram((cur) => ({ ...cur, ...updated, rollup: cur.rollup }));
+    },
+    invalidateKeys: [detailKey, queryKeys.programs(orgId)],
+  });
+  const patchProgram = patch.mutate;
+  const propsPending = patch.isPending;
+  const propsError = patch.error?.message ?? null;
 
   // Editing a program requires `manage`; gate the panel's affordances on it.
   const canEdit = useOrgCapability(members, roles, 'manage');
@@ -394,8 +394,8 @@ export default function ProgramDetailPage(): JSX.Element {
             <div role="tabpanel" id="tabpanel-work" aria-labelledby="tab-work">
               <WorkBoard
                 work={work}
-                loading={workLoading}
-                error={workError}
+                loading={workQ.isPending}
+                error={workQ.isError ? workQ.error.message : null}
                 cycleLabel={cycleLabel}
                 taskNounPlural={taskNounPlural}
                 projectNoun={projectNoun}
@@ -410,13 +410,13 @@ export default function ProgramDetailPage(): JSX.Element {
             <div role="tabpanel" id="tabpanel-updates" aria-labelledby="tab-updates">
               <UpdatesPanel
                 updates={updates}
-                loading={updatesLoading}
-                error={updatesError}
+                loading={updatesQ.isPending}
+                error={updatesQ.isError ? updatesQ.error.message : null}
                 resolveActor={resolveActor}
-                posting={posting}
-                postError={postError}
+                posting={postUpdateM.isPending}
+                postError={postUpdateM.error?.message ?? null}
                 onPost={(body, postHealth) => {
-                  void postUpdate(body, postHealth);
+                  postUpdateM.mutate({ body, health: postHealth });
                 }}
               />
             </div>
@@ -433,16 +433,16 @@ export default function ProgramDetailPage(): JSX.Element {
             canEdit={canEdit}
             pending={propsPending}
             onOwnerChange={(ownerId) => {
-              void patchProgram({ ownerId });
+              patchProgram({ ownerId });
             }}
             onStatusChange={(status) => {
-              void patchProgram({ status });
+              patchProgram({ status });
             }}
             onHealthChange={(next) => {
-              void patchProgram({ health: next });
+              patchProgram({ health: next });
             }}
             onVisibilityChange={(visibility) => {
-              void patchProgram({ visibility });
+              patchProgram({ visibility });
             }}
           />
           {propsError ? (

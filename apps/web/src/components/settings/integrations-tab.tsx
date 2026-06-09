@@ -32,10 +32,10 @@ import {
   TaskAlt,
 } from '@docket/ui/icons';
 import type { JSX } from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { api } from '@/lib/api';
-import { readError, readProblem } from '@/lib/problem';
+import { queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
 
 import { ConnectWizard } from './connect-wizard';
 
@@ -118,40 +118,53 @@ export function IntegrationsTab({
   canManage,
   isPersonal = false,
 }: IntegrationsTabProps): JSX.Element {
-  const [directory, setDirectory] = useState<readonly IntegrationDirectoryProvider[]>([]);
-  const [integrations, setIntegrations] = useState<readonly IntegrationOut[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
-
   const [openProvider, setOpenProvider] = useState<string | null>(null);
-  const [connecting, setConnecting] = useState(false);
-  const [connectError, setConnectError] = useState<string | null>(null);
 
-  /** Load the provider directory and the org's existing integrations. */
-  const load = useCallback(async (): Promise<void> => {
-    setLoading(true);
-    setLoadError(null);
-    try {
-      const [directoryRes, integrationsRes] = await Promise.all([
-        api.v1.orgs[':orgId'].integrations.directory.$get({ param: { orgId } }),
-        api.v1.orgs[':orgId'].integrations.$get({ param: { orgId } }),
-      ]);
-      if (!directoryRes.ok) {
-        setLoadError(await readProblem(directoryRes, 'Could not load the integration directory.'));
-        return;
-      }
-      setDirectory((await directoryRes.json()).providers);
-      if (integrationsRes.ok) setIntegrations((await integrationsRes.json()).items);
-    } catch (caught) {
-      setLoadError(readError(caught, 'Something went wrong loading integrations.'));
-    } finally {
-      setLoading(false);
-    }
-  }, [orgId]);
+  // The provider directory governs whether the screen can render at all; the org's existing
+  // integrations are a best-effort overlay (a failed read just shows everything as configurable).
+  const directoryQ = useApiQuery(
+    queryKeys.integrationsDirectory(orgId),
+    () => api.v1.orgs[':orgId'].integrations.directory.$get({ param: { orgId } }),
+    'Could not load the integration directory.',
+  );
+  const integrationsQ = useApiQuery(
+    queryKeys.integrations(orgId),
+    () => api.v1.orgs[':orgId'].integrations.$get({ param: { orgId } }),
+    'Could not load integrations.',
+  );
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const directory: readonly IntegrationDirectoryProvider[] = directoryQ.data?.providers ?? [];
+  const integrations: readonly IntegrationOut[] = integrationsQ.data?.items ?? [];
+  const loading = directoryQ.isPending;
+  const loadError = directoryQ.isError ? directoryQ.error.message : null;
+
+  /** Connect a provider with the chosen pattern, then add it to the org's integrations. */
+  const connect = useApiMutation({
+    mutationFn: (input: {
+      provider: string;
+      pattern: IntegrationPattern;
+      roles: readonly IntegrationRole[];
+    }) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].integrations.$post({
+            param: { orgId },
+            json: {
+              provider: input.provider,
+              pattern: input.pattern,
+              ...(input.roles.length > 0 ? { roles: [...input.roles] } : {}),
+              syncMode: input.pattern === 'migration' ? 'import' : 'mirror',
+            },
+          }),
+        'Could not connect this integration.',
+      ),
+    onSuccess: () => {
+      setOpenProvider(null);
+    },
+    invalidateKeys: [queryKeys.integrations(orgId)],
+  });
+  const connecting = connect.isPending;
+  const connectError = connect.isError ? connect.error.message : null;
 
   /** The org's existing integration for a provider, if any. */
   const byProvider = useMemo(() => {
@@ -175,41 +188,6 @@ export function IntegrationsTab({
     }
     return order.map((category) => ({ category, providers: map.get(category) ?? [] }));
   }, [directory]);
-
-  /** Connect a provider with the chosen pattern, then add it to the list. */
-  const connect = useCallback(
-    async (
-      provider: string,
-      pattern: IntegrationPattern,
-      roles: readonly IntegrationRole[],
-    ): Promise<void> => {
-      setConnecting(true);
-      setConnectError(null);
-      try {
-        const res = await api.v1.orgs[':orgId'].integrations.$post({
-          param: { orgId },
-          json: {
-            provider,
-            pattern,
-            ...(roles.length > 0 ? { roles: [...roles] } : {}),
-            syncMode: pattern === 'migration' ? 'import' : 'mirror',
-          },
-        });
-        if (!res.ok) {
-          setConnectError(await readProblem(res, 'Could not connect this integration.'));
-          return;
-        }
-        const created = await res.json();
-        setIntegrations((current) => [...current, created]);
-        setOpenProvider(null);
-      } catch (caught) {
-        setConnectError(readError(caught, 'Something went wrong connecting the integration.'));
-      } finally {
-        setConnecting(false);
-      }
-    },
-    [orgId],
-  );
 
   if (loading) {
     return (
@@ -284,7 +262,7 @@ export function IntegrationsTab({
                         type="button"
                         aria-expanded={isOpen}
                         onClick={() => {
-                          setConnectError(null);
+                          connect.reset();
                           setOpenProvider(isOpen ? null : provider.provider);
                         }}
                         className="focus-visible:ring-ring text-primary hover:bg-surface-container-high rounded-md px-3 py-1.5 text-sm font-medium transition-colors outline-none focus-visible:ring-1"
@@ -306,7 +284,11 @@ export function IntegrationsTab({
                       connecting={connecting}
                       error={connectError}
                       onConnect={(pattern) => {
-                        void connect(provider.provider, pattern, provider.roles);
+                        connect.mutate({
+                          provider: provider.provider,
+                          pattern,
+                          roles: provider.roles,
+                        });
                       }}
                       onCancel={() => {
                         setOpenProvider(null);

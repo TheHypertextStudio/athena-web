@@ -25,12 +25,13 @@ import type { InvitationOut, MemberOut, RoleOut } from '@docket/types';
 import { RoleId } from '@docket/types';
 import { Skeleton } from '@docket/ui/primitives';
 import { Users } from '@docket/ui/icons';
+import { useQueryClient } from '@tanstack/react-query';
 import type { JSX } from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 
 import { useSession } from '@/lib/auth-client';
 import { api } from '@/lib/api';
-import { readError, readProblem } from '@/lib/problem';
+import { queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
 
 import { InviteForm, type InvitePayload } from './invite-form';
 import { InvitationsList } from './invitations-list';
@@ -56,49 +57,162 @@ const MANAGER_ROLE_KEYS = new Set(['owner', 'admin']);
 export function MembersTab({ orgId }: MembersTabProps): JSX.Element {
   const { data: authSession } = useSession();
   const userId = authSession?.user.id ?? null;
+  const queryClient = useQueryClient();
 
-  const [members, setMembers] = useState<readonly MemberOut[]>([]);
-  const [roles, setRoles] = useState<readonly RoleOut[]>([]);
-  const [invitations, setInvitations] = useState<readonly InvitationOut[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const membersKey = queryKeys.members(orgId);
+  const invitationsKey = queryKeys.invitations(orgId);
 
-  // Per-action banner for guard/validation errors (e.g. the last-owner 409).
-  const [actionError, setActionError] = useState<string | null>(null);
+  // Members governs whether the tab can render; roles + invitations are best-effort overlays.
+  const membersQ = useApiQuery(
+    membersKey,
+    () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
+    'Could not load members.',
+  );
+  const rolesQ = useApiQuery(
+    queryKeys.roles(orgId),
+    () => api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
+    'Could not load roles.',
+  );
+  const invitationsQ = useApiQuery(
+    invitationsKey,
+    () => api.v1.orgs[':orgId'].members.invitations.$get({ param: { orgId } }),
+    'Could not load invitations.',
+  );
 
-  const [inviting, setInviting] = useState(false);
-  const [inviteError, setInviteError] = useState<string | null>(null);
-  const [savingRoleFor, setSavingRoleFor] = useState<string | null>(null);
-  const [removingFor, setRemovingFor] = useState<string | null>(null);
-  const [revokingFor, setRevokingFor] = useState<string | null>(null);
+  const members: readonly MemberOut[] = membersQ.data?.items ?? [];
+  const roles: readonly RoleOut[] = rolesQ.data?.items ?? [];
+  const invitations: readonly InvitationOut[] = invitationsQ.data?.items ?? [];
+  const loading = membersQ.isPending;
+  const loadError = membersQ.isError ? membersQ.error.message : null;
 
-  /** Load members, roles, and pending invitations for the org. */
-  const load = useCallback(async (): Promise<void> => {
-    setLoading(true);
-    setLoadError(null);
-    try {
-      const [membersRes, rolesRes, invitationsRes] = await Promise.all([
-        api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
-        api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
-        api.v1.orgs[':orgId'].members.invitations.$get({ param: { orgId } }),
-      ]);
-      if (!membersRes.ok) {
-        setLoadError(await readProblem(membersRes, 'Could not load members.'));
-        return;
-      }
-      setMembers((await membersRes.json()).items);
-      if (rolesRes.ok) setRoles((await rolesRes.json()).items);
-      if (invitationsRes.ok) setInvitations((await invitationsRes.json()).items);
-    } catch (caught) {
-      setLoadError(readError(caught, 'Something went wrong loading members.'));
-    } finally {
-      setLoading(false);
-    }
-  }, [orgId]);
+  // The cache stores the FULL list bodies (`{ items, nextCursor?, total? }`), so optimistic
+  // writes map over `.items` while preserving the rest of the body.
+  type MembersBody = NonNullable<typeof membersQ.data>;
+  type InvitationsBody = NonNullable<typeof invitationsQ.data>;
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  /** Send an invitation; on success the invitations list invalidates + refetches. */
+  const inviteMutation = useApiMutation({
+    mutationFn: ({ email, roleId, asGuest }: InvitePayload) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].members.invitations.$post({
+            param: { orgId },
+            json: { email, roleId: RoleId.parse(roleId), asGuest },
+          }),
+        'Could not send the invitation.',
+      ),
+    onSuccess: (created) => {
+      // Prepend the created invitation so the row appears instantly, then the invalidation below
+      // reconciles with the server's authoritative list.
+      queryClient.setQueryData<InvitationsBody>(invitationsKey, (current) =>
+        current ? { ...current, items: [created, ...current.items] } : { items: [created] },
+      );
+    },
+    invalidateKeys: [invitationsKey],
+  });
+
+  /** Change a member's role; optimistically swaps the row, rolls back on failure. */
+  const roleMutation = useApiMutation({
+    mutationFn: ({ actorId, roleId }: { actorId: string; roleId: string }) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].members[':actorId'].$patch({
+            param: { orgId, actorId },
+            json: { roleId: RoleId.parse(roleId) },
+          }),
+        'Could not change this member’s role.',
+      ),
+    onMutate: async ({ actorId, roleId }) => {
+      await queryClient.cancelQueries({ queryKey: membersKey });
+      const previous = queryClient.getQueryData<MembersBody>(membersKey);
+      queryClient.setQueryData<MembersBody>(membersKey, (current) =>
+        current
+          ? {
+              ...current,
+              items: current.items.map((m) =>
+                m.actorId === actorId ? { ...m, roleId: RoleId.parse(roleId) } : m,
+              ),
+            }
+          : current,
+      );
+      return { previous };
+    },
+    onSuccess: (updated, { actorId }) => {
+      // Replace the optimistic row with the server's authoritative result.
+      queryClient.setQueryData<MembersBody>(membersKey, (current) =>
+        current
+          ? { ...current, items: current.items.map((m) => (m.actorId === actorId ? updated : m)) }
+          : current,
+      );
+    },
+    onError: (_error, _vars, context) => {
+      if (context?.previous) queryClient.setQueryData(membersKey, context.previous);
+    },
+    invalidateKeys: [membersKey],
+  });
+
+  /** Remove a member; optimistically drops the row, rolls back on failure (last-owner 409). */
+  const removeMutation = useApiMutation({
+    mutationFn: (actorId: string) =>
+      unwrap(
+        () => api.v1.orgs[':orgId'].members[':actorId'].$delete({ param: { orgId, actorId } }),
+        'Could not remove this member.',
+      ),
+    onMutate: async (actorId) => {
+      await queryClient.cancelQueries({ queryKey: membersKey });
+      const previous = queryClient.getQueryData<MembersBody>(membersKey);
+      queryClient.setQueryData<MembersBody>(membersKey, (current) =>
+        current
+          ? { ...current, items: current.items.filter((m) => m.actorId !== actorId) }
+          : current,
+      );
+      return { previous };
+    },
+    onError: (_error, _actorId, context) => {
+      if (context?.previous) queryClient.setQueryData(membersKey, context.previous);
+    },
+    invalidateKeys: [membersKey],
+  });
+
+  /** Revoke a pending invitation; optimistically drops the row, rolls back on failure. */
+  const revokeMutation = useApiMutation({
+    mutationFn: (invitationId: string) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].members.invitations[':id'].$delete({
+            param: { orgId, id: invitationId },
+          }),
+        'Could not revoke the invitation.',
+      ),
+    onMutate: async (invitationId) => {
+      await queryClient.cancelQueries({ queryKey: invitationsKey });
+      const previous = queryClient.getQueryData<InvitationsBody>(invitationsKey);
+      queryClient.setQueryData<InvitationsBody>(invitationsKey, (current) =>
+        current
+          ? { ...current, items: current.items.filter((i) => i.id !== invitationId) }
+          : current,
+      );
+      return { previous };
+    },
+    onError: (_error, _invitationId, context) => {
+      if (context?.previous) queryClient.setQueryData(invitationsKey, context.previous);
+    },
+    invalidateKeys: [invitationsKey],
+  });
+
+  const inviting = inviteMutation.isPending;
+  const inviteError = inviteMutation.isError ? inviteMutation.error.message : null;
+  // The shared "action" banner reflects whichever guard/validation write last failed (e.g. the
+  // last-owner 409 from a role change or removal).
+  const actionError =
+    (roleMutation.isError ? roleMutation.error.message : null) ??
+    (removeMutation.isError ? removeMutation.error.message : null) ??
+    (revokeMutation.isError ? revokeMutation.error.message : null);
+  // Which row is mid-write: while pending, the mutation's `variables` identify the targeted
+  // actor/id (TanStack narrows them to defined in the pending state).
+  const savingRoleFor = roleMutation.isPending ? roleMutation.variables.actorId : null;
+  const removingFor = removeMutation.isPending ? removeMutation.variables : null;
+  const revokingFor = revokeMutation.isPending ? revokeMutation.variables : null;
 
   /** The assignable role options, ordered most-privileged first. */
   const roleOptions = useMemo<readonly RoleOption[]>(() => {
@@ -148,102 +262,6 @@ export function MembersTab({ orgId }: MembersTabProps): JSX.Element {
     return myRole ? MANAGER_ROLE_KEYS.has(myRole.key) : false;
   }, [members, myActorId, roles]);
 
-  /** Send an invitation, then prepend it to the pending list. */
-  const invite = useCallback(
-    async ({ email, roleId, asGuest }: InvitePayload): Promise<void> => {
-      setInviting(true);
-      setInviteError(null);
-      try {
-        const res = await api.v1.orgs[':orgId'].members.invitations.$post({
-          param: { orgId },
-          json: { email, roleId: RoleId.parse(roleId), asGuest },
-        });
-        if (!res.ok) {
-          setInviteError(await readProblem(res, 'Could not send the invitation.'));
-          return;
-        }
-        const created = await res.json();
-        setInvitations((current) => [created, ...current]);
-      } catch (caught) {
-        setInviteError(readError(caught, 'Something went wrong sending the invitation.'));
-      } finally {
-        setInviting(false);
-      }
-    },
-    [orgId],
-  );
-
-  /** Change a member's role, replacing its row with the server's result. */
-  const changeRole = useCallback(
-    async (actorId: string, roleId: string): Promise<void> => {
-      setSavingRoleFor(actorId);
-      setActionError(null);
-      try {
-        const res = await api.v1.orgs[':orgId'].members[':actorId'].$patch({
-          param: { orgId, actorId },
-          json: { roleId: RoleId.parse(roleId) },
-        });
-        if (!res.ok) {
-          setActionError(await readProblem(res, 'Could not change this member’s role.'));
-          return;
-        }
-        const updated = await res.json();
-        setMembers((current) => current.map((m) => (m.actorId === actorId ? updated : m)));
-      } catch (caught) {
-        setActionError(readError(caught, 'Something went wrong changing the role.'));
-      } finally {
-        setSavingRoleFor(null);
-      }
-    },
-    [orgId],
-  );
-
-  /** Remove a member, dropping its row on success (last-owner 409 surfaces as a banner). */
-  const removeMember = useCallback(
-    async (actorId: string): Promise<void> => {
-      setRemovingFor(actorId);
-      setActionError(null);
-      try {
-        const res = await api.v1.orgs[':orgId'].members[':actorId'].$delete({
-          param: { orgId, actorId },
-        });
-        if (!res.ok) {
-          setActionError(await readProblem(res, 'Could not remove this member.'));
-          return;
-        }
-        setMembers((current) => current.filter((m) => m.actorId !== actorId));
-      } catch (caught) {
-        setActionError(readError(caught, 'Something went wrong removing the member.'));
-      } finally {
-        setRemovingFor(null);
-      }
-    },
-    [orgId],
-  );
-
-  /** Revoke a pending invitation, dropping its row on success. */
-  const revokeInvitation = useCallback(
-    async (invitationId: string): Promise<void> => {
-      setRevokingFor(invitationId);
-      setActionError(null);
-      try {
-        const res = await api.v1.orgs[':orgId'].members.invitations[':id'].$delete({
-          param: { orgId, id: invitationId },
-        });
-        if (!res.ok) {
-          setActionError(await readProblem(res, 'Could not revoke the invitation.'));
-          return;
-        }
-        setInvitations((current) => current.filter((i) => i.id !== invitationId));
-      } catch (caught) {
-        setActionError(readError(caught, 'Something went wrong revoking the invitation.'));
-      } finally {
-        setRevokingFor(null);
-      }
-    },
-    [orgId],
-  );
-
   if (loading) {
     return (
       <div className="flex flex-col gap-4">
@@ -281,7 +299,7 @@ export function MembersTab({ orgId }: MembersTabProps): JSX.Element {
           sending={inviting}
           error={inviteError}
           onInvite={(payload) => {
-            void invite(payload);
+            inviteMutation.mutate(payload);
           }}
         />
       ) : null}
@@ -328,10 +346,10 @@ export function MembersTab({ orgId }: MembersTabProps): JSX.Element {
                     savingRole={savingRoleFor === member.actorId}
                     removing={removingFor === member.actorId}
                     onChangeRole={(roleId) => {
-                      void changeRole(member.actorId, roleId);
+                      roleMutation.mutate({ actorId: member.actorId, roleId });
                     }}
                     onRemove={() => {
-                      void removeMember(member.actorId);
+                      removeMutation.mutate(member.actorId);
                     }}
                   />
                 );
@@ -350,7 +368,7 @@ export function MembersTab({ orgId }: MembersTabProps): JSX.Element {
             canManage={canManage}
             revokingId={revokingFor}
             onRevoke={(id) => {
-              void revokeInvitation(id);
+              revokeMutation.mutate(id);
             }}
           />
         </div>

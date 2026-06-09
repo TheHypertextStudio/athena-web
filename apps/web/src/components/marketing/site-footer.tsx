@@ -26,6 +26,7 @@ const COLUMNS: readonly FooterColumn[] = [
   },
 ];
 
+/** Site footer for marketing pages. */
 export function SiteFooter(): JSX.Element {
   return (
     <footer className="border-border/60 bg-card/30 border-t">

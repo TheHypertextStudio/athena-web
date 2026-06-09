@@ -24,6 +24,7 @@ const STEPS: readonly Step[] = [
   },
 ];
 
+/** How it works section explaining product onboarding flow. */
 export function HowItWorks(): JSX.Element {
   return (
     <section id="how-it-works" className="border-border/60 bg-card/30 scroll-mt-20 border-y">

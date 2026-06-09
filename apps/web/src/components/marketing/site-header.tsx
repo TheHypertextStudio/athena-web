@@ -15,6 +15,7 @@ const NAV: readonly NavLink[] = [
   { href: '/about', label: 'About' },
 ];
 
+/** Site header for marketing pages. */
 export function SiteHeader(): JSX.Element {
   return (
     <header className="border-border/60 bg-background/80 sticky top-0 z-40 border-b backdrop-blur">

@@ -16,6 +16,7 @@ const PREVIEW_ORGS: readonly PreviewOrg[] = [
   { glyph: 'M', name: 'Just me', line: 'Reschedule the team offsite' },
 ];
 
+/** Hero section with product tagline and call-to-action. */
 export function Hero(): JSX.Element {
   return (
     <section className="relative overflow-hidden">

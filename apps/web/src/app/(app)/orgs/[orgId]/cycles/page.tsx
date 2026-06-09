@@ -4,11 +4,8 @@
  * The Cycles list (product §8.5).
  *
  * @remarks
- * A Client Component reached at `/orgs/[orgId]/cycles`. It lists the org's time-boxed
- * cadences in three segments — **Current** (the live, `active` cadence), **Upcoming**
- * (planned but not yet started), and **Completed** (already rolled). The cycles list read
- * (`GET …/cycles`) returns the cycles newest-first; each is summarized as a {@link CycleRow}
- * that links to its detail.
+ * A Client Component reached at `/orgs/[orgId]/cycles`. It lists the org's time-boxed cadences,
+ * each summarized as a {@link CycleRow} that links to its detail.
  *
  * A cycle's pace numbers (committed/completed, capacity, carryover) live on the single-cycle
  * read, not the list, so the page fetches each cycle's `…/cycles/:id` stats in parallel after
@@ -16,9 +13,17 @@
  * skeleton until then, so nothing jumps. The cycle noun routes through {@link useVocabulary}
  * so an org's skin (e.g. "Sprint") shows through. Data is fetched at runtime, so the
  * production build needs no running server.
+ *
+ * The bespoke Current/Upcoming/Completed segments are gone: the roster adopts the unified
+ * {@link FilterToolbar} over the cycle {@link buildCycleCatalog | catalog}, so it can be filtered
+ * by status / team, grouped, and sorted — all applied **client-side** over the already-loaded
+ * {@link useApiQuery} results (the stats fan-out is preserved; no manual refresh). The view state
+ * is held in the URL by {@link useViewState}, defaulting to a group-by-status grouping so the
+ * familiar segmented look is preserved, but now user-changeable.
  */
 import type { CycleOut, CycleStats } from '@docket/types';
-import { EmptyState, EntityList } from '@docket/ui/components';
+import { EmptyState, EntityList, StatusIcon } from '@docket/ui/components';
+import type { WorkflowStateType } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Plus, RefreshCw } from '@docket/ui/icons';
 import { Button, Skeleton } from '@docket/ui/primitives';
@@ -27,9 +32,14 @@ import { type JSX, useCallback, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { useActiveOrg } from '@/components/active-org';
+import { buildCycleCatalog } from '@/components/cycles/cycle-catalog';
 import { CreateCycleDialog } from '@/components/cycles/create-cycle';
 import { CycleRow } from '@/components/cycles/cycle-row';
-import { CYCLE_SEGMENTS, SEGMENT_LABEL, segmentOf } from '@/components/cycles/cycle-status';
+import { applyView, EMPTY_GROUP_ID } from '@/components/views/apply-view';
+import { type FieldOption, type ViewState } from '@/components/views/field-catalog';
+import { FilterToolbar } from '@/components/views/filter-toolbar';
+import { useViewState } from '@/components/views/use-view-state';
+import { isEmptyViewState } from '@/components/views/view-state-url';
 import { api } from '@/lib/api';
 import { type RpcResponse, queryKeys, useApiQuery } from '@/lib/query';
 
@@ -38,6 +48,13 @@ interface CyclesWithStats {
   readonly cycles: readonly CycleOut[];
   readonly statsById: ReadonlyMap<string, CycleStats>;
 }
+
+/** The default view applied when the URL carries none: group by status (the legacy segments). */
+const DEFAULT_VIEW: ViewState = {
+  filters: [],
+  groupBy: { field: 'status' },
+  sort: [],
+};
 
 /**
  * Fetch the org's cycles and each cycle's pace stats, returning a {@link RpcResponse}-shaped
@@ -92,8 +109,10 @@ export default function CyclesPage(): JSX.Element {
 
   const cycleNoun = useVocabulary('cycle');
   const cycleNounPlural = useVocabulary('cycle', { plural: true });
+  const teamLabel = useVocabulary('team');
 
   const [createOpen, setCreateOpen] = useState(false);
+  const { state, setFilters, setGroupBy, setSort } = useViewState();
 
   const cyclesQ = useApiQuery(
     queryKeys.cycles(orgId),
@@ -109,16 +128,32 @@ export default function CyclesPage(): JSX.Element {
   const loading = cyclesQ.isPending;
   const loadError = cyclesQ.isError ? cyclesQ.error.message : null;
 
-  /** Partition the cycles into the three list segments (preserving the API's newest-first order). */
-  const segments = useMemo(() => {
-    const bySegment = new Map<(typeof CYCLE_SEGMENTS)[number], CycleOut[]>(
-      CYCLE_SEGMENTS.map((segment) => [segment, []]),
-    );
-    for (const cycle of cycles) {
-      bySegment.get(segmentOf(cycle.status))?.push(cycle);
-    }
-    return bySegment;
-  }, [cycles]);
+  /** Team display name by id (for the team filter labels + group headers). */
+  const teamNameById = useMemo(
+    () => new Map<string, string>(teams.map((t) => [t.id, t.name])),
+    [teams],
+  );
+
+  /** The cycle field catalog driving the toolbar + the apply engine. */
+  const catalog = useMemo(
+    () =>
+      buildCycleCatalog({
+        teamLabel,
+        teamOptions: (): readonly FieldOption[] =>
+          teams.map((t) => ({ value: t.id, label: t.name })),
+        resolveTeam: (id) => teamNameById.get(id) ?? id,
+      }),
+    [teamLabel, teamNameById, teams],
+  );
+
+  /** Default to the legacy group-by-status segments until the user configures the view. */
+  const effectiveState = useMemo(() => (isEmptyViewState(state) ? DEFAULT_VIEW : state), [state]);
+
+  /** Filter + sort + group the loaded roster client-side per the active view state. */
+  const applied = useMemo(
+    () => applyView(cycles, effectiveState, catalog),
+    [cycles, effectiveState, catalog],
+  );
 
   const total = cycles.length;
 
@@ -150,8 +185,22 @@ export default function CyclesPage(): JSX.Element {
     [orgId, router, queryClient],
   );
 
+  /** Render one cycle row (shared by the flat + grouped renders). */
+  const renderRow = useCallback(
+    (cycle: CycleOut): JSX.Element => (
+      <CycleRow
+        key={cycle.id}
+        cycle={cycle}
+        stats={statsById.get(cycle.id) ?? null}
+        cycleNoun={cycleNoun}
+        href={`/orgs/${orgId}/cycles/${cycle.id}`}
+      />
+    ),
+    [cycleNoun, orgId, statsById],
+  );
+
   return (
-    <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
+    <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-4 p-4 @2xl:p-6 @4xl:p-8">
       <header className="flex flex-col gap-3 @2xl:flex-row @2xl:flex-wrap @2xl:items-center @2xl:justify-between">
         <div className="flex flex-col gap-1">
           <h1 className="text-on-surface text-xl font-semibold tracking-tight">
@@ -186,6 +235,16 @@ export default function CyclesPage(): JSX.Element {
         onCreated={handleCreated}
       />
 
+      {!loading && !loadError && total > 0 ? (
+        <FilterToolbar
+          catalog={catalog}
+          state={effectiveState}
+          onFiltersChange={setFilters}
+          onGroupByChange={setGroupBy}
+          onSortChange={setSort}
+        />
+      ) : null}
+
       {loading ? (
         <ListSkeleton />
       ) : loadError ? (
@@ -207,45 +266,37 @@ export default function CyclesPage(): JSX.Element {
             },
           }}
         />
-      ) : (
+      ) : applied.rows.length === 0 ? (
+        <EmptyState
+          icon={RefreshCw}
+          title={`No matching ${cycleNounPlural.toLowerCase()}`}
+          body={`No ${cycleNoun.toLowerCase()} matches the active filters. Adjust or clear them to see more.`}
+        />
+      ) : applied.groups ? (
         <div className="flex flex-col gap-6">
-          {CYCLE_SEGMENTS.map((segment) => {
-            const inSegment = segments.get(segment) ?? [];
-            if (inSegment.length === 0) return null;
-            return (
-              <section
-                key={segment}
-                aria-labelledby={`cycles-${segment}`}
-                className="flex flex-col gap-3"
-              >
-                <div className="flex items-center gap-2">
-                  <h2
-                    id={`cycles-${segment}`}
-                    className="text-on-surface-variant text-xs font-medium"
-                  >
-                    {SEGMENT_LABEL[segment]}
-                  </h2>
-                  <span className="text-on-surface-variant text-xs tabular-nums">
-                    {inSegment.length}
-                  </span>
-                </div>
-                <EntityList
-                  aria-label={`${SEGMENT_LABEL[segment]} ${cycleNounPlural.toLowerCase()}`}
-                >
-                  {inSegment.map((cycle) => (
-                    <CycleRow
-                      key={cycle.id}
-                      cycle={cycle}
-                      stats={statsById.get(cycle.id) ?? null}
-                      cycleNoun={cycleNoun}
-                      href={`/orgs/${orgId}/cycles/${cycle.id}`}
-                    />
-                  ))}
-                </EntityList>
-              </section>
-            );
-          })}
+          {applied.groups.map((group) => (
+            <section
+              key={group.id}
+              aria-label={`${group.label} ${cycleNounPlural.toLowerCase()}`}
+              className="flex flex-col gap-3"
+            >
+              <h2 className="text-on-surface-variant flex items-center gap-2 text-xs font-medium">
+                {effectiveState.groupBy?.field === 'status' &&
+                group.hint &&
+                group.id !== EMPTY_GROUP_ID ? (
+                  <StatusIcon type={group.hint as WorkflowStateType} label={group.label} />
+                ) : null}
+                <span>{group.label}</span>
+                <span className="tabular-nums">{group.rows.length}</span>
+              </h2>
+              <EntityList aria-label={`${group.label} ${cycleNounPlural.toLowerCase()}`}>
+                {group.rows.map(renderRow)}
+              </EntityList>
+            </section>
+          ))}
         </div>
+      ) : (
+        <EntityList aria-label={cycleNounPlural}>{applied.rows.map(renderRow)}</EntityList>
       )}
     </div>
   );

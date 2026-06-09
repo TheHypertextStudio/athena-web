@@ -2,28 +2,31 @@
 
 /**
  * `views` — renders the tasks of an active query (a saved view or the live working query)
- * as a filtered, grouped, sorted {@link ListView}.
+ * as a filtered, grouped, sorted {@link ListView}, driven by the unified engine.
  *
  * @remarks
- * The heart of "opening a view" (mvp-plan §8.3d): given the permission-scoped task set the API
- * returned and a view's `filters`/`grouping`/`sort`, it runs the pure {@link view-engine} over
- * the tasks and feeds the result to the design-system {@link ListView} (the same grouped,
- * keyboard-navigable surface used by My Work and the project board). Because access control is
- * enforced server-side, the runner renders exactly the rows it is handed — a viewer simply sees
- * fewer rows in a shared view, never an error.
+ * The heart of "opening a view" (mvp-plan §8.3d). Given the permission-scoped task set the API
+ * returned, the active {@link ViewState}, and the task {@link FieldCatalog}, it runs the pure,
+ * generic {@link applyView} engine (the same one every entity list uses) and feeds the result to
+ * the design-system {@link ListView} (the grouped, keyboard-navigable surface used by My Work and
+ * the project board). Because access control is enforced server-side, the runner renders exactly
+ * the rows it is handed — a viewer simply sees fewer rows in a shared view, never an error.
  *
- * Rows resolve their assignee name + kind from the org's members/agents so each {@link TaskRow}
- * shows the right actor avatar; the group header label is vocabulary-resolved by the caller's
- * {@link ViewRunnerProps.resolveLabel}. Activating a row opens the task detail route.
+ * `applyView` is authoritative for the sort *and* group order: it returns rows already sorted so
+ * that grouped rows are contiguous and group buckets are in rank order, so the downstream
+ * `ListView` (which buckets in first-seen order) reproduces exactly the engine's ordering. The
+ * group header label + status glyph come from the engine's {@link AppliedGroup}.
  */
-import type { TaskOut, ViewFilter, ViewGrouping, ViewSort } from '@docket/types';
+import type { TaskOut } from '@docket/types';
 import { type GroupKey, ListView, type TaskRowData, TaskRow } from '@docket/ui/components';
+import type { WorkflowStateType } from '@docket/ui/components';
 import type { JSX } from 'react';
 import { useMemo } from 'react';
 
 import { stateTypeOf } from '@/lib/work-state';
 
-import { applyFilters, groupFor, type LabelResolver, sortTasks } from './view-engine';
+import { applyView, EMPTY_GROUP_ID } from './apply-view';
+import type { FieldCatalog, ViewState } from './field-catalog';
 
 /** A resolved actor descriptor for a row's assignee avatar. */
 export interface RunnerActor {
@@ -39,16 +42,12 @@ export interface RunnerActor {
 export interface ViewRunnerProps {
   /** The permission-scoped tasks the API returned. */
   tasks: readonly TaskOut[];
-  /** The active query's filter predicates. */
-  filters: readonly ViewFilter[];
-  /** The active query's grouping, or `null`. */
-  grouping: ViewGrouping | null;
-  /** The active query's sort terms. */
-  sort: readonly ViewSort[];
+  /** The active query's view state (filters + grouping + sort). */
+  state: ViewState;
+  /** The task field catalog the engine reads fields through. */
+  catalog: FieldCatalog<TaskOut>;
   /** Resolve an assignee actor id to its display descriptor. */
   resolveActor: (actorId: string) => RunnerActor | null;
-  /** Resolve an entity-id grouping value to its display label. */
-  resolveLabel: LabelResolver;
   /** Accessible label for the list grid. */
   label: string;
   /** Open a task (navigate to its detail route). */
@@ -63,19 +62,30 @@ export interface ViewRunnerProps {
  */
 export function ViewRunner({
   tasks,
-  filters,
-  grouping,
-  sort,
+  state,
+  catalog,
   resolveActor,
-  resolveLabel,
   label,
   onOpenTask,
 }: ViewRunnerProps): JSX.Element {
-  /** The filtered + sorted task set for this query. */
-  const visible = useMemo(
-    () => sortTasks(applyFilters(tasks, filters), sort),
-    [tasks, filters, sort],
-  );
+  /** The filtered + sorted + (optionally) grouped result for this query. */
+  const applied = useMemo(() => applyView(tasks, state, catalog), [tasks, state, catalog]);
+
+  /** Group-bucket lookup: task id → its group's id/label/hint (from the engine). */
+  const groupOfTask = useMemo(() => {
+    const map = new Map<string, GroupKey>();
+    if (applied.groups) {
+      for (const group of applied.groups) {
+        const stateType: WorkflowStateType | undefined =
+          state.groupBy?.field === 'state' && group.id !== EMPTY_GROUP_ID
+            ? stateTypeOf(group.id)
+            : undefined;
+        const key: GroupKey = { id: group.id, label: group.label, stateType };
+        for (const task of group.rows) map.set(task.id, key);
+      }
+    }
+    return map;
+  }, [applied.groups, state.groupBy]);
 
   /** Adapt a task DTO to the design-system {@link TaskRow} view-model. */
   const toRow = (task: TaskOut): TaskRowData => {
@@ -90,10 +100,7 @@ export function ViewRunner({
     };
   };
 
-  /** Group a task under the active grouping (or no grouping). */
-  const groupBy = (task: TaskOut): GroupKey | null => groupFor(task, grouping, resolveLabel);
-
-  if (visible.length === 0) {
+  if (applied.rows.length === 0) {
     return (
       <p className="text-on-surface-variant p-8 text-center text-sm">
         No tasks match this view. Adjust the filters above, or check back as work comes in.
@@ -103,10 +110,10 @@ export function ViewRunner({
 
   return (
     <ListView
-      items={visible}
+      items={applied.rows}
       label={label}
       getItemKey={(task) => task.id}
-      groupBy={groupBy}
+      groupBy={(task) => groupOfTask.get(task.id) ?? null}
       rowHeight={40}
       renderRow={(task, ctx) => (
         <TaskRow task={toRow(task)} active={ctx.active} onActivate={ctx.onActivate} />

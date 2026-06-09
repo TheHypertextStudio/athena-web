@@ -10,6 +10,10 @@ import { type JSX, useCallback, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { CreateTeamDialog } from '@/components/teams/create-team';
+import { buildTeamCatalog } from '@/components/teams/team-catalog';
+import { applyView } from '@/components/views/apply-view';
+import { FilterToolbar } from '@/components/views/filter-toolbar';
+import { useViewState } from '@/components/views/use-view-state';
 import { api } from '@/lib/api';
 import { queryKeys, useApiQuery } from '@/lib/query';
 
@@ -37,9 +41,15 @@ interface TeamRow {
  * It composes three slices through the dynamic-data layer — teams, projects, and tasks — so each
  * stays live (auto-refetch on focus + after a create) without a manual refresh control, and rolls
  * up the per-team scope client-side (a project belongs via `project.teamId`; a task belongs via
- * `task.teamId`) so the roster renders without an N-round-trip detail fan-out. Entity nouns route
- * through {@link useVocabulary}; data is fetched at runtime so the production build needs no
- * running server.
+ * `task.teamId`) so the roster renders without an N-round-trip detail fan-out.
+ *
+ * Filtering is the unified engine: a single {@link FilterToolbar} over the team
+ * {@link buildTeamCatalog | catalog} lets the roster be filtered by triage state, grouped, and
+ * sorted (by triage, workflow-state count, key, or name) — all applied **client-side** over the
+ * already-loaded {@link useApiQuery} results (Phase B data flow is preserved; no manual refresh).
+ * The view state is held in the URL by {@link useViewState}, so a filtered roster is shareable and
+ * survives a reload. Entity nouns route through {@link useVocabulary}; data is fetched at runtime
+ * so the production build needs no running server.
  */
 export default function TeamsListPage(): JSX.Element {
   const params = useParams<{ orgId: string }>();
@@ -52,6 +62,7 @@ export default function TeamsListPage(): JSX.Element {
   const taskNounPlural = useVocabulary('task', { plural: true }).toLowerCase();
 
   const [createOpen, setCreateOpen] = useState(false);
+  const { state, setFilters, setGroupBy, setSort } = useViewState();
 
   // The roster is the primary slice (its load gates the page); projects + tasks enrich each row's
   // scope roll-up and degrade gracefully (an empty list) if they fail, mirroring prior behavior.
@@ -96,16 +107,21 @@ export default function TeamsListPage(): JSX.Element {
     return counts;
   }, [tasks]);
 
-  /** Adapt the teams to their row view-models (scope + workflow roll-up). */
-  const rows = useMemo<readonly TeamRow[]>(
-    () =>
-      teams.map((team) => ({
-        team,
-        projectCount: projectCountByTeam.get(team.id) ?? 0,
-        taskCount: taskCountByTeam.get(team.id) ?? 0,
-        workflowStateCount: team.workflowStates?.length ?? 0,
-      })),
-    [teams, projectCountByTeam, taskCountByTeam],
+  /** The team field catalog driving the toolbar + the apply engine. */
+  const catalog = useMemo(() => buildTeamCatalog(), []);
+
+  /** Filter + sort + group the loaded roster client-side per the active view state. */
+  const applied = useMemo(() => applyView(teams, state, catalog), [teams, state, catalog]);
+
+  /** Adapt a team to its dense-row view-model (scope + workflow roll-up). */
+  const toRow = useCallback(
+    (team: TeamOut): TeamRow => ({
+      team,
+      projectCount: projectCountByTeam.get(team.id) ?? 0,
+      taskCount: taskCountByTeam.get(team.id) ?? 0,
+      workflowStateCount: team.workflowStates?.length ?? 0,
+    }),
+    [projectCountByTeam, taskCountByTeam],
   );
 
   /** Refetch the roster from the server (teams have no detail route to open), then close the dialog. */
@@ -118,7 +134,7 @@ export default function TeamsListPage(): JSX.Element {
   );
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 p-4 @2xl:p-6 @4xl:p-8">
       <header className="flex flex-col gap-3 @2xl:flex-row @2xl:flex-wrap @2xl:items-center @2xl:justify-between">
         <div className="flex flex-col gap-1">
           <h1 className="text-on-surface text-xl font-semibold tracking-tight">Teams</h1>
@@ -145,6 +161,16 @@ export default function TeamsListPage(): JSX.Element {
         onCreated={handleCreated}
       />
 
+      {!loading && !loadError && teams.length > 0 ? (
+        <FilterToolbar
+          catalog={catalog}
+          state={state}
+          onFiltersChange={setFilters}
+          onGroupByChange={setGroupBy}
+          onSortChange={setSort}
+        />
+      ) : null}
+
       {loading ? (
         <ListSkeleton />
       ) : loadError ? (
@@ -166,47 +192,109 @@ export default function TeamsListPage(): JSX.Element {
             },
           }}
         />
-      ) : (
-        <EntityList aria-label="Teams">
-          {rows.map(({ team, projectCount, taskCount, workflowStateCount }) => {
-            const projectWord = projectCount === 1 ? projectNoun : projectNounPlural;
-            const taskWord = taskCount === 1 ? taskNoun : taskNounPlural;
-            return (
-              <EntityListRow
-                key={team.id}
-                interactive={false}
-                aria-label={`${team.key} ${team.name}`}
-                leading={
-                  <span className="bg-surface-container text-on-surface-variant rounded px-1.5 py-0.5 font-mono text-xs font-medium">
-                    {team.key}
-                  </span>
-                }
-                title={team.name}
-                meta={
-                  <>
-                    {workflowStateCount > 0 ? (
-                      <RowMeta tabular>
-                        <Workflow aria-hidden="true" className="size-3.5" />
-                        {workflowStateCount} states
-                      </RowMeta>
-                    ) : null}
-                    <RowMeta tabular>
-                      <FolderKanban aria-hidden="true" className="size-3.5" />
-                      {projectCount} {projectWord}
-                    </RowMeta>
-                    <RowMeta tabular>
-                      <ListChecks aria-hidden="true" className="size-3.5" />
-                      {taskCount} {taskWord}
-                    </RowMeta>
-                  </>
-                }
-                trailing={team.triageEnabled ? <Badge variant="secondary">Triage</Badge> : null}
+      ) : applied.rows.length === 0 ? (
+        <EmptyState
+          icon={Users}
+          title="No matching teams"
+          body="No team matches the active filters. Adjust or clear them to see more."
+        />
+      ) : applied.groups ? (
+        <div className="flex flex-col gap-4">
+          {applied.groups.map((group) => (
+            <section key={group.id} className="flex flex-col gap-2">
+              <h2 className="text-on-surface-variant flex items-center gap-2 px-1 text-xs font-medium">
+                <span>{group.label}</span>
+                <span className="text-on-surface-variant/70 tabular-nums">{group.rows.length}</span>
+              </h2>
+              <TeamRows
+                rows={group.rows.map(toRow)}
+                projectNoun={projectNoun}
+                projectNounPlural={projectNounPlural}
+                taskNoun={taskNoun}
+                taskNounPlural={taskNounPlural}
+                ariaLabel={`Teams — ${group.label}`}
               />
-            );
-          })}
-        </EntityList>
+            </section>
+          ))}
+        </div>
+      ) : (
+        <TeamRows
+          rows={applied.rows.map(toRow)}
+          projectNoun={projectNoun}
+          projectNounPlural={projectNounPlural}
+          taskNoun={taskNoun}
+          taskNounPlural={taskNounPlural}
+          ariaLabel="Teams"
+        />
       )}
     </div>
+  );
+}
+
+/** Props for {@link TeamRows}. */
+interface TeamRowsProps {
+  /** The adapted rows to render. */
+  rows: readonly TeamRow[];
+  /** Singular project noun (vocabulary-resolved). */
+  projectNoun: string;
+  /** Plural project noun (vocabulary-resolved). */
+  projectNounPlural: string;
+  /** Singular task noun (vocabulary-resolved). */
+  taskNoun: string;
+  /** Plural task noun (vocabulary-resolved). */
+  taskNounPlural: string;
+  /** Accessible label for the list. */
+  ariaLabel: string;
+}
+
+/** A bordered {@link EntityList} of team rows (shared by the flat + grouped renders). */
+function TeamRows({
+  rows,
+  projectNoun,
+  projectNounPlural,
+  taskNoun,
+  taskNounPlural,
+  ariaLabel,
+}: TeamRowsProps): JSX.Element {
+  return (
+    <EntityList aria-label={ariaLabel}>
+      {rows.map(({ team, projectCount, taskCount, workflowStateCount }) => {
+        const projectWord = projectCount === 1 ? projectNoun : projectNounPlural;
+        const taskWord = taskCount === 1 ? taskNoun : taskNounPlural;
+        return (
+          <EntityListRow
+            key={team.id}
+            interactive={false}
+            aria-label={`${team.key} ${team.name}`}
+            leading={
+              <span className="bg-surface-container text-on-surface-variant rounded px-1.5 py-0.5 font-mono text-xs font-medium">
+                {team.key}
+              </span>
+            }
+            title={team.name}
+            meta={
+              <>
+                {workflowStateCount > 0 ? (
+                  <RowMeta tabular>
+                    <Workflow aria-hidden="true" className="size-3.5" />
+                    {workflowStateCount} states
+                  </RowMeta>
+                ) : null}
+                <RowMeta tabular>
+                  <FolderKanban aria-hidden="true" className="size-3.5" />
+                  {projectCount} {projectWord}
+                </RowMeta>
+                <RowMeta tabular>
+                  <ListChecks aria-hidden="true" className="size-3.5" />
+                  {taskCount} {taskWord}
+                </RowMeta>
+              </>
+            }
+            trailing={team.triageEnabled ? <Badge variant="secondary">Triage</Badge> : null}
+          />
+        );
+      })}
+    </EntityList>
   );
 }
 

@@ -6,6 +6,7 @@ import { Hero } from '@/components/marketing/hero';
 import { HowItWorks } from '@/components/marketing/how-it-works';
 import { PricingTiers } from '@/components/marketing/pricing-tiers';
 
+/** Marketing home page. */
 export default function HomePage(): JSX.Element {
   return (
     <>

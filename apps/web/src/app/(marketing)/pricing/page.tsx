@@ -4,6 +4,7 @@ import type { JSX } from 'react';
 import { CtaBand } from '@/components/marketing/cta-band';
 import { PricingTiers } from '@/components/marketing/pricing-tiers';
 
+/** Pricing page metadata. */
 export const metadata: Metadata = {
   title: 'Pricing',
   description:
@@ -36,6 +37,7 @@ const FAQS: readonly Faq[] = [
     answer: 'Yes — reach out and we will sort out nonprofit pricing for your organization.',
   },
 ];
+/** Pricing page. */
 
 export default function PricingPage(): JSX.Element {
   return (

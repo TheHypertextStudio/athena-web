@@ -169,10 +169,10 @@ export default function OnboardingPage(): JSX.Element {
     }
   }, [intent, pending, orgId, orgBody]);
 
-  /** Route into the (now real) workspace's My Work — used by both Skip and Enter. */
+  /** Route into Home (the cross-org cockpit) — matches sign-in's landing; used by both Skip and Enter. */
   const enterWorkspace = useCallback((): void => {
     if (orgId === null) return;
-    router.push(`/orgs/${orgId}/my-work`);
+    router.push('/today');
   }, [orgId, router]);
 
   /** Advance to the next step; the setup→connect hop creates the org first. */

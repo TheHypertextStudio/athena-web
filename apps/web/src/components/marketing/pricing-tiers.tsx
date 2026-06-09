@@ -1,6 +1,5 @@
 import { Check } from '@docket/ui/icons';
 import {
-  Badge,
   Button,
   Card,
   CardContent,
@@ -25,45 +24,26 @@ interface Tier {
 
 const TIERS: readonly Tier[] = [
   {
-    name: 'Personal',
+    name: 'Free',
     price: '$0',
-    cadence: 'free forever',
-    description: 'Your own command center for everything you run solo.',
+    cadence: 'forever',
+    description: 'Your personal command center. No card required.',
     features: [
-      'Your personal space + one organization',
+      'One personal workspace',
       'Unlimited projects and tasks',
-      'Cross-organization Today view',
       'Connect your own tools',
+      'MCP access for AI clients',
     ],
     cta: 'Get started free',
   },
   {
-    name: 'Team',
+    name: 'Pro',
     price: '$8',
-    cadence: 'per user / month',
-    description: 'For organizations with a few people moving work together.',
-    features: [
-      'Everything in Personal',
-      'Unlimited organizations and members',
-      'Roles, permissions, and guests',
-      'Agent sessions with approval gates',
-      'Priority support',
-    ],
-    cta: 'Start a free trial',
+    cadence: 'per month',
+    description: 'For individuals running more than one workspace.',
+    features: ['Everything in Free', 'Multiple workspaces', 'Priority support'],
+    cta: 'Start free trial',
     featured: true,
-  },
-  {
-    name: 'Enterprise',
-    price: 'Custom',
-    cadence: "let's talk",
-    description: 'For larger groups that need SSO, provisioning, and controls.',
-    features: [
-      'Everything in Team',
-      'SSO and directory provisioning',
-      'Advanced audit and lifecycle controls',
-      'Dedicated onboarding',
-    ],
-    cta: 'Contact us',
   },
 ];
 
@@ -73,14 +53,14 @@ export function PricingTiers(): JSX.Element {
       <div className="flex max-w-2xl flex-col gap-3">
         <span className="text-primary text-sm font-medium">Pricing</span>
         <h2 className="text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
-          Free for one of you, fair for all of you
+          Free until you need more than one workspace
         </h2>
         <p className="text-muted-foreground text-balance">
-          Start free with your personal command center. Add a card only when you bring other people
-          into a shared organization.
+          Start with your personal space at no cost. Upgrade to Pro when you want to run multiple
+          workspaces from the same account.
         </p>
       </div>
-      <div className="mt-12 grid gap-6 lg:grid-cols-3">
+      <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:max-w-2xl">
         {TIERS.map((tier) => (
           <Card
             key={tier.name}
@@ -89,10 +69,7 @@ export function PricingTiers(): JSX.Element {
             }
           >
             <CardHeader className="gap-2">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg">{tier.name}</CardTitle>
-                {tier.featured ? <Badge>Most popular</Badge> : null}
-              </div>
+              <CardTitle className="text-lg">{tier.name}</CardTitle>
               <div className="flex items-baseline gap-1.5">
                 <span className="text-3xl font-semibold tracking-tight">{tier.price}</span>
                 <span className="text-muted-foreground text-sm">{tier.cadence}</span>

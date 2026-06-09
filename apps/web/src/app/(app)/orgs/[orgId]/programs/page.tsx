@@ -17,14 +17,17 @@ import { type JSX, useCallback, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { CreateProgramDialog } from '@/components/programs/create-program';
+import { buildProgramCatalog } from '@/components/programs/program-catalog';
 import {
   HealthDot,
   ProgramStatusBadge,
   STATUS_LABEL,
-  type StatusFilter,
-  StatusFilterMenu,
   statusGlyphType,
 } from '@/components/programs/program-status';
+import { applyView, EMPTY_GROUP_ID } from '@/components/views/apply-view';
+import type { FieldOption } from '@/components/views/field-catalog';
+import { FilterToolbar } from '@/components/views/filter-toolbar';
+import { useViewState } from '@/components/views/use-view-state';
 import { api } from '@/lib/api';
 import { queryKeys, useApiQuery } from '@/lib/query';
 
@@ -51,9 +54,15 @@ interface ProgramRow {
  * control, and rolls up the per-program scope client-side (a project belongs to a program via
  * `project.programId`; a task belongs via `task.programId` directly or through one of those
  * projects) so the roster renders without an N-round-trip detail fan-out. Members name each
- * program's owner. A styled {@link StatusFilterMenu} narrows the roster by lifecycle bucket with
- * live counts. Entity nouns route through {@link useVocabulary}; data is fetched at runtime so the
- * production build needs no running server.
+ * program's owner.
+ *
+ * Filtering is the unified engine: a single {@link FilterToolbar} over the program
+ * {@link buildProgramCatalog | catalog} replaces the old bespoke status menu, so the roster can
+ * be filtered by status / health / owner, grouped, and sorted — all applied **client-side** over
+ * the already-loaded {@link useApiQuery} results (Phase B data flow is preserved; no manual
+ * refresh). The view state is held in the URL by {@link useViewState}, so a filtered roster is
+ * shareable and survives a reload. Entity nouns route through {@link useVocabulary}; data is
+ * fetched at runtime so the production build needs no running server.
  */
 export default function ProgramsListPage(): JSX.Element {
   const router = useRouter();
@@ -68,8 +77,8 @@ export default function ProgramsListPage(): JSX.Element {
   const taskNoun = useVocabulary('task').toLowerCase();
   const taskNounPlural = useVocabulary('task', { plural: true }).toLowerCase();
 
-  const [filter, setFilter] = useState<StatusFilter>('all');
   const [createOpen, setCreateOpen] = useState(false);
+  const { state, setFilters, setGroupBy, setSort } = useViewState();
 
   // The roster is the primary slice (its load gates the page); projects, tasks, and members
   // enrich each row and degrade gracefully (an empty list) if they fail, mirroring the prior
@@ -103,9 +112,9 @@ export default function ProgramsListPage(): JSX.Element {
   const loading = programsQ.isPending;
   const loadError = programsQ.isError ? programsQ.error.message : null;
 
-  /** Owner display name by actor id (for the row attribution). */
+  /** Owner display name by actor id (for the row attribution + filter labels). */
   const ownerNameById = useMemo(
-    () => new Map(members.map((m) => [m.actorId, m.displayName])),
+    () => new Map<string, string>(members.map((m) => [m.actorId, m.displayName])),
     [members],
   );
 
@@ -140,29 +149,31 @@ export default function ProgramsListPage(): JSX.Element {
     return counts;
   }, [tasks, programByProjectId]);
 
-  /** Per-bucket counts for the filter menu (always computed over the full roster). */
-  const counts = useMemo<Record<StatusFilter, number>>(() => {
-    const tally: Record<StatusFilter, number> = {
-      all: programs.length,
-      active: 0,
-      paused: 0,
-      archived: 0,
-    };
-    for (const program of programs) tally[program.status] += 1;
-    return tally;
-  }, [programs]);
+  /** The program field catalog driving the toolbar + the apply engine. */
+  const catalog = useMemo(
+    () =>
+      buildProgramCatalog({
+        ownerLabel: 'Owner',
+        ownerOptions: (): readonly FieldOption[] =>
+          members.map((m) => ({ value: m.actorId, label: m.displayName })),
+        resolveOwner: (id) => ownerNameById.get(id) ?? id,
+      }),
+    [members, ownerNameById],
+  );
 
-  /** The programs shown under the active filter, adapted to their row view-model. */
-  const visibleRows = useMemo<readonly ProgramRow[]>(() => {
-    const visible =
-      filter === 'all' ? programs : programs.filter((program) => program.status === filter);
-    return visible.map((program) => ({
+  /** Filter + sort + group the loaded roster client-side per the active view state. */
+  const applied = useMemo(() => applyView(programs, state, catalog), [programs, state, catalog]);
+
+  /** Adapt a program to its dense-row view-model. */
+  const toRow = useCallback(
+    (program: ProgramOut): ProgramRow => ({
       program,
       ownerName: program.ownerId ? (ownerNameById.get(program.ownerId) ?? null) : null,
       projectCount: projectCountByProgram.get(program.id) ?? 0,
       taskCount: taskCountByProgram.get(program.id) ?? 0,
-    }));
-  }, [programs, filter, ownerNameById, projectCountByProgram, taskCountByProgram]);
+    }),
+    [ownerNameById, projectCountByProgram, taskCountByProgram],
+  );
 
   /**
    * Refetch the roster from the server (prefix-matched, so this also refreshes any open
@@ -177,7 +188,7 @@ export default function ProgramsListPage(): JSX.Element {
   );
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 p-4 @2xl:p-6 @4xl:p-8">
       <header className="flex flex-col gap-3 @2xl:flex-row @2xl:flex-wrap @2xl:items-center @2xl:justify-between">
         <div className="flex flex-col gap-1">
           <h1 className="text-on-surface text-xl font-semibold tracking-tight">{programsLabel}</h1>
@@ -185,21 +196,16 @@ export default function ProgramsListPage(): JSX.Element {
             Ongoing lines of work — tracked by health, not a finish line.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          {!loading && !loadError && programs.length > 0 ? (
-            <StatusFilterMenu value={filter} counts={counts} onChange={setFilter} />
-          ) : null}
-          <Button
-            type="button"
-            className="gap-1.5"
-            onClick={() => {
-              setCreateOpen(true);
-            }}
-          >
-            <Plus aria-hidden="true" className="size-4" />
-            New {programLabel}
-          </Button>
-        </div>
+        <Button
+          type="button"
+          className="gap-1.5"
+          onClick={() => {
+            setCreateOpen(true);
+          }}
+        >
+          <Plus aria-hidden="true" className="size-4" />
+          New {programLabel}
+        </Button>
       </header>
 
       <CreateProgramDialog
@@ -209,6 +215,16 @@ export default function ProgramsListPage(): JSX.Element {
         onOpenChange={setCreateOpen}
         onCreated={handleCreated}
       />
+
+      {!loading && !loadError && programs.length > 0 ? (
+        <FilterToolbar
+          catalog={catalog}
+          state={state}
+          onFiltersChange={setFilters}
+          onGroupByChange={setGroupBy}
+          onSortChange={setSort}
+        />
+      ) : null}
 
       {loading ? (
         <ListSkeleton />
@@ -231,60 +247,131 @@ export default function ProgramsListPage(): JSX.Element {
             },
           }}
         />
-      ) : visibleRows.length === 0 ? (
+      ) : applied.rows.length === 0 ? (
         <EmptyState
           icon={Layers}
-          title={`No ${filter} ${programsLabel.toLowerCase()}`}
-          body={`No ${programLabel.toLowerCase()} matches this filter. Try a different status.`}
+          title={`No matching ${programsLabel.toLowerCase()}`}
+          body={`No ${programLabel.toLowerCase()} matches the active filters. Adjust or clear them to see more.`}
         />
-      ) : (
-        <EntityList aria-label={programsLabel}>
-          {visibleRows.map(({ program, ownerName, projectCount, taskCount }) => {
-            const projectWord = projectCount === 1 ? projectNoun : projectNounPlural;
-            const taskWord = taskCount === 1 ? taskNoun : taskNounPlural;
-            return (
-              <EntityListRow
-                key={program.id}
-                leading={
+      ) : applied.groups ? (
+        <div className="flex flex-col gap-4">
+          {applied.groups.map((group) => (
+            <section key={group.id} className="flex flex-col gap-2">
+              <h2 className="text-on-surface-variant flex items-center gap-2 px-1 text-xs font-medium">
+                {state.groupBy?.field === 'status' && group.id !== EMPTY_GROUP_ID ? (
                   <StatusIcon
-                    type={statusGlyphType(program.status)}
-                    label={STATUS_LABEL[program.status]}
+                    type={statusGlyphType(group.id as ProgramOut['status'])}
+                    label={group.label}
                   />
-                }
-                title={program.name}
-                onActivate={() => {
-                  router.push(`/orgs/${orgId}/programs/${program.id}`);
+                ) : null}
+                <span>{group.label}</span>
+                <span className="text-on-surface-variant/70 tabular-nums">{group.rows.length}</span>
+              </h2>
+              <ProgramRows
+                rows={group.rows.map(toRow)}
+                projectNoun={projectNoun}
+                projectNounPlural={projectNounPlural}
+                taskNoun={taskNoun}
+                taskNounPlural={taskNounPlural}
+                ariaLabel={`${programsLabel} — ${group.label}`}
+                onOpen={(id) => {
+                  router.push(`/orgs/${orgId}/programs/${id}`);
                 }}
-                meta={
-                  <>
-                    {ownerName ? (
-                      <RowMeta>
-                        <ActorAvatar kind="human" name={ownerName} size={18} />
-                        <span className="text-on-surface/80 font-medium">{ownerName}</span>
-                      </RowMeta>
-                    ) : null}
-                    <RowMeta tabular>
-                      <FolderKanban aria-hidden="true" className="size-3.5" />
-                      {projectCount} {projectWord}
-                    </RowMeta>
-                    <RowMeta tabular>
-                      <ListChecks aria-hidden="true" className="size-3.5" />
-                      {taskCount} {taskWord}
-                    </RowMeta>
-                  </>
-                }
-                trailing={
-                  <>
-                    <HealthDot health={program.health ?? null} />
-                    <ProgramStatusBadge status={program.status} />
-                  </>
-                }
               />
-            );
-          })}
-        </EntityList>
+            </section>
+          ))}
+        </div>
+      ) : (
+        <ProgramRows
+          rows={applied.rows.map(toRow)}
+          projectNoun={projectNoun}
+          projectNounPlural={projectNounPlural}
+          taskNoun={taskNoun}
+          taskNounPlural={taskNounPlural}
+          ariaLabel={programsLabel}
+          onOpen={(id) => {
+            router.push(`/orgs/${orgId}/programs/${id}`);
+          }}
+        />
       )}
     </div>
+  );
+}
+
+/** Props for {@link ProgramRows}. */
+interface ProgramRowsProps {
+  /** The adapted rows to render. */
+  rows: readonly ProgramRow[];
+  /** Singular project noun (vocabulary-resolved). */
+  projectNoun: string;
+  /** Plural project noun (vocabulary-resolved). */
+  projectNounPlural: string;
+  /** Singular task noun (vocabulary-resolved). */
+  taskNoun: string;
+  /** Plural task noun (vocabulary-resolved). */
+  taskNounPlural: string;
+  /** Accessible label for the list. */
+  ariaLabel: string;
+  /** Open a program's detail. */
+  onOpen: (programId: string) => void;
+}
+
+/** A bordered {@link EntityList} of program rows (shared by the flat + grouped renders). */
+function ProgramRows({
+  rows,
+  projectNoun,
+  projectNounPlural,
+  taskNoun,
+  taskNounPlural,
+  ariaLabel,
+  onOpen,
+}: ProgramRowsProps): JSX.Element {
+  return (
+    <EntityList aria-label={ariaLabel}>
+      {rows.map(({ program, ownerName, projectCount, taskCount }) => {
+        const projectWord = projectCount === 1 ? projectNoun : projectNounPlural;
+        const taskWord = taskCount === 1 ? taskNoun : taskNounPlural;
+        return (
+          <EntityListRow
+            key={program.id}
+            leading={
+              <StatusIcon
+                type={statusGlyphType(program.status)}
+                label={STATUS_LABEL[program.status]}
+              />
+            }
+            title={program.name}
+            onActivate={() => {
+              onOpen(program.id);
+            }}
+            meta={
+              <>
+                {ownerName ? (
+                  <RowMeta>
+                    <ActorAvatar kind="human" name={ownerName} size={18} />
+                    <span className="text-on-surface/80 font-medium">{ownerName}</span>
+                  </RowMeta>
+                ) : null}
+                <RowMeta tabular>
+                  <FolderKanban aria-hidden="true" className="size-3.5" />
+                  {projectCount} {projectWord}
+                </RowMeta>
+                <RowMeta tabular>
+                  <ListChecks aria-hidden="true" className="size-3.5" />
+                  {taskCount} {taskWord}
+                </RowMeta>
+              </>
+            }
+            trailing={
+              <>
+                <HealthDot health={program.health ?? null} />
+                <ProgramStatusBadge status={program.status} />
+              </>
+            }
+          />
+        );
+      })}
+    </EntityList>
   );
 }
 

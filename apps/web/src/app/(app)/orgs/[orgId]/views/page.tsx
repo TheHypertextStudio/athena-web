@@ -12,16 +12,23 @@
  * 1. **Lists** the org's saved views ({@link ViewList}) — name, scope badge, and a one-line
  *    summary of what each filters/groups.
  * 2. **Opens** a view: its stored `filters`/`grouping`/`sort` become the active working query,
- *    which the {@link FilterBuilder} shows (and lets you tweak) and the {@link ViewRunner}
- *    renders as a grouped task {@link ListView}.
+ *    which the unified {@link FilterToolbar} shows (and lets you tweak) and the
+ *    {@link ViewRunner} renders as a grouped task {@link ListView}.
  * 3. **Saves** the current working query as a new view ({@link SaveViewComposer}).
+ *
+ * This screen drives the *same* {@link FilterToolbar} as every entity list, over a task
+ * {@link FieldCatalog} ({@link buildTaskCatalog}); the stored saved-view config is bridged to the
+ * unified {@link ViewState} via {@link toViewState}/{@link toStoredView}, so opening a view,
+ * tweaking it, and saving it round-trips losslessly. Unlike the entity lists, the working query
+ * lives in local state (not the URL), because this screen's state is "which saved view is open",
+ * not a sticky per-page filter.
  *
  * Views are *shareable but permission-filtered*: the tasks endpoint returns only work the
  * caller may access, so the runner renders exactly the rows it is handed — a shared view simply
  * shows a viewer fewer tasks, never an error. The screen never re-implements access control.
  *
- * Entity-noun labels (project/program) flow through {@link useVocabulary} so the org's
- * vocabulary skin applies everywhere a field, group header, or filter chip names an entity.
+ * Entity-noun labels (project/program) flow through {@link useVocabulary} into the catalog so the
+ * org's vocabulary skin applies everywhere a field, group header, or filter chip names an entity.
  * All data is fetched at runtime, so the production build needs no running server.
  */
 import {
@@ -33,9 +40,6 @@ import {
   type SavedViewOut,
   type TaskOut,
   TeamId,
-  type ViewFilter,
-  type ViewGrouping,
-  type ViewSort,
 } from '@docket/types';
 import { LayoutGrid, Plus } from '@docket/ui/icons';
 import { useVocabulary } from '@docket/ui/hooks';
@@ -45,33 +49,27 @@ import { useParams, useRouter } from 'next/navigation';
 import { type JSX, useCallback, useMemo, useState } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
-import { FilterBuilder } from '@/components/views/filter-builder';
+import type { FieldOption, ViewState } from '@/components/views/field-catalog';
+import { EMPTY_VIEW_STATE } from '@/components/views/field-catalog';
+import { FilterToolbar } from '@/components/views/filter-toolbar';
 import { SaveViewComposer } from '@/components/views/save-view-composer';
+import { buildTaskCatalog, toStoredView, toViewState } from '@/components/views/task-catalog';
 import { type RunnerActor, ViewRunner } from '@/components/views/view-runner';
 import { ViewList } from '@/components/views/view-list';
-import { fieldSpec } from '@/components/views/view-engine';
+import { findField } from '@/components/views/field-catalog';
 import { api } from '@/lib/api';
 import { queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
 
-/** The active working query the builder edits, the runner renders, and the composer saves. */
+/** The active working query the toolbar edits, the runner renders, and the composer saves. */
 interface WorkingQuery {
   /** The id of the saved view this query was opened from, or `null` for an ad-hoc query. */
   sourceViewId: string | null;
-  /** Active filter predicates. */
-  filters: readonly ViewFilter[];
-  /** Active grouping, or `null`. */
-  grouping: ViewGrouping | null;
-  /** Active sort terms. */
-  sort: readonly ViewSort[];
+  /** The unified view state (filters + grouping + sort). */
+  state: ViewState;
 }
 
-/** The empty starting query (no filters / grouping / sort). */
-const EMPTY_QUERY: WorkingQuery = {
-  sourceViewId: null,
-  filters: [],
-  grouping: null,
-  sort: [],
-};
+/** The empty starting query (no source view, no filters / grouping / sort). */
+const EMPTY_QUERY: WorkingQuery = { sourceViewId: null, state: EMPTY_VIEW_STATE };
 
 /**
  * The org Saved Views screen.
@@ -169,51 +167,47 @@ export default function ViewsPage(): JSX.Element {
     [actorById],
   );
 
-  /** Resolve an entity-id field value to a human label (used by group headers + chips). */
-  const resolveLabel = useCallback(
-    (field: string, value: string | null): string => {
-      if (value === null) return '—';
-      if (field === 'projectId') return projectName.get(value) ?? value;
-      if (field === 'programId') return programName.get(value) ?? value;
-      if (field === 'assigneeId') return actorById.get(value)?.name ?? value;
-      return value;
-    },
-    [actorById, programName, projectName],
-  );
-
-  /** Vocabulary-aware label for a field (entity nouns re-skin; others use the catalog label). */
-  const fieldLabel = useCallback(
-    (field: string, fallback: string): string => {
-      if (field === 'projectId') return projectLabel;
-      if (field === 'programId') return programLabel;
-      return fallback;
-    },
-    [programLabel, projectLabel],
-  );
-
-  /** Vocabulary-aware label for a grouping field (drives the list-row summary). */
-  const groupingLabel = useCallback(
-    (field: string): string => fieldLabel(field, fieldSpec(field)?.label ?? field),
-    [fieldLabel],
+  /** The task field catalog driving the toolbar, runner, and view-list summaries. */
+  const catalog = useMemo(
+    () =>
+      buildTaskCatalog({
+        projectLabel,
+        programLabel,
+        resolveProject: (id) => projectName.get(id) ?? id,
+        resolveProgram: (id) => programName.get(id) ?? id,
+        resolveAssignee: (id) => actorById.get(id)?.name ?? id,
+        assigneeOptions: (): readonly FieldOption[] =>
+          [...actorById.entries()].map(([value, actor]) => ({ value, label: actor.name })),
+        projectOptions: (): readonly FieldOption[] =>
+          projects.map((p) => ({ value: p.id, label: p.name })),
+        programOptions: (): readonly FieldOption[] =>
+          programs.map((p) => ({ value: p.id, label: p.name })),
+      }),
+    [actorById, programLabel, programName, programs, projectLabel, projectName, projects],
   );
 
   /** A one-line, human summary of the working query for the save composer caption. */
   const querySummary = useMemo(() => {
+    const { state } = query;
     const parts: string[] = [];
     parts.push(
-      query.filters.length === 0
+      state.filters.length === 0
         ? 'all tasks'
-        : `${String(query.filters.length)} filter${query.filters.length === 1 ? '' : 's'}`,
+        : `${String(state.filters.length)} filter${state.filters.length === 1 ? '' : 's'}`,
     );
-    if (query.grouping) parts.push(`grouped by ${groupingLabel(query.grouping.by).toLowerCase()}`);
-    const primarySort = query.sort[0];
+    if (state.groupBy) {
+      const label = findField(catalog, state.groupBy.field)?.label ?? state.groupBy.field;
+      parts.push(`grouped by ${label.toLowerCase()}`);
+    }
+    const primarySort = state.sort[0];
     if (primarySort) {
+      const label = findField(catalog, primarySort.field)?.label ?? primarySort.field;
       parts.push(
-        `sorted by ${groupingLabel(primarySort.field).toLowerCase()} (${primarySort.order === 'asc' ? 'ascending' : 'descending'})`,
+        `sorted by ${label.toLowerCase()} (${primarySort.dir === 'asc' ? 'ascending' : 'descending'})`,
       );
     }
     return parts.join(' · ');
-  }, [groupingLabel, query]);
+  }, [catalog, query]);
 
   /** Whether the org has a team id available to attach a team-scoped view to. */
   const canScopeToTeam = useMemo(() => Boolean(defaultTeamId), [defaultTeamId]);
@@ -256,13 +250,18 @@ export default function ViewsPage(): JSX.Element {
       saveMutation.reset();
       setQuery({
         sourceViewId: view.id,
-        filters: view.filters,
-        grouping: view.grouping ?? null,
-        sort: view.sort,
+        state: toViewState({
+          filters: view.filters,
+          grouping: view.grouping ?? null,
+          sort: view.sort,
+        }),
       });
     },
     [saveMutation],
   );
+
+  /** The stored config the composer captures (derived from the working query state). */
+  const storedQuery = useMemo(() => toStoredView(query.state), [query.state]);
 
   const openViewName = useMemo(
     () => views.find((v) => v.id === query.sourceViewId)?.name ?? null,
@@ -310,8 +309,7 @@ export default function ViewsPage(): JSX.Element {
                 views={views}
                 activeId={query.sourceViewId}
                 onOpen={openView}
-                resolveLabel={resolveLabel}
-                groupingLabel={groupingLabel}
+                catalog={catalog}
               />
             )}
           </section>
@@ -323,43 +321,42 @@ export default function ViewsPage(): JSX.Element {
               <h2 className="text-on-surface text-sm font-semibold">
                 {openViewName ?? 'New view'}
               </h2>
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1.5"
-                onClick={() => {
-                  saveMutation.reset();
-                  setComposerOpen((open) => !open);
-                }}
-                aria-expanded={composerOpen}
-              >
-                <Plus className="size-4" aria-hidden="true" />
-                Save as view
-              </Button>
             </div>
 
-            <FilterBuilder
-              filters={query.filters}
-              grouping={query.grouping}
-              sort={query.sort}
+            <FilterToolbar
+              catalog={catalog}
+              state={query.state}
               onFiltersChange={(filters) => {
-                setQuery((current) => ({ ...current, filters }));
+                setQuery((current) => ({ ...current, state: { ...current.state, filters } }));
               }}
-              onGroupingChange={(grouping) => {
-                setQuery((current) => ({ ...current, grouping }));
+              onGroupByChange={(groupBy) => {
+                setQuery((current) => ({ ...current, state: { ...current.state, groupBy } }));
               }}
               onSortChange={(sort) => {
-                setQuery((current) => ({ ...current, sort }));
+                setQuery((current) => ({ ...current, state: { ...current.state, sort } }));
               }}
-              resolveLabel={resolveLabel}
-              fieldLabel={fieldLabel}
+              saveSlot={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => {
+                    saveMutation.reset();
+                    setComposerOpen((open) => !open);
+                  }}
+                  aria-expanded={composerOpen}
+                >
+                  <Plus className="size-3.5" aria-hidden="true" />
+                  Save as view
+                </Button>
+              }
             />
 
             {composerOpen ? (
               <SaveViewComposer
-                filters={query.filters}
-                grouping={query.grouping}
-                sort={query.sort}
+                filters={storedQuery.filters}
+                grouping={storedQuery.grouping}
+                sort={storedQuery.sort}
                 summary={querySummary}
                 canScopeToTeam={canScopeToTeam}
                 saving={saving}
@@ -376,11 +373,9 @@ export default function ViewsPage(): JSX.Element {
             <div className="border-outline-variant min-h-64 flex-1 overflow-hidden rounded-xl border">
               <ViewRunner
                 tasks={tasks}
-                filters={query.filters}
-                grouping={query.grouping}
-                sort={query.sort}
+                state={query.state}
+                catalog={catalog}
                 resolveActor={resolveActor}
-                resolveLabel={resolveLabel}
                 label={openViewName ?? 'Working view tasks'}
                 onOpenTask={(taskId) => {
                   router.push(`/orgs/${orgId}/tasks/${taskId}`);

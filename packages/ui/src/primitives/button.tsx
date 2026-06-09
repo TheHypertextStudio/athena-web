@@ -12,6 +12,7 @@ import { type VariantProps, cva } from 'class-variance-authority';
 import * as React from 'react';
 
 import { cn } from '../lib/utils';
+import { focusRing } from './focus';
 
 /**
  * Class-variance-authority recipe for {@link Button}.
@@ -20,9 +21,13 @@ import { cn } from '../lib/utils';
  * Exposes `variant` (`default` | `destructive` | `outline` | `secondary` | `ghost` |
  * `link`) and `size` (`default` | `sm` | `lg` | `icon`). Exported so callers can apply
  * button styling to non-button elements (e.g. an anchor) without rendering a `Button`.
+ * The keyboard-focus treatment is the shared standalone {@link focusRing}.
  */
 export const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
+  cn(
+    'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
+    focusRing,
+  ),
   {
     variants: {
       variant: {

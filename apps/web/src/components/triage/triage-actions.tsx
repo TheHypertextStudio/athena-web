@@ -32,6 +32,9 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
 } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
@@ -91,21 +94,31 @@ export function TriageActions({
 }: TriageActionsProps): JSX.Element {
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7"
-          aria-label="Sort this item"
-          disabled={busy}
-          onClick={(event) => {
-            // Keep opening the menu from also activating the row underneath it.
-            event.stopPropagation();
-          }}
-        >
-          <Ellipsis className="h-4 w-4" />
-        </Button>
-      </DropdownMenuTrigger>
+      {/*
+        Tooltip and DropdownMenu both target the same icon-only button: nest both triggers with
+        `asChild` so their props merge onto the one Button — the glyph names itself on hover/focus,
+        and clicking still opens the sort menu.
+      */}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              aria-label="Sort this item"
+              disabled={busy}
+              onClick={(event) => {
+                // Keep opening the menu from also activating the row underneath it.
+                event.stopPropagation();
+              }}
+            >
+              <Ellipsis className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent>Sort this item</TooltipContent>
+      </Tooltip>
       <DropdownMenuContent
         align="end"
         className="min-w-[14rem]"

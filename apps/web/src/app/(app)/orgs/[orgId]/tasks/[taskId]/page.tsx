@@ -605,10 +605,7 @@ export default function TaskDetailPage(): JSX.Element {
           aria-labelledby="properties-heading"
           className="border-outline-variant border-t pt-6 @4xl:border-t-0 @4xl:border-l @4xl:pt-0 @4xl:pl-6"
         >
-          <h2
-            id="properties-heading"
-            className="text-on-surface-variant mb-2 text-xs font-medium tracking-wide uppercase"
-          >
+          <h2 id="properties-heading" className="text-on-surface-variant mb-2 text-xs font-medium">
             Properties
           </h2>
           <div className="divide-outline-variant flex flex-col divide-y">

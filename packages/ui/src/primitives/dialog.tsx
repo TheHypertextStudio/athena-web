@@ -43,6 +43,7 @@ import * as React from 'react';
 import { X } from '../icons';
 
 import { cn } from '../lib/utils';
+import { focusRing } from './focus';
 
 /**
  * Root controller for an open/closed dialog (Radix passthrough).
@@ -166,7 +167,10 @@ export function DialogContent({
         {showClose ? (
           <DialogPrimitive.Close
             aria-label="Close"
-            className="ring-offset-surface focus-visible:ring-ring text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface absolute top-4 right-4 inline-flex h-8 w-8 items-center justify-center rounded-md opacity-70 transition-colors transition-opacity hover:opacity-100 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:pointer-events-none [&_svg]:size-4"
+            className={cn(
+              'text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface absolute top-4 right-4 inline-flex h-8 w-8 items-center justify-center rounded-md opacity-70 transition-colors transition-opacity hover:opacity-100 disabled:pointer-events-none [&_svg]:size-4',
+              focusRing,
+            )}
           >
             <X />
           </DialogPrimitive.Close>

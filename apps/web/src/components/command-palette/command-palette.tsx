@@ -296,7 +296,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
             <ul ref={listRef} role="listbox" id={listboxId} aria-label="Commands">
               {grouped.map((group) => (
                 <li key={group.section} role="presentation">
-                  <p className="text-on-surface-variant px-3 pt-2 pb-1 text-xs font-medium tracking-wide uppercase">
+                  <p className="text-on-surface-variant px-3 pt-2 pb-1 text-xs font-medium">
                     {group.label}
                     {group.section === 'results' && loading ? ' · searching…' : ''}
                   </p>

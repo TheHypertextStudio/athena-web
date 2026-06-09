@@ -52,9 +52,7 @@ export function OAuthButtons({
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-3" aria-hidden="true">
         <span className="bg-outline-variant h-px flex-1" />
-        <span className="text-on-surface-variant text-xs font-medium tracking-wide uppercase">
-          or continue with
-        </span>
+        <span className="text-on-surface-variant text-xs font-medium">or continue with</span>
         <span className="bg-outline-variant h-px flex-1" />
       </div>
       <div className="flex flex-col gap-2">

@@ -36,9 +36,7 @@ export function UnscheduledTray({ bars, dimmed }: UnscheduledTrayProps): JSX.Ele
   if (bars.length === 0) return null;
   return (
     <div className={cn('flex flex-col gap-1.5 pt-1', dimmed && 'opacity-30')}>
-      <span className="text-on-surface-variant text-[11px] font-medium tracking-wide uppercase">
-        Unscheduled
-      </span>
+      <span className="text-on-surface-variant text-xs font-medium">Unscheduled</span>
       <ul className="flex flex-wrap gap-1.5">
         {bars.map((bar) => {
           const health: Health | null = asHealth(bar.health);

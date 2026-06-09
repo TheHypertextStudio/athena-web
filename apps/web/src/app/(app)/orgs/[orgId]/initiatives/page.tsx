@@ -211,7 +211,7 @@ export default function InitiativesListPage(): JSX.Element {
               aria-label={SECTION_LABEL[section.status]}
               className="flex flex-col gap-3"
             >
-              <h2 className="text-on-surface-variant flex items-center gap-2 text-xs font-medium tracking-wide uppercase">
+              <h2 className="text-on-surface-variant flex items-center gap-2 text-xs font-medium">
                 {SECTION_LABEL[section.status]}
                 <span className="tabular-nums">{section.items.length}</span>
               </h2>

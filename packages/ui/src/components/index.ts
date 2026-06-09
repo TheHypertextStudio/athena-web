@@ -7,7 +7,12 @@
  * `import { AppShell, ListView } from '@docket/ui/components'`.
  */
 export { ActorAvatar, type ActorAvatarProps, type ActorKind } from './atoms/ActorAvatar';
-export { EmptyState, type EmptyStateProps } from './atoms/EmptyState';
+export {
+  EmptyState,
+  type EmptyStateCta,
+  type EmptyStateProps,
+  type EmptyStateTone,
+} from './atoms/EmptyState';
 export {
   STATE_TYPE_TOKEN_CLASS,
   StatusIcon,

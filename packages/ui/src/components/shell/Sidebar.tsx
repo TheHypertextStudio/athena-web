@@ -29,6 +29,7 @@
 import * as React from 'react';
 
 import {
+  Building,
   FolderKanban,
   GanttChart,
   Home,
@@ -95,13 +96,16 @@ interface NavRow<K extends string> {
   readonly icon: LucideIcon;
 }
 
-/** The section heading above a sidebar group. */
+/**
+ * A calm, real section heading above a sidebar group.
+ *
+ * @remarks
+ * A plain `text-sm font-medium` title — no `tracking-wide` pseudo-uppercase eyebrow. The section
+ * is separated from the group above it by `mt-4`, and the heading sits `mb-1` above its first row
+ * (rows then start flush beneath it), matching the section-spacing rhythm.
+ */
 function GroupLabel({ children }: { readonly children: React.ReactNode }): React.JSX.Element {
-  return (
-    <p className="text-on-surface-variant px-2 pt-3 pb-1 text-xs font-medium tracking-wide">
-      {children}
-    </p>
-  );
+  return <p className="text-on-surface-variant mt-4 mb-1 px-3 text-sm font-medium">{children}</p>;
 }
 
 /**
@@ -177,11 +181,11 @@ export function Sidebar({
   return (
     <aside
       aria-label="Navigation"
-      className="text-on-surface flex h-full w-full shrink-0 flex-col gap-0.5 overflow-y-auto p-2 lg:w-60"
+      className="text-on-surface flex h-full w-full shrink-0 flex-col overflow-y-auto p-2 lg:w-60"
     >
       <WorkspaceSwitcher workspaces={workspaces} onSelect={onSelectWorkspace} />
 
-      <nav aria-label="Home" className="flex flex-col gap-0.5 pt-2" onClick={handleNavActivate}>
+      <nav aria-label="Home" className="flex flex-col space-y-1 pt-2" onClick={handleNavActivate}>
         {homeRows.map((row) => {
           const href = hrefForHome(row.key);
           const active = activeHomeKey === row.key;
@@ -204,7 +208,7 @@ export function Sidebar({
 
       <GroupLabel>Workspace</GroupLabel>
       {activeOrgId ? (
-        <nav aria-label="Workspace" className="flex flex-col gap-0.5" onClick={handleNavActivate}>
+        <nav aria-label="Workspace" className="flex flex-col space-y-1" onClick={handleNavActivate}>
           {workspaceRows.map((row) => {
             const href = hrefForWorkspace(activeOrgId, row.key);
             const active = activeWorkspaceKey === row.key;
@@ -222,9 +226,35 @@ export function Sidebar({
           })}
         </nav>
       ) : (
-        <p className="text-on-surface-variant px-2 py-1.5 text-sm">No workspace yet.</p>
+        <WorkspaceEmpty />
       )}
     </aside>
+  );
+}
+
+/**
+ * The calm empty treatment shown when no workspace is bound yet.
+ *
+ * @remarks
+ * A sidebar-scaled version of the shared empty-state vocabulary (muted tonal glyph disc + a short
+ * title and a one-line `on-surface-variant` subtext) rather than a bare paragraph, so the
+ * Workspace section reads as an intentional empty surface instead of broken navigation. The glyph
+ * is decorative (`aria-hidden`); the title + body carry the accessible meaning.
+ */
+function WorkspaceEmpty(): React.JSX.Element {
+  return (
+    <div className="flex flex-col items-center gap-2 px-3 py-4 text-center">
+      <span
+        aria-hidden="true"
+        className="bg-surface-container-high text-on-surface-variant flex size-9 items-center justify-center rounded-full"
+      >
+        <Building className="size-5" />
+      </span>
+      <p className="text-on-surface text-sm font-medium">No workspace yet</p>
+      <p className="text-on-surface-variant text-xs leading-relaxed">
+        Switch into a workspace to see its projects and tasks here.
+      </p>
+    </div>
   );
 }
 
@@ -238,7 +268,7 @@ function RowBody({
 }): React.JSX.Element {
   return (
     <>
-      <Icon aria-hidden="true" className="size-4 shrink-0" />
+      <Icon aria-hidden="true" className="size-3.5 shrink-0" />
       <span className="truncate">{label}</span>
     </>
   );

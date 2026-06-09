@@ -30,6 +30,7 @@ import * as DialogPrimitive from '@radix-ui/react-dialog';
 import * as React from 'react';
 
 import { cn } from '../lib/utils';
+import { focusRing } from './focus';
 
 /**
  * Root controller for an open/closed sheet (Radix Dialog passthrough).
@@ -139,6 +140,7 @@ export function SheetContent({
       <DialogPrimitive.Content
         className={cn(
           'bg-surface text-on-surface border-outline-variant data-[state=open]:animate-in data-[state=closed]:animate-out fixed z-50 flex w-72 max-w-[85vw] flex-col shadow-lg outline-none data-[state=closed]:duration-200 data-[state=open]:duration-300',
+          focusRing,
           SIDE_CLASS[side],
           className,
         )}

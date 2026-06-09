@@ -62,7 +62,7 @@ export function InitiativePropertiesPanel({
 
   return (
     <PropertyPanel>
-      <h3 className="text-on-surface-variant px-1 pt-1 text-xs font-medium tracking-wide uppercase">
+      <h3 className="text-on-surface-variant px-1 pt-1 text-xs font-medium">
         {initiativeLabel} properties
       </h3>
 

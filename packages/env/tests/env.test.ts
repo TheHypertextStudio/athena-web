@@ -211,7 +211,7 @@ describe.each([
   ['admin', () => import('../src/admin')] as const,
 ])('%s composition', (_name, load) => {
   it('validates with valid public URLs', async () => {
-    vi.stubEnv('SKIP_ENV_VALIDATION', '');
+    vi.stubEnv('SKIP_ENV_VALIDATION', 'false');
     vi.stubEnv('NEXT_PUBLIC_API_URL', 'https://api.example.com');
     vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://app.example.com');
     const mod = await load();
@@ -220,7 +220,7 @@ describe.each([
   });
 
   it('throws fail-fast when the required public URLs are absent (no hidden default)', async () => {
-    vi.stubEnv('SKIP_ENV_VALIDATION', '');
+    vi.stubEnv('SKIP_ENV_VALIDATION', 'false');
     await expect(load()).rejects.toThrow();
   });
 
@@ -267,13 +267,13 @@ describe('api composition', () => {
   });
 
   it('throws fail-fast when a required var is missing', async () => {
-    vi.stubEnv('SKIP_ENV_VALIDATION', '');
+    vi.stubEnv('SKIP_ENV_VALIDATION', 'false');
     // Missing DATABASE_URL + BETTER_AUTH_SECRET.
     await expect(import('../src/api')).rejects.toThrow('Invalid environment variables');
   });
 
   it('throws fail-fast when a required var is invalid', async () => {
-    vi.stubEnv('SKIP_ENV_VALIDATION', '');
+    vi.stubEnv('SKIP_ENV_VALIDATION', 'false');
     stubEnv({ ...validApiEnv(), BETTER_AUTH_SECRET: 'too-short' });
     await expect(import('../src/api')).rejects.toThrow('Invalid environment variables');
   });

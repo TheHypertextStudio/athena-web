@@ -8,35 +8,21 @@ import {
   CardHeader,
   CardTitle,
 } from '@docket/ui/primitives';
+import Link from 'next/link';
 import type { JSX } from 'react';
 
-import { signUpUrl } from '@/lib/links';
+import { signUpUrl } from '@/lib/marketing-links';
 
-/** One pricing plan rendered as a card. */
 interface Tier {
-  /** The plan's name. */
   name: string;
-  /** The headline price (already formatted for display). */
   price: string;
-  /** The cadence/qualifier shown beneath the price (e.g. "per user / month"). */
   cadence: string;
-  /** A one-line description of who the plan is for. */
   description: string;
-  /** The plan's included capabilities, in display order. */
   features: readonly string[];
-  /** The card's call-to-action label. */
   cta: string;
-  /** Whether to visually emphasize this plan as the recommended one. */
   featured?: boolean;
 }
 
-/**
- * The available plans, in display order.
- *
- * @remarks
- * Prices are representative placeholder values — the real catalog is configured in Stripe
- * per environment. They exist so the page renders a complete, believable pricing story.
- */
 const TIERS: readonly Tier[] = [
   {
     name: 'Personal',
@@ -69,7 +55,7 @@ const TIERS: readonly Tier[] = [
   {
     name: 'Enterprise',
     price: 'Custom',
-    cadence: 'let’s talk',
+    cadence: "let's talk",
     description: 'For larger groups that need SSO, provisioning, and controls.',
     features: [
       'Everything in Team',
@@ -81,20 +67,12 @@ const TIERS: readonly Tier[] = [
   },
 ];
 
-/**
- * The pricing section: a short header and a three-up grid of plan cards.
- *
- * @remarks
- * A Server Component reused on both the home page and the dedicated `/pricing` route. Every
- * plan's call-to-action routes to {@link signUpUrl}; the "Team" plan is emphasized as the
- * recommended choice. Anchored as `#pricing` for in-site links.
- */
 export function PricingTiers(): JSX.Element {
   return (
     <section id="pricing" className="mx-auto w-full max-w-6xl scroll-mt-20 px-6 py-20">
       <div className="flex max-w-2xl flex-col gap-3">
         <span className="text-primary text-sm font-medium">Pricing</span>
-        <h2 className="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
+        <h2 className="text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
           Free for one of you, fair for all of you
         </h2>
         <p className="text-muted-foreground text-balance">
@@ -131,7 +109,7 @@ export function PricingTiers(): JSX.Element {
                 ))}
               </ul>
               <Button asChild variant={tier.featured ? 'default' : 'outline'} className="w-full">
-                <a href={signUpUrl}>{tier.cta}</a>
+                <Link href={signUpUrl}>{tier.cta}</Link>
               </Button>
             </CardContent>
           </Card>

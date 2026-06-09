@@ -9,17 +9,12 @@ import {
 } from '@docket/ui/icons';
 import type { JSX } from 'react';
 
-/** One product capability rendered as a card in the feature grid. */
 interface Feature {
-  /** The glyph that leads the card. */
   icon: LucideIcon;
-  /** The capability's short title. */
   title: string;
-  /** A plain-language, domain-neutral description of the capability. */
   body: string;
 }
 
-/** The product's pillar capabilities, in display order. */
 const FEATURES: readonly Feature[] = [
   {
     icon: Home,
@@ -53,20 +48,12 @@ const FEATURES: readonly Feature[] = [
   },
 ];
 
-/**
- * The pillar-features grid: a short section header followed by a responsive card grid.
- *
- * @remarks
- * A Server Component. Each card pairs a `@docket/ui` icon with plain-language copy that
- * spans startups, nonprofits, and personal work — deliberately not framed as a developer
- * tool. Anchored as `#features` so the header and footer can link to it.
- */
 export function FeatureGrid(): JSX.Element {
   return (
     <section id="features" className="mx-auto w-full max-w-6xl scroll-mt-20 px-6 py-20">
       <div className="flex max-w-2xl flex-col gap-3">
         <span className="text-primary text-sm font-medium">Everything in one place</span>
-        <h2 className="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
+        <h2 className="text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
           Built for everyone who runs more than one thing
         </h2>
         <p className="text-muted-foreground text-balance">

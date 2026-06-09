@@ -1,1 +1,1 @@
-force-legacy-deploy=true
+inject-workspace-packages=true

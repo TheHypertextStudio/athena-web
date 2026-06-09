@@ -7,7 +7,7 @@ RUN corepack enable
 FROM base AS builder
 WORKDIR /app
 COPY . .
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --no-frozen-lockfile
 ARG API_URL
 ARG NEXT_PUBLIC_API_URL
 ARG NEXT_PUBLIC_APP_URL

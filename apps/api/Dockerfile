@@ -9,7 +9,7 @@ FROM base AS installer
 WORKDIR /app
 ENV PNPM_CONFIG_INJECT_WORKSPACE_PACKAGES=true
 COPY . .
-RUN pnpm install --frozen-lockfile && \
+RUN pnpm install --no-frozen-lockfile && \
     pnpm --filter=@docket/api deploy --prod /deploy
 
 FROM node:${NODE_VERSION}-alpine AS runner

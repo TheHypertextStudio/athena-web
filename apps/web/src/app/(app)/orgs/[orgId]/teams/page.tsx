@@ -178,7 +178,7 @@ export default function TeamsListPage(): JSX.Element {
                 interactive={false}
                 aria-label={`${team.key} ${team.name}`}
                 leading={
-                  <span className="bg-surface-container text-on-surface-variant rounded px-1.5 py-0.5 font-mono text-xs font-medium tracking-wide uppercase">
+                  <span className="bg-surface-container text-on-surface-variant rounded px-1.5 py-0.5 font-mono text-xs font-medium">
                     {team.key}
                   </span>
                 }

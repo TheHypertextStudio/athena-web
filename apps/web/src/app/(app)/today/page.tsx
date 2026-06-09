@@ -174,7 +174,7 @@ export default function TodayPage(): JSX.Element {
             <div className="flex flex-col gap-6">
               {planGroups.map((group) => (
                 <div key={group.orgId} className="flex flex-col gap-1.5">
-                  <h3 className="text-on-surface-variant px-3 text-xs font-medium tracking-wide uppercase">
+                  <h3 className="text-on-surface-variant px-3 text-xs font-medium">
                     {group.orgName}
                   </h3>
                   <ul className="flex flex-col gap-1.5">

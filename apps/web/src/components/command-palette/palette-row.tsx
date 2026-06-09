@@ -68,7 +68,7 @@ export function PaletteRow({
       {item.org ? <OrgChip orgId={item.org.id} name={item.org.name} /> : null}
 
       {item.hitType ? (
-        <span className="text-on-surface-variant border-outline-variant shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-medium tracking-wide uppercase">
+        <span className="text-on-surface-variant border-outline-variant shrink-0 rounded border px-1.5 py-0.5 text-xs font-medium">
           {HIT_TYPE_LABEL[item.hitType]}
         </span>
       ) : item.hint ? (

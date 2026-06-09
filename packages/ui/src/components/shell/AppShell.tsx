@@ -20,8 +20,9 @@
  * panel** (`surface`), inset from the window edges by a uniform gutter applied here. The
  * {@link Sidebar} deliberately carries **no panel chrome** — it blends into the canvas tone so
  * the navigation reads as part of the background, not a separate container. The optional
- * {@link TabBar} sits in its **own bar on the canvas** above the main panel — its active tab
- * shares the panel's tone so the two read as one continuous surface.
+ * {@link TabBar} sits in its **own bar on the canvas** above the main panel as a strip of
+ * **detached floating pills**; a column gutter between the strip and the panel keeps the two as
+ * visually separate layers rather than one continuous surface.
  *
  * @remarks Responsive model — `lg` is the desktop threshold for the shell frame itself, but the
  * `<main>` panel is also a **container-query context** (`@container`). Because the panel's width is
@@ -156,7 +157,14 @@ export function AppShell({
         <ShellDrawerProvider dismiss={null}>{sidebar}</ShellDrawerProvider>
       </div>
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      {/*
+        The content column stacks the optional tab strip over the main panel. A column gap floats
+        a real gutter BETWEEN the two so the detached tab pills read as their own layer on the
+        canvas rather than fusing to the rounded panel below — the gap only materialises between
+        siblings, so it costs nothing when no tab bar is present. Mobile stays full-bleed (no gap)
+        so the panel uses the entire width; the gutter appears at `lg` to match the shell rhythm.
+      */}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col lg:gap-2">
         {tabBar}
         <main
           id="main-content"

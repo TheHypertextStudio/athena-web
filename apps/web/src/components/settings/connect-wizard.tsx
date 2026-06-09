@@ -90,7 +90,7 @@ export function ConnectWizard({
   return (
     <div className="border-outline-variant bg-surface-container flex flex-col gap-4 border-t p-4">
       <fieldset className="flex flex-col gap-2">
-        <legend className="text-on-surface-variant mb-1 text-xs font-medium tracking-wide uppercase">
+        <legend className="text-on-surface-variant mb-1 text-xs font-medium">
           How should Docket connect {providerName}?
         </legend>
         <div
@@ -125,7 +125,7 @@ export function ConnectWizard({
                 <span className="text-on-surface text-xs font-medium">{copy.consequence}</span>
                 <span className="text-on-surface-variant text-xs leading-snug">{copy.detail}</span>
                 {isRecommended ? (
-                  <span className="text-on-surface-variant mt-1 text-[0.625rem] font-medium tracking-wide uppercase">
+                  <span className="text-on-surface-variant mt-1 text-xs font-medium">
                     Recommended
                   </span>
                 ) : null}

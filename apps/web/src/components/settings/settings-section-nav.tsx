@@ -62,9 +62,7 @@ export function SettingsSectionNav({ orgId }: SettingsSectionNavProps): JSX.Elem
     <nav aria-label="Settings sections" className="flex flex-col gap-6">
       {groups.map((group) => (
         <div key={group.label} className="flex flex-col gap-1">
-          <h2 className="text-on-surface-variant px-2.5 text-xs font-medium tracking-wide uppercase">
-            {group.label}
-          </h2>
+          <h2 className="text-on-surface-variant px-2.5 text-xs font-medium">{group.label}</h2>
           <ul className="flex flex-col gap-0.5">
             {group.sections.map((section) => {
               const Icon = section.icon;

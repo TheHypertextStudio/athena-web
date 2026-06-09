@@ -20,7 +20,14 @@ import * as React from 'react';
 
 import { Plus } from '../../icons';
 import { cn } from '../../lib/utils';
-import { Button } from '../../primitives';
+import {
+  Button,
+  focusRing,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '../../primitives';
 
 /** Props for {@link PropertyTrigger}. */
 export interface PropertyTriggerProps {
@@ -87,26 +94,53 @@ export const PropertyTrigger = React.forwardRef<HTMLButtonElement, PropertyTrigg
     const hasValue = label !== null && label !== undefined && label !== '';
 
     if (readOnly) {
+      if (!hasValue) {
+        // No value AND no affordance: the bare em-dash is label-less, so give it a hover/focus
+        // tooltip (from the field's ariaLabel) — otherwise the row reads as an inscrutable dash.
+        const dash = (
+          <span
+            className={cn('text-on-surface-variant inline-flex items-center text-sm', className)}
+          >
+            <span aria-hidden="true">—</span>
+          </span>
+        );
+        if (!ariaLabel) return dash;
+        // Self-contained provider so the tooltip works whether or not the consuming surface has
+        // already mounted one (nesting Radix tooltip providers is safe).
+        return (
+          <TooltipProvider delayDuration={300}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span
+                  tabIndex={0}
+                  aria-label={ariaLabel}
+                  className={cn(
+                    'text-on-surface-variant inline-flex items-center rounded-sm text-sm',
+                    focusRing,
+                    className,
+                  )}
+                >
+                  <span aria-hidden="true">—</span>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{ariaLabel}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        );
+      }
       return (
         <span
           className={cn(
-            'inline-flex min-w-0 items-center gap-1.5 text-sm',
-            hasValue ? 'text-on-surface' : 'text-on-surface-variant',
+            'text-on-surface inline-flex min-w-0 items-center gap-2 text-sm',
             className,
           )}
         >
-          {hasValue ? (
-            <>
-              {icon ? (
-                <span aria-hidden="true" className="flex shrink-0 items-center">
-                  {icon}
-                </span>
-              ) : null}
-              <span className="truncate">{label}</span>
-            </>
-          ) : (
-            <span aria-hidden="true">—</span>
-          )}
+          {icon ? (
+            <span aria-hidden="true" className="flex shrink-0 items-center">
+              {icon}
+            </span>
+          ) : null}
+          <span className="truncate">{label}</span>
         </span>
       );
     }
@@ -120,7 +154,7 @@ export const PropertyTrigger = React.forwardRef<HTMLButtonElement, PropertyTrigg
         disabled={disabled}
         aria-label={ariaLabel}
         className={cn(
-          'h-auto max-w-full justify-start gap-1.5 px-2 py-1 font-normal',
+          'h-auto max-w-full justify-start gap-2 px-2 py-1.5 font-normal',
           hasValue ? 'text-on-surface' : 'text-on-surface-variant',
           className,
         )}

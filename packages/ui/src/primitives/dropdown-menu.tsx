@@ -15,6 +15,7 @@ import * as React from 'react';
 import { Check, ChevronRight, Circle } from '../icons';
 
 import { cn } from '../lib/utils';
+import { focusRingInset } from './focus';
 
 /** Root controller for an open/closed dropdown menu (Radix passthrough). */
 export const DropdownMenu = DropdownMenuPrimitive.Root;
@@ -48,6 +49,7 @@ export function DropdownMenuSubTrigger({
     <DropdownMenuPrimitive.SubTrigger
       className={cn(
         'focus:bg-surface-container-highest data-[state=open]:bg-surface-container-highest flex cursor-default items-center rounded-sm px-2 py-1.5 text-sm outline-none select-none',
+        focusRingInset,
         inset && 'pl-8',
         className,
       )}
@@ -108,6 +110,7 @@ export function DropdownMenuItem({
     <DropdownMenuPrimitive.Item
       className={cn(
         'focus:bg-surface-container-highest focus:text-on-surface relative flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm transition-colors outline-none select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
+        focusRingInset,
         inset && 'pl-8',
         className,
       )}
@@ -127,6 +130,7 @@ export function DropdownMenuCheckboxItem({
     <DropdownMenuPrimitive.CheckboxItem
       className={cn(
         'focus:bg-surface-container-highest focus:text-on-surface relative flex cursor-default items-center rounded-sm py-1.5 pr-2 pl-8 text-sm transition-colors outline-none select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+        focusRingInset,
         className,
       )}
       checked={checked}
@@ -152,6 +156,7 @@ export function DropdownMenuRadioItem({
     <DropdownMenuPrimitive.RadioItem
       className={cn(
         'focus:bg-surface-container-highest focus:text-on-surface relative flex cursor-default items-center rounded-sm py-1.5 pr-2 pl-8 text-sm transition-colors outline-none select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+        focusRingInset,
         className,
       )}
       {...props}

@@ -213,9 +213,7 @@ export function AssociationsPanel({
 }: AssociationsPanelProps): JSX.Element {
   return (
     <div className="border-outline-variant bg-surface-container-low flex flex-col gap-4 rounded-xl border p-4">
-      <h2 className="text-on-surface-variant text-xs font-medium tracking-wide uppercase">
-        Associated work
-      </h2>
+      <h2 className="text-on-surface-variant text-xs font-medium">Associated work</h2>
       <AssociationGroup
         title={programNounPlural}
         noun={programNoun}

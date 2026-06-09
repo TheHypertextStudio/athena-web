@@ -359,10 +359,7 @@ export default function SessionViewPage(): JSX.Element {
       <div className="grid grid-cols-1 gap-6 @4xl:grid-cols-[minmax(0,1fr)_18rem]">
         {/* LEFT: the activity stream. */}
         <section aria-labelledby="activity-heading" className="flex min-w-0 flex-col gap-3">
-          <h2
-            id="activity-heading"
-            className="text-on-surface-variant text-xs font-medium tracking-wide uppercase"
-          >
+          <h2 id="activity-heading" className="text-on-surface-variant text-xs font-medium">
             Activity
           </h2>
           {session.activities.length === 0 ? (

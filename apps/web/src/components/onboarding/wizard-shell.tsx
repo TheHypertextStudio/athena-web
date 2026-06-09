@@ -125,9 +125,7 @@ export function WizardShell({
           className="animate-in fade-in slide-in-from-bottom-2 flex flex-1 flex-col duration-300"
         >
           <div className="mb-8 flex flex-col gap-2">
-            <span className="text-on-surface-variant text-xs font-medium tracking-wide uppercase">
-              {eyebrow}
-            </span>
+            <span className="text-on-surface-variant text-xs font-medium">{eyebrow}</span>
             <h1 className="text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
               {title}
             </h1>

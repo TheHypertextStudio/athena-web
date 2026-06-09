@@ -90,9 +90,7 @@ export function NotificationRow({
       {/* Body. */}
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex items-center gap-2">
-          <span className="text-on-surface-variant text-xs font-medium tracking-wide uppercase">
-            {label}
-          </span>
+          <span className="text-on-surface-variant text-xs font-medium">{label}</span>
           <span className="text-on-surface-variant text-xs">
             {relativeTime(notification.createdAt)}
           </span>

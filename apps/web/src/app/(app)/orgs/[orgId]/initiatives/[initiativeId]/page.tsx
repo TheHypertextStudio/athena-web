@@ -429,9 +429,7 @@ export default function InitiativeDetailPage(): JSX.Element {
             aria-label="Health rollup"
             className="border-outline-variant bg-surface-container-low flex flex-col gap-3 rounded-xl border p-4"
           >
-            <h2 className="text-on-surface-variant text-xs font-medium tracking-wide uppercase">
-              Rolled-up health
-            </h2>
+            <h2 className="text-on-surface-variant text-xs font-medium">Rolled-up health</h2>
             <DistributionBar
               distribution={detail.distribution}
               childNounPlural={`${projectNounPlural.toLowerCase()} & ${programNounPlural.toLowerCase()}`}

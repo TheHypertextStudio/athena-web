@@ -3,12 +3,11 @@
 Docket dev servers run behind [portless](https://github.com/vercel-labs/portless),
 which gives each app a stable named URL instead of a port number:
 
-| App                 | URL                                |
-| ------------------- | ---------------------------------- |
-| `@docket/web`       | https://web.docket.localhost       |
-| `@docket/marketing` | https://marketing.docket.localhost |
-| `@docket/admin`     | https://admin.docket.localhost     |
-| `@docket/api`       | https://api.docket.localhost       |
+| App             | URL                            |
+| --------------- | ------------------------------ |
+| `@docket/web`   | https://docket.localhost       |
+| `@docket/admin` | https://admin.docket.localhost |
+| `@docket/api`   | https://api.docket.localhost   |
 
 ## One-time setup
 

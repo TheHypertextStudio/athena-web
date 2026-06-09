@@ -1,3 +1,9 @@
+## [1.0.1](https://github.com/TheHypertextStudio/athena-web/compare/v1.0.0...v1.0.1) (2026-06-09)
+
+### Bug Fixes
+
+- **docker:** remove --legacy flag, rely on inject-workspace-packages ([20fe277](https://github.com/TheHypertextStudio/athena-web/commit/20fe277a84ba69473a1b361a8b8fece08c49e66f))
+
 # 1.0.0 (2026-06-09)
 
 ### Bug Fixes

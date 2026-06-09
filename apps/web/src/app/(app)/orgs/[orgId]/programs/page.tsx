@@ -1,12 +1,20 @@
 'use client';
 
-import type { MemberOut, ProgramOut, ProjectOut, TaskOut } from '@docket/types';
-import { ActorAvatar, EntityList, EntityListRow, RowMeta, StatusIcon } from '@docket/ui/components';
+import type { ProgramOut } from '@docket/types';
+import {
+  ActorAvatar,
+  EmptyState,
+  EntityList,
+  EntityListRow,
+  RowMeta,
+  StatusIcon,
+} from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { FolderKanban, Layers, ListChecks, Plus } from '@docket/ui/icons';
 import { Button, Skeleton } from '@docket/ui/primitives';
 import { useParams, useRouter } from 'next/navigation';
-import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
+import { type JSX, useCallback, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { CreateProgramDialog } from '@/components/programs/create-program';
 import {
@@ -18,7 +26,7 @@ import {
   statusGlyphType,
 } from '@/components/programs/program-status';
 import { api } from '@/lib/api';
-import { readError, readProblem } from '@/lib/problem';
+import { queryKeys, useApiQuery } from '@/lib/query';
 
 /** The row view-model derived for one Program (owner + child-work roll-up). */
 interface ProgramRow {
@@ -38,18 +46,20 @@ interface ProgramRow {
  * {@link HealthDot | health} and lifecycle {@link ProgramStatusBadge}. The former card grid is
  * replaced by one clean bordered list of hairline-divided rows (design-system §5.1).
  *
- * It composes three slices in parallel — programs, projects, and tasks — and rolls up the
- * per-program scope client-side (a project belongs to a program via `project.programId`; a
- * task belongs via `task.programId` directly or through one of those projects), so the
- * roster renders without an N-round-trip detail fan-out. Members name each program's owner.
- * A styled {@link StatusFilterMenu} narrows the roster by lifecycle bucket with live counts.
- * Entity nouns route through {@link useVocabulary}; data is fetched at runtime so the
+ * It composes four slices through the dynamic-data layer — programs, projects, tasks, and
+ * members — so each stays live (auto-refetch on focus + after a create) without a manual refresh
+ * control, and rolls up the per-program scope client-side (a project belongs to a program via
+ * `project.programId`; a task belongs via `task.programId` directly or through one of those
+ * projects) so the roster renders without an N-round-trip detail fan-out. Members name each
+ * program's owner. A styled {@link StatusFilterMenu} narrows the roster by lifecycle bucket with
+ * live counts. Entity nouns route through {@link useVocabulary}; data is fetched at runtime so the
  * production build needs no running server.
  */
 export default function ProgramsListPage(): JSX.Element {
   const router = useRouter();
   const params = useParams<{ orgId: string }>();
   const orgId = params.orgId;
+  const queryClient = useQueryClient();
 
   const programLabel = useVocabulary('program');
   const programsLabel = useVocabulary('program', { plural: true });
@@ -58,48 +68,40 @@ export default function ProgramsListPage(): JSX.Element {
   const taskNoun = useVocabulary('task').toLowerCase();
   const taskNounPlural = useVocabulary('task', { plural: true }).toLowerCase();
 
-  const [programs, setPrograms] = useState<readonly ProgramOut[]>([]);
-  const [projects, setProjects] = useState<readonly ProjectOut[]>([]);
-  const [tasks, setTasks] = useState<readonly TaskOut[]>([]);
-  const [members, setMembers] = useState<readonly MemberOut[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [filter, setFilter] = useState<StatusFilter>('all');
   const [createOpen, setCreateOpen] = useState(false);
 
-  /** Load the org's programs and the slices needed to scope + attribute each row. */
-  const load = useCallback(async (): Promise<void> => {
-    setLoading(true);
-    setLoadError(null);
-    try {
-      const [programsRes, projectsRes, tasksRes, membersRes] = await Promise.all([
-        api.v1.orgs[':orgId'].programs.$get({ param: { orgId } }),
-        api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
-        api.v1.orgs[':orgId'].tasks.$get({ param: { orgId } }),
-        api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
-      ]);
-      if (!programsRes.ok) {
-        setLoadError(
-          await readProblem(programsRes, `Could not load ${programsLabel.toLowerCase()}.`),
-        );
-        return;
-      }
-      setPrograms((await programsRes.json()).items);
-      if (projectsRes.ok) setProjects((await projectsRes.json()).items);
-      if (tasksRes.ok) setTasks((await tasksRes.json()).items);
-      if (membersRes.ok) setMembers((await membersRes.json()).items);
-    } catch (caught) {
-      setLoadError(
-        readError(caught, `Something went wrong loading ${programsLabel.toLowerCase()}.`),
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [orgId, programsLabel]);
+  // The roster is the primary slice (its load gates the page); projects, tasks, and members
+  // enrich each row and degrade gracefully (an empty list) if they fail, mirroring the prior
+  // behavior. Each stays live without a manual refresh.
+  const programsQ = useApiQuery(
+    queryKeys.programs(orgId),
+    () => api.v1.orgs[':orgId'].programs.$get({ param: { orgId } }),
+    `Could not load ${programsLabel.toLowerCase()}.`,
+  );
+  const projectsQ = useApiQuery(
+    queryKeys.projects(orgId),
+    () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
+    'Could not load projects.',
+  );
+  const tasksQ = useApiQuery(
+    queryKeys.tasks(orgId),
+    () => api.v1.orgs[':orgId'].tasks.$get({ param: { orgId } }),
+    'Could not load tasks.',
+  );
+  const membersQ = useApiQuery(
+    queryKeys.members(orgId),
+    () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
+    'Could not load members.',
+  );
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const programs = useMemo(() => programsQ.data?.items ?? [], [programsQ.data]);
+  const projects = useMemo(() => projectsQ.data?.items ?? [], [projectsQ.data]);
+  const tasks = useMemo(() => tasksQ.data?.items ?? [], [tasksQ.data]);
+  const members = useMemo(() => membersQ.data?.items ?? [], [membersQ.data]);
+
+  const loading = programsQ.isPending;
+  const loadError = programsQ.isError ? programsQ.error.message : null;
 
   /** Owner display name by actor id (for the row attribution). */
   const ownerNameById = useMemo(
@@ -162,13 +164,16 @@ export default function ProgramsListPage(): JSX.Element {
     }));
   }, [programs, filter, ownerNameById, projectCountByProgram, taskCountByProgram]);
 
-  /** Prepend the freshly-created program to the roster, then open its detail. */
+  /**
+   * Refetch the roster from the server (prefix-matched, so this also refreshes any open
+   * program-detail beneath it), then open the freshly-created program's detail.
+   */
   const handleCreated = useCallback(
     (created: ProgramOut): void => {
-      setPrograms((current) => [created, ...current]);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.programs(orgId) });
       router.push(`/orgs/${orgId}/programs/${created.id}`);
     },
-    [orgId, router],
+    [orgId, router, queryClient],
   );
 
   return (
@@ -216,6 +221,7 @@ export default function ProgramsListPage(): JSX.Element {
         </p>
       ) : programs.length === 0 ? (
         <EmptyState
+          icon={Layers}
           title={`No ${programsLabel.toLowerCase()} yet`}
           body={`${programsLabel} are ongoing lines of work — your funded areas, retainers, or recurring operations. Create one to start tracking its health.`}
           cta={{
@@ -227,6 +233,7 @@ export default function ProgramsListPage(): JSX.Element {
         />
       ) : visibleRows.length === 0 ? (
         <EmptyState
+          icon={Layers}
           title={`No ${filter} ${programsLabel.toLowerCase()}`}
           body={`No ${programLabel.toLowerCase()} matches this filter. Try a different status.`}
         />
@@ -295,33 +302,6 @@ function ListSkeleton(): JSX.Element {
           <Skeleton className="ml-auto h-4 w-24" />
         </div>
       ))}
-    </div>
-  );
-}
-
-/** A centered empty-state panel with an icon, title, supporting copy, and an optional CTA. */
-function EmptyState({
-  title,
-  body,
-  cta,
-}: {
-  title: string;
-  body: string;
-  cta?: { label: string; onClick: () => void } | null;
-}): JSX.Element {
-  return (
-    <div className="border-outline-variant flex flex-col items-center gap-3 rounded-xl border border-dashed p-12 text-center">
-      <span className="bg-surface-container text-on-surface-variant flex size-10 items-center justify-center rounded-full">
-        <Layers aria-hidden="true" className="size-5" />
-      </span>
-      <p className="text-on-surface text-sm font-medium">{title}</p>
-      <p className="text-on-surface-variant max-w-sm text-sm leading-relaxed">{body}</p>
-      {cta ? (
-        <Button type="button" variant="outline" className="mt-1 gap-1.5" onClick={cta.onClick}>
-          <Plus aria-hidden="true" className="size-4" />
-          {cta.label}
-        </Button>
-      ) : null}
     </div>
   );
 }

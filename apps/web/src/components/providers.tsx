@@ -3,8 +3,11 @@
 import { ContextProvider } from '@docket/ui/components';
 import { VocabularyProvider } from '@docket/ui/hooks';
 import { TooltipProvider } from '@docket/ui/primitives';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider } from 'next-themes';
-import type { JSX, ReactNode } from 'react';
+import { type JSX, type ReactNode, useState } from 'react';
+
+import { createQueryClient } from '@/lib/query';
 
 /** Props for {@link Providers}. */
 export interface ProvidersProps {
@@ -26,16 +29,24 @@ export interface ProvidersProps {
  * 4. The `@docket/ui` `TooltipProvider` — one shared open/skip-delay timing for every
  *    {@link Tooltip} in the app, so icon-only controls name themselves on hover/focus
  *    consistently (the inline responsiveness the Phase A review asked for).
+ * 5. TanStack Query's `QueryClientProvider` — the dynamic-data layer that backs every
+ *    read/mutation hook in `@/lib/query`, so data surfaces auto-refetch on window focus
+ *    and after mutations instead of needing a manual "Refresh" button.
  *
- * All four are Client Components, so this file carries the `'use client'` boundary and is
- * mounted once by the root layout.
+ * All are Client Components, so this file carries the `'use client'` boundary and is
+ * mounted once by the root layout. The {@link QueryClient} is created via `useState` (lazy
+ * initializer) so a single, stable client survives re-renders without leaking across requests
+ * — the App Router client-component pattern for TanStack Query.
  */
 export function Providers({ children }: ProvidersProps): JSX.Element {
+  const [queryClient] = useState(createQueryClient);
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
       <ContextProvider>
         <VocabularyProvider>
-          <TooltipProvider delayDuration={400}>{children}</TooltipProvider>
+          <TooltipProvider delayDuration={400}>
+            <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+          </TooltipProvider>
         </VocabularyProvider>
       </ContextProvider>
     </ThemeProvider>

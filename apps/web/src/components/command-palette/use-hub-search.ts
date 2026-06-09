@@ -2,11 +2,11 @@
 
 import { CheckCircle2, FolderKanban, type LucideIcon, Layers } from '@docket/ui/icons';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 import { api } from '@/lib/api';
-import { readError, readProblem } from '@/lib/problem';
+import { queryKeys, useApiQuery } from '@/lib/query';
 
 import type { PaletteItem, PaletteScope } from './types';
 
@@ -64,10 +64,13 @@ interface HubSearchInput {
  * @remarks
  * Reads `api.v1.hub.search` — which fans out across every org the caller belongs to and
  * returns org-chipped, typed hits (tasks/projects/programs) — and normalizes each hit into a
- * selectable {@link PaletteItem} whose `run` deep-links into the originating org. The request
- * is debounced and race-safe (a stale response is discarded once a newer query supersedes
- * it), and in the `org` scope the results are narrowed to the bound org client-side so the
- * palette honors the Hub-global vs org-local toggle without a second endpoint.
+ * selectable {@link PaletteItem} whose `run` deep-links into the originating org. The query
+ * string is debounced before it enters the {@link queryKeys.hubSearch} key, so the dynamic-data
+ * layer ({@link useApiQuery}) handles the request lifecycle: it is keyed (so a repeated query is
+ * served from cache), deduped, and inherently race-safe (a superseded query's result lands under
+ * its own key and is never shown). The query is gated on a non-empty term (`enabled`), and in the
+ * `org` scope the results are narrowed to the bound org client-side so the palette honors the
+ * Hub-global vs org-local toggle without a second endpoint.
  *
  * @param input - The query, scope, and the palette `close` callback.
  * @returns the reactive {@link HubSearchState}.
@@ -75,14 +78,31 @@ interface HubSearchInput {
 export function useHubSearch({ query, scope, close }: HubSearchInput): HubSearchState {
   const router = useRouter();
   const { activeOrgId, orgName } = useActiveOrg();
-  const [results, setResults] = useState<readonly PaletteItem[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const requestId = useRef(0);
 
   const trimmed = query.trim();
   const hasQuery = trimmed.length > 0;
   const orgFilter = scope === 'org' ? activeOrgId : null;
+
+  // Debounce the term before it enters the query key, so a keystroke burst issues one request for
+  // the settled term rather than one per character.
+  const [debounced, setDebounced] = useState(trimmed);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebounced(trimmed);
+    }, DEBOUNCE_MS);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [trimmed]);
+
+  const debouncedHasQuery = debounced.length > 0;
+
+  const searchQ = useApiQuery(
+    queryKeys.hubSearch(debounced),
+    () => api.v1.hub.search.$get({ query: { q: debounced, limit: '20' } }),
+    'Search failed.',
+    { enabled: debouncedHasQuery },
+  );
 
   const toResultItem = useCallback(
     (hit: {
@@ -105,45 +125,17 @@ export function useHubSearch({ query, scope, close }: HubSearchInput): HubSearch
     [orgName, close, router],
   );
 
-  useEffect(() => {
-    if (!hasQuery) {
-      setResults([]);
-      setLoading(false);
-      setError(null);
-      return;
-    }
+  const results = useMemo<readonly PaletteItem[]>(() => {
+    if (!hasQuery) return [];
+    const hits = searchQ.data?.results ?? [];
+    const scoped = orgFilter ? hits.filter((h) => h.organizationId === orgFilter) : hits;
+    return scoped.map(toResultItem);
+  }, [hasQuery, orgFilter, searchQ.data, toResultItem]);
 
-    const id = (requestId.current += 1);
-    setLoading(true);
-    setError(null);
+  // While the user is mid-burst (raw term not yet debounced) or the keyed request is in flight,
+  // the result pane shows its loading skeleton; the error mirrors the search request's failure.
+  const loading = hasQuery && (trimmed !== debounced || (debouncedHasQuery && searchQ.isPending));
+  const error = searchQ.isError ? searchQ.error.message : null;
 
-    const timer = setTimeout(() => {
-      void (async () => {
-        try {
-          const res = await api.v1.hub.search.$get({ query: { q: trimmed, limit: '20' } });
-          if (id !== requestId.current) return; // superseded by a newer query
-          if (!res.ok) {
-            setError(await readProblem(res, 'Search failed.'));
-            setResults([]);
-            return;
-          }
-          const { results: hits } = await res.json();
-          const scoped = orgFilter ? hits.filter((h) => h.organizationId === orgFilter) : hits;
-          setResults(scoped.map(toResultItem));
-        } catch (caught) {
-          if (id !== requestId.current) return;
-          setError(readError(caught, 'Something went wrong searching.'));
-          setResults([]);
-        } finally {
-          if (id === requestId.current) setLoading(false);
-        }
-      })();
-    }, DEBOUNCE_MS);
-
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [trimmed, hasQuery, orgFilter, toResultItem]);
-
-  return { results, loading, error, hasQuery };
+  return { results, loading, error: hasQuery ? error : null, hasQuery };
 }

@@ -13,20 +13,24 @@
  * The list endpoint returns only the stored Initiative rows; the per-theme roll-up
  * (`childMix` / `derivedStatus` / `rolledUpHealth`) lives on the detail read, so the page
  * enriches each row by fetching its detail in parallel (the same enrich-per-item idiom the
- * project-detail screen uses for task milestones). Rows are then partitioned into Active and
- * Completed sections by their derived status. A header "New {initiative}" affordance creates a
- * theme from a name; the entity noun routes through {@link useVocabulary} so vocabulary skins
- * apply. Data is fetched at runtime, so the production build needs no running server.
+ * project-detail screen uses for task milestones). That composite read is cached + kept live
+ * through the dynamic-data layer (auto-refetch on focus + after a create), so there is no manual
+ * refresh control. Rows are then partitioned into Active and Completed sections by their derived
+ * status. A header "New {initiative}" affordance creates a theme from a name; the entity noun
+ * routes through {@link useVocabulary} so vocabulary skins apply. Data is fetched at runtime, so
+ * the production build needs no running server.
  */
 import type { InitiativeDetail, InitiativeOut, InitiativeStatus } from '@docket/types';
+import { EmptyState } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Button, Skeleton } from '@docket/ui/primitives';
 import { Plus, Target } from '@docket/ui/icons';
 import { useParams, useRouter } from 'next/navigation';
-import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
+import { type JSX, useCallback, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { api } from '@/lib/api';
-import { readError, readProblem } from '@/lib/problem';
+import { type RpcResponse, queryKeys, useApiQuery } from '@/lib/query';
 import { CreateInitiativeDialog } from '@/components/initiatives/create-initiative';
 import { InitiativeRow, type InitiativeRowData } from '@/components/initiatives/initiative-row';
 
@@ -43,6 +47,41 @@ const SECTION_LABEL: Record<InitiativeStatus, string> = {
   active: 'Active',
   completed: 'Completed',
 };
+
+/**
+ * Fetch the org's initiatives and enrich each with its detail roll-up, returning a
+ * {@link RpcResponse}-shaped result so it can drive {@link useApiQuery} directly.
+ *
+ * @remarks
+ * The list endpoint returns only the stored rows, so each is joined with its detail read in
+ * parallel — the same enrich-per-item idiom the project-detail screen uses. The composite resolves
+ * `ok`/`status` from the gating list read; a failed *detail* read degrades to a benign default
+ * (so the row still renders) rather than failing the whole list.
+ */
+function fetchEnrichedInitiatives(
+  orgId: string,
+): () => Promise<RpcResponse<readonly EnrichedInitiative[]>> {
+  return async () => {
+    const listRes = await api.v1.orgs[':orgId'].initiatives.$get({ param: { orgId } });
+    if (!listRes.ok) {
+      return {
+        ok: false,
+        status: listRes.status,
+        json: () => listRes.json() as unknown as Promise<readonly EnrichedInitiative[]>,
+      };
+    }
+    const { items } = await listRes.json();
+    const enriched = await Promise.all(
+      items.map(async (base): Promise<EnrichedInitiative> => {
+        const detailRes = await api.v1.orgs[':orgId'].initiatives[':id'].$get({
+          param: { orgId, id: base.id },
+        });
+        return toEnriched(base, detailRes.ok ? await detailRes.json() : null);
+      }),
+    );
+    return { ok: true, status: listRes.status, json: () => Promise.resolve(enriched) };
+  };
+}
 
 /** Reduce an Initiative + its detail roll-up into the enriched row view-model. */
 function toEnriched(base: InitiativeOut, detail: InitiativeDetail | null): EnrichedInitiative {
@@ -69,6 +108,7 @@ export default function InitiativesListPage(): JSX.Element {
   const router = useRouter();
   const params = useParams<{ orgId: string }>();
   const orgId = params.orgId;
+  const queryClient = useQueryClient();
 
   const initiativeNoun = useVocabulary('initiative');
   const initiativeNounLower = initiativeNoun.toLowerCase();
@@ -76,50 +116,28 @@ export default function InitiativesListPage(): JSX.Element {
   const programNoun = useVocabulary('program').toLowerCase();
   const projectNoun = useVocabulary('project').toLowerCase();
 
-  const [initiatives, setInitiatives] = useState<readonly EnrichedInitiative[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
 
-  /** Load the org's initiatives, then enrich each with its detail roll-up in parallel. */
-  const load = useCallback(async (): Promise<void> => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await api.v1.orgs[':orgId'].initiatives.$get({ param: { orgId } });
-      if (!res.ok) {
-        setError(await readProblem(res, `Could not load ${initiativeNounPlural.toLowerCase()}.`));
-        return;
-      }
-      const { items } = await res.json();
-      const enriched = await Promise.all(
-        items.map(async (base): Promise<EnrichedInitiative> => {
-          const detailRes = await api.v1.orgs[':orgId'].initiatives[':id'].$get({
-            param: { orgId, id: base.id },
-          });
-          return toEnriched(base, detailRes.ok ? await detailRes.json() : null);
-        }),
-      );
-      setInitiatives(enriched);
-    } catch (caught) {
-      setError(
-        readError(caught, `Something went wrong loading ${initiativeNounPlural.toLowerCase()}.`),
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [orgId, initiativeNounPlural]);
+  const initiativesQ = useApiQuery(
+    queryKeys.initiatives(orgId),
+    fetchEnrichedInitiatives(orgId),
+    `Could not load ${initiativeNounPlural.toLowerCase()}.`,
+  );
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const initiatives = useMemo(() => initiativesQ.data ?? [], [initiativesQ.data]);
+  const loading = initiativesQ.isPending;
+  const error = initiativesQ.isError ? initiativesQ.error.message : null;
 
-  /** Route to the freshly-created theme's (empty) timeline-first detail. */
+  /**
+   * Refetch the roster from the server (prefix-matched, so this also refreshes any open
+   * initiative-detail beneath it), then route to the freshly-created theme's timeline-first detail.
+   */
   const handleCreated = useCallback(
     (created: InitiativeOut): void => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.initiatives(orgId) });
       router.push(`/orgs/${orgId}/initiatives/${created.id}`);
     },
-    [orgId, router],
+    [orgId, router, queryClient],
   );
 
   /** The rows partitioned by derived status, each section newest-first. */
@@ -183,26 +201,17 @@ export default function InitiativesListPage(): JSX.Element {
           {error}
         </p>
       ) : sections.length === 0 ? (
-        <div className="border-outline-variant text-on-surface-variant flex flex-col items-center rounded-xl border border-dashed p-10 text-center">
-          <Target aria-hidden="true" className="mb-3 size-6 opacity-60" />
-          <p className="text-on-surface text-sm font-medium">
-            No {initiativeNounPlural.toLowerCase()} yet
-          </p>
-          <p className="mt-1 text-sm">
-            Create a theme to start grouping {programNoun}s and {projectNoun}s into a roadmap.
-          </p>
-          <Button
-            type="button"
-            variant="outline"
-            className="mt-4 gap-1.5"
-            onClick={() => {
+        <EmptyState
+          icon={Target}
+          title={`No ${initiativeNounPlural.toLowerCase()} yet`}
+          body={`Create a theme to start grouping ${programNoun}s and ${projectNoun}s into a roadmap.`}
+          cta={{
+            label: `Create your first ${initiativeNounLower}`,
+            onClick: () => {
               setCreateOpen(true);
-            }}
-          >
-            <Plus aria-hidden="true" className="size-4" />
-            Create your first {initiativeNounLower}
-          </Button>
-        </div>
+            },
+          }}
+        />
       ) : (
         <div className="flex flex-col gap-6">
           {sections.map((section) => (

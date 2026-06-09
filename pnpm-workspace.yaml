@@ -3,9 +3,6 @@ packages:
   - 'packages/*'
   - 'tooling/*'
 
-# pnpm v10+ requires this for pnpm deploy to work
-inject-workspace-packages: true
-
 # Force a single @types/node (matching the Node 24 LTS engine pin) across the whole
 # graph so transitive peers don't drift to an older major. Keeps the dependency tree
 # deduped on one Node typings version, consistent with engines.node ">=24 <25".

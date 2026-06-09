@@ -1,2 +1,1 @@
-# pnpm v10+ requires this for pnpm deploy to work in monorepos
-force-legacy-deploy=true
+inject-workspace-packages=true

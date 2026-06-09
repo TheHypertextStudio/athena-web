@@ -1,24 +1,19 @@
 import type { Metadata } from 'next';
 import type { JSX } from 'react';
 
-import { CtaBand } from '@/components/cta-band';
+import { CtaBand } from '@/components/marketing/cta-band';
 
-/** Page-specific metadata for the about route. */
 export const metadata: Metadata = {
   title: 'About',
   description:
     'Why Docket exists: a calm command center for the many organizations one person can run.',
 };
 
-/** One principle behind the product, shown as a card on the about page. */
 interface Principle {
-  /** The principle's short title. */
   title: string;
-  /** A plain-language explanation of the principle. */
   body: string;
 }
 
-/** The product principles, in display order. */
 const PRINCIPLES: readonly Principle[] = [
   {
     title: 'Separation by default',
@@ -38,20 +33,12 @@ const PRINCIPLES: readonly Principle[] = [
   },
 ];
 
-/**
- * The about page: the product's story and the principles behind it.
- *
- * @remarks
- * A static Server Component. The narrative is deliberately domain-neutral — Docket is for
- * anyone running more than one thing, not a developer tool — and frames the relationship
- * between the product (Docket) and its first-party agent (Athena).
- */
 export default function AboutPage(): JSX.Element {
   return (
     <>
-      <section className="mx-auto w-full max-w-3xl px-6 pb-12 pt-20">
+      <section className="mx-auto w-full max-w-3xl px-6 pt-20 pb-12">
         <span className="text-primary text-sm font-medium">About Docket</span>
-        <h1 className="mt-3 text-balance text-4xl font-semibold tracking-tight sm:text-5xl">
+        <h1 className="mt-3 text-4xl font-semibold tracking-tight text-balance sm:text-5xl">
           Most people run more than one thing
         </h1>
         <div className="text-muted-foreground mt-6 flex flex-col gap-4 text-lg">

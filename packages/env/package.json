@@ -9,7 +9,6 @@
     ".": "./src/index.ts",
     "./api": "./src/api.ts",
     "./web": "./src/web.ts",
-    "./marketing": "./src/marketing.ts",
     "./admin": "./src/admin.ts",
     "./registry": "./src/registry.ts"
   },

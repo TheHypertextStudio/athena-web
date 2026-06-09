@@ -1,58 +1,44 @@
 import { Button } from '@docket/ui/primitives';
+import Link from 'next/link';
 import type { JSX } from 'react';
 
-import { signInUrl, signUpUrl } from '@/lib/links';
+import { signInUrl, signUpUrl } from '@/lib/marketing-links';
 
-/** One example organization shown in the hero's command-center preview. */
 interface PreviewOrg {
-  /** Single-letter avatar glyph. */
   glyph: string;
-  /** The organization's display name. */
   name: string;
-  /** A short, domain-neutral line of the day's work in that organization. */
   line: string;
 }
 
-/** The illustrative organizations shown side by side in the hero preview. */
 const PREVIEW_ORGS: readonly PreviewOrg[] = [
   { glyph: 'N', name: 'Northwind (startup)', line: 'Ship the launch page · 3 tasks today' },
   { glyph: 'R', name: 'Riverkeepers (nonprofit)', line: 'Draft the donor update · due today' },
   { glyph: 'M', name: 'Just me', line: 'Reschedule the team offsite' },
 ];
 
-/**
- * The landing hero: headline, sub-copy, calls-to-action, and a domain-neutral preview of
- * the cross-organization "Today" command center.
- *
- * @remarks
- * A Server Component. The preview is purely presentational (no live data) and deliberately
- * spans a startup, a nonprofit, and a personal space to show that Docket is for every kind
- * of work — not a developer tool. The primary call-to-action routes to {@link signUpUrl};
- * the secondary to {@link signInUrl}.
- */
 export function Hero(): JSX.Element {
   return (
     <section className="relative overflow-hidden">
       <div className="bg-primary/10 pointer-events-none absolute inset-x-0 -top-40 -z-10 mx-auto h-80 max-w-4xl rounded-full blur-3xl" />
-      <div className="mx-auto flex w-full max-w-6xl flex-col items-center gap-12 px-6 pb-8 pt-20 sm:pt-28">
+      <div className="mx-auto flex w-full max-w-6xl flex-col items-center gap-12 px-6 pt-20 pb-8 sm:pt-28">
         <div className="flex max-w-3xl flex-col items-center gap-6 text-center">
           <span className="border-border text-muted-foreground rounded-full border px-3 py-1 text-xs font-medium">
             Linear for everything
           </span>
-          <h1 className="text-balance text-4xl font-semibold tracking-tight sm:text-6xl">
+          <h1 className="text-4xl font-semibold tracking-tight text-balance sm:text-6xl">
             Run every organization from one calm place
           </h1>
-          <p className="text-muted-foreground max-w-2xl text-balance text-lg">
+          <p className="text-muted-foreground max-w-2xl text-lg text-balance">
             Docket is the command center for the work you actually do — your startup, your
             nonprofit, your side projects. Keep each one in its own space, then plan the whole day
             in a single view.
           </p>
           <div className="flex flex-col items-center gap-3 sm:flex-row">
             <Button asChild size="lg">
-              <a href={signUpUrl}>Get started — it&rsquo;s free</a>
+              <Link href={signUpUrl}>Get started — it&rsquo;s free</Link>
             </Button>
             <Button asChild size="lg" variant="outline">
-              <a href={signInUrl}>Sign in</a>
+              <Link href={signInUrl}>Sign in</Link>
             </Button>
           </div>
           <p className="text-muted-foreground text-xs">

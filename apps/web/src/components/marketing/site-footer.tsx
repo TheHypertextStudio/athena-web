@@ -1,24 +1,20 @@
 import Link from 'next/link';
 import type { JSX } from 'react';
 
-import { signUpUrl } from '@/lib/links';
+import { signUpUrl } from '@/lib/marketing-links';
 
-/** A labeled group of related footer links. */
 interface FooterColumn {
-  /** The column heading. */
   title: string;
-  /** The links within the column, in display order. */
-  links: readonly { href: string; label: string; external?: boolean }[];
+  links: readonly { href: string; label: string }[];
 }
 
-/** The marketing footer's link columns, in display order. */
 const COLUMNS: readonly FooterColumn[] = [
   {
     title: 'Product',
     links: [
       { href: '/#features', label: 'Features' },
       { href: '/pricing', label: 'Pricing' },
-      { href: signUpUrl, label: 'Get started', external: true },
+      { href: signUpUrl, label: 'Get started' },
     ],
   },
   {
@@ -30,15 +26,6 @@ const COLUMNS: readonly FooterColumn[] = [
   },
 ];
 
-/**
- * The site-wide footer shared by every marketing page.
- *
- * @remarks
- * A Server Component: a short brand blurb beside grouped navigation columns, then a thin
- * legal row. External links (into the product app) render as plain anchors; in-site links
- * use the Next `<Link>` component. The copyright year is intentionally static — a fixed
- * brand line, not a live clock — so the page stays a pure render with no date dependency.
- */
 export function SiteFooter(): JSX.Element {
   return (
     <footer className="border-border/60 bg-card/30 border-t">
@@ -61,21 +48,12 @@ export function SiteFooter(): JSX.Element {
             <ul className="flex flex-col gap-2">
               {column.links.map((link) => (
                 <li key={link.label}>
-                  {link.external ? (
-                    <a
-                      href={link.href}
-                      className="text-muted-foreground hover:text-foreground text-sm transition-colors"
-                    >
-                      {link.label}
-                    </a>
-                  ) : (
-                    <Link
-                      href={link.href}
-                      className="text-muted-foreground hover:text-foreground text-sm transition-colors"
-                    >
-                      {link.label}
-                    </Link>
-                  )}
+                  <Link
+                    href={link.href}
+                    className="text-muted-foreground hover:text-foreground text-sm transition-colors"
+                  >
+                    {link.label}
+                  </Link>
                 </li>
               ))}
             </ul>

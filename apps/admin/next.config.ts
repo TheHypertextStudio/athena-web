@@ -1,3 +1,4 @@
+import path from 'path';
 import type { NextConfig } from 'next';
 
 /** The API origin the browser is rewritten to (same-origin so Better Auth cookies flow). */
@@ -24,6 +25,8 @@ if (!API_ORIGIN) {
  */
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  output: 'standalone',
+  outputFileTracingRoot: path.join(import.meta.dirname, '../..'),
   transpilePackages: ['@docket/ui', '@docket/types', '@docket/env'],
   // Portless serves dev over https://admin.docket.localhost; allow its HMR/devtools
   // resources so hot-reload works (Next 16 blocks cross-origin dev resources by default).

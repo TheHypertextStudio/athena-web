@@ -1,0 +1,16 @@
+.git
+node_modules
+**/node_modules
+.next
+**/.next
+.turbo
+**/.turbo
+coverage
+**/coverage
+dist
+**/dist
+**/*.tsbuildinfo
+.env
+.env.*
+!.env.example
+docker-compose.yml

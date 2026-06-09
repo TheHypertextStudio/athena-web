@@ -21,10 +21,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: '.node-version'
-          cache: pnpm
 
       # version read from package.json packageManager field
       - uses: pnpm/action-setup@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.pnpm-store
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: ${{ runner.os }}-pnpm-
 
       # Turbo task cache — on exact SHA hit turbo replays outputs without re-running.
       # restore-keys falls back to the nearest ancestor commit's cache so only
@@ -53,10 +58,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: '.node-version'
-          cache: pnpm
 
       # version read from package.json packageManager field
       - uses: pnpm/action-setup@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.pnpm-store
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: ${{ runner.os }}-pnpm-
 
       - uses: actions/cache@v4
         with:

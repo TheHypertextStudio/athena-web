@@ -81,9 +81,9 @@ describe('OnboardingPage — personal fork', () => {
     // Committed: back navigation is gone once the workspace exists.
     expect(screen.queryByRole('button', { name: /back/i })).toBeNull();
 
-    // Skipping routes straight into the (now real) org's My Work.
+    // Skipping routes straight into Home (matches sign-in's landing).
     fireEvent.click(screen.getByRole('button', { name: 'Skip for now' }));
-    expect(push).toHaveBeenCalledWith('/orgs/org_personal/my-work');
+    expect(push).toHaveBeenCalledWith('/today');
   });
 
   it('keeps the user on the setup step and shows the error when create fails', async () => {
@@ -103,7 +103,7 @@ describe('OnboardingPage — personal fork', () => {
 });
 
 describe('OnboardingPage — team fork', () => {
-  it('walks name → vocabulary → create, then connect → enter routes into My Work', async () => {
+  it('walks name → vocabulary → create, then connect → enter routes into Home', async () => {
     orgPost.mockResolvedValue(
       jsonResponse(true, { organization: { id: 'org_team', name: 'Acme' } }),
     );
@@ -137,6 +137,6 @@ describe('OnboardingPage — team fork', () => {
 
     // The primary action enters the workspace.
     fireEvent.click(screen.getByRole('button', { name: 'Continue without connecting' }));
-    expect(push).toHaveBeenCalledWith('/orgs/org_team/my-work');
+    expect(push).toHaveBeenCalledWith('/today');
   });
 });

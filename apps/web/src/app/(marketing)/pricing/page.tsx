@@ -1,25 +1,20 @@
 import type { Metadata } from 'next';
 import type { JSX } from 'react';
 
-import { CtaBand } from '@/components/cta-band';
-import { PricingTiers } from '@/components/pricing-tiers';
+import { CtaBand } from '@/components/marketing/cta-band';
+import { PricingTiers } from '@/components/marketing/pricing-tiers';
 
-/** Page-specific metadata for the pricing route. */
 export const metadata: Metadata = {
   title: 'Pricing',
   description:
     'Docket is free for your personal command center. Pay only when you bring people into a shared organization.',
 };
 
-/** One frequently-asked question and its plain-language answer. */
 interface Faq {
-  /** The question. */
   question: string;
-  /** The answer. */
   answer: string;
 }
 
-/** The pricing-page FAQs, in display order. */
 const FAQS: readonly Faq[] = [
   {
     question: 'Do I need a credit card to start?',
@@ -42,21 +37,12 @@ const FAQS: readonly Faq[] = [
   },
 ];
 
-/**
- * The dedicated pricing page: the full plan grid followed by a short FAQ and a closing
- * call-to-action.
- *
- * @remarks
- * A static Server Component. The plan cards are shared with the home page via
- * {@link PricingTiers}; this route adds the FAQ for buyers who want the details before
- * signing up.
- */
 export default function PricingPage(): JSX.Element {
   return (
     <>
       <PricingTiers />
       <section className="mx-auto w-full max-w-3xl px-6 py-16">
-        <h2 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl">
+        <h2 className="text-2xl font-semibold tracking-tight text-balance sm:text-3xl">
           Questions, answered
         </h2>
         <dl className="divide-border/60 mt-8 flex flex-col divide-y">

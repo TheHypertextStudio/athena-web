@@ -1,16 +1,11 @@
 import type { JSX } from 'react';
 
-/** One ordered onboarding step shown in the "how it works" section. */
 interface Step {
-  /** The step's display number (1-based). */
   number: string;
-  /** The step's short title. */
   title: string;
-  /** A plain-language description of what happens in this step. */
   body: string;
 }
 
-/** The three onboarding steps, in order. */
 const STEPS: readonly Step[] = [
   {
     number: '01',
@@ -29,20 +24,13 @@ const STEPS: readonly Step[] = [
   },
 ];
 
-/**
- * The "how it works" section: three numbered steps from sign-up to a planned day.
- *
- * @remarks
- * A Server Component. Anchored as `#how-it-works` so the footer can link to it. The copy is
- * domain-neutral so it reads the same for a founder, an organizer, or a one-person shop.
- */
 export function HowItWorks(): JSX.Element {
   return (
     <section id="how-it-works" className="border-border/60 bg-card/30 scroll-mt-20 border-y">
       <div className="mx-auto w-full max-w-6xl px-6 py-20">
         <div className="flex max-w-2xl flex-col gap-3">
           <span className="text-primary text-sm font-medium">From zero to in control</span>
-          <h2 className="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
+          <h2 className="text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
             Up and running in minutes
           </h2>
         </div>

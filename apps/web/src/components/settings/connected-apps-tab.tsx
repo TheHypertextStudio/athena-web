@@ -60,6 +60,18 @@ interface ConfigClient {
   note?: string;
 }
 
+/**
+ * An MCP client set up through its own GUI — numbered steps leading to a URL paste.
+ * The URL is shown as a copyable block after the steps list.
+ */
+interface StepsClient {
+  id: string;
+  name: string;
+  kind: 'steps';
+  steps: readonly string[];
+  note?: string;
+}
+
 /** Fallback for unknown clients — just show the server URL. */
 interface UrlClient {
   id: string;
@@ -68,7 +80,7 @@ interface UrlClient {
   note?: string;
 }
 
-type McpClient = CliClient | DeepLinkClient | ConfigClient | UrlClient;
+type McpClient = CliClient | DeepLinkClient | ConfigClient | StepsClient | UrlClient;
 
 const MCP_CLIENTS: McpClient[] = [
   {
@@ -98,13 +110,14 @@ const MCP_CLIENTS: McpClient[] = [
   {
     id: 'claude-desktop',
     name: 'Claude Desktop',
-    kind: 'config',
-    snippet: (url) => JSON.stringify({ mcpServers: { docket: { url } } }, null, 2),
-    paths: {
-      mac: '~/Library/Application Support/Claude/claude_desktop_config.json',
-      windows: '%APPDATA%\\Claude\\claude_desktop_config.json',
-    },
-    note: 'Merge into the existing file if you already have other servers configured.',
+    kind: 'steps',
+    steps: [
+      'In the chat bar, open the menu (+) and select Connectors → Manage Connectors',
+      'Click the + icon and select Add custom connector',
+      'Enter "Docket" as the name and paste the URL below',
+      'Click Add — your browser will open to complete authorization',
+      'Sign in to Docket and approve the requested permissions',
+    ],
   },
   {
     id: 'windsurf',
@@ -265,6 +278,25 @@ function ConfigSetup({
   );
 }
 
+function StepsSetup({ client, url }: { client: StepsClient; url: string }): JSX.Element {
+  return (
+    <div className="flex flex-col gap-3">
+      <ol className="text-on-surface-variant flex flex-col gap-2 text-sm">
+        {client.steps.map((step, i) => (
+          <li key={step} className="flex gap-2.5">
+            <span className="bg-surface-container text-on-surface-variant flex size-5 shrink-0 items-center justify-center rounded-full text-xs font-medium">
+              {i + 1}
+            </span>
+            <span className="pt-px">{step}</span>
+          </li>
+        ))}
+      </ol>
+      <CodeBlock code={url} label="Copy URL" />
+      {client.note ? <p className="text-on-surface-variant text-xs">{client.note}</p> : null}
+    </div>
+  );
+}
+
 function UrlSetup({ client, url }: { client: UrlClient; url: string }): JSX.Element {
   return (
     <div className="flex flex-col gap-3">
@@ -312,6 +344,8 @@ function ClientSetup({ mcpUrl }: { mcpUrl: string }): JSX.Element {
         <DeepLinkSetup client={client} url={mcpUrl} os={os} />
       ) : client.kind === 'config' ? (
         <ConfigSetup client={client} url={mcpUrl} os={os} />
+      ) : client.kind === 'steps' ? (
+        <StepsSetup client={client} url={mcpUrl} />
       ) : (
         <UrlSetup client={client} url={mcpUrl} />
       )}

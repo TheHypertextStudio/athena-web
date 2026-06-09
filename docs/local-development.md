@@ -33,7 +33,7 @@ What it does:
 - **Binds privileged port 443** so the `.localhost` URLs work over plain `https://`
   without a port suffix. Binding 443 is why it needs **`sudo` — once**, at install time.
   Afterwards each app's `portless` call just registers a route with the already-running
-  proxy: no more `sudo`, and no port-binding race when the four `dev` servers start in
+  proxy: no more `sudo`, and no port-binding race when the three `dev` servers start in
   parallel under turbo.
 - **Generates a local Certificate Authority and adds it to your system/browser trust
   store**, so `https://*.docket.localhost` is trusted with no warnings (the same idea as
@@ -60,7 +60,7 @@ portless clean         # fully revert: drop the CA trust, /etc/hosts entries, an
 
 No `sudo` available (CI, locked-down machines)? Skip the service and run the proxy on an
 unprivileged port instead — `portless proxy start --port 1355 --https` — but then the URLs
-carry the port (e.g. `https://web.docket.localhost:1355`).
+carry the port (e.g. `https://docket.localhost:1355`).
 
 ## `.env.local` — committed defaults, protected edits
 

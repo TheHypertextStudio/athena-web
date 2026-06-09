@@ -9,7 +9,7 @@ FROM base AS installer
 WORKDIR /app
 COPY . .
 RUN pnpm install --frozen-lockfile && \
-    pnpm --filter=@docket/api deploy --legacy --prod /deploy
+    pnpm --filter=@docket/api deploy --prod /deploy
 
 FROM node:${NODE_VERSION}-alpine AS runner
 WORKDIR /app

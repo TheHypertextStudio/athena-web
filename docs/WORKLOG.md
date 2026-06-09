@@ -496,3 +496,5 @@ Remaining: marketing app (public landing) ; Playwright e2e flow films (needs bro
 **Gate (after marketing): typecheck 16/16 · lint 16/16 · test:coverage 13/13 @ 100% · doc-coverage 100% · full `pnpm build` 7/7 (apps/web + apps/admin + apps/marketing all compile; marketing prerenders `/`, `/about`, `/pricing` as static).**
 
 Remaining: Playwright e2e flow films (needs browser install + a running api+web+PGlite stack — a CI-shaped lane).
+
+# fixes complete

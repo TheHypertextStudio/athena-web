@@ -21,7 +21,17 @@ import type {
   IntegrationRole,
   SyncJobOut,
 } from '@docket/types';
-import { Badge, Skeleton } from '@docket/ui/primitives';
+import {
+  Badge,
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  Skeleton,
+} from '@docket/ui/primitives';
 import {
   Calendar,
   Folder,
@@ -125,6 +135,10 @@ export function IntegrationsTab({
   const [syncErrors, setSyncErrors] = useState<Record<string, string | null>>({});
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
   const [disconnectErrors, setDisconnectErrors] = useState<Record<string, string | null>>({});
+  const [confirmDisconnect, setConfirmDisconnect] = useState<{
+    id: string;
+    providerName: string;
+  } | null>(null);
 
   // The provider directory governs whether the screen can render at all; the org's existing
   // integrations are a best-effort overlay (a failed read just shows everything as configurable).
@@ -338,14 +352,10 @@ export function IntegrationsTab({
                               type="button"
                               disabled={disconnectingId === existing.id}
                               onClick={() => {
-                                if (
-                                  window.confirm(
-                                    `Disconnect ${provider.name}? Linked tasks imported from it will remain, but won't receive further updates.`,
-                                  )
-                                ) {
-                                  setDisconnectingId(existing.id);
-                                  disconnect.mutate(existing.id);
-                                }
+                                setConfirmDisconnect({
+                                  id: existing.id,
+                                  providerName: provider.name,
+                                });
                               }}
                               className="focus-visible:ring-ring text-destructive hover:bg-destructive/10 text-body rounded-md px-3 py-1.5 font-medium transition-colors outline-none focus-visible:ring-1 disabled:opacity-50"
                             >
@@ -368,10 +378,17 @@ export function IntegrationsTab({
                       </button>
                     ) : (
                       <span className="text-on-surface-variant text-xs">
-                        Available to configure
+                        Ask an admin to configure
                       </span>
                     )}
                   </div>
+
+                  {existing?.status === 'error' ? (
+                    <p className="text-on-surface-variant border-outline-variant border-t px-4 py-2 text-xs">
+                      Connection needs attention — try syncing to retry. If the issue persists,
+                      re-authenticate from your account settings.
+                    </p>
+                  ) : null}
 
                   {existing && syncFeedback[existing.id] ? (
                     <p className="text-on-surface-variant border-outline-variant border-t px-4 py-2 text-xs">
@@ -426,6 +443,40 @@ export function IntegrationsTab({
           </ul>
         </section>
       ))}
+
+      <Dialog
+        open={confirmDisconnect !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmDisconnect(null);
+        }}
+      >
+        <DialogContent showClose={false}>
+          <DialogHeader>
+            <DialogTitle>Disconnect {confirmDisconnect?.providerName}?</DialogTitle>
+            <DialogDescription>
+              Linked tasks imported from it will remain, but won&apos;t receive further updates.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose className="focus-visible:ring-ring text-on-surface-variant hover:bg-surface-container-high text-body rounded-md px-3 py-1.5 font-medium transition-colors outline-none focus-visible:ring-1">
+              Cancel
+            </DialogClose>
+            <button
+              type="button"
+              className="focus-visible:ring-ring bg-destructive text-destructive-foreground hover:bg-destructive/90 text-body rounded-md px-3 py-1.5 font-medium shadow-sm transition-colors outline-none focus-visible:ring-1"
+              onClick={() => {
+                if (confirmDisconnect) {
+                  setDisconnectingId(confirmDisconnect.id);
+                  disconnect.mutate(confirmDisconnect.id);
+                  setConfirmDisconnect(null);
+                }
+              }}
+            >
+              Disconnect
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

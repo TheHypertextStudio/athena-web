@@ -552,6 +552,7 @@ async function resolveImportTeam(orgId: string, row: IntegrationRow): Promise<st
       .where(and(eq(team.id, configured), eq(team.organizationId, orgId)))
       .limit(1);
     if (teamRows[0]) return teamRows[0].id;
+    // configured teamId exists in config but not in this org — fall through to first-team fallback
   }
   const firstTeam = await db
     .select({ id: team.id })

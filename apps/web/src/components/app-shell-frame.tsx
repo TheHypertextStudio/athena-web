@@ -4,6 +4,8 @@ import type { OrgSummary } from '@docket/types';
 import {
   AppShell,
   ContextProvider,
+  DENSITIES,
+  type Density,
   type HomeNavKey,
   Sidebar,
   TabBar,
@@ -88,6 +90,32 @@ function writeLastOrg(userId: string | null, orgId: string): void {
   if (!userId || typeof window === 'undefined') return;
   try {
     window.localStorage.setItem(lastOrgStorageKey(userId), orgId);
+  } catch {
+    // Non-fatal: persistence is best-effort.
+  }
+}
+
+/** The `localStorage` key for a user's layout density preference. */
+function densityStorageKey(userId: string): string {
+  return `docket:density:${userId}`;
+}
+
+/** Read the persisted density preference, tolerating absent/blocked storage or stale values. */
+function readDensity(userId: string | null): Density {
+  if (!userId || typeof window === 'undefined') return 'comfortable';
+  try {
+    const raw = window.localStorage.getItem(densityStorageKey(userId));
+    return DENSITIES.includes(raw as Density) ? (raw as Density) : 'comfortable';
+  } catch {
+    return 'comfortable';
+  }
+}
+
+/** Persist the density preference, ignoring storage failures (quota/private mode). */
+function writeDensity(userId: string | null, density: Density): void {
+  if (!userId || typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(densityStorageKey(userId), density);
   } catch {
     // Non-fatal: persistence is best-effort.
   }
@@ -185,7 +213,7 @@ export function AppShellFrame({ children }: { children: ReactNode }): JSX.Elemen
   const initialOrgId = routeOrgId ?? readLastOrg(userId);
 
   return (
-    <ContextProvider initialContext={initialOrgId}>
+    <ContextProvider initialContext={initialOrgId} initialDensity={readDensity(userId)}>
       <ActiveOrgContext orgs={orgs} activeOrgId={routeOrgId} orgsError={orgsError}>
         <CommandPaletteProvider>
           <OpenDocumentsProvider userId={userId}>
@@ -257,11 +285,16 @@ function AppShellInner({
   children,
 }: AppShellInnerProps): JSX.Element {
   const router = useRouter();
-  const { setContext } = useContextState();
+  const { setContext, density } = useContextState();
   const { orgs, skin } = useActiveOrg();
   const { openPalette } = useCommandPalette();
   const { tabs, activeKey, closeTab } = useOpenDocuments();
   const [unreadCount, setUnreadCount] = useState(0);
+
+  // Persist the density preference whenever it changes (toggled via the command palette).
+  useEffect(() => {
+    writeDensity(userId, density);
+  }, [userId, density]);
 
   const workspaces = useMemo<readonly Workspace[]>(
     () =>

@@ -125,7 +125,7 @@ export interface EntityRowRenderProps {
  * share one 36px vertical rhythm. Kept as a constant so a single edit retints every preset.
  */
 const ROW_BASE =
-  '@container/row group/row border-outline-variant relative flex min-h-9 w-full items-center gap-2 border-b px-3 py-1.5 text-left text-body last:border-b-0';
+  '@container/row group/row border-outline-variant relative flex min-h-(--row-h) w-full items-center gap-2 border-b px-3 py-(--row-py) text-left text-body last:border-b-0';
 
 /**
  * The interactive affordances layered onto {@link ROW_BASE} for a focusable row.

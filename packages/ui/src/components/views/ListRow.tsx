@@ -99,7 +99,7 @@ export const ListRow = React.forwardRef<HTMLDivElement, ListRowProps>(function L
       }}
       {...rest}
       className={cn(
-        'border-outline-variant text-body flex min-h-9 w-full cursor-pointer items-center gap-2 border-b px-3 py-1.5 transition-colors outline-none',
+        'border-outline-variant text-body flex min-h-(--row-h) w-full cursor-pointer items-center gap-2 border-b px-3 py-(--row-py) transition-colors outline-none',
         'hover:bg-surface-container-high focus-visible:bg-surface-container-high',
         focusRingInset,
         active && 'bg-surface-container-highest',

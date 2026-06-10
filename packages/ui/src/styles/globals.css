@@ -280,6 +280,34 @@
  */
 @layer base {
   /*
+   * Density system: list-row metrics keyed off the `data-density` attribute the AppShell
+   * emits from user preference. Row components consume `min-h-(--row-h)` / `py-(--row-py)`
+   * so one attribute swap retunes every list in the product. The :root fallback matches
+   * `comfortable` (36px rows), keeping rows correct outside the shell (auth, tests).
+   * NOTE: the virtualizer's row-height estimate in ListView.tsx mirrors these values —
+   * change them together.
+   */
+  :root {
+    --row-h: 2.25rem;
+    --row-py: 0.375rem;
+  }
+
+  [data-density='compact'] {
+    --row-h: 2rem;
+    --row-py: 0.25rem;
+  }
+
+  [data-density='comfortable'] {
+    --row-h: 2.25rem;
+    --row-py: 0.375rem;
+  }
+
+  [data-density='spacious'] {
+    --row-h: 2.75rem;
+    --row-py: 0.625rem;
+  }
+
+  /*
    * Reduced motion: the product must be 100% usable with motion off. Collapsing durations
    * to near-zero (rather than `none`) keeps `animationend`/`transitionend` handlers firing
    * so Radix/tw-animate exit animations still unmount. Spinners freeze too — acceptable,

@@ -30,9 +30,20 @@ import * as React from 'react';
 
 import { useListKeyboard } from '../../hooks/useListKeyboard';
 import { cn } from '../../lib/utils';
+import { useDensity, type Density } from '../shell/ContextProvider';
 import { ListGroup } from './ListGroup';
 import { ListSubGroup } from './ListSubGroup';
 import type { WorkflowStateType } from '../atoms/StatusIcon';
+
+/**
+ * Default virtualizer row-height estimate per density. Mirrors the `--row-h` CSS variable
+ * (globals.css §density) — the two MUST change together or virtualized scrolling jitters.
+ */
+const DENSITY_ROW_HEIGHT: Record<Density, number> = {
+  compact: 32,
+  comfortable: 36,
+  spacious: 44,
+};
 
 /** The id + label identifying a group or sub-group bucket. */
 export interface GroupKey {
@@ -100,7 +111,11 @@ export interface ListViewProps<TItem> {
   defaultCollapsed?: Iterable<string>;
   /** Activate (open) a data item (Enter / click). */
   onActivateItem?: (item: TItem) => void;
-  /** Estimated pixel height of a single row; drives virtualization. Defaults to `36`. */
+  /**
+   * Estimated pixel height of a single row; drives virtualization. Defaults to the active
+   * density's row height (32 / 36 / 44 for compact / comfortable / spacious), mirroring the
+   * `--row-h` CSS variable the row components consume.
+   */
   rowHeight?: number;
   /** Accessible label for the grid. */
   label?: string;
@@ -232,11 +247,13 @@ export function ListView<TItem>({
   onToggle,
   defaultCollapsed,
   onActivateItem,
-  rowHeight = 36,
+  rowHeight,
   label = 'List',
   className,
 }: ListViewProps<TItem>): React.JSX.Element {
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
+  const density = useDensity();
+  const resolvedRowHeight = rowHeight ?? DENSITY_ROW_HEIGHT[density];
 
   // Uncontrolled collapse state, used only when `collapsed` is not supplied.
   const [internalCollapsed, setInternalCollapsed] = React.useState<ReadonlySet<string>>(
@@ -274,9 +291,15 @@ export function ListView<TItem>({
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => rowHeight,
+    estimateSize: () => resolvedRowHeight,
     overscan: 12,
   });
+
+  // Re-measure when the density (and so the row-height estimate) changes — the virtualizer
+  // caches measurements and would otherwise keep stale offsets after a density switch.
+  React.useEffect(() => {
+    virtualizer.measure();
+  }, [virtualizer, resolvedRowHeight]);
 
   /** Activate the flattened row at `index`: toggle a (sub-)group or open a data row. */
   const activateRow = React.useCallback(

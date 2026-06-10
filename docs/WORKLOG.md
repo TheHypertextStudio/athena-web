@@ -7,6 +7,24 @@
 
 ## Completed Tasks
 
+### [DESIGN-002] First-run experience: capture + ask-Athena from Today, auto-rolled cycles
+
+- **Completed**: 2026-06-10
+- **Summary**: Made the AI-native entry points real in the UI (both backends existed with no
+  frontend). Today gains the hybrid prompt box — free text captures a task
+  (`POST /capture`, confirmation names the task + links to it) or escalates to an Athena
+  session (`POST /sessions`, navigating into the live session with approval gates). The
+  three zero-count attention cards collapse to one all-clear line; plan empty state funnels
+  into capture/integrations. Cycles stops asking for manual creation and ensures each team's
+  auto-rolled window via the idempotent `GET /cycles/current`. My Work keeps a single
+  creation affordance (composer). `EmptyState` drops the dashed-wireframe look product-wide.
+  All flows browser-driven end-to-end and screenshot-verified.
+- **Learnings**: the audit must be run against the _first-run_ experience explicitly — a
+  fresh workspace exposed that the product's core differentiator (capture → structure →
+  agent) had zero UI entry points despite complete backend support.
+
+---
+
 ### [DESIGN-001] Brand identity + craft framework: rubric, marketing redesign, app design-system completion
 
 - **Completed**: 2026-06-10

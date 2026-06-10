@@ -259,9 +259,11 @@ File: `@docket/ui/src/styles/globals.css` (imported by every app's own `globals.
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
 
-  /* type families */
-  --font-sans: 'Inter', 'InterVariable', ui-sans-serif, system-ui, sans-serif;
-  --font-mono: 'Geist Mono', ui-monospace, 'SF Mono', monospace;
+  /* type families — IBM Plex is the sole product typeface (loaded via next/font per app,
+     published as --font-ibm-plex-sans / --font-ibm-plex-mono). The marketing surface adds
+     Fraunces as a display face in its own route-group layer; see apps/web (marketing). */
+  --font-sans: var(--font-ibm-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-ibm-plex-mono), ui-monospace, 'SFMono-Regular', monospace;
 }
 
 @layer base {
@@ -285,22 +287,21 @@ File: `@docket/ui/src/styles/globals.css` (imported by every app's own `globals.
 - **Health is also encoded non‑chromatically** (icon shape + label) so it survives color‑blindness and grayscale film captures: on‑track = filled circle, at‑risk = half/triangle, off‑track = open/alert, no‑update = dashed circle.
 - **The global rail is dark in both themes** (`--rail`), giving Docket a consistent "spine" — a deliberate Linear‑like signature, and keeps org avatars/badges legible regardless of theme.
 
-### 1.2 Type scale
+### 1.2 Type scale (IMPLEMENTED — `packages/ui/src/styles/globals.css`)
 
-Inter (variable) for UI; Geist Mono for IDs/keys/timestamps/code‑adjacent. Sizes (rem, 16px root). Define as utilities via `@theme inline --text-*`:
+IBM Plex Sans for UI; IBM Plex Mono for IDs/keys/timestamps. Sizes (rem, 16px root), defined as `@theme` font-size tokens with weight and tracking baked into the heading steps. The heading sizes encode the app's real hierarchy — calm and dense; page titles are 20px, not a marketing 24px+:
 
-| Token          | Size / line-height   | Weight | Use                                        |
-| -------------- | -------------------- | ------ | ------------------------------------------ |
-| `text-display` | 2rem / 2.4rem        | 600    | Landing/marketing only                     |
-| `text-h1`      | 1.5rem / 2rem        | 600    | Page title (Detail header)                 |
-| `text-h2`      | 1.25rem / 1.75rem    | 600    | Section headers                            |
-| `text-h3`      | 1.0625rem / 1.5rem   | 600    | Group headers, card titles                 |
-| `text-body`    | 0.875rem / 1.25rem   | 400    | **Default app text** (Linear runs at 14px) |
-| `text-sm`      | 0.8125rem / 1.125rem | 400    | List rows, secondary                       |
-| `text-xs`      | 0.75rem / 1rem       | 500    | Chips, badges, counts, meta                |
-| `text-mono`    | 0.8125rem            | 450    | Task IDs (`ACME-128`), timestamps, scopes  |
+| Token       | Size / line-height   | Weight | Tracking | Use                                                              |
+| ----------- | -------------------- | ------ | -------- | ---------------------------------------------------------------- |
+| `text-h1`   | 1.25rem / 1.75rem    | 600    | -0.02em  | Page titles (the largest in-app heading)                         |
+| `text-h2`   | 1.0625rem / 1.5rem   | 600    | -0.01em  | Section headers                                                  |
+| `text-h3`   | 0.9375rem / 1.375rem | 600    | —        | Group headers, card titles                                       |
+| `text-body` | 0.875rem / 1.25rem   | —      | —        | **Default app text** (== stock Tailwind text-sm)                 |
+| `text-sm`   | 0.8125rem / 1.125rem | —      | —        | List rows, secondary (redefined below stock)                     |
+| `text-xs`   | 0.75rem / 1rem       | 500    | —        | Chips, badges, counts, meta                                      |
+| `text-mono` | 0.8125rem / 1.125rem | 500    | —        | Task IDs (`ACME-128`), timestamps, scopes (Plex Mono has no 450) |
 
-Tracking: `-0.011em` on headings ≥ `text-h2`. Body unmodified. Numerals: `font-variant-numeric: tabular-nums` on all counts, progress %, dates, capacity.
+`text-display` is deliberately NOT an app token: display type is a marketing concern, defined in the web app's marketing layer (Fraunces, clamp-based `text-display`/`text-title`). Numerals: `font-variant-numeric: tabular-nums` on all counts, progress %, dates, capacity. Quality bar for all type decisions: `docs/design/craft-rubric.md`.
 
 ### 1.3 Spacing
 
@@ -336,28 +337,28 @@ Each `Organization` may carry a derived accent hue (from `Organization.avatar` d
 
 Hub context resets `--org-accent` to `var(--primary)`. Org accent is used **only** for: org avatar ring, active rail indicator bar, org chips, and the active org's sidebar selection highlight. It is **never** used for health/priority/state (those are global semantic tokens).
 
-### 1.7 Density
+### 1.7 Density (IMPLEMENTED)
 
-Three modes via `data-density` on `<html>` (persisted in `Hub.preferences`). Implemented as base‑layer overrides of `--row-py` / `--row-h` consumed by List/row components:
+Three modes via `data-density` on the AppShell root (persisted per user in `localStorage`, toggled from the command palette; a Settings control lands once a Preferences section exists). Base-layer overrides of `--row-py` / `--row-h` consumed by `ListRow`/`EntityListRow`/`EntityTable`:
 
 ```css
 @layer base {
   :root {
-    --row-py: 0.5rem;
     --row-h: 2.25rem;
+    --row-py: 0.375rem;
   } /* comfortable (default) */
   [data-density='compact'] {
-    --row-py: 0.375rem;
-    --row-h: 1.875rem;
+    --row-h: 2rem;
+    --row-py: 0.25rem;
   }
   [data-density='spacious'] {
-    --row-py: 0.75rem;
     --row-h: 2.75rem;
+    --row-py: 0.625rem;
   }
 }
 ```
 
-`useDensity()` hook reads/writes the preference. Compact targets power users on the Task list; comfortable is default; spacious aids touch/accessibility.
+`useDensity()` (non-throwing; defaults to `comfortable` outside the provider) also drives `ListView`'s virtualizer row-height estimate (32 / 36 / 44px) — the CSS values and the estimate map MUST change together. Compact targets power users on the Task list; comfortable is default; spacious aids touch/accessibility.
 
 ### 1.8 Motion
 
@@ -370,6 +371,8 @@ Three modes via `data-density` on `<html>` (persisted in `Hub.preferences`). Imp
 | `--dur-slow`    | `240ms`                        | dialog, panel slide, page rebind |
 
 Rules: **no decorative motion.** Group collapse animates height/opacity; Cmd+K fades+scales from 0.98; org rebind is a 240ms cross‑fade of sidebar + content (no slide that implies spatial direction). **All motion wrapped so `@media (prefers-reduced-motion: reduce)` collapses durations to `0ms`** (also the film‑run state). Session "running" pulse = a 2s opacity loop on the session dot, disabled under reduced motion.
+
+> **Implemented:** the tokens above live in `packages/ui/src/styles/globals.css`; `--dur-fast` is also the default for every `transition-*` utility (`--default-transition-duration`). Dialogs/sheets run at `--dur-slow` with the 0.98 scale, popovers/dropdowns at `--dur-base`, the org-rebind cross-fade is a transient `animate-org-rebind` on the main panel (no remount), and a global base-layer reduced-motion block collapses all animation/transition durations.
 
 ---
 

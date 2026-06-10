@@ -121,6 +121,10 @@ export function IntegrationsTab({
 }: IntegrationsTabProps): JSX.Element {
   const [openProvider, setOpenProvider] = useState<string | null>(null);
   const [syncFeedback, setSyncFeedback] = useState<Record<string, string | null>>({});
+  const [syncingId, setSyncingId] = useState<string | null>(null);
+  const [syncErrors, setSyncErrors] = useState<Record<string, string | null>>({});
+  const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
+  const [disconnectErrors, setDisconnectErrors] = useState<Record<string, string | null>>({});
 
   // The provider directory governs whether the screen can render at all; the org's existing
   // integrations are a best-effort overlay (a failed read just shows everything as configurable).
@@ -179,11 +183,22 @@ export function IntegrationsTab({
         'Sync failed.',
       ),
     onSuccess: (data: SyncJobOut, id: string) => {
+      setSyncingId(null);
+      // A failed job still returns 200; surface as an error, not success feedback.
+      if (data.status === 'failed') {
+        setSyncErrors((prev) => ({ ...prev, [id]: data.error ?? 'Sync failed.' }));
+        return;
+      }
       const count = data.processed;
-      setSyncFeedback((prev) => ({
-        ...prev,
-        [id]: count === 0 ? 'Up to date.' : `Synced ${count} item${count === 1 ? '' : 's'}.`,
-      }));
+      const msg = count === 0 ? 'Up to date.' : `Synced ${count} item${count === 1 ? '' : 's'}.`;
+      setSyncFeedback((prev) => ({ ...prev, [id]: msg }));
+      setTimeout(() => {
+        setSyncFeedback((prev) => ({ ...prev, [id]: null }));
+      }, 5000);
+    },
+    onError: (err: { message: string }, id: string) => {
+      setSyncingId(null);
+      setSyncErrors((prev) => ({ ...prev, [id]: err.message }));
     },
     invalidateKeys: [queryKeys.integrations(orgId)],
   });
@@ -198,6 +213,14 @@ export function IntegrationsTab({
           }),
         'Could not disconnect this integration.',
       ),
+    onSuccess: (_data: unknown, id: string) => {
+      setDisconnectingId(null);
+      setDisconnectErrors((prev) => ({ ...prev, [id]: null }));
+    },
+    onError: (err: { message: string }, id: string) => {
+      setDisconnectingId(null);
+      setDisconnectErrors((prev) => ({ ...prev, [id]: err.message }));
+    },
     invalidateKeys: [queryKeys.integrations(orgId)],
   });
 
@@ -296,32 +319,37 @@ export function IntegrationsTab({
                         </Badge>
                         {canManage ? (
                           <>
+                            {existing.pattern !== 'migration' ? (
+                              <button
+                                type="button"
+                                disabled={syncingId === existing.id}
+                                onClick={() => {
+                                  setSyncFeedback((prev) => ({ ...prev, [existing.id]: null }));
+                                  setSyncErrors((prev) => ({ ...prev, [existing.id]: null }));
+                                  setSyncingId(existing.id);
+                                  sync.mutate(existing.id);
+                                }}
+                                className="focus-visible:ring-ring text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high text-body rounded-md px-3 py-1.5 font-medium transition-colors outline-none focus-visible:ring-1 disabled:opacity-50"
+                              >
+                                {syncingId === existing.id ? 'Syncing…' : 'Sync'}
+                              </button>
+                            ) : null}
                             <button
                               type="button"
-                              disabled={sync.isPending}
-                              onClick={() => {
-                                setSyncFeedback((prev) => ({ ...prev, [existing.id]: null }));
-                                sync.mutate(existing.id);
-                              }}
-                              className="focus-visible:ring-ring text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high text-body rounded-md px-3 py-1.5 font-medium transition-colors outline-none focus-visible:ring-1 disabled:opacity-50"
-                            >
-                              {sync.isPending ? 'Syncing…' : 'Sync'}
-                            </button>
-                            <button
-                              type="button"
-                              disabled={disconnect.isPending}
+                              disabled={disconnectingId === existing.id}
                               onClick={() => {
                                 if (
                                   window.confirm(
-                                    `Disconnect ${provider.name}? Linked tasks imported from it will remain.`,
+                                    `Disconnect ${provider.name}? Linked tasks imported from it will remain, but won't receive further updates.`,
                                   )
                                 ) {
+                                  setDisconnectingId(existing.id);
                                   disconnect.mutate(existing.id);
                                 }
                               }}
                               className="focus-visible:ring-ring text-destructive hover:bg-destructive/10 text-body rounded-md px-3 py-1.5 font-medium transition-colors outline-none focus-visible:ring-1 disabled:opacity-50"
                             >
-                              Disconnect
+                              {disconnectingId === existing.id ? 'Disconnecting…' : 'Disconnect'}
                             </button>
                           </>
                         ) : null}
@@ -351,12 +379,25 @@ export function IntegrationsTab({
                     </p>
                   ) : null}
 
-                  {existing && sync.isError ? (
+                  {existing && syncErrors[existing.id] ? (
+                    <div role="alert" className="border-outline-variant border-t px-4 py-2 text-xs">
+                      <p className="text-destructive">{syncErrors[existing.id]}</p>
+                      {/sign in with (\w+)/i.test(syncErrors[existing.id] ?? '') ? (
+                        <p className="text-on-surface-variant mt-1">
+                          To fix this, sign in again with{' '}
+                          {(/sign in with (\w+)/i.exec(syncErrors[existing.id] ?? '') ?? [])[1]}{' '}
+                          from your account settings, then retry.
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  {existing && disconnectErrors[existing.id] ? (
                     <p
                       role="alert"
                       className="text-destructive border-outline-variant border-t px-4 py-2 text-xs"
                     >
-                      {sync.error.message}
+                      {disconnectErrors[existing.id]}
                     </p>
                   ) : null}
 

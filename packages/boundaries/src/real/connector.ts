@@ -69,13 +69,31 @@ export const PROVIDER_API_BASE: Readonly<Record<ConnectorProvider, string>> = {
  * {@link GoogleProviderClient}); {@link RealConnector} dispatches to the right one.
  */
 export interface ConnectorProviderClient {
-  /** Validate the credential and return the external account label, if any. */
+  /**
+   * Validate the OAuth credential by resolving the external account identity.
+   *
+   * @returns the account's display label (login, email, or name), or `undefined` on failure.
+   */
   resolveAccount(): Promise<string | undefined>;
-  /** Import the provider's work items, each carrying provenance. */
+  /**
+   * Import all work items from the provider, each carrying provenance metadata.
+   *
+   * @param input - The connection scope (id, provider, optional workspace).
+   * @param importedAt - ISO-8601 timestamp stamped onto each item's provenance.
+   */
   importWork(input: ImportWorkInput, importedAt: string): Promise<ImportedItem[]>;
-  /** Report the read-only mirror sync state for the connection. */
+  /**
+   * Report the current read-only mirror sync state for a connection without mutating anything.
+   *
+   * @param input - The connection to inspect.
+   */
   mirrorStatus(input: MirrorStatusInput): Promise<MirrorResult>;
-  /** Resolve and return the canonical external URL for a link, if derivable. */
+  /**
+   * Derive the canonical external URL for a linked resource from its external id.
+   *
+   * @param input - The resource's provider and external id.
+   * @returns the URL string, or `undefined` if it cannot be derived from the id alone.
+   */
   resolveExternalUrl(input: LinkResourceInput): Promise<string | undefined>;
 }
 
@@ -94,7 +112,13 @@ class ProviderHttp {
     private readonly http: HttpClient,
   ) {}
 
-  /** Issue an authenticated `GET` and parse JSON, surfacing non-2xx as a clear error. */
+  /**
+   * Issue an authenticated `GET` and parse the JSON response.
+   *
+   * @param path - URL path appended to the provider's API base (must start with `/`).
+   * @param extraHeaders - Additional headers merged onto the default Authorization + Accept set.
+   * @throws {Error} On non-2xx status or unparseable JSON body.
+   */
   async getJson(path: string, extraHeaders: Record<string, string> = {}): Promise<unknown> {
     const res = await this.http(`${this.apiBase}${path}`, {
       method: 'GET',
@@ -107,10 +131,21 @@ class ProviderHttp {
     if (!res.ok) {
       throw new Error(`${this.provider} API GET ${path} failed: ${res.status}`);
     }
-    return res.json();
+    try {
+      return await res.json();
+    } catch {
+      throw new Error(`${this.provider} API returned unparseable response: ${path}`);
+    }
   }
 
-  /** Issue an authenticated `POST` of a JSON body and parse JSON, surfacing non-2xx as a clear error. */
+  /**
+   * Issue an authenticated `POST` of a JSON body and parse the JSON response.
+   *
+   * @param path - URL path appended to the provider's API base.
+   * @param body - Request body, serialized as JSON.
+   * @param auth - `'bearer'` (default) prefixes the token; `'raw'` sends it verbatim (Linear GraphQL uses bearer).
+   * @throws {Error} On non-2xx status or unparseable JSON body.
+   */
   async postJson(path: string, body: unknown, auth: 'bearer' | 'raw' = 'bearer'): Promise<unknown> {
     const res = await this.http(`${this.apiBase}${path}`, {
       method: 'POST',
@@ -124,7 +159,11 @@ class ProviderHttp {
     if (!res.ok) {
       throw new Error(`${this.provider} API POST ${path} failed: ${res.status}`);
     }
-    return res.json();
+    try {
+      return await res.json();
+    } catch {
+      throw new Error(`${this.provider} API returned unparseable response: ${path}`);
+    }
   }
 }
 
@@ -174,24 +213,33 @@ export class GitHubProviderClient implements ConnectorProviderClient {
     };
   }
 
+  /** Fetch all issues matching `stateFilter`, paginating through GitHub's 100-item pages (max 10 pages / 1 000 items). */
+  private async fetchIssuePages(stateFilter: 'open' | 'all'): Promise<GitHubIssue[]> {
+    const all: GitHubIssue[] = [];
+    for (let page = 1; page <= 10; page++) {
+      const json = (await this.http.getJson(
+        `/issues?filter=all&state=${stateFilter}&per_page=100&page=${page}`,
+      )) as GitHubIssue[] | undefined;
+      if (!Array.isArray(json) || json.length === 0) break;
+      all.push(...json);
+      if (json.length < 100) break;
+    }
+    return all;
+  }
+
   /** {@inheritDoc ConnectorProviderClient.importWork} */
   async importWork(_input: ImportWorkInput, importedAt: string): Promise<ImportedItem[]> {
-    const json = (await this.http.getJson('/issues?filter=all&state=open&per_page=100')) as
-      | GitHubIssue[]
-      | undefined;
-    if (!Array.isArray(json)) return [];
-    return json.map((issue) => this.toItem(issue, importedAt));
+    const issues = await this.fetchIssuePages('open');
+    return issues.map((issue) => this.toItem(issue, importedAt));
   }
 
   /** {@inheritDoc ConnectorProviderClient.mirrorStatus} */
   async mirrorStatus(input: MirrorStatusInput): Promise<MirrorResult> {
-    const json = (await this.http.getJson('/issues?filter=all&state=all&per_page=100')) as
-      | GitHubIssue[]
-      | undefined;
+    const issues = await this.fetchIssuePages('all');
     return {
       connectionId: input.connectionId,
       status: 'idle',
-      itemCount: Array.isArray(json) ? json.length : 0,
+      itemCount: issues.length,
     };
   }
 
@@ -228,9 +276,11 @@ export class LinearProviderClient implements ConnectorProviderClient {
   /** {@link viewer} query: the authenticated identity. */
   private static readonly VIEWER_QUERY = '{ viewer { id name email } }';
 
-  /** Migration import query: every issue with the fields the import maps. */
-  private static readonly ISSUES_QUERY =
-    '{ issues(first: 100) { nodes { id identifier title description url } } }';
+  /** Migration import query with cursor pagination support. */
+  private static issuesQuery(cursor?: string): string {
+    const after = cursor ? `, after: "${cursor}"` : '';
+    return `{ issues(first: 100${after}) { nodes { id identifier title description url } pageInfo { hasNextPage endCursor } } }`;
+  }
 
   /** @param http - The provider HTTP wrapper bound to Linear. */
   constructor(private readonly http: ProviderHttp) {}
@@ -274,24 +324,39 @@ export class LinearProviderClient implements ConnectorProviderClient {
     };
   }
 
+  /** Fetch all Linear issues via cursor pagination (max 10 pages / 1 000 items). */
+  private async fetchAllIssues(): Promise<LinearIssueNode[]> {
+    interface Page {
+      issues?: {
+        nodes?: LinearIssueNode[];
+        pageInfo?: { hasNextPage: boolean; endCursor?: string };
+      };
+    }
+    const all: LinearIssueNode[] = [];
+    let cursor: string | undefined;
+    for (let page = 0; page < 10; page++) {
+      const data = await this.query<Page>(LinearProviderClient.issuesQuery(cursor));
+      all.push(...(data.issues?.nodes ?? []));
+      const pageInfo = data.issues?.pageInfo;
+      if (!pageInfo?.hasNextPage || !pageInfo.endCursor) break;
+      cursor = pageInfo.endCursor;
+    }
+    return all;
+  }
+
   /** {@inheritDoc ConnectorProviderClient.importWork} */
   async importWork(_input: ImportWorkInput, importedAt: string): Promise<ImportedItem[]> {
-    const data = await this.query<{ issues?: { nodes?: LinearIssueNode[] } }>(
-      LinearProviderClient.ISSUES_QUERY,
-    );
-    const nodes = data.issues?.nodes ?? [];
+    const nodes = await this.fetchAllIssues();
     return nodes.map((node) => this.toItem(node, importedAt));
   }
 
   /** {@inheritDoc ConnectorProviderClient.mirrorStatus} */
   async mirrorStatus(input: MirrorStatusInput): Promise<MirrorResult> {
-    const data = await this.query<{ issues?: { nodes?: LinearIssueNode[] } }>(
-      LinearProviderClient.ISSUES_QUERY,
-    );
+    const nodes = await this.fetchAllIssues();
     return {
       connectionId: input.connectionId,
       status: 'idle',
-      itemCount: data.issues?.nodes?.length ?? 0,
+      itemCount: nodes.length,
     };
   }
 
@@ -369,10 +434,24 @@ export class GoogleProviderClient implements ConnectorProviderClient {
 
   /** List Drive files and map them onto document {@link ImportedItem}s. */
   private async importDrive(importedAt: string): Promise<ImportedItem[]> {
-    const json = (await this.http.getJson(
-      '/files?fields=files(id,name,webViewLink)&pageSize=100',
-    )) as { files?: { id: string; name: string; webViewLink?: string }[] };
-    return (json.files ?? []).map((f) => ({
+    interface DriveFile {
+      id: string;
+      name: string;
+      webViewLink?: string;
+    }
+    const all: DriveFile[] = [];
+    let pageToken: string | undefined;
+    for (let page = 0; page < 10; page++) {
+      const url = `/files?fields=files(id,name,webViewLink),nextPageToken&pageSize=100${pageToken ? `&pageToken=${pageToken}` : ''}`;
+      const json = (await this.http.getJson(url)) as {
+        files?: DriveFile[];
+        nextPageToken?: string;
+      };
+      all.push(...(json.files ?? []));
+      if (!json.nextPageToken) break;
+      pageToken = json.nextPageToken;
+    }
+    return all.map((f) => ({
       id: f.id,
       kind: 'document' as const,
       title: f.name,
@@ -385,18 +464,38 @@ export class GoogleProviderClient implements ConnectorProviderClient {
     }));
   }
 
-  /** List Gmail message ids and map them onto message {@link ImportedItem}s. */
+  /**
+   * List Gmail threads and map them onto message {@link ImportedItem}s.
+   *
+   * @remarks
+   * Uses the `threads.list` endpoint (not `messages.list`) because it returns a `snippet`
+   * — the first ~100 chars of the latest message — which makes a readable title.
+   * Gmail threads have no canonical URL in the REST API, so `externalUrl` is omitted.
+   */
   private async importGmail(importedAt: string): Promise<ImportedItem[]> {
-    const json = (await this.http.getJson('/users/me/messages?maxResults=100')) as {
-      messages?: { id: string; threadId?: string }[];
-    };
-    return (json.messages ?? []).map((m) => ({
-      id: m.id,
+    interface GmailThread {
+      id: string;
+      snippet?: string;
+    }
+    const all: GmailThread[] = [];
+    let pageToken: string | undefined;
+    for (let page = 0; page < 10; page++) {
+      const url = `/users/me/threads?maxResults=100${pageToken ? `&pageToken=${pageToken}` : ''}`;
+      const json = (await this.http.getJson(url)) as {
+        threads?: GmailThread[];
+        nextPageToken?: string;
+      };
+      all.push(...(json.threads ?? []));
+      if (!json.nextPageToken) break;
+      pageToken = json.nextPageToken;
+    }
+    return all.map((t) => ({
+      id: t.id,
       kind: 'message' as const,
-      title: m.id,
+      title: t.snippet ? t.snippet.slice(0, 80) : `Thread ${t.id}`,
       provenance: {
         provider: 'gmail' as const,
-        externalId: m.threadId ?? m.id,
+        externalId: t.id,
         importedAt,
       },
     }));
@@ -404,10 +503,22 @@ export class GoogleProviderClient implements ConnectorProviderClient {
 
   /** List Calendar events and map them onto event {@link ImportedItem}s. */
   private async importCalendar(importedAt: string): Promise<ImportedItem[]> {
-    const json = (await this.http.getJson('/calendars/primary/events?maxResults=100')) as {
-      items?: { id: string; summary?: string; description?: string; htmlLink?: string }[];
-    };
-    return (json.items ?? []).map((e) => ({
+    interface CalEvent {
+      id: string;
+      summary?: string;
+      description?: string;
+      htmlLink?: string;
+    }
+    const all: CalEvent[] = [];
+    let pageToken: string | undefined;
+    for (let page = 0; page < 10; page++) {
+      const url = `/calendars/primary/events?maxResults=100${pageToken ? `&pageToken=${pageToken}` : ''}`;
+      const json = (await this.http.getJson(url)) as { items?: CalEvent[]; nextPageToken?: string };
+      all.push(...(json.items ?? []));
+      if (!json.nextPageToken) break;
+      pageToken = json.nextPageToken;
+    }
+    return all.map((e) => ({
       id: e.id,
       kind: 'event' as const,
       title: e.summary ?? '(no title)',
@@ -423,18 +534,23 @@ export class GoogleProviderClient implements ConnectorProviderClient {
 
   /** List the user's open Google Tasks (default list) and map them onto work {@link ImportedItem}s. */
   private async importTasks(importedAt: string): Promise<ImportedItem[]> {
-    const json = (await this.http.getJson(
-      '/lists/@default/tasks?showCompleted=false&maxResults=100',
-    )) as {
-      items?: {
-        id: string;
-        title?: string;
-        notes?: string;
-        status?: string;
-        webViewLink?: string;
-      }[];
-    };
-    return (json.items ?? []).map((t) => ({
+    interface GTask {
+      id: string;
+      title?: string;
+      notes?: string;
+      status?: string;
+      webViewLink?: string;
+    }
+    const all: GTask[] = [];
+    let pageToken: string | undefined;
+    for (let page = 0; page < 10; page++) {
+      const url = `/lists/@default/tasks?showCompleted=false&maxResults=100${pageToken ? `&pageToken=${pageToken}` : ''}`;
+      const json = (await this.http.getJson(url)) as { items?: GTask[]; nextPageToken?: string };
+      all.push(...(json.items ?? []));
+      if (!json.nextPageToken) break;
+      pageToken = json.nextPageToken;
+    }
+    return all.map((t) => ({
       id: t.id,
       kind: 'issue' as const,
       title: t.title && t.title.length > 0 ? t.title : '(untitled task)',

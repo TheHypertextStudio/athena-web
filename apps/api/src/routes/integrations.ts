@@ -200,8 +200,17 @@ interface SyncJob {
 const SYNC_JOBS = new Map<string, SyncJob>();
 let syncJobCounter = 0;
 
-/** Mint the next process-unique sync-job id. */
+/** Evict jobs older than 24 hours to prevent unbounded Map growth. */
+function pruneOldJobs(): void {
+  const cutoff = Date.now() - 86_400_000;
+  for (const [id, job] of SYNC_JOBS) {
+    if (new Date(job.createdAt).getTime() < cutoff) SYNC_JOBS.delete(id);
+  }
+}
+
+/** Mint the next process-unique sync-job id, evicting stale entries first. */
 function nextSyncJobId(): string {
+  pruneOldJobs();
   syncJobCounter += 1;
   return `syncjob_${syncJobCounter.toString().padStart(8, '0')}`;
 }
@@ -427,19 +436,26 @@ const integrations = new Hono<AppEnv>()
       const token = await resolveConnectorToken(actorId, provider);
       if (!token) {
         throw new ConflictError(
-          `Sign in with ${socialProviderId(provider)} to connect this integration.`,
+          `Sign in with ${socialProviderId(provider)} to import from this integration.`,
         );
       }
 
       const teamId = await resolveImportTeam(orgId, row);
 
-      const items = await connectorFor(provider, token).importWork({
-        connectionId: row.id,
-        provider,
-        ...(row.connection.externalWorkspaceId
-          ? { externalWorkspaceId: row.connection.externalWorkspaceId }
-          : {}),
-      });
+      let items: ImportedItem[];
+      try {
+        items = await connectorFor(provider, token).importWork({
+          connectionId: row.id,
+          provider,
+          ...(row.connection.externalWorkspaceId
+            ? { externalWorkspaceId: row.connection.externalWorkspaceId }
+            : {}),
+        });
+      } catch (err) {
+        throw new ConflictError(
+          err instanceof Error ? err.message : 'Connector failed to import work',
+        );
+      }
 
       // Onboarding sends `assignToImporter: true` so the owner's freshly-mirrored work lands
       // under My Work's "Assigned to me" (a populated landing screen). The general sync path
@@ -474,15 +490,32 @@ const integrations = new Hono<AppEnv>()
 
     const teamId = await resolveImportTeam(orgId, row);
 
-    const items = await connectorFor(provider, token).importWork({
-      connectionId: row.id,
-      provider,
-      ...(row.connection.externalWorkspaceId
-        ? { externalWorkspaceId: row.connection.externalWorkspaceId }
-        : {}),
-    });
-
-    const created = await importItems(orgId, actorId, row.id, teamId, items, { assigneeId: null });
+    let syncItems: ImportedItem[];
+    let created: TaskRow[];
+    try {
+      syncItems = await connectorFor(provider, token).importWork({
+        connectionId: row.id,
+        provider,
+        ...(row.connection.externalWorkspaceId
+          ? { externalWorkspaceId: row.connection.externalWorkspaceId }
+          : {}),
+      });
+      created = await importItems(orgId, actorId, row.id, teamId, syncItems, { assigneeId: null });
+    } catch (err) {
+      // Record the failure as a job so the frontend can read status via GET /jobs/:jobId.
+      const failedJob: SyncJob = {
+        jobId: nextSyncJobId(),
+        organizationId: orgId,
+        integrationId: row.id,
+        status: 'failed',
+        processed: 0,
+        total: 0,
+        error: err instanceof Error ? err.message : 'Connector error',
+        createdAt: new Date().toISOString(),
+      };
+      SYNC_JOBS.set(failedJob.jobId, failedJob);
+      return ok(c, SyncJobOut, toSyncJobOut(failedJob));
+    }
 
     const job: SyncJob = {
       jobId: nextSyncJobId(),
@@ -490,7 +523,7 @@ const integrations = new Hono<AppEnv>()
       integrationId: row.id,
       status: 'succeeded',
       processed: created.length,
-      total: items.length,
+      total: syncItems.length,
       error: null,
       createdAt: new Date().toISOString(),
     };

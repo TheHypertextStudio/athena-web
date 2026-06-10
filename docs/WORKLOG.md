@@ -1,11 +1,53 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-06-06
+> **Last Updated**: 2026-06-10
 
 ---
 
 ## Completed Tasks
+
+### [DESIGN-001] Brand identity + craft framework: rubric, marketing redesign, app design-system completion
+
+- **Completed**: 2026-06-10
+- **Summary**: Established the product's design-evaluation framework and applied it:
+  the marketing site got a distinct paper-and-ink brand identity, and the app's
+  documented-but-unimplemented type/motion/density systems were built out. Every visual
+  claim screenshot-verified (`.screenshots/`, `.screenshots/all-routes/`).
+- **What shipped**:
+  - **Craft rubric** (`docs/design/craft-rubric.md`) — 8 scored dimensions (1–4, evidence
+    required) + 5 hard gates; ship bar = all dims ≥3, gates green. Operationalized as the
+    `/design-review` skill (`.claude/skills/design-review/`). First full-product scorecard
+    in `docs/design/audits/2026-06-10-design-pass.md` (all surfaces at ship bar).
+  - **Marketing redesign** — scoped `.marketing` token re-skin (cream paper/warm ink/single
+    sienna accent, vanilla CSS to avoid the Tailwind v4 second-entry trap); Fraunces display
+    face (opsz + WONK axes) route-group-loaded; landing rebuilt as an editorial narrative
+    (hero → live-DOM "honest seam" product frame → separation/unification diagram → numbered
+    feature ledger → how-it-works band → pull-quote principles → one-line pricing → ink CTA);
+    about/pricing restyled; canonical tagline ("Run every organization from one calm place.")
+    swept everywhere; OS-dark immunity incl. root scrollbar.
+  - **Auth/onboarding seam** — serif WONK wordmark + warm light backdrop on auth; same
+    wordmark on the onboarding wizard.
+  - **Type scale** — rename-then-redefine: `text-sm`→`text-body` (313 sites, zero visual
+    diff), then the named scale (`text-h1/h2/h3` with weight+tracking baked, 13px `text-sm`,
+    `text-xs` w500, `text-mono` w500); ~30 ad-hoc heading sizes swept; tailwind-merge
+    extended so custom font-size names aren't treated as colors (real bug caught by tests).
+  - **Motion** — `--dur-fast/base/slow` + MD3 eases; 120ms default transition; overlays
+    retimed (dialog/sheet 240ms @0.98 scale, popover/dropdown 180ms); 240ms org-rebind
+    cross-fade in AppShell (transient class, no remount); global prefers-reduced-motion block.
+  - **Density** — `data-density` now actually consumed: `--row-h/--row-py` drive all row
+    components; ListView virtualizer estimate follows density and re-measures; added
+    `spacious`; per-user localStorage persistence; command-palette cycle action.
+  - **Docs** — design-system.md §type/§density/§motion reconciled to implementation.
+- **Learnings**:
+  - Tailwind's stock `text-sm` exactly equals the spec's `text-body`, making the rename
+    mechanically safe before redefining `--text-sm` (grep-zero gate prevents silent shrink).
+  - tailwind-merge classifies unknown `text-*` tokens as colors — any custom font-size
+    token must be registered via `extendTailwindMerge` or `cn()` silently drops color classes.
+  - CDP virtual WebAuthn authenticators (via Playwright `newCDPSession`) make the
+    passkey-only flow fully automatable for screenshot audits.
+
+---
 
 ### [DEVX-001] Portless dev URLs + native turbo dev graph + committed local env
 

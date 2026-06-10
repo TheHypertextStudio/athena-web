@@ -252,6 +252,22 @@
   --default-transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
   --ease-out: cubic-bezier(0.2, 0, 0, 1);
   --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /*
+   * Org-rebind cross-fade (design-system.md §"Motion"): switching the bound org fades the
+   * main panel back in over --dur-slow, making the context switch legible without layout
+   * motion. Applied transiently by AppShell when `activeOrgId` changes.
+   */
+  --animate-org-rebind: org-rebind var(--dur-slow) cubic-bezier(0.2, 0, 0, 1);
+
+  @keyframes org-rebind {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
 }
 
 /*

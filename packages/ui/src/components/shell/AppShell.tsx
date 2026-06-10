@@ -88,7 +88,7 @@ export function AppShell({
   className,
   children,
 }: AppShellProps): React.JSX.Element {
-  const { orgAccent, density } = useContextState();
+  const { orgAccent, density, activeOrgId } = useContextState();
   const [drawerOpen, setDrawerOpen] = React.useState(false);
 
   // Stable dismiss callback handed to the drawer-rendered sidebar so a nav selection closes the
@@ -96,6 +96,23 @@ export function AppShell({
   const closeDrawer = React.useCallback(() => {
     setDrawerOpen(false);
   }, []);
+
+  // Org-rebind cross-fade: when the bound org changes (not on first mount), replay a short
+  // fade-in on the main panel so the context switch is legible. A transient class — not a
+  // key-based remount, which would destroy route/page state.
+  const [rebinding, setRebinding] = React.useState(false);
+  const prevOrgIdRef = React.useRef(activeOrgId);
+  React.useEffect(() => {
+    if (prevOrgIdRef.current === activeOrgId) return undefined;
+    prevOrgIdRef.current = activeOrgId;
+    setRebinding(true);
+    const timer = setTimeout(() => {
+      setRebinding(false);
+    }, 240);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [activeOrgId]);
 
   return (
     <div
@@ -169,7 +186,10 @@ export function AppShell({
         <main
           id="main-content"
           tabIndex={-1}
-          className="bg-surface lg:border-outline-variant @container min-h-0 flex-1 scrollbar-gutter-stable overflow-auto outline-none lg:rounded-xl lg:border lg:shadow-sm"
+          className={cn(
+            'bg-surface lg:border-outline-variant @container min-h-0 flex-1 scrollbar-gutter-stable overflow-auto outline-none lg:rounded-xl lg:border lg:shadow-sm',
+            rebinding && 'animate-org-rebind',
+          )}
         >
           {children}
         </main>

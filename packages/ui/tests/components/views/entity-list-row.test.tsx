@@ -16,7 +16,7 @@ describe('EntityListRow', () => {
     const row = screen.getByRole('button', { name: 'Billing revamp' });
     expect(row).toHaveAttribute('type', 'button');
     expect(row).toHaveAttribute('tabindex', '0');
-    expect(row).toHaveClass('min-h-9', 'px-3', 'focus-visible:ring-1', 'border-b');
+    expect(row).toHaveClass('min-h-(--row-h)', 'px-3', 'focus-visible:ring-1', 'border-b');
     expect(row).not.toHaveAttribute('data-active');
     expect(row).not.toHaveAttribute('data-selected');
   });
@@ -125,7 +125,7 @@ describe('EntityListRow', () => {
     const row = screen.getByLabelText('ENG Engineering');
     expect(row.tagName).toBe('DIV');
     // Keeps the shared layout/density, but drops the interactive affordances.
-    expect(row).toHaveClass('min-h-9', 'px-3', 'border-b');
+    expect(row).toHaveClass('min-h-(--row-h)', 'px-3', 'border-b');
     expect(row).not.toHaveClass('cursor-pointer', 'hover:bg-surface-container-high');
     // It is inert: there is nothing to click that would fire activation.
     expect(onActivate).not.toHaveBeenCalled();
@@ -147,7 +147,7 @@ describe('EntityListRow', () => {
     );
     const link = screen.getByTestId('router-link');
     expect(link).toHaveAttribute('href', '/dest');
-    expect(link).toHaveClass('min-h-9');
+    expect(link).toHaveClass('min-h-(--row-h)');
     expect(screen.getByText('Routed')).toBeInTheDocument();
     fireEvent.click(link);
     expect(onActivate).toHaveBeenCalledTimes(1);

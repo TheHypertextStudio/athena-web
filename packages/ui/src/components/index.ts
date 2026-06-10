@@ -89,7 +89,9 @@ export {
   type ContextState,
   type ActiveContext,
   type Density,
+  DENSITIES,
   useContextState,
+  useDensity,
 } from './shell/ContextProvider';
 export {
   ShellDrawerProvider,

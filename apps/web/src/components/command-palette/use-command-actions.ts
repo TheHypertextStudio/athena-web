@@ -1,11 +1,13 @@
 'use client';
 
+import { DENSITIES, useContextState } from '@docket/ui/components';
 import {
   Building,
   FolderKanban,
   GanttChart,
   Home,
   Inbox,
+  Layers,
   ListChecks,
   LogOut,
   Plus,
@@ -63,6 +65,7 @@ interface CommandActionsInput {
 export function useCommandActions({ scope, close }: CommandActionsInput): readonly PaletteItem[] {
   const router = useRouter();
   const { orgs, activeOrgId, orgName } = useActiveOrg();
+  const { density, setDensity } = useContextState();
 
   return useMemo<readonly PaletteItem[]>(() => {
     /** Wrap a navigation in the close-then-push lifecycle every command shares. */
@@ -131,6 +134,20 @@ export function useCommandActions({ scope, close }: CommandActionsInput): readon
         run: go('/onboarding'),
       },
       {
+        id: 'action:density',
+        section: 'actions',
+        label: `Switch density to ${DENSITIES[(DENSITIES.indexOf(density) + 1) % DENSITIES.length] ?? 'comfortable'}`,
+        hint: `now ${density}`,
+        icon: Layers,
+        keywords: ['density', 'compact', 'comfortable', 'spacious', 'rows', 'spacing'],
+        run: () => {
+          close();
+          setDensity(
+            DENSITIES[(DENSITIES.indexOf(density) + 1) % DENSITIES.length] ?? 'comfortable',
+          );
+        },
+      },
+      {
         id: 'action:sign-out',
         section: 'actions',
         label: 'Sign out',
@@ -159,5 +176,5 @@ export function useCommandActions({ scope, close }: CommandActionsInput): readon
     }
 
     return items;
-  }, [scope, activeOrgId, orgs, orgName, router, close]);
+  }, [scope, activeOrgId, orgs, orgName, router, close, density, setDensity]);
 }

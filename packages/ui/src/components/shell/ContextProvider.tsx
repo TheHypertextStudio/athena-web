@@ -33,7 +33,10 @@ import { getOrgAccent } from '../../lib/org-accent';
 export type ActiveContext = string | null;
 
 /** UI density mode applied to the shell via the `data-density` attribute. */
-export type Density = 'comfortable' | 'compact';
+export type Density = 'compact' | 'comfortable' | 'spacious';
+
+/** Every density mode, in cycling order (used by the density toggle and persistence guards). */
+export const DENSITIES: readonly Density[] = ['compact', 'comfortable', 'spacious'];
 
 /** The shape of the value exposed by {@link useContextState}. */
 export interface ContextState {
@@ -103,4 +106,16 @@ export function useContextState(): ContextState {
     throw new Error('useContextState must be used within a <ContextProvider>.');
   }
   return value;
+}
+
+/**
+ * Read the current layout density, tolerating absence of a {@link ContextProvider}.
+ *
+ * @remarks
+ * Density-aware leaf components (e.g. the virtualized `ListView`'s row-height estimate) use
+ * this so they stay renderable in isolation — outside a provider they assume the default
+ * `comfortable` rhythm, matching the CSS `--row-h`/`--row-py` fallbacks.
+ */
+export function useDensity(): Density {
+  return React.useContext(ContextStateContext)?.density ?? 'comfortable';
 }

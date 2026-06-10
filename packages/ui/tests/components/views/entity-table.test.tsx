@@ -145,7 +145,13 @@ describe('EntityTable — rows + chrome', () => {
     // 1 header row + 3 data rows.
     expect(screen.getAllByRole('row')).toHaveLength(4);
     const dataRow = screen.getByRole('row', { name: /Billing revamp/ });
-    expect(dataRow).toHaveClass('min-h-9', 'px-3', 'py-1.5', 'border-b', 'focus-visible:ring-1');
+    expect(dataRow).toHaveClass(
+      'min-h-(--row-h)',
+      'px-3',
+      'py-(--row-py)',
+      'border-b',
+      'focus-visible:ring-1',
+    );
     expect(within(dataRow).getByTestId('glyph-r1')).toBeInTheDocument();
   });
 
@@ -222,7 +228,7 @@ describe('EntityTable — rows + chrome', () => {
     );
     const links = screen.getAllByTestId('link');
     expect(links[0]).toHaveAttribute('href', '/items/r1');
-    expect(links[0]).toHaveClass('min-h-9');
+    expect(links[0]).toHaveClass('min-h-(--row-h)');
     expect(within(links[0]!).getByText('Billing revamp')).toBeInTheDocument();
   });
 });

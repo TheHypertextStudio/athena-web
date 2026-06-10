@@ -1,18 +1,17 @@
 'use client';
 
-import {
-  type AgentOut,
-  type AgentSessionOut,
-  type MemberOut,
-  type ProjectOut,
-  type SessionStatus,
-  type TaskOut,
-  TeamId,
+import type {
+  AgentOut,
+  AgentSessionOut,
+  MemberOut,
+  ProjectOut,
+  SessionStatus,
+  TaskOut,
 } from '@docket/types';
 import { type GroupKey, ListView } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { ListChecks, Plus } from '@docket/ui/icons';
-import { Button, Input, Skeleton } from '@docket/ui/primitives';
+import { Button, Skeleton } from '@docket/ui/primitives';
 import { useParams, useRouter } from 'next/navigation';
 import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -29,7 +28,6 @@ import {
 import { type PillStatus, pillStatusOf } from '@/components/my-work/live-session-pill';
 import { SplitTabs } from '@/components/my-work/split-tabs';
 import { CreateTaskDialog } from '@/components/tasks/create-task';
-import { TeamPicker } from '@/components/teams/team-picker';
 
 /** The two halves of the agent-aware work split. */
 type WorkTab = 'mine' | 'delegated';
@@ -76,12 +74,11 @@ const SESSION_RANK: Record<SessionStatus, number> = {
  * Each tab keeps the familiar group-by-{@link useVocabulary | project} → sub-group-by-state
  * {@link ListView}. Agent-run rows carry a {@link AgentTaskRow | live-session pill} (running /
  * awaiting-approval / paused / errored) that deep-links to the task detail / session; rows
- * open the task detail route. Inline task creation is preserved.
+ * open the task detail route.
  *
- * Creating a task needs a `teamId`; the active org's teams come from {@link useActiveOrg} (which
- * loads `GET /v1/orgs/:orgId/teams`), defaulting to the org's "General" team and offering a
- * {@link TeamPicker} when the org has more than one. Data is fetched at runtime, so the
- * production build needs no running server.
+ * Creation has ONE affordance: the {@link CreateTaskDialog} composer (header button, mirrored
+ * by the empty state's CTA) — no competing inline quick-add; quick capture lives on Today.
+ * Data is fetched at runtime, so the production build needs no running server.
  */
 export default function MyWorkPage(): JSX.Element {
   const router = useRouter();
@@ -103,14 +100,7 @@ export default function MyWorkPage(): JSX.Element {
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [tab, setTab] = useState<WorkTab>('mine');
-  const [title, setTitle] = useState('');
-  const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
   const [composerOpen, setComposerOpen] = useState(false);
-
-  // The team new tasks land in: a user override (via the picker) or the org's default team.
-  const [teamOverride, setTeamOverride] = useState<string | null>(null);
-  const teamId = teamOverride ?? defaultTeamId;
 
   /** Load the org's tasks, projects, members, agents, and sessions for the split. */
   const load = useCallback(async (): Promise<void> => {
@@ -288,40 +278,12 @@ export default function MyWorkPage(): JSX.Element {
     return { id: stateType, label: STATE_GROUP_LABEL[stateType], stateType };
   }, []);
 
-  /** Create a task on the org's default team and prepend it to the list. */
-  async function createTask(): Promise<void> {
-    if (!teamId) {
-      setCreateError('No team is available yet to create a task in.');
-      return;
-    }
-    setCreateError(null);
-    setCreating(true);
-    try {
-      const res = await api.v1.orgs[':orgId'].tasks.$post({
-        param: { orgId },
-        json: {
-          title,
-          teamId: TeamId.parse(teamId),
-          ...(tab === 'mine' && myActorId ? { assigneeId: myActorId } : {}),
-        },
-      });
-      if (!res.ok) {
-        setCreateError(await readProblem(res, 'Could not create the task. Please try again.'));
-        return;
-      }
-      const created = await res.json();
-      setTasks((current) => [created, ...current]);
-      setTitle('');
-    } catch (caught) {
-      setCreateError(readError(caught, 'Something went wrong creating the task.'));
-    } finally {
-      setCreating(false);
-    }
-  }
-
   const empty =
     tab === 'mine'
-      ? { title: 'Nothing assigned to you yet', body: 'Add a task above to get started.' }
+      ? {
+          title: 'Nothing assigned to you yet',
+          body: 'Create your first task — or capture thoughts from Today and they land here.',
+        }
       : {
           title: 'All clear',
           body: 'Nothing delegated, nothing awaiting your approval.',
@@ -361,45 +323,6 @@ export default function MyWorkPage(): JSX.Element {
         defaultAssigneeId={tab === 'mine' ? myActorId : null}
       />
 
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          void createTask();
-        }}
-        className="flex flex-col gap-2"
-      >
-        <div className="flex flex-col gap-2 @2xl:flex-row">
-          <Input
-            aria-label="New task title"
-            placeholder="Add a task…"
-            value={title}
-            onChange={(e) => {
-              setTitle(e.target.value);
-            }}
-          />
-          <div className="flex gap-2">
-            <TeamPicker
-              teams={teams}
-              value={teamId}
-              onChange={setTeamOverride}
-              disabled={creating}
-            />
-            <Button
-              type="submit"
-              className="flex-1 @2xl:flex-none"
-              disabled={creating || teamsLoading || teamId === null || title.trim().length === 0}
-            >
-              {creating ? 'Adding…' : 'Add task'}
-            </Button>
-          </div>
-        </div>
-        {createError ? (
-          <p role="alert" className="text-destructive text-body">
-            {createError}
-          </p>
-        ) : null}
-      </form>
-
       <SplitTabs
         label="Filter your work"
         value={tab}
@@ -436,7 +359,7 @@ export default function MyWorkPage(): JSX.Element {
             {loadError}
           </p>
         ) : visibleTasks.length === 0 ? (
-          <div className="border-outline-variant flex flex-col items-center gap-3 rounded-xl border border-dashed p-10 text-center">
+          <div className="border-outline-variant bg-surface-container-low/60 flex flex-col items-center gap-3 rounded-xl border p-10 text-center">
             <span
               aria-hidden="true"
               className="bg-surface-container text-on-surface-variant flex size-10 items-center justify-center rounded-full"
@@ -447,6 +370,19 @@ export default function MyWorkPage(): JSX.Element {
             <p className="text-on-surface-variant text-body max-w-xs leading-relaxed">
               {empty.body}
             </p>
+            {tab === 'mine' ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setComposerOpen(true);
+                }}
+              >
+                <Plus aria-hidden="true" className="size-4" />
+                New task
+              </Button>
+            ) : null}
           </div>
         ) : (
           <ListView

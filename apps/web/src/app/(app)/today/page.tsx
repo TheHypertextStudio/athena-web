@@ -1,14 +1,18 @@
 'use client';
 
 import type { HubTaskItem, HubTodayOut } from '@docket/types';
+import { useContextState } from '@docket/ui/components';
 import { CheckCircle2, Inbox, RefreshCw, Sparkles, XCircle } from '@docket/ui/icons';
 import { Badge, Button, Skeleton } from '@docket/ui/primitives';
-import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
+import { type JSX, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+
+import Link from 'next/link';
 
 import { useActiveOrg } from '@/components/active-org';
 import { AttentionCard } from '@/components/today/attention-card';
 import { CalendarPane } from '@/components/today/calendar-pane';
 import { PlanRow } from '@/components/today/plan-row';
+import { TodayPrompt } from '@/components/today/today-prompt';
 import { api } from '@/lib/api';
 import { readError, readProblem } from '@/lib/problem';
 import { todayISODate } from '@/lib/today';
@@ -43,6 +47,9 @@ interface PlanGroup {
  */
 export default function TodayPage(): JSX.Element {
   const { orgName } = useActiveOrg();
+  // The capture/Athena target: the resolved active WORKSPACE (route org ?? last-used ??
+  // personal), not the route org — Today is a cross-org route where that would be null.
+  const { activeOrgId } = useContextState();
   const [data, setData] = useState<HubTodayOut | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -108,6 +115,11 @@ export default function TodayPage(): JSX.Element {
 
   const planCount = data?.plan.length ?? 0;
   const inbox = data?.needsAttention.inbox ?? 0;
+  const attentionCount = data
+    ? data.needsAttention.approvals.length +
+      data.needsAttention.blocked.length +
+      data.needsAttention.dueToday.length
+    : 0;
 
   return (
     <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
@@ -127,10 +139,18 @@ export default function TodayPage(): JSX.Element {
             disabled={loading || refreshing}
           >
             <RefreshCw className={refreshing ? 'animate-spin' : undefined} />
-            {refreshing ? 'Refreshing…' : 'Plan day'}
+            {refreshing ? 'Refreshing…' : 'Refresh'}
           </Button>
         </div>
       </header>
+
+      <TodayPrompt
+        orgId={activeOrgId}
+        orgLabel={activeOrgId ? orgName(activeOrgId) : 'your space'}
+        onCaptured={() => {
+          void load(false);
+        }}
+      />
 
       {error ? (
         <div
@@ -189,9 +209,18 @@ export default function TodayPage(): JSX.Element {
             </div>
           ) : (
             <EmptyPane
-              title="Nothing planned or due today"
-              body="Enjoy the calm — or pull work into your day."
-            />
+              title="Nothing planned yet"
+              body="Capture a thought above and it becomes a real task — or bring in the work you already have."
+            >
+              {activeOrgId ? (
+                <Link
+                  href={`/orgs/${activeOrgId}/settings/integrations`}
+                  className="text-on-surface hover:text-primary text-xs font-medium underline underline-offset-4 transition-colors"
+                >
+                  Connect your tools →
+                </Link>
+              ) : null}
+            </EmptyPane>
           )}
         </section>
 
@@ -228,36 +257,47 @@ export default function TodayPage(): JSX.Element {
 
           {loading ? (
             <AttentionSkeleton />
-          ) : data ? (
+          ) : data && attentionCount > 0 ? (
+            // Only categories with items render — three cards all reading "0" is noise,
+            // not information. The all-clear case is one quiet line below.
             <div className="flex flex-col gap-3">
-              <AttentionCard
-                icon={CheckCircle2}
-                title="Approvals"
-                tasks={data.needsAttention.approvals}
-                orgName={orgName}
-                activeDescription="Agent work waiting on your sign-off"
-                clearDescription="No approvals waiting on you"
-                alert
-              />
-              <AttentionCard
-                icon={XCircle}
-                title="Blocked"
-                tasks={data.needsAttention.blocked}
-                orgName={orgName}
-                activeDescription="Your tasks held up by a dependency"
-                clearDescription="Nothing of yours is blocked"
-              />
-              <AttentionCard
-                icon={Sparkles}
-                title="Due today"
-                tasks={data.needsAttention.dueToday}
-                orgName={orgName}
-                activeDescription="Tasks with a deadline today"
-                clearDescription="Nothing due today"
-              />
+              {data.needsAttention.approvals.length > 0 ? (
+                <AttentionCard
+                  icon={CheckCircle2}
+                  title="Approvals"
+                  tasks={data.needsAttention.approvals}
+                  orgName={orgName}
+                  activeDescription="Agent work waiting on your sign-off"
+                  clearDescription="No approvals waiting on you"
+                  alert
+                />
+              ) : null}
+              {data.needsAttention.blocked.length > 0 ? (
+                <AttentionCard
+                  icon={XCircle}
+                  title="Blocked"
+                  tasks={data.needsAttention.blocked}
+                  orgName={orgName}
+                  activeDescription="Your tasks held up by a dependency"
+                  clearDescription="Nothing of yours is blocked"
+                />
+              ) : null}
+              {data.needsAttention.dueToday.length > 0 ? (
+                <AttentionCard
+                  icon={Sparkles}
+                  title="Due today"
+                  tasks={data.needsAttention.dueToday}
+                  orgName={orgName}
+                  activeDescription="Tasks with a deadline today"
+                  clearDescription="Nothing due today"
+                />
+              ) : null}
             </div>
           ) : (
-            <EmptyPane title="All clear" body="Nothing needs your attention right now." />
+            <EmptyPane
+              title="All clear"
+              body="No approvals, blockers, or deadlines need you right now."
+            />
           )}
         </section>
       </div>
@@ -271,14 +311,17 @@ interface EmptyPaneProps {
   title: string;
   /** The empty-state supporting copy. */
   body: string;
+  /** Optional follow-up action (a link or button) under the copy. */
+  children?: ReactNode;
 }
 
 /** A calm, content-sized empty state for a pane with no content. */
-function EmptyPane({ title, body }: EmptyPaneProps): JSX.Element {
+function EmptyPane({ title, body, children }: EmptyPaneProps): JSX.Element {
   return (
-    <div className="border-outline-variant flex flex-col items-center justify-center gap-1 rounded-xl border border-dashed p-8 text-center">
+    <div className="border-outline-variant bg-surface-container-low/60 flex flex-col items-center justify-center gap-1.5 rounded-xl border p-8 text-center">
       <p className="text-on-surface text-body font-medium">{title}</p>
       <p className="text-on-surface-variant max-w-xs text-xs">{body}</p>
+      {children ? <div className="mt-1.5">{children}</div> : null}
     </div>
   );
 }

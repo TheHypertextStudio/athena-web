@@ -145,7 +145,7 @@ export default function AgentsFeedPage(): JSX.Element {
     filter === 'all'
       ? {
           title: 'No agent sessions yet',
-          body: 'When an agent picks up work, you can watch it happen here.',
+          body: 'Ask Athena from Today — or delegate any task — and you can watch every step of the work happen here.',
         }
       : {
           title: 'No sessions match this filter',
@@ -203,7 +203,7 @@ export default function AgentsFeedPage(): JSX.Element {
             icon={Sparkles}
             title={empty.title}
             body={empty.body}
-            className="border-none p-12"
+            className="border-none bg-transparent p-12"
           />
         ) : (
           <ul className="divide-outline-variant flex flex-col divide-y p-1">

@@ -51,7 +51,7 @@ const mono = IBM_Plex_Mono({
  */
 export const metadata = {
   title: 'Docket',
-  description: 'Docket — the calm command center for work.',
+  description: 'Docket — run every organization from one calm place.',
 };
 
 /** The App Router root layout wrapping every page in the product app. */

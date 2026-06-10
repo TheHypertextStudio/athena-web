@@ -222,8 +222,10 @@ describe('billing checkout/portal defaults (no urls/price/email provided)', () =
 describe('integrations import: configured-team path + null-branch coverage via a connector spy', () => {
   it('imports using the integration config.teamId and maps an item without body/externalUrl', async () => {
     const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
-    const { getContainer } = await import('../../src/container');
-    const spy = vi.spyOn(getContainer().connector, 'importWork').mockResolvedValueOnce([
+    // Spy on the prototype so the per-request MockConnector instance (created by connectorFor)
+    // also returns the null-body / null-externalUrl fixture item.
+    const { MockConnector } = await import('@docket/boundaries');
+    const spy = vi.spyOn(MockConnector.prototype, 'importWork').mockResolvedValueOnce([
       // An item with no `body` and no `externalUrl` → covers both `?? null` null sides.
       {
         id: 'x1',

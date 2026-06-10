@@ -216,11 +216,31 @@ export function buildAuthOptions(e: AuthEnv): BetterAuthOptions {
   const trustedProviders: string[] = [];
 
   if (isRealValue(e.GOOGLE_CLIENT_ID) && isRealValue(e.GOOGLE_CLIENT_SECRET)) {
-    socialProviders.google = { clientId: e.GOOGLE_CLIENT_ID, clientSecret: e.GOOGLE_CLIENT_SECRET };
+    socialProviders.google = {
+      clientId: e.GOOGLE_CLIENT_ID,
+      clientSecret: e.GOOGLE_CLIENT_SECRET,
+      // Connector data-read scopes so the stored token can back Calendar, Tasks,
+      // Drive, and Gmail connectors without a separate OAuth grant flow.
+      scope: [
+        'openid',
+        'email',
+        'profile',
+        'https://www.googleapis.com/auth/calendar.readonly',
+        'https://www.googleapis.com/auth/tasks.readonly',
+        'https://www.googleapis.com/auth/drive.readonly',
+        'https://mail.google.com/',
+      ],
+    };
     trustedProviders.push('google');
   }
   if (isRealValue(e.GITHUB_CLIENT_ID) && isRealValue(e.GITHUB_CLIENT_SECRET)) {
-    socialProviders.github = { clientId: e.GITHUB_CLIENT_ID, clientSecret: e.GITHUB_CLIENT_SECRET };
+    socialProviders.github = {
+      clientId: e.GITHUB_CLIENT_ID,
+      clientSecret: e.GITHUB_CLIENT_SECRET,
+      // `repo` grants read access to issues and PRs on private + public repos,
+      // which the GitHub connector needs for importWork().
+      scope: ['user:email', 'repo'],
+    };
     trustedProviders.push('github');
   }
   if (isRealValue(e.LINEAR_CLIENT_ID) && isRealValue(e.LINEAR_CLIENT_SECRET)) {

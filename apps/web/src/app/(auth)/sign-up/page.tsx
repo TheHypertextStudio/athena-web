@@ -129,7 +129,7 @@ export default function SignUpPage(): JSX.Element {
   return (
     <AuthShell
       title="Create your account"
-      description="Start your calm command center for work."
+      description="Run every organization from one calm place."
       footer={
         <>
           Already have an account?{' '}

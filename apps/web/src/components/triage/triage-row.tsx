@@ -180,7 +180,7 @@ export function TriageRow({
                       size={36}
                     />
                     <div className="flex min-w-0 flex-col">
-                      <span className="text-on-surface truncate text-sm font-medium">
+                      <span className="text-on-surface text-body truncate font-medium">
                         {task.assigneeName}
                       </span>
                       <span className="text-on-surface-variant text-xs">Assignee</span>

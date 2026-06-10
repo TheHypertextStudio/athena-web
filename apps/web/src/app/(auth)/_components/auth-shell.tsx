@@ -43,7 +43,7 @@ export function AuthShell({ title, description, children, footer }: AuthShellPro
         </CardHeader>
         <CardContent className="flex flex-col gap-6">
           {children}
-          <div className="text-on-surface-variant text-center text-sm">{footer}</div>
+          <div className="text-on-surface-variant text-body text-center">{footer}</div>
         </CardContent>
       </Card>
     </main>

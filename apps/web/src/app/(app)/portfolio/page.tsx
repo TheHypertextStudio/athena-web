@@ -103,7 +103,7 @@ export default function PortfolioPage(): JSX.Element {
       {error ? (
         <div
           role="alert"
-          className="border-destructive/40 bg-destructive/5 text-destructive flex items-center justify-between gap-4 rounded-lg border p-4 text-sm"
+          className="border-destructive/40 bg-destructive/5 text-destructive text-body flex items-center justify-between gap-4 rounded-lg border p-4"
         >
           <span>{error}</span>
           <Button

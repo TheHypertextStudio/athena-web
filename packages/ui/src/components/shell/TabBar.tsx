@@ -159,7 +159,7 @@ function TabItem({ tab, active, renderLink, onClose }: TabItemProps): React.JSX.
         // important at narrow/mobile widths. The inner title flexes + truncates within. Each tab
         // is a fully-rounded pill of a consistent height; the strip centres it so it floats on
         // the canvas with a real gap to the panel below rather than fusing to it.
-        'group relative flex h-8 w-40 shrink-0 items-center rounded-lg text-sm transition-colors',
+        'group text-body relative flex h-8 w-40 shrink-0 items-center rounded-lg transition-colors',
         active
           ? // The active pill is *lifted*: a stepped-up container fill plus a subtle ring + shadow
             // separate it from the calm inactive pills and from the canvas, staying legible in

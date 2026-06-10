@@ -543,7 +543,7 @@ export default function TaskDetailPage(): JSX.Element {
       <div className="mx-auto w-full max-w-6xl p-4 @2xl:p-6 @4xl:p-8">
         <p
           role="alert"
-          className="border-outline-variant text-destructive rounded-lg border p-4 text-sm"
+          className="border-outline-variant text-destructive text-body rounded-lg border p-4"
         >
           {taskQ.error.message}
         </p>
@@ -554,7 +554,7 @@ export default function TaskDetailPage(): JSX.Element {
   if (!task) {
     return (
       <div className="mx-auto w-full max-w-6xl p-4 @2xl:p-6 @4xl:p-8">
-        <p className="border-outline-variant text-on-surface-variant rounded-lg border border-dashed p-6 text-center text-sm">
+        <p className="border-outline-variant text-on-surface-variant text-body rounded-lg border border-dashed p-6 text-center">
           This task could not be found.
         </p>
       </div>
@@ -603,7 +603,7 @@ export default function TaskDetailPage(): JSX.Element {
             disabled={propsPending}
           />
           {delegate ? (
-            <span className="flex items-center gap-1.5 text-sm">
+            <span className="text-body flex items-center gap-1.5">
               <span className="text-on-surface-variant text-xs">delegate</span>
               <ActorAvatar
                 kind={delegate.kind}
@@ -629,7 +629,7 @@ export default function TaskDetailPage(): JSX.Element {
         </div>
 
         {actionError ? (
-          <p role="alert" className="text-destructive text-sm">
+          <p role="alert" className="text-destructive text-body">
             {actionError}
           </p>
         ) : null}
@@ -643,11 +643,11 @@ export default function TaskDetailPage(): JSX.Element {
               Description
             </h2>
             {task.description ? (
-              <p className="text-on-surface text-sm leading-relaxed whitespace-pre-wrap">
+              <p className="text-on-surface text-body leading-relaxed whitespace-pre-wrap">
                 {task.description}
               </p>
             ) : (
-              <p className="text-on-surface-variant text-sm">No description.</p>
+              <p className="text-on-surface-variant text-body">No description.</p>
             )}
           </section>
 
@@ -774,7 +774,7 @@ export default function TaskDetailPage(): JSX.Element {
                   href={provenance.externalUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-primary focus-visible:ring-ring inline-flex items-center gap-1 rounded text-sm underline-offset-4 hover:underline focus-visible:ring-1 focus-visible:outline-none"
+                  className="text-primary focus-visible:ring-ring text-body inline-flex items-center gap-1 rounded underline-offset-4 hover:underline focus-visible:ring-1 focus-visible:outline-none"
                 >
                   External link
                 </a>

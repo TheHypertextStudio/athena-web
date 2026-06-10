@@ -329,7 +329,7 @@ export default function TriagePage(): JSX.Element {
       </div>
 
       {actionError ? (
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" className="text-destructive text-body">
           {actionError}
         </p>
       ) : null}
@@ -346,15 +346,15 @@ export default function TriagePage(): JSX.Element {
             <Skeleton className="h-8 w-full" />
           </div>
         ) : loadError ? (
-          <p role="alert" className="text-destructive p-4 text-sm">
+          <p role="alert" className="text-destructive text-body p-4">
             {loadError}
           </p>
         ) : queue.length === 0 ? (
           <div className="text-on-surface-variant flex flex-col items-center gap-3 p-12 text-center">
             <Inbox className="h-8 w-8 opacity-50" aria-hidden="true" />
             <div className="flex flex-col gap-1">
-              <p className="text-on-surface text-sm font-medium">Triage is clear</p>
-              <p className="text-sm">
+              <p className="text-on-surface text-body font-medium">Triage is clear</p>
+              <p className="text-body">
                 Nothing unsorted right now. New incoming work shows up here for you to sort.
               </p>
             </div>

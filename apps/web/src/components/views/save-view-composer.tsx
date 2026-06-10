@@ -108,7 +108,7 @@ export function SaveViewComposer({
           className="flex flex-col gap-4"
         >
           <div className="flex flex-col gap-1.5">
-            <label htmlFor={nameId} className="text-sm font-medium">
+            <label htmlFor={nameId} className="text-body font-medium">
               View name
             </label>
             <Input
@@ -123,7 +123,7 @@ export function SaveViewComposer({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <span className="text-sm font-medium">Who can see this view</span>
+            <span className="text-body font-medium">Who can see this view</span>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button type="button" variant="outline" className="w-fit gap-2">
@@ -157,7 +157,7 @@ export function SaveViewComposer({
           </p>
 
           {error ? (
-            <p role="alert" className="text-destructive text-sm">
+            <p role="alert" className="text-destructive text-body">
               {error}
             </p>
           ) : null}

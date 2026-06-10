@@ -250,7 +250,7 @@ export default function InboxPage(): JSX.Element {
       {error ? (
         <div
           role="alert"
-          className="border-destructive/40 bg-destructive/5 text-destructive flex items-center justify-between gap-4 rounded-lg border p-4 text-sm"
+          className="border-destructive/40 bg-destructive/5 text-destructive text-body flex items-center justify-between gap-4 rounded-lg border p-4"
         >
           <span>{error}</span>
           <Button
@@ -266,7 +266,7 @@ export default function InboxPage(): JSX.Element {
       ) : null}
 
       {actionError && !error ? (
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" className="text-destructive text-body">
           {actionError}
         </p>
       ) : null}
@@ -344,7 +344,7 @@ function EmptyState({ title, body }: EmptyStateProps): JSX.Element {
       >
         <InboxIcon className="h-5 w-5" />
       </span>
-      <p className="text-on-surface text-sm font-medium">{title}</p>
+      <p className="text-on-surface text-body font-medium">{title}</p>
       <p className="text-on-surface-variant max-w-xs text-xs">{body}</p>
     </div>
   );

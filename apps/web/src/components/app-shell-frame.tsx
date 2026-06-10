@@ -173,7 +173,7 @@ export function AppShellFrame({ children }: { children: ReactNode }): JSX.Elemen
 
   if (isPending || !session) {
     return (
-      <main className="bg-surface text-on-surface-variant flex min-h-screen items-center justify-center text-sm">
+      <main className="bg-surface text-on-surface-variant text-body flex min-h-screen items-center justify-center">
         Loading your workspace…
       </main>
     );
@@ -366,7 +366,7 @@ function AppShellInner({
   );
 
   const mobileBrand = (
-    <span className="truncate text-sm font-semibold">{activeWorkspaceName ?? 'Docket'}</span>
+    <span className="text-body truncate font-semibold">{activeWorkspaceName ?? 'Docket'}</span>
   );
 
   // A search affordance for the mobile top bar that opens the same command palette as the

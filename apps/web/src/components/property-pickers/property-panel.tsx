@@ -81,7 +81,7 @@ export function PropertyPanelRow({
         </span>
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="text-on-surface-variant text-xs font-medium">{label}</span>
-          <div className="text-on-surface -ml-2 min-w-0 text-sm">{children}</div>
+          <div className="text-on-surface text-body -ml-2 min-w-0">{children}</div>
         </div>
       </div>
     </>

@@ -51,7 +51,7 @@ export default function PricingPage(): JSX.Element {
           {FAQS.map((faq) => (
             <div key={faq.question} className="flex flex-col gap-2 py-6">
               <dt className="text-base font-semibold">{faq.question}</dt>
-              <dd className="text-muted-foreground text-sm">{faq.answer}</dd>
+              <dd className="text-muted-foreground text-body">{faq.answer}</dd>
             </div>
           ))}
         </dl>

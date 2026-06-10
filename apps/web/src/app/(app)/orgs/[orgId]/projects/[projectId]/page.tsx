@@ -583,7 +583,7 @@ export default function ProjectDetailPage(): JSX.Element {
       <div className="mx-auto w-full max-w-6xl p-4 @2xl:p-6 @4xl:p-8">
         <p
           role="alert"
-          className="border-outline-variant text-destructive rounded-xl border p-4 text-sm"
+          className="border-outline-variant text-destructive text-body rounded-xl border p-4"
         >
           {error}
         </p>
@@ -594,7 +594,7 @@ export default function ProjectDetailPage(): JSX.Element {
   if (!project) {
     return (
       <div className="mx-auto w-full max-w-6xl p-4 @2xl:p-6 @4xl:p-8">
-        <p className="border-outline-variant text-on-surface-variant rounded-xl border border-dashed p-8 text-center text-sm">
+        <p className="border-outline-variant text-on-surface-variant text-body rounded-xl border border-dashed p-8 text-center">
           This {projectLabel.toLowerCase()} could not be found.
         </p>
       </div>
@@ -618,7 +618,7 @@ export default function ProjectDetailPage(): JSX.Element {
           <HealthPill health={health} />
         </div>
         {project.description ? (
-          <p className="text-on-surface-variant max-w-2xl text-sm leading-relaxed">
+          <p className="text-on-surface-variant text-body max-w-2xl leading-relaxed">
             {project.description}
           </p>
         ) : null}
@@ -648,7 +648,7 @@ export default function ProjectDetailPage(): JSX.Element {
               {progress ? (
                 <WeightedProgress progress={progress} health={health} />
               ) : (
-                <p className="text-on-surface-variant text-sm">Progress is unavailable.</p>
+                <p className="text-on-surface-variant text-body">Progress is unavailable.</p>
               )}
             </section>
 
@@ -708,7 +708,7 @@ export default function ProjectDetailPage(): JSX.Element {
               }}
             />
             {propsError ? (
-              <p role="alert" className="text-destructive px-1 text-sm">
+              <p role="alert" className="text-destructive text-body px-1">
                 {propsError}
               </p>
             ) : null}

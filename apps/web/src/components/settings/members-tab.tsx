@@ -275,7 +275,7 @@ export function MembersTab({ orgId }: MembersTabProps): JSX.Element {
     return (
       <p
         role="alert"
-        className="border-outline-variant text-destructive rounded-lg border p-4 text-sm"
+        className="border-outline-variant text-destructive text-body rounded-lg border p-4"
       >
         {loadError}
       </p>
@@ -307,7 +307,7 @@ export function MembersTab({ orgId }: MembersTabProps): JSX.Element {
       {actionError ? (
         <p
           role="alert"
-          className="border-destructive/40 text-destructive bg-destructive/5 rounded-lg border p-3 text-sm"
+          className="border-destructive/40 text-destructive bg-destructive/5 text-body rounded-lg border p-3"
         >
           {actionError}
         </p>
@@ -325,7 +325,7 @@ export function MembersTab({ orgId }: MembersTabProps): JSX.Element {
         </div>
         <div className="border-outline-variant bg-surface-container-low overflow-hidden rounded-xl border">
           {members.length === 0 ? (
-            <p className="text-on-surface-variant p-6 text-center text-sm">
+            <p className="text-on-surface-variant text-body p-6 text-center">
               No members yet — invite someone above to get started.
             </p>
           ) : (

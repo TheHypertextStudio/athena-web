@@ -53,7 +53,7 @@ export function FeatureGrid(): JSX.Element {
   return (
     <section id="features" className="mx-auto w-full max-w-6xl scroll-mt-20 px-6 py-20">
       <div className="flex max-w-2xl flex-col gap-3">
-        <span className="text-primary text-sm font-medium">Everything in one place</span>
+        <span className="text-primary text-body font-medium">Everything in one place</span>
         <h2 className="text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
           Built for everyone who runs more than one thing
         </h2>
@@ -74,7 +74,7 @@ export function FeatureGrid(): JSX.Element {
                 <Icon className="size-5" aria-hidden />
               </span>
               <h3 className="text-base font-semibold">{feature.title}</h3>
-              <p className="text-muted-foreground text-sm">{feature.body}</p>
+              <p className="text-muted-foreground text-body">{feature.body}</p>
             </div>
           );
         })}

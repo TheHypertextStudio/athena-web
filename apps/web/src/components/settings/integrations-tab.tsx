@@ -203,7 +203,7 @@ export function IntegrationsTab({
     return (
       <p
         role="alert"
-        className="border-outline-variant text-destructive rounded-lg border p-4 text-sm"
+        className="border-outline-variant text-destructive text-body rounded-lg border p-4"
       >
         {loadError}
       </p>
@@ -212,7 +212,7 @@ export function IntegrationsTab({
 
   return (
     <div className="flex flex-col gap-6">
-      <p className="text-on-surface-variant text-sm leading-relaxed">
+      <p className="text-on-surface-variant text-body leading-relaxed">
         {isPersonal
           ? 'Docket connects to the tools you already use'
           : 'Docket connects to the tools your team already uses'}{' '}
@@ -244,7 +244,7 @@ export function IntegrationsTab({
                       <ProviderIcon aria-hidden="true" className="size-4" />
                     </span>
                     <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                      <span className="text-on-surface text-sm font-medium">{provider.name}</span>
+                      <span className="text-on-surface text-body font-medium">{provider.name}</span>
                       <span className="text-on-surface-variant text-xs">
                         {existing
                           ? `Connected as ${existing.pattern === 'migration' ? 'a migration' : 'a connector'}`
@@ -266,7 +266,7 @@ export function IntegrationsTab({
                           connect.reset();
                           setOpenProvider(isOpen ? null : provider.provider);
                         }}
-                        className="focus-visible:ring-ring text-primary hover:bg-surface-container-high rounded-md px-3 py-1.5 text-sm font-medium transition-colors outline-none focus-visible:ring-1"
+                        className="focus-visible:ring-ring text-primary hover:bg-surface-container-high text-body rounded-md px-3 py-1.5 font-medium transition-colors outline-none focus-visible:ring-1"
                       >
                         {isOpen ? 'Close' : 'Configure'}
                       </button>

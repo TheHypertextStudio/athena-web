@@ -38,7 +38,7 @@ export interface SettingsSectionNavProps {
 
 /** Shared row layout for both the active link rows and the disabled placeholder rows. */
 const ROW_BASE =
-  'flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors';
+  'flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-body transition-colors';
 
 /**
  * The vertical Settings section list.

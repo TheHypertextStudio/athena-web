@@ -112,7 +112,7 @@ export default function OrgsPage(): JSX.Element {
                 className={`${ROW_CLASS} items-center justify-between gap-4 rounded-lg px-4 py-3`}
               >
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">{org.name}</p>
+                  <p className="text-body truncate font-medium">{org.name}</p>
                   <p className="text-on-surface-variant truncate text-xs">{org.slug}</p>
                 </div>
                 <LifecycleBadge state={org.lifecycleState} />

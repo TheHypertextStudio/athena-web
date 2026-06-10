@@ -106,13 +106,13 @@ function CommentEntry({
       <ActorAvatar kind={author.kind} name={author.name} avatarUrl={author.avatarUrl} size={28} />
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
-          <span className="text-sm font-medium">{author.name}</span>
+          <span className="text-body font-medium">{author.name}</span>
           <span className="text-on-surface-variant text-xs">{formatTime(comment.createdAt)}</span>
           {comment.editedAt ? (
             <span className="text-on-surface-variant text-xs">(edited)</span>
           ) : null}
         </div>
-        <p className="text-on-surface mt-0.5 text-sm whitespace-pre-wrap">{comment.body}</p>
+        <p className="text-on-surface text-body mt-0.5 whitespace-pre-wrap">{comment.body}</p>
       </div>
     </li>
   );
@@ -135,7 +135,7 @@ function ActivityEntry({ activity }: { activity: SessionActivityOut }): JSX.Elem
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-baseline gap-2">
-          <span className="text-sm font-medium">Agent</span>
+          <span className="text-body font-medium">Agent</span>
           <span className="text-on-surface-variant text-xs">{ACTIVITY_LABEL[activity.type]}</span>
           <span className="text-on-surface-variant text-xs">·</span>
           <span className="text-on-surface-variant text-xs">{formatTime(activity.createdAt)}</span>
@@ -147,7 +147,7 @@ function ActivityEntry({ activity }: { activity: SessionActivityOut }): JSX.Elem
         </div>
         {text ? (
           <p
-            className={`mt-0.5 text-sm whitespace-pre-wrap ${
+            className={`text-body mt-0.5 whitespace-pre-wrap ${
               isError ? 'text-destructive' : 'text-on-surface-variant'
             }`}
           >
@@ -216,12 +216,12 @@ export function CommentActivityFeed({
 
   return (
     <section aria-labelledby="activity-heading" className="flex flex-col gap-4">
-      <h2 id="activity-heading" className="text-sm font-medium">
+      <h2 id="activity-heading" className="text-body font-medium">
         Activity
       </h2>
 
       {entries.length === 0 ? (
-        <p className="text-on-surface-variant text-sm">
+        <p className="text-on-surface-variant text-body">
           No activity yet. Start the conversation below.
         </p>
       ) : (
@@ -267,7 +267,7 @@ export function CommentActivityFeed({
               }}
               rows={3}
               placeholder="Leave a comment…"
-              className="border-outline-variant bg-surface-container placeholder:text-on-surface-variant focus-visible:ring-ring w-full resize-y rounded-md border px-3 py-2 text-sm shadow-sm focus-visible:ring-1 focus-visible:outline-none"
+              className="border-outline-variant bg-surface-container placeholder:text-on-surface-variant focus-visible:ring-ring text-body w-full resize-y rounded-md border px-3 py-2 shadow-sm focus-visible:ring-1 focus-visible:outline-none"
             />
             <div className="flex items-center justify-between">
               <span className="text-on-surface-variant text-xs">⌘↵ to send</span>

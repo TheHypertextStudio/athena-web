@@ -113,7 +113,7 @@ export function Discussion({
   return (
     <section aria-label="Discussion" className="flex flex-col gap-6">
       <div className="flex flex-col gap-4">
-        <h2 className="text-on-surface text-sm font-semibold">Comments</h2>
+        <h2 className="text-on-surface text-body font-semibold">Comments</h2>
 
         {loading ? (
           <div className="flex flex-col gap-4">
@@ -127,12 +127,12 @@ export function Discussion({
         ) : error ? (
           <p
             role="alert"
-            className="border-outline-variant text-destructive rounded-lg border p-4 text-sm"
+            className="border-outline-variant text-destructive text-body rounded-lg border p-4"
           >
             {error}
           </p>
         ) : threads.length === 0 ? (
-          <div className="border-outline-variant text-on-surface-variant rounded-xl border border-dashed p-6 text-center text-sm">
+          <div className="border-outline-variant text-on-surface-variant text-body rounded-xl border border-dashed p-6 text-center">
             No comments yet. Start the conversation below.
           </div>
         ) : (
@@ -163,11 +163,11 @@ export function Discussion({
             }}
             rows={2}
             placeholder="Write a comment…"
-            className="border-outline-variant bg-surface-container placeholder:text-on-surface-variant focus-visible:ring-ring min-h-16 w-full resize-y rounded-md border px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1"
+            className="border-outline-variant bg-surface-container placeholder:text-on-surface-variant focus-visible:ring-ring text-body min-h-16 w-full resize-y rounded-md border px-3 py-2 shadow-sm outline-none focus-visible:ring-1"
           />
           <div className="flex items-center justify-end gap-2">
             {postError ? (
-              <p role="alert" className="text-destructive mr-auto text-sm">
+              <p role="alert" className="text-destructive text-body mr-auto">
                 {postError}
               </p>
             ) : null}
@@ -182,7 +182,7 @@ export function Discussion({
         <div className="flex flex-col gap-3">
           <div className="flex items-center gap-2">
             <Sparkles aria-hidden="true" className="text-primary size-4" />
-            <h2 className="text-on-surface text-sm font-semibold">Recent agent activity</h2>
+            <h2 className="text-on-surface text-body font-semibold">Recent agent activity</h2>
           </div>
           <ul className="flex flex-col gap-2">
             {agentActivity.map((entry) => (
@@ -192,7 +192,7 @@ export function Discussion({
               >
                 <ActorAvatar kind="agent" name={entry.agentName} size={24} />
                 <div className="flex min-w-0 flex-1 flex-col">
-                  <span className="text-on-surface text-sm">
+                  <span className="text-on-surface text-body">
                     <span className="font-medium">{entry.agentName}</span>{' '}
                     <span className="text-on-surface-variant">{ACTIVITY_VERB[entry.type]}</span>
                   </span>
@@ -224,7 +224,7 @@ function CommentBubble({
       <ActorAvatar kind={author.kind} name={author.name} size={28} />
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-on-surface text-sm font-medium">{author.name}</span>
+          <span className="text-on-surface text-body font-medium">{author.name}</span>
           <span className="text-on-surface-variant text-xs">{relativeTime(comment.createdAt)}</span>
           {comment.editedAt ? (
             <span className="text-on-surface-variant text-xs italic">(edited)</span>
@@ -232,7 +232,7 @@ function CommentBubble({
         </div>
         <div
           className={cn(
-            'bg-surface-container text-on-surface rounded-lg px-3 py-2 text-sm leading-relaxed',
+            'bg-surface-container text-on-surface text-body rounded-lg px-3 py-2 leading-relaxed',
           )}
         >
           <p className="whitespace-pre-wrap">{comment.body}</p>

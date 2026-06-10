@@ -427,7 +427,7 @@ export default function CycleDetailPage(): JSX.Element {
       <div className="mx-auto w-full max-w-6xl p-4 @2xl:p-6 @4xl:p-8">
         <p
           role="alert"
-          className="border-outline-variant text-destructive rounded-xl border p-4 text-sm"
+          className="border-outline-variant text-destructive text-body rounded-xl border p-4"
         >
           {error}
         </p>
@@ -438,7 +438,7 @@ export default function CycleDetailPage(): JSX.Element {
   if (!cycle) {
     return (
       <div className="mx-auto w-full max-w-6xl p-4 @2xl:p-6 @4xl:p-8">
-        <p className="border-outline-variant text-on-surface-variant rounded-xl border border-dashed p-8 text-center text-sm">
+        <p className="border-outline-variant text-on-surface-variant text-body rounded-xl border border-dashed p-8 text-center">
           This {cycleNounLower} could not be found.
         </p>
       </div>
@@ -492,7 +492,7 @@ export default function CycleDetailPage(): JSX.Element {
           }}
         />
         {propsError ? (
-          <p role="alert" className="text-destructive px-1 text-sm">
+          <p role="alert" className="text-destructive text-body px-1">
             {propsError}
           </p>
         ) : null}
@@ -525,7 +525,7 @@ export default function CycleDetailPage(): JSX.Element {
       {orderedTasks.length === 0 ? (
         <section
           aria-label={`${cycleNounLower} tasks`}
-          className="border-outline-variant text-on-surface-variant min-h-[16rem] flex-1 rounded-xl border p-8 text-center text-sm"
+          className="border-outline-variant text-on-surface-variant text-body min-h-[16rem] flex-1 rounded-xl border p-8 text-center"
         >
           Nothing is committed to this {cycleNounLower} yet.
         </section>

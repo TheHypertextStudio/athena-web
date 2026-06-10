@@ -30,7 +30,7 @@ export function HowItWorks(): JSX.Element {
     <section id="how-it-works" className="border-border/60 bg-card/30 scroll-mt-20 border-y">
       <div className="mx-auto w-full max-w-6xl px-6 py-20">
         <div className="flex max-w-2xl flex-col gap-3">
-          <span className="text-primary text-sm font-medium">From zero to in control</span>
+          <span className="text-primary text-body font-medium">From zero to in control</span>
           <h2 className="text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
             Up and running in minutes
           </h2>
@@ -38,9 +38,9 @@ export function HowItWorks(): JSX.Element {
         <ol className="mt-12 grid gap-8 md:grid-cols-3">
           {STEPS.map((step) => (
             <li key={step.number} className="flex flex-col gap-3">
-              <span className="text-muted-foreground text-sm font-semibold">{step.number}</span>
+              <span className="text-muted-foreground text-body font-semibold">{step.number}</span>
               <h3 className="text-lg font-semibold">{step.title}</h3>
-              <p className="text-muted-foreground text-sm">{step.body}</p>
+              <p className="text-muted-foreground text-body">{step.body}</p>
             </li>
           ))}
         </ol>

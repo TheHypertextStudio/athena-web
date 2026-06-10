@@ -111,7 +111,7 @@ export function StatsBanner({
         )}
       >
         <Chevron aria-hidden="true" className="text-on-surface-variant h-4 w-4 shrink-0" />
-        <span className="text-on-surface text-sm font-semibold">Pace</span>
+        <span className="text-on-surface text-body font-semibold">Pace</span>
         {/* The runway phrase is supplementary; hide it on the narrowest panels so the
             headline numbers never collide with it. */}
         <span className="text-on-surface-variant hidden text-xs @2xl:inline">{runway}</span>

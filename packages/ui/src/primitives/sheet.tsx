@@ -186,7 +186,7 @@ export function SheetDescription({
 }: React.ComponentProps<typeof DialogPrimitive.Description>): React.JSX.Element {
   return (
     <DialogPrimitive.Description
-      className={cn('text-on-surface-variant text-sm', className)}
+      className={cn('text-on-surface-variant text-body', className)}
       {...props}
     />
   );

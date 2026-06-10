@@ -140,12 +140,12 @@ export function ComposerShell({
                   if (canSubmit && !creating) onSubmit();
                 }
               }}
-              className="placeholder:text-on-surface-variant text-on-surface min-h-[4.5rem] w-full resize-y bg-transparent text-sm leading-relaxed outline-none disabled:opacity-50"
+              className="placeholder:text-on-surface-variant text-on-surface text-body min-h-[4.5rem] w-full resize-y bg-transparent leading-relaxed outline-none disabled:opacity-50"
             />
           ) : null}
           <PropertyStrip>{children}</PropertyStrip>
           {error ? (
-            <p role="alert" className="text-destructive text-sm">
+            <p role="alert" className="text-destructive text-body">
               {error}
             </p>
           ) : null}

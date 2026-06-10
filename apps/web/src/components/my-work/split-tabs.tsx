@@ -96,7 +96,7 @@ export function SplitTabs<TValue extends string>({
             }}
             className={cn(
               'focus-visible:ring-ring -mb-px inline-flex items-center gap-2 rounded-t-md border-b-2 px-3 py-2',
-              'text-sm font-medium transition-colors outline-none focus-visible:ring-1',
+              'text-body font-medium transition-colors outline-none focus-visible:ring-1',
               selected
                 ? 'border-primary text-on-surface'
                 : 'text-on-surface-variant hover:text-on-surface border-transparent',

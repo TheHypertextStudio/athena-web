@@ -191,14 +191,14 @@ export function MilestoneTasks({
           </Button>
         </div>
         {createError ? (
-          <p role="alert" className="text-destructive text-sm">
+          <p role="alert" className="text-destructive text-body">
             {createError}
           </p>
         ) : null}
       </form>
 
       {tasks.length === 0 ? (
-        <div className="border-outline-variant text-on-surface-variant rounded-xl border border-dashed p-8 text-center text-sm">
+        <div className="border-outline-variant text-on-surface-variant text-body rounded-xl border border-dashed p-8 text-center">
           No {taskNoun}s yet — add the first one above.
         </div>
       ) : (

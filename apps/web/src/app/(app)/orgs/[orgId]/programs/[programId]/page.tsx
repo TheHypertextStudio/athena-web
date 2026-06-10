@@ -336,7 +336,7 @@ export default function ProgramDetailPage(): JSX.Element {
       <div className="mx-auto w-full max-w-6xl p-4 @2xl:p-6 @4xl:p-8">
         <p
           role="alert"
-          className="border-outline-variant text-destructive rounded-lg border p-4 text-sm"
+          className="border-outline-variant text-destructive text-body rounded-lg border p-4"
         >
           {error}
         </p>
@@ -347,7 +347,7 @@ export default function ProgramDetailPage(): JSX.Element {
   if (!program) {
     return (
       <div className="mx-auto w-full max-w-6xl p-4 @2xl:p-6 @4xl:p-8">
-        <p className="border-outline-variant text-on-surface-variant rounded-xl border border-dashed p-8 text-center text-sm">
+        <p className="border-outline-variant text-on-surface-variant text-body rounded-xl border border-dashed p-8 text-center">
           This {programLabel.toLowerCase()} could not be found.
         </p>
       </div>
@@ -365,7 +365,7 @@ export default function ProgramDetailPage(): JSX.Element {
           <HealthPill health={health} />
         </div>
         {program.description ? (
-          <p className="text-on-surface-variant max-w-2xl text-sm leading-relaxed">
+          <p className="text-on-surface-variant text-body max-w-2xl leading-relaxed">
             {program.description}
           </p>
         ) : null}
@@ -446,7 +446,7 @@ export default function ProgramDetailPage(): JSX.Element {
             }}
           />
           {propsError ? (
-            <p role="alert" className="text-destructive px-1 text-sm">
+            <p role="alert" className="text-destructive text-body px-1">
               {propsError}
             </p>
           ) : null}

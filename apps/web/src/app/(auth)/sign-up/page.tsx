@@ -154,7 +154,7 @@ export default function SignUpPage(): JSX.Element {
         }}
       >
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="name" className="text-sm font-medium">
+          <label htmlFor="name" className="text-body font-medium">
             Name
           </label>
           <Input
@@ -170,7 +170,7 @@ export default function SignUpPage(): JSX.Element {
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="email" className="text-sm font-medium">
+          <label htmlFor="email" className="text-body font-medium">
             Email
           </label>
           <Input
@@ -189,7 +189,7 @@ export default function SignUpPage(): JSX.Element {
         <AuthError message={error} />
 
         {!passkeySupported && hydrated ? (
-          <p className="text-on-surface-variant text-sm" role="status">
+          <p className="text-on-surface-variant text-body" role="status">
             This browser does not support passkeys. You can still continue with one of the options
             below if available.
           </p>

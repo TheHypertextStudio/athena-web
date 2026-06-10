@@ -87,7 +87,7 @@ export function SessionRow({ session, onOpen }: SessionRowProps): JSX.Element {
 
       {/* Task + attribution. */}
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="text-on-surface truncate text-sm font-medium">{session.taskTitle}</span>
+        <span className="text-on-surface text-body truncate font-medium">{session.taskTitle}</span>
         <span className="text-on-surface-variant truncate text-xs">
           <span className="text-on-surface font-medium">{session.agentName}</span>
           {session.ownerName ? (

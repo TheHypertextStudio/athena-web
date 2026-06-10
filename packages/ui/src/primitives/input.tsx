@@ -19,7 +19,7 @@ export function Input({ className, type, ...props }: InputProps): React.JSX.Elem
     <input
       type={type}
       className={cn(
-        'border-outline-variant file:text-on-surface placeholder:text-on-surface-variant flex h-9 w-full rounded-md border bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:cursor-not-allowed disabled:opacity-50',
+        'border-outline-variant file:text-on-surface placeholder:text-on-surface-variant text-body file:text-body flex h-9 w-full rounded-md border bg-transparent px-3 py-1 shadow-sm transition-colors file:border-0 file:bg-transparent file:font-medium disabled:cursor-not-allowed disabled:opacity-50',
         focusRing,
         className,
       )}

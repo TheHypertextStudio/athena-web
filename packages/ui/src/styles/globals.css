@@ -72,6 +72,17 @@
   --on-surface-variant: oklch(0.44 0.006 250);
   --outline: oklch(0.6 0.006 250);
   --outline-variant: oklch(0.9 0.005 250);
+
+  /*
+   * Motion durations (design-system.md §"Motion"). Referenced via the arbitrary-value
+   * syntax `duration-(--dur-base)` / `delay-(--dur-fast)` etc. `--dur-fast` is also the
+   * default transition duration for every `transition-*` utility (see @theme inline).
+   * No decorative motion: fast = hovers/micro-feedback, base = popovers/dropdowns,
+   * slow = dialogs/sheets/org-rebind cross-fade.
+   */
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
+  --dur-slow: 240ms;
 }
 
 .dark {
@@ -190,6 +201,51 @@
   --font-mono:
     var(--font-ibm-plex-mono), ui-monospace, 'SFMono-Regular', 'Menlo', 'Consolas',
     monospace;
+
+  /*
+   * Named type scale (design-system.md §"Type scale"). App text uses these named steps —
+   * never raw Tailwind sizes — so hierarchy stays a system decision, not a per-callsite one.
+   *
+   *   text-h1 / h2 / h3  headings, weight 600 baked in
+   *   text-body          default app text (== Tailwind's stock text-sm; the app-wide
+   *                      `text-sm` → `text-body` rename was a zero-visual-diff move)
+   *   text-sm            REDEFINED below stock Tailwind: 13px secondary/list text
+   *   text-xs            chips, badges, counts, meta — weight 500 baked in for legibility
+   *   text-mono          IDs, timestamps, scopes (pair with `font-mono`)
+   *
+   * `text-display` is deliberately absent: display type is a marketing-surface concern and
+   * is defined in the web app's marketing layer.
+   */
+  --text-h1: 1.5rem;
+  --text-h1--line-height: 2rem;
+  --text-h1--font-weight: 600;
+  --text-h2: 1.25rem;
+  --text-h2--line-height: 1.75rem;
+  --text-h2--font-weight: 600;
+  --text-h3: 1.0625rem;
+  --text-h3--line-height: 1.5rem;
+  --text-h3--font-weight: 600;
+  --text-body: 0.875rem;
+  --text-body--line-height: 1.25rem;
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.125rem;
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1rem;
+  --text-xs--font-weight: 500;
+  --text-mono: 0.8125rem;
+  --text-mono--line-height: 1.125rem;
+  --text-mono--font-weight: 500;
+
+  /*
+   * Motion defaults. Every bare `transition-*` utility runs at --dur-fast with the
+   * standard decelerate curve; slower interactions opt in via `duration-(--dur-base)` /
+   * `duration-(--dur-slow)`. The named eases override Tailwind's stock `ease-out` /
+   * `ease-in-out` with MD3-standard curves so all easing in the product matches.
+   */
+  --default-transition-duration: var(--dur-fast);
+  --default-transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /*
@@ -201,6 +257,23 @@
  * Firefox gets the equivalent via `scrollbar-width`/`scrollbar-color`.
  */
 @layer base {
+  /*
+   * Reduced motion: the product must be 100% usable with motion off. Collapsing durations
+   * to near-zero (rather than `none`) keeps `animationend`/`transitionend` handlers firing
+   * so Radix/tw-animate exit animations still unmount. Spinners freeze too — acceptable,
+   * since loading states also carry text/aria-busy.
+   */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
   * {
     scrollbar-width: thin;
     scrollbar-color: var(--outline) transparent;

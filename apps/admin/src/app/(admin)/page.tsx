@@ -91,7 +91,7 @@ export default function DashboardPage(): JSX.Element {
       ) : data ? (
         <div className="grid gap-8 lg:grid-cols-[1.4fr_1fr]">
           <section className="flex flex-col gap-4" aria-labelledby="metrics-heading">
-            <h2 id="metrics-heading" className="text-on-surface-variant text-sm font-medium">
+            <h2 id="metrics-heading" className="text-on-surface-variant text-body font-medium">
               Platform metrics
             </h2>
             <div className="grid grid-cols-2 gap-3">
@@ -110,7 +110,7 @@ export default function DashboardPage(): JSX.Element {
           </section>
 
           <section className="flex flex-col gap-4" aria-labelledby="queues-heading">
-            <h2 id="queues-heading" className="text-on-surface-variant text-sm font-medium">
+            <h2 id="queues-heading" className="text-on-surface-variant text-body font-medium">
               Needs attention
             </h2>
             <OrgQueue
@@ -156,7 +156,7 @@ function OrgQueue({
 }): JSX.Element {
   return (
     <div className="flex flex-col gap-2">
-      <h3 className="text-sm font-medium">{title}</h3>
+      <h3 className="text-body font-medium">{title}</h3>
       {orgs.length > 0 ? (
         <ul className="flex flex-col gap-1.5">
           {orgs.map((org) => (
@@ -165,7 +165,7 @@ function OrgQueue({
                 href={`/orgs/${org.id}`}
                 className={`${ROW_CLASS} items-center justify-between gap-3 rounded-lg px-3 py-2.5`}
               >
-                <span className="min-w-0 truncate text-sm font-medium">{org.name}</span>
+                <span className="text-body min-w-0 truncate font-medium">{org.name}</span>
                 <LifecycleBadge state={org.lifecycleState} />
               </Link>
             </li>

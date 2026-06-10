@@ -135,7 +135,7 @@ export default function TodayPage(): JSX.Element {
       {error ? (
         <div
           role="alert"
-          className="border-destructive/40 bg-destructive/5 text-destructive flex items-center justify-between gap-4 rounded-lg border p-4 text-sm"
+          className="border-destructive/40 bg-destructive/5 text-destructive text-body flex items-center justify-between gap-4 rounded-lg border p-4"
         >
           <span>{error}</span>
           <Button
@@ -277,7 +277,7 @@ interface EmptyPaneProps {
 function EmptyPane({ title, body }: EmptyPaneProps): JSX.Element {
   return (
     <div className="border-outline-variant flex flex-col items-center justify-center gap-1 rounded-xl border border-dashed p-8 text-center">
-      <p className="text-on-surface text-sm font-medium">{title}</p>
+      <p className="text-on-surface text-body font-medium">{title}</p>
       <p className="text-on-surface-variant max-w-xs text-xs">{body}</p>
     </div>
   );

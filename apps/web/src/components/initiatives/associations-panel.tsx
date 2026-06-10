@@ -69,7 +69,7 @@ function AssociationGroup({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
-        <h3 className="text-on-surface text-sm font-semibold">
+        <h3 className="text-on-surface text-body font-semibold">
           {title}
           <span className="text-on-surface-variant ml-2 font-normal tabular-nums">
             {linked.length}
@@ -120,7 +120,7 @@ function AssociationGroup({
               key={item.id}
               className="border-outline-variant group flex items-center gap-2 rounded-md border px-2.5 py-1.5"
             >
-              <span className="text-on-surface min-w-0 flex-1 truncate text-sm">{item.name}</span>
+              <span className="text-on-surface text-body min-w-0 flex-1 truncate">{item.name}</span>
               {canEdit ? (
                 <button
                   type="button"

@@ -99,13 +99,18 @@ export function NotificationRow({
 
         <TitleLine href={href}>
           <span
-            className={cn('text-sm', unread ? 'text-on-surface font-medium' : 'text-on-surface/80')}
+            className={cn(
+              'text-body',
+              unread ? 'text-on-surface font-medium' : 'text-on-surface/80',
+            )}
           >
             {notification.body.title}
           </span>
         </TitleLine>
 
-        {summary ? <p className="text-on-surface-variant line-clamp-2 text-sm">{summary}</p> : null}
+        {summary ? (
+          <p className="text-on-surface-variant text-body line-clamp-2">{summary}</p>
+        ) : null}
 
         {notification.organizationId ? (
           <div className="mt-0.5">

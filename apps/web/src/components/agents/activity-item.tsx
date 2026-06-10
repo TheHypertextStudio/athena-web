@@ -92,7 +92,7 @@ export function ActivityItem({
     <li className="flex gap-3">
       <span
         aria-hidden="true"
-        className="bg-surface-container text-on-surface-variant flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm leading-none"
+        className="bg-surface-container text-on-surface-variant text-body flex h-7 w-7 shrink-0 items-center justify-center rounded-full leading-none"
       >
         {badge.emoji}
       </span>
@@ -107,11 +107,11 @@ export function ActivityItem({
 
         {/* Body. */}
         {activity.type === 'error' ? (
-          <p role="alert" className="text-destructive text-sm leading-relaxed">
+          <p role="alert" className="text-destructive text-body leading-relaxed">
             {text || 'The agent reported an error.'}
           </p>
         ) : activity.type === 'thought' ? (
-          <p className="text-on-surface-variant text-sm leading-relaxed italic">{text}</p>
+          <p className="text-on-surface-variant text-body leading-relaxed italic">{text}</p>
         ) : action ? (
           <ActionBody
             activityId={activity.id}
@@ -125,7 +125,7 @@ export function ActivityItem({
             onReject={onReject}
           />
         ) : (
-          <p className="text-on-surface text-sm leading-relaxed whitespace-pre-wrap">{text}</p>
+          <p className="text-on-surface text-body leading-relaxed whitespace-pre-wrap">{text}</p>
         )}
 
         {/* Elicitation reply affordance. */}
@@ -182,7 +182,7 @@ function ActionBody({
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-1">
           <code className="text-on-surface-variant text-xs">{kind}</code>
-          <p className="text-on-surface text-sm leading-relaxed">{summary}</p>
+          <p className="text-on-surface text-body leading-relaxed">{summary}</p>
         </div>
         <ApprovalStatusBadge status={approvalStatus} />
       </div>
@@ -271,7 +271,7 @@ function ReplyBox({
           setValue(event.target.value);
         }}
         className={cn(
-          'border-outline-variant bg-surface-container placeholder:text-on-surface-variant focus-visible:ring-ring w-full resize-y rounded-md border px-3 py-2 text-sm',
+          'border-outline-variant bg-surface-container placeholder:text-on-surface-variant focus-visible:ring-ring text-body w-full resize-y rounded-md border px-3 py-2',
           'transition-colors outline-none focus-visible:ring-1 disabled:opacity-50',
         )}
       />

@@ -16,7 +16,7 @@ export function Hero(): JSX.Element {
         <p className="text-ink-muted font-mono text-xs tracking-[0.14em] uppercase">
           For people who run more than one thing
         </p>
-        <h1 className="font-display text-display text-ink max-w-4xl tracking-tight text-balance">
+        <h1 className="font-display text-display text-ink wonk max-w-4xl tracking-tight text-balance">
           Run every organization from one calm place.
         </h1>
         <p className="text-ink-muted max-w-2xl text-lg text-balance">

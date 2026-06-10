@@ -27,3 +27,12 @@
   --text-title--line-height: 1.12;
   --text-title--font-weight: 560;
 }
+
+/*
+ * Fraunces' WONK axis — opt-in quirky letterforms (angled stems, playful terminals) for
+ * display moments: wordmarks and the hero headline. Both Fraunces-loading layouts subset
+ * the axis in via next/font `axes: ['opsz', 'WONK']`; everywhere else WONK stays 0.
+ */
+@utility wonk {
+  font-variation-settings: 'WONK' 1;
+}

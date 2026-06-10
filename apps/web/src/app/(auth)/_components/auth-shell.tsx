@@ -38,7 +38,7 @@ export function AuthShell({ title, description, children, footer }: AuthShellPro
     <main className="dark:bg-surface flex min-h-screen flex-col items-center justify-center gap-8 bg-[oklch(0.985_0.008_85)] px-6 py-12">
       <Link
         href="/"
-        className="text-foreground text-3xl font-semibold tracking-tight"
+        className="text-foreground wonk text-3xl font-semibold tracking-tight"
         style={{ fontFamily: 'var(--font-fraunces), Georgia, serif' }}
       >
         Docket

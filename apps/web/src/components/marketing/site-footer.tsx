@@ -37,7 +37,7 @@ export function SiteFooter(): JSX.Element {
     <footer className="border-border bg-paper-deep border-t">
       <div className="mx-auto grid w-full max-w-6xl gap-10 px-6 py-14 sm:grid-cols-2 lg:grid-cols-4">
         <div className="flex flex-col gap-3 lg:col-span-2">
-          <span className="font-display text-ink text-2xl leading-none font-semibold tracking-tight">
+          <span className="font-display text-ink wonk text-2xl leading-none font-semibold tracking-tight">
             Docket
           </span>
           <p className="text-muted-foreground text-body max-w-sm">{TAGLINE}</p>

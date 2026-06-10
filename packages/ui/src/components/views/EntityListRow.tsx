@@ -31,6 +31,10 @@ import * as React from 'react';
 import { cn } from '../../lib/utils';
 import { focusRingInset } from '../../primitives/focus';
 
+import type { EntityListProps, RowMetaProps, RowProgressProps } from './entity-list-row-slots';
+export { EntityList, RowMeta, RowProgress } from './entity-list-row-slots';
+export type { EntityListProps, RowMetaProps, RowProgressProps };
+
 /** Props for {@link EntityListRow}. */
 export interface EntityListRowProps {
   /**
@@ -74,9 +78,7 @@ export interface EntityListRowProps {
   /**
    * Whether the row is interactive. Defaults to `true` — the row renders a focusable
    * `<button>`/`<a>` that opens its target. Set `false` for a presentational row that has no
-   * destination yet (e.g. an entity with no detail screen): it keeps the row's density,
-   * dividers, and layout but renders an inert element with no pointer cursor, hover tone, or
-   * focus ring, so it never offers a click that leads nowhere.
+   * destination yet.
    */
   interactive?: boolean;
   /** Whether the row is the active (keyboard-focused) row in a roving-tabindex list. */
@@ -98,43 +100,18 @@ export interface EntityListRowProps {
 
 /** The props an {@link EntityListRowProps.render} slot receives. */
 export interface EntityRowRenderProps {
-  /** The composed row class string (MD3 surfaces, density, focus ring). */
   className: string;
-  /** The link target, when the row is a link. */
   href?: string;
-  /** Click handler that invokes the row's `onActivate`. */
   onClick: () => void;
-  /** Keydown handler that activates on Enter. */
   onKeyDown: (event: React.KeyboardEvent) => void;
-  /** Roving tab index. */
   tabIndex: number;
-  /** `aria-current` mirror of the active state for link rows. */
   'aria-current': 'true' | undefined;
-  /** The row body (leading, title, meta, trailing) to render as children. */
   children: React.ReactNode;
 }
 
-/**
- * The shared MD3 row layout — density, dividers, and the named container query.
- *
- * @remarks
- * The chrome common to both interactive and presentational rows: the `@container/row` so the
- * meta band can auto-hide when narrow, the `group/row` so `revealTrailingOnHover` can key off
- * hover, the hairline `border-b` divider (dropped on the last row), and the shared row density
- * (`min-h-9`, `px-3`, `py-1.5`, `gap-2`) — identical to {@link ListRow} so the two row families
- * share one 36px vertical rhythm. Kept as a constant so a single edit retints every preset.
- */
 const ROW_BASE =
   '@container/row group/row border-outline-variant relative flex min-h-(--row-h) w-full items-center gap-2 border-b px-3 py-(--row-py) text-left text-body last:border-b-0';
 
-/**
- * The interactive affordances layered onto {@link ROW_BASE} for a focusable row.
- *
- * @remarks
- * The pointer cursor, the `hover` / `focus-visible` surface tones, and the inset focus ring —
- * identical in spirit to {@link ListRow} so the two stay visually reconciled. Omitted for a
- * presentational (`interactive={false}`) row so it offers no click affordance.
- */
 const ROW_INTERACTIVE = cn(
   'cursor-pointer transition-colors outline-none hover:bg-surface-container-high focus-visible:bg-surface-container-high',
   focusRingInset,
@@ -147,21 +124,15 @@ const ROW_INTERACTIVE = cn(
  * Composes the leading / title / subtitle / meta / trailing slots into one dense, keyboard-
  * operable row. Renders a `<button>` by default, an `<a>` when `href` is set, or a fully
  * custom element via `render` (e.g. a Next.js `Link`); pass `interactive={false}` for an inert
- * presentational `<div>` row (an entity with no detail screen yet). Selection and the active
- * (keyboard-focused) state both adopt the MD3 `bg-surface-container-highest` tone, matching
- * {@link ListRow}.
+ * presentational `<div>` row. Selection and the active (keyboard-focused) state both adopt the
+ * MD3 `bg-surface-container-highest` tone, matching {@link ListRow}.
  *
  * @example
  * ```tsx
  * <EntityListRow
  *   leading={<StatusIcon type="started" />}
  *   title="Billing revamp"
- *   meta={
- *     <>
- *       <RowMeta><ActorAvatar kind="human" name="Ada" size={18} /> Ada</RowMeta>
- *       <RowMeta><RowProgress value={62} /> 62%</RowMeta>
- *     </>
- *   }
+ *   meta={<><RowMeta><ActorAvatar kind="human" name="Ada" size={18} /> Ada</RowMeta></>}
  *   trailing={<Badge>Active</Badge>}
  *   onActivate={() => open(project.id)}
  * />
@@ -191,7 +162,6 @@ export function EntityListRow({
   const handleKeyDown = React.useCallback(
     (event: React.KeyboardEvent) => {
       if (event.key === 'Enter') {
-        // For a real <a>, Enter already navigates; only synthesize activation for non-links.
         if (href === undefined) {
           event.preventDefault();
           onActivate?.();
@@ -242,7 +212,6 @@ export function EntityListRow({
 
   const ariaCurrent: 'true' | undefined = active ? 'true' : undefined;
 
-  // A presentational row: same layout + dividers, but inert (no destination, no focus ring).
   if (!interactive) {
     return (
       <div aria-label={ariaLabel} className={rowClassName}>
@@ -299,136 +268,5 @@ export function EntityListRow({
     >
       {body}
     </button>
-  );
-}
-
-/** Props for {@link RowMeta}. */
-export interface RowMetaProps {
-  /** The metadata content (icon + label, avatar + name, count, …). */
-  children: React.ReactNode;
-  /** Use tabular figures (counts, dates, percentages) for stable alignment. */
-  tabular?: boolean;
-  /** Extra classes merged onto the meta item. */
-  className?: string;
-}
-
-/**
- * A single inline metadata item for an {@link EntityListRow}'s `meta` band.
- *
- * @remarks
- * A flex run with a consistent `gap-1.5` so an icon/avatar and its label sit together; pass
- * `tabular` for numeric meta (counts, dates, percentages) so columns line up across rows.
- *
- * @example
- * ```tsx
- * <RowMeta tabular><ListChecks className="size-3.5" /> 12 tasks</RowMeta>
- * ```
- */
-export function RowMeta({ children, tabular = false, className }: RowMetaProps): React.JSX.Element {
-  return (
-    <span className={cn('flex items-center gap-1.5', tabular && 'tabular-nums', className)}>
-      {children}
-    </span>
-  );
-}
-
-/** Props for {@link RowProgress}. */
-export interface RowProgressProps {
-  /** Completion percentage in `0..100`; clamped into range. */
-  value: number;
-  /** Accessible label describing what the bar measures. */
-  label?: string;
-  /** Track width utility (defaults to `w-16`). */
-  className?: string;
-  /** The fill color utility token; defaults to `bg-state-started`. */
-  fillClassName?: string;
-}
-
-/**
- * A thin, fixed-width progress bar sized for an {@link EntityListRow}'s meta band.
- *
- * @remarks
- * Renders an accessible `role="progressbar"` track (`bg-surface-container`) with a token-
- * colored fill, clamped to `0..100`. Use inside a {@link RowMeta} next to the numeric value.
- *
- * @example
- * ```tsx
- * <RowMeta tabular><RowProgress value={62} label="Weighted progress" /> 62%</RowMeta>
- * ```
- */
-export function RowProgress({
-  value,
-  label,
-  className,
-  fillClassName = 'bg-state-started',
-}: RowProgressProps): React.JSX.Element {
-  const clamped = Math.max(0, Math.min(100, value));
-  return (
-    <span
-      role="progressbar"
-      aria-valuemin={0}
-      aria-valuemax={100}
-      aria-valuenow={Math.round(clamped)}
-      aria-label={label}
-      className={cn(
-        'bg-surface-container relative inline-block h-1.5 w-16 overflow-hidden rounded-full align-middle',
-        className,
-      )}
-    >
-      <span
-        aria-hidden="true"
-        className={cn('absolute inset-y-0 left-0 rounded-full', fillClassName)}
-        style={{ width: `${String(clamped)}%` }}
-      />
-    </span>
-  );
-}
-
-/** Props for {@link EntityList}. */
-export interface EntityListProps {
-  /** The rows — typically {@link EntityListRow}s. */
-  children: React.ReactNode;
-  /** Accessible label for the list. */
-  'aria-label'?: string;
-  /** Extra classes merged onto the list container. */
-  className?: string;
-}
-
-/**
- * The clean, bordered container that wraps a dense column of {@link EntityListRow}s.
- *
- * @remarks
- * The spec's `rounded-xl border-outline-variant overflow-hidden` chrome; the hairline dividers
- * come from each row's own bottom border (the last row drops it via `last:border-b-0`), so the
- * container needs no per-row separators. Replaces the former card grid wrappers for entity
- * lists. Each row is its own focusable control, so — like Linear's list — the container is a
- * labelled `group` rather than an ARIA `list` (which would demand `listitem` children and
- * strip the rows' button/link semantics).
- *
- * @example
- * ```tsx
- * <EntityList aria-label="Projects">
- *   {projects.map((p) => (
- *     <EntityListRow key={p.id} title={p.name} onActivate={() => open(p.id)} />
- *   ))}
- * </EntityList>
- * ```
- */
-export function EntityList({
-  children,
-  'aria-label': ariaLabel,
-  className,
-}: EntityListProps): React.JSX.Element {
-  return (
-    <div
-      role="group"
-      aria-label={ariaLabel}
-      className={cn(
-        'border-outline-variant bg-surface flex w-full flex-col overflow-hidden rounded-xl border',
-        className,
-      )}
-    >
-      {children}
-    </div>
   );
 }

@@ -30,191 +30,15 @@ import * as React from 'react';
 
 import { useListKeyboard } from '../../hooks/useListKeyboard';
 import { cn } from '../../lib/utils';
-import { useDensity, type Density } from '../shell/ContextProvider';
+import { useDensity } from '../shell/ContextProvider';
 import { ListGroup } from './ListGroup';
 import { ListSubGroup } from './ListSubGroup';
-import type { WorkflowStateType } from '../atoms/StatusIcon';
+import { DENSITY_ROW_HEIGHT, flattenGroups, subGroupKey } from './flatten-groups';
+import type { FlatRow, GroupKey, ListViewProps, RenderRowContext } from './list-view-types';
+import { NO_GROUP_ID, NO_GROUP_LABEL } from './list-view-types';
 
-/**
- * Default virtualizer row-height estimate per density. Mirrors the `--row-h` CSS variable
- * (globals.css §density) — the two MUST change together or virtualized scrolling jitters.
- */
-const DENSITY_ROW_HEIGHT: Record<Density, number> = {
-  compact: 32,
-  comfortable: 36,
-  spacious: 44,
-};
-
-/** The id + label identifying a group or sub-group bucket. */
-export interface GroupKey {
-  /** Stable bucket id (used as the collapse-state key and React key). */
-  id: string;
-  /** Display-ready bucket label (entity nouns must already be vocabulary-resolved). */
-  label: string;
-  /**
-   * When the (sub-)grouping is by workflow state, the canonical type — lets a sub-group
-   * header render the matching status icon.
-   */
-  stateType?: WorkflowStateType;
-}
-
-/** The synthesized bucket id for items with no group. */
-export const NO_GROUP_ID = '__no_group__';
-
-/** The default label for the synthesized no-group bucket. */
-export const NO_GROUP_LABEL = 'No project / Triage';
-
-/** Context passed to {@link ListViewProps.renderRow} for one data row. */
-export interface RenderRowContext {
-  /** The row's index within the flattened row array. */
-  flatIndex: number;
-  /** Whether this row is the active (keyboard-focused) row. */
-  active: boolean;
-  /** Activate (open) this row. */
-  onActivate: () => void;
-}
-
-/** A flattened row: a group header, a sub-group header, or a data row. */
-export type FlatRow<TItem> =
-  | {
-      readonly kind: 'group';
-      readonly key: string;
-      readonly group: GroupKey;
-      readonly count: number;
-    }
-  | {
-      readonly kind: 'subgroup';
-      readonly key: string;
-      readonly group: GroupKey;
-      readonly subGroup: GroupKey;
-      readonly count: number;
-    }
-  | { readonly kind: 'row'; readonly key: string; readonly item: TItem };
-
-/** Props for {@link ListView}. */
-export interface ListViewProps<TItem> {
-  /** The flat list of items to group, sub-group, and render. */
-  items: readonly TItem[];
-  /** Partition items into top-level groups; `null` routes to the no-group bucket. */
-  groupBy: (item: TItem) => GroupKey | null;
-  /** Optionally partition each group into sub-groups; omit for single-level grouping. */
-  subGroupBy?: (item: TItem) => GroupKey | null;
-  /** Render one data row. */
-  renderRow: (item: TItem, ctx: RenderRowContext) => React.ReactNode;
-  /** Stable React key for an item; falls back to the item's flat index when omitted. */
-  getItemKey?: (item: TItem) => string;
-  /** Controlled set of collapsed bucket ids (group id or `${groupId}/${subGroupId}`). */
-  collapsed?: ReadonlySet<string>;
-  /** Toggle a bucket's collapse state (controlled mode). */
-  onToggle?: (bucketId: string) => void;
-  /** Initial collapsed bucket ids for uncontrolled mode. */
-  defaultCollapsed?: Iterable<string>;
-  /** Activate (open) a data item (Enter / click). */
-  onActivateItem?: (item: TItem) => void;
-  /**
-   * Estimated pixel height of a single row; drives virtualization. Defaults to the active
-   * density's row height (32 / 36 / 44 for compact / comfortable / spacious), mirroring the
-   * `--row-h` CSS variable the row components consume.
-   */
-  rowHeight?: number;
-  /** Accessible label for the grid. */
-  label?: string;
-  /** Extra classes merged onto the scroll container. */
-  className?: string;
-}
-
-/** Build the composite collapse key for a sub-group bucket. */
-function subGroupKey(groupId: string, subGroupId: string): string {
-  return `${groupId}/${subGroupId}`;
-}
-
-/**
- * Flatten grouped items into a linear {@link FlatRow} array, omitting collapsed descendants.
- *
- * @remarks
- * Preserves first-seen order for both buckets and the items within them. A top-level group
- * always emits its header; its sub-group headers and rows are emitted only when the group is
- * expanded, and a sub-group's rows only when that sub-group is also expanded.
- */
-function flattenGroups<TItem>(
-  items: readonly TItem[],
-  groupBy: (item: TItem) => GroupKey | null,
-  subGroupBy: ((item: TItem) => GroupKey | null) | undefined,
-  collapsed: ReadonlySet<string>,
-  getItemKey: (item: TItem, index: number) => string,
-): FlatRow<TItem>[] {
-  /** Ordered group buckets keyed by group id. */
-  const groupOrder: string[] = [];
-  const groups = new Map<
-    string,
-    {
-      group: GroupKey;
-      subOrder: string[];
-      subs: Map<string, { sub: GroupKey; items: { item: TItem; key: string }[] }>;
-    }
-  >();
-
-  items.forEach((item, index) => {
-    const rawGroup = groupBy(item);
-    const group: GroupKey = rawGroup ?? { id: NO_GROUP_ID, label: NO_GROUP_LABEL };
-    let bucket = groups.get(group.id);
-    if (!bucket) {
-      bucket = { group, subOrder: [], subs: new Map() };
-      groups.set(group.id, bucket);
-      groupOrder.push(group.id);
-    }
-
-    const rawSub = subGroupBy ? subGroupBy(item) : null;
-    const sub: GroupKey = subGroupBy
-      ? (rawSub ?? { id: NO_GROUP_ID, label: NO_GROUP_LABEL })
-      : { id: '__all__', label: '' };
-    let subBucket = bucket.subs.get(sub.id);
-    if (!subBucket) {
-      subBucket = { sub, items: [] };
-      bucket.subs.set(sub.id, subBucket);
-      bucket.subOrder.push(sub.id);
-    }
-    subBucket.items.push({ item, key: getItemKey(item, index) });
-  });
-
-  const rows: FlatRow<TItem>[] = [];
-  for (const groupId of groupOrder) {
-    const bucket = groups.get(groupId);
-    /* v8 ignore start -- unreachable: every id in `groupOrder` was set in `groups` above. */
-    if (!bucket) continue;
-    /* v8 ignore stop */
-    const groupCount = bucket.subOrder.reduce(
-      /* v8 ignore next -- the `?.`/`?? 0` only narrow the always-present sub-bucket lookup. */
-      (sum, sid) => sum + (bucket.subs.get(sid)?.items.length ?? 0),
-      0,
-    );
-    rows.push({ kind: 'group', key: `g:${groupId}`, group: bucket.group, count: groupCount });
-    if (collapsed.has(groupId)) continue;
-
-    const hasSubGroups = Boolean(subGroupBy);
-    for (const subId of bucket.subOrder) {
-      const subBucket = bucket.subs.get(subId);
-      /* v8 ignore start -- unreachable: every id in `subOrder` was set in `bucket.subs` above. */
-      if (!subBucket) continue;
-      /* v8 ignore stop */
-      if (hasSubGroups) {
-        const composite = subGroupKey(groupId, subId);
-        rows.push({
-          kind: 'subgroup',
-          key: `s:${composite}`,
-          group: bucket.group,
-          subGroup: subBucket.sub,
-          count: subBucket.items.length,
-        });
-        if (collapsed.has(composite)) continue;
-      }
-      for (const entry of subBucket.items) {
-        rows.push({ kind: 'row', key: `r:${entry.key}`, item: entry.item });
-      }
-    }
-  }
-  return rows;
-}
+export type { FlatRow, GroupKey, ListViewProps, RenderRowContext };
+export { NO_GROUP_ID, NO_GROUP_LABEL };
 
 /**
  * A virtualized, collapsible, flattened-tree list.
@@ -255,7 +79,6 @@ export function ListView<TItem>({
   const density = useDensity();
   const resolvedRowHeight = rowHeight ?? DENSITY_ROW_HEIGHT[density];
 
-  // Uncontrolled collapse state, used only when `collapsed` is not supplied.
   const [internalCollapsed, setInternalCollapsed] = React.useState<ReadonlySet<string>>(
     () => new Set(defaultCollapsed ?? []),
   );
@@ -295,13 +118,10 @@ export function ListView<TItem>({
     overscan: 12,
   });
 
-  // Re-measure when the density (and so the row-height estimate) changes — the virtualizer
-  // caches measurements and would otherwise keep stale offsets after a density switch.
   React.useEffect(() => {
     virtualizer.measure();
   }, [virtualizer, resolvedRowHeight]);
 
-  /** Activate the flattened row at `index`: toggle a (sub-)group or open a data row. */
   const activateRow = React.useCallback(
     (index: number) => {
       const row = rows[index];

@@ -4,8 +4,6 @@ import type { OrgSummary } from '@docket/types';
 import {
   AppShell,
   ContextProvider,
-  DENSITIES,
-  type Density,
   type HomeNavKey,
   Sidebar,
   TabBar,
@@ -15,7 +13,6 @@ import {
 } from '@docket/ui/components';
 import { VocabularyProvider } from '@docket/ui/hooks';
 import { Search } from '@docket/ui/icons';
-import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { type JSX, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -26,126 +23,17 @@ import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
 import { readError } from '@/lib/problem';
 
-/** The cross-org Home destination implied by the current pathname (Today/Inbox/Portfolio). */
-function homeKeyFromPath(pathname: string): HomeNavKey | undefined {
-  if (/^\/today(?:\/|$)/.test(pathname)) return 'today';
-  if (/^\/inbox(?:\/|$)/.test(pathname)) return 'inbox';
-  if (/^\/portfolio(?:\/|$)/.test(pathname)) return 'portfolio';
-  return undefined;
-}
-
-/** The org id embedded in an `(app)` route, or `null` for cross-org routes (Today/Inbox/…). */
-function orgIdFromPath(pathname: string): string | null {
-  const match = /^\/orgs\/([^/]+)(?:\/|$)/.exec(pathname);
-  return match ? (match[1] ?? null) : null;
-}
-
-/**
- * The org-scoped sidebar destinations, in mvp-plan §7 order.
- *
- * @remarks
- * Each {@link WorkspaceNavKey} maps 1:1 to its route segment under `/orgs/[orgId]/…`, so the
- * href builder and {@link workspaceKeyFromPath} stay in lockstep with the real route tree.
- * Keeping them in one table is what guarantees the sidebar highlight and the navigation target
- * never drift apart as screens are added.
- */
-const NAV_SEGMENTS: readonly WorkspaceNavKey[] = [
-  'my-work',
-  'triage',
-  'initiatives',
-  'programs',
-  'projects',
-  'cycles',
-  'teams',
-  'views',
-  'agents',
-  'settings',
-];
-
-/** The active Workspace nav key implied by the current org-scoped pathname. */
-function workspaceKeyFromPath(pathname: string): WorkspaceNavKey | undefined {
-  for (const key of NAV_SEGMENTS) {
-    if (new RegExp(`^/orgs/[^/]+/${key}(?:/|$)`).test(pathname)) return key;
-  }
-  return undefined;
-}
-
-/** The `localStorage` key for a user's last-active workspace (persists across sessions). */
-function lastOrgStorageKey(userId: string): string {
-  return `docket:last-org:${userId}`;
-}
-
-/** Read the persisted last-active org id for a user, tolerating absent/blocked storage. */
-function readLastOrg(userId: string | null): string | null {
-  if (!userId || typeof window === 'undefined') return null;
-  try {
-    return window.localStorage.getItem(lastOrgStorageKey(userId));
-  } catch {
-    return null;
-  }
-}
-
-/** Persist the last-active org id for a user, ignoring storage failures (quota/private mode). */
-function writeLastOrg(userId: string | null, orgId: string): void {
-  if (!userId || typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(lastOrgStorageKey(userId), orgId);
-  } catch {
-    // Non-fatal: persistence is best-effort.
-  }
-}
-
-/** The `localStorage` key for a user's layout density preference. */
-function densityStorageKey(userId: string): string {
-  return `docket:density:${userId}`;
-}
-
-/** Read the persisted density preference, tolerating absent/blocked storage or stale values. */
-function readDensity(userId: string | null): Density {
-  if (!userId || typeof window === 'undefined') return 'comfortable';
-  try {
-    const raw = window.localStorage.getItem(densityStorageKey(userId));
-    return DENSITIES.includes(raw as Density) ? (raw as Density) : 'comfortable';
-  } catch {
-    return 'comfortable';
-  }
-}
-
-/** Persist the density preference, ignoring storage failures (quota/private mode). */
-function writeDensity(userId: string | null, density: Density): void {
-  if (!userId || typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(densityStorageKey(userId), density);
-  } catch {
-    // Non-fatal: persistence is best-effort.
-  }
-}
-
-/**
- * Resolve the active workspace for the flattened, Linear-style sidebar.
- *
- * @remarks
- * The sidebar's Workspace section is always present and stable, so it must reflect an org on
- * every route — including the cross-org Home routes (Today/Inbox/Portfolio) where no org is in
- * the path. Resolution order: the route's org, else the persisted last-used org (if the caller
- * still belongs to it), else the caller's personal space, else their first org. Returns `null`
- * only when the caller has no orgs at all.
- *
- * @param routeOrgId - The org id parsed from the path, or `null` on a cross-org route.
- * @param orgs - Every org the caller belongs to.
- * @param lastOrgId - The persisted last-used org id, if any.
- */
-function resolveActiveOrg(
-  routeOrgId: string | null,
-  orgs: readonly OrgSummary[],
-  lastOrgId: string | null,
-): string | null {
-  if (routeOrgId) return routeOrgId;
-  if (orgs.length === 0) return null;
-  if (lastOrgId && orgs.some((o) => o.id === lastOrgId)) return lastOrgId;
-  const personal = orgs.find((o) => o.isPersonal);
-  return personal?.id ?? orgs[0]?.id ?? null;
-}
+import {
+  homeKeyFromPath,
+  orgIdFromPath,
+  readDensity,
+  readLastOrg,
+  renderLink,
+  resolveActiveOrg,
+  workspaceKeyFromPath,
+  writeDensity,
+  writeLastOrg,
+} from './app-shell-utils';
 
 /**
  * The authenticated app-shell frame: the single flattened sidebar, the multi-document tab bar,
@@ -172,12 +60,10 @@ export function AppShellFrame({ children }: { children: ReactNode }): JSX.Elemen
   const routeOrgId = orgIdFromPath(pathname);
   const userId = session?.user.id ?? null;
 
-  // Redirect to sign-in once the session resolves to "signed out".
   useEffect(() => {
     if (!isPending && !session) router.replace('/sign-in');
   }, [isPending, session, router]);
 
-  // Load the caller's orgs once a session is present (rides the session cookie).
   useEffect(() => {
     if (!session) return;
     const live = { current: true };
@@ -207,9 +93,6 @@ export function AppShellFrame({ children }: { children: ReactNode }): JSX.Elemen
     );
   }
 
-  // Seed the context with the best guess available before orgs load: the route org, else the
-  // persisted last-used org. The inner frame reconciles it to the full resolution once orgs
-  // arrive — keeping the org accent stable from first paint instead of flashing on hydration.
   const initialOrgId = routeOrgId ?? readLastOrg(userId);
 
   return (
@@ -232,35 +115,12 @@ export function AppShellFrame({ children }: { children: ReactNode }): JSX.Elemen
   );
 }
 
-/** Props for {@link AppShellInner}. */
 interface AppShellInnerProps {
-  /** The org id bound to this route, or `null` on a cross-org route. */
   routeOrgId: string | null;
-  /** The signed-in user's id; namespaces the persisted last-used workspace. */
   userId: string | null;
-  /** The active Workspace nav key for the current route. */
   workspaceKey?: WorkspaceNavKey;
-  /** The active Home destination for the current route (Today/Inbox/Portfolio). */
   homeKey?: HomeNavKey;
-  /** The routed page content. */
   children: ReactNode;
-}
-
-/**
- * Render a Next `Link` carrying the row content (used by the sidebar + tab bar).
- *
- * @remarks
- * Shared by the {@link Sidebar} and the {@link TabBar}. The optional `className` lets the tab
- * bar hand the anchor its flex classes so the link becomes a real flex child of the tab row
- * (a flexing, truncating title with a right-pinned close button); the sidebar omits it. The
- * argument is optional so this single function satisfies both callers' `renderLink` contracts.
- */
-function renderLink(href: string, content: ReactNode, className?: string): ReactNode {
-  return (
-    <Link href={href} className={className}>
-      {content}
-    </Link>
-  );
 }
 
 /**
@@ -272,10 +132,6 @@ function renderLink(href: string, content: ReactNode, className?: string): React
  * always shows both sections — the cross-org Home section and the active workspace's section —
  * so the active workspace is resolved as route org ?? persisted last-used ?? personal space and
  * mirrored into the shell context (driving the org accent + the Workspace section's hrefs).
- * Every selection navigates imperatively (a cross-org row to its page, an org to its My Work),
- * and the chosen org is persisted so it survives across sessions. Entity nouns in the Workspace
- * section are skinned to the *route* org via {@link VocabularyProvider}; on a cross-org route
- * they fall back to the default preset until the caller enters an org.
  */
 function AppShellInner({
   routeOrgId,
@@ -291,7 +147,6 @@ function AppShellInner({
   const { tabs, activeKey, closeTab } = useOpenDocuments();
   const [unreadCount, setUnreadCount] = useState(0);
 
-  // Persist the density preference whenever it changes (toggled via the command palette).
   useEffect(() => {
     writeDensity(userId, density);
   }, [userId, density]);
@@ -306,42 +161,29 @@ function AppShellInner({
     [orgs],
   );
 
-  // The persisted last-used workspace, read once on mount (re-reads on sign-in change).
   const [lastOrgId, setLastOrgId] = useState<string | null>(() => readLastOrg(userId));
   useEffect(() => {
     setLastOrgId(readLastOrg(userId));
   }, [userId]);
 
-  // The active workspace for the flattened sidebar: route org ?? last-used ?? personal ?? first.
   const resolvedOrgId = useMemo(
     () => resolveActiveOrg(routeOrgId, orgs, lastOrgId),
     [routeOrgId, orgs, lastOrgId],
   );
 
-  // Whether the resolved active workspace is the caller's personal space. Read from the SAME org
-  // the Workspace section reflects so the sidebar's chrome (e.g. omitting Teams) always matches
-  // the visible workspace. A personal space is the user's own space, not an organization — its
-  // `isPersonal === true` is an engineering convenience that must not surface team-management UI.
   const resolvedOrgIsPersonal = useMemo(
     () => orgs.find((o) => o.id === resolvedOrgId)?.isPersonal ?? false,
     [orgs, resolvedOrgId],
   );
 
-  // Mirror the resolved active workspace into the shell context — one-directional, never
-  // reversing navigation. The context drives the org accent and the Workspace section's hrefs;
-  // it follows the resolution (route ?? last-used ?? personal) so the sidebar's org section is
-  // stable on every route, including the cross-org Home routes. Navigation is always driven
-  // imperatively from the sidebar/switcher handlers below, so this never derives a `router.push`.
   useEffect(() => {
     if (resolvedOrgId) setContext(resolvedOrgId);
   }, [resolvedOrgId, setContext]);
 
-  // Persist the resolved workspace so it is the last-used default on the next visit.
   useEffect(() => {
     if (resolvedOrgId) writeLastOrg(userId, resolvedOrgId);
   }, [resolvedOrgId, userId]);
 
-  // Poll the caller's cross-org unread count for the Inbox row's attention badge.
   useEffect(() => {
     const live = { current: true };
     const refresh = async (): Promise<void> => {
@@ -362,7 +204,6 @@ function AppShellInner({
     };
   }, []);
 
-  /** Switch the active workspace from the switcher: persist it and route to its My Work. */
   const onSelectWorkspace = useCallback(
     (orgId: string): void => {
       setContext(orgId);
@@ -391,8 +232,6 @@ function AppShellInner({
     <TabBar tabs={tabs} activeKey={activeKey} renderLink={renderLink} onClose={closeTab} />
   );
 
-  // The active workspace name for the mobile top bar (shown below `lg`); falls back to the
-  // product name when no workspace has resolved yet.
   const activeWorkspaceName = useMemo(
     () => workspaces.find((w) => w.id === resolvedOrgId)?.name,
     [workspaces, resolvedOrgId],
@@ -402,8 +241,6 @@ function AppShellInner({
     <span className="text-body truncate font-semibold">{activeWorkspaceName ?? 'Docket'}</span>
   );
 
-  // A search affordance for the mobile top bar that opens the same command palette as the
-  // sidebar's Search row.
   const mobileActions = (
     <button
       type="button"

@@ -1,23 +1,15 @@
 'use client';
 
-import { Building, Command, Globe, Search } from '@docket/ui/icons';
+import { Command, Search } from '@docket/ui/icons';
 import { Skeleton } from '@docket/ui/primitives';
-import { cn } from '@docket/ui/lib/utils';
-import {
-  type JSX,
-  type KeyboardEvent,
-  useCallback,
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { type JSX, useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 
 import { PaletteRow } from './palette-row';
 import type { PaletteItem, PaletteScope, PaletteSection } from './types';
+import { ScopeToggle } from './scope-toggle';
+import { usePaletteKeyboard } from './use-palette-keyboard';
 import { filterCommands } from './filter';
 import { useCommandActions } from './use-command-actions';
 import { useHubSearch } from './use-hub-search';
@@ -130,57 +122,13 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
     row?.scrollIntoView({ block: 'nearest' });
   }, [activeIndex, open]);
 
-  const runActive = useCallback(() => {
-    const item = items[activeIndex];
-    if (item) item.run();
-  }, [items, activeIndex]);
-
-  const onKeyDown = useCallback(
-    (event: KeyboardEvent<HTMLDivElement>) => {
-      switch (event.key) {
-        case 'ArrowDown':
-          event.preventDefault();
-          setActiveIndex((i) => (items.length === 0 ? 0 : (i + 1) % items.length));
-          break;
-        case 'ArrowUp':
-          event.preventDefault();
-          setActiveIndex((i) => (items.length === 0 ? 0 : (i - 1 + items.length) % items.length));
-          break;
-        case 'Enter':
-          event.preventDefault();
-          runActive();
-          break;
-        case 'Escape':
-          event.preventDefault();
-          onClose();
-          break;
-        case 'Tab': {
-          // Trap focus inside the dialog, but cycle through ALL its tabbable controls (the search
-          // input + the scope-toggle radios) rather than pinning to the input — so the scope
-          // toggle stays keyboard-reachable. The list rows are `aria-activedescendant`-driven
-          // `option`s, not tab stops, so they are intentionally excluded.
-          const dialog = dialogRef.current;
-          if (!dialog) break;
-          const tabbables = Array.from(
-            dialog.querySelectorAll<HTMLElement>(
-              'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
-            ),
-          ).filter((el) => el.offsetParent !== null || el === document.activeElement);
-          if (tabbables.length === 0) break;
-          event.preventDefault();
-          const current = document.activeElement as HTMLElement | null;
-          const index = current ? tabbables.indexOf(current) : -1;
-          const delta = event.shiftKey ? -1 : 1;
-          const next = tabbables[(index + delta + tabbables.length) % tabbables.length];
-          next?.focus();
-          break;
-        }
-        default:
-          break;
-      }
-    },
-    [items.length, runActive, onClose],
-  );
+  const { onKeyDown } = usePaletteKeyboard({
+    items,
+    activeIndex,
+    setActiveIndex,
+    onClose,
+    dialogRef,
+  });
 
   if (!open && !closing) return null;
 
@@ -335,73 +283,6 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
           </span>
         </div>
       </div>
-    </div>
-  );
-}
-
-/** Props for {@link ScopeToggle}. */
-interface ScopeToggleProps {
-  /** The active scope. */
-  scope: PaletteScope;
-  /** Whether an org is bound to the current route (enables org-local). */
-  orgBound: boolean;
-  /** The bound org's display name (the org-local segment label). */
-  orgLabel: string;
-  /** Change the scope. */
-  onChange: (next: PaletteScope) => void;
-}
-
-/**
- * The Hub-global vs org-local search-scope segmented control.
- *
- * @remarks
- * Two toggle segments — **Hub** (all orgs, globe glyph) and the bound org (building glyph) —
- * rendered as a small radio-style group. The org segment is disabled (and never active) when
- * no org is bound, since org-local scope is meaningless on the Hub.
- */
-function ScopeToggle({ scope, orgBound, orgLabel, onChange }: ScopeToggleProps): JSX.Element {
-  return (
-    <div
-      role="radiogroup"
-      aria-label="Search scope"
-      className="border-outline-variant flex shrink-0 items-center gap-0.5 rounded-md border p-0.5"
-    >
-      <button
-        type="button"
-        role="radio"
-        aria-checked={scope === 'hub'}
-        onClick={() => {
-          onChange('hub');
-        }}
-        className={cn(
-          'focus-visible:ring-ring flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors focus-visible:ring-1 focus-visible:outline-none',
-          scope === 'hub'
-            ? 'bg-secondary text-secondary-foreground'
-            : 'text-on-surface-variant hover:text-on-surface',
-        )}
-      >
-        <Globe aria-hidden="true" className="size-3.5" />
-        Hub
-      </button>
-      <button
-        type="button"
-        role="radio"
-        aria-checked={scope === 'org'}
-        disabled={!orgBound}
-        onClick={() => {
-          onChange('org');
-        }}
-        title={orgBound ? undefined : 'Open an organization to search just it'}
-        className={cn(
-          'focus-visible:ring-ring flex max-w-[8rem] items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors focus-visible:ring-1 focus-visible:outline-none disabled:opacity-40',
-          scope === 'org'
-            ? 'bg-secondary text-secondary-foreground'
-            : 'text-on-surface-variant hover:text-on-surface',
-        )}
-      >
-        <Building aria-hidden="true" className="size-3.5 shrink-0" />
-        <span className="truncate">{orgBound ? orgLabel : 'This org'}</span>
-      </button>
     </div>
   );
 }

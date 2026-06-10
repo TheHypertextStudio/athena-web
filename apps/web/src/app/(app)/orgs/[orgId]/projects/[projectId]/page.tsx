@@ -1,6 +1,6 @@
 'use client';
 
-import type { PickerOption } from '@docket/types';
+import type { PickerOption } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Badge, Skeleton } from '@docket/ui/primitives';
 import { useParams, useRouter } from 'next/navigation';

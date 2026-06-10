@@ -31,7 +31,7 @@ export interface TriageState {
   pending: ReadonlySet<string>;
   projectDestinations: readonly TriageDestination[];
   programDestinations: readonly TriageDestination[];
-  providerName: (integrationId: string) => string | null;
+  providerName: (integrationId: string | null | undefined) => string;
   toRow: (task: TaskOut) => TriageRowData;
   groupBy: (task: TaskOut) => GroupKey;
   reload: () => void;

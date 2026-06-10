@@ -21,23 +21,22 @@
  *
  * Data is fetched at runtime, so the production build needs no running server.
  */
-import type { InvitationOut, MemberOut, RoleOut } from '@docket/types';
-import { RoleId } from '@docket/types';
+import type { MemberOut, RoleOut } from '@docket/types';
 import { Skeleton } from '@docket/ui/primitives';
 import { Users } from '@docket/ui/icons';
-import { useQueryClient } from '@tanstack/react-query';
 import type { JSX } from 'react';
 import { useCallback, useMemo } from 'react';
 
 import { useSession } from '@/lib/auth-client';
 import { api } from '@/lib/api';
-import { queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
+import { queryKeys, useApiQuery } from '@/lib/query';
 
-import { InviteForm, type InvitePayload } from './invite-form';
+import { InviteForm } from './invite-form';
 import { InvitationsList } from './invitations-list';
 import { MemberRow } from './member-row';
 import type { RoleOption } from './role-control';
 import { asRoleKey, ROLE_KEY_ORDER, ROLE_PLAIN_LANGUAGE } from './roles';
+import { useMembersMutations } from './use-members-mutations';
 
 /** Props for {@link MembersTab}. */
 export interface MembersTabProps {
@@ -57,12 +56,10 @@ const MANAGER_ROLE_KEYS = new Set(['owner', 'admin']);
 export function MembersTab({ orgId }: MembersTabProps): JSX.Element {
   const { data: authSession } = useSession();
   const userId = authSession?.user.id ?? null;
-  const queryClient = useQueryClient();
 
   const membersKey = queryKeys.members(orgId);
   const invitationsKey = queryKeys.invitations(orgId);
 
-  // Members governs whether the tab can render; roles + invitations are best-effort overlays.
   const membersQ = useApiQuery(
     membersKey,
     () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
@@ -81,138 +78,22 @@ export function MembersTab({ orgId }: MembersTabProps): JSX.Element {
 
   const members: readonly MemberOut[] = membersQ.data?.items ?? [];
   const roles: readonly RoleOut[] = rolesQ.data?.items ?? [];
-  const invitations: readonly InvitationOut[] = invitationsQ.data?.items ?? [];
+  const invitations = invitationsQ.data?.items ?? [];
   const loading = membersQ.isPending;
   const loadError = membersQ.isError ? membersQ.error.message : null;
 
-  // The cache stores the FULL list bodies (`{ items, nextCursor?, total? }`), so optimistic
-  // writes map over `.items` while preserving the rest of the body.
-  type MembersBody = NonNullable<typeof membersQ.data>;
-  type InvitationsBody = NonNullable<typeof invitationsQ.data>;
-
-  /** Send an invitation; on success the invitations list invalidates + refetches. */
-  const inviteMutation = useApiMutation({
-    mutationFn: ({ email, roleId, asGuest }: InvitePayload) =>
-      unwrap(
-        () =>
-          api.v1.orgs[':orgId'].members.invitations.$post({
-            param: { orgId },
-            json: { email, roleId: RoleId.parse(roleId), asGuest },
-          }),
-        'Could not send the invitation.',
-      ),
-    onSuccess: (created) => {
-      // Prepend the created invitation so the row appears instantly, then the invalidation below
-      // reconciles with the server's authoritative list.
-      queryClient.setQueryData<InvitationsBody>(invitationsKey, (current) =>
-        current ? { ...current, items: [created, ...current.items] } : { items: [created] },
-      );
-    },
-    invalidateKeys: [invitationsKey],
-  });
-
-  /** Change a member's role; optimistically swaps the row, rolls back on failure. */
-  const roleMutation = useApiMutation({
-    mutationFn: ({ actorId, roleId }: { actorId: string; roleId: string }) =>
-      unwrap(
-        () =>
-          api.v1.orgs[':orgId'].members[':actorId'].$patch({
-            param: { orgId, actorId },
-            json: { roleId: RoleId.parse(roleId) },
-          }),
-        'Could not change this member’s role.',
-      ),
-    onMutate: async ({ actorId, roleId }) => {
-      await queryClient.cancelQueries({ queryKey: membersKey });
-      const previous = queryClient.getQueryData<MembersBody>(membersKey);
-      queryClient.setQueryData<MembersBody>(membersKey, (current) =>
-        current
-          ? {
-              ...current,
-              items: current.items.map((m) =>
-                m.actorId === actorId ? { ...m, roleId: RoleId.parse(roleId) } : m,
-              ),
-            }
-          : current,
-      );
-      return { previous };
-    },
-    onSuccess: (updated, { actorId }) => {
-      // Replace the optimistic row with the server's authoritative result.
-      queryClient.setQueryData<MembersBody>(membersKey, (current) =>
-        current
-          ? { ...current, items: current.items.map((m) => (m.actorId === actorId ? updated : m)) }
-          : current,
-      );
-    },
-    onError: (_error, _vars, context) => {
-      if (context?.previous) queryClient.setQueryData(membersKey, context.previous);
-    },
-    invalidateKeys: [membersKey],
-  });
-
-  /** Remove a member; optimistically drops the row, rolls back on failure (last-owner 409). */
-  const removeMutation = useApiMutation({
-    mutationFn: (actorId: string) =>
-      unwrap(
-        () => api.v1.orgs[':orgId'].members[':actorId'].$delete({ param: { orgId, actorId } }),
-        'Could not remove this member.',
-      ),
-    onMutate: async (actorId) => {
-      await queryClient.cancelQueries({ queryKey: membersKey });
-      const previous = queryClient.getQueryData<MembersBody>(membersKey);
-      queryClient.setQueryData<MembersBody>(membersKey, (current) =>
-        current
-          ? { ...current, items: current.items.filter((m) => m.actorId !== actorId) }
-          : current,
-      );
-      return { previous };
-    },
-    onError: (_error, _actorId, context) => {
-      if (context?.previous) queryClient.setQueryData(membersKey, context.previous);
-    },
-    invalidateKeys: [membersKey],
-  });
-
-  /** Revoke a pending invitation; optimistically drops the row, rolls back on failure. */
-  const revokeMutation = useApiMutation({
-    mutationFn: (invitationId: string) =>
-      unwrap(
-        () =>
-          api.v1.orgs[':orgId'].members.invitations[':id'].$delete({
-            param: { orgId, id: invitationId },
-          }),
-        'Could not revoke the invitation.',
-      ),
-    onMutate: async (invitationId) => {
-      await queryClient.cancelQueries({ queryKey: invitationsKey });
-      const previous = queryClient.getQueryData<InvitationsBody>(invitationsKey);
-      queryClient.setQueryData<InvitationsBody>(invitationsKey, (current) =>
-        current
-          ? { ...current, items: current.items.filter((i) => i.id !== invitationId) }
-          : current,
-      );
-      return { previous };
-    },
-    onError: (_error, _invitationId, context) => {
-      if (context?.previous) queryClient.setQueryData(invitationsKey, context.previous);
-    },
-    invalidateKeys: [invitationsKey],
-  });
-
-  const inviting = inviteMutation.isPending;
-  const inviteError = inviteMutation.isError ? inviteMutation.error.message : null;
-  // The shared "action" banner reflects whichever guard/validation write last failed (e.g. the
-  // last-owner 409 from a role change or removal).
-  const actionError =
-    (roleMutation.isError ? roleMutation.error.message : null) ??
-    (removeMutation.isError ? removeMutation.error.message : null) ??
-    (revokeMutation.isError ? revokeMutation.error.message : null);
-  // Which row is mid-write: while pending, the mutation's `variables` identify the targeted
-  // actor/id (TanStack narrows them to defined in the pending state).
-  const savingRoleFor = roleMutation.isPending ? roleMutation.variables.actorId : null;
-  const removingFor = removeMutation.isPending ? removeMutation.variables : null;
-  const revokingFor = revokeMutation.isPending ? revokeMutation.variables : null;
+  const {
+    invite,
+    changeRole,
+    remove,
+    revoke,
+    inviting,
+    inviteError,
+    actionError,
+    savingRoleFor,
+    removingFor,
+    revokingFor,
+  } = useMembersMutations(orgId, membersKey, invitationsKey);
 
   /** The assignable role options, ordered most-privileged first. */
   const roleOptions = useMemo<readonly RoleOption[]>(() => {
@@ -299,7 +180,7 @@ export function MembersTab({ orgId }: MembersTabProps): JSX.Element {
           sending={inviting}
           error={inviteError}
           onInvite={(payload) => {
-            inviteMutation.mutate(payload);
+            invite(payload);
           }}
         />
       ) : null}
@@ -346,10 +227,10 @@ export function MembersTab({ orgId }: MembersTabProps): JSX.Element {
                     savingRole={savingRoleFor === member.actorId}
                     removing={removingFor === member.actorId}
                     onChangeRole={(roleId) => {
-                      roleMutation.mutate({ actorId: member.actorId, roleId });
+                      changeRole(member.actorId, roleId);
                     }}
                     onRemove={() => {
-                      removeMutation.mutate(member.actorId);
+                      remove(member.actorId);
                     }}
                   />
                 );
@@ -368,7 +249,7 @@ export function MembersTab({ orgId }: MembersTabProps): JSX.Element {
             canManage={canManage}
             revokingId={revokingFor}
             onRevoke={(id) => {
-              revokeMutation.mutate(id);
+              revoke(id);
             }}
           />
         </div>

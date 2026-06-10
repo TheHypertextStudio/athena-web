@@ -4,14 +4,11 @@
  * @remarks
  * The env-driven {@link AgentRuntime} that drives a real Claude turn via the Anthropic
  * Messages API (`@anthropic-ai/sdk`) and translates the model's streamed reasoning,
- * tool use, and output into the port's {@link SessionActivity} stream
- * (`thought → action(proposed) → response`, plus `elicitation`/`error`). Selected only
- * when `ANTHROPIC_API_KEY` is present and real-shaped (see {@link selectAdapter}) and
- * never in `APP_MODE ∈ {local,test}`. Configuration comes from validated env; the live
- * network/SDK edge goes through an injectable {@link MessageStreamer} so the pure
- * translation logic stays unit-testable. The hosting layer's approval gate is real
- * business logic — side-effecting tool calls surface as `approval: 'proposed'` actions
- * and are NEVER auto-executed here (`boundaries.md` §4).
+ * tool use, and output into the port's {@link SessionActivity} stream.
+ * Selected only when `ANTHROPIC_API_KEY` is present and never in `APP_MODE ∈ {local,test}`.
+ *
+ * Pure translation logic (`toActionBody`, `translateEvents`) lives in
+ * `agent-runtime-translate.ts` and is unit-testable without network/SDK wiring.
  *
  * @see {@link MockAgentRuntime} for the deterministic offline counterpart.
  */
@@ -21,20 +18,18 @@ import type {
   RawMessageStreamEvent,
 } from '@anthropic-ai/sdk/resources/messages';
 
-import type {
-  AgentRuntime,
-  SessionActionBody,
-  SessionActivity,
-  StartSessionInput,
-} from '../ports/agent-runtime';
+import type { AgentRuntime, SessionActivity, StartSessionInput } from '../ports/agent-runtime';
+import { translateEvents } from './agent-runtime-translate';
+
+export { blockKind, toActionBody, translateEvents } from './agent-runtime-translate';
+export type { BlockBuffer } from './agent-runtime-translate';
 
 /**
  * The current Claude model id Athena drives a session with.
  *
  * @remarks
- * Verified current via the Claude API reference: `claude-opus-4-8` is the latest,
- * most-capable model and the correct default for agentic/tool-use work. Overridable
- * per-instance via {@link RealProviderRuntimeConfig.model} (e.g. to pin a version).
+ * `claude-opus-4-8` is the latest, most-capable model and the correct default for
+ * agentic/tool-use work. Overridable via {@link RealProviderRuntimeConfig.model}.
  */
 export const DEFAULT_AGENT_MODEL = 'claude-opus-4-8';
 
@@ -42,19 +37,10 @@ export const DEFAULT_AGENT_MODEL = 'claude-opus-4-8';
  * The default per-turn output ceiling.
  *
  * @remarks
- * Streaming makes a large ceiling safe (no HTTP timeout), so this is generous enough
- * for a full reasoning + tool-proposal + response turn without truncating mid-thought.
+ * Generous enough for a full reasoning + tool-proposal + response turn.
  */
 export const DEFAULT_MAX_TOKENS = 16000;
 
-/**
- * The system prompt that frames an Athena session.
- *
- * @remarks
- * Instructs the model that it operates behind Docket's approval gate: it proposes
- * side-effecting changes as tool calls (which surface as gated `action` activities)
- * rather than performing them, and asks the human when it needs a decision.
- */
 const SYSTEM_PROMPT =
   'You are Athena, an autonomous agent operating inside Docket — a multi-organization ' +
   'command center for Programs, Projects, and Tasks. You work a single delegated task ' +
@@ -65,14 +51,6 @@ const SYSTEM_PROMPT =
   'When you need a decision from the human before continuing, ask a single concise ' +
   'question. Keep your final response a short summary of what you proposed and why.';
 
-/**
- * The one tool Athena uses to surface a gated, side-effecting change.
- *
- * @remarks
- * A side-effecting action is promoted to a dedicated tool (rather than free-form text)
- * so the hosting layer gets a typed, interceptable proposal it can route through the
- * approval gate. Its `input` maps 1:1 onto {@link SessionActionBody}.
- */
 const PROPOSE_CHANGE_TOOL: Anthropic.Tool = {
   name: 'propose_change',
   description:
@@ -115,9 +93,8 @@ export interface RealProviderRuntimeConfig {
  * The injectable live edge: turns Messages-API params into a stream of raw events.
  *
  * @remarks
- * The real default calls the Anthropic SDK; tests inject a fake that yields a scripted
- * event sequence, so the {@link translateEvents} translation logic is exercised without
- * any network/SDK wiring. This is the single I/O seam of the adapter.
+ * The real default calls the Anthropic SDK; tests inject a fake so the translation logic
+ * is exercised without any network/SDK wiring. This is the single I/O seam.
  */
 export type MessageStreamer = (
   params: MessageCreateParamsBase,
@@ -127,14 +104,11 @@ export type MessageStreamer = (
  * Build the Messages-API request params for one Athena turn.
  *
  * @remarks
- * Pure: maps the port's {@link StartSessionInput} onto a single-user-turn request with
- * adaptive thinking (`display: 'summarized'` so reasoning is translatable into
- * `thought` activities) and the gated `propose_change` tool. The `agent` slug and
- * Docket `sessionId` are threaded into the prompt for traceability.
+ * Pure: maps {@link StartSessionInput} onto a single-user-turn request with adaptive
+ * thinking and the gated `propose_change` tool.
  *
  * @param input - The session id, task, and agent slug to run.
  * @param config - The validated runtime config (model + token ceiling).
- * @returns the streaming Messages-API request params.
  */
 export function buildRequest(
   input: StartSessionInput,
@@ -153,137 +127,36 @@ export function buildRequest(
   };
 }
 
-/** Internal accumulator for an in-flight content block while its deltas stream in. */
-interface BlockBuffer {
-  /** The block kind, taken from the `content_block_start` event. */
-  readonly type: 'thinking' | 'text' | 'tool_use' | 'other';
-  /** Accumulated text/thinking deltas (for `text`/`thinking` blocks). */
-  text: string;
-  /** Accumulated partial-JSON deltas (for `tool_use` blocks). */
-  json: string;
-  /** The tool name (for `tool_use` blocks). */
-  toolName: string;
+/**
+ * Wrap a thrown SDK/network error as a clear, secret-free {@link Error}.
+ *
+ * @param cause - The original thrown value.
+ */
+export function wrapError(cause: unknown): Error {
+  if (cause instanceof Anthropic.APIError) {
+    const rawStatus: unknown = (cause as { status?: unknown }).status;
+    const status = typeof rawStatus === 'number' ? rawStatus : 'unknown';
+    return new Error(`Anthropic agent runtime failed: ${status} (${cause.name})`);
+  }
+  if (cause instanceof Error) {
+    return new Error(`Anthropic agent runtime failed: ${cause.message}`);
+  }
+  return new Error('Anthropic agent runtime failed: unknown error');
 }
 
 /**
- * Parse an accumulated `tool_use` block into a gated {@link SessionActionBody}.
+ * Build the default {@link MessageStreamer} backed by the Anthropic SDK.
  *
- * @remarks
- * Pure. Tolerant of blank/invalid JSON (Claude may emit no input deltas): falls back to
- * the tool name as `kind` and a generic summary. Always yields a well-formed body so a
- * proposed action is never dropped.
- *
- * @param toolName - The tool the model invoked.
- * @param partialJson - The concatenated `input_json_delta` payload (may be empty).
- * @returns the structured proposed-change body.
+ * @param config - The validated runtime config.
  */
-export function toActionBody(toolName: string, partialJson: string): SessionActionBody {
-  let parsed: Record<string, unknown> = {};
-  const trimmed = partialJson.trim();
-  if (trimmed) {
-    try {
-      const obj: unknown = JSON.parse(trimmed);
-      if (obj && typeof obj === 'object') parsed = obj as Record<string, unknown>;
-    } catch {
-      // Malformed/partial input — fall through to name-derived defaults.
-    }
-  }
-  const rawKind = parsed['kind'];
-  const rawSummary = parsed['summary'];
-  const rawDiff = parsed['diff'];
-  const kind = typeof rawKind === 'string' && rawKind ? rawKind : toolName;
-  const summary =
-    typeof rawSummary === 'string' && rawSummary ? rawSummary : `Proposed ${toolName}`;
-  const body: SessionActionBody = {
-    kind,
-    summary,
-    ...(rawDiff !== undefined ? { diff: rawDiff } : {}),
-  };
-  return body;
-}
-
-/** Classify a `content_block_start` block kind into our buffer kind. */
-function blockKind(type: string): BlockBuffer['type'] {
-  if (type === 'thinking') return 'thinking';
-  if (type === 'text') return 'text';
-  if (type === 'tool_use') return 'tool_use';
-  return 'other';
-}
-
-/**
- * Translate a stream of raw Anthropic events into the port's activity stream.
- *
- * @remarks
- * Pure and fully unit-testable (no network). Accumulates each content block's deltas
- * and, on `content_block_stop`, emits the corresponding {@link SessionActivity}:
- * - `thinking` block → `thought`
- * - `text` block → `response`
- * - `tool_use` block → `action` (a {@link SessionActionBody}) with `approval: 'proposed'`
- *   — the human-approval gate; side-effecting actions are never auto-executed.
- * A `message_delta` with `stop_reason: 'refusal'` is surfaced as an `error` activity.
- * Blank `thought`/`response` blocks (the adaptive thinking default can omit text) are
- * skipped so the stream carries only meaningful activities.
- *
- * @param events - The async stream of raw Messages-API events.
- * @returns an async iterable of {@link SessionActivity} in emission order.
- */
-export async function* translateEvents(
-  events: AsyncIterable<RawMessageStreamEvent>,
-): AsyncIterable<SessionActivity> {
-  const blocks = new Map<number, BlockBuffer>();
-  for await (const event of events) {
-    switch (event.type) {
-      case 'content_block_start': {
-        blocks.set(event.index, {
-          type: blockKind(event.content_block.type),
-          text: '',
-          json: '',
-          toolName: event.content_block.type === 'tool_use' ? event.content_block.name : '',
-        });
-        break;
-      }
-      case 'content_block_delta': {
-        const buf = blocks.get(event.index);
-        if (!buf) break;
-        const delta = event.delta;
-        if (delta.type === 'text_delta') buf.text += delta.text;
-        else if (delta.type === 'thinking_delta') buf.text += delta.thinking;
-        else if (delta.type === 'input_json_delta') buf.json += delta.partial_json;
-        break;
-      }
-      case 'content_block_stop': {
-        const buf = blocks.get(event.index);
-        if (!buf) break;
-        blocks.delete(event.index);
-        if (buf.type === 'thinking') {
-          const body = buf.text.trim();
-          if (body) yield { type: 'thought', body };
-        } else if (buf.type === 'text') {
-          const body = buf.text.trim();
-          if (body) yield { type: 'response', body };
-        } else if (buf.type === 'tool_use') {
-          yield {
-            type: 'action',
-            body: toActionBody(buf.toolName, buf.json),
-            approval: 'proposed',
-          };
-        }
-        break;
-      }
-      case 'message_delta': {
-        if (event.delta.stop_reason === 'refusal') {
-          yield {
-            type: 'error',
-            body: 'The agent declined to complete this task (model refusal).',
-          };
-        }
-        break;
-      }
-      default:
-        // message_start / message_stop carry no activity payload.
-        break;
-    }
-  }
+export function defaultMessageStreamer(config: RealProviderRuntimeConfig): MessageStreamer {
+  /* v8 ignore start -- live Anthropic SDK edge */
+  const client = new Anthropic({
+    apiKey: config.apiKey,
+    ...(config.baseURL ? { baseURL: config.baseURL } : {}),
+  });
+  return (params) => client.messages.stream(params);
+  /* v8 ignore stop */
 }
 
 /**
@@ -291,18 +164,12 @@ export async function* translateEvents(
  *
  * @remarks
  * `startSession` drives one Claude turn for the delegated task and streams the model's
- * reasoning/tool-use/output as {@link SessionActivity}. The live SDK call is the only
- * non-deterministic edge and is isolated behind {@link MessageStreamer}; all mapping is
- * pure ({@link buildRequest}, {@link translateEvents}, {@link toActionBody}).
+ * reasoning/tool-use/output as {@link SessionActivity}.
  */
 export class RealProviderRuntime implements AgentRuntime {
   private readonly config: RealProviderRuntimeConfig;
   private readonly streamer: MessageStreamer;
 
-  /**
-   * @param config - Validated Anthropic config from env (API key + optional model/baseURL).
-   * @param streamer - The live message streamer; defaults to one backed by the Anthropic SDK.
-   */
   constructor(config: RealProviderRuntimeConfig, streamer?: MessageStreamer) {
     this.config = config;
     this.streamer = streamer ?? defaultMessageStreamer(config);
@@ -323,50 +190,4 @@ export class RealProviderRuntime implements AgentRuntime {
       throw wrapError(cause);
     }
   }
-}
-
-/**
- * Wrap a thrown SDK/network error as a clear, secret-free {@link Error}.
- *
- * @remarks
- * Surfaces the Anthropic API status when present (typed {@link Anthropic.APIError}) and
- * never includes the request body or credentials in the message.
- *
- * @param cause - The original thrown value.
- * @returns a normalized error describing the failure.
- */
-export function wrapError(cause: unknown): Error {
-  if (cause instanceof Anthropic.APIError) {
-    // `status` is the HTTP status of the failed call; read it via an unknown view so
-    // the message never depends on the SDK's loosely-typed field. Never include the
-    // request body or credentials.
-    const rawStatus: unknown = (cause as { status?: unknown }).status;
-    const status = typeof rawStatus === 'number' ? rawStatus : 'unknown';
-    return new Error(`Anthropic agent runtime failed: ${status} (${cause.name})`);
-  }
-  if (cause instanceof Error) {
-    return new Error(`Anthropic agent runtime failed: ${cause.message}`);
-  }
-  return new Error('Anthropic agent runtime failed: unknown error');
-}
-
-/**
- * Build the default {@link MessageStreamer} backed by the Anthropic SDK.
- *
- * @remarks
- * The SDK client construction and the live `messages.stream` call are the
- * un-unit-testable IO edge (they only run against the real service), so they are
- * excluded from coverage; the translation/mapping around them is fully tested.
- *
- * @param config - The validated runtime config.
- * @returns a streamer that yields raw Messages-API events from the live API.
- */
-export function defaultMessageStreamer(config: RealProviderRuntimeConfig): MessageStreamer {
-  /* v8 ignore start -- live Anthropic SDK edge; verified by running against the real API */
-  const client = new Anthropic({
-    apiKey: config.apiKey,
-    ...(config.baseURL ? { baseURL: config.baseURL } : {}),
-  });
-  return (params) => client.messages.stream(params);
-  /* v8 ignore stop */
 }

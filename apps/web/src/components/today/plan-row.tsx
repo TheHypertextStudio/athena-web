@@ -42,7 +42,7 @@ export function PlanRow({ task, orgName }: PlanRowProps): JSX.Element {
       className="group border-outline-variant bg-surface-container-low hover:bg-surface-container-high focus-visible:ring-ring focus-visible:ring-offset-background flex min-h-10 items-center gap-2 rounded-lg border px-3 transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
     >
       <StatusIcon type={stateTypeOf(task.state)} />
-      <span className="text-on-surface min-w-0 flex-1 truncate text-sm font-medium">
+      <span className="text-on-surface text-body min-w-0 flex-1 truncate font-medium">
         {task.title}
       </span>
       <PriorityDot priority={task.priority} />

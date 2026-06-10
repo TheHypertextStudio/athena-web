@@ -231,7 +231,7 @@ export default function ProgramsListPage(): JSX.Element {
       ) : loadError ? (
         <p
           role="alert"
-          className="border-outline-variant text-destructive rounded-xl border p-4 text-sm"
+          className="border-outline-variant text-destructive text-body rounded-xl border p-4"
         >
           {loadError}
         </p>

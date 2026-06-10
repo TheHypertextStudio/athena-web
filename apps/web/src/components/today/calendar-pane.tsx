@@ -87,7 +87,7 @@ export function CalendarPane({ blocks, taskTitle, orgName }: CalendarPaneProps):
 
   if (blocks.length === 0) {
     return (
-      <div className="border-outline-variant text-on-surface-variant flex flex-col items-center justify-center rounded-xl border border-dashed p-6 text-center text-sm">
+      <div className="border-outline-variant text-on-surface-variant text-body flex flex-col items-center justify-center rounded-xl border border-dashed p-6 text-center">
         No timeboxed blocks today. Drag tasks onto your calendar to plan focus time.
       </div>
     );

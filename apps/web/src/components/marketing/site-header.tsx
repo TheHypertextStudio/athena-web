@@ -21,7 +21,7 @@ export function SiteHeader(): JSX.Element {
     <header className="border-border/60 bg-background/80 sticky top-0 z-40 border-b backdrop-blur">
       <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-6 px-6">
         <Link href="/" className="flex items-center gap-2 text-base font-semibold tracking-tight">
-          <span className="bg-primary text-primary-foreground grid size-7 place-items-center rounded-md text-sm">
+          <span className="bg-primary text-primary-foreground text-body grid size-7 place-items-center rounded-md">
             D
           </span>
           Docket
@@ -31,7 +31,7 @@ export function SiteHeader(): JSX.Element {
             <Link
               key={item.href}
               href={item.href}
-              className="text-muted-foreground hover:text-foreground text-sm transition-colors"
+              className="text-muted-foreground hover:text-foreground text-body transition-colors"
             >
               {item.label}
             </Link>

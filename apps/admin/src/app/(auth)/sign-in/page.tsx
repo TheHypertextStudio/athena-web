@@ -124,13 +124,13 @@ export default function SignInPage(): JSX.Element {
           />
 
           {error ? (
-            <p role="alert" className="text-destructive text-sm">
+            <p role="alert" className="text-destructive text-body">
               {error}
             </p>
           ) : null}
 
           {!passkeySupported && hydrated ? (
-            <p className="text-on-surface-variant text-sm" role="status">
+            <p className="text-on-surface-variant text-body" role="status">
               This browser does not support passkeys, so operator sign-in is unavailable here. Use a
               device with Face ID / Touch ID or a security key.
             </p>

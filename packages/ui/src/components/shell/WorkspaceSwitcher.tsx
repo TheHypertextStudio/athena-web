@@ -171,14 +171,14 @@ export function WorkspaceSwitcher({
               aria-hidden="true"
             />
           )}
-          <span className="min-w-0 flex-1 truncate text-left text-sm font-semibold">
+          <span className="text-body min-w-0 flex-1 truncate text-left font-semibold">
             {triggerLabel}
           </span>
           <ChevronDown aria-hidden="true" className="text-on-surface-variant size-3.5 shrink-0" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-[15rem]">
-        {/* A calm, real section heading at the menu's default `text-sm font-semibold` — not a
+        {/* A calm, real section heading at the menu's default `text-body font-semibold` — not a
             shrunken `text-xs` eyebrow. */}
         <DropdownMenuLabel>Workspaces</DropdownMenuLabel>
         {workspaces.map((w) => (

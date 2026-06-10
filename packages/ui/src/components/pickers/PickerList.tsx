@@ -159,7 +159,7 @@ export function PickerList<TValue extends string = string>({
             aria-label={ariaLabel ? `Search ${ariaLabel}` : 'Search'}
             aria-controls={listId}
             placeholder={searchPlaceholder}
-            className="placeholder:text-on-surface-variant text-on-surface h-6 w-full bg-transparent text-sm outline-none"
+            className="placeholder:text-on-surface-variant text-on-surface text-body h-6 w-full bg-transparent outline-none"
           />
         </div>
       ) : null}
@@ -177,7 +177,7 @@ export function PickerList<TValue extends string = string>({
         {rows.length === 0 ? (
           <li className="flex flex-col items-center gap-1.5 px-2 py-6 text-center">
             <Search aria-hidden="true" className="text-on-surface-variant size-5 opacity-40" />
-            <span className="text-on-surface-variant text-sm">{emptyText}</span>
+            <span className="text-on-surface-variant text-body">{emptyText}</span>
           </li>
         ) : (
           rows.map((row, index) => {
@@ -194,7 +194,7 @@ export function PickerList<TValue extends string = string>({
                       setActiveIndex(index);
                     }}
                     className={cn(
-                      'text-on-surface-variant flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm',
+                      'text-on-surface-variant text-body flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left',
                       focusRingInset,
                       active && 'bg-surface-container-highest',
                     )}
@@ -220,7 +220,7 @@ export function PickerList<TValue extends string = string>({
                     setActiveIndex(index);
                   }}
                   className={cn(
-                    'text-on-surface flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm',
+                    'text-on-surface text-body flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left',
                     'disabled:pointer-events-none disabled:opacity-50',
                     focusRingInset,
                     active && 'bg-surface-container-highest',

@@ -161,7 +161,7 @@ function ConsentPage(): JSX.Element {
   if (sessionPending) {
     return (
       <main className="bg-surface flex min-h-screen items-center justify-center px-6 py-12">
-        <div className="text-on-surface-variant text-sm">Loading…</div>
+        <div className="text-on-surface-variant text-body">Loading…</div>
       </main>
     );
   }
@@ -212,7 +212,7 @@ function ConsentPage(): JSX.Element {
                   const info = SCOPE_LABELS[scope];
                   return (
                     <li key={scope} className="flex flex-col gap-0.5">
-                      <span className="text-on-surface text-sm font-medium">
+                      <span className="text-on-surface text-body font-medium">
                         {info?.label ?? scope}
                       </span>
                       {info?.detail ? (
@@ -226,7 +226,7 @@ function ConsentPage(): JSX.Element {
           ) : null}
 
           {error ? (
-            <p role="alert" className="text-destructive text-sm">
+            <p role="alert" className="text-destructive text-body">
               {error}
             </p>
           ) : null}

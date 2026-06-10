@@ -29,7 +29,7 @@ import { PropertyTrigger } from './PropertyTrigger';
  * standard interactive control rhythm.
  */
 const DATE_FIELD_CLASS =
-  'border-outline-variant text-on-surface h-9 rounded-md border bg-transparent px-3 text-sm';
+  'border-outline-variant text-on-surface h-9 rounded-md border bg-transparent px-3 text-body';
 
 /** Default short, locale-aware label for an ISO `YYYY-MM-DD` date, or `undefined` when absent. */
 function defaultFormat(value: string | null): string | undefined {

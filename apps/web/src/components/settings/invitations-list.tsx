@@ -71,7 +71,7 @@ export function InvitationsList({
 }: InvitationsListProps): JSX.Element {
   if (invitations.length === 0) {
     return (
-      <div className="text-on-surface-variant flex items-center gap-2 px-3 py-6 text-sm">
+      <div className="text-on-surface-variant text-body flex items-center gap-2 px-3 py-6">
         <Inbox aria-hidden="true" className="size-4" />
         <span>No pending invitations.</span>
       </div>
@@ -116,7 +116,7 @@ function InvitationRow({
     <li className="hover:bg-surface-container-high flex min-h-14 items-center gap-3 px-3 py-2 transition-colors">
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <div className="flex items-center gap-2">
-          <span className="text-on-surface truncate text-sm font-medium">{invitation.email}</span>
+          <span className="text-on-surface text-body truncate font-medium">{invitation.email}</span>
           {invitation.asGuest ? (
             <Badge variant="secondary" className="font-normal">
               Guest

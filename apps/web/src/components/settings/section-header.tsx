@@ -30,7 +30,7 @@ export function SectionHeader({ title, description, action }: SectionHeaderProps
     <header className="border-outline-variant flex flex-col gap-3 border-b pb-4 @2xl:flex-row @2xl:flex-wrap @2xl:items-center @2xl:justify-between">
       <div className="flex flex-col gap-1">
         <h2 className="text-on-surface text-base font-semibold">{title}</h2>
-        <p className="text-on-surface-variant text-sm">{description}</p>
+        <p className="text-on-surface-variant text-body">{description}</p>
       </div>
       {action ? <div className="flex shrink-0 items-center gap-2">{action}</div> : null}
     </header>

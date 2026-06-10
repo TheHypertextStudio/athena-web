@@ -125,7 +125,7 @@ export function SessionSidebar({
           <div className="flex items-center gap-2">
             <ActorAvatar kind="agent" name={agentName} avatarUrl={agentAvatarUrl} size={28} />
             <div className="flex min-w-0 flex-col">
-              <span className="text-on-surface truncate text-sm font-medium">{agentName}</span>
+              <span className="text-on-surface text-body truncate font-medium">{agentName}</span>
               <span className="text-on-surface-variant text-xs">
                 {ownerName ? `on behalf of ${ownerName}` : 'no accountable owner'}
               </span>

@@ -119,7 +119,7 @@ export function ConnectWizard({
                 )}
               >
                 <span className="flex items-center justify-between gap-2">
-                  <span className="text-on-surface text-sm font-semibold">{copy.title}</span>
+                  <span className="text-on-surface text-body font-semibold">{copy.title}</span>
                   {isSelected ? <Check aria-hidden="true" className="text-primary size-4" /> : null}
                 </span>
                 <span className="text-on-surface text-xs font-medium">{copy.consequence}</span>
@@ -135,7 +135,7 @@ export function ConnectWizard({
         </div>
       </fieldset>
 
-      <div className="border-outline-variant bg-surface-container-low rounded-lg border p-3 text-sm">
+      <div className="border-outline-variant bg-surface-container-low text-body rounded-lg border p-3">
         <p className="text-on-surface">
           {pattern === 'migration' ? (
             <>
@@ -157,7 +157,7 @@ export function ConnectWizard({
       </div>
 
       {error ? (
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" className="text-destructive text-body">
           {error}
         </p>
       ) : null}

@@ -131,7 +131,7 @@ export function VocabularyTab({
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
-        <p className="text-on-surface-variant text-sm leading-relaxed">
+        <p className="text-on-surface-variant text-body leading-relaxed">
           {isPersonal
             ? 'Pick the preset that fits how you work, and every screen relabels its nouns to match.'
             : 'Docket speaks your organization’s language. Pick the preset that fits how your team works, and every screen relabels its nouns to match.'}{' '}
@@ -163,7 +163,7 @@ export function VocabularyTab({
               )}
             >
               <span className="flex items-center justify-between">
-                <span className="text-on-surface text-sm font-semibold">{preset.name}</span>
+                <span className="text-on-surface text-body font-semibold">{preset.name}</span>
                 {isSelected ? <Check aria-hidden="true" className="text-primary size-4" /> : null}
               </span>
               <span className="text-on-surface-variant text-xs leading-snug">{preset.tagline}</span>
@@ -180,7 +180,7 @@ export function VocabularyTab({
         className="border-outline-variant bg-surface-container-low rounded-xl border"
       >
         <div className="border-outline-variant border-b px-4 py-3">
-          <h3 className="text-on-surface text-sm font-semibold">
+          <h3 className="text-on-surface text-body font-semibold">
             How the {PRESETS.find((p) => p.value === selected)?.name ?? 'selected'} vocabulary reads
           </h3>
           <p className="text-on-surface-variant text-xs">
@@ -204,7 +204,7 @@ export function VocabularyTab({
                 <dt className="text-on-surface-variant text-xs capitalize">{key}</dt>
                 <dd
                   className={cn(
-                    'text-sm font-medium',
+                    'text-body font-medium',
                     remapped ? 'text-primary' : 'text-on-surface',
                   )}
                 >
@@ -221,7 +221,7 @@ export function VocabularyTab({
         <p
           role={noticeIsError ? 'alert' : 'status'}
           className={cn(
-            'rounded-lg border p-3 text-sm',
+            'text-body rounded-lg border p-3',
             noticeIsError
               ? 'border-destructive/40 text-destructive bg-destructive/5'
               : 'border-outline-variant text-on-surface-variant',
@@ -254,7 +254,7 @@ export function VocabularyTab({
           ) : null}
         </div>
       ) : (
-        <p className="text-on-surface-variant text-sm">
+        <p className="text-on-surface-variant text-body">
           {isPersonal
             ? 'You don’t have permission to change this vocabulary.'
             : 'Only an owner or admin can change the organization’s vocabulary.'}

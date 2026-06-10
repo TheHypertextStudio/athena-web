@@ -33,25 +33,25 @@ export function SiteFooter(): JSX.Element {
       <div className="mx-auto grid w-full max-w-6xl gap-10 px-6 py-14 sm:grid-cols-2 lg:grid-cols-4">
         <div className="flex flex-col gap-3 lg:col-span-2">
           <span className="flex items-center gap-2 text-base font-semibold tracking-tight">
-            <span className="bg-primary text-primary-foreground grid size-7 place-items-center rounded-md text-sm">
+            <span className="bg-primary text-primary-foreground text-body grid size-7 place-items-center rounded-md">
               D
             </span>
             Docket
           </span>
-          <p className="text-muted-foreground max-w-sm text-sm">
+          <p className="text-muted-foreground text-body max-w-sm">
             One calm command center for every organization you run — startups, nonprofits, and
             everything in between.
           </p>
         </div>
         {COLUMNS.map((column) => (
           <div key={column.title} className="flex flex-col gap-3">
-            <p className="text-sm font-semibold">{column.title}</p>
+            <p className="text-body font-semibold">{column.title}</p>
             <ul className="flex flex-col gap-2">
               {column.links.map((link) => (
                 <li key={link.label}>
                   <Link
                     href={link.href}
-                    className="text-muted-foreground hover:text-foreground text-sm transition-colors"
+                    className="text-muted-foreground hover:text-foreground text-body transition-colors"
                   >
                     {link.label}
                   </Link>

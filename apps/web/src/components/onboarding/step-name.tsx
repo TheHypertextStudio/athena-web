@@ -29,7 +29,7 @@ export interface StepNameProps {
 export function StepName({ value, onChange, onSubmit, canSubmit }: StepNameProps): JSX.Element {
   return (
     <div className="flex flex-col gap-2">
-      <label htmlFor="org-name" className="text-on-surface text-sm font-medium">
+      <label htmlFor="org-name" className="text-on-surface text-body font-medium">
         Organization name
       </label>
       <Input
@@ -51,7 +51,7 @@ export function StepName({ value, onChange, onSubmit, canSubmit }: StepNameProps
         placeholder="Acme Inc."
         className="h-11 text-base"
       />
-      <p className="text-on-surface-variant mt-1 text-sm">
+      <p className="text-on-surface-variant text-body mt-1">
         This is the shared space your team will work in. You can rename it — or create more — at any
         time.
       </p>

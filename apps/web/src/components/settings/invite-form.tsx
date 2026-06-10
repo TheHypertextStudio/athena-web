@@ -105,7 +105,7 @@ export function InviteForm({
         </Button>
       </div>
 
-      <label className="text-on-surface-variant flex w-fit cursor-pointer items-center gap-2 text-sm">
+      <label className="text-on-surface-variant text-body flex w-fit cursor-pointer items-center gap-2">
         <input
           type="checkbox"
           className="accent-primary size-4 rounded"
@@ -121,7 +121,7 @@ export function InviteForm({
       </label>
 
       {error ? (
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" className="text-destructive text-body">
           {error}
         </p>
       ) : null}

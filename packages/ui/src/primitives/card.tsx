@@ -51,7 +51,7 @@ export function CardDescription({
   className,
   ...props
 }: React.ComponentProps<'div'>): React.JSX.Element {
-  return <div className={cn('text-on-surface-variant text-sm', className)} {...props} />;
+  return <div className={cn('text-on-surface-variant text-body', className)} {...props} />;
 }
 
 /** Card content region — padded body below the header. */

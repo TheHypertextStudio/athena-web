@@ -50,17 +50,17 @@ export function Hero(): JSX.Element {
         <div className="border-border bg-card w-full max-w-3xl rounded-xl border p-2 shadow-xl">
           <div className="border-border/60 bg-background rounded-lg border">
             <div className="border-border/60 flex items-center justify-between border-b px-4 py-3">
-              <p className="text-sm font-medium">Today</p>
+              <p className="text-body font-medium">Today</p>
               <span className="text-muted-foreground text-xs">across 3 organizations</span>
             </div>
             <ul className="divide-border/60 divide-y">
               {PREVIEW_ORGS.map((org) => (
                 <li key={org.name} className="flex items-center gap-3 px-4 py-3">
-                  <span className="bg-secondary text-secondary-foreground grid size-8 shrink-0 place-items-center rounded-md text-sm font-medium">
+                  <span className="bg-secondary text-secondary-foreground text-body grid size-8 shrink-0 place-items-center rounded-md font-medium">
                     {org.glyph}
                   </span>
                   <span className="min-w-0">
-                    <span className="block truncate text-sm font-medium">{org.name}</span>
+                    <span className="text-body block truncate font-medium">{org.name}</span>
                     <span className="text-muted-foreground block truncate text-xs">{org.line}</span>
                   </span>
                 </li>

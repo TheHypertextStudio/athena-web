@@ -102,7 +102,7 @@ export function ViewRunner({
 
   if (applied.rows.length === 0) {
     return (
-      <p className="text-on-surface-variant p-8 text-center text-sm">
+      <p className="text-on-surface-variant text-body p-8 text-center">
         No tasks match this view. Adjust the filters above, or check back as work comes in.
       </p>
     );

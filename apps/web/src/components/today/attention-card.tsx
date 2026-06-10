@@ -89,8 +89,8 @@ export function AttentionCard({
 
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex items-baseline gap-2">
-            <span className="text-on-surface text-sm font-semibold">{title}</span>
-            <span className={`text-sm font-semibold tabular-nums ${countTone}`}>{count}</span>
+            <span className="text-on-surface text-body font-semibold">{title}</span>
+            <span className={`text-body font-semibold tabular-nums ${countTone}`}>{count}</span>
           </div>
           <span className="text-on-surface-variant text-xs text-balance">
             {active ? activeDescription : clearDescription}

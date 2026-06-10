@@ -249,7 +249,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
             placeholder={
               scope === 'org' ? `Search ${orgLocalLabel}…` : 'Search everything, or jump to…'
             }
-            className="text-on-surface placeholder:text-on-surface-variant h-12 flex-1 bg-transparent text-sm outline-none"
+            className="text-on-surface placeholder:text-on-surface-variant text-body h-12 flex-1 bg-transparent outline-none"
           />
           <ScopeToggle
             scope={scope}
@@ -267,7 +267,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
           {error ? (
             <div
               role="alert"
-              className="text-destructive bg-destructive/5 border-destructive/30 m-1 rounded-md border px-3 py-2 text-sm"
+              className="text-destructive bg-destructive/5 border-destructive/30 text-body m-1 rounded-md border px-3 py-2"
             >
               {error}
             </div>
@@ -283,8 +283,8 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
 
           {showEmpty ? (
             <div className="flex flex-col items-center justify-center gap-1 px-4 py-10 text-center">
-              <p className="text-on-surface text-sm font-medium">No matches</p>
-              <p className="text-on-surface-variant max-w-xs text-sm">
+              <p className="text-on-surface text-body font-medium">No matches</p>
+              <p className="text-on-surface-variant text-body max-w-xs">
                 {hasQuery
                   ? 'Nothing matched your search. Try a different term or switch scope.'
                   : 'Start typing to search across your organizations.'}

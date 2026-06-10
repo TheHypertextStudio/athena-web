@@ -69,7 +69,7 @@ export default function LifecyclePage(): JSX.Element {
               aria-label={lifecycleLabel(column.lifecycleState)}
             >
               <header className="flex items-center justify-between">
-                <h2 className="text-on-surface text-sm font-medium">
+                <h2 className="text-on-surface text-body font-medium">
                   {lifecycleLabel(column.lifecycleState)}
                 </h2>
                 <span className="bg-surface-container-highest text-on-surface-variant rounded-full px-2 py-0.5 text-xs tabular-nums">
@@ -84,7 +84,7 @@ export default function LifecyclePage(): JSX.Element {
                         href={`/orgs/${org.id}`}
                         className={`${ROW_CLASS} flex-col gap-1 rounded-md px-3 py-2`}
                       >
-                        <span className="truncate text-sm font-medium">{org.name}</span>
+                        <span className="text-body truncate font-medium">{org.name}</span>
                         <span className="text-on-surface-variant truncate text-xs">
                           {org.deleteAfterAt
                             ? `Delete after ${formatTimestamp(org.deleteAfterAt)}`

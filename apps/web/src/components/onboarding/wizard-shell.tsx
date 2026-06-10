@@ -74,7 +74,7 @@ export function WizardShell({
       <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col">
         <header className="mb-10 flex flex-col gap-6">
           <div className="flex items-center justify-between">
-            <span className="text-on-surface flex items-center gap-2 text-sm font-semibold tracking-tight">
+            <span className="text-on-surface text-body flex items-center gap-2 font-semibold tracking-tight">
               <Sparkles className="text-primary size-4" />
               Docket
             </span>

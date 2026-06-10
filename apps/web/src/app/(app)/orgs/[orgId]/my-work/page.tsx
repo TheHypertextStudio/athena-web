@@ -394,7 +394,7 @@ export default function MyWorkPage(): JSX.Element {
           </div>
         </div>
         {createError ? (
-          <p role="alert" className="text-destructive text-sm">
+          <p role="alert" className="text-destructive text-body">
             {createError}
           </p>
         ) : null}
@@ -432,7 +432,7 @@ export default function MyWorkPage(): JSX.Element {
             <Skeleton className="h-8 w-full" />
           </div>
         ) : loadError ? (
-          <p role="alert" className="text-destructive p-4 text-sm">
+          <p role="alert" className="text-destructive text-body p-4">
             {loadError}
           </p>
         ) : visibleTasks.length === 0 ? (
@@ -443,8 +443,10 @@ export default function MyWorkPage(): JSX.Element {
             >
               <ListChecks className="size-5" />
             </span>
-            <p className="text-on-surface text-sm font-medium">{empty.title}</p>
-            <p className="text-on-surface-variant max-w-xs text-sm leading-relaxed">{empty.body}</p>
+            <p className="text-on-surface text-body font-medium">{empty.title}</p>
+            <p className="text-on-surface-variant text-body max-w-xs leading-relaxed">
+              {empty.body}
+            </p>
           </div>
         ) : (
           <ListView

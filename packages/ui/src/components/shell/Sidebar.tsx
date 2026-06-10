@@ -100,12 +100,12 @@ interface NavRow<K extends string> {
  * A calm, real section heading above a sidebar group.
  *
  * @remarks
- * A plain `text-sm font-medium` title — no `tracking-wide` pseudo-uppercase eyebrow. The section
+ * A plain `text-body font-medium` title — no `tracking-wide` pseudo-uppercase eyebrow. The section
  * is separated from the group above it by `mt-4`, and the heading sits `mb-1` above its first row
  * (rows then start flush beneath it), matching the section-spacing rhythm.
  */
 function GroupLabel({ children }: { readonly children: React.ReactNode }): React.JSX.Element {
-  return <p className="text-on-surface-variant mt-4 mb-1 px-3 text-sm font-medium">{children}</p>;
+  return <p className="text-on-surface-variant text-body mt-4 mb-1 px-3 font-medium">{children}</p>;
 }
 
 /**
@@ -250,7 +250,7 @@ function WorkspaceEmpty(): React.JSX.Element {
       >
         <Building className="size-5" />
       </span>
-      <p className="text-on-surface text-sm font-medium">No workspace yet</p>
+      <p className="text-on-surface text-body font-medium">No workspace yet</p>
       <p className="text-on-surface-variant text-xs leading-relaxed">
         Switch into a workspace to see its projects and tasks here.
       </p>

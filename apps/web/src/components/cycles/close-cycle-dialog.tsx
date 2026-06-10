@@ -144,7 +144,7 @@ export function CloseCycleDialog({
         ) : null}
 
         {closeError ? (
-          <p role="alert" className="text-destructive px-4 pt-3 text-sm">
+          <p role="alert" className="text-destructive text-body px-4 pt-3">
             {closeError}
           </p>
         ) : null}

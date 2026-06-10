@@ -39,7 +39,7 @@ export default function AboutPage(): JSX.Element {
   return (
     <>
       <section className="mx-auto w-full max-w-3xl px-6 pt-20 pb-12">
-        <span className="text-primary text-sm font-medium">About Docket</span>
+        <span className="text-primary text-body font-medium">About Docket</span>
         <h1 className="mt-3 text-4xl font-semibold tracking-tight text-balance sm:text-5xl">
           Most people run more than one thing
         </h1>
@@ -69,7 +69,7 @@ export default function AboutPage(): JSX.Element {
               className="border-border bg-card flex flex-col gap-2 rounded-xl border p-6"
             >
               <h2 className="text-base font-semibold">{principle.title}</h2>
-              <p className="text-muted-foreground text-sm">{principle.body}</p>
+              <p className="text-muted-foreground text-body">{principle.body}</p>
             </div>
           ))}
         </div>

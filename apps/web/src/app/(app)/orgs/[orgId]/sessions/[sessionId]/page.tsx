@@ -303,7 +303,7 @@ export default function SessionViewPage(): JSX.Element {
       <div className="mx-auto w-full max-w-6xl p-4 @2xl:p-6 @4xl:p-8">
         <p
           role="alert"
-          className="border-outline-variant text-destructive rounded-lg border p-4 text-sm"
+          className="border-outline-variant text-destructive text-body rounded-lg border p-4"
         >
           {loadError}
         </p>
@@ -314,7 +314,7 @@ export default function SessionViewPage(): JSX.Element {
   if (!session) {
     return (
       <div className="mx-auto w-full max-w-6xl p-4 @2xl:p-6 @4xl:p-8">
-        <p className="border-outline-variant text-on-surface-variant rounded-lg border border-dashed p-6 text-center text-sm">
+        <p className="border-outline-variant text-on-surface-variant text-body rounded-lg border border-dashed p-6 text-center">
           This session could not be found.
         </p>
       </div>
@@ -331,13 +331,13 @@ export default function SessionViewPage(): JSX.Element {
           {session.taskId ? (
             <Link
               href={`/orgs/${orgId}/tasks/${session.taskId}`}
-              className="text-on-surface-variant hover:text-on-surface focus-visible:ring-ring -ml-1 inline-flex items-center gap-1 rounded px-1 text-sm transition-colors outline-none focus-visible:ring-1"
+              className="text-on-surface-variant hover:text-on-surface focus-visible:ring-ring text-body -ml-1 inline-flex items-center gap-1 rounded px-1 transition-colors outline-none focus-visible:ring-1"
             >
               <ChevronLeft className="h-4 w-4" />
               Back to {taskTitle ?? taskLabel.toLowerCase()}
             </Link>
           ) : (
-            <span className="text-on-surface-variant text-sm">Ad-hoc session</span>
+            <span className="text-on-surface-variant text-body">Ad-hoc session</span>
           )}
           {orgName ? <OrgChip orgId={orgId} name={orgName} /> : null}
         </div>
@@ -350,7 +350,7 @@ export default function SessionViewPage(): JSX.Element {
         </div>
 
         {actionError ? (
-          <p role="alert" className="text-destructive text-sm">
+          <p role="alert" className="text-destructive text-body">
             {actionError}
           </p>
         ) : null}

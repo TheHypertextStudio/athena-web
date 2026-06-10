@@ -371,7 +371,7 @@ export default function InitiativeDetailPage(): JSX.Element {
       <div className="mx-auto w-full max-w-6xl p-4 @2xl:p-6 @4xl:p-8">
         <p
           role="alert"
-          className="border-outline-variant text-destructive rounded-lg border p-4 text-sm"
+          className="border-outline-variant text-destructive text-body rounded-lg border p-4"
         >
           {error}
         </p>
@@ -382,7 +382,7 @@ export default function InitiativeDetailPage(): JSX.Element {
   if (!detail) {
     return (
       <div className="mx-auto w-full max-w-6xl p-4 @2xl:p-6 @4xl:p-8">
-        <p className="border-outline-variant text-on-surface-variant rounded-xl border border-dashed p-8 text-center text-sm">
+        <p className="border-outline-variant text-on-surface-variant text-body rounded-xl border border-dashed p-8 text-center">
           This {initiativeNounLower} could not be found.
         </p>
       </div>
@@ -398,7 +398,7 @@ export default function InitiativeDetailPage(): JSX.Element {
         onClick={() => {
           router.push(`/orgs/${orgId}/initiatives`);
         }}
-        className="text-on-surface-variant hover:text-on-surface focus-visible:ring-ring -ml-1 inline-flex w-fit items-center gap-1 rounded text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none"
+        className="text-on-surface-variant hover:text-on-surface focus-visible:ring-ring text-body -ml-1 inline-flex w-fit items-center gap-1 rounded transition-colors focus-visible:ring-2 focus-visible:outline-none"
       >
         <ChevronLeft aria-hidden="true" className="size-4" />
         All {initiativeNounPlural.toLowerCase()}
@@ -414,7 +414,7 @@ export default function InitiativeDetailPage(): JSX.Element {
           <RolledUpHealthPill health={detail.rolledUpHealth} />
         </div>
         {detail.description ? (
-          <p className="text-on-surface-variant max-w-2xl text-sm leading-relaxed">
+          <p className="text-on-surface-variant text-body max-w-2xl leading-relaxed">
             {detail.description}
           </p>
         ) : null}
@@ -464,7 +464,7 @@ export default function InitiativeDetailPage(): JSX.Element {
             }}
           />
           {propsError ? (
-            <p role="alert" className="text-destructive px-1 text-sm">
+            <p role="alert" className="text-destructive text-body px-1">
               {propsError}
             </p>
           ) : null}

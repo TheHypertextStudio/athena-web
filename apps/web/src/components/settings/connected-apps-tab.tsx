@@ -164,7 +164,7 @@ function CodeBlock({ code, label = 'Copy' }: { code: string; label?: string }): 
 
   return (
     <div className="bg-surface-container relative rounded-lg">
-      <pre className="text-on-surface overflow-x-auto p-4 pr-24 font-mono text-sm leading-relaxed">
+      <pre className="text-on-surface text-body overflow-x-auto p-4 pr-24 font-mono leading-relaxed">
         <code>{code}</code>
       </pre>
       <Button
@@ -185,7 +185,7 @@ function CodeBlock({ code, label = 'Copy' }: { code: string; label?: string }): 
 function CliSetup({ client, url }: { client: CliClient; url: string }): JSX.Element {
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-on-surface-variant text-sm">Run this command in your terminal:</p>
+      <p className="text-on-surface-variant text-body">Run this command in your terminal:</p>
       <CodeBlock code={client.command(url)} label="Copy command" />
       {client.note ? <p className="text-on-surface-variant text-xs">{client.note}</p> : null}
     </div>
@@ -222,14 +222,14 @@ function DeepLinkSetup({
         onClick={() => {
           setShowManual((v) => !v);
         }}
-        className="text-on-surface-variant hover:text-on-surface w-fit text-sm underline-offset-2 transition-colors hover:underline"
+        className="text-on-surface-variant hover:text-on-surface text-body w-fit underline-offset-2 transition-colors hover:underline"
       >
         {showManual ? 'Hide manual setup' : 'Set up manually instead'}
       </button>
 
       {showManual ? (
         <div className="flex flex-col gap-3">
-          <p className="text-on-surface-variant text-sm">
+          <p className="text-on-surface-variant text-body">
             Paste this into{' '}
             {filePath ? (
               <code className="bg-surface-container rounded px-1.5 py-0.5 font-mono text-xs">
@@ -261,7 +261,7 @@ function ConfigSetup({
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-on-surface-variant text-sm">
+      <p className="text-on-surface-variant text-body">
         Paste this into{' '}
         {filePath ? (
           <code className="bg-surface-container rounded px-1.5 py-0.5 font-mono text-xs">
@@ -281,7 +281,7 @@ function ConfigSetup({
 function StepsSetup({ client, url }: { client: StepsClient; url: string }): JSX.Element {
   return (
     <div className="flex flex-col gap-3">
-      <ol className="text-on-surface-variant flex flex-col gap-2 text-sm">
+      <ol className="text-on-surface-variant text-body flex flex-col gap-2">
         {client.steps.map((step, i) => (
           <li key={step} className="flex gap-2.5">
             <span className="bg-surface-container text-on-surface-variant flex size-5 shrink-0 items-center justify-center rounded-full text-xs font-medium">
@@ -300,7 +300,7 @@ function StepsSetup({ client, url }: { client: StepsClient; url: string }): JSX.
 function UrlSetup({ client, url }: { client: UrlClient; url: string }): JSX.Element {
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-on-surface-variant text-sm">MCP server URL:</p>
+      <p className="text-on-surface-variant text-body">MCP server URL:</p>
       <CodeBlock code={url} label="Copy URL" />
       {client.note ? <p className="text-on-surface-variant text-xs">{client.note}</p> : null}
     </div>
@@ -319,7 +319,7 @@ function ClientSetup({ mcpUrl }: { mcpUrl: string }): JSX.Element {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="mcp-client-select" className="text-on-surface text-sm font-medium">
+        <label htmlFor="mcp-client-select" className="text-on-surface text-body font-medium">
           Which app are you setting up?
         </label>
         <select
@@ -328,7 +328,7 @@ function ClientSetup({ mcpUrl }: { mcpUrl: string }): JSX.Element {
           onChange={(e) => {
             setSelectedId(e.target.value);
           }}
-          className="border-outline-variant bg-surface-container-low text-on-surface focus:ring-primary w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2"
+          className="border-outline-variant bg-surface-container-low text-on-surface focus:ring-primary text-body w-full rounded-lg border px-3 py-2 outline-none focus:ring-2"
         >
           {MCP_CLIENTS.map((c) => (
             <option key={c.id} value={c.id}>
@@ -426,8 +426,8 @@ export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.
       {/* ── Setup guide ── */}
       <section className="flex flex-col gap-4">
         <div className="flex flex-col gap-1">
-          <h2 className="text-on-surface text-sm font-medium">Connect an MCP client</h2>
-          <p className="text-on-surface-variant text-sm leading-relaxed">
+          <h2 className="text-on-surface text-body font-medium">Connect an MCP client</h2>
+          <p className="text-on-surface-variant text-body leading-relaxed">
             Give Claude Desktop, Cursor, or any MCP-compatible tool access to your Docket account.
           </p>
         </div>
@@ -440,8 +440,8 @@ export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.
       {/* ── Authorized clients roster ── */}
       <section className="flex flex-col gap-4" aria-label="Authorized MCP clients">
         <div className="flex flex-col gap-1">
-          <h2 className="text-on-surface text-sm font-medium">Apps with access to your Docket</h2>
-          <p className="text-on-surface-variant text-sm">
+          <h2 className="text-on-surface text-body font-medium">Apps with access to your Docket</h2>
+          <p className="text-on-surface-variant text-body">
             Each app below can read or act on your work using the scopes you approved. Revoking
             removes all their access tokens immediately — they will need to re-authorize.
           </p>
@@ -461,7 +461,7 @@ export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.
             ))}
           </div>
         ) : loadError ? (
-          <p role="alert" className="text-destructive text-sm">
+          <p role="alert" className="text-destructive text-body">
             {loadError}
           </p>
         ) : apps.length === 0 ? (
@@ -475,11 +475,11 @@ export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.
           <ul className="border-outline-variant divide-outline-variant flex flex-col divide-y rounded-lg border">
             {apps.map((app) => (
               <li key={app.clientId} className="flex items-center gap-4 px-4 py-3">
-                <span className="bg-surface-container text-on-surface-variant flex size-9 shrink-0 items-center justify-center rounded-lg text-sm font-medium">
+                <span className="bg-surface-container text-on-surface-variant text-body flex size-9 shrink-0 items-center justify-center rounded-lg font-medium">
                   {app.name.charAt(0).toUpperCase()}
                 </span>
                 <div className="flex min-w-0 flex-1 flex-col gap-1">
-                  <span className="text-on-surface truncate text-sm font-medium">{app.name}</span>
+                  <span className="text-on-surface text-body truncate font-medium">{app.name}</span>
                   <div className="flex flex-wrap gap-1">
                     {app.scopes.map((scope) => (
                       <Badge key={scope} variant="secondary" className="text-xs font-normal">
@@ -505,7 +505,7 @@ export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.
         )}
 
         {revoke.isError ? (
-          <p role="alert" className="text-destructive text-sm">
+          <p role="alert" className="text-destructive text-body">
             {revoke.error.message}
           </p>
         ) : null}

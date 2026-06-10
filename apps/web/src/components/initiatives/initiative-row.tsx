@@ -79,13 +79,13 @@ export function InitiativeRow({
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2.5">
           <Target aria-hidden="true" className="text-on-surface-variant size-4 shrink-0" />
-          <span className="text-on-surface truncate text-sm font-semibold">{name}</span>
+          <span className="text-on-surface text-body truncate font-semibold">{name}</span>
         </div>
         <RolledUpHealthPill health={rolledUpHealth} className="shrink-0" />
       </div>
 
       {description ? (
-        <p className="text-on-surface-variant line-clamp-1 pl-[26px] text-sm">{description}</p>
+        <p className="text-on-surface-variant text-body line-clamp-1 pl-[26px]">{description}</p>
       ) : null}
 
       <p className="text-on-surface-variant pl-[26px] text-xs">

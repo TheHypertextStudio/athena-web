@@ -157,7 +157,7 @@ export function CreateProgramDialog({
     <ComposerShell
       open={open}
       onOpenChange={handleOpenChange}
-      heading={`New ${programNoun}`}
+      heading={`New ${programNoun.toLowerCase()}`}
       description={`Name your ${programNounLower}, then set its owner, status, and health now — or later.`}
       title={name}
       onTitleChange={setName}

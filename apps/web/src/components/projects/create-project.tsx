@@ -173,7 +173,7 @@ export function CreateProjectDialog({
     <ComposerShell
       open={open}
       onOpenChange={handleOpenChange}
-      heading={`New ${projectNoun}`}
+      heading={`New ${projectNoun.toLowerCase()}`}
       description={`Name your ${projectNounLower}, then set its lead, timeline, and ${initiativeNoun.toLowerCase()}s now — or later.`}
       title={name}
       onTitleChange={setName}

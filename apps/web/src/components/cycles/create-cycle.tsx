@@ -193,7 +193,7 @@ export function CreateCycleDialog({
     <ComposerShell
       open={open}
       onOpenChange={handleOpenChange}
-      heading={`New ${cycleNoun}`}
+      heading={`New ${cycleNoun.toLowerCase()}`}
       description={`Pick a team and a date range to time-box your work. Name it, or leave it as ${cycleNoun} ${String(nextNumber)}.`}
       title={name}
       onTitleChange={setName}

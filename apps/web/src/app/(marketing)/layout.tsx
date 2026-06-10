@@ -18,7 +18,7 @@ import './marketing.css';
  */
 const display = Fraunces({
   subsets: ['latin'],
-  axes: ['opsz'],
+  axes: ['opsz', 'WONK'],
   style: ['normal', 'italic'],
   variable: '--font-fraunces',
   display: 'swap',

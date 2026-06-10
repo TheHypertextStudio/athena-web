@@ -26,7 +26,7 @@ export function SiteHeader(): JSX.Element {
       <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-6 px-6">
         <Link
           href="/"
-          className="font-display text-ink text-2xl leading-none font-semibold tracking-tight"
+          className="font-display text-ink wonk text-2xl leading-none font-semibold tracking-tight"
         >
           Docket
         </Link>

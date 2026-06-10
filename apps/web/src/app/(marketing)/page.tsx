@@ -1,19 +1,25 @@
 import type { JSX } from 'react';
 
 import { CtaBand } from '@/components/marketing/cta-band';
-import { FeatureGrid } from '@/components/marketing/feature-grid';
+import { FeatureLedger } from '@/components/marketing/feature-ledger';
 import { Hero } from '@/components/marketing/hero';
 import { HowItWorks } from '@/components/marketing/how-it-works';
-import { PricingTiers } from '@/components/marketing/pricing-tiers';
+import { PricingNote } from '@/components/marketing/pricing-note';
+import { PrinciplesStrip } from '@/components/marketing/principles-strip';
+import { ProductFrame } from '@/components/marketing/product-frame';
+import { SeparationDiagram } from '@/components/marketing/separation-diagram';
 
-/** Marketing home page. */
+/** Marketing home page — editorial narrative: hero → proof → thesis → ledger → path → close. */
 export default function HomePage(): JSX.Element {
   return (
     <>
       <Hero />
-      <FeatureGrid />
+      <ProductFrame />
+      <SeparationDiagram />
+      <FeatureLedger />
       <HowItWorks />
-      <PricingTiers />
+      <PrinciplesStrip />
+      <PricingNote />
       <CtaBand />
     </>
   );

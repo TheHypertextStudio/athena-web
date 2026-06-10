@@ -11,39 +11,44 @@ export const metadata: Metadata = {
 };
 
 interface Principle {
+  number: string;
   title: string;
   body: string;
 }
 
 const PRINCIPLES: readonly Principle[] = [
   {
+    number: '01',
     title: 'Separation by default',
     body: 'Every organization is its own world — its own people, tools, and vocabulary. Nothing leaks between the startup and the nonprofit unless you choose it to.',
   },
   {
+    number: '02',
     title: 'Unification on top',
     body: 'Your command center gathers the organizations you belong to into one daily view, so running many things feels like running one.',
   },
   {
+    number: '03',
     title: 'On top of your tools',
     body: 'Docket coordinates the work; your documents, calendars, and code stay where they already live. We connect, we do not replace.',
   },
   {
+    number: '04',
     title: 'People and agents, together',
     body: 'Agents are teammates you can hand work to and supervise — never a black box. You always see the steps and approve what matters.',
   },
 ];
-/** About page. */
 
+/** About page — editorial essay register: Fraunces display, measured prose, numbered principles. */
 export default function AboutPage(): JSX.Element {
   return (
     <>
-      <section className="mx-auto w-full max-w-3xl px-6 pt-20 pb-12">
-        <span className="text-primary text-body font-medium">About Docket</span>
-        <h1 className="mt-3 text-4xl font-semibold tracking-tight text-balance sm:text-5xl">
-          Most people run more than one thing
+      <section className="mx-auto w-full max-w-3xl px-6 pt-20 pb-16">
+        <p className="text-ink-muted font-mono text-xs tracking-[0.14em] uppercase">About Docket</p>
+        <h1 className="font-display text-title text-ink mt-4 tracking-tight text-balance">
+          Most people run more than one thing.
         </h1>
-        <div className="text-muted-foreground mt-6 flex flex-col gap-4 text-lg">
+        <div className="text-ink-muted mt-8 flex flex-col gap-5 text-lg leading-relaxed">
           <p>
             A founder is also a volunteer. An organizer is also building something on the side. The
             tools we use assume you live inside a single workspace — but real life spills across
@@ -61,17 +66,27 @@ export default function AboutPage(): JSX.Element {
           </p>
         </div>
       </section>
-      <section className="mx-auto w-full max-w-6xl px-6 py-12">
-        <div className="grid gap-5 sm:grid-cols-2">
-          {PRINCIPLES.map((principle) => (
-            <div
-              key={principle.title}
-              className="border-border bg-card flex flex-col gap-2 rounded-xl border p-6"
-            >
-              <h2 className="text-base font-semibold">{principle.title}</h2>
-              <p className="text-muted-foreground text-body">{principle.body}</p>
-            </div>
-          ))}
+      <section className="border-border border-t">
+        <div className="mx-auto w-full max-w-6xl px-6 py-16">
+          <p className="text-ink-muted font-mono text-xs tracking-[0.14em] uppercase">
+            What we hold to
+          </p>
+          <dl className="mt-8 grid gap-x-12 gap-y-12 sm:grid-cols-2">
+            {PRINCIPLES.map((principle) => (
+              <div
+                key={principle.number}
+                className="border-border flex flex-col gap-3 border-t pt-5"
+              >
+                <span aria-hidden className="text-sienna font-mono text-sm">
+                  {principle.number}
+                </span>
+                <dt className="font-display text-ink text-2xl leading-snug tracking-tight">
+                  {principle.title}
+                </dt>
+                <dd className="text-ink-muted text-base">{principle.body}</dd>
+              </div>
+            ))}
+          </dl>
         </div>
       </section>
       <CtaBand />

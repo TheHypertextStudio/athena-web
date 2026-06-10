@@ -15,6 +15,17 @@
  * components must therefore never use `dark:` variants.
  */
 
+/*
+ * The root scrollbar and form-control scheme live on <html>, outside the `.marketing`
+ * subtree, so under html.dark they would render dark against the cream page. While a
+ * marketing page is mounted, force the root light. (The rule stops applying the moment
+ * the marketing tree unmounts on client-side navigation into the app.)
+ */
+html:has(.marketing) {
+  color-scheme: light;
+  scrollbar-color: oklch(0.85 0.02 75) transparent;
+}
+
 .marketing {
   /* Raw marketing palette — warm paper, warm ink, ONE accent. */
   --mk-paper: oklch(0.972 0.012 85); /* cream canvas */

@@ -37,24 +37,26 @@ const FAQS: readonly Faq[] = [
     answer: 'Yes — reach out and we will sort out nonprofit pricing for your organization.',
   },
 ];
-/** Pricing page. */
 
+/** Pricing page — tiers plus rule-separated FAQ in the editorial register. */
 export default function PricingPage(): JSX.Element {
   return (
     <>
       <PricingTiers />
-      <section className="mx-auto w-full max-w-3xl px-6 py-16">
-        <h2 className="text-2xl font-semibold tracking-tight text-balance sm:text-3xl">
-          Questions, answered
-        </h2>
-        <dl className="divide-border/60 mt-8 flex flex-col divide-y">
-          {FAQS.map((faq) => (
-            <div key={faq.question} className="flex flex-col gap-2 py-6">
-              <dt className="text-base font-semibold">{faq.question}</dt>
-              <dd className="text-muted-foreground text-body">{faq.answer}</dd>
-            </div>
-          ))}
-        </dl>
+      <section className="border-border border-t">
+        <div className="mx-auto w-full max-w-3xl px-6 py-16">
+          <h2 className="font-display text-ink text-3xl tracking-tight text-balance">
+            Questions, answered
+          </h2>
+          <dl className="divide-border mt-8 flex flex-col divide-y">
+            {FAQS.map((faq) => (
+              <div key={faq.question} className="flex flex-col gap-2 py-6">
+                <dt className="font-display text-ink text-xl tracking-tight">{faq.question}</dt>
+                <dd className="text-ink-muted text-base">{faq.answer}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
       </section>
       <CtaBand />
     </>

@@ -99,10 +99,10 @@ const TONE_DISC_CLASS: Record<EmptyStateTone, string> = {
  * primary action.
  *
  * @remarks
- * Renders inside a dashed-border panel so it reads as an intentional empty surface rather than a
- * loading or broken state; pass `className="border-none"` when it already sits inside a framed
- * container. The icon is decorative (`aria-hidden`), so the title + body carry the accessible
- * meaning.
+ * Renders inside a hairline panel on the low container tone — a designed surface, not a
+ * dashed wireframe placeholder; pass `className="border-none bg-transparent"` when it already
+ * sits inside a framed container. The icon is decorative (`aria-hidden`), so the title + body
+ * carry the accessible meaning.
  */
 export function EmptyState({
   icon: Icon = Inbox,
@@ -116,7 +116,7 @@ export function EmptyState({
   return (
     <div
       className={cn(
-        'border-outline-variant flex flex-col items-center gap-3 rounded-xl border border-dashed p-8 text-center',
+        'border-outline-variant bg-surface-container-low/60 flex flex-col items-center gap-3 rounded-xl border p-8 text-center',
         className,
       )}
     >

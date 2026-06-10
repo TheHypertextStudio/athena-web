@@ -25,15 +25,13 @@ import type { CycleOut, CycleStats } from '@docket/types';
 import { EmptyState, EntityList, StatusIcon } from '@docket/ui/components';
 import type { WorkflowStateType } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
-import { Plus, RefreshCw } from '@docket/ui/icons';
-import { Button, Skeleton } from '@docket/ui/primitives';
-import { useParams, useRouter } from 'next/navigation';
-import { type JSX, useCallback, useMemo, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { RefreshCw } from '@docket/ui/icons';
+import { Skeleton } from '@docket/ui/primitives';
+import { useParams } from 'next/navigation';
+import { type JSX, useCallback, useMemo } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 import { buildCycleCatalog } from '@/components/cycles/cycle-catalog';
-import { CreateCycleDialog } from '@/components/cycles/create-cycle';
 import { CycleRow } from '@/components/cycles/cycle-row';
 import { applyView, EMPTY_GROUP_ID } from '@/components/views/apply-view';
 import { type FieldOption, type ViewState } from '@/components/views/field-catalog';
@@ -66,8 +64,21 @@ const DEFAULT_VIEW: ViewState = {
  * The composite resolves `ok`/`status` from the gating list read; a failed *stats* read simply
  * omits that cycle's stats (the row shows a slim skeleton) rather than failing the whole list.
  */
-function fetchCyclesWithStats(orgId: string): () => Promise<RpcResponse<CyclesWithStats>> {
+function fetchCyclesWithStats(
+  orgId: string,
+  teamIds: readonly string[],
+): () => Promise<RpcResponse<CyclesWithStats>> {
   return async () => {
+    // Cycles auto-roll: ensure each team's rolling window (past + current + upcoming) exists
+    // before reading the roster. The endpoint is idempotent, so this is a cheap no-op once
+    // the window is materialized — and it means the page is NEVER empty for a real team.
+    await Promise.all(
+      teamIds.map((teamId) =>
+        api.v1.orgs[':orgId'].cycles.current
+          .$get({ param: { orgId }, query: { teamId } })
+          .catch(() => null),
+      ),
+    );
     const listRes = await api.v1.orgs[':orgId'].cycles.$get({ param: { orgId } });
     if (!listRes.ok) {
       return {
@@ -100,24 +111,25 @@ function fetchCyclesWithStats(orgId: string): () => Promise<RpcResponse<CyclesWi
  * The org Cycles list page.
  */
 export default function CyclesPage(): JSX.Element {
-  const router = useRouter();
   const params = useParams<{ orgId: string }>();
   const orgId = params.orgId;
-  const queryClient = useQueryClient();
 
-  const { teams, defaultTeamId, teamsLoading } = useActiveOrg();
+  const { teams, teamsLoading } = useActiveOrg();
 
   const cycleNoun = useVocabulary('cycle');
   const cycleNounPlural = useVocabulary('cycle', { plural: true });
   const teamLabel = useVocabulary('team');
 
-  const [createOpen, setCreateOpen] = useState(false);
   const { state, setFilters, setGroupBy, setSort } = useViewState();
 
+  // The query keys off the team ids so the roster re-ensures + refetches once teams resolve
+  // (the ensure call inside the fetcher materializes each team's auto-rolled window).
+  const teamIds = useMemo(() => teams.map((t) => t.id), [teams]);
   const cyclesQ = useApiQuery(
-    queryKeys.cycles(orgId),
-    fetchCyclesWithStats(orgId),
+    [...queryKeys.cycles(orgId), ...teamIds],
+    fetchCyclesWithStats(orgId, teamIds),
     'Could not load your cycles.',
+    { enabled: !teamsLoading },
   );
 
   const cycles = useMemo(() => cyclesQ.data?.cycles ?? [], [cyclesQ.data]);
@@ -157,34 +169,6 @@ export default function CyclesPage(): JSX.Element {
 
   const total = cycles.length;
 
-  /**
-   * The next team-local sequence number for a team: one past the highest existing cycle
-   * number on that team, or 1 when the team has none yet. Cycles are addressed by a
-   * team-scoped number ("{Cycle} 3"), and the create body requires it explicitly.
-   */
-  const nextNumberForTeam = useCallback(
-    (teamId: string): number => {
-      let max = 0;
-      for (const cycle of cycles) {
-        if (cycle.teamId === teamId && cycle.number > max) max = cycle.number;
-      }
-      return max + 1;
-    },
-    [cycles],
-  );
-
-  /**
-   * Refetch the roster from the server (prefix-matched, so this also refreshes any open
-   * cycle-detail beneath it), then open the freshly-created cycle's detail.
-   */
-  const handleCreated = useCallback(
-    (created: CycleOut): void => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.cycles(orgId) });
-      router.push(`/orgs/${orgId}/cycles/${created.id}`);
-    },
-    [orgId, router, queryClient],
-  );
-
   /** Render one cycle row (shared by the flat + grouped renders). */
   const renderRow = useCallback(
     (cycle: CycleOut): JSX.Element => (
@@ -205,33 +189,10 @@ export default function CyclesPage(): JSX.Element {
         <div className="flex flex-col gap-1">
           <h1 className="text-on-surface text-h1">{cycleNounPlural}</h1>
           <p className="text-on-surface-variant text-xs">
-            Time-boxed cadences for your team — what&apos;s live now, what&apos;s coming up, and
-            what&apos;s wrapped.
+            {`${cycleNounPlural} roll automatically on your cadence — what's live now, what's coming up, and what's wrapped.`}
           </p>
         </div>
-        <Button
-          type="button"
-          className="gap-1.5"
-          onClick={() => {
-            setCreateOpen(true);
-          }}
-        >
-          <Plus aria-hidden="true" className="size-4" />
-          New {cycleNoun.toLowerCase()}
-        </Button>
       </header>
-
-      <CreateCycleDialog
-        orgId={orgId}
-        cycleNoun={cycleNoun}
-        teams={teams}
-        defaultTeamId={defaultTeamId}
-        teamsLoading={teamsLoading}
-        nextNumberForTeam={nextNumberForTeam}
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        onCreated={handleCreated}
-      />
 
       {!loading && !loadError && total > 0 ? (
         <FilterToolbar
@@ -253,16 +214,11 @@ export default function CyclesPage(): JSX.Element {
           {loadError}
         </p>
       ) : total === 0 ? (
+        // Only reachable with no team to roll for — cycles auto-materialize per team cadence.
         <EmptyState
           icon={RefreshCw}
-          title={`No ${cycleNounPlural.toLowerCase()} yet`}
-          body={`Start a ${cycleNoun.toLowerCase()} to time-box your work and see pace and carryover at a glance.`}
-          cta={{
-            label: `Create your first ${cycleNoun.toLowerCase()}`,
-            onClick: () => {
-              setCreateOpen(true);
-            },
-          }}
+          title={`${cycleNounPlural} roll on their own`}
+          body={`As soon as your space has a team, Docket keeps a rolling window of ${cycleNounPlural.toLowerCase()} — past, current, and upcoming — on its cadence. Nothing to set up.`}
         />
       ) : applied.rows.length === 0 ? (
         <EmptyState

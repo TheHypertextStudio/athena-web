@@ -16,7 +16,7 @@
  * back through `GET /jobs/:jobId`. The Connector is never hardcoded to one provider —
  * everything keys off the port's {@link ConnectorProvider} union.
  */
-import { db, integration, task, team } from '@docket/db';
+import { account, db, integration, task, team } from '@docket/db';
 import {
   IntegrationCreate,
   IntegrationDirectoryOut,
@@ -28,12 +28,14 @@ import {
   TaskOut,
 } from '@docket/types';
 import type { ConnectorProvider, ImportedItem } from '@docket/boundaries';
+import { selectAdapter } from '@docket/boundaries';
 import { and, asc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AppEnv } from '../context';
-import { getContainer } from '../container';
+import { toBoundaryEnv } from '../container';
+import { env } from '../env';
 import { ConflictError, NotFoundError } from '../error';
 import { ok } from '../lib/ok';
 import { zJson, zParam } from '../lib/validate';
@@ -90,6 +92,71 @@ const PROVIDER_DIRECTORY: Readonly<
 /** Narrow a stored integration `provider` string to a {@link ConnectorProvider}. */
 function asConnectorProvider(provider: string): ConnectorProvider | null {
   return CONNECTOR_PROVIDERS.find((p) => p === provider) ?? null;
+}
+
+/**
+ * Map a {@link ConnectorProvider} to the Better Auth social `providerId` whose stored
+ * `access_token` is used to call that provider's API.
+ *
+ * @remarks
+ * All four Google products share the same OAuth grant (one `google` account row);
+ * GitHub and Linear each have their own.
+ */
+function socialProviderId(provider: ConnectorProvider): string {
+  if (provider === 'github') return 'github';
+  if (provider === 'linear') return 'linear';
+  return 'google';
+}
+
+/**
+ * Look up the stored OAuth access token for a connector provider from the actor's
+ * Better Auth social account.
+ *
+ * @remarks
+ * In `APP_MODE=local`/`test` the boundary layer forces the MockConnector regardless of
+ * the token value (see {@link selectAdapter}), so a sentinel non-null string is returned
+ * immediately — no DB round-trip, no real credentials needed. In production the actor
+ * must have a linked social account for the provider; `null` means they have not signed
+ * in with that provider and the caller must surface a clear error (no mock fallback).
+ *
+ * @param actorId - The authenticated user id performing the import/sync.
+ * @param provider - The connector provider being called.
+ * @returns the raw OAuth access token, or `null` if not linked (production only).
+ */
+async function resolveConnectorToken(
+  actorId: string,
+  provider: ConnectorProvider,
+): Promise<string | null> {
+  // In mock-forced modes the token value is irrelevant — selectAdapter ignores it and
+  // picks MockConnector. Skip the DB lookup so tests need no seeded social accounts.
+  const mode = env.APP_MODE;
+  if (mode === 'local' || mode === 'test') return 'mock';
+
+  const rows = await db
+    .select({ accessToken: account.accessToken })
+    .from(account)
+    .where(and(eq(account.userId, actorId), eq(account.providerId, socialProviderId(provider))))
+    .limit(1);
+  return rows[0]?.accessToken ?? null;
+}
+
+/**
+ * Instantiate a per-request {@link Connector} bound to a specific provider and token.
+ *
+ * @remarks
+ * Never uses the cached process singleton — the token is per-user, so the connector
+ * must be constructed per-request. In `APP_MODE=local`/`test` the env-mode check in
+ * {@link selectAdapter} still forces the mock, keeping local dev deterministic. In
+ * production the real adapter is selected when `accessToken` is a real-shaped value.
+ *
+ * @param provider - The connector provider to bind.
+ * @param accessToken - The user's OAuth access token for that provider.
+ */
+function connectorFor(provider: ConnectorProvider, accessToken: string) {
+  return selectAdapter('connector', toBoundaryEnv(), {
+    connectorProvider: provider,
+    connectorToken: accessToken,
+  });
 }
 
 /**
@@ -357,9 +424,16 @@ const integrations = new Hono<AppEnv>()
       const provider = asConnectorProvider(row.provider);
       if (!provider) throw new ConflictError('Integration provider does not support import');
 
+      const token = await resolveConnectorToken(actorId, provider);
+      if (!token) {
+        throw new ConflictError(
+          `Sign in with ${socialProviderId(provider)} to connect this integration.`,
+        );
+      }
+
       const teamId = await resolveImportTeam(orgId, row);
 
-      const items = await getContainer().connector.importWork({
+      const items = await connectorFor(provider, token).importWork({
         connectionId: row.id,
         provider,
         ...(row.connection.externalWorkspaceId
@@ -391,9 +465,16 @@ const integrations = new Hono<AppEnv>()
     const provider = asConnectorProvider(row.provider);
     if (!provider) throw new ConflictError('Integration provider does not support sync');
 
+    const token = await resolveConnectorToken(actorId, provider);
+    if (!token) {
+      throw new ConflictError(
+        `Sign in with ${socialProviderId(provider)} to sync this integration.`,
+      );
+    }
+
     const teamId = await resolveImportTeam(orgId, row);
 
-    const items = await getContainer().connector.importWork({
+    const items = await connectorFor(provider, token).importWork({
       connectionId: row.id,
       provider,
       ...(row.connection.externalWorkspaceId

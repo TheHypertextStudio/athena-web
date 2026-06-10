@@ -345,8 +345,21 @@ describe('buildAuthOptions env-gating', () => {
     expect(opts.socialProviders?.google).toEqual({
       clientId: 'goog-id',
       clientSecret: 'goog-secret',
+      scope: [
+        'openid',
+        'email',
+        'profile',
+        'https://www.googleapis.com/auth/calendar.readonly',
+        'https://www.googleapis.com/auth/tasks.readonly',
+        'https://www.googleapis.com/auth/drive.readonly',
+        'https://mail.google.com/',
+      ],
     });
-    expect(opts.socialProviders?.github).toEqual({ clientId: 'gh-id', clientSecret: 'gh-secret' });
+    expect(opts.socialProviders?.github).toEqual({
+      clientId: 'gh-id',
+      clientSecret: 'gh-secret',
+      scope: ['user:email', 'repo'],
+    });
     expect(opts.socialProviders?.linear).toEqual({
       clientId: 'lin-id',
       clientSecret: 'lin-secret',

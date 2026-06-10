@@ -19,6 +19,7 @@ import type {
   IntegrationOut,
   IntegrationPattern,
   IntegrationRole,
+  SyncJobOut,
 } from '@docket/types';
 import { Badge, Skeleton } from '@docket/ui/primitives';
 import {
@@ -119,6 +120,7 @@ export function IntegrationsTab({
   isPersonal = false,
 }: IntegrationsTabProps): JSX.Element {
   const [openProvider, setOpenProvider] = useState<string | null>(null);
+  const [syncFeedback, setSyncFeedback] = useState<Record<string, string | null>>({});
 
   // The provider directory governs whether the screen can render at all; the org's existing
   // integrations are a best-effort overlay (a failed read just shows everything as configurable).
@@ -165,6 +167,39 @@ export function IntegrationsTab({
   });
   const connecting = connect.isPending;
   const connectError = connect.isError ? connect.error.message : null;
+
+  /** Trigger a read-only mirror refresh for a connected integration. */
+  const sync = useApiMutation({
+    mutationFn: (id: string) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].integrations[':id'].sync.$post({
+            param: { orgId, id },
+          }),
+        'Sync failed.',
+      ),
+    onSuccess: (data: SyncJobOut, id: string) => {
+      const count = data.processed;
+      setSyncFeedback((prev) => ({
+        ...prev,
+        [id]: count === 0 ? 'Up to date.' : `Synced ${count} item${count === 1 ? '' : 's'}.`,
+      }));
+    },
+    invalidateKeys: [queryKeys.integrations(orgId)],
+  });
+
+  /** Remove an integration entirely. */
+  const disconnect = useApiMutation({
+    mutationFn: (id: string) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].integrations[':id'].$delete({
+            param: { orgId, id },
+          }),
+        'Could not disconnect this integration.',
+      ),
+    invalidateKeys: [queryKeys.integrations(orgId)],
+  });
 
   /** The org's existing integration for a provider, if any. */
   const byProvider = useMemo(() => {
@@ -252,12 +287,45 @@ export function IntegrationsTab({
                       </span>
                     </div>
                     {existing ? (
-                      <Badge
-                        variant={STATUS_LABEL[existing.status].variant}
-                        className="font-normal"
-                      >
-                        {STATUS_LABEL[existing.status].label}
-                      </Badge>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <Badge
+                          variant={STATUS_LABEL[existing.status].variant}
+                          className="font-normal"
+                        >
+                          {STATUS_LABEL[existing.status].label}
+                        </Badge>
+                        {canManage ? (
+                          <>
+                            <button
+                              type="button"
+                              disabled={sync.isPending}
+                              onClick={() => {
+                                setSyncFeedback((prev) => ({ ...prev, [existing.id]: null }));
+                                sync.mutate(existing.id);
+                              }}
+                              className="focus-visible:ring-ring text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high text-body rounded-md px-3 py-1.5 font-medium transition-colors outline-none focus-visible:ring-1 disabled:opacity-50"
+                            >
+                              {sync.isPending ? 'Syncing…' : 'Sync'}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={disconnect.isPending}
+                              onClick={() => {
+                                if (
+                                  window.confirm(
+                                    `Disconnect ${provider.name}? Linked tasks imported from it will remain.`,
+                                  )
+                                ) {
+                                  disconnect.mutate(existing.id);
+                                }
+                              }}
+                              className="focus-visible:ring-ring text-destructive hover:bg-destructive/10 text-body rounded-md px-3 py-1.5 font-medium transition-colors outline-none focus-visible:ring-1 disabled:opacity-50"
+                            >
+                              Disconnect
+                            </button>
+                          </>
+                        ) : null}
+                      </div>
                     ) : canManage ? (
                       <button
                         type="button"
@@ -276,6 +344,21 @@ export function IntegrationsTab({
                       </span>
                     )}
                   </div>
+
+                  {existing && syncFeedback[existing.id] ? (
+                    <p className="text-on-surface-variant border-outline-variant border-t px-4 py-2 text-xs">
+                      {syncFeedback[existing.id]}
+                    </p>
+                  ) : null}
+
+                  {existing && sync.isError ? (
+                    <p
+                      role="alert"
+                      className="text-destructive border-outline-variant border-t px-4 py-2 text-xs"
+                    >
+                      {sync.error.message}
+                    </p>
+                  ) : null}
 
                   {isOpen && !existing ? (
                     <ConnectWizard

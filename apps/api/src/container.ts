@@ -21,8 +21,15 @@ import { env } from './env';
 /** The wired set of boundary adapters the API runs against (re-exported for handlers). */
 export type { BoundaryContainer } from '@docket/boundaries';
 
-/** Map the validated API `env` onto the boundary-relevant {@link BoundaryEnv} slice. */
-function toBoundaryEnv(): BoundaryEnv {
+/**
+ * Map the validated API `env` onto the boundary-relevant {@link BoundaryEnv} slice.
+ *
+ * @remarks
+ * Exported so the integrations router can pass the same env slice to per-request
+ * {@link selectAdapter} calls (the connector port is instantiated per-connection,
+ * not from the cached singleton).
+ */
+export function toBoundaryEnv(): BoundaryEnv {
   return {
     APP_MODE: env.APP_MODE,
     // billing (Stripe)

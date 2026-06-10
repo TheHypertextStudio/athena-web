@@ -106,7 +106,7 @@ export default function SignInPage(): JSX.Element {
     <main className="bg-surface-container text-on-surface flex min-h-screen items-center justify-center px-6">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle className="text-2xl">Docket service admin</CardTitle>
+          <CardTitle className="text-h1">Docket service admin</CardTitle>
           <CardDescription>Sign in with your operator passkey.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">

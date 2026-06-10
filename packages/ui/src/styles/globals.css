@@ -203,10 +203,14 @@
     monospace;
 
   /*
-   * Named type scale (design-system.md §"Type scale"). App text uses these named steps —
-   * never raw Tailwind sizes — so hierarchy stays a system decision, not a per-callsite one.
+   * Named type scale. App text uses these named steps — never raw Tailwind sizes — so
+   * hierarchy stays a system decision, not a per-callsite one. The heading sizes encode
+   * the app's REAL hierarchy (calm and dense, Linear-grade): page titles are 20px, not a
+   * marketing 24px+. Weight 600 and tight tracking are baked into the heading steps.
    *
-   *   text-h1 / h2 / h3  headings, weight 600 baked in
+   *   text-h1            page titles (the app's largest in-product heading)
+   *   text-h2            section headers within a page
+   *   text-h3            group headers, card titles
    *   text-body          default app text (== Tailwind's stock text-sm; the app-wide
    *                      `text-sm` → `text-body` rename was a zero-visual-diff move)
    *   text-sm            REDEFINED below stock Tailwind: 13px secondary/list text
@@ -216,14 +220,16 @@
    * `text-display` is deliberately absent: display type is a marketing-surface concern and
    * is defined in the web app's marketing layer.
    */
-  --text-h1: 1.5rem;
-  --text-h1--line-height: 2rem;
+  --text-h1: 1.25rem;
+  --text-h1--line-height: 1.75rem;
   --text-h1--font-weight: 600;
-  --text-h2: 1.25rem;
-  --text-h2--line-height: 1.75rem;
+  --text-h1--letter-spacing: -0.02em;
+  --text-h2: 1.0625rem;
+  --text-h2--line-height: 1.5rem;
   --text-h2--font-weight: 600;
-  --text-h3: 1.0625rem;
-  --text-h3--line-height: 1.5rem;
+  --text-h2--letter-spacing: -0.01em;
+  --text-h3: 0.9375rem;
+  --text-h3--line-height: 1.375rem;
   --text-h3--font-weight: 600;
   --text-body: 0.875rem;
   --text-body--line-height: 1.25rem;

@@ -193,7 +193,7 @@ function ConsentPage(): JSX.Element {
     <main className="bg-surface flex min-h-screen items-center justify-center px-6 py-12">
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
-          <CardTitle className="text-xl">Authorize access</CardTitle>
+          <CardTitle className="text-h1">Authorize access</CardTitle>
           <CardDescription>
             <span className="text-on-surface font-medium">{displayName}</span> wants permission to
             access your Docket account as{' '}

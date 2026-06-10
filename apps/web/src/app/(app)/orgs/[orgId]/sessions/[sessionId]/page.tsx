@@ -343,7 +343,7 @@ export default function SessionViewPage(): JSX.Element {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-on-surface text-xl leading-tight font-semibold tracking-tight">
+          <h1 className="text-on-surface text-h1 leading-tight">
             {taskTitle ?? `${agentActor.name}’s session`}
           </h1>
           <SessionStatusPill status={session.status} />

@@ -49,7 +49,7 @@ export function HowItWorks(): JSX.Element {
               <span aria-hidden className="font-display text-sienna text-4xl italic">
                 {step.number}
               </span>
-              <h3 className="text-ink text-h3 tracking-tight">{step.title}</h3>
+              <h3 className="text-ink text-h2">{step.title}</h3>
               <p className="text-ink-muted text-body">{step.body}</p>
             </li>
           ))}

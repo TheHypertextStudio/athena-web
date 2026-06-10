@@ -87,7 +87,7 @@ export default function PortfolioPage(): JSX.Element {
     <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
       <header className="flex flex-col gap-3 @2xl:flex-row @2xl:flex-wrap @2xl:items-center @2xl:justify-between">
         <div className="flex flex-col gap-1">
-          <h1 className="text-on-surface text-xl font-semibold tracking-tight">Portfolio</h1>
+          <h1 className="text-on-surface text-h1">Portfolio</h1>
           <p className="text-on-surface-variant text-xs">Every venture on one timeline.</p>
         </div>
         <div className="flex items-center gap-2">

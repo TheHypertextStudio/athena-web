@@ -20,7 +20,7 @@
  * value chooser reads the catalog's options (sync or lazily resolved from loaded page data), so
  * filtering by an enum (status, health) or a relation (lead, team) needs no per-page UI.
  */
-import { ChevronDown, Filter, Plus, X } from '@docket/ui/icons';
+import { ChevronDown, Filter, X } from '@docket/ui/icons';
 import {
   Button,
   DropdownMenu,
@@ -28,33 +28,26 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
-  Input,
   focusRing,
 } from '@docket/ui/primitives';
 import { cn } from '@docket/ui';
-import { type JSX, type ReactNode, useState } from 'react';
+import { type JSX, type ReactNode } from 'react';
 
 import { describeFilterTerm } from './apply-view';
 import {
   type FieldCatalog,
-  type FieldDescriptor,
   type FilterOperator,
   type ViewFilterTerm,
   type ViewGroupTerm,
   type ViewSortTerm,
   type ViewState,
-  OPERATOR_LABEL,
   filterableFields,
   findField,
   groupableFields,
-  operatorsForType,
-  optionsFor,
   sortableFields,
 } from './field-catalog';
+import { AddFilterMenu } from './add-filter-menu';
 
 /** Props for {@link FilterToolbar}. */
 export interface FilterToolbarProps<T> {
@@ -239,154 +232,5 @@ export function FilterToolbar<T>({
         </ul>
       ) : null}
     </div>
-  );
-}
-
-/** Props for {@link AddFilterMenu}. */
-interface AddFilterMenuProps<T> {
-  /** The filterable fields. */
-  fields: FieldCatalog<T>;
-  /** Append a predicate. */
-  onAdd: (field: string, op: FilterOperator, value: unknown) => void;
-}
-
-/**
- * The "Add filter" control: a nested field → operator → value menu.
- *
- * @remarks
- * For enum/relation fields the value step is a third nested submenu of the field's options, so
- * the whole predicate composes without typing. For free-text / date fields the value step is an
- * inline entry committed on Enter. The menu closes once a predicate is committed.
- */
-function AddFilterMenu<T>({ fields, onAdd }: AddFilterMenuProps<T>): JSX.Element {
-  const [open, setOpen] = useState(false);
-  return (
-    <DropdownMenu open={open} onOpenChange={setOpen}>
-      <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-1.5">
-          <Plus className="size-3.5" aria-hidden="true" />
-          Add filter
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="min-w-[14rem]">
-        <DropdownMenuLabel>Filter where</DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        {fields.map((field) => (
-          <DropdownMenuSub key={field.key}>
-            <DropdownMenuSubTrigger>{field.label}</DropdownMenuSubTrigger>
-            <DropdownMenuSubContent className="min-w-[14rem]">
-              {operatorsForType(field.type).map((op) => (
-                <OperatorBranch
-                  key={op}
-                  field={field}
-                  op={op}
-                  onCommit={(value) => {
-                    onAdd(field.key, op, value);
-                    setOpen(false);
-                  }}
-                />
-              ))}
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
-/** Props for {@link OperatorBranch}. */
-interface OperatorBranchProps<T> {
-  /** The field being filtered. */
-  field: FieldDescriptor<T>;
-  /** The operator for this branch. */
-  op: FilterOperator;
-  /** Commit the predicate's value. */
-  onCommit: (value: unknown) => void;
-}
-
-/**
- * One operator branch in the Add-filter menu.
- *
- * @remarks
- * Enum/relation fields render a value submenu over the field's options; `in`/`nin` append a
- * one-value predicate per pick (the engine folds membership). Free-text / date fields render an
- * inline entry row.
- */
-function OperatorBranch<T>({ field, op, onCommit }: OperatorBranchProps<T>): JSX.Element {
-  const opLabel = OPERATOR_LABEL[op];
-  const hasOptions = field.type === 'enum' || field.type === 'relation';
-
-  if (hasOptions) {
-    const options = optionsFor(field);
-    return (
-      <DropdownMenuSub>
-        <DropdownMenuSubTrigger>{opLabel}…</DropdownMenuSubTrigger>
-        <DropdownMenuSubContent className="min-w-[12rem]">
-          {options.length === 0 ? (
-            <DropdownMenuItem disabled>No options</DropdownMenuItem>
-          ) : (
-            options.map((option) => (
-              <DropdownMenuItem
-                key={option.value}
-                onSelect={() => {
-                  onCommit(op === 'in' || op === 'nin' ? [option.value] : option.value);
-                }}
-              >
-                {option.label}
-              </DropdownMenuItem>
-            ))
-          )}
-        </DropdownMenuSubContent>
-      </DropdownMenuSub>
-    );
-  }
-
-  return (
-    <DropdownMenuSub>
-      <DropdownMenuSubTrigger>{opLabel}…</DropdownMenuSubTrigger>
-      <DropdownMenuSubContent className="min-w-[14rem] p-2">
-        <ValueEntry
-          placeholder={`${opLabel}…`}
-          type={field.type === 'date' ? 'date' : field.type === 'number' ? 'number' : 'text'}
-          onCommit={onCommit}
-        />
-      </DropdownMenuSubContent>
-    </DropdownMenuSub>
-  );
-}
-
-/** Props for {@link ValueEntry}. */
-interface ValueEntryProps {
-  /** Placeholder for the entry input. */
-  placeholder: string;
-  /** Input type (text / date / number). */
-  type: 'text' | 'date' | 'number';
-  /** Commit the entered value. */
-  onCommit: (value: string) => void;
-}
-
-/** A small inline value-entry row committed on Enter (used inside the Add-filter menu). */
-function ValueEntry({ placeholder, type, onCommit }: ValueEntryProps): JSX.Element {
-  const [value, setValue] = useState('');
-  return (
-    <Input
-      type={type}
-      value={value}
-      placeholder={placeholder}
-      aria-label={placeholder}
-      autoFocus
-      className="h-8"
-      onChange={(event) => {
-        setValue(event.target.value);
-      }}
-      onKeyDown={(event) => {
-        // Keep typing keys inside the input rather than triggering menu typeahead.
-        event.stopPropagation();
-        if (event.key === 'Enter' && value.trim().length > 0) {
-          event.preventDefault();
-          onCommit(value.trim());
-        }
-      }}
-    />
   );
 }

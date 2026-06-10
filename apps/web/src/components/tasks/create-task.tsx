@@ -32,31 +32,19 @@ import {
   type TeamOut,
   type WorkflowState,
 } from '@docket/types';
-import {
-  ActorPicker,
-  DatePicker,
-  EntityPicker,
-  EnumPicker,
-  LabelsPicker,
-} from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { api } from '@/lib/api';
 import { ComposerShell } from '@/components/composer/composer-shell';
-import { PRIORITY_OPTIONS, workflowStateOptions } from '@/components/pickers/options';
+import { workflowStateOptions } from '@/components/pickers/options';
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
-import { TeamPicker } from '@/components/teams/team-picker';
-import { formatCalendarDate } from '@/lib/format-date';
 import { readError, readProblem } from '@/lib/problem';
+
+import { TaskComposerPickers } from './task-form-pickers';
 
 /** The lists this composer's pickers draw from. */
 const COMPOSER_INCLUDE = ['actors', 'projects', 'cycles', 'labels'] as const;
-
-/** Format an ISO date for a picker trigger, narrowing the app helper's `null` to `undefined`. */
-function triggerDate(value: string | null): string | undefined {
-  return formatCalendarDate(value, { month: 'short', day: 'numeric' }) ?? undefined;
-}
 
 /** Props for {@link CreateTaskDialog}. */
 export interface CreateTaskDialogProps {
@@ -99,8 +87,6 @@ export function CreateTaskDialog({
 }: CreateTaskDialogProps): JSX.Element {
   const projectNoun = useVocabulary('project');
   const cycleNoun = useVocabulary('cycle');
-  const projectNounLower = projectNoun.toLowerCase();
-  const cycleNounLower = cycleNoun.toLowerCase();
 
   const options = useComposerOptions(orgId, COMPOSER_INCLUDE, open);
 
@@ -247,88 +233,32 @@ export function CreateTaskDialog({
       onSubmit={() => void submit()}
       submitLabel="Create task"
     >
-      <TeamPicker
+      <TaskComposerPickers
         teams={teams}
-        value={teamId}
-        onChange={setTeamOverride}
-        disabled={creating}
-        className="h-8"
-      />
-      {statusOptions.length > 0 ? (
-        <EnumPicker
-          triggerVariant="outline"
-          options={statusOptions}
-          value={state}
-          onChange={(next) => {
-            if (next) setState(next);
-          }}
-          placeholder="Status"
-          ariaLabel="Status"
-          disabled={creating}
-        />
-      ) : null}
-      <EnumPicker
-        triggerVariant="outline"
-        options={PRIORITY_OPTIONS}
-        value={priority}
-        onChange={(next) => {
-          setPriority(next ?? 'none');
-        }}
-        placeholder="Priority"
-        ariaLabel="Priority"
-        disabled={creating}
-      />
-      <ActorPicker
-        triggerVariant="outline"
-        options={options.actorOptions}
-        value={assigneeId}
-        onChange={setAssigneeId}
-        placeholder="Assignee"
-        clearLabel="Unassigned"
-        ariaLabel="Assignee"
-        disabled={creating}
-      />
-      <EntityPicker
-        triggerVariant="outline"
-        options={options.projectOptions}
-        value={projectId}
-        onChange={setProjectId}
-        placeholder={`Set ${projectNounLower}`}
-        clearLabel={`No ${projectNounLower}`}
-        searchPlaceholder={`Search ${projectNoun.toLowerCase()}s…`}
-        ariaLabel={projectNoun}
-        disabled={creating}
-      />
-      {cycleOptionsForTeam.length > 0 ? (
-        <EntityPicker
-          triggerVariant="outline"
-          options={cycleOptionsForTeam}
-          value={cycleId}
-          onChange={setCycleId}
-          placeholder={`Set ${cycleNounLower}`}
-          clearLabel={`No ${cycleNounLower}`}
-          searchPlaceholder={`Search ${cycleNounLower}s…`}
-          ariaLabel={cycleNoun}
-          disabled={creating}
-        />
-      ) : null}
-      <DatePicker
-        triggerVariant="outline"
-        value={dueDate}
-        onChange={setDueDate}
-        placeholder="Due date"
-        formatLabel={triggerDate}
-        ariaLabel="Due date"
-        disabled={creating}
-      />
-      <LabelsPicker
-        triggerVariant="outline"
-        options={options.labelOptions}
-        value={labelIds}
-        onToggle={toggleLabel}
-        placeholder="Labels"
-        ariaLabel="Labels"
-        disabled={creating}
+        teamId={teamId}
+        statusOptions={statusOptions}
+        state={state}
+        priority={priority}
+        assigneeId={assigneeId}
+        actorOptions={options.actorOptions}
+        projectId={projectId}
+        projectOptions={options.projectOptions}
+        projectNoun={projectNoun}
+        cycleId={cycleId}
+        cycleOptionsForTeam={cycleOptionsForTeam}
+        cycleNoun={cycleNoun}
+        dueDate={dueDate}
+        labelIds={labelIds}
+        labelOptions={options.labelOptions}
+        creating={creating}
+        onTeamChange={setTeamOverride}
+        onStateChange={setState}
+        onPriorityChange={setPriority}
+        onAssigneeChange={setAssigneeId}
+        onProjectChange={setProjectId}
+        onCycleChange={setCycleId}
+        onDueDateChange={setDueDate}
+        onLabelToggle={toggleLabel}
       />
     </ComposerShell>
   );

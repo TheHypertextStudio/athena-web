@@ -407,7 +407,7 @@ export default function InitiativeDetailPage(): JSX.Element {
       <header className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-3">
           <Target aria-hidden="true" className="text-on-surface-variant size-5 shrink-0" />
-          <h1 className="text-on-surface text-xl font-semibold tracking-tight">{detail.name}</h1>
+          <h1 className="text-on-surface text-h1">{detail.name}</h1>
           <Badge variant={derivedStatusVariant(detail.derivedStatus)}>
             {DERIVED_STATUS_LABEL[detail.derivedStatus]}
           </Badge>

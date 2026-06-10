@@ -216,9 +216,7 @@ export default function InitiativesListPage(): JSX.Element {
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 p-4 @2xl:p-6 @4xl:p-8">
       <header className="flex flex-col gap-3 @2xl:flex-row @2xl:flex-wrap @2xl:items-center @2xl:justify-between">
         <div className="flex flex-col gap-1">
-          <h1 className="text-on-surface text-xl font-semibold tracking-tight">
-            {initiativeNounPlural}
-          </h1>
+          <h1 className="text-on-surface text-h1">{initiativeNounPlural}</h1>
           <p className="text-on-surface-variant text-xs">
             Cross-cutting themes that roll up the health of the {programNoun}s and {projectNoun}s
             beneath them — no work lives here directly.

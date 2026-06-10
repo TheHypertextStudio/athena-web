@@ -360,7 +360,7 @@ export default function ProgramDetailPage(): JSX.Element {
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
       <header className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-on-surface text-xl font-semibold tracking-tight">{program.name}</h1>
+          <h1 className="text-on-surface text-h1">{program.name}</h1>
           <ProgramStatusBadge status={program.status} />
           <HealthPill health={health} />
         </div>

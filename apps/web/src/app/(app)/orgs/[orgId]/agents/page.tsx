@@ -155,7 +155,7 @@ export default function AgentsFeedPage(): JSX.Element {
   return (
     <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
       <header className="flex flex-col gap-1">
-        <h1 className="text-on-surface text-xl font-semibold tracking-tight">Agents</h1>
+        <h1 className="text-on-surface text-h1">Agents</h1>
         <p className="text-on-surface-variant text-body">
           A live feed of what your agents are working on — watch the work happen.
         </p>

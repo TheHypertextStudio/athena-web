@@ -611,7 +611,7 @@ export default function ProjectDetailPage(): JSX.Element {
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
       <header className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-on-surface text-xl font-semibold tracking-tight">{project.name}</h1>
+          <h1 className="text-on-surface text-h1">{project.name}</h1>
           <Badge variant={statusBadgeVariant(project.status)}>
             {STATUS_LABEL[project.status] ?? project.status}
           </Badge>

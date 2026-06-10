@@ -79,7 +79,7 @@ export function FlowSnapshot({
               health ? HEALTH_DOT_CLASS[health] : 'bg-on-surface-variant/50',
             )}
           />
-          <span className="text-on-surface text-lg font-semibold tracking-tight">
+          <span className="text-on-surface text-h2">
             {health ? HEALTH_LABEL[health] : 'No health set'}
           </span>
         </div>

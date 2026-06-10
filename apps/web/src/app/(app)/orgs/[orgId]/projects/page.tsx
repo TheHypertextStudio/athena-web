@@ -175,7 +175,7 @@ export default function ProjectsListPage(): JSX.Element {
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 p-4 @2xl:p-6 @4xl:p-8">
       <header className="flex flex-col gap-3 @2xl:flex-row @2xl:flex-wrap @2xl:items-center @2xl:justify-between">
         <div className="flex flex-col gap-1">
-          <h1 className="text-on-surface text-xl font-semibold tracking-tight">{projectsLabel}</h1>
+          <h1 className="text-on-surface text-h1">{projectsLabel}</h1>
           <p className="text-on-surface-variant text-xs">
             Bounded efforts with a finish line — tracked by status, health, and scope.
           </p>

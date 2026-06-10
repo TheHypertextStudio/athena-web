@@ -300,7 +300,7 @@ export default function TriagePage(): JSX.Element {
   return (
     <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
       <header className="flex flex-col gap-1">
-        <h1 className="text-on-surface text-xl font-semibold tracking-tight">Triage</h1>
+        <h1 className="text-on-surface text-h1">Triage</h1>
         <p className="text-on-surface-variant text-xs">
           Unsorted incoming work — {taskNounPlural.toLowerCase()} that have no home yet. Sort each
           one onward into a {projectNoun.toLowerCase()} or {programNoun.toLowerCase()}, or dismiss

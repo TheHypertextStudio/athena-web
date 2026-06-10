@@ -271,7 +271,7 @@ export default function ViewsPage(): JSX.Element {
   return (
     <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
       <header className="flex flex-col gap-1">
-        <h1 className="text-on-surface text-xl font-semibold tracking-tight">Views</h1>
+        <h1 className="text-on-surface text-h1">Views</h1>
         <p className="text-on-surface-variant text-xs">
           Saved filters over your {viewsLabel.toLowerCase()} — open one, tweak it, or save the
           current filter as a new view. Shared views show each person only the work they can see.

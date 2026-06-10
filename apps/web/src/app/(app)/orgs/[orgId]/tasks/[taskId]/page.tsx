@@ -567,9 +567,7 @@ export default function TaskDetailPage(): JSX.Element {
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
       {/* Header: title, editable status + priority, assignee/delegate, due date. */}
       <header className="flex flex-col gap-4">
-        <h1 className="text-on-surface text-xl leading-tight font-semibold tracking-tight">
-          {task.title}
-        </h1>
+        <h1 className="text-on-surface text-h1 leading-tight">{task.title}</h1>
 
         <div className="flex flex-wrap items-center gap-2">
           <StatusPicker

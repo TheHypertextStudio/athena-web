@@ -206,7 +206,7 @@ export default function InboxPage(): JSX.Element {
     <div className="mx-auto flex h-full w-full max-w-4xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
       <header className="flex flex-col gap-3 @2xl:flex-row @2xl:flex-wrap @2xl:items-center @2xl:justify-between">
         <div className="flex flex-col gap-1">
-          <h1 className="text-on-surface text-xl font-semibold tracking-tight">Inbox</h1>
+          <h1 className="text-on-surface text-h1">Inbox</h1>
           <p className="text-on-surface-variant text-xs">Everything that needs a response.</p>
         </div>
         <div className="flex items-center gap-2">

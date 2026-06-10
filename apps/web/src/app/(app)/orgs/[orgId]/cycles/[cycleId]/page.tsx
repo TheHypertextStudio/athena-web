@@ -454,7 +454,7 @@ export default function CycleDetailPage(): JSX.Element {
       <header className="flex flex-col gap-3 @2xl:flex-row @2xl:flex-wrap @2xl:items-center @2xl:justify-between">
         <div className="flex flex-col gap-1">
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-on-surface text-xl font-semibold tracking-tight">{title}</h1>
+            <h1 className="text-on-surface text-h1">{title}</h1>
             {cycle.name ? (
               <span className="text-on-surface-variant text-xs tabular-nums">
                 {cycleNoun} {cycle.number}

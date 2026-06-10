@@ -114,7 +114,7 @@ export default function TodayPage(): JSX.Element {
       <header className="flex flex-col gap-3 @2xl:flex-row @2xl:flex-wrap @2xl:items-center @2xl:justify-between">
         <div className="flex flex-col gap-1">
           <p className="text-on-surface-variant text-xs">{heading}</p>
-          <h1 className="text-on-surface text-xl font-semibold tracking-tight">Today</h1>
+          <h1 className="text-on-surface text-h1">Today</h1>
           <p className="text-on-surface-variant text-xs">Your plan and what needs you today.</p>
         </div>
         <div className="flex items-center gap-2">

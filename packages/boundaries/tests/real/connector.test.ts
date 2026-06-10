@@ -105,7 +105,9 @@ describe('RealConnector — GitHub (REST)', () => {
     ]);
     const connector = new RealConnector({ provider: 'github', accessToken: 'tok' }, http);
     const items = await connector.importWork({ connectionId: 'c1', provider: 'github' });
-    expect(calls[0]!.url).toBe('https://api.github.com/issues?filter=all&state=open&per_page=100');
+    expect(calls[0]!.url).toBe(
+      'https://api.github.com/issues?filter=all&state=open&per_page=100&page=1',
+    );
     expect(items).toHaveLength(1);
     expect(items[0]).toMatchObject({
       id: '1001',
@@ -152,7 +154,9 @@ describe('RealConnector — GitHub (REST)', () => {
     ]);
     const connector = new RealConnector({ provider: 'github', accessToken: 'tok' }, http);
     const status = await connector.mirrorStatus({ connectionId: 'c1', provider: 'github' });
-    expect(calls[0]!.url).toBe('https://api.github.com/issues?filter=all&state=all&per_page=100');
+    expect(calls[0]!.url).toBe(
+      'https://api.github.com/issues?filter=all&state=all&per_page=100&page=1',
+    );
     expect(status).toEqual({ connectionId: 'c1', status: 'idle', itemCount: 1 });
   });
 
@@ -210,6 +214,39 @@ describe('RealConnector — GitHub (REST)', () => {
     );
     await connector.connect({ provider: 'github', referenceId: 'o' });
     expect(calls[0]!.url).toBe('https://ghe.local/api/v3/user');
+  });
+
+  it('paginates past 100 issues when page=1 is full', async () => {
+    const page1 = Array.from({ length: 100 }, (_, i) => ({
+      id: i + 1,
+      number: i + 1,
+      title: `Issue ${i + 1}`,
+      html_url: `https://github.com/o/r/issues/${i + 1}`,
+    }));
+    const page2 = Array.from({ length: 42 }, (_, i) => ({
+      id: 200 + i,
+      number: 200 + i,
+      title: `Issue ${200 + i}`,
+      html_url: `https://github.com/o/r/issues/${200 + i}`,
+    }));
+    const { http, calls } = fakeHttp([
+      new Response(JSON.stringify(page1), { status: 200 }),
+      new Response(JSON.stringify(page2), { status: 200 }),
+    ]);
+    const connector = new RealConnector({ provider: 'github', accessToken: 'tok' }, http);
+    const items = await connector.importWork({ connectionId: 'c1', provider: 'github' });
+    expect(items).toHaveLength(142);
+    expect(calls[0]!.url).toContain('page=1');
+    expect(calls[1]!.url).toContain('page=2');
+    expect(calls).toHaveLength(2);
+  });
+
+  it('throws with provider context when the GET response is not valid JSON', async () => {
+    const { http } = fakeHttp([new Response('not-json<!>', { status: 200 })]);
+    const connector = new RealConnector({ provider: 'github', accessToken: 'tok' }, http);
+    await expect(connector.importWork({ connectionId: 'c1', provider: 'github' })).rejects.toThrow(
+      /github API returned unparseable response: \/issues/,
+    );
   });
 });
 
@@ -336,6 +373,44 @@ describe('RealConnector — Linear (GraphQL)', () => {
     expect(status).toEqual({ connectionId: 'c1', status: 'idle', itemCount: 2 });
   });
 
+  it('paginates Linear issues using cursor when hasNextPage is true', async () => {
+    const page1 = {
+      data: {
+        issues: {
+          nodes: [{ id: 'a', identifier: 'A-1', title: 'Page 1', url: 'https://linear.app/a/A-1' }],
+          pageInfo: { hasNextPage: true, endCursor: 'cursor1' },
+        },
+      },
+    };
+    const page2 = {
+      data: {
+        issues: {
+          nodes: [{ id: 'b', identifier: 'A-2', title: 'Page 2', url: 'https://linear.app/a/A-2' }],
+          pageInfo: { hasNextPage: false },
+        },
+      },
+    };
+    const { http, calls } = fakeHttp([
+      new Response(JSON.stringify(page1), { status: 200 }),
+      new Response(JSON.stringify(page2), { status: 200 }),
+    ]);
+    const connector = new RealConnector({ provider: 'linear', accessToken: 'tok' }, http);
+    const items = await connector.importWork({ connectionId: 'c1', provider: 'linear' });
+    expect(items).toHaveLength(2);
+    expect(items[0]?.title).toBe('Page 1');
+    expect(items[1]?.title).toBe('Page 2');
+    // Second call must include the cursor.
+    expect(JSON.parse(bodyText(calls[1]!)).query).toContain('cursor1');
+  });
+
+  it('throws with provider context when the POST response is not valid JSON', async () => {
+    const { http } = fakeHttp([new Response('not-json<!>', { status: 200 })]);
+    const connector = new RealConnector({ provider: 'linear', accessToken: 'tok' }, http);
+    await expect(connector.importWork({ connectionId: 'c1', provider: 'linear' })).rejects.toThrow(
+      /linear API returned unparseable response: \/graphql/,
+    );
+  });
+
   it('resolves the canonical issue url from a workspace/identifier external id', async () => {
     const { http } = fakeHttp([]);
     const connector = new RealConnector({ provider: 'linear', accessToken: 'tok' }, http);
@@ -383,7 +458,7 @@ describe('RealConnector — Google (Drive / Gmail / Calendar REST)', () => {
 
     const items = await connector.importWork({ connectionId: 'c1', provider: 'drive' });
     expect(calls[1]!.url).toBe(
-      'https://www.googleapis.com/drive/v3/files?fields=files(id,name,webViewLink)&pageSize=100',
+      'https://www.googleapis.com/drive/v3/files?fields=files(id,name,webViewLink),nextPageToken&pageSize=100',
     );
     expect(items[0]).toEqual({
       id: 'f1',
@@ -407,12 +482,15 @@ describe('RealConnector — Google (Drive / Gmail / Calendar REST)', () => {
     expect((await connector.connect({ provider: 'drive', referenceId: 'o' })).account).toBe('Me');
   });
 
-  it('Gmail: resolves the profile email and imports message threads', async () => {
+  it('Gmail: resolves the profile email and imports threads using snippet as title', async () => {
     const { http, calls } = fakeHttp([
       new Response(JSON.stringify({ emailAddress: 'me@gmail.com' }), { status: 200 }),
-      new Response(JSON.stringify({ messages: [{ id: 'm1', threadId: 't1' }, { id: 'm2' }] }), {
-        status: 200,
-      }),
+      new Response(
+        JSON.stringify({
+          threads: [{ id: 't1', snippet: 'Following up on the renewal terms.' }, { id: 't2' }],
+        }),
+        { status: 200 },
+      ),
     ]);
     const connector = new RealConnector({ provider: 'gmail', accessToken: 'tok' }, http);
     const conn = await connector.connect({ provider: 'gmail', referenceId: 'o' });
@@ -421,15 +499,18 @@ describe('RealConnector — Google (Drive / Gmail / Calendar REST)', () => {
 
     const items = await connector.importWork({ connectionId: 'c1', provider: 'gmail' });
     expect(calls[1]!.url).toBe(
-      'https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=100',
+      'https://gmail.googleapis.com/gmail/v1/users/me/threads?maxResults=100',
     );
     expect(items[0]).toMatchObject({
-      id: 'm1',
+      id: 't1',
       kind: 'message',
+      title: 'Following up on the renewal terms.',
       provenance: { provider: 'gmail', externalId: 't1' },
     });
-    // Falls back to the message id as the thread external id when threadId is absent.
-    expect(items[1]?.provenance.externalId).toBe('m2');
+    // No externalUrl for Gmail threads.
+    expect(items[0]?.provenance).not.toHaveProperty('externalUrl');
+    // Falls back to 'Thread <id>' when no snippet.
+    expect(items[1]?.title).toBe('Thread t2');
   });
 
   it('Calendar: resolves the primary calendar id and imports events', async () => {
@@ -578,6 +659,48 @@ describe('RealConnector — Google (Drive / Gmail / Calendar REST)', () => {
     const connector = new RealConnector({ provider: 'drive', accessToken: 'tok' }, http);
     const status = await connector.mirrorStatus({ connectionId: 'c1', provider: 'drive' });
     expect(status).toEqual({ connectionId: 'c1', status: 'idle', itemCount: 2 });
+  });
+
+  it('Drive: paginates files using nextPageToken', async () => {
+    const { http, calls } = fakeHttp([
+      new Response(JSON.stringify({ files: [{ id: 'f1', name: 'A' }], nextPageToken: 'tok1' }), {
+        status: 200,
+      }),
+      new Response(JSON.stringify({ files: [{ id: 'f2', name: 'B' }] }), { status: 200 }),
+    ]);
+    const connector = new RealConnector({ provider: 'drive', accessToken: 'tok' }, http);
+    const items = await connector.importWork({ connectionId: 'c1', provider: 'drive' });
+    expect(items).toHaveLength(2);
+    expect(items[0]?.id).toBe('f1');
+    expect(items[1]?.id).toBe('f2');
+    expect(calls[1]!.url).toContain('pageToken=tok1');
+  });
+
+  it('Gmail: truncates long snippets to 80 chars for the title', async () => {
+    const longSnippet = 'x'.repeat(120);
+    const { http } = fakeHttp([
+      new Response(JSON.stringify({ threads: [{ id: 'tid', snippet: longSnippet }] }), {
+        status: 200,
+      }),
+    ]);
+    const connector = new RealConnector({ provider: 'gmail', accessToken: 'tok' }, http);
+    const items = await connector.importWork({ connectionId: 'c1', provider: 'gmail' });
+    expect(items[0]?.title).toHaveLength(80);
+  });
+
+  it('Gmail: paginates threads using nextPageToken', async () => {
+    const { http } = fakeHttp([
+      new Response(
+        JSON.stringify({ threads: [{ id: 't1', snippet: 'first' }], nextPageToken: 'p2' }),
+        { status: 200 },
+      ),
+      new Response(JSON.stringify({ threads: [{ id: 't2', snippet: 'second' }] }), { status: 200 }),
+    ]);
+    const connector = new RealConnector({ provider: 'gmail', accessToken: 'tok' }, http);
+    const items = await connector.importWork({ connectionId: 'c1', provider: 'gmail' });
+    expect(items).toHaveLength(2);
+    expect(items[0]?.id).toBe('t1');
+    expect(items[1]?.id).toBe('t2');
   });
 
   it('resolves canonical product urls for link resolution', async () => {

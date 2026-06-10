@@ -15,15 +15,19 @@ const NAV: readonly NavLink[] = [
   { href: '/about', label: 'About' },
 ];
 
-/** Site header for marketing pages. */
+/**
+ * Site header for marketing pages — typographic wordmark over a hairline rule.
+ * The wordmark is set in Fraunces (the display face); nav and actions stay in
+ * Plex Sans, quietly previewing the product's own typography.
+ */
 export function SiteHeader(): JSX.Element {
   return (
-    <header className="border-border/60 bg-background/80 sticky top-0 z-40 border-b backdrop-blur">
+    <header className="border-border bg-background/85 sticky top-0 z-40 border-b backdrop-blur">
       <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-6 px-6">
-        <Link href="/" className="flex items-center gap-2 text-base font-semibold tracking-tight">
-          <span className="bg-primary text-primary-foreground text-body grid size-7 place-items-center rounded-md">
-            D
-          </span>
+        <Link
+          href="/"
+          className="font-display text-ink text-2xl leading-none font-semibold tracking-tight"
+        >
           Docket
         </Link>
         <nav className="hidden items-center gap-7 md:flex" aria-label="Primary">

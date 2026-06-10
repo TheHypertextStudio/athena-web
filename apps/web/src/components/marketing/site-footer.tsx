@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { JSX } from 'react';
 
+import { TAGLINE } from '@/lib/marketing-copy';
 import { signUpUrl } from '@/lib/marketing-links';
 
 interface FooterColumn {
@@ -26,26 +27,26 @@ const COLUMNS: readonly FooterColumn[] = [
   },
 ];
 
-/** Site footer for marketing pages. */
+/**
+ * Site footer for marketing pages — colophon register: serif wordmark, the canonical
+ * tagline, mono-capped link columns, and a typesetting signature line. Sits on the
+ * deeper paper tone under a hairline rule.
+ */
 export function SiteFooter(): JSX.Element {
   return (
-    <footer className="border-border/60 bg-card/30 border-t">
+    <footer className="border-border bg-paper-deep border-t">
       <div className="mx-auto grid w-full max-w-6xl gap-10 px-6 py-14 sm:grid-cols-2 lg:grid-cols-4">
         <div className="flex flex-col gap-3 lg:col-span-2">
-          <span className="flex items-center gap-2 text-base font-semibold tracking-tight">
-            <span className="bg-primary text-primary-foreground text-body grid size-7 place-items-center rounded-md">
-              D
-            </span>
+          <span className="font-display text-ink text-2xl leading-none font-semibold tracking-tight">
             Docket
           </span>
-          <p className="text-muted-foreground text-body max-w-sm">
-            One calm command center for every organization you run — startups, nonprofits, and
-            everything in between.
-          </p>
+          <p className="text-muted-foreground text-body max-w-sm">{TAGLINE}</p>
         </div>
         {COLUMNS.map((column) => (
           <div key={column.title} className="flex flex-col gap-3">
-            <p className="text-body font-semibold">{column.title}</p>
+            <p className="text-ink-muted font-mono text-xs tracking-[0.14em] uppercase">
+              {column.title}
+            </p>
             <ul className="flex flex-col gap-2">
               {column.links.map((link) => (
                 <li key={link.label}>
@@ -61,10 +62,10 @@ export function SiteFooter(): JSX.Element {
           </div>
         ))}
       </div>
-      <div className="border-border/60 border-t">
-        <div className="text-muted-foreground mx-auto flex w-full max-w-6xl flex-col gap-1 px-6 py-6 text-xs sm:flex-row sm:items-center sm:justify-between">
+      <div className="border-border border-t">
+        <div className="text-ink-muted mx-auto flex w-full max-w-6xl flex-col gap-1 px-6 py-6 font-mono text-xs sm:flex-row sm:items-center sm:justify-between">
           <p>© Docket. All rights reserved.</p>
-          <p>The calm command center for work.</p>
+          <p>Set in Fraunces &amp; IBM Plex.</p>
         </div>
       </div>
     </footer>

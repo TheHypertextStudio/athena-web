@@ -1,0 +1,83 @@
+/*
+ * Marketing skin — paper-and-ink re-theme, scoped to the `.marketing` wrapper.
+ *
+ * VANILLA CSS ONLY. No `@theme`, `@apply`, `@variant`, or `@import 'tailwindcss'` here:
+ * any of those would make this file a second Tailwind entry without the shared theme
+ * (the Tailwind v4 multi-entry trap). New utility NAMES (text-display, bg-paper, …) are
+ * declared in `apps/web/src/app/globals.css` inside the one existing Tailwind entry; this
+ * file only assigns the underlying variable VALUES inside the marketing subtree.
+ *
+ * Mechanism: Tailwind utilities like `bg-background` compile to
+ * `background-color: var(--background)`. Re-assigning those raw variables on `.marketing`
+ * re-skins every existing utility inside the subtree — closer-ancestor custom properties
+ * beat `html.dark`'s values by inheritance, which (with `color-scheme: light`) makes the
+ * marketing site render identically whether or not the OS/app is in dark mode. Marketing
+ * components must therefore never use `dark:` variants.
+ */
+
+.marketing {
+  /* Raw marketing palette — warm paper, warm ink, ONE accent. */
+  --mk-paper: oklch(0.972 0.012 85); /* cream canvas */
+  --mk-paper-deep: oklch(0.94 0.018 80); /* recessed bands, footer */
+  --mk-ink: oklch(0.245 0.02 60); /* warm near-black */
+  --mk-ink-muted: oklch(0.46 0.025 60); /* secondary text on cream (AA on --mk-paper) */
+  --mk-accent: oklch(0.52 0.15 40); /* burnt sienna — the only marketing accent */
+  --mk-line: oklch(0.85 0.02 75); /* warm hairline rule */
+  --mk-shadow-plate: 0.375rem 0.375rem 0 oklch(0.245 0.02 60 / 0.1); /* offset plate, no blur */
+
+  /* Re-skin the app's semantic tokens within this subtree. */
+  --background: var(--mk-paper);
+  --foreground: var(--mk-ink);
+  --card: var(--mk-paper);
+  --card-foreground: var(--mk-ink);
+  --popover: var(--mk-paper);
+  --popover-foreground: var(--mk-ink);
+  --primary: var(--mk-ink);
+  --primary-foreground: var(--mk-paper);
+  --secondary: var(--mk-paper-deep);
+  --secondary-foreground: var(--mk-ink);
+  --muted: var(--mk-paper-deep);
+  --muted-foreground: var(--mk-ink-muted);
+  --accent: var(--mk-paper-deep);
+  --accent-foreground: var(--mk-ink);
+  --border: var(--mk-line);
+  --input: var(--mk-line);
+  --ring: var(--mk-accent);
+  --outline: var(--mk-line);
+
+  /* Sharper, print-like corners (radius-sm/md/lg/xl all derive from this). */
+  --radius: 0.25rem;
+
+  color-scheme: light;
+}
+
+/*
+ * The honest seam: inside a product frame, restore the app's real light tokens so the
+ * preview shows Docket truthfully — Plex on MD3 surfaces with the app's own radius —
+ * matted on the warm paper around it.
+ *
+ * These ~12 values intentionally duplicate `:root` in packages/ui/src/styles/globals.css
+ * (the source of truth); duplication is the price of keeping the design-system package
+ * free of marketing concerns. If the app tokens change, refresh these.
+ */
+.marketing .app-seam {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.45 0 0);
+  --border: oklch(0.922 0 0);
+  --surface: oklch(0.995 0.003 250);
+  --surface-container: oklch(0.97 0.004 250);
+  --on-surface: oklch(0.205 0.004 250);
+  --on-surface-variant: oklch(0.44 0.006 250);
+  --outline-variant: oklch(0.9 0.005 250);
+  --radius: 0.625rem;
+  font-family: var(--font-sans);
+  color-scheme: light;
+}

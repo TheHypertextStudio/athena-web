@@ -1,1 +1,29 @@
 @import '@docket/ui/styles/globals.css';
+
+/*
+ * Marketing-only utility vocabulary. The NAMES live here — inside the app's single
+ * Tailwind entry, so they join the shared theme — while the underlying `--mk-*` VALUES
+ * are assigned only under the `.marketing` scope in `(marketing)/marketing.css`.
+ * Outside that subtree these utilities resolve to nothing, and they are only emitted
+ * when marketing files actually use them.
+ */
+@theme inline {
+  /* Fraunces display face, published by (marketing)/layout.tsx via next/font. */
+  --font-display: var(--font-fraunces), 'Iowan Old Style', Georgia, 'Times New Roman', serif;
+
+  --color-paper: var(--mk-paper);
+  --color-paper-deep: var(--mk-paper-deep);
+  --color-ink: var(--mk-ink);
+  --color-ink-muted: var(--mk-ink-muted);
+  --color-sienna: var(--mk-accent);
+
+  --shadow-plate: var(--mk-shadow-plate);
+
+  /* Editorial display sizes (marketing only — the app type scale tops out at text-h1). */
+  --text-display: clamp(2.75rem, 1.2rem + 5.5vw, 5rem);
+  --text-display--line-height: 1.05;
+  --text-display--font-weight: 560;
+  --text-title: clamp(1.875rem, 1.1rem + 2.6vw, 3rem);
+  --text-title--line-height: 1.12;
+  --text-title--font-weight: 560;
+}

@@ -230,7 +230,7 @@ export default function InitiativesListPage(): JSX.Element {
           }}
         >
           <Plus aria-hidden="true" className="size-4" />
-          New {initiativeNoun}
+          New {initiativeNoun.toLowerCase()}
         </Button>
       </header>
 

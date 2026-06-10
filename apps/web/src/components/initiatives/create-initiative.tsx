@@ -148,7 +148,7 @@ export function CreateInitiativeDialog({
     <ComposerShell
       open={open}
       onOpenChange={handleOpenChange}
-      heading={`New ${initiativeNoun}`}
+      heading={`New ${initiativeNoun.toLowerCase()}`}
       description={`Name a cross-cutting theme — set its owner, target, and health now, then associate work later.`}
       title={name}
       onTitleChange={setName}

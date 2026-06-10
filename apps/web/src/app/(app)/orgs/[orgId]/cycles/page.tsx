@@ -217,7 +217,7 @@ export default function CyclesPage(): JSX.Element {
           }}
         >
           <Plus aria-hidden="true" className="size-4" />
-          New {cycleNoun}
+          New {cycleNoun.toLowerCase()}
         </Button>
       </header>
 
@@ -256,7 +256,7 @@ export default function CyclesPage(): JSX.Element {
         <EmptyState
           icon={RefreshCw}
           title={`No ${cycleNounPlural.toLowerCase()} yet`}
-          body={`Start a ${cycleNoun.toLowerCase()} to time-box your team's work and track its pace and carryover at a glance.`}
+          body={`Start a ${cycleNoun.toLowerCase()} to time-box your work and see pace and carryover at a glance.`}
           cta={{
             label: `Create your first ${cycleNoun.toLowerCase()}`,
             onClick: () => {

@@ -11,7 +11,7 @@
  * their one concept. The body keys off the current step so React remounts it between steps,
  * which re-triggers the enter animation for a smooth, deliberate transition.
  */
-import { ChevronLeft, Sparkles } from '@docket/ui/icons';
+import { ChevronLeft } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import { Button } from '@docket/ui/primitives';
 import type { JSX, ReactNode } from 'react';
@@ -74,8 +74,10 @@ export function WizardShell({
       <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col">
         <header className="mb-10 flex flex-col gap-6">
           <div className="flex items-center justify-between">
-            <span className="text-on-surface text-body flex items-center gap-2 font-semibold tracking-tight">
-              <Sparkles className="text-primary size-4" />
+            <span
+              className="text-on-surface wonk text-xl leading-none font-semibold tracking-tight"
+              style={{ fontFamily: 'var(--font-fraunces), Georgia, serif' }}
+            >
               Docket
             </span>
             <span className="text-on-surface-variant text-xs font-medium tabular-nums">

@@ -28,8 +28,9 @@ import type { JSX } from 'react';
 
 import { formatAxisTick, formatDate, toMillis } from './format-date';
 import { HEALTH_FILL_CLASS, HEALTH_LABEL, HEALTH_UNKNOWN_FILL_CLASS } from './health';
+import { computeWindow, pct, placeBars } from './roadmap-math';
 
-/** Human label for a Project/Program lifecycle status (the timeline carries free strings). */
+/** Human label for a Project/Program lifecycle status. */
 const STATUS_LABEL: Record<string, string> = {
   planned: 'Planned',
   active: 'Active',
@@ -39,23 +40,6 @@ const STATUS_LABEL: Record<string, string> = {
   canceled: 'Canceled',
 };
 
-/** One day in milliseconds — the granularity floor for span math. */
-const DAY_MS = 86_400_000;
-
-/** A dated project bar: the DTO bar plus its resolved start/end epoch millis. */
-interface PlacedBar {
-  readonly bar: InitiativeTimelineBar;
-  readonly start: number;
-  readonly end: number;
-}
-
-/** The computed time window for the axis: bounds (ms) plus the month tick marks. */
-interface Window {
-  readonly min: number;
-  readonly max: number;
-  readonly ticks: readonly number[];
-}
-
 /** The health-keyed fill class for a bar/swatch, defaulting to the neutral no-verdict fill. */
 function fillFor(health: Health | null): string {
   return health ? HEALTH_FILL_CLASS[health] : HEALTH_UNKNOWN_FILL_CLASS;
@@ -64,72 +48,6 @@ function fillFor(health: Health | null): string {
 /** Resolve a status string to its display label, falling back to the raw value. */
 function statusLabel(status: string): string {
   return STATUS_LABEL[status] ?? status;
-}
-
-/**
- * Partition the project bars into dated (placeable) and unscheduled.
- *
- * @remarks
- * A bar is placeable only when it carries at least one date. A bar with a single date is
- * given a one-day span anchored at that date so it still renders as a visible marker.
- */
-function placeBars(bars: readonly InitiativeTimelineBar[]): {
-  placed: readonly PlacedBar[];
-  unscheduled: readonly InitiativeTimelineBar[];
-} {
-  const placed: PlacedBar[] = [];
-  const unscheduled: InitiativeTimelineBar[] = [];
-  for (const bar of bars) {
-    const startMs = toMillis(bar.startDate);
-    const endMs = toMillis(bar.targetDate);
-    // Anchor against whichever endpoint(s) exist; a bar with neither is unschedulable.
-    const start = startMs ?? endMs;
-    const end = endMs ?? startMs;
-    if (start === null || end === null) {
-      unscheduled.push(bar);
-      continue;
-    }
-    placed.push({ bar, start: Math.min(start, end), end: Math.max(start, end) });
-  }
-  return { placed, unscheduled };
-}
-
-/**
- * Compute the axis window from the placed bars: the min start → max end, padded to the
- * first/last day of their months, with one tick per month boundary in between.
- *
- * @param placed - The dated bars to span.
- * @returns the window, or null when there is nothing dated to place.
- */
-function computeWindow(placed: readonly PlacedBar[]): Window | null {
-  if (placed.length === 0) return null;
-  let min = Number.POSITIVE_INFINITY;
-  let max = Number.NEGATIVE_INFINITY;
-  for (const item of placed) {
-    if (item.start < min) min = item.start;
-    if (item.end > max) max = item.end;
-  }
-  // Pad to the start of the min month and the start of the month after the max month, so the
-  // first and last bars never kiss the edges and the ticks land on clean month boundaries.
-  const lo = new Date(min);
-  const windowMin = Date.UTC(lo.getUTCFullYear(), lo.getUTCMonth(), 1);
-  const hi = new Date(max);
-  const windowMax = Date.UTC(hi.getUTCFullYear(), hi.getUTCMonth() + 1, 1);
-
-  const ticks: number[] = [];
-  const cursor = new Date(windowMin);
-  while (cursor.getTime() <= windowMax) {
-    ticks.push(cursor.getTime());
-    cursor.setUTCMonth(cursor.getUTCMonth() + 1);
-  }
-  return { min: windowMin, max: Math.max(windowMax, windowMin + DAY_MS), ticks };
-}
-
-/** Convert an epoch-ms value to a 0–100 percentage offset within the window. */
-function pct(value: number, window: Window): number {
-  const span = window.max - window.min;
-  if (span <= 0) return 0;
-  return ((value - window.min) / span) * 100;
 }
 
 /** Props for {@link Roadmap}. */

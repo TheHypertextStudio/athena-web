@@ -34,7 +34,7 @@
  * through {@link useVocabulary} so vocabulary skins apply. Data is fetched at runtime, so the
  * production build needs no running server.
  */
-import type { InitiativeDetail, InitiativeOut } from '@docket/types';
+import type { InitiativeOut } from '@docket/types';
 import { EmptyState, EntityTable, StatusIcon } from '@docket/ui/components';
 import type { WorkflowStateType } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
@@ -48,16 +48,15 @@ import { useQueryClient } from '@tanstack/react-query';
 import {
   buildInitiativeCatalog,
   initiativeColumns,
-  type InitiativeCatalogRow,
 } from '@/components/initiatives/initiative-catalog';
 import { CreateInitiativeDialog } from '@/components/initiatives/create-initiative';
+import { fetchEnrichedInitiatives } from '@/components/initiatives/initiative-fetcher';
 import { applyView, EMPTY_GROUP_ID } from '@/components/views/apply-view';
 import { FilterToolbar } from '@/components/views/filter-toolbar';
 import { useViewState } from '@/components/views/use-view-state';
 import { type ViewState } from '@/components/views/field-catalog';
 import { isEmptyViewState } from '@/components/views/view-state-url';
-import { api } from '@/lib/api';
-import { type RpcResponse, queryKeys, useApiQuery } from '@/lib/query';
+import { queryKeys, useApiQuery } from '@/lib/query';
 
 /** The default view applied when the URL carries none: group by status (the legacy sections). */
 const DEFAULT_VIEW: ViewState = {
@@ -65,57 +64,6 @@ const DEFAULT_VIEW: ViewState = {
   groupBy: { field: 'derivedStatus' },
   sort: [],
 };
-
-/**
- * Fetch the org's initiatives and enrich each with its detail roll-up, returning a
- * {@link RpcResponse}-shaped result so it can drive {@link useApiQuery} directly.
- *
- * @remarks
- * The list endpoint returns only the stored rows, so each is joined with its detail read in
- * parallel — the same enrich-per-item idiom the project-detail screen uses. The composite resolves
- * `ok`/`status` from the gating list read; a failed *detail* read degrades to a benign default
- * (so the row still renders) rather than failing the whole list.
- */
-function fetchEnrichedInitiatives(
-  orgId: string,
-): () => Promise<RpcResponse<readonly InitiativeCatalogRow[]>> {
-  return async () => {
-    const listRes = await api.v1.orgs[':orgId'].initiatives.$get({ param: { orgId } });
-    if (!listRes.ok) {
-      return {
-        ok: false,
-        status: listRes.status,
-        json: () => listRes.json() as unknown as Promise<readonly InitiativeCatalogRow[]>,
-      };
-    }
-    const { items } = await listRes.json();
-    const enriched = await Promise.all(
-      items.map(async (base): Promise<InitiativeCatalogRow> => {
-        const detailRes = await api.v1.orgs[':orgId'].initiatives[':id'].$get({
-          param: { orgId, id: base.id },
-        });
-        return toEnriched(base, detailRes.ok ? await detailRes.json() : null);
-      }),
-    );
-    return { ok: true, status: listRes.status, json: () => Promise.resolve(enriched) };
-  };
-}
-
-/** Reduce an Initiative + its detail roll-up into the enriched row view-model. */
-function toEnriched(base: InitiativeOut, detail: InitiativeDetail | null): InitiativeCatalogRow {
-  return {
-    id: base.id,
-    name: base.name,
-    description: base.description ?? null,
-    createdAt: base.createdAt,
-    // The roll-up is authoritative on the detail; fall back to a benign default when the
-    // detail read failed so the row still renders rather than disappearing.
-    derivedStatus: detail?.derivedStatus ?? 'active',
-    rolledUpHealth: detail?.rolledUpHealth ?? null,
-    programCount: detail?.childMix.programs ?? 0,
-    projectCount: detail?.childMix.projects ?? 0,
-  };
-}
 
 /**
  * The Initiatives list page.

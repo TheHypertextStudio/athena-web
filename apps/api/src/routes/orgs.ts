@@ -7,16 +7,7 @@
  * the creator's Owner actor, a default team (+ its team actor + membership), and the
  * org-root role grants. All nested routes go through `orgContextMiddleware`.
  */
-import {
-  actor,
-  db,
-  type GrantCapability,
-  grant,
-  organization,
-  role,
-  team,
-  teamMember,
-} from '@docket/db';
+import { actor, db, grant, organization, role, team, teamMember } from '@docket/db';
 import type { DefaultTeamOut } from '@docket/types';
 import { OrgCreate, OrgCreateResult, OrgOut, OrgSummary, pageOf } from '@docket/types';
 import { and, eq } from 'drizzle-orm';
@@ -24,10 +15,11 @@ import { Hono } from 'hono';
 import type { z } from 'zod';
 
 import type { AppEnv } from '../context';
-import { AuthError, ConflictError } from '../error';
+import { AuthError } from '../error';
 import { ok } from '../lib/ok';
 import { zJson } from '../lib/validate';
 import { orgContextMiddleware } from '../permissions/org-context-middleware';
+import { SYSTEM_ROLES, resolveUniqueSlug, slugify, toOrgOut } from './org-helpers';
 import activity from './activity';
 import agentSessions from './agent-sessions';
 import agents from './agents';
@@ -48,116 +40,6 @@ import savedViews from './saved-views';
 import tasks from './tasks';
 import teams from './teams';
 import updates from './updates';
-
-type OrgRow = typeof organization.$inferSelect;
-
-function toOrgOut(o: OrgRow): z.input<typeof OrgOut> {
-  return {
-    id: o.id,
-    name: o.name,
-    slug: o.slug,
-    purpose: o.purpose,
-    avatar: o.avatar,
-    isPersonal: o.isPersonal,
-    vocabulary: o.vocabulary,
-    lifecycleState: o.lifecycleState,
-    createdAt: o.createdAt.toISOString(),
-  };
-}
-
-function slugify(name: string): string {
-  return (
-    name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .slice(0, 48) || 'org'
-  );
-}
-
-/** A short, slug-safe random suffix used to disambiguate a colliding auto-derived slug. */
-function slugSuffix(): string {
-  return Math.random().toString(36).slice(2, 8);
-}
-
-/**
- * Resolve a slug that is free on the unique `organization_slug_uq` index.
- *
- * @remarks
- * Org slugs are globally unique, so two team orgs named the same (e.g. two people both
- * naming their workspace "Acme") would otherwise collide and abort the create transaction —
- * surfacing as an opaque 500. This pre-resolves a free slug before the seed transaction runs:
- *
- * - An **auto-derived** slug (the common onboarding path, where `name` is slugified) is
- *   silently disambiguated by appending a short random suffix until it is free, so a repeated
- *   workspace name still succeeds.
- * - An **explicit** slug the caller chose is never silently mutated; a collision throws a
- *   clean {@link ConflictError} (409) so the caller learns the slug is taken.
- *
- * @param base - The candidate slug.
- * @param explicit - Whether the caller supplied the slug explicitly (vs. derived from `name`).
- * @returns a slug not currently used by any organization.
- * @throws {ConflictError} when `explicit` is true and the slug is already taken.
- */
-async function resolveUniqueSlug(base: string, explicit: boolean): Promise<string> {
-  const taken = async (s: string): Promise<boolean> => {
-    const rows = await db
-      .select({ id: organization.id })
-      .from(organization)
-      .where(eq(organization.slug, s))
-      .limit(1);
-    return rows.length > 0;
-  };
-
-  if (!(await taken(base))) return base;
-  if (explicit) throw new ConflictError(`The slug '${base}' is already taken.`);
-
-  // Disambiguate the auto-derived slug, trimming the base so the suffix fits in 48 chars.
-  for (let attempt = 0; attempt < 6; attempt += 1) {
-    const candidate = `${base.slice(0, 41)}-${slugSuffix()}`;
-    if (!(await taken(candidate))) return candidate;
-  }
-  /* v8 ignore next -- @preserve defensive: six random 6-char suffixes practically never all collide */
-  throw new ConflictError('Could not allocate a unique slug for the organization.');
-}
-
-/** The 4 seeded system roles + their org-root base capability. */
-const SYSTEM_ROLES: {
-  key: string;
-  name: string;
-  baseCapability: GrantCapability | null;
-  defaultVisibility: 'public' | 'private';
-  capabilities: GrantCapability[];
-}[] = [
-  {
-    key: 'owner',
-    name: 'Owner',
-    baseCapability: 'manage',
-    defaultVisibility: 'public',
-    capabilities: ['view', 'comment', 'contribute', 'assign', 'manage'],
-  },
-  {
-    key: 'admin',
-    name: 'Admin',
-    baseCapability: 'manage',
-    defaultVisibility: 'public',
-    capabilities: ['view', 'comment', 'contribute', 'assign', 'manage'],
-  },
-  {
-    key: 'member',
-    name: 'Member',
-    baseCapability: 'contribute',
-    defaultVisibility: 'public',
-    capabilities: ['view', 'comment', 'contribute'],
-  },
-  {
-    key: 'guest',
-    name: 'Guest',
-    baseCapability: null,
-    defaultVisibility: 'private',
-    capabilities: [],
-  },
-];
 
 /** Organizations router (memberships, create-org transaction, nested project/task routers). */
 const orgs = new Hono<AppEnv>()

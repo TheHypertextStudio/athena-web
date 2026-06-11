@@ -1,43 +1,25 @@
 'use client';
 
 import type { ProgramOut } from '@docket/types';
-import {
-  ActorAvatar,
-  EmptyState,
-  EntityList,
-  EntityListRow,
-  RowMeta,
-  StatusIcon,
-} from '@docket/ui/components';
+import { EmptyState, StatusIcon } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
-import { FolderKanban, Layers, ListChecks, Plus } from '@docket/ui/icons';
-import { Button, Skeleton } from '@docket/ui/primitives';
+import { Layers, Plus } from '@docket/ui/icons';
+import { Button } from '@docket/ui/primitives';
+
+import { type ProgramRow, ListSkeleton, ProgramRows } from '@/components/programs/program-list-ui';
 import { useParams, useRouter } from 'next/navigation';
 import { type JSX, useCallback, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { CreateProgramDialog } from '@/components/programs/create-program';
 import { buildProgramCatalog } from '@/components/programs/program-catalog';
-import {
-  HealthDot,
-  ProgramStatusBadge,
-  STATUS_LABEL,
-  statusGlyphType,
-} from '@/components/programs/program-status';
+import { statusGlyphType } from '@/components/programs/program-status';
 import { applyView, EMPTY_GROUP_ID } from '@/components/views/apply-view';
 import type { FieldOption } from '@/components/views/field-catalog';
 import { FilterToolbar } from '@/components/views/filter-toolbar';
 import { useViewState } from '@/components/views/use-view-state';
 import { api } from '@/lib/api';
 import { queryKeys, useApiQuery } from '@/lib/query';
-
-/** The row view-model derived for one Program (owner + child-work roll-up). */
-interface ProgramRow {
-  program: ProgramOut;
-  ownerName: string | null;
-  projectCount: number;
-  taskCount: number;
-}
 
 /**
  * The org Programs list — the roster of ongoing operational lines of work (§8.4), as dense rows.
@@ -294,101 +276,6 @@ export default function ProgramsListPage(): JSX.Element {
           }}
         />
       )}
-    </div>
-  );
-}
-
-/** Props for {@link ProgramRows}. */
-interface ProgramRowsProps {
-  /** The adapted rows to render. */
-  rows: readonly ProgramRow[];
-  /** Singular project noun (vocabulary-resolved). */
-  projectNoun: string;
-  /** Plural project noun (vocabulary-resolved). */
-  projectNounPlural: string;
-  /** Singular task noun (vocabulary-resolved). */
-  taskNoun: string;
-  /** Plural task noun (vocabulary-resolved). */
-  taskNounPlural: string;
-  /** Accessible label for the list. */
-  ariaLabel: string;
-  /** Open a program's detail. */
-  onOpen: (programId: string) => void;
-}
-
-/** A bordered {@link EntityList} of program rows (shared by the flat + grouped renders). */
-function ProgramRows({
-  rows,
-  projectNoun,
-  projectNounPlural,
-  taskNoun,
-  taskNounPlural,
-  ariaLabel,
-  onOpen,
-}: ProgramRowsProps): JSX.Element {
-  return (
-    <EntityList aria-label={ariaLabel}>
-      {rows.map(({ program, ownerName, projectCount, taskCount }) => {
-        const projectWord = projectCount === 1 ? projectNoun : projectNounPlural;
-        const taskWord = taskCount === 1 ? taskNoun : taskNounPlural;
-        return (
-          <EntityListRow
-            key={program.id}
-            leading={
-              <StatusIcon
-                type={statusGlyphType(program.status)}
-                label={STATUS_LABEL[program.status]}
-              />
-            }
-            title={program.name}
-            onActivate={() => {
-              onOpen(program.id);
-            }}
-            meta={
-              <>
-                {ownerName ? (
-                  <RowMeta>
-                    <ActorAvatar kind="human" name={ownerName} size={18} />
-                    <span className="text-on-surface/80 font-medium">{ownerName}</span>
-                  </RowMeta>
-                ) : null}
-                <RowMeta tabular>
-                  <FolderKanban aria-hidden="true" className="size-3.5" />
-                  {projectCount} {projectWord}
-                </RowMeta>
-                <RowMeta tabular>
-                  <ListChecks aria-hidden="true" className="size-3.5" />
-                  {taskCount} {taskWord}
-                </RowMeta>
-              </>
-            }
-            trailing={
-              <>
-                <HealthDot health={program.health ?? null} />
-                <ProgramStatusBadge status={program.status} />
-              </>
-            }
-          />
-        );
-      })}
-    </EntityList>
-  );
-}
-
-/** Loading placeholder: a bordered list of slim row skeletons. */
-function ListSkeleton(): JSX.Element {
-  return (
-    <div
-      className="border-outline-variant divide-outline-variant flex flex-col divide-y overflow-hidden rounded-xl border"
-      aria-hidden="true"
-    >
-      {[0, 1, 2, 3, 4].map((i) => (
-        <div key={i} className="flex items-center gap-3 px-3 py-2.5">
-          <Skeleton className="size-4 rounded-full" />
-          <Skeleton className="h-4 w-48" />
-          <Skeleton className="ml-auto h-4 w-24" />
-        </div>
-      ))}
     </div>
   );
 }

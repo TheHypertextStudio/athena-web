@@ -21,38 +21,23 @@
  * authoritative (no write-back, no take-over) — the import endpoint enforces this.
  */
 import type { IntegrationCreate, IntegrationOut, TaskOut } from '@docket/types';
-import { Cable, Calendar, CheckCircle2, Layers, TaskAlt } from '@docket/ui/icons';
-import type { LucideIcon } from '@docket/ui/icons';
-import { cn } from '@docket/ui/lib/utils';
-import { Button } from '@docket/ui/primitives';
-import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
+import { Calendar, Layers, TaskAlt } from '@docket/ui/icons';
+import { type JSX, useCallback, useEffect, useState } from 'react';
 
 import { api } from '@/lib/api';
 import { readError, readProblem } from '@/lib/problem';
+import {
+  type CardState,
+  type ProviderCard,
+  INITIAL_CARD_STATE,
+  ProviderRow,
+} from './step-connect-provider-row';
 
 /** The exact set of sources onboarding offers, in display order. */
 const ONBOARDING_PROVIDERS = ['calendar', 'gtasks', 'linear'] as const;
 
 /** A source onboarding can mirror work from. */
 export type OnboardingProvider = (typeof ONBOARDING_PROVIDERS)[number];
-
-/** Static presentation for one onboarding source. */
-interface ProviderCard {
-  /** The connector provider key the API understands. */
-  readonly provider: OnboardingProvider;
-  /** The product name shown on the card. */
-  readonly name: string;
-  /** One plain-language line: what connecting this brings in. */
-  readonly blurb: string;
-  /** The leading glyph. */
-  readonly icon: LucideIcon;
-  /**
-   * The build-inlined public flag whose truthiness means this provider's OAuth is wired in
-   * production. Read via DOT-notation `process.env.NEXT_PUBLIC_*` below so the Next/Turbopack
-   * bundler statically inlines it into the client bundle.
-   */
-  readonly prodEnabled: boolean;
-}
 
 /** Truthy only for a non-empty, non-`"false"`/`"0"` public flag value. */
 function isEnabled(flag: string | undefined): boolean {
@@ -108,31 +93,7 @@ const PROVIDER_CARDS: readonly ProviderCard[] = [
   },
 ];
 
-/** Where a single provider card is in its connect lifecycle. */
-type CardPhase = 'idle' | 'connecting' | 'connected' | 'error';
-
-/** The mutable per-provider connect state. */
-interface CardState {
-  /** The lifecycle phase this card is in. */
-  readonly phase: CardPhase;
-  /** Count of items mirrored once `connected` (0 is valid — nothing new to mirror). */
-  readonly mirrored: number;
-  /** A human-readable failure message when `phase === 'error'`. */
-  readonly error: string | null;
-}
-
-/** The initial state shared by every card. */
-const INITIAL_CARD_STATE: CardState = { phase: 'idle', mirrored: 0, error: null };
-
-/**
- * Create an integration for a provider in the given org (the "Connect" call).
- *
- * @remarks
- * Created as a read-only mirror (`pattern: 'connector'`, `syncMode: 'mirror'`) regardless of
- * the provider's directory pattern, because onboarding mirrors work rather than taking a tool
- * over. No OAuth fields are needed against the mock; in prod the connection credential is
- * resolved server-side from the deployment's configured OAuth.
- */
+/** Create an integration for a provider in the given org (the "Connect" call). */
 async function defaultCreateIntegration(
   orgId: string,
   provider: OnboardingProvider,
@@ -263,7 +224,7 @@ export function StepConnect({
           <ProviderRow
             card={card}
             live={isLive(card)}
-            state={states[card.provider]}
+            state={states[card.provider as OnboardingProvider]}
             onConnect={() => {
               void connect(card.provider);
             }}
@@ -272,120 +233,4 @@ export function StepConnect({
       ))}
     </ul>
   );
-}
-
-/** Props for a single provider row. */
-interface ProviderRowProps {
-  /** The provider's static presentation. */
-  card: ProviderCard;
-  /** Whether this provider is actually connectable in this deployment. */
-  live: boolean;
-  /** The provider's current connect state. */
-  state: CardState;
-  /** Invoked when the user clicks Connect. */
-  onConnect: () => void;
-}
-
-/**
- * One provider's row: icon + name + blurb on the left, the connect affordance on the right.
- *
- * @remarks
- * The right side reflects the card's phase: a Connect button while idle, a calm progress
- * label while connecting, a confirmed "Mirrored N items" once done (with a Retry for
- * failures), or a disabled "Available soon" when the provider is not connectable here.
- */
-function ProviderRow({ card, live, state, onConnect }: ProviderRowProps): JSX.Element {
-  const { phase } = state;
-  const connected = phase === 'connected';
-  const mirroredLabel = useMemo(() => mirroredText(state.mirrored, card.name), [state, card.name]);
-
-  return (
-    <div
-      className={cn(
-        'border-outline-variant bg-surface-container-low flex items-center gap-4 rounded-xl border p-4 transition-colors',
-        connected && 'border-primary/40 bg-primary/5',
-        !live && 'opacity-70',
-      )}
-    >
-      <span
-        aria-hidden
-        className={cn(
-          'flex size-10 shrink-0 items-center justify-center rounded-lg border',
-          connected
-            ? 'border-primary/30 bg-primary/10 text-primary'
-            : 'border-outline-variant bg-surface-container text-on-surface-variant',
-        )}
-      >
-        {connected ? <CheckCircle2 className="size-5" /> : <card.icon className="size-5" />}
-      </span>
-
-      <div className="flex min-w-0 flex-col gap-0.5">
-        <span className="text-on-surface text-body leading-tight font-semibold">{card.name}</span>
-        {connected ? (
-          <span className="text-primary text-body leading-snug">{mirroredLabel}</span>
-        ) : phase === 'error' ? (
-          <span role="alert" className="text-destructive text-body leading-snug">
-            {state.error}
-          </span>
-        ) : (
-          <span className="text-on-surface-variant text-body leading-snug">{card.blurb}</span>
-        )}
-      </div>
-
-      <div className="ml-auto shrink-0">
-        {!live ? (
-          <span className="text-on-surface-variant border-outline-variant rounded-md border px-3 py-1.5 text-xs font-medium">
-            Available soon
-          </span>
-        ) : connected ? (
-          <span className="text-primary text-body inline-flex items-center gap-1.5 font-medium">
-            <CheckCircle2 className="size-4" />
-            Connected
-          </span>
-        ) : (
-          <Button
-            type="button"
-            variant={phase === 'error' ? 'outline' : 'secondary'}
-            size="sm"
-            onClick={onConnect}
-            disabled={phase === 'connecting'}
-            aria-label={
-              phase === 'error' ? `Retry connecting ${card.name}` : `Connect ${card.name}`
-            }
-          >
-            {phase === 'connecting' ? (
-              <>
-                <Cable className="size-4 animate-pulse" />
-                Connecting…
-              </>
-            ) : phase === 'error' ? (
-              'Retry'
-            ) : (
-              <>
-                <Cable className="size-4" />
-                Connect
-              </>
-            )}
-          </Button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/**
- * The confirmation line shown once a provider is connected.
- *
- * @remarks
- * Re-importing is idempotent, so a second connect can legitimately mirror nothing new — the
- * copy stays honest and reassuring in that case rather than implying a failure.
- *
- * @param count - The number of items mirrored on this connect.
- * @param name - The provider's display name.
- * @returns the user-facing confirmation sentence.
- */
-function mirroredText(count: number, name: string): string {
-  if (count === 0) return `${name} is connected — nothing new to bring in.`;
-  if (count === 1) return `Mirrored 1 item from ${name}.`;
-  return `Mirrored ${count} items from ${name}.`;
 }

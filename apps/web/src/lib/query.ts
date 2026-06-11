@@ -44,6 +44,8 @@ import {
 
 import { readError, readProblem } from '@/lib/problem';
 
+export { queryKeys } from './query-keys';
+
 /** The app-wide stale time: data is considered fresh for 30s before a background refetch. */
 const DEFAULT_STALE_TIME_MS = 30_000;
 
@@ -121,77 +123,6 @@ export async function unwrap<T>(
   }
   return response.json();
 }
-
-/**
- * The org-scoped, hierarchical query-key convention.
- *
- * @remarks
- * Every key is a tuple beginning with the org id (or `'me'` for the cross-org account scope),
- * then the entity collection, then — for detail keys — the entity id. Because TanStack matches
- * keys by prefix, invalidating a coarse key (e.g. `queryKeys.projects(orgId)`) also invalidates
- * every finer key under it (each `queryKeys.project(orgId, id)`), which is exactly what a list
- * mutation wants. Keys are returned `as const` so they are stable, structurally-typed tuples.
- *
- * @example
- * ```ts
- * useApiQuery(queryKeys.projects(orgId), () =>
- *   api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
- * );
- * ```
- */
-export const queryKeys = {
-  /** The org's project roster. */
-  projects: (orgId: string) => ['org', orgId, 'projects'] as const,
-  /** One project's detail. */
-  project: (orgId: string, projectId: string) => ['org', orgId, 'projects', projectId] as const,
-  /** The org's task list. */
-  tasks: (orgId: string) => ['org', orgId, 'tasks'] as const,
-  /** One task's detail. */
-  task: (orgId: string, taskId: string) => ['org', orgId, 'tasks', taskId] as const,
-  /** The org's program roster. */
-  programs: (orgId: string) => ['org', orgId, 'programs'] as const,
-  /** One program's detail. */
-  program: (orgId: string, programId: string) => ['org', orgId, 'programs', programId] as const,
-  /** The org's initiative roster. */
-  initiatives: (orgId: string) => ['org', orgId, 'initiatives'] as const,
-  /** One initiative's detail. */
-  initiative: (orgId: string, initiativeId: string) =>
-    ['org', orgId, 'initiatives', initiativeId] as const,
-  /** The org's cycle roster. */
-  cycles: (orgId: string) => ['org', orgId, 'cycles'] as const,
-  /** One cycle's detail. */
-  cycle: (orgId: string, cycleId: string) => ['org', orgId, 'cycles', cycleId] as const,
-  /** The org's team roster. */
-  teams: (orgId: string) => ['org', orgId, 'teams'] as const,
-  /** One team's detail. */
-  team: (orgId: string, teamId: string) => ['org', orgId, 'teams', teamId] as const,
-  /** The org's member roster. */
-  members: (orgId: string) => ['org', orgId, 'members'] as const,
-  /** The org's role roster. */
-  roles: (orgId: string) => ['org', orgId, 'roles'] as const,
-  /** The org's pending invitations. */
-  invitations: (orgId: string) => ['org', orgId, 'invitations'] as const,
-  /** The org's connected integrations. */
-  integrations: (orgId: string) => ['org', orgId, 'integrations'] as const,
-  /** The org's available integration provider directory. */
-  integrationsDirectory: (orgId: string) => ['org', orgId, 'integrations-directory'] as const,
-  /** The org's saved view definitions. */
-  savedViews: (orgId: string) => ['org', orgId, 'saved-views'] as const,
-  /** The org's agent roster. */
-  agents: (orgId: string) => ['org', orgId, 'agents'] as const,
-  /** The org's view definitions. */
-  views: (orgId: string) => ['org', orgId, 'views'] as const,
-  /** The org's settings payload (a settings tab's backing data). */
-  settings: (orgId: string, tab: string) => ['org', orgId, 'settings', tab] as const,
-  /** The signed-in account's authorized MCP clients (user-scoped, not org-scoped). */
-  connectedApps: () => ['me', 'connected-apps'] as const,
-  /** The signed-in account's org list (cross-org account scope). */
-  orgs: () => ['me', 'orgs'] as const,
-  /** The signed-in account's cross-org portfolio timeline (cross-org account scope). */
-  portfolio: () => ['me', 'portfolio'] as const,
-  /** The signed-in account's cross-org entity search for a query (cross-org account scope). */
-  hubSearch: (query: string) => ['me', 'search', query] as const,
-} as const;
 
 /** Extra options forwarded to {@link useApiQuery} (everything `useQuery` accepts but the key/fn). */
 export type ApiQueryOptions<T> = Omit<UseQueryOptions<T>, 'queryKey' | 'queryFn'>;

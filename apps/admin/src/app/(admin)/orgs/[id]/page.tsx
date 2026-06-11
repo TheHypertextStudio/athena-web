@@ -1,24 +1,15 @@
 'use client';
 
-import {
-  Button,
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  Input,
-  Skeleton,
-} from '@docket/ui/primitives';
+import { Button, Card, CardContent, CardHeader, CardTitle, Input } from '@docket/ui/primitives';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { type JSX, useCallback, useEffect, useState } from 'react';
+import { type JSX } from 'react';
 
 import { LifecycleStateMenu } from '@/components/lifecycle-filter';
 import { ErrorBanner, LifecycleBadge, PageHeader, SignInAction } from '@/components/ui-bits';
-import { api } from '@/lib/api';
-import { type LifecycleState, formatTimestamp } from '@/lib/lifecycle';
-import { isAuthError, readError, readProblem } from '@/lib/problem';
-import type { AdminHold, AdminOrg } from '@/lib/types';
+import { formatTimestamp } from '@/lib/lifecycle';
+import { DetailSkeleton, Field } from './org-detail-ui';
+import { useOrgDetail } from './use-org-detail';
 
 /**
  * The organization detail screen with inline billing actions and lifecycle holds.
@@ -34,142 +25,26 @@ import type { AdminHold, AdminOrg } from '@/lib/types';
  */
 export default function OrgDetailPage(): JSX.Element {
   const params = useParams<{ id: string }>();
-  const [org, setOrg] = useState<AdminOrg | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [authFailed, setAuthFailed] = useState(false);
-
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [pending, setPending] = useState<string | null>(null);
-
-  const [trialDays, setTrialDays] = useState('14');
-  const [targetState, setTargetState] = useState<LifecycleState>('active');
-
-  const [holds, setHolds] = useState<readonly AdminHold[]>([]);
-  const [holdReason, setHoldReason] = useState('');
-
-  /** Load the org detail. */
-  const load = useCallback(async (): Promise<void> => {
-    setLoading(true);
-    setError(null);
-    setAuthFailed(false);
-    try {
-      const res = await api.v1.admin.orgs[':id'].$get({ param: { id: params.id } });
-      if (!res.ok) {
-        setAuthFailed(isAuthError(res));
-        setError(await readProblem(res, 'Could not load this organization.'));
-        return;
-      }
-      setOrg(await res.json());
-    } catch (caught) {
-      setError(readError(caught, 'Something went wrong loading this organization.'));
-    } finally {
-      setLoading(false);
-    }
-  }, [params.id]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  /** Run a billing/lifecycle action that returns the updated org, tracking pending + errors. */
-  const runOrgAction = useCallback(
-    async (key: string, call: () => Promise<Response>, failMessage: string): Promise<void> => {
-      setActionError(null);
-      setPending(key);
-      try {
-        const res = await call();
-        if (!res.ok) {
-          setActionError(await readProblem(res, failMessage));
-          return;
-        }
-        setOrg((await res.json()) as AdminOrg);
-      } catch (caught) {
-        setActionError(readError(caught, failMessage));
-      } finally {
-        setPending(null);
-      }
-    },
-    [],
-  );
-
-  /** Extend the trial by the entered number of days. */
-  function extendTrial(): void {
-    void runOrgAction(
-      'extend-trial',
-      () =>
-        api.v1.admin.orgs[':id']['extend-trial'].$post({
-          param: { id: params.id },
-          json: { days: Number(trialDays) },
-        }),
-      'Could not extend the trial.',
-    );
-  }
-
-  /** Reactivate the org (back to active/trialing through the billing service). */
-  function reactivate(): void {
-    void runOrgAction(
-      'reactivate',
-      () => api.v1.admin.orgs[':id'].reactivate.$post({ param: { id: params.id } }),
-      'Could not reactivate the organization.',
-    );
-  }
-
-  /** Force the org into the selected lifecycle state. */
-  function setLifecycle(): void {
-    void runOrgAction(
-      'lifecycle',
-      () =>
-        api.v1.admin.orgs[':id'].lifecycle.$post({
-          param: { id: params.id },
-          json: { lifecycleState: targetState },
-        }),
-      'Could not set the lifecycle state.',
-    );
-  }
-
-  /** Place a lifecycle hold with the entered reason. */
-  async function placeHold(): Promise<void> {
-    setActionError(null);
-    setPending('place-hold');
-    try {
-      const res = await api.v1.admin.orgs[':id'].holds.$post({
-        param: { id: params.id },
-        json: { reason: holdReason },
-      });
-      if (!res.ok) {
-        setActionError(await readProblem(res, 'Could not place the hold.'));
-        return;
-      }
-      const hold = await res.json();
-      setHolds((prev) => [hold, ...prev]);
-      setHoldReason('');
-    } catch (caught) {
-      setActionError(readError(caught, 'Something went wrong placing the hold.'));
-    } finally {
-      setPending(null);
-    }
-  }
-
-  /** Release an active hold. */
-  async function releaseHold(holdId: string): Promise<void> {
-    setActionError(null);
-    setPending(`release-${holdId}`);
-    try {
-      const res = await api.v1.admin.orgs[':id'].holds[':holdId'].$delete({
-        param: { id: params.id, holdId },
-      });
-      if (!res.ok) {
-        setActionError(await readProblem(res, 'Could not release the hold.'));
-        return;
-      }
-      setHolds((prev) => prev.filter((h) => h.id !== holdId));
-    } catch (caught) {
-      setActionError(readError(caught, 'Something went wrong releasing the hold.'));
-    } finally {
-      setPending(null);
-    }
-  }
+  const {
+    org,
+    loading,
+    error,
+    authFailed,
+    actionError,
+    pending,
+    trialDays,
+    setTrialDays,
+    targetState,
+    setTargetState,
+    holds,
+    holdReason,
+    setHoldReason,
+    extendTrial,
+    reactivate,
+    setLifecycle,
+    placeHold,
+    releaseHold,
+  } = useOrgDetail(params.id);
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 p-8">
@@ -329,37 +204,6 @@ export default function OrgDetailPage(): JSX.Element {
       ) : (
         <ErrorBanner message={error} action={authFailed ? <SignInAction /> : null} />
       )}
-    </div>
-  );
-}
-
-/** A labeled read-only field in the overview card. */
-function Field({
-  label,
-  value,
-  mono = false,
-}: {
-  label: string;
-  value: string;
-  mono?: boolean;
-}): JSX.Element {
-  return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-on-surface-variant text-xs tracking-wide uppercase">{label}</span>
-      <span className={`text-body ${mono ? 'truncate font-mono text-xs' : ''}`} title={value}>
-        {value}
-      </span>
-    </div>
-  );
-}
-
-/** A loading placeholder for the org detail screen. */
-function DetailSkeleton(): JSX.Element {
-  return (
-    <div className="flex flex-col gap-4">
-      <Skeleton className="h-8 w-64 rounded-md" />
-      <Skeleton className="h-32 w-full rounded-lg" />
-      <Skeleton className="h-48 w-full rounded-lg" />
     </div>
   );
 }

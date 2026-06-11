@@ -1,125 +1,33 @@
 'use client';
 
-import type { HubTaskItem, HubTodayOut } from '@docket/types';
-import { useContextState } from '@docket/ui/components';
 import { CheckCircle2, Inbox, RefreshCw, Sparkles, XCircle } from '@docket/ui/icons';
 import { Badge, Button, Skeleton } from '@docket/ui/primitives';
-import { type JSX, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { type JSX, type ReactNode } from 'react';
 
 import Link from 'next/link';
 
-import { useActiveOrg } from '@/components/active-org';
 import { AttentionCard } from '@/components/today/attention-card';
 import { CalendarPane } from '@/components/today/calendar-pane';
 import { PlanRow } from '@/components/today/plan-row';
 import { TodayPrompt } from '@/components/today/today-prompt';
-import { api } from '@/lib/api';
-import { readError, readProblem } from '@/lib/problem';
-import { todayISODate } from '@/lib/today';
+import { useTodayData } from './use-today-data';
 
-/** A plan group: one organization and the caller's tasks for the day within it. */
-interface PlanGroup {
-  /** The originating organization's id. */
-  orgId: string;
-  /** The organization's display name. */
-  orgName: string;
-  /** The caller's planned + due tasks in this org for the day. */
-  tasks: HubTaskItem[];
-}
-
-/**
- * The Hub "Today" three-pane cockpit — the default authenticated landing.
- *
- * @remarks
- * A Client Component that aggregates across every org the caller is an active human Actor in.
- * It reads the cross-org day via `api.v1.hub.today.$get` (which returns the day's `plan`
- * tasks, timeboxed `calendar` blocks, and the `needsAttention` trio + inbox count) and lays
- * it out as three calm panes:
- *
- * - **Plan** — the day's pulled + due tasks, grouped by organization, each row org-chipped
- *   (via {@link PlanRow} → {@link OrgChip}) and state-glyphed.
- * - **Calendar** — the day's timeboxed blocks in a single day column ({@link CalendarPane}).
- * - **Needs attention** — approvals, blocked, and due-today digests as expandable
- *   {@link AttentionCard}s, plus the unread inbox count.
- *
- * Every surfaced item carries its originating `organizationId` so the cross-org day is never
- * ambiguous. Data is fetched at runtime (no build-time API dependency).
- */
 export default function TodayPage(): JSX.Element {
-  const { orgName } = useActiveOrg();
-  // The capture/Athena target: the resolved active WORKSPACE (route org ?? last-used ??
-  // personal), not the route org — Today is a cross-org route where that would be null.
-  const { activeOrgId } = useContextState();
-  const [data, setData] = useState<HubTodayOut | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  /** Load today's cross-org cockpit. `initial` drives the skeleton vs. the inline refresh. */
-  const load = useCallback(async (initial: boolean): Promise<void> => {
-    if (initial) setLoading(true);
-    else setRefreshing(true);
-    setError(null);
-    const date = todayISODate();
-    try {
-      const res = await api.v1.hub.today.$get({ query: { date } });
-      if (!res.ok) {
-        setError(await readProblem(res, 'Could not load your day.'));
-        return;
-      }
-      setData(await res.json());
-    } catch (caught) {
-      setError(readError(caught, 'Something went wrong loading your day.'));
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load(true);
-  }, [load]);
-
-  const heading = useMemo(
-    () =>
-      new Date().toLocaleDateString(undefined, {
-        weekday: 'long',
-        month: 'long',
-        day: 'numeric',
-      }),
-    [],
-  );
-
-  /** The plan tasks grouped by originating org (insertion order = first-seen org order). */
-  const planGroups = useMemo<PlanGroup[]>(() => {
-    if (!data) return [];
-    const byOrg = new Map<string, PlanGroup>();
-    for (const task of data.plan) {
-      const group = byOrg.get(task.organizationId);
-      if (group) group.tasks.push(task);
-      else
-        byOrg.set(task.organizationId, {
-          orgId: task.organizationId,
-          orgName: orgName(task.organizationId),
-          tasks: [task],
-        });
-    }
-    return [...byOrg.values()];
-  }, [data, orgName]);
-
-  /** Resolve a plan task's title by id (for calendar block labels). */
-  const taskTitle = useMemo(() => {
-    const byId = new Map<string, string>(data?.plan.map((t) => [t.id, t.title]) ?? []);
-    return (taskId: string): string => byId.get(taskId) ?? 'Timeboxed work';
-  }, [data]);
-
-  const planCount = data?.plan.length ?? 0;
-  const inbox = data?.needsAttention.inbox ?? 0;
-  const attentionCount = data
-    ? data.needsAttention.approvals.length +
-      data.needsAttention.blocked.length +
-      data.needsAttention.dueToday.length
-    : 0;
+  const {
+    data,
+    loading,
+    refreshing,
+    error,
+    load,
+    planGroups,
+    taskTitle,
+    planCount,
+    inbox,
+    attentionCount,
+    activeOrgId,
+    orgName,
+    heading,
+  } = useTodayData();
 
   return (
     <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">

@@ -31,242 +31,43 @@
  * org's vocabulary skin applies everywhere a field, group header, or filter chip names an entity.
  * All data is fetched at runtime, so the production build needs no running server.
  */
-import {
-  type AgentOut,
-  type MemberOut,
-  type ProgramOut,
-  type ProjectOut,
-  type SavedViewCreate,
-  type SavedViewOut,
-  type TaskOut,
-  TeamId,
-} from '@docket/types';
 import { LayoutGrid, Plus } from '@docket/ui/icons';
-import { useVocabulary } from '@docket/ui/hooks';
 import { Button, Separator, Skeleton } from '@docket/ui/primitives';
-import { useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
-import { type JSX, useCallback, useMemo, useState } from 'react';
+import { type JSX } from 'react';
 
-import { useActiveOrg } from '@/components/active-org';
-import type { FieldOption, ViewState } from '@/components/views/field-catalog';
-import { EMPTY_VIEW_STATE } from '@/components/views/field-catalog';
 import { FilterToolbar } from '@/components/views/filter-toolbar';
 import { SaveViewComposer } from '@/components/views/save-view-composer';
-import { buildTaskCatalog, toStoredView, toViewState } from '@/components/views/task-catalog';
-import { type RunnerActor, ViewRunner } from '@/components/views/view-runner';
 import { ViewList } from '@/components/views/view-list';
-import { findField } from '@/components/views/field-catalog';
-import { api } from '@/lib/api';
-import { queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
+import { ViewRunner } from '@/components/views/view-runner';
+import { useViewsPage } from './use-views-page';
 
-/** The active working query the toolbar edits, the runner renders, and the composer saves. */
-interface WorkingQuery {
-  /** The id of the saved view this query was opened from, or `null` for an ad-hoc query. */
-  sourceViewId: string | null;
-  /** The unified view state (filters + grouping + sort). */
-  state: ViewState;
-}
-
-/** The empty starting query (no source view, no filters / grouping / sort). */
-const EMPTY_QUERY: WorkingQuery = { sourceViewId: null, state: EMPTY_VIEW_STATE };
-
-/**
- * The org Saved Views screen.
- *
- * @returns the rendered views directory + the open view's filtered task list.
- */
 export default function ViewsPage(): JSX.Element {
   const router = useRouter();
   const params = useParams<{ orgId: string }>();
   const orgId = params.orgId;
-  const { defaultTeamId } = useActiveOrg();
-
-  const projectLabel = useVocabulary('project');
-  const programLabel = useVocabulary('program');
-  const viewsLabel = useVocabulary('task', { plural: true });
-
-  const queryClient = useQueryClient();
-  const savedViewsKey = queryKeys.savedViews(orgId);
-
-  // The saved-views read governs whether the screen can render; the tasks + entity reads are
-  // best-effort overlays used to resolve labels (a failed one just leaves a value un-skinned).
-  const viewsQ = useApiQuery(
-    savedViewsKey,
-    () => api.v1.orgs[':orgId']['saved-views'].$get({ param: { orgId } }),
-    'Could not load your saved views.',
-  );
-  const tasksQ = useApiQuery(
-    queryKeys.tasks(orgId),
-    () => api.v1.orgs[':orgId'].tasks.$get({ param: { orgId } }),
-    'Could not load tasks.',
-  );
-  const projectsQ = useApiQuery(
-    queryKeys.projects(orgId),
-    () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
-    'Could not load projects.',
-  );
-  const programsQ = useApiQuery(
-    queryKeys.programs(orgId),
-    () => api.v1.orgs[':orgId'].programs.$get({ param: { orgId } }),
-    'Could not load programs.',
-  );
-  const membersQ = useApiQuery(
-    queryKeys.members(orgId),
-    () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
-    'Could not load members.',
-  );
-  const agentsQ = useApiQuery(
-    queryKeys.agents(orgId),
-    () => api.v1.orgs[':orgId'].agents.$get({ param: { orgId } }),
-    'Could not load agents.',
-  );
-
-  const views: readonly SavedViewOut[] = viewsQ.data?.items ?? [];
-  const tasks: readonly TaskOut[] = tasksQ.data?.items ?? [];
-  const projects: readonly ProjectOut[] = projectsQ.data?.items ?? [];
-  const programs: readonly ProgramOut[] = programsQ.data?.items ?? [];
-  const members: readonly MemberOut[] = membersQ.data?.items ?? [];
-  const agents: readonly AgentOut[] = agentsQ.data?.items ?? [];
-  const loading = viewsQ.isPending;
-  const loadError = viewsQ.isError ? viewsQ.error.message : null;
-
-  const [query, setQuery] = useState<WorkingQuery>(EMPTY_QUERY);
-  const [composerOpen, setComposerOpen] = useState(false);
-
-  /** Project/program name lookups for resolving entity-id field values to labels. */
-  const projectName = useMemo(
-    () => new Map<string, string>(projects.map((p) => [p.id, p.name])),
-    [projects],
-  );
-  const programName = useMemo(
-    () => new Map<string, string>(programs.map((p) => [p.id, p.name])),
-    [programs],
-  );
-
-  /** Resolve an actor id to its display descriptor (humans from members, agents flagged). */
-  const actorById = useMemo(() => {
-    const byId = new Map<string, RunnerActor>();
-    for (const member of members) {
-      byId.set(member.actorId, {
-        name: member.displayName,
-        kind: 'human',
-        avatarUrl: member.avatar,
-      });
-    }
-    const agentActorIds = new Set(agents.map((a) => a.actorId));
-    for (const id of agentActorIds) {
-      const existing = byId.get(id);
-      byId.set(id, existing ? { ...existing, kind: 'agent' } : { name: 'Agent', kind: 'agent' });
-    }
-    return byId;
-  }, [agents, members]);
-
-  const resolveActor = useCallback(
-    (actorId: string): RunnerActor | null => actorById.get(actorId) ?? null,
-    [actorById],
-  );
-
-  /** The task field catalog driving the toolbar, runner, and view-list summaries. */
-  const catalog = useMemo(
-    () =>
-      buildTaskCatalog({
-        projectLabel,
-        programLabel,
-        resolveProject: (id) => projectName.get(id) ?? id,
-        resolveProgram: (id) => programName.get(id) ?? id,
-        resolveAssignee: (id) => actorById.get(id)?.name ?? id,
-        assigneeOptions: (): readonly FieldOption[] =>
-          [...actorById.entries()].map(([value, actor]) => ({ value, label: actor.name })),
-        projectOptions: (): readonly FieldOption[] =>
-          projects.map((p) => ({ value: p.id, label: p.name })),
-        programOptions: (): readonly FieldOption[] =>
-          programs.map((p) => ({ value: p.id, label: p.name })),
-      }),
-    [actorById, programLabel, programName, programs, projectLabel, projectName, projects],
-  );
-
-  /** A one-line, human summary of the working query for the save composer caption. */
-  const querySummary = useMemo(() => {
-    const { state } = query;
-    const parts: string[] = [];
-    parts.push(
-      state.filters.length === 0
-        ? 'all tasks'
-        : `${String(state.filters.length)} filter${state.filters.length === 1 ? '' : 's'}`,
-    );
-    if (state.groupBy) {
-      const label = findField(catalog, state.groupBy.field)?.label ?? state.groupBy.field;
-      parts.push(`grouped by ${label.toLowerCase()}`);
-    }
-    const primarySort = state.sort[0];
-    if (primarySort) {
-      const label = findField(catalog, primarySort.field)?.label ?? primarySort.field;
-      parts.push(
-        `sorted by ${label.toLowerCase()} (${primarySort.dir === 'asc' ? 'ascending' : 'descending'})`,
-      );
-    }
-    return parts.join(' · ');
-  }, [catalog, query]);
-
-  /** Whether the org has a team id available to attach a team-scoped view to. */
-  const canScopeToTeam = useMemo(() => Boolean(defaultTeamId), [defaultTeamId]);
-
-  /** Save the working query as a new saved view and prepend it to the directory. */
-  const saveMutation = useApiMutation({
-    mutationFn: (payload: SavedViewCreate) =>
-      unwrap(
-        () =>
-          api.v1.orgs[':orgId']['saved-views'].$post({
-            param: { orgId },
-            json: {
-              ...payload,
-              ...(payload.scope === 'team' && defaultTeamId
-                ? { teamId: TeamId.parse(defaultTeamId) }
-                : {}),
-            },
-          }),
-        'Could not save the view. Please try again.',
-      ),
-    onSuccess: (created) => {
-      // Prepend the created view so it appears instantly; the invalidation below reconciles with
-      // the server's authoritative directory. The cache holds the full list body, so map over
-      // `.items` while preserving the rest. Open the new view as the working query's source.
-      queryClient.setQueryData<NonNullable<typeof viewsQ.data>>(savedViewsKey, (current) =>
-        current ? { ...current, items: [created, ...current.items] } : { items: [created] },
-      );
-      setComposerOpen(false);
-      setQuery((current) => ({ ...current, sourceViewId: created.id }));
-    },
-    invalidateKeys: [savedViewsKey],
-  });
-  const saving = saveMutation.isPending;
-  const saveError = saveMutation.isError ? saveMutation.error.message : null;
-
-  /** Open a saved view: its stored config becomes the active working query. */
-  const openView = useCallback(
-    (view: SavedViewOut): void => {
-      setComposerOpen(false);
-      saveMutation.reset();
-      setQuery({
-        sourceViewId: view.id,
-        state: toViewState({
-          filters: view.filters,
-          grouping: view.grouping ?? null,
-          sort: view.sort,
-        }),
-      });
-    },
-    [saveMutation],
-  );
-
-  /** The stored config the composer captures (derived from the working query state). */
-  const storedQuery = useMemo(() => toStoredView(query.state), [query.state]);
-
-  const openViewName = useMemo(
-    () => views.find((v) => v.id === query.sourceViewId)?.name ?? null,
-    [query.sourceViewId, views],
-  );
+  const {
+    views,
+    tasks,
+    loading,
+    loadError,
+    viewsLabel,
+    query,
+    setQuery,
+    composerOpen,
+    setComposerOpen,
+    catalog,
+    querySummary,
+    canScopeToTeam,
+    saving,
+    saveError,
+    save,
+    resetSave,
+    openView,
+    storedQuery,
+    openViewName,
+    resolveActor,
+  } = useViewsPage(orgId);
 
   return (
     <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
@@ -341,7 +142,7 @@ export default function ViewsPage(): JSX.Element {
                   size="sm"
                   className="gap-1.5"
                   onClick={() => {
-                    saveMutation.reset();
+                    resetSave();
                     setComposerOpen((open) => !open);
                   }}
                   aria-expanded={composerOpen}
@@ -362,7 +163,7 @@ export default function ViewsPage(): JSX.Element {
                 saving={saving}
                 error={saveError}
                 onSave={(payload) => {
-                  saveMutation.mutate(payload);
+                  save(payload);
                 }}
                 onCancel={() => {
                   setComposerOpen(false);

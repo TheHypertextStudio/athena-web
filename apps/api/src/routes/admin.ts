@@ -2,19 +2,11 @@
  * `@docket/api` — service-admin (operator back-office) router (mounted at `/v1/admin`).
  *
  * @remarks
- * Top-level + staff-gated: every route runs behind {@link staffMiddleware} (resolves
- * the caller to a `staff_user` row or 403s) rather than the per-org actor context, so
- * the admin app consumes it through the same `hc<AppType>` RPC client. Reads (users,
- * orgs, the lifecycle board, audit feed, metrics) are open to any staff tier; billing
- * actions require finance+ via {@link requireStaffRole}; impersonation requires
- * support+ (i.e. any staff). Every mutation writes an `operator_audit_event` so the
- * back-office is fully auditable. Lifecycle writes go through the billing
- * {@link onReactivated}/{@link onTrialOrPaymentTerminal} service, never raw column
- * pokes (except the explicit `lifecycleState` override, which is the operator escape
- * hatch and is itself audited).
+ * Top-level + staff-gated: every route runs behind {@link staffMiddleware}. Reads are open
+ * to any staff tier; billing actions require `finance+`; impersonation requires `support+`.
+ * Every mutation writes an `operator_audit_event` for full auditability.
  */
 import {
-  type Database,
   actor,
   agentSession,
   db,
@@ -22,7 +14,6 @@ import {
   lifecycleHold,
   operatorAuditEvent,
   organization,
-  staffUser,
   user,
 } from '@docket/db';
 import { and, count, desc, eq, ilike, isNull, or, type SQL } from 'drizzle-orm';
@@ -31,154 +22,37 @@ import { Hono } from 'hono';
 import {
   AdminAuditPage,
   AdminAuditQuery,
-  AdminHoldOut,
   AdminImpersonationOut,
   AdminLifecycleBoard,
   AdminMetricsOut,
   AdminOrgListQuery,
   AdminOrgOut,
   AdminOrgPage,
-  AdminStaffListQuery,
-  AdminStaffOut,
-  AdminStaffPage,
   AdminUserDetail,
   AdminUserListQuery,
   AdminUserPage,
-  CreateStaffBody,
-  ExtendTrialBody,
-  LifecycleState,
-  PlaceHoldBody,
-  SetLifecycleBody,
   StartImpersonationBody,
 } from '../admin-dto';
 import type { AppEnv } from '../context';
-import { onReactivated, onTrialOrPaymentTerminal } from '../billing/lifecycle';
-import { ConflictError, NotFoundError } from '../error';
+import { NotFoundError } from '../error';
 import { ok } from '../lib/ok';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { requireStaffRole, staffMiddleware } from '../permissions/staff-guard';
-import { z } from 'zod';
 
-type UserRow = typeof user.$inferSelect;
-type OrgRow = typeof organization.$inferSelect;
-type HoldRow = typeof lifecycleHold.$inferSelect;
-type ImpersonationRow = typeof impersonationSession.$inferSelect;
-type AuditRow = typeof operatorAuditEvent.$inferSelect;
-type StaffRow = typeof staffUser.$inferSelect;
-
-/** The lifecycle states, in pipeline order, used to build the board + metrics. */
-const LIFECYCLE_STATES = LifecycleState.options;
-
-/** Serialize a user row into the admin user DTO shape. */
-function toUserOut(u: UserRow) {
-  return {
-    id: u.id,
-    name: u.name,
-    email: u.email,
-    emailVerified: u.emailVerified,
-    createdAt: u.createdAt.toISOString(),
-  };
-}
-
-/** Serialize an org row into the admin org DTO shape. */
-function toOrgOut(o: OrgRow): z.input<typeof AdminOrgOut> {
-  return {
-    id: o.id,
-    name: o.name,
-    slug: o.slug,
-    isPersonal: o.isPersonal,
-    lifecycleState: o.lifecycleState,
-    exportReadyAt: o.exportReadyAt?.toISOString() ?? null,
-    deleteAfterAt: o.deleteAfterAt?.toISOString() ?? null,
-    createdAt: o.createdAt.toISOString(),
-  };
-}
-
-/** Serialize a lifecycle-hold row into its DTO shape. */
-function toHoldOut(h: HoldRow): z.input<typeof AdminHoldOut> {
-  return {
-    id: h.id,
-    organizationId: h.organizationId,
-    reason: h.reason,
-    placedBy: h.placedBy,
-    createdAt: h.createdAt.toISOString(),
-    releasedAt: h.releasedAt?.toISOString() ?? null,
-  };
-}
-
-/** Serialize an impersonation-session row into its DTO shape. */
-function toImpersonationOut(s: ImpersonationRow): z.input<typeof AdminImpersonationOut> {
-  return {
-    id: s.id,
-    staffUserId: s.staffUserId,
-    targetUserId: s.targetUserId,
-    reason: s.reason,
-    startedAt: s.startedAt.toISOString(),
-    expiresAt: s.expiresAt.toISOString(),
-    endedAt: s.endedAt?.toISOString() ?? null,
-  };
-}
-
-/** Serialize an operator-audit-event row into its DTO shape. */
-function toAuditOut(a: AuditRow) {
-  return {
-    id: a.id,
-    staffUserId: a.staffUserId,
-    type: a.type,
-    subjectType: a.subjectType,
-    subjectId: a.subjectId,
-    metadata: a.metadata,
-    createdAt: a.createdAt.toISOString(),
-  };
-}
-
-/** Serialize a staff-user row (joined with its global user) into its DTO shape. */
-function toStaffOut(
-  s: StaffRow,
-  u: Pick<UserRow, 'name' | 'email'>,
-): z.input<typeof AdminStaffOut> {
-  return {
-    id: s.id,
-    userId: s.userId,
-    role: s.role,
-    userName: u.name,
-    userEmail: u.email,
-    createdAt: s.createdAt.toISOString(),
-  };
-}
-
-/** Extract the scalar from a single-row `count()` query result. */
-function countOf(rows: readonly { n: number }[]): number {
-  /* v8 ignore next -- @preserve a `count()` aggregate always returns exactly one row */
-  return rows[0]?.n ?? 0;
-}
-
-/** Record an operator audit event for an actioned mutation. */
-async function audit(
-  database: Database,
-  staffUserId: string,
-  type: string,
-  subjectType: string,
-  subjectId: string,
-  metadata: Record<string, unknown>,
-): Promise<void> {
-  await database
-    .insert(operatorAuditEvent)
-    .values({ staffUserId, type, subjectType, subjectId, metadata });
-}
-
-/** Load an org by id or throw {@link NotFoundError}. */
-async function loadOrg(id: string): Promise<OrgRow> {
-  const rows = await db.select().from(organization).where(eq(organization.id, id)).limit(1);
-  const row = rows[0];
-  if (!row) throw new NotFoundError('Organization not found');
-  return row;
-}
-
-const idParam = z.object({ id: z.string() });
-const holdParam = z.object({ id: z.string(), holdId: z.string() });
-const impersonationParam = z.object({ id: z.string() });
-const staffParam = z.object({ id: z.string() });
+import {
+  LIFECYCLE_STATES,
+  audit,
+  countOf,
+  idParam,
+  impersonationParam,
+  loadOrg,
+  toAuditOut,
+  toImpersonationOut,
+  toOrgOut,
+  toUserOut,
+} from './admin-serializers';
+import { adminBillingRoutes } from './admin-billing-routes';
+import { adminStaffRoutes } from './admin-staff-routes';
 
 /** The staff-gated operator back-office router. */
 const admin = new Hono<AppEnv>()
@@ -258,106 +132,9 @@ const admin = new Hono<AppEnv>()
       })),
     });
   })
-  // ---- Lifecycle holds ----------------------------------------------------
-  .post('/orgs/:id/holds', zParam(idParam), zJson(PlaceHoldBody), async (c) => {
-    const { id } = c.req.valid('param');
-    const { reason } = c.req.valid('json');
-    const { staffUserId } = c.get('staffCtx');
-    await loadOrg(id);
-    const inserted = await db
-      .insert(lifecycleHold)
-      .values({ organizationId: id, reason, placedBy: staffUserId })
-      .returning();
-    const hold = inserted[0];
-    /* v8 ignore next -- @preserve defensive: insert always returns the inserted row */
-    if (!hold) throw new NotFoundError('Hold insert returned no row');
-    await audit(db, staffUserId, 'lifecycle_hold.placed', 'organization', id, {
-      holdId: hold.id,
-      reason,
-    });
-    return ok(c, AdminHoldOut, toHoldOut(hold));
-  })
-  .delete('/orgs/:id/holds/:holdId', zParam(holdParam), async (c) => {
-    const { id, holdId } = c.req.valid('param');
-    const { staffUserId } = c.get('staffCtx');
-    const released = await db
-      .update(lifecycleHold)
-      .set({ releasedAt: new Date() })
-      .where(
-        and(
-          eq(lifecycleHold.id, holdId),
-          eq(lifecycleHold.organizationId, id),
-          isNull(lifecycleHold.releasedAt),
-        ),
-      )
-      .returning();
-    const hold = released[0];
-    if (!hold) throw new NotFoundError('Active hold not found');
-    await audit(db, staffUserId, 'lifecycle_hold.released', 'organization', id, { holdId });
-    return ok(c, AdminHoldOut, toHoldOut(hold));
-  })
-  // ---- Billing actions (finance+) -----------------------------------------
-  .post(
-    '/orgs/:id/extend-trial',
-    requireStaffRole('finance'),
-    zParam(idParam),
-    zJson(ExtendTrialBody),
-    async (c) => {
-      const { id } = c.req.valid('param');
-      const { days } = c.req.valid('json');
-      const { staffUserId } = c.get('staffCtx');
-      const org = await loadOrg(id);
-      const updated = await db
-        .update(organization)
-        .set({ lifecycleState: 'trialing', exportReadyAt: null, deleteAfterAt: null })
-        .where(eq(organization.id, id))
-        .returning();
-      const next = updated[0];
-      /* v8 ignore next -- @preserve defensive: the org was just loaded, so the update returns it */
-      if (!next) throw new NotFoundError('Organization not found');
-      await audit(db, staffUserId, 'billing.trial_extended', 'organization', id, {
-        days,
-        previousState: org.lifecycleState,
-      });
-      return ok(c, AdminOrgOut, toOrgOut(next));
-    },
-  )
-  .post('/orgs/:id/reactivate', requireStaffRole('finance'), zParam(idParam), async (c) => {
-    const { id } = c.req.valid('param');
-    const { staffUserId } = c.get('staffCtx');
-    const org = await loadOrg(id);
-    await onReactivated(db, id);
-    await audit(db, staffUserId, 'billing.reactivated', 'organization', id, {
-      previousState: org.lifecycleState,
-    });
-    return ok(c, AdminOrgOut, toOrgOut(await loadOrg(id)));
-  })
-  .post(
-    '/orgs/:id/lifecycle',
-    requireStaffRole('finance'),
-    zParam(idParam),
-    zJson(SetLifecycleBody),
-    async (c) => {
-      const { id } = c.req.valid('param');
-      const { lifecycleState } = c.req.valid('json');
-      const { staffUserId } = c.get('staffCtx');
-      const org = await loadOrg(id);
-      const now = new Date().toISOString();
-      if (lifecycleState === 'active' || lifecycleState === 'trialing') {
-        await onReactivated(db, id);
-      } else if (lifecycleState === 'export_window') {
-        await onTrialOrPaymentTerminal(db, id, now);
-      } else {
-        await db.update(organization).set({ lifecycleState }).where(eq(organization.id, id));
-      }
-      await audit(db, staffUserId, 'lifecycle.state_set', 'organization', id, {
-        from: org.lifecycleState,
-        to: lifecycleState,
-      });
-      return ok(c, AdminOrgOut, toOrgOut(await loadOrg(id)));
-    },
-  )
-  // ---- Impersonation (support+) -------------------------------------------
+  // ---- Lifecycle holds + billing actions (sub-router) --------------------
+  .route('/orgs', adminBillingRoutes)
+  // ---- Impersonation (any staff) -----------------------------------------
   .post('/impersonations', zJson(StartImpersonationBody), async (c) => {
     const { targetUserId, reason, ttlMinutes } = c.req.valid('json');
     const { staffUserId } = c.get('staffCtx');
@@ -397,7 +174,7 @@ const admin = new Hono<AppEnv>()
     });
     return ok(c, AdminImpersonationOut, toImpersonationOut(sess));
   })
-  // ---- Audit feed (superadmin-only; staff + type filterable) --------------
+  // ---- Audit feed (superadmin-only) ---------------------------------------
   .get('/audit', requireStaffRole('superadmin'), zQuery(AdminAuditQuery), async (c) => {
     const { staffUserId, type, limit, offset } = c.req.valid('query');
     const filters: SQL[] = [];
@@ -413,64 +190,9 @@ const admin = new Hono<AppEnv>()
       .offset(offset);
     return ok(c, AdminAuditPage, { items: rows.map(toAuditOut) });
   })
-  // ---- Staff management (superadmin-only) ---------------------------------
-  .get('/staff', requireStaffRole('superadmin'), zQuery(AdminStaffListQuery), async (c) => {
-    const { limit, offset } = c.req.valid('query');
-    const [items, totals] = await Promise.all([
-      db
-        .select({ staff: staffUser, name: user.name, email: user.email })
-        .from(staffUser)
-        .innerJoin(user, eq(staffUser.userId, user.id))
-        .orderBy(desc(staffUser.createdAt))
-        .limit(limit)
-        .offset(offset),
-      db.select({ n: count() }).from(staffUser),
-    ]);
-    return ok(c, AdminStaffPage, {
-      items: items.map((r) => toStaffOut(r.staff, { name: r.name, email: r.email })),
-      total: countOf(totals),
-    });
-  })
-  .post('/staff', requireStaffRole('superadmin'), zJson(CreateStaffBody), async (c) => {
-    const { userId, role } = c.req.valid('json');
-    const { staffUserId } = c.get('staffCtx');
-    const userRows = await db
-      .select({ name: user.name, email: user.email })
-      .from(user)
-      .where(eq(user.id, userId))
-      .limit(1);
-    const u = userRows[0];
-    if (!u) throw new NotFoundError('User not found');
-    const existing = await db
-      .select({ id: staffUser.id })
-      .from(staffUser)
-      .where(eq(staffUser.userId, userId))
-      .limit(1);
-    if (existing[0]) throw new ConflictError('User is already a staff member');
-    const inserted = await db.insert(staffUser).values({ userId, role }).returning();
-    const staff = inserted[0];
-    /* v8 ignore next -- @preserve defensive: insert always returns the inserted row */
-    if (!staff) throw new NotFoundError('Staff insert returned no row');
-    await audit(db, staffUserId, 'staff.granted', 'staff_user', staff.id, {
-      targetUserId: userId,
-      role,
-    });
-    return ok(c, AdminStaffOut, toStaffOut(staff, u));
-  })
-  .delete('/staff/:id', requireStaffRole('superadmin'), zParam(staffParam), async (c) => {
-    const { id } = c.req.valid('param');
-    const { staffUserId } = c.get('staffCtx');
-    if (id === staffUserId) throw new ConflictError('Cannot revoke your own staff access');
-    const deleted = await db.delete(staffUser).where(eq(staffUser.id, id)).returning();
-    const staff = deleted[0];
-    if (!staff) throw new NotFoundError('Staff member not found');
-    await audit(db, staffUserId, 'staff.revoked', 'staff_user', staff.id, {
-      targetUserId: staff.userId,
-      role: staff.role,
-    });
-    return ok(c, AdminStaffOut, toStaffOut(staff, { name: '', email: '' }));
-  })
-  // ---- Metrics (split counts + queues home, mvp-plan §8.9) ----------------
+  // ---- Staff management (sub-router) ------------------------------------
+  .route('/staff', adminStaffRoutes)
+  // ---- Metrics -----------------------------------------------------------
   .get('/metrics', async (c) => {
     const [userTotals, orgTotals, byState, holdTotals, agentVolume, agentErrors, stuckApprovals] =
       await Promise.all([

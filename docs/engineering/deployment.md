@@ -8,11 +8,11 @@ Docket deploys three services to GCP Cloud Run (scale-to-zero) backed by Neon Po
 
 | Service        | Domain                          | Image                                         | Notes                                                   |
 | -------------- | ------------------------------- | --------------------------------------------- | ------------------------------------------------------- |
-| `docket-api`   | `api.docket.hypertext.studio`   | `apps/api` — `pnpm deploy --prod` + `tsx/esm` | Hono Node.js; reads secrets from Secret Manager at boot |
+| `docket-api`   | `docket-api.hypertext.studio`   | `apps/api` — `pnpm deploy --prod` + `tsx/esm` | Hono Node.js; reads secrets from Secret Manager at boot |
 | `docket-web`   | `docket.hypertext.studio`       | `apps/web` — Next.js standalone               | Marketing site + app; `API_URL` baked in at build time  |
-| `docket-admin` | `admin.docket.hypertext.studio` | `apps/admin` — Next.js standalone             | `API_URL` baked in at build time                        |
+| `docket-admin` | `docket-admin.hypertext.studio` | `apps/admin` — Next.js standalone             | `API_URL` baked in at build time                        |
 
-**Passkey RP ID:** `docket.hypertext.studio` — the shared registrable suffix across all three subdomains.
+**Passkey RP ID:** `hypertext.studio` — the shared registrable suffix across the production web and admin hosts.
 
 All services: `--min-instances=0` (scale to zero), `--max-instances=10`, `--memory=512Mi`.
 
@@ -68,9 +68,9 @@ DNS is managed via **Cloudflare**. Add three CNAME records in the Cloudflare das
 
 | Name           | Type  | Target                                   | Proxy            |
 | -------------- | ----- | ---------------------------------------- | ---------------- |
-| `api.docket`   | CNAME | `docket-api-<hash>-<region>.a.run.app`   | Proxied (orange) |
+| `docket-api`   | CNAME | `docket-api-<hash>-<region>.a.run.app`   | Proxied (orange) |
 | `docket`       | CNAME | `docket-web-<hash>-<region>.a.run.app`   | Proxied (orange) |
-| `admin.docket` | CNAME | `docket-admin-<hash>-<region>.a.run.app` | Proxied (orange) |
+| `docket-admin` | CNAME | `docket-admin-<hash>-<region>.a.run.app` | Proxied (orange) |
 
 **Required Cloudflare SSL/TLS setting:** set the zone's SSL/TLS mode to **Full** (not Full Strict). Cloudflare terminates TLS for your custom domains; the connection from Cloudflare to Cloud Run uses the `*.run.app` certificate, which is valid but not for your domain. Full Strict would reject it.
 
@@ -87,9 +87,10 @@ gcloud run services describe docket-admin --region=<REGION> --project=<PROJECT_I
 Once DNS propagates, set the GitHub variables to the custom domains (not the `.run.app` URLs):
 
 ```bash
-gh variable set API_URL    --body "https://api.docket.hypertext.studio"   --repo <owner/repo>
+gh variable set API_URL    --body "https://docket-api.hypertext.studio"    --repo <owner/repo>
 gh variable set WEB_URL    --body "https://docket.hypertext.studio"        --repo <owner/repo>
-gh variable set ADMIN_URL  --body "https://admin.docket.hypertext.studio"  --repo <owner/repo>
+gh variable set ADMIN_URL  --body "https://docket-admin.hypertext.studio"  --repo <owner/repo>
+gh variable set PASSKEY_RP_ID --body "hypertext.studio"                    --repo <owner/repo>
 
 # Push again — all three services now deploy successfully with the real URLs baked in
 git commit --allow-empty -m "chore: trigger redeploy after URL vars set"
@@ -110,11 +111,11 @@ Set by `pnpm bootstrap`. Add missing ones with `gh variable set NAME --body "VAL
 | `GCP_REGION`          | bootstrap            | Deployment region (e.g. `us-central1`)                                                                                   |
 | `GCP_SERVICE_ACCOUNT` | bootstrap            | Full SA email: `docket-deploy@<project>.iam.gserviceaccount.com`                                                         |
 | `GCP_WIF_PROVIDER`    | bootstrap            | Full WIF provider resource name: `projects/<num>/locations/global/workloadIdentityPools/github/providers/github-actions` |
-| `PASSKEY_RP_ID`       | bootstrap            | WebAuthn relying-party domain (e.g. `example.com`)                                                                       |
+| `PASSKEY_RP_ID`       | bootstrap/manual     | WebAuthn relying-party domain. Use `hypertext.studio` for the production `*.hypertext.studio` hosts.                     |
 | `NEON_PROJECT_ID`     | bootstrap            | Neon project ID (from Neon console)                                                                                      |
-| `API_URL`             | manual (post-deploy) | Cloud Run URL of `docket-api`                                                                                            |
-| `WEB_URL`             | manual (post-deploy) | Cloud Run URL of `docket-web`                                                                                            |
-| `ADMIN_URL`           | manual (post-deploy) | Cloud Run URL of `docket-admin`                                                                                          |
+| `API_URL`             | manual (post-deploy) | Public custom-domain origin of `docket-api`                                                                              |
+| `WEB_URL`             | manual (post-deploy) | Public custom-domain origin of `docket-web`                                                                              |
+| `ADMIN_URL`           | manual (post-deploy) | Public custom-domain origin of `docket-admin`                                                                            |
 
 ### Secrets (`secrets.*`)
 

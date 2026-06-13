@@ -7,6 +7,24 @@
 
 ## Completed Tasks
 
+### [DEVX-002] Commit message scope enforcement
+
+- **Completed**: 2026-06-13
+- **Summary**: Added a Husky `commit-msg` hook backed by
+  `scripts/validate-commit-message.mjs` so scoped Conventional Commits are limited to a
+  focused product/domain allowlist. Process scopes such as `ci`, `deploy`, `deps`, `pnpm`,
+  `release`, and `build` are rejected when used as scopes; unscoped commits remain valid for
+  broad maintenance. Updated Dependabot prefixes to avoid generating process-scoped commits
+  and documented the scope list in the contributor workflow.
+- **Files Changed**:
+  - `.husky/commit-msg`
+  - `.github/dependabot.yml`
+  - `scripts/validate-commit-message.mjs`
+  - `docs/contributing/workflow.md`
+  - `docs/WORKLOG.md`
+- **Validation**: Ran the validator against valid scoped, valid unscoped, and invalid scoped
+  commit subjects; verified Prettier formatting and the actual `commit-msg` hook path.
+
 ### [DEPLOY-001] Production deploy triage for `docket.hypertext.studio`
 
 - **Completed**: 2026-06-13

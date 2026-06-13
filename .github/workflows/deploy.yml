@@ -43,7 +43,8 @@ jobs:
           cache-to: type=gha,scope=api,mode=max
           build-args: NODE_VERSION=${{ steps.node-ver.outputs.value }}
 
-      - uses: google-github-actions/deploy-cloudrun@v3
+      - id: deploy-api
+        uses: google-github-actions/deploy-cloudrun@v3
         with:
           service: docket-api
           region: ${{ env.REGION }}
@@ -59,7 +60,7 @@ jobs:
             APP_MODE=production
             API_URL=${{ vars.API_URL }}
             BETTER_AUTH_URL=${{ vars.API_URL }}
-            BETTER_AUTH_TRUSTED_ORIGINS=${{ vars.WEB_URL }},${{ vars.ADMIN_URL }}
+            BETTER_AUTH_TRUSTED_ORIGINS=${{ vars.WEB_URL }}\,${{ vars.ADMIN_URL }}
             BETTER_AUTH_PASSKEY_RP_ID=${{ vars.PASSKEY_RP_ID }}
             BETTER_AUTH_PASSKEY_RP_NAME=Docket
             BILLING_ENABLED=false
@@ -69,6 +70,9 @@ jobs:
             DATABASE_URL=docket-database-url:latest
             BETTER_AUTH_SECRET=docket-auth-secret:latest
             CRON_SECRET=docket-cron-secret:latest
+
+      - name: Show Cloud Run URL
+        run: echo "docket-api=${{ steps.deploy-api.outputs.url }}"
 
   deploy-web:
     name: Web
@@ -106,7 +110,8 @@ jobs:
             NEXT_PUBLIC_API_URL=${{ vars.API_URL }}
             NEXT_PUBLIC_APP_URL=${{ vars.WEB_URL }}
 
-      - uses: google-github-actions/deploy-cloudrun@v3
+      - id: deploy-web
+        uses: google-github-actions/deploy-cloudrun@v3
         with:
           service: docket-web
           region: ${{ env.REGION }}
@@ -120,6 +125,9 @@ jobs:
           env_vars: |
             NODE_ENV=production
             APP_MODE=production
+
+      - name: Show Cloud Run URL
+        run: echo "docket-web=${{ steps.deploy-web.outputs.url }}"
 
   deploy-admin:
     name: Admin
@@ -157,7 +165,8 @@ jobs:
             NEXT_PUBLIC_API_URL=${{ vars.API_URL }}
             NEXT_PUBLIC_APP_URL=${{ vars.WEB_URL }}
 
-      - uses: google-github-actions/deploy-cloudrun@v3
+      - id: deploy-admin
+        uses: google-github-actions/deploy-cloudrun@v3
         with:
           service: docket-admin
           region: ${{ env.REGION }}
@@ -171,3 +180,6 @@ jobs:
           env_vars: |
             NODE_ENV=production
             APP_MODE=production
+
+      - name: Show Cloud Run URL
+        run: echo "docket-admin=${{ steps.deploy-admin.outputs.url }}"

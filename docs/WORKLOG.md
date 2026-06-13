@@ -7,6 +7,31 @@
 
 ## Completed Tasks
 
+### [DEPLOY-001] Production deploy triage for `docket.hypertext.studio`
+
+- **Completed**: 2026-06-13
+- **Summary**: Re-checked the current production path for Docket. The GitHub Actions
+  Cloud Run deploy workflow is green on `main`, but public DNS still prevents the app from
+  serving: `docket.hypertext.studio`, `docket-api.hypertext.studio`, and
+  `docket-admin.hypertext.studio` resolve to Google Frontend / `ghs.googlehosted.com` and
+  return HTTP 403 instead of routing through Cloudflare to the Cloud Run services. Local
+  `gcloud` credentials are expired, so service metadata could not be queried from this
+  shell. Fixed the deploy workflow so comma-containing `BETTER_AUTH_TRUSTED_ORIGINS` is
+  escaped per the deploy action contract and added explicit Cloud Run URL output lines for
+  the next deploy. Updated the deployment runbook to match the live GitHub variables:
+  `docket-api.hypertext.studio`, `docket.hypertext.studio`, and
+  `docket-admin.hypertext.studio`.
+- **Files Changed**:
+  - `.github/workflows/deploy.yml`
+  - `docs/engineering/deployment.md`
+  - `docs/WORKLOG.md`
+- **Validation**: Verified GitHub deploy run `27227068960` succeeded; verified live DNS and
+  HTTP status with `dig`/`curl`; attempted `gcloud run services describe` but was blocked
+  by expired local reauthentication.
+- **Remaining**: Update authoritative DNS/Cloudflare records to CNAME each production host
+  to its Cloud Run `.run.app` URL, set Cloudflare SSL/TLS mode to Full, set
+  `PASSKEY_RP_ID=hypertext.studio`, redeploy, then run a live sign-up smoke test.
+
 ### [DESIGN-002] First-run experience: capture + ask-Athena from Today, auto-rolled cycles
 
 - **Completed**: 2026-06-10

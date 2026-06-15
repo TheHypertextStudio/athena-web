@@ -1,3 +1,9 @@
+## [1.0.6](https://github.com/TheHypertextStudio/athena-web/compare/v1.0.5...v1.0.6) (2026-06-15)
+
+### Bug Fixes
+
+- **api:** install Cloud Run domain mapping tools ([97e8882](https://github.com/TheHypertextStudio/athena-web/commit/97e8882ea7953ae8d51c020df9992caa9c231be4))
+
 ## [1.0.5](https://github.com/TheHypertextStudio/athena-web/compare/v1.0.4...v1.0.5) (2026-06-15)
 
 ### Bug Fixes

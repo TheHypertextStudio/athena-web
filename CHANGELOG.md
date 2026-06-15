@@ -1,3 +1,9 @@
+## [1.0.13](https://github.com/TheHypertextStudio/athena-web/compare/v1.0.12...v1.0.13) (2026-06-15)
+
+### Bug Fixes
+
+- **auth:** type passkey client errors ([971dfe0](https://github.com/TheHypertextStudio/athena-web/commit/971dfe02cf4dd882815e660026c052b117d1ede1))
+
 ## [1.0.12](https://github.com/TheHypertextStudio/athena-web/compare/v1.0.11...v1.0.12) (2026-06-15)
 
 ### Bug Fixes

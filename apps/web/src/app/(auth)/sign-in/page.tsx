@@ -7,7 +7,6 @@ import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
-import { readError } from '@/lib/problem';
 
 import { AuthError, Spinner } from '../_components/auth-feedback';
 import { AuthShell } from '../_components/auth-shell';
@@ -92,7 +91,9 @@ export default function SignInPage(): JSX.Element {
         await routeAfterSignIn();
       } catch (caught) {
         if (!autoFill) {
-          setError(readError(caught, 'Something went wrong signing in. Please try again.'));
+          setError(
+            passkeyErrorMessage(caught, 'Something went wrong signing in. Please try again.'),
+          );
         }
       } finally {
         if (!autoFill) setPending(false);

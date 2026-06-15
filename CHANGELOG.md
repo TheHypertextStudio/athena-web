@@ -1,3 +1,9 @@
+## [1.0.4](https://github.com/TheHypertextStudio/athena-web/compare/v1.0.3...v1.0.4) (2026-06-15)
+
+### Bug Fixes
+
+- **web:** preserve onboarding provider types ([f63f063](https://github.com/TheHypertextStudio/athena-web/commit/f63f063f67ba054f9e51ca1da2a3646891ee58ac))
+
 # 1.0.0 (2026-06-13)
 
 ### Bug Fixes

@@ -1,3 +1,9 @@
+## [1.0.5](https://github.com/TheHypertextStudio/athena-web/compare/v1.0.4...v1.0.5) (2026-06-15)
+
+### Bug Fixes
+
+- **api:** map production custom domains ([918c0bc](https://github.com/TheHypertextStudio/athena-web/commit/918c0bc78ae61722d7be50cf579086560bd79652))
+
 ## [1.0.4](https://github.com/TheHypertextStudio/athena-web/compare/v1.0.3...v1.0.4) (2026-06-15)
 
 ### Bug Fixes

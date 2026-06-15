@@ -1,18 +1,9 @@
 /**
- * Unit tests for the passkey-ceremony error → user-facing message mapping.
+ * Unit tests for the shared passkey ceremony error mapper.
  *
  * @remarks
- * This pure module decides what a failed passkey ceremony says to the user, and the ordering of
- * its cases is the contract that matters:
- *
- * - the duplicate-account case (Better Auth's `ERROR_AUTHENTICATOR_PREVIOUSLY_REGISTERED`, whose
- *   terse upstream "Previously registered" message is unhelpful) must surface the plain,
- *   actionable "Sign in instead." copy — and must do so even when the status would otherwise
- *   look like a server error, so it is keyed on the stable `code`, never the wording;
- * - a 5xx surfaces the outage-aware message rather than inviting a futile retry;
- * - everything else falls back to the screen's transient copy instead of rendering raw messages.
- *
- * Kept independent of the React tree so the copy contract is pinned where the logic lives.
+ * These tests pin the contract that clients render only Docket-owned copy. Raw browser,
+ * WebAuthn, and upstream Better Auth messages are classifier inputs, not UI strings.
  */
 import { describe, expect, it } from 'vitest';
 
@@ -20,11 +11,12 @@ import {
   ALREADY_REGISTERED_MESSAGE,
   isServerUnavailable,
   PASSKEY_PROMPT_CANCELLED_MESSAGE,
-  passkeyErrorMessage,
   passkeyErrorKind,
+  passkeyErrorMessage,
+  passkeyUserMessage,
   PREVIOUSLY_REGISTERED_CODE,
   SERVER_UNAVAILABLE_MESSAGE,
-} from '../src/app/(auth)/_lib/passkey-error';
+} from '../src/passkey-errors';
 
 const TRANSIENT = 'Please try again.';
 
@@ -48,20 +40,20 @@ describe('passkeyErrorMessage', () => {
     ).toBe(ALREADY_REGISTERED_MESSAGE);
   });
 
-  it('prefers the duplicate-account copy over the raw upstream message and any status', () => {
-    // Keyed on the stable code, never the terse wording, so it survives upstream changes.
+  it('prefers the duplicate-account code over status and raw upstream text', () => {
     expect(
-      passkeyErrorMessage(
+      passkeyUserMessage(
         { code: PREVIOUSLY_REGISTERED_CODE, message: 'Previously registered', status: 503 },
         TRANSIENT,
       ),
-    ).toBe(ALREADY_REGISTERED_MESSAGE);
+    ).toEqual({ kind: 'already_registered', message: ALREADY_REGISTERED_MESSAGE });
   });
 
   it('surfaces the outage-aware message for a 5xx without a known code', () => {
-    expect(passkeyErrorMessage({ status: 500, message: 'boom' }, TRANSIENT)).toBe(
-      SERVER_UNAVAILABLE_MESSAGE,
-    );
+    expect(passkeyUserMessage({ status: 500, message: 'boom' }, TRANSIENT)).toEqual({
+      kind: 'server_unavailable',
+      message: SERVER_UNAVAILABLE_MESSAGE,
+    });
   });
 
   it('maps raw WebAuthn timeout/denial copy to friendly prompt copy', () => {
@@ -73,13 +65,13 @@ describe('passkeyErrorMessage', () => {
     );
   });
 
-  it('maps browser NotAllowedError throws to friendly prompt copy', () => {
+  it('maps DOM-style NotAllowedError shapes to friendly prompt copy', () => {
     expect(
-      passkeyErrorMessage(
-        new DOMException('The operation was not allowed.', 'NotAllowedError'),
+      passkeyUserMessage(
+        { name: 'NotAllowedError', message: 'The operation was not allowed.' },
         TRANSIENT,
       ),
-    ).toBe(PASSKEY_PROMPT_CANCELLED_MESSAGE);
+    ).toEqual({ kind: 'cancelled_or_timed_out', message: PASSKEY_PROMPT_CANCELLED_MESSAGE });
   });
 
   it('does not expose unknown upstream messages for other failures', () => {
@@ -88,8 +80,11 @@ describe('passkeyErrorMessage', () => {
     );
   });
 
-  it('falls back to the transient copy when there is no message', () => {
-    expect(passkeyErrorMessage({ status: 400 }, TRANSIENT)).toBe(TRANSIENT);
+  it('falls back to transient copy when there is no typed match', () => {
+    expect(passkeyUserMessage({ status: 400 }, TRANSIENT)).toEqual({
+      kind: 'transient',
+      message: TRANSIENT,
+    });
     expect(passkeyErrorMessage(null, TRANSIENT)).toBe(TRANSIENT);
     expect(passkeyErrorMessage(undefined, TRANSIENT)).toBe(TRANSIENT);
   });

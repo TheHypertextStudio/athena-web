@@ -1,3 +1,9 @@
+## [1.0.7](https://github.com/TheHypertextStudio/athena-web/compare/v1.0.6...v1.0.7) (2026-06-15)
+
+### Bug Fixes
+
+- **api:** allow public Cloud Run ingress ([91a9618](https://github.com/TheHypertextStudio/athena-web/commit/91a961895a404eccb925f8147fc3ce6304abc1cf))
+
 ## [1.0.6](https://github.com/TheHypertextStudio/athena-web/compare/v1.0.5...v1.0.6) (2026-06-15)
 
 ### Bug Fixes

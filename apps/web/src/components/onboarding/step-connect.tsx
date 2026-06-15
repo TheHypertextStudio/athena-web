@@ -69,7 +69,7 @@ function isMockMode(): boolean {
  * mirroring the sign-in OAuth gate. In local dev these are blank — availability comes from
  * {@link isMockMode}.
  */
-const PROVIDER_CARDS: readonly ProviderCard[] = [
+const PROVIDER_CARDS: readonly ProviderCard<OnboardingProvider>[] = [
   {
     provider: 'calendar',
     name: 'Google Calendar',
@@ -224,7 +224,7 @@ export function StepConnect({
           <ProviderRow
             card={card}
             live={isLive(card)}
-            state={states[card.provider as OnboardingProvider]}
+            state={states[card.provider]}
             onConnect={() => {
               void connect(card.provider);
             }}

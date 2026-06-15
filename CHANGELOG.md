@@ -1,3 +1,9 @@
+## [1.0.9](https://github.com/TheHypertextStudio/athena-web/compare/v1.0.8...v1.0.9) (2026-06-15)
+
+### Bug Fixes
+
+- **api:** restore Cloud Run deploy permissions ([2f0876a](https://github.com/TheHypertextStudio/athena-web/commit/2f0876a0b22c1c9a31ef17979e39bfd9517e186f))
+
 ## [1.0.8](https://github.com/TheHypertextStudio/athena-web/compare/v1.0.7...v1.0.8) (2026-06-15)
 
 ### Bug Fixes

@@ -7,8 +7,8 @@ import { Button } from '@docket/ui/primitives';
 import { useMemo, type JSX } from 'react';
 
 /** Static presentation for one onboarding source. */
-export interface ProviderCard {
-  readonly provider: string;
+export interface ProviderCard<Provider extends string = string> {
+  readonly provider: Provider;
   readonly name: string;
   readonly blurb: string;
   readonly icon: LucideIcon;
@@ -29,8 +29,8 @@ export interface CardState {
 export const INITIAL_CARD_STATE: CardState = { phase: 'idle', mirrored: 0, error: null };
 
 /** Props for a single provider row. */
-export interface ProviderRowProps {
-  card: ProviderCard;
+export interface ProviderRowProps<Provider extends string = string> {
+  card: ProviderCard<Provider>;
   live: boolean;
   state: CardState;
   onConnect: () => void;
@@ -42,7 +42,12 @@ export interface ProviderRowProps {
  * Right side reflects the card's phase: Connect while idle, progress while connecting,
  * confirmed "Mirrored N items" once done, or disabled "Available soon" when not connectable.
  */
-export function ProviderRow({ card, live, state, onConnect }: ProviderRowProps): JSX.Element {
+export function ProviderRow<Provider extends string = string>({
+  card,
+  live,
+  state,
+  onConnect,
+}: ProviderRowProps<Provider>): JSX.Element {
   const { phase } = state;
   const connected = phase === 'connected';
   const mirroredLabel = useMemo(() => mirroredText(state.mirrored, card.name), [state, card.name]);

@@ -67,9 +67,18 @@ jobs:
 
       - run: pnpm turbo run test --cache-dir=.turbo
 
-      # Upload even on partial test failure so coverage doesn't silently drop.
-      - uses: codecov/codecov-action@v7
+      - id: coverage
         if: always()
+        run: |
+          if find . -path '*/coverage/*' \( -name 'coverage-final.json' -o -name 'lcov.info' -o -name '*.xml' \) -print -quit | grep -q .; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Upload only when a test task actually generated coverage files.
+      - uses: codecov/codecov-action@v7
+        if: always() && steps.coverage.outputs.found == 'true'
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false

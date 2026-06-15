@@ -190,6 +190,9 @@ describe('EntityTable — rows + chrome', () => {
     const row = screen.getByRole('row', { name: /Billing revamp/ });
     expect(row.tagName).toBe('A');
     expect(row).toHaveAttribute('href', '/items/r1');
+    row.addEventListener('click', (event) => {
+      event.preventDefault();
+    });
     fireEvent.click(row); // click still records (selection/recording) + navigates
     fireEvent.keyDown(row, { key: 'Enter' }); // Enter is left to the browser's navigation
     expect(onRowClick).toHaveBeenCalledTimes(1);

@@ -24,6 +24,7 @@ import { STATE_GROUP_ORDER, stateTypeOf } from '@/lib/work-state';
 
 const EMPTY_NAME_MAP: ReadonlyMap<string, string> = new Map();
 
+/** CycleDetailPage renders the authenticated cycle page. */
 export default function CycleDetailPage(): JSX.Element {
   const router = useRouter();
   const params = useParams<{ orgId: string; cycleId: string }>();

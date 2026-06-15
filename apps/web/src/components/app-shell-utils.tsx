@@ -8,6 +8,7 @@ import {
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
+/** homeKeyFromPath derives a stable app shell storage or navigation key. */
 export function homeKeyFromPath(pathname: string): HomeNavKey | undefined {
   if (/^\/today(?:\/|$)/.test(pathname)) return 'today';
   if (/^\/inbox(?:\/|$)/.test(pathname)) return 'inbox';
@@ -15,6 +16,7 @@ export function homeKeyFromPath(pathname: string): HomeNavKey | undefined {
   return undefined;
 }
 
+/** orgIdFromPath derives app shell routing state from the current pathname. */
 export function orgIdFromPath(pathname: string): string | null {
   const match = /^\/orgs\/([^/]+)(?:\/|$)/.exec(pathname);
   return match ? (match[1] ?? null) : null;
@@ -39,6 +41,7 @@ export const NAV_SEGMENTS: readonly WorkspaceNavKey[] = [
   'settings',
 ];
 
+/** workspaceKeyFromPath derives a stable app shell storage or navigation key. */
 export function workspaceKeyFromPath(pathname: string): WorkspaceNavKey | undefined {
   for (const key of NAV_SEGMENTS) {
     if (new RegExp(`^/orgs/[^/]+/${key}(?:/|$)`).test(pathname)) return key;
@@ -46,10 +49,12 @@ export function workspaceKeyFromPath(pathname: string): WorkspaceNavKey | undefi
   return undefined;
 }
 
+/** lastOrgStorageKey derives a stable app shell storage or navigation key. */
 export function lastOrgStorageKey(userId: string): string {
   return `docket:last-org:${userId}`;
 }
 
+/** readLastOrg reads persisted app shell preferences from browser storage. */
 export function readLastOrg(userId: string | null): string | null {
   if (!userId || typeof window === 'undefined') return null;
   try {
@@ -59,6 +64,7 @@ export function readLastOrg(userId: string | null): string | null {
   }
 }
 
+/** writeLastOrg writes persisted app shell preferences to browser storage. */
 export function writeLastOrg(userId: string | null, orgId: string): void {
   if (!userId || typeof window === 'undefined') return;
   try {
@@ -68,10 +74,12 @@ export function writeLastOrg(userId: string | null, orgId: string): void {
   }
 }
 
+/** densityStorageKey derives a stable app shell storage or navigation key. */
 export function densityStorageKey(userId: string): string {
   return `docket:density:${userId}`;
 }
 
+/** readDensity reads persisted app shell preferences from browser storage. */
 export function readDensity(userId: string | null): Density {
   if (!userId || typeof window === 'undefined') return 'comfortable';
   try {
@@ -82,6 +90,7 @@ export function readDensity(userId: string | null): Density {
   }
 }
 
+/** writeDensity writes persisted app shell preferences to browser storage. */
 export function writeDensity(userId: string | null, density: Density): void {
   if (!userId || typeof window === 'undefined') return;
   try {
@@ -91,6 +100,7 @@ export function writeDensity(userId: string | null, density: Density): void {
   }
 }
 
+/** resolveActiveOrg supports the app shell workflow. */
 export function resolveActiveOrg(
   routeOrgId: string | null,
   orgs: readonly OrgSummary[],
@@ -103,6 +113,7 @@ export function resolveActiveOrg(
   return personal?.id ?? orgs[0]?.id ?? null;
 }
 
+/** renderLink renders an app-shell navigation item with the correct active state. */
 export function renderLink(href: string, content: ReactNode, className?: string): ReactNode {
   return (
     <Link href={href} className={className}>

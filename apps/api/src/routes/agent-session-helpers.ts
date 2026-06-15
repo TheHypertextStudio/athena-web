@@ -7,9 +7,12 @@ import { z } from 'zod';
 
 import { ConflictError, NotFoundError } from '../error';
 
+/** SessionRow is the selected database row shape consumed by these API route serializers. */
 export type SessionRow = typeof agentSession.$inferSelect;
+/** ActivityRow is the selected database row shape consumed by these API route serializers. */
 export type ActivityRow = typeof sessionActivity.$inferSelect;
 
+/** toSessionOut converts internal API route data into the public API response shape. */
 export function toSessionOut(s: SessionRow): z.input<typeof AgentSessionOut> {
   return {
     id: s.id,
@@ -26,6 +29,7 @@ export function toSessionOut(s: SessionRow): z.input<typeof AgentSessionOut> {
   };
 }
 
+/** toActivityOut converts internal API route data into the public API response shape. */
 export function toActivityOut(
   a: ActivityRow,
 ): z.input<typeof AgentSessionDetailOut>['activities'][number] {
@@ -40,8 +44,11 @@ export function toActivityOut(
   };
 }
 
+/** idParam is the reusable OpenAPI parameter schema for this API route route. */
 export const idParam = z.object({ id: z.string() });
+/** activityParam is the reusable OpenAPI parameter schema for this API route route. */
 export const activityParam = z.object({ id: z.string(), activityId: z.string() });
+/** listQuery is the reusable OpenAPI query schema for this API route route. */
 export const listQuery = z.object({ status: SessionStatus.optional() });
 
 /** Load an org-scoped session row or throw {@link NotFoundError}. */

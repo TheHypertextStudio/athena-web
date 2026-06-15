@@ -12,6 +12,7 @@ import { PlanRow } from '@/components/today/plan-row';
 import { TodayPrompt } from '@/components/today/today-prompt';
 import { useTodayData } from './use-today-data';
 
+/** TodayPage renders the authenticated today page. */
 export default function TodayPage(): JSX.Element {
   const {
     data,

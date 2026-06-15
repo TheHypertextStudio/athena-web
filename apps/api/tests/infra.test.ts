@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 // Mock the node server `serve` so importing `server.ts` does not bind a real port,
 // and stub Better Auth so the heavy ESM chain is not pulled into the test graph.
@@ -35,12 +35,11 @@ describe('env + index re-exports', () => {
 describe('app.ts route composition', () => {
   it('mounts the /v1 base path and the orgs/notifications/daily-plan/hub routers', async () => {
     const { app } = await import('../src/app');
+    const { onError } = await import('../src/error');
+    app.onError(onError);
     // The orgs list route requires a session; without one it 401s (proves the mount).
     const res = await app.request('/v1/orgs');
-    // No session middleware here, so `c.get('session')` is undefined → AuthError handled
-    // by the route's own throw (no onError mounted on the bare app → 500/exception).
-    // We only assert the route exists (non-404) to cover the chain.
-    expect(res.status).not.toBe(404);
+    expect(res.status).toBe(401);
   });
 });
 
@@ -93,8 +92,14 @@ describe('session middleware', () => {
 
 describe('server boot', () => {
   let server: Hono;
+  let log: ReturnType<typeof vi.spyOn>;
   beforeAll(async () => {
+    log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     server = (await import('../src/server')).server as unknown as Hono;
+  });
+
+  afterAll(() => {
+    log.mockRestore();
   });
 
   it('calls serve() at import (mocked) and exposes /v1/health', async () => {
@@ -118,6 +123,7 @@ describe('server CORS trusted-origins parsing', () => {
     vi.resetModules();
     process.env['BETTER_AUTH_TRUSTED_ORIGINS'] = 'https://a.com, https://b.com ,';
     const freshServe = vi.fn();
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.doMock('@hono/node-server', () => ({ serve: freshServe }));
     vi.doMock('@docket/auth', () => ({
       auth: {
@@ -125,10 +131,14 @@ describe('server CORS trusted-origins parsing', () => {
         handler: vi.fn(async () => new Response('ok')),
       },
     }));
-    const { server: fresh } = await import('../src/server');
-    expect((await (fresh as unknown as Hono).request('/v1/health')).status).toBe(200);
-    delete process.env['BETTER_AUTH_TRUSTED_ORIGINS'];
-    vi.doUnmock('@hono/node-server');
-    vi.doUnmock('@docket/auth');
+    try {
+      const { server: fresh } = await import('../src/server');
+      expect((await (fresh as unknown as Hono).request('/v1/health')).status).toBe(200);
+    } finally {
+      log.mockRestore();
+      delete process.env['BETTER_AUTH_TRUSTED_ORIGINS'];
+      vi.doUnmock('@hono/node-server');
+      vi.doUnmock('@docket/auth');
+    }
   });
 });

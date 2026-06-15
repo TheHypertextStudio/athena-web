@@ -10,7 +10,9 @@ import type { z } from 'zod';
 import { toBoundaryEnv } from '../container';
 import { env } from '../env';
 
+/** IntegrationRow is the selected database row shape consumed by these API route serializers. */
 export type IntegrationRow = typeof integration.$inferSelect;
+/** TaskRow is the selected database row shape consumed by these API route serializers. */
 export type TaskRow = typeof task.$inferSelect;
 
 /** The providers the {@link Connector} port can import from. */

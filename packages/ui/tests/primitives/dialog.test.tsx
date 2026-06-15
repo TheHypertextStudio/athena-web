@@ -165,6 +165,9 @@ describe('Dialog family', () => {
       <Dialog defaultOpen>
         <DialogContent showClose={false}>
           <DialogTitle>No close X</DialogTitle>
+          <DialogDescription>
+            The dialog deliberately omits the chrome close button.
+          </DialogDescription>
         </DialogContent>
       </Dialog>,
     );
@@ -177,6 +180,7 @@ describe('Dialog family', () => {
       <Dialog defaultOpen>
         <DialogContent>
           <DialogTitle>With scrim</DialogTitle>
+          <DialogDescription>The dialog renders above a dimmed page scrim.</DialogDescription>
         </DialogContent>
       </Dialog>,
     );

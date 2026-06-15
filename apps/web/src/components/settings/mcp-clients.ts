@@ -1,5 +1,7 @@
+/** Supported desktop operating systems for MCP client setup instructions. */
 export type OS = 'mac' | 'windows' | 'linux';
 
+/** CliClient describes the settings data contract shared by the hook or component. */
 export interface CliClient {
   id: string;
   name: string;
@@ -8,6 +10,7 @@ export interface CliClient {
   note?: string;
 }
 
+/** DeepLinkClient describes the settings data contract shared by the hook or component. */
 export interface DeepLinkClient {
   id: string;
   name: string;
@@ -18,6 +21,7 @@ export interface DeepLinkClient {
   note?: string;
 }
 
+/** ConfigClient describes the settings data contract shared by the hook or component. */
 export interface ConfigClient {
   id: string;
   name: string;
@@ -27,6 +31,7 @@ export interface ConfigClient {
   note?: string;
 }
 
+/** StepsClient describes the settings data contract shared by the hook or component. */
 export interface StepsClient {
   id: string;
   name: string;
@@ -35,6 +40,7 @@ export interface StepsClient {
   note?: string;
 }
 
+/** UrlClient describes the settings data contract shared by the hook or component. */
 export interface UrlClient {
   id: string;
   name: string;
@@ -42,8 +48,10 @@ export interface UrlClient {
   note?: string;
 }
 
+/** Union of every MCP client setup model rendered by the settings UI. */
 export type McpClient = CliClient | DeepLinkClient | ConfigClient | StepsClient | UrlClient;
 
+/** Catalog of MCP clients and setup options shown in settings. */
 export const MCP_CLIENTS: McpClient[] = [
   {
     id: 'claude-code',
@@ -100,6 +108,7 @@ export const MCP_CLIENTS: McpClient[] = [
   },
 ];
 
+/** detectOS identifies the current desktop operating system for setup guidance. */
 export function detectOS(): OS {
   if (typeof navigator === 'undefined') return 'mac';
   const ua = navigator.userAgent;

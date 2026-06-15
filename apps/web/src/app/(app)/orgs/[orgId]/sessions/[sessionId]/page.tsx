@@ -14,6 +14,7 @@ import { SessionStatusPill } from '@/components/agents/session-status';
 import { SessionSidebar } from '@/components/agents/session-sidebar';
 import { useSessionDetail } from '@/lib/use-session-detail';
 
+/** SessionViewPage renders the authenticated agent session page. */
 export default function SessionViewPage(): JSX.Element {
   const params = useParams<{ orgId: string; sessionId: string }>();
   const { orgId, sessionId } = params;

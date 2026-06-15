@@ -14,19 +14,27 @@ import { z } from 'zod';
 
 import { NotFoundError } from '../error';
 
+/** InitiativeRow is the selected database row shape consumed by these API route serializers. */
 export type InitiativeRow = typeof initiative.$inferSelect;
+/** ProjectRow is the selected database row shape consumed by these API route serializers. */
 export type ProjectRow = typeof project.$inferSelect;
+/** ProgramRow is the selected database row shape consumed by these API route serializers. */
 export type ProgramRow = typeof program.$inferSelect;
 
+/** TERMINAL_PROJECT_STATUSES lists the statuses treated specially by this API route helper. */
 export const TERMINAL_PROJECT_STATUSES = new Set(['completed', 'canceled']);
 
 /** Health verdicts ordered worst→best so the roll-up can pick the most severe. */
 const HEALTH_SEVERITY: readonly Health[] = ['off_track', 'at_risk', 'on_track'];
 
+/** idParam is the reusable OpenAPI parameter schema for this API route route. */
 export const idParam = z.object({ id: z.string() });
+/** projectLinkParam is the reusable OpenAPI parameter schema for this API route route. */
 export const projectLinkParam = z.object({ id: z.string(), projectId: z.string() });
+/** programLinkParam is the reusable OpenAPI parameter schema for this API route route. */
 export const programLinkParam = z.object({ id: z.string(), programId: z.string() });
 
+/** toOut converts internal API route data into the public API response shape. */
 export function toOut(i: InitiativeRow): z.input<typeof InitiativeOut> {
   return {
     id: i.id,

@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 
 import { FIXED_NOW } from '../../src/fixtures';
 import type { SessionActionBody, SessionActivity } from '../../src/ports/agent-runtime';
@@ -196,8 +196,14 @@ describe('mailers', () => {
   });
 
   it('ConsoleMailer sends without throwing', async () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
     const m = new ConsoleMailer();
-    await expect(m.send({ to: 'a@b.com', subject: 'Hi', text: 'x' })).resolves.toBeUndefined();
+    try {
+      await expect(m.send({ to: 'a@b.com', subject: 'Hi', text: 'x' })).resolves.toBeUndefined();
+      expect(info).toHaveBeenCalledWith('[ConsoleMailer] to=a@b.com subject=Hi');
+    } finally {
+      info.mockRestore();
+    }
   });
 });
 

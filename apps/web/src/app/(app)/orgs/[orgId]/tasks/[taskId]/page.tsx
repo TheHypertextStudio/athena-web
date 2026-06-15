@@ -30,6 +30,7 @@ function isoDateOf(value: string): string {
   return value.slice(0, 10);
 }
 
+/** TaskDetailPage renders the authenticated task page. */
 export default function TaskDetailPage(): JSX.Element {
   const router = useRouter();
   const params = useParams<{ orgId: string; taskId: string }>();

@@ -166,6 +166,7 @@ function UrlSetup({ client, url }: { client: UrlClient; url: string }): JSX.Elem
   );
 }
 
+/** ClientSetup renders the settings UI control for its parent workflow. */
 export function ClientSetup({ mcpUrl }: { mcpUrl: string }): JSX.Element {
   const [selectedId, setSelectedId] = useState<string>('claude-code');
   const os = useMemo(() => detectOS(), []);

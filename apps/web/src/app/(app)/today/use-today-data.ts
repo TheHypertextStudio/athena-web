@@ -33,6 +33,7 @@ export interface TodayPageData {
   heading: string;
 }
 
+/** useTodayData coordinates today state, loading, and mutations for its screen. */
 export function useTodayData(): TodayPageData {
   const { orgName } = useActiveOrg();
   const { activeOrgId } = useContextState();

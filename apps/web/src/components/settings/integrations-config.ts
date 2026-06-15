@@ -10,6 +10,7 @@ import {
   TaskAlt,
 } from '@docket/ui/icons';
 
+/** PROVIDER_ICON maps integration providers to their display icon component. */
 export const PROVIDER_ICON: Record<string, LucideIcon> = {
   github: Github,
   linear: Layers,
@@ -19,10 +20,12 @@ export const PROVIDER_ICON: Record<string, LucideIcon> = {
   gtasks: TaskAlt,
 };
 
+/** providerIcon returns the icon component for an integration provider. */
 export function providerIcon(provider: string): LucideIcon {
   return PROVIDER_ICON[provider] ?? Sparkles;
 }
 
+/** CATEGORY_LABEL maps integration enum values to user-facing labels. */
 export const CATEGORY_LABEL: Record<string, string> = {
   engineering: 'Engineering',
   'project-management': 'Project management',
@@ -30,6 +33,7 @@ export const CATEGORY_LABEL: Record<string, string> = {
   communication: 'Communication',
 };
 
+/** STATUS_LABEL maps integration enum values to user-facing labels. */
 export const STATUS_LABEL: Record<
   IntegrationOut['status'],
   { label: string; variant: 'secondary' | 'destructive' }
@@ -39,6 +43,7 @@ export const STATUS_LABEL: Record<
   disconnected: { label: 'Disconnected', variant: 'secondary' },
 };
 
+/** categoryLabel returns display copy for an integration provider category. */
 export function categoryLabel(category: string): string {
   return (
     CATEGORY_LABEL[category] ??

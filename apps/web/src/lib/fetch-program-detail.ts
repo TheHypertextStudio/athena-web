@@ -3,6 +3,7 @@ import type { AgentOut, MemberOut, ProgramDetail, RoleOut } from '@docket/types'
 import { api } from './api';
 import type { RpcResponse } from './query';
 
+/** ProgramDetailData describes the fetch program detail data contract shared by the hook or component. */
 export interface ProgramDetailData {
   readonly program: ProgramDetail;
   readonly members: readonly MemberOut[];
@@ -10,6 +11,7 @@ export interface ProgramDetailData {
   readonly roles: readonly RoleOut[];
 }
 
+/** fetchProgramDetail loads the fetch program detail detail data required by the page. */
 export function fetchProgramDetail(
   orgId: string,
   programId: string,

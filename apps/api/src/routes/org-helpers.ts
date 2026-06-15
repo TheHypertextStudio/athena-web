@@ -7,6 +7,7 @@ import { ConflictError } from '../error';
 
 type OrgRow = typeof organization.$inferSelect;
 
+/** toOrgOut converts internal API route data into the public API response shape. */
 export function toOrgOut(o: OrgRow): z.input<typeof OrgOut> {
   return {
     id: o.id,
@@ -21,6 +22,7 @@ export function toOrgOut(o: OrgRow): z.input<typeof OrgOut> {
   };
 }
 
+/** slugify converts an organization name into a URL-safe slug candidate. */
 export function slugify(name: string): string {
   return (
     name

@@ -15,6 +15,7 @@ interface UsePaletteKeyboardOutput {
   onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void;
 }
 
+/** usePaletteKeyboard coordinates command palette state, loading, and mutations for its screen. */
 export function usePaletteKeyboard({
   items,
   activeIndex,

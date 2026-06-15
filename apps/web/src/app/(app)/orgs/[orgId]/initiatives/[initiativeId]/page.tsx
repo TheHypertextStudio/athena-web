@@ -39,6 +39,7 @@ function candidatesOf(
     .map((item) => ({ id: item.id, name: item.name }));
 }
 
+/** InitiativeDetailPage renders the authenticated initiative page. */
 export default function InitiativeDetailPage(): JSX.Element {
   const router = useRouter();
   const params = useParams<{ orgId: string; initiativeId: string }>();

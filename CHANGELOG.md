@@ -1,3 +1,9 @@
+## [1.0.11](https://github.com/TheHypertextStudio/athena-web/compare/v1.0.10...v1.0.11) (2026-06-15)
+
+### Bug Fixes
+
+- **api:** keep deploys independent of domain mappings ([bcb196d](https://github.com/TheHypertextStudio/athena-web/commit/bcb196d033c96ce3ec93119689a9c2e5d69fb341))
+
 ## [1.0.10](https://github.com/TheHypertextStudio/athena-web/compare/v1.0.9...v1.0.10) (2026-06-15)
 
 ### Bug Fixes

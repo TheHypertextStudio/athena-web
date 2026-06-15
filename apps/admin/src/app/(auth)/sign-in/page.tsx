@@ -13,7 +13,8 @@ import { useRouter } from 'next/navigation';
 import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 
 import { authClient } from '@/lib/auth-client';
-import { readError } from '@/lib/problem';
+
+import { passkeyErrorMessage } from '../_lib/passkey-error';
 
 /** Whether this browser exposes the WebAuthn API at all. */
 function isWebAuthnSupported(): boolean {
@@ -68,7 +69,10 @@ export default function SignInPage(): JSX.Element {
         if (passkeyError) {
           if (!autoFill) {
             setError(
-              passkeyError.message ?? 'Could not sign in with that passkey. Please try again.',
+              passkeyErrorMessage(
+                passkeyError,
+                'Could not sign in with that passkey. Please try again.',
+              ),
             );
           }
           return;
@@ -76,7 +80,9 @@ export default function SignInPage(): JSX.Element {
         router.push('/');
       } catch (caught) {
         if (!autoFill) {
-          setError(readError(caught, 'Something went wrong signing in. Please try again.'));
+          setError(
+            passkeyErrorMessage(caught, 'Something went wrong signing in. Please try again.'),
+          );
         }
       } finally {
         if (!autoFill) setPending(false);

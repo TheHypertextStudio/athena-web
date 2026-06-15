@@ -19,7 +19,9 @@ import { describe, expect, it } from 'vitest';
 import {
   ALREADY_REGISTERED_MESSAGE,
   isServerUnavailable,
+  PASSKEY_PROMPT_CANCELLED_MESSAGE,
   passkeyErrorMessage,
+  passkeyErrorKind,
   PREVIOUSLY_REGISTERED_CODE,
   SERVER_UNAVAILABLE_MESSAGE,
 } from '../src/app/(auth)/_lib/passkey-error';
@@ -62,9 +64,27 @@ describe('passkeyErrorMessage', () => {
     );
   });
 
-  it("prefers the error's own message for other failures", () => {
+  it('maps raw WebAuthn timeout/denial copy to friendly prompt copy', () => {
+    const raw =
+      'The operation either timed out or was not allowed. See: https://www.w3.org/TR/webauthn-2/#sctn-privacy-considerations-client.';
+    expect(passkeyErrorKind({ status: 400, message: raw })).toBe('cancelled_or_timed_out');
+    expect(passkeyErrorMessage({ status: 400, message: raw }, TRANSIENT)).toBe(
+      PASSKEY_PROMPT_CANCELLED_MESSAGE,
+    );
+  });
+
+  it('maps browser NotAllowedError throws to friendly prompt copy', () => {
+    expect(
+      passkeyErrorMessage(
+        new DOMException('The operation was not allowed.', 'NotAllowedError'),
+        TRANSIENT,
+      ),
+    ).toBe(PASSKEY_PROMPT_CANCELLED_MESSAGE);
+  });
+
+  it('does not expose unknown upstream messages for other failures', () => {
     expect(passkeyErrorMessage({ status: 400, message: 'Ceremony cancelled.' }, TRANSIENT)).toBe(
-      'Ceremony cancelled.',
+      TRANSIENT,
     );
   });
 

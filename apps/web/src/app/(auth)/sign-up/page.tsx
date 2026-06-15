@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation';
 import { type JSX, useEffect, useState } from 'react';
 
 import { passkey, signIn } from '@/lib/auth-client';
-import { readError } from '@/lib/problem';
 
 import { AuthError, Spinner } from '../_components/auth-feedback';
 import { AuthShell } from '../_components/auth-shell';
@@ -117,7 +116,12 @@ export default function SignUpPage(): JSX.Element {
       }
       router.push(POST_SIGNUP_DESTINATION);
     } catch (caught) {
-      setError(readError(caught, 'Something went wrong creating your account. Please try again.'));
+      setError(
+        passkeyErrorMessage(
+          caught,
+          'Something went wrong creating your account. Please try again.',
+        ),
+      );
     } finally {
       setPending(false);
     }

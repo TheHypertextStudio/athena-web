@@ -150,6 +150,8 @@ jobs:
           env_vars: |
             NODE_ENV=production
             APP_MODE=production
+          secrets: |
+            BETTER_AUTH_SECRET=docket-auth-secret:latest
 
       - name: Show Cloud Run URL
         run: echo "docket-web=${{ steps.deploy-web.outputs.url }}"

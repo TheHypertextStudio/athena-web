@@ -1,3 +1,9 @@
+## [1.0.8](https://github.com/TheHypertextStudio/athena-web/compare/v1.0.7...v1.0.8) (2026-06-15)
+
+### Bug Fixes
+
+- **api:** disable Cloud Run invoker checks ([a7d13ef](https://github.com/TheHypertextStudio/athena-web/commit/a7d13ef5f384d84e1db4e026bafe7765156d0755))
+
 ## [1.0.7](https://github.com/TheHypertextStudio/athena-web/compare/v1.0.6...v1.0.7) (2026-06-15)
 
 ### Bug Fixes

@@ -51,6 +51,7 @@ jobs:
           image: ${{ env.REGISTRY }}/api:${{ github.sha }}
           flags: >-
             --allow-unauthenticated
+            --ingress=all
             --min-instances=0
             --max-instances=10
             --memory=512Mi
@@ -141,6 +142,7 @@ jobs:
           image: ${{ env.REGISTRY }}/web:${{ github.sha }}
           flags: >-
             --allow-unauthenticated
+            --ingress=all
             --min-instances=0
             --max-instances=10
             --memory=512Mi
@@ -219,6 +221,7 @@ jobs:
           image: ${{ env.REGISTRY }}/admin:${{ github.sha }}
           flags: >-
             --allow-unauthenticated
+            --ingress=all
             --min-instances=0
             --max-instances=10
             --memory=512Mi

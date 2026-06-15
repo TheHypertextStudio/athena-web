@@ -5,6 +5,7 @@
 export * from './primitives';
 export * from './capability';
 export * from './errors';
+export * from './passkey-errors';
 export * from './pagination';
 export * from './vocabulary';
 export * from './hub-preferences';

@@ -24,7 +24,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.101.0",
+    "@anthropic-ai/sdk": "^0.104.1",
     "@docket/env": "workspace:*",
     "@docket/types": "workspace:*",
     "@vercel/blob": "^2.4.0",

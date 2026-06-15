@@ -36,7 +36,7 @@
     "@docket/db": "workspace:*",
     "@docket/env": "workspace:*",
     "@docket/types": "workspace:*",
-    "@hono/node-server": "^2.0.4",
+    "@hono/node-server": "^2.0.5",
     "@modelcontextprotocol/sdk": "catalog:",
     "@scalar/hono-api-reference": "catalog:",
     "drizzle-orm": "catalog:",

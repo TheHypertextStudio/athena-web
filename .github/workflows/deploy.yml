@@ -52,7 +52,6 @@ jobs:
           flags: >-
             --allow-unauthenticated
             --ingress=all
-            --no-invoker-iam-check
             --min-instances=0
             --max-instances=10
             --memory=512Mi
@@ -144,7 +143,6 @@ jobs:
           flags: >-
             --allow-unauthenticated
             --ingress=all
-            --no-invoker-iam-check
             --min-instances=0
             --max-instances=10
             --memory=512Mi
@@ -224,7 +222,6 @@ jobs:
           flags: >-
             --allow-unauthenticated
             --ingress=all
-            --no-invoker-iam-check
             --min-instances=0
             --max-instances=10
             --memory=512Mi

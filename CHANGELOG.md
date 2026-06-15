@@ -1,3 +1,9 @@
+## [1.0.12](https://github.com/TheHypertextStudio/athena-web/compare/v1.0.11...v1.0.12) (2026-06-15)
+
+### Bug Fixes
+
+- **auth:** map passkey ceremony errors ([d21bf89](https://github.com/TheHypertextStudio/athena-web/commit/d21bf89db35405f4dcd40ab3a8eaa05338137dd4))
+
 ## [1.0.11](https://github.com/TheHypertextStudio/athena-web/compare/v1.0.10...v1.0.11) (2026-06-15)
 
 ### Bug Fixes

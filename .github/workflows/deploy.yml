@@ -74,6 +74,28 @@ jobs:
       - name: Show Cloud Run URL
         run: echo "docket-api=${{ steps.deploy-api.outputs.url }}"
 
+      - name: Ensure custom domain mapping
+        run: |
+          domain="${{ vars.API_URL }}"
+          domain="${domain#https://}"
+          domain="${domain#http://}"
+          existing="$(
+            gcloud beta run domain-mappings describe \
+              --domain="$domain" \
+              --region="${{ env.REGION }}" \
+              --project="${{ vars.GCP_PROJECT_ID }}" \
+              --format="value(spec.routeName)" 2>/dev/null || true
+          )"
+          if [ "$existing" != "docket-api" ]; then
+            gcloud beta run domain-mappings create \
+              --service=docket-api \
+              --domain="$domain" \
+              --region="${{ env.REGION }}" \
+              --project="${{ vars.GCP_PROJECT_ID }}" \
+              --force-override \
+              --quiet
+          fi
+
   deploy-web:
     name: Web
     runs-on: ubuntu-latest
@@ -129,6 +151,28 @@ jobs:
       - name: Show Cloud Run URL
         run: echo "docket-web=${{ steps.deploy-web.outputs.url }}"
 
+      - name: Ensure custom domain mapping
+        run: |
+          domain="${{ vars.WEB_URL }}"
+          domain="${domain#https://}"
+          domain="${domain#http://}"
+          existing="$(
+            gcloud beta run domain-mappings describe \
+              --domain="$domain" \
+              --region="${{ env.REGION }}" \
+              --project="${{ vars.GCP_PROJECT_ID }}" \
+              --format="value(spec.routeName)" 2>/dev/null || true
+          )"
+          if [ "$existing" != "docket-web" ]; then
+            gcloud beta run domain-mappings create \
+              --service=docket-web \
+              --domain="$domain" \
+              --region="${{ env.REGION }}" \
+              --project="${{ vars.GCP_PROJECT_ID }}" \
+              --force-override \
+              --quiet
+          fi
+
   deploy-admin:
     name: Admin
     runs-on: ubuntu-latest
@@ -183,3 +227,25 @@ jobs:
 
       - name: Show Cloud Run URL
         run: echo "docket-admin=${{ steps.deploy-admin.outputs.url }}"
+
+      - name: Ensure custom domain mapping
+        run: |
+          domain="${{ vars.ADMIN_URL }}"
+          domain="${domain#https://}"
+          domain="${domain#http://}"
+          existing="$(
+            gcloud beta run domain-mappings describe \
+              --domain="$domain" \
+              --region="${{ env.REGION }}" \
+              --project="${{ vars.GCP_PROJECT_ID }}" \
+              --format="value(spec.routeName)" 2>/dev/null || true
+          )"
+          if [ "$existing" != "docket-admin" ]; then
+            gcloud beta run domain-mappings create \
+              --service=docket-admin \
+              --domain="$domain" \
+              --region="${{ env.REGION }}" \
+              --project="${{ vars.GCP_PROJECT_ID }}" \
+              --force-override \
+              --quiet
+          fi

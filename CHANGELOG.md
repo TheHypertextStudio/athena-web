@@ -1,3 +1,9 @@
+## [1.0.10](https://github.com/TheHypertextStudio/athena-web/compare/v1.0.9...v1.0.10) (2026-06-15)
+
+### Bug Fixes
+
+- **web:** mount passkey intent secret in prod ([268094f](https://github.com/TheHypertextStudio/athena-web/commit/268094fde3a33855f36c49f9fdc2c41b6a094b6a))
+
 ## [1.0.9](https://github.com/TheHypertextStudio/athena-web/compare/v1.0.8...v1.0.9) (2026-06-15)
 
 ### Bug Fixes

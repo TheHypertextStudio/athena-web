@@ -52,6 +52,7 @@ function ControlledNavSheet(): React.JSX.Element {
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="left">
           <SheetTitle>Navigation</SheetTitle>
+          <SheetDescription>Jump to a destination.</SheetDescription>
           <a href="/today">Today</a>
         </SheetContent>
       </Sheet>
@@ -86,6 +87,7 @@ describe('Sheet family', () => {
       <Sheet defaultOpen>
         <SheetContent side="right">
           <SheetTitle>Right panel</SheetTitle>
+          <SheetDescription>The right-side sheet slides in from the right edge.</SheetDescription>
         </SheetContent>
       </Sheet>,
     );
@@ -99,6 +101,7 @@ describe('Sheet family', () => {
       <Sheet defaultOpen>
         <SheetContent>
           <SheetTitle>With scrim</SheetTitle>
+          <SheetDescription>The sheet renders above a dimmed page scrim.</SheetDescription>
         </SheetContent>
       </Sheet>,
     );
@@ -160,6 +163,7 @@ describe('Sheet family', () => {
       <Sheet defaultOpen>
         <SheetContent className="panel-x">
           <SheetTitle>Styled</SheetTitle>
+          <SheetDescription>The sheet accepts caller-provided panel classes.</SheetDescription>
         </SheetContent>
       </Sheet>,
     );

@@ -30,6 +30,7 @@ export interface OrgDetailData {
   releaseHold: (holdId: string) => Promise<void>;
 }
 
+/** useOrgDetail coordinates use org detail state, loading, and mutations for its screen. */
 export function useOrgDetail(orgId: string): OrgDetailData {
   const [org, setOrg] = useState<AdminOrg | null>(null);
   const [loading, setLoading] = useState(true);

@@ -3,6 +3,7 @@ import type { InitiativeDetail, MemberOut, ProgramOut, ProjectOut, RoleOut } fro
 import { api } from './api';
 import type { RpcResponse } from './query';
 
+/** InitiativeDetailData describes the fetch initiative detail data contract shared by the hook or component. */
 export interface InitiativeDetailData {
   readonly detail: InitiativeDetail;
   readonly allProjects: readonly ProjectOut[];
@@ -11,6 +12,7 @@ export interface InitiativeDetailData {
   readonly roles: readonly RoleOut[];
 }
 
+/** fetchInitiativeDetail loads the fetch initiative detail detail data required by the page. */
 export function fetchInitiativeDetail(
   orgId: string,
   initiativeId: string,

@@ -7,8 +7,10 @@ import { z } from 'zod';
 
 import { NotFoundError, ValidationError } from '../error';
 
+/** TaskRow is the selected database row shape consumed by these API route serializers. */
 export type TaskRow = typeof task.$inferSelect;
 
+/** toOut converts internal API route data into the public API response shape. */
 export function toOut(t: TaskRow): z.input<typeof TaskOut> {
   return {
     id: t.id,
@@ -42,7 +44,9 @@ export function toRef(
   return { id: t.id, title: t.title, state: t.state, projectId: t.projectId };
 }
 
+/** idParam is the reusable OpenAPI parameter schema for this API route route. */
 export const idParam = z.object({ id: z.string() });
+/** depParam is the reusable OpenAPI parameter schema for this API route route. */
 export const depParam = z.object({ id: z.string(), depId: z.string() });
 
 /**

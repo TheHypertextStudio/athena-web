@@ -14,6 +14,7 @@ import { api } from './api';
 import type { ProgramDetailData } from './fetch-program-detail';
 import { queryKeys, unwrap, useApiMutation } from './query';
 
+/** ProgramPatch describes the use program mutations data contract shared by the hook or component. */
 export interface ProgramPatch {
   ownerId?: string | null;
   status?: ProgramStatus;
@@ -32,6 +33,7 @@ function toProgramPatchBody(patch: ProgramPatch): ProgramUpdate {
   };
 }
 
+/** ProgramMutations describes the use program mutations data contract shared by the hook or component. */
 export interface ProgramMutations {
   patchProgram: (patch: ProgramPatch) => void;
   postUpdate: (body: string, health: Health | undefined) => void;
@@ -41,6 +43,7 @@ export interface ProgramMutations {
   updateError: string | null;
 }
 
+/** useProgramMutations coordinates use program mutations state, loading, and mutations for its screen. */
 export function useProgramMutations(
   orgId: string,
   programId: string,

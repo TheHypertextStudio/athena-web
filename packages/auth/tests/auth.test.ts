@@ -375,10 +375,18 @@ describe('buildAuthOptions env-gating', () => {
 
   it('mounts oidcProvider (before nextCookies) when OIDC_LOGIN_PAGE_URL is real but MCP_RESOURCE_URL is not', async () => {
     const { buildAuthOptions } = await import('../src/index');
-    const opts = buildAuthOptions({
-      ...baseEnv,
-      OIDC_LOGIN_PAGE_URL: 'https://docket.example/sign-in',
-    });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    let opts!: ReturnType<typeof buildAuthOptions>;
+    try {
+      opts = buildAuthOptions({
+        ...baseEnv,
+        OIDC_LOGIN_PAGE_URL: 'https://docket.example/sign-in',
+      });
+    } finally {
+      warn.mockRestore();
+      error.mockRestore();
+    }
     // passkey + oidcProvider + nextCookies (no mcp).
     const ids = (opts.plugins ?? []).map((p) => p.id);
     expect(ids).toEqual(['passkey', 'oidc-provider', 'next-cookies']);

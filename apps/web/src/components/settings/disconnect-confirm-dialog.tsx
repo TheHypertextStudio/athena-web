@@ -17,6 +17,7 @@ interface DisconnectConfirmDialogProps {
   onCancel: () => void;
 }
 
+/** DisconnectConfirmDialog renders the settings UI control for its parent workflow. */
 export function DisconnectConfirmDialog({
   providerName,
   onConfirm,

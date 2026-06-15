@@ -48,6 +48,7 @@ export interface IntegrationsTabProps {
   isPersonal?: boolean;
 }
 
+/** IntegrationsTab renders the settings UI control for its parent workflow. */
 export function IntegrationsTab({
   orgId,
   canManage,

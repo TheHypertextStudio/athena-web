@@ -77,6 +77,9 @@ describe('EntityListRow', () => {
     render(<EntityListRow title="Go" href="/orgs/o1/projects/p1" onActivate={onActivate} />);
     const link = screen.getByRole('link', { name: 'Go' });
     expect(link).toHaveAttribute('href', '/orgs/o1/projects/p1');
+    link.addEventListener('click', (event) => {
+      event.preventDefault();
+    });
     // Click still activates (e.g. to record selection), Enter is left to the browser's nav.
     fireEvent.click(link);
     fireEvent.keyDown(link, { key: 'Enter' });
@@ -139,7 +142,15 @@ describe('EntityListRow', () => {
         href="/dest"
         onActivate={onActivate}
         render={(p) => (
-          <a data-testid="router-link" href={p.href} className={p.className} onClick={p.onClick}>
+          <a
+            data-testid="router-link"
+            href={p.href}
+            className={p.className}
+            onClick={(event) => {
+              event.preventDefault();
+              p.onClick();
+            }}
+          >
             {p.children}
           </a>
         )}

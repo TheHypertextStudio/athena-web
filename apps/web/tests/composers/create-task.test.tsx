@@ -258,8 +258,11 @@ describe('CreateTaskDialog — robust composer', () => {
     expect(firstJson(taskPost)).toMatchObject({ title: 'Tagged', labels: [BUG_ID] });
   });
 
-  it('disables Create until the title is non-empty and never sends an empty title', () => {
+  it('disables Create until the title is non-empty and never sends an empty title', async () => {
     renderComposer();
+    await waitFor(() => {
+      expect(teamGet).toHaveBeenCalled();
+    });
     const create = screen.getByRole('button', { name: 'Create task' });
     expect((create as HTMLButtonElement).disabled).toBe(true);
     expect(taskPost).not.toHaveBeenCalled();

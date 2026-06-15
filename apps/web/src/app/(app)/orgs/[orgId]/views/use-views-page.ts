@@ -54,6 +54,7 @@ export interface ViewsPageData {
   resolveActor: (actorId: string) => RunnerActor | null;
 }
 
+/** useViewsPage coordinates saved views state, loading, and mutations for its screen. */
 export function useViewsPage(orgId: string): ViewsPageData {
   const { defaultTeamId } = useActiveOrg();
   const projectLabel = useVocabulary('project');

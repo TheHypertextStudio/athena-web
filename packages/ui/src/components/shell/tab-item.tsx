@@ -16,6 +16,7 @@ interface TabItemProps {
   readonly onClose: (key: string) => void;
 }
 
+/** TabItem renders the shell navigation UI control for its parent workflow. */
 export function TabItem({ tab, active, renderLink, onClose }: TabItemProps): React.JSX.Element {
   const Icon = TYPE_ICON[tab.type];
   return (

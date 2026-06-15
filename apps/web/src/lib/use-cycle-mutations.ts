@@ -16,6 +16,7 @@ import { api } from './api';
 import type { CycleDetailData } from './fetch-cycle-detail';
 import { queryKeys, unwrap, useApiMutation } from './query';
 
+/** CycleMutations describes the use cycle mutations data contract shared by the hook or component. */
 export interface CycleMutations {
   patchCycle: (patch: { status?: CycleStatus; startsAt?: string; endsAt?: string }) => void;
   propsPending: boolean;
@@ -33,6 +34,7 @@ export interface CycleMutations {
   confirmClose: () => void;
 }
 
+/** useCycleMutations coordinates use cycle mutations state, loading, and mutations for its screen. */
 export function useCycleMutations(
   orgId: string,
   cycleId: string,

@@ -41,7 +41,13 @@ const WORKSPACES: readonly Workspace[] = [ACME, GLOBEX, PERSONAL];
  */
 function renderLink(href: string, content: React.ReactNode, className?: string): React.ReactNode {
   return (
-    <a href={href} className={className}>
+    <a
+      href={href}
+      className={className}
+      onClick={(event) => {
+        event.preventDefault();
+      }}
+    >
       {content}
     </a>
   );

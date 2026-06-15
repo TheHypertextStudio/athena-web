@@ -26,6 +26,7 @@ interface OverflowMenuProps {
   readonly onClose: (key: string) => void;
 }
 
+/** OverflowMenu renders the shell navigation UI control for its parent workflow. */
 export function OverflowMenu({
   tabs,
   activeKey,

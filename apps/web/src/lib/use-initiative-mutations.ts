@@ -13,6 +13,7 @@ import { api } from './api';
 import type { InitiativeDetailData } from './fetch-initiative-detail';
 import { queryKeys, unwrap, useApiMutation } from './query';
 
+/** InitiativePatch describes the use initiative mutations data contract shared by the hook or component. */
 export interface InitiativePatch {
   ownerId?: string | null;
   targetDate?: string | null;
@@ -27,6 +28,7 @@ function toInitiativePatchBody(patch: InitiativePatch): InitiativeUpdate {
   };
 }
 
+/** InitiativeMutations describes the use initiative mutations data contract shared by the hook or component. */
 export interface InitiativeMutations {
   patchInitiative: (patch: InitiativePatch) => void;
   propsPending: boolean;
@@ -41,6 +43,7 @@ export interface InitiativeMutations {
   projectError: string | null;
 }
 
+/** useInitiativeMutations coordinates use initiative mutations state, loading, and mutations for its screen. */
 export function useInitiativeMutations(
   orgId: string,
   initiativeId: string,

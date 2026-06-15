@@ -24,6 +24,7 @@ interface AddFilterMenuProps<T> {
   onAdd: (field: string, op: FilterOperator, value: unknown) => void;
 }
 
+/** AddFilterMenu renders the saved views UI control for its parent workflow. */
 export function AddFilterMenu<T>({ fields, onAdd }: AddFilterMenuProps<T>): JSX.Element {
   const [open, setOpen] = useState(false);
   return (

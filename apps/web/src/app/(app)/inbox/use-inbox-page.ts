@@ -35,6 +35,7 @@ export interface InboxPageData {
   onMarkAllRead: () => Promise<void>;
 }
 
+/** useInboxPage coordinates inbox state, loading, and mutations for its screen. */
 export function useInboxPage(): InboxPageData {
   const [tab, setTab] = useState<InboxTab>('inbox');
   const [notifications, setNotifications] = useState<readonly NotificationOut[]>([]);

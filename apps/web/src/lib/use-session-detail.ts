@@ -6,6 +6,7 @@ import type { ChangeReceiptItem, SessionControlsState } from '@/components/agent
 import { api } from './api';
 import { readError, readProblem } from './problem';
 
+/** SessionDetailState describes the use session detail data contract shared by the hook or component. */
 export interface SessionDetailState {
   session: AgentSessionDetailOut | null;
   orgName: string | null;
@@ -27,6 +28,7 @@ export interface SessionDetailState {
   transition: (action: 'pause' | 'resume' | 'cancel') => Promise<void>;
 }
 
+/** useSessionDetail coordinates use session detail state, loading, and mutations for its screen. */
 export function useSessionDetail(orgId: string, sessionId: string): SessionDetailState {
   const [session, setSession] = useState<AgentSessionDetailOut | null>(null);
   const [members, setMembers] = useState<readonly MemberOut[]>([]);

@@ -42,6 +42,7 @@ import { ViewList } from '@/components/views/view-list';
 import { ViewRunner } from '@/components/views/view-runner';
 import { useViewsPage } from './use-views-page';
 
+/** ViewsPage renders the authenticated saved views page. */
 export default function ViewsPage(): JSX.Element {
   const router = useRouter();
   const params = useParams<{ orgId: string }>();

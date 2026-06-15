@@ -23,6 +23,7 @@ function isUnsorted(task: TaskOut): boolean {
   return (task.projectId ?? null) === null && (task.programId ?? null) === null;
 }
 
+/** TriageState describes the use triage data contract shared by the hook or component. */
 export interface TriageState {
   queue: readonly TaskOut[];
   loading: boolean;
@@ -40,6 +41,7 @@ export interface TriageState {
   dismiss: (taskId: string) => Promise<void>;
 }
 
+/** useTriage coordinates use triage state, loading, and mutations for its screen. */
 export function useTriage(orgId: string): TriageState {
   const [tasks, setTasks] = useState<readonly TaskOut[]>([]);
   const [teams, setTeams] = useState<readonly TeamOut[]>([]);

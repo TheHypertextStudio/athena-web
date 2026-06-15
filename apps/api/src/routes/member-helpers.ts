@@ -6,12 +6,15 @@ import { z } from 'zod';
 import type { AppEnv } from '../context';
 import { ConflictError, NotFoundError } from '../error';
 
+/** ActorRow is the selected database row shape consumed by these API route serializers. */
 export type ActorRow = typeof actor.$inferSelect;
+/** InvitationRow is the selected database row shape consumed by these API route serializers. */
 export type InvitationRow = typeof invitation.$inferSelect;
 
 /** Days an invitation stays valid before expiring. */
 export const INVITATION_TTL_DAYS = 7;
 
+/** toMemberOut converts internal API route data into the public API response shape. */
 export function toMemberOut(a: ActorRow): z.input<typeof MemberOut> {
   return {
     actorId: a.id,
@@ -25,6 +28,7 @@ export function toMemberOut(a: ActorRow): z.input<typeof MemberOut> {
   };
 }
 
+/** toInvitationOut converts internal API route data into the public API response shape. */
 export function toInvitationOut(i: InvitationRow): z.input<typeof InvitationOut> {
   return {
     id: i.id,
@@ -40,8 +44,11 @@ export function toInvitationOut(i: InvitationRow): z.input<typeof InvitationOut>
   };
 }
 
+/** actorIdParam is the reusable OpenAPI parameter schema for this API route route. */
 export const actorIdParam = z.object({ actorId: z.string() });
+/** invitationIdParam is the reusable OpenAPI parameter schema for this API route route. */
 export const invitationIdParam = z.object({ id: z.string() });
+/** tokenParam is the reusable OpenAPI parameter schema for this API route route. */
 export const tokenParam = z.object({ token: z.string().min(1) });
 
 /**

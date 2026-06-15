@@ -7,8 +7,11 @@ import { z } from 'zod';
 import { NotFoundError } from '../error';
 import { type CycleWindowSlot, isWithinWindow, rollingWindow } from '../lib/cycle-window';
 
+/** CycleRow is the selected database row shape consumed by these API route serializers. */
 export type CycleRow = typeof cycle.$inferSelect;
+/** TaskRow is the selected database row shape consumed by these API route serializers. */
 export type TaskRow = typeof task.$inferSelect;
+/** TeamRow is the selected database row shape consumed by these API route serializers. */
 export type TeamRow = typeof team.$inferSelect;
 
 /**
@@ -58,6 +61,7 @@ export function taskToOut(t: TaskRow): z.input<typeof TaskOut> {
   };
 }
 
+/** idParam is the reusable OpenAPI parameter schema for this API route route. */
 export const idParam = z.object({ id: z.string() });
 
 /** Load a single cycle scoped to the org, or throw {@link NotFoundError}. */

@@ -29,6 +29,7 @@ interface IntegrationProviderCardProps {
   onConnect: (pattern: IntegrationPattern) => void;
 }
 
+/** IntegrationProviderCard renders the settings UI control for its parent workflow. */
 export function IntegrationProviderCard({
   provider,
   existing,

@@ -7,6 +7,7 @@ import { unwrap, useApiMutation } from '@/lib/query';
 
 import type { InvitePayload } from './invite-form';
 
+/** MembersMutationState describes the settings data contract shared by the hook or component. */
 export interface MembersMutationState {
   invite: (payload: InvitePayload) => void;
   changeRole: (actorId: string, roleId: string) => void;
@@ -31,6 +32,7 @@ interface InvitationsBody {
   total?: number;
 }
 
+/** useMembersMutations coordinates settings state, loading, and mutations for its screen. */
 export function useMembersMutations(
   orgId: string,
   membersKey: readonly string[],

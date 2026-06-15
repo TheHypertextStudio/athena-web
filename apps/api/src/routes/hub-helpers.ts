@@ -19,16 +19,25 @@ import type {
 import { and, eq } from 'drizzle-orm';
 import type { z } from 'zod';
 
+/** TaskRow is the selected database row shape consumed by these API route serializers. */
 export type TaskRow = typeof task.$inferSelect;
+/** ProjectRow is the selected database row shape consumed by these API route serializers. */
 export type ProjectRow = typeof project.$inferSelect;
+/** ProgramRow is the selected database row shape consumed by these API route serializers. */
 export type ProgramRow = typeof program.$inferSelect;
+/** MilestoneRow is the selected database row shape consumed by these API route serializers. */
 export type MilestoneRow = typeof milestone.$inferSelect;
+/** OrgRow is the selected database row shape consumed by these API route serializers. */
 export type OrgRow = typeof organization.$inferSelect;
+/** NotificationRow is the selected database row shape consumed by these API route serializers. */
 export type NotificationRow = typeof notification.$inferSelect;
+/** AuditEventRow is the selected database row shape consumed by these API route serializers. */
 export type AuditEventRow = typeof auditEvent.$inferSelect;
 
+/** IN_FLIGHT_PROJECT_STATES lists the statuses treated specially by this API route helper. */
 export const IN_FLIGHT_PROJECT_STATES = ['planned', 'active'] as const;
 
+/** toTaskItem converts internal API route data into the public API response shape. */
 export function toTaskItem(t: TaskRow): z.input<typeof HubTaskItem> {
   return {
     id: t.id,
@@ -42,6 +51,7 @@ export function toTaskItem(t: TaskRow): z.input<typeof HubTaskItem> {
   };
 }
 
+/** toNotificationOut converts internal API route data into the public API response shape. */
 export function toNotificationOut(n: NotificationRow): z.input<typeof NotificationOut> {
   return {
     id: n.id,
@@ -54,6 +64,7 @@ export function toNotificationOut(n: NotificationRow): z.input<typeof Notificati
   };
 }
 
+/** toAuditEventOut converts internal API route data into the public API response shape. */
 export function toAuditEventOut(e: AuditEventRow): z.input<typeof AuditEventOut> {
   return {
     id: e.id,
@@ -68,10 +79,12 @@ export function toAuditEventOut(e: AuditEventRow): z.input<typeof AuditEventOut>
   };
 }
 
+/** toOrgChip converts internal API route data into the public API response shape. */
 export function toOrgChip(o: OrgRow): z.input<typeof OrgChip> {
   return { id: o.id, name: o.name, slug: o.slug, avatar: o.avatar };
 }
 
+/** toMilestoneItem converts internal API route data into the public API response shape. */
 export function toMilestoneItem(m: MilestoneRow): z.input<typeof HubMilestoneItem> {
   return {
     id: m.id,
@@ -80,6 +93,7 @@ export function toMilestoneItem(m: MilestoneRow): z.input<typeof HubMilestoneIte
   };
 }
 
+/** toSearchHit converts internal API route data into the public API response shape. */
 export function toSearchHit(
   organizationId: string,
   type: z.input<typeof HubSearchHit>['type'],

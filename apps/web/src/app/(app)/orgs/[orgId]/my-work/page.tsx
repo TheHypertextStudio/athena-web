@@ -16,6 +16,7 @@ import { useMyWork } from '@/lib/use-my-work';
 
 type WorkTab = 'mine' | 'delegated';
 
+/** MyWorkPage renders the authenticated my work page. */
 export default function MyWorkPage(): JSX.Element {
   const router = useRouter();
   const params = useParams<{ orgId: string }>();

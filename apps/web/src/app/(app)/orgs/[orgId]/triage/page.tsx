@@ -10,6 +10,7 @@ import { type JSX } from 'react';
 import { TriageRow } from '@/components/triage/triage-row';
 import { useTriage } from '@/lib/use-triage';
 
+/** TriagePage renders the authenticated triage page. */
 export default function TriagePage(): JSX.Element {
   const router = useRouter();
   const params = useParams<{ orgId: string }>();

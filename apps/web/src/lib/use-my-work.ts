@@ -25,6 +25,7 @@ const SESSION_RANK: Record<SessionStatus, number> = {
   canceled: 0,
 };
 
+/** MyWorkState describes the use my work data contract shared by the hook or component. */
 export interface MyWorkState {
   tasks: readonly TaskOut[];
   setTasks: (updater: (prev: readonly TaskOut[]) => readonly TaskOut[]) => void;
@@ -40,6 +41,7 @@ export interface MyWorkState {
   isDelegated: (task: TaskOut) => boolean;
 }
 
+/** useMyWork coordinates use my work state, loading, and mutations for its screen. */
 export function useMyWork(orgId: string, userId: string | null): MyWorkState {
   const [tasks, setTasks] = useState<readonly TaskOut[]>([]);
   const [projects, setProjects] = useState<readonly ProjectOut[]>([]);

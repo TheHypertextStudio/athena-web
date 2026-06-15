@@ -23,6 +23,7 @@ import { useProgramMutations } from '@/lib/use-program-mutations';
 
 type TabId = 'work' | 'updates';
 
+/** ProgramDetailPage renders the authenticated program page. */
 export default function ProgramDetailPage(): JSX.Element {
   const router = useRouter();
   const params = useParams<{ orgId: string; programId: string }>();

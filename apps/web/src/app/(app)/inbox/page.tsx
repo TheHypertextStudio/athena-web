@@ -10,6 +10,7 @@ import { NotificationRow } from '@/components/inbox/notification-row';
 import { SegmentedTabs } from '@/components/inbox/segmented-tabs';
 import { useInboxPage } from './use-inbox-page';
 
+/** InboxPage renders the authenticated inbox page. */
 export default function InboxPage(): JSX.Element {
   const { orgName } = useActiveOrg();
   const {

@@ -47,6 +47,7 @@ function triggerDate(value: string | null): string | undefined {
   return formatCalendarDate(value, { month: 'short', day: 'numeric' }) ?? undefined;
 }
 
+/** TaskComposerPickers renders the task UI control for its parent workflow. */
 export function TaskComposerPickers({
   teams,
   teamId,

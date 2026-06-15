@@ -13,6 +13,7 @@ import { type ActorDirectory, buildActorDirectory } from '@/components/agents/ac
 import { api } from './api';
 import type { RpcResponse } from './query';
 
+/** CycleDetailData describes the fetch cycle detail data contract shared by the hook or component. */
 export interface CycleDetailData {
   readonly cycle: CycleDetail;
   readonly burnup: CycleBurnupOut | null;
@@ -25,6 +26,7 @@ export interface CycleDetailData {
   readonly resolveActor: ActorDirectory['resolve'];
 }
 
+/** fetchCycleDetail loads the fetch cycle detail detail data required by the page. */
 export function fetchCycleDetail(
   orgId: string,
   cycleId: string,

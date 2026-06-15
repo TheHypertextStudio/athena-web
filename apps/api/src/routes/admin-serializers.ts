@@ -7,18 +7,27 @@ import type { AdminHoldOut, AdminImpersonationOut, AdminOrgOut, AdminStaffOut } 
 import { LifecycleState } from '../admin-dto';
 import { NotFoundError } from '../error';
 
+/** UserRow is the selected database row shape consumed by these API route serializers. */
 export type UserRow = typeof user.$inferSelect;
+/** OrgRow is the selected database row shape consumed by these API route serializers. */
 export type OrgRow = typeof organization.$inferSelect;
+/** HoldRow is the selected database row shape consumed by these API route serializers. */
 export type HoldRow = typeof lifecycleHold.$inferSelect;
+/** ImpersonationRow is the selected database row shape consumed by these API route serializers. */
 export type ImpersonationRow = typeof impersonationSession.$inferSelect;
+/** StaffRow is the selected database row shape consumed by these API route serializers. */
 export type StaffRow = typeof staffUser.$inferSelect;
 
 /** The lifecycle states, in pipeline order, used to build the board + metrics. */
 export const LIFECYCLE_STATES = LifecycleState.options;
 
+/** idParam is the reusable OpenAPI parameter schema for this API route route. */
 export const idParam = z.object({ id: z.string() });
+/** holdParam is the reusable OpenAPI parameter schema for this API route route. */
 export const holdParam = z.object({ id: z.string(), holdId: z.string() });
+/** impersonationParam is the reusable OpenAPI parameter schema for this API route route. */
 export const impersonationParam = z.object({ id: z.string() });
+/** staffParam is the reusable OpenAPI parameter schema for this API route route. */
 export const staffParam = z.object({ id: z.string() });
 
 /** Serialize a user row into the admin user DTO shape. */

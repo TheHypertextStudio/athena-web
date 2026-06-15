@@ -13,6 +13,7 @@ interface ScopeToggleProps {
   onChange: (next: PaletteScope) => void;
 }
 
+/** ScopeToggle renders the command palette UI control for its parent workflow. */
 export function ScopeToggle({
   scope,
   orgBound,

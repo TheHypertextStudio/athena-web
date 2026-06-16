@@ -212,6 +212,38 @@ gcloud run services update docket-api --region=<REGION> --project=<PROJECT_ID>
 2. If it's sensitive, create the Secret Manager secret and add it to the `secrets:` block instead.
 3. Push to `main` — the next deploy picks it up.
 
+### OAuth connector providers (GitHub / Linear / Google)
+
+Connectors (and social sign-in) only work when the provider's OAuth client id **and** secret are
+present and real — `buildAuthOptions` mounts each provider only when `isRealValue()` is true, so a
+missing/`placeholder` value leaves the provider cleanly **un**mounted (no fake "connected"). The
+six vars (`{GOOGLE,GITHUB,LINEAR}_CLIENT_{ID,SECRET}`, all optional, API-only) are already wired:
+their Secret Manager secrets exist (seeded with `placeholder`) and the `deploy-api` `secrets:`
+block injects them as `:latest`. So the deploy is green today with connectors honestly dormant.
+
+**To activate a provider**, register an OAuth app, then replace its placeholder secret value(s)
+and redeploy. The Better Auth callback URL for each is `${API_URL}/api/auth/callback/<provider>`:
+
+| Provider | Register at                                                  | Callback URL                                                   | Secrets to set                                           |
+| -------- | ------------------------------------------------------------ | -------------------------------------------------------------- | -------------------------------------------------------- |
+| GitHub   | GitHub → Settings → Developer settings → OAuth Apps          | `https://docket-api.hypertext.studio/api/auth/callback/github` | `docket-github-client-id`, `docket-github-client-secret` |
+| Linear   | Linear → Settings → API → OAuth applications                 | `https://docket-api.hypertext.studio/api/auth/callback/linear` | `docket-linear-client-id`, `docket-linear-client-secret` |
+| Google   | Google Cloud Console → APIs & Services → Credentials → OAuth | `https://docket-api.hypertext.studio/api/auth/callback/google` | `docket-google-client-id`, `docket-google-client-secret` |
+
+```bash
+# Add the real value as a new secret version (repeat per secret), then redeploy:
+printf '%s' '<the-client-id>'     | gcloud secrets versions add docket-github-client-id     --project=athena-services --data-file=-
+printf '%s' '<the-client-secret>' | gcloud secrets versions add docket-github-client-secret --project=athena-services --data-file=-
+
+# Pick up the new :latest values (either re-run the deploy workflow, or update in place):
+gcloud run services update docket-api --region=us-central1 --project=athena-services
+```
+
+> Google needs its OAuth consent screen configured with the calendar/tasks/drive/gmail readonly
+> scopes (see `buildAuthOptions`); Linear's app must grant the `read` scope or every connector
+> call 400s. Existing users who linked before a scope change must re-consent — they surface as
+> `error` / needs-reauth, never a silent skip.
+
 ### Scheduled jobs (Cloud Scheduler)
 
 Cloud Run is scale-to-zero, so there is no in-process worker — scheduled work is driven by

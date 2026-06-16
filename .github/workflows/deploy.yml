@@ -71,6 +71,12 @@ jobs:
             DATABASE_URL=docket-database-url:latest
             BETTER_AUTH_SECRET=docket-auth-secret:latest
             CRON_SECRET=docket-cron-secret:latest
+            GOOGLE_CLIENT_ID=docket-google-client-id:latest
+            GOOGLE_CLIENT_SECRET=docket-google-client-secret:latest
+            GITHUB_CLIENT_ID=docket-github-client-id:latest
+            GITHUB_CLIENT_SECRET=docket-github-client-secret:latest
+            LINEAR_CLIENT_ID=docket-linear-client-id:latest
+            LINEAR_CLIENT_SECRET=docket-linear-client-secret:latest
 
       - name: Show Cloud Run URL
         run: echo "docket-api=${{ steps.deploy-api.outputs.url }}"

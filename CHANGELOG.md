@@ -1,3 +1,9 @@
+# [1.2.0](https://github.com/TheHypertextStudio/athena-web/compare/v1.1.0...v1.2.0) (2026-06-16)
+
+### Features
+
+- **integrations:** provision connector auto-sync via Cloud Scheduler ([531b590](https://github.com/TheHypertextStudio/athena-web/commit/531b590281cd714ed957d3d6d17f2dfef640b96c))
+
 # [1.1.0](https://github.com/TheHypertextStudio/athena-web/compare/v1.0.13...v1.1.0) (2026-06-16)
 
 ### Features

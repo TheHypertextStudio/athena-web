@@ -10,7 +10,23 @@
 import { describe, expect, it } from 'vitest';
 
 import { RealConnector } from '../../src/real/connector';
+import { ConnectorError, type ConnectorErrorKind } from '../../src/ports/connector-error';
 import type { HttpClient } from '../../src/real/http';
+
+/** Assert a thunk rejects with a {@link ConnectorError} of the expected kind. */
+async function expectConnectorError(
+  thunk: () => Promise<unknown>,
+  kind: ConnectorErrorKind,
+): Promise<ConnectorError> {
+  try {
+    await thunk();
+  } catch (err) {
+    expect(err).toBeInstanceOf(ConnectorError);
+    expect((err as ConnectorError).kind).toBe(kind);
+    return err as ConnectorError;
+  }
+  throw new Error('expected a ConnectorError to be thrown');
+}
 
 /** One recorded HTTP call: the URL and the (optional) request init. */
 interface RecordedCall {
@@ -72,19 +88,22 @@ describe('RealConnector — GitHub (REST)', () => {
     expect(result.status).toBe('connected');
   });
 
-  it('reports an error status (and omits account) when the identity call fails', async () => {
+  it('throws a typed auth error (never a fake status) when the identity call is unauthorized', async () => {
     const { http } = fakeHttp([new Response('forbidden', { status: 401 })]);
     const connector = new RealConnector({ provider: 'github', accessToken: 'bad' }, http);
-    const result = await connector.connect({ provider: 'github', referenceId: 'org_1' });
-    expect(result.status).toBe('error');
-    expect(result).not.toHaveProperty('account');
+    await expectConnectorError(
+      () => connector.connect({ provider: 'github', referenceId: 'org_1' }),
+      'auth',
+    );
   });
 
-  it('reports an error status when the identity has neither login nor name', async () => {
+  it('still connects (no account label) when the identity resolves but has neither login nor name', async () => {
+    // The token IS valid — the call succeeded; we just lack a display label. That is a healthy
+    // connection, not an error: a valid credential must never read as failed.
     const { http } = fakeHttp([new Response(JSON.stringify({}), { status: 200 })]);
     const connector = new RealConnector({ provider: 'github', accessToken: 'tok' }, http);
     const result = await connector.connect({ provider: 'github', referenceId: 'org_1' });
-    expect(result.status).toBe('error');
+    expect(result.status).toBe('connected');
     expect(result).not.toHaveProperty('account');
   });
 
@@ -123,19 +142,27 @@ describe('RealConnector — GitHub (REST)', () => {
     expect(items[0]?.provenance.importedAt).toMatch(/Z$/);
   });
 
-  it('omits body when null/absent and tolerates a non-array response', async () => {
+  it('omits body when null/absent', async () => {
     const { http } = fakeHttp([
       new Response(
         JSON.stringify([{ id: 2, number: 7, title: 'T2', body: null, html_url: 'https://x/7' }]),
         { status: 200 },
       ),
-      new Response(JSON.stringify({ message: 'oops' }), { status: 200 }),
     ]);
     const connector = new RealConnector({ provider: 'github', accessToken: 'tok' }, http);
     const withItem = await connector.importWork({ connectionId: 'c1', provider: 'github' });
     expect(withItem[0]).not.toHaveProperty('body');
-    const empty = await connector.importWork({ connectionId: 'c1', provider: 'github' });
-    expect(empty).toEqual([]);
+  });
+
+  it('throws (never returns empty) on a non-array issues response — a bad-auth body must not look like 0 items', async () => {
+    const { http } = fakeHttp([
+      new Response(JSON.stringify({ message: 'Bad credentials' }), { status: 200 }),
+    ]);
+    const connector = new RealConnector({ provider: 'github', accessToken: 'tok' }, http);
+    await expectConnectorError(
+      () => connector.importWork({ connectionId: 'c1', provider: 'github' }),
+      'provider',
+    );
   });
 
   it('throws when an import API call fails', async () => {
@@ -160,11 +187,13 @@ describe('RealConnector — GitHub (REST)', () => {
     expect(status).toEqual({ connectionId: 'c1', status: 'idle', itemCount: 1 });
   });
 
-  it('defaults mirror itemCount to 0 on a non-array response', async () => {
+  it('surfaces a non-array mirror response as an error (never a silent itemCount of 0)', async () => {
     const { http } = fakeHttp([new Response(JSON.stringify({}), { status: 200 })]);
     const connector = new RealConnector({ provider: 'github', accessToken: 'tok' }, http);
-    const status = await connector.mirrorStatus({ connectionId: 'c1', provider: 'github' });
-    expect(status.itemCount).toBe(0);
+    await expectConnectorError(
+      () => connector.mirrorStatus({ connectionId: 'c1', provider: 'github' }),
+      'provider',
+    );
   });
 
   it('resolves the canonical issue url for an owner/repo#number external id', async () => {
@@ -245,7 +274,7 @@ describe('RealConnector — GitHub (REST)', () => {
     const { http } = fakeHttp([new Response('not-json<!>', { status: 200 })]);
     const connector = new RealConnector({ provider: 'github', accessToken: 'tok' }, http);
     await expect(connector.importWork({ connectionId: 'c1', provider: 'github' })).rejects.toThrow(
-      /github API returned unparseable response: \/issues/,
+      /github API returned an unparseable response: \/issues/,
     );
   });
 });
@@ -346,12 +375,13 @@ describe('RealConnector — Linear (GraphQL)', () => {
     );
   });
 
-  it('reports an error status when the GraphQL response is missing data', async () => {
+  it('throws a typed error when the GraphQL response is missing data (never a fake status)', async () => {
     const { http } = fakeHttp([new Response(JSON.stringify({}), { status: 200 })]);
     const connector = new RealConnector({ provider: 'linear', accessToken: 'tok' }, http);
-    await expect(
-      connector.connect({ provider: 'linear', referenceId: 'o' }),
-    ).resolves.toMatchObject({ status: 'error' });
+    await expectConnectorError(
+      () => connector.connect({ provider: 'linear', referenceId: 'o' }),
+      'provider',
+    );
   });
 
   it('throws when the GraphQL endpoint returns a non-2xx status', async () => {
@@ -407,7 +437,7 @@ describe('RealConnector — Linear (GraphQL)', () => {
     const { http } = fakeHttp([new Response('not-json<!>', { status: 200 })]);
     const connector = new RealConnector({ provider: 'linear', accessToken: 'tok' }, http);
     await expect(connector.importWork({ connectionId: 'c1', provider: 'linear' })).rejects.toThrow(
-      /linear API returned unparseable response: \/graphql/,
+      /linear API returned an unparseable response: \/graphql/,
     );
   });
 
@@ -719,5 +749,55 @@ describe('RealConnector — Google (Drive / Gmail / Calendar REST)', () => {
       (await calendar.linkResource({ ...base, provider: 'calendar', externalId: 'e1' }))
         .externalUrl,
     ).toBe('https://calendar.google.com/calendar/event?eid=e1');
+  });
+});
+
+describe('ConnectorError classification (the IO edge never swallows a failure)', () => {
+  it('maps 429 to a rate_limit error and parses Retry-After', async () => {
+    const { http } = fakeHttp([
+      new Response('slow down', { status: 429, headers: { 'retry-after': '42' } }),
+    ]);
+    const connector = new RealConnector({ provider: 'github', accessToken: 'tok' }, http);
+    const err = await expectConnectorError(
+      () => connector.importWork({ connectionId: 'c1', provider: 'github' }),
+      'rate_limit',
+    );
+    expect(err.status).toBe(429);
+    expect(err.retryAfterSeconds).toBe(42);
+    expect(err.retryable).toBe(true);
+  });
+
+  it('maps a transport failure (no Response) to a network error', async () => {
+    const http: HttpClient = () => Promise.reject(new Error('ECONNREFUSED'));
+    const connector = new RealConnector({ provider: 'github', accessToken: 'tok' }, http);
+    const err = await expectConnectorError(
+      () => connector.connect({ provider: 'github', referenceId: 'o' }),
+      'network',
+    );
+    expect(err.status).toBeUndefined();
+    expect(err.retryable).toBe(true);
+  });
+
+  it('maps a 5xx to a (retryable) provider error', async () => {
+    const { http } = fakeHttp([new Response('boom', { status: 503 })]);
+    const connector = new RealConnector({ provider: 'linear', accessToken: 'tok' }, http);
+    const err = await expectConnectorError(
+      () => connector.connect({ provider: 'linear', referenceId: 'o' }),
+      'provider',
+    );
+    expect(err.status).toBe(503);
+  });
+
+  it('maps a Linear auth-shaped GraphQL error to an auth error needing re-consent', async () => {
+    const { http } = fakeHttp([
+      new Response(JSON.stringify({ errors: [{ message: 'Authentication required' }] }), {
+        status: 200,
+      }),
+    ]);
+    const connector = new RealConnector({ provider: 'linear', accessToken: 'tok' }, http);
+    await expectConnectorError(
+      () => connector.connect({ provider: 'linear', referenceId: 'o' }),
+      'auth',
+    );
   });
 });

@@ -35,6 +35,8 @@ import {
   notificationType,
   resourceKind,
   syncMode,
+  syncRunStatus,
+  syncTrigger,
   updateSubjectType,
   viewScope,
   visibility,
@@ -169,7 +171,18 @@ export const notification = pgTable(
   (t) => [index('notification_user_idx').on(t.userId, t.createdAt)],
 );
 
-/** An org-scoped external integration (Migration or Connector) and its sync mode. */
+/**
+ * An org-scoped external integration (Migration or Connector) and its sync mode.
+ *
+ * @remarks
+ * `status` tracks **connection health** and is the spine of the "never report success when
+ * nothing happened" invariant: it starts `pending` and is only promoted to `connected` by a
+ * real `connector.connect()` (see {@link integrationStatus}). The `lastSync*` columns track
+ * the **last sync run** separately so a one-off sync failure on a healthy connection, or a
+ * still-valid connection that has never synced, are each represented truthfully. `syncStartedAt`
+ * is the in-progress lease used to serialize concurrent (manual + scheduled) runs;
+ * `syncCadenceMinutes` drives the background scheduler (null = manual-only).
+ */
 export const integration = pgTable(
   'integration',
   {
@@ -181,11 +194,57 @@ export const integration = pgTable(
       .notNull()
       .default(sql`'{}'`),
     connection: jsonb('connection').$type<IntegrationConnection>().notNull().default({}),
-    status: integrationStatus('status').notNull().default('connected'),
+    status: integrationStatus('status').notNull().default('pending'),
     config: jsonb('config').$type<Record<string, unknown>>().notNull().default({}),
     syncMode: syncMode('sync_mode').notNull().default('mirror'),
+    /** Status of the most recent sync run (null = never synced). */
+    lastSyncStatus: syncRunStatus('last_sync_status'),
+    /** Timestamp of the last SUCCESSFUL sync (null = never succeeded). */
+    lastSyncedAt: timestamp('last_synced_at'),
+    /** Human-readable reason the connection/last-sync is unhealthy (null = healthy). */
+    lastError: text('last_error'),
+    /** When {@link integration.lastError} was recorded. */
+    lastErrorAt: timestamp('last_error_at'),
+    /** In-progress lease: set when a sync run starts, cleared when it finishes. */
+    syncStartedAt: timestamp('sync_started_at'),
+    /** Background re-sync cadence in minutes (null = manual-only, no auto-sync). */
+    syncCadenceMinutes: integer('sync_cadence_minutes').default(60),
   },
   (t) => [index('integration_org_idx').on(t.organizationId)],
+);
+
+/**
+ * The durable, auditable record of one connector sync run (one `Connector.importWork` pass).
+ *
+ * @remarks
+ * Replaces the former process-scoped in-memory `SYNC_JOBS` map, which was wiped on every
+ * Cloud Run scale-to-zero / deploy — so a failed sync left no trace and the integration kept
+ * showing "connected". Persisting each run is what lets the UI show real history and lets the
+ * background scheduler reason about what already ran. Scoped by `organizationId` for tenant
+ * isolation.
+ */
+export const syncRun = pgTable(
+  'sync_run',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    integrationId: text('integration_id')
+      .notNull()
+      .references(() => integration.id, { onDelete: 'cascade' }),
+    status: syncRunStatus('status').notNull(),
+    trigger: syncTrigger('trigger').notNull(),
+    /** Items materialized into Docket this run. */
+    processed: integer('processed').notNull().default(0),
+    /** Items returned by the connector this run. */
+    total: integer('total').notNull().default(0),
+    /** Failure reason when `status = 'failed'` (null otherwise). */
+    error: text('error'),
+    startedAt: timestamp('started_at').notNull().defaultNow(),
+    finishedAt: timestamp('finished_at'),
+  },
+  (t) => [index('sync_run_integration_idx').on(t.integrationId, t.startedAt)],
 );
 
 /** A label; org-global when `teamId` is null, otherwise team-scoped (two partial uniques). */

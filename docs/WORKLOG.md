@@ -1,11 +1,49 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-06-10
+> **Last Updated**: 2026-06-15
 
 ---
 
 ## Completed Tasks
+
+### [CONN-001] Connector reliability — never report success when nothing happened
+
+- **Completed**: 2026-06-15
+- **Summary**: Audited all connector/integration code and remediated the "connectors fail
+  silently" defect end to end. Root causes fixed: (1) the create endpoint fabricated a
+  `connected` status without ever validating the credential — integrations now start `pending`
+  and only a real `connector.connect()` (`POST /:id/verify`) promotes them; (2) sync failures
+  were written to an in-memory map wiped on every deploy and never touched the integration —
+  replaced with a durable `sync_run` table plus persisted `lastSyncStatus/lastSyncedAt/lastError`
+  on the integration; (3) the boundary swallowed errors (`.catch(() => undefined)`, `return []`
+  on bad-auth) — now throws a typed `ConnectorError` (auth/rate_limit/network/provider) with
+  edge logging and pagination-truncation warnings; (4) the UI showed ephemeral state — the card
+  now renders server truth (pending/connected/error + "last synced"), with a working Reconnect
+  CTA, a route error boundary, and inbox notifications on background failures. Added background
+  auto-mirror: a lease-guarded `runSync` shared by manual + scheduled paths and a
+  `POST /v1/cron/sync-connectors` sweep. Also fixed a latent bug where token resolution compared
+  an Actor id against `account.userId`; it now resolves `actor.userId` and refreshes via Better
+  Auth `getAccessToken`. Added the Linear `read` OAuth scope.
+- **Files Changed**:
+  - `packages/db/src/enums.ts`, `packages/db/src/schema/crosscutting.ts`,
+    `packages/db/drizzle/0004_*.sql`, `0005_*.sql`
+  - `packages/types/src/integration.ts`, `packages/types/src/notification.ts`
+  - `packages/boundaries/src/ports/connector-error.ts` (new), `…/real/connector*.ts`,
+    `…/real/connector-log.ts` (new)
+  - `apps/api/src/routes/integrations.ts`, `integration-provider.ts`,
+    `integration-sync.ts` (new, replaces `integration-sync-jobs.ts`), `cron.ts`
+  - `packages/auth/src/auth-builder.ts`
+  - `apps/web/src/components/settings/{integrations-tab,integration-provider-card,integrations-config,format-time}.{ts,tsx}`,
+    `apps/web/src/app/(app)/orgs/[orgId]/settings/integrations/error.tsx` (new),
+    `apps/web/src/components/inbox/notification-meta.ts`
+  - `docs/engineering/deployment.md`
+- **Validation**: `pnpm typecheck` (12/12), `pnpm lint` (12/12), `pnpm build` (3/3),
+  `pnpm test` (11/11 suites). New tests cover create→pending, verify-gated connect, durable
+  sync-failure status, the background sweep (due/not-due/pending-excluded), and `ConnectorError`
+  classification (auth/rate_limit/network/provider).
+- **Follow-ups**: Provision the `docket-sync-connectors` Cloud Scheduler job per environment
+  (documented in `deployment.md`) so background mirroring actually fires in prod.
 
 ### [DEVX-002] Commit message scope enforcement
 

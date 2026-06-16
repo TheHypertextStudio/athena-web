@@ -1203,10 +1203,10 @@ describe('integration DTOs', () => {
       expect(IntegrationRole.parse(r)).toBe(r);
     }
     expect(IntegrationRole.safeParse('billing').success).toBe(false);
-    for (const s of ['connected', 'error', 'disconnected'] as const) {
+    for (const s of ['pending', 'connected', 'error', 'disconnected'] as const) {
       expect(IntegrationStatus.parse(s)).toBe(s);
     }
-    expect(IntegrationStatus.safeParse('pending').success).toBe(false);
+    expect(IntegrationStatus.safeParse('paused').success).toBe(false);
     expect(SyncMode.parse('mirror')).toBe('mirror');
     expect(SyncMode.safeParse('push').success).toBe(false);
   });
@@ -1228,7 +1228,6 @@ describe('integration DTOs', () => {
       pattern: 'migration',
       roles: ['work', 'code'],
       connection: { account: 'acme' },
-      status: 'connected',
       config: { repo: 'x' },
       syncMode: 'import',
     });
@@ -1240,8 +1239,10 @@ describe('integration DTOs', () => {
     expect(IntegrationCreate.safeParse({ provider: 'x', pattern: 'bad' }).success).toBe(false);
   });
 
-  it('IntegrationUpdate parses', () => {
-    expect(IntegrationUpdate.parse({ status: 'error', config: {} }).status).toBe('error');
+  it('IntegrationUpdate parses (and never accepts client-set status)', () => {
+    expect(IntegrationUpdate.parse({ roles: ['work'], config: {} }).roles).toEqual(['work']);
+    // `status` is intentionally not part of the schema; a client cannot declare health.
+    expect('status' in IntegrationUpdate.parse({ config: {} })).toBe(false);
   });
 
   it('IntegrationOut parses + rejects missing connection', () => {
@@ -1255,6 +1256,11 @@ describe('integration DTOs', () => {
       status: 'connected',
       config: {},
       syncMode: 'mirror',
+      lastSyncStatus: null,
+      lastSyncedAt: null,
+      lastError: null,
+      lastErrorAt: null,
+      syncCadenceMinutes: 60,
       createdAt: 'x',
     });
     expect(parsed.syncMode).toBe('mirror');

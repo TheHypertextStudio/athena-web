@@ -162,7 +162,7 @@ describe('minimal patches cover the "field-absent" spread branches', () => {
         await w.request(`/${id}`, {
           method: 'PATCH',
           headers: J,
-          body: JSON.stringify({ status: 'connected' }),
+          body: JSON.stringify({ syncMode: 'import' }),
         })
       ).status,
     ).toBe(200);

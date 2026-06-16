@@ -1,10 +1,11 @@
-import { account, db } from '@docket/db';
+import { actor, db } from '@docket/db';
 import type { integration, task } from '@docket/db';
+import { auth } from '@docket/auth';
 import type { IntegrationOut, TaskOut } from '@docket/types';
 import { type IntegrationDirectoryProvider } from '@docket/types';
 import type { ConnectorProvider } from '@docket/boundaries';
 import { selectAdapter } from '@docket/boundaries';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import type { z } from 'zod';
 
 import { toBoundaryEnv } from '../container';
@@ -78,27 +79,67 @@ export function socialProviderId(provider: ConnectorProvider): string {
 }
 
 /**
- * Look up the stored OAuth access token for a connector provider from the actor's
- * Better Auth social account.
+ * The outcome of resolving a connector's OAuth access token.
  *
  * @remarks
- * In `APP_MODE=local`/`test` a sentinel `'mock'` is returned immediately — no DB round-trip,
- * no real credentials needed. In production `null` means they haven't signed in with the
- * provider and the caller must surface a clear error (no mock fallback).
+ * A discriminated result instead of `string | null`: a `null` token previously could not
+ * distinguish "never signed in" from "token expired and refresh failed", so the UI/scheduler
+ * could not pick the right remediation or message. `needs_reauth` carries a user-facing reason
+ * the caller persists as `lastError` and (for background runs) notifies on.
+ */
+export type ConnectorTokenResult =
+  | { readonly ok: true; readonly token: string }
+  | { readonly ok: false; readonly reason: 'needs_reauth'; readonly message: string };
+
+/**
+ * Resolve a fresh OAuth access token for a connector provider on behalf of an Actor.
+ *
+ * @remarks
+ * Resolves the Actor's global Better Auth `user` (an Actor id is NOT a user id — the prior
+ * code compared the two id spaces directly, so it never matched in production), then asks
+ * Better Auth for the access token. `auth.api.getAccessToken` transparently REFRESHES an
+ * expired token via the stored refresh token — essential for background syncs that run while
+ * nobody is signed in. Any failure (no linked account, revoked grant, refresh failure) becomes
+ * a single `needs_reauth` outcome with a "Sign in with X" message, never a silent skip.
+ *
+ * In `APP_MODE=local`/`test` a sentinel `'mock'` token is returned immediately (no DB round
+ * trip, no real credentials), and {@link selectAdapter} forces the mock connector anyway.
+ *
+ * @param actorId - The Actor whose linked provider grant should be used (e.g. the integration's
+ *   `createdBy` for a background run, or the request actor for a manual one).
+ * @param provider - The connector provider whose token is needed.
  */
 export async function resolveConnectorToken(
   actorId: string,
   provider: ConnectorProvider,
-): Promise<string | null> {
+): Promise<ConnectorTokenResult> {
   const mode = env.APP_MODE;
-  if (mode === 'local' || mode === 'test') return 'mock';
+  if (mode === 'local' || mode === 'test') return { ok: true, token: 'mock' };
+
+  const providerId = socialProviderId(provider);
+  const needsReauth = {
+    ok: false as const,
+    reason: 'needs_reauth' as const,
+    message: `Sign in with ${providerId} to reconnect this integration.`,
+  };
 
   const rows = await db
-    .select({ accessToken: account.accessToken })
-    .from(account)
-    .where(and(eq(account.userId, actorId), eq(account.providerId, socialProviderId(provider))))
+    .select({ userId: actor.userId })
+    .from(actor)
+    .where(eq(actor.id, actorId))
     .limit(1);
-  return rows[0]?.accessToken ?? null;
+  const userId = rows[0]?.userId;
+  if (!userId) return needsReauth;
+
+  try {
+    const result = await auth.api.getAccessToken({ body: { providerId, userId } });
+    if (!result.accessToken) return needsReauth;
+    return { ok: true, token: result.accessToken };
+  } catch {
+    // getAccessToken throws when no account is linked or the refresh-token exchange fails —
+    // both mean the user must re-authorize. Surfaced (never swallowed into a fake success).
+    return needsReauth;
+  }
 }
 
 /**
@@ -127,6 +168,11 @@ export function toOut(i: IntegrationRow): z.input<typeof IntegrationOut> {
     status: i.status,
     config: i.config,
     syncMode: i.syncMode,
+    lastSyncStatus: i.lastSyncStatus,
+    lastSyncedAt: i.lastSyncedAt?.toISOString() ?? null,
+    lastError: i.lastError,
+    lastErrorAt: i.lastErrorAt?.toISOString() ?? null,
+    syncCadenceMinutes: i.syncCadenceMinutes,
     createdAt: i.createdAt.toISOString(),
   };
 }

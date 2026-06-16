@@ -9,6 +9,7 @@ import { Badge } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
 import { ConnectWizard } from './connect-wizard';
+import { relativeTime } from './format-time';
 import { STATUS_LABEL, providerIcon } from './integrations-config';
 
 interface IntegrationProviderCardProps {
@@ -16,38 +17,64 @@ interface IntegrationProviderCardProps {
   existing: IntegrationOut | undefined;
   isOpen: boolean;
   canManage: boolean;
-  syncingId: string | null;
-  disconnectingId: string | null;
-  syncFeedback: Record<string, string | null>;
-  syncErrors: Record<string, string | null>;
-  disconnectErrors: Record<string, string | null>;
-  connecting: boolean;
-  connectError: string | null;
+  /** A connect/verify ceremony is in flight for this provider. */
+  busy: boolean;
+  /** A manual sync is in flight for this integration. */
+  syncing: boolean;
+  /** A disconnect is in flight for this integration. */
+  disconnecting: boolean;
+  /** Transient success toast after a manual sync (e.g. "Synced 3 items."). */
+  syncFeedback: string | null;
+  /** Transient error from a connect/verify/disconnect action (persistent sync/connection errors
+   * come from the server via `existing.lastError`). */
+  actionError: string | null;
   onToggleOpen: () => void;
+  /** Connect a brand-new integration with the chosen pattern (from the wizard). */
+  onConnect: (pattern: IntegrationPattern) => void;
+  /** Finish (pending) or repair (error) a connection — validates the credential, launching the
+   * provider's OAuth consent when one is required. */
+  onReconnect: () => void;
   onSync: () => void;
   onDisconnect: () => void;
-  onConnect: (pattern: IntegrationPattern) => void;
 }
 
-/** IntegrationProviderCard renders the settings UI control for its parent workflow. */
+/** IntegrationProviderCard renders one provider row whose state mirrors the server truthfully. */
 export function IntegrationProviderCard({
   provider,
   existing,
   isOpen,
   canManage,
-  syncingId,
-  disconnectingId,
+  busy,
+  syncing,
+  disconnecting,
   syncFeedback,
-  syncErrors,
-  disconnectErrors,
-  connecting,
-  connectError,
+  actionError,
   onToggleOpen,
+  onConnect,
+  onReconnect,
   onSync,
   onDisconnect,
-  onConnect,
 }: IntegrationProviderCardProps): JSX.Element {
   const ProviderIcon = providerIcon(provider.provider);
+  const status = existing?.status;
+  // Only a `connected` integration may surface healthy affordances (Sync) and a "last synced"
+  // stamp — `pending`/`error` never read as working.
+  const isConnected = status === 'connected';
+  const needsConnect = status === 'pending' || status === 'error' || status === 'disconnected';
+
+  /** Status-aware subtitle that never implies a connection that wasn't validated. */
+  const subtitle = ((): string => {
+    if (!existing) {
+      return `Recommended: ${provider.pattern === 'migration' ? 'Migration' : 'Connector'}`;
+    }
+    const kind = existing.pattern === 'migration' ? 'migration' : 'connector';
+    if (status === 'pending') return 'Setup not finished';
+    if (status === 'error') return `Connection needs attention`;
+    if (status === 'disconnected') return 'Disconnected';
+    if (existing.lastSyncedAt)
+      return `Connected as a ${kind} · Last synced ${relativeTime(existing.lastSyncedAt)}`;
+    return `Connected as a ${kind}`;
+  })();
 
   return (
     <li className="border-outline-variant bg-surface-container-low overflow-hidden rounded-xl border">
@@ -57,11 +84,7 @@ export function IntegrationProviderCard({
         </span>
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="text-on-surface text-body font-medium">{provider.name}</span>
-          <span className="text-on-surface-variant text-xs">
-            {existing
-              ? `Connected as ${existing.pattern === 'migration' ? 'a migration' : 'a connector'}`
-              : `Recommended: ${provider.pattern === 'migration' ? 'Migration' : 'Connector'}`}
-          </span>
+          <span className="text-on-surface-variant text-xs">{subtitle}</span>
         </div>
         {existing ? (
           <div className="flex shrink-0 items-center gap-2">
@@ -70,23 +93,37 @@ export function IntegrationProviderCard({
             </Badge>
             {canManage ? (
               <>
-                {existing.pattern !== 'migration' ? (
+                {needsConnect ? (
                   <button
                     type="button"
-                    disabled={syncingId === existing.id}
+                    disabled={busy}
+                    onClick={onReconnect}
+                    className="focus-visible:ring-ring text-primary hover:bg-surface-container-high text-body rounded-md px-3 py-1.5 font-medium transition-colors outline-none focus-visible:ring-1 disabled:opacity-50"
+                  >
+                    {busy
+                      ? 'Connecting…'
+                      : status === 'pending'
+                        ? 'Finish connecting'
+                        : 'Reconnect'}
+                  </button>
+                ) : null}
+                {isConnected && existing.pattern !== 'migration' ? (
+                  <button
+                    type="button"
+                    disabled={syncing}
                     onClick={onSync}
                     className="focus-visible:ring-ring text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high text-body rounded-md px-3 py-1.5 font-medium transition-colors outline-none focus-visible:ring-1 disabled:opacity-50"
                   >
-                    {syncingId === existing.id ? 'Syncing…' : 'Sync'}
+                    {syncing ? 'Syncing…' : 'Sync'}
                   </button>
                 ) : null}
                 <button
                   type="button"
-                  disabled={disconnectingId === existing.id}
+                  disabled={disconnecting}
                   onClick={onDisconnect}
                   className="focus-visible:ring-ring text-destructive hover:bg-destructive/10 text-body rounded-md px-3 py-1.5 font-medium transition-colors outline-none focus-visible:ring-1 disabled:opacity-50"
                 >
-                  {disconnectingId === existing.id ? 'Disconnecting…' : 'Disconnect'}
+                  {disconnecting ? 'Disconnecting…' : 'Disconnect'}
                 </button>
               </>
             ) : null}
@@ -105,38 +142,36 @@ export function IntegrationProviderCard({
         )}
       </div>
 
-      {existing?.status === 'error' ? (
-        <p className="text-on-surface-variant border-outline-variant border-t px-4 py-2 text-xs">
-          Connection needs attention — try syncing to retry. If the issue persists, re-authenticate
-          from your account settings.
-        </p>
-      ) : null}
-
-      {existing && syncFeedback[existing.id] ? (
-        <p className="text-on-surface-variant border-outline-variant border-t px-4 py-2 text-xs">
-          {syncFeedback[existing.id]}
-        </p>
-      ) : null}
-
-      {existing && syncErrors[existing.id] ? (
+      {/* Persistent connection/sync error — sourced from the server (survives reload), never
+          ephemeral React state. */}
+      {existing && status === 'error' && existing.lastError ? (
         <div role="alert" className="border-outline-variant border-t px-4 py-2 text-xs">
-          <p className="text-destructive">{syncErrors[existing.id]}</p>
-          {/sign in with (\w+)/i.test(syncErrors[existing.id] ?? '') ? (
-            <p className="text-on-surface-variant mt-1">
-              To fix this, sign in again with{' '}
-              {(/sign in with (\w+)/i.exec(syncErrors[existing.id] ?? '') ?? [])[1]} from your
-              account settings, then retry.
-            </p>
-          ) : null}
+          <p className="text-destructive">{existing.lastError}</p>
+          <p className="text-on-surface-variant mt-1">
+            Use <span className="font-medium">Reconnect</span> to re-authorize and resume syncing.
+          </p>
         </div>
       ) : null}
 
-      {existing && disconnectErrors[existing.id] ? (
+      {existing && status === 'pending' ? (
+        <p className="text-on-surface-variant border-outline-variant border-t px-4 py-2 text-xs">
+          Finish connecting to validate access and start syncing.
+        </p>
+      ) : null}
+
+      {/* Transient action feedback (connect/verify/disconnect failures shown in the moment). */}
+      {existing && actionError ? (
         <p
           role="alert"
           className="text-destructive border-outline-variant border-t px-4 py-2 text-xs"
         >
-          {disconnectErrors[existing.id]}
+          {actionError}
+        </p>
+      ) : null}
+
+      {existing && isConnected && syncFeedback ? (
+        <p className="text-on-surface-variant border-outline-variant border-t px-4 py-2 text-xs">
+          {syncFeedback}
         </p>
       ) : null}
 
@@ -145,8 +180,8 @@ export function IntegrationProviderCard({
           providerName={provider.name}
           recommendedPattern={provider.pattern}
           roles={provider.roles}
-          connecting={connecting}
-          error={connectError}
+          connecting={busy}
+          error={actionError}
           onConnect={onConnect}
           onCancel={onToggleOpen}
         />

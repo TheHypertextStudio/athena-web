@@ -11,7 +11,16 @@
  * icon barrel (owned by another surface) is never touched.
  */
 import type { AuditEventOut, NotificationOut, NotificationType } from '@docket/types';
-import { CheckCircle2, CircleDot, type LucideIcon, Sparkles, User, Users } from '@docket/ui/icons';
+import {
+  Cable,
+  CheckCircle2,
+  CircleDot,
+  type LucideIcon,
+  Sparkles,
+  User,
+  Users,
+  XCircle,
+} from '@docket/ui/icons';
 
 /** The leading glyph + accessible label for each {@link NotificationType}. */
 interface NotificationKindMeta {
@@ -30,6 +39,8 @@ const NOTIFICATION_KIND: Record<NotificationType, NotificationKindMeta> = {
   status_change: { icon: CheckCircle2, label: 'Status change' },
   comment: { icon: User, label: 'Comment' },
   invitation: { icon: Users, label: 'Invitation' },
+  connector_sync_failed: { icon: XCircle, label: 'Sync failed' },
+  connector_needs_reauth: { icon: Cable, label: 'Reconnect needed' },
 };
 
 /**

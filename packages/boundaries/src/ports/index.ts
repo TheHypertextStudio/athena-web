@@ -38,5 +38,7 @@ export type {
   MirrorResult,
   MirrorStatusInput,
 } from './connector';
+export { ConnectorError, isConnectorError } from './connector-error';
+export type { ConnectorErrorKind, ConnectorErrorOptions } from './connector-error';
 export type { Mailer, OutboundMessage, SentMessage } from './mailer';
 export type { BlobPutResult, BlobStore } from './blob';

@@ -20,6 +20,8 @@ export const NotificationType = z.enum([
   'comment',
   'invitation',
   'agent_session',
+  'connector_sync_failed',
+  'connector_needs_reauth',
 ]);
 /** Notification-type value. */
 export type NotificationType = z.infer<typeof NotificationType>;

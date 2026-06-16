@@ -3,16 +3,19 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
+import type * as IntegrationSyncModule from '../../src/routes/integration-sync';
 import { appWithActor, getDb, seedBaseOrg } from './harness.test';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
 let integrations!: unknown;
+let sweepConnectorSync!: typeof IntegrationSyncModule.sweepConnectorSync;
 
 beforeAll(async () => {
   schema = await getDb();
   db = schema.db;
   integrations = (await import('../../src/routes/integrations')).default;
+  sweepConnectorSync = (await import('../../src/routes/integration-sync')).sweepConnectorSync;
 });
 
 const MISSING = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
@@ -46,14 +49,24 @@ interface DirectoryRes {
     category: string;
   }[];
 }
-interface SyncJobRes {
-  jobId: string;
+interface SyncRunRes {
+  id: string;
   integrationId: string;
   status: string;
+  trigger: string;
   processed: number;
   total: number;
   error: string | null;
-  createdAt: string;
+  startedAt: string;
+  finishedAt: string | null;
+}
+interface IntegrationStateRes {
+  id: string;
+  status: string;
+  lastSyncStatus: string | null;
+  lastSyncedAt: string | null;
+  lastError: string | null;
+  connection: { account?: string };
 }
 interface IntegrationRes {
   id: string;
@@ -118,29 +131,35 @@ describe('integrations directory', () => {
 });
 
 describe('integrations sync', () => {
-  it('runs the connector and records a succeeded job, readable via GET /jobs/:jobId', async () => {
+  it('runs the connector, records a succeeded run, and marks the integration connected', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
     const id = await seedIntegration(orgId, humanActorId, 'github');
     const w = appWithActor(integrations, orgId, ['manage'], humanActorId);
 
     const res = await w.request(`/${id}/sync`, { method: 'POST', headers: J });
     expect(res.status).toBe(200);
-    const job = await body<SyncJobRes>(res);
-    expect(job.status).toBe('succeeded');
-    expect(job.integrationId).toBe(id);
-    expect(job.total).toBe(1); // one fixture item per provider
-    expect(job.processed).toBe(1); // first run materializes it
-    expect(job.error).toBeNull();
-    expect(job.jobId).toMatch(/^syncjob_/);
+    const run = await body<SyncRunRes>(res);
+    expect(run.status).toBe('succeeded');
+    expect(run.trigger).toBe('manual');
+    expect(run.integrationId).toBe(id);
+    expect(run.total).toBe(1); // one fixture item per provider
+    expect(run.processed).toBe(1); // first run materializes it
+    expect(run.error).toBeNull();
+    expect(run.finishedAt).not.toBeNull();
 
-    // Status is retrievable (view capability suffices).
+    // A successful sync is durably reflected on the integration itself (not ephemeral).
     const v = appWithActor(integrations, orgId, ['view']);
-    const got = await v.request(`/jobs/${job.jobId}`);
-    expect(got.status).toBe(200);
-    const status = await body<SyncJobRes>(got);
-    expect(status.jobId).toBe(job.jobId);
-    expect(status.status).toBe('succeeded');
-    expect(status.processed).toBe(1);
+    const got = await body<IntegrationStateRes>(await v.request(`/${id}`));
+    expect(got.status).toBe('connected');
+    expect(got.lastSyncStatus).toBe('succeeded');
+    expect(got.lastSyncedAt).not.toBeNull();
+    expect(got.lastError).toBeNull();
+
+    // The run is persisted and listable (view capability suffices).
+    const runs = await body<{ items: SyncRunRes[] }>(await v.request(`/${id}/runs`));
+    expect(runs.items).toHaveLength(1);
+    expect(runs.items[0]!.id).toBe(run.id);
+    expect(runs.items[0]!.status).toBe('succeeded');
   });
 
   it('is idempotent: a second sync processes nothing already materialized', async () => {
@@ -148,18 +167,18 @@ describe('integrations sync', () => {
     const id = await seedIntegration(orgId, humanActorId, 'linear');
     const w = appWithActor(integrations, orgId, ['manage'], humanActorId);
 
-    const first = await body<SyncJobRes>(
+    const first = await body<SyncRunRes>(
       await w.request(`/${id}/sync`, { method: 'POST', headers: J }),
     );
     expect(first.processed).toBe(2); // the linear fixture yields two issues
 
-    const second = await body<SyncJobRes>(
+    const second = await body<SyncRunRes>(
       await w.request(`/${id}/sync`, { method: 'POST', headers: J }),
     );
     expect(second.total).toBe(2);
     expect(second.processed).toBe(0); // already imported, nothing new
     expect(second.status).toBe('succeeded');
-    expect(second.jobId).not.toBe(first.jobId);
+    expect(second.id).not.toBe(first.id);
   });
 
   it('honors a valid config.teamId, and falls back when it is invalid', async () => {
@@ -201,13 +220,13 @@ describe('integrations sync', () => {
 
     const w = appWithActor(integrations, orgId, ['manage'], humanActorId);
 
-    const v = await body<SyncJobRes>(
+    const v = await body<SyncRunRes>(
       await w.request(`/${valid!.id}/sync`, { method: 'POST', headers: J }),
     );
     expect(v.status).toBe('succeeded');
     expect(v.processed).toBe(1);
 
-    const iv = await body<SyncJobRes>(
+    const iv = await body<SyncRunRes>(
       await w.request(`/${invalid!.id}/sync`, { method: 'POST', headers: J }),
     );
     expect(iv.status).toBe('succeeded');
@@ -223,7 +242,9 @@ describe('integrations sync', () => {
     expect(res.status).toBe(409);
   });
 
-  it('409 when the org has no team to import work into', async () => {
+  it('records a FAILED run (and flips the integration to error) when the sync cannot complete', async () => {
+    // An org with no team to import into makes the run fail. The failure must be DURABLE — a
+    // failed run + the integration marked `error` with the reason — never a vanished 409.
     const slug = `noteam-${Math.random().toString(36).slice(2, 10)}`;
     const [org] = await db
       .insert(schema.organization)
@@ -238,7 +259,16 @@ describe('integrations sync', () => {
     const w = appWithActor(integrations, orgId, ['manage'], human!.id);
 
     const res = await w.request(`/${id}/sync`, { method: 'POST', headers: J });
-    expect(res.status).toBe(409);
+    expect(res.status).toBe(200);
+    const run = await body<SyncRunRes>(res);
+    expect(run.status).toBe('failed');
+    expect(run.error).toMatch(/team/i);
+
+    // Durable: the integration now reads as needing attention, with the reason persisted.
+    const got = await body<IntegrationStateRes>(await w.request(`/${id}`));
+    expect(got.status).toBe('error');
+    expect(got.lastSyncStatus).toBe('failed');
+    expect(got.lastError).toMatch(/team/i);
   });
 
   it('404 when the integration does not exist', async () => {
@@ -259,29 +289,27 @@ describe('integrations sync', () => {
   });
 });
 
-describe('integrations job status', () => {
-  it('404 for an unknown job id', async () => {
+describe('integrations run history', () => {
+  it('404 listing runs for an unknown integration', async () => {
     const { orgId } = await seedBaseOrg(db, schema);
     const v = appWithActor(integrations, orgId, ['view']);
-    expect((await v.request('/jobs/syncjob_99999999')).status).toBe(404);
+    expect((await v.request(`/${MISSING}/runs`)).status).toBe(404);
   });
 
-  it('is tenant-isolated: another org cannot read this org job', async () => {
+  it('is tenant-isolated: another org cannot read this org integration runs', async () => {
     const a = await seedBaseOrg(db, schema);
     const b = await seedBaseOrg(db, schema);
     const id = await seedIntegration(a.orgId, a.humanActorId, 'github');
 
     const wA = appWithActor(integrations, a.orgId, ['manage'], a.humanActorId);
-    const job = await body<SyncJobRes>(
-      await wA.request(`/${id}/sync`, { method: 'POST', headers: J }),
-    );
+    await wA.request(`/${id}/sync`, { method: 'POST', headers: J });
 
-    // Org A reads it.
-    expect((await wA.request(`/jobs/${job.jobId}`)).status).toBe(200);
+    // Org A reads its own integration's run history.
+    expect((await wA.request(`/${id}/runs`)).status).toBe(200);
 
     // Org B is hidden from it (existence-hiding 404, not 403).
     const wB = appWithActor(integrations, b.orgId, ['view'], b.humanActorId);
-    expect((await wB.request(`/jobs/${job.jobId}`)).status).toBe(404);
+    expect((await wB.request(`/${id}/runs`)).status).toBe(404);
   });
 });
 
@@ -486,5 +514,105 @@ describe('onboarding connect + import (the exact path the connect step calls)', 
       body: JSON.stringify({ provider: 'gtasks', pattern: 'connector', roles: ['work'] }),
     });
     expect(res.status).toBe(403);
+  });
+});
+
+describe('integrations connect lifecycle (validate before connected)', () => {
+  it('create starts PENDING — never a fabricated connected', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const w = appWithActor(integrations, orgId, ['manage'], humanActorId);
+    const res = await w.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({
+        provider: 'github',
+        pattern: 'connector',
+        roles: ['work'],
+        syncMode: 'mirror',
+      }),
+    });
+    expect(res.status).toBe(200);
+    const created = await body<IntegrationStateRes>(res);
+    expect(created.status).toBe('pending');
+  });
+
+  it('ignores a client-supplied status (a caller cannot self-declare connected)', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const w = appWithActor(integrations, orgId, ['manage'], humanActorId);
+    const res = await w.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ provider: 'drive', pattern: 'connector', status: 'connected' }),
+    });
+    const created = await body<IntegrationStateRes>(res);
+    expect(created.status).toBe('pending');
+  });
+
+  it('verify promotes to connected only after the credential resolves (and records the account)', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const id = await seedIntegration(orgId, humanActorId, 'github');
+    const w = appWithActor(integrations, orgId, ['manage'], humanActorId);
+
+    const res = await w.request(`/${id}/verify`, { method: 'POST', headers: J });
+    expect(res.status).toBe(200);
+    const verified = await body<IntegrationStateRes>(res);
+    expect(verified.status).toBe('connected');
+    expect(verified.lastError).toBeNull();
+    // The mock connector resolves an account label, which is persisted on the connection.
+    expect(verified.connection.account).toBeTruthy();
+  });
+});
+
+describe('background connector sweep', () => {
+  it('syncs a due mirror integration on the scheduled trigger and records it durably', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const id = await seedIntegration(orgId, humanActorId, 'github');
+    // The sweep only considers connected/error integrations; a pending one is never auto-synced.
+    // lastSyncedAt is null → due immediately.
+    await db
+      .update(schema.integration)
+      .set({ status: 'connected', lastSyncedAt: null, syncCadenceMinutes: 60 })
+      .where(eq(schema.integration.id, id));
+
+    await sweepConnectorSync(new Date());
+
+    const w = appWithActor(integrations, orgId, ['view'], humanActorId);
+    const got = await body<IntegrationStateRes>(await w.request(`/${id}`));
+    expect(got.status).toBe('connected');
+    expect(got.lastSyncedAt).not.toBeNull();
+
+    const runs = await body<{ items: SyncRunRes[] }>(await w.request(`/${id}/runs`));
+    expect(runs.items.some((r) => r.trigger === 'scheduled' && r.status === 'succeeded')).toBe(
+      true,
+    );
+  });
+
+  it('does not re-sync an integration whose cadence is not yet due', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const id = await seedIntegration(orgId, humanActorId, 'linear');
+    // Just synced (now) with a 60-minute cadence → not due.
+    await db
+      .update(schema.integration)
+      .set({ status: 'connected', lastSyncedAt: new Date(), syncCadenceMinutes: 60 })
+      .where(eq(schema.integration.id, id));
+
+    await sweepConnectorSync(new Date());
+
+    const w = appWithActor(integrations, orgId, ['view'], humanActorId);
+    const runs = await body<{ items: SyncRunRes[] }>(await w.request(`/${id}/runs`));
+    expect(runs.items.some((r) => r.trigger === 'scheduled')).toBe(false);
+  });
+
+  it('never auto-syncs a pending integration (one never validated)', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const id = await seedIntegration(orgId, humanActorId, 'gtasks'); // defaults to pending
+
+    await sweepConnectorSync(new Date());
+
+    const w = appWithActor(integrations, orgId, ['view'], humanActorId);
+    const got = await body<IntegrationStateRes>(await w.request(`/${id}`));
+    expect(got.status).toBe('pending');
+    const runs = await body<{ items: SyncRunRes[] }>(await w.request(`/${id}/runs`));
+    expect(runs.items).toHaveLength(0);
   });
 });

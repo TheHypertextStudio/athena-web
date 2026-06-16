@@ -10,6 +10,8 @@ import {
   TaskAlt,
 } from '@docket/ui/icons';
 
+import { configuredOAuthProviders } from '@/app/(auth)/_lib/oauth-providers';
+
 /** PROVIDER_ICON maps integration providers to their display icon component. */
 export const PROVIDER_ICON: Record<string, LucideIcon> = {
   github: Github,
@@ -33,15 +35,45 @@ export const CATEGORY_LABEL: Record<string, string> = {
   communication: 'Communication',
 };
 
-/** STATUS_LABEL maps integration enum values to user-facing labels. */
+/** STATUS_LABEL maps integration enum values to user-facing labels + badge variants. */
 export const STATUS_LABEL: Record<
   IntegrationOut['status'],
-  { label: string; variant: 'secondary' | 'destructive' }
+  { label: string; variant: 'secondary' | 'destructive' | 'outline' }
 > = {
+  // `pending` is created-but-not-yet-validated: never shown as connected.
+  pending: { label: 'Not connected', variant: 'outline' },
   connected: { label: 'Connected', variant: 'secondary' },
   error: { label: 'Needs attention', variant: 'destructive' },
-  disconnected: { label: 'Disconnected', variant: 'secondary' },
+  disconnected: { label: 'Disconnected', variant: 'outline' },
 };
+
+/**
+ * Map a connector provider to the Better Auth social provider whose OAuth grant funds it.
+ *
+ * @remarks
+ * Mirrors the server's `socialProviderId`: all four Google products share the one `google`
+ * grant; GitHub and Linear each have their own. Used to decide which provider's OAuth redirect
+ * to launch when finishing/repairing a connection.
+ */
+export function socialProviderForConnector(provider: string): 'google' | 'github' | 'linear' {
+  if (provider === 'github') return 'github';
+  if (provider === 'linear') return 'linear';
+  return 'google';
+}
+
+/**
+ * Whether this deployment has real OAuth wired for the provider's social grant.
+ *
+ * @remarks
+ * When true (production), finishing a connection must go through the provider's OAuth consent
+ * redirect. When false (local/mock dev, where {@link configuredOAuthProviders} is empty), the
+ * connection is validated directly against the mock connector with no redirect — so the
+ * validate-before-connected guarantee holds in every environment.
+ */
+export function connectorOAuthConfigured(provider: string): boolean {
+  const social = socialProviderForConnector(provider);
+  return configuredOAuthProviders().some((p) => p.id === social);
+}
 
 /** categoryLabel returns display copy for an integration provider category. */
 export function categoryLabel(category: string): string {

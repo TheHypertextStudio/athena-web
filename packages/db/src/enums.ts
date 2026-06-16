@@ -36,6 +36,10 @@ export const taskPriority = pgEnum('task_priority', ['none', 'urgent', 'high', '
 export const provenanceSource = pgEnum('provenance_source', ['native', 'linked']);
 /** Integration sync depth: one-time import vs read-only mirror. */
 export const syncMode = pgEnum('sync_mode', ['import', 'mirror']);
+/** Lifecycle status of one connector sync run (a single `importWork` pass). */
+export const syncRunStatus = pgEnum('sync_run_status', ['running', 'succeeded', 'failed']);
+/** What triggered a sync run: a user action or the background scheduler. */
+export const syncTrigger = pgEnum('sync_trigger', ['manual', 'scheduled']);
 /** Integration pattern: replace (migration) vs complement (connector). */
 export const integrationPattern = pgEnum('integration_pattern', ['migration', 'connector']);
 /** What an integration contributes: work, context, signal, time, or code. */
@@ -46,8 +50,18 @@ export const integrationRole = pgEnum('integration_role', [
   'time',
   'code',
 ]);
-/** Integration connection health. */
+/**
+ * Integration connection health.
+ *
+ * @remarks
+ * `pending` is the initial state on create: the integration exists but its credential has
+ * NOT yet been validated by a real `connector.connect()`, so it must never be shown as
+ * connected. Only a successful connect/sync may promote it to `connected`; any failed
+ * connect, sync, or token refresh demotes it to `error`. This separation is the spine of the
+ * "never report success when nothing happened" invariant.
+ */
 export const integrationStatus = pgEnum('integration_status', [
+  'pending',
   'connected',
   'error',
   'disconnected',
@@ -135,6 +149,8 @@ export const notificationType = pgEnum('notification_type', [
   'comment',
   'invitation',
   'agent_session',
+  'connector_sync_failed',
+  'connector_needs_reauth',
 ]);
 /** Audit-feed subject kinds; `agent` is a first-class subject (frozen). */
 export const auditSubjectType = pgEnum('audit_subject_type', [

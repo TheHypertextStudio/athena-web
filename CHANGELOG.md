@@ -1,3 +1,9 @@
+# [1.1.0](https://github.com/TheHypertextStudio/athena-web/compare/v1.0.13...v1.1.0) (2026-06-16)
+
+### Features
+
+- **integrations:** implement connector reliability invariant ([91d924f](https://github.com/TheHypertextStudio/athena-web/commit/91d924f309f308b1ac013cf732b4fd3052197262))
+
 ## [1.0.13](https://github.com/TheHypertextStudio/athena-web/compare/v1.0.12...v1.0.13) (2026-06-15)
 
 ### Bug Fixes

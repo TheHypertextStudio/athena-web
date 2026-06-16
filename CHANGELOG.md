@@ -1,3 +1,9 @@
+# [1.3.0](https://github.com/TheHypertextStudio/athena-web/compare/v1.2.0...v1.3.0) (2026-06-16)
+
+### Features
+
+- **integrations:** wire OAuth provider credentials into the API deploy ([73ee4a7](https://github.com/TheHypertextStudio/athena-web/commit/73ee4a78c73d9b9ebd8913fe9c6fb2989b3947aa))
+
 # [1.2.0](https://github.com/TheHypertextStudio/athena-web/compare/v1.1.0...v1.2.0) (2026-06-16)
 
 ### Features

@@ -223,22 +223,28 @@ Cloud Run is scale-to-zero, so there is no in-process worker — scheduled work 
 | `POST /v1/cron/lifecycle-sweep` | Advance orgs through the data-lifecycle deletion state machine | daily             |
 | `POST /v1/cron/sync-connectors` | Re-mirror every due connector integration (auto-sync)          | every 15 min      |
 
-Provision the connector-sync schedule once per environment (the secret lives in
-`docket-cron-secret`):
+Both jobs are provisioned **as code** by `scripts/scheduler-setup.ts`, the single source of
+truth. It runs automatically after every API deploy (the `Ensure Cloud Scheduler jobs` step in
+the `deploy-api` job) and can be run by hand. The script is idempotent — it `describe`s each job
+and `update`s or `create`s it — and reads the secret from `docket-cron-secret` (never logged).
+The Cloud Run services are `--allow-unauthenticated`, so each job authenticates purely with the
+`x-cron-secret` header (no OIDC / `run.invoker`).
 
 ```bash
-CRON_SECRET="$(gcloud secrets versions access latest --secret=docket-cron-secret --project=<PROJECT_ID>)"
-API_URL="https://<docket-api-host>"
+# Preview the exact gcloud commands without touching GCP (secret redacted):
+DRY_RUN=1 GCP_PROJECT_ID=<PROJECT_ID> GCP_REGION=<REGION> \
+  API_URL="https://<docket-api-host>" pnpm scheduler:setup
 
-gcloud scheduler jobs create http docket-sync-connectors \
-  --project=<PROJECT_ID> --location=<REGION> \
-  --schedule="*/15 * * * *" \
-  --uri="${API_URL}/v1/cron/sync-connectors" \
-  --http-method=POST \
-  --headers="x-cron-secret=${CRON_SECRET}"
+# Provision/update for real (needs an authenticated gcloud):
+GCP_PROJECT_ID=<PROJECT_ID> GCP_REGION=<REGION> \
+  API_URL="https://<docket-api-host>" pnpm scheduler:setup
 ```
 
-> Until this scheduler job exists, connectors do **not** auto-sync in that environment —
+`pnpm bootstrap` enables `cloudscheduler.googleapis.com` and grants the deploy service account
+`roles/cloudscheduler.admin`, so CI may manage the jobs. (Re-run bootstrap on an existing
+project to apply these.) Cloud Scheduler must be available in the chosen `GCP_REGION`.
+
+> If these scheduler jobs do not exist in an environment, connectors do **not** auto-sync there —
 > manual "Sync now" and the honest-status flows still work, but background mirroring is dormant.
 > The connector's `syncCadenceMinutes` (default 60) gates which integrations a given sweep
 > actually re-syncs, so the scheduler can safely run more often than any single integration's

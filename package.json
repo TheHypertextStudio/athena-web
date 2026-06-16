@@ -24,6 +24,7 @@
     "clean": "turbo run clean && rm -rf node_modules",
     "bootstrap": "tsx scripts/bootstrap.ts",
     "env:check": "tsx scripts/env-check.ts",
+    "scheduler:setup": "dotenv -e .env.local -- tsx scripts/scheduler-setup.ts",
     "proxy:install": "portless service install",
     "proxy:status": "portless service status",
     "proxy:uninstall": "portless service uninstall",

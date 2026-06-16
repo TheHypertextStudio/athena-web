@@ -223,6 +223,7 @@ function setupGcp(cfg: Config): { saEmail: string; wifProvider: string } {
     'iamcredentials.googleapis.com',
     'sts.googleapis.com', // required for WIF OIDC token exchange
     'cloudresourcemanager.googleapis.com',
+    'cloudscheduler.googleapis.com', // drives the secret-guarded cron endpoints (pnpm scheduler:setup)
   ];
   step(`enabling ${apis.length} APIs (may take ~30s)…`);
   exec(`gcloud services enable ${apis.join(' ')} --project=${cfg.project}`);
@@ -248,6 +249,7 @@ function setupGcp(cfg: Config): { saEmail: string; wifProvider: string } {
     'roles/artifactregistry.writer',
     'roles/secretmanager.secretAccessor',
     'roles/iam.serviceAccountUser',
+    'roles/cloudscheduler.admin', // create/update the cron jobs from CI (pnpm scheduler:setup)
   ];
   for (const role of roles) {
     exec(`gcloud projects add-iam-policy-binding ${cfg.project} \

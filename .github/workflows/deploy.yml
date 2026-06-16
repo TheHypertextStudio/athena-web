@@ -75,6 +75,16 @@ jobs:
       - name: Show Cloud Run URL
         run: echo "docket-api=${{ steps.deploy-api.outputs.url }}"
 
+      # Background sync (a core feature) only fires if Cloud Scheduler calls the cron endpoint.
+      # Re-running this idempotent create-or-update every deploy guarantees the jobs exist and
+      # stay current — never a forgotten manual step. gcloud is already authenticated (WIF).
+      - name: Ensure Cloud Scheduler jobs
+        env:
+          GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+          GCP_REGION: ${{ vars.GCP_REGION }}
+          API_URL: ${{ vars.API_URL }}
+        run: npx -y tsx scripts/scheduler-setup.ts
+
   deploy-web:
     name: Web
     runs-on: ubuntu-latest

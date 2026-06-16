@@ -14,7 +14,7 @@
  */
 
 import { execSync } from 'node:child_process';
-import { existsSync, writeFileSync, mkdtempSync, unlinkSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, mkdtempSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { createInterface } from 'node:readline';
 import { dirname, resolve } from 'node:path';
@@ -60,6 +60,30 @@ function warn(msg: string): void {
 function section(title: string): void {
   const bar = '─'.repeat(Math.max(0, 62 - title.length));
   console.log(`\n── ${title} ${bar}`);
+}
+
+/** Parse KEY=VALUE lines from a .env file; ignores comments and blank lines. */
+function parseEnvFile(path: string): Record<string, string> {
+  let text: string;
+  try {
+    text = readFileSync(path, 'utf8');
+  } catch {
+    return {};
+  }
+  const out: Record<string, string> = {};
+  for (const raw of text.split('\n')) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#')) continue;
+    const eq = line.indexOf('=');
+    if (eq < 1) continue;
+    const key = line.slice(0, eq).trim();
+    const val = line
+      .slice(eq + 1)
+      .trim()
+      .replace(/^["']|["']$/g, '');
+    if (key && val) out[key] = val;
+  }
+  return out;
 }
 
 const rl = createInterface({ input: process.stdin, output: process.stdout });
@@ -142,13 +166,16 @@ interface Config {
   apiUrl: string; // e.g. https://docket-api.example.com
   adminUrl: string; // e.g. https://docket-admin.example.com
   neonProjectId: string;
-  neonApiKey: string;
+  neonApiKey: string | null; // null = already stored in GitHub; skip upload
   databaseUrl: string;
   databaseUrlUnpooled: string;
 }
 
 async function gatherConfig(): Promise<Config> {
   section('Configuration');
+
+  // Seed defaults from an existing .env.local so re-runs don't ask for known values.
+  const localEnv = parseEnvFile(resolve(ROOT, '.env.local'));
 
   const currentProject = tryRun('gcloud config get-value project');
   const project = await prompt('GCP project ID', currentProject);
@@ -168,7 +195,10 @@ async function gatherConfig(): Promise<Config> {
   const detectedRepo = repoMatch ? repoMatch[1] : '';
   const repo = await prompt('GitHub owner/repo', detectedRepo);
 
-  const domain = await prompt('Passkey relying-party domain (e.g. docket.dev)');
+  const domain = await prompt(
+    'Passkey relying-party domain (e.g. docket.dev)',
+    localEnv['BETTER_AUTH_PASSKEY_RP_ID'] ?? '',
+  );
   if (!domain) {
     console.error('Passkey domain is required.');
     process.exit(1);
@@ -177,21 +207,41 @@ async function gatherConfig(): Promise<Config> {
   // Derive default service URLs from the domain label structure.
   // e.g. docket.hypertext.studio → base = hypertext.studio
   const base = domain.includes('.') ? domain.slice(domain.indexOf('.') + 1) : domain;
-  const webUrl = await prompt('Web app URL', `https://${domain}`);
-  const apiUrl = await prompt('API URL', `https://docket-api.${base}`);
-  const adminUrl = await prompt('Admin URL', `https://docket-admin.${base}`);
+  const webUrl = await prompt(
+    'Web app URL',
+    localEnv['NEXT_PUBLIC_APP_URL'] ?? `https://${domain}`,
+  );
+  const apiUrl = await prompt(
+    'API URL',
+    localEnv['API_URL'] ?? localEnv['NEXT_PUBLIC_API_URL'] ?? `https://docket-api.${base}`,
+  );
+  const adminUrl = await prompt(
+    'Admin URL',
+    localEnv['ADMIN_URL'] ?? `https://docket-admin.${base}`,
+  );
 
   console.log('\n  Neon (free tier: neon.tech → New project → Connection details)');
-  const neonProjectId = await prompt('Neon project ID');
-  const neonApiKey = await prompt('Neon API key (from neon.tech → Account → API keys)');
-  if (!neonApiKey) {
-    console.error('Neon API key is required (used to create preview branches in CI).');
-    process.exit(1);
+  const neonProjectId = await prompt('Neon project ID', localEnv['NEON_PROJECT_ID'] ?? '');
+
+  // Skip the API key prompt if it's already stored as a GitHub secret.
+  const neonKeyAlreadySet =
+    !!repo &&
+    tryRun(`gh secret list --repo ${repo} 2>/dev/null | grep -c '^NEON_API_KEY\b'`) === '1';
+  let neonApiKey: string | null;
+  if (neonKeyAlreadySet) {
+    ok('NEON_API_KEY already set in GitHub secrets — skipping prompt');
+    neonApiKey = null;
+  } else {
+    neonApiKey = await prompt('Neon API key (from neon.tech → Account → API keys)');
+    if (!neonApiKey) {
+      console.error('Neon API key is required (used to create preview branches in CI).');
+      process.exit(1);
+    }
   }
-  const databaseUrl = await prompt('Neon DATABASE_URL (pooled)');
+  const databaseUrl = await prompt('Neon DATABASE_URL (pooled)', localEnv['DATABASE_URL'] ?? '');
   const databaseUrlUnpooled = await prompt(
     'Neon DATABASE_URL_UNPOOLED (for migrations)',
-    databaseUrl,
+    localEnv['DATABASE_URL_UNPOOLED'] ?? databaseUrl,
   );
 
   return {
@@ -381,7 +431,7 @@ function setupGithub(cfg: Config, saEmail: string, wifProvider: string): void {
 
   section('GitHub — Repository Secrets');
 
-  if (cfg.neonApiKey) {
+  if (cfg.neonApiKey !== null) {
     execSync(`gh secret set NEON_API_KEY --repo ${cfg.repo}`, {
       encoding: 'utf8',
       stdio: ['pipe', 'inherit', 'inherit'],

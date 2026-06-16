@@ -5,8 +5,10 @@ import type {
   MirrorResult,
   MirrorStatusInput,
 } from '../ports/connector';
+import { ConnectorError } from '../ports/connector-error';
 import type { ConnectorProviderClient } from './connector-provider-client';
 import type { ProviderHttp } from './connector-http';
+import { MAX_IMPORT_PAGES, logConnectorTruncation } from './connector-log';
 
 /** Shape of one GitHub issue/PR as returned by the GitHub REST issues endpoints. */
 interface GitHubIssue {
@@ -53,16 +55,41 @@ export class GitHubProviderClient implements ConnectorProviderClient {
     };
   }
 
-  /** Fetch all issues, paginating through GitHub's 100-item pages (max 10 pages / 1 000 items). */
+  /**
+   * Fetch all issues, paginating through GitHub's 100-item pages.
+   *
+   * @remarks
+   * A non-array response (a bare `{ message }` error object the REST API can return with a 2xx
+   * for some surfaces) is treated as a provider failure, NOT an empty success — that is exactly
+   * the case that used to make a broken connector report "imported 0 items". Stops at
+   * {@link MAX_IMPORT_PAGES} and logs a truncation warning if more data remained.
+   */
   private async fetchIssuePages(stateFilter: 'open' | 'all'): Promise<GitHubIssue[]> {
     const all: GitHubIssue[] = [];
-    for (let page = 1; page <= 10; page++) {
+    let truncated = true;
+    for (let page = 1; page <= MAX_IMPORT_PAGES; page++) {
       const json = (await this.http.getJson(
         `/issues?filter=all&state=${stateFilter}&per_page=100&page=${page}`,
-      )) as GitHubIssue[] | undefined;
-      if (!Array.isArray(json) || json.length === 0) break;
+      )) as GitHubIssue[] | { message?: string } | undefined;
+      if (!Array.isArray(json)) {
+        throw new ConnectorError('github returned an unexpected (non-array) issues response', {
+          provider: 'github',
+          kind: 'provider',
+        });
+      }
       all.push(...json);
-      if (json.length < 100) break;
+      if (json.length < 100) {
+        truncated = false;
+        break;
+      }
+    }
+    if (truncated) {
+      logConnectorTruncation({
+        provider: 'github',
+        resource: 'issues',
+        fetched: all.length,
+        maxPages: MAX_IMPORT_PAGES,
+      });
     }
     return all;
   }

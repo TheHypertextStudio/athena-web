@@ -1,0 +1,1 @@
+ALTER TABLE "integration" ALTER COLUMN "status" SET DEFAULT 'pending';

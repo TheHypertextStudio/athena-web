@@ -8,6 +8,7 @@ import type {
 } from '../ports/connector';
 import type { ConnectorProviderClient } from './connector-provider-client';
 import type { ProviderHttp } from './connector-http';
+import { MAX_IMPORT_PAGES, logConnectorTruncation } from './connector-log';
 
 /** The Google product a {@link GoogleProviderClient} targets. */
 export type GoogleProduct = Extract<ConnectorProvider, 'drive' | 'gmail' | 'calendar' | 'gtasks'>;
@@ -66,6 +67,44 @@ export class GoogleProviderClient implements ConnectorProviderClient {
     return this.importCalendar(importedAt);
   }
 
+  /**
+   * Page through a Google list endpoint via `nextPageToken`, collecting all items.
+   *
+   * @remarks
+   * Shared by every product import so pagination, the {@link MAX_IMPORT_PAGES} safety bound,
+   * and the truncation warning are handled once. A truncated import logs a warning rather than
+   * silently returning a partial set that looks complete.
+   *
+   * @param resource - Label for the truncation log (e.g. `'files'`).
+   * @param buildUrl - Builds the request path for a given page token.
+   * @param extract - Pulls `{ items, nextPageToken }` out of the (provider-specific) response.
+   */
+  private async paginate<T>(
+    resource: string,
+    buildUrl: (pageToken: string | undefined) => string,
+    extract: (json: unknown) => { items: readonly T[]; nextPageToken: string | undefined },
+  ): Promise<T[]> {
+    const all: T[] = [];
+    let pageToken: string | undefined;
+    let truncated = false;
+    for (let page = 0; page < MAX_IMPORT_PAGES; page++) {
+      const { items, nextPageToken } = extract(await this.http.getJson(buildUrl(pageToken)));
+      all.push(...items);
+      if (!nextPageToken) break;
+      pageToken = nextPageToken;
+      if (page === MAX_IMPORT_PAGES - 1) truncated = true;
+    }
+    if (truncated) {
+      logConnectorTruncation({
+        provider: this.product,
+        resource,
+        fetched: all.length,
+        maxPages: MAX_IMPORT_PAGES,
+      });
+    }
+    return all;
+  }
+
   /** List Drive files and map them onto document {@link ImportedItem}s. */
   private async importDrive(importedAt: string): Promise<ImportedItem[]> {
     interface DriveFile {
@@ -73,18 +112,15 @@ export class GoogleProviderClient implements ConnectorProviderClient {
       name: string;
       webViewLink?: string;
     }
-    const all: DriveFile[] = [];
-    let pageToken: string | undefined;
-    for (let page = 0; page < 10; page++) {
-      const url = `/files?fields=files(id,name,webViewLink),nextPageToken&pageSize=100${pageToken ? `&pageToken=${pageToken}` : ''}`;
-      const json = (await this.http.getJson(url)) as {
-        files?: DriveFile[];
-        nextPageToken?: string;
-      };
-      all.push(...(json.files ?? []));
-      if (!json.nextPageToken) break;
-      pageToken = json.nextPageToken;
-    }
+    const all = await this.paginate<DriveFile>(
+      'files',
+      (pageToken) =>
+        `/files?fields=files(id,name,webViewLink),nextPageToken&pageSize=100${pageToken ? `&pageToken=${pageToken}` : ''}`,
+      (json) => {
+        const j = json as { files?: DriveFile[]; nextPageToken?: string };
+        return { items: j.files ?? [], nextPageToken: j.nextPageToken };
+      },
+    );
     return all.map((f) => ({
       id: f.id,
       kind: 'document' as const,
@@ -110,18 +146,15 @@ export class GoogleProviderClient implements ConnectorProviderClient {
       id: string;
       snippet?: string;
     }
-    const all: GmailThread[] = [];
-    let pageToken: string | undefined;
-    for (let page = 0; page < 10; page++) {
-      const url = `/users/me/threads?maxResults=100${pageToken ? `&pageToken=${pageToken}` : ''}`;
-      const json = (await this.http.getJson(url)) as {
-        threads?: GmailThread[];
-        nextPageToken?: string;
-      };
-      all.push(...(json.threads ?? []));
-      if (!json.nextPageToken) break;
-      pageToken = json.nextPageToken;
-    }
+    const all = await this.paginate<GmailThread>(
+      'threads',
+      (pageToken) =>
+        `/users/me/threads?maxResults=100${pageToken ? `&pageToken=${pageToken}` : ''}`,
+      (json) => {
+        const j = json as { threads?: GmailThread[]; nextPageToken?: string };
+        return { items: j.threads ?? [], nextPageToken: j.nextPageToken };
+      },
+    );
     return all.map((t) => ({
       id: t.id,
       kind: 'message' as const,
@@ -138,18 +171,15 @@ export class GoogleProviderClient implements ConnectorProviderClient {
       description?: string;
       htmlLink?: string;
     }
-    const all: CalEvent[] = [];
-    let pageToken: string | undefined;
-    for (let page = 0; page < 10; page++) {
-      const url = `/calendars/primary/events?maxResults=100${pageToken ? `&pageToken=${pageToken}` : ''}`;
-      const json = (await this.http.getJson(url)) as {
-        items?: CalEvent[];
-        nextPageToken?: string;
-      };
-      all.push(...(json.items ?? []));
-      if (!json.nextPageToken) break;
-      pageToken = json.nextPageToken;
-    }
+    const all = await this.paginate<CalEvent>(
+      'events',
+      (pageToken) =>
+        `/calendars/primary/events?maxResults=100${pageToken ? `&pageToken=${pageToken}` : ''}`,
+      (json) => {
+        const j = json as { items?: CalEvent[]; nextPageToken?: string };
+        return { items: j.items ?? [], nextPageToken: j.nextPageToken };
+      },
+    );
     return all.map((e) => ({
       id: e.id,
       kind: 'event' as const,
@@ -173,15 +203,15 @@ export class GoogleProviderClient implements ConnectorProviderClient {
       status?: string;
       webViewLink?: string;
     }
-    const all: GTask[] = [];
-    let pageToken: string | undefined;
-    for (let page = 0; page < 10; page++) {
-      const url = `/lists/@default/tasks?showCompleted=false&maxResults=100${pageToken ? `&pageToken=${pageToken}` : ''}`;
-      const json = (await this.http.getJson(url)) as { items?: GTask[]; nextPageToken?: string };
-      all.push(...(json.items ?? []));
-      if (!json.nextPageToken) break;
-      pageToken = json.nextPageToken;
-    }
+    const all = await this.paginate<GTask>(
+      'tasks',
+      (pageToken) =>
+        `/lists/@default/tasks?showCompleted=false&maxResults=100${pageToken ? `&pageToken=${pageToken}` : ''}`,
+      (json) => {
+        const j = json as { items?: GTask[]; nextPageToken?: string };
+        return { items: j.items ?? [], nextPageToken: j.nextPageToken };
+      },
+    );
     return all.map((t) => ({
       id: t.id,
       kind: 'issue' as const,

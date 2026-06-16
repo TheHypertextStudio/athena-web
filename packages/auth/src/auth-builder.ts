@@ -139,7 +139,14 @@ export function buildAuthOptions(e: AuthEnv): BetterAuthOptions {
     trustedProviders.push('github');
   }
   if (isRealValue(e.LINEAR_CLIENT_ID) && isRealValue(e.LINEAR_CLIENT_SECRET)) {
-    socialProviders.linear = { clientId: e.LINEAR_CLIENT_ID, clientSecret: e.LINEAR_CLIENT_SECRET };
+    // `read` is required for the Linear connector to query the GraphQL API — without it the
+    // grant carries no scope and every connector call 400s. (Existing Linear-linked users
+    // predating this scope must re-consent; they surface as `error`/needs-reauth, not silent.)
+    socialProviders.linear = {
+      clientId: e.LINEAR_CLIENT_ID,
+      clientSecret: e.LINEAR_CLIENT_SECRET,
+      scope: ['read'],
+    };
     trustedProviders.push('linear');
   }
 

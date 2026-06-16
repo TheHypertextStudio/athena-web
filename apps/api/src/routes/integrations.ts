@@ -1,16 +1,16 @@
 /** `@docket/api` — integrations router (mounted at `/v1/orgs/:orgId/integrations`). */
-import { db, integration } from '@docket/db';
+import { db, integration, syncRun } from '@docket/db';
 import {
   IntegrationCreate,
   IntegrationDirectoryOut,
   IntegrationOut,
   IntegrationUpdate,
   pageOf,
-  SyncJobOut,
+  SyncRunOut,
   TaskOut,
 } from '@docket/types';
 import type { ImportedItem } from '@docket/boundaries';
-import { and, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
@@ -25,11 +25,12 @@ import {
   PROVIDER_DIRECTORY,
   asConnectorProvider,
   connectorFor,
+  type IntegrationRow,
   resolveConnectorToken,
   socialProviderId,
   toOut,
 } from './integration-provider';
-import { SYNC_JOBS, type SyncJob, nextSyncJobId, toSyncJobOut } from './integration-sync-jobs';
+import { runSync, toSyncRunOut } from './integration-sync';
 import { importItems, resolveImportTeam } from './integration-import';
 
 /** `assignToImporter` lands new linked tasks under My Work's "Assigned to me". */
@@ -38,7 +39,29 @@ const ImportBody = z.object({
 });
 
 const idParam = z.object({ id: z.string() });
-const jobIdParam = z.object({ jobId: z.string() });
+
+/** Update an integration's mutable health/sync fields, returning the fresh row. */
+async function setIntegration(
+  id: string,
+  patch: Partial<typeof integration.$inferInsert>,
+): Promise<IntegrationRow> {
+  const updated = await db.update(integration).set(patch).where(eq(integration.id, id)).returning();
+  const row = updated[0];
+  if (!row) throw new NotFoundError('Integration not found');
+  return row;
+}
+
+/** Load an org-scoped integration or 404 (existence-hiding across tenants). */
+async function loadIntegration(orgId: string, id: string): Promise<IntegrationRow> {
+  const rows = await db
+    .select()
+    .from(integration)
+    .where(and(eq(integration.id, id), eq(integration.organizationId, orgId)))
+    .limit(1);
+  const row = rows[0];
+  if (!row) throw new NotFoundError('Integration not found');
+  return row;
+}
 
 /** Integrations router: org-scoped CRUD over external migrations + connectors. */
 const integrations = new Hono<AppEnv>()
@@ -54,10 +77,13 @@ const integrations = new Hono<AppEnv>()
     // Connecting a provider is idempotent per (org, provider): reconnecting reuses the
     // existing integration (refreshing fields) to keep the integration id — and so each
     // mirrored task's `sourceIntegrationId` — stable across reconnects.
+    //
+    // Health is NEVER taken from the body: a new or reconnected integration starts `pending`
+    // and clears any prior error, and is only promoted to `connected` once `POST /:id/verify`
+    // (or a successful sync) actually validates the credential.
     const fields = {
       ...(body.roles !== undefined ? { roles: body.roles } : {}),
       ...(body.connection !== undefined ? { connection: body.connection } : {}),
-      ...(body.status !== undefined ? { status: body.status } : {}),
       ...(body.config !== undefined ? { config: body.config } : {}),
       ...(body.syncMode !== undefined ? { syncMode: body.syncMode } : {}),
     };
@@ -69,14 +95,13 @@ const integrations = new Hono<AppEnv>()
       .limit(1);
 
     if (existing[0]) {
-      const updated = await db
-        .update(integration)
-        .set({ pattern: body.pattern, ...fields })
-        .where(eq(integration.id, existing[0].id))
-        .returning();
-      const row = updated[0];
-      /* v8 ignore next -- @preserve defensive: the row was just verified to exist */
-      if (!row) throw new Error('integration update returned no row');
+      const row = await setIntegration(existing[0].id, {
+        pattern: body.pattern,
+        ...fields,
+        status: 'pending',
+        lastError: null,
+        lastErrorAt: null,
+      });
       return ok(c, IntegrationOut, toOut(row));
     }
 
@@ -101,24 +126,23 @@ const integrations = new Hono<AppEnv>()
     );
     return ok(c, IntegrationDirectoryOut, { providers });
   })
-  .get('/jobs/:jobId', zParam(jobIdParam), async (c) => {
-    const { orgId } = c.get('actorCtx');
-    const { jobId } = c.req.valid('param');
-    const job = SYNC_JOBS.get(jobId);
-    if (job?.organizationId !== orgId) throw new NotFoundError('Sync job not found');
-    return ok(c, SyncJobOut, toSyncJobOut(job));
-  })
   .get('/:id', zParam(idParam), async (c) => {
     const { orgId } = c.get('actorCtx');
     const { id } = c.req.valid('param');
-    const rows = await db
-      .select()
-      .from(integration)
-      .where(and(eq(integration.id, id), eq(integration.organizationId, orgId)))
-      .limit(1);
-    const row = rows[0];
-    if (!row) throw new NotFoundError('Integration not found');
+    const row = await loadIntegration(orgId, id);
     return ok(c, IntegrationOut, toOut(row));
+  })
+  .get('/:id/runs', zParam(idParam), async (c) => {
+    const { orgId } = c.get('actorCtx');
+    const { id } = c.req.valid('param');
+    await loadIntegration(orgId, id);
+    const runs = await db
+      .select()
+      .from(syncRun)
+      .where(and(eq(syncRun.integrationId, id), eq(syncRun.organizationId, orgId)))
+      .orderBy(desc(syncRun.startedAt))
+      .limit(20);
+    return ok(c, pageOf(SyncRunOut), { items: runs.map(toSyncRunOut) });
   })
   .patch(
     '/:id',
@@ -130,27 +154,13 @@ const integrations = new Hono<AppEnv>()
       const { id } = c.req.valid('param');
       const body = c.req.valid('json');
 
-      const existing = await db
-        .select()
-        .from(integration)
-        .where(and(eq(integration.id, id), eq(integration.organizationId, orgId)))
-        .limit(1);
-      if (!existing[0]) throw new NotFoundError('Integration not found');
-
-      const updated = await db
-        .update(integration)
-        .set({
-          ...(body.roles !== undefined ? { roles: body.roles } : {}),
-          ...(body.connection !== undefined ? { connection: body.connection } : {}),
-          ...(body.status !== undefined ? { status: body.status } : {}),
-          ...(body.config !== undefined ? { config: body.config } : {}),
-          ...(body.syncMode !== undefined ? { syncMode: body.syncMode } : {}),
-        })
-        .where(and(eq(integration.id, id), eq(integration.organizationId, orgId)))
-        .returning();
-      const row = updated[0];
-      /* v8 ignore next -- @preserve defensive: the integration was verified to exist above */
-      if (!row) throw new NotFoundError('Integration not found');
+      await loadIntegration(orgId, id);
+      const row = await setIntegration(id, {
+        ...(body.roles !== undefined ? { roles: body.roles } : {}),
+        ...(body.connection !== undefined ? { connection: body.connection } : {}),
+        ...(body.config !== undefined ? { config: body.config } : {}),
+        ...(body.syncMode !== undefined ? { syncMode: body.syncMode } : {}),
+      });
       return ok(c, IntegrationOut, toOut(row));
     },
   )
@@ -165,6 +175,57 @@ const integrations = new Hono<AppEnv>()
     if (!row) throw new NotFoundError('Integration not found');
     return ok(c, IntegrationOut, toOut(row));
   })
+  .post('/:id/verify', capabilityGuard('manage'), zParam(idParam), async (c) => {
+    const { orgId, actorId } = c.get('actorCtx');
+    const { id } = c.req.valid('param');
+    const row = await loadIntegration(orgId, id);
+
+    const provider = asConnectorProvider(row.provider);
+    if (!provider)
+      throw new ConflictError('Integration provider does not support connection checks');
+
+    // The ONLY place that promotes an integration to `connected` at connect time: a credential
+    // must actually resolve the external account here. Failures are recorded as `error` with a
+    // real reason and returned as 200 (the truthful integration state), never thrown away.
+    const tokenResult = await resolveConnectorToken(actorId, provider);
+    if (!tokenResult.ok) {
+      const updated = await setIntegration(id, {
+        status: 'error',
+        lastError: tokenResult.message,
+        lastErrorAt: new Date(),
+      });
+      return ok(c, IntegrationOut, toOut(updated));
+    }
+
+    try {
+      const result = await connectorFor(provider, tokenResult.token).connect({
+        provider,
+        referenceId: orgId,
+        ...(row.connection.externalWorkspaceId
+          ? { externalWorkspaceId: row.connection.externalWorkspaceId }
+          : {}),
+      });
+      if (result.status !== 'connected') throw new Error('Connection check did not succeed');
+      const updated = await setIntegration(id, {
+        status: 'connected',
+        lastError: null,
+        lastErrorAt: null,
+        connection: {
+          ...row.connection,
+          ...(result.account !== undefined ? { account: result.account } : {}),
+        },
+      });
+      return ok(c, IntegrationOut, toOut(updated));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Connection check failed';
+      const updated = await setIntegration(id, {
+        status: 'error',
+        lastError: message,
+        lastErrorAt: new Date(),
+      });
+      return ok(c, IntegrationOut, toOut(updated));
+    }
+  })
   .post(
     '/:id/import',
     capabilityGuard('contribute'),
@@ -175,19 +236,18 @@ const integrations = new Hono<AppEnv>()
       const { id } = c.req.valid('param');
       const { assignToImporter } = c.req.valid('json');
 
-      const rows = await db
-        .select()
-        .from(integration)
-        .where(and(eq(integration.id, id), eq(integration.organizationId, orgId)))
-        .limit(1);
-      const row = rows[0];
-      if (!row) throw new NotFoundError('Integration not found');
+      const row = await loadIntegration(orgId, id);
 
       const provider = asConnectorProvider(row.provider);
       if (!provider) throw new ConflictError('Integration provider does not support import');
 
-      const token = await resolveConnectorToken(actorId, provider);
-      if (!token) {
+      const tokenResult = await resolveConnectorToken(actorId, provider);
+      if (!tokenResult.ok) {
+        await setIntegration(id, {
+          status: 'error',
+          lastError: tokenResult.message,
+          lastErrorAt: new Date(),
+        });
         throw new ConflictError(
           `Sign in with ${socialProviderId(provider)} to import from this integration.`,
         );
@@ -197,7 +257,7 @@ const integrations = new Hono<AppEnv>()
 
       let items: ImportedItem[];
       try {
-        items = await connectorFor(provider, token).importWork({
+        items = await connectorFor(provider, tokenResult.token).importWork({
           connectionId: row.id,
           provider,
           ...(row.connection.externalWorkspaceId
@@ -205,9 +265,9 @@ const integrations = new Hono<AppEnv>()
             : {}),
         });
       } catch (err) {
-        throw new ConflictError(
-          err instanceof Error ? err.message : 'Connector failed to import work',
-        );
+        const message = err instanceof Error ? err.message : 'Connector failed to import work';
+        await setIntegration(id, { status: 'error', lastError: message, lastErrorAt: new Date() });
+        throw new ConflictError(message);
       }
 
       // Onboarding sends `assignToImporter: true` so the owner's freshly-mirrored work lands
@@ -215,71 +275,29 @@ const integrations = new Hono<AppEnv>()
       const created = await importItems(orgId, actorId, row.id, teamId, items, {
         assigneeId: assignToImporter ? actorId : null,
       });
+      // The import succeeded against the real provider, so the connection is proven healthy.
+      await setIntegration(id, {
+        status: 'connected',
+        lastSyncStatus: 'succeeded',
+        lastSyncedAt: new Date(),
+        lastError: null,
+        lastErrorAt: null,
+      });
       return ok(c, pageOf(TaskOut), { items: created });
     },
   )
   .post('/:id/sync', capabilityGuard('manage'), zParam(idParam), async (c) => {
     const { orgId, actorId } = c.get('actorCtx');
     const { id } = c.req.valid('param');
+    const row = await loadIntegration(orgId, id);
 
-    const rows = await db
-      .select()
-      .from(integration)
-      .where(and(eq(integration.id, id), eq(integration.organizationId, orgId)))
-      .limit(1);
-    const row = rows[0];
-    if (!row) throw new NotFoundError('Integration not found');
-
-    const provider = asConnectorProvider(row.provider);
-    if (!provider) throw new ConflictError('Integration provider does not support sync');
-
-    const token = await resolveConnectorToken(actorId, provider);
-    if (!token) {
-      throw new ConflictError(
-        `Sign in with ${socialProviderId(provider)} to sync this integration.`,
-      );
+    if (!asConnectorProvider(row.provider)) {
+      throw new ConflictError('Integration provider does not support sync');
     }
 
-    const teamId = await resolveImportTeam(orgId, row);
-
-    let syncItems: ImportedItem[];
-    let created: Awaited<ReturnType<typeof importItems>>;
-    try {
-      syncItems = await connectorFor(provider, token).importWork({
-        connectionId: row.id,
-        provider,
-        ...(row.connection.externalWorkspaceId
-          ? { externalWorkspaceId: row.connection.externalWorkspaceId }
-          : {}),
-      });
-      created = await importItems(orgId, actorId, row.id, teamId, syncItems, { assigneeId: null });
-    } catch (err) {
-      const failedJob: SyncJob = {
-        jobId: nextSyncJobId(),
-        organizationId: orgId,
-        integrationId: row.id,
-        status: 'failed',
-        processed: 0,
-        total: 0,
-        error: err instanceof Error ? err.message : 'Connector error',
-        createdAt: new Date().toISOString(),
-      };
-      SYNC_JOBS.set(failedJob.jobId, failedJob);
-      return ok(c, SyncJobOut, toSyncJobOut(failedJob));
-    }
-
-    const job: SyncJob = {
-      jobId: nextSyncJobId(),
-      organizationId: orgId,
-      integrationId: row.id,
-      status: 'succeeded',
-      processed: created.length,
-      total: syncItems.length,
-      error: null,
-      createdAt: new Date().toISOString(),
-    };
-    SYNC_JOBS.set(job.jobId, job);
-    return ok(c, SyncJobOut, toSyncJobOut(job));
+    const run = await runSync(row, { actorId, trigger: 'manual' });
+    if (!run) throw new ConflictError('A sync is already in progress for this integration.');
+    return ok(c, SyncRunOut, toSyncRunOut(run));
   });
 
 export default integrations;

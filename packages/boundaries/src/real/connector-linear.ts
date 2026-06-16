@@ -5,8 +5,10 @@ import type {
   MirrorResult,
   MirrorStatusInput,
 } from '../ports/connector';
+import { ConnectorError } from '../ports/connector-error';
 import type { ConnectorProviderClient } from './connector-provider-client';
 import type { ProviderHttp } from './connector-http';
+import { MAX_IMPORT_PAGES, logConnectorTruncation } from './connector-log';
 
 /** Shape of one Linear issue node as returned by the GraphQL issues query. */
 interface LinearIssueNode {
@@ -40,17 +42,30 @@ export class LinearProviderClient implements ConnectorProviderClient {
   /** @param http - The provider HTTP wrapper bound to Linear. */
   constructor(private readonly http: ProviderHttp) {}
 
-  /** Run one GraphQL query and return its `data` payload, surfacing GraphQL errors. */
+  /**
+   * Run one GraphQL query and return its `data` payload, surfacing GraphQL errors.
+   *
+   * @remarks
+   * Linear can answer a 200 with a populated `errors[]` (e.g. an expired token surfaces as an
+   * "authentication"/"access" GraphQL error rather than a 401), so these are raised as typed
+   * {@link ConnectorError}s — auth-shaped messages become `auth` (re-auth needed) and the rest
+   * `provider` — instead of a generic untyped throw the caller can't reason about.
+   */
   private async query<T>(query: string): Promise<T> {
     const json = (await this.http.postJson('/graphql', { query })) as {
       data?: T;
       errors?: { message: string }[];
     };
     if (json.errors && json.errors.length > 0) {
-      throw new Error(`linear GraphQL error: ${json.errors.map((e) => e.message).join('; ')}`);
+      const message = json.errors.map((e) => e.message).join('; ');
+      const kind = /auth|unauthorized|access|token|forbidden/i.test(message) ? 'auth' : 'provider';
+      throw new ConnectorError(`linear GraphQL error: ${message}`, { provider: 'linear', kind });
     }
     if (json.data === undefined) {
-      throw new Error('linear GraphQL response missing data');
+      throw new ConnectorError('linear GraphQL response missing data', {
+        provider: 'linear',
+        kind: 'provider',
+      });
     }
     return json.data;
   }
@@ -79,7 +94,7 @@ export class LinearProviderClient implements ConnectorProviderClient {
     };
   }
 
-  /** Fetch all Linear issues via cursor pagination (max 10 pages / 1 000 items). */
+  /** Fetch all Linear issues via cursor pagination, warning if the safety bound truncates results. */
   private async fetchAllIssues(): Promise<LinearIssueNode[]> {
     interface Page {
       issues?: {
@@ -89,12 +104,22 @@ export class LinearProviderClient implements ConnectorProviderClient {
     }
     const all: LinearIssueNode[] = [];
     let cursor: string | undefined;
-    for (let page = 0; page < 10; page++) {
+    let truncated = false;
+    for (let page = 0; page < MAX_IMPORT_PAGES; page++) {
       const data = await this.query<Page>(LinearProviderClient.issuesQuery(cursor));
       all.push(...(data.issues?.nodes ?? []));
       const pageInfo = data.issues?.pageInfo;
       if (!pageInfo?.hasNextPage || !pageInfo.endCursor) break;
       cursor = pageInfo.endCursor;
+      if (page === MAX_IMPORT_PAGES - 1) truncated = true;
+    }
+    if (truncated) {
+      logConnectorTruncation({
+        provider: 'linear',
+        resource: 'issues',
+        fetched: all.length,
+        maxPages: MAX_IMPORT_PAGES,
+      });
     }
     return all;
   }

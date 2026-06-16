@@ -6,11 +6,13 @@
  * @remarks
  * A categorized directory of the providers Docket can connect to (from
  * `…/integrations/directory`), cross-referenced with the org's existing integrations (from
- * `…/integrations`). Each provider card shows its recommended pattern and what it contributes;
- * a not-yet-configured provider is marked "Available to configure" and expands the
- * {@link ConnectWizard} (which forces the Migration vs Connector choice before creating
- * anything). A configured provider shows its actual pattern + status drawn from the API — never
- * a fabricated "connected" state — which matters in local dev where no real providers exist.
+ * `…/integrations`). Every state shown is the SERVER's truth — a card is "Connected" only after
+ * `POST /:id/verify` actually validated the credential, and a failed connection/sync surfaces
+ * its persisted `lastError` (which survives reload), never a fabricated or ephemeral state.
+ *
+ * Connecting is a two-beat, validate-before-connected flow: create the integration (`pending`),
+ * then either run the provider's OAuth consent redirect (production) or validate directly
+ * against the mock connector (local) before anything reads as connected.
  *
  * Data is fetched at runtime, so the production build needs no running server.
  */
@@ -19,18 +21,26 @@ import type {
   IntegrationOut,
   IntegrationPattern,
   IntegrationRole,
-  SyncJobOut,
+  SyncRunOut,
 } from '@docket/types';
 import { Skeleton } from '@docket/ui/primitives';
+import { useQueryClient } from '@tanstack/react-query';
+import { useRouter, useSearchParams } from 'next/navigation';
 import type { JSX } from 'react';
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { api } from '@/lib/api';
+import { authClient } from '@/lib/auth-client';
+import { readError } from '@/lib/problem';
 import { queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
 
 import { DisconnectConfirmDialog } from './disconnect-confirm-dialog';
 import { IntegrationProviderCard } from './integration-provider-card';
-import { categoryLabel } from './integrations-config';
+import {
+  categoryLabel,
+  connectorOAuthConfigured,
+  socialProviderForConnector,
+} from './integrations-config';
 
 /** Props for {@link IntegrationsTab}. */
 export interface IntegrationsTabProps {
@@ -54,12 +64,16 @@ export function IntegrationsTab({
   canManage,
   isPersonal = false,
 }: IntegrationsTabProps): JSX.Element {
+  const qc = useQueryClient();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
   const [openProvider, setOpenProvider] = useState<string | null>(null);
-  const [syncFeedback, setSyncFeedback] = useState<Record<string, string | null>>({});
+  const [busyProvider, setBusyProvider] = useState<string | null>(null);
   const [syncingId, setSyncingId] = useState<string | null>(null);
-  const [syncErrors, setSyncErrors] = useState<Record<string, string | null>>({});
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
-  const [disconnectErrors, setDisconnectErrors] = useState<Record<string, string | null>>({});
+  const [syncFeedback, setSyncFeedback] = useState<Record<string, string | null>>({});
+  const [actionErrors, setActionErrors] = useState<Record<string, string | null>>({});
   const [confirmDisconnect, setConfirmDisconnect] = useState<{
     id: string;
     providerName: string;
@@ -81,48 +95,126 @@ export function IntegrationsTab({
   const loading = directoryQ.isPending;
   const loadError = directoryQ.isError ? directoryQ.error.message : null;
 
-  const connect = useApiMutation({
-    mutationFn: (input: {
-      provider: string;
-      pattern: IntegrationPattern;
-      roles: readonly IntegrationRole[];
-    }) =>
-      unwrap(
-        () =>
-          api.v1.orgs[':orgId'].integrations.$post({
-            param: { orgId },
-            json: {
-              provider: input.provider,
-              pattern: input.pattern,
-              ...(input.roles.length > 0 ? { roles: [...input.roles] } : {}),
-              syncMode: input.pattern === 'migration' ? 'import' : 'mirror',
-            },
-          }),
-        'Could not connect this integration.',
-      ),
-    onSuccess: () => {
-      setOpenProvider(null);
+  const setActionError = useCallback((provider: string, message: string | null) => {
+    setActionErrors((prev) => ({ ...prev, [provider]: message }));
+  }, []);
+
+  const refreshIntegrations = useCallback(
+    () => qc.invalidateQueries({ queryKey: queryKeys.integrations(orgId) }),
+    [qc, orgId],
+  );
+
+  /**
+   * Validate (or repair) a connection: in production launch the provider's OAuth consent
+   * redirect (which returns to this page with `?verify=<id>`); in local/mock dev validate
+   * directly. Only a successful validation lets the card read as connected.
+   */
+  const finishConnection = useCallback(
+    async (id: string, provider: string): Promise<void> => {
+      if (connectorOAuthConfigured(provider)) {
+        const callbackURL = `${window.location.pathname}?verify=${id}`;
+        await authClient.linkSocial({
+          provider: socialProviderForConnector(provider),
+          callbackURL,
+        });
+        return; // the browser redirects to the provider's consent screen
+      }
+      const verified = await unwrap(
+        () => api.v1.orgs[':orgId'].integrations[':id'].verify.$post({ param: { orgId, id } }),
+        'Could not validate this connection.',
+      );
+      await refreshIntegrations();
+      if (verified.status !== 'connected') {
+        setActionError(provider, verified.lastError ?? 'Connection could not be validated.');
+      }
     },
-    invalidateKeys: [queryKeys.integrations(orgId)],
-  });
-  const connecting = connect.isPending;
-  const connectError = connect.isError ? connect.error.message : null;
+    [orgId, refreshIntegrations, setActionError],
+  );
+
+  /** Create a brand-new integration (pending), then validate it before it reads as connected. */
+  const runConnect = useCallback(
+    async (
+      provider: string,
+      pattern: IntegrationPattern,
+      roles: readonly IntegrationRole[],
+    ): Promise<void> => {
+      setBusyProvider(provider);
+      setActionError(provider, null);
+      try {
+        const created = await unwrap(
+          () =>
+            api.v1.orgs[':orgId'].integrations.$post({
+              param: { orgId },
+              json: {
+                provider,
+                pattern,
+                ...(roles.length > 0 ? { roles: [...roles] } : {}),
+                syncMode: pattern === 'migration' ? 'import' : 'mirror',
+              },
+            }),
+          'Could not connect this integration.',
+        );
+        await refreshIntegrations();
+        setOpenProvider(null);
+        await finishConnection(created.id, provider);
+      } catch (err) {
+        setActionError(provider, readError(err, 'Could not connect this integration.'));
+      } finally {
+        setBusyProvider(null);
+      }
+    },
+    [orgId, finishConnection, refreshIntegrations, setActionError],
+  );
+
+  /** Finish/repair an existing integration's connection. */
+  const runReconnect = useCallback(
+    async (existing: IntegrationOut): Promise<void> => {
+      setBusyProvider(existing.provider);
+      setActionError(existing.provider, null);
+      try {
+        await finishConnection(existing.id, existing.provider);
+      } catch (err) {
+        setActionError(existing.provider, readError(err, 'Could not reconnect this integration.'));
+      } finally {
+        setBusyProvider(null);
+      }
+    },
+    [finishConnection, setActionError],
+  );
+
+  // OAuth return: the consent redirect lands back here with `?verify=<id>`. Validate that
+  // integration, refresh, then strip the param so a reload doesn't re-run it. `verify` is
+  // idempotent, so a StrictMode double-invoke or redundant replace is harmless.
+  const verifyReturnId = searchParams.get('verify');
+  useEffect(() => {
+    if (!verifyReturnId) return;
+    void (async () => {
+      try {
+        await unwrap(
+          () =>
+            api.v1.orgs[':orgId'].integrations[':id'].verify.$post({
+              param: { orgId, id: verifyReturnId },
+            }),
+          'Could not validate this connection.',
+        );
+        await refreshIntegrations();
+      } finally {
+        router.replace(window.location.pathname);
+      }
+    })();
+  }, [verifyReturnId, orgId, refreshIntegrations, router]);
 
   const sync = useApiMutation({
     mutationFn: (id: string) =>
       unwrap(
-        () =>
-          api.v1.orgs[':orgId'].integrations[':id'].sync.$post({
-            param: { orgId, id },
-          }),
+        () => api.v1.orgs[':orgId'].integrations[':id'].sync.$post({ param: { orgId, id } }),
         'Sync failed.',
       ),
-    onSuccess: (data: SyncJobOut, id: string) => {
+    onSuccess: (data: SyncRunOut, id: string) => {
       setSyncingId(null);
-      if (data.status === 'failed') {
-        setSyncErrors((prev) => ({ ...prev, [id]: data.error ?? 'Sync failed.' }));
-        return;
-      }
+      // A failed run already persisted `status: error` + `lastError` on the integration, so the
+      // invalidation below repaints the card from that server truth — no ephemeral error needed.
+      if (data.status === 'failed') return;
       const count = data.processed;
       const msg = count === 0 ? 'Up to date.' : `Synced ${count} item${count === 1 ? '' : 's'}.`;
       setSyncFeedback((prev) => ({ ...prev, [id]: msg }));
@@ -132,7 +224,8 @@ export function IntegrationsTab({
     },
     onError: (err: { message: string }, id: string) => {
       setSyncingId(null);
-      setSyncErrors((prev) => ({ ...prev, [id]: err.message }));
+      const provider = integrations.find((i) => i.id === id)?.provider;
+      if (provider) setActionError(provider, err.message);
     },
     invalidateKeys: [queryKeys.integrations(orgId)],
   });
@@ -140,19 +233,18 @@ export function IntegrationsTab({
   const disconnect = useApiMutation({
     mutationFn: (id: string) =>
       unwrap(
-        () =>
-          api.v1.orgs[':orgId'].integrations[':id'].$delete({
-            param: { orgId, id },
-          }),
+        () => api.v1.orgs[':orgId'].integrations[':id'].$delete({ param: { orgId, id } }),
         'Could not disconnect this integration.',
       ),
     onSuccess: (_data: unknown, id: string) => {
       setDisconnectingId(null);
-      setDisconnectErrors((prev) => ({ ...prev, [id]: null }));
+      const provider = integrations.find((i) => i.id === id)?.provider;
+      if (provider) setActionError(provider, null);
     },
     onError: (err: { message: string }, id: string) => {
       setDisconnectingId(null);
-      setDisconnectErrors((prev) => ({ ...prev, [id]: err.message }));
+      const provider = integrations.find((i) => i.id === id)?.provider;
+      if (provider) setActionError(provider, err.message);
     },
     invalidateKeys: [queryKeys.integrations(orgId)],
   });
@@ -190,12 +282,19 @@ export function IntegrationsTab({
 
   if (loadError) {
     return (
-      <p
+      <div
         role="alert"
-        className="border-outline-variant text-destructive text-body rounded-lg border p-4"
+        className="border-outline-variant text-on-surface-variant flex flex-col items-start gap-3 rounded-lg border p-4"
       >
-        {loadError}
-      </p>
+        <p className="text-destructive text-body">{loadError}</p>
+        <button
+          type="button"
+          onClick={() => void directoryQ.refetch()}
+          className="focus-visible:ring-ring text-primary hover:bg-surface-container-high text-body rounded-md px-3 py-1.5 font-medium transition-colors outline-none focus-visible:ring-1"
+        >
+          Retry
+        </button>
+      </div>
     );
   }
 
@@ -229,21 +328,25 @@ export function IntegrationsTab({
                   existing={existing}
                   isOpen={isOpen}
                   canManage={canManage}
-                  syncingId={syncingId}
-                  disconnectingId={disconnectingId}
-                  syncFeedback={syncFeedback}
-                  syncErrors={syncErrors}
-                  disconnectErrors={disconnectErrors}
-                  connecting={connecting}
-                  connectError={connectError}
+                  busy={busyProvider === provider.provider}
+                  syncing={existing ? syncingId === existing.id : false}
+                  disconnecting={existing ? disconnectingId === existing.id : false}
+                  syncFeedback={existing ? (syncFeedback[existing.id] ?? null) : null}
+                  actionError={actionErrors[provider.provider] ?? null}
                   onToggleOpen={() => {
-                    connect.reset();
+                    setActionError(provider.provider, null);
                     setOpenProvider(isOpen ? null : provider.provider);
+                  }}
+                  onConnect={(pattern) => {
+                    void runConnect(provider.provider, pattern, provider.roles);
+                  }}
+                  onReconnect={() => {
+                    if (existing) void runReconnect(existing);
                   }}
                   onSync={() => {
                     if (existing) {
                       setSyncFeedback((prev) => ({ ...prev, [existing.id]: null }));
-                      setSyncErrors((prev) => ({ ...prev, [existing.id]: null }));
+                      setActionError(provider.provider, null);
                       setSyncingId(existing.id);
                       sync.mutate(existing.id);
                     }
@@ -252,9 +355,6 @@ export function IntegrationsTab({
                     if (existing) {
                       setConfirmDisconnect({ id: existing.id, providerName: provider.name });
                     }
-                  }}
-                  onConnect={(pattern) => {
-                    connect.mutate({ provider: provider.provider, pattern, roles: provider.roles });
                   }}
                 />
               );

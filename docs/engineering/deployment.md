@@ -211,3 +211,35 @@ gcloud run services update docket-api --region=<REGION> --project=<PROJECT_ID>
 1. Add the var to the `env_vars:` block in the `deploy-api` job in `.github/workflows/deploy.yml`.
 2. If it's sensitive, create the Secret Manager secret and add it to the `secrets:` block instead.
 3. Push to `main` — the next deploy picks it up.
+
+### Scheduled jobs (Cloud Scheduler)
+
+Cloud Run is scale-to-zero, so there is no in-process worker — scheduled work is driven by
+**Cloud Scheduler** POSTing to a secret-guarded cron endpoint on the API. Each endpoint checks
+`CRON_SECRET` (sent as `Authorization: Bearer …` or `x-cron-secret`) and is idempotent.
+
+| Endpoint                        | Purpose                                                        | Suggested cadence |
+| ------------------------------- | -------------------------------------------------------------- | ----------------- |
+| `POST /v1/cron/lifecycle-sweep` | Advance orgs through the data-lifecycle deletion state machine | daily             |
+| `POST /v1/cron/sync-connectors` | Re-mirror every due connector integration (auto-sync)          | every 15 min      |
+
+Provision the connector-sync schedule once per environment (the secret lives in
+`docket-cron-secret`):
+
+```bash
+CRON_SECRET="$(gcloud secrets versions access latest --secret=docket-cron-secret --project=<PROJECT_ID>)"
+API_URL="https://<docket-api-host>"
+
+gcloud scheduler jobs create http docket-sync-connectors \
+  --project=<PROJECT_ID> --location=<REGION> \
+  --schedule="*/15 * * * *" \
+  --uri="${API_URL}/v1/cron/sync-connectors" \
+  --http-method=POST \
+  --headers="x-cron-secret=${CRON_SECRET}"
+```
+
+> Until this scheduler job exists, connectors do **not** auto-sync in that environment —
+> manual "Sync now" and the honest-status flows still work, but background mirroring is dormant.
+> The connector's `syncCadenceMinutes` (default 60) gates which integrations a given sweep
+> actually re-syncs, so the scheduler can safely run more often than any single integration's
+> cadence.

@@ -3,7 +3,6 @@ lockfileVersion: '9.0'
 settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
-  injectWorkspacePackages: true
 
 catalogs:
   default:
@@ -138,8 +137,8 @@ importers:
         specifier: ^4.22.4
         version: 4.22.4
       turbo:
-        specifier: ^2.9.16
-        version: 2.9.16
+        specifier: ^2.9.18
+        version: 2.9.18
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -157,7 +156,7 @@ importers:
     dependencies:
       '@better-auth/passkey':
         specifier: 'catalog:'
-        version: 1.6.14(@better-auth/core@1.6.14(@better-auth/utils@0.4.1)(@better-fetch/fetch@1.1.21)(better-call@1.3.5(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0))(@better-auth/utils@0.4.1)(@better-fetch/fetch@1.1.21)(better-auth@1.6.14(@prisma/client@5.22.0)(better-sqlite3@12.10.0)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@electric-sql/pglite@0.5.1)(@neondatabase/serverless@1.1.0)(@prisma/client@5.22.0)(@types/pg@8.20.0)(better-sqlite3@12.10.0)(kysely@0.29.2)(pg@8.21.0)(postgres@3.4.9))(next@16.2.7(@babel/core@7.29.7)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(pg@8.21.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@4.1.8))(better-call@1.3.5(zod@4.4.3))(nanostores@1.3.0)
+        version: 1.6.14(@better-auth/core@1.6.14(@better-auth/utils@0.4.1)(@better-fetch/fetch@1.1.21)(better-call@1.3.5(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0))(@better-auth/utils@0.4.1)(@better-fetch/fetch@1.1.21)(better-auth@1.6.14(@prisma/client@5.22.0)(better-sqlite3@12.10.0)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@electric-sql/pglite@0.5.1)(@neondatabase/serverless@1.1.0)(@prisma/client@5.22.0)(@types/pg@8.20.0)(better-sqlite3@12.10.0)(kysely@0.29.2)(pg@8.21.0)(postgres@3.4.9))(next@16.2.7(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(pg@8.21.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@4.1.8))(better-call@1.3.5(zod@4.4.3))(nanostores@1.3.0)
       '@docket/api':
         specifier: workspace:*
         version: link:../api
@@ -181,7 +180,7 @@ importers:
         version: 9.0.1(@emotion/cache@11.14.0)(@emotion/react@11.14.0(@types/react@19.2.17)(react@19.2.7))(@emotion/server@11.11.0)(@types/react@19.2.17)(next@16.2.7(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7)
       better-auth:
         specifier: 'catalog:'
-        version: 1.6.14(@prisma/client@5.22.0)(better-sqlite3@12.10.0)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@electric-sql/pglite@0.5.1)(@neondatabase/serverless@1.1.0)(@prisma/client@5.22.0)(@types/pg@8.20.0)(better-sqlite3@12.10.0)(kysely@0.29.2)(pg@8.21.0)(postgres@3.4.9))(next@16.2.7(@babel/core@7.29.7)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(pg@8.21.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@4.1.8)
+        version: 1.6.14(@prisma/client@5.22.0)(better-sqlite3@12.10.0)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@electric-sql/pglite@0.5.1)(@neondatabase/serverless@1.1.0)(@prisma/client@5.22.0)(@types/pg@8.20.0)(better-sqlite3@12.10.0)(kysely@0.29.2)(pg@8.21.0)(postgres@3.4.9))(next@16.2.7(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(pg@8.21.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@4.1.8)
       hono:
         specifier: 'catalog:'
         version: 4.12.23
@@ -200,7 +199,7 @@ importers:
     devDependencies:
       '@docket/eslint-config':
         specifier: workspace:*
-        version: file:tooling/eslint-config(eslint@10.4.1(jiti@2.7.0))(typescript@6.0.3)
+        version: link:../../tooling/eslint-config
       '@docket/tsconfig':
         specifier: workspace:*
         version: link:../../tooling/tsconfig
@@ -224,7 +223,7 @@ importers:
     dependencies:
       '@docket/auth':
         specifier: workspace:*
-        version: file:packages/auth(@better-auth/core@1.6.14(@better-auth/utils@0.4.1)(@better-fetch/fetch@1.1.21)(better-call@1.3.5(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0))(@better-auth/utils@0.4.1)(@better-fetch/fetch@1.1.21)(@prisma/client@5.22.0)(@types/pg@8.20.0)(better-call@1.3.5(zod@4.4.3))(better-sqlite3@12.10.0)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@electric-sql/pglite@0.5.1)(@neondatabase/serverless@1.1.0)(@prisma/client@5.22.0)(@types/pg@8.20.0)(better-sqlite3@12.10.0)(kysely@0.29.2)(pg@8.21.0)(postgres@3.4.9))(kysely@0.29.2)(nanostores@1.3.0)(next@16.2.7(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(pg@8.21.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(typescript@6.0.3)(vitest@4.1.8)
+        version: link:../../packages/auth
       '@docket/authz':
         specifier: workspace:*
         version: link:../../packages/authz
@@ -267,7 +266,7 @@ importers:
     devDependencies:
       '@docket/eslint-config':
         specifier: workspace:*
-        version: file:tooling/eslint-config(eslint@10.4.1(jiti@2.7.0))(typescript@6.0.3)
+        version: link:../../tooling/eslint-config
       '@docket/tsconfig':
         specifier: workspace:*
         version: link:../../tooling/tsconfig
@@ -288,7 +287,7 @@ importers:
     dependencies:
       '@better-auth/passkey':
         specifier: 'catalog:'
-        version: 1.6.14(@better-auth/core@1.6.14(@better-auth/utils@0.4.1)(@better-fetch/fetch@1.1.21)(better-call@1.3.5(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0))(@better-auth/utils@0.4.1)(@better-fetch/fetch@1.1.21)(better-auth@1.6.14(@prisma/client@5.22.0)(better-sqlite3@12.10.0)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@electric-sql/pglite@0.5.1)(@neondatabase/serverless@1.1.0)(@prisma/client@5.22.0)(@types/pg@8.20.0)(better-sqlite3@12.10.0)(kysely@0.29.2)(pg@8.21.0)(postgres@3.4.9))(next@16.2.7(@babel/core@7.29.7)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(pg@8.21.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@4.1.8))(better-call@1.3.5(zod@4.4.3))(nanostores@1.3.0)
+        version: 1.6.14(@better-auth/core@1.6.14(@better-auth/utils@0.4.1)(@better-fetch/fetch@1.1.21)(better-call@1.3.5(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0))(@better-auth/utils@0.4.1)(@better-fetch/fetch@1.1.21)(better-auth@1.6.14(@prisma/client@5.22.0)(better-sqlite3@12.10.0)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@electric-sql/pglite@0.5.1)(@neondatabase/serverless@1.1.0)(@prisma/client@5.22.0)(@types/pg@8.20.0)(better-sqlite3@12.10.0)(kysely@0.29.2)(pg@8.21.0)(postgres@3.4.9))(next@16.2.7(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(pg@8.21.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@4.1.8))(better-call@1.3.5(zod@4.4.3))(nanostores@1.3.0)
       '@docket/api':
         specifier: workspace:*
         version: link:../api
@@ -315,7 +314,7 @@ importers:
         version: 5.101.0(react@19.2.7)
       better-auth:
         specifier: 'catalog:'
-        version: 1.6.14(@prisma/client@5.22.0)(better-sqlite3@12.10.0)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@electric-sql/pglite@0.5.1)(@neondatabase/serverless@1.1.0)(@prisma/client@5.22.0)(@types/pg@8.20.0)(better-sqlite3@12.10.0)(kysely@0.29.2)(pg@8.21.0)(postgres@3.4.9))(next@16.2.7(@babel/core@7.29.7)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(pg@8.21.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@4.1.8)
+        version: 1.6.14(@prisma/client@5.22.0)(better-sqlite3@12.10.0)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@electric-sql/pglite@0.5.1)(@neondatabase/serverless@1.1.0)(@prisma/client@5.22.0)(@types/pg@8.20.0)(better-sqlite3@12.10.0)(kysely@0.29.2)(pg@8.21.0)(postgres@3.4.9))(next@16.2.7(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(pg@8.21.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@4.1.8)
       hono:
         specifier: 'catalog:'
         version: 4.12.23
@@ -334,7 +333,7 @@ importers:
     devDependencies:
       '@docket/eslint-config':
         specifier: workspace:*
-        version: file:tooling/eslint-config(eslint@10.4.1(jiti@2.7.0))(typescript@6.0.3)
+        version: link:../../tooling/eslint-config
       '@docket/tsconfig':
         specifier: workspace:*
         version: link:../../tooling/tsconfig
@@ -379,7 +378,7 @@ importers:
     dependencies:
       '@better-auth/passkey':
         specifier: 'catalog:'
-        version: 1.6.14(@better-auth/core@1.6.14(@better-auth/utils@0.4.1)(@better-fetch/fetch@1.1.21)(better-call@1.3.5(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0))(@better-auth/utils@0.4.1)(@better-fetch/fetch@1.1.21)(better-auth@1.6.14(@prisma/client@5.22.0)(better-sqlite3@12.10.0)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@electric-sql/pglite@0.5.1)(@neondatabase/serverless@1.1.0)(@prisma/client@5.22.0)(@types/pg@8.20.0)(better-sqlite3@12.10.0)(kysely@0.29.2)(pg@8.21.0)(postgres@3.4.9))(next@16.2.7(@babel/core@7.29.7)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(pg@8.21.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@4.1.8))(better-call@1.3.5(zod@4.4.3))(nanostores@1.3.0)
+        version: 1.6.14(@better-auth/core@1.6.14(@better-auth/utils@0.4.1)(@better-fetch/fetch@1.1.21)(better-call@1.3.5(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0))(@better-auth/utils@0.4.1)(@better-fetch/fetch@1.1.21)(better-auth@1.6.14(@prisma/client@5.22.0)(better-sqlite3@12.10.0)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@electric-sql/pglite@0.5.1)(@neondatabase/serverless@1.1.0)(@prisma/client@5.22.0)(@types/pg@8.20.0)(better-sqlite3@12.10.0)(kysely@0.29.2)(pg@8.21.0)(postgres@3.4.9))(next@16.2.7(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(pg@8.21.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@4.1.8))(better-call@1.3.5(zod@4.4.3))(nanostores@1.3.0)
       '@docket/db':
         specifier: workspace:*
         version: link:../db
@@ -394,14 +393,14 @@ importers:
         version: 13.3.1
       better-auth:
         specifier: 'catalog:'
-        version: 1.6.14(@prisma/client@5.22.0)(better-sqlite3@12.10.0)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@electric-sql/pglite@0.5.1)(@neondatabase/serverless@1.1.0)(@prisma/client@5.22.0)(@types/pg@8.20.0)(better-sqlite3@12.10.0)(kysely@0.29.2)(pg@8.21.0)(postgres@3.4.9))(next@16.2.7(@babel/core@7.29.7)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(pg@8.21.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@4.1.8)
+        version: 1.6.14(@prisma/client@5.22.0)(better-sqlite3@12.10.0)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@electric-sql/pglite@0.5.1)(@neondatabase/serverless@1.1.0)(@prisma/client@5.22.0)(@types/pg@8.20.0)(better-sqlite3@12.10.0)(kysely@0.29.2)(pg@8.21.0)(postgres@3.4.9))(next@16.2.7(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(pg@8.21.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@4.1.8)
     devDependencies:
       '@better-auth/cli':
         specifier: 'catalog:'
         version: 1.4.21(@better-fetch/fetch@1.1.21)(@electric-sql/pglite@0.5.1)(@neondatabase/serverless@1.1.0)(better-call@1.3.5(zod@4.4.3))(drizzle-kit@0.31.10)(jose@6.2.3)(kysely@0.29.2)(magicast@0.5.3)(nanostores@1.3.0)(next@16.2.7(@babel/core@7.29.7)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(postgres@3.4.9)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@4.1.8)
       '@docket/eslint-config':
         specifier: workspace:*
-        version: file:tooling/eslint-config(eslint@10.4.1(jiti@2.7.0))(typescript@6.0.3)
+        version: link:../../tooling/eslint-config
       '@docket/tsconfig':
         specifier: workspace:*
         version: link:../../tooling/tsconfig
@@ -435,7 +434,7 @@ importers:
     devDependencies:
       '@docket/eslint-config':
         specifier: workspace:*
-        version: file:tooling/eslint-config(eslint@10.4.1(jiti@2.7.0))(typescript@6.0.3)
+        version: link:../../tooling/eslint-config
       '@docket/tsconfig':
         specifier: workspace:*
         version: link:../../tooling/tsconfig
@@ -481,7 +480,7 @@ importers:
     devDependencies:
       '@docket/eslint-config':
         specifier: workspace:*
-        version: file:tooling/eslint-config(eslint@10.4.1(jiti@2.7.0))(typescript@6.0.3)
+        version: link:../../tooling/eslint-config
       '@docket/tsconfig':
         specifier: workspace:*
         version: link:../../tooling/tsconfig
@@ -524,7 +523,7 @@ importers:
     devDependencies:
       '@docket/eslint-config':
         specifier: workspace:*
-        version: file:tooling/eslint-config(eslint@10.4.1(jiti@2.7.0))(typescript@6.0.3)
+        version: link:../../tooling/eslint-config
       '@docket/tsconfig':
         specifier: workspace:*
         version: link:../../tooling/tsconfig
@@ -555,7 +554,7 @@ importers:
     devDependencies:
       '@docket/eslint-config':
         specifier: workspace:*
-        version: file:tooling/eslint-config(eslint@10.4.1(jiti@2.7.0))(typescript@6.0.3)
+        version: link:../../tooling/eslint-config
       '@docket/tsconfig':
         specifier: workspace:*
         version: link:../../tooling/tsconfig
@@ -577,7 +576,7 @@ importers:
     devDependencies:
       '@docket/eslint-config':
         specifier: workspace:*
-        version: file:tooling/eslint-config(eslint@10.4.1(jiti@2.7.0))(typescript@6.0.3)
+        version: link:../../tooling/eslint-config
       '@docket/tsconfig':
         specifier: workspace:*
         version: link:../../tooling/tsconfig
@@ -599,7 +598,7 @@ importers:
     devDependencies:
       '@docket/eslint-config':
         specifier: workspace:*
-        version: file:tooling/eslint-config(eslint@10.4.1(jiti@2.7.0))(typescript@6.0.3)
+        version: link:../../tooling/eslint-config
       '@docket/tsconfig':
         specifier: workspace:*
         version: link:../../tooling/tsconfig
@@ -672,7 +671,7 @@ importers:
     devDependencies:
       '@docket/eslint-config':
         specifier: workspace:*
-        version: file:tooling/eslint-config(eslint@10.4.1(jiti@2.7.0))(typescript@6.0.3)
+        version: link:../../tooling/eslint-config
       '@docket/tsconfig':
         specifier: workspace:*
         version: link:../../tooling/tsconfig
@@ -1172,23 +1171,6 @@ packages:
   '@csstools/css-tokenizer@4.0.0':
     resolution: {integrity: sha512-QxULHAm7cNu72w97JUNCBFODFaXpbDg+dP8b/oWFAZ2MTRppA3U00Y2L1HqaS4J6yBqxwa/Y3nMBaxVKbB/NsA==}
     engines: {node: '>=20.19.0'}
-
-  '@docket/auth@file:packages/auth':
-    resolution: {directory: packages/auth, type: directory}
-
-  '@docket/db@file:packages/db':
-    resolution: {directory: packages/db, type: directory}
-
-  '@docket/env@file:packages/env':
-    resolution: {directory: packages/env, type: directory}
-
-  '@docket/eslint-config@file:tooling/eslint-config':
-    resolution: {directory: tooling/eslint-config, type: directory}
-    peerDependencies:
-      eslint: ^9.17.0
-
-  '@docket/types@file:packages/types':
-    resolution: {directory: packages/types, type: directory}
 
   '@drizzle-team/brocli@0.10.2':
     resolution: {integrity: sha512-z33Il7l5dKjUgGULTqBsQBQwckHh5AbIuxhdsIxDDiZAzBOrZO6q9ogcWC65kU382AfynTfgNumVcNIjuIua6w==}
@@ -3164,33 +3146,33 @@ packages:
       '@types/react-dom':
         optional: true
 
-  '@turbo/darwin-64@2.9.16':
-    resolution: {integrity: sha512-jLjApWTSNd7JZ5JaLYfelW1ytnGQOvB7ivl+2RD1xQvJTbi8I9gBjzcga7tDZVPyaxpl10YTfJt3BrYXR18KDw==}
+  '@turbo/darwin-64@2.9.18':
+    resolution: {integrity: sha512-9f27peFu16ur8c0v9nUFUEyBnbKuuFsUTjHFWfmwGfzySBXbHwzU44QhZon6Mznz0cHsIr3984NQj/bVrnGSRw==}
     cpu: [x64]
     os: [darwin]
 
-  '@turbo/darwin-arm64@2.9.16':
-    resolution: {integrity: sha512-YPgrn+5HIGzrx0O2a631SV4MBQUe4W/DafMFUuBVgaU32PW9/OTT0ehviF0QSxTXuRJlHvW2eUTemddF5/spmw==}
+  '@turbo/darwin-arm64@2.9.18':
+    resolution: {integrity: sha512-9A6TMRq/Ib+QnbhLlgkhOm+624wO4pzSQ/yQviQfWHOlFvaYxdnIAYmu2H6TS6y7kSVL0DvzNe04NbESTOzFVQ==}
     cpu: [arm64]
     os: [darwin]
 
-  '@turbo/linux-64@2.9.16':
-    resolution: {integrity: sha512-vAEf1H6l26lTpl9FJ/peQo1NUB8RC0sbEJJz5mPcUhHA2bPDup2x3CZPgo/bH8S4cUcBLm4FN3UHd5iUO2RAew==}
+  '@turbo/linux-64@2.9.18':
+    resolution: {integrity: sha512-zCdIDtz69AnbYh913elJRRoF3QY5aa2HNnf+4rAkc7bQ+tWujiDkCNV7stazOUPggaDvhKIf2Z87qHftTeXSkw==}
     cpu: [x64]
     os: [linux]
 
-  '@turbo/linux-arm64@2.9.16':
-    resolution: {integrity: sha512-xDBLR2PZg4BrQOchfG6svgpv5FCNJ2TOtT2psLdEJcdKo1BH+pnPs9Xj6pvUjgfkHbuvBOfeE4R6tvxMoQKDHQ==}
+  '@turbo/linux-arm64@2.9.18':
+    resolution: {integrity: sha512-Va1kXI04naMgYwqv/5Dfa36dTDx8015U7oaQAjrXa45ua9OoFjSV4OmvkML4EmXvUclQHCiBRbY8bvd0jV7eAg==}
     cpu: [arm64]
     os: [linux]
 
-  '@turbo/windows-64@2.9.16':
-    resolution: {integrity: sha512-NBAJnaUiGdgkSzQwUIdOvkCkcpTSu58G/sBGa0mvBtzfvFOOgrQwepKOOQ8cp6sWM6OcKDNFj2p1dsZA1OWjPg==}
+  '@turbo/windows-64@2.9.18':
+    resolution: {integrity: sha512-m0kDhZANxSNz9ck1ybogFscHabriAsp4eDFNrN/1H5WrgTF7b3VlcPZnhuO3v2+E2KnCbeAc+UUT10BZZHdDKw==}
     cpu: [x64]
     os: [win32]
 
-  '@turbo/windows-arm64@2.9.16':
-    resolution: {integrity: sha512-Y7SJppD0Z8wjO3Ec0ZGd9KQ4Yv0BMnA8CIowj5Vp+OEVsosXDG2weK6/t1RRLfJmc2Ozrnd6y4DOgQys+mn3WQ==}
+  '@turbo/windows-arm64@2.9.18':
+    resolution: {integrity: sha512-nUdR8WqoomUys9iIQmG45TMiizJ+5BV8egSeLLZba/AWblyp3fVBcIH1kSE58OtK4g2YzbMJEth6Ttv9w5rqMA==}
     cpu: [arm64]
     os: [win32]
 
@@ -6417,8 +6399,8 @@ packages:
     resolution: {integrity: sha512-1h/Lnq9yajKY2PEbBadPXj3VxsDDu844OnaAo52UVmIzIvwwtBPIuNvkjuzBlTWpfJyUbG3ez0KSBibQkj4ojg==}
     engines: {node: '>=0.6.11 <=0.7.0 || >=0.7.3'}
 
-  turbo@2.9.16:
-    resolution: {integrity: sha512-NqgRQy6j6dPYcdSdv0q1g9QsZg7SWg87RERM8otw/1AtKU2yTFVClOM7cbwKzOonZr/Ek1blTBucw64L9H0Bwg==}
+  turbo@2.9.18:
+    resolution: {integrity: sha512-bwabv6PupzeavybzEoArBAkwq5fnzwf8OFnRtpHwnviFWuwJPFxtyH+aVp36TmIqK3aYYgtTJ3J0m2ysxxSzQg==}
     hasBin: true
 
   tw-animate-css@1.4.0:
@@ -7174,14 +7156,14 @@ snapshots:
       '@better-auth/core': 1.6.14(@better-auth/utils@0.4.1)(@better-fetch/fetch@1.1.21)(better-call@1.3.5(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0)
       '@better-auth/utils': 0.4.1
 
-  '@better-auth/passkey@1.6.14(@better-auth/core@1.6.14(@better-auth/utils@0.4.1)(@better-fetch/fetch@1.1.21)(better-call@1.3.5(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0))(@better-auth/utils@0.4.1)(@better-fetch/fetch@1.1.21)(better-auth@1.6.14(@prisma/client@5.22.0)(better-sqlite3@12.10.0)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@electric-sql/pglite@0.5.1)(@neondatabase/serverless@1.1.0)(@prisma/client@5.22.0)(@types/pg@8.20.0)(better-sqlite3@12.10.0)(kysely@0.29.2)(pg@8.21.0)(postgres@3.4.9))(next@16.2.7(@babel/core@7.29.7)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(pg@8.21.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@4.1.8))(better-call@1.3.5(zod@4.4.3))(nanostores@1.3.0)':
+  '@better-auth/passkey@1.6.14(@better-auth/core@1.6.14(@better-auth/utils@0.4.1)(@better-fetch/fetch@1.1.21)(better-call@1.3.5(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0))(@better-auth/utils@0.4.1)(@better-fetch/fetch@1.1.21)(better-auth@1.6.14(@prisma/client@5.22.0)(better-sqlite3@12.10.0)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@electric-sql/pglite@0.5.1)(@neondatabase/serverless@1.1.0)(@prisma/client@5.22.0)(@types/pg@8.20.0)(better-sqlite3@12.10.0)(kysely@0.29.2)(pg@8.21.0)(postgres@3.4.9))(next@16.2.7(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(pg@8.21.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@4.1.8))(better-call@1.3.5(zod@4.4.3))(nanostores@1.3.0)':
     dependencies:
       '@better-auth/core': 1.6.14(@better-auth/utils@0.4.1)(@better-fetch/fetch@1.1.21)(better-call@1.3.5(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0)
       '@better-auth/utils': 0.4.1
       '@better-fetch/fetch': 1.1.21
       '@simplewebauthn/browser': 13.3.0
       '@simplewebauthn/server': 13.3.1
-      better-auth: 1.6.14(@prisma/client@5.22.0)(better-sqlite3@12.10.0)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@electric-sql/pglite@0.5.1)(@neondatabase/serverless@1.1.0)(@prisma/client@5.22.0)(@types/pg@8.20.0)(better-sqlite3@12.10.0)(kysely@0.29.2)(pg@8.21.0)(postgres@3.4.9))(next@16.2.7(@babel/core@7.29.7)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(pg@8.21.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@4.1.8)
+      better-auth: 1.6.14(@prisma/client@5.22.0)(better-sqlite3@12.10.0)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@electric-sql/pglite@0.5.1)(@neondatabase/serverless@1.1.0)(@prisma/client@5.22.0)(@types/pg@8.20.0)(better-sqlite3@12.10.0)(kysely@0.29.2)(pg@8.21.0)(postgres@3.4.9))(next@16.2.7(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(pg@8.21.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@4.1.8)
       better-call: 1.3.5(zod@4.4.3)
       nanostores: 1.3.0
       zod: 4.4.3
@@ -7412,127 +7394,6 @@ snapshots:
       css-tree: 3.2.1
 
   '@csstools/css-tokenizer@4.0.0': {}
-
-  '@docket/auth@file:packages/auth(@better-auth/core@1.6.14(@better-auth/utils@0.4.1)(@better-fetch/fetch@1.1.21)(better-call@1.3.5(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0))(@better-auth/utils@0.4.1)(@better-fetch/fetch@1.1.21)(@prisma/client@5.22.0)(@types/pg@8.20.0)(better-call@1.3.5(zod@4.4.3))(better-sqlite3@12.10.0)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@electric-sql/pglite@0.5.1)(@neondatabase/serverless@1.1.0)(@prisma/client@5.22.0)(@types/pg@8.20.0)(better-sqlite3@12.10.0)(kysely@0.29.2)(pg@8.21.0)(postgres@3.4.9))(kysely@0.29.2)(nanostores@1.3.0)(next@16.2.7(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(pg@8.21.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(typescript@6.0.3)(vitest@4.1.8)':
-    dependencies:
-      '@better-auth/passkey': 1.6.14(@better-auth/core@1.6.14(@better-auth/utils@0.4.1)(@better-fetch/fetch@1.1.21)(better-call@1.3.5(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0))(@better-auth/utils@0.4.1)(@better-fetch/fetch@1.1.21)(better-auth@1.6.14(@prisma/client@5.22.0)(better-sqlite3@12.10.0)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@electric-sql/pglite@0.5.1)(@neondatabase/serverless@1.1.0)(@prisma/client@5.22.0)(@types/pg@8.20.0)(better-sqlite3@12.10.0)(kysely@0.29.2)(pg@8.21.0)(postgres@3.4.9))(next@16.2.7(@babel/core@7.29.7)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(pg@8.21.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@4.1.8))(better-call@1.3.5(zod@4.4.3))(nanostores@1.3.0)
-      '@docket/db': file:packages/db(@prisma/client@5.22.0)(@types/pg@8.20.0)(better-sqlite3@12.10.0)(kysely@0.29.2)(pg@8.21.0)(typescript@6.0.3)
-      '@docket/env': file:packages/env(typescript@6.0.3)
-      '@docket/types': file:packages/types
-      '@simplewebauthn/server': 13.3.1
-      better-auth: 1.6.14(@prisma/client@5.22.0)(better-sqlite3@12.10.0)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@electric-sql/pglite@0.5.1)(@neondatabase/serverless@1.1.0)(@prisma/client@5.22.0)(@types/pg@8.20.0)(better-sqlite3@12.10.0)(kysely@0.29.2)(pg@8.21.0)(postgres@3.4.9))(next@16.2.7(@babel/core@7.29.7)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(pg@8.21.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@4.1.8)
-    transitivePeerDependencies:
-      - '@aws-sdk/client-rds-data'
-      - '@better-auth/core'
-      - '@better-auth/utils'
-      - '@better-fetch/fetch'
-      - '@cloudflare/workers-types'
-      - '@libsql/client'
-      - '@libsql/client-wasm'
-      - '@lynx-js/react'
-      - '@op-engineering/op-sqlite'
-      - '@opentelemetry/api'
-      - '@planetscale/database'
-      - '@prisma/client'
-      - '@sveltejs/kit'
-      - '@tanstack/react-start'
-      - '@tanstack/solid-start'
-      - '@tidbcloud/serverless'
-      - '@types/better-sqlite3'
-      - '@types/pg'
-      - '@types/sql.js'
-      - '@upstash/redis'
-      - '@vercel/postgres'
-      - '@xata.io/client'
-      - arktype
-      - better-call
-      - better-sqlite3
-      - bun-types
-      - drizzle-kit
-      - drizzle-orm
-      - expo-sqlite
-      - gel
-      - knex
-      - kysely
-      - mongodb
-      - mysql2
-      - nanostores
-      - next
-      - pg
-      - prisma
-      - react
-      - react-dom
-      - solid-js
-      - sql.js
-      - sqlite3
-      - svelte
-      - typescript
-      - valibot
-      - vitest
-      - vue
-
-  '@docket/db@file:packages/db(@prisma/client@5.22.0)(@types/pg@8.20.0)(better-sqlite3@12.10.0)(kysely@0.29.2)(pg@8.21.0)(typescript@6.0.3)':
-    dependencies:
-      '@docket/env': file:packages/env(typescript@6.0.3)
-      '@docket/types': file:packages/types
-      '@electric-sql/pglite': 0.5.1
-      '@neondatabase/serverless': 1.1.0
-      drizzle-orm: 0.45.2(@electric-sql/pglite@0.5.1)(@neondatabase/serverless@1.1.0)(@prisma/client@5.22.0)(@types/pg@8.20.0)(better-sqlite3@12.10.0)(kysely@0.29.2)(pg@8.21.0)(postgres@3.4.9)
-      postgres: 3.4.9
-      ulid: 3.0.2
-    transitivePeerDependencies:
-      - '@aws-sdk/client-rds-data'
-      - '@cloudflare/workers-types'
-      - '@libsql/client'
-      - '@libsql/client-wasm'
-      - '@op-engineering/op-sqlite'
-      - '@opentelemetry/api'
-      - '@planetscale/database'
-      - '@prisma/client'
-      - '@tidbcloud/serverless'
-      - '@types/better-sqlite3'
-      - '@types/pg'
-      - '@types/sql.js'
-      - '@upstash/redis'
-      - '@vercel/postgres'
-      - '@xata.io/client'
-      - arktype
-      - better-sqlite3
-      - bun-types
-      - expo-sqlite
-      - gel
-      - knex
-      - kysely
-      - mysql2
-      - pg
-      - prisma
-      - sql.js
-      - sqlite3
-      - typescript
-      - valibot
-
-  '@docket/env@file:packages/env(typescript@6.0.3)':
-    dependencies:
-      '@t3-oss/env-core': 0.13.11(typescript@6.0.3)(zod@4.4.3)
-      '@t3-oss/env-nextjs': 0.13.11(typescript@6.0.3)(zod@4.4.3)
-      zod: 4.4.3
-    transitivePeerDependencies:
-      - arktype
-      - typescript
-      - valibot
-
-  '@docket/eslint-config@file:tooling/eslint-config(eslint@10.4.1(jiti@2.7.0))(typescript@6.0.3)':
-    dependencies:
-      '@eslint/js': 10.0.1(eslint@10.4.1(jiti@2.7.0))
-      eslint: 10.4.1(jiti@2.7.0)
-      typescript-eslint: 8.60.1(eslint@10.4.1(jiti@2.7.0))(typescript@6.0.3)
-    transitivePeerDependencies:
-      - supports-color
-      - typescript
-
-  '@docket/types@file:packages/types':
-    dependencies:
-      zod: 4.4.3
 
   '@drizzle-team/brocli@0.10.2': {}
 
@@ -9219,22 +9080,22 @@ snapshots:
       '@types/react': 19.2.17
       '@types/react-dom': 19.2.3(@types/react@19.2.17)
 
-  '@turbo/darwin-64@2.9.16':
+  '@turbo/darwin-64@2.9.18':
     optional: true
 
-  '@turbo/darwin-arm64@2.9.16':
+  '@turbo/darwin-arm64@2.9.18':
     optional: true
 
-  '@turbo/linux-64@2.9.16':
+  '@turbo/linux-64@2.9.18':
     optional: true
 
-  '@turbo/linux-arm64@2.9.16':
+  '@turbo/linux-arm64@2.9.18':
     optional: true
 
-  '@turbo/windows-64@2.9.16':
+  '@turbo/windows-64@2.9.18':
     optional: true
 
-  '@turbo/windows-arm64@2.9.16':
+  '@turbo/windows-arm64@2.9.18':
     optional: true
 
   '@tybys/wasm-util@0.10.2':
@@ -9647,7 +9508,7 @@ snapshots:
       react-dom: 19.2.7(react@19.2.7)
       vitest: 4.1.8(@types/node@24.13.0)(@vitest/coverage-v8@4.1.8)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.0.16(@types/node@24.13.0)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
 
-  better-auth@1.6.14(@prisma/client@5.22.0)(better-sqlite3@12.10.0)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@electric-sql/pglite@0.5.1)(@neondatabase/serverless@1.1.0)(@prisma/client@5.22.0)(@types/pg@8.20.0)(better-sqlite3@12.10.0)(kysely@0.29.2)(pg@8.21.0)(postgres@3.4.9))(next@16.2.7(@babel/core@7.29.7)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(pg@8.21.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@4.1.8):
+  better-auth@1.6.14(@prisma/client@5.22.0)(better-sqlite3@12.10.0)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@electric-sql/pglite@0.5.1)(@neondatabase/serverless@1.1.0)(@prisma/client@5.22.0)(@types/pg@8.20.0)(better-sqlite3@12.10.0)(kysely@0.29.2)(pg@8.21.0)(postgres@3.4.9))(next@16.2.7(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(pg@8.21.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@4.1.8):
     dependencies:
       '@better-auth/core': 1.6.14(@better-auth/utils@0.4.1)(@better-fetch/fetch@1.1.21)(better-call@1.3.5(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0)
       '@better-auth/drizzle-adapter': 1.6.14(@better-auth/core@1.6.14(@better-auth/utils@0.4.1)(@better-fetch/fetch@1.1.21)(better-call@1.3.5(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0))(@better-auth/utils@0.4.1)(drizzle-orm@0.45.2(@electric-sql/pglite@0.5.1)(@neondatabase/serverless@1.1.0)(@prisma/client@5.22.0)(@types/pg@8.20.0)(better-sqlite3@12.10.0)(kysely@0.29.2)(pg@8.21.0)(postgres@3.4.9))
@@ -12271,14 +12132,14 @@ snapshots:
 
   tunnel@0.0.6: {}
 
-  turbo@2.9.16:
+  turbo@2.9.18:
     optionalDependencies:
-      '@turbo/darwin-64': 2.9.16
-      '@turbo/darwin-arm64': 2.9.16
-      '@turbo/linux-64': 2.9.16
-      '@turbo/linux-arm64': 2.9.16
-      '@turbo/windows-64': 2.9.16
-      '@turbo/windows-arm64': 2.9.16
+      '@turbo/darwin-64': 2.9.18
+      '@turbo/darwin-arm64': 2.9.18
+      '@turbo/linux-64': 2.9.18
+      '@turbo/linux-arm64': 2.9.18
+      '@turbo/windows-64': 2.9.18
+      '@turbo/windows-arm64': 2.9.18
 
   tw-animate-css@1.4.0: {}
 

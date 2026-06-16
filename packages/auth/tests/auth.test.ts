@@ -363,6 +363,8 @@ describe('buildAuthOptions env-gating', () => {
     expect(opts.socialProviders?.linear).toEqual({
       clientId: 'lin-id',
       clientSecret: 'lin-secret',
+      // The Linear connector needs `read` to query the GraphQL API.
+      scope: ['read'],
     });
     expect(opts.account?.accountLinking?.enabled).toBe(true);
     // Passwordless: `email-password` is NOT a trusted linking provider — only social ones.

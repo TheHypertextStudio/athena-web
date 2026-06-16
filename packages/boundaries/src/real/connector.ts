@@ -126,14 +126,22 @@ export class RealConnector implements Connector {
     );
   }
 
-  /** {@inheritDoc Connector.connect} */
+  /**
+   * {@inheritDoc Connector.connect}
+   *
+   * @remarks
+   * Validates the credential by actually calling the provider's identity endpoint. A
+   * successful call returns `status: 'connected'` (with the account label when the provider
+   * supplies one); a failure THROWS a {@link ConnectorError} so the caller records the real
+   * reason — it never reports a healthy connection that wasn't proven. A resolved-but-unlabeled
+   * account (valid token, no display name) is still `connected`: the credential worked.
+   */
   async connect(input: ConnectInput): Promise<ConnectionResult> {
-    const account = await this.client.resolveAccount().catch(() => undefined);
-    const ok = account !== undefined;
+    const account = await this.client.resolveAccount();
     return {
       connectionId: `${input.provider}:${input.referenceId}`,
       provider: input.provider,
-      status: ok ? 'connected' : 'error',
+      status: 'connected',
       ...(account !== undefined ? { account } : {}),
     };
   }
@@ -149,9 +157,17 @@ export class RealConnector implements Connector {
     return this.client.mirrorStatus(input);
   }
 
-  /** {@inheritDoc Connector.linkResource} */
+  /**
+   * {@inheritDoc Connector.linkResource}
+   *
+   * @remarks
+   * `resolveExternalUrl` returning `undefined` means the canonical URL can't be derived from
+   * the id alone (a legitimate, non-error state) — the link is still established. A real
+   * provider/network failure THROWS a {@link ConnectorError} rather than being swallowed into
+   * a false `linked: true`, which is what previously hid link failures.
+   */
   async linkResource(input: LinkResourceInput): Promise<LinkResult> {
-    const externalUrl = await this.client.resolveExternalUrl(input).catch(() => undefined);
+    const externalUrl = await this.client.resolveExternalUrl(input);
     return {
       resourceId: input.resourceId,
       externalId: input.externalId,

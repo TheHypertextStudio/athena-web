@@ -1,10 +1,31 @@
 import type { ConnectorProvider } from '../ports/connector';
+import { ConnectorError } from '../ports/connector-error';
 import type { HttpClient } from './http';
+import { logConnectorError } from './connector-log';
 
-/** A small typed wrapper around the injected {@link HttpClient} for one provider. */
+/** Max characters of a provider error body kept for diagnostics (avoids logging huge payloads). */
+const ERROR_BODY_SNIPPET_LIMIT = 200;
+
+/** Parse a `Retry-After` header (delta-seconds form) into a number, or undefined. */
+function parseRetryAfter(res: Response): number | undefined {
+  const header = res.headers.get('retry-after');
+  if (header === null) return undefined;
+  const seconds = Number.parseInt(header, 10);
+  return Number.isFinite(seconds) && seconds >= 0 ? seconds : undefined;
+}
+
+/**
+ * A small typed wrapper around the injected {@link HttpClient} for one provider.
+ *
+ * @remarks
+ * Every non-2xx response, network failure, and unparseable body becomes a typed
+ * {@link ConnectorError} (never a swallowed empty result), so callers can tell a revoked
+ * token (`auth`) from a throttle (`rate_limit`) from an outage (`provider`/`network`). The
+ * access token is never logged or included in error messages.
+ */
 export class ProviderHttp {
   /**
-   * @param provider - The provider these calls target (used in error messages).
+   * @param provider - The provider these calls target (used in errors + logs).
    * @param apiBase - The provider API base (no trailing slash assumptions).
    * @param accessToken - The bearer token / API key (never logged).
    * @param http - The injected HTTP transport.
@@ -17,29 +38,84 @@ export class ProviderHttp {
   ) {}
 
   /**
+   * Issue an authenticated request, validate the response, and parse the JSON body.
+   *
+   * @throws {ConnectorError} On network failure (`network`), non-2xx status
+   *   (`auth`/`rate_limit`/`provider` by code), or an unparseable body (`provider`).
+   */
+  private async request(
+    method: 'GET' | 'POST',
+    path: string,
+    init: { headers: Record<string, string>; body?: string },
+  ): Promise<unknown> {
+    let res: Response;
+    try {
+      res = await this.http(`${this.apiBase}${path}`, { method, ...init });
+    } catch (cause) {
+      logConnectorError({ provider: this.provider, kind: 'network', method, path });
+      throw new ConnectorError(
+        `${this.provider} API ${method} ${path} could not reach the provider`,
+        {
+          provider: this.provider,
+          kind: 'network',
+          cause,
+        },
+      );
+    }
+
+    if (!res.ok) {
+      const kind = ConnectorError.kindForStatus(res.status);
+      const snippet = await res
+        .text()
+        .then((t) => t.slice(0, ERROR_BODY_SNIPPET_LIMIT))
+        .catch(() => '');
+      logConnectorError({ provider: this.provider, kind, method, path, status: res.status });
+      const retryAfterSeconds = res.status === 429 ? parseRetryAfter(res) : undefined;
+      throw new ConnectorError(
+        `${this.provider} API ${method} ${path} failed: ${res.status}${snippet ? ` — ${snippet}` : ''}`,
+        {
+          provider: this.provider,
+          kind,
+          status: res.status,
+          ...(retryAfterSeconds !== undefined ? { retryAfterSeconds } : {}),
+        },
+      );
+    }
+
+    try {
+      return await res.json();
+    } catch (cause) {
+      logConnectorError({
+        provider: this.provider,
+        kind: 'provider',
+        method,
+        path,
+        status: res.status,
+      });
+      throw new ConnectorError(`${this.provider} API returned an unparseable response: ${path}`, {
+        provider: this.provider,
+        kind: 'provider',
+        status: res.status,
+        cause,
+      });
+    }
+  }
+
+  /**
    * Issue an authenticated `GET` and parse the JSON response.
    *
    * @param path - URL path appended to the provider's API base (must start with `/`).
    * @param extraHeaders - Additional headers merged onto the default Authorization + Accept set.
-   * @throws {Error} On non-2xx status or unparseable JSON body.
+   * @throws {ConnectorError} On network failure, non-2xx status, or an unparseable body.
    */
   async getJson(path: string, extraHeaders: Record<string, string> = {}): Promise<unknown> {
-    const res = await this.http(`${this.apiBase}${path}`, {
-      method: 'GET',
+    return this.request('GET', path, {
       headers: {
         Authorization: `Bearer ${this.accessToken}`,
         Accept: 'application/json',
         ...extraHeaders,
       },
     });
-    if (!res.ok) {
-      throw new Error(`${this.provider} API GET ${path} failed: ${res.status}`);
-    }
-    try {
-      return await res.json();
-    } catch {
-      throw new Error(`${this.provider} API returned unparseable response: ${path}`);
-    }
   }
 
   /**
@@ -48,11 +124,10 @@ export class ProviderHttp {
    * @param path - URL path appended to the provider's API base.
    * @param body - Request body, serialized as JSON.
    * @param auth - `'bearer'` (default) prefixes the token; `'raw'` sends it verbatim.
-   * @throws {Error} On non-2xx status or unparseable JSON body.
+   * @throws {ConnectorError} On network failure, non-2xx status, or an unparseable body.
    */
   async postJson(path: string, body: unknown, auth: 'bearer' | 'raw' = 'bearer'): Promise<unknown> {
-    const res = await this.http(`${this.apiBase}${path}`, {
-      method: 'POST',
+    return this.request('POST', path, {
       headers: {
         Authorization: auth === 'bearer' ? `Bearer ${this.accessToken}` : this.accessToken,
         'Content-Type': 'application/json',
@@ -60,13 +135,5 @@ export class ProviderHttp {
       },
       body: JSON.stringify(body),
     });
-    if (!res.ok) {
-      throw new Error(`${this.provider} API POST ${path} failed: ${res.status}`);
-    }
-    try {
-      return await res.json();
-    } catch {
-      throw new Error(`${this.provider} API returned unparseable response: ${path}`);
-    }
   }
 }

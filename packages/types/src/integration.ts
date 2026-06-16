@@ -21,8 +21,16 @@ export const IntegrationRole = z.enum(['work', 'context', 'signal', 'time', 'cod
 /** Integration-role value. */
 export type IntegrationRole = z.infer<typeof IntegrationRole>;
 
-/** Integration connection health. */
-export const IntegrationStatus = z.enum(['connected', 'error', 'disconnected']);
+/**
+ * Integration connection health.
+ *
+ * @remarks
+ * `pending` is the initial state: the integration exists but its credential has NOT been
+ * validated by a real `connect()`, so it must never be shown as connected. Only a successful
+ * connect/sync promotes it to `connected`; any failed connect, sync, or token refresh demotes
+ * it to `error`. This is the spine of the "never report success when nothing happened" rule.
+ */
+export const IntegrationStatus = z.enum(['pending', 'connected', 'error', 'disconnected']);
 /** Integration-status value. */
 export type IntegrationStatus = z.infer<typeof IntegrationStatus>;
 
@@ -42,14 +50,19 @@ export const IntegrationConnection = z
 /** Integration-connection value. */
 export type IntegrationConnection = z.infer<typeof IntegrationConnection>;
 
-/** Body for creating an Integration (organizationId comes from the path, never the body). */
+/**
+ * Body for creating an Integration (organizationId comes from the path, never the body).
+ *
+ * @remarks
+ * `status` is intentionally NOT accepted: connection health is *earned* by a real
+ * `connect()`/sync, never declared by the caller. New integrations always start `pending`.
+ */
 export const IntegrationCreate = z
   .object({
     provider: z.string().min(1),
     pattern: IntegrationPattern,
     roles: z.array(IntegrationRole).optional(),
     connection: IntegrationConnection.optional(),
-    status: IntegrationStatus.optional(),
     config: z.record(z.string(), z.unknown()).optional(),
     syncMode: SyncMode.optional(),
   })
@@ -57,12 +70,17 @@ export const IntegrationCreate = z
 /** Validated integration-create body. */
 export type IntegrationCreate = z.infer<typeof IntegrationCreate>;
 
-/** Body for updating an Integration's roles, connection, status, config, or sync mode. */
+/**
+ * Body for updating an Integration's roles, connection, config, or sync mode.
+ *
+ * @remarks
+ * `status` is intentionally NOT accepted — see {@link IntegrationCreate}. Health transitions
+ * only through the connect/verify and sync paths, so a client can never fabricate `connected`.
+ */
 export const IntegrationUpdate = z
   .object({
     roles: z.array(IntegrationRole).optional(),
     connection: IntegrationConnection.optional(),
-    status: IntegrationStatus.optional(),
     config: z.record(z.string(), z.unknown()).optional(),
     syncMode: SyncMode.optional(),
   })
@@ -98,25 +116,38 @@ export const IntegrationDirectoryOut = z
 /** Directory representation value. */
 export type IntegrationDirectoryOut = z.infer<typeof IntegrationDirectoryOut>;
 
-/** Lifecycle status of a connector sync / migration-import job. */
-export const SyncJobStatus = z.enum(['queued', 'running', 'succeeded', 'failed']);
-/** Sync-job-status value. */
-export type SyncJobStatus = z.infer<typeof SyncJobStatus>;
+/** Lifecycle status of a single connector sync run (one `importWork` pass). */
+export const SyncRunStatus = z.enum(['running', 'succeeded', 'failed']);
+/** Sync-run-status value. */
+export type SyncRunStatus = z.infer<typeof SyncRunStatus>;
 
-/** The status of a sync (connector mirror refresh) or import (migration) job. */
-export const SyncJobOut = z
+/** What triggered a sync run: a user action or the background scheduler. */
+export const SyncTrigger = z.enum(['manual', 'scheduled']);
+/** Sync-trigger value. */
+export type SyncTrigger = z.infer<typeof SyncTrigger>;
+
+/**
+ * The durable record of one connector sync run.
+ *
+ * @remarks
+ * Replaces the former ephemeral `SyncJobOut` (an in-memory job wiped on every restart). Each
+ * run is persisted, so a failure leaves a real, auditable trace instead of vanishing.
+ */
+export const SyncRunOut = z
   .object({
-    jobId: z.string(),
+    id: z.string(),
     integrationId: IntegrationId,
-    status: SyncJobStatus,
+    status: SyncRunStatus,
+    trigger: SyncTrigger,
     processed: z.number().int().nonnegative(),
     total: z.number().int().nonnegative(),
     error: z.string().nullable(),
-    createdAt: z.string(),
+    startedAt: z.string(),
+    finishedAt: z.string().nullable(),
   })
-  .meta({ id: 'SyncJobOut', description: 'The progress/status of an integration sync job.' });
-/** Sync-job representation value. */
-export type SyncJobOut = z.infer<typeof SyncJobOut>;
+  .meta({ id: 'SyncRunOut', description: 'The result of one integration sync run.' });
+/** Sync-run representation value. */
+export type SyncRunOut = z.infer<typeof SyncRunOut>;
 
 /** Full integration representation returned by reads. */
 export const IntegrationOut = z
@@ -130,6 +161,16 @@ export const IntegrationOut = z
     status: IntegrationStatus,
     config: z.record(z.string(), z.unknown()),
     syncMode: SyncMode,
+    /** Status of the most recent sync run (null = never synced). */
+    lastSyncStatus: SyncRunStatus.nullable(),
+    /** ISO-8601 timestamp of the last SUCCESSFUL sync (null = never succeeded). */
+    lastSyncedAt: z.string().nullable(),
+    /** Why the connection/last-sync is unhealthy (null = healthy). */
+    lastError: z.string().nullable(),
+    /** ISO-8601 timestamp the {@link IntegrationOut.lastError} was recorded. */
+    lastErrorAt: z.string().nullable(),
+    /** Background re-sync cadence in minutes (null = manual-only). */
+    syncCadenceMinutes: z.number().int().positive().nullable(),
     createdAt: z.string(),
   })
   .meta({ id: 'IntegrationOut', description: 'An external integration.' });

@@ -92,30 +92,44 @@ export type ConnectorTokenResult =
   | { readonly ok: false; readonly reason: 'needs_reauth'; readonly message: string };
 
 /**
- * Resolve a fresh OAuth access token for a connector provider on behalf of an Actor.
+ * Fetch a (possibly refreshed) OAuth access token for a `(providerId, userId)` pair.
+ *
+ * @remarks
+ * Isolated as an injectable seam so {@link resolveLiveConnectorToken} can be exercised in
+ * tests without a real Better Auth instance or network — the default delegates to
+ * `auth.api.getAccessToken`, which transparently refreshes an expired token via the stored
+ * refresh token.
+ */
+export type AccessTokenFetcher = (input: {
+  readonly providerId: string;
+  readonly userId: string;
+}) => Promise<{ readonly accessToken?: string | null }>;
+
+/** The production {@link AccessTokenFetcher}: Better Auth's server-side token endpoint. */
+const defaultAccessTokenFetcher: AccessTokenFetcher = (input) =>
+  auth.api.getAccessToken({ body: input });
+
+/**
+ * Resolve a fresh OAuth access token for a connector provider on behalf of an Actor —
+ * the live path, with NO env-mode short-circuit (see {@link resolveConnectorToken}).
  *
  * @remarks
  * Resolves the Actor's global Better Auth `user` (an Actor id is NOT a user id — the prior
- * code compared the two id spaces directly, so it never matched in production), then asks
- * Better Auth for the access token. `auth.api.getAccessToken` transparently REFRESHES an
- * expired token via the stored refresh token — essential for background syncs that run while
+ * code compared the two id spaces directly, so it never matched in production), then asks the
+ * {@link AccessTokenFetcher} for the access token. The default fetcher transparently REFRESHES
+ * an expired token via the stored refresh token — essential for background syncs that run while
  * nobody is signed in. Any failure (no linked account, revoked grant, refresh failure) becomes
  * a single `needs_reauth` outcome with a "Sign in with X" message, never a silent skip.
  *
- * In `APP_MODE=local`/`test` a sentinel `'mock'` token is returned immediately (no DB round
- * trip, no real credentials), and {@link selectAdapter} forces the mock connector anyway.
- *
- * @param actorId - The Actor whose linked provider grant should be used (e.g. the integration's
- *   `createdBy` for a background run, or the request actor for a manual one).
+ * @param actorId - The Actor whose linked provider grant should be used.
  * @param provider - The connector provider whose token is needed.
+ * @param fetchAccessToken - Token fetcher; defaults to {@link defaultAccessTokenFetcher}.
  */
-export async function resolveConnectorToken(
+export async function resolveLiveConnectorToken(
   actorId: string,
   provider: ConnectorProvider,
+  fetchAccessToken: AccessTokenFetcher = defaultAccessTokenFetcher,
 ): Promise<ConnectorTokenResult> {
-  const mode = env.APP_MODE;
-  if (mode === 'local' || mode === 'test') return { ok: true, token: 'mock' };
-
   const providerId = socialProviderId(provider);
   const needsReauth = {
     ok: false as const,
@@ -132,7 +146,7 @@ export async function resolveConnectorToken(
   if (!userId) return needsReauth;
 
   try {
-    const result = await auth.api.getAccessToken({ body: { providerId, userId } });
+    const result = await fetchAccessToken({ providerId, userId });
     if (!result.accessToken) return needsReauth;
     return { ok: true, token: result.accessToken };
   } catch {
@@ -140,6 +154,29 @@ export async function resolveConnectorToken(
     // both mean the user must re-authorize. Surfaced (never swallowed into a fake success).
     return needsReauth;
   }
+}
+
+/**
+ * Resolve a fresh OAuth access token for a connector provider on behalf of an Actor.
+ *
+ * @remarks
+ * In `APP_MODE=local`/`test` a sentinel `'mock'` token is returned immediately (no DB round
+ * trip, no real credentials), and {@link selectAdapter} forces the mock connector anyway.
+ * Otherwise this delegates to {@link resolveLiveConnectorToken}, which does the real Actor →
+ * Better Auth `user` → access-token resolution (and refresh).
+ *
+ * @param actorId - The Actor whose linked provider grant should be used (e.g. the integration's
+ *   `createdBy` for a background run, or the request actor for a manual one).
+ * @param provider - The connector provider whose token is needed.
+ */
+export async function resolveConnectorToken(
+  actorId: string,
+  provider: ConnectorProvider,
+): Promise<ConnectorTokenResult> {
+  const mode = env.APP_MODE;
+  if (mode === 'local' || mode === 'test') return { ok: true, token: 'mock' };
+
+  return resolveLiveConnectorToken(actorId, provider);
 }
 
 /**

@@ -34,6 +34,6 @@
     "@types/node": "25.9.2",
     "drizzle-orm": "catalog:",
     "vite": "^8.0.16",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.9"
   }
 }

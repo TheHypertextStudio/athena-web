@@ -24,10 +24,10 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.101.0",
+    "@anthropic-ai/sdk": "^0.105.0",
     "@docket/env": "workspace:*",
     "@docket/types": "workspace:*",
-    "@vercel/blob": "^2.4.0",
+    "@vercel/blob": "^2.4.1",
     "nodemailer": "8.0.10",
     "stripe": "catalog:",
     "ulid": "catalog:",

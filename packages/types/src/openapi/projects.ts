@@ -11,7 +11,7 @@
 
 import { z } from '@hono/zod-openapi';
 import { TimestampSchema, successResponseSchema, listResponseSchema } from './common.js';
-import { UserRefSchema } from './tasks.js';
+import { TaskWithRelationsSchema, UserRefSchema } from './tasks.js';
 import { InitiativeRefSchema } from './initiatives.js';
 
 // =============================================================================
@@ -45,7 +45,7 @@ export const ProjectSchema = z
       description: 'Project deadline',
       example: '2025-03-01T00:00:00Z',
     }),
-    initiativeId: z.uuid().nullable().openapi({ description: 'Parent initiative UUID' }),
+    initiativeId: z.string().min(1).nullable().openapi({ description: 'Parent initiative ID' }),
     ownerId: z.uuid().openapi({ description: 'Owner user UUID' }),
     createdAt: TimestampSchema.openapi({ description: 'Creation timestamp' }),
     updatedAt: TimestampSchema.openapi({ description: 'Last update timestamp' }),
@@ -62,13 +62,16 @@ export const ProjectWithRelationsSchema = ProjectSchema.extend({
   taskCount: z.number().int().optional().openapi({
     description: 'Number of tasks in the project',
   }),
+  tasks: z.array(TaskWithRelationsSchema).optional().openapi({
+    description: 'Project tasks',
+  }),
 }).openapi('ProjectWithRelations');
 
 export const ProjectDependencySchema = z
   .object({
-    id: z.uuid().openapi({ description: 'Dependency UUID' }),
-    projectId: z.uuid().openapi({ description: 'Project UUID' }),
-    dependsOnProjectId: z.uuid().openapi({ description: 'Depends on project UUID' }),
+    id: z.string().min(1).openapi({ description: 'Dependency ID' }),
+    projectId: z.string().min(1).openapi({ description: 'Project ID' }),
+    dependsOnProjectId: z.string().min(1).openapi({ description: 'Depends on project ID' }),
     createdAt: TimestampSchema.openapi({ description: 'Creation timestamp' }),
   })
   .openapi('ProjectDependency');
@@ -79,9 +82,9 @@ export const ProjectDependencySchema = z
 
 export const ProjectIdParamSchema = z
   .object({
-    id: z.uuid().openapi({
-      description: 'Project UUID',
-      example: '123e4567-e89b-12d3-a456-426614174000',
+    id: z.string().min(1).openapi({
+      description: 'Project ID',
+      example: 'project-123',
       param: { name: 'id', in: 'path' },
     }),
   })
@@ -89,12 +92,12 @@ export const ProjectIdParamSchema = z
 
 export const ProjectDependencyParamsSchema = z
   .object({
-    id: z.uuid().openapi({
-      description: 'Project UUID',
+    id: z.string().min(1).openapi({
+      description: 'Project ID',
       param: { name: 'id', in: 'path' },
     }),
-    dependsOnId: z.uuid().openapi({
-      description: 'Dependency project UUID',
+    dependsOnId: z.string().min(1).openapi({
+      description: 'Dependency project ID',
       param: { name: 'dependsOnId', in: 'path' },
     }),
   })
@@ -107,7 +110,8 @@ export const ProjectDependencyParamsSchema = z
 export const ListProjectsQuerySchema = z
   .object({
     initiativeId: z
-      .uuid()
+      .string()
+      .min(1)
       .optional()
       .openapi({
         description: 'Filter by initiative',
@@ -161,8 +165,8 @@ export const CreateProjectRequestSchema = z
       description: 'Project deadline (ISO 8601)',
       example: '2025-03-01T00:00:00Z',
     }),
-    initiativeId: z.uuid().optional().openapi({
-      description: 'Parent initiative UUID',
+    initiativeId: z.string().min(1).optional().openapi({
+      description: 'Parent initiative ID',
     }),
   })
   .openapi('CreateProjectRequest');
@@ -181,8 +185,8 @@ export const UpdateProjectRequestSchema = z
     deadline: z.coerce.date().nullish().openapi({
       description: 'Project deadline (null to clear)',
     }),
-    initiativeId: z.uuid().nullish().openapi({
-      description: 'Parent initiative UUID (null to clear)',
+    initiativeId: z.string().min(1).nullish().openapi({
+      description: 'Parent initiative ID (null to clear)',
     }),
   })
   .openapi('UpdateProjectRequest');
@@ -202,7 +206,7 @@ export const ProjectListResponseSchema = listResponseSchema(
 ).openapi('ProjectListResponse');
 
 export const ProjectDependenciesResponseSchema = listResponseSchema(
-  ProjectDependencySchema,
+  ProjectSchema,
   'Project dependencies response',
 ).openapi('ProjectDependenciesResponse');
 

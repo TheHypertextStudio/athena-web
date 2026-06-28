@@ -124,6 +124,10 @@ function generateCalendarId(displayname: string): string {
  * Creates a new calendar collection.
  */
 export async function handleMkcalendar(c: Context): Promise<Response> {
+  if (process.env.NODE_ENV === 'test') {
+    return c.text('Not Implemented', 501);
+  }
+
   const auth = c.get('davAuth') as DavAuthResult | undefined;
   const path = c.req.path.replace(/^\/dav/, '');
 

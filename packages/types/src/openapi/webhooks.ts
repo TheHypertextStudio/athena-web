@@ -5,7 +5,7 @@
  */
 
 import { z } from '@hono/zod-openapi';
-import { TimestampSchema, successResponseSchema } from './common.js';
+import { TimestampSchema } from './common.js';
 
 // =============================================================================
 // Enums
@@ -32,10 +32,12 @@ export const WebhookEventTypeSchema = z
     example: 'task.created',
   });
 
-export const DeliveryStatusSchema = z.enum(['pending', 'success', 'failed']).openapi({
-  description: 'Delivery status',
-  example: 'success',
-});
+export const DeliveryStatusSchema = z
+  .enum(['pending', 'sending', 'delivered', 'failed', 'retrying'])
+  .openapi({
+    description: 'Delivery status',
+    example: 'delivered',
+  });
 
 // =============================================================================
 // Core Webhook Schemas
@@ -44,27 +46,25 @@ export const DeliveryStatusSchema = z.enum(['pending', 'success', 'failed']).ope
 export const WebhookEndpointSchema = z
   .object({
     id: z.string().openapi({ description: 'Endpoint ID' }),
-    userId: z.uuid().openapi({ description: 'Owner user ID' }),
     url: z.string().openapi({ description: 'Webhook URL' }),
     events: z.array(WebhookEventTypeSchema).openapi({ description: 'Subscribed events' }),
     description: z.string().nullable().openapi({ description: 'Endpoint description' }),
-    secret: z.string().openapi({ description: 'Webhook secret' }),
     isActive: z.boolean().openapi({ description: 'Active status' }),
+    lastDeliveredAt: TimestampSchema.nullable().openapi({
+      description: 'Last delivery timestamp',
+    }),
+    failureCount: z.number().int().openapi({ description: 'Consecutive failure count' }),
     createdAt: TimestampSchema.openapi({ description: 'Creation timestamp' }),
-    updatedAt: TimestampSchema.openapi({ description: 'Last update timestamp' }),
   })
   .openapi('WebhookEndpoint');
 
 export const WebhookDeliverySchema = z
   .object({
     id: z.string().openapi({ description: 'Delivery ID' }),
-    endpointId: z.string().openapi({ description: 'Endpoint ID' }),
     eventType: WebhookEventTypeSchema,
     status: DeliveryStatusSchema,
-    requestBody: z.string().nullable().openapi({ description: 'Request body' }),
     responseStatus: z.number().int().nullable().openapi({ description: 'Response status code' }),
-    responseBody: z.string().nullable().openapi({ description: 'Response body' }),
-    error: z.string().nullable().openapi({ description: 'Error message' }),
+    errorMessage: z.string().nullable().openapi({ description: 'Error message' }),
     attempts: z.number().int().openapi({ description: 'Delivery attempts' }),
     createdAt: TimestampSchema.openapi({ description: 'Creation timestamp' }),
     deliveredAt: TimestampSchema.nullable().openapi({ description: 'Delivery timestamp' }),
@@ -147,25 +147,36 @@ export const TestWebhookRequestSchema = z
 // Response Schemas
 // =============================================================================
 
-export const WebhookEndpointsResponseSchema = successResponseSchema(
-  z.array(WebhookEndpointSchema),
-  'List of webhook endpoints',
-).openapi('WebhookEndpointsResponse');
+export const WebhookEndpointsResponseSchema = z
+  .object({
+    success: z.literal(true),
+    data: z.array(WebhookEndpointSchema),
+  })
+  .openapi('WebhookEndpointsResponse');
 
-export const WebhookEndpointResponseSchema = successResponseSchema(
-  WebhookEndpointSchema,
-  'Webhook endpoint',
-).openapi('WebhookEndpointResponse');
+export const WebhookEndpointResponseSchema = z
+  .object({
+    success: z.literal(true),
+    data: z.object({
+      id: z.string().openapi({ description: 'Endpoint ID' }),
+      secret: z.string().openapi({ description: 'Webhook secret' }),
+    }),
+  })
+  .openapi('WebhookEndpointResponse');
 
-export const WebhookDeliveriesResponseSchema = successResponseSchema(
-  z.array(WebhookDeliverySchema),
-  'Delivery history',
-).openapi('WebhookDeliveriesResponse');
+export const WebhookDeliveriesResponseSchema = z
+  .object({
+    success: z.literal(true),
+    data: z.array(WebhookDeliverySchema),
+  })
+  .openapi('WebhookDeliveriesResponse');
 
-export const RegenerateSecretResponseSchema = successResponseSchema(
-  z.object({ secret: z.string() }),
-  'New webhook secret',
-).openapi('RegenerateSecretResponse');
+export const RegenerateSecretResponseSchema = z
+  .object({
+    success: z.literal(true),
+    data: z.object({ secret: z.string() }),
+  })
+  .openapi('RegenerateSecretResponse');
 
 // =============================================================================
 // Type Exports

@@ -4,325 +4,576 @@
  * @packageDocumentation
  */
 
-import { Hono } from 'hono';
-import { zValidator } from '@hono/zod-validator';
-import { z } from 'zod';
+import { createRoute } from '@hono/zod-openapi';
+import {
+  NotificationIdParamSchema,
+  NotificationsQuerySchema,
+  UnreadNotificationsQuerySchema,
+  UpdateNotificationPreferencesRequestSchema,
+  SendNotificationRequestSchema,
+  ScheduleNotificationRequestSchema,
+  NotificationsResponseSchema,
+  UnreadNotificationsResponseSchema,
+  MarkReadResponseSchema,
+  MarkAllReadResponseSchema,
+  NotificationPreferencesResponseSchema,
+  SendNotificationResponseSchema,
+  ScheduleNotificationResponseSchema,
+  NotificationChannelsResponseSchema,
+} from '@athena/types/openapi/notifications';
+import {
+  NotFoundErrorSchema,
+  UnauthorizedErrorSchema,
+  ValidationErrorSchema,
+} from '@athena/types/openapi/common';
 import { getNotificationService } from '../services/notifications/index.js';
 import type { NotificationChannel, NotificationPriority } from '../services/notifications/types.js';
 import { requireAuth, getUserId } from '../middleware/auth.js';
+import { createOpenAPIApp } from '../lib/openapi.js';
+import {
+  toNotification,
+  toNotificationPreferences,
+  toNotificationResult,
+} from './notifications/helpers.js';
 
-const app = new Hono();
+const app = createOpenAPIApp();
 
 // Require authentication for all notification routes
 app.use('*', requireAuth);
 
-const PAGINATION_LIMIT_MIN = 1;
-const PAGINATION_LIMIT_MAX = 100;
-const PAGINATION_OFFSET_MIN = 0;
-const DEFAULT_NOTIFICATION_LIMIT = 50;
-const DEFAULT_NOTIFICATION_OFFSET = 0;
-const NOTIFICATION_CHANNEL_VALUES = ['email', 'push', 'sms', 'slack', 'in_app'] as const;
-const NOTIFICATION_PRIORITY_VALUES = ['low', 'normal', 'high', 'urgent'] as const;
-
 // Get notification service
-const getService = () => getNotificationService();
+
+// =============================================================================
+// List Notifications
+// =============================================================================
+
+const getNotifications = createRoute({
+  method: 'get',
+  path: '/',
+  tags: ['Notifications'],
+  summary: 'Get notifications',
+  description: 'Get notifications for the authenticated user with pagination.',
+  request: {
+    query: NotificationsQuerySchema,
+  },
+  responses: {
+    200: {
+      description: 'Notifications retrieved successfully',
+      content: {
+        'application/json': {
+          schema: NotificationsResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+  },
+});
+
+// =============================================================================
+// Get Unread Notifications
+// =============================================================================
+
+const getUnreadNotifications = createRoute({
+  method: 'get',
+  path: '/unread',
+  tags: ['Notifications'],
+  summary: 'Get unread notifications',
+  description: 'Get unread notifications for the authenticated user.',
+  request: {
+    query: UnreadNotificationsQuerySchema,
+  },
+  responses: {
+    200: {
+      description: 'Unread notifications retrieved successfully',
+      content: {
+        'application/json': {
+          schema: UnreadNotificationsResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+  },
+});
+
+// =============================================================================
+// Mark Notification as Read
+// =============================================================================
+
+const markNotificationRead = createRoute({
+  method: 'post',
+  path: '/{id}/read',
+  tags: ['Notifications'],
+  summary: 'Mark notification as read',
+  description: 'Mark a specific notification as read.',
+  request: {
+    params: NotificationIdParamSchema,
+  },
+  responses: {
+    200: {
+      description: 'Notification marked as read',
+      content: {
+        'application/json': {
+          schema: MarkReadResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+    404: {
+      description: 'Notification not found',
+      content: {
+        'application/json': {
+          schema: NotFoundErrorSchema,
+        },
+      },
+    },
+  },
+});
+
+// =============================================================================
+// Mark All Notifications as Read
+// =============================================================================
+
+const markAllNotificationsRead = createRoute({
+  method: 'post',
+  path: '/read-all',
+  tags: ['Notifications'],
+  summary: 'Mark all notifications as read',
+  description: 'Mark all notifications as read for the authenticated user.',
+  responses: {
+    200: {
+      description: 'All notifications marked as read',
+      content: {
+        'application/json': {
+          schema: MarkAllReadResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+  },
+});
+
+// =============================================================================
+// Get Notification Preferences
+// =============================================================================
+
+const getNotificationPreferences = createRoute({
+  method: 'get',
+  path: '/preferences',
+  tags: ['Notifications'],
+  summary: 'Get notification preferences',
+  description: 'Get notification preferences for the authenticated user.',
+  responses: {
+    200: {
+      description: 'Notification preferences retrieved',
+      content: {
+        'application/json': {
+          schema: NotificationPreferencesResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+  },
+});
+
+// =============================================================================
+// Update Notification Preferences
+// =============================================================================
+
+const updateNotificationPreferences = createRoute({
+  method: 'patch',
+  path: '/preferences',
+  tags: ['Notifications'],
+  summary: 'Update notification preferences',
+  description: 'Update notification preferences for the authenticated user.',
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: UpdateNotificationPreferencesRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Notification preferences updated',
+      content: {
+        'application/json': {
+          schema: NotificationPreferencesResponseSchema,
+        },
+      },
+    },
+    400: {
+      description: 'Validation error',
+      content: {
+        'application/json': {
+          schema: ValidationErrorSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+  },
+});
+
+// =============================================================================
+// Send Notification
+// =============================================================================
+
+const sendNotification = createRoute({
+  method: 'post',
+  path: '/send',
+  tags: ['Notifications'],
+  summary: 'Send notification',
+  description: 'Send a notification to a user (admin/system use).',
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: SendNotificationRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Notification sent',
+      content: {
+        'application/json': {
+          schema: SendNotificationResponseSchema,
+        },
+      },
+    },
+    400: {
+      description: 'Validation error',
+      content: {
+        'application/json': {
+          schema: ValidationErrorSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+  },
+});
+
+// =============================================================================
+// Schedule Notification
+// =============================================================================
+
+const scheduleNotification = createRoute({
+  method: 'post',
+  path: '/schedule',
+  tags: ['Notifications'],
+  summary: 'Schedule notification',
+  description: 'Schedule a notification for later delivery.',
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: ScheduleNotificationRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Notification scheduled',
+      content: {
+        'application/json': {
+          schema: ScheduleNotificationResponseSchema,
+        },
+      },
+    },
+    400: {
+      description: 'Validation error',
+      content: {
+        'application/json': {
+          schema: ValidationErrorSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+  },
+});
+
+// =============================================================================
+// Get Notification Channels
+// =============================================================================
+
+const getNotificationChannels = createRoute({
+  method: 'get',
+  path: '/channels',
+  tags: ['Notifications'],
+  summary: 'Get notification channels',
+  description: 'Get list of configured notification channels.',
+  responses: {
+    200: {
+      description: 'Notification channels retrieved',
+      content: {
+        'application/json': {
+          schema: NotificationChannelsResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+  },
+});
 
 /**
  * GET /notifications
  * Get notifications for the authenticated user.
  */
-app.get(
-  '/',
-  zValidator(
-    'query',
-    z.object({
-      limit: z.coerce
-        .number()
-        .min(PAGINATION_LIMIT_MIN)
-        .max(PAGINATION_LIMIT_MAX)
-        .optional()
-        .default(DEFAULT_NOTIFICATION_LIMIT),
-      offset: z.coerce
-        .number()
-        .min(PAGINATION_OFFSET_MIN)
-        .optional()
-        .default(DEFAULT_NOTIFICATION_OFFSET),
-    }),
-  ),
-  async (c) => {
-    const userId = getUserId(c);
-    const { limit, offset } = c.req.valid('query');
+app.openapi(getNotifications, async (c) => {
+  const userId = getUserId(c);
+  const { limit, offset } = c.req.valid('query');
 
-    const service = getService();
-    const notifications = await service.getNotifications(userId, limit, offset);
+  const service = getNotificationService();
+  const notifications = await service.getNotifications(userId, limit, offset);
+  const response = notifications.map((notification) => toNotification(notification));
 
-    return c.json({
-      success: true,
-      data: notifications,
-      meta: {
-        limit,
-        offset,
-        count: notifications.length,
-      },
-    });
-  },
-);
+  return c.json({
+    success: true as const,
+    data: response,
+    meta: {
+      limit,
+      offset,
+      count: response.length,
+    },
+  }, 200);
+});
 
 /**
  * GET /notifications/unread
  * Get unread notifications for the authenticated user.
  */
-app.get(
-  '/unread',
-  zValidator(
-    'query',
-    z.object({
-      limit: z.coerce
-        .number()
-        .min(PAGINATION_LIMIT_MIN)
-        .max(PAGINATION_LIMIT_MAX)
-        .optional()
-        .default(DEFAULT_NOTIFICATION_LIMIT),
-    }),
-  ),
-  async (c) => {
-    const userId = getUserId(c);
-    const { limit } = c.req.valid('query');
+app.openapi(getUnreadNotifications, async (c) => {
+  const userId = getUserId(c);
+  const { limit } = c.req.valid('query');
 
-    const service = getService();
-    const notifications = await service.getUnreadNotifications(userId, limit);
+  const service = getNotificationService();
+  const notifications = await service.getUnreadNotifications(userId, limit);
+  const response = notifications.map((notification) => toNotification(notification));
 
-    return c.json({
-      success: true,
-      data: notifications,
-      meta: {
-        count: notifications.length,
-      },
-    });
-  },
-);
+  return c.json({
+    success: true as const,
+    data: response,
+    meta: {
+      count: response.length,
+    },
+  }, 200);
+});
 
 /**
  * POST /notifications/:id/read
  * Mark a notification as read.
  */
-app.post('/:id/read', async (c) => {
+app.openapi(markNotificationRead, async (c) => {
   const userId = getUserId(c);
-  const notificationId = c.req.param('id');
+  const { id: notificationId } = c.req.valid('param');
 
-  const service = getService();
+  const service = getNotificationService();
   const success = await service.markAsRead(notificationId, userId);
 
   if (!success) {
-    return c.json(
-      {
-        success: false,
-        error: 'Notification not found',
-      },
-      404,
-    );
+    return c.json({ error: 'Not found', message: 'Notification not found' }, 404);
   }
 
   return c.json({
     success: true,
-  });
+  }, 200);
 });
 
 /**
  * POST /notifications/read-all
  * Mark all notifications as read.
  */
-app.post('/read-all', async (c) => {
+app.openapi(markAllNotificationsRead, async (c) => {
   const userId = getUserId(c);
 
-  const service = getService();
+  const service = getNotificationService();
   const count = await service.markAllAsRead(userId);
 
   return c.json({
-    success: true,
+    success: true as const,
     data: {
       markedRead: count,
     },
-  });
+  }, 200);
 });
 
 /**
  * GET /notifications/preferences
  * Get notification preferences for the authenticated user.
  */
-app.get('/preferences', async (c) => {
+app.openapi(getNotificationPreferences, async (c) => {
   const userId = getUserId(c);
 
-  const service = getService();
+  const service = getNotificationService();
   const preferences = await service.getUserPreferences(userId);
+  const response = toNotificationPreferences(preferences, userId);
 
   return c.json({
-    success: true,
-    data: preferences,
-  });
+    data: response,
+  }, 200);
 });
 
 /**
  * PATCH /notifications/preferences
  * Update notification preferences.
  */
-app.patch(
-  '/preferences',
-  zValidator(
-    'json',
-    z.object({
-      emailEnabled: z.boolean().optional(),
-      pushEnabled: z.boolean().optional(),
-      smsEnabled: z.boolean().optional(),
-      slackEnabled: z.boolean().optional(),
-      inAppEnabled: z.boolean().optional(),
-      emailAddress: z.email().optional(),
-      phoneNumber: z.string().optional(),
-      slackWebhookUrl: z.url().optional(),
-      slackChannel: z.string().optional(),
-      quietHoursEnabled: z.boolean().optional(),
-      quietHoursStart: z
-        .string()
-        .regex(/^\d{2}:\d{2}$/)
-        .optional(),
-      quietHoursEnd: z
-        .string()
-        .regex(/^\d{2}:\d{2}$/)
-        .optional(),
-      quietHoursTimezone: z.string().optional(),
-      taskDeadlineReminders: z.boolean().optional(),
-      taskAssignmentNotifications: z.boolean().optional(),
-      taskCompletionNotifications: z.boolean().optional(),
-      eventReminders: z.boolean().optional(),
-      dailyPlanningReminder: z.boolean().optional(),
-      weeklyReviewReminder: z.boolean().optional(),
-    }),
-  ),
-  async (c) => {
-    const userId = getUserId(c);
-    const updates = c.req.valid('json');
+app.openapi(updateNotificationPreferences, async (c) => {
+  const userId = getUserId(c);
+  const updates = c.req.valid('json');
 
-    const service = getService();
-    await service.updateUserPreferences(userId, updates);
+  const service = getNotificationService();
+  await service.updateUserPreferences(userId, updates);
 
-    const preferences = await service.getUserPreferences(userId);
+  const preferences = await service.getUserPreferences(userId);
+  const response = toNotificationPreferences(preferences, userId);
 
-    return c.json({
-      success: true,
-      data: preferences,
-    });
-  },
-);
+  return c.json({
+    data: response,
+  }, 200);
+});
 
 /**
  * POST /notifications/send
  * Send a notification (admin/system use).
  */
-app.post(
-  '/send',
-  zValidator(
-    'json',
-    z.object({
-      userId: z.uuid(),
-      title: z.string().min(1).max(200),
-      body: z.string().min(1).max(2000),
-      channels: z.array(z.enum(NOTIFICATION_CHANNEL_VALUES)).optional(),
-      priority: z.enum(NOTIFICATION_PRIORITY_VALUES).optional(),
-      actionUrl: z.url().optional(),
-      entityType: z.string().optional(),
-      entityId: z.string().optional(),
-      data: z.record(z.string(), z.unknown()).optional(),
-    }),
-  ),
-  async (c) => {
-    const body = c.req.valid('json');
+app.openapi(sendNotification, async (c) => {
+  const body = c.req.valid('json');
 
-    const service = getService();
-    const results = await service.send({
-      userId: body.userId,
-      title: body.title,
-      body: body.body,
-      channels: body.channels as NotificationChannel[] | undefined,
-      priority: body.priority as NotificationPriority | undefined,
-      actionUrl: body.actionUrl,
-      entityType: body.entityType,
-      entityId: body.entityId,
-      data: body.data,
-    });
+  const service = getNotificationService();
+  const results = await service.send({
+    userId: body.userId,
+    title: body.title,
+    body: body.body,
+    channels: body.channels as NotificationChannel[] | undefined,
+    priority: body.priority as NotificationPriority | undefined,
+    actionUrl: body.actionUrl,
+    entityType: body.entityType,
+    entityId: body.entityId,
+    data: body.data,
+  });
 
-    return c.json({
-      success: true,
-      data: {
-        results,
-        successCount: results.filter((r) => r.success).length,
-        failureCount: results.filter((r) => !r.success).length,
-      },
-    });
-  },
-);
+  const responseResults = results.map((result) => toNotificationResult(result));
+
+  return c.json({
+    success: true as const,
+    data: {
+      results: responseResults,
+      successCount: responseResults.filter((r) => r.success).length,
+      failureCount: responseResults.filter((r) => !r.success).length,
+    },
+  }, 200);
+});
 
 /**
  * POST /notifications/schedule
  * Schedule a notification for later delivery.
  */
-app.post(
-  '/schedule',
-  zValidator(
-    'json',
-    z.object({
-      userId: z.uuid(),
-      scheduledFor: z.iso.datetime(),
-      recurrenceRule: z.string().optional(),
-      notificationType: z.string(),
-      channels: z.array(z.enum(NOTIFICATION_CHANNEL_VALUES)),
-      title: z.string().min(1).max(200),
-      bodyTemplate: z.string().min(1).max(2000),
-      data: z.record(z.string(), z.unknown()).optional(),
-      actionUrl: z.url().optional(),
-      priority: z.enum(NOTIFICATION_PRIORITY_VALUES).optional(),
-    }),
-  ),
-  async (c) => {
-    const body = c.req.valid('json');
+app.openapi(scheduleNotification, async (c) => {
+  const body = c.req.valid('json');
 
-    const service = getService();
-    const id = await service.scheduleNotification({
-      userId: body.userId,
-      scheduledFor: new Date(body.scheduledFor),
-      recurrenceRule: body.recurrenceRule,
-      notificationType: body.notificationType,
-      channels: body.channels as NotificationChannel[],
-      title: body.title,
-      bodyTemplate: body.bodyTemplate,
-      data: body.data,
-      actionUrl: body.actionUrl,
-      priority: body.priority as NotificationPriority | undefined,
-    });
+  const service = getNotificationService();
+  const id = await service.scheduleNotification({
+    userId: body.userId,
+    scheduledFor: body.scheduledFor,
+    recurrenceRule: body.recurrenceRule,
+    notificationType: body.notificationType,
+    channels: body.channels as NotificationChannel[],
+    title: body.title,
+    bodyTemplate: body.bodyTemplate,
+    data: body.data,
+    actionUrl: body.actionUrl,
+    priority: body.priority as NotificationPriority | undefined,
+  });
 
-    return c.json({
-      success: true,
-      data: {
-        id,
-        scheduledFor: body.scheduledFor,
-      },
-    });
-  },
-);
+  return c.json({
+    success: true as const,
+    data: {
+      id,
+      scheduledFor: body.scheduledFor,
+    },
+  }, 200);
+});
 
 /**
  * GET /notifications/channels
  * Get list of configured notification channels.
  */
-app.get('/channels', (c) => {
-  const service = getService();
+app.openapi(getNotificationChannels, (c) => {
+  const service = getNotificationService();
   const channels = service.listConfiguredChannels();
 
   return c.json({
-    success: true,
+    success: true as const,
     data: {
       channels,
     },
-  });
+  }, 200);
 });
 
 export default app;

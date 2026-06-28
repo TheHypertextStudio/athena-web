@@ -23,7 +23,7 @@ export const AuditActionSchema = z.enum(['create', 'update', 'delete']).openapi(
 export const AuditLogSchema = z
   .object({
     id: z.string().openapi({ description: 'Audit log ID' }),
-    userId: z.uuid().openapi({ description: 'User ID' }),
+    userId: z.uuid().nullable().openapi({ description: 'User ID' }),
     action: AuditActionSchema,
     entityType: z.string().openapi({ description: 'Entity type' }),
     entityId: z.string().openapi({ description: 'Entity ID' }),

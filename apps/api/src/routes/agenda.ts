@@ -4,14 +4,31 @@
  * @packageDocumentation
  */
 
-import { Hono } from 'hono';
+import { createRoute } from '@hono/zod-openapi';
 import { eq, and, or, gte, lte, isNull, asc, desc } from 'drizzle-orm';
+import {
+  AgendaQuerySchema,
+  AgendaRangeQuerySchema,
+  DeadlinesQuerySchema,
+  WeekQuerySchema,
+  AgendaReorderRequestSchema,
+  AgendaResponseSchema,
+  AgendaRangeResponseSchema,
+  TodayAgendaResponseSchema,
+  ReorderResponseSchema,
+  TaskOrderResponseSchema,
+  DeadlinesResponseSchema,
+  WeekAgendaResponseSchema,
+} from '@athena/types/openapi/agenda';
+import { UnauthorizedErrorSchema, ErrorResponseSchema } from '@athena/types/openapi/common';
 import { db } from '../db/index.js';
 import { tasks, events, timeBlocks, timeEntries, agendaTaskOrder } from '../db/schema/index.js';
 import { requireAuth, getUserId } from '../middleware/auth.js';
 import { notDeleted } from '../lib/soft-delete.js';
+import { createOpenAPIApp } from '../lib/openapi.js';
+import { getWeekStart, toDateKey } from './agenda/helpers.js';
 
-const agendaRoutes = new Hono();
+const agendaRoutes = createOpenAPIApp();
 
 agendaRoutes.use('*', requireAuth);
 
@@ -35,22 +52,268 @@ const UTILIZATION_CAP_PERCENT = 100;
 const PERCENT_SCALE = 100;
 const DEFAULT_DEADLINE_LOOKAHEAD_DAYS = 7;
 const DAYS_IN_WEEK = 7;
-const SUNDAY_INDEX = 0;
-const SUNDAY_OFFSET = -6;
-const WEEK_START_MONDAY = 1;
+const ERROR_DATE_RANGE_REQUIRED = 'startDate and endDate are required';
 
-const toDateKey = (date: Date): string => date.toISOString().slice(0, 10);
+// =============================================================================
+// Get Agenda
+// =============================================================================
+
+const getAgenda = createRoute({
+  method: 'get',
+  path: '/',
+  tags: ['Agenda'],
+  summary: 'Get agenda',
+  description: 'Get agenda for a specific date.',
+  request: {
+    query: AgendaQuerySchema,
+  },
+  responses: {
+    200: {
+      description: 'Agenda retrieved successfully',
+      content: {
+        'application/json': {
+          schema: AgendaResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+  },
+});
+
+// =============================================================================
+// Get Agenda Range
+// =============================================================================
+
+const getAgendaRange = createRoute({
+  method: 'get',
+  path: '/range',
+  tags: ['Agenda'],
+  summary: 'Get agenda range',
+  description: 'Get agenda for a date range.',
+  request: {
+    query: AgendaRangeQuerySchema,
+  },
+  responses: {
+    200: {
+      description: 'Agenda range retrieved successfully',
+      content: {
+        'application/json': {
+          schema: AgendaRangeResponseSchema,
+        },
+      },
+    },
+    400: {
+      description: 'Missing required parameters',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+  },
+});
+
+// =============================================================================
+// Get Today Agenda
+// =============================================================================
+
+const getTodayAgenda = createRoute({
+  method: 'get',
+  path: '/today',
+  tags: ['Agenda'],
+  summary: 'Get today agenda',
+  description: 'Get agenda for today with time blocks and utilization.',
+  responses: {
+    200: {
+      description: 'Today agenda retrieved successfully',
+      content: {
+        'application/json': {
+          schema: TodayAgendaResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+  },
+});
+
+// =============================================================================
+// Reorder Tasks
+// =============================================================================
+
+const reorderTasks = createRoute({
+  method: 'post',
+  path: '/reorder',
+  tags: ['Agenda'],
+  summary: 'Reorder tasks',
+  description: 'Reorder tasks in the agenda for a specific date.',
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: AgendaReorderRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Tasks reordered successfully',
+      content: {
+        'application/json': {
+          schema: ReorderResponseSchema,
+        },
+      },
+    },
+    400: {
+      description: 'Invalid request',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+  },
+});
+
+// =============================================================================
+// Get Task Order
+// =============================================================================
+
+const getTaskOrder = createRoute({
+  method: 'get',
+  path: '/order',
+  tags: ['Agenda'],
+  summary: 'Get task order',
+  description: 'Get custom task order for a specific date.',
+  request: {
+    query: AgendaQuerySchema,
+  },
+  responses: {
+    200: {
+      description: 'Task order retrieved successfully',
+      content: {
+        'application/json': {
+          schema: TaskOrderResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+  },
+});
+
+// =============================================================================
+// Get Deadlines
+// =============================================================================
+
+const getDeadlines = createRoute({
+  method: 'get',
+  path: '/deadlines',
+  tags: ['Agenda'],
+  summary: 'Get upcoming deadlines',
+  description: 'Get upcoming task deadlines.',
+  request: {
+    query: DeadlinesQuerySchema,
+  },
+  responses: {
+    200: {
+      description: 'Deadlines retrieved successfully',
+      content: {
+        'application/json': {
+          schema: DeadlinesResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+  },
+});
+
+// =============================================================================
+// Get Week Agenda
+// =============================================================================
+
+const getWeekAgenda = createRoute({
+  method: 'get',
+  path: '/week',
+  tags: ['Agenda'],
+  summary: 'Get week agenda',
+  description: 'Get weekly overview.',
+  request: {
+    query: WeekQuerySchema,
+  },
+  responses: {
+    200: {
+      description: 'Week agenda retrieved successfully',
+      content: {
+        'application/json': {
+          schema: WeekAgendaResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+  },
+});
 
 /**
  * Get agenda for a specific date.
  * GET /api/agenda?date=YYYY-MM-DD
  */
-agendaRoutes.get('/', async (c) => {
+agendaRoutes.openapi(getAgenda, async (c) => {
   const userId = getUserId(c);
-  const dateParam = c.req.query('date');
+  const { date: dateParam } = c.req.valid('query');
 
   // Default to today if no date provided
-  const targetDate = dateParam ? new Date(dateParam) : new Date();
+  const targetDate = dateParam ?? new Date();
 
   // Start and end of the target day
   const startOfDay = new Date(targetDate);
@@ -197,40 +460,45 @@ agendaRoutes.get('/', async (c) => {
     DEFAULT_ESTIMATE_FALLBACK_MINUTES,
   );
 
-  return c.json({
-    data: {
-      date: toDateKey(targetDate),
-      items: agendaItems,
-      summary: {
-        totalTasks,
-        completedTasks,
-        totalEvents: userEvents.length,
-        estimatedMinutes,
-        estimatedHours:
-          Math.round((estimatedMinutes / MINUTES_PER_HOUR) * PERCENT_SCALE) / PERCENT_SCALE,
+  return c.json(
+    {
+      data: {
+        date: toDateKey(targetDate),
+        items: agendaItems,
+        summary: {
+          totalTasks,
+          completedTasks,
+          totalEvents: userEvents.length,
+          estimatedMinutes,
+          estimatedHours:
+            Math.round((estimatedMinutes / MINUTES_PER_HOUR) * PERCENT_SCALE) / PERCENT_SCALE,
+        },
       },
     },
-  });
+    200,
+  );
 });
 
 /**
  * Get agenda for a date range.
  * GET /api/agenda/range?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
  */
-agendaRoutes.get('/range', async (c) => {
+agendaRoutes.openapi(getAgendaRange, async (c) => {
   const userId = getUserId(c);
-  const startDateParam = c.req.query('startDate');
-  const endDateParam = c.req.query('endDate');
+  const { startDate: startDateParam, endDate: endDateParam } = c.req.valid('query');
 
   if (!startDateParam || !endDateParam) {
-    return c.json({ error: 'startDate and endDate are required' }, 400);
+    return c.json({ error: ERROR_DATE_RANGE_REQUIRED }, 400);
   }
 
   const startDate = new Date(startDateParam);
-  startDate.setHours(...START_OF_DAY);
-
   const endDate = new Date(endDateParam);
-  endDate.setHours(...END_OF_DAY);
+
+  const rangeStart = new Date(startDate);
+  rangeStart.setUTCHours(...START_OF_DAY);
+
+  const rangeEnd = new Date(endDate);
+  rangeEnd.setUTCHours(...END_OF_DAY);
 
   // Get tasks with deadlines in range
   const userTasks = await db.query.tasks.findMany({
@@ -240,8 +508,8 @@ agendaRoutes.get('/range', async (c) => {
         eq(tasks.statusCategory, TASK_STATUS_CATEGORY.NOT_STARTED),
         eq(tasks.statusCategory, TASK_STATUS_CATEGORY.IN_PROGRESS),
       ),
-      gte(tasks.deadline, startDate),
-      lte(tasks.deadline, endDate),
+      gte(tasks.deadline, rangeStart),
+      lte(tasks.deadline, rangeEnd),
     ),
     with: {
       project: true,
@@ -259,9 +527,9 @@ agendaRoutes.get('/range', async (c) => {
     where: and(
       eq(events.creatorId, userId),
       or(
-        and(gte(events.startTime, startDate), lte(events.startTime, endDate)),
-        and(gte(events.endTime, startDate), lte(events.endTime, endDate)),
-        and(lte(events.startTime, startDate), gte(events.endTime, endDate)),
+        and(gte(events.startTime, rangeStart), lte(events.startTime, rangeEnd)),
+        and(gte(events.endTime, rangeStart), lte(events.endTime, rangeEnd)),
+        and(lte(events.startTime, rangeStart), gte(events.endTime, rangeEnd)),
       ),
     ),
     with: {
@@ -274,25 +542,28 @@ agendaRoutes.get('/range', async (c) => {
     orderBy: (events, { asc }) => [asc(events.startTime)],
   });
 
-  return c.json({
-    data: {
-      startDate: startDateParam,
-      endDate: endDateParam,
-      tasks: userTasks,
-      events: userEvents,
-      summary: {
-        totalTasks: userTasks.length,
-        totalEvents: userEvents.length,
+  return c.json(
+    {
+      data: {
+        startDate: toDateKey(startDate),
+        endDate: toDateKey(endDate),
+        tasks: userTasks,
+        events: userEvents,
+        summary: {
+          totalTasks: userTasks.length,
+          totalEvents: userEvents.length,
+        },
       },
     },
-  });
+    200,
+  );
 });
 
 /**
  * Get today's agenda with time blocks and utilization.
  * GET /api/agenda/today
  */
-agendaRoutes.get('/today', async (c) => {
+agendaRoutes.openapi(getTodayAgenda, async (c) => {
   const userId = getUserId(c);
 
   const today = new Date();
@@ -394,46 +665,42 @@ agendaRoutes.get('/today', async (c) => {
     Math.round(((scheduledMinutes + estimatedTaskMinutes) / totalWorkMinutes) * PERCENT_SCALE),
   );
 
-  return c.json({
-    data: {
-      date: toDateKey(today),
-      tasks: userTasks,
-      events: userEvents,
-      timeBlocks: userTimeBlocks,
-      summary: {
-        taskCount: userTasks.length,
-        eventCount: userEvents.length,
-        timeBlockCount: userTimeBlocks.length,
-        estimatedTaskMinutes,
-        scheduledEventMinutes: scheduledMinutes,
-        trackedMinutes,
-        utilizationPercent,
-        availableMinutes: Math.max(
-          DEFAULT_ESTIMATE_FALLBACK_MINUTES,
-          totalWorkMinutes - scheduledMinutes - estimatedTaskMinutes,
-        ),
+  return c.json(
+    {
+      data: {
+        date: toDateKey(today),
+        tasks: userTasks,
+        events: userEvents,
+        timeBlocks: userTimeBlocks,
+        summary: {
+          taskCount: userTasks.length,
+          eventCount: userEvents.length,
+          timeBlockCount: userTimeBlocks.length,
+          estimatedTaskMinutes,
+          scheduledEventMinutes: scheduledMinutes,
+          trackedMinutes,
+          utilizationPercent,
+          availableMinutes: Math.max(
+            DEFAULT_ESTIMATE_FALLBACK_MINUTES,
+            totalWorkMinutes - scheduledMinutes - estimatedTaskMinutes,
+          ),
+        },
       },
     },
-  });
+    200,
+  );
 });
 
 /**
  * Reorder tasks in the agenda for a specific date.
  * POST /api/agenda/reorder
  */
-agendaRoutes.post('/reorder', async (c) => {
+agendaRoutes.openapi(reorderTasks, async (c) => {
   const userId = getUserId(c);
-  const body = await c.req.json<{
-    taskIds?: string[];
-    date?: string; // YYYY-MM-DD format, defaults to today
-  }>();
-
-  if (!Array.isArray(body.taskIds)) {
-    return c.json({ error: 'taskIds array is required' }, 400);
-  }
+  const body = c.req.valid('json');
 
   // Parse the date, default to today
-  const agendaDate = body.date ? new Date(body.date) : new Date();
+  const agendaDate = body.date ?? new Date();
   agendaDate.setHours(...START_OF_DAY);
 
   // Verify all tasks belong to the user
@@ -448,7 +715,7 @@ agendaRoutes.post('/reorder', async (c) => {
   const invalidIds = body.taskIds.filter((id) => !userTaskIds.has(id));
 
   if (invalidIds.length > 0) {
-    return c.json({ error: 'Invalid task IDs', invalidIds }, 400);
+    return c.json({ error: 'Invalid task IDs', details: { invalidIds } }, 400);
   }
 
   // Delete existing order for this date
@@ -481,22 +748,25 @@ agendaRoutes.post('/reorder', async (c) => {
     await db.insert(agendaTaskOrder).values(orderValues);
   }
 
-  return c.json({
-    success: true,
-    date: toDateKey(agendaDate),
-    orderedTaskIds: body.taskIds,
-  });
+  return c.json(
+    {
+      success: true as const,
+      date: toDateKey(agendaDate),
+      orderedTaskIds: body.taskIds,
+    },
+    200,
+  );
 });
 
 /**
  * Get the custom task order for a specific date.
  * GET /api/agenda/order?date=YYYY-MM-DD
  */
-agendaRoutes.get('/order', async (c) => {
+agendaRoutes.openapi(getTaskOrder, async (c) => {
   const userId = getUserId(c);
-  const dateParam = c.req.query('date');
+  const { date: dateParam } = c.req.valid('query');
 
-  const agendaDate = dateParam ? new Date(dateParam) : new Date();
+  const agendaDate = dateParam ?? new Date();
   agendaDate.setHours(...START_OF_DAY);
 
   const nextDay = new Date(agendaDate);
@@ -511,21 +781,25 @@ agendaRoutes.get('/order', async (c) => {
     orderBy: [asc(agendaTaskOrder.position)],
   });
 
-  return c.json({
-    data: {
-      date: toDateKey(agendaDate),
-      taskIds: order.map((o) => o.taskId),
+  return c.json(
+    {
+      data: {
+        date: toDateKey(agendaDate),
+        taskIds: order.map((o) => o.taskId),
+      },
     },
-  });
+    200,
+  );
 });
 
 /**
  * Get upcoming deadlines.
  * GET /api/agenda/deadlines
  */
-agendaRoutes.get('/deadlines', async (c) => {
+agendaRoutes.openapi(getDeadlines, async (c) => {
   const userId = getUserId(c);
-  const days = parseInt(c.req.query('days') ?? String(DEFAULT_DEADLINE_LOOKAHEAD_DAYS), 10);
+  const { days: daysParam } = c.req.valid('query');
+  const days = daysParam ?? DEFAULT_DEADLINE_LOOKAHEAD_DAYS;
 
   const now = new Date();
   const futureDate = new Date();
@@ -563,23 +837,26 @@ agendaRoutes.get('/deadlines', async (c) => {
     }
   }
 
-  return c.json({
-    data: {
-      tasks: upcomingTasks,
-      byDay,
-      totalCount: upcomingTasks.length,
-      overdueCount: upcomingTasks.filter((t) => t.deadline && t.deadline < now).length,
+  return c.json(
+    {
+      data: {
+        tasks: upcomingTasks,
+        byDay,
+        totalCount: upcomingTasks.length,
+        overdueCount: upcomingTasks.filter((t) => t.deadline && t.deadline < now).length,
+      },
     },
-  });
+    200,
+  );
 });
 
 /**
  * Get weekly overview.
  * GET /api/agenda/week
  */
-agendaRoutes.get('/week', async (c) => {
+agendaRoutes.openapi(getWeekAgenda, async (c) => {
   const userId = getUserId(c);
-  const startDateParam = c.req.query('startDate');
+  const { startDate: startDateParam } = c.req.valid('query');
 
   // Default to current week (Monday start)
   const startDate = startDateParam ? new Date(startDateParam) : getWeekStart(new Date());
@@ -639,29 +916,20 @@ agendaRoutes.get('/week', async (c) => {
     }
   }
 
-  return c.json({
-    data: {
-      startDate: toDateKey(startDate),
-      endDate: toDateKey(endDate),
-      days,
-      summary: {
-        totalTasks: weekTasks.length,
-        totalEvents: weekEvents.length,
+  return c.json(
+    {
+      data: {
+        startDate: toDateKey(startDate),
+        endDate: toDateKey(endDate),
+        days,
+        summary: {
+          totalTasks: weekTasks.length,
+          totalEvents: weekEvents.length,
+        },
       },
     },
-  });
+    200,
+  );
 });
-
-/**
- * Get Monday of the current week.
- */
-function getWeekStart(date: Date): Date {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === SUNDAY_INDEX ? SUNDAY_OFFSET : WEEK_START_MONDAY);
-  d.setDate(diff);
-  d.setHours(...START_OF_DAY);
-  return d;
-}
 
 export { agendaRoutes };

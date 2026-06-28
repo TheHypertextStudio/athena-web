@@ -7,7 +7,14 @@
  * @packageDocumentation
  */
 
-import { Hono } from 'hono';
+import { createRoute } from '@hono/zod-openapi';
+import {
+  RISCWebhookResponseSchema,
+  RISCWebhookVerifyResponseSchema,
+  RISCStreamResponseSchema,
+  RISCVerifyResponseSchema,
+} from '@athena/types/openapi/risc';
+import { ErrorResponseSchema } from '@athena/types/openapi/common';
 import {
   validateRISCToken,
   processRISCEvent,
@@ -17,8 +24,10 @@ import {
 } from '../services/risc/index.js';
 import { logger } from '../lib/logger.js';
 import { env } from '../lib/env.js';
+import { createOpenAPIApp } from '../lib/openapi.js';
+import { extractSecurityEventToken } from './risc/helpers.js';
 
-const riscRoutes = new Hono();
+const riscRoutes = createOpenAPIApp();
 
 const ERROR_MISSING_SECURITY_EVENT_TOKEN = 'Missing security event token';
 const ERROR_INVALID_SECURITY_EVENT = 'Invalid token';
@@ -32,6 +41,134 @@ const ERROR_STREAM_STATUS_FETCH = 'Failed to fetch stream status';
 const ERROR_VERIFICATION_REQUEST_FAILED = 'Failed to request verification';
 const MESSAGE_VERIFICATION_SENT = 'Verification request sent';
 
+// =============================================================================
+// RISC Webhook (POST)
+// =============================================================================
+
+const riscWebhook = createRoute({
+  method: 'post',
+  path: '/webhook',
+  tags: ['RISC'],
+  summary: 'RISC webhook',
+  description: 'Receive security events from Google Cross-Account Protection.',
+  responses: {
+    200: {
+      description: 'Event processed successfully',
+      content: {
+        'application/json': {
+          schema: RISCWebhookResponseSchema,
+        },
+      },
+    },
+    400: {
+      description: 'Invalid token or missing configuration',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+    500: {
+      description: 'Internal error',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+// =============================================================================
+// RISC Webhook Verification (GET)
+// =============================================================================
+
+const riscWebhookVerify = createRoute({
+  method: 'get',
+  path: '/webhook',
+  tags: ['RISC'],
+  summary: 'RISC webhook verification',
+  description: 'Verify webhook endpoint connectivity.',
+  responses: {
+    200: {
+      description: 'Webhook endpoint active',
+      content: {
+        'application/json': {
+          schema: RISCWebhookVerifyResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+// =============================================================================
+// Get RISC Stream Status
+// =============================================================================
+
+const getRiscStream = createRoute({
+  method: 'get',
+  path: '/stream',
+  tags: ['RISC'],
+  summary: 'Get RISC stream status',
+  description: 'Get RISC stream configuration and status.',
+  responses: {
+    200: {
+      description: 'Stream status retrieved',
+      content: {
+        'application/json': {
+          schema: RISCStreamResponseSchema,
+        },
+      },
+    },
+    500: {
+      description: 'Failed to fetch status',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+// =============================================================================
+// Request RISC Verification
+// =============================================================================
+
+const requestRiscVerification = createRoute({
+  method: 'post',
+  path: '/stream/verify',
+  tags: ['RISC'],
+  summary: 'Request RISC verification',
+  description: 'Send a verification request to Google.',
+  responses: {
+    200: {
+      description: 'Verification requested',
+      content: {
+        'application/json': {
+          schema: RISCVerifyResponseSchema,
+        },
+      },
+    },
+    400: {
+      description: 'RISC not configured',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+    500: {
+      description: 'Failed to request verification',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
 /**
  * RISC webhook endpoint.
  * POST /api/risc/webhook
@@ -39,34 +176,9 @@ const MESSAGE_VERIFICATION_SENT = 'Verification request sent';
  * Google sends security events as JWTs in the request body.
  * The JWT is validated using Google's public keys and our client ID as audience.
  */
-riscRoutes.post('/webhook', async (c) => {
+riscRoutes.openapi(riscWebhook, async (c) => {
   try {
-    // Get the raw body - Google sends JWT as form data or raw text
-    const contentType = c.req.header('content-type') ?? '';
-    let token: string;
-
-    if (contentType.includes('application/x-www-form-urlencoded')) {
-      // Form data format
-      const formData = await c.req.parseBody();
-      const assertion = formData.assertion;
-      token = typeof assertion === 'string' ? assertion : '';
-    } else if (contentType.includes('application/secevent+jwt')) {
-      // Direct JWT format (preferred)
-      token = await c.req.text();
-    } else if (contentType.includes('text/plain')) {
-      // Plain text JWT
-      token = await c.req.text();
-    } else {
-      // Try to get from JSON body
-      const body = await c.req.json<unknown>().catch(() => null);
-      if (body && typeof body === 'object' && !Array.isArray(body)) {
-        const record = body as Record<string, unknown>;
-        const rawToken = record.token ?? record.assertion;
-        token = typeof rawToken === 'string' ? rawToken : '';
-      } else {
-        token = '';
-      }
-    }
+    const token = await extractSecurityEventToken(c);
 
     if (!token) {
       logger.warn('[RISC] Received webhook with no token');
@@ -82,16 +194,19 @@ riscRoutes.post('/webhook', async (c) => {
 
     if (result.eventTypes.length === 0) {
       // Duplicate event - already processed
-      return c.json({ success: true, message: MESSAGE_EVENT_ALREADY_PROCESSED });
+      return c.json({ success: true, message: MESSAGE_EVENT_ALREADY_PROCESSED }, 200);
     }
 
     logger.info({ eventTypes: result.eventTypes }, '[RISC] Processed security events');
 
     // Google expects a 200-299 response
-    return c.json({
-      success: true,
-      eventTypes: result.eventTypes,
-    });
+    return c.json(
+      {
+        success: true,
+        eventTypes: result.eventTypes,
+      },
+      200,
+    );
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     logger.error({ error: errorMessage }, '[RISC] Error processing webhook');
@@ -119,11 +234,14 @@ riscRoutes.post('/webhook', async (c) => {
  *
  * Google may send verification requests to check endpoint connectivity.
  */
-riscRoutes.get('/webhook', (c) => {
-  return c.json({
-    status: STATUS_OK,
-    message: MESSAGE_WEBHOOK_ACTIVE,
-  });
+riscRoutes.openapi(riscWebhookVerify, (c) => {
+  return c.json(
+    {
+      status: STATUS_OK,
+      message: MESSAGE_WEBHOOK_ACTIVE,
+    },
+    200,
+  );
 });
 
 /**
@@ -133,13 +251,13 @@ riscRoutes.get('/webhook', (c) => {
  * Returns the current RISC stream configuration and status.
  * Useful for debugging and monitoring.
  */
-riscRoutes.get('/stream', async (c) => {
+riscRoutes.openapi(getRiscStream, async (c) => {
   try {
     // Check if RISC is configured
     if (!env.riscConfig) {
       return c.json(
         {
-          configured: false,
+          configured: false as const,
           message: MESSAGE_RISC_NOT_CONFIGURED,
         },
         200,
@@ -149,32 +267,32 @@ riscRoutes.get('/stream', async (c) => {
     // Get stream configuration and status
     const [stream, status] = await Promise.all([getStream(), getStreamStatus()]);
 
-    return c.json({
-      configured: true,
-      webhookUrl: env.riscConfig.webhookUrl,
-      authMethod: env.riscConfig.useAdc ? 'adc' : 'explicit',
-      stream: stream
-        ? {
-            deliveryUrl: stream.delivery.url,
-            eventsRequested: stream.events_requested,
-            eventsSupported: stream.events_supported,
-            eventsDelivered: stream.events_delivered,
-          }
-        : null,
-      status: status?.status ?? 'unknown',
-    });
+    const authMethod: 'adc' | 'explicit' = env.riscConfig.useAdc ? 'adc' : 'explicit';
+    const streamStatus: 'enabled' | 'disabled' | 'unknown' = status?.status ?? 'unknown';
+
+    return c.json(
+      {
+        configured: true as const,
+        webhookUrl: env.riscConfig.webhookUrl,
+        authMethod,
+        stream: stream
+          ? {
+              deliveryUrl: stream.delivery.url,
+              eventsRequested: stream.events_requested,
+              eventsSupported: stream.events_supported ?? [],
+              eventsDelivered: stream.events_delivered ?? [],
+            }
+          : null,
+        status: streamStatus,
+      },
+      200,
+    );
   } catch (error) {
     logger.error(
       { error: error instanceof Error ? error.message : 'Unknown error' },
       '[RISC] Error fetching stream status',
     );
-    return c.json(
-      {
-        configured: true,
-        error: ERROR_STREAM_STATUS_FETCH,
-      },
-      500,
-    );
+    return c.json({ error: ERROR_STREAM_STATUS_FETCH }, 500);
   }
 });
 
@@ -184,7 +302,7 @@ riscRoutes.get('/stream', async (c) => {
  *
  * Sends a verification request to Google to test the webhook.
  */
-riscRoutes.post('/stream/verify', async (c) => {
+riscRoutes.openapi(requestRiscVerification, async (c) => {
   try {
     if (!env.riscConfig) {
       return c.json({ error: ERROR_RISC_NOT_CONFIGURED }, 400);
@@ -195,11 +313,14 @@ riscRoutes.post('/stream/verify', async (c) => {
 
     logger.info({ state }, '[RISC] Verification requested');
 
-    return c.json({
-      success: true,
-      message: MESSAGE_VERIFICATION_SENT,
-      state,
-    });
+    return c.json(
+      {
+        success: true as const,
+        message: MESSAGE_VERIFICATION_SENT,
+        state,
+      },
+      200,
+    );
   } catch (error) {
     logger.error(
       { error: error instanceof Error ? error.message : 'Unknown error' },

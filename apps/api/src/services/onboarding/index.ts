@@ -6,11 +6,7 @@
 
 export {
   getOrCreateOnboardingConversation,
-  getOnboardingMessages,
-  sendOnboardingMessage,
-  generateOnboardingGreeting,
-  generateAgendaForUser,
-  type AgendaChunk,
+  updateConversationTimestamp,
 } from './service.js';
 
 export { ONBOARDING_TOOLS, executeOnboardingTool, type OnboardingToolContext } from './tools.js';

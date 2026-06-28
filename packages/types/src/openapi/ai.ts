@@ -34,7 +34,9 @@ export const MessageSchema = z
   .object({
     id: z.string().openapi({ description: 'Message ID' }),
     conversationId: z.string().openapi({ description: 'Conversation ID' }),
-    role: z.enum(['user', 'assistant', 'system']).openapi({ description: 'Message role' }),
+    role: z
+      .enum(['user', 'assistant', 'system', 'tool'])
+      .openapi({ description: 'Message role' }),
     content: z.string().openapi({ description: 'Message content' }),
     createdAt: TimestampSchema.openapi({ description: 'Creation timestamp' }),
   })
@@ -128,6 +130,11 @@ export const CreateConversationRequestSchema = z
   })
   .openapi('CreateConversationRequest');
 
+export const ChatContextSchema = z.enum(['general', 'onboarding']).openapi({
+  description: 'Context for scoped tools and behavior',
+  example: 'general',
+});
+
 export const ChatRequestSchema = z
   .object({
     conversationId: z.string().openapi({ description: 'Conversation ID' }),
@@ -135,6 +142,9 @@ export const ChatRequestSchema = z
     provider: AIProviderSchema.optional().openapi({ description: 'AI provider to use' }),
     temperature: z.number().min(0).max(2).optional().openapi({ description: 'Temperature' }),
     maxTokens: z.number().int().positive().optional().openapi({ description: 'Max tokens' }),
+    context: ChatContextSchema.optional().openapi({
+      description: 'Context for scoped tools (e.g., "onboarding" enables onboarding-specific tools)',
+    }),
   })
   .openapi('ChatRequest');
 
@@ -221,6 +231,7 @@ export const AIHealthResponseSchema = successResponseSchema(
 // =============================================================================
 
 export type AIProvider = z.infer<typeof AIProviderSchema>;
+export type ChatContext = z.infer<typeof ChatContextSchema>;
 export type Conversation = z.infer<typeof ConversationSchema>;
 export type ConversationWithMessages = z.infer<typeof ConversationWithMessagesSchema>;
 export type Message = z.infer<typeof MessageSchema>;

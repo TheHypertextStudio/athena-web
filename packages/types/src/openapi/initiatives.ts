@@ -28,7 +28,7 @@ export const InitiativeStatusSchema = z.enum(['draft', 'active', 'completed', 'a
 
 export const InitiativeSchema = z
   .object({
-    id: z.uuid().openapi({ description: 'Initiative UUID' }),
+    id: z.string().min(1).openapi({ description: 'Initiative ID' }),
     name: z.string().min(1).max(500).openapi({
       description: 'Initiative name',
       example: 'Q1 2025 Goals',
@@ -38,8 +38,8 @@ export const InitiativeSchema = z
       example: 'Key objectives for the first quarter',
     }),
     status: InitiativeStatusSchema,
-    parentId: z.uuid().nullable().openapi({
-      description: 'Parent initiative UUID for hierarchical initiatives',
+    parentId: z.string().min(1).nullable().openapi({
+      description: 'Parent initiative ID for hierarchical initiatives',
     }),
     ownerId: z.uuid().openapi({ description: 'Owner user UUID' }),
     deletedAt: TimestampSchema.nullable().openapi({
@@ -53,11 +53,19 @@ export const InitiativeSchema = z
 // Forward declare for recursive relations
 export const InitiativeRefSchema = z
   .object({
-    id: z.uuid().openapi({ description: 'Initiative UUID' }),
+    id: z.string().min(1).openapi({ description: 'Initiative ID' }),
     name: z.string().openapi({ description: 'Initiative name', example: 'Q1 Goals' }),
     status: InitiativeStatusSchema,
   })
   .openapi('InitiativeRefDetailed');
+
+export const InitiativeProjectSchema = z
+  .object({
+    id: z.string().min(1).openapi({ description: 'Project ID' }),
+    name: z.string().optional().openapi({ description: 'Project name' }),
+    tasks: z.array(z.unknown()).optional().openapi({ description: 'Project tasks' }),
+  })
+  .openapi('InitiativeProject');
 
 export const InitiativeWithRelationsSchema = InitiativeSchema.extend({
   parent: InitiativeRefSchema.nullable().optional().openapi({
@@ -68,6 +76,9 @@ export const InitiativeWithRelationsSchema = InitiativeSchema.extend({
   }),
   children: z.array(InitiativeRefSchema).optional().openapi({
     description: 'Child initiative summaries',
+  }),
+  projects: z.array(InitiativeProjectSchema).optional().openapi({
+    description: 'Projects in this initiative',
   }),
   projectCount: z.number().int().optional().openapi({
     description: 'Number of projects in this initiative',
@@ -80,9 +91,9 @@ export const InitiativeWithRelationsSchema = InitiativeSchema.extend({
 
 export const InitiativeIdParamSchema = z
   .object({
-    id: z.uuid().openapi({
-      description: 'Initiative UUID',
-      example: '123e4567-e89b-12d3-a456-426614174000',
+    id: z.string().min(1).openapi({
+      description: 'Initiative ID',
+      example: 'initiative-123',
       param: { name: 'id', in: 'path' },
     }),
   })
@@ -99,7 +110,8 @@ export const ListInitiativesQuerySchema = z
       param: { name: 'status', in: 'query' },
     }),
     parentId: z
-      .uuid()
+      .string()
+      .min(1)
       .optional()
       .openapi({
         description: 'Filter by parent initiative',
@@ -145,8 +157,8 @@ export const CreateInitiativeRequestSchema = z
     status: InitiativeStatusSchema.default('draft').openapi({
       description: 'Initial initiative status',
     }),
-    parentId: z.uuid().optional().openapi({
-      description: 'Parent initiative UUID for hierarchical initiatives',
+    parentId: z.string().min(1).optional().openapi({
+      description: 'Parent initiative ID for hierarchical initiatives',
     }),
   })
   .openapi('CreateInitiativeRequest');
@@ -162,8 +174,8 @@ export const UpdateInitiativeRequestSchema = z
     status: InitiativeStatusSchema.optional().openapi({
       description: 'Initiative status',
     }),
-    parentId: z.uuid().nullish().openapi({
-      description: 'Parent initiative UUID (null to clear)',
+    parentId: z.string().min(1).nullish().openapi({
+      description: 'Parent initiative ID (null to clear)',
     }),
   })
   .openapi('UpdateInitiativeRequest');

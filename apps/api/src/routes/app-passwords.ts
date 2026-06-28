@@ -7,50 +7,25 @@
  * @packageDocumentation
  */
 
-import { OpenAPIHono, createRoute as defineRoute, z } from '@hono/zod-openapi';
+import { createRoute, z } from '@hono/zod-openapi';
 import { requireAuth, getUserId } from '../middleware/auth.js';
 import { db } from '../db/index.js';
 import { appPasswords } from '../db/schema/index.js';
 import { eq, and } from 'drizzle-orm';
 import * as crypto from 'node:crypto';
 import { hashPassword, generateAppPassword } from '../services/caldav-server/index.js';
-import type { AppEnv } from '../lib/openapi.js';
+import { createOpenAPIApp } from '../lib/openapi.js';
+import {
+  AppPasswordSchema,
+  AppPasswordWithSecretSchema,
+  CreateAppPasswordSchema,
+} from './app-passwords/schemas.js';
+import { toAppPassword } from './app-passwords/serializers.js';
 
-const appPasswordRoutes = new OpenAPIHono<AppEnv>();
+const appPasswordRoutes = createOpenAPIApp();
 
 // Apply auth to all routes
 appPasswordRoutes.use('*', requireAuth);
-
-// ============================================================================
-// Schemas
-// ============================================================================
-
-const AppPasswordSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  scopes: z.array(z.string()),
-  lastUsedAt: z.string().nullable(),
-  lastUsedIp: z.string().nullable(),
-  expiresAt: z.string().nullable(),
-  createdAt: z.string(),
-});
-
-const CreateAppPasswordSchema = z.object({
-  name: z
-    .string()
-    .min(1, 'Name is required')
-    .max(100, 'Name too long')
-    .describe('User-friendly name for the device/app (e.g., "iPhone Calendar", "Thunderbird")'),
-  scopes: z
-    .array(z.enum(['caldav', 'carddav']))
-    .default(['caldav', 'carddav'])
-    .describe('Access scopes for this password'),
-  expiresAt: z.iso.datetime().optional().describe('Optional expiration date'),
-});
-
-const AppPasswordWithSecretSchema = AppPasswordSchema.extend({
-  password: z.string().describe('The generated password (only shown once)'),
-});
 
 // ============================================================================
 // Routes
@@ -59,7 +34,7 @@ const AppPasswordWithSecretSchema = AppPasswordSchema.extend({
 /**
  * List app passwords.
  */
-const listRoute = defineRoute({
+const listRoute = createRoute({
   method: 'get',
   path: '/',
   summary: 'List app passwords',
@@ -98,20 +73,13 @@ appPasswordRoutes.openapi(listRoute, async (c) => {
     orderBy: (t, { desc }) => desc(t.createdAt),
   });
 
-  return c.json({
-    data: passwords.map((p) => ({
-      ...p,
-      lastUsedAt: p.lastUsedAt?.toISOString() ?? null,
-      expiresAt: p.expiresAt?.toISOString() ?? null,
-      createdAt: p.createdAt.toISOString(),
-    })),
-  });
+  return c.json({ data: passwords.map(toAppPassword) });
 });
 
 /**
  * Create app password.
  */
-const createPasswordRoute = defineRoute({
+const createPasswordRoute = createRoute({
   method: 'post',
   path: '/',
   summary: 'Create app password',
@@ -168,20 +136,22 @@ appPasswordRoutes.openapi(createPasswordRoute, async (c) => {
     name: body.name,
     passwordHash,
     scopes: body.scopes,
-    expiresAt: body.expiresAt ? new Date(body.expiresAt) : null,
+    expiresAt: body.expiresAt ?? null,
     createdAt: now,
   });
 
   return c.json(
     {
       data: {
-        id,
-        name: body.name,
-        scopes: body.scopes,
-        lastUsedAt: null,
-        lastUsedIp: null,
-        expiresAt: body.expiresAt ?? null,
-        createdAt: now.toISOString(),
+        ...toAppPassword({
+          id,
+          name: body.name,
+          scopes: body.scopes,
+          lastUsedAt: null,
+          lastUsedIp: null,
+          expiresAt: body.expiresAt ?? null,
+          createdAt: now,
+        }),
         password: plainPassword, // Only returned on creation
       },
     },
@@ -192,7 +162,7 @@ appPasswordRoutes.openapi(createPasswordRoute, async (c) => {
 /**
  * Update app password name.
  */
-const updateRoute = defineRoute({
+const updateRoute = createRoute({
   method: 'patch',
   path: '/:id',
   summary: 'Update app password',
@@ -263,23 +233,13 @@ appPasswordRoutes.openapi(updateRoute, async (c) => {
   if (!p) {
     return c.json({ error: 'App password not found' }, 404);
   }
-  return c.json(
-    {
-      data: {
-        ...p,
-        lastUsedAt: p.lastUsedAt?.toISOString() ?? null,
-        expiresAt: p.expiresAt?.toISOString() ?? null,
-        createdAt: p.createdAt.toISOString(),
-      },
-    },
-    200,
-  );
+  return c.json({ data: toAppPassword(p) }, 200);
 });
 
 /**
  * Delete app password.
  */
-const deleteRoute = defineRoute({
+const deleteRoute = createRoute({
   method: 'delete',
   path: '/:id',
   summary: 'Delete app password',

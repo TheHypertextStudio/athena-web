@@ -1,94 +1,367 @@
 /**
  * Onboarding routes for the 3-step conversational onboarding flow.
  *
- * The onboarding flow is:
- * 1. Intent - Athena asks what brings the user here
- * 2. Integrations - Connect calendar and task sources
- * 3. Agenda - AI generates personalized agenda for approval
- *
- * Athena drives the conversation using tools to:
- * - Respond to user intent with personalized messages
- * - Suggest integrations based on stated goals
- * - Generate time blocks for the user's agenda
+ * This is a minimal RESTful API that manages onboarding state.
+ * Other functionality is delegated to general-purpose endpoints:
+ * - AI conversation: POST /api/ai/chat with context: "onboarding"
+ * - Calendar connections: /api/calendar-sync/*
+ * - Time block generation: POST /api/time-blocks/generate
  *
  * @packageDocumentation
  */
 
-import { Hono } from 'hono';
-import { streamSSE } from 'hono/streaming';
+import { createRoute } from '@hono/zod-openapi';
 import { eq } from 'drizzle-orm';
-import { z } from 'zod';
+import {
+  ErrorResponseSchema,
+  UnauthorizedErrorSchema,
+} from '@athena/types/openapi/common';
+import {
+  IntentChipsResponseSchema,
+  LegacyOnboardingStatusResponseSchema,
+  OnboardingCompleteRequestSchema,
+  OnboardingCompleteResponseSchema,
+  OnboardingSkipRequestSchema,
+  OnboardingSkipResponseSchema,
+  OnboardingStatusResponseSchema,
+  OnboardingUpdateResponseSchema,
+  UpdateOnboardingRequestSchema,
+  UpdateOnboardingStepRequestSchema,
+} from '@athena/types/openapi/onboarding';
 import { db } from '../db/index.js';
-import { onboardingProgress, type OnboardingMetadata } from '../db/schema/index.js';
+import { onboardingProgress, type OnboardingMetadata as DbOnboardingMetadata } from '../db/schema/index.js';
 import { users } from '../db/schema/auth.js';
 import { requireAuth, getUserId } from '../middleware/auth.js';
+import { createOpenAPIApp } from '../lib/openapi.js';
+import { DEFAULT_STEP, INTENT_CHIPS, mergeOnboardingMetadata } from './onboarding/helpers.js';
+import { toLegacyOnboardingStatusData } from './onboarding/legacy.js';
+import { toOnboardingStatus, toOnboardingUpdate } from './onboarding/serializers.js';
 import {
-  sendOnboardingMessage,
-  generateOnboardingGreeting,
-  getOnboardingMessages,
-  generateAgendaForUser,
-} from '../services/onboarding/index.js';
-import { getCalendarSyncService } from '../services/calendar-sync/service.js';
+  ERROR_ONBOARDING_ALREADY_FINISHED,
+  completeLegacyOnboarding,
+  getOrCreateOnboardingProgress,
+  skipLegacyOnboarding,
+  updateLegacyOnboardingStep,
+} from './onboarding/service.js';
 
-const onboardingRoutes = new Hono();
+const onboardingRoutes = createOpenAPIApp();
 
 onboardingRoutes.use('*', requireAuth);
 
-/**
- * Valid onboarding steps.
- */
-const ONBOARDING_STEPS = ['intent', 'integrations', 'agenda'] as const;
-type OnboardingStep = (typeof ONBOARDING_STEPS)[number];
+// =============================================================================
+// Get Onboarding Status
+// =============================================================================
 
-const DEFAULT_STEP: OnboardingStep = 'intent';
-
-/**
- * Intent chip options for the first step.
- * These are the curated options users can select from.
- */
-export const INTENT_CHIPS = [
-  { id: 'organized', label: 'Get more organized', icon: '📋' },
-  { id: 'focus', label: 'Focus on what matters', icon: '🎯' },
-  { id: 'time', label: 'Better time management', icon: '⏰' },
-  { id: 'projects', label: 'Track projects', icon: '📊' },
-  { id: 'calendars', label: 'Consolidate my calendars', icon: '📅' },
-  { id: 'ai', label: 'AI-powered productivity', icon: '🤖' },
-] as const;
-
-// Validation schemas
-const stepSchema = z.enum(ONBOARDING_STEPS);
-
-const updateStepSchema = z.object({
-  step: stepSchema,
-  metadata: z.record(z.string(), z.unknown()).optional(),
+const getOnboardingStatus = createRoute({
+  method: 'get',
+  path: '/',
+  tags: ['Onboarding'],
+  summary: 'Get onboarding status',
+  description: 'Get current onboarding state for the authenticated user.',
+  responses: {
+    200: {
+      description: 'Onboarding status retrieved successfully',
+      content: {
+        'application/json': {
+          schema: OnboardingStatusResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+    500: {
+      description: 'Internal error',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
 });
 
-const generateAgendaSchema = z.object({
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD format'),
-  intent: z
-    .object({
-      selectedChips: z.array(z.string()),
-      customText: z.string().nullable(),
-    })
-    .optional(),
+// =============================================================================
+// Update Onboarding
+// =============================================================================
+
+const patchOnboarding = createRoute({
+  method: 'patch',
+  path: '/',
+  tags: ['Onboarding'],
+  summary: 'Update onboarding',
+  description:
+    'Update onboarding state. Can advance step, merge metadata, complete, or skip.',
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: UpdateOnboardingRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Onboarding updated successfully',
+      content: {
+        'application/json': {
+          schema: OnboardingUpdateResponseSchema,
+        },
+      },
+    },
+    400: {
+      description: 'Invalid request or onboarding already finished',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+    500: {
+      description: 'Internal error',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
 });
 
-// Error messages
-const ERROR_ONBOARDING_NOT_STARTED = 'Onboarding not started';
-const ERROR_INVALID_STEP = 'Invalid onboarding step';
-const ERROR_ALREADY_COMPLETED = 'Onboarding already completed';
-const ERROR_ALREADY_SKIPPED = 'Onboarding already skipped';
-const ERROR_ALREADY_FINISHED = 'Onboarding already finished';
+// =============================================================================
+// Legacy Step Update
+// =============================================================================
+
+const updateOnboardingStep = createRoute({
+  method: 'patch',
+  path: '/step',
+  tags: ['Onboarding'],
+  summary: 'Update onboarding step',
+  description: 'Advance onboarding to a new step (legacy endpoint).',
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: UpdateOnboardingStepRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Onboarding step updated',
+      content: {
+        'application/json': {
+          schema: LegacyOnboardingStatusResponseSchema,
+        },
+      },
+    },
+    400: {
+      description: 'Invalid step or onboarding already finished',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+    404: {
+      description: 'Onboarding not started',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+// =============================================================================
+// Legacy Complete
+// =============================================================================
+
+const completeOnboarding = createRoute({
+  method: 'post',
+  path: '/complete',
+  tags: ['Onboarding'],
+  summary: 'Complete onboarding',
+  description: 'Mark onboarding as complete (legacy endpoint).',
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: OnboardingCompleteRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Onboarding completed',
+      content: {
+        'application/json': {
+          schema: OnboardingCompleteResponseSchema,
+        },
+      },
+    },
+    400: {
+      description: 'Onboarding already completed',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+    404: {
+      description: 'Onboarding not started',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+// =============================================================================
+// Legacy Skip
+// =============================================================================
+
+const skipOnboarding = createRoute({
+  method: 'post',
+  path: '/skip',
+  tags: ['Onboarding'],
+  summary: 'Skip onboarding',
+  description: 'Skip onboarding (legacy endpoint).',
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: OnboardingSkipRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Onboarding skipped',
+      content: {
+        'application/json': {
+          schema: OnboardingSkipResponseSchema,
+        },
+      },
+    },
+    400: {
+      description: 'Onboarding already completed or skipped',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+  },
+});
+
+// =============================================================================
+// Reset Onboarding
+// =============================================================================
+
+const resetOnboarding = createRoute({
+  method: 'delete',
+  path: '/',
+  tags: ['Onboarding'],
+  summary: 'Reset onboarding',
+  description: 'Reset onboarding progress (for testing/support).',
+  responses: {
+    204: {
+      description: 'Onboarding reset successfully',
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+  },
+});
+
+// =============================================================================
+// Intent Chips
+// =============================================================================
+
+const getIntentChips = createRoute({
+  method: 'get',
+  path: '/intent-chips',
+  tags: ['Onboarding'],
+  summary: 'Get intent chips',
+  description: 'Get curated intent chip options for the first step.',
+  responses: {
+    200: {
+      description: 'Intent chips retrieved',
+      content: {
+        'application/json': {
+          schema: IntentChipsResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+  },
+});
 
 /**
- * Get onboarding status for the authenticated user.
+ * Get onboarding status.
  *
  * GET /api/onboarding
  *
- * Returns the current onboarding state including step, metadata,
- * and user info (name from IdP).
+ * Returns current onboarding state including step, metadata, and user info.
  */
-onboardingRoutes.get('/', async (c) => {
+onboardingRoutes.openapi(getOnboardingStatus, async (c) => {
   const userId = getUserId(c);
 
   // Get user info for the response
@@ -100,15 +373,51 @@ onboardingRoutes.get('/', async (c) => {
     },
   });
 
-  let progress = await db.query.onboardingProgress.findFirst({
+  const progress = await getOrCreateOnboardingProgress(userId);
+
+  if (!progress) {
+    return c.json({ error: 'Failed to create onboarding progress' }, 500);
+  }
+
+  const status = toOnboardingStatus(
+    progress,
+    user
+      ? {
+          name: user.name,
+          email: user.email,
+        }
+      : null,
+  );
+  const legacyData = toLegacyOnboardingStatusData(progress);
+
+  return c.json({ ...status, data: legacyData }, 200);
+});
+
+/**
+ * Update onboarding state.
+ *
+ * PATCH /api/onboarding
+ *
+ * Unified endpoint to:
+ * - Advance to a new step
+ * - Merge metadata
+ * - Mark as complete
+ * - Mark as skipped
+ */
+onboardingRoutes.openapi(patchOnboarding, async (c) => {
+  const userId = getUserId(c);
+  const { step, metadata, complete, skip } = c.req.valid('json');
+
+  // Get or create progress
+  let existing = await db.query.onboardingProgress.findFirst({
     where: eq(onboardingProgress.userId, userId),
   });
 
-  // If no progress exists, create initial record
-  if (!progress) {
-    const id = crypto.randomUUID();
-    const now = new Date();
+  const now = new Date();
 
+  if (!existing) {
+    // Create initial record
+    const id = crypto.randomUUID();
     await db.insert(onboardingProgress).values({
       id,
       userId,
@@ -117,266 +426,136 @@ onboardingRoutes.get('/', async (c) => {
       createdAt: now,
       updatedAt: now,
     });
-
-    progress = await db.query.onboardingProgress.findFirst({
+    existing = await db.query.onboardingProgress.findFirst({
       where: eq(onboardingProgress.userId, userId),
     });
   }
 
-  if (!progress) {
+  if (!existing) {
     return c.json({ error: 'Failed to create onboarding progress' }, 500);
   }
 
-  return c.json({
-    currentStep: progress.currentStep,
-    metadata: progress.metadata ?? {},
-    skippedAt: progress.skippedAt?.toISOString() ?? null,
-    completedAt: progress.completedAt?.toISOString() ?? null,
-    user: user
-      ? {
-          name: user.name,
-          email: user.email,
-        }
-      : null,
-  });
-});
-
-/**
- * Update current onboarding step.
- *
- * PATCH /api/onboarding/step
- *
- * Updates the current step and merges metadata.
- * Metadata is merged, not replaced, to preserve data from previous steps.
- */
-onboardingRoutes.patch('/step', async (c) => {
-  const userId = getUserId(c);
-  const body = await c.req.json<unknown>();
-
-  const parsed = updateStepSchema.safeParse(body);
-  if (!parsed.success) {
-    return c.json({ error: ERROR_INVALID_STEP, details: z.treeifyError(parsed.error) }, 400);
+  // Check if already finished
+  if ((existing.completedAt || existing.skippedAt) && !complete && !skip) {
+    return c.json({ error: ERROR_ONBOARDING_ALREADY_FINISHED }, 400);
   }
 
-  const { step, metadata } = parsed.data;
+  // Build update object
+  const metadataInput = complete ? { ...(metadata ?? {}), agendaApprovedAt: now } : metadata;
+  const mergedMetadata: DbOnboardingMetadata = mergeOnboardingMetadata(
+    existing.metadata,
+    metadataInput,
+  );
 
-  const existing = await db.query.onboardingProgress.findFirst({
-    where: eq(onboardingProgress.userId, userId),
-  });
+  // Determine redirect URL
+  let redirectTo: string | null = null;
 
-  if (!existing) {
-    return c.json({ error: ERROR_ONBOARDING_NOT_STARTED }, 404);
-  }
-
-  if (existing.completedAt || existing.skippedAt) {
-    return c.json({ error: ERROR_ALREADY_FINISHED }, 400);
-  }
-
-  // Merge metadata instead of replacing
-  const existingMetadata = (existing.metadata as OnboardingMetadata | null | undefined) ?? {};
-  const incomingMetadata = metadata ? (metadata as Partial<OnboardingMetadata>) : undefined;
-  const mergedMetadata: OnboardingMetadata = {
-    ...existingMetadata,
-    ...(incomingMetadata ?? {}),
+  const updateData: Partial<typeof onboardingProgress.$inferInsert> = {
+    metadata: mergedMetadata,
+    updatedAt: now,
   };
 
-  // Deep merge intent if both exist
-  if (existingMetadata.intent && incomingMetadata?.intent) {
-    mergedMetadata.intent = {
-      ...existingMetadata.intent,
-      ...incomingMetadata.intent,
-    };
+  if (step) {
+    updateData.currentStep = step;
+  }
+
+  if (complete) {
+    updateData.completedAt = now;
+    redirectTo = '/home';
+  }
+
+  if (skip) {
+    updateData.skippedAt = now;
+    redirectTo = '/home';
   }
 
   await db
     .update(onboardingProgress)
-    .set({
-      currentStep: step,
-      metadata: mergedMetadata,
-      updatedAt: new Date(),
-    })
+    .set(updateData)
     .where(eq(onboardingProgress.userId, userId));
 
   const updated = await db.query.onboardingProgress.findFirst({
     where: eq(onboardingProgress.userId, userId),
   });
 
-  return c.json({
-    currentStep: updated?.currentStep,
-    metadata: updated?.metadata ?? {},
-  });
+  const response = toOnboardingUpdate(updated, redirectTo);
+  const legacyData = updated ? toLegacyOnboardingStatusData(updated) : undefined;
+
+  return c.json(legacyData ? { ...response, data: legacyData } : response, 200);
 });
 
 /**
- * Complete onboarding.
+ * Update onboarding step (legacy).
+ *
+ * PATCH /api/onboarding/step
+ */
+onboardingRoutes.openapi(updateOnboardingStep, async (c) => {
+  const userId = getUserId(c);
+  const { step, metadata } = c.req.valid('json');
+
+  const result = await updateLegacyOnboardingStep(userId, step, metadata);
+
+  if (!result.ok) {
+    return c.json({ error: result.error }, result.status);
+  }
+
+  return c.json({ data: toLegacyOnboardingStatusData(result.progress) }, 200);
+});
+
+/**
+ * Complete onboarding (legacy).
  *
  * POST /api/onboarding/complete
- *
- * Marks onboarding as completed. Returns redirect URL to home.
  */
-onboardingRoutes.post('/complete', async (c) => {
+onboardingRoutes.openapi(completeOnboarding, async (c) => {
   const userId = getUserId(c);
+  const result = await completeLegacyOnboarding(userId);
 
-  const existing = await db.query.onboardingProgress.findFirst({
-    where: eq(onboardingProgress.userId, userId),
-  });
-
-  if (!existing) {
-    return c.json({ error: ERROR_ONBOARDING_NOT_STARTED }, 404);
+  if (!result.ok) {
+    return c.json({ error: result.error }, result.status);
   }
 
-  if (existing.completedAt) {
-    return c.json({ error: ERROR_ALREADY_COMPLETED }, 400);
-  }
-
-  const now = new Date();
-
-  // Update metadata with agenda approval timestamp
-  const metadata = (existing.metadata as OnboardingMetadata | null | undefined) ?? {};
-  metadata.agendaApprovedAt = now.toISOString();
-
-  await db
-    .update(onboardingProgress)
-    .set({
-      completedAt: now,
-      metadata,
-      updatedAt: now,
-    })
-    .where(eq(onboardingProgress.userId, userId));
-
-  return c.json({
-    completedAt: now.toISOString(),
-    redirectTo: '/home',
-  });
+  return c.json(
+    {
+      data: {
+        completed: true,
+        completedAt: result.completedAt.toISOString(),
+      },
+    },
+    200,
+  );
 });
 
 /**
- * Skip onboarding.
+ * Skip onboarding (legacy).
  *
  * POST /api/onboarding/skip
- *
- * Marks onboarding as skipped. Preserves any partial progress.
- * Returns redirect URL to home.
  */
-onboardingRoutes.post('/skip', async (c) => {
+onboardingRoutes.openapi(skipOnboarding, async (c) => {
   const userId = getUserId(c);
+  const result = await skipLegacyOnboarding(userId);
 
-  const existing = await db.query.onboardingProgress.findFirst({
-    where: eq(onboardingProgress.userId, userId),
-  });
-
-  const now = new Date();
-
-  if (!existing) {
-    // Create and immediately skip
-    const id = crypto.randomUUID();
-
-    await db.insert(onboardingProgress).values({
-      id,
-      userId,
-      currentStep: DEFAULT_STEP,
-      metadata: {},
-      skippedAt: now,
-      createdAt: now,
-      updatedAt: now,
-    });
-
-    return c.json({
-      skippedAt: now.toISOString(),
-      redirectTo: '/home',
-    });
+  if (!result.ok) {
+    return c.json({ error: result.error }, result.status);
   }
 
-  if (existing.completedAt) {
-    return c.json({ error: ERROR_ALREADY_COMPLETED }, 400);
-  }
-
-  if (existing.skippedAt) {
-    return c.json({ error: ERROR_ALREADY_SKIPPED }, 400);
-  }
-
-  await db
-    .update(onboardingProgress)
-    .set({
-      skippedAt: now,
-      updatedAt: now,
-    })
-    .where(eq(onboardingProgress.userId, userId));
-
-  return c.json({
-    skippedAt: now.toISOString(),
-    redirectTo: '/home',
-  });
+  return c.json(
+    {
+      data: {
+        skipped: true,
+        skippedAt: result.skippedAt.toISOString(),
+      },
+    },
+    200,
+  );
 });
 
 /**
- * Generate personalized agenda.
- *
- * POST /api/onboarding/generate-agenda
- *
- * Generates AI-suggested time blocks based on:
- * - User's stated intent
- * - Connected calendar events
- * - Time of day preferences
- *
- * Returns a streaming SSE response with time blocks as they're generated.
- */
-onboardingRoutes.post('/generate-agenda', async (c) => {
-  const userId = getUserId(c);
-  const body = await c.req.json<unknown>();
-
-  const parsed = generateAgendaSchema.safeParse(body);
-  if (!parsed.success) {
-    return c.json({ error: 'Invalid request', details: z.treeifyError(parsed.error) }, 400);
-  }
-
-  const { date, intent } = parsed.data;
-
-  // Get existing onboarding progress for intent data
-  const progress = await db.query.onboardingProgress.findFirst({
-    where: eq(onboardingProgress.userId, userId),
-  });
-
-  const metadata: OnboardingMetadata = progress?.metadata ?? {};
-  const userIntent = intent ?? metadata.intent;
-
-  // Delegate to service which uses existing tools infrastructure
-  return streamSSE(c, async (stream) => {
-    for await (const chunk of generateAgendaForUser(userId, date, userIntent)) {
-      if (chunk.type === 'block') {
-        await stream.writeSSE({
-          event: 'block',
-          data: JSON.stringify(chunk.block),
-        });
-      } else {
-        // chunk.type === 'done'
-        await stream.writeSSE({
-          event: 'done',
-          data: JSON.stringify({ totalBlocks: chunk.totalBlocks }),
-        });
-      }
-    }
-
-    // Update metadata to indicate agenda was generated
-    if (progress) {
-      const updatedMetadata = { ...metadata, agendaGenerated: true };
-      await db
-        .update(onboardingProgress)
-        .set({
-          metadata: updatedMetadata,
-          updatedAt: new Date(),
-        })
-        .where(eq(onboardingProgress.userId, userId));
-    }
-  });
-});
-
-/**
- * Reset onboarding (for testing/support purposes).
+ * Reset onboarding (for testing/support).
  *
  * DELETE /api/onboarding
  */
-onboardingRoutes.delete('/', async (c) => {
+onboardingRoutes.openapi(resetOnboarding, async (c) => {
   const userId = getUserId(c);
 
   await db.delete(onboardingProgress).where(eq(onboardingProgress.userId, userId));
@@ -388,225 +567,9 @@ onboardingRoutes.delete('/', async (c) => {
  * Get available intent chips.
  *
  * GET /api/onboarding/intent-chips
- *
- * Returns the curated list of intent options for the first step.
  */
-onboardingRoutes.get('/intent-chips', (c) => {
-  return c.json({ chips: INTENT_CHIPS });
-});
-
-// ============================================================================
-// AI Conversation Endpoints
-// ============================================================================
-
-/**
- * Get conversation messages.
- *
- * GET /api/onboarding/messages
- *
- * Returns the conversation history for the onboarding flow.
- */
-onboardingRoutes.get('/messages', async (c) => {
-  const userId = getUserId(c);
-
-  try {
-    const messages = await getOnboardingMessages(userId);
-    return c.json({ messages });
-  } catch (error) {
-    console.error('Failed to get onboarding messages:', error);
-    return c.json({ messages: [] });
-  }
-});
-
-/**
- * Get initial greeting from Athena.
- *
- * GET /api/onboarding/greeting
- *
- * Returns a streaming greeting message from Athena.
- */
-onboardingRoutes.get('/greeting', async (c) => {
-  const userId = getUserId(c);
-
-  const user = await db.query.users.findFirst({
-    where: eq(users.id, userId),
-    columns: { name: true },
-  });
-
-  return streamSSE(c, async (stream) => {
-    for await (const chunk of generateOnboardingGreeting(userId, user?.name ?? null)) {
-      if (chunk.type === 'content' && chunk.content) {
-        await stream.writeSSE({
-          event: 'content',
-          data: chunk.content,
-        });
-      } else if (chunk.type === 'done') {
-        await stream.writeSSE({
-          event: 'done',
-          data: '{}',
-        });
-      } else if (chunk.type === 'error' && chunk.error) {
-        await stream.writeSSE({
-          event: 'error',
-          data: JSON.stringify({ error: chunk.error }),
-        });
-      }
-    }
-  });
-});
-
-/**
- * Send a message to Athena.
- *
- * POST /api/onboarding/chat
- *
- * Sends a message to the AI and returns a streaming response.
- * Athena may use tools to:
- * - Acknowledge user intent
- * - Suggest integrations
- * - Generate time blocks
- * - Advance the onboarding step
- */
-onboardingRoutes.post('/chat', async (c) => {
-  const userId = getUserId(c);
-  const body = await c.req.json<{ message: string }>();
-
-  if (!body.message || typeof body.message !== 'string') {
-    return c.json({ error: 'Message is required' }, 400);
-  }
-
-  // Get base URL for OAuth redirects
-  const protocol = c.req.header('x-forwarded-proto') ?? 'http';
-  const host = c.req.header('host') ?? 'localhost:8787';
-  const baseUrl = `${protocol}://${host}`;
-
-  return streamSSE(c, async (stream) => {
-    for await (const chunk of sendOnboardingMessage(userId, body.message, baseUrl)) {
-      if (chunk.type === 'content' && chunk.content) {
-        await stream.writeSSE({
-          event: 'content',
-          data: chunk.content,
-        });
-      } else if (chunk.type === 'tool_call' && chunk.toolCall) {
-        await stream.writeSSE({
-          event: 'tool_call',
-          data: JSON.stringify(chunk.toolCall),
-        });
-      } else if (chunk.type === 'done') {
-        await stream.writeSSE({
-          event: 'done',
-          data: JSON.stringify(chunk.fullResponse ?? {}),
-        });
-      } else if (chunk.type === 'error' && chunk.error) {
-        await stream.writeSSE({
-          event: 'error',
-          data: JSON.stringify({ error: chunk.error }),
-        });
-      }
-    }
-  });
-});
-
-// ============================================================================
-// Calendar Integration Endpoints
-// ============================================================================
-
-/**
- * Get OAuth URL for a calendar provider.
- *
- * GET /api/onboarding/calendar/oauth/:provider
- *
- * Returns the OAuth authorization URL for the specified provider.
- */
-onboardingRoutes.get('/calendar/oauth/:provider', (c) => {
-  const provider = c.req.param('provider');
-
-  if (!['google', 'outlook', 'icloud'].includes(provider)) {
-    return c.json({ error: 'Invalid provider' }, 400);
-  }
-
-  const calendarSyncService = getCalendarSyncService();
-
-  // Generate a random state for CSRF protection
-  const state = crypto.randomUUID();
-
-  try {
-    const authUrl = calendarSyncService.getAuthUrl(
-      provider as 'google' | 'outlook' | 'icloud',
-      state,
-    );
-
-    return c.json({
-      provider,
-      authorizationUrl: authUrl,
-      state,
-      configured: true,
-    });
-  } catch (error) {
-    return c.json({
-      provider,
-      authorizationUrl: '',
-      configured: false,
-      error: error instanceof Error ? error.message : 'Provider not configured',
-    });
-  }
-});
-
-/**
- * Get connected calendar integrations.
- *
- * GET /api/onboarding/calendar/connections
- *
- * Returns the user's connected calendar integrations with sync status.
- */
-onboardingRoutes.get('/calendar/connections', async (c) => {
-  const userId = getUserId(c);
-
-  try {
-    const calendarSyncService = getCalendarSyncService();
-    const connections = await calendarSyncService.getConnections(userId);
-
-    return c.json({
-      connections: connections.map((conn) => ({
-        id: conn.id,
-        provider: conn.provider,
-        accountEmail: conn.accountEmail,
-        calendarCount: conn.calendars.length,
-        lastSyncAt: conn.lastSyncAt?.toISOString() ?? null,
-        lastSyncStatus: conn.lastSyncStatus ?? null,
-      })),
-    });
-  } catch (error) {
-    console.error('Failed to get calendar connections:', error);
-    return c.json({ connections: [] });
-  }
-});
-
-/**
- * Trigger calendar sync for a connection.
- *
- * POST /api/onboarding/calendar/sync/:connectionId
- *
- * Triggers a sync for the specified calendar connection.
- */
-onboardingRoutes.post('/calendar/sync/:connectionId', async (c) => {
-  const userId = getUserId(c);
-  const connectionId = c.req.param('connectionId');
-
-  try {
-    const calendarSyncService = getCalendarSyncService();
-    const result = await calendarSyncService.sync(connectionId, userId);
-
-    return c.json({
-      success: result.success,
-      eventsCreated: result.eventsCreated,
-      eventsUpdated: result.eventsUpdated,
-      eventsDeleted: result.eventsDeleted,
-      syncedAt: result.syncedAt.toISOString(),
-    });
-  } catch (error) {
-    return c.json({ error: error instanceof Error ? error.message : 'Sync failed' }, 500);
-  }
+onboardingRoutes.openapi(getIntentChips, (c) => {
+  return c.json({ chips: INTENT_CHIPS.map((chip) => ({ ...chip })) }, 200);
 });
 
 export { onboardingRoutes };

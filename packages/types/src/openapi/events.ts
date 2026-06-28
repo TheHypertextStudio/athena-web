@@ -118,9 +118,9 @@ export const EventWithRelationsSchema = EventSchema.extend({
 
 export const EventIdParamSchema = z
   .object({
-    id: z.uuid().openapi({
-      description: 'Event UUID',
-      example: '123e4567-e89b-12d3-a456-426614174000',
+    id: z.string().min(1).openapi({
+      description: 'Event ID',
+      example: 'event-123',
       param: { name: 'id', in: 'path' },
     }),
   })
@@ -128,12 +128,12 @@ export const EventIdParamSchema = z
 
 export const EventParticipantParamsSchema = z
   .object({
-    id: z.uuid().openapi({
-      description: 'Event UUID',
+    id: z.string().min(1).openapi({
+      description: 'Event ID',
       param: { name: 'id', in: 'path' },
     }),
-    participantId: z.uuid().openapi({
-      description: 'Participant record UUID',
+    participantId: z.string().min(1).openapi({
+      description: 'Participant ID',
       param: { name: 'participantId', in: 'path' },
     }),
   })
@@ -215,8 +215,8 @@ export const CreateEventRequestSchema = z
     recurrenceRule: z.string().max(500).optional().openapi({
       description: 'iCalendar RRULE for recurring events',
     }),
-    participantIds: z.array(z.uuid()).optional().openapi({
-      description: 'User UUIDs to add as participants',
+    participantIds: z.array(z.string().min(1)).optional().openapi({
+      description: 'User IDs to add as participants',
     }),
   })
   .openapi('CreateEventRequest');
@@ -249,8 +249,8 @@ export const UpdateEventRequestSchema = z
 
 export const AddParticipantRequestSchema = z
   .object({
-    userId: z.uuid().openapi({
-      description: 'User UUID to add as participant',
+    userId: z.string().min(1).openapi({
+      description: 'User ID to add as participant',
     }),
   })
   .openapi('AddParticipantRequest');

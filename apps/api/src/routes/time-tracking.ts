@@ -4,14 +4,37 @@
  * @packageDocumentation
  */
 
-import { Hono } from 'hono';
+import { createRoute } from '@hono/zod-openapi';
+import {
+  TimeEntryIdParamSchema,
+  TimeEntriesQuerySchema,
+  TimeSummaryQuerySchema,
+  StartTimerRequestSchema,
+  SwitchTimerRequestSchema,
+  CreateTimeEntryRequestSchema,
+  UpdateTimeEntryRequestSchema,
+  TimeEntriesResponseSchema,
+  TimeEntryResponseSchema,
+  TimeSummaryResponseSchema,
+  ActiveTimerResponseSchema,
+  StopTimerResponseSchema,
+  SwitchTimerResponseSchema,
+  ElapsedTimeResponseSchema,
+} from '@athena/types/openapi/time-tracking';
+import {
+  UnauthorizedErrorSchema,
+  ErrorResponseSchema,
+} from '@athena/types/openapi/common';
 import { eq, and, isNull, gte, lte } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { timeEntries, tasks } from '../db/schema/index.js';
+import { createOpenAPIApp } from '../lib/openapi.js';
 import { requireAuth, getUserId } from '../middleware/auth.js';
 import { requireEntitlement } from '../middleware/entitlements.js';
+import { toTimeEntry } from './time-tracking/serializers.js';
+import { formatDuration } from './time-tracking/helpers.js';
 
-const timeTrackingRoutes = new Hono();
+const timeTrackingRoutes = createOpenAPIApp();
 
 // Require authentication for all routes
 timeTrackingRoutes.use('*', requireAuth);
@@ -30,15 +53,419 @@ const ERROR_ACTIVE_TIMER_EXISTS = 'A timer is already running. Stop it first.';
 const ERROR_NO_ACTIVE_TIMER = 'No active timer to stop';
 const ERROR_END_TIME_MISSING = 'Time entry end time missing';
 
+// =============================================================================
+// OpenAPI Route Definitions
+// =============================================================================
+
+const listTimeEntries = createRoute({
+  method: 'get',
+  path: '/',
+  tags: ['Time Tracking'],
+  summary: 'List time entries',
+  description: 'List time entries for the authenticated user.',
+  request: {
+    query: TimeEntriesQuerySchema,
+  },
+  responses: {
+    200: {
+      description: 'Time entries retrieved successfully',
+      content: {
+        'application/json': {
+          schema: TimeEntriesResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+  },
+});
+
+const getTimeSummary = createRoute({
+  method: 'get',
+  path: '/summary',
+  tags: ['Time Tracking'],
+  summary: 'Get time tracking summary',
+  description: 'Get time tracking summary for a date range.',
+  request: {
+    query: TimeSummaryQuerySchema,
+  },
+  responses: {
+    200: {
+      description: 'Time summary retrieved successfully',
+      content: {
+        'application/json': {
+          schema: TimeSummaryResponseSchema,
+        },
+      },
+    },
+    400: {
+      description: 'Date range required',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+  },
+});
+
+const getActiveTimer = createRoute({
+  method: 'get',
+  path: '/active',
+  tags: ['Time Tracking'],
+  summary: 'Get active timer',
+  description: 'Get the currently active time entry (timer running).',
+  responses: {
+    200: {
+      description: 'Active timer retrieved successfully',
+      content: {
+        'application/json': {
+          schema: ActiveTimerResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+  },
+});
+
+const getTimeEntry = createRoute({
+  method: 'get',
+  path: '/{id}',
+  tags: ['Time Tracking'],
+  summary: 'Get time entry',
+  description: 'Get a single time entry.',
+  request: {
+    params: TimeEntryIdParamSchema,
+  },
+  responses: {
+    200: {
+      description: 'Time entry retrieved successfully',
+      content: {
+        'application/json': {
+          schema: TimeEntryResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+    404: {
+      description: 'Time entry not found',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+const startTimer = createRoute({
+  method: 'post',
+  path: '/start',
+  tags: ['Time Tracking'],
+  summary: 'Start timer',
+  description: 'Start a new timer.',
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: StartTimerRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: 'Timer started successfully',
+      content: {
+        'application/json': {
+          schema: TimeEntryResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+    404: {
+      description: 'Task not found',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+    409: {
+      description: 'Active timer already exists',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+const stopTimer = createRoute({
+  method: 'post',
+  path: '/stop',
+  tags: ['Time Tracking'],
+  summary: 'Stop timer',
+  description: 'Stop the current timer.',
+  responses: {
+    200: {
+      description: 'Timer stopped successfully',
+      content: {
+        'application/json': {
+          schema: StopTimerResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+    404: {
+      description: 'No active timer or entry not found',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+const switchTimer = createRoute({
+  method: 'post',
+  path: '/switch',
+  tags: ['Time Tracking'],
+  summary: 'Switch timer',
+  description: 'Switch timer to a different task (stop current, start new).',
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: SwitchTimerRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: 'Timer switched successfully',
+      content: {
+        'application/json': {
+          schema: SwitchTimerResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+    404: {
+      description: 'Task not found',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+const getElapsedTime = createRoute({
+  method: 'get',
+  path: '/elapsed',
+  tags: ['Time Tracking'],
+  summary: 'Get elapsed time',
+  description: 'Get elapsed time of current timer.',
+  responses: {
+    200: {
+      description: 'Elapsed time retrieved successfully',
+      content: {
+        'application/json': {
+          schema: ElapsedTimeResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+  },
+});
+
+const createTimeEntry = createRoute({
+  method: 'post',
+  path: '/',
+  tags: ['Time Tracking'],
+  summary: 'Create time entry',
+  description: 'Create a manual time entry.',
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: CreateTimeEntryRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: 'Time entry created successfully',
+      content: {
+        'application/json': {
+          schema: TimeEntryResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+    404: {
+      description: 'Task not found',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+const updateTimeEntry = createRoute({
+  method: 'patch',
+  path: '/{id}',
+  tags: ['Time Tracking'],
+  summary: 'Update time entry',
+  description: 'Update a time entry.',
+  request: {
+    params: TimeEntryIdParamSchema,
+    body: {
+      content: {
+        'application/json': {
+          schema: UpdateTimeEntryRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Time entry updated successfully',
+      content: {
+        'application/json': {
+          schema: TimeEntryResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+    404: {
+      description: 'Time entry not found',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+const deleteTimeEntry = createRoute({
+  method: 'delete',
+  path: '/{id}',
+  tags: ['Time Tracking'],
+  summary: 'Delete time entry',
+  description: 'Delete a time entry.',
+  request: {
+    params: TimeEntryIdParamSchema,
+  },
+  responses: {
+    204: {
+      description: 'Time entry deleted successfully',
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+    404: {
+      description: 'Time entry not found',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
 /**
  * List time entries for the current user.
  * GET /api/time-tracking
  */
-timeTrackingRoutes.get('/', async (c) => {
+timeTrackingRoutes.openapi(listTimeEntries, async (c) => {
   const userId = getUserId(c);
-  const taskId = c.req.query('taskId');
-  const startDate = c.req.query('startDate');
-  const endDate = c.req.query('endDate');
+  const { taskId, startDate, endDate } = c.req.valid('query');
 
   const conditions = [eq(timeEntries.userId, userId)];
 
@@ -47,11 +474,11 @@ timeTrackingRoutes.get('/', async (c) => {
   }
 
   if (startDate) {
-    conditions.push(gte(timeEntries.startTime, new Date(startDate)));
+    conditions.push(gte(timeEntries.startTime, startDate));
   }
 
   if (endDate) {
-    conditions.push(lte(timeEntries.startTime, new Date(endDate)));
+    conditions.push(lte(timeEntries.startTime, endDate));
   }
 
   const result = await db.query.timeEntries.findMany({
@@ -62,7 +489,7 @@ timeTrackingRoutes.get('/', async (c) => {
     orderBy: (timeEntries, { desc }) => [desc(timeEntries.startTime)],
   });
 
-  return c.json({ data: result });
+  return c.json({ data: result.map(toTimeEntry) }, 200);
 });
 
 /**
@@ -70,10 +497,9 @@ timeTrackingRoutes.get('/', async (c) => {
  * GET /api/time-tracking/summary
  * NOTE: This must be defined before /:id to avoid matching "summary" as an id
  */
-timeTrackingRoutes.get('/summary', async (c) => {
+timeTrackingRoutes.openapi(getTimeSummary, async (c) => {
   const userId = getUserId(c);
-  const startDate = c.req.query('startDate');
-  const endDate = c.req.query('endDate');
+  const { startDate, endDate } = c.req.valid('query');
 
   if (!startDate || !endDate) {
     return c.json({ error: ERROR_DATE_RANGE_REQUIRED }, 400);
@@ -82,8 +508,8 @@ timeTrackingRoutes.get('/summary', async (c) => {
   const entries = await db.query.timeEntries.findMany({
     where: and(
       eq(timeEntries.userId, userId),
-      gte(timeEntries.startTime, new Date(startDate)),
-      lte(timeEntries.startTime, new Date(endDate)),
+      gte(timeEntries.startTime, startDate),
+      lte(timeEntries.startTime, endDate),
     ),
     with: {
       task: {
@@ -118,16 +544,20 @@ timeTrackingRoutes.get('/summary', async (c) => {
     }
   }
 
-  return c.json({
-    data: {
-      totalMinutes,
-      totalHours:
-        Math.round((totalMinutes / MINUTES_PER_HOUR) * HOURS_DECIMAL_SCALE) / HOURS_DECIMAL_SCALE,
-      entryCount: entries.length,
-      taskBreakdown,
-      projectBreakdown,
+  return c.json(
+    {
+      data: {
+        totalMinutes,
+        totalHours:
+          Math.round((totalMinutes / MINUTES_PER_HOUR) * HOURS_DECIMAL_SCALE) /
+          HOURS_DECIMAL_SCALE,
+        entryCount: entries.length,
+        taskBreakdown,
+        projectBreakdown,
+      },
     },
-  });
+    200,
+  );
 });
 
 /**
@@ -135,7 +565,7 @@ timeTrackingRoutes.get('/summary', async (c) => {
  * GET /api/time-tracking/active
  * NOTE: This must be defined before /:id to avoid matching "active" as an id
  */
-timeTrackingRoutes.get('/active', async (c) => {
+timeTrackingRoutes.openapi(getActiveTimer, async (c) => {
   const userId = getUserId(c);
 
   const result = await db.query.timeEntries.findFirst({
@@ -146,19 +576,19 @@ timeTrackingRoutes.get('/active', async (c) => {
   });
 
   if (!result) {
-    return c.json({ data: null });
+    return c.json({ data: null }, 200);
   }
 
-  return c.json({ data: result });
+  return c.json({ data: toTimeEntry(result) }, 200);
 });
 
 /**
  * Get a single time entry.
  * GET /api/time-tracking/:id
  */
-timeTrackingRoutes.get('/:id', async (c) => {
+timeTrackingRoutes.openapi(getTimeEntry, async (c) => {
   const userId = getUserId(c);
-  const id = c.req.param('id');
+  const { id } = c.req.valid('param');
 
   const result = await db.query.timeEntries.findFirst({
     where: and(eq(timeEntries.id, id), eq(timeEntries.userId, userId)),
@@ -171,19 +601,16 @@ timeTrackingRoutes.get('/:id', async (c) => {
     return c.json({ error: ERROR_TIME_ENTRY_NOT_FOUND }, 404);
   }
 
-  return c.json({ data: result });
+  return c.json({ data: toTimeEntry(result) }, 200);
 });
 
 /**
  * Start a new timer.
  * POST /api/time-tracking/start
  */
-timeTrackingRoutes.post('/start', async (c) => {
+timeTrackingRoutes.openapi(startTimer, async (c) => {
   const userId = getUserId(c);
-  const body = await c.req.json<{
-    taskId?: string;
-    description?: string;
-  }>();
+  const body = c.req.valid('json');
 
   // Check if there's already an active timer
   const activeTimer = await db.query.timeEntries.findFirst({
@@ -225,14 +652,18 @@ timeTrackingRoutes.post('/start', async (c) => {
     },
   });
 
-  return c.json({ data: result }, 201);
+  if (!result) {
+    throw new Error('Failed to start timer');
+  }
+
+  return c.json({ data: toTimeEntry(result) }, 201);
 });
 
 /**
  * Stop the current timer.
  * POST /api/time-tracking/stop
  */
-timeTrackingRoutes.post('/stop', async (c) => {
+timeTrackingRoutes.openapi(stopTimer, async (c) => {
   const userId = getUserId(c);
 
   const activeTimer = await db.query.timeEntries.findFirst({
@@ -262,7 +693,7 @@ timeTrackingRoutes.post('/stop', async (c) => {
   }
 
   if (!result.endTime) {
-    return c.json({ error: ERROR_END_TIME_MISSING }, 500);
+    throw new Error(ERROR_END_TIME_MISSING);
   }
 
   // Calculate duration
@@ -270,25 +701,25 @@ timeTrackingRoutes.post('/stop', async (c) => {
     (result.endTime.getTime() - result.startTime.getTime()) / MILLISECONDS_PER_MINUTE,
   );
 
-  return c.json({
-    data: result,
-    duration: {
-      minutes: durationMinutes,
-      formatted: formatDuration(durationMinutes),
+  return c.json(
+    {
+      data: toTimeEntry(result),
+      duration: {
+        minutes: durationMinutes,
+        formatted: formatDuration(durationMinutes),
+      },
     },
-  });
+    200,
+  );
 });
 
 /**
  * Switch timer to a different task (stop current, start new).
  * POST /api/time-tracking/switch
  */
-timeTrackingRoutes.post('/switch', async (c) => {
+timeTrackingRoutes.openapi(switchTimer, async (c) => {
   const userId = getUserId(c);
-  const body = await c.req.json<{
-    taskId?: string;
-    description?: string;
-  }>();
+  const body = c.req.valid('json');
 
   const now = new Date();
 
@@ -337,10 +768,14 @@ timeTrackingRoutes.post('/switch', async (c) => {
     with: { task: true },
   });
 
+  if (!newEntry) {
+    throw new Error('Failed to start timer');
+  }
+
   return c.json(
     {
-      data: newEntry,
-      previousEntry: stoppedEntry,
+      data: toTimeEntry(newEntry),
+      previousEntry: stoppedEntry ? toTimeEntry(stoppedEntry) : null,
     },
     201,
   );
@@ -350,7 +785,7 @@ timeTrackingRoutes.post('/switch', async (c) => {
  * Get elapsed time of current timer.
  * GET /api/time-tracking/elapsed
  */
-timeTrackingRoutes.get('/elapsed', async (c) => {
+timeTrackingRoutes.openapi(getElapsedTime, async (c) => {
   const userId = getUserId(c);
 
   const activeTimer = await db.query.timeEntries.findFirst({
@@ -359,47 +794,33 @@ timeTrackingRoutes.get('/elapsed', async (c) => {
   });
 
   if (!activeTimer) {
-    return c.json({ data: null, isRunning: false });
+    return c.json({ data: null, isRunning: false }, 200);
   }
 
   const elapsedMs = Date.now() - activeTimer.startTime.getTime();
   const elapsedMinutes = Math.floor(elapsedMs / MILLISECONDS_PER_MINUTE);
 
-  return c.json({
-    data: activeTimer,
-    isRunning: true,
-    elapsed: {
-      milliseconds: elapsedMs,
-      minutes: elapsedMinutes,
-      formatted: formatDuration(elapsedMinutes),
+  return c.json(
+    {
+      data: toTimeEntry(activeTimer),
+      isRunning: true,
+      elapsed: {
+        milliseconds: elapsedMs,
+        minutes: elapsedMinutes,
+        formatted: formatDuration(elapsedMinutes),
+      },
     },
-  });
+    200,
+  );
 });
-
-/**
- * Format duration in minutes to human-readable string.
- */
-function formatDuration(minutes: number): string {
-  const hours = Math.floor(minutes / MINUTES_PER_HOUR);
-  const mins = minutes % 60;
-  if (hours > 0) {
-    return `${String(hours)}h ${String(mins)}m`;
-  }
-  return `${String(mins)}m`;
-}
 
 /**
  * Create a manual time entry.
  * POST /api/time-tracking
  */
-timeTrackingRoutes.post('/', async (c) => {
+timeTrackingRoutes.openapi(createTimeEntry, async (c) => {
   const userId = getUserId(c);
-  const body = await c.req.json<{
-    taskId?: string;
-    startTime: string;
-    endTime: string;
-    description?: string;
-  }>();
+  const body = c.req.valid('json');
 
   // Verify task exists if provided
   if (body.taskId) {
@@ -419,8 +840,8 @@ timeTrackingRoutes.post('/', async (c) => {
     id,
     taskId: body.taskId,
     userId,
-    startTime: new Date(body.startTime),
-    endTime: new Date(body.endTime),
+    startTime: body.startTime,
+    endTime: body.endTime,
     description: body.description,
     createdAt: now,
     updatedAt: now,
@@ -433,22 +854,21 @@ timeTrackingRoutes.post('/', async (c) => {
     },
   });
 
-  return c.json({ data: result }, 201);
+  if (!result) {
+    throw new Error('Failed to create time entry');
+  }
+
+  return c.json({ data: toTimeEntry(result) }, 201);
 });
 
 /**
  * Update a time entry.
  * PATCH /api/time-tracking/:id
  */
-timeTrackingRoutes.patch('/:id', async (c) => {
+timeTrackingRoutes.openapi(updateTimeEntry, async (c) => {
   const userId = getUserId(c);
-  const id = c.req.param('id');
-  const body = await c.req.json<{
-    taskId?: string | null;
-    startTime?: string;
-    endTime?: string | null;
-    description?: string | null;
-  }>();
+  const { id } = c.req.valid('param');
+  const body = c.req.valid('json');
 
   const existing = await db.query.timeEntries.findFirst({
     where: and(eq(timeEntries.id, id), eq(timeEntries.userId, userId)),
@@ -458,11 +878,11 @@ timeTrackingRoutes.patch('/:id', async (c) => {
     return c.json({ error: ERROR_TIME_ENTRY_NOT_FOUND }, 404);
   }
 
-  const updateData: Record<string, unknown> = { updatedAt: new Date() };
+  const updateData: Partial<typeof timeEntries.$inferInsert> = { updatedAt: new Date() };
   if (body.taskId !== undefined) updateData.taskId = body.taskId;
-  if (body.startTime !== undefined) updateData.startTime = new Date(body.startTime);
+  if (body.startTime !== undefined) updateData.startTime = body.startTime;
   if (body.endTime !== undefined) {
-    updateData.endTime = body.endTime ? new Date(body.endTime) : null;
+    updateData.endTime = body.endTime;
   }
   if (body.description !== undefined) updateData.description = body.description;
 
@@ -475,16 +895,20 @@ timeTrackingRoutes.patch('/:id', async (c) => {
     },
   });
 
-  return c.json({ data: result });
+  if (!result) {
+    throw new Error('Failed to update time entry');
+  }
+
+  return c.json({ data: toTimeEntry(result) }, 200);
 });
 
 /**
  * Delete a time entry.
  * DELETE /api/time-tracking/:id
  */
-timeTrackingRoutes.delete('/:id', async (c) => {
+timeTrackingRoutes.openapi(deleteTimeEntry, async (c) => {
   const userId = getUserId(c);
-  const id = c.req.param('id');
+  const { id } = c.req.valid('param');
 
   const existing = await db.query.timeEntries.findFirst({
     where: and(eq(timeEntries.id, id), eq(timeEntries.userId, userId)),

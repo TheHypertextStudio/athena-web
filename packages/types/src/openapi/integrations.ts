@@ -20,10 +20,22 @@ export const IntegrationProviderSchema = z
   .enum([
     'linear',
     'github',
+    'todoist',
+    'asana',
+    'jira',
+    'trello',
+    'google_tasks',
+    'microsoft_todo',
+    'apple_reminders',
     'google_calendar',
     'outlook_calendar',
     'apple_calendar',
     'caldav_calendar',
+    'slack',
+    'zoom',
+    'google_drive',
+    'dropbox',
+    'figma',
   ])
   .openapi({
     description: 'Integration provider',
@@ -35,7 +47,9 @@ export const WebhookProviderSchema = z.enum(['linear', 'github']).openapi({
   example: 'github',
 });
 
-export const EntityTypeSchema = z.enum(['task', 'project', 'event', 'initiative']).openapi({
+export const EntityTypeSchema = z
+  .enum(['task', 'project', 'event', 'initiative', 'activity'])
+  .openapi({
   description: 'Entity type for mapping',
   example: 'task',
 });
@@ -121,7 +135,8 @@ export const IntegrationIdParamSchema = z
 
 export const ProviderParamSchema = z
   .object({
-    provider: IntegrationProviderSchema.openapi({
+    provider: z.string().min(1).openapi({
+      description: 'Integration provider',
       param: { name: 'provider', in: 'path' },
     }),
   })
@@ -200,10 +215,7 @@ export const ConnectIntegrationRequestSchema = z
     externalAccountId: z.string().openapi({ description: 'External account identifier' }),
     accessToken: z.string().optional().openapi({ description: 'OAuth access token' }),
     refreshToken: z.string().optional().openapi({ description: 'OAuth refresh token' }),
-    tokenExpiresAt: z.iso
-      .datetime()
-      .optional()
-      .openapi({ description: 'Token expiration (ISO 8601)' }),
+    tokenExpiresAt: TimestampSchema.optional().openapi({ description: 'Token expiration' }),
     scopes: z.string().optional().openapi({ description: 'OAuth scopes' }),
     metadata: z
       .record(z.string(), z.unknown())

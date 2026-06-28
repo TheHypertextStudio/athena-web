@@ -52,8 +52,8 @@ export const SortQuerySchema = z
 // Common Field Schemas
 // =============================================================================
 
-export const TimestampSchema = z.iso
-  .datetime()
+export const TimestampSchema = z.coerce
+  .date()
   .openapi({ description: 'ISO 8601 timestamp', example: '2025-01-09T12:00:00Z' });
 
 export const EmailSchema = z.email().openapi({

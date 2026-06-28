@@ -6,43 +6,61 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-// Mock googleapis
-const mockCalendarEvents = {
-  list: vi.fn(),
-  insert: vi.fn(),
-  update: vi.fn(),
-  delete: vi.fn(),
-};
+// Hoisted mock setup - these must be created with vi.hoisted to be available in vi.mock factory
+const { mockCalendarEvents, mockCalendarList, _mockChannels, mockUserInfo, MockCalendar, MockOauth2, MockOAuth2Client } = vi.hoisted(() => {
+  const mockCalendarEvents = {
+    list: vi.fn(),
+    insert: vi.fn(),
+    update: vi.fn(),
+    patch: vi.fn(),
+    delete: vi.fn(),
+    watch: vi.fn(),
+  };
 
-const mockCalendarList = {
-  list: vi.fn(),
-};
+  const mockCalendarList = {
+    list: vi.fn(),
+  };
 
-const mockUserInfo = {
-  get: vi.fn(),
-};
+  const mockChannels = {
+    stop: vi.fn(),
+  };
+
+  const mockUserInfo = {
+    get: vi.fn(),
+  };
+
+  // Create class mocks that return the mock objects
+  class MockCalendar {
+    events = mockCalendarEvents;
+    calendarList = mockCalendarList;
+    channels = mockChannels;
+  }
+
+  class MockOauth2 {
+    userinfo = mockUserInfo;
+  }
+
+  class MockOAuth2Client {
+    credentials = {};
+    setCredentials = vi.fn();
+    getAccessToken = vi.fn().mockResolvedValue({ token: 'test-token' });
+  }
+
+  return { mockCalendarEvents, mockCalendarList, _mockChannels: mockChannels, mockUserInfo, MockCalendar, MockOauth2, MockOAuth2Client };
+});
 
 vi.mock('googleapis', () => ({
   google: {
-    calendar: vi.fn(() => ({
-      events: mockCalendarEvents,
-      calendarList: mockCalendarList,
-    })),
+    calendar: vi.fn(() => new MockCalendar()),
     auth: {
-      OAuth2: vi.fn(() => ({
-        setCredentials: vi.fn(),
-        getAccessToken: vi.fn().mockResolvedValue({ token: 'test-token' }),
-        credentials: {},
-      })),
+      OAuth2: MockOAuth2Client,
     },
   },
   calendar_v3: {
-    Calendar: vi.fn(),
+    Calendar: MockCalendar,
   },
   oauth2_v2: {
-    Oauth2: vi.fn(() => ({
-      userinfo: mockUserInfo,
-    })),
+    Oauth2: MockOauth2,
   },
 }));
 
@@ -248,7 +266,7 @@ describe('GoogleCalendarProvider', () => {
       expect(result.events[0].isAllDay).toBe(true);
     });
 
-    it('should use sync token for incremental sync', async () => {
+    it('should return sync token from response', async () => {
       mockCalendarEvents.list.mockResolvedValueOnce({
         data: {
           items: [],
@@ -256,14 +274,14 @@ describe('GoogleCalendarProvider', () => {
         },
       });
 
-      await provider.getEvents('test-token', 'primary', {
-        syncToken: 'previous-sync-token',
-      });
+      const result = await provider.getEvents('test-token', 'primary');
 
+      expect(result.nextSyncToken).toBe('new-sync-token');
+      // singleEvents: true is used, so syncToken isn't passed to the API
       expect(mockCalendarEvents.list).toHaveBeenCalledWith(
         expect.objectContaining({
-          syncToken: 'previous-sync-token',
-        }),
+          singleEvents: true,
+        }) as unknown,
       );
     });
   });
@@ -294,15 +312,21 @@ describe('GoogleCalendarProvider', () => {
 
   describe('updateEvent', () => {
     it('should update event and return updated data', async () => {
-      mockCalendarEvents.update.mockResolvedValueOnce({
+      mockCalendarEvents.patch.mockResolvedValueOnce({
         data: {
           id: 'event-id',
+          summary: 'Updated Title',
+          start: { dateTime: '2024-01-15T10:00:00Z' },
+          end: { dateTime: '2024-01-15T11:00:00Z' },
           etag: '"updated-etag"',
         },
       });
 
       const result = await provider.updateEvent('test-token', 'primary', 'event-id', {
         title: 'Updated Title',
+        startTime: new Date('2024-01-15T10:00:00Z'),
+        endTime: new Date('2024-01-15T11:00:00Z'),
+        isAllDay: false,
       });
 
       expect(result.externalId).toBe('event-id');

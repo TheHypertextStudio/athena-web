@@ -11,6 +11,7 @@ import type {
   StreamChunk,
   ChatMessage,
   ToolCall,
+  MessageRole,
 } from './types.js';
 import { DEFAULT_MODELS } from './types.js';
 import { OpenAIProvider } from './providers/openai.js';
@@ -143,10 +144,14 @@ export class AIService {
     userId: string,
   ): Promise<{
     id: string;
+    userId: string;
     title: string | null;
+    createdAt: Date;
+    updatedAt: Date;
     messages: {
       id: string;
-      role: string;
+      conversationId: string;
+      role: MessageRole;
       content: string;
       createdAt: Date;
     }[];
@@ -170,9 +175,13 @@ export class AIService {
 
     return {
       id: conversation.id,
+      userId: conversation.userId,
       title: conversation.title,
+      createdAt: conversation.createdAt,
+      updatedAt: conversation.updatedAt,
       messages: conversationMessages.map((m) => ({
         id: m.id,
+        conversationId: m.conversationId,
         role: m.role,
         content: m.content,
         createdAt: m.createdAt,
@@ -189,6 +198,7 @@ export class AIService {
   ): Promise<
     {
       id: string;
+      userId: string;
       title: string | null;
       createdAt: Date;
       updatedAt: Date;
@@ -202,6 +212,7 @@ export class AIService {
 
     return result.map((c) => ({
       id: c.id,
+      userId: c.userId,
       title: c.title,
       createdAt: c.createdAt,
       updatedAt: c.updatedAt,
@@ -219,6 +230,9 @@ export class AIService {
       provider?: AIProvider;
       temperature?: number;
       maxTokens?: number;
+      systemPrompt?: string;
+      tools?: typeof ATHENA_TOOLS;
+      toolExecutor?: (tc: ToolCall, userId: string) => Promise<{ result?: unknown; error?: string }>;
     },
   ): Promise<{
     response: string;
@@ -242,18 +256,23 @@ export class AIService {
 
     // Build message history
     const chatMessages: ChatMessage[] = conversation.messages.map((m) => ({
-      role: m.role as ChatMessage['role'],
+      role: m.role,
       content: m.content,
     }));
 
     // Add current user message
     chatMessages.push({ role: 'user', content: userMessage });
 
+    // Use provided tools/system prompt or defaults
+    const systemPrompt = options?.systemPrompt ?? ATHENA_SYSTEM_PROMPT;
+    const tools = options?.tools ?? ATHENA_TOOLS;
+    const executeToolFn = options?.toolExecutor ?? executeTool;
+
     // Call the AI
     let response = await provider.chat({
       messages: chatMessages,
-      systemPrompt: ATHENA_SYSTEM_PROMPT,
-      tools: ATHENA_TOOLS,
+      systemPrompt,
+      tools,
       temperature: options?.temperature ?? 0.7,
       maxTokens: options?.maxTokens,
       userId,
@@ -270,7 +289,7 @@ export class AIService {
 
       // Execute tool calls
       const toolResults = await Promise.all(
-        response.toolCalls.map((tc) => executeTool(tc, userId)),
+        response.toolCalls.map((tc) => executeToolFn(tc, userId)),
       );
 
       // Store assistant message with tool calls
@@ -318,8 +337,8 @@ export class AIService {
       // Call AI again with tool results
       response = await provider.chat({
         messages: chatMessages,
-        systemPrompt: ATHENA_SYSTEM_PROMPT,
-        tools: ATHENA_TOOLS,
+        systemPrompt,
+        tools,
         temperature: options?.temperature ?? 0.7,
         maxTokens: options?.maxTokens,
         userId,
@@ -353,6 +372,9 @@ export class AIService {
       provider?: AIProvider;
       temperature?: number;
       maxTokens?: number;
+      systemPrompt?: string;
+      tools?: typeof ATHENA_TOOLS;
+      toolExecutor?: (tc: ToolCall, userId: string) => Promise<{ result?: unknown; error?: string }>;
     },
   ): AsyncGenerator<StreamChunk> {
     const provider = this.getProvider(options?.provider);
@@ -369,11 +391,16 @@ export class AIService {
 
     // Build message history
     const chatMessages: ChatMessage[] = conversation.messages.map((m) => ({
-      role: m.role as ChatMessage['role'],
+      role: m.role,
       content: m.content,
     }));
 
     chatMessages.push({ role: 'user', content: userMessage });
+
+    // Use provided tools/system prompt or defaults
+    const systemPrompt = options?.systemPrompt ?? ATHENA_SYSTEM_PROMPT;
+    const tools = options?.tools ?? ATHENA_TOOLS;
+    const executeToolFn = options?.toolExecutor ?? executeTool;
 
     // Stream the response
     let fullContent = '';
@@ -381,8 +408,8 @@ export class AIService {
 
     for await (const chunk of provider.chatStream({
       messages: chatMessages,
-      systemPrompt: ATHENA_SYSTEM_PROMPT,
-      tools: ATHENA_TOOLS,
+      systemPrompt,
+      tools,
       temperature: options?.temperature ?? 0.7,
       maxTokens: options?.maxTokens,
       userId,
@@ -399,7 +426,7 @@ export class AIService {
     // If there were tool calls, we need to execute them and continue
     if (allToolCalls.length > 0) {
       // Execute tool calls
-      const toolResults = await Promise.all(allToolCalls.map((tc) => executeTool(tc, userId)));
+      const toolResults = await Promise.all(allToolCalls.map((tc) => executeToolFn(tc, userId)));
 
       // Store assistant message with tool calls
       const assistantMessageId = await this.storeMessage(conversationId, 'assistant', fullContent, {
@@ -444,8 +471,8 @@ export class AIService {
       fullContent = '';
       for await (const chunk of provider.chatStream({
         messages: chatMessages,
-        systemPrompt: ATHENA_SYSTEM_PROMPT,
-        tools: ATHENA_TOOLS,
+        systemPrompt,
+        tools,
         temperature: options?.temperature ?? 0.7,
         maxTokens: options?.maxTokens,
         userId,

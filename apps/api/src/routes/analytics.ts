@@ -4,225 +4,296 @@
  * @packageDocumentation
  */
 
-import { Hono } from 'hono';
-import { zValidator } from '@hono/zod-validator';
-import { z } from 'zod';
+import { createRoute } from '@hono/zod-openapi';
+import {
+  DashboardQuerySchema,
+  AnalyticsQuerySchema,
+  ProductivityQuerySchema,
+  DashboardResponseSchema,
+  TaskMetricsResponseSchema,
+  TimeMetricsResponseSchema,
+  ProductivityMetricsResponseSchema,
+  ProjectMetricsResponseSchema,
+} from '@athena/types/openapi/analytics';
+import { UnauthorizedErrorSchema } from '@athena/types/openapi/common';
 import { getAnalyticsService } from '../services/analytics/index.js';
 import { requireAuth, getUserId } from '../middleware/auth.js';
 import type { AnalyticsPeriod } from '../services/analytics/types.js';
+import { createOpenAPIApp } from '../lib/openapi.js';
+import { toDashboardSummary } from './analytics/serializers.js';
+import { getLookbackDays } from './analytics/helpers.js';
 
-const app = new Hono();
+const app = createOpenAPIApp();
 
 app.use('*', requireAuth);
 
-const ANALYTICS_PERIOD_VALUES = ['day', 'week', 'month', 'quarter', 'year', 'all'] as const;
-const DEFAULT_ANALYTICS_PERIOD = 'week' as const;
-const DEFAULT_ANALYTICS_PRODUCTIVITY_PERIOD = 'week' as const;
-const DEFAULT_ANALYTICS_PROJECTS_PERIOD = 'month' as const;
-const ANALYTICS_LOOKBACK_DAYS = {
-  day: 1,
-  week: 7,
-  month: 30,
-} as const;
-const DEFAULT_ANALYTICS_LOOKBACK_DAYS = 30;
 
-const periodSchema = z.enum(ANALYTICS_PERIOD_VALUES);
+// =============================================================================
+// OpenAPI Route Definitions
+// =============================================================================
 
-const getLookbackDays = (period: AnalyticsPeriod): number => {
-  switch (period) {
-    case 'day':
-      return ANALYTICS_LOOKBACK_DAYS.day;
-    case 'week':
-      return ANALYTICS_LOOKBACK_DAYS.week;
-    case 'month':
-      return ANALYTICS_LOOKBACK_DAYS.month;
-    default:
-      return DEFAULT_ANALYTICS_LOOKBACK_DAYS;
-  }
-};
+const getDashboard = createRoute({
+  method: 'get',
+  path: '/dashboard',
+  tags: ['Analytics'],
+  summary: 'Get dashboard',
+  description: 'Get dashboard summary metrics.',
+  request: {
+    query: DashboardQuerySchema,
+  },
+  responses: {
+    200: {
+      description: 'Dashboard metrics retrieved successfully',
+      content: {
+        'application/json': {
+          schema: DashboardResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+  },
+});
+
+const getTaskMetrics = createRoute({
+  method: 'get',
+  path: '/tasks',
+  tags: ['Analytics'],
+  summary: 'Get task metrics',
+  description: 'Get task analytics metrics.',
+  request: {
+    query: AnalyticsQuerySchema,
+  },
+  responses: {
+    200: {
+      description: 'Task metrics retrieved successfully',
+      content: {
+        'application/json': {
+          schema: TaskMetricsResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+  },
+});
+
+const getTimeMetrics = createRoute({
+  method: 'get',
+  path: '/time',
+  tags: ['Analytics'],
+  summary: 'Get time metrics',
+  description: 'Get time tracking metrics.',
+  request: {
+    query: AnalyticsQuerySchema,
+  },
+  responses: {
+    200: {
+      description: 'Time metrics retrieved successfully',
+      content: {
+        'application/json': {
+          schema: TimeMetricsResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+  },
+});
+
+const getProductivityMetrics = createRoute({
+  method: 'get',
+  path: '/productivity',
+  tags: ['Analytics'],
+  summary: 'Get productivity metrics',
+  description: 'Get productivity analytics metrics.',
+  request: {
+    query: ProductivityQuerySchema,
+  },
+  responses: {
+    200: {
+      description: 'Productivity metrics retrieved successfully',
+      content: {
+        'application/json': {
+          schema: ProductivityMetricsResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+  },
+});
+
+const getProjectMetrics = createRoute({
+  method: 'get',
+  path: '/projects',
+  tags: ['Analytics'],
+  summary: 'Get project metrics',
+  description: 'Get project analytics metrics.',
+  request: {
+    query: ProductivityQuerySchema,
+  },
+  responses: {
+    200: {
+      description: 'Project metrics retrieved successfully',
+      content: {
+        'application/json': {
+          schema: ProjectMetricsResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+  },
+});
 
 /**
  * GET /analytics/dashboard
  * Get dashboard summary.
  */
-app.get(
-  '/dashboard',
-  zValidator(
-    'query',
-    z.object({
-      period: periodSchema.optional().default(DEFAULT_ANALYTICS_PERIOD),
-      dateFrom: z.iso.datetime().optional(),
-      dateTo: z.iso.datetime().optional(),
-      projectId: z.uuid().optional(),
-    }),
-  ),
-  async (c) => {
-    const userId = getUserId(c);
-    const params = c.req.valid('query');
-    const period = params.period as AnalyticsPeriod;
+app.openapi(getDashboard, async (c) => {
+  const userId = getUserId(c);
+  const params = c.req.valid('query');
+  const period = params.period as AnalyticsPeriod;
 
-    const service = getAnalyticsService();
-    const dashboard = await service.getDashboard({
-      userId,
-      period,
-      dateFrom: params.dateFrom ? new Date(params.dateFrom) : undefined,
-      dateTo: params.dateTo ? new Date(params.dateTo) : undefined,
-      projectId: params.projectId,
-    });
+  const service = getAnalyticsService();
+  const dashboard = await service.getDashboard({
+    userId,
+    period,
+    dateFrom: params.dateFrom ?? undefined,
+    dateTo: params.dateTo ?? undefined,
+    projectId: params.projectId,
+  });
 
-    return c.json({
-      success: true,
-      data: dashboard,
-    });
-  },
-);
+  return c.json({ data: toDashboardSummary(dashboard) }, 200);
+});
 
 /**
  * GET /analytics/tasks
  * Get task metrics.
  */
-app.get(
-  '/tasks',
-  zValidator(
-    'query',
-    z.object({
-      period: periodSchema.optional().default(DEFAULT_ANALYTICS_PERIOD),
-      projectId: z.uuid().optional(),
-    }),
-  ),
-  async (c) => {
-    const userId = getUserId(c);
-    const { period, projectId } = c.req.valid('query');
+app.openapi(getTaskMetrics, async (c) => {
+  const userId = getUserId(c);
+  const { period, projectId } = c.req.valid('query');
 
-    const service = getAnalyticsService();
-    const now = new Date();
-    const dateFrom = new Date();
-    const lookbackDays = getLookbackDays(period);
-    dateFrom.setDate(now.getDate() - lookbackDays);
+  const service = getAnalyticsService();
+  const now = new Date();
+  const dateFrom = new Date();
+  const lookbackDays = getLookbackDays(period as AnalyticsPeriod);
+  dateFrom.setDate(now.getDate() - lookbackDays);
 
-    const metrics = await service.getTaskMetrics({
-      userId,
-      period: period as AnalyticsPeriod,
-      dateFrom,
-      dateTo: now,
-      projectId,
-    });
+  const metrics = await service.getTaskMetrics({
+    userId,
+    period: period as AnalyticsPeriod,
+    dateFrom,
+    dateTo: now,
+    projectId,
+  });
 
-    return c.json({
-      success: true,
-      data: metrics,
-    });
-  },
-);
+  return c.json({ data: metrics }, 200);
+});
 
 /**
  * GET /analytics/time
  * Get time tracking metrics.
  */
-app.get(
-  '/time',
-  zValidator(
-    'query',
-    z.object({
-      period: periodSchema.optional().default(DEFAULT_ANALYTICS_PERIOD),
-      projectId: z.uuid().optional(),
-    }),
-  ),
-  async (c) => {
-    const userId = getUserId(c);
-    const { period, projectId } = c.req.valid('query');
+app.openapi(getTimeMetrics, async (c) => {
+  const userId = getUserId(c);
+  const { period, projectId } = c.req.valid('query');
 
-    const service = getAnalyticsService();
-    const now = new Date();
-    const dateFrom = new Date();
-    const lookbackDays = getLookbackDays(period as AnalyticsPeriod);
-    dateFrom.setDate(now.getDate() - lookbackDays);
+  const service = getAnalyticsService();
+  const now = new Date();
+  const dateFrom = new Date();
+  const lookbackDays = getLookbackDays(period as AnalyticsPeriod);
+  dateFrom.setDate(now.getDate() - lookbackDays);
 
-    const metrics = await service.getTimeMetrics({
-      userId,
-      period: period as AnalyticsPeriod,
-      dateFrom,
-      dateTo: now,
-      projectId,
-    });
+  const metrics = await service.getTimeMetrics({
+    userId,
+    period: period as AnalyticsPeriod,
+    dateFrom,
+    dateTo: now,
+    projectId,
+  });
 
-    return c.json({
-      success: true,
-      data: metrics,
-    });
-  },
-);
+  return c.json({ data: metrics }, 200);
+});
 
 /**
  * GET /analytics/productivity
  * Get productivity metrics.
  */
-app.get(
-  '/productivity',
-  zValidator(
-    'query',
-    z.object({
-      period: periodSchema.optional().default(DEFAULT_ANALYTICS_PRODUCTIVITY_PERIOD),
-    }),
-  ),
-  async (c) => {
-    const userId = getUserId(c);
-    const { period } = c.req.valid('query');
+app.openapi(getProductivityMetrics, async (c) => {
+  const userId = getUserId(c);
+  const { period } = c.req.valid('query');
 
-    const service = getAnalyticsService();
-    const now = new Date();
-    const dateFrom = new Date();
-    const lookbackDays = getLookbackDays(period as AnalyticsPeriod);
-    dateFrom.setDate(now.getDate() - lookbackDays);
+  const service = getAnalyticsService();
+  const now = new Date();
+  const dateFrom = new Date();
+  const lookbackDays = getLookbackDays(period as AnalyticsPeriod);
+  dateFrom.setDate(now.getDate() - lookbackDays);
 
-    const metrics = await service.getProductivityMetrics({
-      userId,
-      period: period as AnalyticsPeriod,
-      dateFrom,
-      dateTo: now,
-    });
+  const metrics = await service.getProductivityMetrics({
+    userId,
+    period: period as AnalyticsPeriod,
+    dateFrom,
+    dateTo: now,
+  });
 
-    return c.json({
-      success: true,
-      data: metrics,
-    });
-  },
-);
+  return c.json({ data: metrics }, 200);
+});
 
 /**
  * GET /analytics/projects
  * Get project metrics.
  */
-app.get(
-  '/projects',
-  zValidator(
-    'query',
-    z.object({
-      period: periodSchema.optional().default(DEFAULT_ANALYTICS_PROJECTS_PERIOD),
-    }),
-  ),
-  async (c) => {
-    const userId = getUserId(c);
-    const { period } = c.req.valid('query');
+app.openapi(getProjectMetrics, async (c) => {
+  const userId = getUserId(c);
+  const { period } = c.req.valid('query');
 
-    const service = getAnalyticsService();
-    const now = new Date();
-    const dateFrom = new Date();
-    const lookbackDays = getLookbackDays(period as AnalyticsPeriod);
-    dateFrom.setDate(now.getDate() - lookbackDays);
+  const service = getAnalyticsService();
+  const now = new Date();
+  const dateFrom = new Date();
+  const lookbackDays = getLookbackDays(period as AnalyticsPeriod);
+  dateFrom.setDate(now.getDate() - lookbackDays);
 
-    const metrics = await service.getProjectMetrics({
-      userId,
-      period: period as AnalyticsPeriod,
-      dateFrom,
-      dateTo: now,
-    });
+  const metrics = await service.getProjectMetrics({
+    userId,
+    period: period as AnalyticsPeriod,
+    dateFrom,
+    dateTo: now,
+  });
 
-    return c.json({
-      success: true,
-      data: metrics,
-    });
-  },
-);
+  return c.json({ data: metrics }, 200);
+});
 
 export default app;

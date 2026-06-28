@@ -232,6 +232,58 @@ export const ReorderTasksRequestSchema = z
   })
   .openapi('ReorderTasksRequest');
 
+export const GenerateTimeBlocksRequestSchema = z
+  .object({
+    date: z
+      .iso
+      .date()
+      .openapi({
+        description: 'Date to generate time blocks for (YYYY-MM-DD)',
+        example: '2026-01-15',
+      }),
+    intent: z
+      .object({
+        selectedChips: z.array(z.string()).openapi({
+          description: 'Selected intent chips (e.g., ["focus", "projects"])',
+          example: ['focus', 'projects'],
+        }),
+        customText: z.string().nullable().optional().openapi({
+          description: 'Custom user intent text',
+        }),
+      })
+      .optional()
+      .openapi({
+        description: 'User intent hints for personalized suggestions',
+      }),
+    calendarEventIds: z.array(z.uuid()).optional().openapi({
+      description: 'Specific calendar event IDs to consider (fetches all if omitted)',
+    }),
+  })
+  .openapi('GenerateTimeBlocksRequest');
+
+export const GeneratedTimeBlockSchema = z
+  .object({
+    type: z.literal('time_block').openapi({ description: 'Block type marker' }),
+    source: z.enum(['ai', 'calendar']).openapi({
+      description: 'Whether block is AI-suggested or from calendar',
+    }),
+    title: z.string().openapi({ description: 'Block title', example: 'Deep Work' }),
+    description: z.string().optional().openapi({ description: 'Block description' }),
+    startTime: z.string().openapi({
+      description: 'Start time ISO string',
+      example: '2026-01-15T09:00:00Z',
+    }),
+    endTime: z.string().openapi({
+      description: 'End time ISO string',
+      example: '2026-01-15T11:00:00Z',
+    }),
+    color: z.string().optional().openapi({
+      description: 'Hex color code',
+      example: '#8b5cf6',
+    }),
+  })
+  .openapi('GeneratedTimeBlock');
+
 // =============================================================================
 // Response Schemas
 // =============================================================================
@@ -261,5 +313,7 @@ export type CreateTimeBlockRequest = z.infer<typeof CreateTimeBlockRequestSchema
 export type UpdateTimeBlockRequest = z.infer<typeof UpdateTimeBlockRequestSchema>;
 export type LinkTaskRequest = z.infer<typeof LinkTaskRequestSchema>;
 export type ReorderTasksRequest = z.infer<typeof ReorderTasksRequestSchema>;
+export type GenerateTimeBlocksRequest = z.infer<typeof GenerateTimeBlocksRequestSchema>;
+export type GeneratedTimeBlock = z.infer<typeof GeneratedTimeBlockSchema>;
 export type TimeBlockResponse = z.infer<typeof TimeBlockResponseSchema>;
 export type TimeBlockListResponse = z.infer<typeof TimeBlockListResponseSchema>;

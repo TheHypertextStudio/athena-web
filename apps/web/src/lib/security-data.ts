@@ -41,6 +41,7 @@ export interface Session {
   expiresAt: string;
   lastActiveAt: string;
   status: SessionStatus;
+  isCurrent: boolean;
 }
 
 export interface LinkedAccount {
@@ -62,7 +63,7 @@ export interface BackupCodesInfo {
   hasBackupCodes: boolean;
   remainingCount: number;
   totalCount: number;
-  lastGeneratedAt: string | null;
+  generatedAt: string | null;
 }
 
 export interface Settings {

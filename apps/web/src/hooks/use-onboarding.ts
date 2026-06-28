@@ -16,8 +16,10 @@ import { useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
+  aiApi,
   onboardingApi,
   onboardingKeys,
+  timeBlocksApi,
   type OnboardingStep,
   type OnboardingTimeBlock,
 } from '@/lib/api-client';
@@ -109,7 +111,7 @@ export function useOnboarding() {
       step: OnboardingStep;
       metadata?: Record<string, unknown>;
     }) => {
-      return onboardingApi.updateStep(step, metadata);
+      return onboardingApi.update({ step, metadata });
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: onboardingKeys.status() });
@@ -121,7 +123,13 @@ export function useOnboarding() {
 
   // Complete mutation
   const completeMutation = useMutation({
-    mutationFn: onboardingApi.complete,
+    mutationFn: async () => {
+      const res = await onboardingApi.update({ complete: true });
+      return {
+        completedAt: res.completedAt ?? new Date().toISOString(),
+        redirectTo: res.redirectTo ?? '/home',
+      };
+    },
     onSuccess: (data) => {
       store.complete();
       // Set cookie to cache onboarding status
@@ -135,7 +143,13 @@ export function useOnboarding() {
 
   // Skip mutation
   const skipMutation = useMutation({
-    mutationFn: onboardingApi.skip,
+    mutationFn: async () => {
+      const res = await onboardingApi.update({ skip: true });
+      return {
+        skippedAt: res.skippedAt ?? new Date().toISOString(),
+        redirectTo: res.redirectTo ?? '/home',
+      };
+    },
     onSuccess: (data) => {
       store.skip();
       // Set cookie to cache onboarding status
@@ -233,7 +247,11 @@ export function useOnboarding() {
       };
 
       try {
-        const response = await onboardingApi.generateAgendaStream(date, getIntent());
+        const intent = getIntent();
+        const response = await timeBlocksApi.generateStream({
+          date,
+          intent: { selectedChips: intent.selectedChips, customText: intent.customText },
+        });
         if (!response.ok) {
           throw new Error('Failed to generate agenda');
         }
@@ -446,7 +464,9 @@ export function useOnboarding() {
     setAthenaState('thinking');
 
     try {
-      const response = await onboardingApi.getGreetingStream();
+      // Use general AI chat endpoint with onboarding context
+      // Empty message triggers the greeting flow
+      const response = await aiApi.chatStream('', 'onboarding');
       if (!response.ok) {
         throw new Error('Failed to fetch greeting');
       }
@@ -487,7 +507,8 @@ export function useOnboarding() {
       setAthenaState('thinking');
 
       try {
-        const response = await onboardingApi.sendMessage(message);
+        // Use general AI chat endpoint with onboarding context
+        const response = await aiApi.chatStream(message, 'onboarding');
         if (!response.ok) {
           throw new Error('Failed to send message');
         }

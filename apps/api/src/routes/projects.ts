@@ -4,38 +4,426 @@
  * @packageDocumentation
  */
 
-import { Hono } from 'hono';
+import { createRoute } from '@hono/zod-openapi';
 import { eq, and, inArray } from 'drizzle-orm';
+import {
+  ProjectIdParamSchema,
+  ProjectDependencyParamsSchema,
+  ListProjectsQuerySchema,
+  CreateProjectRequestSchema,
+  UpdateProjectRequestSchema,
+  ProjectResponseSchema,
+  ProjectListResponseSchema,
+  ProjectDependenciesResponseSchema,
+} from '@athena/types/openapi/projects';
+import {
+  ErrorResponseSchema,
+  UnauthorizedErrorSchema,
+  ValidationErrorSchema,
+} from '@athena/types/openapi/common';
 import { db } from '../db/index.js';
 import { projects, projectDependencies, tasks, taskDependencies } from '../db/schema/index.js';
 import { requireAuth, getUserId } from '../middleware/auth.js';
+import { createOpenAPIApp } from '../lib/openapi.js';
+import { TaskDependencyGraphQuerySchema, TaskDependencyGraphResponseSchema } from './projects/schemas.js';
+import {
+  toDependencyGraphTask,
+  toProject,
+  toProjectWithRelations,
+} from './projects/serializers.js';
 
-const projectRoutes = new Hono();
+const projectRoutes = createOpenAPIApp();
 
 projectRoutes.use('*', requireAuth);
 
-const PROJECT_STATUS = {
-  PLANNING: 'planning',
-  ACTIVE: 'active',
-  ON_HOLD: 'on_hold',
-  COMPLETED: 'completed',
-  CANCELLED: 'cancelled',
-} as const;
-type ProjectStatus = (typeof PROJECT_STATUS)[keyof typeof PROJECT_STATUS];
-const DEFAULT_PROJECT_STATUS: ProjectStatus = PROJECT_STATUS.PLANNING;
 const ERROR_PROJECT_NOT_FOUND = 'Project not found';
 const ERROR_DEPENDENCY_PROJECT_NOT_FOUND = 'Dependency project not found';
 const ERROR_SELF_DEPENDENCY = 'A project cannot depend on itself';
 const ERROR_CIRCULAR_DEPENDENCY = 'Circular dependency detected';
 
+// =============================================================================
+// List Projects
+// =============================================================================
+
+const listProjects = createRoute({
+  method: 'get',
+  path: '/',
+  tags: ['Projects'],
+  summary: 'List projects',
+  description: 'Retrieve a list of projects with optional filtering and pagination.',
+  request: {
+    query: ListProjectsQuerySchema,
+  },
+  responses: {
+    200: {
+      description: 'Projects retrieved successfully',
+      content: {
+        'application/json': {
+          schema: ProjectListResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+  },
+});
+
+// =============================================================================
+// Get Project
+// =============================================================================
+
+const getProject = createRoute({
+  method: 'get',
+  path: '/{id}',
+  tags: ['Projects'],
+  summary: 'Get a project',
+  description: 'Retrieve a single project by its ID.',
+  request: {
+    params: ProjectIdParamSchema,
+  },
+  responses: {
+    200: {
+      description: 'Project retrieved successfully',
+      content: {
+        'application/json': {
+          schema: ProjectResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+    404: {
+      description: 'Project not found',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+// =============================================================================
+// Create Project
+// =============================================================================
+
+const createProject = createRoute({
+  method: 'post',
+  path: '/',
+  tags: ['Projects'],
+  summary: 'Create a project',
+  description: 'Create a new project.',
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: CreateProjectRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: 'Project created successfully',
+      content: {
+        'application/json': {
+          schema: ProjectResponseSchema,
+        },
+      },
+    },
+    400: {
+      description: 'Validation error',
+      content: {
+        'application/json': {
+          schema: ValidationErrorSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+  },
+});
+
+// =============================================================================
+// Update Project
+// =============================================================================
+
+const updateProject = createRoute({
+  method: 'patch',
+  path: '/{id}',
+  tags: ['Projects'],
+  summary: 'Update a project',
+  description: 'Update an existing project. Only provided fields will be updated.',
+  request: {
+    params: ProjectIdParamSchema,
+    body: {
+      content: {
+        'application/json': {
+          schema: UpdateProjectRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Project updated successfully',
+      content: {
+        'application/json': {
+          schema: ProjectResponseSchema,
+        },
+      },
+    },
+    400: {
+      description: 'Validation error',
+      content: {
+        'application/json': {
+          schema: ValidationErrorSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+    404: {
+      description: 'Project not found',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+// =============================================================================
+// Delete Project
+// =============================================================================
+
+const deleteProject = createRoute({
+  method: 'delete',
+  path: '/{id}',
+  tags: ['Projects'],
+  summary: 'Delete a project',
+  description: 'Delete a project by its ID.',
+  request: {
+    params: ProjectIdParamSchema,
+  },
+  responses: {
+    204: {
+      description: 'Project deleted successfully',
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+    404: {
+      description: 'Project not found',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+// =============================================================================
+// Task Dependency Graph
+// =============================================================================
+
+const getTaskDependencyGraph = createRoute({
+  method: 'get',
+  path: '/{id}/task-dependency-graph',
+  tags: ['Projects'],
+  summary: 'Get project task dependency graph',
+  description: 'Retrieve tasks in a project and their dependency relationships.',
+  request: {
+    params: ProjectIdParamSchema,
+    query: TaskDependencyGraphQuerySchema,
+  },
+  responses: {
+    200: {
+      description: 'Task dependency graph retrieved',
+      content: {
+        'application/json': {
+          schema: TaskDependencyGraphResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+    404: {
+      description: 'Project not found',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+// =============================================================================
+// Get Project Dependencies
+// =============================================================================
+
+const getProjectDependencies = createRoute({
+  method: 'get',
+  path: '/{id}/dependencies',
+  tags: ['Projects'],
+  summary: 'Get project dependencies',
+  description: 'Retrieve all projects that this project depends on.',
+  request: {
+    params: ProjectIdParamSchema,
+  },
+  responses: {
+    200: {
+      description: 'Dependencies retrieved successfully',
+      content: {
+        'application/json': {
+          schema: ProjectDependenciesResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+    404: {
+      description: 'Project not found',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+// =============================================================================
+// Add Project Dependency
+// =============================================================================
+
+const addProjectDependency = createRoute({
+  method: 'post',
+  path: '/{id}/dependencies/{dependsOnId}',
+  tags: ['Projects'],
+  summary: 'Add project dependency',
+  description: 'Add a dependency relationship between two projects.',
+  request: {
+    params: ProjectDependencyParamsSchema,
+  },
+  responses: {
+    201: {
+      description: 'Dependency added successfully',
+    },
+    400: {
+      description: 'Invalid dependency (e.g., circular dependency)',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+    404: {
+      description: 'Project not found',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+// =============================================================================
+// Remove Project Dependency
+// =============================================================================
+
+const removeProjectDependency = createRoute({
+  method: 'delete',
+  path: '/{id}/dependencies/{dependsOnId}',
+  tags: ['Projects'],
+  summary: 'Remove project dependency',
+  description: 'Remove a dependency relationship between two projects.',
+  request: {
+    params: ProjectDependencyParamsSchema,
+  },
+  responses: {
+    204: {
+      description: 'Dependency removed successfully',
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+    404: {
+      description: 'Project or dependency not found',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
 /**
  * List all projects for the authenticated user.
  * GET /api/projects
  */
-projectRoutes.get('/', async (c) => {
+projectRoutes.openapi(listProjects, async (c) => {
   const userId = getUserId(c);
-  const initiativeId = c.req.query('initiativeId');
-  const status = c.req.query('status') as ProjectStatus | undefined;
+  const { initiativeId, status } = c.req.valid('query');
 
   const conditions = [eq(projects.ownerId, userId)];
 
@@ -56,16 +444,16 @@ projectRoutes.get('/', async (c) => {
     orderBy: (projects, { desc }) => [desc(projects.createdAt)],
   });
 
-  return c.json({ data: result });
+  return c.json({ data: result.map(toProjectWithRelations) }, 200);
 });
 
 /**
  * Get a single project by ID.
  * GET /api/projects/:id
  */
-projectRoutes.get('/:id', async (c) => {
+projectRoutes.openapi(getProject, async (c) => {
   const userId = getUserId(c);
-  const id = c.req.param('id');
+  const { id } = c.req.valid('param');
 
   const result = await db.query.projects.findFirst({
     where: and(eq(projects.id, id), eq(projects.ownerId, userId)),
@@ -88,22 +476,16 @@ projectRoutes.get('/:id', async (c) => {
     return c.json({ error: ERROR_PROJECT_NOT_FOUND }, 404);
   }
 
-  return c.json({ data: result });
+  return c.json({ data: toProjectWithRelations(result) }, 200);
 });
 
 /**
  * Create a new project.
  * POST /api/projects
  */
-projectRoutes.post('/', async (c) => {
+projectRoutes.openapi(createProject, async (c) => {
   const userId = getUserId(c);
-  const body = await c.req.json<{
-    name: string;
-    description?: string;
-    status?: ProjectStatus;
-    deadline?: string;
-    initiativeId?: string;
-  }>();
+  const body = c.req.valid('json');
 
   const id = crypto.randomUUID();
   const now = new Date();
@@ -112,8 +494,8 @@ projectRoutes.post('/', async (c) => {
     id,
     name: body.name,
     description: body.description,
-    status: body.status ?? DEFAULT_PROJECT_STATUS,
-    deadline: body.deadline ? new Date(body.deadline) : null,
+    status: body.status,
+    deadline: body.deadline ?? null,
     initiativeId: body.initiativeId,
     ownerId: userId,
     createdAt: now,
@@ -127,23 +509,21 @@ projectRoutes.post('/', async (c) => {
     },
   });
 
-  return c.json({ data: result }, 201);
+  if (!result) {
+    throw new Error('Failed to create project');
+  }
+
+  return c.json({ data: toProjectWithRelations(result) }, 201);
 });
 
 /**
  * Update a project.
  * PATCH /api/projects/:id
  */
-projectRoutes.patch('/:id', async (c) => {
+projectRoutes.openapi(updateProject, async (c) => {
   const userId = getUserId(c);
-  const id = c.req.param('id');
-  const body = await c.req.json<{
-    name?: string;
-    description?: string;
-    status?: ProjectStatus;
-    deadline?: string | null;
-    initiativeId?: string | null;
-  }>();
+  const { id } = c.req.valid('param');
+  const body = c.req.valid('json');
 
   const existing = await db.query.projects.findFirst({
     where: and(eq(projects.id, id), eq(projects.ownerId, userId)),
@@ -153,12 +533,12 @@ projectRoutes.patch('/:id', async (c) => {
     return c.json({ error: ERROR_PROJECT_NOT_FOUND }, 404);
   }
 
-  const updateData: Record<string, unknown> = { updatedAt: new Date() };
+  const updateData: Partial<typeof projects.$inferInsert> = { updatedAt: new Date() };
   if (body.name !== undefined) updateData.name = body.name;
   if (body.description !== undefined) updateData.description = body.description;
   if (body.status !== undefined) updateData.status = body.status;
   if (body.deadline !== undefined) {
-    updateData.deadline = body.deadline ? new Date(body.deadline) : null;
+    updateData.deadline = body.deadline ?? null;
   }
   if (body.initiativeId !== undefined) updateData.initiativeId = body.initiativeId;
 
@@ -174,16 +554,20 @@ projectRoutes.patch('/:id', async (c) => {
     },
   });
 
-  return c.json({ data: result });
+  if (!result) {
+    throw new Error('Failed to update project');
+  }
+
+  return c.json({ data: toProjectWithRelations(result) }, 200);
 });
 
 /**
  * Delete a project.
  * DELETE /api/projects/:id
  */
-projectRoutes.delete('/:id', async (c) => {
+projectRoutes.openapi(deleteProject, async (c) => {
   const userId = getUserId(c);
-  const id = c.req.param('id');
+  const { id } = c.req.valid('param');
 
   const existing = await db.query.projects.findFirst({
     where: and(eq(projects.id, id), eq(projects.ownerId, userId)),
@@ -203,10 +587,10 @@ projectRoutes.delete('/:id', async (c) => {
  * Returns all tasks in the project and their dependency relationships.
  * GET /api/projects/:id/task-dependency-graph
  */
-projectRoutes.get('/:id/task-dependency-graph', async (c) => {
+projectRoutes.openapi(getTaskDependencyGraph, async (c) => {
   const userId = getUserId(c);
-  const projectId = c.req.param('id');
-  const includeCompleted = c.req.query('includeCompleted') === 'true';
+  const { id: projectId } = c.req.valid('param');
+  const { includeCompleted } = c.req.valid('query');
 
   const project = await db.query.projects.findFirst({
     where: and(eq(projects.id, projectId), eq(projects.ownerId, userId)),
@@ -248,24 +632,27 @@ projectRoutes.get('/:id/task-dependency-graph', async (c) => {
         ).filter((d) => taskIdSet.has(d.dependsOnTaskId))
       : [];
 
-  return c.json({
-    data: {
-      tasks: filteredTasks,
-      dependencies: projectDeps.map((d) => ({
-        taskId: d.taskId,
-        dependsOnTaskId: d.dependsOnTaskId,
-      })),
+  return c.json(
+    {
+      data: {
+        tasks: filteredTasks.map(toDependencyGraphTask),
+        dependencies: projectDeps.map((d) => ({
+          taskId: d.taskId,
+          dependsOnTaskId: d.dependsOnTaskId,
+        })),
+      },
     },
-  });
+    200,
+  );
 });
 
 /**
  * Get project dependencies.
  * GET /api/projects/:id/dependencies
  */
-projectRoutes.get('/:id/dependencies', async (c) => {
+projectRoutes.openapi(getProjectDependencies, async (c) => {
   const userId = getUserId(c);
-  const projectId = c.req.param('id');
+  const { id: projectId } = c.req.valid('param');
 
   const project = await db.query.projects.findFirst({
     where: and(eq(projects.id, projectId), eq(projects.ownerId, userId)),
@@ -282,19 +669,21 @@ projectRoutes.get('/:id/dependencies', async (c) => {
     },
   });
 
-  return c.json({
-    data: dependencies.map((d) => d.dependsOnProject),
-  });
+  return c.json(
+    {
+      data: dependencies.map((d) => toProject(d.dependsOnProject)),
+    },
+    200,
+  );
 });
 
 /**
  * Add a dependency to a project.
  * POST /api/projects/:id/dependencies/:dependsOnId
  */
-projectRoutes.post('/:id/dependencies/:dependsOnId', async (c) => {
+projectRoutes.openapi(addProjectDependency, async (c) => {
   const userId = getUserId(c);
-  const projectId = c.req.param('id');
-  const dependsOnId = c.req.param('dependsOnId');
+  const { id: projectId, dependsOnId } = c.req.valid('param');
 
   // Prevent self-dependency
   if (projectId === dependsOnId) {
@@ -347,10 +736,9 @@ projectRoutes.post('/:id/dependencies/:dependsOnId', async (c) => {
  * Remove a dependency from a project.
  * DELETE /api/projects/:id/dependencies/:dependsOnId
  */
-projectRoutes.delete('/:id/dependencies/:dependsOnId', async (c) => {
+projectRoutes.openapi(removeProjectDependency, async (c) => {
   const userId = getUserId(c);
-  const projectId = c.req.param('id');
-  const dependsOnId = c.req.param('dependsOnId');
+  const { id: projectId, dependsOnId } = c.req.valid('param');
 
   const project = await db.query.projects.findFirst({
     where: and(eq(projects.id, projectId), eq(projects.ownerId, userId)),

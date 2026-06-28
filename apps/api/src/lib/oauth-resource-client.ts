@@ -8,15 +8,30 @@
 
 import { createAuthClient } from 'better-auth/client';
 import { oauthProviderResourceClient } from '@better-auth/oauth-provider/resource-client';
-import { auth } from './auth.js';
 
 /**
  * Server-side auth client with OAuth resource capabilities.
  * Used for token verification in API middleware.
  */
-export const serverClient = createAuthClient({
-  plugins: [oauthProviderResourceClient(auth)],
-});
+type AuthInstance = Parameters<typeof oauthProviderResourceClient>[0];
+
+const createServerClient = (auth: AuthInstance) =>
+  createAuthClient({
+    plugins: [oauthProviderResourceClient(auth)],
+  });
+
+type ServerClient = ReturnType<typeof createServerClient>;
+let serverClient: ServerClient | null = null;
+
+async function getServerClient() {
+  if (serverClient) {
+    return serverClient;
+  }
+
+  const { auth } = await import('./auth.js');
+  serverClient = createServerClient(auth);
+  return serverClient;
+}
 
 /**
  * Verify an OAuth access token and return its payload.
@@ -35,7 +50,8 @@ export async function verifyAccessToken(
 ) {
   const { env } = await import('./env.js');
 
-  const payload = await serverClient.verifyAccessToken(accessToken, {
+  const client = await getServerClient();
+  const payload = await client.verifyAccessToken(accessToken, {
     verifyOptions: {
       issuer: env.BETTER_AUTH_URL,
       audience: options?.audience ?? `${env.BETTER_AUTH_URL}/mcp`,

@@ -24,13 +24,98 @@ export const AnalyticsPeriodSchema = z
 
 export const DashboardMetricsSchema = z
   .object({
-    tasksCompleted: z.number().int().openapi({ description: 'Tasks completed' }),
-    tasksCreated: z.number().int().openapi({ description: 'Tasks created' }),
-    eventsAttended: z.number().int().openapi({ description: 'Events attended' }),
-    minutesTracked: z.number().int().openapi({ description: 'Minutes tracked' }),
-    activeProjects: z.number().int().openapi({ description: 'Active projects' }),
-    completionRate: z.number().openapi({ description: 'Completion rate (0-1)' }),
-    averageTaskDuration: z.number().openapi({ description: 'Average task duration in minutes' }),
+    period: AnalyticsPeriodSchema,
+    dateFrom: z.coerce.date().openapi({ description: 'Start of reporting period' }),
+    dateTo: z.coerce.date().openapi({ description: 'End of reporting period' }),
+    tasks: z
+      .object({
+        total: z.number().int().openapi({ description: 'Total tasks' }),
+        completed: z.number().int().openapi({ description: 'Completed tasks' }),
+        pending: z.number().int().openapi({ description: 'Pending tasks' }),
+        inProgress: z.number().int().openapi({ description: 'In-progress tasks' }),
+        cancelled: z.number().int().openapi({ description: 'Cancelled tasks' }),
+        overdue: z.number().int().openapi({ description: 'Overdue tasks' }),
+        completionRate: z.number().openapi({ description: 'Completion rate (0-1)' }),
+        avgCompletionTime: z
+          .number()
+          .nullable()
+          .openapi({ description: 'Average completion time (hours)' }),
+      })
+      .openapi({ description: 'Task metrics' }),
+    projects: z
+      .object({
+        total: z.number().int().openapi({ description: 'Total projects' }),
+        active: z.number().int().openapi({ description: 'Active projects' }),
+        completed: z.number().int().openapi({ description: 'Completed projects' }),
+        onHold: z.number().int().openapi({ description: 'On-hold projects' }),
+        tasksByProject: z
+          .array(
+            z.object({
+              projectId: z.string(),
+              projectName: z.string(),
+              totalTasks: z.number().int(),
+              completedTasks: z.number().int(),
+            }),
+          )
+          .openapi({ description: 'Task counts by project' }),
+      })
+      .openapi({ description: 'Project metrics' }),
+    time: z
+      .object({
+        totalHours: z.number().openapi({ description: 'Total hours tracked' }),
+        avgHoursPerDay: z.number().openapi({ description: 'Average hours per day' }),
+        byProject: z
+          .array(
+            z.object({
+              projectId: z.string().nullable(),
+              projectName: z.string().nullable(),
+              hours: z.number(),
+            }),
+          )
+          .openapi({ description: 'Hours by project' }),
+        byDay: z
+          .array(
+            z.object({
+              date: z.iso.date(),
+              hours: z.number(),
+            }),
+          )
+          .openapi({ description: 'Hours by day' }),
+        byTask: z
+          .array(
+            z.object({
+              taskId: z.string(),
+              taskTitle: z.string(),
+              hours: z.number(),
+            }),
+          )
+          .openapi({ description: 'Hours by task' }),
+      })
+      .openapi({ description: 'Time tracking metrics' }),
+    productivity: z
+      .object({
+        tasksCompletedPerDay: z.number().openapi({ description: 'Tasks completed per day' }),
+        focusHoursPerDay: z.number().openapi({ description: 'Focus hours per day' }),
+        streakDays: z.number().int().openapi({ description: 'Current streak days' }),
+        mostProductiveDay: z
+          .iso
+          .date()
+          .nullable()
+          .openapi({ description: 'Most productive day' }),
+        mostProductiveHour: z
+          .number()
+          .nullable()
+          .openapi({ description: 'Most productive hour' }),
+        taskCompletionTrend: z
+          .array(
+            z.object({
+              date: z.iso.date(),
+              count: z.number().int(),
+            }),
+          )
+          .openapi({ description: 'Task completion trend' }),
+      })
+      .openapi({ description: 'Productivity metrics' }),
   })
   .openapi('DashboardMetrics');
 
@@ -40,58 +125,71 @@ export const TaskMetricsSchema = z
     completed: z.number().int().openapi({ description: 'Completed tasks' }),
     pending: z.number().int().openapi({ description: 'Pending tasks' }),
     inProgress: z.number().int().openapi({ description: 'In-progress tasks' }),
+    cancelled: z.number().int().openapi({ description: 'Cancelled tasks' }),
     overdue: z.number().int().openapi({ description: 'Overdue tasks' }),
-    byPriority: z
-      .record(z.string(), z.number().int())
-      .openapi({ description: 'Tasks by priority' }),
-    byStatus: z.record(z.string(), z.number().int()).openapi({ description: 'Tasks by status' }),
-    completionTrend: z
-      .array(
-        z.object({
-          date: z.string(),
-          completed: z.number().int(),
-        }),
-      )
-      .openapi({ description: 'Completion trend' }),
+    completionRate: z.number().openapi({ description: 'Completion rate (0-1)' }),
+    avgCompletionTime: z
+      .number()
+      .nullable()
+      .openapi({ description: 'Average completion time (hours)' }),
   })
   .openapi('TaskMetrics');
 
 export const TimeMetricsSchema = z
   .object({
-    totalMinutes: z.number().int().openapi({ description: 'Total minutes tracked' }),
     totalHours: z.number().openapi({ description: 'Total hours tracked' }),
+    avgHoursPerDay: z.number().openapi({ description: 'Average hours per day' }),
+    byProject: z
+      .array(
+        z.object({
+          projectId: z.string().nullable(),
+          projectName: z.string().nullable(),
+          hours: z.number(),
+        }),
+      )
+      .openapi({ description: 'Hours by project' }),
     byDay: z
       .array(
         z.object({
-          date: z.string(),
-          minutes: z.number().int(),
+          date: z.iso.date(),
+          hours: z.number(),
         }),
       )
-      .openapi({ description: 'Minutes by day' }),
-    byProject: z
-      .record(z.string(), z.number().int())
-      .openapi({ description: 'Minutes by project' }),
-    byTask: z.record(z.string(), z.number().int()).openapi({ description: 'Minutes by task' }),
-    averagePerDay: z.number().openapi({ description: 'Average minutes per day' }),
+      .openapi({ description: 'Hours by day' }),
+    byTask: z
+      .array(
+        z.object({
+          taskId: z.string(),
+          taskTitle: z.string(),
+          hours: z.number(),
+        }),
+      )
+      .openapi({ description: 'Hours by task' }),
   })
   .openapi('TimeMetrics');
 
 export const ProductivityMetricsSchema = z
   .object({
-    focusScore: z.number().openapi({ description: 'Focus score (0-100)' }),
-    consistencyScore: z.number().openapi({ description: 'Consistency score (0-100)' }),
-    completionRate: z.number().openapi({ description: 'Completion rate (0-1)' }),
-    peakHours: z.array(z.number().int()).openapi({ description: 'Peak productivity hours' }),
+    tasksCompletedPerDay: z.number().openapi({ description: 'Tasks completed per day' }),
+    focusHoursPerDay: z.number().openapi({ description: 'Focus hours per day' }),
     streakDays: z.number().int().openapi({ description: 'Current streak days' }),
-    longestStreak: z.number().int().openapi({ description: 'Longest streak days' }),
-    weeklyProgress: z
+    mostProductiveDay: z
+      .iso
+      .date()
+      .nullable()
+      .openapi({ description: 'Most productive day' }),
+    mostProductiveHour: z
+      .number()
+      .nullable()
+      .openapi({ description: 'Most productive hour' }),
+    taskCompletionTrend: z
       .array(
         z.object({
-          week: z.string(),
-          score: z.number(),
+          date: z.iso.date(),
+          count: z.number().int(),
         }),
       )
-      .openapi({ description: 'Weekly progress' }),
+      .openapi({ description: 'Task completion trend' }),
   })
   .openapi('ProductivityMetrics');
 
@@ -100,14 +198,14 @@ export const ProjectMetricsSchema = z
     total: z.number().int().openapi({ description: 'Total projects' }),
     active: z.number().int().openapi({ description: 'Active projects' }),
     completed: z.number().int().openapi({ description: 'Completed projects' }),
-    byStatus: z.record(z.string(), z.number().int()).openapi({ description: 'Projects by status' }),
-    taskDistribution: z
+    onHold: z.number().int().openapi({ description: 'On-hold projects' }),
+    tasksByProject: z
       .array(
         z.object({
           projectId: z.string(),
           projectName: z.string(),
-          taskCount: z.number().int(),
-          completedCount: z.number().int(),
+          totalTasks: z.number().int(),
+          completedTasks: z.number().int(),
         }),
       )
       .openapi({ description: 'Task distribution by project' }),
@@ -123,15 +221,15 @@ export const DashboardQuerySchema = z
     period: AnalyticsPeriodSchema.default('week').openapi({
       param: { name: 'period', in: 'query' },
     }),
-    dateFrom: z.iso
-      .datetime()
+    dateFrom: z.coerce
+      .date()
       .optional()
       .openapi({
         description: 'Filter from date',
         param: { name: 'dateFrom', in: 'query' },
       }),
-    dateTo: z.iso
-      .datetime()
+    dateTo: z.coerce
+      .date()
       .optional()
       .openapi({
         description: 'Filter to date',

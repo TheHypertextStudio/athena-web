@@ -172,7 +172,7 @@ export const SendNotificationRequestSchema = z
 export const ScheduleNotificationRequestSchema = z
   .object({
     userId: z.uuid().openapi({ description: 'Target user ID' }),
-    scheduledFor: z.iso.datetime().openapi({ description: 'Scheduled delivery time (ISO 8601)' }),
+    scheduledFor: TimestampSchema.openapi({ description: 'Scheduled delivery time' }),
     recurrenceRule: z
       .string()
       .optional()
@@ -249,7 +249,7 @@ export const ScheduleNotificationResponseSchema = z
     success: z.literal(true),
     data: z.object({
       id: z.string().openapi({ description: 'Scheduled notification ID' }),
-      scheduledFor: z.string().openapi({ description: 'Scheduled delivery time' }),
+      scheduledFor: TimestampSchema.openapi({ description: 'Scheduled delivery time' }),
     }),
   })
   .openapi('ScheduleNotificationResponse');

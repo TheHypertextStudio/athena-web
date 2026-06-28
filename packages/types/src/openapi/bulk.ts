@@ -5,7 +5,7 @@
  */
 
 import { z } from '@hono/zod-openapi';
-import { successResponseSchema } from './common.js';
+import { TimestampSchema, successResponseSchema } from './common.js';
 import { TaskPrioritySchema, TaskStatusSchema } from './tasks.js';
 
 // =============================================================================
@@ -34,7 +34,7 @@ export const BulkCreateTasksRequestSchema = z
             .openapi({ description: 'Task description' }),
           projectId: z.uuid().optional().openapi({ description: 'Project ID' }),
           priority: TaskPrioritySchema.optional().openapi({ description: 'Task priority' }),
-          deadline: z.iso.datetime().optional().openapi({ description: 'Task deadline' }),
+          deadline: TimestampSchema.optional().openapi({ description: 'Task deadline' }),
           tags: z.array(z.string()).optional().openapi({ description: 'Tag names' }),
         }),
       )
@@ -53,7 +53,7 @@ export const BulkUpdateTasksRequestSchema = z
         priority: TaskPrioritySchema.optional(),
         projectId: z.uuid().nullable().optional(),
         assigneeId: z.uuid().nullable().optional(),
-        deadline: z.iso.datetime().nullable().optional(),
+        deadline: TimestampSchema.nullable().optional(),
       })
       .openapi({ description: 'Updates to apply' }),
   })

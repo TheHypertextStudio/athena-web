@@ -30,6 +30,20 @@ const DEFAULT_SUBSCRIPTION = {
   updatedAt: new Date('2026-01-01T00:00:00Z'),
 };
 
+const DEFAULT_CUSTOM_INITIATIVE_STATUS = {
+  id: 'status-default',
+  workspaceId: 'workspace-test',
+  name: 'Default',
+  description: null,
+  category: 'planning',
+  color: '#000000',
+  icon: null,
+  position: 0,
+  isDefault: true,
+  createdAt: new Date('2026-01-01T00:00:00Z'),
+  updatedAt: new Date('2026-01-01T00:00:00Z'),
+};
+
 const createMockQueryFn = <T>(returnValue: T) => {
   const fn = vi.fn<(..._args: unknown[]) => Promise<T>>();
   fn.mockResolvedValue(returnValue as Awaited<T>);
@@ -73,6 +87,10 @@ export function createMockDb() {
   return {
     query: {
       initiatives: {
+        findMany: createMockQueryFn([] as unknown[]),
+        findFirst: createMockQueryFn(null as unknown),
+      },
+      customInitiativeStatuses: {
         findMany: createMockQueryFn([] as unknown[]),
         findFirst: createMockQueryFn(null as unknown),
       },
@@ -194,6 +212,14 @@ export function createMockDb() {
         findMany: createMockQueryFn([] as unknown[]),
         findFirst: createMockQueryFn(null as unknown),
       },
+      calendarSyncTokens: {
+        findMany: createMockQueryFn([] as unknown[]),
+        findFirst: createMockQueryFn(null as unknown),
+      },
+      externalIdMappings: {
+        findMany: createMockQueryFn([] as unknown[]),
+        findFirst: createMockQueryFn(null as unknown),
+      },
     },
     insert: vi.fn(() => createInsertChain()),
     update: vi.fn(() => createUpdateChain()),
@@ -236,6 +262,9 @@ export function resetMockDb(mockDb: MockDb) {
   });
   mockDb.query.users.findFirst.mockResolvedValue(DEFAULT_USER);
   mockDb.query.subscriptions.findFirst.mockResolvedValue(DEFAULT_SUBSCRIPTION);
+  mockDb.query.customInitiativeStatuses.findFirst.mockResolvedValue(
+    DEFAULT_CUSTOM_INITIATIVE_STATUS,
+  );
 
   mockDb.select.mockReset();
   mockDb.select.mockImplementation(() => createSelectChain());

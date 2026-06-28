@@ -4,7 +4,17 @@
  * @packageDocumentation
  */
 
-import { Hono } from 'hono';
+import { createRoute } from '@hono/zod-openapi';
+import {
+  AccountOverviewResponseSchema,
+  DataExportResponseSchema,
+  DeleteAccountRequestSchema,
+} from '@athena/types/openapi/account';
+import {
+  ErrorResponseSchema,
+  UnauthorizedErrorSchema,
+  ValidationErrorSchema,
+} from '@athena/types/openapi/common';
 import { eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import {
@@ -34,9 +44,10 @@ import {
   webhookEndpoints,
   auditLogs,
 } from '../db/schema/index.js';
+import { createOpenAPIApp } from '../lib/openapi.js';
 import { requireAuth, getUserId } from '../middleware/auth.js';
 
-const accountRoutes = new Hono();
+const accountRoutes = createOpenAPIApp();
 
 accountRoutes.use('*', requireAuth);
 
@@ -45,17 +56,131 @@ const ACCOUNT_EXPORT_VERSION = '2.0.0';
 const ACCOUNT_EXPORT_FILE_PREFIX = 'athena-export';
 const ACCOUNT_EXPORT_AUDIT_LOG_LIMIT = 1000;
 
+// =============================================================================
+// OpenAPI Route Definitions
+// =============================================================================
+
+const getAccountOverview = createRoute({
+  method: 'get',
+  path: '/',
+  tags: ['Account'],
+  summary: 'Get account overview',
+  description: 'Retrieve account information and usage statistics.',
+  responses: {
+    200: {
+      description: 'Account overview retrieved successfully',
+      content: {
+        'application/json': {
+          schema: AccountOverviewResponseSchema,
+        },
+      },
+    },
+    404: {
+      description: 'User not found',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+  },
+});
+
+const exportUserData = createRoute({
+  method: 'get',
+  path: '/export',
+  tags: ['Account'],
+  summary: 'Export user data',
+  description: 'Export all user data as JSON for GDPR compliance.',
+  responses: {
+    200: {
+      description: 'Data export successful',
+      content: {
+        'application/json': {
+          schema: DataExportResponseSchema,
+        },
+      },
+    },
+    404: {
+      description: 'User not found',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+  },
+});
+
+const deleteAccount = createRoute({
+  method: 'delete',
+  path: '/',
+  tags: ['Account'],
+  summary: 'Delete account',
+  description: 'Permanently delete the user account and all associated data.',
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: DeleteAccountRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    204: {
+      description: 'Account deleted successfully',
+    },
+    400: {
+      description: 'Invalid confirmation string',
+      content: {
+        'application/json': {
+          schema: ValidationErrorSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+  },
+});
+
 /**
  * Export all user data.
  * GET /api/account/export
  */
-accountRoutes.get('/export', async (c) => {
+accountRoutes.openapi(exportUserData, async (c) => {
   const userId = getUserId(c);
 
   // Get user profile
   const user = await db.query.users.findFirst({
     where: eq(users.id, userId),
   });
+
+  if (!user) {
+    return c.json({ error: 'User not found' }, 404);
+  }
 
   // Get all user data - core entities
   const [
@@ -160,14 +285,14 @@ accountRoutes.get('/export', async (c) => {
 
   const exportData = {
     exportVersion: ACCOUNT_EXPORT_VERSION,
-    exportedAt: new Date().toISOString(),
+    exportedAt: new Date(),
     user: {
-      id: user?.id,
-      name: user?.name,
-      email: user?.email,
-      createdAt: user?.createdAt,
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      createdAt: user.createdAt,
     },
-    settings,
+    settings: settings ?? {},
     subscription: subscription
       ? {
           planTier: subscription.planTier,
@@ -353,18 +478,16 @@ accountRoutes.get('/export', async (c) => {
     `attachment; filename="${ACCOUNT_EXPORT_FILE_PREFIX}-${dateStr}.json"`,
   );
 
-  return c.json(exportData);
+  return c.json(exportData, 200);
 });
 
 /**
  * Delete user account.
  * DELETE /api/account
  */
-accountRoutes.delete('/', async (c) => {
+accountRoutes.openapi(deleteAccount, async (c) => {
   const userId = getUserId(c);
-  const body = await c.req.json<{
-    confirmation: string;
-  }>();
+  const body = c.req.valid('json');
 
   // Require explicit confirmation
   if (body.confirmation !== ACCOUNT_DELETE_CONFIRMATION) {
@@ -394,7 +517,7 @@ accountRoutes.delete('/', async (c) => {
  * Get account overview.
  * GET /api/account
  */
-accountRoutes.get('/', async (c) => {
+accountRoutes.openapi(getAccountOverview, async (c) => {
   const userId = getUserId(c);
 
   const user = await db.query.users.findFirst({
@@ -428,7 +551,7 @@ accountRoutes.get('/', async (c) => {
         events: eventCount.length,
       },
     },
-  });
+  }, 200);
 });
 
 export { accountRoutes };

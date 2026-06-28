@@ -44,14 +44,14 @@ export const MomentIdParamSchema = z
 export const MomentsQuerySchema = z
   .object({
     startDate: z
-      .string()
+      .coerce.date()
       .optional()
       .openapi({
         description: 'Filter from date',
         param: { name: 'startDate', in: 'query' },
       }),
     endDate: z
-      .string()
+      .coerce.date()
       .optional()
       .openapi({
         description: 'Filter to date',
@@ -68,8 +68,8 @@ export const CreateMomentRequestSchema = z
   .object({
     label: z.string().max(200).optional().openapi({ description: 'Moment label' }),
     description: z.string().max(2000).optional().openapi({ description: 'Moment description' }),
-    startTime: z.iso.datetime().openapi({ description: 'Start time' }),
-    endTime: z.iso.datetime().openapi({ description: 'End time' }),
+    startTime: TimestampSchema.openapi({ description: 'Start time' }),
+    endTime: TimestampSchema.openapi({ description: 'End time' }),
   })
   .openapi('CreateMomentRequest');
 
@@ -77,8 +77,8 @@ export const UpdateMomentRequestSchema = z
   .object({
     label: z.string().max(200).optional().openapi({ description: 'Moment label' }),
     description: z.string().max(2000).optional().openapi({ description: 'Moment description' }),
-    startTime: z.iso.datetime().optional().openapi({ description: 'Start time' }),
-    endTime: z.iso.datetime().optional().openapi({ description: 'End time' }),
+    startTime: TimestampSchema.optional().openapi({ description: 'Start time' }),
+    endTime: TimestampSchema.optional().openapi({ description: 'End time' }),
   })
   .openapi('UpdateMomentRequest');
 

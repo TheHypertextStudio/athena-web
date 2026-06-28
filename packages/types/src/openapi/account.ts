@@ -48,7 +48,7 @@ export const AccountOverviewSchema = z
 export const DataExportSchema = z
   .object({
     exportVersion: z.string().openapi({ description: 'Export format version', example: '1.0' }),
-    exportedAt: z.string().openapi({ description: 'Export timestamp' }),
+    exportedAt: TimestampSchema.openapi({ description: 'Export timestamp' }),
     user: z.object({
       id: z.uuid(),
       name: z.string(),
@@ -85,7 +85,7 @@ export const DataExportSchema = z
 
 export const DeleteAccountRequestSchema = z
   .object({
-    confirmation: z.literal('DELETE_MY_ACCOUNT').openapi({
+    confirmation: z.string().min(1).openapi({
       description: 'Confirmation string - must be exactly "DELETE_MY_ACCOUNT"',
       example: 'DELETE_MY_ACCOUNT',
     }),

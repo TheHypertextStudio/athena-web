@@ -22,6 +22,8 @@ export interface ExternalMapping {
   lastSyncedToExternal: Date | null;
   externalVersion: string | null;
   metadata: Record<string, unknown> | null;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface CreateMappingOptions {
@@ -249,6 +251,8 @@ export class MappingService {
       lastSyncedToExternal: row.lastSyncedToExternal,
       externalVersion: row.externalVersion,
       metadata: row.metadata as Record<string, unknown> | null,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
     };
   }
 }

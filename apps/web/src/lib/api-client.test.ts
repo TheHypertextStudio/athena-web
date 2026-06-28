@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-non-null-assertion */
 /**
  * Tests for the API client.
  *
@@ -174,7 +173,9 @@ describe('API Client', () => {
 
       const mockCalls = (fetch as ReturnType<typeof vi.fn>).mock.calls;
       expect(mockCalls.length).toBeGreaterThan(0);
-      const calledUrl = mockCalls[0]![0] as string;
+      const firstCall = mockCalls[0];
+      expect(firstCall).toBeDefined();
+      const calledUrl = firstCall?.[0] as string;
       expect(calledUrl).toContain('status=pending');
       expect(calledUrl).not.toContain('priority');
     });
@@ -264,7 +265,9 @@ describe('API Client', () => {
 
       const mockCalls = (fetch as ReturnType<typeof vi.fn>).mock.calls;
       expect(mockCalls.length).toBeGreaterThan(0);
-      const calledOptions = mockCalls[0]![1] as RequestInit;
+      const firstCall = mockCalls[0];
+      expect(firstCall).toBeDefined();
+      const calledOptions = firstCall?.[1] as RequestInit;
       const headers = calledOptions.headers as Headers;
       expect(headers.get('Content-Type')).toBe('application/json');
     });

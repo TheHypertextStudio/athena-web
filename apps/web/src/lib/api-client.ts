@@ -827,6 +827,7 @@ export interface Session {
   expiresAt: string;
   lastActiveAt: string;
   status: SessionStatus;
+  isCurrent: boolean;
 }
 
 export interface LinkedAccount {
@@ -839,7 +840,8 @@ export interface LinkedAccount {
 export interface BackupCodesInfo {
   hasBackupCodes: boolean;
   remainingCount: number;
-  generatedAt?: string;
+  totalCount: number;
+  generatedAt: string | null;
 }
 
 export interface Passkey {
@@ -964,6 +966,8 @@ export interface AICompletionsResponse {
   completions: string[];
 }
 
+export type AIContext = 'general' | 'onboarding';
+
 export const aiApi = {
   getPreferences: () => request<{ data: AIPreferences }>('/api/ai/preferences'),
   updatePreferences: (data: Partial<AIPreferences>) =>
@@ -977,6 +981,21 @@ export const aiApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+  /**
+   * Stream a chat message with optional context.
+   * Returns a streaming Response that can be read with SSE parsing.
+   *
+   * @param message - The message to send (can be empty for initial greeting)
+   * @param context - The context for scoped tools (e.g., 'onboarding')
+   */
+  chatStream: (message: string, context?: AIContext) => {
+    return fetch(`${API_BASE_URL}/api/ai/chat`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message, context }),
+    });
+  },
 };
 
 // ============================================================================
@@ -1065,6 +1084,22 @@ export const timeBlocksApi = {
       method: 'PUT',
       body: JSON.stringify({ taskIds }),
     }),
+  /**
+   * Generate AI-suggested time blocks for a date.
+   * Returns a streaming response with generated blocks.
+   */
+  generateStream: (params: {
+    date: string;
+    intent?: { selectedChips: string[]; customText?: string | null };
+    calendarEventIds?: string[];
+  }) => {
+    return fetch(`${API_BASE_URL}/api/time-blocks/generate`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+  },
 };
 
 /**
@@ -1423,6 +1458,15 @@ export interface OnboardingTimeBlock {
 
 /**
  * Onboarding API for the 3-step conversational onboarding flow.
+ *
+ * Uses simplified RESTful endpoints:
+ * - GET /api/onboarding - Get status
+ * - PATCH /api/onboarding - Update step, metadata, complete, or skip
+ *
+ * For other functionality:
+ * - Calendar connections: Use `calendarSyncApi`
+ * - AI chat: Use `/api/ai/chat` with `context: "onboarding"`
+ * - Agenda generation: Use `timeBlocksApi.generateStream()`
  */
 export const onboardingApi = {
   /**
@@ -1436,29 +1480,52 @@ export const onboardingApi = {
   getIntentChips: () => request<{ chips: IntentChip[] }>('/api/onboarding/intent-chips'),
 
   /**
+   * Update onboarding state.
+   * Can advance step, merge metadata, complete, or skip.
+   */
+  update: (data: {
+    step?: OnboardingStep;
+    metadata?: Partial<OnboardingMetadata>;
+    complete?: boolean;
+    skip?: boolean;
+  }) =>
+    request<{
+      currentStep: OnboardingStep;
+      metadata: OnboardingMetadata;
+      completedAt: string | null;
+      skippedAt: string | null;
+      redirectTo: string | null;
+    }>('/api/onboarding', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  /**
    * Update current onboarding step.
+   * @deprecated Use `update({ step, metadata })` instead.
    */
   updateStep: (step: OnboardingStep, metadata?: Partial<OnboardingMetadata>) =>
-    request<{ currentStep: OnboardingStep; metadata: OnboardingMetadata }>('/api/onboarding/step', {
-      method: 'PATCH',
-      body: JSON.stringify({ step, metadata }),
-    }),
+    onboardingApi.update({ step, metadata }),
 
   /**
    * Complete onboarding.
+   * @deprecated Use `update({ complete: true })` instead.
    */
   complete: () =>
-    request<{ completedAt: string; redirectTo: string }>('/api/onboarding/complete', {
-      method: 'POST',
-    }),
+    onboardingApi.update({ complete: true }).then((res) => ({
+      completedAt: res.completedAt ?? new Date().toISOString(),
+      redirectTo: res.redirectTo ?? '/home',
+    })),
 
   /**
    * Skip onboarding.
+   * @deprecated Use `update({ skip: true })` instead.
    */
   skip: () =>
-    request<{ skippedAt: string; redirectTo: string }>('/api/onboarding/skip', {
-      method: 'POST',
-    }),
+    onboardingApi.update({ skip: true }).then((res) => ({
+      skippedAt: res.skippedAt ?? new Date().toISOString(),
+      redirectTo: res.redirectTo ?? '/home',
+    })),
 
   /**
    * Reset onboarding (for testing).
@@ -1467,87 +1534,16 @@ export const onboardingApi = {
 
   /**
    * Generate personalized agenda.
-   * Returns an EventSource for streaming time blocks.
+   * @deprecated Use `timeBlocksApi.generateStream()` instead.
    */
   generateAgendaStream: (date: string, intent?: OnboardingIntent) => {
-    const url = new URL(`${API_BASE_URL}/api/onboarding/generate-agenda`);
-    return fetch(url, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ date, intent }),
+    return timeBlocksApi.generateStream({
+      date,
+      intent: intent
+        ? { selectedChips: intent.selectedChips, customText: intent.customText }
+        : undefined,
     });
   },
-
-  // ============================================================================
-  // AI Conversation Endpoints
-  // ============================================================================
-
-  /**
-   * Get conversation messages for onboarding.
-   */
-  getMessages: () =>
-    request<{ messages: { role: string; content: string }[] }>('/api/onboarding/messages'),
-
-  /**
-   * Get initial greeting from Athena.
-   * Returns a streaming response.
-   */
-  getGreetingStream: () => {
-    return fetch(`${API_BASE_URL}/api/onboarding/greeting`, {
-      credentials: 'include',
-      headers: { Accept: 'text/event-stream' },
-    });
-  },
-
-  /**
-   * Send a message to Athena during onboarding.
-   * Returns a streaming response with content and tool calls.
-   */
-  sendMessage: (message: string) => {
-    return fetch(`${API_BASE_URL}/api/onboarding/chat`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message }),
-    });
-  },
-
-  // ============================================================================
-  // Calendar Integration Endpoints
-  // ============================================================================
-
-  /**
-   * Get OAuth URL for a calendar provider.
-   */
-  getCalendarOAuthUrl: (provider: 'google_calendar' | 'outlook_calendar' | 'caldav') =>
-    request<{ authUrl: string }>(`/api/onboarding/calendar/oauth/${provider}`),
-
-  /**
-   * Get all calendar connections for the user.
-   */
-  getCalendarConnections: () =>
-    request<{
-      connections: {
-        id: string;
-        provider: string;
-        email: string | null;
-        status: string;
-        lastSyncAt: string | null;
-        error: string | null;
-      }[];
-    }>('/api/onboarding/calendar/connections'),
-
-  /**
-   * Trigger sync for a calendar connection.
-   */
-  triggerCalendarSync: (connectionId: string) =>
-    request<{ success: boolean; eventsCount: number }>(
-      `/api/onboarding/calendar/sync/${connectionId}`,
-      {
-        method: 'POST',
-      },
-    ),
 };
 
 /**
@@ -1557,6 +1553,4 @@ export const onboardingKeys = {
   all: ['onboarding'] as const,
   status: () => [...onboardingKeys.all, 'status'] as const,
   intentChips: () => [...onboardingKeys.all, 'intent-chips'] as const,
-  messages: () => [...onboardingKeys.all, 'messages'] as const,
-  calendarConnections: () => [...onboardingKeys.all, 'calendar-connections'] as const,
 };

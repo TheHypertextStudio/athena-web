@@ -89,7 +89,7 @@ export const DeadlinesSummarySchema = z
 export const AgendaQuerySchema = z
   .object({
     date: z
-      .string()
+      .coerce.date()
       .optional()
       .openapi({
         description: 'Date (YYYY-MM-DD)',
@@ -100,11 +100,11 @@ export const AgendaQuerySchema = z
 
 export const AgendaRangeQuerySchema = z
   .object({
-    startDate: z.string().openapi({
+    startDate: z.coerce.date().optional().openapi({
       description: 'Start date (YYYY-MM-DD)',
       param: { name: 'startDate', in: 'query' },
     }),
-    endDate: z.string().openapi({
+    endDate: z.coerce.date().optional().openapi({
       description: 'End date (YYYY-MM-DD)',
       param: { name: 'endDate', in: 'query' },
     }),
@@ -129,7 +129,7 @@ export const DeadlinesQuerySchema = z
 export const WeekQuerySchema = z
   .object({
     startDate: z
-      .string()
+      .coerce.date()
       .optional()
       .openapi({
         description: 'Week start date (YYYY-MM-DD)',
@@ -145,7 +145,7 @@ export const WeekQuerySchema = z
 export const AgendaReorderRequestSchema = z
   .object({
     taskIds: z.array(z.uuid()).openapi({ description: 'Ordered task IDs' }),
-    date: z.string().optional().openapi({ description: 'Date (YYYY-MM-DD)' }),
+    date: z.coerce.date().optional().openapi({ description: 'Date (YYYY-MM-DD)' }),
   })
   .openapi('AgendaReorderRequest');
 
@@ -155,7 +155,7 @@ export const AgendaReorderRequestSchema = z
 
 export const AgendaResponseSchema = successResponseSchema(
   z.object({
-    date: z.string(),
+    date: z.iso.date(),
     items: z.array(AgendaItemSchema),
     summary: AgendaSummarySchema,
   }),
@@ -164,8 +164,8 @@ export const AgendaResponseSchema = successResponseSchema(
 
 export const AgendaRangeResponseSchema = successResponseSchema(
   z.object({
-    startDate: z.string(),
-    endDate: z.string(),
+    startDate: z.iso.date(),
+    endDate: z.iso.date(),
     tasks: z.array(AgendaTaskSchema),
     events: z.array(AgendaEventSchema),
     summary: z.object({
@@ -178,7 +178,7 @@ export const AgendaRangeResponseSchema = successResponseSchema(
 
 export const TodayAgendaResponseSchema = successResponseSchema(
   z.object({
-    date: z.string(),
+    date: z.iso.date(),
     tasks: z.array(AgendaTaskSchema),
     events: z.array(AgendaEventSchema),
     timeBlocks: z.array(z.unknown()),
@@ -190,14 +190,14 @@ export const TodayAgendaResponseSchema = successResponseSchema(
 export const ReorderResponseSchema = z
   .object({
     success: z.literal(true),
-    date: z.string(),
+    date: z.iso.date(),
     orderedTaskIds: z.array(z.string()),
   })
   .openapi('ReorderResponse');
 
 export const TaskOrderResponseSchema = successResponseSchema(
   z.object({
-    date: z.string(),
+    date: z.iso.date(),
     taskIds: z.array(z.string()),
   }),
   'Task order',
@@ -206,7 +206,7 @@ export const TaskOrderResponseSchema = successResponseSchema(
 export const DeadlinesResponseSchema = successResponseSchema(
   z.object({
     tasks: z.array(AgendaTaskSchema),
-    byDay: z.record(z.string(), z.array(AgendaTaskSchema)),
+    byDay: z.record(z.iso.date(), z.array(AgendaTaskSchema)),
     totalCount: z.number().int(),
     overdueCount: z.number().int(),
   }),
@@ -215,10 +215,10 @@ export const DeadlinesResponseSchema = successResponseSchema(
 
 export const WeekAgendaResponseSchema = successResponseSchema(
   z.object({
-    startDate: z.string(),
-    endDate: z.string(),
+    startDate: z.iso.date(),
+    endDate: z.iso.date(),
     days: z.record(
-      z.string(),
+      z.iso.date(),
       z.object({
         tasks: z.array(AgendaTaskSchema),
         events: z.array(AgendaEventSchema),

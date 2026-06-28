@@ -5,20 +5,55 @@
  */
 
 import * as crypto from 'node:crypto';
-import { Hono } from 'hono';
+import { createRoute, z } from '@hono/zod-openapi';
 import { eq, and } from 'drizzle-orm';
+import {
+  IntegrationIdParamSchema,
+  ProviderParamSchema,
+  WebhookProviderParamSchema,
+  MappingIdParamSchema,
+  ExternalIdParamSchema,
+  EntityMappingParamSchema,
+  OAuthQuerySchema,
+  ConnectIntegrationRequestSchema,
+  CreateMappingRequestSchema,
+  MarkSyncedRequestSchema,
+  LinkedIntegrationsResponseSchema,
+  LinkedIntegrationResponseSchema,
+  OAuthAuthorizationResponseSchema,
+  IntegrationMappingsResponseSchema,
+  IntegrationMappingResponseSchema,
+  MarkSyncedResponseSchema,
+  WebhookResultSchema,
+} from '@athena/types/openapi/integrations';
+import {
+  ErrorResponseSchema,
+  UnauthorizedErrorSchema,
+  ValidationErrorSchema,
+} from '@athena/types/openapi/common';
 import { db } from '../db/index.js';
 import { linkedIntegrations } from '../db/schema/index.js';
 import { requireAuth, getUserId } from '../middleware/auth.js';
 import { requireEntitlement } from '../middleware/entitlements.js';
-import {
-  getMappingService,
-  type EntityType,
-  type SyncDirection,
-} from '../services/sync/mapping-service.js';
+import { createOpenAPIApp } from '../lib/openapi.js';
+import { getMappingService } from '../services/sync/mapping-service.js';
 import { env } from '../lib/env.js';
+import {
+  WebhookSignatureHeadersSchema,
+  ERROR_INVALID_WEBHOOK_PAYLOAD,
+  ERROR_UNSUPPORTED_WEBHOOK_PROVIDER,
+  isOAuthProvider,
+  processIntegrationWebhook,
+  verifyWebhookSignature,
+  type OAuthProvider,
+} from './integrations/helpers.js';
+import {
+  toIntegrationMapping,
+  toLinkedIntegration,
+  toServiceSyncDirection,
+} from './integrations/serializers.js';
 
-const integrationRoutes = new Hono();
+const integrationRoutes = createOpenAPIApp();
 
 // Require authentication for all routes
 integrationRoutes.use('*', requireAuth);
@@ -27,41 +62,594 @@ integrationRoutes.use('*', requireAuth);
 // GET requests pass through (read access is sacred)
 integrationRoutes.use('*', requireEntitlement('integrations'));
 
-type OAuthProvider =
-  | 'linear'
-  | 'github'
-  | 'google_calendar'
-  | 'outlook_calendar'
-  | 'apple_calendar';
-const OAUTH_PROVIDERS: OAuthProvider[] = [
-  'linear',
-  'github',
-  'google_calendar',
-  'outlook_calendar',
-  'apple_calendar',
-];
-
-const isOAuthProvider = (value: string): value is OAuthProvider =>
-  OAUTH_PROVIDERS.includes(value as OAuthProvider);
-
-const WEBHOOK_PROVIDERS = ['linear', 'github'] as const;
-type WebhookProvider = (typeof WEBHOOK_PROVIDERS)[number];
-
-const isWebhookProvider = (value: string): value is WebhookProvider =>
-  WEBHOOK_PROVIDERS.includes(value as WebhookProvider);
-
 const ERROR_INVALID_PROVIDER = 'Invalid provider';
+const ERROR_INTEGRATION_NOT_FOUND = 'Integration not found';
+const ERROR_INTEGRATION_EXISTS = 'Integration already exists for this provider';
 const ERROR_INVALID_JSON_PAYLOAD = 'Invalid JSON payload';
 const ERROR_INVALID_WEBHOOK_SIGNATURE = 'Invalid webhook signature';
-const ERROR_INVALID_WEBHOOK_PAYLOAD = 'Invalid webhook payload';
-const ERROR_UNSUPPORTED_WEBHOOK_PROVIDER = 'Unsupported webhook provider';
 const ERROR_WEBHOOK_PROCESSING_FAILED = 'Webhook processing failed';
+const ERROR_MISSING_REDIRECT_URI = 'redirect_uri query parameter is required';
+const ERROR_MAPPING_NOT_FOUND = 'Mapping not found';
+
+const optionalOAuthQuerySchema = OAuthQuerySchema.partial();
+
+// =============================================================================
+// List Integrations
+// =============================================================================
+
+const getIntegrations = createRoute({
+  method: 'get',
+  path: '/',
+  tags: ['Integrations'],
+  summary: 'List integrations',
+  description: 'List all linked integrations for the authenticated user.',
+  responses: {
+    200: {
+      description: 'Integrations retrieved successfully',
+      content: {
+        'application/json': {
+          schema: LinkedIntegrationsResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+  },
+});
+
+// =============================================================================
+// Get Integration
+// =============================================================================
+
+const getIntegration = createRoute({
+  method: 'get',
+  path: '/{id}',
+  tags: ['Integrations'],
+  summary: 'Get integration',
+  description: 'Get a specific integration by ID.',
+  request: {
+    params: IntegrationIdParamSchema,
+  },
+  responses: {
+    200: {
+      description: 'Integration retrieved successfully',
+      content: {
+        'application/json': {
+          schema: LinkedIntegrationResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+    404: {
+      description: 'Integration not found',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+// =============================================================================
+// Connect Integration
+// =============================================================================
+
+const connectIntegration = createRoute({
+  method: 'post',
+  path: '/connect',
+  tags: ['Integrations'],
+  summary: 'Connect integration',
+  description: 'Connect a new integration.',
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: ConnectIntegrationRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: 'Integration connected successfully',
+      content: {
+        'application/json': {
+          schema: LinkedIntegrationResponseSchema,
+        },
+      },
+    },
+    400: {
+      description: 'Validation error',
+      content: {
+        'application/json': {
+          schema: ValidationErrorSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+    409: {
+      description: 'Integration already exists for this provider',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+// =============================================================================
+// Disconnect Integration
+// =============================================================================
+
+const disconnectIntegration = createRoute({
+  method: 'delete',
+  path: '/{id}',
+  tags: ['Integrations'],
+  summary: 'Disconnect integration',
+  description: 'Disconnect (remove) an integration.',
+  request: {
+    params: IntegrationIdParamSchema,
+  },
+  responses: {
+    204: {
+      description: 'Integration disconnected successfully',
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+    404: {
+      description: 'Integration not found',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+// =============================================================================
+// Get OAuth Authorization URL
+// =============================================================================
+
+const getOAuthAuthorization = createRoute({
+  method: 'get',
+  path: '/oauth/{provider}/authorize',
+  tags: ['Integrations'],
+  summary: 'Get OAuth URL',
+  description: 'Get OAuth authorization URL for a provider.',
+  request: {
+    params: ProviderParamSchema,
+    query: optionalOAuthQuerySchema,
+  },
+  responses: {
+    200: {
+      description: 'OAuth authorization URL retrieved',
+      content: {
+        'application/json': {
+          schema: OAuthAuthorizationResponseSchema,
+        },
+      },
+    },
+    400: {
+      description: 'Invalid provider or missing redirect_uri',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+  },
+});
+
+// =============================================================================
+// Handle Webhook
+// =============================================================================
+
+const handleWebhook = createRoute({
+  method: 'post',
+  path: '/webhooks/{provider}',
+  tags: ['Integrations'],
+  summary: 'Handle webhook',
+  description: 'Handle incoming webhook from an integration provider.',
+  request: {
+    params: WebhookProviderParamSchema,
+    headers: WebhookSignatureHeadersSchema,
+    body: {
+      content: {
+        'application/json': {
+          schema: z.unknown(),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Webhook processed successfully',
+      content: {
+        'application/json': {
+          schema: WebhookResultSchema,
+        },
+      },
+    },
+    400: {
+      description: 'Invalid webhook payload',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Invalid webhook signature',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+    500: {
+      description: 'Webhook processing failed',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+// =============================================================================
+// Get Mappings
+// =============================================================================
+
+const getMappings = createRoute({
+  method: 'get',
+  path: '/{id}/mappings',
+  tags: ['Integrations'],
+  summary: 'Get mappings',
+  description: 'Get all mappings for an integration.',
+  request: {
+    params: IntegrationIdParamSchema,
+  },
+  responses: {
+    200: {
+      description: 'Mappings retrieved successfully',
+      content: {
+        'application/json': {
+          schema: IntegrationMappingsResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+    404: {
+      description: 'Integration not found',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+// =============================================================================
+// Create Mapping
+// =============================================================================
+
+const createMapping = createRoute({
+  method: 'post',
+  path: '/{id}/mappings',
+  tags: ['Integrations'],
+  summary: 'Create mapping',
+  description: 'Create a new mapping for an integration.',
+  request: {
+    params: IntegrationIdParamSchema,
+    body: {
+      content: {
+        'application/json': {
+          schema: CreateMappingRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: 'Mapping created successfully',
+      content: {
+        'application/json': {
+          schema: IntegrationMappingResponseSchema,
+        },
+      },
+    },
+    400: {
+      description: 'Validation error',
+      content: {
+        'application/json': {
+          schema: ValidationErrorSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+    404: {
+      description: 'Integration not found',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+// =============================================================================
+// Find Mapping by External ID
+// =============================================================================
+
+const getMappingByExternalId = createRoute({
+  method: 'get',
+  path: '/{id}/mappings/by-external/{externalId}',
+  tags: ['Integrations'],
+  summary: 'Find mapping by external ID',
+  description: 'Find a mapping by external ID.',
+  request: {
+    params: ExternalIdParamSchema,
+  },
+  responses: {
+    200: {
+      description: 'Mapping retrieved successfully',
+      content: {
+        'application/json': {
+          schema: IntegrationMappingResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+    404: {
+      description: 'Mapping or integration not found',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+// =============================================================================
+// Find Mapping by Local Entity
+// =============================================================================
+
+const getMappingByEntity = createRoute({
+  method: 'get',
+  path: '/{id}/mappings/by-entity/{entityType}/{localEntityId}',
+  tags: ['Integrations'],
+  summary: 'Find mapping by local entity',
+  description: 'Find a mapping by local entity type and ID.',
+  request: {
+    params: EntityMappingParamSchema,
+  },
+  responses: {
+    200: {
+      description: 'Mapping retrieved successfully',
+      content: {
+        'application/json': {
+          schema: IntegrationMappingResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+    404: {
+      description: 'Mapping or integration not found',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+// =============================================================================
+// Delete Mapping
+// =============================================================================
+
+const deleteMapping = createRoute({
+  method: 'delete',
+  path: '/{id}/mappings/{mappingId}',
+  tags: ['Integrations'],
+  summary: 'Delete mapping',
+  description: 'Delete a mapping.',
+  request: {
+    params: MappingIdParamSchema,
+  },
+  responses: {
+    204: {
+      description: 'Mapping deleted successfully',
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+    404: {
+      description: 'Mapping or integration not found',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+// =============================================================================
+// Mark Synced from External
+// =============================================================================
+
+const markSyncedFromExternal = createRoute({
+  method: 'post',
+  path: '/{id}/mappings/{mappingId}/synced-from-external',
+  tags: ['Integrations'],
+  summary: 'Mark synced from external',
+  description: 'Mark a mapping as synced from external.',
+  request: {
+    params: MappingIdParamSchema,
+    body: {
+      content: {
+        'application/json': {
+          schema: MarkSyncedRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Mapping marked as synced',
+      content: {
+        'application/json': {
+          schema: MarkSyncedResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+    404: {
+      description: 'Mapping or integration not found',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+// =============================================================================
+// Mark Synced to External
+// =============================================================================
+
+const markSyncedToExternal = createRoute({
+  method: 'post',
+  path: '/{id}/mappings/{mappingId}/synced-to-external',
+  tags: ['Integrations'],
+  summary: 'Mark synced to external',
+  description: 'Mark a mapping as synced to external.',
+  request: {
+    params: MappingIdParamSchema,
+    body: {
+      content: {
+        'application/json': {
+          schema: MarkSyncedRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Mapping marked as synced',
+      content: {
+        'application/json': {
+          schema: MarkSyncedResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Authentication required',
+      content: {
+        'application/json': {
+          schema: UnauthorizedErrorSchema,
+        },
+      },
+    },
+    404: {
+      description: 'Mapping or integration not found',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
 
 /**
  * List all linked integrations for the authenticated user.
  * GET /api/integrations
  */
-integrationRoutes.get('/', async (c) => {
+integrationRoutes.openapi(getIntegrations, async (c) => {
   const userId = getUserId(c);
 
   const result = await db.query.linkedIntegrations.findMany({
@@ -77,16 +665,16 @@ integrationRoutes.get('/', async (c) => {
     },
   });
 
-  return c.json({ data: result });
+  return c.json({ data: result.map(toLinkedIntegration) }, 200);
 });
 
 /**
  * Get a specific integration by ID.
  * GET /api/integrations/:id
  */
-integrationRoutes.get('/:id', async (c) => {
+integrationRoutes.openapi(getIntegration, async (c) => {
   const userId = getUserId(c);
-  const id = c.req.param('id');
+  const { id } = c.req.valid('param');
 
   const result = await db.query.linkedIntegrations.findFirst({
     where: and(eq(linkedIntegrations.id, id), eq(linkedIntegrations.userId, userId)),
@@ -102,10 +690,10 @@ integrationRoutes.get('/:id', async (c) => {
   });
 
   if (!result) {
-    return c.json({ error: 'Integration not found' }, 404);
+    return c.json({ error: ERROR_INTEGRATION_NOT_FOUND }, 404);
   }
 
-  return c.json({ data: result });
+  return c.json({ data: toLinkedIntegration(result) }, 200);
 });
 
 /**
@@ -115,23 +703,9 @@ integrationRoutes.get('/:id', async (c) => {
  * Note: In production, this would initiate an OAuth flow.
  * For now, it accepts the integration details directly.
  */
-integrationRoutes.post('/connect', async (c) => {
+integrationRoutes.openapi(connectIntegration, async (c) => {
   const userId = getUserId(c);
-  const body = await c.req.json<{
-    provider:
-      | 'linear'
-      | 'github'
-      | 'google_calendar'
-      | 'outlook_calendar'
-      | 'apple_calendar'
-      | 'caldav_calendar';
-    externalAccountId: string;
-    accessToken?: string;
-    refreshToken?: string;
-    tokenExpiresAt?: string;
-    scopes?: string;
-    metadata?: Record<string, unknown>;
-  }>();
+  const body = c.req.valid('json');
 
   // Check if integration already exists for this provider
   const existing = await db.query.linkedIntegrations.findFirst({
@@ -142,7 +716,12 @@ integrationRoutes.post('/connect', async (c) => {
   });
 
   if (existing) {
-    return c.json({ error: 'Integration already exists for this provider' }, 409);
+    return c.json(
+      {
+        error: ERROR_INTEGRATION_EXISTS,
+      },
+      409,
+    );
   }
 
   const id = crypto.randomUUID();
@@ -155,7 +734,7 @@ integrationRoutes.post('/connect', async (c) => {
     externalAccountId: body.externalAccountId,
     accessToken: body.accessToken,
     refreshToken: body.refreshToken,
-    tokenExpiresAt: body.tokenExpiresAt ? new Date(body.tokenExpiresAt) : null,
+    tokenExpiresAt: body.tokenExpiresAt ?? null,
     scopes: body.scopes,
     metadata: body.metadata,
     createdAt: now,
@@ -171,26 +750,31 @@ integrationRoutes.post('/connect', async (c) => {
       scopes: true,
       metadata: true,
       createdAt: true,
+      updatedAt: true,
     },
   });
 
-  return c.json({ data: result }, 201);
+  if (!result) {
+    throw new Error('Integration not found after creation');
+  }
+
+  return c.json({ data: toLinkedIntegration(result) }, 201);
 });
 
 /**
  * Disconnect (remove) an integration.
  * DELETE /api/integrations/:id
  */
-integrationRoutes.delete('/:id', async (c) => {
+integrationRoutes.openapi(disconnectIntegration, async (c) => {
   const userId = getUserId(c);
-  const id = c.req.param('id');
+  const { id } = c.req.valid('param');
 
   const existing = await db.query.linkedIntegrations.findFirst({
     where: and(eq(linkedIntegrations.id, id), eq(linkedIntegrations.userId, userId)),
   });
 
   if (!existing) {
-    return c.json({ error: 'Integration not found' }, 404);
+    return c.json({ error: ERROR_INTEGRATION_NOT_FOUND }, 404);
   }
 
   await db
@@ -204,10 +788,10 @@ integrationRoutes.delete('/:id', async (c) => {
  * Get OAuth authorization URL for a provider.
  * GET /api/integrations/oauth/:provider/authorize
  */
-integrationRoutes.get('/oauth/:provider/authorize', (c) => {
-  const providerParam = c.req.param('provider');
+integrationRoutes.openapi(getOAuthAuthorization, (c) => {
+  const { provider: providerParam } = c.req.valid('param');
   if (!isOAuthProvider(providerParam)) {
-    return c.json({ error: 'Invalid provider' }, 400);
+    return c.json({ error: ERROR_INVALID_PROVIDER }, 400);
   }
   const provider = providerParam;
 
@@ -219,7 +803,7 @@ integrationRoutes.get('/oauth/:provider/authorize', (c) => {
         authorizationUrl: '',
         configured: true,
       },
-    });
+    }, 200);
   }
 
   const defaultRedirectUris: Record<
@@ -232,9 +816,13 @@ integrationRoutes.get('/oauth/:provider/authorize', (c) => {
     outlook_calendar: env.outlookCalendar?.redirectUri,
   };
 
-  const redirectUri = c.req.query('redirect_uri') ?? defaultRedirectUris[provider];
+  const { redirect_uri: redirectUriParam } = c.req.valid('query');
+  const redirectUri = redirectUriParam ?? defaultRedirectUris[provider];
   if (!redirectUri) {
-    return c.json({ success: false, error: 'redirect_uri query parameter is required' }, 400);
+    return c.json(
+      { error: ERROR_MISSING_REDIRECT_URI },
+      400,
+    );
   }
 
   // Get OAuth credentials from validated env config
@@ -249,10 +837,7 @@ integrationRoutes.get('/oauth/:provider/authorize', (c) => {
 
   if (!clientId) {
     return c.json(
-      {
-        success: false,
-        error: `${provider} is not configured. Set the required environment variables.`,
-      },
+      { error: `${provider} is not configured. Set the required environment variables.` },
       400,
     );
   }
@@ -272,7 +857,7 @@ integrationRoutes.get('/oauth/:provider/authorize', (c) => {
       authorizationUrl: authUrl,
       configured: true,
     },
-  });
+  }, 200);
 });
 
 /**
@@ -282,23 +867,20 @@ integrationRoutes.get('/oauth/:provider/authorize', (c) => {
  * This endpoint receives webhooks from third-party services (Linear, GitHub, etc.)
  * and processes them to sync data with local entities.
  */
-integrationRoutes.post('/webhooks/:provider', async (c) => {
-  const providerParam = c.req.param('provider');
-  if (!isWebhookProvider(providerParam)) {
-    return c.json({ error: ERROR_INVALID_PROVIDER }, 400);
-  }
-  const provider = providerParam;
+integrationRoutes.openapi(handleWebhook, async (c) => {
+  const { provider } = c.req.valid('param');
+  const headers = c.req.valid('header');
   const signature =
-    c.req.header('x-linear-signature') ??
-    c.req.header('x-hub-signature-256') ??
-    c.req.header('x-webhook-signature');
+    headers['x-linear-signature'] ??
+    headers['x-hub-signature-256'] ??
+    headers['x-webhook-signature'];
 
   // Get the raw body for signature verification
-  const rawBody = await c.req.text();
+  const rawBody = await c.req.raw.clone().text();
   let payload: unknown;
 
   try {
-    payload = JSON.parse(rawBody);
+    payload = c.req.valid('json');
   } catch {
     return c.json({ error: ERROR_INVALID_JSON_PAYLOAD }, 400);
   }
@@ -313,14 +895,14 @@ integrationRoutes.post('/webhooks/:provider', async (c) => {
   if (secret && signature) {
     const isValid = verifyWebhookSignature(provider, rawBody, signature, secret);
     if (!isValid) {
-      return c.json({ error: ERROR_INVALID_WEBHOOK_SIGNATURE }, 401);
+      return c.json({ error: 'Unauthorized', message: ERROR_INVALID_WEBHOOK_SIGNATURE }, 401);
     }
   }
 
   // Process the webhook based on provider
   try {
     const result = processIntegrationWebhook(provider, payload);
-    return c.json({ success: true, processed: result });
+    return c.json({ success: true, processed: result }, 200);
   } catch (error) {
     const message = error instanceof Error ? error.message : '';
     const status =
@@ -333,110 +915,6 @@ integrationRoutes.post('/webhooks/:provider', async (c) => {
   }
 });
 
-/**
- * Verify webhook signature for different providers.
- */
-function verifyWebhookSignature(
-  provider: string,
-  payload: string,
-  signature: string,
-  secret: string,
-): boolean {
-  switch (provider) {
-    case 'linear': {
-      // Linear uses HMAC-SHA256
-      const hmac = crypto.createHmac('sha256', secret);
-      hmac.update(payload);
-      const expectedSignature = hmac.digest('hex');
-      return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature));
-    }
-    case 'github': {
-      // GitHub uses sha256=<signature>
-      if (!signature.startsWith('sha256=')) return false;
-      const sig = signature.slice(7);
-      const hmac = crypto.createHmac('sha256', secret);
-      hmac.update(payload);
-      const expectedSignature = hmac.digest('hex');
-      return crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expectedSignature));
-    }
-    default:
-      return true; // Unknown provider, skip verification
-  }
-}
-
-/**
- * Process incoming webhook from an integration provider.
- */
-function processIntegrationWebhook(
-  provider: WebhookProvider,
-  payload: unknown,
-): { eventType: string; entityUpdated?: boolean } {
-  switch (provider) {
-    case 'linear': {
-      const data = payload as {
-        type?: string;
-        action?: string;
-        data?: { id?: string; title?: string; state?: { name?: string } };
-        organizationId?: string;
-      };
-
-      if (!data.type || !data.action) {
-        throw new Error(ERROR_INVALID_WEBHOOK_PAYLOAD);
-      }
-      const eventType = `${data.type}.${data.action}`;
-
-      if (data.type === 'Issue' && data.data?.id) {
-        // Find the mapping for this external issue
-        // We'd need to iterate through all integrations to find the matching one
-        // For now, just log and return
-        console.log(`Linear webhook: ${eventType} for issue ${data.data.id}`);
-
-        // In a full implementation, we would:
-        // 1. Find the integration that owns this issue (by organizationId)
-        // 2. Look up the mapping to find the local task
-        // 3. Update the local task with the new data
-        // 4. Mark the mapping as synced
-
-        return { eventType, entityUpdated: false };
-      }
-
-      return { eventType };
-    }
-
-    case 'github': {
-      const data = payload as {
-        action?: string;
-        issue?: { id?: number; title?: string; state?: string };
-        pull_request?: { id?: number; title?: string; state?: string };
-        repository?: { full_name?: string };
-      };
-
-      if (!data.action) {
-        throw new Error(ERROR_INVALID_WEBHOOK_PAYLOAD);
-      }
-
-      if (data.issue) {
-        const eventType = `issue.${data.action}`;
-        const issueId = String(data.issue.id ?? 'unknown');
-        console.log(`GitHub webhook: ${eventType} for issue ${issueId}`);
-        return { eventType };
-      }
-
-      if (data.pull_request) {
-        const eventType = `pull_request.${data.action}`;
-        const prId = String(data.pull_request.id ?? 'unknown');
-        console.log(`GitHub webhook: ${eventType} for PR ${prId}`);
-        return { eventType };
-      }
-
-      throw new Error(ERROR_INVALID_WEBHOOK_PAYLOAD);
-    }
-
-    default:
-      throw new Error(ERROR_UNSUPPORTED_WEBHOOK_PROVIDER);
-  }
-}
-
 // ============================================================================
 // External ID Mapping Endpoints
 // ============================================================================
@@ -445,9 +923,9 @@ function processIntegrationWebhook(
  * Get all mappings for an integration.
  * GET /api/integrations/:id/mappings
  */
-integrationRoutes.get('/:id/mappings', async (c) => {
+integrationRoutes.openapi(getMappings, async (c) => {
   const userId = getUserId(c);
-  const integrationId = c.req.param('id');
+  const { id: integrationId } = c.req.valid('param');
 
   // Verify integration belongs to user
   const integration = await db.query.linkedIntegrations.findFirst({
@@ -455,30 +933,24 @@ integrationRoutes.get('/:id/mappings', async (c) => {
   });
 
   if (!integration) {
-    return c.json({ error: 'Integration not found' }, 404);
+    return c.json({ error: ERROR_INTEGRATION_NOT_FOUND }, 404);
   }
 
   const mappingService = getMappingService();
   const mappings = await mappingService.getMappingsForIntegration(integrationId);
+  const response = mappings.map((mapping) => toIntegrationMapping(mapping));
 
-  return c.json({ data: mappings });
+  return c.json({ data: response }, 200);
 });
 
 /**
  * Create a new mapping for an integration.
  * POST /api/integrations/:id/mappings
  */
-integrationRoutes.post('/:id/mappings', async (c) => {
+integrationRoutes.openapi(createMapping, async (c) => {
   const userId = getUserId(c);
-  const integrationId = c.req.param('id');
-  const body = await c.req.json<{
-    entityType: EntityType;
-    localEntityId: string;
-    externalId: string;
-    syncDirection?: SyncDirection;
-    externalVersion?: string;
-    metadata?: Record<string, unknown>;
-  }>();
+  const { id: integrationId } = c.req.valid('param');
+  const body = c.req.valid('json');
 
   // Verify integration belongs to user
   const integration = await db.query.linkedIntegrations.findFirst({
@@ -486,7 +958,7 @@ integrationRoutes.post('/:id/mappings', async (c) => {
   });
 
   if (!integration) {
-    return c.json({ error: 'Integration not found' }, 404);
+    return c.json({ error: ERROR_INTEGRATION_NOT_FOUND }, 404);
   }
 
   const mappingService = getMappingService();
@@ -495,22 +967,21 @@ integrationRoutes.post('/:id/mappings', async (c) => {
     entityType: body.entityType,
     localEntityId: body.localEntityId,
     externalId: body.externalId,
-    syncDirection: body.syncDirection,
+    syncDirection: toServiceSyncDirection(body.syncDirection),
     externalVersion: body.externalVersion,
     metadata: body.metadata,
   });
 
-  return c.json({ data: mapping }, 201);
+  return c.json({ data: toIntegrationMapping(mapping) }, 201);
 });
 
 /**
  * Find mapping by external ID.
  * GET /api/integrations/:id/mappings/by-external/:externalId
  */
-integrationRoutes.get('/:id/mappings/by-external/:externalId', async (c) => {
+integrationRoutes.openapi(getMappingByExternalId, async (c) => {
   const userId = getUserId(c);
-  const integrationId = c.req.param('id');
-  const externalId = c.req.param('externalId');
+  const { id: integrationId, externalId } = c.req.valid('param');
 
   // Verify integration belongs to user
   const integration = await db.query.linkedIntegrations.findFirst({
@@ -518,28 +989,26 @@ integrationRoutes.get('/:id/mappings/by-external/:externalId', async (c) => {
   });
 
   if (!integration) {
-    return c.json({ error: 'Integration not found' }, 404);
+    return c.json({ error: ERROR_INTEGRATION_NOT_FOUND }, 404);
   }
 
   const mappingService = getMappingService();
   const mapping = await mappingService.findByExternalId(integrationId, externalId);
 
   if (!mapping) {
-    return c.json({ error: 'Mapping not found' }, 404);
+    return c.json({ error: ERROR_MAPPING_NOT_FOUND }, 404);
   }
 
-  return c.json({ data: mapping });
+  return c.json({ data: toIntegrationMapping(mapping) }, 200);
 });
 
 /**
  * Find mapping by local entity.
  * GET /api/integrations/:id/mappings/by-entity/:entityType/:localEntityId
  */
-integrationRoutes.get('/:id/mappings/by-entity/:entityType/:localEntityId', async (c) => {
+integrationRoutes.openapi(getMappingByEntity, async (c) => {
   const userId = getUserId(c);
-  const integrationId = c.req.param('id');
-  const entityType = c.req.param('entityType') as EntityType;
-  const localEntityId = c.req.param('localEntityId');
+  const { id: integrationId, entityType, localEntityId } = c.req.valid('param');
 
   // Verify integration belongs to user
   const integration = await db.query.linkedIntegrations.findFirst({
@@ -547,27 +1016,26 @@ integrationRoutes.get('/:id/mappings/by-entity/:entityType/:localEntityId', asyn
   });
 
   if (!integration) {
-    return c.json({ error: 'Integration not found' }, 404);
+    return c.json({ error: ERROR_INTEGRATION_NOT_FOUND }, 404);
   }
 
   const mappingService = getMappingService();
   const mapping = await mappingService.findByLocalEntity(integrationId, entityType, localEntityId);
 
   if (!mapping) {
-    return c.json({ error: 'Mapping not found' }, 404);
+    return c.json({ error: ERROR_MAPPING_NOT_FOUND }, 404);
   }
 
-  return c.json({ data: mapping });
+  return c.json({ data: toIntegrationMapping(mapping) }, 200);
 });
 
 /**
  * Delete a mapping.
  * DELETE /api/integrations/:id/mappings/:mappingId
  */
-integrationRoutes.delete('/:id/mappings/:mappingId', async (c) => {
+integrationRoutes.openapi(deleteMapping, async (c) => {
   const userId = getUserId(c);
-  const integrationId = c.req.param('id');
-  const mappingId = c.req.param('mappingId');
+  const { id: integrationId, mappingId } = c.req.valid('param');
 
   // Verify integration belongs to user
   const integration = await db.query.linkedIntegrations.findFirst({
@@ -575,14 +1043,14 @@ integrationRoutes.delete('/:id/mappings/:mappingId', async (c) => {
   });
 
   if (!integration) {
-    return c.json({ error: 'Integration not found' }, 404);
+    return c.json({ error: ERROR_INTEGRATION_NOT_FOUND }, 404);
   }
 
   const mappingService = getMappingService();
   const mapping = await mappingService.getMappingById(mappingId);
 
   if (mapping?.integrationId !== integrationId) {
-    return c.json({ error: 'Mapping not found' }, 404);
+    return c.json({ error: ERROR_MAPPING_NOT_FOUND }, 404);
   }
 
   await mappingService.deleteMapping(mappingId);
@@ -594,11 +1062,10 @@ integrationRoutes.delete('/:id/mappings/:mappingId', async (c) => {
  * Mark a mapping as synced from external.
  * POST /api/integrations/:id/mappings/:mappingId/synced-from-external
  */
-integrationRoutes.post('/:id/mappings/:mappingId/synced-from-external', async (c) => {
+integrationRoutes.openapi(markSyncedFromExternal, async (c) => {
   const userId = getUserId(c);
-  const integrationId = c.req.param('id');
-  const mappingId = c.req.param('mappingId');
-  const body = await c.req.json<{ externalVersion?: string }>();
+  const { id: integrationId, mappingId } = c.req.valid('param');
+  const body = c.req.valid('json');
 
   // Verify integration belongs to user
   const integration = await db.query.linkedIntegrations.findFirst({
@@ -606,30 +1073,29 @@ integrationRoutes.post('/:id/mappings/:mappingId/synced-from-external', async (c
   });
 
   if (!integration) {
-    return c.json({ error: 'Integration not found' }, 404);
+    return c.json({ error: ERROR_INTEGRATION_NOT_FOUND }, 404);
   }
 
   const mappingService = getMappingService();
   const mapping = await mappingService.getMappingById(mappingId);
 
   if (mapping?.integrationId !== integrationId) {
-    return c.json({ error: 'Mapping not found' }, 404);
+    return c.json({ error: ERROR_MAPPING_NOT_FOUND }, 404);
   }
 
   await mappingService.markSyncedFromExternal(mappingId, body.externalVersion);
 
-  return c.json({ data: { success: true } });
+  return c.json({ data: { success: true as const } }, 200);
 });
 
 /**
  * Mark a mapping as synced to external.
  * POST /api/integrations/:id/mappings/:mappingId/synced-to-external
  */
-integrationRoutes.post('/:id/mappings/:mappingId/synced-to-external', async (c) => {
+integrationRoutes.openapi(markSyncedToExternal, async (c) => {
   const userId = getUserId(c);
-  const integrationId = c.req.param('id');
-  const mappingId = c.req.param('mappingId');
-  const body = await c.req.json<{ externalVersion?: string }>();
+  const { id: integrationId, mappingId } = c.req.valid('param');
+  const body = c.req.valid('json');
 
   // Verify integration belongs to user
   const integration = await db.query.linkedIntegrations.findFirst({
@@ -637,19 +1103,19 @@ integrationRoutes.post('/:id/mappings/:mappingId/synced-to-external', async (c) 
   });
 
   if (!integration) {
-    return c.json({ error: 'Integration not found' }, 404);
+    return c.json({ error: ERROR_INTEGRATION_NOT_FOUND }, 404);
   }
 
   const mappingService = getMappingService();
   const mapping = await mappingService.getMappingById(mappingId);
 
   if (mapping?.integrationId !== integrationId) {
-    return c.json({ error: 'Mapping not found' }, 404);
+    return c.json({ error: ERROR_MAPPING_NOT_FOUND }, 404);
   }
 
   await mappingService.markSyncedToExternal(mappingId, body.externalVersion);
 
-  return c.json({ data: { success: true } });
+  return c.json({ data: { success: true as const } }, 200);
 });
 
 export { integrationRoutes };

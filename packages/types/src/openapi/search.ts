@@ -12,7 +12,7 @@ import { successResponseSchema } from './common.js';
 // =============================================================================
 
 export const SearchEntityTypeSchema = z
-  .enum(['task', 'project', 'event', 'initiative', 'tag'])
+  .enum(['task', 'project', 'event', 'initiative', 'tag', 'moment', 'activity'])
   .openapi({
     description: 'Searchable entity type',
     example: 'task',
@@ -26,14 +26,10 @@ export const SearchResultItemSchema = z
   .object({
     id: z.string().openapi({ description: 'Entity ID' }),
     type: SearchEntityTypeSchema,
-    title: z.string().openapi({ description: 'Entity title/name' }),
-    description: z.string().nullable().openapi({ description: 'Entity description' }),
     score: z.number().openapi({ description: 'Relevance score' }),
-    highlight: z.string().nullable().openapi({ description: 'Highlighted match' }),
-    metadata: z
-      .record(z.string(), z.unknown())
-      .nullable()
-      .openapi({ description: 'Additional metadata' }),
+    matchedField: z.string().openapi({ description: 'Matched field name' }),
+    highlight: z.string().optional().openapi({ description: 'Highlighted match' }),
+    data: z.unknown().openapi({ description: 'Entity data payload' }),
   })
   .openapi('SearchResultItem');
 
@@ -41,8 +37,14 @@ export const SearchResultsSchema = z
   .object({
     results: z.array(SearchResultItemSchema).openapi({ description: 'Search results' }),
     total: z.number().int().openapi({ description: 'Total matching results' }),
-    query: z.string().openapi({ description: 'Search query' }),
     took: z.number().openapi({ description: 'Search time in ms' }),
+    pagination: z
+      .object({
+        limit: z.number().int(),
+        offset: z.number().int(),
+        hasMore: z.boolean(),
+      })
+      .openapi({ description: 'Pagination metadata' }),
   })
   .openapi('SearchResults');
 
@@ -50,15 +52,17 @@ export const SearchSuggestionSchema = z
   .object({
     text: z.string().openapi({ description: 'Suggestion text' }),
     type: SearchEntityTypeSchema,
-    id: z.string().optional().openapi({ description: 'Entity ID if specific' }),
+    id: z.string().openapi({ description: 'Entity ID' }),
   })
   .openapi('SearchSuggestion');
 
 export const SearchStatsSchema = z
   .object({
-    totalIndexed: z.number().int().openapi({ description: 'Total indexed documents' }),
-    byType: z.record(z.string(), z.number().int()).openapi({ description: 'Count by entity type' }),
-    lastUpdated: z.string().openapi({ description: 'Last index update' }),
+    totalDocuments: z.number().int().openapi({ description: 'Total indexed documents' }),
+    documentsByType: z
+      .record(z.string(), z.number().int())
+      .openapi({ description: 'Count by entity type' }),
+    lastIndexedAt: z.coerce.date().openapi({ description: 'Last index update' }),
   })
   .openapi('SearchStats');
 
@@ -123,15 +127,15 @@ export const SearchQuerySchema = z
         description: 'Comma-separated statuses',
         param: { name: 'status', in: 'query' },
       }),
-    dateFrom: z.iso
-      .datetime()
+    dateFrom: z.coerce
+      .date()
       .optional()
       .openapi({
         description: 'Filter from date',
         param: { name: 'dateFrom', in: 'query' },
       }),
-    dateTo: z.iso
-      .datetime()
+    dateTo: z.coerce
+      .date()
       .optional()
       .openapi({
         description: 'Filter to date',

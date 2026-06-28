@@ -92,14 +92,14 @@ export const TimeEntriesQuerySchema = z
         param: { name: 'taskId', in: 'query' },
       }),
     startDate: z
-      .string()
+      .coerce.date()
       .optional()
       .openapi({
         description: 'Filter from date',
         param: { name: 'startDate', in: 'query' },
       }),
     endDate: z
-      .string()
+      .coerce.date()
       .optional()
       .openapi({
         description: 'Filter to date',
@@ -110,11 +110,11 @@ export const TimeEntriesQuerySchema = z
 
 export const TimeSummaryQuerySchema = z
   .object({
-    startDate: z.string().openapi({
+    startDate: z.coerce.date().optional().openapi({
       description: 'Summary start date',
       param: { name: 'startDate', in: 'query' },
     }),
-    endDate: z.string().openapi({
+    endDate: z.coerce.date().optional().openapi({
       description: 'Summary end date',
       param: { name: 'endDate', in: 'query' },
     }),
@@ -142,8 +142,8 @@ export const SwitchTimerRequestSchema = z
 export const CreateTimeEntryRequestSchema = z
   .object({
     taskId: z.string().optional().openapi({ description: 'Task ID' }),
-    startTime: z.iso.datetime().openapi({ description: 'Start time' }),
-    endTime: z.iso.datetime().openapi({ description: 'End time' }),
+    startTime: TimestampSchema.openapi({ description: 'Start time' }),
+    endTime: TimestampSchema.openapi({ description: 'End time' }),
     description: z.string().max(500).optional().openapi({ description: 'Description' }),
   })
   .openapi('CreateTimeEntryRequest');
@@ -151,8 +151,8 @@ export const CreateTimeEntryRequestSchema = z
 export const UpdateTimeEntryRequestSchema = z
   .object({
     taskId: z.string().nullable().optional().openapi({ description: 'Task ID' }),
-    startTime: z.iso.datetime().optional().openapi({ description: 'Start time' }),
-    endTime: z.iso.datetime().nullable().optional().openapi({ description: 'End time' }),
+    startTime: TimestampSchema.optional().openapi({ description: 'Start time' }),
+    endTime: TimestampSchema.nullable().optional().openapi({ description: 'End time' }),
     description: z.string().max(500).nullable().optional().openapi({ description: 'Description' }),
   })
   .openapi('UpdateTimeEntryRequest');

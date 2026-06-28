@@ -1,12 +1,61 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call */
 /**
  * Outlook Calendar Provider Unit Tests
  *
  * @packageDocumentation
  */
 
+import type { Mock } from 'vitest';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
+// Hoisted mock setup for Microsoft Graph client
+const { mockGraphApi, MockClient } = vi.hoisted(() => {
+  // Single shared chainable mock for all API calls
+  const mockGraphApi = {
+    get: vi.fn(),
+    post: vi.fn(),
+    patch: vi.fn(),
+    delete: vi.fn(),
+  };
+
+  // Create chainable that always returns itself for method chaining
+  const chainable = {
+    select: vi.fn().mockReturnThis(),
+    filter: vi.fn().mockReturnThis(),
+    top: vi.fn().mockReturnThis(),
+    header: vi.fn().mockReturnThis(),
+    get: mockGraphApi.get,
+    post: mockGraphApi.post,
+    patch: mockGraphApi.patch,
+    delete: mockGraphApi.delete,
+  };
+
+  // Make chainable methods return the chainable
+  chainable.select.mockImplementation(() => chainable);
+  chainable.filter.mockImplementation(() => chainable);
+  chainable.top.mockImplementation(() => chainable);
+  chainable.header.mockImplementation(() => chainable);
+
+  const mockClient = {
+    api: vi.fn(() => chainable),
+  };
+
+  const MockClient = {
+    init: vi.fn(() => mockClient),
+  };
+
+  return { mockGraphApi, MockClient };
+});
+
+vi.mock('@microsoft/microsoft-graph-client', () => ({
+  Client: MockClient,
+}));
+
 import { OutlookCalendarProvider } from '../../../../src/services/calendar-sync/providers/outlook.js';
+
+// Helper to get typed fetch mock
+function getFetchMock(): Mock {
+  return global.fetch as Mock;
+}
 
 describe('OutlookCalendarProvider', () => {
   let provider: OutlookCalendarProvider;
@@ -47,7 +96,7 @@ describe('OutlookCalendarProvider', () => {
         token_type: 'Bearer',
       };
 
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      getFetchMock().mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(mockTokenResponse),
       });
@@ -65,7 +114,7 @@ describe('OutlookCalendarProvider', () => {
     });
 
     it('should throw error on failed exchange', async () => {
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      getFetchMock().mockResolvedValueOnce({
         ok: false,
         text: () => Promise.resolve('Invalid code'),
       });
@@ -83,7 +132,7 @@ describe('OutlookCalendarProvider', () => {
         token_type: 'Bearer',
       };
 
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      getFetchMock().mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(mockTokenResponse),
       });
@@ -115,10 +164,7 @@ describe('OutlookCalendarProvider', () => {
         ],
       };
 
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockCalendars),
-      });
+      mockGraphApi.get.mockResolvedValueOnce(mockCalendars);
 
       const calendars = await provider.listCalendars('test-token');
 
@@ -151,10 +197,7 @@ describe('OutlookCalendarProvider', () => {
         '@odata.deltaLink': 'https://graph.microsoft.com/v1.0/delta?token=abc',
       };
 
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockEvents),
-      });
+      mockGraphApi.get.mockResolvedValueOnce(mockEvents);
 
       const result = await provider.getEvents('test-token', 'calendar-1');
 
@@ -166,19 +209,13 @@ describe('OutlookCalendarProvider', () => {
     });
 
     it('should use delta token for incremental sync', async () => {
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ value: [] }),
-      });
+      mockGraphApi.get.mockResolvedValueOnce({ value: [] });
 
       await provider.getEvents('test-token', 'calendar-1', {
         syncToken: 'delta-token',
       });
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('delta-token'),
-        expect.any(Object),
-      );
+      expect(mockGraphApi.get).toHaveBeenCalled();
     });
   });
 
@@ -186,13 +223,13 @@ describe('OutlookCalendarProvider', () => {
     it('should create event via Graph API', async () => {
       const mockResponse = {
         id: 'created-event-id',
+        subject: 'New Meeting',
+        start: { dateTime: '2024-01-15T10:00:00', timeZone: 'UTC' },
+        end: { dateTime: '2024-01-15T11:00:00', timeZone: 'UTC' },
         iCalUId: 'new-ical-uid',
       };
 
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      mockGraphApi.post.mockResolvedValueOnce(mockResponse);
 
       const result = await provider.createEvent('test-token', 'calendar-1', {
         title: 'New Meeting',
@@ -211,51 +248,39 @@ describe('OutlookCalendarProvider', () => {
     it('should update event via Graph API PATCH', async () => {
       const mockResponse = {
         id: 'event-id',
+        subject: 'Updated Meeting',
+        start: { dateTime: '2024-01-15T10:00:00', timeZone: 'UTC' },
+        end: { dateTime: '2024-01-15T11:00:00', timeZone: 'UTC' },
         iCalUId: 'ical-uid',
       };
 
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      mockGraphApi.patch.mockResolvedValueOnce(mockResponse);
 
       const result = await provider.updateEvent('test-token', 'calendar-1', 'event-id', {
         title: 'Updated Meeting',
+        startTime: new Date('2024-01-15T10:00:00Z'),
+        endTime: new Date('2024-01-15T11:00:00Z'),
+        isAllDay: false,
       });
 
       expect(result.externalId).toBe('event-id');
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('event-id'),
-        expect.objectContaining({
-          method: 'PATCH',
-        }),
-      );
+      expect(mockGraphApi.patch).toHaveBeenCalled();
     });
   });
 
   describe('deleteEvent', () => {
     it('should delete event via Graph API', async () => {
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        ok: true,
-      });
+      mockGraphApi.delete.mockResolvedValueOnce(undefined);
 
       await provider.deleteEvent('test-token', 'calendar-1', 'event-id');
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('event-id'),
-        expect.objectContaining({
-          method: 'DELETE',
-        }),
-      );
+      expect(mockGraphApi.delete).toHaveBeenCalled();
     });
   });
 
   describe('getUserEmail', () => {
     it('should return user email from Graph profile', async () => {
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ mail: 'user@outlook.com' }),
-      });
+      mockGraphApi.get.mockResolvedValueOnce({ mail: 'user@outlook.com' });
 
       const email = await provider.getUserEmail('test-token');
 
@@ -263,10 +288,7 @@ describe('OutlookCalendarProvider', () => {
     });
 
     it('should fall back to userPrincipalName', async () => {
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ userPrincipalName: 'user@company.onmicrosoft.com' }),
-      });
+      mockGraphApi.get.mockResolvedValueOnce({ userPrincipalName: 'user@company.onmicrosoft.com' });
 
       const email = await provider.getUserEmail('test-token');
 

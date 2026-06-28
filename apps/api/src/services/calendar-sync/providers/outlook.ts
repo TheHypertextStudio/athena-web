@@ -276,6 +276,19 @@ export class OutlookCalendarProvider implements CalendarProviderClient {
     }
   }
 
+  async getUserEmail(accessToken: string): Promise<string | undefined> {
+    try {
+      const client = this.createClient(accessToken);
+      const user = (await client.api('/me').select('mail,userPrincipalName').get()) as {
+        mail?: string;
+        userPrincipalName?: string;
+      };
+      return user.mail ?? user.userPrincipalName;
+    } catch {
+      return undefined;
+    }
+  }
+
   private createClient(accessToken: string): Client {
     return Client.init({
       authProvider: (done) => {

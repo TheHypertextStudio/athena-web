@@ -7,38 +7,60 @@
  * @packageDocumentation
  */
 
-import { Hono } from 'hono';
-import { db } from '../../db/index.js';
-import { linkedIntegrations } from '../../db/schema/index.js';
-import { eq, and } from 'drizzle-orm';
-import { getCalendarSyncService } from '../../services/calendar-sync/index.js';
+import { createRoute, z } from '@hono/zod-openapi';
+import { createOpenAPIApp } from '../../lib/openapi.js';
+import {
+  OutlookNotificationPayloadSchema,
+  OutlookValidationQuerySchema,
+  type OutlookNotificationPayload,
+} from './outlook-calendar/schemas.js';
+import { processOutlookNotifications } from './outlook-calendar/helpers.js';
 
-const outlookCalendarWebhookRoutes = new Hono();
+const outlookCalendarWebhookRoutes = createOpenAPIApp();
 
-/**
- * Outlook notification payload structure.
- */
-interface OutlookNotificationPayload {
-  value: OutlookNotification[];
-}
-
-/**
- * Individual Outlook notification.
- */
-interface OutlookNotification {
-  subscriptionId: string;
-  subscriptionExpirationDateTime: string;
-  changeType: 'created' | 'updated' | 'deleted';
-  resource: string;
-  resourceData?: {
-    '@odata.type': string;
-    '@odata.id': string;
-    '@odata.etag': string;
-    id: string;
-  };
-  clientState?: string;
-  tenantId: string;
-}
+const outlookCalendarWebhookRoute = createRoute({
+  method: 'post',
+  path: '/',
+  tags: ['Webhooks'],
+  summary: 'Outlook Calendar webhook',
+  description: 'Receive Microsoft Graph calendar change notifications.',
+  request: {
+    query: OutlookValidationQuerySchema,
+    body: {
+      content: {
+        'application/json': {
+          schema: OutlookNotificationPayloadSchema.optional(),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Validation token echoed',
+      content: {
+        'text/plain': {
+          schema: z.string(),
+        },
+      },
+    },
+    202: {
+      description: 'Webhook accepted',
+      content: {
+        'text/plain': {
+          schema: z.string(),
+        },
+      },
+    },
+    400: {
+      description: 'Invalid webhook request',
+      content: {
+        'text/plain': {
+          schema: z.string(),
+        },
+      },
+    },
+  },
+});
 
 /**
  * Microsoft Outlook/Graph webhook receiver.
@@ -49,9 +71,10 @@ interface OutlookNotification {
  *
  * POST /webhooks/outlook-calendar
  */
-outlookCalendarWebhookRoutes.post('/', async (c) => {
+outlookCalendarWebhookRoutes.openapi(outlookCalendarWebhookRoute, async (c) => {
+  const { validationToken } = c.req.valid('query');
+
   // Handle subscription validation
-  const validationToken = c.req.query('validationToken');
   if (validationToken) {
     // Echo validation token back in plain text
     return c.text(validationToken, 200, {
@@ -59,67 +82,21 @@ outlookCalendarWebhookRoutes.post('/', async (c) => {
     });
   }
 
-  // Handle change notification
-  let body: unknown;
+  let payload: OutlookNotificationPayload | undefined;
+
   try {
-    body = await c.req.json();
+    payload = c.req.valid('json');
   } catch {
     console.warn('Outlook Calendar webhook: Invalid JSON body');
     return c.text('Invalid request body', 400);
   }
 
-  // Validate payload structure
-  const payload = body as Partial<OutlookNotificationPayload>;
-  if (!payload.value || !Array.isArray(payload.value)) {
+  if (!payload) {
     console.warn('Outlook Calendar webhook: Missing notification value array');
     return c.text('Invalid request body', 400);
   }
 
-  // Process each notification
-  for (const notification of payload.value) {
-    // Extract connection info from clientState (format: userId:connectionId)
-    const clientState = notification.clientState;
-    if (!clientState) {
-      console.warn('Outlook Calendar webhook: Missing clientState');
-      continue;
-    }
-
-    const [userId, connectionId] = clientState.split(':');
-    if (!userId || !connectionId) {
-      console.warn('Outlook Calendar webhook: Invalid clientState format');
-      continue;
-    }
-
-    // Verify the connection exists
-    const connection = await db.query.linkedIntegrations.findFirst({
-      where: and(
-        eq(linkedIntegrations.id, connectionId),
-        eq(linkedIntegrations.userId, userId),
-        eq(linkedIntegrations.provider, 'outlook_calendar'),
-      ),
-    });
-
-    if (!connection) {
-      console.warn(
-        `Outlook Calendar webhook: Connection ${connectionId} not found for user ${userId}`,
-      );
-      continue;
-    }
-
-    // Handle notification based on change type
-    const changeType = notification.changeType;
-    console.log(
-      `Outlook Calendar webhook: ${changeType} notification for connection ${connectionId}, resource ${notification.resource}`,
-    );
-
-    // Trigger incremental sync (fire-and-forget)
-    // All change types (created, updated, deleted) trigger a sync
-    getCalendarSyncService()
-      .sync(connectionId, userId)
-      .catch((err: unknown) => {
-        console.error('Outlook Calendar webhook sync failed:', err);
-      });
-  }
+  await processOutlookNotifications(payload);
 
   // Microsoft requires 202 Accepted for webhook notifications
   return c.text('Accepted', 202);

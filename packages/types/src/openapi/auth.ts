@@ -10,11 +10,16 @@
  */
 
 import { z } from '@hono/zod-openapi';
-import { TimestampSchema, successResponseSchema } from './common.js';
+import { TimestampSchema } from './common.js';
 
 // =============================================================================
 // Core Auth Schemas
 // =============================================================================
+
+export const SessionStatusSchema = z.enum(['current', 'recent', 'inactive']).openapi({
+  description: 'Session activity status',
+  example: 'current',
+});
 
 export const SessionSchema = z
   .object({
@@ -23,6 +28,8 @@ export const SessionSchema = z
     userAgent: z.string().nullable().openapi({ description: 'User agent string' }),
     createdAt: TimestampSchema.openapi({ description: 'Session creation time' }),
     expiresAt: TimestampSchema.openapi({ description: 'Session expiration time' }),
+    lastActiveAt: TimestampSchema.openapi({ description: 'Last activity time' }),
+    status: SessionStatusSchema,
     isCurrent: z.boolean().openapi({ description: 'Whether this is the current session' }),
   })
   .openapi('Session');
@@ -39,7 +46,10 @@ export const LinkedAccountSchema = z
 export const PasskeySchema = z
   .object({
     id: z.string().openapi({ description: 'Passkey ID' }),
-    name: z.string().openapi({ description: 'Passkey display name', example: 'MacBook Pro' }),
+    name: z
+      .string()
+      .nullable()
+      .openapi({ description: 'Passkey display name', example: 'MacBook Pro' }),
     deviceType: z.string().nullable().openapi({ description: 'Device type' }),
     backedUp: z.boolean().openapi({ description: 'Whether passkey is backed up' }),
     createdAt: TimestampSchema.openapi({ description: 'Registration time' }),
@@ -50,7 +60,8 @@ export const BackupCodesInfoSchema = z
   .object({
     hasBackupCodes: z.boolean().openapi({ description: 'Whether user has backup codes' }),
     remainingCount: z.number().int().openapi({ description: 'Number of unused backup codes' }),
-    createdAt: TimestampSchema.nullable().openapi({ description: 'When codes were generated' }),
+    totalCount: z.number().int().openapi({ description: 'Total number of codes generated' }),
+    generatedAt: TimestampSchema.nullable().openapi({ description: 'When codes were generated' }),
   })
   .openapi('BackupCodesInfo');
 
@@ -114,10 +125,7 @@ export const UpdatePasskeyRequestSchema = z
 // Response Schemas
 // =============================================================================
 
-export const BackupCodesInfoResponseSchema = successResponseSchema(
-  BackupCodesInfoSchema,
-  'Backup codes info response',
-).openapi('BackupCodesInfoResponse');
+export const BackupCodesInfoResponseSchema = BackupCodesInfoSchema;
 
 export const GenerateBackupCodesResponseSchema = z
   .object({
@@ -132,7 +140,7 @@ export const VerifyBackupCodeResponseSchema = z
     success: z.literal(true),
     message: z.string().openapi({ description: 'Success message' }),
     recoveryToken: z.string().openapi({ description: 'Token for account recovery' }),
-    expiresAt: z.string().openapi({ description: 'Token expiration time' }),
+    expiresAt: TimestampSchema.openapi({ description: 'Token expiration time' }),
   })
   .openapi('VerifyBackupCodeResponse');
 
@@ -176,6 +184,7 @@ export const UpdatePasskeyResponseSchema = z
 // =============================================================================
 
 export type Session = z.infer<typeof SessionSchema>;
+export type SessionStatus = z.infer<typeof SessionStatusSchema>;
 export type LinkedAccount = z.infer<typeof LinkedAccountSchema>;
 export type Passkey = z.infer<typeof PasskeySchema>;
 export type BackupCodesInfo = z.infer<typeof BackupCodesInfoSchema>;

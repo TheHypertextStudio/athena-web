@@ -83,15 +83,15 @@ export const ActivityIdParamSchema = z
 
 export const ActivitiesQuerySchema = z
   .object({
-    startDate: z
-      .string()
+    startDate: z.coerce
+      .date()
       .optional()
       .openapi({
         description: 'Filter from date',
         param: { name: 'startDate', in: 'query' },
       }),
-    endDate: z
-      .string()
+    endDate: z.coerce
+      .date()
       .optional()
       .openapi({
         description: 'Filter to date',
@@ -121,8 +121,8 @@ export const UpdateActivityStreamRequestSchema = z
 export const CreateActivityRequestSchema = z
   .object({
     type: z.string().min(1).max(100).openapi({ description: 'Activity type' }),
-    startTime: z.iso.datetime().openapi({ description: 'Start time' }),
-    endTime: z.iso.datetime().openapi({ description: 'End time' }),
+    startTime: z.coerce.date().openapi({ description: 'Start time' }),
+    endTime: z.coerce.date().openapi({ description: 'End time' }),
     metadata: z
       .record(z.string(), z.unknown())
       .optional()
@@ -133,8 +133,8 @@ export const CreateActivityRequestSchema = z
 export const UpdateActivityRequestSchema = z
   .object({
     type: z.string().min(1).max(100).optional().openapi({ description: 'Activity type' }),
-    startTime: z.iso.datetime().optional().openapi({ description: 'Start time' }),
-    endTime: z.iso.datetime().optional().openapi({ description: 'End time' }),
+    startTime: z.coerce.date().optional().openapi({ description: 'Start time' }),
+    endTime: z.coerce.date().optional().openapi({ description: 'End time' }),
     metadata: z
       .record(z.string(), z.unknown())
       .optional()
@@ -161,6 +161,11 @@ export const CreateActivityStreamResponseSchema = successResponseSchema(
   'Created activity stream',
 ).openapi('CreateActivityStreamResponse');
 
+export const UpdateActivityStreamResponseSchema = successResponseSchema(
+  ActivityStreamSchema,
+  'Updated activity stream',
+).openapi('UpdateActivityStreamResponse');
+
 export const ActivitiesResponseSchema = successResponseSchema(
   z.array(ActivitySchema),
   'List of activities',
@@ -183,5 +188,6 @@ export const CreateActivityResponseSchema = successResponseSchema(
 export type ActivityStream = z.infer<typeof ActivityStreamSchema>;
 export type Activity = z.infer<typeof ActivitySchema>;
 export type ActivityStreamWithActivities = z.infer<typeof ActivityStreamWithActivitiesSchema>;
+export type ActivityWithStream = z.infer<typeof ActivityWithStreamSchema>;
 export type CreateActivityStreamRequest = z.infer<typeof CreateActivityStreamRequestSchema>;
 export type CreateActivityRequest = z.infer<typeof CreateActivityRequestSchema>;

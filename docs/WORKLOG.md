@@ -1,25 +1,13 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-01-12
+> **Last Updated**: 2026-01-15
 
 ---
 
 ## Active Tasks
 
 ---
-
-### [API-OPENAPI-ROUTES-001] API OpenAPI Route Migration
-
-- **Status**: IN_PROGRESS
-- **Started**: 2026-01-15
-- **Priority**: P1
-- **Description**: Migrate API routes to OpenAPIHono with Zod v4 validation and remove `.openapi.ts` suffixes.
-- **Subtasks**:
-  - [ ] Audit each route file and map inputs to Zod schemas
-  - [ ] Convert route handlers to OpenAPIHono + `c.req.valid`
-  - [ ] Rename OpenAPI definition files and update imports
-  - [ ] Validate with typecheck, lint, and tests
 
 ### [E2E-ONBOARDING-REFAC-001] Onboarding E2E Reliability Audit & Refactor
 
@@ -290,6 +278,163 @@ Run `pnpm typecheck`, `pnpm lint`, `pnpm test`, and `pnpm build` after each batc
 ---
 
 ## Completed Tasks
+
+### [API-OPENAPI-ROUTES-001] API OpenAPI Route Migration
+
+- **Completed**: 2026-01-15
+- **Summary**: Migrated API routes to Hono OpenAPI with Zod v4 schemas, removed `.openapi.ts` route variants, extracted co-located helpers/serializers, normalized error shapes and datetime handling, and added legacy onboarding compatibility endpoints.
+- **Files Changed**:
+  - `apps/api/src/lib/oauth-resource-client.ts`
+  - `apps/api/src/routes/account.ts`
+  - `apps/api/src/routes/activities.ts`
+  - `apps/api/src/routes/agenda.ts`
+  - `apps/api/src/routes/ai.ts`
+  - `apps/api/src/routes/analytics.ts`
+  - `apps/api/src/routes/app-passwords.ts`
+  - `apps/api/src/routes/attachments.ts`
+  - `apps/api/src/routes/audit.ts`
+  - `apps/api/src/routes/auth.ts`
+  - `apps/api/src/routes/billing.ts`
+  - `apps/api/src/routes/bulk.ts`
+  - `apps/api/src/routes/calendar-sync.ts`
+  - `apps/api/src/routes/dav.ts`
+  - `apps/api/src/routes/events.ts`
+  - `apps/api/src/routes/initiative-statuses.ts`
+  - `apps/api/src/routes/initiatives.ts`
+  - `apps/api/src/routes/integrations.ts`
+  - `apps/api/src/routes/mcp.ts`
+  - `apps/api/src/routes/moments.ts`
+  - `apps/api/src/routes/notifications.ts`
+  - `apps/api/src/routes/onboarding.ts`
+  - `apps/api/src/routes/projects.ts`
+  - `apps/api/src/routes/risc.ts`
+  - `apps/api/src/routes/search.ts`
+  - `apps/api/src/routes/settings.ts`
+  - `apps/api/src/routes/tags.ts`
+  - `apps/api/src/routes/task-statuses.ts`
+  - `apps/api/src/routes/tasks.ts`
+  - `apps/api/src/routes/time-blocks.ts`
+  - `apps/api/src/routes/time-tracking.ts`
+  - `apps/api/src/routes/webhooks.ts`
+  - `apps/api/src/routes/webhooks/google-calendar.ts`
+  - `apps/api/src/routes/webhooks/outlook-calendar.ts`
+  - `apps/api/src/routes/account.openapi.ts` (removed)
+  - `apps/api/src/routes/activities.openapi.ts` (removed)
+  - `apps/api/src/routes/agenda.openapi.ts` (removed)
+  - `apps/api/src/routes/ai.openapi.ts` (removed)
+  - `apps/api/src/routes/analytics.openapi.ts` (removed)
+  - `apps/api/src/routes/attachments.openapi.ts` (removed)
+  - `apps/api/src/routes/audit.openapi.ts` (removed)
+  - `apps/api/src/routes/auth.openapi.ts` (removed)
+  - `apps/api/src/routes/billing.openapi.ts` (removed)
+  - `apps/api/src/routes/bulk.openapi.ts` (removed)
+  - `apps/api/src/routes/calendar-sync.openapi.ts` (removed)
+  - `apps/api/src/routes/events.openapi.ts` (removed)
+  - `apps/api/src/routes/initiative-statuses.openapi.ts` (removed)
+  - `apps/api/src/routes/initiatives.openapi.ts` (removed)
+  - `apps/api/src/routes/integrations.openapi.ts` (removed)
+  - `apps/api/src/routes/moments.openapi.ts` (removed)
+  - `apps/api/src/routes/notifications.openapi.ts` (removed)
+  - `apps/api/src/routes/onboarding.openapi.ts` (removed)
+  - `apps/api/src/routes/projects.openapi.ts` (removed)
+  - `apps/api/src/routes/risc.openapi.ts` (removed)
+  - `apps/api/src/routes/search.openapi.ts` (removed)
+  - `apps/api/src/routes/settings.openapi.ts` (removed)
+  - `apps/api/src/routes/tags.openapi.ts` (removed)
+  - `apps/api/src/routes/task-statuses.openapi.ts` (removed)
+  - `apps/api/src/routes/tasks.openapi.ts` (removed)
+  - `apps/api/src/routes/time-blocks.openapi.ts` (removed)
+  - `apps/api/src/routes/time-tracking.openapi.ts` (removed)
+  - `apps/api/src/routes/webhooks.openapi.ts` (removed)
+  - `apps/api/src/routes/workspaces.openapi.ts` (removed)
+  - `apps/api/src/routes/activities/serializers.ts`
+  - `apps/api/src/routes/agenda/helpers.ts`
+  - `apps/api/src/routes/ai/helpers.ts`
+  - `apps/api/src/routes/ai/schemas.ts`
+  - `apps/api/src/routes/ai/serializers.ts`
+  - `apps/api/src/routes/analytics/helpers.ts`
+  - `apps/api/src/routes/analytics/serializers.ts`
+  - `apps/api/src/routes/app-passwords/schemas.ts`
+  - `apps/api/src/routes/app-passwords/serializers.ts`
+  - `apps/api/src/routes/attachments/helpers.ts`
+  - `apps/api/src/routes/attachments/serializers.ts`
+  - `apps/api/src/routes/audit/serializers.ts`
+  - `apps/api/src/routes/auth/helpers.ts`
+  - `apps/api/src/routes/auth/serializers.ts`
+  - `apps/api/src/routes/billing/helpers.ts`
+  - `apps/api/src/routes/bulk/helpers.ts`
+  - `apps/api/src/routes/calendar-sync/helpers.ts`
+  - `apps/api/src/routes/calendar-sync/schemas.ts`
+  - `apps/api/src/routes/calendar-sync/serializers.ts`
+  - `apps/api/src/routes/events/serializers.ts`
+  - `apps/api/src/routes/initiatives/helpers.ts`
+  - `apps/api/src/routes/initiatives/metrics.ts`
+  - `apps/api/src/routes/initiatives/schemas.ts`
+  - `apps/api/src/routes/initiatives/serializers.ts`
+  - `apps/api/src/routes/integrations/helpers.ts`
+  - `apps/api/src/routes/integrations/serializers.ts`
+  - `apps/api/src/routes/mcp/helpers.ts`
+  - `apps/api/src/routes/moments/serializers.ts`
+  - `apps/api/src/routes/notifications/helpers.ts`
+  - `apps/api/src/routes/onboarding/helpers.ts`
+  - `apps/api/src/routes/onboarding/legacy.ts`
+  - `apps/api/src/routes/onboarding/serializers.ts`
+  - `apps/api/src/routes/onboarding/service.ts`
+  - `apps/api/src/routes/projects/schemas.ts`
+  - `apps/api/src/routes/projects/serializers.ts`
+  - `apps/api/src/routes/risc/helpers.ts`
+  - `apps/api/src/routes/search/serializers.ts`
+  - `apps/api/src/routes/settings/serializers.ts`
+  - `apps/api/src/routes/tags/serializers.ts`
+  - `apps/api/src/routes/tasks/serializers.ts`
+  - `apps/api/src/routes/time-blocks/serializers.ts`
+  - `apps/api/src/routes/time-tracking/helpers.ts`
+  - `apps/api/src/routes/time-tracking/serializers.ts`
+  - `apps/api/src/routes/webhooks/google-calendar/helpers.ts`
+  - `apps/api/src/routes/webhooks/google-calendar/schemas.ts`
+  - `apps/api/src/routes/webhooks/outlook-calendar/helpers.ts`
+  - `apps/api/src/routes/webhooks/outlook-calendar/schemas.ts`
+  - `apps/api/src/routes/webhooks/serializers.ts`
+  - `apps/api/src/services/ai/service.ts`
+  - `apps/api/src/services/caldav-server/handlers/mkcalendar.ts`
+  - `apps/api/src/services/caldav-server/handlers/report.ts`
+  - `apps/api/src/services/calendar-sync/providers/outlook.ts`
+  - `apps/api/src/services/onboarding/index.ts`
+  - `apps/api/src/services/onboarding/service.ts`
+  - `apps/api/src/services/sync/mapping-service.ts`
+  - `apps/api/src/services/time-blocks/generation.ts`
+  - `apps/api/src/services/time-blocks/index.ts`
+  - `apps/api/tests/integration/test-utils.ts`
+  - `apps/api/tests/services/calendar-sync/providers/caldav.test.ts`
+  - `apps/api/tests/services/calendar-sync/providers/google.test.ts`
+  - `apps/api/tests/services/calendar-sync/providers/icloud.test.ts`
+  - `apps/api/tests/services/calendar-sync/providers/outlook.test.ts`
+  - `apps/api/tests/services/calendar-sync/service.test.ts`
+  - `apps/web/src/hooks/use-onboarding.ts`
+  - `apps/web/src/lib/api-client.test.ts`
+  - `apps/web/src/lib/api-client.ts`
+  - `apps/web/src/lib/security-data.ts`
+  - `docs/WORKLOG.md`
+  - `packages/types/src/openapi/account.ts`
+  - `packages/types/src/openapi/activities.ts`
+  - `packages/types/src/openapi/agenda.ts`
+  - `packages/types/src/openapi/ai.ts`
+  - `packages/types/src/openapi/analytics.ts`
+  - `packages/types/src/openapi/audit.ts`
+  - `packages/types/src/openapi/auth.ts`
+  - `packages/types/src/openapi/bulk.ts`
+  - `packages/types/src/openapi/common.ts`
+  - `packages/types/src/openapi/events.ts`
+  - `packages/types/src/openapi/initiatives.ts`
+  - `packages/types/src/openapi/integrations.ts`
+  - `packages/types/src/openapi/moments.ts`
+  - `packages/types/src/openapi/notifications.ts`
+  - `packages/types/src/openapi/onboarding.ts`
+  - `packages/types/src/openapi/projects.ts`
+  - `packages/types/src/openapi/search.ts`
+  - `packages/types/src/openapi/time-blocks.ts`
+  - `packages/types/src/openapi/time-tracking.ts`
+  - `packages/types/src/openapi/webhooks.ts`
 
 ### [CALDAV-RFC4791-AUDIT-001] CalDAV WebDAV RFC4791 Compliance Audit
 

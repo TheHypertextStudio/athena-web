@@ -1,9 +1,8 @@
-'use client';
+import type { InitiativeDetail, InitiativeOut } from '@docket/types';
 
 import type { InitiativeCatalogRow } from '@/components/initiatives/initiative-catalog';
-import type { RpcResponse } from '@/lib/query';
 import { api } from '@/lib/api';
-import type { InitiativeDetail, InitiativeOut } from '@docket/types';
+import type { RpcResponse } from '@/lib/query-core';
 
 /** Reduce an Initiative + its detail roll-up into the enriched row view-model. */
 export function toEnriched(
@@ -30,9 +29,10 @@ export function toEnriched(
  */
 export function fetchEnrichedInitiatives(
   orgId: string,
+  client: typeof api = api,
 ): () => Promise<RpcResponse<readonly InitiativeCatalogRow[]>> {
   return async () => {
-    const listRes = await api.v1.orgs[':orgId'].initiatives.$get({ param: { orgId } });
+    const listRes = await client.v1.orgs[':orgId'].initiatives.$get({ param: { orgId } });
     if (!listRes.ok) {
       return {
         ok: false,
@@ -43,7 +43,7 @@ export function fetchEnrichedInitiatives(
     const { items } = await listRes.json();
     const enriched = await Promise.all(
       items.map(async (base): Promise<InitiativeCatalogRow> => {
-        const detailRes = await api.v1.orgs[':orgId'].initiatives[':id'].$get({
+        const detailRes = await client.v1.orgs[':orgId'].initiatives[':id'].$get({
           param: { orgId, id: base.id },
         });
         return toEnriched(base, detailRes.ok ? await detailRes.json() : null);

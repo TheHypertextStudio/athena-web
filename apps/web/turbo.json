@@ -1,0 +1,17 @@
+{
+  "extends": ["//"],
+  // `NEXT_PUBLIC_*` are inlined into the client bundle at `next build`, so they belong to the
+  // build cache key. `dev` additionally runs the server-side `/passkey-intent` route, which signs
+  // the intent token with `BETTER_AUTH_SECRET` (read from `process.env`, not via `@docket/env`).
+  "tasks": {
+    "build": {
+      "env": ["NEXT_PUBLIC_*"]
+    },
+    "dev": {
+      "env": ["NEXT_PUBLIC_*", "BETTER_AUTH_SECRET"]
+    },
+    "test": {
+      "env": ["NEXT_PUBLIC_*"]
+    }
+  }
+}

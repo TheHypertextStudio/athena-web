@@ -4,10 +4,18 @@ ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable
 
-FROM base AS builder
+# Prune to @docket/admin + its workspace deps so the install layer is cache-stable across source edits.
+FROM base AS pruner
 WORKDIR /app
 COPY . .
+RUN pnpm dlx turbo@2.9.18 prune @docket/admin --docker
+
+FROM base AS builder
+WORKDIR /app
+# Install from pruned manifests (cache-stable), then bring in the pruned source.
+COPY --from=pruner /app/out/json/ .
 RUN pnpm install --no-frozen-lockfile
+COPY --from=pruner /app/out/full/ .
 ARG API_URL
 ARG NEXT_PUBLIC_API_URL
 ARG NEXT_PUBLIC_APP_URL

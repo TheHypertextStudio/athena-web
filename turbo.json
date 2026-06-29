@@ -2,6 +2,9 @@
   "$schema": "https://v2-9-18.turborepo.dev/schema.json",
   "ui": "tui",
   "envMode": "strict",
+  // Only TRULY cross-cutting vars live here (they bust every task's cache). App/service-specific
+  // groups (BETTER_AUTH_*, STRIPE_*, MCP_*, GOOGLE_*, …) are declared in the consuming package's
+  // turbo.json instead, so e.g. rotating a Stripe key no longer invalidates the web/admin caches.
   "globalEnv": [
     "NODE_ENV",
     "APP_MODE",
@@ -9,52 +12,20 @@
     "PORT",
     "API_URL",
     "SKIP_ENV_VALIDATION",
-    "CRON_SECRET",
     "DATABASE_URL",
-    "DATABASE_URL_UNPOOLED",
-    "BETTER_AUTH_*",
-    "STRIPE_*",
-    "DOCKET_PRICE_*",
-    "MCP_*",
-    "OIDC_*",
-    "GOOGLE_*",
-    "GITHUB_*",
-    "LINEAR_*",
-    "ATHENA_*",
-    "ANTHROPIC_API_KEY",
-    "SENTRY_DSN",
-    "BLOB_READ_WRITE_TOKEN",
-    "EXPORT_BUCKET_*",
-    "NEXT_PUBLIC_*",
-    "BILLING_ENABLED"
+    "DATABASE_URL_UNPOOLED"
   ],
   "globalPassThroughEnv": ["VERCEL", "VERCEL_*"],
+  // Remote cache is signed (HMAC over artifacts). Inert until a cache is configured: with no
+  // TURBO_TOKEN/TURBO_API set, turbo silently uses the local cache only. CI supplies the token +
+  // TURBO_REMOTE_CACHE_SIGNATURE_KEY from secrets — see .github/workflows/ci.yml.
+  "remoteCache": { "signature": true },
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
       "outputs": ["dist/**", ".next/**", "!.next/cache/**"],
-      "env": [
-        "NODE_ENV",
-        "API_URL",
-        "DATABASE_URL",
-        "DATABASE_URL_UNPOOLED",
-        "BETTER_AUTH_*",
-        "STRIPE_*",
-        "DOCKET_PRICE_*",
-        "MCP_*",
-        "OIDC_*",
-        "GOOGLE_*",
-        "GITHUB_*",
-        "LINEAR_*",
-        "ATHENA_*",
-        "ANTHROPIC_API_KEY",
-        "CRON_SECRET",
-        "SENTRY_DSN",
-        "BLOB_READ_WRITE_TOKEN",
-        "EXPORT_BUCKET_*",
-        "NEXT_PUBLIC_*",
-        "BILLING_ENABLED"
-      ]
+      // Docs-only edits never change build output — keep them out of the cache key.
+      "inputs": ["$TURBO_DEFAULT$", "!**/*.md"]
     },
     "dev": {
       "cache": false,
@@ -64,35 +35,35 @@
       // (marketing) simply skip it. Replaces the old `db:up && db:migrate &&` shell chain.
       "dependsOn": ["^db:migrate"]
     },
+    // lint/typecheck/test no longer depend on `^build`: workspace packages expose raw TS
+    // (`"types": "./src/index.ts"`), so tsc/eslint/vitest resolve dependency source directly —
+    // building deps first was pure overhead in CI.
     "lint": {
-      "dependsOn": ["^build"],
-      "outputs": []
+      "outputs": [],
+      "inputs": ["$TURBO_DEFAULT$", "!**/*.md"]
     },
     "lint:fix": {
-      "dependsOn": ["^build"],
       "outputs": []
     },
     "typecheck": {
-      "dependsOn": ["^build"],
-      "outputs": []
+      "outputs": [],
+      "inputs": ["$TURBO_DEFAULT$", "!**/*.md"]
     },
     "test": {
-      "dependsOn": ["^build"],
       "outputs": [],
-      "env": ["NODE_ENV", "DATABASE_URL", "DATABASE_URL_UNPOOLED", "SKIP_ENV_VALIDATION"]
+      "inputs": ["$TURBO_DEFAULT$", "!**/*.md"]
     },
     "test:watch": {
       "cache": false,
       "persistent": true
     },
     "test:coverage": {
-      "dependsOn": ["^build"],
       "outputs": ["coverage/**"]
     },
     "test:e2e": {
       "dependsOn": ["build"],
       "outputs": ["playwright-report/**", "test-results/**"],
-      "env": ["NODE_ENV", "API_URL", "NEXT_PUBLIC_*", "DATABASE_URL", "DATABASE_URL_UNPOOLED"]
+      "env": ["NEXT_PUBLIC_*"]
     },
     "clean": {
       "cache": false
@@ -102,26 +73,21 @@
     // embedded `pglite:` mode). db:migrate depends on it, so a TCP DB is healthy before
     // migrations run, while the zero-service PGlite mode needs no daemon.
     "//#db:up": {
-      "cache": false,
-      "env": ["DATABASE_URL"]
+      "cache": false
     },
     "db:generate": {
-      "cache": false,
-      "env": ["DATABASE_URL", "DATABASE_URL_UNPOOLED"]
+      "cache": false
     },
     "db:migrate": {
       "cache": false,
-      "dependsOn": ["//#db:up"],
-      "env": ["DATABASE_URL", "DATABASE_URL_UNPOOLED"]
+      "dependsOn": ["//#db:up"]
     },
     "db:studio": {
       "cache": false,
-      "persistent": true,
-      "env": ["DATABASE_URL", "DATABASE_URL_UNPOOLED"]
+      "persistent": true
     },
     "db:auth:generate": {
-      "cache": false,
-      "env": ["DATABASE_URL", "DATABASE_URL_UNPOOLED", "BETTER_AUTH_*"]
+      "cache": false
     }
   }
 }

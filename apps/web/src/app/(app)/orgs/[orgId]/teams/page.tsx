@@ -14,7 +14,7 @@ import { unwrap } from '@/lib/query-core';
 import { queryKeys } from '@/lib/query-keys';
 import { dehydrate, getServerApi, getServerQueryClient } from '@/lib/query-server';
 
-import { TeamsListClient } from './teams-client';
+import TeamsListClient from './teams-client';
 
 /**
  * The Teams list page (Server Component).

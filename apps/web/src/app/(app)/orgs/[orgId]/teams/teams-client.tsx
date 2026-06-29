@@ -44,7 +44,7 @@ import { apiQueryOptions, queryKeys, useApiListQuery } from '@/lib/query';
  * survives a reload. Entity nouns route through {@link useVocabulary}; data is fetched at runtime
  * so the production build needs no running server.
  */
-export function TeamsListClient(): JSX.Element {
+export default function TeamsListClient(): JSX.Element {
   const params = useParams<{ orgId: string }>();
   const orgId = params.orgId;
   const queryClient = useQueryClient();

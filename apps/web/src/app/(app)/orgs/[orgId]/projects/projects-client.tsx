@@ -57,7 +57,7 @@ import { apiQueryOptions, queryKeys, useApiListQuery } from '@/lib/query';
  *
  * @returns the rendered roster.
  */
-export function ProjectsListClient(): JSX.Element {
+export default function ProjectsListClient(): JSX.Element {
   const router = useRouter();
   const params = useParams<{ orgId: string }>();
   const orgId = params.orgId;

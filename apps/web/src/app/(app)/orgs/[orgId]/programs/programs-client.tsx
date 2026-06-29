@@ -46,7 +46,7 @@ import { apiQueryOptions, queryKeys, useApiListQuery } from '@/lib/query';
  * shareable and survives a reload. Entity nouns route through {@link useVocabulary}; data is
  * fetched at runtime so the production build needs no running server.
  */
-export function ProgramsListClient(): JSX.Element {
+export default function ProgramsListClient(): JSX.Element {
   const router = useRouter();
   const params = useParams<{ orgId: string }>();
   const orgId = params.orgId;

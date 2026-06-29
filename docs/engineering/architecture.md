@@ -651,6 +651,14 @@ then visibility fallback for `view`). On allow, the handler queries Neon
 through Drizzle and returns a Zod-validated payload the client infers via
 `hc<AppType>`._
 
+**Client data layer.** On the browser side, every read and write goes through a
+single typed wrapper around TanStack Query v5 (`apps/web/src/lib/query.ts`):
+typed query definitions (`apiQueryOptions`) over org-scoped hierarchical keys,
+definition-only `useApiQuery` / `useApiListQuery` / `useLiveApiQuery` read hooks,
+and `useApiMutation` with optimistic patch + rollback + prefix invalidation. The
+goal is an instant-feeling, cache-warm UI with no hand-rolled `useEffect` fetches.
+See **`docs/engineering/specs/data-layer.md`** for the full standard.
+
 ### 2. Agent Session + Approval Gate (two-axis)
 
 ```

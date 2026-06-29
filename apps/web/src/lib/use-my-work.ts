@@ -7,13 +7,14 @@ import type {
   TaskOut,
 } from '@docket/types';
 import type { GroupKey } from '@docket/ui/components';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useCallback, useMemo } from 'react';
 
 import { type AgentTaskRowData, type RowActor } from '@/components/my-work/agent-task-row';
 import { type PillStatus, pillStatusOf } from '@/components/my-work/live-session-pill';
 import { STATE_GROUP_LABEL, STATE_GROUP_ORDER, stateTypeOf } from './work-state';
 import { api } from './api';
-import { readError, readProblem } from './problem';
+import { STALE, apiQueryOptions, queryKeys, useApiQuery } from './query';
 
 const SESSION_RANK: Record<SessionStatus, number> = {
   awaiting_approval: 5,
@@ -43,44 +44,83 @@ export interface MyWorkState {
 
 /** useMyWork coordinates use my work state, loading, and mutations for its screen. */
 export function useMyWork(orgId: string, userId: string | null): MyWorkState {
-  const [tasks, setTasks] = useState<readonly TaskOut[]>([]);
-  const [projects, setProjects] = useState<readonly ProjectOut[]>([]);
-  const [members, setMembers] = useState<readonly MemberOut[]>([]);
-  const [agents, setAgents] = useState<readonly AgentOut[]>([]);
-  const [sessions, setSessions] = useState<readonly AgentSessionOut[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
-  const load = useCallback(async (): Promise<void> => {
-    setLoading(true);
-    setLoadError(null);
-    try {
-      const [tasksRes, projectsRes, membersRes, agentsRes, sessionsRes] = await Promise.all([
-        api.v1.orgs[':orgId'].tasks.$get({ param: { orgId } }),
-        api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
-        api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
-        api.v1.orgs[':orgId'].agents.$get({ param: { orgId } }),
-        api.v1.orgs[':orgId'].sessions.$get({ param: { orgId }, query: {} }),
-      ]);
-      if (!tasksRes.ok) {
-        setLoadError(await readProblem(tasksRes, 'Could not load your work.'));
-        return;
-      }
-      setTasks((await tasksRes.json()).items);
-      if (projectsRes.ok) setProjects((await projectsRes.json()).items);
-      if (membersRes.ok) setMembers((await membersRes.json()).items);
-      if (agentsRes.ok) setAgents((await agentsRes.json()).items);
-      if (sessionsRes.ok) setSessions((await sessionsRes.json()).items);
-    } catch (caught) {
-      setLoadError(readError(caught, 'Something went wrong loading your work.'));
-    } finally {
-      setLoading(false);
-    }
-  }, [orgId]);
+  // The five slices flow through the shared query layer under their canonical keys, so a server
+  // entry can SSR-prefetch them (warm first paint) and any create/mutation elsewhere reconciles
+  // this screen automatically. Tasks are volatile (state churns); the rosters are static-ish.
+  const tasksQ = useApiQuery(
+    apiQueryOptions(
+      queryKeys.tasks(orgId),
+      () => api.v1.orgs[':orgId'].tasks.$get({ param: { orgId } }),
+      'Could not load your work.',
+      { staleTime: STALE.volatile },
+    ),
+  );
+  const projectsQ = useApiQuery(
+    apiQueryOptions(
+      queryKeys.projects(orgId),
+      () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
+      'Could not load projects.',
+      { staleTime: STALE.standard },
+    ),
+  );
+  const membersQ = useApiQuery(
+    apiQueryOptions(
+      queryKeys.members(orgId),
+      () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
+      'Could not load members.',
+      { staleTime: STALE.static },
+    ),
+  );
+  const agentsQ = useApiQuery(
+    apiQueryOptions(
+      queryKeys.agents(orgId),
+      () => api.v1.orgs[':orgId'].agents.$get({ param: { orgId } }),
+      'Could not load agents.',
+      { staleTime: STALE.static },
+    ),
+  );
+  const sessionsQ = useApiQuery(
+    apiQueryOptions(
+      queryKeys.sessions(orgId),
+      () => api.v1.orgs[':orgId'].sessions.$get({ param: { orgId }, query: {} }),
+      'Could not load agent sessions.',
+      { staleTime: STALE.volatile },
+    ),
+  );
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const tasks = useMemo<readonly TaskOut[]>(() => tasksQ.data?.items ?? [], [tasksQ.data]);
+  const projects = useMemo<readonly ProjectOut[]>(
+    () => projectsQ.data?.items ?? [],
+    [projectsQ.data],
+  );
+  const members = useMemo<readonly MemberOut[]>(() => membersQ.data?.items ?? [], [membersQ.data]);
+  const agents = useMemo<readonly AgentOut[]>(() => agentsQ.data?.items ?? [], [agentsQ.data]);
+  const sessions = useMemo<readonly AgentSessionOut[]>(
+    () => sessionsQ.data?.items ?? [],
+    [sessionsQ.data],
+  );
+
+  // Tasks gate the load (the others enrich); only a failed tasks read is fatal — the rosters
+  // degrade to benign empties, exactly as the prior best-effort load did.
+  const loading =
+    tasksQ.isPending ||
+    projectsQ.isPending ||
+    membersQ.isPending ||
+    agentsQ.isPending ||
+    sessionsQ.isPending;
+  const loadError = tasksQ.isError ? tasksQ.error.message : null;
+
+  /** Optimistically patch the cached task roster (e.g. prepend a just-created task). */
+  const setTasks = useCallback(
+    (updater: (prev: readonly TaskOut[]) => readonly TaskOut[]): void => {
+      queryClient.setQueryData<{ items: readonly TaskOut[] }>(queryKeys.tasks(orgId), (prev) =>
+        prev ? { ...prev, items: updater(prev.items) } : { items: updater([]) },
+      );
+    },
+    [queryClient, orgId],
+  );
 
   const myActorId = useMemo(
     () => (userId ? (members.find((m) => m.userId === userId)?.actorId ?? null) : null),

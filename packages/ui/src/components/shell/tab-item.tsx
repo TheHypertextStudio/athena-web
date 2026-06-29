@@ -26,7 +26,7 @@ export function TabItem({ tab, active, renderLink, onClose }: TabItemProps): Rea
       className={cn(
         'group text-body relative flex h-8 w-40 shrink-0 items-center rounded-lg transition-colors',
         active
-          ? 'text-on-surface bg-surface-container-highest ring-outline-variant shadow-sm ring-1'
+          ? 'text-on-secondary-container bg-secondary-container shadow-sm'
           : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface',
       )}
     >

@@ -174,7 +174,9 @@ export function EntityListRow({
   const rowClassName = cn(
     ROW_BASE,
     interactive && ROW_INTERACTIVE,
-    (active || selected) && 'bg-surface-container-highest',
+    // Explicit selection takes the indigo tonal fill; the roving keyboard cursor stays neutral.
+    selected && 'bg-secondary-container',
+    active && !selected && 'bg-surface-container-highest',
     className,
   );
 

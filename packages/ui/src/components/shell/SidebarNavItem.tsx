@@ -90,7 +90,7 @@ export function SidebarNavItem({
   const className = cn(
     'w-full justify-start gap-2 px-3 text-body font-normal [&_svg]:size-3.5',
     active
-      ? 'bg-surface-container-highest text-on-surface'
+      ? 'bg-secondary-container text-on-secondary-container'
       : 'text-on-surface-variant hover:text-on-surface',
     focusRingInset,
   );

@@ -103,6 +103,7 @@ export function fetchProjectDetail(
       programsRes,
       initiativesRes,
       rolesRes,
+      rollupRes,
     ] = await Promise.all([
       api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
       api.v1.orgs[':orgId'].projects[':id'].progress.$get({ param: { orgId, id: projectId } }),
@@ -117,6 +118,7 @@ export function fetchProjectDetail(
       api.v1.orgs[':orgId'].programs.$get({ param: { orgId } }),
       api.v1.orgs[':orgId'].initiatives.$get({ param: { orgId } }),
       api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
+      api.v1.orgs[':orgId'].projects[':id'].rollup.$get({ param: { orgId, id: projectId } }),
     ]);
 
     if (!projectsRes.ok) {
@@ -148,29 +150,19 @@ export function fetchProjectDetail(
     const allTasks: readonly TaskOut[] = tasksRes.ok ? (await tasksRes.json()).items : [];
     const projectTasks = allTasks.filter((t) => t.projectId === projectId);
 
-    const milestoneTasks = await Promise.all(
-      projectTasks.map(async (t): Promise<MilestoneTask> => {
-        const detailRes = await api.v1.orgs[':orgId'].tasks[':id'].$get({
-          param: { orgId, id: t.id },
-        });
-        if (!detailRes.ok) return { task: t, milestoneId: null };
-        const detail = await detailRes.json();
-        return { task: t, milestoneId: detail.milestoneId ?? null };
-      }),
+    // The project's task→milestone map and its initiative come from one roll-up read
+    // (`…/projects/:id/rollup`), collapsing what were a per-task `tasks/:id` N+1 (only
+    // `TaskDetail` carries `milestoneId`) and a per-initiative `initiatives/:id/timeline` M+1.
+    // A failed roll-up degrades to no grouping / no initiative rather than failing the screen.
+    const rollup = rollupRes.ok ? await rollupRes.json() : null;
+    const milestoneByTaskId = new Map<string, string | null>(
+      (rollup?.taskMilestones ?? []).map((tm) => [tm.taskId, tm.milestoneId]),
     );
-
-    const initiativeMatches = await Promise.all(
-      initiatives.map(async (init): Promise<string | null> => {
-        const res = await api.v1.orgs[':orgId'].initiatives[':id'].timeline.$get({
-          param: { orgId, id: init.id },
-          query: {},
-        });
-        if (!res.ok) return null;
-        const { projects } = await res.json();
-        return projects.some((p) => p.id === projectId) ? init.id : null;
-      }),
-    );
-    const currentInitiativeId = initiativeMatches.find((id) => id !== null) ?? null;
+    const milestoneTasks: readonly MilestoneTask[] = projectTasks.map((t) => ({
+      task: t,
+      milestoneId: milestoneByTaskId.get(t.id) ?? null,
+    }));
+    const currentInitiativeId = rollup?.currentInitiativeId ?? null;
 
     const projectTaskIds = new Set<string>(projectTasks.map((t) => t.id));
     const projectTaskTitle = new Map<string, string>(projectTasks.map((t) => [t.id, t.title]));

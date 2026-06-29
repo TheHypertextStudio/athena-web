@@ -4,7 +4,16 @@
 import { z } from 'zod';
 
 import { Health } from './capability';
-import { ActorId, InitiativeId, OrganizationId, ProgramId, ProjectId, TeamId } from './primitives';
+import {
+  ActorId,
+  InitiativeId,
+  MilestoneId,
+  OrganizationId,
+  ProgramId,
+  ProjectId,
+  TaskId,
+  TeamId,
+} from './primitives';
 
 /** Body for creating a Project (organizationId comes from the path, never the body). */
 export const ProjectCreate = z
@@ -100,3 +109,29 @@ export const ProjectProgress = z
   .meta({ id: 'ProjectProgress', description: 'Weighted completion roll-up for a project.' });
 /** Weighted project-progress value. */
 export type ProjectProgress = z.infer<typeof ProjectProgress>;
+
+/**
+ * The project-detail extras the project-detail screen can't read cheaply from the org-level
+ * lists, served in one round-trip.
+ *
+ * @remarks
+ * The detail screen joins each of the project's tasks to its milestone and resolves which
+ * initiative the project belongs to. Done client-side those become an N+1 (a `tasks/:id` read
+ * per task, for the `milestoneId` that only `TaskDetail` carries) and an M+1 (an
+ * `initiatives/:id/timeline` read per initiative to find the one containing the project). This
+ * roll-up answers both directly from the `task.milestone_id` column and the `initiative_project`
+ * join, so the screen makes one bounded read instead of `1 + N + M`.
+ */
+export const ProjectRollupOut = z
+  .object({
+    /** Each project task paired with the milestone it sits under (`null` when ungrouped). */
+    taskMilestones: z.array(z.object({ taskId: TaskId, milestoneId: MilestoneId.nullable() })),
+    /** The initiative this project rolls up into, or `null` when it belongs to none. */
+    currentInitiativeId: InitiativeId.nullable(),
+  })
+  .meta({
+    id: 'ProjectRollupOut',
+    description: "A project's task→milestone map and current initiative, in one read.",
+  });
+/** Project detail roll-up value. */
+export type ProjectRollupOut = z.infer<typeof ProjectRollupOut>;

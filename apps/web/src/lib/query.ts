@@ -12,21 +12,25 @@
  * - {@link createQueryClient} builds the one stable {@link QueryClient} (mounted once in
  *   `providers.tsx`) with the app-wide defaults: a `30s` stale time, auto-refetch on window
  *   focus, and a single retry. Surfaces become live without a manual refresh control.
- * - {@link useApiQuery} is the read hook. It takes a {@link QueryKey} and a thunk that performs
- *   one Hono RPC call, and resolves the parsed body — throwing a readable error (via
- *   {@link readProblem}/{@link readError}) on a non-OK response so TanStack's `error`/`isError`
- *   state carries the server's own message.
- * - {@link useLiveApiQuery} is the same read hook with a `refetchInterval`, for session/
- *   agent-activity polling.
- * - {@link useApiMutation} is the write hook. It supports an optimistic cache update with
- *   automatic rollback on failure, and invalidates a set of related {@link QueryKey}s on settle
- *   so dependent surfaces re-fetch.
+ * - {@link apiQueryOptions} builds a **typed query definition** (key + fetcher + optional
+ *   {@link STALE} tier) whose key carries its data type, so reads, prefetches, and cache writes
+ *   (`setQueryData`) are all type-checked against the response shape.
+ * - {@link useApiQuery} is the read hook: hand it a definition and it resolves the parsed body,
+ *   surfacing the server's `application/problem+json` message as `error`/`isError` (via
+ *   {@link readProblem}/{@link readError}). {@link useApiListQuery} adds `keepPreviousData` for
+ *   flicker-free lists, and {@link useLiveApiQuery} layers a focus-only `refetchInterval` for
+ *   session/agent-activity polling.
+ * - {@link useApiMutation} is the write hook. It supports an optimistic cache update (via
+ *   {@link optimisticPatch}) with automatic rollback on failure, and invalidates a set of related
+ *   {@link QueryKey}s on settle so dependent surfaces re-fetch.
  *
  * The query-key convention lives in {@link queryKeys}: every key is org-scoped and hierarchical,
  * so invalidating a coarse key (e.g. an org's projects list) is a prefix match that also covers
  * finer keys (a single project's detail). All of it is typed off the Hono client's response
  * shapes via generics — no `as any`, no placeholder types.
  *
+ * @see `docs/engineering/specs/data-layer.md` for the full standard (the seven rules, tiers,
+ * optimistic recipe, prefetch/prime, SSR hydration, and pitfalls).
  * @see {@link api} for the underlying typed Hono RPC client.
  */
 import {

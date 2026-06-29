@@ -301,6 +301,7 @@ BACKLOG → ACTIVE (IN_PROGRESS) → ACTIVE (REVIEW) → COMPLETED
 - **Server Actions for mutations** - Type-safe form handling
 - **App Router conventions** - Layouts, loading, error boundaries
 - **shadcn/ui components** - Accessible, customizable
+- **Data fetching** - All reads/writes go through the typed TanStack Query layer in `apps/web/src/lib/query.ts` (`apiQueryOptions` + def-only `useApiQuery`/`useApiListQuery`/`useLiveApiQuery`/`useApiMutation`); never hand-roll `useEffect`+`fetch` or call `api.v1.*` in a component. See **`docs/engineering/specs/data-layer.md`**.
 
 ### Database Patterns (Drizzle)
 

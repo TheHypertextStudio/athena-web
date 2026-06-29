@@ -6,16 +6,18 @@ import {
   hub,
   passkey as passkeyTable,
   session,
+  twoFactor as twoFactorTable,
   user,
   verification,
 } from '@docket/db';
 import { isRealValue } from '@docket/env';
 import { type BetterAuthOptions, type BetterAuthPlugin } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { mcp, oidcProvider } from 'better-auth/plugins';
+import { mcp, oAuthProxy, oidcProvider, twoFactor } from 'better-auth/plugins';
 import { nextCookies } from 'better-auth/next-js';
 
 import { verifyPasskeyIntent } from './passkey-intent';
+import { recoveryChallenge } from './recovery-challenge';
 
 /**
  * The subset of the validated server environment that {@link buildAuthOptions} reads to
@@ -39,6 +41,8 @@ export interface AuthEnv {
   readonly GITHUB_APP_CLIENT_SECRET?: string | undefined;
   readonly LINEAR_CLIENT_ID?: string | undefined;
   readonly LINEAR_CLIENT_SECRET?: string | undefined;
+  readonly OAUTH_PROXY_SECRET?: string | undefined;
+  readonly OAUTH_PROXY_PRODUCTION_URL?: string | undefined;
   readonly OIDC_LOGIN_PAGE_URL?: string | undefined;
   readonly MCP_RESOURCE_URL?: string | undefined;
 }
@@ -198,6 +202,21 @@ export function buildAuthOptions(e: AuthEnv): BetterAuthOptions {
         resolveUser: ({ ctx, context }) => resolvePasskeyUser(ctx.context.internalAdapter, context),
       },
     }),
+    // Account recovery codes (backup codes). Configured backup-codes-only for this passwordless,
+    // passkey-first app: `allowPasswordless` lets passkey users enable/manage codes without a
+    // password; `skipVerificationOnEnable` enables immediately (no TOTP verify step); TOTP is
+    // disabled and OTP is never configured, so the only second factor is the recovery code, stored
+    // encrypted at rest (keyed by `BETTER_AUTH_SECRET`). See the recovery bridge below.
+    twoFactor({
+      issuer: e.BETTER_AUTH_PASSKEY_RP_NAME,
+      allowPasswordless: true,
+      skipVerificationOnEnable: true,
+      totpOptions: { disable: true },
+      backupCodeOptions: { storeBackupCodes: 'encrypted' },
+    }),
+    // Bridges the locked-out recovery case (no passkey ⇒ no session ⇒ no `two_factor` challenge
+    // cookie). Mints that cookie from an email so the unmodified `verifyBackupCode` can run.
+    recoveryChallenge(),
   ];
 
   if (isRealValue(e.OIDC_LOGIN_PAGE_URL)) {
@@ -227,6 +246,15 @@ export function buildAuthOptions(e: AuthEnv): BetterAuthOptions {
       plugins.push(oidcProvider({ loginPage: e.OIDC_LOGIN_PAGE_URL }));
     }
   }
+  // oAuthProxy lets preview/branch deployments run social OAuth through production: only prod's
+  // callback URL is registered with the provider, and previews (whose URL can't be pre-registered)
+  // proxy the flow through it. Mounted only when BOTH the shared secret and the production URL are
+  // configured — unset (local/first-setup) ⇒ OAuth runs directly against the env's own callback.
+  if (isRealValue(e.OAUTH_PROXY_SECRET) && isRealValue(e.OAUTH_PROXY_PRODUCTION_URL)) {
+    plugins.push(
+      oAuthProxy({ productionURL: e.OAUTH_PROXY_PRODUCTION_URL, secret: e.OAUTH_PROXY_SECRET }),
+    );
+  }
   plugins.push(nextCookies());
 
   // When `BETTER_AUTH_ALLOWED_HOSTS` lists one or more host patterns, switch `baseURL` to
@@ -246,7 +274,14 @@ export function buildAuthOptions(e: AuthEnv): BetterAuthOptions {
     trustedOrigins: parseTrustedOrigins(e.BETTER_AUTH_TRUSTED_ORIGINS),
     database: drizzleAdapter(db, {
       provider: 'pg',
-      schema: { user, session, account, verification, passkey: passkeyTable },
+      schema: {
+        user,
+        session,
+        account,
+        verification,
+        passkey: passkeyTable,
+        twoFactor: twoFactorTable,
+      },
     }),
     advanced: {
       database: { generateId: () => genId() },

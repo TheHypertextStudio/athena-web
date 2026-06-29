@@ -13,6 +13,12 @@ import { betterAuth } from 'better-auth';
 import { buildAuthOptions } from './auth-builder';
 
 export * from './passkey-intent';
+export {
+  generateRecoveryCodes,
+  getRecoveryCodeStatus,
+  hasRecoveryCodes,
+  type RecoveryCodeStatus,
+} from './backup-codes';
 export type { AuthEnv, PasskeyUserAdapter } from './auth-builder';
 export {
   buildAuthOptions,

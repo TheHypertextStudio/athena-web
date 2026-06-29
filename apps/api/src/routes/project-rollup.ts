@@ -5,19 +5,20 @@
  * @remarks
  * A focused companion to the main projects router (kept separate so it lands in a clean file
  * rather than the projects router's in-flight edits). It serves one read — `GET /:id/rollup` —
- * that answers the two lookups the project-detail screen otherwise resolves with client-side
+ * that answers the three lookups the project-detail screen otherwise resolves with client-side
  * waterfalls: the per-task milestone (an N+1 of `tasks/:id` reads, since only `TaskDetail`
- * carries `milestoneId`) and the project's initiative (an M+1 of `initiatives/:id/timeline`
- * reads). Both come straight from the `task.milestone_id` column and the `initiative_project`
- * join, so the screen makes one bounded read instead of `1 + N + M`.
+ * carries `milestoneId`), the project's initiative (an M+1 of `initiatives/:id/timeline` reads),
+ * and the recent agent activity (a per-session `sessions/:id` fan-out). All three come straight
+ * from the `task.milestone_id` column, the `initiative_project` join, and one ordered
+ * `session_activity` read, so the screen makes one bounded read instead of `1 + N + M`.
  *
  * Mounted under the same `/:orgId/projects` prefix as the projects router, so it inherits the
  * `orgContextMiddleware` actor context; like the other project *reads* it needs no capability
  * guard (those gate writes only).
  */
-import { db, initiativeProject, project, task } from '@docket/db';
+import { agentSession, db, initiativeProject, project, sessionActivity, task } from '@docket/db';
 import { ProjectRollupOut } from '@docket/types';
-import { and, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
@@ -25,9 +26,13 @@ import type { AppEnv } from '../context';
 import { NotFoundError } from '../error';
 import { ok } from '../lib/ok';
 import { zParam } from '../lib/validate';
+import { toActivityOut } from './agent-session-helpers';
 
 /** Path-param schema for the single-project roll-up route. */
 const idParam = z.object({ id: z.string() });
+
+/** How many recent activity entries the roll-up returns (matches the detail screen's feed). */
+const RECENT_ACTIVITY_LIMIT = 8;
 
 /** Project roll-up router: the detail screen's waterfall-collapsing read. */
 const projectRollup = new Hono<AppEnv>().get('/:id/rollup', zParam(idParam), async (c) => {
@@ -58,9 +63,39 @@ const projectRollup = new Hono<AppEnv>().get('/:id/rollup', zParam(idParam), asy
     .where(and(eq(initiativeProject.projectId, id), eq(initiativeProject.organizationId, orgId)))
     .limit(1);
 
+  // Recent agent activity on the project: the sessions on its tasks (one join), then their newest
+  // activities in one ordered read — collapsing the screen's per-session `sessions/:id` fan-out.
+  // Each row carries its session's `agentId` so the client resolves the actor without a re-read.
+  const sessionRows = await db
+    .select({ id: agentSession.id, agentId: agentSession.agentId })
+    .from(agentSession)
+    .innerJoin(task, eq(agentSession.taskId, task.id))
+    .where(and(eq(task.projectId, id), eq(agentSession.organizationId, orgId)));
+  const agentBySession = new Map(sessionRows.map((s) => [s.id, s.agentId]));
+  const sessionIds = sessionRows.map((s) => s.id);
+  const activityRows =
+    sessionIds.length > 0
+      ? await db
+          .select()
+          .from(sessionActivity)
+          .where(
+            and(
+              inArray(sessionActivity.sessionId, sessionIds),
+              eq(sessionActivity.organizationId, orgId),
+            ),
+          )
+          .orderBy(desc(sessionActivity.createdAt))
+          .limit(RECENT_ACTIVITY_LIMIT)
+      : [];
+  const recentActivity = activityRows.flatMap((a) => {
+    const agentId = agentBySession.get(a.sessionId);
+    return agentId ? [{ ...toActivityOut(a), agentId }] : [];
+  });
+
   return ok(c, ProjectRollupOut, {
     taskMilestones: taskRows.map((r) => ({ taskId: r.taskId, milestoneId: r.milestoneId })),
     currentInitiativeId: initRows[0]?.initiativeId ?? null,
+    recentActivity,
   });
 });
 

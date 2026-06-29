@@ -88,9 +88,47 @@ async function makeLinkedInitiative(
   return init!.id;
 }
 
+/** Seed an agent + a session on `taskId` + one activity on that session; returns the ids. */
+async function seedSessionActivity(
+  orgId: string,
+  taskId: string,
+  humanActorId: string,
+): Promise<{ agentId: string; activityId: string }> {
+  const [agentActor] = await db
+    .insert(schema.actor)
+    .values({ organizationId: orgId, kind: 'agent', displayName: 'Bot' })
+    .returning({ id: schema.actor.id });
+  const [ag] = await db
+    .insert(schema.agent)
+    .values({ organizationId: orgId, actorId: agentActor!.id, createdBy: humanActorId })
+    .returning({ id: schema.agent.id });
+  const [session] = await db
+    .insert(schema.agentSession)
+    .values({
+      organizationId: orgId,
+      agentId: ag!.id,
+      taskId,
+      trigger: 'assignment',
+      status: 'running',
+      initiatorId: humanActorId,
+    })
+    .returning({ id: schema.agentSession.id });
+  const [activity] = await db
+    .insert(schema.sessionActivity)
+    .values({
+      sessionId: session!.id,
+      organizationId: orgId,
+      type: 'response',
+      body: { text: 'hi' },
+    })
+    .returning({ id: schema.sessionActivity.id });
+  return { agentId: ag!.id, activityId: activity!.id };
+}
+
 interface RollupBody {
   taskMilestones: { taskId: string; milestoneId: string | null }[];
   currentInitiativeId: string | null;
+  recentActivity: { id: string; agentId: string; type: string; createdAt: string }[];
 }
 
 describe('project roll-up (GET /:id/rollup)', () => {
@@ -122,6 +160,24 @@ describe('project roll-up (GET /:id/rollup)', () => {
     expect(byTask.get(t1)).toBe(milestoneId);
     expect(byTask.get(t2)).toBe(milestoneId);
     expect(byTask.get(tUngrouped)).toBeNull();
+  });
+
+  it('returns recent activity on the project’s sessions, scoped to this project', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const projectId = await makeProject(orgId, teamId, humanActorId);
+    const taskId = await makeTask(orgId, teamId, humanActorId, { projectId });
+    const { agentId, activityId } = await seedSessionActivity(orgId, taskId, humanActorId);
+
+    // Activity on a session for ANOTHER project's task must not appear in this project's roll-up.
+    const otherProject = await makeProject(orgId, teamId, humanActorId);
+    const otherTask = await makeTask(orgId, teamId, humanActorId, { projectId: otherProject });
+    await seedSessionActivity(orgId, otherTask, humanActorId);
+
+    const reader = appWithActor(projectRollup, orgId, ['view'], humanActorId);
+    const body = await json<RollupBody>(await reader.request(`/${projectId}/rollup`));
+    expect(body.recentActivity).toHaveLength(1);
+    expect(body.recentActivity[0]!.id).toBe(activityId);
+    expect(body.recentActivity[0]!.agentId).toBe(agentId);
   });
 
   it('returns a null initiative when the project belongs to none', async () => {

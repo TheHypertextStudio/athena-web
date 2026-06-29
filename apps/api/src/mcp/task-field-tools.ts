@@ -1,5 +1,5 @@
 import { actor, db, task } from '@docket/db';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpRegistrar } from './catalog';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 
@@ -9,7 +9,7 @@ import { jsonResult, runTool, scopedActor, authorize } from './result';
 import { assertRefInOrg, loadTask, resolveStateTransition } from './tools-shared';
 
 /** Register assign_task, set_task_delegate, set_task_state, add_subtask on `server`. */
-export function registerTaskFieldTools(server: McpServer, ctx: McpContext): void {
+export function registerTaskFieldTools(server: McpRegistrar, ctx: McpContext): void {
   server.registerTool(
     'assign_task',
     {

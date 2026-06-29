@@ -1,6 +1,6 @@
 import { comment, db, integration, task, team, update } from '@docket/db';
 import { Health } from '@docket/types';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpRegistrar } from './catalog';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 
@@ -10,7 +10,7 @@ import { jsonResult, runTool, scopedActor, authorize } from './result';
 import { subjectTable } from './tools-shared';
 
 /** Register add_comment, post_update, link_external on `server`. */
-export function registerContentTools(server: McpServer, ctx: McpContext): void {
+export function registerContentTools(server: McpRegistrar, ctx: McpContext): void {
   server.registerTool(
     'add_comment',
     {

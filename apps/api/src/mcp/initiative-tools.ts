@@ -7,7 +7,7 @@ import {
   program,
   project,
 } from '@docket/db';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpRegistrar } from './catalog';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 
@@ -17,7 +17,7 @@ import { jsonResult, runTool, scopedActor, authorize } from './result';
 import { assertRefInOrg } from './tools-shared';
 
 /** Register create_program, create_initiative, link_initiative on `server`. */
-export function registerInitiativeTools(server: McpServer, ctx: McpContext): void {
+export function registerInitiativeTools(server: McpRegistrar, ctx: McpContext): void {
   server.registerTool(
     'create_program',
     {

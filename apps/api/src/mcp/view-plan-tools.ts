@@ -1,15 +1,15 @@
-import { dailyPlanItem, db, hub, program, project, task } from '@docket/db';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { and, eq, ilike, isNull } from 'drizzle-orm';
+import { dailyPlanItem, db, hub, task } from '@docket/db';
+import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { NotFoundError } from '../error';
 import type { McpContext } from './auth';
+import type { McpRegistrar } from './catalog';
 import { authorize, jsonResult, runTool, scopedActor } from './result';
-import { runEntityQuery } from './tools-shared';
+import { runEntityQuery, searchEntities } from './tools-shared';
 
 /** Register run_view, search, and add_to_daily_plan on `server`. */
-export function registerViewPlanTools(server: McpServer, ctx: McpContext): void {
+export function registerViewPlanTools(server: McpRegistrar, ctx: McpContext): void {
   server.registerTool(
     'run_view',
     {
@@ -20,6 +20,7 @@ export function registerViewPlanTools(server: McpServer, ctx: McpContext): void 
         orgId: z.string().min(1),
         entity: z.enum(['task', 'project', 'program', 'initiative']),
         limit: z.number().int().min(1).max(200).default(50),
+        cursor: z.string().optional(),
       },
       annotations: {
         title: 'Run view',
@@ -41,8 +42,13 @@ export function registerViewPlanTools(server: McpServer, ctx: McpContext): void 
           orgId: input.orgId,
         });
 
-        const items = await runEntityQuery(input.orgId, input.entity, input.limit);
-        return jsonResult({ entity: input.entity, items });
+        const { items, nextCursor } = await runEntityQuery(
+          input.orgId,
+          input.entity,
+          input.limit,
+          input.cursor,
+        );
+        return jsonResult({ entity: input.entity, items, nextCursor });
       }),
   );
 
@@ -55,6 +61,7 @@ export function registerViewPlanTools(server: McpServer, ctx: McpContext): void 
         orgId: z.string().min(1),
         query: z.string().min(1),
         limit: z.number().int().min(1).max(50).default(20),
+        cursor: z.string().optional(),
       },
       annotations: {
         readOnlyHint: true,
@@ -71,36 +78,13 @@ export function registerViewPlanTools(server: McpServer, ctx: McpContext): void 
           id: input.orgId,
           orgId: input.orgId,
         });
-        const pattern = `%${input.query}%`;
-        const [taskRows, projectRows, programRows] = await Promise.all([
-          db
-            .select({ id: task.id, title: task.title })
-            .from(task)
-            .where(
-              and(
-                eq(task.organizationId, input.orgId),
-                isNull(task.archivedAt),
-                ilike(task.title, pattern),
-              ),
-            )
-            .limit(input.limit),
-          db
-            .select({ id: project.id, name: project.name })
-            .from(project)
-            .where(and(eq(project.organizationId, input.orgId), ilike(project.name, pattern)))
-            .limit(input.limit),
-          db
-            .select({ id: program.id, name: program.name })
-            .from(program)
-            .where(and(eq(program.organizationId, input.orgId), ilike(program.name, pattern)))
-            .limit(input.limit),
-        ]);
-        const results = [
-          ...taskRows.map((t) => ({ type: 'task', id: t.id, title: t.title })),
-          ...projectRows.map((p) => ({ type: 'project', id: p.id, title: p.name })),
-          ...programRows.map((p) => ({ type: 'program', id: p.id, title: p.name })),
-        ].slice(0, input.limit);
-        return jsonResult({ query: input.query, results });
+        const { results, nextCursor } = await searchEntities(
+          input.orgId,
+          input.query,
+          input.limit,
+          input.cursor,
+        );
+        return jsonResult({ query: input.query, results, nextCursor });
       }),
   );
 

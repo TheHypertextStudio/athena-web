@@ -58,6 +58,8 @@ interface McpAuthApi {
   getMcpSession?: (args: { headers: Headers }) => Promise<McpSession | null>;
 }
 
+type GetMcpSession = NonNullable<McpAuthApi['getMcpSession']>;
+
 /**
  * The caller's resolved Actor within one organization, for {@link canActor} checks.
  *
@@ -127,6 +129,15 @@ function bearerToken(headers: Headers): string | null {
   return match ? (match[1]?.trim() ?? null) : null;
 }
 
+function getMcpSessionApi(): GetMcpSession | null {
+  const descriptor: PropertyDescriptor | undefined = Object.getOwnPropertyDescriptor(
+    auth.api,
+    'getMcpSession',
+  );
+  const candidate: unknown = descriptor?.value;
+  return typeof candidate === 'function' ? (candidate as GetMcpSession) : null;
+}
+
 /**
  * Resolve an OAuth Bearer access token into an {@link McpContext}, enforcing the RS
  * checks (audience + issuer binding + scope availability) of mcp-surface.md §2.5.
@@ -157,15 +168,15 @@ async function resolveBearerContext(headers: Headers, token: string): Promise<Mc
     throw new AuthError('Bearer tokens are not accepted on this resource');
   }
 
-  const api = auth.api as unknown as McpAuthApi;
+  const getMcpSession = getMcpSessionApi();
   /* v8 ignore next -- @preserve defensive: getMcpSession exists whenever mcp() is mounted, which the issuer guard above requires */
-  if (typeof api.getMcpSession !== 'function') {
+  if (!getMcpSession) {
     throw new AuthError('Bearer tokens are not accepted on this resource');
   }
 
   // `getMcpSession` validates the token AND its audience binding to the configured
   // `resource` (RFC 8707) — a mismatched/foreign-audience token resolves to null here.
-  const session = await api.getMcpSession({ headers });
+  const session = await getMcpSession({ headers });
   if (session?.accessToken !== token) throw new AuthError();
 
   const scopes = session.scopes

@@ -1,5 +1,5 @@
 import { db, taskDependency } from '@docket/db';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpRegistrar } from './catalog';
 import { and, eq, or } from 'drizzle-orm';
 import { z } from 'zod';
 
@@ -9,7 +9,7 @@ import { jsonResult, runTool, scopedActor, authorize } from './result';
 import { loadTask, wouldCreateCycle } from './tools-shared';
 
 /** Register add_task_dependency and remove_task_dependency on `server`. */
-export function registerTaskDepTools(server: McpServer, ctx: McpContext): void {
+export function registerTaskDepTools(server: McpRegistrar, ctx: McpContext): void {
   server.registerTool(
     'add_task_dependency',
     {

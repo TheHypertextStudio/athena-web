@@ -1,5 +1,5 @@
 import { actor, agentSession, db, organization, program, project, task } from '@docket/db';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpRegistrar } from './catalog';
 import type { ReadResourceResult } from '@modelcontextprotocol/sdk/types.js';
 import { and, desc, eq, ilike, inArray, isNull } from 'drizzle-orm';
 
@@ -85,7 +85,7 @@ export function firstVar(value: string | string[] | undefined): string | undefin
  * hub-inbox, and hub-portfolio. All are gated by `ctx.userId` (token sub only;
  * no per-org actor resolution needed for cross-org personal surfaces).
  */
-export function registerStaticResources(server: McpServer, ctx: McpContext): void {
+export function registerStaticResources(server: McpRegistrar, ctx: McpContext): void {
   server.registerResource(
     'orgs',
     'docket://orgs',

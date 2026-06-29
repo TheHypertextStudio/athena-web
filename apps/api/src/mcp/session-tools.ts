@@ -1,6 +1,6 @@
 import { agent, agentSession, db, sessionActivity, task } from '@docket/db';
 import { SessionTrigger } from '@docket/types';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpRegistrar } from './catalog';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 
@@ -10,7 +10,7 @@ import { jsonResult, runTool, scopedActor, authorize } from './result';
 import { cancelSession, replyToElicitation, resolveSessionAction } from './tools-shared';
 
 /** Register trigger_agent, respond_to_session, approve_action, reject_action, cancel_session. */
-export function registerSessionTools(server: McpServer, ctx: McpContext): void {
+export function registerSessionTools(server: McpRegistrar, ctx: McpContext): void {
   server.registerTool(
     'trigger_agent',
     {

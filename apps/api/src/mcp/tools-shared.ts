@@ -4,6 +4,7 @@ export {
   loadTask,
   resolveStateTransition,
   runEntityQuery,
+  searchEntities,
   subjectTable,
   wouldCreateCycle,
 } from './tools-shared-queries';

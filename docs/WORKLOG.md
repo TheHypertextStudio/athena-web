@@ -11,6 +11,27 @@
 
 ## Completed Tasks
 
+### [MCP-PAGE-007] MCP pagination protocol support
+
+- **Completed**: 2026-06-29
+- **Summary**: Added catalog-backed MCP cursor pagination for `tools/list`,
+  `resources/list`, `resources/templates/list`, and `prompts/list`; added opaque cursor
+  pagination to the `run_view` and `search` tools. The implementation keeps the SDK as the
+  execution/read/prompt engine while Docket records list metadata in a small typed catalog and
+  installs cursor-aware list handlers.
+- **Files Changed**: `apps/api/src/mcp/{catalog,list-metadata,list-pagination,server,tools-shared,tools-shared-queries,view-plan-tools}.ts`,
+  `apps/api/tests/mcp/mcp-surface.test.ts`.
+- **Learnings**: MCP protocol-list pagination is not automatic in the SDK's high-level
+  registration API; a Docket-owned catalog is the durable way to paginate lists without reading
+  SDK private fields. Keyset cursors must order by the same `(createdAt,id)` tuple they encode,
+  otherwise same-timestamp rows can duplicate across pages.
+- **Gate**: Touched-file ESLint passed. `pnpm exec vitest run tests/mcp/mcp-surface.test.ts
+tests/mcp/mcp-auth.test.ts tests/mcp/mcp.test.ts tests/mcp/mcp-tools.test.ts
+tests/mcp/mcp-scope.test.ts` is currently blocked by unrelated dirty DB schema drift
+  (`hub.deletion_state` exists in the Drizzle schema but not the migrated PGlite test DB).
+  `pnpm --filter @docket/api typecheck` is blocked by an unrelated existing
+  `tests/account/export.test.ts` assertion mismatch.
+
 ### [AUTH-003] Browser-facing Better Auth baseURL + oAuthProxy + setup URL split
 
 - **Completed**: 2026-06-29

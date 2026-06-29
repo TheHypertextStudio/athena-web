@@ -26,7 +26,7 @@ import { ok } from '../lib/ok';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 
-import { afterCursor, decodeListCursor, pageResult } from '../lib/list-cursor';
+import { pageResult, seekAfter } from '../lib/list-cursor';
 import {
   committedTasks,
   committedTasksForCycles,
@@ -50,13 +50,10 @@ const cycles = new Hono<AppEnv>()
 
     // Keyset-paginate the roster (newest-first by start, id as tiebreak). `limit` is optional:
     // omitted, the full roster is returned as before; supplied, a bounded page + `nextCursor`.
-    const conds = [eq(cycle.organizationId, orgId)];
-    const decoded = decodeListCursor(cursor);
-    if (decoded) conds.push(afterCursor(cycle.startsAt, cycle.id, decoded));
     const base = db
       .select()
       .from(cycle)
-      .where(and(...conds))
+      .where(and(eq(cycle.organizationId, orgId), seekAfter(cycle.startsAt, cycle.id, cursor)))
       .orderBy(desc(cycle.startsAt), desc(cycle.id));
     const rows = await (limit === undefined ? base : base.limit(limit + 1));
     const { items: pageRows, nextCursor } = pageResult(rows, limit, (r) => r.startsAt);

@@ -161,7 +161,7 @@ Runtime env vars are split between Secret Manager (sensitive) and Cloud Run env 
 
 **From Cloud Run env vars** (set at deploy time from GitHub `vars.*`):
 
-`NODE_ENV`, `APP_MODE`, `API_URL`, `BETTER_AUTH_URL`, `BETTER_AUTH_TRUSTED_ORIGINS`, `BETTER_AUTH_PASSKEY_RP_ID`, `BETTER_AUTH_PASSKEY_RP_NAME`, `BILLING_ENABLED`, `MCP_TASKS_ENABLED`, `MCP_CIMD_STRICT`
+`NODE_ENV`, `APP_MODE`, `API_URL`, `BETTER_AUTH_URL`, `BETTER_AUTH_TRUSTED_ORIGINS`, `BETTER_AUTH_ALLOWED_HOSTS` (optional — host allowlist that switches Better Auth to a dynamic per-request base URL for previews/multi-domain; unset ⇒ static `BETTER_AUTH_URL`), `BETTER_AUTH_PASSKEY_RP_ID`, `BETTER_AUTH_PASSKEY_RP_NAME`, `BILLING_ENABLED`, `MCP_TASKS_ENABLED`, `MCP_CIMD_STRICT`
 
 ### Next.js services (web, admin)
 

@@ -95,6 +95,16 @@ export const CORE_VARS: readonly VarSpec[] = [
     where: 'CSV of trusted browser origins for CORS + cookies',
   },
   {
+    name: 'BETTER_AUTH_ALLOWED_HOSTS',
+    slice: 'auth',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: authServer.BETTER_AUTH_ALLOWED_HOSTS,
+    where:
+      'CSV of host patterns Better Auth issues cookies/redirects for (wildcards ok, e.g. *.vercel.app); enables dynamic base URL when set',
+  },
+  {
     name: 'BETTER_AUTH_PASSKEY_RP_ID',
     slice: 'auth',
     scope: 'server',

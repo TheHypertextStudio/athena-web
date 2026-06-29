@@ -1,5 +1,5 @@
 import type { LucideIcon } from '@docket/ui/icons';
-import { Cable, Link, ListChecks, Translate, Trash2 } from '@docket/ui/icons';
+import { Cable, Inbox, Link, ListChecks, Translate, Trash2, Users } from '@docket/ui/icons';
 
 /** A settings section's availability: a live routed page, or a planned ("coming soon") stub. */
 export type SectionStatus = 'available' | 'coming-soon';
@@ -34,11 +34,19 @@ export const PERSONAL_SETTINGS_SECTION_GROUPS: readonly SettingsSectionGroup[] =
         status: 'available',
       },
       {
-        key: 'integrations',
-        label: 'Integrations & import',
-        description: 'Connect your tools and bring your existing work into Docket.',
+        key: 'connections',
+        label: 'Connections',
+        description: 'Connect a tool to keep it in sync with Docket.',
         icon: Cable,
-        href: 'integrations',
+        href: 'connections',
+        status: 'available',
+      },
+      {
+        key: 'import',
+        label: 'Import',
+        description: 'Move everything from another tool into Docket, once.',
+        icon: Inbox,
+        href: 'import',
         status: 'available',
       },
       {
@@ -62,6 +70,14 @@ export const PERSONAL_SETTINGS_SECTION_GROUPS: readonly SettingsSectionGroup[] =
   {
     label: 'Account',
     sections: [
+      {
+        key: 'connected-accounts',
+        label: 'Connected accounts',
+        description: 'The external accounts (Google, …) linked to your Docket identity.',
+        icon: Users,
+        href: 'connected-accounts',
+        status: 'available',
+      },
       {
         key: 'danger',
         label: 'Danger zone',

@@ -1,15 +1,16 @@
-import { actor, db } from '@docket/db';
+import { account, actor, db, user } from '@docket/db';
 import type { integration, task } from '@docket/db';
 import { auth } from '@docket/auth';
-import type { IntegrationOut, TaskOut } from '@docket/types';
+import type { IdentityOut, IntegrationOut, TaskOut } from '@docket/types';
 import { type IntegrationDirectoryProvider } from '@docket/types';
 import type { ConnectorProvider } from '@docket/boundaries';
 import { selectAdapter } from '@docket/boundaries';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { z } from 'zod';
 
 import { toBoundaryEnv } from '../container';
 import { env } from '../env';
+import { decodeIdTokenClaims } from '../lib/id-token';
 
 /** IntegrationRow is the selected database row shape consumed by these API route serializers. */
 export type IntegrationRow = typeof integration.$inferSelect;
@@ -113,6 +114,12 @@ export type ConnectorTokenResult =
 export type AccessTokenFetcher = (input: {
   readonly providerId: string;
   readonly userId: string;
+  /**
+   * The provider account to fetch the token for, disambiguating when a user has linked multiple
+   * accounts of the same provider (e.g. several Google accounts). Omitted ⇒ the user's single
+   * grant for that provider.
+   */
+  readonly accountId?: string;
 }) => Promise<{ readonly accessToken?: string | null }>;
 
 /** The production {@link AccessTokenFetcher}: Better Auth's server-side token endpoint. */
@@ -134,11 +141,14 @@ const defaultAccessTokenFetcher: AccessTokenFetcher = (input) =>
  * @param actorId - The Actor whose linked provider grant should be used.
  * @param provider - The connector provider whose token is needed.
  * @param fetchAccessToken - Token fetcher; defaults to {@link defaultAccessTokenFetcher}.
+ * @param externalAccountId - The bound provider account (e.g. Google `sub`) to disambiguate which
+ *   of a user's same-provider grants to use; null/undefined ⇒ the single grant.
  */
 export async function resolveLiveConnectorToken(
   actorId: string,
   provider: ConnectorProvider,
   fetchAccessToken: AccessTokenFetcher = defaultAccessTokenFetcher,
+  externalAccountId?: string | null,
 ): Promise<ConnectorTokenResult> {
   const providerId = socialProviderId(provider);
   const needsReauth = {
@@ -156,7 +166,11 @@ export async function resolveLiveConnectorToken(
   if (!userId) return needsReauth;
 
   try {
-    const result = await fetchAccessToken({ providerId, userId });
+    const result = await fetchAccessToken({
+      providerId,
+      userId,
+      ...(externalAccountId ? { accountId: externalAccountId } : {}),
+    });
     if (!result.accessToken) return needsReauth;
     return { ok: true, token: result.accessToken };
   } catch {
@@ -178,15 +192,108 @@ export async function resolveLiveConnectorToken(
  * @param actorId - The Actor whose linked provider grant should be used (e.g. the integration's
  *   `createdBy` for a background run, or the request actor for a manual one).
  * @param provider - The connector provider whose token is needed.
+ * @param externalAccountId - The integration's bound provider account, threaded through so the
+ *   correct grant is used when a user linked several accounts of the same provider.
  */
 export async function resolveConnectorToken(
   actorId: string,
   provider: ConnectorProvider,
+  externalAccountId?: string | null,
 ): Promise<ConnectorTokenResult> {
   const mode = env.APP_MODE;
   if (mode === 'local' || mode === 'test') return { ok: true, token: 'mock' };
 
-  return resolveLiveConnectorToken(actorId, provider);
+  return resolveLiveConnectorToken(actorId, provider, defaultAccessTokenFetcher, externalAccountId);
+}
+
+/**
+ * List the user's linked Google identities (the external accounts they authorized), each labeled
+ * by the email decoded from its stored OIDC id token.
+ *
+ * @remarks
+ * Identities are user-scoped — the OAuth grant belongs to the Docket user, not an org. In
+ * `APP_MODE` local/test there is no real Google grant (sign-up is passwordless/passkey), so a
+ * single synthetic identity labeled with the user's own email is returned, keeping the link/pick
+ * flow exercisable offline. The email comes from `account.idToken` (not a column), so it must be
+ * resolved here rather than client-side.
+ *
+ * @param userId - The Docket user whose linked identities to list.
+ */
+export async function googleIdentities(userId: string): Promise<IdentityOut[]> {
+  const rows = await db
+    .select({
+      accountId: account.accountId,
+      idToken: account.idToken,
+      scope: account.scope,
+      createdAt: account.createdAt,
+    })
+    .from(account)
+    .where(and(eq(account.userId, userId), eq(account.providerId, 'google')));
+
+  const identities: IdentityOut[] = rows.map((row) => {
+    const claims = decodeIdTokenClaims(row.idToken);
+    return {
+      accountId: row.accountId,
+      provider: 'google',
+      email: claims.email,
+      name: claims.name,
+      picture: claims.picture,
+      scopes: (row.scope ?? '')
+        .split(' ')
+        .map((s) => s.trim())
+        .filter(Boolean),
+      linkedAt: row.createdAt.toISOString(),
+    };
+  });
+  if (identities.length > 0) return identities;
+
+  const mode = env.APP_MODE;
+  if (mode === 'local' || mode === 'test') {
+    const u = await db
+      .select({ email: user.email, name: user.name })
+      .from(user)
+      .where(eq(user.id, userId))
+      .limit(1);
+    return [
+      {
+        accountId: 'mock-google',
+        provider: 'google',
+        email: u[0]?.email ?? 'you@gmail.com',
+        name: u[0]?.name ?? null,
+        picture: null,
+        scopes: ['https://www.googleapis.com/auth/tasks'],
+        linkedAt: new Date().toISOString(),
+      },
+    ];
+  }
+  return identities;
+}
+
+/**
+ * Resolve the display label (email) of the identity an integration is bound to.
+ *
+ * @remarks
+ * Stamps `integration.connection.account` with the account's EMAIL at verify time — replacing the
+ * old gtasks label which was a task-list *title* (a resource), conflating account with resource.
+ * Reuses the Actor → Better Auth `user` mapping.
+ *
+ * @param actorId - The actor owning the integration.
+ * @param externalAccountId - The bound Google `sub`, or null for a legacy single-account row.
+ */
+export async function resolveIdentityLabel(
+  actorId: string,
+  externalAccountId: string | null,
+): Promise<string | undefined> {
+  if (!externalAccountId) return undefined;
+  const rows = await db
+    .select({ userId: actor.userId })
+    .from(actor)
+    .where(eq(actor.id, actorId))
+    .limit(1);
+  const userId = rows[0]?.userId;
+  if (!userId) return undefined;
+  const match = (await googleIdentities(userId)).find((i) => i.accountId === externalAccountId);
+  return match?.email ?? match?.name ?? undefined;
 }
 
 /**
@@ -214,6 +321,7 @@ export function toOut(i: IntegrationRow): z.input<typeof IntegrationOut> {
     connection: i.connection,
     status: i.status,
     config: i.config,
+    externalAccountId: i.externalAccountId,
     syncMode: i.syncMode,
     writeBack: i.writeBack,
     lastSyncStatus: i.lastSyncStatus,

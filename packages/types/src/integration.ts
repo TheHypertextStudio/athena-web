@@ -51,6 +51,57 @@ export const IntegrationConnection = z
 export type IntegrationConnection = z.infer<typeof IntegrationConnection>;
 
 /**
+ * Per-connector sync configuration, stored in the integration's freeform `config` jsonb but
+ * validated to this shape at the route for two-way connectors (Google Tasks).
+ *
+ * @remarks
+ * - `teamId`/`projectId` — where mirrored linked tasks land (see `resolveImportTeam`).
+ * - `listIds` — which external task lists to sync (empty/absent = all lists).
+ * - `defaultListId` — the external list a pushed native task is created in.
+ * - `pushNativeTasks` — opt-in: also push `native` Docket tasks in the target team out to the
+ *   provider as new external tasks (default off, to avoid surprising bulk creation).
+ */
+export const ConnectorConfig = z
+  .object({
+    teamId: z.string().optional(),
+    projectId: z.string().optional(),
+    listIds: z.array(z.string()).optional(),
+    defaultListId: z.string().optional(),
+    pushNativeTasks: z.boolean().optional(),
+  })
+  .meta({
+    id: 'ConnectorConfig',
+    description: 'Per-connector sync configuration (task lists, target team, write-back options).',
+  });
+/** Validated connector-config value. */
+export type ConnectorConfig = z.infer<typeof ConnectorConfig>;
+
+/** A selectable external container (e.g. a Google Tasks list) offered in the config UI. */
+export const ConnectorResourceRef = z
+  .object({
+    id: z.string(),
+    title: z.string(),
+  })
+  .meta({
+    id: 'ConnectorResourceRef',
+    description: 'A selectable external container (task list).',
+  });
+/** Connector-resource-ref value. */
+export type ConnectorResourceRef = z.infer<typeof ConnectorResourceRef>;
+
+/** The set of external containers a connector can sync from (e.g. Google Tasks lists). */
+export const ConnectorResourceListOut = z
+  .object({
+    resources: z.array(ConnectorResourceRef),
+  })
+  .meta({
+    id: 'ConnectorResourceListOut',
+    description: 'External containers (task lists) the connector exposes for selection.',
+  });
+/** Connector-resource-list value. */
+export type ConnectorResourceListOut = z.infer<typeof ConnectorResourceListOut>;
+
+/**
  * Body for creating an Integration (organizationId comes from the path, never the body).
  *
  * @remarks
@@ -66,6 +117,11 @@ export const IntegrationCreate = z
     config: z.record(z.string(), z.unknown()).optional(),
     syncMode: SyncMode.optional(),
     writeBack: z.boolean().optional(),
+    /**
+     * The provider account this integration binds to (Google `sub`), letting one org link
+     * multiple accounts of the same provider. Used to disambiguate the OAuth grant at sync time.
+     */
+    externalAccountId: z.string().optional(),
   })
   .meta({ id: 'IntegrationCreate', description: 'Create an integration within an organization.' });
 /** Validated integration-create body. */
@@ -162,6 +218,8 @@ export const IntegrationOut = z
     connection: IntegrationConnection,
     status: IntegrationStatus,
     config: z.record(z.string(), z.unknown()),
+    /** The bound provider account (Google `sub`); null for single-account/legacy integrations. */
+    externalAccountId: z.string().nullable(),
     syncMode: SyncMode,
     /** Whether this connector also writes Docket changes back to the provider (two-way sync). */
     writeBack: z.boolean(),

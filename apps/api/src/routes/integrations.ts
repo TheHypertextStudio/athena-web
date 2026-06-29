@@ -1,6 +1,7 @@
 /** `@docket/api` — integrations router (mounted at `/v1/orgs/:orgId/integrations`). */
 import { db, integration, syncRun } from '@docket/db';
 import {
+  ConnectorResourceListOut,
   IntegrationCreate,
   IntegrationDirectoryOut,
   IntegrationOut,
@@ -10,7 +11,7 @@ import {
   TaskOut,
 } from '@docket/types';
 import type { ImportedItem } from '@docket/boundaries';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, isNull } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
@@ -28,6 +29,7 @@ import {
   connectorFor,
   type IntegrationRow,
   resolveConnectorToken,
+  resolveIdentityLabel,
   socialProviderId,
   toOut,
 } from './integration-provider';
@@ -90,13 +92,28 @@ const integrations = new Hono<AppEnv>()
       ...(body.connection !== undefined ? { connection: body.connection } : {}),
       ...(body.config !== undefined ? { config: body.config } : {}),
       ...(body.syncMode !== undefined ? { syncMode: body.syncMode } : {}),
+      ...(body.externalAccountId !== undefined
+        ? { externalAccountId: body.externalAccountId }
+        : {}),
       writeBack,
     };
 
+    // Reconnect is idempotent per (org, provider, account): with an `externalAccountId` an org can
+    // link several accounts of the same provider (one integration each); without one we preserve
+    // the original single-account behavior (match the row that also has no bound account).
+    const accountMatch = body.externalAccountId
+      ? eq(integration.externalAccountId, body.externalAccountId)
+      : isNull(integration.externalAccountId);
     const existing = await db
       .select({ id: integration.id })
       .from(integration)
-      .where(and(eq(integration.organizationId, orgId), eq(integration.provider, body.provider)))
+      .where(
+        and(
+          eq(integration.organizationId, orgId),
+          eq(integration.provider, body.provider),
+          accountMatch,
+        ),
+      )
       .limit(1);
 
     if (existing[0]) {
@@ -136,6 +153,26 @@ const integrations = new Hono<AppEnv>()
     const { id } = c.req.valid('param');
     const row = await loadIntegration(orgId, id);
     return ok(c, IntegrationOut, toOut(row));
+  })
+  .get('/:id/lists', capabilityGuard('manage'), zParam(idParam), async (c) => {
+    const { orgId, actorId } = c.get('actorCtx');
+    const { id } = c.req.valid('param');
+    const row = await loadIntegration(orgId, id);
+
+    const provider = asConnectorProvider(row.provider);
+    if (!provider) throw new ConflictError('Integration provider has no selectable lists');
+
+    // Enumerating the provider's task lists needs a live credential, so a broken connection
+    // surfaces here as a real reason (not an empty list that looks like "no lists").
+    const tokenResult = await resolveConnectorToken(actorId, provider, row.externalAccountId);
+    if (!tokenResult.ok) throw new ConflictError(tokenResult.message);
+
+    const resources =
+      (await connectorFor(provider, tokenResult.token).listContainers?.({
+        connectionId: row.id,
+        provider,
+      })) ?? [];
+    return ok(c, ConnectorResourceListOut, { resources });
   })
   .get('/:id/runs', zParam(idParam), async (c) => {
     const { orgId } = c.get('actorCtx');
@@ -193,7 +230,7 @@ const integrations = new Hono<AppEnv>()
     // The ONLY place that promotes an integration to `connected` at connect time: a credential
     // must actually resolve the external account here. Failures are recorded as `error` with a
     // real reason and returned as 200 (the truthful integration state), never thrown away.
-    const tokenResult = await resolveConnectorToken(actorId, provider);
+    const tokenResult = await resolveConnectorToken(actorId, provider, row.externalAccountId);
     if (!tokenResult.ok) {
       const updated = await setIntegration(id, {
         status: 'error',
@@ -212,13 +249,18 @@ const integrations = new Hono<AppEnv>()
           : {}),
       });
       if (result.status !== 'connected') throw new Error('Connection check did not succeed');
+      // Label the connection by the linked IDENTITY (the account's email), not a resource. The
+      // gtasks connector no longer returns a label (it used to return a task-list title), so the
+      // identity email — resolved from the bound account's id token — is the source of truth.
+      const identityLabel = await resolveIdentityLabel(actorId, row.externalAccountId);
+      const account = identityLabel ?? result.account;
       const updated = await setIntegration(id, {
         status: 'connected',
         lastError: null,
         lastErrorAt: null,
         connection: {
           ...row.connection,
-          ...(result.account !== undefined ? { account: result.account } : {}),
+          ...(account !== undefined ? { account } : {}),
         },
       });
       return ok(c, IntegrationOut, toOut(updated));
@@ -247,7 +289,7 @@ const integrations = new Hono<AppEnv>()
       const provider = asConnectorProvider(row.provider);
       if (!provider) throw new ConflictError('Integration provider does not support import');
 
-      const tokenResult = await resolveConnectorToken(actorId, provider);
+      const tokenResult = await resolveConnectorToken(actorId, provider, row.externalAccountId);
       if (!tokenResult.ok) {
         await setIntegration(id, {
           status: 'error',

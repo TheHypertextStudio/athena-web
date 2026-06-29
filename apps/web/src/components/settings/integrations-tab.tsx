@@ -1,20 +1,18 @@
 'use client';
 
 /**
- * `settings` — the Integrations tab.
+ * `settings` — the integrations surface, shared by **Connections** and **Import**.
  *
  * @remarks
- * A categorized directory of the providers Docket can connect to (from
- * `…/integrations/directory`), cross-referenced with the org's existing integrations (from
- * `…/integrations`). Every state shown is the SERVER's truth — a card is "Connected" only after
- * `POST /:id/verify` actually validated the credential, and a failed connection/sync surfaces
- * its persisted `lastError` (which survives reload), never a fabricated or ephemeral state.
+ * Two sibling settings sections render this one component, differing only by `surface`:
+ * - **Connections** (`surface='connections'`) — connect a tool to keep it in *live sync*; the tool
+ *   stays the source of truth and Docket mirrors it. Includes the Google Tasks identity surface.
+ * - **Import** (`surface='import'`) — a *one-time* full import / migration; Docket becomes the
+ *   source of truth.
  *
- * Connecting is a two-beat, validate-before-connected flow: create the integration (`pending`),
- * then either run the provider's OAuth consent redirect (production) or validate directly
- * against the mock connector (local) before anything reads as connected.
- *
- * Data is fetched at runtime, so the production build needs no running server.
+ * The pattern is fixed by the surface (no inline "Migration vs Connector" choice). Every state
+ * shown is the SERVER's truth — a card reads "Connected" only after `POST /:id/verify` validated
+ * the credential. Data is fetched at runtime, so the production build needs no running server.
  */
 import type {
   IntegrationDirectoryProvider,
@@ -22,9 +20,11 @@ import type {
   IntegrationPattern,
   IntegrationRole,
   SyncRunOut,
+  TeamOut,
 } from '@docket/types';
 import { Skeleton } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
+import NextLink from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import type { JSX } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -35,12 +35,52 @@ import { readError } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
 
 import { DisconnectConfirmDialog } from './disconnect-confirm-dialog';
+import { GtasksAccountsSection } from './gtasks-accounts-section';
 import { IntegrationProviderCard } from './integration-provider-card';
 import {
   categoryLabel,
+  connectorAvailable,
   connectorOAuthConfigured,
   socialProviderForConnector,
 } from './integrations-config';
+
+/** The provider rendered as its own multi-account identity surface (Connections only). */
+const MULTI_ACCOUNT_PROVIDER = 'gtasks';
+
+/** Which integration surface this instance renders. */
+export type IntegrationSurface = 'connections' | 'import';
+
+/** Per-surface copy + the connect pattern it creates. */
+const SURFACE: Record<
+  IntegrationSurface,
+  {
+    pattern: IntegrationPattern;
+    actionLabel: string;
+    connectHint: string;
+    intro: string;
+    crossHref: 'connections' | 'import';
+    crossText: string;
+  }
+> = {
+  connections: {
+    pattern: 'connector',
+    actionLabel: 'Connect',
+    connectHint: 'Keep it in sync',
+    intro:
+      'Connect a tool to keep it in sync with Docket. The tool stays the source of truth; Docket mirrors your work.',
+    crossHref: 'import',
+    crossText: 'Moving off a tool entirely? Import it →',
+  },
+  import: {
+    pattern: 'migration',
+    actionLabel: 'Import',
+    connectHint: 'One-time full import',
+    intro:
+      'Import everything from another tool into Docket, once. Docket becomes the source of truth and the tool can be retired.',
+    crossHref: 'connections',
+    crossText: 'Want to keep a tool in sync instead? Connect it →',
+  },
+};
 
 /** Props for {@link IntegrationsTab}. */
 export interface IntegrationsTabProps {
@@ -48,27 +88,17 @@ export interface IntegrationsTabProps {
   orgId: string;
   /** Whether the caller can connect integrations. */
   canManage: boolean;
-  /**
-   * Whether the active workspace is the caller's personal space (`OrgSummary.isPersonal`).
-   *
-   * @remarks
-   * Purely presentational: a personal workspace has no team, so the intro copy reads "the tools
-   * you already use" rather than "the tools your team already uses". Defaults to `false`.
-   */
-  isPersonal?: boolean;
+  /** Which surface to render. */
+  surface: IntegrationSurface;
 }
 
-/** IntegrationsTab renders the settings UI control for its parent workflow. */
-export function IntegrationsTab({
-  orgId,
-  canManage,
-  isPersonal = false,
-}: IntegrationsTabProps): JSX.Element {
+/** The integrations surface (Connections or Import), driven by the server's truth. */
+export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabProps): JSX.Element {
+  const cfg = SURFACE[surface];
   const qc = useQueryClient();
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const [openProvider, setOpenProvider] = useState<string | null>(null);
   const [busyProvider, setBusyProvider] = useState<string | null>(null);
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
@@ -93,9 +123,17 @@ export function IntegrationsTab({
       'Could not load integrations.',
     ),
   );
+  const teamsQ = useApiQuery(
+    apiQueryOptions(
+      queryKeys.teams(orgId),
+      () => api.v1.orgs[':orgId'].teams.$get({ param: { orgId } }),
+      'Could not load teams.',
+    ),
+  );
 
   const directory: readonly IntegrationDirectoryProvider[] = directoryQ.data?.providers ?? [];
   const integrations: readonly IntegrationOut[] = integrationsQ.data?.items ?? [];
+  const teams: readonly TeamOut[] = teamsQ.data?.items ?? [];
   const loading = directoryQ.isPending;
   const loadError = directoryQ.isError ? directoryQ.error.message : null;
 
@@ -109,17 +147,16 @@ export function IntegrationsTab({
   );
 
   /**
-   * Validate (or repair) a connection: in production launch the provider's OAuth consent
-   * redirect (which returns to this page with `?verify=<id>`); in local/mock dev validate
-   * directly. Only a successful validation lets the card read as connected.
+   * Validate (or repair) a connection: in production launch the provider's OAuth consent redirect
+   * (returning with `?verify=<id>`); in local/mock dev validate directly. Only a successful
+   * validation lets the card read as connected.
    */
   const finishConnection = useCallback(
     async (id: string, provider: string): Promise<void> => {
       if (connectorOAuthConfigured(provider)) {
-        const callbackURL = `${window.location.pathname}?verify=${id}`;
         await authClient.linkSocial({
           provider: socialProviderForConnector(provider),
-          callbackURL,
+          callbackURL: `${window.location.pathname}?verify=${id}`,
         });
         return; // the browser redirects to the provider's consent screen
       }
@@ -135,13 +172,9 @@ export function IntegrationsTab({
     [orgId, refreshIntegrations, setActionError],
   );
 
-  /** Create a brand-new integration (pending), then validate it before it reads as connected. */
+  /** Create a brand-new integration (pending) with this surface's pattern, then validate it. */
   const runConnect = useCallback(
-    async (
-      provider: string,
-      pattern: IntegrationPattern,
-      roles: readonly IntegrationRole[],
-    ): Promise<void> => {
+    async (provider: string, roles: readonly IntegrationRole[]): Promise<void> => {
       setBusyProvider(provider);
       setActionError(provider, null);
       try {
@@ -151,15 +184,14 @@ export function IntegrationsTab({
               param: { orgId },
               json: {
                 provider,
-                pattern,
+                pattern: cfg.pattern,
                 ...(roles.length > 0 ? { roles: [...roles] } : {}),
-                syncMode: pattern === 'migration' ? 'import' : 'mirror',
+                syncMode: cfg.pattern === 'migration' ? 'import' : 'mirror',
               },
             }),
           'Could not connect this integration.',
         );
         await refreshIntegrations();
-        setOpenProvider(null);
         await finishConnection(created.id, provider);
       } catch (err) {
         setActionError(provider, readError(err, 'Could not connect this integration.'));
@@ -167,7 +199,7 @@ export function IntegrationsTab({
         setBusyProvider(null);
       }
     },
-    [orgId, finishConnection, refreshIntegrations, setActionError],
+    [orgId, cfg.pattern, finishConnection, refreshIntegrations, setActionError],
   );
 
   /** Finish/repair an existing integration's connection. */
@@ -186,27 +218,25 @@ export function IntegrationsTab({
     [finishConnection, setActionError],
   );
 
-  // OAuth return: the consent redirect lands back here with `?verify=<id>`. Validate that
-  // integration, refresh, then strip the param so a reload doesn't re-run it. `verify` is
-  // idempotent, so a StrictMode double-invoke or redundant replace is harmless.
+  // OAuth return: the consent redirect lands back with `?verify=<id>`. Re-validate through the
+  // write path (never fetch `api.v1.*` directly inside an effect — data-layer rule), then strip.
+  const verifyReturn = useApiMutation({
+    mutationFn: (id: string) =>
+      unwrap(
+        () => api.v1.orgs[':orgId'].integrations[':id'].verify.$post({ param: { orgId, id } }),
+        'Could not validate this connection.',
+      ),
+    invalidateKeys: [queryKeys.integrations(orgId)],
+  });
   const verifyReturnId = searchParams.get('verify');
   useEffect(() => {
     if (!verifyReturnId) return;
-    void (async () => {
-      try {
-        await unwrap(
-          () =>
-            api.v1.orgs[':orgId'].integrations[':id'].verify.$post({
-              param: { orgId, id: verifyReturnId },
-            }),
-          'Could not validate this connection.',
-        );
-        await refreshIntegrations();
-      } finally {
+    verifyReturn.mutate(verifyReturnId, {
+      onSettled: () => {
         router.replace(window.location.pathname);
-      }
-    })();
-  }, [verifyReturnId, orgId, refreshIntegrations, router]);
+      },
+    });
+  }, [verifyReturnId, router]);
 
   const sync = useApiMutation({
     mutationFn: (id: string) =>
@@ -216,8 +246,6 @@ export function IntegrationsTab({
       ),
     onSuccess: (data: SyncRunOut, id: string) => {
       setSyncingId(null);
-      // A failed run already persisted `status: error` + `lastError` on the integration, so the
-      // invalidation below repaints the card from that server truth — no ephemeral error needed.
       if (data.status === 'failed') return;
       const count = data.processed;
       const msg = count === 0 ? 'Up to date.' : `Synced ${count} item${count === 1 ? '' : 's'}.`;
@@ -254,25 +282,38 @@ export function IntegrationsTab({
   });
 
   const byProvider = useMemo(() => {
-    const map = new Map<string, IntegrationOut>();
-    for (const integration of integrations) map.set(integration.provider, integration);
+    const map = new Map<string, IntegrationOut[]>();
+    for (const integration of integrations) {
+      const list = map.get(integration.provider);
+      if (list) list.push(integration);
+      else map.set(integration.provider, [integration]);
+    }
     return map;
   }, [integrations]);
 
+  // Only providers whose recommended pattern matches this surface appear here.
   const grouped = useMemo(() => {
     const order: string[] = [];
     const map = new Map<string, IntegrationDirectoryProvider[]>();
     for (const provider of directory) {
+      if (provider.pattern !== cfg.pattern) continue;
       const list = map.get(provider.category);
-      if (list) {
-        list.push(provider);
-      } else {
+      if (list) list.push(provider);
+      else {
         order.push(provider.category);
         map.set(provider.category, [provider]);
       }
     }
     return order.map((category) => ({ category, providers: map.get(category) ?? [] }));
-  }, [directory]);
+  }, [directory, cfg.pattern]);
+
+  const gtasksDirectory = useMemo(
+    () =>
+      surface === 'connections'
+        ? (directory.find((p) => p.provider === MULTI_ACCOUNT_PROVIDER) ?? null)
+        : null,
+    [directory, surface],
+  );
 
   if (loading) {
     return (
@@ -304,15 +345,26 @@ export function IntegrationsTab({
 
   return (
     <div className="flex flex-col gap-6">
-      <p className="text-on-surface-variant text-body leading-relaxed">
-        {isPersonal
-          ? 'Docket connects to the tools you already use'
-          : 'Docket connects to the tools your team already uses'}{' '}
-        — pulling your existing work in. Choose a{' '}
-        <span className="text-on-surface font-medium">Migration</span> to move fully into Docket, or
-        a <span className="text-on-surface font-medium">Connector</span> to mirror a tool that stays
-        the source of truth.
-      </p>
+      <div className="flex flex-col gap-1">
+        <p className="text-on-surface-variant text-body leading-relaxed">{cfg.intro}</p>
+        <NextLink
+          href={`/orgs/${orgId}/settings/${cfg.crossHref}`}
+          className="text-primary text-body w-fit font-medium hover:underline"
+        >
+          {cfg.crossText}
+        </NextLink>
+      </div>
+
+      {gtasksDirectory ? (
+        <GtasksAccountsSection
+          orgId={orgId}
+          canManage={canManage}
+          directory={gtasksDirectory}
+          accounts={byProvider.get(MULTI_ACCOUNT_PROVIDER) ?? []}
+          teams={teams}
+          loading={integrationsQ.isPending}
+        />
+      ) : null}
 
       {grouped.map(({ category, providers }) => (
         <section
@@ -323,26 +375,25 @@ export function IntegrationsTab({
           <h2 className="text-on-surface-variant text-xs font-medium">{categoryLabel(category)}</h2>
           <ul className="flex flex-col gap-2">
             {providers.map((provider) => {
-              const existing = byProvider.get(provider.provider);
-              const isOpen = openProvider === provider.provider;
+              // Google Tasks renders in its own identity section (above), not as a card here.
+              if (provider.provider === MULTI_ACCOUNT_PROVIDER) return null;
+              const existing = byProvider.get(provider.provider)?.[0];
               return (
                 <IntegrationProviderCard
                   key={provider.provider}
                   provider={provider}
                   existing={existing}
-                  isOpen={isOpen}
                   canManage={canManage}
+                  available={connectorAvailable(provider.provider)}
+                  actionLabel={cfg.actionLabel}
+                  connectHint={cfg.connectHint}
                   busy={busyProvider === provider.provider}
                   syncing={existing ? syncingId === existing.id : false}
                   disconnecting={existing ? disconnectingId === existing.id : false}
                   syncFeedback={existing ? (syncFeedback[existing.id] ?? null) : null}
                   actionError={actionErrors[provider.provider] ?? null}
-                  onToggleOpen={() => {
-                    setActionError(provider.provider, null);
-                    setOpenProvider(isOpen ? null : provider.provider);
-                  }}
-                  onConnect={(pattern) => {
-                    void runConnect(provider.provider, pattern, provider.roles);
+                  onConnect={() => {
+                    void runConnect(provider.provider, provider.roles);
                   }}
                   onReconnect={() => {
                     if (existing) void runReconnect(existing);

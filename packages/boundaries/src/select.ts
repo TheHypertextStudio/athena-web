@@ -30,6 +30,7 @@ import { RealStripeGateway } from './real/billing';
 import { RealProviderRuntime } from './real/agent-runtime';
 import { RealConnector } from './real/connector';
 import { RealLinearObserver } from './real/observer-linear';
+import { RealGitHubObserver } from './real/observer-github';
 import { RealSummarizer } from './real/summarizer';
 import { SmtpMailer, smtpConfigFromEnv } from './real/mailer';
 import { RealBlob } from './real/blob';
@@ -56,6 +57,8 @@ export interface BoundaryEnv {
   readonly ANTHROPIC_API_KEY?: string;
   /** App-level Linear webhook signing secret — selects {@link RealLinearObserver} when real-shaped. */
   readonly LINEAR_WEBHOOK_SECRET?: string;
+  /** App-level GitHub App webhook signing secret — selects {@link RealGitHubObserver} when real-shaped. */
+  readonly GITHUB_APP_WEBHOOK_SECRET?: string;
   /** SMTP relay host — selects {@link SmtpMailer} when present with {@link BoundaryEnv.MAIL_FROM}. */
   readonly SMTP_HOST?: string;
   /** SMTP port (string form; 587 STARTTLS, 465 implicit TLS, 1025 Mailpit). */
@@ -143,6 +146,8 @@ function observerSecret(provider: ConnectorProvider, env: BoundaryEnv): string |
   switch (provider) {
     case 'linear':
       return env.LINEAR_WEBHOOK_SECRET;
+    case 'github':
+      return env.GITHUB_APP_WEBHOOK_SECRET;
     default:
       return undefined;
   }
@@ -250,14 +255,19 @@ export function selectAdapter<P extends PortName>(
       return adapter as PortMap[P];
     }
     case 'observer': {
-      // Bound to one provider (like the connector). Only Linear has a real observer today;
-      // it verifies with the app-level `LINEAR_WEBHOOK_SECRET`. Anything else uses the mock.
+      // Bound to one provider (like the connector). Linear and GitHub have real observers, each
+      // verifying with its own app-level webhook secret; anything else uses the mock.
       const provider = options.observerProvider ?? 'linear';
       const secret = observerSecret(provider, env);
-      const useReal = !mock && provider === 'linear' && isRealValue(secret);
-      const adapter: Observer = useReal
-        ? new RealLinearObserver({ signingSecret: secret })
-        : new MockObserver({ provider });
+      const useReal = !mock && isRealValue(secret);
+      let adapter: Observer;
+      if (useReal && provider === 'linear') {
+        adapter = new RealLinearObserver({ signingSecret: secret });
+      } else if (useReal && provider === 'github') {
+        adapter = new RealGitHubObserver({ signingSecret: secret });
+      } else {
+        adapter = new MockObserver({ provider });
+      }
       return adapter as PortMap[P];
     }
     case 'summarizer': {

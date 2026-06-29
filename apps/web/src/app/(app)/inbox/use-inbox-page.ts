@@ -8,13 +8,16 @@ import { isApproval } from '@/components/inbox/notification-meta';
 import type { SegmentDef } from '@/components/inbox/segmented-tabs';
 import { api } from '@/lib/api';
 import { readError, readProblem } from '@/lib/problem';
-import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
+import { apiQueryOptions, queryKeys, useLiveApiQuery } from '@/lib/query';
 
 /** The Inbox's two feeds. */
 type InboxTab = 'inbox' | 'activity';
 
 /** The number of activity events pulled per page of the passive awareness feed. */
 const ACTIVITY_PAGE_SIZE = 50;
+
+/** Focus-only poll interval (ms) for the Inbox's live feeds (notifications, approvals, activity). */
+const INBOX_POLL_MS = 15_000;
 
 /** All state + actions the Inbox page needs from the data layer. */
 export interface InboxPageData {
@@ -38,13 +41,14 @@ export interface InboxPageData {
 }
 
 /**
- * Coordinates the Inbox screen via the shared {@link useApiQuery} layer.
+ * Coordinates the Inbox screen via the shared {@link useLiveApiQuery} layer.
  *
  * @remarks
- * Three live queries (notifications list, pending-approval count, activity feed) auto-refetch on
- * window focus + after the 30s stale window, so the page needs no manual Refresh control. The
- * count key is nested under the notifications key, so a single `invalidate(notifications())` after
- * a mutation re-syncs both the list and the count from the server.
+ * Three live queries (notifications list, pending-approval count, activity feed) poll on a short
+ * focus-only interval ({@link INBOX_POLL_MS}) and also refetch on window focus, so new approvals
+ * and activity surface on their own — no manual Refresh control. The count key is nested under the
+ * notifications key, so a single `invalidate(notifications())` after a mutation re-syncs both the
+ * list and the count from the server.
  */
 export function useInboxPage(): InboxPageData {
   const queryClient = useQueryClient();
@@ -53,27 +57,30 @@ export function useInboxPage(): InboxPageData {
   const [markingAll, setMarkingAll] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const inboxQ = useApiQuery(
+  const inboxQ = useLiveApiQuery(
     apiQueryOptions(
       queryKeys.notifications(),
       () => api.v1.notifications.$get({ query: {} }),
       'Could not load your inbox.',
     ),
+    INBOX_POLL_MS,
   );
-  const countQ = useApiQuery(
+  const countQ = useLiveApiQuery(
     apiQueryOptions(
       queryKeys.notificationsCount(),
       () => api.v1.notifications.count.$get(),
       'Could not load your inbox.',
     ),
+    INBOX_POLL_MS,
   );
-  const activityQ = useApiQuery(
+  const activityQ = useLiveApiQuery(
     apiQueryOptions(
       queryKeys.activity(),
       () =>
         api.v1.hub.activity.$get({ query: { limit: String(ACTIVITY_PAGE_SIZE), order: 'desc' } }),
       'Could not load activity.',
     ),
+    INBOX_POLL_MS,
   );
 
   const notifications = useMemo(() => inboxQ.data?.items ?? [], [inboxQ.data]);

@@ -61,6 +61,9 @@ export const baseConfig = tseslint.config(
       '**/node_modules/**',
       '**/dist/**',
       '**/.next/**',
+      // Next.js build output is never linted. Cover backup/corrupt variants the
+      // dev server can leave behind (e.g. `.next.corrupt-bak`) as well.
+      '**/.next.*/**',
       '**/.turbo/**',
       '**/coverage/**',
       '**/drizzle/**',
@@ -73,8 +76,54 @@ export const baseConfig = tseslint.config(
       '**/postcss.config.js',
       '**/next-env.d.ts',
       '**/tooling/eslint-config/**',
+      '**/tooling/vitest/**',
     ],
   },
 );
+
+/**
+ * Data-layer enforcement for the web app (`docs/engineering/specs/data-layer.md`).
+ *
+ * In `apps/web` pages and components, never hand-roll data fetching inside a `useEffect` (the
+ * `useEffect` + `api.v1`/`fetch` + `setState` pattern the query layer replaces). Reads go through
+ * `useApiQuery`/`useApiListQuery`/`useLiveApiQuery`; writes through `useApiMutation`
+ * (`apps/web/src/lib/query.ts`). Introduced as WARN; flips to ERROR after the straggler migration
+ * (data-layer plan, Phase 6).
+ *
+ * Deliberately scoped to the fetch-in-effect anti-pattern: a blanket `api.v1`/`fetch` ban is
+ * deferred to Phase 6, because today the toolkit legitimately calls `api.v1` inside
+ * `apiQueryOptions` within page/component files, and the only bare `fetch` calls are auth/OAuth
+ * flows (passkey intent, consent) that are not query-layer concerns. The ban broadens once query
+ * definitions are relocated into `lib/**` / `*.query.ts` data modules.
+ *
+ * @type {import('typescript-eslint').ConfigArray}
+ */
+const DATA_LAYER_SURFACES = [
+  'apps/web/src/app/**/*.{ts,tsx}',
+  'apps/web/src/components/**/*.{ts,tsx}',
+];
+
+/** esquery selectors for the fetch-in-effect anti-pattern, with their guidance messages. */
+const SPEC_REF = 'See docs/engineering/specs/data-layer.md.';
+const fetchInEffectRules = [
+  {
+    selector:
+      "CallExpression[callee.name='useEffect'] MemberExpression[object.name='api'][property.name='v1']",
+    message: `Do not fetch with \`api.v1.*\` inside a useEffect — read through useApiQuery/useApiListQuery/useLiveApiQuery and write through useApiMutation (apps/web/src/lib/query.ts). ${SPEC_REF}`,
+  },
+  {
+    selector: "CallExpression[callee.name='useEffect'] CallExpression[callee.name='fetch']",
+    message: `Do not \`fetch\` inside a useEffect — go through the typed query layer (apps/web/src/lib/query.ts). ${SPEC_REF}`,
+  },
+];
+
+export const dataLayerConfig = [
+  {
+    files: DATA_LAYER_SURFACES,
+    rules: {
+      'no-restricted-syntax': ['warn', ...fetchInEffectRules],
+    },
+  },
+];
 
 export default baseConfig;

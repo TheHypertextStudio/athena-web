@@ -605,3 +605,24 @@ describe('cycle close (POST /:id/close)', () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe('cycle list auto-roll (GET /?roll=true)', () => {
+  it('roll=true materializes each team window in-process; the plain list has no side effect', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const reader = appWithActor(cycles, orgId, ['view'], humanActorId);
+
+    // Plain list: no stored cycles + no auto-roll → empty (the pure-read contract other callers
+    // and the route tests rely on).
+    const plain = await json<{ items: unknown[] }>(await reader.request('/'));
+    expect(plain.items).toHaveLength(0);
+
+    // roll=true: auto-materializes the seeded team's rolling window in one in-process call.
+    const rolled = await json<{ items: { teamId: string }[] }>(await reader.request('/?roll=true'));
+    expect(rolled.items.length).toBeGreaterThan(0);
+    expect(rolled.items.every((cy) => cy.teamId === teamId)).toBe(true);
+
+    // Idempotent: a second roll returns the same window, no duplicates.
+    const again = await json<{ items: unknown[] }>(await reader.request('/?roll=true'));
+    expect(again.items).toHaveLength(rolled.items.length);
+  });
+});

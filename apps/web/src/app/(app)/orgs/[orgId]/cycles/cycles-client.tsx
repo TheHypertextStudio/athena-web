@@ -64,7 +64,7 @@ export default function CyclesClient(): JSX.Element {
   const orgId = params.orgId;
   const prefetch = usePrefetchApi();
 
-  const { teams, teamsLoading } = useActiveOrg();
+  const { teams } = useActiveOrg();
 
   const cycleNoun = useVocabulary('cycle');
   const cycleNounPlural = useVocabulary('cycle', { plural: true });
@@ -72,16 +72,14 @@ export default function CyclesClient(): JSX.Element {
 
   const { state, setFilters, setGroupBy, setSort } = useViewState();
 
-  // The query keys off the team ids so the roster re-ensures + refetches once teams resolve
-  // (the ensure call inside the fetcher materializes each team's auto-rolled window). The server
-  // entry primes the same key with the same team-id order, so an SSR-hydrated cache hits.
-  const teamIds = useMemo(() => teams.map((t) => t.id), [teams]);
+  // The list endpoint auto-rolls every team's window server-side before listing, so the roster no
+  // longer depends on the client's teams — one org-scoped key, fetched immediately (`teams` is
+  // still read below, only for the filter/group catalog).
   const cyclesQ = useApiListQuery(
     apiQueryOptions(
-      [...queryKeys.cycles(orgId), ...teamIds],
-      fetchCyclesWithStats(orgId, teamIds),
+      queryKeys.cycles(orgId),
+      fetchCyclesWithStats(orgId),
       'Could not load your cycles.',
-      { enabled: !teamsLoading },
     ),
   );
 

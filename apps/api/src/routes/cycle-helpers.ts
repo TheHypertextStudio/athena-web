@@ -5,7 +5,12 @@ import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { NotFoundError } from '../error';
-import { type CycleWindowSlot, isWithinWindow, rollingWindow } from '../lib/cycle-window';
+import {
+  type CycleWindowSlot,
+  isWithinWindow,
+  normalizeCadenceWeeks,
+  rollingWindow,
+} from '../lib/cycle-window';
 
 /** CycleRow is the selected database row shape consumed by these API route serializers. */
 export type CycleRow = typeof cycle.$inferSelect;
@@ -150,6 +155,35 @@ export async function ensureCycleWindow(
     .from(cycle)
     .where(and(eq(cycle.teamId, teamId), eq(cycle.organizationId, orgId)))
     .orderBy(cycle.number);
+}
+
+/**
+ * Ensure the rolling cycle window for **every** team in the org (idempotent).
+ *
+ * @remarks
+ * The in-process counterpart to the client formerly calling `GET /cycles/current?teamId=…` once per
+ * team before listing: a single batched teams read, then {@link ensureCycleWindow} per team. Run at
+ * the top of the cycles list endpoint so the roster auto-rolls server-side — the list is never
+ * empty for a real team and callers (browser + SSR) need no per-team ensure fan-out.
+ *
+ * @param orgId - The tenant.
+ * @param actorId - Creator stamped on auto-generated cycles.
+ * @param now - Reference instant ("today").
+ */
+export async function ensureOrgCycleWindows(
+  orgId: string,
+  actorId: string | null,
+  now: Date,
+): Promise<void> {
+  const teams = await db
+    .select({ id: team.id, cadenceWeeks: team.cycleCadenceWeeks })
+    .from(team)
+    .where(eq(team.organizationId, orgId));
+  await Promise.all(
+    teams.map((t) =>
+      ensureCycleWindow(orgId, t.id, normalizeCadenceWeeks(t.cadenceWeeks), actorId, now),
+    ),
+  );
 }
 
 /**

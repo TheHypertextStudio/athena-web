@@ -183,6 +183,53 @@ describe('MockConnector', () => {
     expect(link.linked).toBe(true);
     expect(link.externalId).toBe('DOC-7');
   });
+
+  it('exposes write-back only for gtasks, echoing advancing post-write anchors', async () => {
+    expect(new MockConnector({ provider: 'github' }).asWritable()).toBeUndefined();
+
+    const c = new MockConnector({ provider: 'gtasks' });
+    const writable = c.asWritable();
+    expect(writable).toBeDefined();
+
+    const update = await writable!.pushTask({
+      connectionId: 'conn_1',
+      provider: 'gtasks',
+      op: { kind: 'update', listId: '@default', externalId: 'gt1', title: 'Edited' },
+    });
+    expect(update).toMatchObject({ externalId: 'gt1' });
+    expect(typeof update!.externalUpdatedAt).toBe('string');
+
+    // A second push echoes a strictly-newer stamp (monotonic), so the echo guard can settle.
+    const second = await writable!.pushTask({
+      connectionId: 'conn_1',
+      provider: 'gtasks',
+      op: { kind: 'update', listId: '@default', externalId: 'gt2', completed: true },
+    });
+    expect(new Date(second!.externalUpdatedAt).getTime()).toBeGreaterThan(
+      new Date(update!.externalUpdatedAt).getTime(),
+    );
+
+    // A create assigns a fresh external id; a delete resolves to void.
+    const created = await writable!.pushTask({
+      connectionId: 'conn_1',
+      provider: 'gtasks',
+      op: { kind: 'create', listId: '@default', title: 'New', completed: false },
+    });
+    expect(created!.externalId).toMatch(/^gtask_/);
+    const deleted = await writable!.pushTask({
+      connectionId: 'conn_1',
+      provider: 'gtasks',
+      op: { kind: 'delete', listId: '@default', externalId: 'gt1' },
+    });
+    expect(deleted).toBeUndefined();
+  });
+
+  it('enumerates gtasks containers and none for other providers', async () => {
+    const c = new MockConnector({ provider: 'gtasks' });
+    const lists = await c.listContainers({ connectionId: 'conn_1', provider: 'gtasks' });
+    expect(lists.map((l) => l.id)).toContain('@default');
+    expect(await c.listContainers({ connectionId: 'conn_1', provider: 'drive' })).toEqual([]);
+  });
 });
 
 describe('mailers', () => {

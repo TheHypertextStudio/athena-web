@@ -1,9 +1,12 @@
 import type {
+  ExternalWriteResult,
   ImportWorkInput,
   ImportedItem,
   LinkResourceInput,
   MirrorResult,
   MirrorStatusInput,
+  ResourceRef,
+  TaskPushOp,
 } from '../ports/connector';
 
 /**
@@ -41,4 +44,40 @@ export interface ConnectorProviderClient {
    * @returns the URL string, or `undefined` if it cannot be derived from the id alone.
    */
   resolveExternalUrl(input: LinkResourceInput): Promise<string | undefined>;
+  /**
+   * Enumerate the provider's external containers (e.g. Google Tasks lists) for selection.
+   *
+   * @remarks
+   * Required so {@link RealConnector} can call it without a runtime capability check: providers
+   * with no container concept (GitHub/Linear) return an empty array.
+   */
+  listContainers(): Promise<ResourceRef[]>;
+}
+
+/**
+ * The write-capable provider client (today only {@link GoogleProviderClient} for Google Tasks).
+ *
+ * @remarks
+ * Extends the read-only {@link ConnectorProviderClient} with a single `pushTask` that applies
+ * one {@link TaskPushOp} to the provider. Kept as a *separate* interface so the read-only
+ * providers (GitHub/Linear/Drive/Gmail/Calendar) implement nothing extra; `RealConnector`
+ * narrows to it for `gtasks` via {@link isWritableProviderClient} and exposes it through
+ * {@link Connector.asWritable}.
+ */
+export interface WritableConnectorProviderClient extends ConnectorProviderClient {
+  /**
+   * Apply one write op to the provider.
+   *
+   * @param op - The create/update/delete change to apply.
+   * @returns the post-write external timestamp/etag for `create`/`update`, `undefined` for `delete`.
+   * @throws {ConnectorError} On auth, throttle, or provider failure.
+   */
+  pushTask(op: TaskPushOp): Promise<ExternalWriteResult | undefined>;
+}
+
+/** Narrow a {@link ConnectorProviderClient} to a {@link WritableConnectorProviderClient}. */
+export function isWritableProviderClient(
+  client: ConnectorProviderClient,
+): client is WritableConnectorProviderClient {
+  return typeof (client as Partial<WritableConnectorProviderClient>).pushTask === 'function';
 }

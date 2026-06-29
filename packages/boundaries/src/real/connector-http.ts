@@ -43,11 +43,11 @@ export class ProviderHttp {
    * @throws {ConnectorError} On network failure (`network`), non-2xx status
    *   (`auth`/`rate_limit`/`provider` by code), or an unparseable body (`provider`).
    */
-  private async request(
-    method: 'GET' | 'POST',
+  private async request<T>(
+    method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
     path: string,
     init: { headers: Record<string, string>; body?: string },
-  ): Promise<unknown> {
+  ): Promise<T> {
     let res: Response;
     try {
       res = await this.http(`${this.apiBase}${path}`, { method, ...init });
@@ -82,8 +82,16 @@ export class ProviderHttp {
       );
     }
 
+    // A 204 (or otherwise empty) body is a valid "no content" success — e.g. a Google Tasks
+    // DELETE — so resolve to `undefined` rather than failing to parse empty text as JSON.
+    // Reading as text first (instead of `res.json()`) is what lets us distinguish empty from
+    // malformed. The single `as T` is the unavoidable parse boundary: raw JSON has no static
+    // shape, so the typed accessors below assert it for their callers.
+    if (res.status === 204) return undefined as T;
+    const text = await res.text();
+    if (text.length === 0) return undefined as T;
     try {
-      return await res.json();
+      return JSON.parse(text) as T;
     } catch (cause) {
       logConnectorError({
         provider: this.provider,
@@ -108,8 +116,8 @@ export class ProviderHttp {
    * @param extraHeaders - Additional headers merged onto the default Authorization + Accept set.
    * @throws {ConnectorError} On network failure, non-2xx status, or an unparseable body.
    */
-  async getJson(path: string, extraHeaders: Record<string, string> = {}): Promise<unknown> {
-    return this.request('GET', path, {
+  async getJson<T = unknown>(path: string, extraHeaders: Record<string, string> = {}): Promise<T> {
+    return this.request<T>('GET', path, {
       headers: {
         Authorization: `Bearer ${this.accessToken}`,
         Accept: 'application/json',
@@ -126,14 +134,56 @@ export class ProviderHttp {
    * @param auth - `'bearer'` (default) prefixes the token; `'raw'` sends it verbatim.
    * @throws {ConnectorError} On network failure, non-2xx status, or an unparseable body.
    */
-  async postJson(path: string, body: unknown, auth: 'bearer' | 'raw' = 'bearer'): Promise<unknown> {
-    return this.request('POST', path, {
+  async postJson<T = unknown>(
+    path: string,
+    body: unknown,
+    auth: 'bearer' | 'raw' = 'bearer',
+  ): Promise<T> {
+    return this.request<T>('POST', path, {
       headers: {
         Authorization: auth === 'bearer' ? `Bearer ${this.accessToken}` : this.accessToken,
         'Content-Type': 'application/json',
         Accept: 'application/json',
       },
       body: JSON.stringify(body),
+    });
+  }
+
+  /**
+   * Issue an authenticated `PATCH` of a JSON body and parse the JSON response.
+   *
+   * @param path - URL path appended to the provider's API base.
+   * @param body - Request body (typically a partial of the resource), serialized as JSON.
+   * @throws {ConnectorError} On network failure, non-2xx status, or an unparseable body.
+   */
+  async patchJson<T = unknown>(path: string, body: unknown): Promise<T> {
+    return this.request<T>('PATCH', path, {
+      headers: {
+        Authorization: `Bearer ${this.accessToken}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+  }
+
+  /**
+   * Issue an authenticated `DELETE` and discard the (typically empty) response.
+   *
+   * @remarks
+   * No `Content-Type` is sent (there is no request body), and a `204 No Content` reply — the
+   * common success for deletes (e.g. Google Tasks) — resolves cleanly rather than failing to
+   * parse an empty body. Non-2xx still throws a typed {@link ConnectorError}.
+   *
+   * @param path - URL path appended to the provider's API base.
+   * @throws {ConnectorError} On network failure or non-2xx status.
+   */
+  async deleteVoid(path: string): Promise<void> {
+    await this.request<undefined>('DELETE', path, {
+      headers: {
+        Authorization: `Bearer ${this.accessToken}`,
+        Accept: 'application/json',
+      },
     });
   }
 }

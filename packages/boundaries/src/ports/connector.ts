@@ -54,6 +54,24 @@ export interface ItemProvenance {
   readonly externalUrl?: string;
   /** ISO-8601 timestamp the item was imported. */
   readonly importedAt: string;
+  /**
+   * The provider's own last-modified timestamp (RFC3339), when it exposes one.
+   *
+   * @remarks
+   * The last-write-wins anchor for two-way sync: stored per task and compared against the
+   * local `updatedAt` to decide which side is newer. Absent for read-only mirror providers.
+   */
+  readonly externalUpdatedAt?: string;
+  /** The provider's entity tag for optimistic-concurrency writes, when available. */
+  readonly externalEtag?: string;
+  /**
+   * The owning external collection id, when the provider partitions items into lists.
+   *
+   * @remarks
+   * Google Tasks groups tasks under task lists; this records which list a task came from so a
+   * write-back can address the correct `/lists/{listId}/tasks/{taskId}`.
+   */
+  readonly externalListId?: string;
 }
 
 /** One unit of work imported from a provider, with provenance. */
@@ -66,6 +84,19 @@ export interface ImportedItem {
   readonly title: string;
   /** Optional body/description. */
   readonly body?: string;
+  /** Whether the source item is completed/done (work items that carry a status). */
+  readonly completed?: boolean;
+  /** Due date (RFC3339 date) when the source carries one; `null` means explicitly unset. */
+  readonly dueDate?: string | null;
+  /**
+   * True when this item is a tombstone — deleted at the source — rather than live content.
+   *
+   * @remarks
+   * Two-way pulls surface deletions as tombstones (e.g. Google Tasks `showDeleted=true`) so a
+   * remote delete propagates as data instead of as absence; reconciliation archives the local
+   * linked task. Read-only mirror imports never set this.
+   */
+  readonly removed?: boolean;
   /** Where the item came from. */
   readonly provenance: ItemProvenance;
 }
@@ -78,6 +109,27 @@ export interface ImportWorkInput {
   readonly provider: ConnectorProvider;
   /** Optional external workspace to scope the import to. */
   readonly externalWorkspaceId?: string;
+  /**
+   * Optional external container ids to scope the import to (e.g. Google Tasks list ids). When
+   * absent or empty, every container is imported; when present, only the listed ones are pulled.
+   */
+  readonly listIds?: readonly string[];
+}
+
+/** A selectable external container (e.g. a Google Tasks list) the connector can sync from. */
+export interface ResourceRef {
+  /** The container's external id. */
+  readonly id: string;
+  /** A human-readable label for the container. */
+  readonly title: string;
+}
+
+/** Input to enumerate a connector's external containers (task lists). */
+export interface ListContainersInput {
+  /** The connection whose containers are requested. */
+  readonly connectionId: string;
+  /** The provider being enumerated. */
+  readonly provider: ConnectorProvider;
 }
 
 /** Input to query a read-only mirror's sync status. */
@@ -125,6 +177,78 @@ export interface LinkResult {
 }
 
 /**
+ * A single write operation pushed back to a writable provider (two-way sync).
+ *
+ * @remarks
+ * Round-trip only: a `linked` Docket task always already has an `externalId`, so `create`
+ * is defined for completeness but unused by the current Google Tasks write-back path. Every
+ * variant carries `listId` because Google Tasks addresses tasks within a list.
+ */
+export type TaskPushOp =
+  | {
+      readonly kind: 'create';
+      readonly listId: string;
+      readonly title: string;
+      readonly notes?: string | null;
+      readonly dueDate?: string | null;
+      readonly completed: boolean;
+    }
+  | {
+      readonly kind: 'update';
+      readonly listId: string;
+      readonly externalId: string;
+      readonly etag?: string;
+      readonly title?: string;
+      readonly notes?: string | null;
+      readonly dueDate?: string | null;
+      readonly completed?: boolean;
+    }
+  | {
+      readonly kind: 'delete';
+      readonly listId: string;
+      readonly externalId: string;
+    };
+
+/** The provider's acknowledgement of a successful write, carrying the new sync anchors. */
+export interface ExternalWriteResult {
+  /** The external id of the written item (echoed for `update`, assigned for `create`). */
+  readonly externalId: string;
+  /** The provider's post-write last-modified timestamp (RFC3339) — the new echo guard. */
+  readonly externalUpdatedAt: string;
+  /** The provider's post-write entity tag, when available. */
+  readonly externalEtag?: string;
+}
+
+/** Input to push one task change to a writable provider. */
+export interface PushTaskInput {
+  /** The connection performing the write. */
+  readonly connectionId: string;
+  /** The provider being written to. */
+  readonly provider: ConnectorProvider;
+  /** The change to apply. */
+  readonly op: TaskPushOp;
+}
+
+/**
+ * The write half of a two-way connector: pushes a local task change back to the provider.
+ *
+ * @remarks
+ * Exposed only by connectors that support write-back (today, Google Tasks), discovered via
+ * {@link Connector.asWritable}. Read-only connectors return `undefined` there and never
+ * implement this. A `delete` op resolves to `undefined` — no entity remains to anchor.
+ */
+export interface WritableConnector {
+  /**
+   * Apply one write to the provider and return the post-write sync anchors.
+   *
+   * @param input - The connection, provider, and the change to apply.
+   * @returns the new external timestamp/etag for `create`/`update`, or `undefined` for `delete`.
+   * @throws {ConnectorError} On auth (`auth`), throttle (`rate_limit`), or provider failure.
+   */
+  pushTask(input: PushTaskInput): Promise<ExternalWriteResult | undefined>;
+}
+
+/**
  * The connector port: a single typed edge for connecting to a provider and pulling /
  * mirroring / linking its work. Implemented by the real provider adapters and
  * `MockConnector`.
@@ -161,4 +285,27 @@ export interface Connector {
    * @returns whether the link was established and the external URL.
    */
   linkResource(input: LinkResourceInput): Promise<LinkResult>;
+
+  /**
+   * Return this connector's write-back capability, or `undefined` when it is read-only.
+   *
+   * @remarks
+   * The single typed seam the sync engine uses to detect two-way support: read-only
+   * connectors (GitHub/Linear/Drive/Gmail/Calendar) omit it or return `undefined`, and only
+   * a write-back connector (Google Tasks) returns a {@link WritableConnector}.
+   */
+  asWritable?(): WritableConnector | undefined;
+
+  /**
+   * Enumerate the external containers (e.g. Google Tasks lists) this connection can sync from,
+   * for the per-account "which lists to sync" config UI.
+   *
+   * @remarks
+   * Optional: only connectors with a meaningful container concept (today Google Tasks) implement
+   * it; the rest omit it. Read-only — never mutates the provider.
+   *
+   * @param input - The connection and provider to enumerate.
+   * @returns the selectable containers; an empty array when the connection has none.
+   */
+  listContainers?(input: ListContainersInput): Promise<ResourceRef[]>;
 }

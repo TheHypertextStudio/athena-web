@@ -24,7 +24,6 @@
  */
 
 import { execSync } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
 import { readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -45,6 +44,13 @@ import {
 
 import { findVar } from '../packages/env/src/registry';
 import type { VarSpec } from '../packages/env/src/registry';
+import {
+  PROVIDER_GROUPS,
+  DEFAULT_LOCAL_API_URL,
+  copyToClipboard,
+  type Environment,
+  type ProviderGroup,
+} from './integration-providers';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -162,14 +168,6 @@ export function parseEnvFile(path: string): Record<string, string> {
 
 // ── environments ────────────────────────────────────────────────────────────────
 
-export type Environment = 'local' | 'staging' | 'production';
-
-/**
- * Fallback local API origin (Better Auth base) when `.env.local` has none — matches the
- * project's portless convention (`https://api.docket.localhost`), NOT a bare `localhost:port`.
- */
-const DEFAULT_LOCAL_API_URL = 'https://api.docket.localhost';
-
 /**
  * GCP Secret Manager name for a var in a given environment. Production keeps the existing
  * unqualified `docket-…` names (so `deploy.yml` is unchanged); staging is suffixed.
@@ -226,281 +224,6 @@ function wrapLines(lines: readonly string[], width = noteWidth()): string[] {
   }
   return out;
 }
-
-// ── turnkey secret generation (no hand-run openssl) ──────────────────────────────
-
-/** A fresh 48-hex-char secret (24 random bytes) — the GitHub webhook signing secret. */
-function generateHexSecret(): string {
-  return randomBytes(24).toString('hex');
-}
-
-/**
- * Best-effort copy to the OS clipboard (pbcopy / xclip / wl-copy / clip).
- *
- * @returns true if a clipboard utility accepted the text.
- */
-function copyToClipboard(text: string): boolean {
-  for (const cmd of ['pbcopy', 'xclip -selection clipboard', 'wl-copy', 'clip']) {
-    try {
-      execSync(cmd, { input: text, stdio: ['pipe', 'ignore', 'ignore'] });
-      return true;
-    } catch {
-      // try the next utility
-    }
-  }
-  return false;
-}
-
-// ── provider groups (curated order + DX copy; metadata comes from the registry) ──
-
-interface ProviderGroup {
-  readonly title: string;
-  /** Registry var names to prompt for, in order. */
-  readonly vars: readonly string[];
-  /** Explicit, copy-pasteable setup instructions for the chosen environment. */
-  readonly instructions: (env: Environment, base: string) => readonly string[];
-  /**
-   * Turnkey secrets generated FOR the user (not prompted): the returned values are shown +
-   * copied to the clipboard, saved like any collected var, and skipped in the prompt loop.
-   * Used for self-chosen secrets (e.g. the GitHub webhook secret) so nobody hand-runs openssl.
-   */
-  readonly generate?: (env: Environment) => Record<string, string>;
-  /**
-   * Marks a group as ONE credential shared across every environment and device (the GitHub App:
-   * its webhook URL is fixed to production and must never change per machine). The app is created
-   * once when configuring `production`; for any other environment the setup REUSES the same values
-   * by pulling them from production Secret Manager instead of creating a new app.
-   */
-  readonly shared?: boolean;
-}
-
-/** Suggested OAuth-app name so each environment gets its own clearly-labelled app. */
-function appName(env: Environment): string {
-  return `Docket (${env})`;
-}
-
-const PROVIDER_GROUPS: readonly ProviderGroup[] = [
-  {
-    title: 'Google — sign-in + Drive / Gmail / Calendar / Tasks connectors',
-    vars: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'],
-    instructions: (env, base) => [
-      'Creates an OAuth 2.0 Web-application client. ~5 min. You need a Google account.',
-      '',
-      '1) Open https://console.cloud.google.com/ and sign in.',
-      '2) Top bar → project picker → "New Project" → Name: "Docket" → Create, then make sure',
-      '   that project is selected in the picker.',
-      '3) Enable the APIs you need: ☰ menu → "APIs & Services" → "Library". Search each, open it,',
-      '   click "Enable":',
-      '     • "Google People API"   (required — sign-in profile)',
-      '     • "Google Drive API", "Gmail API", "Google Calendar API", "Google Tasks API"',
-      '       (only the connectors you plan to use)',
-      '4) Configure the consent screen (first time only): "APIs & Services" → "OAuth consent screen".',
-      '     • User type: "External" (or "Internal" if this is a Google Workspace org) → Create',
-      '     • App name: "Docket", User support email: you, Developer contact email: you → Save',
-      '     • Scopes: add ".../auth/userinfo.email", ".../auth/userinfo.profile", "openid"',
-      '       (+ drive/gmail/calendar/tasks scopes if you enabled those APIs) → Save',
-      '     • If the app is in "Testing", add your Google address under "Test users".',
-      '5) Create the credential: "APIs & Services" → "Credentials" → "+ Create credentials" →',
-      '   "OAuth client ID" → Application type: "Web application" →',
-      `   Name: "${appName(env)}".`,
-      '6) Under "Authorized redirect URIs" click "+ Add URI" and paste exactly, no trailing slash:',
-      `     ${base}/api/auth/callback/google`,
-      '7) Click "Create". A dialog shows "Your Client ID" and "Your Client Secret".',
-      '8) Copy both now (you can re-open them later from the Credentials list) and paste below.',
-    ],
-  },
-  {
-    title: 'GitHub — sign-in + issue/PR connector + webhook firehose',
-    vars: [
-      'GITHUB_APP_ID',
-      'GITHUB_APP_SLUG',
-      'GITHUB_APP_CLIENT_ID',
-      'GITHUB_APP_CLIENT_SECRET',
-      'GITHUB_APP_PRIVATE_KEY',
-      'GITHUB_APP_WEBHOOK_SECRET',
-    ],
-    // ONE GitHub App for EVERY environment and device. These create instructions are only shown
-    // when configuring `production` (where the app is born); local/staging REUSE the same values
-    // (pulled from prod Secret Manager — see `shared` handling in setupEnvironment), so the
-    // webhook URL is set once and never changes per device.
-    shared: true,
-    instructions: (_env, base) => {
-      // Homepage is the product (web) URL, not the API host the callbacks/webhook live on.
-      const homepage = base.replace('://api.', '://');
-      return [
-        'Creates the ONE GitHub App Docket uses across EVERY environment and device — it powers',
-        'sign-in (user-to-server OAuth), the issue/PR connector, AND the webhook firehose. NOT an',
-        'OAuth App. You create it ONCE here (for production); every other machine/environment',
-        'reuses these same values automatically (the bootstrap pulls them from Secret Manager), so',
-        'the public webhook URL is set a single time and never has to change per device.',
-        '',
-        'Your webhook secret was generated and copied to your clipboard above — paste it in step 4.',
-        '',
-        '1) Open your org\'s GitHub Apps settings → "New GitHub App":',
-        '   https://github.com/organizations/<org>/settings/apps',
-        '   (Org → Settings → Developer settings → GitHub Apps → "New GitHub App").',
-        '2) GitHub App name: "Docket".  Homepage URL: ' + homepage,
-        '3) Identifying and authorizing users — add ALL of these callback URLs ("Add callback URL"',
-        '   for each; a GitHub App allows several, and one app serves both prod and local):',
-        `     • ${base}/api/auth/callback/github                  (prod sign-in)`,
-        `     • ${base}/v1/integrations/github/callback           (prod install/connect)`,
-        `     • ${DEFAULT_LOCAL_API_URL}/api/auth/callback/github         (local sign-in)`,
-        `     • ${DEFAULT_LOCAL_API_URL}/v1/integrations/github/callback  (local install/connect)`,
-        '     • Check "Expire user authorization tokens" (this provides the refresh token).',
-        '     • Check "Request user authorization (OAuth) during installation".',
-        '     • Check "Redirect on update".',
-        '     • Post installation → Setup URL: leave it. GitHub greys it out with "Unavailable',
-        '       when requesting OAuth during installation" — expected. After install GitHub',
-        '       redirects to the connect callback above with ?installation_id=…',
-        '4) Webhook — set ONCE to production (public + stable; Cloudflare fronts the API host).',
-        '   Local dev needs no webhook of its own: APP_MODE=local uses the mock observer. To',
-        '   exercise the REAL firehose locally, run a Cloudflare Tunnel against a PERSONAL test',
-        '   app (never this shared one): cloudflared tunnel --url http://localhost:3001',
-        '     • Check "Active".',
-        `     • Webhook URL:  ${base}/v1/ingest/github`,
-        '     • Secret: paste the generated webhook secret from above (already on your clipboard).',
-        '     • Leave "Enable SSL verification" on.',
-        '5) Permissions — click each section header to expand it, then set:',
-        '     • Repository permissions → Issues: Read-only;  Pull requests: Read-only.',
-        '       (Metadata: Read-only is then selected for you automatically.)',
-        '     • Account permissions → Email addresses: Read-only (lets sign-in read the email).',
-        '6) Subscribe to events — IMPORTANT: these checkboxes only appear AFTER you grant the',
-        '   repository permissions in step 5, so do step 5 first. Then check:',
-        '     • Issues, Issue comment, Pull request, Pull request review comment.',
-        '7) Where can this be installed → "Only on this account" (just your org).',
-        '8) Click "Create GitHub App". On the app\'s settings page, collect and paste below:',
-        '     • "App ID" (a number)                         → GITHUB_APP_ID',
-        '     • the URL slug from github.com/apps/<slug>     → GITHUB_APP_SLUG',
-        '     • "Client ID" (Iv…)                            → GITHUB_APP_CLIENT_ID',
-        '     • "Generate a new client secret" (shown once)  → GITHUB_APP_CLIENT_SECRET',
-        '     • "Generate a private key" downloads a .pem. Convert to single-line base64:',
-        "           base64 -i <file>.pem | tr -d '\\n'        → GITHUB_APP_PRIVATE_KEY",
-      ];
-    },
-    // Self-chosen secret — generate it for the user instead of making them run openssl.
-    generate: () => ({ GITHUB_APP_WEBHOOK_SECRET: generateHexSecret() }),
-  },
-  {
-    title: 'Linear — sign-in + Linear issue migration',
-    vars: ['LINEAR_CLIENT_ID', 'LINEAR_CLIENT_SECRET'],
-    instructions: (env, base) => [
-      'Creates a Linear OAuth2 application. ~2 min. You need a Linear workspace admin.',
-      '',
-      '1) Open https://linear.app/settings/api/applications/new',
-      '   (or: Linear → workspace menu (top-left) → Settings → "API" → "OAuth applications" →',
-      '   "Create new").',
-      `2) Application name: "${appName(env)}". Add a developer name + icon if it asks.`,
-      '3) Callback URLs — paste exactly, no trailing slash:',
-      `     ${base}/api/auth/oauth2/callback/linear`,
-      '4) Scopes: tick "read" (required for sign-in). For the issue-migration feature also tick',
-      '   "write" and "issues:create".',
-      '5) Keep the app private (untick "Public") unless you intend multi-workspace installs → "Create".',
-      '6) Copy the "Client ID" and "Client secret" shown, and paste below.',
-    ],
-  },
-  {
-    title: 'Stripe — billing (subscriptions + webhooks)',
-    vars: ['STRIPE_SECRET_KEY', 'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY', 'STRIPE_WEBHOOK_SECRET'],
-    instructions: (env, base) => {
-      const mode = env === 'production' ? 'live' : 'test';
-      const lines = [
-        `Use ${mode}-mode keys for the "${env}" environment. Never mix test and live across envs.`,
-        '',
-        '1) Open https://dashboard.stripe.com and sign in.',
-        `2) Top-right toggle: switch to ${mode} mode (the "Test mode" switch must show "${mode}").`,
-        '3) API keys: Developers → API keys (https://dashboard.stripe.com/apikeys).',
-        `     • Copy "Secret key"      → starts with ${env === 'production' ? 'sk_live_' : 'sk_test_'}`,
-        `     • Copy "Publishable key" → starts with ${env === 'production' ? 'pk_live_' : 'pk_test_'}`,
-        '4) Webhook signing secret (whsec_…):',
-      ];
-      if (env === 'local') {
-        lines.push(
-          '     • Install the Stripe CLI (https://stripe.com/docs/stripe-cli), then in a SEPARATE',
-          '       terminal run:',
-          '           stripe login',
-          `           stripe listen --forward-to ${base}/api/auth/stripe/webhook`,
-          '     • It prints "Ready! ... whsec_…" — copy that whsec_ value.',
-          '     • Keep that terminal running while developing so webhooks reach your local API.',
-        );
-      } else {
-        lines.push(
-          '     • Developers → Webhooks → "Add endpoint".',
-          `     • Endpoint URL (paste exactly): ${base}/api/auth/stripe/webhook`,
-          '     • "Select events" → add: checkout.session.completed, customer.subscription.created,',
-          '       customer.subscription.updated, customer.subscription.deleted, invoice.paid,',
-          '       invoice.payment_failed → "Add endpoint".',
-          '     • Open the new endpoint → "Signing secret" → "Reveal" → copy the whsec_… value.',
-        );
-      }
-      lines.push(
-        '',
-        'Note: plan prices (DOCKET_PRICE_LOOKUP_*) are created separately via the Stripe CLI/',
-        'dashboard and are not collected here. Leave all three blank to keep billing on the mock.',
-      );
-      return lines;
-    },
-  },
-  {
-    title: 'Anthropic — built-in Athena agent (optional)',
-    vars: ['ANTHROPIC_API_KEY'],
-    instructions: (env) => [
-      'Powers real Athena/Claude turns. Optional — blank keeps the deterministic mock runtime',
-      '(local/test always use the mock regardless of this key).',
-      '',
-      '1) Open https://console.anthropic.com and sign in.',
-      '2) Ensure the workspace has billing/credits (Settings → Billing).',
-      '3) Settings → "API keys" → "Create Key".',
-      `4) Name it "${appName(env)}" → Create → copy the key (starts with sk-ant-…, shown once).`,
-      '5) Paste below, or leave blank to skip.',
-    ],
-  },
-  {
-    title: 'Transactional email (SMTP) — optional',
-    vars: ['SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS', 'MAIL_FROM'],
-    instructions: (env) =>
-      env === 'local'
-        ? [
-            'Local dev uses Mailpit — a fake SMTP server with a web inbox. Blank SMTP_HOST keeps the',
-            'no-op mock mailer (emails are just logged).',
-            '',
-            '1) Start Mailpit (pick one):',
-            '     • Docker:  docker run -d -p 1025:1025 -p 8025:8025 axllent/mailpit',
-            '     • Homebrew: brew install mailpit && mailpit',
-            '2) Enter at the prompts below:',
-            '     • SMTP_HOST = localhost',
-            '     • SMTP_PORT = 1025',
-            '     • SMTP_USER / SMTP_PASS = leave blank (Mailpit needs no auth)',
-            '     • MAIL_FROM = "Docket <dev@docket.localhost>"',
-            '3) View captured email at http://localhost:8025.',
-          ]
-        : [
-            'Use a transactional email provider (Resend, Postmark, Amazon SES, Mailgun, …). Blank',
-            'SMTP_HOST keeps the no-op mock mailer.',
-            '',
-            '1) In your provider, create SMTP credentials and verify a sending domain/address.',
-            '2) Enter at the prompts below:',
-            '     • SMTP_HOST = the provider host (e.g. smtp.resend.com)',
-            '     • SMTP_PORT = 465 (implicit TLS) or 587 (STARTTLS) per the provider',
-            '     • SMTP_USER / SMTP_PASS = the provider SMTP username + password/API key',
-            '     • MAIL_FROM = a VERIFIED sender, e.g. "Docket <no-reply@your-domain.com>"',
-          ],
-  },
-  {
-    title: 'Observability & storage — optional',
-    vars: ['SENTRY_DSN', 'BLOB_READ_WRITE_TOKEN', 'EXPORT_BUCKET_URL', 'EXPORT_BUCKET_TOKEN'],
-    instructions: () => [
-      'All optional. Leave blank to disable each.',
-      '',
-      'Sentry (error reporting):',
-      '  1) https://sentry.io → create/select a project (platform: Node).',
-      '  2) Settings → "Client Keys (DSN)" → copy the DSN (https://…@…ingest.sentry.io/…).',
-      '',
-      'Export storage (only if you use data-export artifacts — provide URL + token together):',
-      '  • BLOB_READ_WRITE_TOKEN: Vercel → Storage → Blob → "Read/Write Token".',
-      '  • EXPORT_BUCKET_URL + EXPORT_BUCKET_TOKEN: your S3-compatible bucket endpoint + access token.',
-    ],
-  },
-];
 
 // ── core: per-var prompt with schema validation ──────────────────────────────────
 
@@ -905,7 +628,9 @@ async function setupEnvironment(
         if (!spec) continue;
         const current = nonEmpty(envLocal, varName);
         const value = await promptVar(spec, { env, current });
-        if (value !== undefined && value !== current) collected[varName] = value;
+        if (value !== undefined && value !== current) {
+          collected[varName] = group.transform?.[varName]?.(value) ?? value;
+        }
       }
       if (Object.keys(collected).length > 0) {
         if (env === 'local') upsertEnvVars(resolve(ROOT, '.env.local'), collected);
@@ -941,24 +666,46 @@ async function setupEnvironment(
       );
     }
 
-    note(
-      wrapLines([...group.instructions(env, base), '', 'Leave a field blank to skip it.']).join(
-        '\n',
-      ),
-      group.title,
-    );
-
-    for (const varName of group.vars) {
-      if (varName in generated) continue; // turnkey-generated above — not prompted
-      const spec = findVar(varName);
-      if (!spec) {
-        warn(`unknown var ${varName} (registry drift) — skipping`);
-        continue;
+    if (group.steps) {
+      // Step-by-step: show each short instruction immediately before prompting for the value it
+      // produces, so the guidance never drifts away from the field it describes.
+      for (const step of group.steps(env, base)) {
+        note(wrapLines(step.note).join('\n'), group.title);
+        const varName = step.var;
+        if (!varName || varName in generated) continue;
+        const spec = findVar(varName);
+        if (!spec) {
+          warn(`unknown var ${varName} (registry drift) — skipping`);
+          continue;
+        }
+        const current = nonEmpty(envLocal, varName);
+        const value = await promptVar(spec, { env, current });
+        if (value !== undefined && value !== current) {
+          collected[varName] = group.transform?.[varName]?.(value) ?? value;
+        }
       }
-      const current = nonEmpty(envLocal, varName);
-      const value = await promptVar(spec, { env, current });
-      if (value !== undefined && value !== current) {
-        collected[varName] = value;
+    } else {
+      note(
+        wrapLines([
+          ...(group.instructions?.(env, base) ?? []),
+          '',
+          'Leave a field blank to skip it.',
+        ]).join('\n'),
+        group.title,
+      );
+
+      for (const varName of group.vars) {
+        if (varName in generated) continue; // turnkey-generated above — not prompted
+        const spec = findVar(varName);
+        if (!spec) {
+          warn(`unknown var ${varName} (registry drift) — skipping`);
+          continue;
+        }
+        const current = nonEmpty(envLocal, varName);
+        const value = await promptVar(spec, { env, current });
+        if (value !== undefined && value !== current) {
+          collected[varName] = group.transform?.[varName]?.(value) ?? value;
+        }
       }
     }
 

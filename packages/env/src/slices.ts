@@ -53,8 +53,34 @@ export const authServer = {
   BETTER_AUTH_PASSKEY_RP_NAME: z.string().min(1),
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
-  GITHUB_CLIENT_ID: z.string().optional(),
-  GITHUB_CLIENT_SECRET: z.string().optional(),
+  /**
+   * GitHub App numeric id — the JWT `iss` used to mint short-lived installation access tokens
+   * (the firehose/mirror data plane). The single GitHub App is the ONLY GitHub credential:
+   * it powers sign-in (user-to-server OAuth), the issue/PR connector, and the webhook firehose
+   * — there is no separate OAuth App. Absent ⇒ the GitHub connector falls back to the mock.
+   */
+  GITHUB_APP_ID: z.string().optional(),
+  /**
+   * GitHub App URL slug — builds the install URL `https://github.com/apps/<slug>/installations/new`
+   * the connect flow redirects users to (self-serve install on their own account, or an org).
+   */
+  GITHUB_APP_SLUG: z.string().optional(),
+  /**
+   * GitHub App OAuth client id — the user-to-server flow that powers GitHub sign-in, the
+   * "my issues" pull, and identity mapping. (A GitHub App reuses the OAuth web endpoints with
+   * this `Iv…`-prefixed client id; replaces the retired OAuth-App `GITHUB_CLIENT_ID`.)
+   */
+  GITHUB_APP_CLIENT_ID: z.string().optional(),
+  /** GitHub App OAuth client secret — user-to-server token exchange (paired with the client id). */
+  GITHUB_APP_CLIENT_SECRET: z.string().optional(),
+  /**
+   * GitHub App private key, **base64-encoded PEM** (single line so it survives line-based `.env`
+   * upserts). Signs the app JWT exchanged for 1h installation tokens. Lenient here; the
+   * `@docket/boundaries` resolver decodes + decides real-vs-mock.
+   */
+  GITHUB_APP_PRIVATE_KEY: z.string().optional(),
+  /** GitHub App webhook signing secret — verifies inbound `X-Hub-Signature-256` firehose events. */
+  GITHUB_APP_WEBHOOK_SECRET: z.string().optional(),
   LINEAR_CLIENT_ID: z.string().optional(),
   LINEAR_CLIENT_SECRET: z.string().optional(),
   /** App-level Linear webhook signing secret — verifies inbound ambient-observation events. */

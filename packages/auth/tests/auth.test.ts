@@ -310,8 +310,8 @@ describe('buildAuthOptions env-gating', () => {
       ...baseEnv,
       GOOGLE_CLIENT_ID: 'goog-id',
       // GOOGLE_CLIENT_SECRET missing → provider must NOT mount
-      GITHUB_CLIENT_SECRET: 'gh-secret',
-      // GITHUB_CLIENT_ID missing → provider must NOT mount
+      GITHUB_APP_CLIENT_SECRET: 'gh-secret',
+      // GITHUB_APP_CLIENT_ID missing → provider must NOT mount
     });
     expect(opts.socialProviders).toBeUndefined();
     expect(opts.account).toBeUndefined();
@@ -336,8 +336,8 @@ describe('buildAuthOptions env-gating', () => {
       ...baseEnv,
       GOOGLE_CLIENT_ID: 'goog-id',
       GOOGLE_CLIENT_SECRET: 'goog-secret',
-      GITHUB_CLIENT_ID: 'gh-id',
-      GITHUB_CLIENT_SECRET: 'gh-secret',
+      GITHUB_APP_CLIENT_ID: 'gh-id',
+      GITHUB_APP_CLIENT_SECRET: 'gh-secret',
       LINEAR_CLIENT_ID: 'lin-id',
       LINEAR_CLIENT_SECRET: 'lin-secret',
     });
@@ -345,20 +345,24 @@ describe('buildAuthOptions env-gating', () => {
     expect(opts.socialProviders?.google).toEqual({
       clientId: 'goog-id',
       clientSecret: 'goog-secret',
+      // Read-WRITE `tasks` (two-way sync), plus offline access + account chooser for multi-account.
       scope: [
         'openid',
         'email',
         'profile',
         'https://www.googleapis.com/auth/calendar.readonly',
-        'https://www.googleapis.com/auth/tasks.readonly',
+        'https://www.googleapis.com/auth/tasks',
         'https://www.googleapis.com/auth/drive.readonly',
         'https://mail.google.com/',
       ],
+      accessType: 'offline',
+      prompt: 'select_account consent',
     });
     expect(opts.socialProviders?.github).toEqual({
       clientId: 'gh-id',
       clientSecret: 'gh-secret',
-      scope: ['user:email', 'repo'],
+      // Sign-in only needs the email; repo access comes from installing the GitHub App, not a scope.
+      scope: ['user:email'],
     });
     expect(opts.socialProviders?.linear).toEqual({
       clientId: 'lin-id',

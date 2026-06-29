@@ -24,6 +24,7 @@
  */
 
 import { execSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import { readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -178,6 +179,78 @@ function secretName(env: Environment, varName: string): string {
   return env === 'production' ? `docket-${kebab}` : `docket-${env}-${kebab}`;
 }
 
+// ── note rendering (word-wrap so clack boxes never overflow the terminal) ────────
+
+/** Safe content width for a clack `note()` box on the current terminal. */
+function noteWidth(): number {
+  // `process.stdout.columns` is typed `number` but is `undefined` on a non-TTY at runtime.
+  const cols = Number.isFinite(process.stdout.columns) ? process.stdout.columns : 80;
+  return Math.max(40, Math.min(cols - 8, 84));
+}
+
+/**
+ * Word-wrap each line to fit inside a clack `note()` box on the current terminal.
+ *
+ * @remarks
+ * clack's `note()` sizes its frame to the widest line and does NOT wrap, so any line
+ * wider than the terminal overflows and the terminal hard-wraps it mid-word, shattering
+ * the box border. Pre-wrapping at word boundaries keeps every line within the frame; each
+ * line's leading indentation is preserved so numbered/bulleted structure stays aligned.
+ */
+function wrapLines(lines: readonly string[], width = noteWidth()): string[] {
+  const out: string[] = [];
+  for (const line of lines) {
+    const indent = /^\s*/.exec(line)?.[0] ?? '';
+    const body = line.slice(indent.length);
+    if (body === '' || indent.length + body.length <= width) {
+      out.push(line);
+      continue;
+    }
+    // Hang-indent continuation lines under a leading bullet/number marker so wrapped
+    // list items align under their text rather than back at the bullet.
+    const marker = /^(?:[•\-*]\s+|\d+[).]\s+)/.exec(body)?.[0] ?? '';
+    const hang = indent + ' '.repeat(marker.length);
+    const segments: string[] = [];
+    let current = '';
+    for (const word of body.split(' ')) {
+      const pad = (segments.length === 0 ? indent : hang).length;
+      if (current === '') current = word;
+      else if (pad + current.length + 1 + word.length <= width) current += ` ${word}`;
+      else {
+        segments.push(current);
+        current = word;
+      }
+    }
+    if (current !== '') segments.push(current);
+    segments.forEach((seg, i) => out.push((i === 0 ? indent : hang) + seg));
+  }
+  return out;
+}
+
+// ── turnkey secret generation (no hand-run openssl) ──────────────────────────────
+
+/** A fresh 48-hex-char secret (24 random bytes) — the GitHub webhook signing secret. */
+function generateHexSecret(): string {
+  return randomBytes(24).toString('hex');
+}
+
+/**
+ * Best-effort copy to the OS clipboard (pbcopy / xclip / wl-copy / clip).
+ *
+ * @returns true if a clipboard utility accepted the text.
+ */
+function copyToClipboard(text: string): boolean {
+  for (const cmd of ['pbcopy', 'xclip -selection clipboard', 'wl-copy', 'clip']) {
+    try {
+      execSync(cmd, { input: text, stdio: ['pipe', 'ignore', 'ignore'] });
+      return true;
+    } catch {
+      // try the next utility
+    }
+  }
+  return false;
+}
+
 // ── provider groups (curated order + DX copy; metadata comes from the registry) ──
 
 interface ProviderGroup {
@@ -186,6 +259,12 @@ interface ProviderGroup {
   readonly vars: readonly string[];
   /** Explicit, copy-pasteable setup instructions for the chosen environment. */
   readonly instructions: (env: Environment, base: string) => readonly string[];
+  /**
+   * Turnkey secrets generated FOR the user (not prompted): the returned values are shown +
+   * copied to the clipboard, saved like any collected var, and skipped in the prompt loop.
+   * Used for self-chosen secrets (e.g. the GitHub webhook secret) so nobody hand-runs openssl.
+   */
+  readonly generate?: (env: Environment) => Record<string, string>;
 }
 
 /** Suggested OAuth-app name so each environment gets its own clearly-labelled app. */
@@ -224,24 +303,61 @@ const PROVIDER_GROUPS: readonly ProviderGroup[] = [
     ],
   },
   {
-    title: 'GitHub — sign-in + GitHub connector',
-    vars: ['GITHUB_CLIENT_ID', 'GITHUB_CLIENT_SECRET'],
-    instructions: (env, base) => [
-      'Creates a GitHub OAuth App. ~2 min. GitHub allows ONE callback URL per app, so create a',
-      'separate app per environment.',
-      '',
-      '1) Open https://github.com/settings/developers (for an org instead:',
-      '   https://github.com/organizations/<org>/settings/applications).',
-      '2) Select the "OAuth Apps" tab → click "New OAuth App".',
-      `3) Application name: "${appName(env)}".`,
-      `4) Homepage URL: ${base}`,
-      '5) Authorization callback URL — paste exactly, no trailing slash:',
-      `     ${base}/api/auth/callback/github`,
-      '6) Leave "Enable Device Flow" unchecked → click "Register application".',
-      '7) On the app page, copy the "Client ID".',
-      '8) Click "Generate a new client secret" → copy it IMMEDIATELY (GitHub shows it once).',
-      '9) Paste both below.',
+    title: 'GitHub — sign-in + issue/PR connector + webhook firehose',
+    vars: [
+      'GITHUB_APP_ID',
+      'GITHUB_APP_SLUG',
+      'GITHUB_APP_CLIENT_ID',
+      'GITHUB_APP_CLIENT_SECRET',
+      'GITHUB_APP_PRIVATE_KEY',
+      'GITHUB_APP_WEBHOOK_SECRET',
     ],
+    instructions: (env, base) => {
+      // Homepage is the product (web) URL, not the API host the callbacks/webhook live on.
+      const homepage = base.replace('://api.', '://');
+      return [
+        'Creates ONE GitHub App — the only GitHub credential Docket needs. It powers sign-in',
+        '(user-to-server OAuth), the issue/PR connector, AND the webhook firehose. NOT an OAuth',
+        'App. ~5 min. One app per environment (each has its own URLs).',
+        '',
+        'Your webhook secret was generated and copied to your clipboard above — paste it in',
+        'step 4. It is already saved locally; the two just have to match.',
+        '',
+        '1) Open your org\'s GitHub Apps settings → "New GitHub App":',
+        '   https://github.com/organizations/<org>/settings/apps',
+        '   (Org → Settings → Developer settings → GitHub Apps → "New GitHub App").',
+        `2) GitHub App name: "${appName(env)}".  Homepage URL: ${homepage}`,
+        '3) Identifying and authorizing users:',
+        `     • Callback URL:  ${base}/v1/integrations/github/callback`,
+        '     • Check "Expire user authorization tokens" (this provides the refresh token).',
+        '     • Check "Request user authorization (OAuth) during installation".',
+        '     • Check "Redirect on update".',
+        '     • Post installation → Setup URL: leave it. GitHub greys it out with "Unavailable',
+        '       when requesting OAuth during installation" — that is expected, not an error.',
+        '4) Webhook:',
+        '     • Check "Active".',
+        `     • Webhook URL:  ${base}/v1/ingest/github`,
+        '     • Secret: paste the generated webhook secret from above (already on your clipboard).',
+        '     • Leave "Enable SSL verification" on.',
+        '5) Permissions — click each section header to expand it, then set:',
+        '     • Repository permissions → Issues: Read-only;  Pull requests: Read-only.',
+        '       (Metadata: Read-only is then selected for you automatically.)',
+        '     • Account permissions → Email addresses: Read-only (lets sign-in read the email).',
+        '6) Subscribe to events — IMPORTANT: these checkboxes only appear AFTER you grant the',
+        '   repository permissions in step 5, so do step 5 first. Then check:',
+        '     • Issues, Issue comment, Pull request, Pull request review comment.',
+        '7) Where can this be installed → "Only on this account" (just your org).',
+        '8) Click "Create GitHub App". On the app\'s settings page, collect and paste below:',
+        '     • "App ID" (a number)                         → GITHUB_APP_ID',
+        '     • the URL slug from github.com/apps/<slug>     → GITHUB_APP_SLUG',
+        '     • "Client ID" (Iv…)                            → GITHUB_APP_CLIENT_ID',
+        '     • "Generate a new client secret" (shown once)  → GITHUB_APP_CLIENT_SECRET',
+        '     • "Generate a private key" downloads a .pem. Convert to single-line base64:',
+        "           base64 -i <file>.pem | tr -d '\\n'        → GITHUB_APP_PRIVATE_KEY",
+      ];
+    },
+    // Self-chosen secret — generate it for the user instead of making them run openssl.
+    generate: () => ({ GITHUB_APP_WEBHOOK_SECRET: generateHexSecret() }),
   },
   {
     title: 'Linear — sign-in + Linear issue migration',
@@ -705,13 +821,43 @@ async function setupEnvironment(
   const deployHints: string[] = [];
 
   for (const group of PROVIDER_GROUPS) {
+    const collected: Record<string, string> = {};
+
+    // Turnkey secrets: generate (unless already set), show + copy to clipboard, then skip the
+    // prompt — so the value is on screen + clipboard while the user fills the provider's form.
+    const generated = group.generate?.(env) ?? {};
+    for (const [name, fresh] of Object.entries(generated)) {
+      const existing = nonEmpty(envLocal, name);
+      if (existing) {
+        generated[name] = existing; // keep a working secret; never rotate it out from under them
+        continue;
+      }
+      collected[name] = fresh;
+      const copied = copyToClipboard(fresh);
+      note(
+        wrapLines([
+          `${name}:`,
+          `  ${fresh}`,
+          '',
+          `Generated for you${copied ? ' and copied to your clipboard' : ''}. Paste it into the`,
+          'matching field on the provider as you fill the form below. It is saved to',
+          env === 'local'
+            ? 'your .env.local automatically — the two must match.'
+            : 'the cloud secret store automatically — the two must match.',
+        ]).join('\n'),
+        'Secret generated',
+      );
+    }
+
     note(
-      [...group.instructions(env, base), '', 'Leave a field blank to skip it.'].join('\n'),
+      wrapLines([...group.instructions(env, base), '', 'Leave a field blank to skip it.']).join(
+        '\n',
+      ),
       group.title,
     );
 
-    const collected: Record<string, string> = {};
     for (const varName of group.vars) {
+      if (varName in generated) continue; // turnkey-generated above — not prompted
       const spec = findVar(varName);
       if (!spec) {
         warn(`unknown var ${varName} (registry drift) — skipping`);

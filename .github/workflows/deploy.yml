@@ -74,8 +74,12 @@ jobs:
             CRON_SECRET=docket-cron-secret:latest
             GOOGLE_CLIENT_ID=docket-google-client-id:latest
             GOOGLE_CLIENT_SECRET=docket-google-client-secret:latest
-            GITHUB_CLIENT_ID=docket-github-client-id:latest
-            GITHUB_CLIENT_SECRET=docket-github-client-secret:latest
+            GITHUB_APP_ID=docket-github-app-id:latest
+            GITHUB_APP_SLUG=docket-github-app-slug:latest
+            GITHUB_APP_CLIENT_ID=docket-github-app-client-id:latest
+            GITHUB_APP_CLIENT_SECRET=docket-github-app-client-secret:latest
+            GITHUB_APP_PRIVATE_KEY=docket-github-app-private-key:latest
+            GITHUB_APP_WEBHOOK_SECRET=docket-github-app-webhook-secret:latest
             LINEAR_CLIENT_ID=docket-linear-client-id:latest
             LINEAR_CLIENT_SECRET=docket-linear-client-secret:latest
 

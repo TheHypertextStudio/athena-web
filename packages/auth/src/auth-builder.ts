@@ -35,8 +35,8 @@ export interface AuthEnv {
   readonly BETTER_AUTH_PASSKEY_RP_NAME: string;
   readonly GOOGLE_CLIENT_ID?: string | undefined;
   readonly GOOGLE_CLIENT_SECRET?: string | undefined;
-  readonly GITHUB_CLIENT_ID?: string | undefined;
-  readonly GITHUB_CLIENT_SECRET?: string | undefined;
+  readonly GITHUB_APP_CLIENT_ID?: string | undefined;
+  readonly GITHUB_APP_CLIENT_SECRET?: string | undefined;
   readonly LINEAR_CLIENT_ID?: string | undefined;
   readonly LINEAR_CLIENT_SECRET?: string | undefined;
   readonly OIDC_LOGIN_PAGE_URL?: string | undefined;
@@ -119,23 +119,35 @@ export function buildAuthOptions(e: AuthEnv): BetterAuthOptions {
     socialProviders.google = {
       clientId: e.GOOGLE_CLIENT_ID,
       clientSecret: e.GOOGLE_CLIENT_SECRET,
+      // `tasks` (read-WRITE, not `tasks.readonly`) is required for two-way Google Tasks sync —
+      // the connector's `pushTask` 403s without it. (Existing Google-linked users predating this
+      // scope must re-consent; they surface as `error`/needs-reauth, never silently.)
       scope: [
         'openid',
         'email',
         'profile',
         'https://www.googleapis.com/auth/calendar.readonly',
-        'https://www.googleapis.com/auth/tasks.readonly',
+        'https://www.googleapis.com/auth/tasks',
         'https://www.googleapis.com/auth/drive.readonly',
         'https://mail.google.com/',
       ],
+      // `offline` returns a refresh token so background syncs run while nobody is signed in;
+      // `select_account consent` shows the account chooser so a user can link a DIFFERENT Google
+      // account each time (multi-account) and Google re-issues a refresh token on each grant.
+      accessType: 'offline',
+      prompt: 'select_account consent',
     };
     trustedProviders.push('google');
   }
-  if (isRealValue(e.GITHUB_CLIENT_ID) && isRealValue(e.GITHUB_CLIENT_SECRET)) {
+  if (isRealValue(e.GITHUB_APP_CLIENT_ID) && isRealValue(e.GITHUB_APP_CLIENT_SECRET)) {
+    // Sign-in runs on the GitHub App's user-to-server OAuth (a GitHub App reuses the OAuth web
+    // endpoints with its `Iv…` client id). Only `user:email` is requested — repo access is NOT a
+    // sign-in scope: it comes from installing the App (Issues/PRs permission), so the scary `repo`
+    // scope the retired OAuth App needed is gone.
     socialProviders.github = {
-      clientId: e.GITHUB_CLIENT_ID,
-      clientSecret: e.GITHUB_CLIENT_SECRET,
-      scope: ['user:email', 'repo'],
+      clientId: e.GITHUB_APP_CLIENT_ID,
+      clientSecret: e.GITHUB_APP_CLIENT_SECRET,
+      scope: ['user:email'],
     };
     trustedProviders.push('github');
   }

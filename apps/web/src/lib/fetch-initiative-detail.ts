@@ -1,7 +1,7 @@
 import type { InitiativeDetail, MemberOut, ProgramOut, ProjectOut, RoleOut } from '@docket/types';
 
 import { api } from './api';
-import type { RpcResponse } from './query';
+import { type RpcResponse, apiQueryOptions, queryKeys } from './query';
 
 /** InitiativeDetailData describes the fetch initiative detail data contract shared by the hook or component. */
 export interface InitiativeDetailData {
@@ -10,6 +10,22 @@ export interface InitiativeDetailData {
   readonly allPrograms: readonly ProgramOut[];
   readonly members: readonly MemberOut[];
   readonly roles: readonly RoleOut[];
+}
+
+/**
+ * Typed query definition for the initiative detail — the single source the detail page reads with
+ * and list rows prefetch on hover, sharing one cache entry under `queryKeys.initiative`.
+ */
+export function initiativeDetailDef(
+  orgId: string,
+  initiativeId: string,
+  fallbackMessage = 'Could not load this initiative.',
+) {
+  return apiQueryOptions(
+    queryKeys.initiative(orgId, initiativeId),
+    fetchInitiativeDetail(orgId, initiativeId),
+    fallbackMessage,
+  );
 }
 
 /** fetchInitiativeDetail loads the fetch initiative detail detail data required by the page. */

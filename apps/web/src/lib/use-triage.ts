@@ -18,7 +18,7 @@ import type { TriageDestination } from '@/components/triage/triage-actions';
 import type { TriageRowData } from '@/components/triage/triage-row';
 import { api } from './api';
 import { readError, readProblem } from './problem';
-import { apiQueryOptions, queryKeys, useApiQuery } from './query';
+import { STALE, apiQueryOptions, queryKeys, useApiQuery } from './query';
 import { stateTypeOf } from './work-state';
 
 function isUnsorted(task: TaskOut): boolean {
@@ -57,11 +57,14 @@ export function useTriage(orgId: string): TriageState {
   const [pending, setPending] = useState<ReadonlySet<string>>(new Set());
   const [actionError, setActionError] = useState<string | null>(null);
 
+  // The queue itself is volatile (tasks get sorted/dismissed out of it); the supporting rosters and
+  // the integration vocabulary are static within a triage session.
   const tasksQ = useApiQuery(
     apiQueryOptions(
       queryKeys.tasks(orgId),
       () => api.v1.orgs[':orgId'].tasks.$get({ param: { orgId } }),
       'Could not load the triage queue.',
+      { staleTime: STALE.volatile },
     ),
   );
   const teamsQ = useApiQuery(
@@ -69,6 +72,7 @@ export function useTriage(orgId: string): TriageState {
       queryKeys.teams(orgId),
       () => api.v1.orgs[':orgId'].teams.$get({ param: { orgId } }),
       'Could not load teams.',
+      { staleTime: STALE.static },
     ),
   );
   const membersQ = useApiQuery(
@@ -76,6 +80,7 @@ export function useTriage(orgId: string): TriageState {
       queryKeys.members(orgId),
       () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
       'Could not load members.',
+      { staleTime: STALE.static },
     ),
   );
   const projectsQ = useApiQuery(
@@ -83,6 +88,7 @@ export function useTriage(orgId: string): TriageState {
       queryKeys.projects(orgId),
       () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
       'Could not load projects.',
+      { staleTime: STALE.static },
     ),
   );
   const programsQ = useApiQuery(
@@ -90,6 +96,7 @@ export function useTriage(orgId: string): TriageState {
       queryKeys.programs(orgId),
       () => api.v1.orgs[':orgId'].programs.$get({ param: { orgId } }),
       'Could not load programs.',
+      { staleTime: STALE.static },
     ),
   );
   const integrationsQ = useApiQuery(
@@ -97,6 +104,7 @@ export function useTriage(orgId: string): TriageState {
       queryKeys.integrations(orgId),
       () => api.v1.orgs[':orgId'].integrations.$get({ param: { orgId } }),
       'Could not load integrations.',
+      { staleTime: STALE.static },
     ),
   );
   const directoryQ = useApiQuery(
@@ -104,6 +112,7 @@ export function useTriage(orgId: string): TriageState {
       queryKeys.integrationsDirectory(orgId),
       () => api.v1.orgs[':orgId'].integrations.directory.$get({ param: { orgId } }),
       'Could not load the integration directory.',
+      { staleTime: STALE.static },
     ),
   );
 

@@ -23,6 +23,7 @@
     "test:e2e": "turbo run test:e2e",
     "clean": "turbo run clean && rm -rf node_modules",
     "bootstrap": "tsx scripts/bootstrap.ts",
+    "integrations": "tsx scripts/integrations-setup.ts",
     "env:check": "tsx scripts/env-check.ts",
     "scheduler:setup": "dotenv -e .env.local -- tsx scripts/scheduler-setup.ts",
     "proxy:install": "portless service install",
@@ -40,6 +41,7 @@
   },
   "devDependencies": {
     "@changesets/cli": "^2.31.0",
+    "@clack/prompts": "^1.6.0",
     "@eslint/js": "^10.0.1",
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/git": "^10.0.1",

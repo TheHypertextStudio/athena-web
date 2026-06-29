@@ -93,6 +93,15 @@ useApiMutation({
 });
 ```
 
+**When invalidate-only is the right call.** Optimism applies where the optimistic value can be
+faithfully represented from data already on the client. For **server-assigned-identity inserts**
+(a new comment, task, or subtask whose id/timestamps the server mints) and **derived-rollup
+changes** (linking a program to an initiative shifts `childMix`/`distribution`/`rolledUpHealth`;
+closing a cycle carries tasks over), a synthesized optimistic entity or a client-recomputed rollup
+would show wrong data — so those mutations stay invalidate-only and reconcile via `invalidateKeys`.
+In-place edits with a known next value (state, priority, assignment, rename, role change, delete-
+from-list) are always optimistic.
+
 ### 2.5 `usePrefetchApi()` — prefetch on intent (rule 5)
 
 Returns a `(def) => void` prefetcher bound to the active client. Wire it to a row's `onMouseEnter`/`onFocus`, passing the **same definition the destination reads with**, so navigation renders from a warm cache. No-op when the data is already fresh.

@@ -32,15 +32,21 @@ import type {
   ImportedItem,
   LinkResourceInput,
   LinkResult,
+  ListContainersInput,
   MirrorResult,
   MirrorStatusInput,
+  ResourceRef,
+  WritableConnector,
 } from '../ports/connector';
 import { defaultHttpClient, type HttpClient } from './http';
 import { GitHubProviderClient } from './connector-github';
 import { LinearProviderClient } from './connector-linear';
 import { GoogleProviderClient } from './connector-google';
 import { ProviderHttp } from './connector-http';
-import type { ConnectorProviderClient } from './connector-provider-client';
+import {
+  isWritableProviderClient,
+  type ConnectorProviderClient,
+} from './connector-provider-client';
 export type { GoogleProduct } from './connector-google';
 export type { ConnectorProviderClient } from './connector-provider-client';
 export { GitHubProviderClient, LinearProviderClient, GoogleProviderClient };
@@ -174,5 +180,35 @@ export class RealConnector implements Connector {
       ...(externalUrl !== undefined ? { externalUrl } : {}),
       linked: true,
     };
+  }
+
+  /**
+   * {@inheritDoc Connector.asWritable}
+   *
+   * @remarks
+   * Two-way write-back is gated on BOTH the provider being `gtasks` AND the underlying client
+   * implementing `pushTask`: `GoogleProviderClient` is shared across Drive/Gmail/Calendar/Tasks,
+   * so the provider check keeps write-back exposed only for Google Tasks even though the others
+   * share the class.
+   */
+  asWritable(): WritableConnector | undefined {
+    if (this.provider !== 'gtasks') return undefined;
+    const client = this.client;
+    if (!isWritableProviderClient(client)) return undefined;
+    return {
+      pushTask: (input) => client.pushTask(input.op),
+    };
+  }
+
+  /**
+   * {@inheritDoc Connector.listContainers}
+   *
+   * @remarks
+   * Gated to `gtasks` (the only provider with a container concept) AND the client implementing
+   * `listContainers`, mirroring {@link RealConnector.asWritable}.
+   */
+  async listContainers(_input: ListContainersInput): Promise<ResourceRef[]> {
+    if (this.provider !== 'gtasks') return [];
+    return this.client.listContainers();
   }
 }

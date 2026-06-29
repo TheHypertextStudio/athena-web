@@ -246,7 +246,7 @@ export function selectAdapter<P extends PortName>(
             },
             options.http,
           )
-        : new MockConnector();
+        : new MockConnector({ provider });
       return adapter as PortMap[P];
     }
     case 'observer': {

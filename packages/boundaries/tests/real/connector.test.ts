@@ -592,11 +592,17 @@ describe('RealConnector — Google (Drive / Gmail / Calendar REST)', () => {
     );
   });
 
-  it('Tasks: resolves the default-list account, defaults the API base, and imports open tasks', async () => {
+  it('Tasks: resolves the default-list account, defaults the API base, and imports all lists two-way', async () => {
     const { http, calls } = fakeHttp([
+      // connect() → resolveAccount: first list (maxResults=1) supplies the account label.
       new Response(JSON.stringify({ items: [{ id: 'list1', title: 'My Tasks' }] }), {
         status: 200,
       }),
+      // importWork → fetchTaskLists: every list (maxResults=100).
+      new Response(JSON.stringify({ items: [{ id: 'list1', title: 'My Tasks' }] }), {
+        status: 200,
+      }),
+      // importWork → per-list tasks (completed + hidden + deleted), carrying the two-way anchors.
       new Response(
         JSON.stringify({
           items: [
@@ -605,6 +611,8 @@ describe('RealConnector — Google (Drive / Gmail / Calendar REST)', () => {
               title: 'Send the agreement',
               notes: 'To legal by Friday.',
               status: 'needsAction',
+              updated: '2026-01-02T00:00:00.000Z',
+              etag: 'etag-gt1',
               webViewLink: 'https://tasks.google.com/task/gt1',
             },
             { id: 'gt2', status: 'needsAction' },
@@ -615,11 +623,12 @@ describe('RealConnector — Google (Drive / Gmail / Calendar REST)', () => {
     ]);
     const connector = new RealConnector({ provider: 'gtasks', accessToken: 'g_tok' }, http);
     const conn = await connector.connect({ provider: 'gtasks', referenceId: 'org_1' });
+    // gtasks validates the token (the lists call below) but returns NO account label — the app
+    // supplies the identity (account email) instead, so `account` is omitted. Accounts ≠ resources.
     expect(conn).toEqual({
       connectionId: 'gtasks:org_1',
       provider: 'gtasks',
       status: 'connected',
-      account: 'My Tasks',
     });
     expect(calls[0]!.url).toBe(
       'https://tasks.googleapis.com/tasks/v1/users/@me/lists?maxResults=1',
@@ -628,18 +637,26 @@ describe('RealConnector — Google (Drive / Gmail / Calendar REST)', () => {
 
     const items = await connector.importWork({ connectionId: 'c1', provider: 'gtasks' });
     expect(calls[1]!.url).toBe(
-      'https://tasks.googleapis.com/tasks/v1/lists/@default/tasks?showCompleted=false&maxResults=100',
+      'https://tasks.googleapis.com/tasks/v1/users/@me/lists?maxResults=100',
+    );
+    expect(calls[2]!.url).toBe(
+      'https://tasks.googleapis.com/tasks/v1/lists/list1/tasks?showCompleted=true&showHidden=true&showDeleted=true&maxResults=100',
     );
     expect(items[0]).toEqual({
       id: 'gt1',
       kind: 'issue',
       title: 'Send the agreement',
       body: 'To legal by Friday.',
+      completed: false,
+      dueDate: null,
       provenance: {
         provider: 'gtasks',
         externalId: 'gt1',
         externalUrl: 'https://tasks.google.com/task/gt1',
         importedAt: items[0]!.provenance.importedAt,
+        externalUpdatedAt: '2026-01-02T00:00:00.000Z',
+        externalEtag: 'etag-gt1',
+        externalListId: 'list1',
       },
     });
     // An untitled task falls back to a placeholder and omits body + externalUrl.
@@ -648,14 +665,64 @@ describe('RealConnector — Google (Drive / Gmail / Calendar REST)', () => {
     expect(items[1]?.provenance).not.toHaveProperty('externalUrl');
   });
 
-  it('Tasks: falls back to the list id when the default list has no title, and resolves the task url', async () => {
+  it('Tasks: scopes the import to the configured listIds', async () => {
+    const { http, calls } = fakeHttp([
+      // fetchTaskLists returns two lists; only 'work' is selected.
+      new Response(
+        JSON.stringify({
+          items: [
+            { id: 'personal', title: 'Personal' },
+            { id: 'work', title: 'Work' },
+          ],
+        }),
+        { status: 200 },
+      ),
+      new Response(JSON.stringify({ items: [{ id: 'w1', status: 'needsAction' }] }), {
+        status: 200,
+      }),
+    ]);
+    const connector = new RealConnector({ provider: 'gtasks', accessToken: 'tok' }, http);
+    const items = await connector.importWork({
+      connectionId: 'c1',
+      provider: 'gtasks',
+      listIds: ['work'],
+    });
+    // Only the 'work' list's tasks were pulled (no call for 'personal').
+    expect(calls).toHaveLength(2);
+    expect(calls[1]!.url).toContain('/lists/work/tasks');
+    expect(items.map((i) => i.id)).toEqual(['w1']);
+  });
+
+  it('Tasks: listContainers enumerates the task lists for the config UI', async () => {
+    const { http } = fakeHttp([
+      new Response(
+        JSON.stringify({
+          items: [
+            { id: '@default', title: 'My Tasks' },
+            { id: 'work', title: 'Work' },
+          ],
+        }),
+        { status: 200 },
+      ),
+    ]);
+    const connector = new RealConnector({ provider: 'gtasks', accessToken: 'tok' }, http);
+    const lists = await connector.listContainers({ connectionId: 'c1', provider: 'gtasks' });
+    expect(lists).toEqual([
+      { id: '@default', title: 'My Tasks' },
+      { id: 'work', title: 'Work' },
+    ]);
+  });
+
+  it('Tasks: connects without deriving an account label, and resolves the task url', async () => {
     const { http } = fakeHttp([
       new Response(JSON.stringify({ items: [{ id: 'list-only-id' }] }), { status: 200 }),
     ]);
     const connector = new RealConnector({ provider: 'gtasks', accessToken: 'tok' }, http);
-    expect((await connector.connect({ provider: 'gtasks', referenceId: 'o' })).account).toBe(
-      'list-only-id',
-    );
+    // The credential is validated (the lists call) but no label is derived from a resource — the
+    // app supplies the account's identity (email) instead, so `account` is undefined.
+    expect(
+      (await connector.connect({ provider: 'gtasks', referenceId: 'o' })).account,
+    ).toBeUndefined();
     const link = await connector.linkResource({
       connectionId: 'c1',
       provider: 'gtasks',

@@ -4,6 +4,7 @@ import type {
   LinkResourceInput,
   MirrorResult,
   MirrorStatusInput,
+  ResourceRef,
 } from '../ports/connector';
 import { ConnectorError } from '../ports/connector-error';
 import type { ConnectorProviderClient } from './connector-provider-client';
@@ -17,6 +18,12 @@ interface LinearIssueNode {
   readonly title: string;
   readonly description?: string | null;
   readonly url: string;
+}
+
+/** A Linear GraphQL envelope: the typed `data` payload, plus any `errors[]`. */
+interface GraphQLResponse<T> {
+  readonly data?: T;
+  readonly errors?: { readonly message: string }[];
 }
 
 /**
@@ -52,10 +59,7 @@ export class LinearProviderClient implements ConnectorProviderClient {
    * `provider` — instead of a generic untyped throw the caller can't reason about.
    */
   private async query<T>(query: string): Promise<T> {
-    const json = (await this.http.postJson('/graphql', { query })) as {
-      data?: T;
-      errors?: { message: string }[];
-    };
+    const json = await this.http.postJson<GraphQLResponse<T>>('/graphql', { query });
     if (json.errors && json.errors.length > 0) {
       const message = json.errors.map((e) => e.message).join('; ');
       const kind = /auth|unauthorized|access|token|forbidden/i.test(message) ? 'auth' : 'provider';
@@ -141,5 +145,15 @@ export class LinearProviderClient implements ConnectorProviderClient {
     const match = /^([^/]+)\/([A-Z0-9]+-\d+)$/.exec(input.externalId);
     if (!match) return undefined;
     return `https://linear.app/${match[1]}/issue/${match[2]}`;
+  }
+
+  /**
+   * {@inheritDoc ConnectorProviderClient.listContainers}
+   *
+   * @remarks
+   * Linear has no Google-Tasks-style container concept here, so there is nothing to select.
+   */
+  async listContainers(): Promise<ResourceRef[]> {
+    return [];
   }
 }

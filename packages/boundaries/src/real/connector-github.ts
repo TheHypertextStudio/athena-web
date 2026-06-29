@@ -4,6 +4,7 @@ import type {
   LinkResourceInput,
   MirrorResult,
   MirrorStatusInput,
+  ResourceRef,
 } from '../ports/connector';
 import { ConnectorError } from '../ports/connector-error';
 import type { ConnectorProviderClient } from './connector-provider-client';
@@ -20,6 +21,20 @@ interface GitHubIssue {
   readonly pull_request?: unknown;
 }
 
+/** `GET /user` identity payload. */
+interface GitHubUser {
+  readonly login?: string;
+  readonly name?: string;
+}
+
+/** A GitHub REST error body (`{ message }`), the non-array shape `GET /issues` can return. */
+interface GitHubErrorBody {
+  readonly message?: string;
+}
+
+/** The two shapes `GET /issues` can answer with: the issue array, or an error body. */
+type GitHubIssuesResponse = GitHubIssue[] | GitHubErrorBody | undefined;
+
 /**
  * The GitHub connector client (REST, Octokit-compatible shapes).
  *
@@ -35,7 +50,7 @@ export class GitHubProviderClient implements ConnectorProviderClient {
 
   /** {@inheritDoc ConnectorProviderClient.resolveAccount} */
   async resolveAccount(): Promise<string | undefined> {
-    const json = (await this.http.getJson('/user')) as { login?: string; name?: string };
+    const json = await this.http.getJson<GitHubUser>('/user');
     return json.login ?? json.name;
   }
 
@@ -68,9 +83,9 @@ export class GitHubProviderClient implements ConnectorProviderClient {
     const all: GitHubIssue[] = [];
     let truncated = true;
     for (let page = 1; page <= MAX_IMPORT_PAGES; page++) {
-      const json = (await this.http.getJson(
+      const json = await this.http.getJson<GitHubIssuesResponse>(
         `/issues?filter=all&state=${stateFilter}&per_page=100&page=${page}`,
-      )) as GitHubIssue[] | { message?: string } | undefined;
+      );
       if (!Array.isArray(json)) {
         throw new ConnectorError('github returned an unexpected (non-array) issues response', {
           provider: 'github',
@@ -112,5 +127,15 @@ export class GitHubProviderClient implements ConnectorProviderClient {
     if (match) return `https://github.com/${match[1]}/issues/${match[2]}`;
     if (/^[^/]+\/[^/]+$/.test(input.externalId)) return `https://github.com/${input.externalId}`;
     return undefined;
+  }
+
+  /**
+   * {@inheritDoc ConnectorProviderClient.listContainers}
+   *
+   * @remarks
+   * GitHub has no task-list container concept, so there is nothing to select — returns empty.
+   */
+  async listContainers(): Promise<ResourceRef[]> {
+    return [];
   }
 }

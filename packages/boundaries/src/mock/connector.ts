@@ -13,18 +13,29 @@ import type {
   ConnectInput,
   ConnectionResult,
   Connector,
+  ConnectorProvider,
+  ExternalWriteResult,
   ImportWorkInput,
   ImportedItem,
   LinkResourceInput,
   LinkResult,
+  ListContainersInput,
   MirrorResult,
   MirrorStatusInput,
+  ResourceRef,
+  TaskPushOp,
+  WritableConnector,
 } from '../ports/connector';
 
 /** Construction options for {@link MockConnector}. */
 export interface MockConnectorOptions {
   /** Fixed ISO-8601 "now" used for mirror timestamps. */
   readonly now?: string;
+  /**
+   * The provider this mock is bound to, so {@link MockConnector.asWritable} can gate write-back
+   * on `gtasks` exactly like {@link RealConnector}. Defaults to `github` (read-only).
+   */
+  readonly provider?: ConnectorProvider;
 }
 
 /**
@@ -37,13 +48,15 @@ export interface MockConnectorOptions {
  */
 export class MockConnector implements Connector {
   private readonly now: string;
+  private readonly provider: ConnectorProvider;
   private counter = 0;
 
   /**
-   * @param options - Optional fixed `now` for deterministic timestamps.
+   * @param options - Optional fixed `now` and the bound provider for write-back gating.
    */
   constructor(options: MockConnectorOptions = {}) {
     this.now = options.now ?? FIXED_NOW;
+    this.provider = options.provider ?? 'github';
   }
 
   private nextId(prefix: string): string {
@@ -84,5 +97,56 @@ export class MockConnector implements Connector {
       externalUrl: `https://${input.provider}.mock.docket.local/${input.externalId}`,
       linked: true,
     };
+  }
+
+  /**
+   * A deterministic, monotonically-advancing ISO timestamp for write-back echoes.
+   *
+   * @remarks
+   * Anchored to {@link MockConnector.now} and advanced by the per-mock counter so each
+   * `pushTask` returns a strictly-newer `externalUpdatedAt` than the last — letting the echo
+   * guard (`externalUpdatedAt = updatedAt`) settle without wall-clock time or randomness.
+   */
+  private nextStamp(): string {
+    this.counter += 1;
+    return new Date(new Date(this.now).getTime() + this.counter * 1000).toISOString();
+  }
+
+  /**
+   * {@inheritDoc Connector.asWritable}
+   *
+   * @remarks
+   * The mock is two-way for `gtasks` only (mirroring {@link RealConnector}); other providers
+   * are read-only and get `undefined`, so the sync engine's write path is exercised offline.
+   */
+  asWritable(): WritableConnector | undefined {
+    if (this.provider !== 'gtasks') return undefined;
+    return { pushTask: (input) => this.pushTask(input.op) };
+  }
+
+  /** Apply one write op against the in-memory mock, echoing post-write sync anchors. */
+  private async pushTask(op: TaskPushOp): Promise<ExternalWriteResult | undefined> {
+    if (op.kind === 'delete') return;
+    const stamp = this.nextStamp();
+    return {
+      externalId: op.kind === 'create' ? this.nextId('gtask') : op.externalId,
+      externalUpdatedAt: stamp,
+      externalEtag: `etag_${this.counter.toString().padStart(6, '0')}`,
+    };
+  }
+
+  /**
+   * {@inheritDoc Connector.listContainers}
+   *
+   * @remarks
+   * Returns two fixture Google Tasks lists for `gtasks` so the per-account "which lists to sync"
+   * config UI has selectable data offline; every other provider has no containers.
+   */
+  async listContainers(input: ListContainersInput): Promise<ResourceRef[]> {
+    if (input.provider !== 'gtasks') return [];
+    return [
+      { id: '@default', title: 'My Tasks' },
+      { id: 'mock-list-work', title: 'Work' },
+    ];
   }
 }

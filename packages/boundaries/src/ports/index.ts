@@ -30,13 +30,19 @@ export type {
   ConnectionResult,
   Connector,
   ConnectorProvider,
+  ExternalWriteResult,
   ImportWorkInput,
   ImportedItem,
   ItemProvenance,
   LinkResourceInput,
   LinkResult,
+  ListContainersInput,
   MirrorResult,
   MirrorStatusInput,
+  PushTaskInput,
+  ResourceRef,
+  TaskPushOp,
+  WritableConnector,
 } from './connector';
 export { ConnectorError, isConnectorError } from './connector-error';
 export type { ConnectorErrorKind, ConnectorErrorOptions } from './connector-error';

@@ -2,11 +2,11 @@
 
 import type { HubTaskItem, HubTodayOut } from '@docket/types';
 import { useContextState } from '@docket/ui/components';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 import { api } from '@/lib/api';
-import { readError, readProblem } from '@/lib/problem';
+import { queryKeys, useApiQuery } from '@/lib/query';
 import { todayISODate } from '@/lib/today';
 
 /** A plan group: one organization and the caller's tasks for the day within it. */
@@ -20,9 +20,9 @@ export interface PlanGroup {
 export interface TodayPageData {
   data: HubTodayOut | null;
   loading: boolean;
-  refreshing: boolean;
   error: string | null;
-  load: (initial: boolean) => Promise<void>;
+  /** Force a re-fetch (error-state retry, or after a task is captured). */
+  refetch: () => void;
   planGroups: PlanGroup[];
   taskTitle: (taskId: string) => string;
   planCount: number;
@@ -33,39 +33,21 @@ export interface TodayPageData {
   heading: string;
 }
 
-/** useTodayData coordinates today state, loading, and mutations for its screen. */
+/**
+ * Coordinates the Today screen's data via the shared {@link useApiQuery} layer: it auto-refetches
+ * on window focus and after its 30s stale window, so the page needs no manual Refresh control.
+ */
 export function useTodayData(): TodayPageData {
   const { orgName } = useActiveOrg();
   const { activeOrgId } = useContextState();
 
-  const [data, setData] = useState<HubTodayOut | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(async (initial: boolean): Promise<void> => {
-    if (initial) setLoading(true);
-    else setRefreshing(true);
-    setError(null);
-    const date = todayISODate();
-    try {
-      const res = await api.v1.hub.today.$get({ query: { date } });
-      if (!res.ok) {
-        setError(await readProblem(res, 'Could not load your day.'));
-        return;
-      }
-      setData(await res.json());
-    } catch (caught) {
-      setError(readError(caught, 'Something went wrong loading your day.'));
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load(true);
-  }, [load]);
+  const date = todayISODate();
+  const todayQ = useApiQuery(
+    queryKeys.today(date),
+    () => api.v1.hub.today.$get({ query: { date } }),
+    'Could not load your day.',
+  );
+  const data = todayQ.data ?? null;
 
   const heading = useMemo(
     () =>
@@ -108,10 +90,11 @@ export function useTodayData(): TodayPageData {
 
   return {
     data,
-    loading,
-    refreshing,
-    error,
-    load,
+    loading: todayQ.isPending,
+    error: todayQ.error ? todayQ.error.message : null,
+    refetch: () => {
+      void todayQ.refetch();
+    },
     planGroups,
     taskTitle,
     planCount,

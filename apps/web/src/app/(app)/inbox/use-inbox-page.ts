@@ -1,12 +1,14 @@
 'use client';
 
 import type { AuditEventOut, NotificationOut } from '@docket/types';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useCallback, useMemo, useState } from 'react';
 
 import { isApproval } from '@/components/inbox/notification-meta';
 import type { SegmentDef } from '@/components/inbox/segmented-tabs';
 import { api } from '@/lib/api';
 import { readError, readProblem } from '@/lib/problem';
+import { queryKeys, useApiQuery } from '@/lib/query';
 
 /** The Inbox's two feeds. */
 type InboxTab = 'inbox' | 'activity';
@@ -23,61 +25,53 @@ export interface InboxPageData {
   unreadCount: number;
   pendingApprovals: number;
   loading: boolean;
-  refreshing: boolean;
   error: string | null;
   actionError: string | null;
   pendingIds: ReadonlySet<string>;
   markingAll: boolean;
   segments: readonly SegmentDef<InboxTab>[];
-  load: (initial: boolean) => Promise<void>;
+  /** Force a re-fetch (error-state retry). */
+  refetch: () => void;
   onApprove: (id: string) => Promise<void>;
   onMarkRead: (id: string) => Promise<void>;
   onMarkAllRead: () => Promise<void>;
 }
 
-/** useInboxPage coordinates inbox state, loading, and mutations for its screen. */
+/**
+ * Coordinates the Inbox screen via the shared {@link useApiQuery} layer.
+ *
+ * @remarks
+ * Three live queries (notifications list, pending-approval count, activity feed) auto-refetch on
+ * window focus + after the 30s stale window, so the page needs no manual Refresh control. The
+ * count key is nested under the notifications key, so a single `invalidate(notifications())` after
+ * a mutation re-syncs both the list and the count from the server.
+ */
 export function useInboxPage(): InboxPageData {
+  const queryClient = useQueryClient();
   const [tab, setTab] = useState<InboxTab>('inbox');
-  const [notifications, setNotifications] = useState<readonly NotificationOut[]>([]);
-  const [activity, setActivity] = useState<readonly AuditEventOut[]>([]);
-  const [pendingApprovals, setPendingApprovals] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [pendingIds, setPendingIds] = useState<ReadonlySet<string>>(new Set());
   const [markingAll, setMarkingAll] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const load = useCallback(async (initial: boolean): Promise<void> => {
-    if (initial) setLoading(true);
-    else setRefreshing(true);
-    setError(null);
-    try {
-      const [inboxRes, countRes, activityRes] = await Promise.all([
-        api.v1.notifications.$get({ query: {} }),
-        api.v1.notifications.count.$get(),
-        api.v1.hub.activity.$get({
-          query: { limit: String(ACTIVITY_PAGE_SIZE), order: 'desc' },
-        }),
-      ]);
-      if (!inboxRes.ok) {
-        setError(await readProblem(inboxRes, 'Could not load your inbox.'));
-        return;
-      }
-      setNotifications((await inboxRes.json()).items);
-      if (countRes.ok) setPendingApprovals((await countRes.json()).pendingApprovals);
-      if (activityRes.ok) setActivity((await activityRes.json()).items);
-    } catch (caught) {
-      setError(readError(caught, 'Something went wrong loading your inbox.'));
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
+  const inboxQ = useApiQuery(
+    queryKeys.notifications(),
+    () => api.v1.notifications.$get({ query: {} }),
+    'Could not load your inbox.',
+  );
+  const countQ = useApiQuery(
+    queryKeys.notificationsCount(),
+    () => api.v1.notifications.count.$get(),
+    'Could not load your inbox.',
+  );
+  const activityQ = useApiQuery(
+    queryKeys.activity(),
+    () => api.v1.hub.activity.$get({ query: { limit: String(ACTIVITY_PAGE_SIZE), order: 'desc' } }),
+    'Could not load activity.',
+  );
 
-  useEffect(() => {
-    void load(true);
-  }, [load]);
+  const notifications = useMemo(() => inboxQ.data?.items ?? [], [inboxQ.data]);
+  const activity = useMemo(() => activityQ.data?.items ?? [], [activityQ.data]);
+  const pendingApprovals = countQ.data?.pendingApprovals ?? 0;
 
   const setPending = useCallback((id: string, on: boolean): void => {
     setPendingIds((prev) => {
@@ -88,12 +82,11 @@ export function useInboxPage(): InboxPageData {
     });
   }, []);
 
-  const markReadLocally = useCallback((id: string): void => {
-    const now = new Date().toISOString();
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, readAt: n.readAt ?? now } : n)),
-    );
-  }, []);
+  /** Re-sync the inbox list + count from the server (count key is nested under notifications). */
+  const refreshInbox = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: queryKeys.notifications() }),
+    [queryClient],
+  );
 
   const onApprove = useCallback(
     async (id: string): Promise<void> => {
@@ -108,37 +101,34 @@ export function useInboxPage(): InboxPageData {
           setActionError(await readProblem(res, 'Could not approve this item.'));
           return;
         }
-        markReadLocally(id);
-        setPendingApprovals((c) => Math.max(0, c - 1));
+        await refreshInbox();
       } catch (caught) {
         setActionError(readError(caught, 'Something went wrong approving this item.'));
       } finally {
         setPending(id, false);
       }
     },
-    [markReadLocally, setPending],
+    [refreshInbox, setPending],
   );
 
   const onMarkRead = useCallback(
     async (id: string): Promise<void> => {
       setActionError(null);
       setPending(id, true);
-      const wasApproval = notifications.some((n) => n.id === id && isApproval(n.type) && !n.readAt);
       try {
         const res = await api.v1.notifications[':id'].read.$post({ param: { id } });
         if (!res.ok) {
           setActionError(await readProblem(res, 'Could not mark this item read.'));
           return;
         }
-        markReadLocally(id);
-        if (wasApproval) setPendingApprovals((c) => Math.max(0, c - 1));
+        await refreshInbox();
       } catch (caught) {
         setActionError(readError(caught, 'Something went wrong updating this item.'));
       } finally {
         setPending(id, false);
       }
     },
-    [markReadLocally, notifications, setPending],
+    [refreshInbox, setPending],
   );
 
   const onMarkAllRead = useCallback(async (): Promise<void> => {
@@ -150,15 +140,13 @@ export function useInboxPage(): InboxPageData {
         setActionError(await readProblem(res, 'Could not mark everything read.'));
         return;
       }
-      const now = new Date().toISOString();
-      setNotifications((prev) => prev.map((n) => (n.readAt ? n : { ...n, readAt: now })));
-      setPendingApprovals(0);
+      await refreshInbox();
     } catch (caught) {
       setActionError(readError(caught, 'Something went wrong marking everything read.'));
     } finally {
       setMarkingAll(false);
     }
-  }, []);
+  }, [refreshInbox]);
 
   const orderedInbox = useMemo<readonly NotificationOut[]>(() => {
     const rank = (n: NotificationOut): number => {
@@ -190,14 +178,17 @@ export function useInboxPage(): InboxPageData {
     activity,
     unreadCount,
     pendingApprovals,
-    loading,
-    refreshing,
-    error,
+    loading: inboxQ.isPending,
+    error: inboxQ.error ? inboxQ.error.message : null,
     actionError,
     pendingIds,
     markingAll,
     segments,
-    load,
+    refetch: () => {
+      void inboxQ.refetch();
+      void countQ.refetch();
+      void activityQ.refetch();
+    },
     onApprove,
     onMarkRead,
     onMarkAllRead,

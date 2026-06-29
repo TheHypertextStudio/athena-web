@@ -10,13 +10,15 @@ import {
   type TeamOut,
 } from '@docket/types';
 import type { GroupKey } from '@docket/ui/components';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useCallback, useMemo, useState } from 'react';
 
 import { buildProviderResolver } from '@/components/triage/provider-directory';
 import type { TriageDestination } from '@/components/triage/triage-actions';
 import type { TriageRowData } from '@/components/triage/triage-row';
 import { api } from './api';
 import { readError, readProblem } from './problem';
+import { queryKeys, useApiQuery } from './query';
 import { stateTypeOf } from './work-state';
 
 function isUnsorted(task: TaskOut): boolean {
@@ -35,61 +37,81 @@ export interface TriageState {
   providerName: (integrationId: string | null | undefined) => string;
   toRow: (task: TaskOut) => TriageRowData;
   groupBy: (task: TaskOut) => GroupKey;
-  reload: () => void;
   sortToProject: (taskId: string, projectId: string) => Promise<void>;
   sortToProgram: (taskId: string, programId: string) => Promise<void>;
   dismiss: (taskId: string) => Promise<void>;
 }
 
-/** useTriage coordinates use triage state, loading, and mutations for its screen. */
+/**
+ * Coordinates the Triage screen via the shared {@link useApiQuery} layer.
+ *
+ * @remarks
+ * Each of the seven data slices is its own query keyed off the standard {@link queryKeys}, so the
+ * cache is shared with the rest of the app (e.g. moving a task elsewhere already invalidates
+ * `tasks(orgId)`, which refreshes the queue here too) and every slice auto-refetches on window
+ * focus — no manual Refresh control. Sorting / dismissing a task invalidates `tasks(orgId)` so the
+ * server-side state (the task is no longer unsorted, or is gone) drops it from the queue.
+ */
 export function useTriage(orgId: string): TriageState {
-  const [tasks, setTasks] = useState<readonly TaskOut[]>([]);
-  const [teams, setTeams] = useState<readonly TeamOut[]>([]);
-  const [members, setMembers] = useState<readonly MemberOut[]>([]);
-  const [projects, setProjects] = useState<readonly ProjectOut[]>([]);
-  const [programs, setPrograms] = useState<readonly ProgramOut[]>([]);
-  const [integrations, setIntegrations] = useState<readonly IntegrationOut[]>([]);
-  const [directory, setDirectory] = useState<readonly IntegrationDirectoryProvider[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
   const [pending, setPending] = useState<ReadonlySet<string>>(new Set());
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const load = useCallback(async (): Promise<void> => {
-    setLoading(true);
-    setLoadError(null);
-    try {
-      const [tasksRes, teamsRes, membersRes, projectsRes, programsRes, integrationsRes, dirRes] =
-        await Promise.all([
-          api.v1.orgs[':orgId'].tasks.$get({ param: { orgId } }),
-          api.v1.orgs[':orgId'].teams.$get({ param: { orgId } }),
-          api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
-          api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
-          api.v1.orgs[':orgId'].programs.$get({ param: { orgId } }),
-          api.v1.orgs[':orgId'].integrations.$get({ param: { orgId } }),
-          api.v1.orgs[':orgId'].integrations.directory.$get({ param: { orgId } }),
-        ]);
-      if (!tasksRes.ok) {
-        setLoadError(await readProblem(tasksRes, 'Could not load the triage queue.'));
-        return;
-      }
-      setTasks((await tasksRes.json()).items);
-      if (teamsRes.ok) setTeams((await teamsRes.json()).items);
-      if (membersRes.ok) setMembers((await membersRes.json()).items);
-      if (projectsRes.ok) setProjects((await projectsRes.json()).items);
-      if (programsRes.ok) setPrograms((await programsRes.json()).items);
-      if (integrationsRes.ok) setIntegrations((await integrationsRes.json()).items);
-      if (dirRes.ok) setDirectory((await dirRes.json()).providers);
-    } catch (caught) {
-      setLoadError(readError(caught, 'Something went wrong loading the triage queue.'));
-    } finally {
-      setLoading(false);
-    }
-  }, [orgId]);
+  const tasksQ = useApiQuery(
+    queryKeys.tasks(orgId),
+    () => api.v1.orgs[':orgId'].tasks.$get({ param: { orgId } }),
+    'Could not load the triage queue.',
+  );
+  const teamsQ = useApiQuery(
+    queryKeys.teams(orgId),
+    () => api.v1.orgs[':orgId'].teams.$get({ param: { orgId } }),
+    'Could not load teams.',
+  );
+  const membersQ = useApiQuery(
+    queryKeys.members(orgId),
+    () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
+    'Could not load members.',
+  );
+  const projectsQ = useApiQuery(
+    queryKeys.projects(orgId),
+    () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
+    'Could not load projects.',
+  );
+  const programsQ = useApiQuery(
+    queryKeys.programs(orgId),
+    () => api.v1.orgs[':orgId'].programs.$get({ param: { orgId } }),
+    'Could not load programs.',
+  );
+  const integrationsQ = useApiQuery(
+    queryKeys.integrations(orgId),
+    () => api.v1.orgs[':orgId'].integrations.$get({ param: { orgId } }),
+    'Could not load integrations.',
+  );
+  const directoryQ = useApiQuery(
+    queryKeys.integrationsDirectory(orgId),
+    () => api.v1.orgs[':orgId'].integrations.directory.$get({ param: { orgId } }),
+    'Could not load the integration directory.',
+  );
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const tasks = useMemo<readonly TaskOut[]>(() => tasksQ.data?.items ?? [], [tasksQ.data]);
+  const teams = useMemo<readonly TeamOut[]>(() => teamsQ.data?.items ?? [], [teamsQ.data]);
+  const members = useMemo<readonly MemberOut[]>(() => membersQ.data?.items ?? [], [membersQ.data]);
+  const projects = useMemo<readonly ProjectOut[]>(
+    () => projectsQ.data?.items ?? [],
+    [projectsQ.data],
+  );
+  const programs = useMemo<readonly ProgramOut[]>(
+    () => programsQ.data?.items ?? [],
+    [programsQ.data],
+  );
+  const integrations = useMemo<readonly IntegrationOut[]>(
+    () => integrationsQ.data?.items ?? [],
+    [integrationsQ.data],
+  );
+  const directory = useMemo<readonly IntegrationDirectoryProvider[]>(
+    () => directoryQ.data?.providers ?? [],
+    [directoryQ.data],
+  );
 
   const triageTeamIds = useMemo(
     () => new Set(teams.filter((team) => team.triageEnabled).map((team) => team.id)),
@@ -158,9 +180,11 @@ export function useTriage(orgId: string): TriageState {
     });
   }, []);
 
-  const dropTask = useCallback((taskId: string): void => {
-    setTasks((current) => current.filter((task) => task.id !== taskId));
-  }, []);
+  /** Re-sync the task list so a sorted/dismissed task leaves the queue. */
+  const refreshTasks = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: queryKeys.tasks(orgId) }),
+    [queryClient, orgId],
+  );
 
   const sortToProject = useCallback(
     async (taskId: string, projectId: string): Promise<void> => {
@@ -175,14 +199,14 @@ export function useTriage(orgId: string): TriageState {
           setActionError(await readProblem(res, 'Could not move that item. Please try again.'));
           return;
         }
-        dropTask(taskId);
+        await refreshTasks();
       } catch (caught) {
         setActionError(readError(caught, 'Something went wrong moving that item.'));
       } finally {
         endPending(taskId);
       }
     },
-    [orgId, beginPending, endPending, dropTask],
+    [orgId, beginPending, endPending, refreshTasks],
   );
 
   const sortToProgram = useCallback(
@@ -198,14 +222,14 @@ export function useTriage(orgId: string): TriageState {
           setActionError(await readProblem(res, 'Could not send that item. Please try again.'));
           return;
         }
-        dropTask(taskId);
+        await refreshTasks();
       } catch (caught) {
         setActionError(readError(caught, 'Something went wrong sending that item.'));
       } finally {
         endPending(taskId);
       }
     },
-    [orgId, beginPending, endPending, dropTask],
+    [orgId, beginPending, endPending, refreshTasks],
   );
 
   const dismiss = useCallback(
@@ -220,20 +244,20 @@ export function useTriage(orgId: string): TriageState {
           setActionError(await readProblem(res, 'Could not dismiss that item. Please try again.'));
           return;
         }
-        dropTask(taskId);
+        await refreshTasks();
       } catch (caught) {
         setActionError(readError(caught, 'Something went wrong dismissing that item.'));
       } finally {
         endPending(taskId);
       }
     },
-    [orgId, beginPending, endPending, dropTask],
+    [orgId, beginPending, endPending, refreshTasks],
   );
 
   return {
     queue,
-    loading,
-    loadError,
+    loading: tasksQ.isPending,
+    loadError: tasksQ.error ? tasksQ.error.message : null,
     actionError,
     pending,
     projectDestinations,
@@ -241,9 +265,6 @@ export function useTriage(orgId: string): TriageState {
     providerName,
     toRow,
     groupBy,
-    reload: () => {
-      void load();
-    },
     sortToProject,
     sortToProgram,
     dismiss,

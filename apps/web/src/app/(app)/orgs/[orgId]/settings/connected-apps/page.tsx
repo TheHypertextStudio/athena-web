@@ -1,16 +1,17 @@
 'use client';
 
 /**
- * The Connected Apps settings section.
+ * The Authorized apps settings section.
  *
  * @remarks
  * Reached at `/orgs/[orgId]/settings/connected-apps` (personal workspace only — see
- * {@link PERSONAL_SETTINGS_SECTION_GROUPS}). This surface is the inverse of Integrations:
+ * {@link PERSONAL_SETTINGS_SECTION_GROUPS}). This surface is the inverse of Connections /
+ * Connected accounts:
  *
- * - **Integrations** — Docket connecting _to_ other tools (GitHub, Linear, Drive…) to pull
- *   your work in. Docket is the client.
- * - **Connected apps** — other tools connecting _to_ Docket via MCP to read and act on your
- *   work. Docket is the server / data provider.
+ * - **Connections** / **Connected accounts** — Docket connecting _out_ to other tools (GitHub,
+ *   Linear, Google…) to pull your work in. Docket is the client.
+ * - **Authorized apps** — external tools connecting _into_ Docket via MCP to read and act on
+ *   your work. Docket is the server / data provider.
  *
  * The tab shows the MCP server URL for copy-paste into Claude Desktop, Cursor, or any other
  * MCP-compatible client, and lists the OAuth clients a user has already authorized, with a
@@ -39,8 +40,8 @@ export default function ConnectedAppsSettingsPage({
   return (
     <div className="flex flex-col gap-6">
       <SectionHeader
-        title="Connected apps"
-        description="MCP clients authorized to read and act on your Docket account."
+        title="Authorized apps"
+        description="External apps (via MCP) you have authorized to read and act on your Docket account."
       />
       <ConnectedAppsTab orgId={orgId} />
     </div>

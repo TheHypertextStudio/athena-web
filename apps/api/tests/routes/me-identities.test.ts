@@ -7,14 +7,14 @@ import { getDb, seedBaseOrg } from './harness.test';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
-let googleIdentities!: typeof ProviderModule.googleIdentities;
+let linkedIdentities!: typeof ProviderModule.linkedIdentities;
 let resolveIdentityLabel!: typeof ProviderModule.resolveIdentityLabel;
 
 beforeAll(async () => {
   schema = await getDb();
   db = schema.db;
   const mod = await import('../../src/routes/integration-provider');
-  googleIdentities = mod.googleIdentities;
+  linkedIdentities = mod.linkedIdentities;
   resolveIdentityLabel = mod.resolveIdentityLabel;
 });
 
@@ -41,7 +41,16 @@ async function seedGoogleAccount(userId: string, accountId: string, token: strin
   });
 }
 
-describe('googleIdentities', () => {
+async function seedAccount(
+  userId: string,
+  providerId: string,
+  accountId: string,
+  scope: string,
+): Promise<void> {
+  await db.insert(schema.account).values({ userId, providerId, accountId, scope });
+}
+
+describe('linkedIdentities', () => {
   it('lists a linked Google account by the email decoded from its id token', async () => {
     const userId = await seedUser(`gid-${Math.random().toString(36).slice(2)}@x.test`, 'Ada');
     await seedGoogleAccount(
@@ -50,7 +59,7 @@ describe('googleIdentities', () => {
       idToken({ email: 'ada@gmail.com', name: 'Ada G' }),
     );
 
-    const ids = await googleIdentities(userId);
+    const ids = await linkedIdentities(userId);
     expect(ids).toHaveLength(1);
     expect(ids[0]).toMatchObject({
       accountId: 'sub-real-1',
@@ -61,13 +70,22 @@ describe('googleIdentities', () => {
     expect(ids[0]!.scopes).toContain('https://www.googleapis.com/auth/tasks');
   });
 
-  it('returns a synthetic identity (labeled by the user email) when none is linked, in test mode', async () => {
-    const email = `solo-${Math.random().toString(36).slice(2)}@x.test`;
-    const userId = await seedUser(email, 'Solo');
+  it('lists every supported provider; GitHub/Linear carry null claims (no id token)', async () => {
+    const userId = await seedUser(`multi-${Math.random().toString(36).slice(2)}@x.test`, 'Mira');
+    await seedGoogleAccount(userId, 'g-sub', idToken({ email: 'mira@gmail.com' }));
+    await seedAccount(userId, 'github', 'gh-42', 'read:user repo');
+    await seedAccount(userId, 'linear', 'lin-7', 'read');
 
-    const ids = await googleIdentities(userId);
-    expect(ids).toHaveLength(1);
-    expect(ids[0]).toMatchObject({ accountId: 'mock-google', provider: 'google', email });
+    const ids = await linkedIdentities(userId);
+    expect(ids.map((i) => i.provider).sort()).toEqual(['github', 'google', 'linear']);
+    const gh = ids.find((i) => i.provider === 'github');
+    expect(gh).toMatchObject({ accountId: 'gh-42', email: null, name: null, picture: null });
+    expect(gh!.scopes).toEqual(['read:user', 'repo']);
+  });
+
+  it('returns an empty list when nothing is linked — no synthetic/fabricated identity', async () => {
+    const userId = await seedUser(`solo-${Math.random().toString(36).slice(2)}@x.test`, 'Solo');
+    expect(await linkedIdentities(userId)).toEqual([]);
   });
 });
 

@@ -28,6 +28,7 @@ export * from './grant';
 export * from './agent';
 export * from './integration';
 export * from './identity';
+export * from './public-config';
 export * from './notification';
 export * from './observation';
 export * from './daily-plan';

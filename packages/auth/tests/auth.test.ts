@@ -379,6 +379,43 @@ describe('buildAuthOptions env-gating', () => {
     ]);
   });
 
+  describe('configuredSocialProviders (shared availability truth)', () => {
+    it('is empty when no provider pair is real (matches the passkey-only baseline)', async () => {
+      const { configuredSocialProviders } = await import('../src/index');
+      expect(configuredSocialProviders(baseEnv)).toEqual([]);
+    });
+
+    it('lists only providers whose id AND secret are both real-shaped', async () => {
+      const { configuredSocialProviders } = await import('../src/index');
+      const providers = configuredSocialProviders({
+        ...baseEnv,
+        GOOGLE_CLIENT_ID: 'goog-id',
+        GOOGLE_CLIENT_SECRET: 'goog-secret',
+        // Half-configured GitHub (id only) and placeholder Linear must NOT appear.
+        GITHUB_APP_CLIENT_ID: 'gh-id',
+        LINEAR_CLIENT_ID: 'your-linear-id',
+        LINEAR_CLIENT_SECRET: 'changeme',
+      });
+      expect(providers).toEqual(['google']);
+    });
+
+    it('agrees with the providers buildAuthOptions actually mounts', async () => {
+      const { configuredSocialProviders, buildAuthOptions } = await import('../src/index');
+      const full = {
+        ...baseEnv,
+        GOOGLE_CLIENT_ID: 'goog-id',
+        GOOGLE_CLIENT_SECRET: 'goog-secret',
+        GITHUB_APP_CLIENT_ID: 'gh-id',
+        GITHUB_APP_CLIENT_SECRET: 'gh-secret',
+        LINEAR_CLIENT_ID: 'lin-id',
+        LINEAR_CLIENT_SECRET: 'lin-secret',
+      };
+      expect(configuredSocialProviders(full).sort()).toEqual(
+        Object.keys(buildAuthOptions(full).socialProviders ?? {}).sort(),
+      );
+    });
+  });
+
   it('mounts oidcProvider (before nextCookies) when OIDC_LOGIN_PAGE_URL is real but MCP_RESOURCE_URL is not', async () => {
     const { buildAuthOptions } = await import('../src/index');
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);

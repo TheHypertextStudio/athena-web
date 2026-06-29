@@ -18,6 +18,7 @@ import { Badge, Button, Skeleton } from '@docket/ui/primitives';
 import { type JSX, useCallback, useState } from 'react';
 
 import { api } from '@/lib/api';
+import { mcpUrl, usePublicConfig } from '@/lib/public-config';
 import {
   STALE,
   apiQueryOptions,
@@ -56,9 +57,8 @@ export interface ConnectedAppsTabProps {
  * The Connected Apps settings tab — MCP client setup guide + authorized client roster.
  */
 export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.Element {
-  const mcpUrl =
-    process.env['NEXT_PUBLIC_MCP_URL'] ??
-    `${typeof window !== 'undefined' ? window.location.origin.replace('app.', 'api.') : ''}/mcp`;
+  const { data: config } = usePublicConfig();
+  const mcpServerUrl = mcpUrl(config);
 
   const appsQ = useApiQuery(
     apiQueryOptions(
@@ -105,7 +105,7 @@ export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.
           </p>
         </div>
 
-        <ClientSetup mcpUrl={mcpUrl} />
+        <ClientSetup mcpUrl={mcpServerUrl} />
       </section>
 
       <div className="border-outline-variant border-t" role="separator" />

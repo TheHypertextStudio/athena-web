@@ -51,8 +51,9 @@ export const PERSONAL_SETTINGS_SECTION_GROUPS: readonly SettingsSectionGroup[] =
       },
       {
         key: 'connected-apps',
-        label: 'Connected apps',
-        description: 'MCP clients authorized to read and act on your Docket account.',
+        label: 'Authorized apps',
+        description:
+          'External apps (via MCP) you have authorized to read and act on your Docket account.',
         icon: Link,
         href: 'connected-apps',
         status: 'available',

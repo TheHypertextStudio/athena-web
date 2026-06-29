@@ -10,8 +10,6 @@ import {
   TaskAlt,
 } from '@docket/ui/icons';
 
-import { configuredOAuthProviders } from '@/app/(auth)/_lib/oauth-providers';
-
 /** PROVIDER_ICON maps integration providers to their display icon component. */
 export const PROVIDER_ICON: Record<string, LucideIcon> = {
   github: Github,
@@ -61,43 +59,10 @@ export function socialProviderForConnector(provider: string): 'google' | 'github
   return 'google';
 }
 
-/**
- * Whether this deployment has real OAuth wired for the provider's social grant.
- *
- * @remarks
- * When true (production), finishing a connection must go through the provider's OAuth consent
- * redirect. When false (local/mock dev, where {@link configuredOAuthProviders} is empty), the
- * connection is validated directly against the mock connector with no redirect — so the
- * validate-before-connected guarantee holds in every environment.
- */
-export function connectorOAuthConfigured(provider: string): boolean {
-  const social = socialProviderForConnector(provider);
-  return configuredOAuthProviders().some((p) => p.id === social);
-}
-
-/**
- * Whether this is the local mock deployment (every boundary is mocked).
- *
- * @remarks
- * Read via DOT-notation `process.env.NEXT_PUBLIC_APP_MODE` so Next inlines it at build time.
- */
-export function isMockMode(): boolean {
-  return process.env.NEXT_PUBLIC_APP_MODE === 'local';
-}
-
-/**
- * Whether a connector can actually be set up in this deployment.
- *
- * @remarks
- * A connector is "available" only when its OAuth grant is reachable — either the local mock
- * (everything is mocked) or real OAuth is configured for its social provider. Without that,
- * connecting would only ever produce a broken `needs_reauth`/`error` row, so the UI must show it
- * as "Available soon" rather than offering to configure it (never claim a connector works when
- * nothing is set up).
- */
-export function connectorAvailable(provider: string): boolean {
-  return isMockMode() || connectorOAuthConfigured(provider);
-}
+// Provider/connector *availability* (isMockMode, connectorOAuthConfigured, connectorAvailable) is
+// derived from the server's `/v1/config` — see `@/lib/public-config`. This module holds only the
+// static display catalog (icons, labels) and the connector → social-provider mapping above, so no
+// component reads availability from the environment.
 
 /** categoryLabel returns display copy for an integration provider category. */
 export function categoryLabel(category: string): string {

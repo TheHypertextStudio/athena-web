@@ -14,7 +14,13 @@ import { buildAuthOptions } from './auth-builder';
 
 export * from './passkey-intent';
 export type { AuthEnv, PasskeyUserAdapter } from './auth-builder';
-export { buildAuthOptions, parseTrustedOrigins, resolvePasskeyUser } from './auth-builder';
+export {
+  buildAuthOptions,
+  configuredSocialProviders,
+  parseTrustedOrigins,
+  resolvePasskeyUser,
+  type SocialProvider,
+} from './auth-builder';
 
 /** The configured Better Auth instance (handler, server API, plugins). */
 export const auth = betterAuth(buildAuthOptions(env));

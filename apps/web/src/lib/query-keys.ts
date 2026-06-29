@@ -35,6 +35,7 @@ export const queryKeys = {
   settings: (orgId: string, tab: string) => ['org', orgId, 'settings', tab] as const,
   connectedApps: () => ['me', 'connected-apps'] as const,
   identities: () => ['me', 'identities'] as const,
+  publicConfig: () => ['public-config'] as const,
   orgs: () => ['me', 'orgs'] as const,
   portfolio: () => ['me', 'portfolio'] as const,
   hubSearch: (query: string) => ['me', 'search', query] as const,

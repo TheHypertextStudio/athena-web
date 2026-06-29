@@ -101,19 +101,46 @@ export async function resolvePasskeyUser(
   return { id: created.id, name: created.name };
 }
 
+/** A social provider a user can sign in / link an account with. */
+export type SocialProvider = 'google' | 'github' | 'linear';
+
+/**
+ * The social providers whose OAuth credentials are actually configured in this environment.
+ *
+ * @remarks
+ * The single source of truth for "which providers are available": a provider is on iff BOTH its
+ * client id and secret are real-shaped values ({@link isRealValue}). Both {@link buildAuthOptions}
+ * (to decide which providers to mount) and the public `/v1/config` endpoint (to tell the client
+ * what to offer) derive availability from this — so the client never needs a parallel build-time
+ * flag like `NEXT_PUBLIC_OAUTH_GOOGLE` that can drift from the real credentials.
+ *
+ * @param e - The validated server env slice (see {@link AuthEnv}).
+ */
+export function configuredSocialProviders(e: AuthEnv): SocialProvider[] {
+  const providers: SocialProvider[] = [];
+  if (isRealValue(e.GOOGLE_CLIENT_ID) && isRealValue(e.GOOGLE_CLIENT_SECRET))
+    providers.push('google');
+  if (isRealValue(e.GITHUB_APP_CLIENT_ID) && isRealValue(e.GITHUB_APP_CLIENT_SECRET))
+    providers.push('github');
+  if (isRealValue(e.LINEAR_CLIENT_ID) && isRealValue(e.LINEAR_CLIENT_SECRET))
+    providers.push('linear');
+  return providers;
+}
+
 /**
  * Build the Better Auth options from the validated environment, mounting each optional
  * social provider / plugin ONLY when its credentials are real-shaped.
  *
  * @remarks
  * Pure (no module-level side effects): both the provider-present and provider-absent
- * branches are unit-testable directly. `nextCookies()` is always pushed LAST.
+ * branches are unit-testable directly. Provider availability is the same set
+ * {@link configuredSocialProviders} reports. `nextCookies()` is always pushed LAST.
  *
  * @param e - The validated server env slice (see {@link AuthEnv}).
  */
 export function buildAuthOptions(e: AuthEnv): BetterAuthOptions {
   const socialProviders: NonNullable<BetterAuthOptions['socialProviders']> = {};
-  const trustedProviders: string[] = [];
+  const trustedProviders: string[] = [...configuredSocialProviders(e)];
 
   if (isRealValue(e.GOOGLE_CLIENT_ID) && isRealValue(e.GOOGLE_CLIENT_SECRET)) {
     socialProviders.google = {
@@ -137,7 +164,6 @@ export function buildAuthOptions(e: AuthEnv): BetterAuthOptions {
       accessType: 'offline',
       prompt: 'select_account consent',
     };
-    trustedProviders.push('google');
   }
   if (isRealValue(e.GITHUB_APP_CLIENT_ID) && isRealValue(e.GITHUB_APP_CLIENT_SECRET)) {
     // Sign-in runs on the GitHub App's user-to-server OAuth (a GitHub App reuses the OAuth web
@@ -149,7 +175,6 @@ export function buildAuthOptions(e: AuthEnv): BetterAuthOptions {
       clientSecret: e.GITHUB_APP_CLIENT_SECRET,
       scope: ['user:email'],
     };
-    trustedProviders.push('github');
   }
   if (isRealValue(e.LINEAR_CLIENT_ID) && isRealValue(e.LINEAR_CLIENT_SECRET)) {
     // `read` is required for the Linear connector to query the GraphQL API — without it the
@@ -160,7 +185,6 @@ export function buildAuthOptions(e: AuthEnv): BetterAuthOptions {
       clientSecret: e.LINEAR_CLIENT_SECRET,
       scope: ['read'],
     };
-    trustedProviders.push('linear');
   }
 
   const hasSocial = Object.keys(socialProviders).length > 0;

@@ -11,11 +11,11 @@
  * can pull from several sources before entering the workspace; the orchestrator owns the
  * skip / enter action row.
  *
- * Honesty: a provider is only offered as live when it is actually connectable. In local dev
- * (`NEXT_PUBLIC_APP_MODE=local`) the mock boundary adapter backs every provider, so all three
- * are live with no OAuth. In production a provider is live only when its OAuth is wired (its
- * `NEXT_PUBLIC_CONNECTOR_*` flag is set); otherwise the card renders a calm, disabled
- * "Available soon" state rather than a button that would fail on click.
+ * Honesty: a provider is only offered as live when it is actually connectable. Availability comes
+ * from the server's `/v1/config` (see `usePublicConfig`): in local dev the mock boundary adapter
+ * backs every provider (all live, no OAuth), and in production a provider is live only when its
+ * OAuth is configured server-side (its connector appears in `config.connectors`); otherwise the
+ * card renders a calm, disabled "Available soon" state rather than a button that fails on click.
  *
  * Read-only mirror only: imported items become linked tasks whose external source stays
  * authoritative (no write-back, no take-over) — the import endpoint enforces this.
@@ -26,6 +26,8 @@ import { type JSX, useCallback, useEffect, useState } from 'react';
 
 import { api } from '@/lib/api';
 import { readError, readProblem } from '@/lib/problem';
+import { connectorAvailable, usePublicConfig } from '@/lib/public-config';
+
 import {
   type CardState,
   type ProviderCard,
@@ -39,35 +41,13 @@ const ONBOARDING_PROVIDERS = ['calendar', 'gtasks', 'linear'] as const;
 /** A source onboarding can mirror work from. */
 export type OnboardingProvider = (typeof ONBOARDING_PROVIDERS)[number];
 
-/** Truthy only for a non-empty, non-`"false"`/`"0"` public flag value. */
-function isEnabled(flag: string | undefined): boolean {
-  if (!flag) return false;
-  const normalized = flag.trim().toLowerCase();
-  return normalized.length > 0 && normalized !== 'false' && normalized !== '0';
-}
-
 /**
- * Whether this deployment runs against the mock boundary adapters (local dev), in which
- * case every provider is connectable without OAuth.
+ * The three onboarding sources.
  *
  * @remarks
- * Read via DOT-notation `process.env.NEXT_PUBLIC_APP_MODE` so Next/Turbopack statically inlines
- * the literal into the client bundle (a bracket/computed lookup is NOT inlined and reads as
- * `undefined` in the browser). `local` means the MockConnector backs every provider, so the
- * connect flow works end-to-end with no real credentials.
- */
-function isMockMode(): boolean {
-  return process.env.NEXT_PUBLIC_APP_MODE === 'local';
-}
-
-/**
- * The three onboarding sources, each carrying whether its production OAuth is configured.
- *
- * @remarks
- * The `prodEnabled` flags are read via DOT-notation `process.env.NEXT_PUBLIC_…` accesses (never
- * a bracket/computed key) so Next/Turbopack statically inlines them into the client bundle,
- * mirroring the sign-in OAuth gate. In local dev these are blank — availability comes from
- * {@link isMockMode}.
+ * Whether each is *live* is decided at render from the server's `/v1/config`
+ * ({@link connectorAvailable}) — mock-backed in local dev, OAuth-gated in production — so the card
+ * carries only its static presentation, never a build-time availability flag.
  */
 const PROVIDER_CARDS: readonly ProviderCard<OnboardingProvider>[] = [
   {
@@ -75,21 +55,18 @@ const PROVIDER_CARDS: readonly ProviderCard<OnboardingProvider>[] = [
     name: 'Google Calendar',
     blurb: 'Pull your events in as upcoming time and deadlines.',
     icon: Calendar,
-    prodEnabled: isEnabled(process.env.NEXT_PUBLIC_CONNECTOR_CALENDAR),
   },
   {
     provider: 'gtasks',
     name: 'Google Tasks',
     blurb: 'Bring your personal to-dos in as tasks you can act on.',
     icon: TaskAlt,
-    prodEnabled: isEnabled(process.env.NEXT_PUBLIC_CONNECTOR_GTASKS),
   },
   {
     provider: 'linear',
     name: 'Linear',
     blurb: 'Mirror your assigned issues so nothing gets lost in the move.',
     icon: Layers,
-    prodEnabled: isEnabled(process.env.NEXT_PUBLIC_CONNECTOR_LINEAR),
   },
 ];
 
@@ -153,6 +130,7 @@ export function StepConnect({
   createIntegration = defaultCreateIntegration,
   importWork = defaultImportWork,
 }: StepConnectProps): JSX.Element {
+  const { data: config } = usePublicConfig();
   const [states, setStates] = useState<Record<OnboardingProvider, CardState>>({
     calendar: INITIAL_CARD_STATE,
     gtasks: INITIAL_CARD_STATE,
@@ -169,8 +147,11 @@ export function StepConnect({
     onMirroredTotalChange?.(mirroredTotal);
   }, [mirroredTotal, onMirroredTotalChange]);
 
-  /** A provider is live when the mock backs it (dev) or its prod OAuth is configured. */
-  const isLive = useCallback((card: ProviderCard): boolean => isMockMode() || card.prodEnabled, []);
+  /** A provider is live when the mock backs it (dev) or its OAuth is configured server-side. */
+  const isLive = useCallback(
+    (card: ProviderCard): boolean => connectorAvailable(config, card.provider),
+    [config],
+  );
 
   /** Connect a single provider: create the integration, then import its work. */
   const connect = useCallback(

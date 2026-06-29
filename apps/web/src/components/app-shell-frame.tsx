@@ -1,6 +1,5 @@
 'use client';
 
-import type { OrgSummary } from '@docket/types';
 import {
   AppShell,
   ContextProvider,
@@ -21,7 +20,7 @@ import { CommandPaletteProvider, useCommandPalette } from '@/components/command-
 import { OpenDocumentsProvider, useOpenDocuments } from '@/components/tabs';
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
-import { readError } from '@/lib/problem';
+import { STALE, apiQueryOptions, queryKeys, useApiQuery, useLiveApiQuery } from '@/lib/query';
 
 import {
   homeKeyFromPath,
@@ -54,9 +53,6 @@ export function AppShellFrame({ children }: { children: ReactNode }): JSX.Elemen
   const pathname = usePathname();
   const { data: session, isPending } = authClient.useSession();
 
-  const [orgs, setOrgs] = useState<readonly OrgSummary[]>([]);
-  const [orgsError, setOrgsError] = useState<string | null>(null);
-
   const routeOrgId = orgIdFromPath(pathname);
   const userId = session?.user.id ?? null;
 
@@ -64,26 +60,19 @@ export function AppShellFrame({ children }: { children: ReactNode }): JSX.Elemen
     if (!isPending && !session) router.replace('/sign-in');
   }, [isPending, session, router]);
 
-  useEffect(() => {
-    if (!session) return;
-    const live = { current: true };
-    void (async () => {
-      try {
-        const res = await api.v1.orgs.$get();
-        if (!res.ok) {
-          if (live.current) setOrgsError('Could not load your organizations.');
-          return;
-        }
-        const { items } = await res.json();
-        if (live.current) setOrgs(items);
-      } catch (caught) {
-        if (live.current) setOrgsError(readError(caught, 'Could not load your organizations.'));
-      }
-    })();
-    return () => {
-      live.current = false;
-    };
-  }, [session]);
+  // The caller's orgs drive the sidebar's workspace switcher — read once through the shared query
+  // layer, gated on an authenticated session and static-tiered (membership rarely changes within a
+  // session), shared with the rest of the app under queryKeys.orgs().
+  const orgsQ = useApiQuery(
+    apiQueryOptions(
+      queryKeys.orgs(),
+      () => api.v1.orgs.$get(),
+      'Could not load your organizations.',
+      { enabled: Boolean(session), staleTime: STALE.static },
+    ),
+  );
+  const orgs = useMemo(() => orgsQ.data?.items ?? [], [orgsQ.data]);
+  const orgsError = orgsQ.error ? orgsQ.error.message : null;
 
   if (isPending || !session) {
     return (
@@ -145,7 +134,19 @@ function AppShellInner({
   const { orgs, skin } = useActiveOrg();
   const { openPalette } = useCommandPalette();
   const { tabs, activeKey, closeTab } = useOpenDocuments();
-  const [unreadCount, setUnreadCount] = useState(0);
+
+  // The sidebar's unread badge polls on a focus-only minute interval, sharing the inbox's
+  // notifications-count cache (queryKeys.notificationsCount()) so the two stay in lock-step.
+  const unreadCountQ = useLiveApiQuery(
+    apiQueryOptions(
+      queryKeys.notificationsCount(),
+      () => api.v1.notifications.count.$get(),
+      'Could not load notifications.',
+      { staleTime: STALE.volatile },
+    ),
+    60_000,
+  );
+  const unreadCount = unreadCountQ.data?.unread ?? 0;
 
   useEffect(() => {
     writeDensity(userId, density);
@@ -183,26 +184,6 @@ function AppShellInner({
   useEffect(() => {
     if (resolvedOrgId) writeLastOrg(userId, resolvedOrgId);
   }, [resolvedOrgId, userId]);
-
-  useEffect(() => {
-    const live = { current: true };
-    const refresh = async (): Promise<void> => {
-      try {
-        const res = await api.v1.notifications.count.$get();
-        if (!res.ok) return;
-        const { unread } = await res.json();
-        if (live.current) setUnreadCount(unread);
-      } catch {
-        // Non-fatal: the badge simply stays at its last value.
-      }
-    };
-    void refresh();
-    const interval = setInterval(() => void refresh(), 60_000);
-    return () => {
-      live.current = false;
-      clearInterval(interval);
-    };
-  }, []);
 
   const onSelectWorkspace = useCallback(
     (orgId: string): void => {

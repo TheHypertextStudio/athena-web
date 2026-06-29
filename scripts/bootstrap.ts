@@ -477,6 +477,14 @@ DATABASE_URL_UNPOOLED=postgres://docket:docket@localhost:5433/docket
 BETTER_AUTH_SECRET=${authSecret}
 BETTER_AUTH_URL=https://api.docket.localhost
 BETTER_AUTH_TRUSTED_ORIGINS=https://docket.localhost,https://admin.docket.localhost
+# Dynamic per-request base URL (required: web + admin each proxy /api/auth to the API, so auth must
+# resolve its base to whichever frontend the browser is on — keeps the OAuth callback + cookie on
+# the right origin). BETTER_AUTH_URL above is the fallback for header-less/direct requests.
+BETTER_AUTH_ALLOWED_HOSTS=docket.localhost,admin.docket.localhost,api.docket.localhost
+# OAuth proxy (blank locally → not mounted → direct local OAuth). Set both on prod/previews so
+# previews route OAuth through prod's registered callback; OAUTH_PROXY_SECRET must match across them.
+OAUTH_PROXY_SECRET=
+OAUTH_PROXY_PRODUCTION_URL=
 BETTER_AUTH_PASSKEY_RP_ID=docket.localhost
 BETTER_AUTH_PASSKEY_RP_NAME=Docket (local)
 

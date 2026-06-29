@@ -28,7 +28,10 @@ import type { QueryKey } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
 import { api } from './api';
-import { apiQueryOptions, queryKeys, useApiQuery } from './query';
+import { STALE, apiQueryOptions, queryKeys, useApiQuery, useLiveApiQuery } from './query';
+
+/** Focus-only poll interval (ms) for a task's bound agent-session activity stream. */
+const TASK_ACTIVITY_POLL_MS = 4_000;
 
 /** All data slices exposed by {@link useTaskDetail}. */
 export interface TaskDetailData {
@@ -150,11 +153,14 @@ export function useTaskDetail(orgId: string, taskId: string): TaskDetailData {
       [...detailKey, 'session'],
       () => api.v1.orgs[':orgId'].sessions.$get({ param: { orgId }, query: {} }),
       'Could not load sessions.',
+      { staleTime: STALE.volatile },
     ),
   );
   const taskSession = sessionQ.data?.items.find((s) => s.taskId === taskId) ?? null;
 
-  const activityQ = useApiQuery(
+  // The bound session's activity stream polls on a short focus-only interval so an agent's progress
+  // shows live; the poll is gated by `enabled` so idle tasks (no session) never fetch.
+  const activityQ = useLiveApiQuery(
     apiQueryOptions(
       [...detailKey, 'activity', taskSession?.id ?? ''],
       () =>
@@ -164,6 +170,7 @@ export function useTaskDetail(orgId: string, taskId: string): TaskDetailData {
       'Could not load activity.',
       { enabled: Boolean(taskSession) },
     ),
+    TASK_ACTIVITY_POLL_MS,
   );
 
   return {

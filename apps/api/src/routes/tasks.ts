@@ -77,6 +77,7 @@ const tasks = new Hono<AppEnv>()
         parentTaskId: body.parentTaskId,
         estimate: body.estimate,
         estimateMinutes: body.estimateMinutes,
+        startDate: body.startDate ? new Date(body.startDate) : undefined,
         dueDate: body.dueDate ? new Date(body.dueDate) : undefined,
         source: 'native',
         createdBy: actorId,
@@ -179,6 +180,9 @@ const tasks = new Hono<AppEnv>()
       ...(body.cycleId !== undefined ? { cycleId: body.cycleId } : {}),
       ...(body.estimate !== undefined ? { estimate: body.estimate } : {}),
       ...(body.estimateMinutes !== undefined ? { estimateMinutes: body.estimateMinutes } : {}),
+      ...(body.startDate !== undefined
+        ? { startDate: body.startDate ? new Date(body.startDate) : null }
+        : {}),
       ...(body.dueDate !== undefined
         ? { dueDate: body.dueDate ? new Date(body.dueDate) : null }
         : {}),

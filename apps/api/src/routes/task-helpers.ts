@@ -25,6 +25,7 @@ export function toOut(t: TaskRow): z.input<typeof TaskOut> {
     projectId: t.projectId,
     programId: t.programId,
     estimateMinutes: t.estimateMinutes,
+    startDate: t.startDate?.toISOString() ?? null,
     dueDate: t.dueDate?.toISOString() ?? null,
     provenance: {
       source: t.source,

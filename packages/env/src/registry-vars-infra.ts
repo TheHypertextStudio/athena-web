@@ -109,6 +109,16 @@ export const INFRA_VARS: readonly VarSpec[] = [
     zod: opsServer.MAIL_FROM,
     where: 'From-address for transactional email, e.g. "Docket <no-reply@docket.dev>".',
   },
+  {
+    name: 'STAFF_BOOTSTRAP_EMAILS',
+    slice: 'ops',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: opsServer.STAFF_BOOTSTRAP_EMAILS,
+    where:
+      'Dev-only operator allowlist: comma-separated email[:role] (default superadmin). Ignored in production.',
+  },
 
   // connector (per-provider API-base overrides; the OAuth token is per-connection, not env)
   {

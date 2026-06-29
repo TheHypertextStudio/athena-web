@@ -49,6 +49,7 @@ import {
   DEFAULT_LOCAL_API_URL,
   copyToClipboard,
   type Environment,
+  type SetupUrls,
 } from './integration-providers';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -488,46 +489,56 @@ interface SetupOptions {
   readonly environments?: Environment[];
 }
 
+/** Split a comma-separated origins string into trimmed, non-empty entries. */
+function splitOrigins(raw: string | undefined): string[] {
+  return (raw ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 /**
- * Resolve the API base URL for an environment (drives the OAuth redirect URIs).
+ * Resolve the two distinct origins a provider's setup URLs hang off (see {@link SetupUrls}):
+ * `apiBase` (the public API host — only webhooks point here) and `webBases` (the browser-facing
+ * product frontends — OAuth/connect callbacks point here).
  *
  * @remarks
- * `local` is derived from the user's actual `.env.local` (Better Auth base → API → public URL),
- * defaulting to the project's portless `https://api.docket.localhost` — never a hardcoded
- * `localhost:port` — and is offered for confirmation. `staging`/`production` read the GitHub
- * environment's `API_URL`, falling back to a prompt.
+ * `local` derives both straight from `.env.local` (no prompt): `apiBase` from `API_URL`, and
+ * `webBases` from `BETTER_AUTH_TRUSTED_ORIGINS` (the configured web + admin origins) — these are the
+ * exact hosts the browser is on, which is what OAuth `redirect_uri`s must match. `staging`/`production`
+ * read the GitHub environment's `API_URL` + `WEB_URL`, falling back to a prompt.
  */
-async function resolveBaseUrl(
+async function resolveSetupUrls(
   env: Environment,
   repo: string,
   envLocal: Record<string, string>,
-): Promise<string> {
+): Promise<SetupUrls> {
   if (env === 'local') {
-    const def =
-      nonEmpty(envLocal, 'BETTER_AUTH_URL') ??
-      nonEmpty(envLocal, 'API_URL') ??
-      nonEmpty(envLocal, 'NEXT_PUBLIC_API_URL') ??
-      DEFAULT_LOCAL_API_URL;
-    return unwrap(
+    const apiBase = nonEmpty(envLocal, 'API_URL') ?? DEFAULT_LOCAL_API_URL;
+    const webBases = splitOrigins(envLocal['BETTER_AUTH_TRUSTED_ORIGINS']);
+    return { apiBase, webBases: webBases.length > 0 ? webBases : ['https://docket.localhost'] };
+  }
+  const apiFromGh = repo ? tryRun(`gh variable get API_URL --env ${env} --repo ${repo}`) : '';
+  const apiBase =
+    apiFromGh ||
+    unwrap(
       await text({
-        message: 'Local API base URL (used for OAuth redirect URIs)',
-        defaultValue: def,
-        placeholder: def,
+        message: `API base URL for ${env} (webhook target)`,
+        placeholder: 'https://api.docket.app',
+        validate: (v) => (v && v.length > 0 ? undefined : 'required'),
       }),
     );
-  }
-  const fromGh = repo ? tryRun(`gh variable get API_URL --env ${env} --repo ${repo}`) : '';
-  if (fromGh) {
-    ok(`${env} API_URL from GitHub: ${fromGh}`);
-    return fromGh;
-  }
-  return unwrap(
-    await text({
-      message: `API base URL for ${env}`,
-      placeholder: 'https://api.docket.app',
-      validate: (v) => (v && v.length > 0 ? undefined : 'required'),
-    }),
-  );
+  const webFromGh = repo ? tryRun(`gh variable get WEB_URL --env ${env} --repo ${repo}`) : '';
+  const webBase =
+    webFromGh ||
+    unwrap(
+      await text({
+        message: `Product (web app) URL for ${env} (OAuth callbacks live here)`,
+        placeholder: 'https://app.docket.app',
+        validate: (v) => (v && v.length > 0 ? undefined : 'required'),
+      }),
+    );
+  return { apiBase, webBases: [webBase] };
 }
 
 /** Configure every provider for a single environment. */
@@ -544,9 +555,9 @@ async function setupEnvironment(
     `Environment: ${env}`,
   );
 
-  // Parse .env.local once (only local reads it) and reuse for the base URL + keep-existing defaults.
+  // Parse .env.local once (only local reads it) and reuse for the setup URLs + keep-existing defaults.
   const envLocal = env === 'local' ? parseEnvFile(resolve(ROOT, '.env.local')) : {};
-  const base = await resolveBaseUrl(env, repo, envLocal);
+  const urls = await resolveSetupUrls(env, repo, envLocal);
 
   // Cloud targets resolve a GCP project + repo once per environment.
   let cloud: CloudTarget | undefined;
@@ -605,7 +616,7 @@ async function setupEnvironment(
     if (group.steps) {
       // Step-by-step: show each short instruction immediately before prompting for the value it
       // produces, so the guidance never drifts away from the field it describes.
-      for (const step of group.steps(env, base)) {
+      for (const step of group.steps(env, urls)) {
         note(wrapLines(step.note).join('\n'), group.title);
         const varName = step.var;
         if (!varName || varName in generated) continue;
@@ -623,7 +634,7 @@ async function setupEnvironment(
     } else {
       note(
         wrapLines([
-          ...(group.instructions?.(env, base) ?? []),
+          ...(group.instructions?.(env, urls) ?? []),
           '',
           'Leave a field blank to skip it.',
         ]).join('\n'),

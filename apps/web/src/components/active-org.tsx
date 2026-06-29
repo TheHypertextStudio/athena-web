@@ -1,17 +1,10 @@
 'use client';
 
 import type { OrgSummary, TeamOut, VocabularySkin } from '@docket/types';
-import {
-  createContext,
-  type JSX,
-  type ReactNode,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-} from 'react';
+import { createContext, type JSX, type ReactNode, useContext, useMemo } from 'react';
 
 import { api } from '@/lib/api';
+import { STALE, apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 
 /**
  * The `key` of the org's default ("General") team, seeded at org creation.
@@ -89,54 +82,29 @@ export function ActiveOrgContext({
   orgsError,
   children,
 }: ActiveOrgContextProps): JSX.Element {
-  const [skin, setSkin] = useState<VocabularySkin | null>(null);
-  const [teams, setTeams] = useState<readonly TeamOut[]>([]);
-  const [teamsLoading, setTeamsLoading] = useState(false);
-
-  // Load the bound org's full record (for its vocabulary skin) whenever it changes.
-  useEffect(() => {
-    if (!activeOrgId) {
-      setSkin(null);
-      return;
-    }
-    const live = { current: true };
-    void (async () => {
-      const res = await api.v1.orgs[':orgId'].$get({ param: { orgId: activeOrgId } });
-      if (!res.ok) return;
-      const org = await res.json();
-      if (live.current) setSkin(org.vocabulary);
-    })();
-    return () => {
-      live.current = false;
-    };
-  }, [activeOrgId]);
-
-  // Load the bound org's teams whenever it changes, so create surfaces have a real teamId.
-  useEffect(() => {
-    if (!activeOrgId) {
-      setTeams([]);
-      setTeamsLoading(false);
-      return;
-    }
-    const live = { current: true };
-    setTeamsLoading(true);
-    void (async () => {
-      try {
-        const res = await api.v1.orgs[':orgId'].teams.$get({ param: { orgId: activeOrgId } });
-        if (!res.ok) {
-          if (live.current) setTeams([]);
-          return;
-        }
-        const { items } = await res.json();
-        if (live.current) setTeams(items);
-      } finally {
-        if (live.current) setTeamsLoading(false);
-      }
-    })();
-    return () => {
-      live.current = false;
-    };
-  }, [activeOrgId]);
+  // The bound org's full record (for its vocabulary skin) and its teams flow through the shared
+  // query layer, gated by `enabled` so the Hub (no bound org) fetches nothing. Both are static-tier
+  // (an org's skin and team roster rarely change within a session) and shared with the rest of the
+  // app under the standard query keys.
+  const orgDetailQ = useApiQuery(
+    apiQueryOptions(
+      ['org', activeOrgId ?? '', 'detail'],
+      () => api.v1.orgs[':orgId'].$get({ param: { orgId: activeOrgId ?? '' } }),
+      'Could not load the workspace.',
+      { enabled: Boolean(activeOrgId), staleTime: STALE.static },
+    ),
+  );
+  const teamsQ = useApiQuery(
+    apiQueryOptions(
+      queryKeys.teams(activeOrgId ?? ''),
+      () => api.v1.orgs[':orgId'].teams.$get({ param: { orgId: activeOrgId ?? '' } }),
+      'Could not load teams.',
+      { enabled: Boolean(activeOrgId), staleTime: STALE.static },
+    ),
+  );
+  const skin: VocabularySkin | null = orgDetailQ.data?.vocabulary ?? null;
+  const teams = useMemo<readonly TeamOut[]>(() => teamsQ.data?.items ?? [], [teamsQ.data]);
+  const teamsLoading = teamsQ.isLoading;
 
   const value = useMemo<ActiveOrgValue>(() => {
     const byId = new Map<string, OrgSummary>(orgs.map((o) => [o.id, o]));

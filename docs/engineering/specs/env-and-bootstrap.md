@@ -77,13 +77,35 @@ Redirect URIs follow Better Auth's fixed routing (verified): social providers us
 | `LINEAR_CLIENT_ID`          | api (auth) | server | D=P | Linear OAuth2 application client ID (`genericOAuth` `providerId: "linear"`; sign-in + Linear migration). | Linear → Settings → **API** → OAuth applications → Create.                                  |
 | `LINEAR_CLIENT_SECRET`      | api (auth) | server | D=P | Matching client secret.                                                                                  | Same Linear OAuth application.                                                              |
 
-**Exact redirect URIs to register (bootstrap emits these verbatim):**
+**OAuth callbacks live on the browser-facing PRODUCT origin, not the API.** Better Auth runs on the
+API but is reached **same-origin** through each Next app's `/api/auth/*` rewrite, and its `baseURL`
+(which the OAuth `redirect_uri` + session cookie are built from) resolves to the browser's host. So
+the redirect URI you register with each provider is the _product_ origin, per frontend:
 
-| Provider         | Dev redirect URI                                        | Prod redirect URI                                        |
-| ---------------- | ------------------------------------------------------- | -------------------------------------------------------- |
-| Google           | `http://localhost:8787/api/auth/callback/google`        | `https://api.docket.app/api/auth/callback/google`        |
-| GitHub (sign-in) | `http://localhost:8787/api/auth/callback/github`        | `https://api.docket.app/api/auth/callback/github`        |
-| Linear           | `http://localhost:8787/api/auth/oauth2/callback/linear` | `https://api.docket.app/api/auth/oauth2/callback/linear` |
+| Provider | Dev redirect URI (per frontend)                            | Prod redirect URI                                        |
+| -------- | ---------------------------------------------------------- | -------------------------------------------------------- |
+| Google   | `https://docket.localhost/api/auth/callback/google`        | `https://app.docket.app/api/auth/callback/google`        |
+| GitHub   | `https://docket.localhost/api/auth/callback/github`        | `https://app.docket.app/api/auth/callback/github`        |
+| Linear   | `https://docket.localhost/api/auth/oauth2/callback/linear` | `https://app.docket.app/api/auth/oauth2/callback/linear` |
+
+Register the same set for **each** signing-in frontend (web + `admin.…`). The GitHub App also gets
+a connect callback `…/v1/integrations/github/callback` (browser-facing → product origin) per
+frontend; only its **webhook** `…/v1/ingest/github` is the **API** origin (GitHub's servers POST it
+directly). `pnpm integrations` emits exactly these — `webBases` (from `BETTER_AUTH_TRUSTED_ORIGINS`)
+for callbacks, `apiBase` (from `API_URL`) for the webhook.
+
+**`baseURL` is dynamic everywhere.** `BETTER_AUTH_ALLOWED_HOSTS` is set in _every_ environment
+(local too: `docket.localhost,admin.docket.localhost,api.docket.localhost`) so Better Auth derives
+`baseURL` per request from `x-forwarded-host`: a browser on the web/admin app gets that product
+origin (callback + cookie first-party there); a direct API/MCP request gets the API origin (so the
+OIDC/MCP issuer stays the API). A single static base could not serve two frontends + the API.
+
+**Preview deploys use the `oAuthProxy` plugin** (gated on `OAUTH_PROXY_SECRET` +
+`OAUTH_PROXY_PRODUCTION_URL`, both set together — enforced by an API cross-field rule; the shared
+secret must match across prod + previews). A per-PR `*.vercel.app` URL can't be pre-registered with
+GitHub/Google, so previews route OAuth through production's registered callback. Only the
+**production** callback needs registering; local + prod register their own and run OAuth directly
+(local leaves both vars blank ⇒ the plugin is not mounted).
 
 **GitHub uses one GitHub App (not an OAuth App)** that does three jobs: sign-in (user-to-server
 OAuth, `user:email` only — no `repo` scope), the issue/PR connector, and the webhook firehose. The

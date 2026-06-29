@@ -32,6 +32,7 @@ import {
   committedTasksForCycles,
   computeStats,
   ensureCycleWindow,
+  ensureOrgCycleWindows,
   idParam,
   isCompleted,
   loadCycle,
@@ -41,12 +42,24 @@ import {
 } from './cycle-helpers';
 import { buildCycleBurnupPayload } from './cycle-burnup';
 
+/**
+ * The cycles list query: cursor pagination plus an opt-in `roll` flag. The list surfaces pass
+ * `roll=true` to auto-materialize every team's rolling window before listing; other callers omit it
+ * and get the raw stored roster with no side effect.
+ */
+const CycleListQuery = CursorQuery.extend({ roll: z.enum(['true', 'false']).optional() });
+
 /** Cycles router: org-scoped CRUD; `contribute` to mutate. */
 const cycles = new Hono<AppEnv>()
-  .get('/', zQuery(CursorQuery), async (c) => {
-    const { orgId } = c.get('actorCtx');
-    const { cursor, limit } = c.req.valid('query');
+  .get('/', zQuery(CycleListQuery), async (c) => {
+    const { orgId, actorId } = c.get('actorCtx');
+    const { cursor, limit, roll } = c.req.valid('query');
     const now = new Date();
+
+    // Auto-roll opt-in: the list surfaces want the live rolling window, so `roll=true` materializes
+    // every team's window in-process first — one batched ensure instead of a per-team `/current`
+    // HTTP fan-out (T self-HTTP round-trips on SSR). Other callers get the raw stored roster.
+    if (roll === 'true') await ensureOrgCycleWindows(orgId, actorId, now);
 
     // Keyset-paginate the roster (newest-first by start, id as tiebreak). `limit` is optional:
     // omitted, the full roster is returned as before; supplied, a bounded page + `nextCursor`.
@@ -70,7 +83,7 @@ const cycles = new Hono<AppEnv>()
       ...toOut(r, now),
       stats: computeStats(r, tasksByCycle.get(r.id) ?? []),
     }));
-    return ok(c, pageOf(CycleDetail), { items, ...(nextCursor ? { nextCursor } : {}) });
+    return ok(c, pageOf(CycleDetail), { items, nextCursor });
   })
   .get('/current', zQuery(CycleWindowQuery), async (c) => {
     const { orgId, actorId } = c.get('actorCtx');

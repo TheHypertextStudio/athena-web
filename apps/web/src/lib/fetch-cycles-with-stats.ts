@@ -18,38 +18,31 @@ export interface CyclesWithStats {
 }
 
 /**
- * Fetch the org's cycles and each cycle's pace stats, returning a {@link RpcResponse}-shaped
+ * Fetch the org's cycles with each cycle's pace stats, returning a {@link RpcResponse}-shaped
  * result so it can drive {@link useApiListQuery} directly (or be `unwrap`-ed for an SSR prefetch).
  *
  * @remarks
  * The cycles list endpoint returns each cycle's pace stats (committed/completed, capacity,
- * carryover) inline, so this reads them straight off the list items — no per-cycle `…/cycles/:id`
- * fan-out. The composite resolves `ok`/`status` from the gating list read.
- *
- * Before reading the roster it ensures each team's rolling window (past + current + upcoming)
- * exists — the `…/cycles/current` ensure is idempotent, so it is a cheap no-op once materialized,
- * and it means the page is never empty for a real team.
+ * carryover) inline **and** auto-rolls each team's window server-side before listing, so this is a
+ * single read — no per-cycle `…/cycles/:id` stats fan-out and no per-team `…/cycles/current` ensure
+ * fan-out (which on the SSR path were T self-HTTP round-trips). The composite resolves `ok`/`status`
+ * from the gating list read.
  *
  * @param orgId - The active org id.
- * @param teamIds - The org's team ids, in the order the roster keys off (must match server + client
- *   so an SSR-hydrated cache hits).
  * @param client - The RPC client; defaults to the browser client. The server passes its
  *   cookie-forwarding client for SSR prefetch.
  */
 export function fetchCyclesWithStats(
   orgId: string,
-  teamIds: readonly string[],
   client: typeof api = api,
 ): () => Promise<RpcResponse<CyclesWithStats>> {
   return async () => {
-    await Promise.all(
-      teamIds.map((teamId) =>
-        client.v1.orgs[':orgId'].cycles.current
-          .$get({ param: { orgId }, query: { teamId } })
-          .catch(() => null),
-      ),
-    );
-    const listRes = await client.v1.orgs[':orgId'].cycles.$get({ param: { orgId } });
+    // `roll=true`: the list endpoint auto-materializes every team's window in-process before
+    // listing (one call), replacing the old per-team `/current` ensure fan-out.
+    const listRes = await client.v1.orgs[':orgId'].cycles.$get({
+      param: { orgId },
+      query: { roll: 'true' },
+    });
     if (!listRes.ok) {
       return {
         ok: false,

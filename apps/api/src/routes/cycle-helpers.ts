@@ -152,13 +152,23 @@ export async function ensureCycleWindow(
     .orderBy(cycle.number);
 }
 
+/**
+ * The minimal task shape the pace-stats roll-up reads.
+ *
+ * @remarks
+ * `computeStats`/`effort`/`isCompleted` need only these three columns, so the batched list query
+ * ({@link committedTasksForCycles}) can `select` just them instead of whole rows. Full `TaskRow`s
+ * (from {@link committedTasks}) satisfy this structurally, so both feed the same helpers.
+ */
+export type CycleStatTask = Pick<TaskRow, 'estimate' | 'completedAt' | 'createdAt'>;
+
 /** Whether a task counts as completed (its workflow state stamped a `completed_at`). */
-export function isCompleted(t: TaskRow): boolean {
+export function isCompleted(t: CycleStatTask): boolean {
   return t.completedAt !== null;
 }
 
 /** A task's effort weight: its estimate, treating an unestimated task as 0. */
-export function effort(t: TaskRow): number {
+export function effort(t: CycleStatTask): number {
   return t.estimate ?? 0;
 }
 
@@ -187,11 +197,18 @@ export async function committedTasks(orgId: string, cycleId: string): Promise<Ta
 export async function committedTasksForCycles(
   orgId: string,
   cycleIds: readonly string[],
-): Promise<Map<string, TaskRow[]>> {
-  const byCycle = new Map<string, TaskRow[]>();
+): Promise<Map<string, CycleStatTask[]>> {
+  const byCycle = new Map<string, CycleStatTask[]>();
   if (cycleIds.length === 0) return byCycle;
+  // Select only the columns the stats roll-up reads (+ cycleId to group by) rather than whole
+  // rows — the list rolls up every committed task across every cycle, so the row width matters.
   const rows = await db
-    .select()
+    .select({
+      cycleId: task.cycleId,
+      estimate: task.estimate,
+      completedAt: task.completedAt,
+      createdAt: task.createdAt,
+    })
     .from(task)
     .where(
       and(
@@ -210,7 +227,7 @@ export async function committedTasksForCycles(
 }
 
 /** Roll a cycle's committed tasks up into its pace stats. */
-export function computeStats(cy: CycleRow, tasks: TaskRow[]): CycleStats {
+export function computeStats(cy: CycleRow, tasks: readonly CycleStatTask[]): CycleStats {
   let completed = 0;
   let capacity = 0;
   let completedCapacity = 0;

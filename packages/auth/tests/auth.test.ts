@@ -209,15 +209,119 @@ describe('auth config', () => {
     expect(hubs).toHaveLength(1);
   });
 
-  it('mounts ONLY passkey + nextCookies with placeholder env (passwordless baseline)', async () => {
+  it('getRecoveryCodeStatus: null when no codes, count + generatedAt when present', async () => {
+    // Validates the recovery-code status path end-to-end — including the load-bearing assumption
+    // that the encryption key is `BETTER_AUTH_SECRET` — by storing codes exactly as the twoFactor
+    // plugin does (`storeBackupCodes: 'encrypted'`) and reading the count + timestamp back.
+    const { getRecoveryCodeStatus } = await import('../src/index');
+    const { db, twoFactor, user } = await import('@docket/db');
+    const { symmetricEncrypt } = await import('better-auth/crypto');
+
+    // No twoFactor row → null (distinguishes "never generated" from "0 left").
+    expect(await getRecoveryCodeStatus('no-such-user')).toBeNull();
+
+    const [u] = await db.insert(user).values({ name: 'Rec', email: 'rec@example.com' }).returning();
+    const codes = ['aaaaa-bbbbb', 'ccccc-ddddd', 'eeeee-fffff'];
+    const encrypted = await symmetricEncrypt({ key: SECRET, data: JSON.stringify(codes) });
+    await db.insert(twoFactor).values({ secret: 'x', backupCodes: encrypted, userId: u!.id });
+
+    const status = await getRecoveryCodeStatus(u!.id);
+    expect(status?.remaining).toBe(3);
+    // `backup_codes_generated_at` defaults to now() on insert → a parseable ISO instant.
+    expect(Number.isNaN(Date.parse(status?.generatedAt ?? ''))).toBe(false);
+  });
+
+  it('recovery: generateRecoveryCodes → recoveryChallenge → verifyBackupCode, session-less, end-to-end', async () => {
+    // Proves two seams at once: (a) Docket-owned `generateRecoveryCodes` writes codes the plugin's
+    // `verifyBackupCode` can consume (byte-compatible encryption), and (b) the recovery-challenge
+    // bridge mints exactly the `two_factor` cookie that `verifyBackupCode` reads back. Driven
+    // through the live `auth.handler` (HTTP) with NO session — the locked-out path — so a
+    // better-auth upgrade that changes the cookie/verification shape fails here loudly.
+    const { auth, generateRecoveryCodes } = await import('../src/index');
+    const { db, user } = await import('@docket/db');
+
+    const email = 'locked-out@example.com';
+    const [u] = await db.insert(user).values({ name: 'Locked', email }).returning();
+    const codes = await generateRecoveryCodes(u!.id);
+
+    const post = (path: string, body: unknown, cookie?: string): Promise<Response> =>
+      auth.handler(
+        new Request(`http://localhost:4000/api/auth${path}`, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            origin: 'http://localhost:4000',
+            ...(cookie ? { cookie } : {}),
+          },
+          body: JSON.stringify(body),
+        }),
+      );
+
+    // 1) Arm the challenge with no session → a signed challenge cookie is set.
+    const armed = await post('/two-factor/recovery-challenge', { email });
+    expect(armed.status).toBe(200);
+    const cookie = armed.headers
+      .getSetCookie()
+      .map((c) => c.split(';')[0])
+      .join('; ');
+    expect(cookie).not.toBe('');
+
+    // 2) Verify one of the GENERATED codes with that cookie (still no session) → a session issues.
+    const verified = await post('/two-factor/verify-backup-code', { code: codes[0] }, cookie);
+    expect(verified.status).toBe(200);
+    expect(verified.headers.getSetCookie().some((c) => c.includes('session'))).toBe(true);
+
+    // 3) The consumed code (and now-cleared challenge) can't be replayed.
+    const replay = await post('/two-factor/verify-backup-code', { code: codes[0] }, cookie);
+    expect(replay.status).not.toBe(200);
+  });
+
+  it('generateRecoveryCodes: creates a set, enables 2FA, stamps generatedAt; regenerate replaces + advances', async () => {
+    const { generateRecoveryCodes, getRecoveryCodeStatus } = await import('../src/index');
+    const { db, twoFactor, user } = await import('@docket/db');
+    const { eq } = await import('drizzle-orm');
+
+    const [u] = await db.insert(user).values({ name: 'Gen', email: 'gen@example.com' }).returning();
+
+    const first = await generateRecoveryCodes(u!.id);
+    expect(first).toHaveLength(10);
+    expect(first.every((c) => /^[a-zA-Z0-9]{5}-[a-zA-Z0-9]{5}$/.test(c))).toBe(true);
+    const [urow] = await db
+      .select({ tfe: user.twoFactorEnabled })
+      .from(user)
+      .where(eq(user.id, u!.id));
+    expect(urow!.tfe).toBe(true);
+    expect((await getRecoveryCodeStatus(u!.id))?.remaining).toBe(10);
+
+    // Backdate, then regenerate → fresh set, one row, generatedAt jumps to now.
+    await db
+      .update(twoFactor)
+      .set({ backupCodesGeneratedAt: new Date('2020-01-01T00:00:00.000Z') })
+      .where(eq(twoFactor.userId, u!.id));
+    const second = await generateRecoveryCodes(u!.id);
+    expect(second).not.toEqual(first);
+    const rows = await db
+      .select({ id: twoFactor.id })
+      .from(twoFactor)
+      .where(eq(twoFactor.userId, u!.id));
+    expect(rows).toHaveLength(1);
+    const status = await getRecoveryCodeStatus(u!.id);
+    expect(status?.remaining).toBe(10);
+    expect(Date.parse(status?.generatedAt ?? '')).toBeGreaterThan(
+      Date.parse('2020-01-01T00:00:00.000Z'),
+    );
+  });
+
+  it('mounts passkey + twoFactor + recoveryChallenge + nextCookies with placeholder env (passwordless baseline)', async () => {
     // The live `auth` is built from the test env (optional gated vars unset) → every
-    // OPTIONAL gate is closed. This pins the zero-account local build to passkey +
-    // nextCookies, with no social/oidc/mcp and no account-linking.
+    // OPTIONAL gate is closed. This pins the zero-account local build to passkey + the
+    // always-on recovery-codes pair (twoFactor + recoveryChallenge) + nextCookies, with no
+    // social/oidc/mcp and no account-linking.
     const { auth } = await import('../src/index');
     expect(auth.options.socialProviders).toBeUndefined();
     expect(auth.options.account).toBeUndefined();
     const ids = (auth.options.plugins ?? []).map((p) => p.id);
-    expect(ids).toEqual(['passkey', 'next-cookies']);
+    expect(ids).toEqual(['passkey', 'two-factor', 'recovery-challenge', 'next-cookies']);
   });
 
   // Runs LAST: it resets the module registry, which would orphan the migrated
@@ -247,12 +351,17 @@ describe('buildAuthOptions env-gating', () => {
     BETTER_AUTH_PASSKEY_RP_NAME: 'Docket',
   } as const;
 
-  it('mounts ONLY passkey + nextCookies when no optional gated vars are real (== baseline)', async () => {
+  it('mounts passkey + twoFactor + recoveryChallenge + nextCookies when no optional gated vars are real (== baseline)', async () => {
     const { buildAuthOptions } = await import('../src/index');
     const opts = buildAuthOptions(baseEnv);
     expect(opts.socialProviders).toBeUndefined();
     expect(opts.account).toBeUndefined();
-    expect((opts.plugins ?? []).map((p) => p.id)).toEqual(['passkey', 'next-cookies']);
+    expect((opts.plugins ?? []).map((p) => p.id)).toEqual([
+      'passkey',
+      'two-factor',
+      'recovery-challenge',
+      'next-cookies',
+    ]);
     // Passwordless: no email/password sign-in.
     expect(opts.emailAndPassword).toBeUndefined();
   });
@@ -304,6 +413,29 @@ describe('buildAuthOptions env-gating', () => {
     expect(created).toEqual([{ name: 'Wired', email: 'wired@example.com' }]);
   });
 
+  it('configures twoFactor backup-codes-only for passwordless account recovery', async () => {
+    // The recovery-codes feature rides the twoFactor plugin, but used backup-codes-only: passkey
+    // users must be able to enable/manage codes without a password (`allowPasswordless`), there is
+    // no TOTP verify step (`skipVerificationOnEnable`), TOTP is disabled, and codes are encrypted
+    // at rest. Also assert the recovery-challenge bridge is mounted alongside it.
+    const { buildAuthOptions } = await import('../src/index');
+    const opts = buildAuthOptions(baseEnv);
+    const tf = (opts.plugins ?? []).find((p) => p.id === 'two-factor');
+    expect(tf).toBeDefined();
+    const tfOptions = (tf as { options?: Record<string, unknown> }).options ?? {};
+    expect(tfOptions['allowPasswordless']).toBe(true);
+    expect(tfOptions['skipVerificationOnEnable']).toBe(true);
+    expect((tfOptions['totpOptions'] as { disable?: boolean } | undefined)?.disable).toBe(true);
+    expect(
+      (tfOptions['backupCodeOptions'] as { storeBackupCodes?: string } | undefined)
+        ?.storeBackupCodes,
+    ).toBe('encrypted');
+    // No OTP delivery configured ⇒ recovery code is the only second factor.
+    expect(tfOptions['otpOptions']).toBeUndefined();
+
+    expect((opts.plugins ?? []).map((p) => p.id)).toContain('recovery-challenge');
+  });
+
   it('ignores half-configured social pairs (id without secret)', async () => {
     const { buildAuthOptions } = await import('../src/index');
     const opts = buildAuthOptions({
@@ -326,8 +458,13 @@ describe('buildAuthOptions env-gating', () => {
       OIDC_LOGIN_PAGE_URL: '',
     });
     expect(opts.socialProviders).toBeUndefined();
-    // Still just passkey + nextCookies.
-    expect((opts.plugins ?? []).map((p) => p.id)).toEqual(['passkey', 'next-cookies']);
+    // Still just the baseline: passkey + recovery-codes pair + nextCookies.
+    expect((opts.plugins ?? []).map((p) => p.id)).toEqual([
+      'passkey',
+      'two-factor',
+      'recovery-challenge',
+      'next-cookies',
+    ]);
   });
 
   it('mounts Google + GitHub + Linear + account linking when all pairs are real', async () => {
@@ -432,7 +569,13 @@ describe('buildAuthOptions env-gating', () => {
     }
     // passkey + oidcProvider + nextCookies (no mcp).
     const ids = (opts.plugins ?? []).map((p) => p.id);
-    expect(ids).toEqual(['passkey', 'oidc-provider', 'next-cookies']);
+    expect(ids).toEqual([
+      'passkey',
+      'two-factor',
+      'recovery-challenge',
+      'oidc-provider',
+      'next-cookies',
+    ]);
     expect(ids).not.toContain('mcp');
     // nextCookies MUST remain last.
     expect(ids[ids.length - 1]).toBe('next-cookies');
@@ -448,9 +591,30 @@ describe('buildAuthOptions env-gating', () => {
       MCP_RESOURCE_URL: 'https://docket.example/mcp',
     });
     const ids = (opts.plugins ?? []).map((p) => p.id);
-    expect(ids).toEqual(['passkey', 'mcp', 'next-cookies']);
+    expect(ids).toEqual(['passkey', 'two-factor', 'recovery-challenge', 'mcp', 'next-cookies']);
     expect(ids).not.toContain('oidc-provider');
     expect(ids[ids.length - 1]).toBe('next-cookies');
+  });
+
+  it('mounts oAuthProxy (before nextCookies) only when both OAUTH_PROXY_* are real', async () => {
+    const { buildAuthOptions } = await import('../src/index');
+    const opts = buildAuthOptions({
+      ...baseEnv,
+      OAUTH_PROXY_SECRET: 'oauth-proxy-shared-secret',
+      OAUTH_PROXY_PRODUCTION_URL: 'https://app.docket.example',
+    });
+    const ids = (opts.plugins ?? []).map((p) => p.id);
+    expect(ids).toContain('oauth-proxy');
+    expect(ids[ids.length - 1]).toBe('next-cookies');
+  });
+
+  it('does NOT mount oAuthProxy when the pair is absent or half-configured', async () => {
+    const { buildAuthOptions } = await import('../src/index');
+    // Absent (the local placeholder env).
+    expect((buildAuthOptions(baseEnv).plugins ?? []).map((p) => p.id)).not.toContain('oauth-proxy');
+    // Secret without URL → not mounted (the contract also rejects this pair at env validation).
+    const half = buildAuthOptions({ ...baseEnv, OAUTH_PROXY_SECRET: 'only-the-secret' });
+    expect((half.plugins ?? []).map((p) => p.id)).not.toContain('oauth-proxy');
   });
 
   it('uses a static baseURL string + no proxy-header trust when BETTER_AUTH_ALLOWED_HOSTS is unset', async () => {

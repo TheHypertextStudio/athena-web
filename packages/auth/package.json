@@ -24,7 +24,9 @@
     "@docket/env": "workspace:*",
     "@docket/types": "workspace:*",
     "@simplewebauthn/server": "catalog:",
-    "better-auth": "catalog:"
+    "better-auth": "catalog:",
+    "drizzle-orm": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@better-auth/cli": "catalog:",
@@ -32,7 +34,6 @@
     "@docket/tsconfig": "workspace:*",
     "@electric-sql/pglite": "catalog:",
     "@types/node": "25.9.2",
-    "drizzle-orm": "catalog:",
     "vite": "^8.0.16",
     "vitest": "^4.1.8"
   }

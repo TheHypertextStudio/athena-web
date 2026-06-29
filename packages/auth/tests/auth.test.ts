@@ -411,4 +411,26 @@ describe('buildAuthOptions env-gating', () => {
     expect(ids).not.toContain('oidc-provider');
     expect(ids[ids.length - 1]).toBe('next-cookies');
   });
+
+  it('uses a static baseURL string + no proxy-header trust when BETTER_AUTH_ALLOWED_HOSTS is unset', async () => {
+    const { buildAuthOptions } = await import('../src/index');
+    const opts = buildAuthOptions(baseEnv);
+    expect(opts.baseURL).toBe('http://localhost:3000');
+    expect(opts.advanced?.trustedProxyHeaders).toBeUndefined();
+  });
+
+  it('switches to dynamic baseURL + proxy-header trust when BETTER_AUTH_ALLOWED_HOSTS is set', async () => {
+    const { buildAuthOptions } = await import('../src/index');
+    const opts = buildAuthOptions({
+      ...baseEnv,
+      // Trimmed/empties-dropped CSV (reuses parseTrustedOrigins).
+      BETTER_AUTH_ALLOWED_HOSTS: 'usedocket.app, docket.hypertext.studio , *.vercel.app,',
+    });
+    expect(opts.baseURL).toEqual({
+      allowedHosts: ['usedocket.app', 'docket.hypertext.studio', '*.vercel.app'],
+      fallback: 'http://localhost:3000',
+      protocol: 'auto',
+    });
+    expect(opts.advanced?.trustedProxyHeaders).toBe(true);
+  });
 });

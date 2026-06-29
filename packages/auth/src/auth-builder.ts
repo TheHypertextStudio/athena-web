@@ -30,6 +30,7 @@ export interface AuthEnv {
   readonly BETTER_AUTH_SECRET: string;
   readonly BETTER_AUTH_URL: string;
   readonly BETTER_AUTH_TRUSTED_ORIGINS?: string | undefined;
+  readonly BETTER_AUTH_ALLOWED_HOSTS?: string;
   readonly BETTER_AUTH_PASSKEY_RP_ID: string;
   readonly BETTER_AUTH_PASSKEY_RP_NAME: string;
   readonly GOOGLE_CLIENT_ID?: string | undefined;
@@ -192,9 +193,20 @@ export function buildAuthOptions(e: AuthEnv): BetterAuthOptions {
   }
   plugins.push(nextCookies());
 
+  // When `BETTER_AUTH_ALLOWED_HOSTS` lists one or more host patterns, switch `baseURL` to
+  // Better Auth's dynamic config: the per-request base URL is derived from the incoming
+  // request host (validated against this allowlist), so one instance serves preview
+  // deployments (`*.vercel.app`) and multiple custom domains. `BETTER_AUTH_URL` stays the
+  // `fallback` for unmatched/header-less requests. Unset ⇒ the static-string behavior is
+  // byte-identical to before (no proxy-header trust). See the dynamic-base-url guide.
+  const allowedHosts = parseTrustedOrigins(e.BETTER_AUTH_ALLOWED_HOSTS);
+  const dynamicBaseURL = allowedHosts.length > 0;
+
   return {
     secret: e.BETTER_AUTH_SECRET,
-    baseURL: e.BETTER_AUTH_URL,
+    baseURL: dynamicBaseURL
+      ? { allowedHosts, fallback: e.BETTER_AUTH_URL, protocol: 'auto' }
+      : e.BETTER_AUTH_URL,
     trustedOrigins: parseTrustedOrigins(e.BETTER_AUTH_TRUSTED_ORIGINS),
     database: drizzleAdapter(db, {
       provider: 'pg',
@@ -202,6 +214,10 @@ export function buildAuthOptions(e: AuthEnv): BetterAuthOptions {
     }),
     advanced: {
       database: { generateId: () => genId() },
+      // The auth handler sits behind the Next rewrite proxy, so the browser-facing host
+      // only reaches it via `x-forwarded-host` — which the dynamic resolver honors ONLY
+      // when proxy headers are trusted. Safe here: hosts are still allowlist-validated.
+      ...(dynamicBaseURL ? { trustedProxyHeaders: true } : {}),
     },
     ...(hasSocial
       ? { socialProviders, account: { accountLinking: { enabled: true, trustedProviders } } }

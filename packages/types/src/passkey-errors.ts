@@ -22,6 +22,7 @@ export interface PasskeyCeremonyError {
 /** The typed passkey outcomes clients know how to explain. */
 export type PasskeyErrorKind =
   | 'already_registered'
+  | 'unknown_credential'
   | 'server_unavailable'
   | 'cancelled_or_timed_out'
   | 'transient';
@@ -48,6 +49,21 @@ export const PREVIOUSLY_REGISTERED_CODE = 'ERROR_AUTHENTICATOR_PREVIOUSLY_REGIST
 /** Plain, actionable copy for the duplicate-account case during sign-up. */
 export const ALREADY_REGISTERED_MESSAGE =
   'You already have an account with this email. Sign in instead.';
+
+/**
+ * Better Auth's stable code when sign-in presents a credential the server no longer holds.
+ *
+ * @remarks
+ * Raised by `@better-auth/passkey`'s `verify-authentication` endpoint (HTTP 401) when the
+ * supplied credential ID matches no `passkey` row — i.e. the passkey was deleted server-side.
+ * This is the signal that the browser should prune the stale credential via the WebAuthn
+ * Signal API (`PublicKeyCredential.signalUnknownCredential`).
+ */
+export const PASSKEY_NOT_FOUND_CODE = 'PASSKEY_NOT_FOUND';
+
+/** Copy shown when the presented passkey no longer exists on the server. */
+export const PASSKEY_NOT_FOUND_MESSAGE =
+  "That passkey is no longer registered. It's been removed from this device — try another way to sign in.";
 
 /** Whether an HTTP status denotes a server-side failure the user cannot fix. */
 export function isServerUnavailable(status: number | undefined): boolean {
@@ -85,6 +101,21 @@ function errorCode(error: unknown): string | undefined {
 }
 
 /**
+ * Whether the server rejected sign-in because it no longer holds the presented credential.
+ *
+ * @remarks
+ * True for the `@better-auth/passkey` `PASSKEY_NOT_FOUND` outcome — the cue to call
+ * `PublicKeyCredential.signalUnknownCredential` so the platform authenticator prunes the
+ * deleted passkey.
+ *
+ * @param error - A Better Auth error envelope, browser error, or opaque thrown value.
+ * @returns `true` when the presented passkey is unknown to the server.
+ */
+export function isPasskeyUnknownToServer(error: unknown): boolean {
+  return errorCode(error) === PASSKEY_NOT_FOUND_CODE;
+}
+
+/**
  * Whether the browser/native authenticator refused, cancelled, or timed out the ceremony.
  *
  * @param error - A Better Auth error envelope, browser error, or opaque thrown value.
@@ -110,6 +141,7 @@ export function isPasskeyPromptCancelled(error: unknown): boolean {
  */
 export function passkeyErrorKind(error: unknown): PasskeyErrorKind {
   if (errorCode(error) === PREVIOUSLY_REGISTERED_CODE) return 'already_registered';
+  if (isPasskeyUnknownToServer(error)) return 'unknown_credential';
   if (isServerUnavailable(errorStatus(error))) return 'server_unavailable';
   if (isPasskeyPromptCancelled(error)) return 'cancelled_or_timed_out';
   return 'transient';
@@ -127,6 +159,8 @@ export function passkeyUserMessage(error: unknown, transientFallback: string): P
   switch (kind) {
     case 'already_registered':
       return { kind, message: ALREADY_REGISTERED_MESSAGE };
+    case 'unknown_credential':
+      return { kind, message: PASSKEY_NOT_FOUND_MESSAGE };
     case 'server_unavailable':
       return { kind, message: SERVER_UNAVAILABLE_MESSAGE };
     case 'cancelled_or_timed_out':

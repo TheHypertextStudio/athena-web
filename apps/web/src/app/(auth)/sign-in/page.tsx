@@ -11,8 +11,12 @@ import { authClient } from '@/lib/auth-client';
 import { AuthError, Spinner } from '../_components/auth-feedback';
 import { AuthShell } from '../_components/auth-shell';
 import { OAuthButtons } from '../_components/oauth-buttons';
-import { passkeyErrorMessage } from '../_lib/passkey-error';
-import { isConditionalMediationSupported, isWebAuthnSupported } from '../_lib/webauthn';
+import { isPasskeyUnknownToServer, passkeyErrorMessage } from '../_lib/passkey-error';
+import {
+  isConditionalMediationSupported,
+  isWebAuthnSupported,
+  signalUnknownPasskey,
+} from '../_lib/webauthn';
 
 /** The Hub cockpit a returning user lands in once signed in. */
 const HOME_DESTINATION = '/today';
@@ -73,8 +77,15 @@ export default function SignInPage(): JSX.Element {
       if (!autoFill) setPending(true);
       setError(null);
       try {
-        const { error: passkeyError } = await authClient.signIn.passkey({ autoFill });
+        const result = await authClient.signIn.passkey({ autoFill, returnWebAuthnResponse: true });
+        const passkeyError = result.error;
         if (passkeyError) {
+          // When the server no longer holds the presented credential (deleted passkey), tell the
+          // platform authenticator to prune it via the WebAuthn Signal API — even on the silent
+          // autofill path, so the stale passkey stops surfacing in the browser's own UI.
+          if (isPasskeyUnknownToServer(passkeyError) && 'webauthn' in result) {
+            void signalUnknownPasskey(result.webauthn.response.id);
+          }
           // A user-cancelled or timed-out conditional prompt should not nag the user. For the
           // explicit button path a 5xx (e.g. the API/database is down) surfaces an outage-aware
           // message instead of a bare "please try again".

@@ -9,7 +9,10 @@ import { describe, expect, it } from 'vitest';
 
 import {
   ALREADY_REGISTERED_MESSAGE,
+  isPasskeyUnknownToServer,
   isServerUnavailable,
+  PASSKEY_NOT_FOUND_CODE,
+  PASSKEY_NOT_FOUND_MESSAGE,
   PASSKEY_PROMPT_CANCELLED_MESSAGE,
   passkeyErrorKind,
   passkeyErrorMessage,
@@ -30,7 +33,31 @@ describe('isServerUnavailable', () => {
   });
 });
 
+describe('isPasskeyUnknownToServer', () => {
+  it('is true only for the PASSKEY_NOT_FOUND code', () => {
+    expect(isPasskeyUnknownToServer({ code: PASSKEY_NOT_FOUND_CODE, status: 401 })).toBe(true);
+    expect(isPasskeyUnknownToServer({ code: PREVIOUSLY_REGISTERED_CODE, status: 400 })).toBe(false);
+    expect(isPasskeyUnknownToServer({ status: 401, message: 'Unauthorized' })).toBe(false);
+    expect(isPasskeyUnknownToServer(null)).toBe(false);
+    expect(isPasskeyUnknownToServer(undefined)).toBe(false);
+  });
+});
+
 describe('passkeyErrorMessage', () => {
+  it('maps the server-deleted-passkey code to the unknown-credential copy', () => {
+    const envelope = {
+      code: PASSKEY_NOT_FOUND_CODE,
+      message: 'Passkey not found',
+      status: 401,
+      statusText: 'UNAUTHORIZED',
+    };
+    expect(passkeyErrorKind(envelope)).toBe('unknown_credential');
+    expect(passkeyUserMessage(envelope, TRANSIENT)).toEqual({
+      kind: 'unknown_credential',
+      message: PASSKEY_NOT_FOUND_MESSAGE,
+    });
+  });
+
   it('maps the duplicate-account code to the actionable sign-in copy', () => {
     expect(
       passkeyErrorMessage(

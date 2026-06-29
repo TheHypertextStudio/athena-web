@@ -1,11 +1,86 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-06-28
+> **Last Updated**: 2026-06-29
 
 ---
 
 ## Completed Tasks
+
+### [AUTH-002] Prune server-deleted passkeys during sign-in via the WebAuthn Signal API
+
+- **Completed**: 2026-06-29
+- **Summary**: When a passkey sign-in is rejected by the server because the credential no longer
+  exists (`@better-auth/passkey` `verify-authentication` → HTTP 401 `PASSKEY_NOT_FOUND`), the
+  client now tells the platform authenticator/password manager to prune the stale credential via
+  `PublicKeyCredential.signalUnknownCredential({ rpId, credentialId })`. This stops the deleted
+  passkey from being offered again (notably in the conditional-mediation autofill list). Applies
+  to both `apps/web` and `apps/admin` sign-in screens, on both the explicit-button and silent
+  autofill paths.
+- **Approach**: The credential ID is recovered by calling
+  `authClient.signIn.passkey({ autoFill, returnWebAuthnResponse: true })` and reading
+  `result.webauthn.response.id` on the error branch — the plugin attaches the
+  `AuthenticationResponseJSON` even on a server rejection because it posts to verify with
+  `throw: false`. Added `isPasskeyUnknownToServer()` + a typed `unknown_credential` outcome to the
+  shared `@docket/types` passkey error mapper, and a defensive, feature-detected
+  `signalUnknownPasskey()` browser helper per app (no-op where the Signal API is absent; never
+  throws). The required `rpId` comes from a new browser-exposed `NEXT_PUBLIC_PASSKEY_RP_ID`
+  (mirrors the server's `BETTER_AUTH_PASSKEY_RP_ID`, **no fallback**).
+- **Files Changed**: `packages/types/src/passkey-errors.ts` (+ `tests/passkey-errors.test.ts`);
+  `apps/web/src/app/(auth)/_lib/{webauthn,passkey-error}.ts`, `apps/web/src/app/(auth)/sign-in/page.tsx`;
+  `apps/admin/src/app/(auth)/_lib/webauthn.ts` (new), `apps/admin/src/app/(auth)/_lib/passkey-error.ts`,
+  `apps/admin/src/app/(auth)/sign-in/page.tsx`; `apps/web/src/types/env.d.ts`,
+  `apps/admin/src/types/env.d.ts` (new); `.env.example`; `docs/engineering/specs/env-and-bootstrap.md`.
+- **Learnings**: better-auth hides the ceremony credential ID by default; `returnWebAuthnResponse`
+  is the only way to recover it, and it's populated on the server-rejection path (not on a
+  thrown/cancelled ceremony, which has no credential ID — and isn't a "deleted" case anyway).
+  Signal API is Chrome/Edge 132+; Safari/Firefox no-op gracefully.
+
+---
+
+### [INT-001] Turnkey third-party integration setup (`pnpm integrations`)
+
+- **Completed**: 2026-06-29
+- **Summary**: Implemented the interactive integration setup designed in
+  `docs/engineering/specs/env-and-bootstrap.md` §3.4 (previously specced but not built). A new
+  registry-driven module walks every external credential in `VAR_REGISTRY` (OAuth providers,
+  Stripe, Anthropic, SMTP, observability), printing explicit per-provider instructions (exact
+  console URL + the exact redirect URI for the chosen environment) and collecting values via
+  masked, schema-validated, re-promptable inputs. It is **environment-aware** — `local`,
+  `staging`, `production` are each configured in their own pass with their own credentials and
+  redirect URIs — and routes writes accordingly: `local` upserts the root `.env.local`
+  non-destructively; `staging`/`production` push server vars to GCP Secret Manager
+  (`docket-…` for prod, `docket-staging-…` for staging — matching `deploy.yml`) and public
+  `NEXT_PUBLIC_*` vars to GitHub environment variables, printing the exact `deploy.yml` lines to
+  wire any new secret. Runnable standalone (`pnpm integrations`) or automatically at the end of
+  `pnpm bootstrap`. Before any cloud write it **confirms the gcloud + gh accounts and GCP project**
+  — lists every authenticated account and every accessible project and lets the operator choose
+  rather than assuming the active ones — scoping gcloud via `CLOUDSDK_CORE_ACCOUNT` (no
+  global-config mutation) and `gh auth switch` only when a different account is picked;
+  `pnpm bootstrap` runs the same confirmation up front.
+- **Approach**: Reused `VAR_REGISTRY` (the documented single source for "the future bootstrap
+  prompt") for metadata + zod validation, and `env-check`'s validation pattern. Built the prompt
+  layer on `@clack/prompts` (the library the spec §3 already mandates) — `password()` for real
+  masking, `select()`/`multiselect()` for account/project/environment menus, `text()` with
+  zod-backed `validate` — replacing the initial hand-rolled readline + private `_writeToOutput`
+  masking hack and bootstrap's bespoke readline. Added a non-destructive `upsertEnvVars` (also
+  adopted by bootstrap's `writeEnvLocal`, replacing its destructive skip-if-exists), and a curated
+  provider-group table carrying **dummy-proof, numbered, click-by-click** setup walkthroughs per
+  provider (console navigation, exact fields, exact redirect URI, where to copy each value),
+  rendered in clack `note()` boxes; the credential metadata still comes from the registry.
+- **Files Changed**: `scripts/integrations-setup.ts` (new); `scripts/bootstrap.ts` (fully
+  clack-rendered — `intro`/`log`/`note`/`outro` + prompts, no more raw `console.log` sections
+  clashing with the styled prompts; calls `runIntegrationSetup` embedded; non-destructive
+  `.env.local`); `package.json` (`integrations` script + `@clack/prompts` devDependency);
+  `docs/engineering/specs/env-and-bootstrap.md` §3.4 (marked implemented); `.env.example`.
+- **Validation**: `tsc` strict (clean), `eslint` (clean), `pnpm env:check` (pass); `upsertEnvVars`
+  unit harness (in-place replace, no dupes, comment-preserving, empty-skip); live verification of
+  the gcloud/gh account choosers and the GCP project chooser (CLOUDSDK_CORE_ACCOUNT set, gh
+  untouched); clack `note()` render check of the walkthroughs.
+- **Learnings**: Don't hand-roll terminal prompting — masking secrets by overriding readline's
+  private `_writeToOutput` is a hack; `@clack/prompts` does it properly and the spec already
+  sanctioned it. Also: piped stdin can't drive interactive prompt loops (EOF fires before later
+  prompts register), so verify the pure logic in isolation and the TTY flow via `note()`/render.
 
 ### [AMB-001] Ambient Context Intelligence — Phase 0 (Linear ingestion → daily digest)
 

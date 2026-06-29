@@ -14,7 +14,8 @@ import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 
 import { authClient } from '@/lib/auth-client';
 
-import { passkeyErrorMessage } from '../_lib/passkey-error';
+import { isPasskeyUnknownToServer, passkeyErrorMessage } from '../_lib/passkey-error';
+import { signalUnknownPasskey } from '../_lib/webauthn';
 
 /** Whether this browser exposes the WebAuthn API at all. */
 function isWebAuthnSupported(): boolean {
@@ -65,8 +66,15 @@ export default function SignInPage(): JSX.Element {
       if (!autoFill) setPending(true);
       setError(null);
       try {
-        const { error: passkeyError } = await authClient.signIn.passkey({ autoFill });
+        const result = await authClient.signIn.passkey({ autoFill, returnWebAuthnResponse: true });
+        const passkeyError = result.error;
         if (passkeyError) {
+          // When the server no longer holds the presented credential (deleted passkey), tell the
+          // platform authenticator to prune it via the WebAuthn Signal API — even on the silent
+          // autofill path, so the stale passkey stops surfacing in the browser's own UI.
+          if (isPasskeyUnknownToServer(passkeyError) && 'webauthn' in result) {
+            void signalUnknownPasskey(result.webauthn.response.id);
+          }
           if (!autoFill) {
             setError(
               passkeyErrorMessage(

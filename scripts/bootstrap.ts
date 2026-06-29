@@ -1,25 +1,40 @@
 /**
- * `pnpm bootstrap` — one-time GCP + GitHub setup for Docket production deployment.
+ * `pnpm bootstrap` — set up Docket for local development, and optionally provision production.
  *
  * @remarks
- * Sets up in order:
- *   1. Prerequisite checks (gcloud, gh, openssl)
- *   2. GCP APIs, service account, roles, Artifact Registry, WIF, Secret Manager
- *   3. GitHub repository variables and secrets (via gh CLI)
- *   4. Local .env.local skeleton
+ * Dev-first flow:
+ *   Phase 1 (always): check dev tools (openssl/docker) → write a local-only `.env.local`
+ *     (its own freshly-generated dev secrets) → optionally walk through local integrations.
+ *   Phase 2 (opt-in): provision production — gcloud/gh prereqs + account confirmation, GCP
+ *     APIs/service account/WIF/Artifact Registry/Secret Manager, GitHub Actions vars + secrets,
+ *     optionally production integrations.
  *
- * Idempotent — safe to re-run. Already-existing resources are detected and skipped.
- * Cloud Run service URLs are unknown until after the first deploy; the script prints
- * exact follow-up commands to set them once services are live.
+ * Production secrets are held in memory and pushed straight to Secret Manager / GitHub — never
+ * written to disk. Idempotent — safe to re-run; existing resources are detected and skipped.
+ * Cloud Run URLs are unknown until the first deploy; the script prints the follow-up commands.
  */
 
 import { execSync } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync, mkdtempSync, unlinkSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { createInterface } from 'node:readline';
+import { existsSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import process from 'node:process';
+
+import { cancel, confirm, intro, log, note, outro, password, text } from '@clack/prompts';
+
+import {
+  chooseGcloudProject,
+  confirmAuthAccounts,
+  detectRepo,
+  exec,
+  listGcloudAccounts,
+  listGhAccounts,
+  parseEnvFile,
+  runIntegrationSetup,
+  tryRun,
+  unwrap,
+  upsertEnvVars,
+} from './integrations-setup';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const SA_NAME = 'docket-deploy';
@@ -29,127 +44,107 @@ const WIF_PROVIDER = 'github-actions';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
+// execSync wrappers + env parsing + the clack-cancel `unwrap` are shared from
+// ./integrations-setup; bootstrap keeps only `run` (throwing) and its clack log wrappers.
 function run(cmd: string): string {
   return execSync(cmd, { encoding: 'utf8', stdio: 'pipe' }).trim();
 }
 
-function exec(cmd: string): void {
-  execSync(cmd, { encoding: 'utf8', stdio: 'inherit' });
-}
-
-function tryRun(cmd: string): string {
-  try {
-    return run(cmd);
-  } catch {
-    return '';
-  }
-}
+// All output routes through @clack/prompts so the script reads as one consistent flow.
 
 function ok(msg: string): void {
-  console.log(`  ✓  ${msg}`);
+  log.success(msg);
 }
 
 function step(msg: string): void {
-  console.log(`  →  ${msg}`);
+  log.step(msg);
 }
 
 function warn(msg: string): void {
-  console.log(`  ⚠  ${msg}`);
+  log.warn(msg);
 }
 
 function section(title: string): void {
-  const bar = '─'.repeat(Math.max(0, 62 - title.length));
-  console.log(`\n── ${title} ${bar}`);
+  log.info(title);
 }
 
-/** Parse KEY=VALUE lines from a .env file; ignores comments and blank lines. */
-function parseEnvFile(path: string): Record<string, string> {
-  let text: string;
-  try {
-    text = readFileSync(path, 'utf8');
-  } catch {
-    return {};
-  }
-  const out: Record<string, string> = {};
-  for (const raw of text.split('\n')) {
-    const line = raw.trim();
-    if (!line || line.startsWith('#')) continue;
-    const eq = line.indexOf('=');
-    if (eq < 1) continue;
-    const key = line.slice(0, eq).trim();
-    const val = line
-      .slice(eq + 1)
-      .trim()
-      .replace(/^["']|["']$/g, '');
-    if (key && val) out[key] = val;
-  }
-  return out;
+/** Plain text prompt (clack); empty input resolves to `fallback`. `placeholder` is the grey hint. */
+async function prompt(question: string, fallback = '', placeholder?: string): Promise<string> {
+  const answer = unwrap(
+    await text({
+      message: question,
+      defaultValue: fallback,
+      placeholder: placeholder ?? fallback,
+    }),
+  );
+  return answer.trim() || fallback;
 }
 
-const rl = createInterface({ input: process.stdin, output: process.stdout });
-
-function prompt(question: string, fallback = ''): Promise<string> {
-  return new Promise((res) => {
-    const hint = fallback ? ` [${fallback}]` : '';
-    rl.question(`  ${question}${hint}: `, (ans) => {
-      res(ans.trim() || fallback);
-    });
-  });
+/** Masked secret prompt (clack). */
+async function promptSecret(question: string): Promise<string> {
+  return unwrap(await password({ message: question })).trim();
 }
 
 // ── prerequisite checks ───────────────────────────────────────────────────────
 
-function checkPrereqs(): void {
-  section('Prerequisites');
+/** First line of a CLI's version output, trimmed (e.g. "Google Cloud SDK 531.0.0"). */
+function firstLine(cmd: string): string {
+  return tryRun(cmd).split('\n')[0]?.trim() ?? '';
+}
 
-  // 1. Binary presence
-  const tools = [
-    {
-      cmd: 'gcloud --version',
-      name: 'gcloud',
-      install: 'https://cloud.google.com/sdk/docs/install',
-    },
-    { cmd: 'gh --version', name: 'gh (GitHub CLI)', install: 'https://cli.github.com' },
-    { cmd: 'openssl version', name: 'openssl', install: 'brew install openssl' },
-    { cmd: 'docker --version', name: 'docker', install: 'https://docs.docker.com/get-docker/' },
-  ];
-  let failed = false;
-  for (const { cmd, name, install } of tools) {
-    if (tryRun(cmd)) {
-      ok(name);
-    } else {
-      console.error(`  ✗  ${name} not found — install: ${install}`);
-      failed = true;
-    }
+/** Verify the tools local dev needs (openssl required; docker only for the local Postgres). */
+function checkDevPrereqs(): void {
+  const openssl = firstLine('openssl version');
+  const docker = firstLine('docker --version');
+  note(
+    [
+      openssl ? `✓ openssl  ${openssl}` : '✗ openssl  not found — install: brew install openssl',
+      docker
+        ? `✓ docker   ${docker}`
+        : '• docker   optional — needed for local Postgres (pnpm db:up); pglite works without it',
+    ].join('\n'),
+    openssl ? 'Checked: local dev prerequisites' : 'Missing: local dev prerequisites (openssl)',
+  );
+  if (!openssl) {
+    cancel('Install openssl, then re-run pnpm bootstrap.');
+    process.exit(1);
   }
-  if (failed) {
-    console.error('\nInstall missing tools and re-run pnpm bootstrap.');
+}
+
+/** Verify gcloud + gh are installed AND authenticated — only needed when provisioning prod. */
+function checkProdPrereqs(): void {
+  const gcloud = firstLine('gcloud --version');
+  const gh = firstLine('gh --version');
+  note(
+    [
+      gcloud
+        ? `✓ gcloud  ${gcloud}`
+        : '✗ gcloud  not found — install: https://cloud.google.com/sdk',
+      gh ? `✓ gh      ${gh}` : '✗ gh      not found — install: https://cli.github.com',
+    ].join('\n'),
+    gcloud && gh ? 'Checked: production tools' : 'Missing: production tools',
+  );
+  if (!gcloud || !gh) {
+    cancel('Install the missing tool(s) above, then re-run and opt into production.');
     process.exit(1);
   }
 
-  // 2. Auth state
-  section('Auth state');
-
-  const gcloudAccount = tryRun(
-    "gcloud auth list --filter=status:ACTIVE --format='value(account)' 2>/dev/null",
+  // Show WHICH accounts are authenticated (selection happens next, in confirmAuthAccounts).
+  const gcloudAccounts = listGcloudAccounts();
+  const ghAccounts = listGhAccounts();
+  const gcloudActive = gcloudAccounts.find((a) => a.active)?.id ?? gcloudAccounts[0]?.id ?? '';
+  const ghActive = ghAccounts.find((a) => a.active)?.id ?? ghAccounts[0]?.id ?? '';
+  note(
+    [
+      gcloudAccounts.length > 0
+        ? `✓ gcloud  ${gcloudAccounts.length} account(s), active: ${gcloudActive}`
+        : '✗ gcloud  not authenticated — run: gcloud auth login',
+      ghActive ? `✓ gh      ${ghActive}` : '✗ gh      not authenticated — run: gh auth login',
+    ].join('\n'),
+    'Checked: authenticated CLIs (you choose which to use next)',
   );
-  if (gcloudAccount) {
-    ok(`gcloud authenticated as ${gcloudAccount}`);
-  } else {
-    console.error('  ✗  gcloud is not authenticated — run: gcloud auth login');
-    failed = true;
-  }
-
-  const ghUser = tryRun('gh auth status --hostname github.com 2>&1 | grep "Logged in"');
-  if (ghUser) {
-    ok(`gh authenticated (${ghUser.trim()})`);
-  } else {
-    console.error('  ✗  gh is not authenticated — run: gh auth login');
-    failed = true;
-  }
-
-  if (failed) {
-    console.error('\nAuthenticate missing tools and re-run pnpm bootstrap.');
+  if (gcloudAccounts.length === 0 || !ghActive) {
+    cancel('Authenticate the tool(s) above, then re-run and opt into production.');
     process.exit(1);
   }
 }
@@ -172,56 +167,43 @@ interface Config {
 }
 
 async function gatherConfig(): Promise<Config> {
-  section('Configuration');
-
-  // Seed defaults from an existing .env.local so re-runs don't ask for known values.
-  const localEnv = parseEnvFile(resolve(ROOT, '.env.local'));
-
-  const currentProject = tryRun('gcloud config get-value project');
-  const project = await prompt('GCP project ID', currentProject);
+  // Every value below is a production value — defaults are prod-shaped, never seeded from the
+  // local .env.local (that would bleed dev values like *.localhost into prod). The account to
+  // use was already confirmed by main() before this step.
+  const project = await chooseGcloudProject(
+    tryRun('gcloud config get-value project'),
+    'the production deploy',
+  );
   if (!project) {
-    console.error('GCP project ID is required.');
+    cancel('A GCP project is required.');
     process.exit(1);
   }
-
   const projectNumber = run(`gcloud projects describe ${project} --format='value(projectNumber)'`);
-  ok(`project number: ${projectNumber}`);
 
-  const region = await prompt('GCP region', 'us-central1');
+  const region = await prompt('Production GCP region', 'us-central1');
 
-  // Detect GitHub remote
-  const remoteUrl = tryRun('git remote get-url origin');
-  const repoMatch = /github\.com[/:]([\w.-]+\/[\w.-]+?)(?:\.git)?$/.exec(remoteUrl);
-  const detectedRepo = repoMatch ? repoMatch[1] : '';
-  const repo = await prompt('GitHub owner/repo', detectedRepo);
+  const repo = await prompt('GitHub owner/repo to deploy from (CI)', detectRepo());
 
   const domain = await prompt(
-    'Passkey relying-party domain (e.g. docket.dev)',
-    localEnv['BETTER_AUTH_PASSKEY_RP_ID'] ?? '',
+    'Production apex domain shared by all prod hosts (passkey RP ID)',
+    '',
+    'docket.app',
   );
   if (!domain) {
-    console.error('Passkey domain is required.');
+    cancel('A production domain is required.');
     process.exit(1);
   }
+  if (domain.endsWith('.localhost')) {
+    warn(`"${domain}" looks like a local dev value — this is the production setup.`);
+  }
 
-  // Derive default service URLs from the domain label structure.
-  // e.g. docket.hypertext.studio → base = hypertext.studio
-  const base = domain.includes('.') ? domain.slice(domain.indexOf('.') + 1) : domain;
-  const webUrl = await prompt(
-    'Web app URL',
-    localEnv['NEXT_PUBLIC_APP_URL'] ?? `https://${domain}`,
-  );
-  const apiUrl = await prompt(
-    'API URL',
-    localEnv['API_URL'] ?? localEnv['NEXT_PUBLIC_API_URL'] ?? `https://docket-api.${base}`,
-  );
-  const adminUrl = await prompt(
-    'Admin URL',
-    localEnv['ADMIN_URL'] ?? `https://docket-admin.${base}`,
-  );
+  // Derive default prod URLs from the apex (e.g. docket.app → app/api/admin.docket.app).
+  const webUrl = await prompt('Production web app URL', `https://app.${domain}`);
+  const apiUrl = await prompt('Production API URL', `https://api.${domain}`);
+  const adminUrl = await prompt('Production admin URL', `https://admin.${domain}`);
 
-  console.log('\n  Neon (free tier: neon.tech → New project → Connection details)');
-  const neonProjectId = await prompt('Neon project ID', localEnv['NEON_PROJECT_ID'] ?? '');
+  log.info('Production database — Neon (neon.tech → New project → Connection details)');
+  const neonProjectId = await prompt('Neon project ID', '', 'cool-darkness-12345678');
 
   // Skip the API key prompt if it's already stored as a GitHub secret.
   const neonKeyAlreadySet =
@@ -229,22 +211,26 @@ async function gatherConfig(): Promise<Config> {
     tryRun(`gh secret list --repo ${repo} 2>/dev/null | grep -c '^NEON_API_KEY\b'`) === '1';
   let neonApiKey: string | null;
   if (neonKeyAlreadySet) {
-    ok('NEON_API_KEY already set in GitHub secrets — skipping prompt');
+    ok('NEON_API_KEY already in GitHub secrets — not re-prompting');
     neonApiKey = null;
   } else {
-    neonApiKey = await prompt('Neon API key (from neon.tech → Account → API keys)');
+    neonApiKey = await promptSecret('Neon API key (neon.tech → Account → API keys)');
     if (!neonApiKey) {
-      console.error('Neon API key is required (used to create preview branches in CI).');
+      cancel('The Neon API key is required (CI uses it to create preview DB branches).');
       process.exit(1);
     }
   }
-  const databaseUrl = await prompt('Neon DATABASE_URL (pooled)', localEnv['DATABASE_URL'] ?? '');
+  const databaseUrl = await prompt(
+    'Production Neon DATABASE_URL (pooled)',
+    '',
+    'postgres://…@…-pooler.neon.tech/docket?sslmode=require',
+  );
   const databaseUrlUnpooled = await prompt(
-    'Neon DATABASE_URL_UNPOOLED (for migrations)',
-    localEnv['DATABASE_URL_UNPOOLED'] ?? databaseUrl,
+    'Production Neon DATABASE_URL_UNPOOLED (direct, for migrations)',
+    databaseUrl,
   );
 
-  return {
+  const cfg: Config = {
     project,
     projectNumber,
     region,
@@ -258,6 +244,30 @@ async function gatherConfig(): Promise<Config> {
     databaseUrl,
     databaseUrlUnpooled,
   };
+
+  // Precise echo of exactly what will be provisioned — review before any cloud writes happen.
+  note(
+    [
+      `GCP project   ${project} (#${projectNumber})`,
+      `GCP region    ${region}`,
+      `GitHub repo   ${repo}`,
+      `Apex domain   ${domain}`,
+      `Web / API     ${webUrl}  /  ${apiUrl}`,
+      `Admin         ${adminUrl}`,
+      `Neon project  ${neonProjectId || '(none)'}`,
+      `Database      ${databaseUrl ? `${databaseUrl.slice(0, 32)}…` : '(none)'}`,
+    ].join('\n'),
+    'Production configuration to provision',
+  );
+  const proceed = unwrap(
+    await confirm({ message: `Provision these production resources in ${project}?` }),
+  );
+  if (!proceed) {
+    cancel('No changes made.');
+    process.exit(0);
+  }
+
+  return cfg;
 }
 
 // ── gcp ───────────────────────────────────────────────────────────────────────
@@ -369,40 +379,36 @@ function setupGcp(cfg: Config): { saEmail: string; wifProvider: string } {
 
   section('GCP — Secret Manager');
 
-  const authSecret = run('openssl rand -base64 32');
-  const cronSecret = run('openssl rand -hex 24');
-
+  // These PROD secrets are generated/entered, held only in memory, and piped straight into
+  // Secret Manager via stdin (--data-file=-) — they are NEVER written to local disk. The local
+  // .env.local later generates its OWN independent dev secrets (see writeEnvLocal).
   const secrets: { name: string; value: string; label: string }[] = [
     { name: 'docket-database-url', value: cfg.databaseUrl, label: 'DATABASE_URL' },
-    { name: 'docket-auth-secret', value: authSecret, label: 'BETTER_AUTH_SECRET (generated)' },
-    { name: 'docket-cron-secret', value: cronSecret, label: 'CRON_SECRET (generated)' },
+    {
+      name: 'docket-auth-secret',
+      value: run('openssl rand -base64 32'),
+      label: 'BETTER_AUTH_SECRET',
+    },
+    { name: 'docket-cron-secret', value: run('openssl rand -hex 24'), label: 'CRON_SECRET' },
   ];
 
-  const tmpDir = mkdtempSync(resolve(tmpdir(), 'docket-bootstrap-'));
+  const created: string[] = [];
+  const skipped: string[] = [];
   for (const { name, value, label } of secrets) {
     const exists = tryRun(
       `gcloud secrets describe ${name} --project=${cfg.project} --format='value(name)'`,
     );
     if (exists) {
-      warn(`secret exists, skipping: ${name} — update manually if needed`);
+      skipped.push(`• ${name} (${label}) — already exists, left as-is`);
     } else {
-      const tmpFile = resolve(tmpDir, name);
-      writeFileSync(tmpFile, value, { encoding: 'utf8', mode: 0o600 });
-      try {
-        exec(`gcloud secrets create ${name} \
-          --project=${cfg.project} \
-          --replication-policy=automatic \
-          --data-file=${tmpFile}`);
-        ok(`created secret: ${name} (${label})`);
-      } finally {
-        unlinkSync(tmpFile);
-      }
+      execSync(
+        `gcloud secrets create ${name} --project=${cfg.project} --replication-policy=automatic --data-file=-`,
+        { input: value, stdio: ['pipe', 'inherit', 'inherit'] },
+      );
+      created.push(`✓ ${name} (${label})`);
     }
   }
-
-  // Store generated secrets for .env.local
-  process.env['_BOOTSTRAP_AUTH_SECRET'] = authSecret;
-  process.env['_BOOTSTRAP_CRON_SECRET'] = cronSecret;
+  note([...created, ...skipped].join('\n') || '(none)', 'Secret Manager');
 
   return { saEmail, wifProvider };
 }
@@ -443,19 +449,17 @@ function setupGithub(cfg: Config, saEmail: string, wifProvider: string): void {
 
 // ── .env.local ────────────────────────────────────────────────────────────────
 
-function writeEnvLocal(_cfg: Config): void {
-  section('Local — .env.local');
+function writeEnvLocal(): void {
+  section('Local dev env (.env.local)');
 
+  // .env.local holds ONLY local dev values. Its secrets are generated FRESH here and are
+  // independent of the production secrets in Secret Manager — no prod value is ever written
+  // to disk (dev ≠ prod, same var names, different values).
   const envPath = resolve(ROOT, '.env.local');
-  if (existsSync(envPath)) {
-    ok('.env.local already exists — skipping (delete it to regenerate)');
-    return;
-  }
+  const authSecret = run('openssl rand -base64 32');
+  const cronSecret = run('openssl rand -hex 24');
 
-  const authSecret = process.env['_BOOTSTRAP_AUTH_SECRET'] ?? run('openssl rand -base64 32');
-  const cronSecret = process.env['_BOOTSTRAP_CRON_SECRET'] ?? run('openssl rand -hex 24');
-
-  const content = `# Generated by pnpm bootstrap — do NOT commit this file.
+  const content = `# Generated by pnpm bootstrap — local dev only. Do not commit. Contains no prod values.
 # Edit values as needed for local development.
 
 APP_MODE=local
@@ -487,8 +491,31 @@ NEXT_PUBLIC_API_URL=https://api.docket.localhost
 NEXT_PUBLIC_APP_URL=https://docket.localhost
 `;
 
-  writeFileSync(envPath, content, 'utf8');
-  ok('.env.local written');
+  if (!existsSync(envPath)) {
+    writeFileSync(envPath, content, 'utf8');
+    ok('.env.local written');
+    return;
+  }
+
+  // Non-destructive: keep every existing value (incl. already-set secrets and integration
+  // keys) and only fill in skeleton keys that are missing.
+  const present = parseEnvFile(envPath);
+  const missing: Record<string, string> = {};
+  for (const raw of content.split('\n')) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#')) continue;
+    const eq = line.indexOf('=');
+    if (eq < 1) continue;
+    const key = line.slice(0, eq).trim();
+    // Treat a present-but-empty key as missing so the skeleton default fills it in.
+    if (!present[key]) missing[key] = line.slice(eq + 1).trim();
+  }
+  if (Object.keys(missing).length === 0) {
+    ok('.env.local already complete — no skeleton keys to add');
+    return;
+  }
+  upsertEnvVars(envPath, missing);
+  ok(`.env.local updated — added ${Object.keys(missing).join(', ')}`);
 }
 
 // ── next steps ────────────────────────────────────────────────────────────────
@@ -496,53 +523,115 @@ NEXT_PUBLIC_APP_URL=https://docket.localhost
 function printNextSteps(cfg: Config): void {
   const registry = `${cfg.region}-docker.pkg.dev/${cfg.project}/${AR_REPO}`;
 
-  console.log(`
-╔══════════════════════════════════════════════════════════════════╗
-║  Bootstrap complete. Next steps:                                 ║
-╚══════════════════════════════════════════════════════════════════╝
-
-1. Run DB migrations against Neon:
-   DATABASE_URL_UNPOOLED="<your-unpooled-url>" pnpm db:migrate
-
-2. Push to main — GitHub Actions will build and deploy all 3 services.
-   The first deploy will fail for web/admin (API_URL not set yet). That's expected.
-
-3. After the API deploys, get its URL:
-   gcloud run services describe docket-api \\
-     --region=${cfg.region} --project=${cfg.project} \\
-     --format='value(status.url)'
-
-4. Set the URL variables (replace with your actual URLs):
-   gh variable set API_URL  --body "https://..." --repo ${cfg.repo}
-   gh variable set WEB_URL  --body "https://..." --repo ${cfg.repo}
-   gh variable set ADMIN_URL --body "https://..." --repo ${cfg.repo}
-
-5. Push again — all services deploy successfully.
-
-6. Optional — custom domains via Cloud Run domain mappings or GCP Load Balancer.
-
-Artifact Registry: ${registry}
-`);
+  note(
+    [
+      '1) Run DB migrations against Neon:',
+      '     DATABASE_URL_UNPOOLED="<your-unpooled-url>" pnpm db:migrate',
+      '',
+      '2) Push to main — GitHub Actions builds and deploys all 3 services.',
+      "     The first deploy fails for web/admin (API_URL not set yet). That's expected.",
+      '',
+      '3) After the API deploys, get its URL:',
+      `     gcloud run services describe docket-api --region=${cfg.region} \\`,
+      `       --project=${cfg.project} --format='value(status.url)'`,
+      '',
+      '4) Set the URL variables (replace with your actual URLs):',
+      `     gh variable set API_URL   --body "https://..." --repo ${cfg.repo}`,
+      `     gh variable set WEB_URL   --body "https://..." --repo ${cfg.repo}`,
+      `     gh variable set ADMIN_URL --body "https://..." --repo ${cfg.repo}`,
+      '',
+      '5) Push again — all services deploy successfully.',
+      '6) Optional — custom domains via Cloud Run domain mappings or a GCP Load Balancer.',
+      '',
+      `Artifact Registry: ${registry}`,
+    ].join('\n'),
+    'Next steps',
+  );
 }
 
 // ── main ──────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  console.log('\nDocket bootstrap — GCP + GitHub production setup\n');
+  intro('Docket bootstrap — local dev setup (+ optional production)');
 
-  checkPrereqs();
+  note(
+    [
+      'First, this sets up your local development environment:',
+      '  • writes a local-only .env.local (its own dev secrets, mock mode)',
+      '  • optionally walks you through local OAuth/integration credentials',
+      '',
+      'Then it optionally provisions production (only if you opt in):',
+      '  • GCP service account, Workload Identity, Artifact Registry, Secret Manager',
+      '  • GitHub Actions variables + the Neon API key secret',
+      '',
+      'Prod secrets are pushed straight to Secret Manager / GitHub — never written to disk.',
+    ].join('\n'),
+    'Overview',
+  );
 
+  // ── Phase 1 — local development (the priority) ──────────────────────────────
+  checkDevPrereqs();
+  writeEnvLocal();
+  const localIntegrations = unwrap(
+    await confirm({
+      message: 'Set up local integration credentials now (Google/GitHub/Stripe/… for dev)?',
+      initialValue: false,
+    }),
+  );
+  if (localIntegrations) {
+    await runIntegrationSetup({ environments: ['local'], embedded: true });
+  }
+
+  // ── Phase 2 — production (opt-in) ───────────────────────────────────────────
+  const doProd = unwrap(
+    await confirm({
+      message: 'Also provision production now (GCP + GitHub)? You can run this later.',
+      initialValue: false,
+    }),
+  );
+  if (!doProd) {
+    note(
+      [
+        'Local dev is ready. To run it:',
+        '  • pnpm db:up        # start local Postgres (Docker)',
+        '  • pnpm db:migrate   # apply migrations',
+        '  • pnpm dev          # start the apps',
+        '',
+        'When you are ready for production, re-run `pnpm bootstrap` and opt in.',
+      ].join('\n'),
+      'Next steps — local dev',
+    );
+    outro('Local dev ready.');
+    return;
+  }
+
+  checkProdPrereqs();
+  await confirmAuthAccounts();
   const cfg = await gatherConfig();
   const { saEmail, wifProvider } = setupGcp(cfg);
   setupGithub(cfg, saEmail, wifProvider);
-  writeEnvLocal(cfg);
-  printNextSteps(cfg);
 
-  rl.close();
+  const prodIntegrations = unwrap(
+    await confirm({
+      message: 'Set up production integration credentials now (OAuth/Stripe/…)?',
+      initialValue: false,
+    }),
+  );
+  if (prodIntegrations) {
+    await runIntegrationSetup({
+      environments: ['production'],
+      repo: cfg.repo,
+      defaultProject: cfg.project,
+      authConfirmed: true,
+      embedded: true,
+    });
+  }
+
+  printNextSteps(cfg);
+  outro('Bootstrap complete — local dev + production provisioned.');
 }
 
 main().catch((err: unknown) => {
-  console.error('\nBootstrap failed:', err instanceof Error ? err.message : String(err));
-  rl.close();
+  cancel(`Bootstrap failed: ${err instanceof Error ? err.message : String(err)}`);
   process.exit(1);
 });

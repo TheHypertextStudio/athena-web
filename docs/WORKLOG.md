@@ -77,10 +77,29 @@
   unit harness (in-place replace, no dupes, comment-preserving, empty-skip); live verification of
   the gcloud/gh account choosers and the GCP project chooser (CLOUDSDK_CORE_ACCOUNT set, gh
   untouched); clack `note()` render check of the walkthroughs.
+- **Dev-first flow**: `pnpm bootstrap`'s first priority is the local dev environment — Phase 1
+  (always): check dev tools (openssl required; docker optional) → write a local-only `.env.local`
+  → optionally run local integrations. Phase 2 (opt-in, gated by a confirm): provision production
+  (gcloud/gh prereqs + account confirmation → GCP/WIF/Secret Manager → GitHub → optional prod
+  integrations). `runIntegrationSetup` gained an `environments` option so each phase drives exactly
+  one env. Prod prompt defaults are prod-shaped (apex `docket.app` → `app/api/admin.docket.app`),
+  never seeded from `.env.local`; a localhost value warns; a config-review note + confirm gate
+  precedes any cloud write.
+- **UX/clarity pass**: status output is grouped into compact `note` blocks (tool **versions**,
+  authenticated **accounts** — not bare CLI names) instead of one `◆`-per-item with blank-line
+  sprawl. Note titles are objective and outcome-framed ("Checked: local dev prerequisites",
+  "Overview", "Environment: local") rather than conversational/assertive; no all-caps emphasis in
+  prose.
+- **Prod secrets never touch disk**: prod/staging values are held in memory and pushed straight to
+  GCP Secret Manager (via `--data-file=-` stdin) / GitHub — no temp files. Fixed a leak where
+  bootstrap reused the prod-generated `BETTER_AUTH_SECRET`/`CRON_SECRET` for `.env.local`; the
+  local file now generates its own independent dev secrets (dev ≠ prod).
 - **Learnings**: Don't hand-roll terminal prompting — masking secrets by overriding readline's
   private `_writeToOutput` is a hack; `@clack/prompts` does it properly and the spec already
-  sanctioned it. Also: piped stdin can't drive interactive prompt loops (EOF fires before later
-  prompts register), so verify the pure logic in isolation and the TTY flow via `note()`/render.
+  sanctioned it. Clack emits a blank gutter line between every `log.*` call, so per-item status
+  loops look sparse — group related status into a single `note()`. Also: piped stdin can't drive
+  interactive prompt loops (EOF fires before later prompts register), so verify the pure logic in
+  isolation and the TTY flow via `note()`/render.
 
 ### [AMB-001] Ambient Context Intelligence — Phase 0 (Linear ingestion → daily digest)
 

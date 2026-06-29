@@ -30,6 +30,7 @@ export const queryKeys = {
   integrationsDirectory: (orgId: string) => ['org', orgId, 'integrations-directory'] as const,
   savedViews: (orgId: string) => ['org', orgId, 'saved-views'] as const,
   agents: (orgId: string) => ['org', orgId, 'agents'] as const,
+  sessions: (orgId: string) => ['org', orgId, 'sessions'] as const,
   views: (orgId: string) => ['org', orgId, 'views'] as const,
   settings: (orgId: string, tab: string) => ['org', orgId, 'settings', tab] as const,
   connectedApps: () => ['me', 'connected-apps'] as const,

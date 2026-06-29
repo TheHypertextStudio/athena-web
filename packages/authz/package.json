@@ -28,7 +28,7 @@
     "@docket/tsconfig": "workspace:*",
     "@electric-sql/pglite": "catalog:",
     "@types/node": "25.9.2",
-    "vite": "^8.0.16",
+    "vite": "^8.1.0",
     "vitest": "^4.1.8"
   }
 }

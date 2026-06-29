@@ -20,7 +20,7 @@ import { type JSX, useCallback, useState } from 'react';
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
 import { readError } from '@/lib/problem';
-import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
+import { STALE, apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 
 import { connectorOAuthConfigured } from './integrations-config';
 
@@ -60,6 +60,7 @@ export function ConnectedAccountsTab({ orgId: _orgId }: ConnectedAccountsTabProp
       queryKeys.identities(),
       () => api.v1.me.identities.$get(),
       'Could not load connected accounts.',
+      { staleTime: STALE.static },
     ),
   );
   const identities: readonly IdentityOut[] = identitiesQ.data?.items ?? [];

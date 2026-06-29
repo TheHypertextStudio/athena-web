@@ -28,7 +28,7 @@ import type { MemberOut, RoleOut } from '@docket/types';
 
 import { useSession } from '@/lib/auth-client';
 import { api } from '@/lib/api';
-import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
+import { STALE, apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 
 /** The role keys that confer org-management ability. */
 const MANAGER_ROLE_KEYS = new Set(['owner', 'admin']);
@@ -67,7 +67,7 @@ export function useCanManageOrg(orgId: string): CanManageOrg {
       queryKeys.members(orgId),
       () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
       'Could not load members.',
-      { enabled },
+      { enabled, staleTime: STALE.static },
     ),
   );
   const rolesQ = useApiQuery(
@@ -75,7 +75,7 @@ export function useCanManageOrg(orgId: string): CanManageOrg {
       queryKeys.roles(orgId),
       () => api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
       'Could not load roles.',
-      { enabled },
+      { enabled, staleTime: STALE.static },
     ),
   );
 

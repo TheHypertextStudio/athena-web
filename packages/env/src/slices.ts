@@ -85,6 +85,21 @@ export const authServer = {
   LINEAR_CLIENT_SECRET: z.string().optional(),
   /** App-level Linear webhook signing secret — verifies inbound ambient-observation events. */
   LINEAR_WEBHOOK_SECRET: z.string().optional(),
+  /**
+   * Shared secret for Better Auth's `oAuthProxy` plugin — lets preview/branch deployments run the
+   * social-OAuth flow through production (whose callback URL is the only one registered with the
+   * provider) instead of needing their own unpredictable redirect URI registered. Must be the SAME
+   * value on every environment that participates (prod + previews). Paired with
+   * {@link authServer.OAUTH_PROXY_PRODUCTION_URL}; both unset ⇒ the plugin is not mounted and OAuth
+   * runs directly against each environment's own (registered) callback.
+   */
+  OAUTH_PROXY_SECRET: z.string().optional(),
+  /**
+   * The production product origin `oAuthProxy` routes preview/dev OAuth through (e.g.
+   * `https://app.docket.app`) — the one host whose `/api/auth/callback/*` is registered with the
+   * provider. Paired with {@link authServer.OAUTH_PROXY_SECRET} (all-or-nothing).
+   */
+  OAUTH_PROXY_PRODUCTION_URL: z.string().optional(),
 };
 
 /** Stripe billing (server scope; publishable key is a client var). */

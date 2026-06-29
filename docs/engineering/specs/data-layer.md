@@ -166,11 +166,10 @@ The target for entry/list pages (today, my-work, inbox, the org list pages, heav
 
 ---
 
-## 8. Enforcement (Phase 2)
+## 8. Enforcement
 
-Introduced as **warnings**, flipped to errors after the straggler migration (Phase 6):
+The **fetch-in-effect anti-pattern** — `api.v1.*` or `fetch` inside a `useEffect` (the hand-rolled loading the query layer replaces) — is an **ESLint error** across the authed product app (`apps/web/src/app/(app)/**` + `components/**`), via `dataLayerConfig` in the shared `@docket/eslint-config` preset. Auth/OAuth/onboarding flows are intentionally out of scope (they legitimately `fetch` in effects for passkey/consent ceremonies, not product data). A blanket `api.v1` ban is deliberately _not_ imposed — the toolkit legitimately calls `api.v1` inside `apiQueryOptions` within page/component files — so the rule targets the effect-driven pattern; it can broaden once query definitions are relocated into `*.query.ts` data modules.
 
-- ESLint bans `api.v1.*` calls and bare `fetch` inside `app/**` pages and `components/**` (allowed only in `lib/**` and `*-mutations.ts` data modules).
 - The behavior contract in `apps/web/tests/query.test.tsx` pins: `useApiQuery` resolves the parsed body and surfaces the server's problem `detail` as `error`; `useApiMutation` applies the optimistic write, rolls back on failure, and invalidates on settle.
 
 ---
@@ -186,12 +185,12 @@ Introduced as **warnings**, flipped to errors after the straggler migration (Pha
 
 ## 10. Rollout status
 
-| Phase | Scope                                                                                                                      | Status      |
-| ----- | -------------------------------------------------------------------------------------------------------------------------- | ----------- |
-| 0     | Toolkit: `STALE`, `apiQueryOptions`, def-only hooks, `usePrefetchApi`, `optimisticPatch`                                   | ✅ shipped  |
-| 1     | This spec + `architecture.md` / `AGENTS.md` pointers                                                                       | ✅ this doc |
-| 2     | ESLint enforcement (warn) + key-from-`queryKeys` test                                                                      | in progress |
-| 3     | Optimism on invalidate-only writes; `keepPreviousData` on all lists; prefetch-on-intent; `useLiveApiQuery` on hot surfaces | planned     |
-| 4     | SSR prefetch + hydration on entry/detail pages                                                                             | planned     |
-| 5     | API pagination + aggregate detail endpoints (kill waterfalls)                                                              | planned     |
-| 6     | Migrate stragglers; flip lint warn → error                                                                                 | planned     |
+| Phase | Scope                                                                                    | Status                                                                                                   |
+| ----- | ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| 0     | Toolkit: `STALE`, `apiQueryOptions`, def-only hooks, `usePrefetchApi`, `optimisticPatch` | ✅ shipped                                                                                               |
+| 1     | This spec + `architecture.md` / `AGENTS.md` pointers                                     | ✅ shipped                                                                                               |
+| 2     | ESLint enforcement (fetch-in-effect)                                                     | ✅ shipped — at **error**                                                                                |
+| 3     | `keepPreviousData` on lists; `useLiveApiQuery` on hot surfaces; optimism                 | ✅ lists, live polling; optimism already in place (§2.4); prefetch deferred (needs shared def factories) |
+| 4     | SSR prefetch + hydration on entry/detail pages                                           | 🚧 foundation shipped (server-safe `query-core` split); page adoption pending (needs build verification) |
+| 5     | staleTime tiers; API pagination + aggregate detail endpoints                             | 🚧 staleTime tiers shipped; API pagination/aggregates pending (coordinate with API branch)               |
+| 6     | Migrate stragglers; lock lint                                                            | ✅ active-org, app-shell-frame, composer migrated; lint at **error**                                     |

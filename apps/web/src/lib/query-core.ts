@@ -1,0 +1,164 @@
+/**
+ * Server-safe core of the dynamic-data layer — no React, no `'use client'`.
+ *
+ * @remarks
+ * Holds the parts of the data layer that are pure (no hooks): the {@link QueryClient} factory, the
+ * Hono-RPC→TanStack bridge ({@link unwrap}), the staleness tiers ({@link STALE}), and the typed
+ * query-definition builder ({@link apiQueryOptions}). Splitting these out of `query.ts` (which is
+ * `'use client'`) lets React Server Components build/prefetch the very same query definitions and a
+ * request-scoped client for SSR hydration, without importing the client-only hooks. The public
+ * surface and every client hook re-export from here via `query.ts`, so consumers still import
+ * everything from `@/lib/query`.
+ *
+ * @see `docs/engineering/specs/data-layer.md` for the full standard.
+ */
+import {
+  QueryClient,
+  type QueryKey,
+  queryOptions,
+  type UseQueryOptions,
+} from '@tanstack/react-query';
+
+import { readError, readProblem } from '@/lib/problem';
+
+/**
+ * Staleness tiers (ms). Every query picks one based on how fast its data changes, rather than a
+ * single flat default: `standard` is the {@link createQueryClient} default; pass
+ * `{ staleTime: STALE.volatile }` to a read for fast-moving data (task state, in-flight sessions,
+ * counts) and `STALE.static` for data that rarely changes within a session (members, teams,
+ * vocabulary, roles). See `docs/engineering/specs/data-layer.md`.
+ */
+export const STALE = {
+  /** Always considered stale — refetch eagerly (poll targets / hyper-volatile reads). */
+  realtime: 0,
+  /** Fast-moving: task state, in-flight sessions, pending counts. */
+  volatile: 5_000,
+  /** The default for most lists and detail reads. */
+  standard: 30_000,
+  /** Rarely changes within a session: members, teams, vocabulary, roles. */
+  static: 300_000,
+} as const;
+
+/** How long an unused query stays cached before GC — long enough that back-nav stays instant. */
+const DEFAULT_GC_TIME_MS = 5 * 60_000;
+
+/**
+ * Build a {@link QueryClient} with the app-wide defaults.
+ *
+ * @remarks
+ * On the client this is called once via a `useState` lazy initializer in `providers.tsx` so a
+ * single, stable client survives re-renders without leaking across requests. On the server a fresh
+ * one is created per request for SSR prefetch (see `getServerQueryClient` in `query-server.ts`).
+ * The defaults make every surface dynamic by default: a 30s `staleTime` avoids refetch storms while
+ * keeping data live, `refetchOnWindowFocus` pulls fresh data when the user returns to the tab
+ * (replacing manual "Refresh" buttons), and a single `retry` smooths a transient network blip.
+ *
+ * @returns a configured {@link QueryClient}.
+ */
+export function createQueryClient(): QueryClient {
+  return new QueryClient({
+    defaultOptions: {
+      queries: {
+        staleTime: STALE.standard,
+        gcTime: DEFAULT_GC_TIME_MS,
+        refetchOnWindowFocus: true,
+        retry: 1,
+      },
+    },
+  });
+}
+
+/**
+ * The minimal structural shape this layer needs from a Hono RPC response.
+ *
+ * @remarks
+ * The Hono client returns a `ClientResponse<T>` whose `.json()` resolves to the typed body `T`.
+ * Constraining to this minimal interface (rather than Hono's deep internal `ClientResponse`
+ * generic) keeps the hooks ergonomic and lets tests pass a lightweight mock, while `T` is still
+ * inferred end-to-end from the real client call — so there is no loss of type safety and no
+ * `as any`. The real `Response` is structurally assignable to it.
+ */
+export interface RpcResponse<T> {
+  /** Whether the request succeeded (HTTP 2xx). */
+  readonly ok: boolean;
+  /** The HTTP status code. */
+  readonly status: number;
+  /** Parse the JSON body as the typed payload `T`. */
+  json(): Promise<T>;
+}
+
+/**
+ * Await a Hono RPC call and return its parsed body, throwing a readable error on failure.
+ *
+ * @remarks
+ * The bridge between the Hono RPC convention (a `Response` whose `.ok` is checked, with errors
+ * emitted as `application/problem+json`) and TanStack Query's throw-to-signal-error convention.
+ * On a non-OK response it throws an `Error` whose message is the server's problem `detail`/`title`
+ * (via {@link readProblem}); the thrown value flows into the hook's `error` state. A rejection from
+ * the call itself (network failure) is re-thrown with a readable message via {@link readError}.
+ *
+ * @typeParam T - The parsed response body type, inferred from the Hono client call.
+ * @param call - A thunk performing exactly one Hono RPC call.
+ * @param fallbackMessage - The message to surface when the server sends no problem detail.
+ * @returns the parsed response body.
+ * @throws {Error} when the response is non-OK or the request rejects.
+ */
+export async function unwrap<T>(
+  call: () => Promise<RpcResponse<T>>,
+  fallbackMessage: string,
+): Promise<T> {
+  let response: RpcResponse<T>;
+  try {
+    response = await call();
+  } catch (caught) {
+    throw new Error(readError(caught, fallbackMessage), { cause: caught });
+  }
+  if (!response.ok) {
+    throw new Error(await readProblem(response as unknown as Response, fallbackMessage));
+  }
+  return response.json();
+}
+
+/** Extra options forwarded to a read (everything `useQuery` accepts but the key/fn). */
+export type ApiQueryOptions<T> = Omit<UseQueryOptions<T>, 'queryKey' | 'queryFn'>;
+
+/**
+ * Build a **typed query definition** — the standard way to declare a read.
+ *
+ * @remarks
+ * Returns a TanStack `queryOptions` object whose `queryKey` carries its data type (a `DataTag`), so
+ * `useApiQuery(def)`, `queryClient.prefetchQuery(def)`, and especially
+ * `queryClient.setQueryData(def.queryKey, value)` / cache priming are all **type-checked against
+ * `T`** — no `unknown`, no untyped keys that let cache writes drift from the read's type. The
+ * RPC error handling (problem-detail → readable message via {@link unwrap}) is baked into the
+ * query fn, and a {@link STALE} tier can be passed through `options`. Pure (no React), so a Server
+ * Component can build the same definition to prefetch into a request-scoped client for hydration.
+ *
+ * @example
+ * ```ts
+ * const taskDef = (orgId: string, id: string) =>
+ *   apiQueryOptions(
+ *     queryKeys.task(orgId, id),
+ *     () => api.v1.orgs[':orgId'].tasks[':id'].$get({ param: { orgId, id } }),
+ *     'Could not load the task.',
+ *     { staleTime: STALE.volatile },
+ *   );
+ *
+ * const q = useApiQuery(taskDef(orgId, id));                  // q.data: TaskOut | undefined
+ * queryClient.setQueryData(taskDef(orgId, id).queryKey, row); // type error unless `row` is TaskOut
+ * ```
+ *
+ * @typeParam T - The parsed response body type, inferred from `call`.
+ */
+export function apiQueryOptions<T>(
+  key: QueryKey,
+  call: () => Promise<RpcResponse<T>>,
+  fallbackMessage: string,
+  options?: ApiQueryOptions<T>,
+) {
+  return queryOptions<T>({
+    queryKey: key,
+    queryFn: () => unwrap(call, fallbackMessage),
+    ...options,
+  });
+}

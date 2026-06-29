@@ -22,10 +22,9 @@ export interface CyclesWithStats {
  * result so it can drive {@link useApiListQuery} directly (or be `unwrap`-ed for an SSR prefetch).
  *
  * @remarks
- * Pace numbers (committed/completed, capacity, carryover) live on the single-cycle read, not the
- * list, so each cycle is joined with its `…/cycles/:id` stats in parallel after the list lands.
- * The composite resolves `ok`/`status` from the gating list read; a failed *stats* read simply
- * omits that cycle's stats (the row shows a slim skeleton) rather than failing the whole list.
+ * The cycles list endpoint returns each cycle's pace stats (committed/completed, capacity,
+ * carryover) inline, so this reads them straight off the list items — no per-cycle `…/cycles/:id`
+ * fan-out. The composite resolves `ok`/`status` from the gating list read.
  *
  * Before reading the roster it ensures each team's rolling window (past + current + upcoming)
  * exists — the `…/cycles/current` ensure is idempotent, so it is a cheap no-op once materialized,
@@ -60,16 +59,9 @@ export function fetchCyclesWithStats(
     }
     const { items } = await listRes.json();
     const statsById: Record<string, CycleStats> = {};
-    await Promise.all(
-      items.map(async (cycle) => {
-        const detailRes = await client.v1.orgs[':orgId'].cycles[':id'].$get({
-          param: { orgId, id: cycle.id },
-        });
-        if (!detailRes.ok) return;
-        const detail = await detailRes.json();
-        statsById[cycle.id] = detail.stats;
-      }),
-    );
+    for (const item of items) {
+      statsById[item.id] = item.stats;
+    }
     return {
       ok: true,
       status: listRes.status,

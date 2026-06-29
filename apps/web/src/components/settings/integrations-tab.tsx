@@ -32,17 +32,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
 import { readError } from '@/lib/problem';
+import { connectorAvailable, connectorOAuthConfigured, usePublicConfig } from '@/lib/public-config';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
 
 import { DisconnectConfirmDialog } from './disconnect-confirm-dialog';
 import { GtasksAccountsSection } from './gtasks-accounts-section';
 import { IntegrationProviderCard } from './integration-provider-card';
-import {
-  categoryLabel,
-  connectorAvailable,
-  connectorOAuthConfigured,
-  socialProviderForConnector,
-} from './integrations-config';
+import { categoryLabel, socialProviderForConnector } from './integrations-config';
 
 /** The provider rendered as its own multi-account identity surface (Connections only). */
 const MULTI_ACCOUNT_PROVIDER = 'gtasks';
@@ -136,6 +132,7 @@ export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabPr
   const teams: readonly TeamOut[] = teamsQ.data?.items ?? [];
   const loading = directoryQ.isPending;
   const loadError = directoryQ.isError ? directoryQ.error.message : null;
+  const { data: config } = usePublicConfig();
 
   const setActionError = useCallback((provider: string, message: string | null) => {
     setActionErrors((prev) => ({ ...prev, [provider]: message }));
@@ -153,7 +150,7 @@ export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabPr
    */
   const finishConnection = useCallback(
     async (id: string, provider: string): Promise<void> => {
-      if (connectorOAuthConfigured(provider)) {
+      if (connectorOAuthConfigured(config, provider)) {
         await authClient.linkSocial({
           provider: socialProviderForConnector(provider),
           callbackURL: `${window.location.pathname}?verify=${id}`,
@@ -169,7 +166,7 @@ export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabPr
         setActionError(provider, verified.lastError ?? 'Connection could not be validated.');
       }
     },
-    [orgId, refreshIntegrations, setActionError],
+    [config, orgId, refreshIntegrations, setActionError],
   );
 
   /** Create a brand-new integration (pending) with this surface's pattern, then validate it. */
@@ -384,7 +381,7 @@ export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabPr
                   provider={provider}
                   existing={existing}
                   canManage={canManage}
-                  available={connectorAvailable(provider.provider)}
+                  available={connectorAvailable(config, provider.provider)}
                   actionLabel={cfg.actionLabel}
                   connectHint={cfg.connectHint}
                   busy={busyProvider === provider.provider}

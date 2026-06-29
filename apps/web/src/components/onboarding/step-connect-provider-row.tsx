@@ -12,7 +12,6 @@ export interface ProviderCard<Provider extends string = string> {
   readonly name: string;
   readonly blurb: string;
   readonly icon: LucideIcon;
-  readonly prodEnabled: boolean;
 }
 
 /** Where a single provider card is in its connect lifecycle. */

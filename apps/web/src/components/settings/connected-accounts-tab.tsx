@@ -4,25 +4,36 @@
  * `settings` — the Connected accounts tab.
  *
  * @remarks
- * Lists the external **identities** (Google accounts) the user linked to their Docket identity,
- * from `GET /v1/me/identities` (the email is decoded server-side from the stored id token). This
- * is the *only* place linking/unlinking happens — org **Connections** then pick one of these
- * identities to sync resources from. User-scoped: the same list shows regardless of which org's
- * settings are open.
+ * Lists the external **identities** (Google / GitHub / Linear accounts) the user linked to their
+ * Docket identity, from `GET /v1/me/identities` (a Google email is decoded server-side from the
+ * stored id token; GitHub/Linear carry none, so they show by provider name). This is the *only*
+ * place linking/unlinking happens — org **Connections** then pick one of these identities to sync
+ * resources from. User-scoped: the same list shows regardless of which org's settings are open.
+ *
+ * Only providers whose OAuth is actually configured for this deployment are offered, and only real
+ * linked accounts are listed — never a fabricated placeholder (an unlinked provider just shows an
+ * honest empty state).
  */
-import type { IdentityOut } from '@docket/types';
+import type { IdentityOut, IdentityProvider } from '@docket/types';
 import { EmptyState } from '@docket/ui/components';
 import { Users } from '@docket/ui/icons';
 import { Badge, Button, Skeleton } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
 import { type JSX, useCallback, useState } from 'react';
 
+import { oauthProviderOptions } from '@/app/(auth)/_lib/oauth-providers';
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
 import { readError } from '@/lib/problem';
+import { usePublicConfig } from '@/lib/public-config';
 import { STALE, apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 
-import { connectorOAuthConfigured } from './integrations-config';
+/** Human-readable provider names (the identity's `provider` is a Better Auth `socialProviders` key). */
+const PROVIDER_NAME: Record<IdentityProvider, string> = {
+  google: 'Google',
+  github: 'GitHub',
+  linear: 'Linear',
+};
 
 /** Friendly labels for the Google OAuth scopes we request (raw URLs are unreadable). */
 const SCOPE_LABEL: Record<string, string> = {
@@ -38,22 +49,29 @@ function accessLabels(scopes: readonly string[]): string[] {
   return [...new Set(labels)];
 }
 
+/** The display label for an identity: its email, then name, then the provider name. */
+function identityLabel(identity: IdentityOut): string {
+  return identity.email ?? identity.name ?? PROVIDER_NAME[identity.provider];
+}
+
 /** Props for {@link ConnectedAccountsTab}. */
 export interface ConnectedAccountsTabProps {
   /** The active organization id (route context; identities are user-scoped, not org-scoped). */
   orgId: string;
 }
 
-/** The Connected accounts settings tab — link/remove external Google identities. */
+/** The Connected accounts settings tab — link/remove external identities across providers. */
 export function ConnectedAccountsTab({ orgId: _orgId }: ConnectedAccountsTabProps): JSX.Element {
   const qc = useQueryClient();
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [adding, setAdding] = useState(false);
+  const [addingProvider, setAddingProvider] = useState<IdentityProvider | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Real linking needs Google OAuth configured; in local mock mode a synthetic identity already
-  // stands in, so there's nothing to add.
-  const canLink = connectorOAuthConfigured('gtasks');
+  // Offer linking only for providers whose OAuth is actually wired in this deployment (from the
+  // server's /v1/config). You can link several accounts of the same provider, so each stays
+  // available even after one is linked.
+  const { data: config } = usePublicConfig();
+  const linkable = oauthProviderOptions(config?.oauthProviders ?? []);
 
   const identitiesQ = useApiQuery(
     apiQueryOptions(
@@ -67,24 +85,24 @@ export function ConnectedAccountsTab({ orgId: _orgId }: ConnectedAccountsTabProp
   const loading = identitiesQ.isPending;
   const loadError = identitiesQ.isError ? identitiesQ.error.message : null;
 
-  const onAdd = useCallback(async (): Promise<void> => {
+  const onAdd = useCallback(async (provider: IdentityProvider): Promise<void> => {
     setError(null);
-    setAdding(true);
+    setAddingProvider(provider);
     try {
-      // Redirects to Google's account chooser; on return this page remounts and refetches.
-      await authClient.linkSocial({ provider: 'google', callbackURL: window.location.pathname });
+      // Redirects to the provider's account chooser; on return this page remounts and refetches.
+      await authClient.linkSocial({ provider, callbackURL: window.location.pathname });
     } catch (err) {
-      setError(readError(err, 'Could not start linking a Google account.'));
-      setAdding(false);
+      setError(readError(err, `Could not start linking a ${PROVIDER_NAME[provider]} account.`));
+      setAddingProvider(null);
     }
   }, []);
 
   const onRemove = useCallback(
-    async (accountId: string): Promise<void> => {
+    async (provider: IdentityProvider, accountId: string): Promise<void> => {
       setError(null);
       setBusyId(accountId);
       try {
-        await authClient.unlinkAccount({ providerId: 'google', accountId });
+        await authClient.unlinkAccount({ providerId: provider, accountId });
         await qc.invalidateQueries({ queryKey: queryKeys.identities() });
       } catch (err) {
         setError(readError(err, 'Could not remove this account.'));
@@ -99,20 +117,25 @@ export function ConnectedAccountsTab({ orgId: _orgId }: ConnectedAccountsTabProp
     <section className="flex flex-col gap-4" aria-label="Connected accounts">
       <div className="flex items-start justify-between gap-3">
         <p className="text-on-surface-variant text-body max-w-prose">
-          Linking a Google account lets Docket sync the work it holds. Set up what actually syncs in{' '}
+          Linking an account lets Docket sync the work it holds. Set up what actually syncs in{' '}
           <span className="text-on-surface font-medium">Connections</span>.
         </p>
-        {canLink ? (
-          <Button
-            type="button"
-            size="sm"
-            disabled={adding}
-            onClick={() => {
-              void onAdd();
-            }}
-          >
-            {adding ? 'Opening…' : 'Add account'}
-          </Button>
+        {linkable.length > 0 ? (
+          <div className="flex shrink-0 flex-wrap justify-end gap-2">
+            {linkable.map((p) => (
+              <Button
+                key={p.id}
+                type="button"
+                size="sm"
+                disabled={addingProvider !== null}
+                onClick={() => {
+                  void onAdd(p.id);
+                }}
+              >
+                {addingProvider === p.id ? 'Opening…' : `Add ${PROVIDER_NAME[p.id]}`}
+              </Button>
+            ))}
+          </div>
         ) : null}
       </div>
 
@@ -144,16 +167,16 @@ export function ConnectedAccountsTab({ orgId: _orgId }: ConnectedAccountsTabProp
           icon={Users}
           title="No accounts linked"
           body={
-            canLink
-              ? 'Link a Google account to sync its tasks into Docket.'
-              : 'Linking a Google account is not available in this workspace yet.'
+            linkable.length > 0
+              ? 'Link an account to sync its work into Docket.'
+              : 'No accounts can be linked in this workspace yet.'
           }
           className="border-none p-8"
         />
       ) : (
         <ul className="border-outline-variant divide-outline-variant flex flex-col divide-y rounded-lg border">
           {identities.map((identity) => {
-            const label = identity.email ?? identity.name ?? 'Google account';
+            const label = identityLabel(identity);
             const access = accessLabels(identity.scopes);
             return (
               <li key={identity.accountId} className="flex items-center gap-4 px-4 py-3">
@@ -163,7 +186,9 @@ export function ConnectedAccountsTab({ orgId: _orgId }: ConnectedAccountsTabProp
                 <div className="flex min-w-0 flex-1 flex-col gap-1">
                   <span className="text-on-surface text-body truncate font-medium">{label}</span>
                   <div className="flex flex-wrap items-center gap-1">
-                    <span className="text-on-surface-variant text-xs">Google</span>
+                    <span className="text-on-surface-variant text-xs">
+                      {PROVIDER_NAME[identity.provider]}
+                    </span>
                     {access.map((a) => (
                       <Badge key={a} variant="secondary" className="text-xs font-normal">
                         {a}
@@ -177,7 +202,7 @@ export function ConnectedAccountsTab({ orgId: _orgId }: ConnectedAccountsTabProp
                   size="sm"
                   disabled={busyId === identity.accountId}
                   onClick={() => {
-                    void onRemove(identity.accountId);
+                    void onRemove(identity.provider, identity.accountId);
                   }}
                 >
                   {busyId === identity.accountId ? 'Removing…' : 'Remove'}

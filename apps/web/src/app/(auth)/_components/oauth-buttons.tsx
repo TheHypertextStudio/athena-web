@@ -1,22 +1,23 @@
 'use client';
 
 /**
- * `(auth)/_components/oauth-buttons` — the secondary, env-gated OAuth provider buttons.
+ * `(auth)/_components/oauth-buttons` — the secondary OAuth provider buttons.
  *
  * @remarks
- * Renders nothing unless at least one provider is configured (see
- * {@link configuredOAuthProviders}), so local/passkey-only deployments show no dead buttons.
- * When providers exist it renders a labelled `"or continue with"` divider followed by one
- * outline button per provider; clicking redirects through Better Auth's `signIn.social`. The
- * group is disabled while any auth attempt is pending so the user cannot start two ceremonies
- * at once.
+ * Renders nothing unless at least one provider is configured — availability comes from the
+ * server's `/v1/config` ({@link usePublicConfig}), so local/passkey-only deployments show no dead
+ * buttons and the client never mirrors OAuth setup into a build-time flag. When providers exist it
+ * renders a labelled `"or continue with"` divider followed by one outline button per provider;
+ * clicking redirects through Better Auth's `signIn.social`. The group is disabled while any auth
+ * attempt is pending so the user cannot start two ceremonies at once.
  */
 import { Button } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
 import { authClient } from '@/lib/auth-client';
+import { usePublicConfig } from '@/lib/public-config';
 
-import { configuredOAuthProviders, type OAuthProvider } from '../_lib/oauth-providers';
+import { oauthProviderOptions, type OAuthProvider } from '../_lib/oauth-providers';
 
 /** Props for {@link OAuthButtons}. */
 export interface OAuthButtonsProps {
@@ -29,14 +30,15 @@ export interface OAuthButtonsProps {
 }
 
 /**
- * The env-gated OAuth provider button group, or `null` when no provider is configured.
+ * The OAuth provider button group, or `null` when no provider is configured (or still loading).
  */
 export function OAuthButtons({
   callbackURL,
   disabled,
   onError,
 }: OAuthButtonsProps): JSX.Element | null {
-  const providers = configuredOAuthProviders();
+  const { data: config } = usePublicConfig();
+  const providers = oauthProviderOptions(config?.oauthProviders ?? []);
   if (providers.length === 0) return null;
 
   /** Begin the OAuth redirect for `provider`, reporting a failure if the call rejects. */

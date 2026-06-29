@@ -288,9 +288,10 @@ export function GtasksAccountsSection({
       'Could not load your Google accounts.',
     ),
   );
-  const identities: readonly IdentityOut[] = identitiesQ.data?.items ?? [];
+  // Google Tasks can only sync a Google identity, so ignore other linked providers here.
+  const googleIdentities = (identitiesQ.data?.items ?? []).filter((i) => i.provider === 'google');
   const bound = new Set(accounts.map((a) => a.externalAccountId).filter(Boolean));
-  const available = identities.filter((i) => !bound.has(i.accountId));
+  const available = googleIdentities.filter((i) => !bound.has(i.accountId));
 
   /** Create a connection bound to a chosen identity, then validate it. */
   const connectIdentity = useCallback(
@@ -424,7 +425,7 @@ export function GtasksAccountsSection({
         <IdentityPicker
           orgId={orgId}
           available={available}
-          hasAnyIdentity={identities.length > 0}
+          hasAnyIdentity={googleIdentities.length > 0}
           loading={identitiesQ.isPending}
           busySub={connectingSub}
           onPick={(sub) => {

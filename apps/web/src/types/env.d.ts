@@ -15,24 +15,16 @@
 declare global {
   namespace NodeJS {
     interface ProcessEnv {
-      /** Boundary mode; `'local'` runs against the mock adapters (connect works with no OAuth). */
-      readonly NEXT_PUBLIC_APP_MODE?: string;
-      /** Whether the Google Calendar connector's OAuth is wired in this deployment. */
-      readonly NEXT_PUBLIC_CONNECTOR_CALENDAR?: string;
-      /** Whether the Google Tasks connector's OAuth is wired in this deployment. */
-      readonly NEXT_PUBLIC_CONNECTOR_GTASKS?: string;
-      /** Whether the Linear connector's OAuth is wired in this deployment. */
-      readonly NEXT_PUBLIC_CONNECTOR_LINEAR?: string;
-      /** Whether the Google sign-in OAuth provider is configured. */
-      readonly NEXT_PUBLIC_OAUTH_GOOGLE?: string;
-      /** Whether the GitHub sign-in OAuth provider is configured. */
-      readonly NEXT_PUBLIC_OAUTH_GITHUB?: string;
-      /** Whether the Linear sign-in OAuth provider is configured. */
-      readonly NEXT_PUBLIC_OAUTH_LINEAR?: string;
       /**
        * The WebAuthn relying-party ID, mirroring the server's required
        * `BETTER_AUTH_PASSKEY_RP_ID`. Required (not a feature flag): the passkey Signal-API
        * cleanup reads it with no fallback, so it must be set for every deployment.
+       *
+       * @remarks
+       * Provider/connector availability is NOT declared here: it is no longer a build-time flag.
+       * The client reads what is configured from the server's `GET /v1/config` (derived from the
+       * real credentials) — see `@/lib/public-config` — so there are no `NEXT_PUBLIC_OAUTH_*` /
+       * `NEXT_PUBLIC_CONNECTOR_*` / `NEXT_PUBLIC_APP_MODE` mirror flags to drift from setup.
        */
       readonly NEXT_PUBLIC_PASSKEY_RP_ID: string;
     }

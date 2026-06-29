@@ -1,11 +1,11 @@
-import { account, actor, db, user } from '@docket/db';
+import { account, actor, db } from '@docket/db';
 import type { integration, task } from '@docket/db';
 import { auth } from '@docket/auth';
-import type { IdentityOut, IntegrationOut, TaskOut } from '@docket/types';
+import type { IdentityOut, IdentityProvider, IntegrationOut, TaskOut } from '@docket/types';
 import { type IntegrationDirectoryProvider } from '@docket/types';
 import type { ConnectorProvider } from '@docket/boundaries';
 import { selectAdapter } from '@docket/boundaries';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import type { z } from 'zod';
 
 import { toBoundaryEnv } from '../container';
@@ -206,35 +206,40 @@ export async function resolveConnectorToken(
   return resolveLiveConnectorToken(actorId, provider, defaultAccessTokenFetcher, externalAccountId);
 }
 
+/** The social providers a linked identity can belong to (mirrors Better Auth `socialProviders`). */
+const IDENTITY_PROVIDERS: readonly IdentityProvider[] = ['google', 'github', 'linear'];
+
 /**
- * List the user's linked Google identities (the external accounts they authorized), each labeled
- * by the email decoded from its stored OIDC id token.
+ * List the user's linked external identities across every supported provider (Google / GitHub /
+ * Linear), each labeled by the email/name decoded from its stored OIDC id token when available.
  *
  * @remarks
- * Identities are user-scoped — the OAuth grant belongs to the Docket user, not an org. In
- * `APP_MODE` local/test there is no real Google grant (sign-up is passwordless/passkey), so a
- * single synthetic identity labeled with the user's own email is returned, keeping the link/pick
- * flow exercisable offline. The email comes from `account.idToken` (not a column), so it must be
- * resolved here rather than client-side.
+ * Identities are user-scoped — the OAuth grant belongs to the Docket user, not an org. Only real,
+ * linked `account` rows are returned: there is **no** synthetic/fabricated fallback, so an
+ * unconfigured or unlinked provider simply contributes nothing and the UI renders an honest empty
+ * state (never a placeholder that claims a connection nothing set up). Google supplies email/name/
+ * picture via its OIDC `account.idToken` (decoded here, since it is not a column); GitHub/Linear
+ * carry no id token, so those claims are null and the UI falls back to the provider name.
  *
  * @param userId - The Docket user whose linked identities to list.
  */
-export async function googleIdentities(userId: string): Promise<IdentityOut[]> {
+export async function linkedIdentities(userId: string): Promise<IdentityOut[]> {
   const rows = await db
     .select({
       accountId: account.accountId,
+      providerId: account.providerId,
       idToken: account.idToken,
       scope: account.scope,
       createdAt: account.createdAt,
     })
     .from(account)
-    .where(and(eq(account.userId, userId), eq(account.providerId, 'google')));
+    .where(and(eq(account.userId, userId), inArray(account.providerId, [...IDENTITY_PROVIDERS])));
 
-  const identities: IdentityOut[] = rows.map((row) => {
+  return rows.map((row) => {
     const claims = decodeIdTokenClaims(row.idToken);
     return {
       accountId: row.accountId,
-      provider: 'google',
+      provider: row.providerId as IdentityProvider,
       email: claims.email,
       name: claims.name,
       picture: claims.picture,
@@ -245,28 +250,6 @@ export async function googleIdentities(userId: string): Promise<IdentityOut[]> {
       linkedAt: row.createdAt.toISOString(),
     };
   });
-  if (identities.length > 0) return identities;
-
-  const mode = env.APP_MODE;
-  if (mode === 'local' || mode === 'test') {
-    const u = await db
-      .select({ email: user.email, name: user.name })
-      .from(user)
-      .where(eq(user.id, userId))
-      .limit(1);
-    return [
-      {
-        accountId: 'mock-google',
-        provider: 'google',
-        email: u[0]?.email ?? 'you@gmail.com',
-        name: u[0]?.name ?? null,
-        picture: null,
-        scopes: ['https://www.googleapis.com/auth/tasks'],
-        linkedAt: new Date().toISOString(),
-      },
-    ];
-  }
-  return identities;
 }
 
 /**
@@ -292,7 +275,7 @@ export async function resolveIdentityLabel(
     .limit(1);
   const userId = rows[0]?.userId;
   if (!userId) return undefined;
-  const match = (await googleIdentities(userId)).find((i) => i.accountId === externalAccountId);
+  const match = (await linkedIdentities(userId)).find((i) => i.accountId === externalAccountId);
   return match?.email ?? match?.name ?? undefined;
 }
 

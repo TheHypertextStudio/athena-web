@@ -85,10 +85,20 @@ Redirect URIs follow Better Auth's fixed routing (verified): social providers us
 | GitHub (sign-in) | `http://localhost:8787/api/auth/callback/github`        | `https://api.docket.app/api/auth/callback/github`        |
 | Linear           | `http://localhost:8787/api/auth/oauth2/callback/linear` | `https://api.docket.app/api/auth/oauth2/callback/linear` |
 
-The GitHub App additionally registers three of its own URLs (collected by `pnpm integrations`):
-Callback `…/v1/integrations/github/callback`, Setup `…/v1/integrations/github/setup`, and Webhook
-`…/v1/ingest/github` (the firehose). A GitHub App allows multiple callback URLs, so the sign-in
-callback above and the connector callback coexist on the one app.
+**GitHub is a single shared GitHub App across every environment and device.** Unlike the OAuth
+providers above (one app per environment), the GitHub App is created **once** (when configuring
+`production`) and every other machine/environment **reuses the same credentials** — `pnpm
+integrations` pulls the `GITHUB_APP_*` values from production Secret Manager rather than creating a
+new app. This is deliberate: the webhook URL is a property of the app, so a per-environment app
+would force re-pointing the webhook on every device, which is untenable.
+
+Because it is one app, its webhook URL is set **once to production** — `https://api.docket.app/v1/ingest/github`
+(public + stable; Cloudflare fronts the API host) — and never changes. Local dev does not receive
+webhooks: `APP_MODE=local` selects the mock observer. To exercise the real firehose locally, run a
+Cloudflare Tunnel (`cloudflared tunnel --url http://localhost:3001`) against a **personal** test
+app, never the shared one. The one app registers multiple callback URLs so both prod and local
+sign-in/connect work: `…/api/auth/callback/github` (sign-in, Better Auth) and
+`…/v1/integrations/github/callback` (install/connect) for each of the prod and local API hosts.
 
 **Linear `genericOAuth` config values (constants in `@docket/auth`, not env):** `authorizationUrl = https://linear.app/oauth/authorize`, `tokenUrl = https://api.linear.app/oauth/token`, `userInfoUrl = https://api.linear.app/graphql` (resolve identity via the `viewer` GraphQL query in `getUserInfo`), `scopes = ["read"]` for login (request `["read","write","issues:create"]` only on the migration connect flow), `pkce: true`, comma-separated scope serialization (Linear quirk — pass scopes as a single comma-joined string).
 

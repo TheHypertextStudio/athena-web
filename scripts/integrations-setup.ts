@@ -265,6 +265,13 @@ interface ProviderGroup {
    * Used for self-chosen secrets (e.g. the GitHub webhook secret) so nobody hand-runs openssl.
    */
   readonly generate?: (env: Environment) => Record<string, string>;
+  /**
+   * Marks a group as ONE credential shared across every environment and device (the GitHub App:
+   * its webhook URL is fixed to production and must never change per machine). The app is created
+   * once when configuring `production`; for any other environment the setup REUSES the same values
+   * by pulling them from production Secret Manager instead of creating a new app.
+   */
+  readonly shared?: boolean;
 }
 
 /** Suggested OAuth-app name so each environment gets its own clearly-labelled app. */
@@ -312,29 +319,43 @@ const PROVIDER_GROUPS: readonly ProviderGroup[] = [
       'GITHUB_APP_PRIVATE_KEY',
       'GITHUB_APP_WEBHOOK_SECRET',
     ],
-    instructions: (env, base) => {
+    // ONE GitHub App for EVERY environment and device. These create instructions are only shown
+    // when configuring `production` (where the app is born); local/staging REUSE the same values
+    // (pulled from prod Secret Manager — see `shared` handling in setupEnvironment), so the
+    // webhook URL is set once and never changes per device.
+    shared: true,
+    instructions: (_env, base) => {
       // Homepage is the product (web) URL, not the API host the callbacks/webhook live on.
       const homepage = base.replace('://api.', '://');
       return [
-        'Creates ONE GitHub App — the only GitHub credential Docket needs. It powers sign-in',
-        '(user-to-server OAuth), the issue/PR connector, AND the webhook firehose. NOT an OAuth',
-        'App. ~5 min. One app per environment (each has its own URLs).',
+        'Creates the ONE GitHub App Docket uses across EVERY environment and device — it powers',
+        'sign-in (user-to-server OAuth), the issue/PR connector, AND the webhook firehose. NOT an',
+        'OAuth App. You create it ONCE here (for production); every other machine/environment',
+        'reuses these same values automatically (the bootstrap pulls them from Secret Manager), so',
+        'the public webhook URL is set a single time and never has to change per device.',
         '',
-        'Your webhook secret was generated and copied to your clipboard above — paste it in',
-        'step 4. It is already saved locally; the two just have to match.',
+        'Your webhook secret was generated and copied to your clipboard above — paste it in step 4.',
         '',
         '1) Open your org\'s GitHub Apps settings → "New GitHub App":',
         '   https://github.com/organizations/<org>/settings/apps',
         '   (Org → Settings → Developer settings → GitHub Apps → "New GitHub App").',
-        `2) GitHub App name: "${appName(env)}".  Homepage URL: ${homepage}`,
-        '3) Identifying and authorizing users:',
-        `     • Callback URL:  ${base}/v1/integrations/github/callback`,
+        '2) GitHub App name: "Docket".  Homepage URL: ' + homepage,
+        '3) Identifying and authorizing users — add ALL of these callback URLs ("Add callback URL"',
+        '   for each; a GitHub App allows several, and one app serves both prod and local):',
+        `     • ${base}/api/auth/callback/github                  (prod sign-in)`,
+        `     • ${base}/v1/integrations/github/callback           (prod install/connect)`,
+        `     • ${DEFAULT_LOCAL_API_URL}/api/auth/callback/github         (local sign-in)`,
+        `     • ${DEFAULT_LOCAL_API_URL}/v1/integrations/github/callback  (local install/connect)`,
         '     • Check "Expire user authorization tokens" (this provides the refresh token).',
         '     • Check "Request user authorization (OAuth) during installation".',
         '     • Check "Redirect on update".',
         '     • Post installation → Setup URL: leave it. GitHub greys it out with "Unavailable',
-        '       when requesting OAuth during installation" — that is expected, not an error.',
-        '4) Webhook:',
+        '       when requesting OAuth during installation" — expected. After install GitHub',
+        '       redirects to the connect callback above with ?installation_id=…',
+        '4) Webhook — set ONCE to production (public + stable; Cloudflare fronts the API host).',
+        '   Local dev needs no webhook of its own: APP_MODE=local uses the mock observer. To',
+        '   exercise the REAL firehose locally, run a Cloudflare Tunnel against a PERSONAL test',
+        '   app (never this shared one): cloudflared tunnel --url http://localhost:3001',
         '     • Check "Active".',
         `     • Webhook URL:  ${base}/v1/ingest/github`,
         '     • Secret: paste the generated webhook secret from above (already on your clipboard).',
@@ -730,6 +751,35 @@ function pushVariable(env: Environment, target: CloudTarget, key: string, value:
   ok(`${key} → GitHub ${env} variable`);
 }
 
+/**
+ * Pull a {@link ProviderGroup.shared} group's values from PRODUCTION Secret Manager.
+ *
+ * @remarks
+ * The GitHub App is a SINGLE app for every environment and device: its webhook URL is set once
+ * (to production) and must never change, so each new machine/env REUSES the one app's credentials
+ * rather than creating its own. This reads those values from the prod `docket-…` secrets so a
+ * fresh checkout is configured automatically with prod values by default. Returns `{}` when
+ * gcloud or the prod project is unavailable (the caller then falls back to manual entry).
+ *
+ * @param group - The shared provider group whose vars to pull.
+ * @param prodProject - The production GCP project id holding the `docket-…` secrets.
+ */
+function pullSharedGroupFromProd(
+  group: ProviderGroup,
+  prodProject: string,
+): Record<string, string> {
+  const pulled: Record<string, string> = {};
+  if (!prodProject) return pulled;
+  for (const varName of group.vars) {
+    const name = secretName('production', varName);
+    const value = tryRun(
+      `gcloud secrets versions access latest --secret=${name} --project=${prodProject}`,
+    );
+    if (value) pulled[varName] = value;
+  }
+  return pulled;
+}
+
 // ── per-environment setup pass ───────────────────────────────────────────────────
 
 interface SetupOptions {
@@ -822,6 +872,48 @@ async function setupEnvironment(
 
   for (const group of PROVIDER_GROUPS) {
     const collected: Record<string, string> = {};
+
+    // A shared group (the GitHub App) is ONE app for every environment/device — its webhook URL is
+    // fixed to production. Outside production we REUSE that one app's credentials (pull them from
+    // prod Secret Manager → prod values by default) instead of creating a new app, which would
+    // force a per-device webhook URL. Only `production` falls through to the create instructions.
+    if (group.shared && env !== 'production') {
+      const prodProject = defaultProject || tryRun('gcloud config get-value project');
+      const pulled = pullSharedGroupFromProd(group, prodProject);
+      if (Object.keys(pulled).length > 0) {
+        if (env === 'local') {
+          upsertEnvVars(resolve(ROOT, '.env.local'), pulled);
+        } else if (cloud) {
+          for (const [name, value] of Object.entries(pulled)) pushSecret(env, cloud, name, value);
+        }
+        ok(`${group.title}: reused the shared production app — ${Object.keys(pulled).join(', ')}`);
+        continue;
+      }
+      note(
+        wrapLines([
+          'This is the ONE shared GitHub App for all environments — do NOT create a new one (its',
+          'webhook URL is fixed to production and must not change per device).',
+          prodProject
+            ? `Could not read it from prod Secret Manager (project ${prodProject}).`
+            : 'No prod GCP project was found to pull from.',
+          'Paste the shared app values below — copy them from the prod secret store / 1Password.',
+        ]).join('\n'),
+        group.title,
+      );
+      for (const varName of group.vars) {
+        const spec = findVar(varName);
+        if (!spec) continue;
+        const current = nonEmpty(envLocal, varName);
+        const value = await promptVar(spec, { env, current });
+        if (value !== undefined && value !== current) collected[varName] = value;
+      }
+      if (Object.keys(collected).length > 0) {
+        if (env === 'local') upsertEnvVars(resolve(ROOT, '.env.local'), collected);
+        else if (cloud)
+          for (const [n, v] of Object.entries(collected)) pushSecret(env, cloud, n, v);
+      }
+      continue;
+    }
 
     // Turnkey secrets: generate (unless already set), show + copy to clipboard, then skip the
     // prompt — so the value is on screen + clipboard while the user fills the provider's form.

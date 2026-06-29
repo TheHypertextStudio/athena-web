@@ -160,9 +160,17 @@ Omitting `staleTime` inherits `standard`. Reserve `realtime` for data you also p
 
 ---
 
-## 7. SSR hydration (Phase 4 — planned)
+## 7. SSR hydration (Phase 4)
 
-The target for entry/list pages (today, my-work, inbox, the org list pages, heavy detail pages): a **server component prefetches** the page's queries into a request-scoped `QueryClient`, `dehydrate`s it, and wraps the tree in a `<HydrateQuery>` boundary. The existing client `useApiQuery` hooks then read the warm cache — **same keys, so client code is unchanged; the change is purely additive**. The server helpers (`getServerQueryClient()`, `prefetchApi()`, `<HydrateQuery>`) are **not yet shipped**; this section defines the intended shape so surfaces aren't built in a way that blocks it. Until then, entry pages render client-side from a cold cache on first paint.
+The target for entry/list pages (today, my-work, inbox, the org list pages, heavy detail pages): a **server component prefetches** the page's queries into a request-scoped `QueryClient`, `dehydrate`s it, and wraps the existing client page in a `<HydrationBoundary>`. The client `useApiQuery` hooks then read the warm cache — **same keys, so client code is unchanged; the change is purely additive**. A failed server prefetch degrades gracefully (nothing cached → the client just fetches).
+
+**Shipped — the server foundation (`lib/query-server.ts`, server-only):**
+
+- `getServerQueryClient()` — a request-scoped `QueryClient` (React `cache()`-deduped per render).
+- `getServerApi()` — a Hono RPC client for RSC prefetch that mirrors the browser's same-origin model (targets the request's own origin so the Next rewrite proxies to the API) and **forwards the caller's session cookie** via `next/headers`, so server reads are authenticated.
+- `dehydrate` (re-exported) for the `<HydrationBoundary state={…}>`.
+
+**Pending — per-page adoption.** Each entry page splits into a server wrapper (prefetch + hydrate) and the existing client component. Two prerequisites remain: (1) `query-keys.ts` must drop its `'use client'` directive so Server Components can import `queryKeys` (pure functions — safe, but currently an in-flight WIP file), and (2) RSC boundary + the cookie-forwarding fetch are only meaningfully verified with `next build` against a running app, so adoption lands in a build-capable environment.
 
 ---
 
@@ -191,6 +199,6 @@ The **fetch-in-effect anti-pattern** — `api.v1.*` or `fetch` inside a `useEffe
 | 1     | This spec + `architecture.md` / `AGENTS.md` pointers                                     | ✅ shipped                                                                                                                                                                                                                                                     |
 | 2     | ESLint enforcement (fetch-in-effect)                                                     | ✅ shipped — at **error**                                                                                                                                                                                                                                      |
 | 3     | `keepPreviousData` on lists; `useLiveApiQuery` on hot surfaces; optimism; prefetch       | ✅ complete — lists, live polling, optimism (§2.4), and prefetch-on-intent across cycles/projects/tasks/initiatives (shared `*DetailDef` factories + an additive `EntityTable` `onRowPrefetch`); triage rows are sort/dismiss actions with no detail nav (N/A) |
-| 4     | SSR prefetch + hydration on entry/detail pages                                           | 🚧 foundation shipped (server-safe `query-core` split); page adoption pending (needs build verification)                                                                                                                                                       |
+| 4     | SSR prefetch + hydration on entry/detail pages                                           | 🚧 foundation shipped (`query-core` split + `query-server.ts`: `getServerQueryClient`/`getServerApi`/`dehydrate`); page adoption pending (`query-keys.ts` must drop `'use client'` + `next build` verification — §7)                                           |
 | 5     | staleTime tiers; API pagination + aggregate detail endpoints                             | 🚧 staleTime tiers shipped; API pagination/aggregates pending (coordinate with API branch)                                                                                                                                                                     |
 | 6     | Migrate stragglers; lock lint                                                            | ✅ active-org, app-shell-frame, composer migrated; lint at **error**                                                                                                                                                                                           |

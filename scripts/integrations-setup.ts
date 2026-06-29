@@ -49,7 +49,6 @@ import {
   DEFAULT_LOCAL_API_URL,
   copyToClipboard,
   type Environment,
-  type ProviderGroup,
 } from './integration-providers';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -474,35 +473,6 @@ function pushVariable(env: Environment, target: CloudTarget, key: string, value:
   ok(`${key} → GitHub ${env} variable`);
 }
 
-/**
- * Pull a {@link ProviderGroup.shared} group's values from PRODUCTION Secret Manager.
- *
- * @remarks
- * The GitHub App is a SINGLE app for every environment and device: its webhook URL is set once
- * (to production) and must never change, so each new machine/env REUSES the one app's credentials
- * rather than creating its own. This reads those values from the prod `docket-…` secrets so a
- * fresh checkout is configured automatically with prod values by default. Returns `{}` when
- * gcloud or the prod project is unavailable (the caller then falls back to manual entry).
- *
- * @param group - The shared provider group whose vars to pull.
- * @param prodProject - The production GCP project id holding the `docket-…` secrets.
- */
-function pullSharedGroupFromProd(
-  group: ProviderGroup,
-  prodProject: string,
-): Record<string, string> {
-  const pulled: Record<string, string> = {};
-  if (!prodProject) return pulled;
-  for (const varName of group.vars) {
-    const name = secretName('production', varName);
-    const value = tryRun(
-      `gcloud secrets versions access latest --secret=${name} --project=${prodProject}`,
-    );
-    if (value) pulled[varName] = value;
-  }
-  return pulled;
-}
-
 // ── per-environment setup pass ───────────────────────────────────────────────────
 
 interface SetupOptions {
@@ -596,47 +566,13 @@ async function setupEnvironment(
   for (const group of PROVIDER_GROUPS) {
     const collected: Record<string, string> = {};
 
-    // A shared group (the GitHub App) is ONE app for every environment/device — its webhook URL is
-    // fixed to production. Outside production we REUSE that one app's credentials (pull them from
-    // prod Secret Manager → prod values by default) instead of creating a new app, which would
-    // force a per-device webhook URL. Only `production` falls through to the create instructions.
-    if (group.shared && env !== 'production') {
-      const prodProject = defaultProject || tryRun('gcloud config get-value project');
-      const pulled = pullSharedGroupFromProd(group, prodProject);
-      if (Object.keys(pulled).length > 0) {
-        if (env === 'local') {
-          upsertEnvVars(resolve(ROOT, '.env.local'), pulled);
-        } else if (cloud) {
-          for (const [name, value] of Object.entries(pulled)) pushSecret(env, cloud, name, value);
-        }
-        ok(`${group.title}: reused the shared production app — ${Object.keys(pulled).join(', ')}`);
-        continue;
-      }
-      note(
-        wrapLines([
-          'This is the ONE shared GitHub App for all environments — do NOT create a new one (its',
-          'webhook URL is fixed to production and must not change per device).',
-          prodProject
-            ? `Could not read it from prod Secret Manager (project ${prodProject}).`
-            : 'No prod GCP project was found to pull from.',
-          'Paste the shared app values below — copy them from the prod secret store / 1Password.',
-        ]).join('\n'),
-        group.title,
-      );
-      for (const varName of group.vars) {
-        const spec = findVar(varName);
-        if (!spec) continue;
-        const current = nonEmpty(envLocal, varName);
-        const value = await promptVar(spec, { env, current });
-        if (value !== undefined && value !== current) {
-          collected[varName] = group.transform?.[varName]?.(value) ?? value;
-        }
-      }
-      if (Object.keys(collected).length > 0) {
-        if (env === 'local') upsertEnvVars(resolve(ROOT, '.env.local'), collected);
-        else if (cloud)
-          for (const [n, v] of Object.entries(collected)) pushSecret(env, cloud, n, v);
-      }
+    // Bootstrap assumes a fresh repo and creates everything from scratch. But if this provider is
+    // ALREADY configured — every var it manages is present (a re-run, or values someone pasted in
+    // from the team's secret store) — verify that and skip rather than redo the work. (Only `local`
+    // reads existing state from .env.local; cloud envs always (re)provision.)
+    const alreadySet = group.vars.filter((v) => nonEmpty(envLocal, v));
+    if (group.vars.length > 0 && alreadySet.length === group.vars.length) {
+      ok(`${group.title}: already configured (${alreadySet.join(', ')}) — skipping.`);
       continue;
     }
 

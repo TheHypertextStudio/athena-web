@@ -72,6 +72,7 @@ export function useTaskDetail(orgId: string, taskId: string): TaskDetailData {
       detailKey,
       () => api.v1.orgs[':orgId'].tasks[':id'].$get({ param: { orgId, id: taskId } }),
       'Could not load this task.',
+      { staleTime: STALE.volatile },
     ),
   );
   const task = taskQ.data ?? null;
@@ -82,15 +83,18 @@ export function useTaskDetail(orgId: string, taskId: string): TaskDetailData {
       [...queryKeys.team(orgId, teamId ?? ''), 'workflow'],
       () => api.v1.orgs[':orgId'].teams[':teamId'].$get({ param: { orgId, teamId: teamId ?? '' } }),
       'Could not load the workflow.',
-      { enabled: Boolean(teamId) },
+      { enabled: Boolean(teamId), staleTime: STALE.static },
     ),
   );
 
+  // Org rosters change rarely within a session — tier them `static` so reopening tasks doesn't
+  // refetch the same projects/programs/members/agents/milestones/cycles/roles every 30s.
   const projectsQ = useApiQuery(
     apiQueryOptions(
       queryKeys.projects(orgId),
       () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
       'Could not load projects.',
+      { staleTime: STALE.static },
     ),
   );
   const programsQ = useApiQuery(
@@ -98,6 +102,7 @@ export function useTaskDetail(orgId: string, taskId: string): TaskDetailData {
       queryKeys.programs(orgId),
       () => api.v1.orgs[':orgId'].programs.$get({ param: { orgId } }),
       'Could not load programs.',
+      { staleTime: STALE.static },
     ),
   );
   const membersQ = useApiQuery(
@@ -105,6 +110,7 @@ export function useTaskDetail(orgId: string, taskId: string): TaskDetailData {
       queryKeys.members(orgId),
       () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
       'Could not load members.',
+      { staleTime: STALE.static },
     ),
   );
   const agentsQ = useApiQuery(
@@ -112,6 +118,7 @@ export function useTaskDetail(orgId: string, taskId: string): TaskDetailData {
       ['org', orgId, 'agents'],
       () => api.v1.orgs[':orgId'].agents.$get({ param: { orgId } }),
       'Could not load agents.',
+      { staleTime: STALE.static },
     ),
   );
   const milestonesQ = useApiQuery(
@@ -119,6 +126,7 @@ export function useTaskDetail(orgId: string, taskId: string): TaskDetailData {
       ['org', orgId, 'milestones'],
       () => api.v1.orgs[':orgId'].milestones.$get({ param: { orgId }, query: {} }),
       'Could not load milestones.',
+      { staleTime: STALE.static },
     ),
   );
   const cyclesQ = useApiQuery(
@@ -126,6 +134,7 @@ export function useTaskDetail(orgId: string, taskId: string): TaskDetailData {
       queryKeys.cycles(orgId),
       () => api.v1.orgs[':orgId'].cycles.$get({ param: { orgId } }),
       'Could not load cycles.',
+      { staleTime: STALE.static },
     ),
   );
   const rolesQ = useApiQuery(
@@ -133,6 +142,7 @@ export function useTaskDetail(orgId: string, taskId: string): TaskDetailData {
       queryKeys.roles(orgId),
       () => api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
       'Could not load roles.',
+      { staleTime: STALE.static },
     ),
   );
 

@@ -1,36 +1,28 @@
 'use client';
 
 /**
- * Fetch the org-scoped option sources a create composer needs, once, when it opens.
+ * Fetch the org-scoped option sources a create composer needs, while it is open.
  *
  * @remarks
  * The robust create composers ({@link CreateTaskDialog}, {@link CreateProjectDialog}, …) front a
  * row of compact property pickers — assignee, project, program, lead, labels — whose choices come
- * from the org's rosters. Rather than have each composer fan out its own `useEffect`s, this hook
- * loads the lists it is asked for (gated by the `enabled` flag so a closed dialog fetches nothing)
- * and hands back ready-to-use {@link PickerOption} arrays plus a `loading` flag. Every list is
- * optional via the `include` set so a composer pays only for what it shows (the project composer
- * needs members + programs + initiatives; the task composer needs members + projects + labels).
+ * from the org's rosters. Rather than fan out hand-rolled `useEffect`s, this hook reads each list
+ * the composer opts into through the shared {@link useApiQuery} layer, gated by the `enabled` flag
+ * (so a closed dialog fetches nothing) and the `include` set (so a composer pays only for what it
+ * shows). Rosters are tiered `static` — reopening a composer reuses the warm cache instead of
+ * refetching — and the lists are shared with the rest of the app under the standard {@link queryKeys}.
  *
  * Workflow states are *per team*, not org-global, so they are exposed through a memoized
- * {@link ComposerOptions.workflowStatesFor} loader the task composer calls when its team changes.
+ * {@link ComposerOptions.workflowStatesFor} loader that reads through the query cache (sharing the
+ * same key as the task detail's workflow read), which the task composer calls when its team changes.
  *
  * @see {@link actorOptions} and friends for the pure DTO→option mappers this composes.
  */
-import type {
-  AgentOut,
-  CycleOut,
-  InitiativeOut,
-  LabelOut,
-  MemberOut,
-  ProgramOut,
-  ProjectOut,
-  WorkflowState,
-} from '@docket/types';
+import type { CycleOut, WorkflowState } from '@docket/types';
 import type { PickerOption } from '@docket/ui/components';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useCallback, useMemo } from 'react';
 
-import { api } from '@/lib/api';
 import {
   actorOptions,
   initiativeOptions,
@@ -38,6 +30,8 @@ import {
   programOptions,
   projectOptions,
 } from '@/components/pickers/options';
+import { api } from '@/lib/api';
+import { STALE, apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 
 /** The org-scoped option lists a composer can opt into loading. */
 export type ComposerOptionKind =
@@ -86,108 +80,104 @@ export function useComposerOptions(
   include: readonly ComposerOptionKind[],
   enabled: boolean,
 ): ComposerOptions {
-  const [members, setMembers] = useState<readonly MemberOut[]>([]);
-  const [agents, setAgents] = useState<readonly AgentOut[]>([]);
-  const [projects, setProjects] = useState<readonly ProjectOut[]>([]);
-  const [programs, setPrograms] = useState<readonly ProgramOut[]>([]);
-  const [initiatives, setInitiatives] = useState<readonly InitiativeOut[]>([]);
-  const [labels, setLabels] = useState<readonly LabelOut[]>([]);
-  const [cycles, setCycles] = useState<readonly CycleOut[]>([]);
-  const [loading, setLoading] = useState(false);
+  const queryClient = useQueryClient();
+  const want = useMemo(() => new Set(include), [include]);
+  const on = (kind: ComposerOptionKind): boolean => enabled && want.has(kind);
 
-  // A stable string key so the effect re-runs only when the *set* of lists changes, not on every
-  // render that passes a fresh array literal.
-  const includeKey = useMemo(() => [...new Set(include)].sort().join(','), [include]);
+  const membersQ = useApiQuery(
+    apiQueryOptions(
+      queryKeys.members(orgId),
+      () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
+      'Could not load members.',
+      { enabled: on('actors'), staleTime: STALE.static },
+    ),
+  );
+  const agentsQ = useApiQuery(
+    apiQueryOptions(
+      queryKeys.agents(orgId),
+      () => api.v1.orgs[':orgId'].agents.$get({ param: { orgId } }),
+      'Could not load agents.',
+      { enabled: on('actors'), staleTime: STALE.static },
+    ),
+  );
+  const projectsQ = useApiQuery(
+    apiQueryOptions(
+      queryKeys.projects(orgId),
+      () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
+      'Could not load projects.',
+      { enabled: on('projects'), staleTime: STALE.static },
+    ),
+  );
+  const programsQ = useApiQuery(
+    apiQueryOptions(
+      queryKeys.programs(orgId),
+      () => api.v1.orgs[':orgId'].programs.$get({ param: { orgId } }),
+      'Could not load programs.',
+      { enabled: on('programs'), staleTime: STALE.static },
+    ),
+  );
+  const initiativesQ = useApiQuery(
+    apiQueryOptions(
+      queryKeys.initiatives(orgId),
+      () => api.v1.orgs[':orgId'].initiatives.$get({ param: { orgId } }),
+      'Could not load initiatives.',
+      { enabled: on('initiatives'), staleTime: STALE.static },
+    ),
+  );
+  const labelsQ = useApiQuery(
+    apiQueryOptions(
+      ['org', orgId, 'labels'],
+      () => api.v1.orgs[':orgId'].labels.$get({ param: { orgId } }),
+      'Could not load labels.',
+      { enabled: on('labels'), staleTime: STALE.static },
+    ),
+  );
+  const cyclesQ = useApiQuery(
+    apiQueryOptions(
+      queryKeys.cycles(orgId),
+      () => api.v1.orgs[':orgId'].cycles.$get({ param: { orgId } }),
+      'Could not load cycles.',
+      { enabled: on('cycles'), staleTime: STALE.static },
+    ),
+  );
 
-  useEffect(() => {
-    if (!enabled) return;
-    const wanted = new Set(includeKey.split(',').filter(Boolean) as ComposerOptionKind[]);
-    if (wanted.size === 0) return;
-    const live = { current: true };
-    setLoading(true);
-    void (async () => {
-      try {
-        const tasks: Promise<void>[] = [];
-        if (wanted.has('actors')) {
-          tasks.push(
-            (async () => {
-              const [membersRes, agentsRes] = await Promise.all([
-                api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
-                api.v1.orgs[':orgId'].agents.$get({ param: { orgId } }),
-              ]);
-              if (live.current && membersRes.ok) setMembers((await membersRes.json()).items);
-              if (live.current && agentsRes.ok) setAgents((await agentsRes.json()).items);
-            })(),
-          );
-        }
-        if (wanted.has('projects')) {
-          tasks.push(
-            (async () => {
-              const res = await api.v1.orgs[':orgId'].projects.$get({ param: { orgId } });
-              if (live.current && res.ok) setProjects((await res.json()).items);
-            })(),
-          );
-        }
-        if (wanted.has('programs')) {
-          tasks.push(
-            (async () => {
-              const res = await api.v1.orgs[':orgId'].programs.$get({ param: { orgId } });
-              if (live.current && res.ok) setPrograms((await res.json()).items);
-            })(),
-          );
-        }
-        if (wanted.has('initiatives')) {
-          tasks.push(
-            (async () => {
-              const res = await api.v1.orgs[':orgId'].initiatives.$get({ param: { orgId } });
-              if (live.current && res.ok) setInitiatives((await res.json()).items);
-            })(),
-          );
-        }
-        if (wanted.has('labels')) {
-          tasks.push(
-            (async () => {
-              const res = await api.v1.orgs[':orgId'].labels.$get({ param: { orgId } });
-              if (live.current && res.ok) setLabels((await res.json()).items);
-            })(),
-          );
-        }
-        if (wanted.has('cycles')) {
-          tasks.push(
-            (async () => {
-              const res = await api.v1.orgs[':orgId'].cycles.$get({ param: { orgId } });
-              if (live.current && res.ok) setCycles((await res.json()).items);
-            })(),
-          );
-        }
-        await Promise.all(tasks);
-      } finally {
-        if (live.current) setLoading(false);
-      }
-    })();
-    return () => {
-      live.current = false;
-    };
-  }, [orgId, includeKey, enabled]);
+  // Only enabled, first-loading queries contribute (a gated-off query is idle, not loading).
+  const loading =
+    membersQ.isLoading ||
+    agentsQ.isLoading ||
+    projectsQ.isLoading ||
+    programsQ.isLoading ||
+    initiativesQ.isLoading ||
+    labelsQ.isLoading ||
+    cyclesQ.isLoading;
 
-  // Cache workflow-state reads per team so re-picking the same team is free.
-  const workflowCache = useRef(new Map<string, readonly WorkflowState[]>());
   const workflowStatesFor = useCallback(
     async (teamId: string | null): Promise<readonly WorkflowState[]> => {
       if (!teamId) return [];
-      const cached = workflowCache.current.get(teamId);
-      if (cached) return cached;
-      const res = await api.v1.orgs[':orgId'].teams[':teamId'].$get({
-        param: { orgId, teamId },
-      });
-      if (!res.ok) return [];
-      const detail = await res.json();
-      const states = detail.workflowStates;
-      workflowCache.current.set(teamId, states);
-      return states;
+      try {
+        const detail = await queryClient.fetchQuery(
+          apiQueryOptions(
+            [...queryKeys.team(orgId, teamId), 'workflow'],
+            () => api.v1.orgs[':orgId'].teams[':teamId'].$get({ param: { orgId, teamId } }),
+            'Could not load the workflow.',
+            { staleTime: STALE.static },
+          ),
+        );
+        return detail.workflowStates;
+      } catch {
+        return [];
+      }
     },
-    [orgId],
+    [queryClient, orgId],
   );
+
+  const members = membersQ.data?.items ?? [];
+  const agents = agentsQ.data?.items ?? [];
+  const projects = projectsQ.data?.items ?? [];
+  const programs = programsQ.data?.items ?? [];
+  const initiatives = initiativesQ.data?.items ?? [];
+  const labels = labelsQ.data?.items ?? [];
+  const cycles = cyclesQ.data?.items ?? [];
 
   return useMemo(
     () => ({

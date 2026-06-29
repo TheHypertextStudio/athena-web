@@ -7,6 +7,49 @@
 
 ## Completed Tasks
 
+### [INT-003] GitHub App integration (sign-in + issue/PR connector + webhook firehose)
+
+- **Completed**: 2026-06-29
+- **Summary**: Docket's GitHub integration is a **GitHub App**, not an OAuth App. The deciding
+  factor is the real-time webhook **firehose** — an app-level webhook is a GitHub-App-only
+  primitive (OAuth Apps have none), so it is the only model that delivers it. It also wins on
+  least-privilege consent (`Issues`/`Pull requests`/`Metadata` read; no `repo` scope) and a
+  zero-migration path to teams. The one App does three jobs: sign-in (user-to-server OAuth), the
+  issue/PR connector pull, and the firehose.
+- **Approach**: Consolidated the GitHub OAuth App (`GITHUB_CLIENT_ID/SECRET`) into one App —
+  `GITHUB_APP_{ID,SLUG,CLIENT_ID,CLIENT_SECRET,PRIVATE_KEY,WEBHOOK_SECRET}` across the auth slice,
+  registry, `.env.example`, and `deploy.yml`; sign-in now sources the App's client creds in
+  `buildAuthOptions` (scope `user:email`). Added the App auth machinery in `@docket/boundaries`
+  (`connector-github-app.ts`: RS256 app JWT via `node:crypto`, `mintInstallationToken` /
+  `resolveInstallationAccount`, an `InstallationTokenStore` cache; private key as single-line
+  base64 PEM). The firehose is `RealGitHubObserver` (verify `X-Hub-Signature-256` → route by
+  installation id → normalize issue/PR/comment events) + `POST /v1/ingest/github`, reusing the
+  Linear ambient-ingestion path (write-ahead inbox → per-provider drain → observations). The
+  connect flow is `GET …/integrations/:id/connect-url` (signed-`state` install URL) → the non-RPC
+  `GET /v1/integrations/github/callback`, which verifies the state, validates the installation, and
+  records `installation_id` on `connection.externalWorkspaceId` (the firehose routing key).
+- **Files Changed**: `packages/env/src/{slices,registry-vars-core}.ts`, `.env.example`,
+  `.github/workflows/deploy.yml`, `packages/auth/src/auth-builder.ts` (+ tests);
+  `packages/boundaries/src/real/{connector-github-app,observer-github,index}.ts`,
+  `packages/boundaries/src/select.ts` (+ `tests/real/{connector-github-app,observer-github}.test.ts`,
+  `tests/select-ambient.test.ts`); `apps/api/src/{container,server}.ts`,
+  `apps/api/src/routes/{ingest,integrations,integrations-github}.ts`,
+  `apps/api/src/lib/github-app.ts` (+ `tests/routes/{ingest,integrations-github}.test.ts`,
+  `tests/lib/github-app.test.ts`); `scripts/{integrations-setup,integration-providers}.ts`;
+  `docs/engineering/specs/env-and-bootstrap.md`.
+- **Learnings**: GitHub webhook payloads embed the full issue/PR object, so `normalize` is pure (no
+  API call); the event type lives in the `X-GitHub-Event` header (absent from `route(payload)`), so
+  it is inferred from the payload shape. Bootstrap setup must **create from scratch by default and
+  only verify/skip when the env vars already exist** — an earlier "pull shared values from prod
+  Secret Manager" flow broke first-time setup, lagged on serial gcloud calls, and silently used the
+  wrong gcloud project.
+- **Gate**: `@docket/{env,auth,boundaries}` typecheck + lint clean; boundaries 232 + new GitHub
+  tests pass; api GitHub tests (token machinery, observer, `/v1/ingest/github`, install-state,
+  callback) pass. (A pre-existing `daily-digest` ON CONFLICT failure and a concurrent
+  `ObservationKind` rename in `stream-read.test.ts` are unrelated to this work.)
+
+---
+
 ### [INT-002] Separate connected identities (accounts) from the resources they provide
 
 - **Completed**: 2026-06-29
@@ -833,39 +876,3 @@ Remaining: marketing app (public landing) ; Playwright e2e flow films (needs bro
 Remaining: Playwright e2e flow films (needs browser install + a running api+web+PGlite stack — a CI-shaped lane).
 
 # fixes complete
-
----
-
-## GitHub App integration (sign-in + connector + firehose)
-
-- **Decision** — Docket's GitHub integration is a **GitHub App**, not an OAuth App. Drivers: the
-  real-time webhook firehose is a GitHub-App-only primitive (OAuth Apps have no app-level webhook),
-  least-privilege consent (`Issues/PRs/Metadata` read, no `repo` scope), and a zero-migration path
-  to teams. See `docs/engineering/specs/env-and-bootstrap.md` for the env contract.
-
-- **Env consolidation** — replaced the GitHub OAuth App (`GITHUB_CLIENT_ID/SECRET`) with one
-  GitHub App: `GITHUB_APP_{ID,SLUG,CLIENT_ID,CLIENT_SECRET,PRIVATE_KEY,WEBHOOK_SECRET}` (auth slice
-  - registry + `.env.example` + `deploy.yml`). Sign-in now runs on the App's user-to-server OAuth
-    (`@docket/auth` `buildAuthOptions`, scope `user:email`).
-
-- **Token machinery** (`@docket/boundaries`) — `connector-github-app.ts`: RS256 app JWT via
-  `node:crypto` (no JWT dep), `mintInstallationToken` / `resolveInstallationAccount`, and an
-  `InstallationTokenStore` cache. Private key stored as single-line base64 PEM.
-
-- **Firehose** — `RealGitHubObserver` (verify `X-Hub-Signature-256` → route by installation id →
-  normalize issue/PR/comment events) wired into the observer resolver; `POST /v1/ingest/github`
-  reuses the Linear ambient-ingestion path (write-ahead inbox → per-provider drain → observations).
-
-- **Connect flow** — `GET …/integrations/:id/connect-url` returns the App install URL with a signed
-  `state`; the non-RPC `GET /v1/integrations/github/callback` verifies it, validates the
-  installation, and records `installation_id` on `connection.externalWorkspaceId` (the firehose
-  routing key).
-
-- **Bootstrap** — `pnpm integrations` walks GitHub App creation step-by-step (each instruction next
-  to the value it produces), takes the private key as a `.pem` path/paste and base64-encodes it,
-  and follows the create-from-scratch / verify-and-skip-if-present rule. Provider catalog split into
-  `scripts/integration-providers.ts`.
-
-- **Tests** — boundaries: `connector-github-app` (6) + `observer-github` (10) + observer selection;
-  api: `/v1/ingest/github` route + install-state sign/verify. typecheck clean across env/auth/
-  boundaries/api.

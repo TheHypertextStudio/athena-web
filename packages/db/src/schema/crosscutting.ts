@@ -198,6 +198,11 @@ export const integration = pgTable(
     config: jsonb('config').$type<Record<string, unknown>>().notNull().default({}),
     syncMode: syncMode('sync_mode').notNull().default('mirror'),
     /**
+     * The provider account this integration is bound to, when the provider supports linking
+     * multiple identities for one Docket user (for example, several Google accounts).
+     */
+    externalAccountId: text('external_account_id'),
+    /**
      * Whether this connector also writes Docket changes back to the provider (two-way sync).
      *
      * @remarks

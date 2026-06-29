@@ -5,6 +5,10 @@
 
 ---
 
+## Active Tasks
+
+---
+
 ## Completed Tasks
 
 ### [AUTH-003] Browser-facing Better Auth baseURL + oAuthProxy + setup URL split
@@ -39,6 +43,44 @@
   `pnpm env:check` passes; `pnpm integrations` GitHub steps verified to render callbacks on the
   web + admin origins and the webhook on the API origin. (The auth-builder mount lands with the
   concurrent twoFactor work it co-occupies.)
+
+---
+
+### [MCP-001] Complete CIMD support for MCP OAuth clients
+
+- **Completed**: 2026-06-29
+- **Summary**: Implemented URL-form Client ID Metadata Document (CIMD) support for the MCP OAuth
+  authorize flow. The API now resolves and validates HTTPS client metadata documents, rejects
+  private/loopback DNS answers before fetch, enforces strict metadata-host trust allowlisting, and
+  upserts validated clients as Better Auth public OAuth applications before `/api/auth/mcp/authorize`
+  continues. The implementation follows the modern MCP authorization guide by serving Protected
+  Resource Metadata, AS metadata with `client_id_metadata_document_supported`, PKCE S256 support,
+  URL-form `client_id` validation, and localhost redirect URI support for native clients.
+- **Approach**: Added `apps/api/src/mcp/cimd.ts` with dependency-injected DNS/fetch validation,
+  OAuth-style CIMD errors, SSRF protections, public PKCE-only metadata checks, and idempotent
+  `oauth_application` upsert ownership metadata. Replaced the AS metadata redirect with a root
+  metadata document advertising Better Auth MCP endpoints, S256 PKCE, DCR, and
+  `client_id_metadata_document_supported`. Wired the pre-authorize middleware before the Better
+  Auth catch-all, exposed MCP transport headers through CORS, mounted root
+  `/.well-known/openid-configuration`, and added production Cloud Run MCP env vars. Also finished
+  the connected-account/integration blockers by adding `integration.externalAccountId`, the missing
+  `/v1/me/account` route, and the connector reconciliation engine used by manual/scheduled sync.
+- **Files Changed**: `apps/api/src/mcp/cimd.ts`, `apps/api/src/mcp/server.ts`,
+  `apps/api/src/server.ts`, `apps/api/tests/mcp/{mcp-cimd,mcp-scope}.test.ts`,
+  `apps/api/src/routes/{me-account,integration-reconcile,integration-sync}.ts`,
+  `packages/db/src/schema/crosscutting.ts`, `packages/db/drizzle/0010_bound_external_accounts.sql`,
+  `packages/db/drizzle/meta/_journal.json`, `.github/workflows/deploy.yml`, `docs/WORKLOG.md`.
+- **Learnings**: The local Better Auth OAuth application table does not store a separate
+  `authenticationScheme`; public CIMD registration is represented here by `type: "public"` plus an
+  empty client secret. Returning the AS metadata document directly is necessary so clients can see
+  CIMD support at discovery time. The MCP guide allows localhost redirect URIs for native clients;
+  only the metadata-document URL itself remains HTTPS-only.
+- **Gate**: CIMD red tests failed first on missing `src/mcp/cimd` and then on localhost redirect
+  rejection. Final verification: `pnpm --filter @docket/api typecheck`, `pnpm --filter @docket/api
+lint`, `pnpm --filter @docket/api build`, `pnpm --filter @docket/api test` (737 tests),
+  targeted MCP + integration suites (87 tests), and `pnpm --filter @docket/db test` (39 tests) all
+  pass. The only warning is the local Node version (`v26.3.0`) being outside the repo's declared
+  `>=24 <25` engine.
 
 ---
 

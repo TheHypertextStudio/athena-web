@@ -229,6 +229,7 @@ export async function runSync(
     });
     const tally = await reconcileTasks(row.organizationId, opts.actorId, row, teamId, items, {
       assigneeId: null,
+      provider,
       writable: connector.asWritable?.() ?? null,
     });
     const processed =

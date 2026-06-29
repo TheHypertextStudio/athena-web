@@ -71,6 +71,13 @@
       "when": 1782705660818,
       "tag": "0009_breezy_omega_sentinel",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1782789600000,
+      "tag": "0010_bound_external_accounts",
+      "breakpoints": true
     }
   ]
 }

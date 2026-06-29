@@ -1,11 +1,65 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-06-15
+> **Last Updated**: 2026-06-28
 
 ---
 
 ## Completed Tasks
+
+### [AMB-001] Ambient Context Intelligence — Phase 0 (Linear ingestion → daily digest)
+
+- **Completed**: 2026-06-28
+- **Summary**: Built the Phase-0 vertical slice of Ambient Context Intelligence: Docket now
+  observes inbound external-tool events into an append-only knowledge timeline and emails a
+  Sunsama-style daily digest of what the user actually did. This is distinct from the existing
+  pull-and-materialize sync (which turns external items into native tasks) — observations are a
+  read-only timeline whose source of truth stays external. Architecture is a provider-agnostic
+  pipeline (verify → write-ahead inbox → ACK fast → lease-guarded async drain → normalize →
+  observation store → surface), fed by provider-specific source adapters, mirroring the existing
+  `Connector` ports/adapters pattern. Linear is the first provider proving the whole loop.
+  - **Boundary ports**: new `Observer` port (`verifySignature`/`route`/`normalize`) with a real
+    Linear adapter (hex HMAC-SHA256 over the raw body, app-level secret; maps Issue/Comment/
+    Reaction/AppUserNotification → observation drafts) + `MockObserver`; new `Summarizer` port
+    (one-shot Claude completion — deliberately NOT the session/approval-gated `AgentRuntime`) +
+    `MockSummarizer`. Shared `makeAnthropicClient`/`wrapAnthropicError` + `asRecord`/`str` helpers.
+  - **Data model**: new `observation` schema island — `inbound_event` (durable write-ahead log,
+    unique `(provider, external_event_id)`), `observation` (the timeline; org-scoped + `user_id`),
+    `daily_digest` (cross-org per-user, unique `(user_id, digest_date)` watermark), and
+    `event_subscription` (the seam for later watch-channel providers). Migrations 0008/0009.
+  - **API**: `POST /v1/ingest/linear` (non-RPC edge, write-ahead then 200); lease-guarded drain
+    `POST /v1/cron/process-events` with mention/assignment → `notification` bridges; the hero
+    `POST /v1/cron/daily-digests` (timezone-aware "find who's due" by `HubPreferences.timezone` +
+    send time, aggregate → summarize → render → mail, idempotent per user/day). Two new Cloud
+    Scheduler jobs.
+- **Files Changed**: `packages/types/src/{observation,primitives,hub-preferences,index}.ts`;
+  `packages/db/src/{enums,types}.ts`, `packages/db/src/schema/{observation,index}.ts`,
+  `packages/db/drizzle/0008_*.sql`, `0009_*.sql`; `packages/env/src/slices.ts`
+  (`LINEAR_WEBHOOK_SECRET`, optional); `packages/boundaries/src/{json,select}.ts`,
+  `.../ports/{observer,summarizer}.ts`, `.../real/{anthropic,observer-linear,summarizer}.ts`,
+  `.../mock/{observer,summarizer}.ts` (+ barrels; `agent-runtime`/`summarizer` now share the
+  Anthropic helpers); `apps/api/src/{container,server}.ts`,
+  `apps/api/src/routes/{ingest,observation-sync,daily-digest,cron,integration-sync}.ts`;
+  `scripts/scheduler-setup.ts`. Tests added across `@docket/types`, `@docket/boundaries`, and
+  `apps/api` (ingest verify/route/dedup, drain + bridges, digest send/empty/idempotent).
+- **Validation**: `pnpm typecheck` green (13/13); `@docket/types` 189, `@docket/db` 39,
+  `@docket/boundaries` 211 (the 1 failing `connector.test.ts` is pre-existing gtasks WIP, not
+  this work), `apps/api` 694 — all green; lint clean on all files authored here.
+- **Deliberate design calls**: digest is cross-org per-user (one summary per person, like the
+  Hub inbox), not per-org; both mention AND assignment surface as `notification`s because
+  `daily_plan_item.ref_task_id` requires a real Task (an observation isn't one) — the
+  "suggested task" bridge is deferred until observation→task materialization exists; the drain
+  is a cron sweep behind a pluggable seam so Cloud Tasks can replace it for near-real-time later.
+- **Launch checklist (prod, not yet done — avoids breaking the deploy pipeline)**: create the
+  GCP Secret Manager secret `docket-linear-webhook-secret`, then add
+  `LINEAR_WEBHOOK_SECRET=docket-linear-webhook-secret:latest` to `.github/workflows/deploy.yml`
+  (alongside the other provider secrets) and configure the Linear OAuth app's webhook URL to
+  `<API_URL>/v1/ingest/linear`. Until the secret is set, the observer safely falls back to the
+  mock; the secret must be created BEFORE adding the deploy.yml reference (a missing secret fails
+  the Cloud Run deploy). Backfill embeddings / Athena RAG over the observation store is Phase 5.
+- **Learnings**: the five target sources don't share a delivery mechanism (Linear/Slack =
+  webhooks, Calendar = expiring watch channels, Google Tasks = poll-only, Discord = persistent
+  gateway) — so the ingestion edge is per-provider over a shared spine, not one generic endpoint.
 
 ### [CONN-001] Connector reliability — never report success when nothing happened
 

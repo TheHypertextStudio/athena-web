@@ -13,6 +13,7 @@
  * The RPC client is mocked; the lead + initiative rosters are fed through the mocked `$get`s.
  */
 import { OrganizationId, TeamId, type TeamOut } from '@docket/types';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -110,17 +111,24 @@ afterEach(() => {
 function renderComposer() {
   const onCreated = vi.fn();
   const onOpenChange = vi.fn();
+  // The composer reads its option rosters through the shared useApiQuery layer, so it must run
+  // under a QueryClientProvider (as it does in the app via providers.tsx). Retry-free for tests.
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
   render(
-    <CreateProjectDialog
-      orgId={ORG_ID}
-      projectNoun="Project"
-      teams={TEAMS}
-      defaultTeamId={TEAM_ID}
-      teamsLoading={false}
-      open
-      onOpenChange={onOpenChange}
-      onCreated={onCreated}
-    />,
+    <QueryClientProvider client={client}>
+      <CreateProjectDialog
+        orgId={ORG_ID}
+        projectNoun="Project"
+        teams={TEAMS}
+        defaultTeamId={TEAM_ID}
+        teamsLoading={false}
+        open
+        onOpenChange={onOpenChange}
+        onCreated={onCreated}
+      />
+    </QueryClientProvider>,
   );
   return { onCreated, onOpenChange };
 }

@@ -50,6 +50,10 @@ const DEFAULT_VIEW: ViewState = {
   sort: [],
 };
 
+/** Shared frozen empties for the roster fallbacks (stable identity, no per-render allocation). */
+const EMPTY_CYCLES: readonly CycleOut[] = [];
+const EMPTY_STATS: Readonly<Record<string, CycleStats>> = {};
+
 /**
  * The org Cycles list (Client Component).
  *
@@ -81,11 +85,10 @@ export default function CyclesClient(): JSX.Element {
     ),
   );
 
-  const cycles = useMemo(() => cyclesQ.data?.cycles ?? [], [cyclesQ.data]);
-  const statsById = useMemo<Readonly<Record<string, CycleStats>>>(
-    () => cyclesQ.data?.statsById ?? {},
-    [cyclesQ.data],
-  );
+  // react-query keeps `data` referentially stable, so these read straight off it; the frozen
+  // empties keep the fallbacks stable too — no useMemo needed.
+  const cycles: readonly CycleOut[] = cyclesQ.data?.cycles ?? EMPTY_CYCLES;
+  const statsById: Readonly<Record<string, CycleStats>> = cyclesQ.data?.statsById ?? EMPTY_STATS;
   const loading = cyclesQ.isPending;
   const loadError = cyclesQ.isError ? cyclesQ.error.message : null;
 

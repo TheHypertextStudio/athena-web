@@ -13,8 +13,11 @@ import { useCallback, useMemo } from 'react';
 import { type AgentTaskRowData, type RowActor } from '@/components/my-work/agent-task-row';
 import { type PillStatus, pillStatusOf } from '@/components/my-work/live-session-pill';
 import { STATE_GROUP_LABEL, STATE_GROUP_ORDER, stateTypeOf } from './work-state';
-import { api } from './api';
-import { STALE, apiQueryOptions, queryKeys, useApiQuery } from './query';
+import { myWorkDefs } from './my-work-defs';
+import { queryKeys, useApiQuery } from './query';
+
+/** Shared frozen empty list for the slice fallbacks (stable identity, no per-render allocation). */
+const EMPTY: readonly never[] = [];
 
 const SESSION_RANK: Record<SessionStatus, number> = {
   awaiting_approval: 5,
@@ -46,61 +49,23 @@ export interface MyWorkState {
 export function useMyWork(orgId: string, userId: string | null): MyWorkState {
   const queryClient = useQueryClient();
 
-  // The five slices flow through the shared query layer under their canonical keys, so a server
-  // entry can SSR-prefetch them (warm first paint) and any create/mutation elsewhere reconciles
-  // this screen automatically. Tasks are volatile (state churns); the rosters are static-ish.
-  const tasksQ = useApiQuery(
-    apiQueryOptions(
-      queryKeys.tasks(orgId),
-      () => api.v1.orgs[':orgId'].tasks.$get({ param: { orgId } }),
-      'Could not load your work.',
-      { staleTime: STALE.volatile },
-    ),
-  );
-  const projectsQ = useApiQuery(
-    apiQueryOptions(
-      queryKeys.projects(orgId),
-      () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
-      'Could not load projects.',
-      { staleTime: STALE.standard },
-    ),
-  );
-  const membersQ = useApiQuery(
-    apiQueryOptions(
-      queryKeys.members(orgId),
-      () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
-      'Could not load members.',
-      { staleTime: STALE.static },
-    ),
-  );
-  const agentsQ = useApiQuery(
-    apiQueryOptions(
-      queryKeys.agents(orgId),
-      () => api.v1.orgs[':orgId'].agents.$get({ param: { orgId } }),
-      'Could not load agents.',
-      { staleTime: STALE.static },
-    ),
-  );
-  const sessionsQ = useApiQuery(
-    apiQueryOptions(
-      queryKeys.sessions(orgId),
-      () => api.v1.orgs[':orgId'].sessions.$get({ param: { orgId }, query: {} }),
-      'Could not load agent sessions.',
-      { staleTime: STALE.volatile },
-    ),
-  );
+  // The five slices flow through myWorkDefs — the same definitions the SSR entry prefetches with —
+  // so a warm first paint hits the cache and any create/mutation elsewhere reconciles this screen
+  // automatically, with no key/fetcher/staleTime drift between server and client.
+  const defs = myWorkDefs(orgId);
+  const tasksQ = useApiQuery(defs.tasks);
+  const projectsQ = useApiQuery(defs.projects);
+  const membersQ = useApiQuery(defs.members);
+  const agentsQ = useApiQuery(defs.agents);
+  const sessionsQ = useApiQuery(defs.sessions);
 
-  const tasks = useMemo<readonly TaskOut[]>(() => tasksQ.data?.items ?? [], [tasksQ.data]);
-  const projects = useMemo<readonly ProjectOut[]>(
-    () => projectsQ.data?.items ?? [],
-    [projectsQ.data],
-  );
-  const members = useMemo<readonly MemberOut[]>(() => membersQ.data?.items ?? [], [membersQ.data]);
-  const agents = useMemo<readonly AgentOut[]>(() => agentsQ.data?.items ?? [], [agentsQ.data]);
-  const sessions = useMemo<readonly AgentSessionOut[]>(
-    () => sessionsQ.data?.items ?? [],
-    [sessionsQ.data],
-  );
+  // react-query keeps `data` referentially stable across renders, so `data.items` is already
+  // stable; the shared frozen EMPTY keeps the fallback stable too — no useMemo needed.
+  const tasks: readonly TaskOut[] = tasksQ.data?.items ?? EMPTY;
+  const projects: readonly ProjectOut[] = projectsQ.data?.items ?? EMPTY;
+  const members: readonly MemberOut[] = membersQ.data?.items ?? EMPTY;
+  const agents: readonly AgentOut[] = agentsQ.data?.items ?? EMPTY;
+  const sessions: readonly AgentSessionOut[] = sessionsQ.data?.items ?? EMPTY;
 
   // Tasks gate the load (the others enrich); only a failed tasks read is fatal — the rosters
   // degrade to benign empties, exactly as the prior best-effort load did.

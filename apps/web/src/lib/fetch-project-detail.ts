@@ -62,12 +62,6 @@ function activitySummary(activity: SessionActivityOut): string {
 }
 
 /**
- * Build the composite project-detail fetcher as a thunk for {@link useApiQuery}.
- *
- * @param orgId - The active organization id.
- * @param projectId - The project being viewed.
- */
-/**
  * Typed query definition for the project detail — the single source the detail page reads with and
  * portfolio rows prefetch on hover, so they share one cache entry under `queryKeys.project`.
  *
@@ -87,6 +81,12 @@ export function projectDetailDef(
   );
 }
 
+/**
+ * Build the composite project-detail fetcher as a thunk for {@link useApiQuery}.
+ *
+ * @param orgId - The active organization id.
+ * @param projectId - The project being viewed.
+ */
 export function fetchProjectDetail(
   orgId: string,
   projectId: string,
@@ -105,9 +105,9 @@ export function fetchProjectDetail(
       rolesRes,
       rollupRes,
     ] = await Promise.all([
-      api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
+      api.v1.orgs[':orgId'].projects.$get({ param: { orgId }, query: {} }),
       api.v1.orgs[':orgId'].projects[':id'].progress.$get({ param: { orgId, id: projectId } }),
-      api.v1.orgs[':orgId'].tasks.$get({ param: { orgId } }),
+      api.v1.orgs[':orgId'].tasks.$get({ param: { orgId }, query: {} }),
       api.v1.orgs[':orgId'].milestones.$get({
         param: { orgId },
         query: { projectId: ProjectId.parse(projectId) },
@@ -115,8 +115,8 @@ export function fetchProjectDetail(
       api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
       api.v1.orgs[':orgId'].agents.$get({ param: { orgId } }),
       api.v1.orgs[':orgId'].sessions.$get({ param: { orgId }, query: {} }),
-      api.v1.orgs[':orgId'].programs.$get({ param: { orgId } }),
-      api.v1.orgs[':orgId'].initiatives.$get({ param: { orgId } }),
+      api.v1.orgs[':orgId'].programs.$get({ param: { orgId }, query: {} }),
+      api.v1.orgs[':orgId'].initiatives.$get({ param: { orgId }, query: {} }),
       api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
       api.v1.orgs[':orgId'].projects[':id'].rollup.$get({ param: { orgId, id: projectId } }),
     ]);

@@ -18,7 +18,7 @@ import type { z } from 'zod';
 import type { AppEnv } from '../context';
 import { CapabilityError, NotFoundError } from '../error';
 import { ok } from '../lib/ok';
-import { afterCursor, decodeListCursor, pageResult } from '../lib/list-cursor';
+import { pageResult, seekAfter } from '../lib/list-cursor';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 
@@ -95,20 +95,20 @@ const tasks = new Hono<AppEnv>()
     const { cursor, limit } = c.req.valid('query');
     // Keyset-paginate newest-first (createdAt, id tiebreak). `limit` is optional: omitted returns
     // the full active-task list as before; supplied returns a bounded page + `nextCursor`.
-    const conds = [eq(task.organizationId, orgId), isNull(task.archivedAt)];
-    const decoded = decodeListCursor(cursor);
-    if (decoded) conds.push(afterCursor(task.createdAt, task.id, decoded));
     const base = db
       .select()
       .from(task)
-      .where(and(...conds))
+      .where(
+        and(
+          eq(task.organizationId, orgId),
+          isNull(task.archivedAt),
+          seekAfter(task.createdAt, task.id, cursor),
+        ),
+      )
       .orderBy(desc(task.createdAt), desc(task.id));
     const rows = await (limit === undefined ? base : base.limit(limit + 1));
     const { items, nextCursor } = pageResult(rows, limit, (r) => r.createdAt);
-    return ok(c, pageOf(TaskOut), {
-      items: items.map(toOut),
-      ...(nextCursor ? { nextCursor } : {}),
-    });
+    return ok(c, pageOf(TaskOut), { items: items.map(toOut), nextCursor });
   })
   .get('/:id', zParam(idParam), async (c) => {
     const { orgId } = c.get('actorCtx');

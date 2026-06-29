@@ -39,7 +39,14 @@ import { FilterToolbar } from '@/components/views/filter-toolbar';
 import { useViewState } from '@/components/views/use-view-state';
 import { isEmptyViewState } from '@/components/views/view-state-url';
 import { api } from '@/lib/api';
-import { apiQueryOptions, type RpcResponse, queryKeys, useApiListQuery } from '@/lib/query';
+import { cycleDetailDef } from '@/lib/fetch-cycle-detail';
+import {
+  apiQueryOptions,
+  type RpcResponse,
+  queryKeys,
+  useApiListQuery,
+  usePrefetchApi,
+} from '@/lib/query';
 
 /** The cycles roster joined with each cycle's pace stats (from its single-cycle read). */
 interface CyclesWithStats {
@@ -113,6 +120,7 @@ function fetchCyclesWithStats(
 export default function CyclesPage(): JSX.Element {
   const params = useParams<{ orgId: string }>();
   const orgId = params.orgId;
+  const prefetch = usePrefetchApi();
 
   const { teams, teamsLoading } = useActiveOrg();
 
@@ -180,9 +188,12 @@ export default function CyclesPage(): JSX.Element {
         stats={statsById.get(cycle.id) ?? null}
         cycleNoun={cycleNoun}
         href={`/orgs/${orgId}/cycles/${cycle.id}`}
+        onPrefetch={() => {
+          prefetch(cycleDetailDef(orgId, cycle.id));
+        }}
       />
     ),
-    [cycleNoun, orgId, statsById],
+    [cycleNoun, orgId, statsById, prefetch],
   );
 
   return (

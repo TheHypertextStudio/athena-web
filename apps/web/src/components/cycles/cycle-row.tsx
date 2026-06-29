@@ -33,6 +33,8 @@ export interface CycleRowProps {
   cycleNoun: string;
   /** Href to the cycle's detail screen. */
   href: string;
+  /** Warm the cycle-detail cache on hover/focus so the row opens instantly (prefetch-on-intent). */
+  onPrefetch?: () => void;
 }
 
 /**
@@ -43,7 +45,13 @@ export interface CycleRowProps {
  * <CycleRow cycle={cycle} stats={stats} cycleNoun="Cycle" href={`/orgs/${orgId}/cycles/${cycle.id}`} />
  * ```
  */
-export function CycleRow({ cycle, stats, cycleNoun, href }: CycleRowProps): JSX.Element {
+export function CycleRow({
+  cycle,
+  stats,
+  cycleNoun,
+  href,
+  onPrefetch,
+}: CycleRowProps): JSX.Element {
   const title = cycle.name ?? `${cycleNoun} ${String(cycle.number)}`;
   const taskPct =
     stats && stats.committed > 0 ? Math.round((stats.completed / stats.committed) * 100) : 0;
@@ -58,6 +66,8 @@ export function CycleRow({ cycle, stats, cycleNoun, href }: CycleRowProps): JSX.
           className={p.className}
           onClick={p.onClick}
           aria-current={p['aria-current']}
+          onMouseEnter={onPrefetch}
+          onFocus={onPrefetch}
         >
           {p.children}
         </Link>

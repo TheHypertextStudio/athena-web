@@ -45,7 +45,7 @@ import type { FieldOption } from '@/components/views/field-catalog';
 import { FilterToolbar } from '@/components/views/filter-toolbar';
 import { useViewState } from '@/components/views/use-view-state';
 import { api } from '@/lib/api';
-import { queryKeys, useApiQuery } from '@/lib/query';
+import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 
 /**
  * The Projects list page.
@@ -72,19 +72,25 @@ export default function ProjectsListPage(): JSX.Element {
   // The roster is the primary slice (its load gates the page); tasks + members enrich each row
   // and degrade gracefully (an empty list) if they fail, mirroring the prior behavior.
   const projectsQ = useApiQuery(
-    queryKeys.projects(orgId),
-    () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
-    `Could not load ${projectsLabel.toLowerCase()}.`,
+    apiQueryOptions(
+      queryKeys.projects(orgId),
+      () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
+      `Could not load ${projectsLabel.toLowerCase()}.`,
+    ),
   );
   const tasksQ = useApiQuery(
-    queryKeys.tasks(orgId),
-    () => api.v1.orgs[':orgId'].tasks.$get({ param: { orgId } }),
-    'Could not load tasks.',
+    apiQueryOptions(
+      queryKeys.tasks(orgId),
+      () => api.v1.orgs[':orgId'].tasks.$get({ param: { orgId } }),
+      'Could not load tasks.',
+    ),
   );
   const membersQ = useApiQuery(
-    queryKeys.members(orgId),
-    () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
-    'Could not load members.',
+    apiQueryOptions(
+      queryKeys.members(orgId),
+      () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
+      'Could not load members.',
+    ),
   );
 
   const projects = useMemo(() => projectsQ.data?.items ?? [], [projectsQ.data]);

@@ -56,7 +56,7 @@ import { FilterToolbar } from '@/components/views/filter-toolbar';
 import { useViewState } from '@/components/views/use-view-state';
 import { type ViewState } from '@/components/views/field-catalog';
 import { isEmptyViewState } from '@/components/views/view-state-url';
-import { queryKeys, useApiQuery } from '@/lib/query';
+import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 
 /** The default view applied when the URL carries none: group by status (the legacy sections). */
 const DEFAULT_VIEW: ViewState = {
@@ -90,9 +90,11 @@ export default function InitiativesListPage(): JSX.Element {
   const { state, setFilters, setGroupBy, setSort } = useViewState();
 
   const initiativesQ = useApiQuery(
-    queryKeys.initiatives(orgId),
-    fetchEnrichedInitiatives(orgId),
-    `Could not load ${initiativeNounPlural.toLowerCase()}.`,
+    apiQueryOptions(
+      queryKeys.initiatives(orgId),
+      fetchEnrichedInitiatives(orgId),
+      `Could not load ${initiativeNounPlural.toLowerCase()}.`,
+    ),
   );
 
   const initiatives = useMemo(() => initiativesQ.data ?? [], [initiativesQ.data]);

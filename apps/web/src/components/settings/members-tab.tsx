@@ -29,7 +29,7 @@ import { useCallback, useMemo } from 'react';
 
 import { useSession } from '@/lib/auth-client';
 import { api } from '@/lib/api';
-import { queryKeys, useApiQuery } from '@/lib/query';
+import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 
 import { InviteForm } from './invite-form';
 import { InvitationsList } from './invitations-list';
@@ -61,19 +61,25 @@ export function MembersTab({ orgId }: MembersTabProps): JSX.Element {
   const invitationsKey = queryKeys.invitations(orgId);
 
   const membersQ = useApiQuery(
-    membersKey,
-    () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
-    'Could not load members.',
+    apiQueryOptions(
+      membersKey,
+      () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
+      'Could not load members.',
+    ),
   );
   const rolesQ = useApiQuery(
-    queryKeys.roles(orgId),
-    () => api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
-    'Could not load roles.',
+    apiQueryOptions(
+      queryKeys.roles(orgId),
+      () => api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
+      'Could not load roles.',
+    ),
   );
   const invitationsQ = useApiQuery(
-    invitationsKey,
-    () => api.v1.orgs[':orgId'].members.invitations.$get({ param: { orgId } }),
-    'Could not load invitations.',
+    apiQueryOptions(
+      invitationsKey,
+      () => api.v1.orgs[':orgId'].members.invitations.$get({ param: { orgId } }),
+      'Could not load invitations.',
+    ),
   );
 
   const members: readonly MemberOut[] = membersQ.data?.items ?? [];

@@ -28,7 +28,7 @@ import type { MemberOut, RoleOut } from '@docket/types';
 
 import { useSession } from '@/lib/auth-client';
 import { api } from '@/lib/api';
-import { queryKeys, useApiQuery } from '@/lib/query';
+import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 
 /** The role keys that confer org-management ability. */
 const MANAGER_ROLE_KEYS = new Set(['owner', 'admin']);
@@ -63,16 +63,20 @@ export function useCanManageOrg(orgId: string): CanManageOrg {
   const enabled = Boolean(userId);
 
   const membersQ = useApiQuery(
-    queryKeys.members(orgId),
-    () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
-    'Could not load members.',
-    { enabled },
+    apiQueryOptions(
+      queryKeys.members(orgId),
+      () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
+      'Could not load members.',
+      { enabled },
+    ),
   );
   const rolesQ = useApiQuery(
-    queryKeys.roles(orgId),
-    () => api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
-    'Could not load roles.',
-    { enabled },
+    apiQueryOptions(
+      queryKeys.roles(orgId),
+      () => api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
+      'Could not load roles.',
+      { enabled },
+    ),
   );
 
   if (!enabled) {

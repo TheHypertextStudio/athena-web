@@ -18,7 +18,7 @@ import { Badge, Button, Skeleton } from '@docket/ui/primitives';
 import { type JSX, useCallback, useState } from 'react';
 
 import { api } from '@/lib/api';
-import { queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
+import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
 
 import { ClientSetup } from './mcp-setup-panels';
 
@@ -54,9 +54,11 @@ export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.
     `${typeof window !== 'undefined' ? window.location.origin.replace('app.', 'api.') : ''}/mcp`;
 
   const appsQ = useApiQuery(
-    queryKeys.connectedApps(),
-    () => api.v1.me['connected-apps'].$get(),
-    'Could not load connected apps.',
+    apiQueryOptions(
+      queryKeys.connectedApps(),
+      () => api.v1.me['connected-apps'].$get(),
+      'Could not load connected apps.',
+    ),
   );
 
   const apps: readonly ConnectedApp[] = appsQ.data?.items ?? [];

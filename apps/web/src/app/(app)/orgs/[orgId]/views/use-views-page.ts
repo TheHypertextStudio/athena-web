@@ -20,7 +20,7 @@ import { EMPTY_VIEW_STATE, findField } from '@/components/views/field-catalog';
 import { buildTaskCatalog, toStoredView, toViewState } from '@/components/views/task-catalog';
 import type { RunnerActor } from '@/components/views/view-runner';
 import { api } from '@/lib/api';
-import { queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
+import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
 
 /** The active working query the toolbar edits, the runner renders, and the composer saves. */
 interface WorkingQuery {
@@ -64,34 +64,46 @@ export function useViewsPage(orgId: string): ViewsPageData {
   const savedViewsKey = queryKeys.savedViews(orgId);
 
   const viewsQ = useApiQuery(
-    savedViewsKey,
-    () => api.v1.orgs[':orgId']['saved-views'].$get({ param: { orgId } }),
-    'Could not load your saved views.',
+    apiQueryOptions(
+      savedViewsKey,
+      () => api.v1.orgs[':orgId']['saved-views'].$get({ param: { orgId } }),
+      'Could not load your saved views.',
+    ),
   );
   const tasksQ = useApiQuery(
-    queryKeys.tasks(orgId),
-    () => api.v1.orgs[':orgId'].tasks.$get({ param: { orgId } }),
-    'Could not load tasks.',
+    apiQueryOptions(
+      queryKeys.tasks(orgId),
+      () => api.v1.orgs[':orgId'].tasks.$get({ param: { orgId } }),
+      'Could not load tasks.',
+    ),
   );
   const projectsQ = useApiQuery(
-    queryKeys.projects(orgId),
-    () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
-    'Could not load projects.',
+    apiQueryOptions(
+      queryKeys.projects(orgId),
+      () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
+      'Could not load projects.',
+    ),
   );
   const programsQ = useApiQuery(
-    queryKeys.programs(orgId),
-    () => api.v1.orgs[':orgId'].programs.$get({ param: { orgId } }),
-    'Could not load programs.',
+    apiQueryOptions(
+      queryKeys.programs(orgId),
+      () => api.v1.orgs[':orgId'].programs.$get({ param: { orgId } }),
+      'Could not load programs.',
+    ),
   );
   const membersQ = useApiQuery(
-    queryKeys.members(orgId),
-    () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
-    'Could not load members.',
+    apiQueryOptions(
+      queryKeys.members(orgId),
+      () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
+      'Could not load members.',
+    ),
   );
   const agentsQ = useApiQuery(
-    queryKeys.agents(orgId),
-    () => api.v1.orgs[':orgId'].agents.$get({ param: { orgId } }),
-    'Could not load agents.',
+    apiQueryOptions(
+      queryKeys.agents(orgId),
+      () => api.v1.orgs[':orgId'].agents.$get({ param: { orgId } }),
+      'Could not load agents.',
+    ),
   );
 
   const views: readonly SavedViewOut[] = viewsQ.data?.items ?? [];

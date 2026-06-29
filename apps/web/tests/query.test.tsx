@@ -18,7 +18,13 @@ import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import type { JSX, ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { type RpcResponse, queryKeys, useApiMutation, useApiQuery } from '../src/lib/query';
+import {
+  apiQueryOptions,
+  type RpcResponse,
+  queryKeys,
+  useApiMutation,
+  useApiQuery,
+} from '../src/lib/query';
 
 afterEach(cleanup);
 
@@ -64,9 +70,11 @@ describe('useApiQuery', () => {
     const { result } = renderHook(
       () =>
         useApiQuery(
-          queryKeys.project('org_1', 'p1'),
-          () => Promise.resolve(okResponse(project)),
-          'Could not load the project.',
+          apiQueryOptions(
+            queryKeys.project('org_1', 'p1'),
+            () => Promise.resolve(okResponse(project)),
+            'Could not load the project.',
+          ),
         ),
       { wrapper },
     );
@@ -83,10 +91,12 @@ describe('useApiQuery', () => {
 
     const { result } = renderHook(
       () =>
-        useApiQuery<ProjectShape>(
-          queryKeys.project('org_1', 'p1'),
-          () => Promise.resolve(problemResponse('You lack access to this project.')),
-          'Could not load the project.',
+        useApiQuery(
+          apiQueryOptions<ProjectShape>(
+            queryKeys.project('org_1', 'p1'),
+            () => Promise.resolve(problemResponse('You lack access to this project.')),
+            'Could not load the project.',
+          ),
         ),
       { wrapper },
     );

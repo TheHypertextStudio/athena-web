@@ -10,7 +10,7 @@ import { type JSX, useMemo } from 'react';
 
 import { useSession } from '@/lib/auth-client';
 import { api } from '@/lib/api';
-import { queryKeys, useApiQuery } from '@/lib/query';
+import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 import { memberActorOptions } from '@/components/property-pickers/options';
 import {
   AssociationsPanel,
@@ -61,9 +61,11 @@ export default function InitiativeDetailPage(): JSX.Element {
   const timelineKey = useMemo(() => [...detailKey, 'timeline'] as const, [detailKey]);
 
   const detailQ = useApiQuery(
-    detailKey,
-    fetchInitiativeDetail(orgId, initiativeId),
-    `Could not load this ${initiativeNounLower}.`,
+    apiQueryOptions(
+      detailKey,
+      fetchInitiativeDetail(orgId, initiativeId),
+      `Could not load this ${initiativeNounLower}.`,
+    ),
   );
   const data = detailQ.data ?? null;
   const detail = data?.detail ?? null;
@@ -73,13 +75,15 @@ export default function InitiativeDetailPage(): JSX.Element {
   const roles = data?.roles ?? [];
 
   const timelineQ = useApiQuery(
-    timelineKey,
-    () =>
-      api.v1.orgs[':orgId'].initiatives[':id'].timeline.$get({
-        param: { orgId, id: initiativeId },
-        query: {},
-      }),
-    'Could not load the timeline.',
+    apiQueryOptions(
+      timelineKey,
+      () =>
+        api.v1.orgs[':orgId'].initiatives[':id'].timeline.$get({
+          param: { orgId, id: initiativeId },
+          query: {},
+        }),
+      'Could not load the timeline.',
+    ),
   );
   const timeline: InitiativeTimelineOut | null = timelineQ.data ?? null;
 

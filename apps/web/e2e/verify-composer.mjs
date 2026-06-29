@@ -11,26 +11,11 @@
  */
 import { chromium } from '@playwright/test';
 
+import { addVirtualAuthenticator } from './_lib/webauthn.mjs';
+
 const BASE = process.env.APP_URL ?? 'https://docket.localhost';
 const OUT = process.argv[2] ?? '.';
 const stamp = Date.now();
-
-/** Add a CDP WebAuthn virtual authenticator that auto-approves every ceremony. */
-async function addVirtualAuthenticator(page) {
-  const cdp = await page.context().newCDPSession(page);
-  await cdp.send('WebAuthn.enable');
-  const { authenticatorId } = await cdp.send('WebAuthn.addVirtualAuthenticator', {
-    options: {
-      protocol: 'ctap2',
-      transport: 'internal',
-      hasResidentKey: true,
-      hasUserVerification: true,
-      isUserVerified: true,
-      automaticPresenceSimulation: true,
-    },
-  });
-  return authenticatorId;
-}
 
 let page = null;
 async function main() {

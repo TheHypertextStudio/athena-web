@@ -187,7 +187,7 @@ export const CORE_VARS: readonly VarSpec[] = [
     targets: ['api'],
     required: false,
     zod: authServer.GITHUB_APP_PRIVATE_KEY,
-    where: 'GitHub App private key as base64 PEM: `base64 -i app.private-key.pem | tr -d "\\n"`',
+    where: 'Path to the .pem you downloaded (or paste the PEM) — base64-encoded for you',
     sensitive: true,
   },
   {

@@ -4,18 +4,27 @@ ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable
 
-# Install all workspace deps (pnpm deploy needs the full store to bundle workspace packages)
+# Prune the monorepo to @docket/api + its workspace deps. `out/json` is just manifests + lockfile;
+# `out/full` is the pruned source. Splitting them lets the dependency-install layer stay cached
+# across source-only edits (only a manifest/lockfile change rebuilds it).
+FROM base AS pruner
+WORKDIR /app
+COPY . .
+RUN pnpm dlx turbo@2.9.18 prune @docket/api --docker
+
 FROM base AS installer
 WORKDIR /app
-ENV PNPM_CONFIG_INJECT_WORKSPACE_PACKAGES=true
-COPY . .
-RUN pnpm install --no-frozen-lockfile && \
-    pnpm --filter=@docket/api deploy --prod /deploy
+# Install from the pruned manifests first — this RUN is the cache-stable layer.
+COPY --from=pruner /app/out/json/ .
+RUN pnpm install --prod --no-frozen-lockfile
+# Then the pruned source (api + the workspace packages it imports, run from TS via tsx).
+COPY --from=pruner /app/out/full/ .
 
-FROM node:${NODE_VERSION}-alpine AS runner
+FROM base AS runner
 WORKDIR /app
 ENV NODE_ENV=production
-COPY --from=installer /deploy .
+COPY --from=installer /app .
+WORKDIR /app/apps/api
 EXPOSE 8080
 # node --import=tsx/esm is the correct ESM loader invocation for tsx v4+ on Node 18.19+
 CMD ["node", "--import=tsx/esm", "src/server.ts"]

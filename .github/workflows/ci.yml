@@ -10,6 +10,17 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Turbo Remote Cache (optional): set these to share the cache across CI runs and machines so a
+# task computed on one run is replayed on the next. All unset → turbo silently uses the local
+# `.turbo` cache only (current behavior, no-op). When TURBO_TOKEN is set, the signature key is
+# required by `remoteCache.signature` in turbo.json. For a self-hosted cache also set TURBO_API
+# (repo variable); omit it to use the Vercel Remote Cache.
+env:
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+  TURBO_API: ${{ vars.TURBO_API }}
+  TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+
 jobs:
   # Lint + typecheck run together — same install, no reason for separate runners.
   quality:

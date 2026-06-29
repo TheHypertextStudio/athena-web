@@ -1,0 +1,28 @@
+{
+  "extends": ["//"],
+  // The Hono API validates the full server env contract (`@docket/env/api`) when it boots, so
+  // its long-running `dev` server needs every server-var group made available under strict mode.
+  // These live here — not in the root globalEnv — so they only invalidate API caches, never the
+  // Next apps'. `build` is `tsc` (no runtime env) and `test` sets its own env, so neither needs them.
+  "tasks": {
+    "dev": {
+      "env": [
+        "BETTER_AUTH_*",
+        "GOOGLE_*",
+        "GITHUB_*",
+        "LINEAR_*",
+        "MCP_*",
+        "OIDC_*",
+        "STRIPE_*",
+        "DOCKET_PRICE_*",
+        "ATHENA_*",
+        "ANTHROPIC_API_KEY",
+        "CRON_SECRET",
+        "SENTRY_DSN",
+        "BLOB_READ_WRITE_TOKEN",
+        "EXPORT_BUCKET_*",
+        "BILLING_ENABLED"
+      ]
+    }
+  }
+}

@@ -4,10 +4,18 @@ ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable
 
-FROM base AS builder
+# Prune to @docket/web + its workspace deps so the install layer is cache-stable across source edits.
+FROM base AS pruner
 WORKDIR /app
 COPY . .
+RUN pnpm dlx turbo@2.9.18 prune @docket/web --docker
+
+FROM base AS builder
+WORKDIR /app
+# Install from pruned manifests (cache-stable), then bring in the pruned source.
+COPY --from=pruner /app/out/json/ .
 RUN pnpm install --no-frozen-lockfile
+COPY --from=pruner /app/out/full/ .
 # Build-time env: API_URL for next.config rewrites, NEXT_PUBLIC_* get inlined into the bundle
 ARG API_URL
 ARG NEXT_PUBLIC_API_URL

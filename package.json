@@ -36,7 +36,7 @@
     "db:migrate": "dotenv -e .env.local -- turbo run db:migrate --filter=@docket/db",
     "db:studio": "dotenv -e .env.local -- turbo run db:studio --filter=@docket/db",
     "db:auth:generate": "dotenv -e .env.local -- turbo run db:auth:generate --filter=@docket/db",
-    "prepare": "husky && (git update-index --skip-worktree .env.local 2>/dev/null || true)"
+    "prepare": "(husky || true) && (git update-index --skip-worktree .env.local 2>/dev/null || true)"
   },
   "devDependencies": {
     "@changesets/cli": "^2.31.0",

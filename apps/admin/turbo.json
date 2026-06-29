@@ -1,0 +1,13 @@
+{
+  "extends": ["//"],
+  // The operator console only consumes the two public URLs (staff-gating is server-side); they
+  // are inlined at `next build` and read by the dev server, so both tasks declare them.
+  "tasks": {
+    "build": {
+      "env": ["NEXT_PUBLIC_API_URL", "NEXT_PUBLIC_APP_URL"]
+    },
+    "dev": {
+      "env": ["NEXT_PUBLIC_API_URL", "NEXT_PUBLIC_APP_URL"]
+    }
+  }
+}

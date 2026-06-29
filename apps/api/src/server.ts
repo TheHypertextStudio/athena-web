@@ -17,6 +17,7 @@ import { sessionMiddleware } from './auth/session-middleware';
 import type { AppEnv } from './context';
 import { env } from './env';
 import { onError } from './error';
+import { cimdAuthorizeMiddleware } from './mcp/cimd';
 import { authorizationServerMetadata, mcpHandler, protectedResourceMetadata } from './mcp/server';
 import { registerOpenapi } from './openapi';
 import cron from './routes/cron';
@@ -37,11 +38,12 @@ server.use(
   cors({
     origin: trustedOrigins,
     credentials: true,
-    allowHeaders: ['Content-Type', 'Authorization'],
-    exposeHeaders: ['Authorization', 'WWW-Authenticate'],
+    allowHeaders: ['Content-Type', 'Authorization', 'MCP-Protocol-Version', 'Last-Event-ID'],
+    exposeHeaders: ['Authorization', 'WWW-Authenticate', 'MCP-Protocol-Version', 'Mcp-Session-Id'],
   }),
 );
 server.use('*', sessionMiddleware);
+server.use('/api/auth/mcp/authorize', cimdAuthorizeMiddleware);
 server.on(['POST', 'GET'], '/api/auth/*', (c) => auth.handler(c.req.raw));
 // The MCP Streamable HTTP endpoint lives OUTSIDE the typed `AppType` routes (like
 // `/api/auth`): it carries its own Origin + session guard and is not part of the RPC
@@ -53,6 +55,7 @@ server.on(['POST', 'GET'], '/mcp', mcpHandler);
 server.get('/.well-known/oauth-protected-resource', protectedResourceMetadata);
 server.get('/.well-known/oauth-protected-resource/mcp', protectedResourceMetadata);
 server.get('/.well-known/oauth-authorization-server', authorizationServerMetadata);
+server.get('/.well-known/openid-configuration', authorizationServerMetadata);
 // Non-RPC external edges (webhooks, ingestion, cron) live OUTSIDE the typed `AppType` routes.
 server.route('/v1/billing', webhooks);
 server.route('/v1/ingest', ingest);

@@ -10,8 +10,9 @@
  * (required because the stateless transport is single-use per request). Tools and
  * resources reuse the same `db` + {@link canActor} engine as the RPC routers.
  *
- * OAuth 2.1 Resource-Server discovery metadata + Dynamic Client Registration are a
- * documented follow-up; for now the Better Auth session/bearer guard IS the auth.
+ * OAuth 2.1 Resource-Server discovery metadata + Dynamic Client Registration are
+ * backed by Better Auth's MCP/OIDC plugin. URL-form client IDs are registered by
+ * the CIMD pre-authorize middleware in `server.ts`.
  */
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
@@ -145,24 +146,36 @@ export function protectedResourceMetadata(c: Context): Response {
 }
 
 /**
- * Serve the OAuth 2.0 Authorization Server metadata pointer (RFC 8414).
+ * Serve the OAuth 2.0 Authorization Server metadata document (RFC 8414/OIDC).
  *
  * @remarks
- * The single Docket AS is Better Auth mounted at `/api/auth`, whose `mcp()`/`oidcProvider`
- * plugin already serves the canonical discovery document (with `issuer`, the authorization/
- * token/registration endpoints, `code_challenge_methods_supported:["S256"]`, and the scope
- * set) at `<issuer>/.well-known/openid-configuration`. The RS-level
- * `/.well-known/oauth-authorization-server` route 307-redirects there so a client that
- * discovered the AS via the PRM `authorization_servers` entry lands on the live document
- * (mcp-surface.md §2.3) — without re-importing the heavy Better Auth plugin chain.
+ * Docket keeps this document at the root well-known paths so MCP clients can discover
+ * the exact Better Auth MCP endpoints and the CIMD extension without first knowing the
+ * internal `/api/auth` mount. Better Auth still owns the endpoint implementations.
  *
  * @param c - The Hono context.
- * @returns a 307 redirect to the AS's OIDC discovery document.
+ * @returns the AS metadata JSON document.
  */
 export function authorizationServerMetadata(c: Context): Response {
   const resource = canonicalResourceUrl(c);
   const issuer = env.MCP_ISSUER_URL?.replace(/\/$/, '') ?? new URL(resource).origin;
-  return c.redirect(`${issuer}/.well-known/openid-configuration`, 307);
+  const authBase = `${issuer}/api/auth`;
+  return c.json({
+    issuer,
+    authorization_endpoint: `${authBase}/mcp/authorize`,
+    token_endpoint: `${authBase}/mcp/token`,
+    userinfo_endpoint: `${authBase}/userinfo`,
+    jwks_uri: `${authBase}/jwks`,
+    registration_endpoint: `${authBase}/mcp/register`,
+    response_types_supported: ['code'],
+    grant_types_supported: ['authorization_code', 'refresh_token'],
+    scopes_supported: ['openid', 'profile', 'email', 'offline_access', ...MCP_SCOPES],
+    token_endpoint_auth_methods_supported: ['client_secret_basic', 'client_secret_post', 'none'],
+    code_challenge_methods_supported: ['S256'],
+    claims_supported: ['sub', 'name', 'email', 'email_verified'],
+    resource,
+    client_id_metadata_document_supported: true,
+  });
 }
 
 /** A `tools/call` JSON-RPC request body (the only shape the scope preflight inspects). */

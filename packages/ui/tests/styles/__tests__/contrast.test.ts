@@ -45,6 +45,14 @@ const TEXT_PAIRS: [string, string][] = [
   ['--accent-foreground', '--accent'],
   ['--muted-foreground', '--background'],
   ['--destructive-foreground', '--destructive'],
+  // MD3 tonal roles (indigo primary). Container fills carry on-* text; inverse-surface is the
+  // snackbar/inverse layer. `--error` aliases `--destructive` (already guarded above) via var(),
+  // so it is omitted here — culori cannot parse a var() reference.
+  ['--on-primary-container', '--primary-container'],
+  ['--on-secondary-container', '--secondary-container'],
+  ['--on-error-container', '--error-container'],
+  ['--inverse-on-surface', '--inverse-surface'],
+  ['--inverse-primary', '--inverse-surface'],
   // MD3 tonal surface ramp — body text must be readable on every container tone it lands on,
   // including the floating-panel `--surface` (sidebar / main / active tab) and the hover/overlay
   // tones it can step up to.

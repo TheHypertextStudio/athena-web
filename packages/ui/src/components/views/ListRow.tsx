@@ -102,8 +102,9 @@ export const ListRow = React.forwardRef<HTMLDivElement, ListRowProps>(function L
         'border-outline-variant text-body flex min-h-(--row-h) w-full cursor-pointer items-center gap-2 border-b px-3 py-(--row-py) transition-colors outline-none',
         'hover:bg-surface-container-high focus-visible:bg-surface-container-high',
         focusRingInset,
-        active && 'bg-surface-container-highest',
-        selected && 'bg-surface-container-highest',
+        // Explicit selection takes the indigo tonal fill; the roving keyboard cursor stays neutral.
+        active && !selected && 'bg-surface-container-highest',
+        selected && 'bg-secondary-container',
         className,
       )}
     >

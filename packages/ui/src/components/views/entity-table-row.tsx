@@ -52,7 +52,10 @@ export function EntityTableRow<T>({
   const rowClassName = cn(
     TABLE_ROW_BASE,
     TABLE_ROW_INTERACTIVE,
-    (active || selected) && 'bg-surface-container-highest',
+    // Explicit selection takes the indigo tonal fill; the roving keyboard cursor stays neutral
+    // (its inset focus ring already marks it) so a dense table never over-colors.
+    selected && 'bg-secondary-container',
+    active && !selected && 'bg-surface-container-highest',
   );
 
   const handleClick = React.useCallback(() => {

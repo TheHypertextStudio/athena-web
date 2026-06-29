@@ -26,6 +26,8 @@ export interface EntityTableRowProps<T> {
   selected: boolean;
   href?: string;
   renderRowLink?: (props: EntityTableRowLinkProps) => React.ReactNode;
+  /** Warm the row's destination cache on hover/focus (bound to this row by EntityTable). */
+  onRowPrefetch?: () => void;
   onActivate?: () => void;
   onSelect?: () => void;
 }
@@ -46,6 +48,7 @@ export function EntityTableRow<T>({
   selected,
   href,
   renderRowLink,
+  onRowPrefetch,
   onActivate,
   onSelect,
 }: EntityTableRowProps<T>): React.JSX.Element {
@@ -99,6 +102,8 @@ export function EntityTableRow<T>({
           href,
           className: rowClassName,
           onClick: handleClick,
+          onMouseEnter: onRowPrefetch,
+          onFocus: onRowPrefetch,
           tabIndex: -1,
           'aria-current': ariaCurrent,
           children: cells,
@@ -118,6 +123,8 @@ export function EntityTableRow<T>({
         data-selected={selected ? '' : undefined}
         tabIndex={-1}
         onClick={handleClick}
+        onMouseEnter={onRowPrefetch}
+        onFocus={onRowPrefetch}
         onKeyDown={handleKeyDown}
         className={rowClassName}
       >

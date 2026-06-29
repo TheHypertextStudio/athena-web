@@ -26,6 +26,8 @@ import { TeamPicker } from '@/components/teams/team-picker';
 import { buildTaskCatalog } from '@/components/views/task-catalog';
 import { buildTaskColumns, TaskTable } from '@/components/views/task-table';
 import { formatCalendarDate } from '@/lib/format-date';
+import { usePrefetchApi } from '@/lib/query';
+import { taskDetailDef } from '@/lib/use-task-detail';
 import { STATE_GROUP_ORDER, stateTypeOf } from '@/lib/work-state';
 
 /** A task enriched with its resolved milestone association. */
@@ -95,6 +97,7 @@ export function MilestoneTasks({
   teamsLoading,
   orgId,
 }: MilestoneTasksProps): JSX.Element {
+  const prefetch = usePrefetchApi();
   const [title, setTitle] = useState('');
 
   /** Milestone display order: declared milestones in `sort` order, then Unscheduled last. */
@@ -207,6 +210,9 @@ export function MilestoneTasks({
           columns={columns}
           groups={groups}
           taskHref={(task) => `/orgs/${orgId}/tasks/${task.id}`}
+          onRowPrefetch={(task) => {
+            prefetch(taskDetailDef(orgId, task.id));
+          }}
           onOpenTask={(task) => {
             onOpenTask(task.id);
           }}

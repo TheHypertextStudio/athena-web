@@ -165,6 +165,8 @@ export interface TaskTableProps {
   taskHref: (task: TaskOut) => string;
   /** Optional override for row activation (e.g. push via router); links navigate by default. */
   onOpenTask?: (task: TaskOut) => void;
+  /** Warm a task's detail cache on row hover/focus (prefetch-on-intent). Optional; no-op if unset. */
+  onRowPrefetch?: (task: TaskOut) => void;
   /** Accessible label for the grid. */
   label: string;
   /** Initial collapsed group ids (uncontrolled). */
@@ -191,6 +193,7 @@ export function TaskTable({
   groups,
   taskHref,
   onOpenTask,
+  onRowPrefetch,
   label,
   defaultCollapsed,
   className,
@@ -207,12 +210,15 @@ export function TaskTable({
           href={lp.href}
           className={lp.className}
           onClick={lp.onClick}
+          onMouseEnter={lp.onMouseEnter}
+          onFocus={lp.onFocus}
           tabIndex={lp.tabIndex}
           aria-current={lp['aria-current']}
         >
           {lp.children}
         </Link>
       )}
+      onRowPrefetch={onRowPrefetch}
       onRowClick={
         onOpenTask
           ? (task) => {

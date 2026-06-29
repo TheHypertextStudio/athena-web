@@ -58,6 +58,8 @@ export interface EntityTableProps<T> {
   renderRowLink?: (props: EntityTableRowLinkProps) => React.ReactNode;
   /** Activate (open) a row on click / Enter. */
   onRowClick?: (row: T) => void;
+  /** Warm a row's destination cache on hover/focus (prefetch-on-intent). Optional; no-op if unset. */
+  onRowPrefetch?: (row: T) => void;
   /** The currently selected row keys (controlled). */
   selected?: ReadonlySet<string>;
   /** Toggle a row's selection (controlled). */
@@ -107,6 +109,7 @@ export function EntityTable<T>({
   rowHref,
   renderRowLink,
   onRowClick,
+  onRowPrefetch,
   selected,
   onSelect,
   collapsed: collapsedProp,
@@ -244,6 +247,13 @@ export function EntityTable<T>({
             selected={selected?.has(key) ?? false}
             href={rowHref?.(entry.row)}
             renderRowLink={renderRowLink}
+            onRowPrefetch={
+              onRowPrefetch
+                ? () => {
+                    onRowPrefetch(entry.row);
+                  }
+                : undefined
+            }
             onActivate={
               onRowClick
                 ? () => {

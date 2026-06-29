@@ -48,6 +48,9 @@ export interface EntityTableRowLinkProps {
   href: string;
   className: string;
   onClick: () => void;
+  /** Hover/focus handlers for prefetch-on-intent (set when the table has `onRowPrefetch`). */
+  onMouseEnter?: () => void;
+  onFocus?: () => void;
   tabIndex: number;
   'aria-current': 'true' | undefined;
   children: React.ReactNode;

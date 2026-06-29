@@ -12,13 +12,14 @@
  *
  * @see {@link MockAgentRuntime} for the deterministic offline counterpart.
  */
-import Anthropic from '@anthropic-ai/sdk';
+import type Anthropic from '@anthropic-ai/sdk';
 import type {
   MessageCreateParamsBase,
   RawMessageStreamEvent,
 } from '@anthropic-ai/sdk/resources/messages';
 
 import type { AgentRuntime, SessionActivity, StartSessionInput } from '../ports/agent-runtime';
+import { makeAnthropicClient, wrapAnthropicError } from './anthropic';
 import { translateEvents } from './agent-runtime-translate';
 
 export { blockKind, toActionBody, translateEvents } from './agent-runtime-translate';
@@ -133,15 +134,7 @@ export function buildRequest(
  * @param cause - The original thrown value.
  */
 export function wrapError(cause: unknown): Error {
-  if (cause instanceof Anthropic.APIError) {
-    const rawStatus: unknown = (cause as { status?: unknown }).status;
-    const status = typeof rawStatus === 'number' ? rawStatus : 'unknown';
-    return new Error(`Anthropic agent runtime failed: ${status} (${cause.name})`);
-  }
-  if (cause instanceof Error) {
-    return new Error(`Anthropic agent runtime failed: ${cause.message}`);
-  }
-  return new Error('Anthropic agent runtime failed: unknown error');
+  return wrapAnthropicError(cause, 'agent runtime');
 }
 
 /**
@@ -151,10 +144,7 @@ export function wrapError(cause: unknown): Error {
  */
 export function defaultMessageStreamer(config: RealProviderRuntimeConfig): MessageStreamer {
   /* v8 ignore start -- live Anthropic SDK edge */
-  const client = new Anthropic({
-    apiKey: config.apiKey,
-    ...(config.baseURL ? { baseURL: config.baseURL } : {}),
-  });
+  const client = makeAnthropicClient(config);
   return (params) => client.messages.stream(params);
   /* v8 ignore stop */
 }

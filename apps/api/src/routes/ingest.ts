@@ -1,0 +1,95 @@
+/**
+ * `@docket/api` — the ambient-intelligence ingestion edge (mounted OUTSIDE the RPC `AppType`).
+ *
+ * @remarks
+ * `POST /v1/ingest/linear` receives Linear webhooks and records them in the durable
+ * write-ahead inbox ({@link inboundEvent}) — the "persist incoming data as fast as
+ * possible" invariant. It is non-RPC (an untyped external edge), so it lives in
+ * `server.ts` alongside `/v1/billing` and `/v1/cron`.
+ *
+ * The handler reads the **raw** body (the HMAC is computed over the exact bytes),
+ * verifies it via the resolved {@link Observer}, parses + routes it to extract the
+ * provider's workspace id and a per-delivery event id, maps that to the connected
+ * {@link integration} (and thus the org), then writes one `inbound_event` row and ACKs
+ * 200. No normalization or task/observation writes happen here — the lease-guarded drain
+ * cron ({@link sweepInboundEvents}) does that asynchronously. Dedup against webhook
+ * retries is the unique `(provider, external_event_id)` index. `now` is request-time.
+ */
+import { db, inboundEvent, integration } from '@docket/db';
+import { selectAdapter } from '@docket/boundaries';
+import { and, eq, sql } from 'drizzle-orm';
+import { Hono } from 'hono';
+
+import { toBoundaryEnv } from '../container';
+
+/** Narrow a routed payload to the record drizzle stores in the `payload` jsonb column. */
+function asPayload(value: unknown): Record<string, unknown> {
+  // `observer.route(...)` returned non-null, so the body is a JSON object.
+  return value as Record<string, unknown>;
+}
+
+/** The ingestion app: verify → write-ahead → 200, one provider edge per route. */
+const ingest = new Hono().post('/linear', async (c) => {
+  // Read the RAW bytes first: Linear's signature is an HMAC over the exact request body.
+  const rawBody = await c.req.text();
+  const observer = selectAdapter('observer', toBoundaryEnv(), { observerProvider: 'linear' });
+
+  // Authenticate before trusting any payload (the mock trusts the local path; see MockObserver).
+  // Pass all headers through — the observer owns which signature header matters per provider.
+  if (!observer.verifySignature({ rawBody, headers: c.req.header() })) {
+    return c.json({ error: 'signature verification failed' }, 400);
+  }
+
+  let payload: unknown;
+  try {
+    payload = JSON.parse(rawBody);
+  } catch {
+    return c.json({ error: 'invalid json' }, 400);
+  }
+
+  const routing = observer.route(payload);
+  if (!routing) return c.json({ error: 'unrecognized payload' }, 400);
+
+  // Map the Linear workspace to the connected integration (→ org). An event for a workspace
+  // Docket doesn't have connected is acknowledged (200) but recorded unrouted, so a missing
+  // integration never 500s a third-party retry storm.
+  let organizationId: string | null = null;
+  let integrationId: string | null = null;
+  if (routing.externalWorkspaceId) {
+    const [row] = await db
+      .select({ id: integration.id, organizationId: integration.organizationId })
+      .from(integration)
+      .where(
+        and(
+          eq(integration.provider, 'linear'),
+          sql`${integration.connection}->>'externalWorkspaceId' = ${routing.externalWorkspaceId}`,
+        ),
+      )
+      .limit(1);
+    if (row) {
+      organizationId = row.organizationId;
+      integrationId = row.id;
+    }
+  }
+
+  // Write-ahead, then ACK. The unique (provider, external_event_id) index makes a retried
+  // delivery a no-op insert.
+  await db
+    .insert(inboundEvent)
+    .values({
+      organizationId,
+      integrationId,
+      provider: 'linear',
+      externalEventId: routing.externalEventId,
+      eventType: routing.eventType,
+      payload: asPayload(payload),
+      signatureVerified: true,
+    })
+    .onConflictDoNothing({
+      target: [inboundEvent.provider, inboundEvent.externalEventId],
+    });
+
+  return c.json({ received: true, routed: integrationId !== null });
+});
+
+export default ingest;

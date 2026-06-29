@@ -16,6 +16,8 @@ import { Hono } from 'hono';
 import { env } from '../env';
 import { sweepLifecycle } from '../billing/lifecycle';
 import { sweepConnectorSync } from './integration-sync';
+import { sweepInboundEvents } from './observation-sync';
+import { sweepDailyDigests } from './daily-digest';
 
 /** Extract the presented cron secret from `Authorization: Bearer …` or `x-cron-secret`. */
 function presentedSecret(
@@ -48,6 +50,22 @@ const cron = new Hono()
   .post('/sync-connectors', async (c) => {
     if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
     const result = await sweepConnectorSync(new Date());
+    return c.json({ swept: true, ...result });
+  })
+  // Ambient-intelligence drain: normalize received webhook events into observations + bridges.
+  // Idempotent + lease-guarded (see {@link sweepInboundEvents}); run on a tight cadence so
+  // captured activity surfaces quickly.
+  .post('/process-events', async (c) => {
+    if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
+    const result = await sweepInboundEvents(new Date());
+    return c.json({ swept: true, ...result });
+  })
+  // Daily-digest sweep: generate + email each opted-in user's end-of-day summary once their
+  // local send time passes. The unique (user_id, digest_date) watermark makes this safe to
+  // call frequently (send times are per-user/local, so a coarse fixed schedule won't fit all).
+  .post('/daily-digests', async (c) => {
+    if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
+    const result = await sweepDailyDigests(new Date());
     return c.json({ swept: true, ...result });
   });
 

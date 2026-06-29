@@ -65,6 +65,7 @@ export const IntegrationCreate = z
     connection: IntegrationConnection.optional(),
     config: z.record(z.string(), z.unknown()).optional(),
     syncMode: SyncMode.optional(),
+    writeBack: z.boolean().optional(),
   })
   .meta({ id: 'IntegrationCreate', description: 'Create an integration within an organization.' });
 /** Validated integration-create body. */
@@ -83,6 +84,7 @@ export const IntegrationUpdate = z
     connection: IntegrationConnection.optional(),
     config: z.record(z.string(), z.unknown()).optional(),
     syncMode: SyncMode.optional(),
+    writeBack: z.boolean().optional(),
   })
   .meta({ id: 'IntegrationUpdate', description: 'Update an integration.' });
 /** Validated integration-update body. */
@@ -161,6 +163,8 @@ export const IntegrationOut = z
     status: IntegrationStatus,
     config: z.record(z.string(), z.unknown()),
     syncMode: SyncMode,
+    /** Whether this connector also writes Docket changes back to the provider (two-way sync). */
+    writeBack: z.boolean(),
     /** Status of the most recent sync run (null = never synced). */
     lastSyncStatus: SyncRunStatus.nullable(),
     /** ISO-8601 timestamp of the last SUCCESSFUL sync (null = never succeeded). */

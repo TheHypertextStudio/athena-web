@@ -16,6 +16,16 @@ export {
 } from './billing';
 export { RealProviderRuntime, type RealProviderRuntimeConfig } from './agent-runtime';
 export { RealConnector, type RealConnectorConfig } from './connector';
+export { RealLinearObserver, type RealLinearObserverConfig } from './observer-linear';
+export {
+  RealSummarizer,
+  type RealSummarizerConfig,
+  type MessageCreator,
+  buildRequest as buildSummarizerRequest,
+  extractMarkdown,
+  defaultMessageCreator,
+  DEFAULT_SUMMARIZER_MODEL,
+} from './summarizer';
 export {
   RealMailer,
   type RealMailerConfig,

@@ -15,6 +15,8 @@ import type { AppMode } from '@docket/env';
 import { InMemoryBillingGateway } from './mock/billing';
 import { MockAgentRuntime } from './mock/agent-runtime';
 import { MockConnector } from './mock/connector';
+import { MockObserver } from './mock/observer';
+import { MockSummarizer } from './mock/summarizer';
 import { CaptureMailer } from './mock/mailer';
 import { LocalDiskBlob } from './mock/blob';
 import type { AgentRuntime } from './ports/agent-runtime';
@@ -22,9 +24,13 @@ import type { BillingGateway } from './ports/billing';
 import type { BlobStore } from './ports/blob';
 import type { Connector, ConnectorProvider } from './ports/connector';
 import type { Mailer } from './ports/mailer';
+import type { Observer } from './ports/observer';
+import type { Summarizer } from './ports/summarizer';
 import { RealStripeGateway } from './real/billing';
 import { RealProviderRuntime } from './real/agent-runtime';
 import { RealConnector } from './real/connector';
+import { RealLinearObserver } from './real/observer-linear';
+import { RealSummarizer } from './real/summarizer';
 import { SmtpMailer, smtpConfigFromEnv } from './real/mailer';
 import { RealBlob } from './real/blob';
 import type { HttpClient } from './real/http';
@@ -44,10 +50,12 @@ export interface BoundaryEnv {
   /** Stripe billing portal configuration id. */
   readonly STRIPE_BILLING_PORTAL_CONFIG_ID?: string;
   /**
-   * Anthropic API key — selects {@link RealProviderRuntime} (the built-in Athena runtime,
-   * backed by the Anthropic Messages API) when real-shaped.
+   * Anthropic API key — selects {@link RealProviderRuntime} (the built-in Athena runtime)
+   * and {@link RealSummarizer} (the daily-digest narrator) when real-shaped.
    */
   readonly ANTHROPIC_API_KEY?: string;
+  /** App-level Linear webhook signing secret — selects {@link RealLinearObserver} when real-shaped. */
+  readonly LINEAR_WEBHOOK_SECRET?: string;
   /** SMTP relay host — selects {@link SmtpMailer} when present with {@link BoundaryEnv.MAIL_FROM}. */
   readonly SMTP_HOST?: string;
   /** SMTP port (string form; 587 STARTTLS, 465 implicit TLS, 1025 Mailpit). */
@@ -79,7 +87,14 @@ export interface BoundaryEnv {
 }
 
 /** The set of named ports {@link selectAdapter} can resolve. */
-export type PortName = 'billing' | 'agentRuntime' | 'connector' | 'mailer' | 'blob';
+export type PortName =
+  | 'billing'
+  | 'agentRuntime'
+  | 'connector'
+  | 'observer'
+  | 'summarizer'
+  | 'mailer'
+  | 'blob';
 
 /** Maps each {@link PortName} to its port interface (the resolved adapter type). */
 export interface PortMap {
@@ -89,6 +104,10 @@ export interface PortMap {
   readonly agentRuntime: AgentRuntime;
   /** The connector port (bound to a single provider). */
   readonly connector: Connector;
+  /** The observer port (ambient-intelligence ingestion, bound to a single provider). */
+  readonly observer: Observer;
+  /** The summarizer port (daily-digest narration). */
+  readonly summarizer: Summarizer;
   /** The mailer port. */
   readonly mailer: Mailer;
   /** The blob store port. */
@@ -105,6 +124,28 @@ export interface SelectOptions {
   readonly connectorProvider?: ConnectorProvider;
   /** OAuth token for the real connector (from the resolved credential, not env). */
   readonly connectorToken?: string;
+  /** Provider to bind the observer port to (defaults to `linear`). */
+  readonly observerProvider?: ConnectorProvider;
+}
+
+/**
+ * The app-level webhook signing secret for an observer provider, if configured.
+ *
+ * @remarks
+ * Only Linear has a real observer in Phase 0 (its OAuth app signs every webhook with one
+ * app-level secret); other providers have no real observer yet and resolve to the mock.
+ *
+ * @param provider - The observer provider being bound.
+ * @param env - The boundary-relevant env slice.
+ * @returns the signing secret, or `undefined` when none is configured for the provider.
+ */
+function observerSecret(provider: ConnectorProvider, env: BoundaryEnv): string | undefined {
+  switch (provider) {
+    case 'linear':
+      return env.LINEAR_WEBHOOK_SECRET;
+    default:
+      return undefined;
+  }
 }
 
 /** Whether `APP_MODE` forces the mock adapters (`local`/`test`). */
@@ -208,6 +249,26 @@ export function selectAdapter<P extends PortName>(
         : new MockConnector();
       return adapter as PortMap[P];
     }
+    case 'observer': {
+      // Bound to one provider (like the connector). Only Linear has a real observer today;
+      // it verifies with the app-level `LINEAR_WEBHOOK_SECRET`. Anything else uses the mock.
+      const provider = options.observerProvider ?? 'linear';
+      const secret = observerSecret(provider, env);
+      const useReal = !mock && provider === 'linear' && isRealValue(secret);
+      const adapter: Observer = useReal
+        ? new RealLinearObserver({ signingSecret: secret })
+        : new MockObserver({ provider });
+      return adapter as PortMap[P];
+    }
+    case 'summarizer': {
+      // The digest narrator is the Anthropic Messages API (same key as the agent runtime);
+      // the SDK manages its own transport, so `options.http` is intentionally NOT threaded.
+      const useReal = !mock && isRealValue(env.ANTHROPIC_API_KEY);
+      const adapter: Summarizer = useReal
+        ? new RealSummarizer({ apiKey: env.ANTHROPIC_API_KEY })
+        : new MockSummarizer();
+      return adapter as PortMap[P];
+    }
     case 'mailer': {
       // Transactional email goes over SMTP (Mailpit locally, a real relay in prod). The
       // env is real-shaped only when both the relay host and the from-address are set;
@@ -250,6 +311,10 @@ export interface BoundaryContainer {
   readonly agentRuntime: AgentRuntime;
   /** The selected connector (bound to {@link SelectOptions.connectorProvider}). */
   readonly connector: Connector;
+  /** The selected observer (bound to {@link SelectOptions.observerProvider}). */
+  readonly observer: Observer;
+  /** The selected daily-digest summarizer. */
+  readonly summarizer: Summarizer;
   /** The selected mailer. */
   readonly mailer: Mailer;
   /** The selected blob store. */
@@ -268,6 +333,8 @@ export function buildContainer(env: BoundaryEnv, options: SelectOptions = {}): B
     billing: selectAdapter('billing', env, options),
     agentRuntime: selectAdapter('agentRuntime', env, options),
     connector: selectAdapter('connector', env, options),
+    observer: selectAdapter('observer', env, options),
+    summarizer: selectAdapter('summarizer', env, options),
     mailer: selectAdapter('mailer', env, options),
     blob: selectAdapter('blob', env, options),
   };

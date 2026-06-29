@@ -40,5 +40,21 @@ export type {
 } from './connector';
 export { ConnectorError, isConnectorError } from './connector-error';
 export type { ConnectorErrorKind, ConnectorErrorOptions } from './connector-error';
+export type {
+  InboundHeaders,
+  InboundRouting,
+  Observer,
+  ObservationActorRef,
+  ObservationDraft,
+  ObservationSubjectRef,
+  RawInboundEvent,
+  VerifySignatureInput,
+} from './observer';
+export type {
+  SummarizeInput,
+  SummarizeResult,
+  Summarizer,
+  SummarizerObservation,
+} from './summarizer';
 export type { Mailer, OutboundMessage, SentMessage } from './mailer';
 export type { BlobPutResult, BlobStore } from './blob';

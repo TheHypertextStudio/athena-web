@@ -143,6 +143,7 @@ export const task = pgTable(
     parentTaskId: text('parent_task_id'),
     estimate: integer('estimate'),
     estimateMinutes: integer('estimate_minutes'),
+    startDate: timestamp('start_date'),
     dueDate: timestamp('due_date'),
     // Provenance (single inline triple): native vs linked-from-an-integration.
     source: provenanceSource('source').notNull().default('native'),
@@ -152,6 +153,14 @@ export const task = pgTable(
     externalId: text('external_id'),
     externalUrl: text('external_url'),
     sourceSyncMode: syncMode('source_sync_mode'),
+    // Two-way sync bookkeeping (gtasks bidirectional). `externalUpdatedAt` is both the
+    // last-write-wins anchor AND the echo guard: a linked task is dirty (needs push) iff
+    // `externalUpdatedAt IS NOT NULL AND updatedAt > externalUpdatedAt`. Every sync write
+    // sets `externalUpdatedAt = updatedAt = <remote updated>` so the next pull is a no-op.
+    externalUpdatedAt: timestamp('external_updated_at'),
+    externalEtag: text('external_etag'),
+    externalListId: text('external_list_id'),
+    lastPushedAt: timestamp('last_pushed_at'),
     completedAt: timestamp('completed_at'),
     canceledAt: timestamp('canceled_at'),
     visibility: visibility('visibility').notNull().default('public'),

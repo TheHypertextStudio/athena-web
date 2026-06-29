@@ -28,10 +28,11 @@ import { importItems, resolveImportTeam } from './integration-import';
 export type SyncRunRow = typeof syncRun.$inferSelect;
 
 /**
- * A held sync lease is considered abandoned after this long (a process that crashed
- * mid-sync), so a later run may reclaim it rather than the integration getting stuck.
+ * A held lease is considered abandoned after this long (a process that crashed mid-run), so a
+ * later run may reclaim it rather than the row getting stuck. Shared by the connector sync and
+ * the observation drain so both lease windows stay in lockstep.
  */
-const LEASE_STALE_MS = 15 * 60 * 1000;
+export const LEASE_STALE_MS = 15 * 60 * 1000;
 
 /** Serialize a {@link SyncRunRow} to its {@link SyncRunOut} representation. */
 export function toSyncRunOut(run: SyncRunRow): z.input<typeof SyncRunOut> {

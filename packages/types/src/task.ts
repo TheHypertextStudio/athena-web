@@ -31,6 +31,7 @@ export const TaskCreate = z
     parentTaskId: TaskId.optional(),
     estimate: z.number().int().optional(),
     estimateMinutes: z.number().int().nullable().optional(),
+    startDate: z.iso.date().optional(),
     dueDate: z.iso.date().optional(),
     labels: z.array(LabelId).optional(),
   })
@@ -66,6 +67,7 @@ export const TaskOut = z
     projectId: ProjectId.nullable().optional(),
     programId: ProgramId.nullable().optional(),
     estimateMinutes: z.number().int().nullable().optional(),
+    startDate: z.string().nullable().optional(),
     dueDate: z.string().nullable().optional(),
     provenance: TaskProvenance,
     createdAt: z.string(),
@@ -89,6 +91,7 @@ export const TaskUpdate = z
     cycleId: CycleId.nullable().optional(),
     estimate: z.number().int().optional(),
     estimateMinutes: z.number().int().nullable().optional(),
+    startDate: z.iso.date().nullable().optional(),
     dueDate: z.iso.date().nullable().optional(),
     labels: z.array(LabelId).optional(),
   })
@@ -118,6 +121,7 @@ export const SubtaskCreate = z
     cycleId: CycleId.optional(),
     estimate: z.number().int().optional(),
     estimateMinutes: z.number().int().nullable().optional(),
+    startDate: z.iso.date().optional(),
     dueDate: z.iso.date().optional(),
     labels: z.array(LabelId).optional(),
   })

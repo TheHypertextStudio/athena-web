@@ -65,8 +65,17 @@ export interface HubPreferences {
   readonly density?: 'comfortable' | 'compact';
   /** Theme preference. */
   readonly theme?: 'system' | 'light' | 'dark';
-  /** IANA timezone for the daily plan. */
+  /** IANA timezone for the daily plan (also the digest's day boundary + send time). */
   readonly timezone?: string;
+  /** Daily digest delivery settings (the Sunsama-style end-of-day summary). */
+  readonly digest?: {
+    /** Whether the daily digest is generated and delivered. */
+    readonly enabled?: boolean;
+    /** Local clock time to send, `"HH:MM"` 24-hour (interpreted in `timezone`). */
+    readonly sendAtLocalTime?: string;
+    /** Where to deliver the digest. */
+    readonly channels?: readonly ('email' | 'inApp')[];
+  };
 }
 
 /** The wire protocol an agent's runtime speaks. */
@@ -112,6 +121,38 @@ export interface NotificationBody {
   readonly url?: string;
   /** Additional type-specific fields. */
   readonly [key: string]: unknown;
+}
+
+/** The external person behind an observed action (`observation.external_actor` jsonb). */
+export interface ObservationActor {
+  /** The person's native id in the source system. */
+  readonly externalId: string;
+  /** Display name, when the provider exposes one. */
+  readonly displayName?: string;
+  /** Avatar URL, when known. */
+  readonly avatar?: string;
+}
+
+/** The external object an observation is about (`observation.subject` jsonb). */
+export interface ObservationSubject {
+  /** Subject kind in the source system (e.g. `issue`, `thread`, `channel`, `event`). */
+  readonly type: string;
+  /** The subject's native id in the source system. */
+  readonly externalId: string;
+  /** Display title, when known. */
+  readonly title?: string;
+  /** Canonical URL, when available. */
+  readonly url?: string;
+}
+
+/** Aggregate counts describing a day's observations (`daily_digest.stats` jsonb). */
+export interface DigestStats {
+  /** Total observations summarized. */
+  readonly total: number;
+  /** Count keyed by provider. */
+  readonly byProvider: Record<string, number>;
+  /** Count keyed by observation kind. */
+  readonly byKind: Record<string, number>;
 }
 
 /** A session Activity payload; `action` rows carry the proposed change. */

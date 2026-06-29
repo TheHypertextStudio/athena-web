@@ -215,3 +215,54 @@ export const invitationStatus = pgEnum('invitation_status', [
 export const idempotencyStatus = pgEnum('idempotency_status', ['in_progress', 'completed']);
 /** Saved-view sharing scope (frozen addition). */
 export const viewScope = pgEnum('view_scope', ['personal', 'team', 'organization']);
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * Ambient Context Intelligence — observation pipeline + daily digest
+ * ────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * The high-level kind of an ambient observation captured from an external tool.
+ *
+ * @remarks
+ * Distinct from `audit_event_type` (Docket's own internal feed): these describe
+ * provider-shaped activity observed where the source of truth lives elsewhere
+ * (a Linear mention, a Slack message, a calendar invite). The forward-looking
+ * `calendar_*`/`task_assignment` kinds are reserved now so later providers add no enum migration.
+ */
+export const observationKind = pgEnum('observation_kind', [
+  'message',
+  'mention',
+  'assignment',
+  'status_change',
+  'comment',
+  'reaction',
+  'created',
+  'completed',
+  'calendar_invite',
+  'calendar_update',
+  'task_assignment',
+]);
+/** Processing status of one raw inbound event in the durable write-ahead inbox. */
+export const inboundEventStatus = pgEnum('inbound_event_status', [
+  'received',
+  'processing',
+  'processed',
+  'failed',
+  'skipped',
+]);
+/** Lifecycle status of one user's daily digest for a given day (`skipped_empty` = no activity). */
+export const dailyDigestStatus = pgEnum('daily_digest_status', [
+  'pending',
+  'generating',
+  'generated',
+  'sent',
+  'failed',
+  'skipped_empty',
+]);
+/** Health of an external event subscription (provider webhook / push channel). */
+export const eventSubscriptionStatus = pgEnum('event_subscription_status', [
+  'active',
+  'expired',
+  'revoked',
+  'error',
+]);

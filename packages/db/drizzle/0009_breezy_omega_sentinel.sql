@@ -1,0 +1,1 @@
+CREATE INDEX "observation_user_occurred_idx" ON "observation" USING btree ("user_id","occurred_at");

@@ -15,6 +15,25 @@ export const ListQuery = z.object({
 /** Validated list-query value. */
 export type ListQuery = z.infer<typeof ListQuery>;
 
+/**
+ * Backward-compatible cursor query for endpoints that historically returned every row.
+ *
+ * @remarks
+ * Unlike {@link ListQuery} (which bounds by default at 50), `limit` here is **optional with no
+ * default**: when omitted the endpoint returns its full result set exactly as before, so adding
+ * this to an existing list endpoint never silently truncates a caller that doesn't opt in. When a
+ * `limit` is supplied the endpoint returns a bounded keyset page plus a `nextCursor` to continue.
+ * Ordering is fixed (newest-first) — these endpoints have a single canonical order.
+ */
+export const CursorQuery = z.object({
+  /** Opaque cursor from a prior page's `nextCursor`. */
+  cursor: z.string().optional(),
+  /** Optional page size (1..100); omit to return all rows (legacy behavior). */
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+});
+/** Validated cursor-query value. */
+export type CursorQuery = z.infer<typeof CursorQuery>;
+
 /** A page of results with an optional next-page cursor and total. */
 export interface Page<T> {
   /** The page's items. */

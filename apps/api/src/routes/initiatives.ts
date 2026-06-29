@@ -19,6 +19,7 @@ import {
   InitiativeTimelineQuery,
   InitiativeUnlinked,
   InitiativeUpdate,
+  CursorQuery,
   pageOf,
 } from '@docket/types';
 import { and, desc, eq } from 'drizzle-orm';
@@ -28,6 +29,7 @@ import type { z } from 'zod';
 import type { AppEnv } from '../context';
 import { ConflictError, NotFoundError } from '../error';
 import { ok } from '../lib/ok';
+import { afterCursor, decodeListCursor, pageResult } from '../lib/list-cursor';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 
@@ -46,14 +48,25 @@ import {
 
 /** Initiatives router: org-scoped CRUD + child associations + roadmap roll-up. */
 const initiatives = new Hono<AppEnv>()
-  .get('/', async (c) => {
+  .get('/', zQuery(CursorQuery), async (c) => {
     const { orgId } = c.get('actorCtx');
-    const rows = await db
+    const { cursor, limit } = c.req.valid('query');
+    // Keyset-paginate newest-first (createdAt, id tiebreak). `limit` is optional: omitted returns
+    // the full list as before; supplied returns a bounded page + `nextCursor`.
+    const conds = [eq(initiative.organizationId, orgId)];
+    const decoded = decodeListCursor(cursor);
+    if (decoded) conds.push(afterCursor(initiative.createdAt, initiative.id, decoded));
+    const base = db
       .select()
       .from(initiative)
-      .where(eq(initiative.organizationId, orgId))
-      .orderBy(desc(initiative.createdAt));
-    return ok(c, pageOf(InitiativeOut), { items: rows.map(toOut) });
+      .where(and(...conds))
+      .orderBy(desc(initiative.createdAt), desc(initiative.id));
+    const rows = await (limit === undefined ? base : base.limit(limit + 1));
+    const { items, nextCursor } = pageResult(rows, limit, (r) => r.createdAt);
+    return ok(c, pageOf(InitiativeOut), {
+      items: items.map(toOut),
+      ...(nextCursor ? { nextCursor } : {}),
+    });
   })
   .post('/', capabilityGuard('contribute'), zJson(InitiativeCreate), async (c) => {
     const { orgId, actorId } = c.get('actorCtx');

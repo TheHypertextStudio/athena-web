@@ -12,6 +12,7 @@ import {
   CycleUpdate,
   CycleWindow,
   CycleWindowQuery,
+  CursorQuery,
   pageOf,
 } from '@docket/types';
 import { and, desc, eq } from 'drizzle-orm';
@@ -25,6 +26,7 @@ import { ok } from '../lib/ok';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 
+import { afterCursor, decodeListCursor, pageResult } from '../lib/list-cursor';
 import {
   committedTasks,
   committedTasksForCycles,
@@ -41,27 +43,37 @@ import { buildCycleBurnupPayload } from './cycle-burnup';
 
 /** Cycles router: org-scoped CRUD; `contribute` to mutate. */
 const cycles = new Hono<AppEnv>()
-  .get('/', async (c) => {
+  .get('/', zQuery(CursorQuery), async (c) => {
     const { orgId } = c.get('actorCtx');
+    const { cursor, limit } = c.req.valid('query');
     const now = new Date();
-    const rows = await db
+
+    // Keyset-paginate the roster (newest-first by start, id as tiebreak). `limit` is optional:
+    // omitted, the full roster is returned as before; supplied, a bounded page + `nextCursor`.
+    const conds = [eq(cycle.organizationId, orgId)];
+    const decoded = decodeListCursor(cursor);
+    if (decoded) conds.push(afterCursor(cycle.startsAt, cycle.id, decoded));
+    const base = db
       .select()
       .from(cycle)
-      .where(eq(cycle.organizationId, orgId))
-      .orderBy(desc(cycle.startsAt));
-    // Roll up each cycle's pace stats inline so callers render a complete roster from one round
-    // trip — the committed tasks for every listed cycle are fetched in a single batched query
-    // (no per-cycle fan-out / N+1), then grouped and folded through the same pure `computeStats`
-    // the detail endpoint uses. Each item also surfaces the date-derived `isCurrent`.
+      .where(and(...conds))
+      .orderBy(desc(cycle.startsAt), desc(cycle.id));
+    const rows = await (limit === undefined ? base : base.limit(limit + 1));
+    const { items: pageRows, nextCursor } = pageResult(rows, limit, (r) => r.startsAt);
+
+    // Roll up each cycle's pace stats inline so callers render a complete roster without a
+    // per-cycle fan-out — the committed tasks for the page's cycles are fetched in a single
+    // batched query, then folded through the same pure `computeStats` the detail endpoint uses.
+    // Each item also surfaces the date-derived `isCurrent`.
     const tasksByCycle = await committedTasksForCycles(
       orgId,
-      rows.map((r) => r.id),
+      pageRows.map((r) => r.id),
     );
-    const items: z.input<typeof CycleDetail>[] = rows.map((r) => ({
+    const items: z.input<typeof CycleDetail>[] = pageRows.map((r) => ({
       ...toOut(r, now),
       stats: computeStats(r, tasksByCycle.get(r.id) ?? []),
     }));
-    return ok(c, pageOf(CycleDetail), { items });
+    return ok(c, pageOf(CycleDetail), { items, ...(nextCursor ? { nextCursor } : {}) });
   })
   .get('/current', zQuery(CycleWindowQuery), async (c) => {
     const { orgId, actorId } = c.get('actorCtx');

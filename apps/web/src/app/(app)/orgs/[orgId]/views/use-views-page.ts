@@ -20,7 +20,7 @@ import { EMPTY_VIEW_STATE, findField } from '@/components/views/field-catalog';
 import { buildTaskCatalog, toStoredView, toViewState } from '@/components/views/task-catalog';
 import type { RunnerActor } from '@/components/views/view-runner';
 import { api } from '@/lib/api';
-import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
+import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiListQuery } from '@/lib/query';
 
 /** The active working query the toolbar edits, the runner renders, and the composer saves. */
 interface WorkingQuery {
@@ -63,42 +63,42 @@ export function useViewsPage(orgId: string): ViewsPageData {
   const queryClient = useQueryClient();
   const savedViewsKey = queryKeys.savedViews(orgId);
 
-  const viewsQ = useApiQuery(
+  const viewsQ = useApiListQuery(
     apiQueryOptions(
       savedViewsKey,
       () => api.v1.orgs[':orgId']['saved-views'].$get({ param: { orgId } }),
       'Could not load your saved views.',
     ),
   );
-  const tasksQ = useApiQuery(
+  const tasksQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.tasks(orgId),
       () => api.v1.orgs[':orgId'].tasks.$get({ param: { orgId } }),
       'Could not load tasks.',
     ),
   );
-  const projectsQ = useApiQuery(
+  const projectsQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.projects(orgId),
       () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
       'Could not load projects.',
     ),
   );
-  const programsQ = useApiQuery(
+  const programsQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.programs(orgId),
       () => api.v1.orgs[':orgId'].programs.$get({ param: { orgId } }),
       'Could not load programs.',
     ),
   );
-  const membersQ = useApiQuery(
+  const membersQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.members(orgId),
       () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
       'Could not load members.',
     ),
   );
-  const agentsQ = useApiQuery(
+  const agentsQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.agents(orgId),
       () => api.v1.orgs[':orgId'].agents.$get({ param: { orgId } }),

@@ -17,7 +17,7 @@
  * The bespoke Current/Upcoming/Completed segments are gone: the roster adopts the unified
  * {@link FilterToolbar} over the cycle {@link buildCycleCatalog | catalog}, so it can be filtered
  * by status / team, grouped, and sorted — all applied **client-side** over the already-loaded
- * {@link useApiQuery} results (the stats fan-out is preserved; no manual refresh). The view state
+ * {@link useApiListQuery} results (the stats fan-out is preserved; no manual refresh). The view state
  * is held in the URL by {@link useViewState}, defaulting to a group-by-status grouping so the
  * familiar segmented look is preserved, but now user-changeable.
  */
@@ -39,7 +39,7 @@ import { FilterToolbar } from '@/components/views/filter-toolbar';
 import { useViewState } from '@/components/views/use-view-state';
 import { isEmptyViewState } from '@/components/views/view-state-url';
 import { api } from '@/lib/api';
-import { apiQueryOptions, type RpcResponse, queryKeys, useApiQuery } from '@/lib/query';
+import { apiQueryOptions, type RpcResponse, queryKeys, useApiListQuery } from '@/lib/query';
 
 /** The cycles roster joined with each cycle's pace stats (from its single-cycle read). */
 interface CyclesWithStats {
@@ -56,7 +56,7 @@ const DEFAULT_VIEW: ViewState = {
 
 /**
  * Fetch the org's cycles and each cycle's pace stats, returning a {@link RpcResponse}-shaped
- * result so it can drive {@link useApiQuery} directly.
+ * result so it can drive {@link useApiListQuery} directly.
  *
  * @remarks
  * Pace numbers (committed/completed, capacity, carryover) live on the single-cycle read, not the
@@ -125,7 +125,7 @@ export default function CyclesPage(): JSX.Element {
   // The query keys off the team ids so the roster re-ensures + refetches once teams resolve
   // (the ensure call inside the fetcher materializes each team's auto-rolled window).
   const teamIds = useMemo(() => teams.map((t) => t.id), [teams]);
-  const cyclesQ = useApiQuery(
+  const cyclesQ = useApiListQuery(
     apiQueryOptions(
       [...queryKeys.cycles(orgId), ...teamIds],
       fetchCyclesWithStats(orgId, teamIds),

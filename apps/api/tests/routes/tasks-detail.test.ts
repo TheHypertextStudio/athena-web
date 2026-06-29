@@ -102,6 +102,54 @@ describe('tasks create (POST /)', () => {
   });
 });
 
+describe('tasks startDate (create + patch)', () => {
+  it('sets startDate on create and returns it as an ISO timestamp', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    const created = await writer.request('/', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ title: 'T', teamId, startDate: '2026-09-01' }),
+    });
+    expect(created.status).toBe(200);
+    expect((await json<{ startDate: string | null }>(created)).startDate).toBe(
+      '2026-09-01T00:00:00.000Z',
+    );
+  });
+
+  it('leaves startDate null when omitted on create', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    const id = await createTask(writer, teamId);
+    const detail = await json<{ startDate: string | null }>(
+      await writer.request(`/${id}`, { method: 'GET' }),
+    );
+    expect(detail.startDate).toBeNull();
+  });
+
+  it('patches startDate to a value (non-null branch) then clears it to null', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    const id = await createTask(writer, teamId);
+
+    const set = await writer.request(`/${id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ startDate: '2027-01-01' }),
+    });
+    expect((await json<{ startDate: string | null }>(set)).startDate).toBe(
+      '2027-01-01T00:00:00.000Z',
+    );
+
+    const cleared = await writer.request(`/${id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ startDate: null }),
+    });
+    expect((await json<{ startDate: string | null }>(cleared)).startDate).toBeNull();
+  });
+});
+
 describe('tasks detail (GET /:id)', () => {
   it('returns the task with empty dependency + subtask lists', async () => {
     const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);

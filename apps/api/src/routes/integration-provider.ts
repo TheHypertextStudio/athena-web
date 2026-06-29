@@ -27,6 +27,16 @@ export const CONNECTOR_PROVIDERS: readonly ConnectorProvider[] = [
 ];
 
 /**
+ * Connectors that support two-way write-back and default to it on connect.
+ *
+ * @remarks
+ * A write-back connector pushes local edits/completions/deletions of its `linked` tasks back
+ * to the provider on each sync, in addition to the read-only mirror pull. Only Google Tasks
+ * (`gtasks`) does today. Used to seed `integration.writeBack` when a caller doesn't specify it.
+ */
+export const WRITE_BACK_PROVIDERS: ReadonlySet<string> = new Set<string>(['gtasks']);
+
+/**
  * The connect-wizard directory entry for each {@link ConnectorProvider}.
  *
  * @remarks
@@ -205,6 +215,7 @@ export function toOut(i: IntegrationRow): z.input<typeof IntegrationOut> {
     status: i.status,
     config: i.config,
     syncMode: i.syncMode,
+    writeBack: i.writeBack,
     lastSyncStatus: i.lastSyncStatus,
     lastSyncedAt: i.lastSyncedAt?.toISOString() ?? null,
     lastError: i.lastError,

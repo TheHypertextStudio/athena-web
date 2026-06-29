@@ -80,6 +80,7 @@ export const taskDependencyRoutes = new Hono<AppEnv>()
           parentTaskId: parent.id,
           estimate: body.estimate,
           estimateMinutes: body.estimateMinutes,
+          startDate: body.startDate ? new Date(body.startDate) : undefined,
           dueDate: body.dueDate ? new Date(body.dueDate) : undefined,
           source: 'native',
           createdBy: actorId,

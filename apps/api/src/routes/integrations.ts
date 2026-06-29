@@ -23,6 +23,7 @@ import { capabilityGuard } from '../permissions/capability-guard';
 import {
   CONNECTOR_PROVIDERS,
   PROVIDER_DIRECTORY,
+  WRITE_BACK_PROVIDERS,
   asConnectorProvider,
   connectorFor,
   type IntegrationRow,
@@ -81,11 +82,15 @@ const integrations = new Hono<AppEnv>()
     // Health is NEVER taken from the body: a new or reconnected integration starts `pending`
     // and clears any prior error, and is only promoted to `connected` once `POST /:id/verify`
     // (or a successful sync) actually validates the credential.
+    // Default two-way write-back ON for connectors that support it (gtasks) unless the caller
+    // says otherwise, so connecting Google Tasks is two-way out of the box.
+    const writeBack = body.writeBack ?? WRITE_BACK_PROVIDERS.has(body.provider);
     const fields = {
       ...(body.roles !== undefined ? { roles: body.roles } : {}),
       ...(body.connection !== undefined ? { connection: body.connection } : {}),
       ...(body.config !== undefined ? { config: body.config } : {}),
       ...(body.syncMode !== undefined ? { syncMode: body.syncMode } : {}),
+      writeBack,
     };
 
     const existing = await db
@@ -160,6 +165,7 @@ const integrations = new Hono<AppEnv>()
         ...(body.connection !== undefined ? { connection: body.connection } : {}),
         ...(body.config !== undefined ? { config: body.config } : {}),
         ...(body.syncMode !== undefined ? { syncMode: body.syncMode } : {}),
+        ...(body.writeBack !== undefined ? { writeBack: body.writeBack } : {}),
       });
       return ok(c, IntegrationOut, toOut(row));
     },

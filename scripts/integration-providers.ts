@@ -48,12 +48,27 @@ export function copyToClipboard(text: string): boolean {
 
 // ── provider groups (curated order + DX copy; metadata comes from the registry) ──
 
+/**
+ * The two distinct origins a provider's setup URLs hang off — they are NOT the same host:
+ *
+ * - `webBases` — the browser-facing product origin(s) (web + admin). OAuth `redirect_uri`s and the
+ *   GitHub connect callback live here, because the browser does the OAuth dance same-origin on the
+ *   product domain (each Next app proxies `/api/auth` to the API) and the session cookie must be
+ *   first-party there. A provider that allows several callback URLs registers one per entry.
+ * - `apiBase` — the public API origin. Only genuinely server-to-server edges live here: provider
+ *   webhooks (Stripe, the GitHub firehose) that the provider's *servers* POST to directly.
+ */
+export interface SetupUrls {
+  readonly apiBase: string;
+  readonly webBases: readonly string[];
+}
+
 export interface ProviderGroup {
   readonly title: string;
   /** Registry var names to prompt for, in order. */
   readonly vars: readonly string[];
   /** Explicit, copy-pasteable setup instructions for the chosen environment (shown all at once). */
-  readonly instructions?: (env: Environment, base: string) => readonly string[];
+  readonly instructions?: (env: Environment, urls: SetupUrls) => readonly string[];
   /**
    * A step-by-step alternative to {@link instructions}: each step shows a short, natural-language
    * instruction and then (optionally) prompts for the single value that step produces. Guidance
@@ -62,7 +77,7 @@ export interface ProviderGroup {
    */
   readonly steps?: (
     env: Environment,
-    base: string,
+    urls: SetupUrls,
   ) => readonly { readonly note: readonly string[]; readonly var?: string }[];
   /**
    * Turnkey secrets generated FOR the user (not prompted): the returned values are shown +
@@ -114,7 +129,7 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
   {
     title: 'Google Integration Set-up',
     vars: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'],
-    instructions: (env, base) => [
+    instructions: (env, urls) => [
       'Creates an OAuth 2.0 Web-application client. ~5 min. You need a Google account.',
       '',
       '1) Open https://console.cloud.google.com/ and sign in.',
@@ -134,8 +149,10 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
       '5) Create the credential: "APIs & Services" → "Credentials" → "+ Create credentials" →',
       '   "OAuth client ID" → Application type: "Web application" →',
       `   Name: "${appName(env)}".`,
-      '6) Under "Authorized redirect URIs" click "+ Add URI" and paste exactly, no trailing slash:',
-      `     ${base}/api/auth/callback/google`,
+      '6) Under "Authorized redirect URIs" click "+ Add URI" and add one per Docket frontend',
+      '   (the callback is browser-facing — it lives on the product origin, not the API), exactly,',
+      '   no trailing slash:',
+      ...urls.webBases.map((web) => `     ${web}/api/auth/callback/google`),
       '7) Click "Create". A dialog shows "Your Client ID" and "Your Client Secret".',
       '8) Copy both now (you can re-open them later from the Credentials list) and paste below.',
     ],
@@ -150,9 +167,10 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
       'GITHUB_APP_PRIVATE_KEY',
       'GITHUB_APP_WEBHOOK_SECRET',
     ],
-    steps: (env, base) => {
-      // Homepage is the product (web) URL, not the API host the callbacks/webhook live on.
-      const homepage = base.replace('://api.', '://');
+    steps: (env, urls) => {
+      // Homepage + the OAuth/connect callbacks are browser-facing (product origin); only the
+      // webhook is the API origin (GitHub's servers POST it directly).
+      const homepage = urls.webBases[0] ?? urls.apiBase;
       return [
         {
           note: [
@@ -182,15 +200,19 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
         {
           note: [
             'Find the "Identifying and authorizing users" section — this is how sign-in and',
-            'connecting an account return the user to Docket.',
+            'connecting an account return the user to Docket. These are browser-facing, so they go',
+            'on the product origin(s), not the API host.',
             '',
-            'In "Callback URL", add these two (click "Add callback URL" for the second):',
+            'In "Callback URL", add these (click "Add callback URL" for each — a GitHub App allows',
+            'several): a sign-in + a connect callback for every Docket frontend:',
             '',
-            `  • ${base}/api/auth/callback/github`,
-            `  • ${base}/v1/integrations/github/callback`,
+            ...urls.webBases.flatMap((web) => [
+              `  • ${web}/api/auth/callback/github`,
+              `  • ${web}/v1/integrations/github/callback`,
+            ]),
             '',
-            "(It's one app for every environment. When you set up another environment later, add",
-            "that environment's two URLs here too — a GitHub App allows several.)",
+            "(It's one app for every environment. In prod, oAuthProxy means you register ONLY the",
+            'production callbacks and previews proxy through them — see the env-and-bootstrap spec.)',
             '',
             'Then tick all three checkboxes:',
             '',
@@ -214,10 +236,12 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
                   'generated GITHUB_APP_WEBHOOK_SECRET and saved it for that day.)',
                 ]
               : [
-                  'Now the "Webhook" section — this is what makes the firehose real-time.',
+                  'Now the "Webhook" section — this is what makes the firehose real-time. Unlike the',
+                  "callbacks above, this is server-to-server (GitHub's servers POST it), so it points",
+                  'at the public API host.',
                   '',
                   '  • Tick "Active".',
-                  `  • Webhook URL:  ${base}/v1/ingest/github`,
+                  `  • Webhook URL:  ${urls.apiBase}/v1/ingest/github`,
                   '  • Secret: paste the webhook secret we generated a moment ago (already on your',
                   '    clipboard, so just paste).',
                   '  • Leave "Enable SSL verification" on.',
@@ -319,15 +343,15 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
   {
     title: 'Linear Integration Set-up',
     vars: ['LINEAR_CLIENT_ID', 'LINEAR_CLIENT_SECRET'],
-    instructions: (env, base) => [
+    instructions: (env, urls) => [
       'Creates a Linear OAuth2 application. ~2 min. You need a Linear workspace admin.',
       '',
       '1) Open https://linear.app/settings/api/applications/new',
       '   (or: Linear → workspace menu (top-left) → Settings → "API" → "OAuth applications" →',
       '   "Create new").',
       `2) Application name: "${appName(env)}". Add a developer name + icon if it asks.`,
-      '3) Callback URLs — paste exactly, no trailing slash:',
-      `     ${base}/api/auth/oauth2/callback/linear`,
+      '3) Callback URLs — browser-facing, so add one per Docket frontend, exactly, no trailing slash:',
+      ...urls.webBases.map((web) => `     ${web}/api/auth/oauth2/callback/linear`),
       '4) Scopes: tick "read" (required for sign-in). For the issue-migration feature also tick',
       '   "write" and "issues:create".',
       '5) Keep the app private (untick "Public") unless you intend multi-workspace installs → "Create".',
@@ -337,7 +361,7 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
   {
     title: 'Stripe Integration Set-up',
     vars: ['STRIPE_SECRET_KEY', 'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY', 'STRIPE_WEBHOOK_SECRET'],
-    instructions: (env, base) => {
+    instructions: (env, urls) => {
       const mode = env === 'production' ? 'live' : 'test';
       const lines = [
         `Use ${mode}-mode keys for the "${env}" environment. Never mix test and live across envs.`,
@@ -354,14 +378,14 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
           '     • Install the Stripe CLI (https://stripe.com/docs/stripe-cli), then in a SEPARATE',
           '       terminal run:',
           '           stripe login',
-          `           stripe listen --forward-to ${base}/api/auth/stripe/webhook`,
+          `           stripe listen --forward-to ${urls.apiBase}/api/auth/stripe/webhook`,
           '     • It prints "Ready! ... whsec_…" — copy that whsec_ value.',
           '     • Keep that terminal running while developing so webhooks reach your local API.',
         );
       } else {
         lines.push(
           '     • Developers → Webhooks → "Add endpoint".',
-          `     • Endpoint URL (paste exactly): ${base}/api/auth/stripe/webhook`,
+          `     • Endpoint URL (paste exactly): ${urls.apiBase}/api/auth/stripe/webhook`,
           '     • "Select events" → add: checkout.session.completed, customer.subscription.created,',
           '       customer.subscription.updated, customer.subscription.deleted, invoice.paid,',
           '       invoice.payment_failed → "Add endpoint".',

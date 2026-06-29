@@ -10,7 +10,7 @@
  * "never report success when nothing happened" invariant on the server side.
  */
 import { actor, db, integration, notification, syncRun } from '@docket/db';
-import type { SyncRunOut, SyncTrigger } from '@docket/types';
+import { ConnectorConfig, type SyncRunOut, type SyncTrigger } from '@docket/types';
 import { type ImportedItem, isConnectorError } from '@docket/boundaries';
 import { and, eq, inArray, isNotNull, isNull, lt, or } from 'drizzle-orm';
 import type { z } from 'zod';
@@ -22,7 +22,8 @@ import {
   type IntegrationRow,
   resolveConnectorToken,
 } from './integration-provider';
-import { importItems, resolveImportTeam } from './integration-import';
+import { resolveImportTeam } from './integration-import';
+import { reconcileTasks } from './integration-reconcile';
 
 /** The selected `sync_run` row shape. */
 export type SyncRunRow = typeof syncRun.$inferSelect;
@@ -162,7 +163,7 @@ async function notifyOwner(
       summary: needsReauth
         ? 'Your sign-in expired — reconnect to keep this integration syncing.'
         : message,
-      url: `/orgs/${row.organizationId}/settings/integrations`,
+      url: `/orgs/${row.organizationId}/settings/connections`,
     },
   });
 }
@@ -202,7 +203,7 @@ export async function runSync(
     });
   }
 
-  const tokenResult = await resolveConnectorToken(opts.actorId, provider);
+  const tokenResult = await resolveConnectorToken(opts.actorId, provider, row.externalAccountId);
   if (!tokenResult.ok) {
     return finishFailure(run, row, tokenResult.message, { needsReauth: true, now });
   }
@@ -216,17 +217,23 @@ export async function runSync(
   }
 
   try {
-    const items: ImportedItem[] = await connectorFor(provider, tokenResult.token).importWork({
+    const config = ConnectorConfig.safeParse(row.config).data ?? {};
+    const connector = connectorFor(provider, tokenResult.token);
+    const items: ImportedItem[] = await connector.importWork({
       connectionId: row.id,
       provider,
       ...(row.connection.externalWorkspaceId
         ? { externalWorkspaceId: row.connection.externalWorkspaceId }
         : {}),
+      ...(config.listIds && config.listIds.length > 0 ? { listIds: config.listIds } : {}),
     });
-    const created = await importItems(row.organizationId, opts.actorId, row.id, teamId, items, {
+    const tally = await reconcileTasks(row.organizationId, opts.actorId, row, teamId, items, {
       assigneeId: null,
+      writable: connector.asWritable?.() ?? null,
     });
-    return await finishSuccess(run, row, created.length, items.length, now);
+    const processed =
+      tally.inserted + tally.pulled + tally.pushed + tally.deleted + tally.archived + tally.created;
+    return await finishSuccess(run, row, processed, items.length, now);
   } catch (err) {
     const needsReauth = isConnectorError(err) && err.kind === 'auth';
     const message = err instanceof Error ? err.message : 'Connector error';

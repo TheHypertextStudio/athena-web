@@ -7,6 +7,52 @@
 
 ## Completed Tasks
 
+### [INT-002] Separate connected identities (accounts) from the resources they provide
+
+- **Completed**: 2026-06-29
+- **Summary**: Fixed the Google Tasks integration's conflation of two distinct concepts —
+  **identities** (external accounts a user links to their Docket identity: a Google `sub`/email,
+  stored as a Better Auth `account` row keyed by `userId`) versus **resources** (what an identity
+  provides: Google task lists / `ResourceRef`, selected per-integration). Previously each linked
+  Google account was even _labeled by a task-list title_ because `connector-google.ts`
+  `resolveAccount()` returned the first list's title, and OAuth linking was welded into the org
+  integration "Add account" flow. Now: identities are surfaced at the **user level** in a new
+  **Account ▸ Connected accounts** surface (the only place OAuth link/unlink happens, by email);
+  the org Google Tasks surface picks an already-linked identity and configures resources. Also
+  split the org "Integrations & import" into **two sibling settings sections** — **Connections**
+  (sync as a connection, the default) and **Import** (full one-time import) — removing the inline
+  Migration/Connector choice; the surface fixes the pattern.
+- **Approach**: New `GET /v1/me/identities` (`me-identities.ts`) → `requireUserId` →
+  `googleIdentities(userId)` queries the `account` table and decodes each `idToken` JWT payload
+  (unverified — trusted storage, display-only) via a new `decodeIdTokenClaims` helper
+  (`lib/id-token.ts`) to recover `email`/`name`/`picture`; returns a synthetic identity in
+  `APP_MODE` local/test so the flow stays exercisable offline. `IdentityOut`/`IdentityListOut`
+  DTOs added to `@docket/types`. `POST /:id/verify` now sets `connection.account =
+resolveIdentityLabel(actorId, externalAccountId) ?? result.account` (Actor→user→account
+  mapping) so the stored label is the **email**, not a list title. Connector
+  `resolveAccount()` gtasks branch returns `undefined` (still validates the token via the lists
+  call). Web: new `connected-accounts-tab.tsx` (link/unlink via `authClient`), rewritten
+  `gtasks-accounts-section.tsx` as an identity picker, `IntegrationsTab({surface})` driving the
+  Connections/Import split, and a reusable `IntegrationActionButton`.
+- **Files Changed**: `packages/types/src/identity.ts` (new) + `index.ts`;
+  `apps/api/src/lib/id-token.ts` (new) + `tests/lib/id-token.test.ts`;
+  `apps/api/src/routes/me-identities.ts` (new) + `tests/routes/me-identities.test.ts`,
+  `routes/integration-provider.ts`, `routes/integrations.ts`, `routes/integration-sync.ts`,
+  `app.ts`; `packages/boundaries/src/real/connector-google.ts` + `tests/connector.test.ts`;
+  `apps/web/src/components/settings/{connected-accounts-tab,gtasks-accounts-section,integration-provider-card,integration-action-button,integrations-tab,sections-personal,sections}.{ts,tsx}`,
+  new `connected-accounts/` + `connections/` + `import/` route pages (git mv from `integrations/`),
+  removed `connect-wizard.tsx`; `apps/web/tests/components/settings/settings-sections.test.ts`.
+- **Learnings**: the identity email lives **only** in `account.idToken` (not a column;
+  `listAccounts()` returns just the `sub`) → server-side decode is required. Fixing the conflation
+  was localized to `resolveAccount()` because every downstream layer faithfully carried whatever
+  label it produced. Pre-existing `daily-digest.test.ts` failures (3) are an unrelated pglite
+  ON CONFLICT/unique-index gap, untouched by this work.
+- **Gate**: `@docket/{types,boundaries,api,auth}` typecheck + lint clean; web typecheck + 149
+  tests + lint clean; api 716 pass (3 pre-existing daily-digest failures unrelated); boundaries
+  216 + types 200 pass; `@docket/api` dist rebuilt for web RPC types.
+
+---
+
 ### [AUTH-002] Prune server-deleted passkeys during sign-in via the WebAuthn Signal API
 
 - **Completed**: 2026-06-29

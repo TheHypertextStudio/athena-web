@@ -14,6 +14,7 @@ import connectedApps from './routes/connected-apps';
 import type { AppEnv } from './context';
 import dailyPlan from './routes/daily-plan';
 import hubRouter from './routes/hub';
+import meIdentities from './routes/me-identities';
 import notifications from './routes/notifications';
 import orgs from './routes/orgs';
 
@@ -28,7 +29,8 @@ const routes = app
   .route('/daily-plan', dailyPlan)
   .route('/hub', hubRouter)
   .route('/admin', admin)
-  .route('/me/connected-apps', connectedApps);
+  .route('/me/connected-apps', connectedApps)
+  .route('/me/identities', meIdentities);
 
 /** The Hono RPC contract consumed by clients via `hc<AppType>`. */
 export type AppType = typeof routes;

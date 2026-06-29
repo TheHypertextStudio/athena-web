@@ -616,3 +616,109 @@ describe('background connector sweep', () => {
     expect(runs.items).toHaveLength(0);
   });
 });
+
+/** Seed a write-back gtasks integration (the two-way default isn't applied to raw inserts). */
+async function seedWritableGtasks(orgId: string, actorId: string): Promise<string> {
+  const [row] = await db
+    .insert(schema.integration)
+    .values({
+      organizationId: orgId,
+      provider: 'gtasks',
+      pattern: 'connector',
+      roles: ['work'],
+      writeBack: true,
+      createdBy: actorId,
+    })
+    .returning({ id: schema.integration.id });
+  return row!.id;
+}
+
+describe('two-way Google Tasks sync', () => {
+  it('pushes a locally-edited linked task back to the provider on the next sync (echo guard)', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const id = await seedWritableGtasks(orgId, humanActorId);
+    const w = appWithActor(integrations, orgId, ['manage'], humanActorId);
+
+    // First sync materializes the fixtures as clean linked tasks (updatedAt == externalUpdatedAt).
+    const first = await body<SyncRunRes>(
+      await w.request(`/${id}/sync`, { method: 'POST', headers: J }),
+    );
+    expect(first.processed).toBe(3);
+
+    const loadTask = async () =>
+      (
+        await db
+          .select()
+          .from(schema.task)
+          .where(
+            and(
+              eq(schema.task.sourceIntegrationId, id),
+              eq(schema.task.externalId, 'gtasks-task-001'),
+            ),
+          )
+          .limit(1)
+      )[0]!;
+
+    // Edit the task locally → updatedAt bumps past the anchor, marking it dirty.
+    const original = await loadTask();
+    await db
+      .update(schema.task)
+      .set({ title: 'Edited locally' })
+      .where(eq(schema.task.id, original.id));
+    const dirty = await loadTask();
+    expect(dirty.updatedAt.getTime()).toBeGreaterThan(dirty.externalUpdatedAt!.getTime());
+
+    // Second sync pushes exactly that task and re-stamps it clean (anchor advanced, lastPushedAt set).
+    const second = await body<SyncRunRes>(
+      await w.request(`/${id}/sync`, { method: 'POST', headers: J }),
+    );
+    expect(second.processed).toBe(1);
+
+    const pushed = await loadTask();
+    expect(pushed.lastPushedAt).not.toBeNull();
+    expect(pushed.externalUpdatedAt!.getTime()).toBeGreaterThan(
+      original.externalUpdatedAt!.getTime(),
+    );
+    // Echo guard: clean again, so a subsequent sync neither re-pushes nor re-pulls it.
+    expect(pushed.updatedAt.getTime()).toBe(pushed.externalUpdatedAt!.getTime());
+    expect(pushed.title).toBe('Edited locally');
+
+    const third = await body<SyncRunRes>(
+      await w.request(`/${id}/sync`, { method: 'POST', headers: J }),
+    );
+    expect(third.processed).toBe(0);
+  });
+
+  it('lists the provider task lists for the per-account config UI', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const id = await seedIntegration(orgId, humanActorId, 'gtasks');
+    const w = appWithActor(integrations, orgId, ['manage'], humanActorId);
+
+    const res = await w.request(`/${id}/lists`);
+    expect(res.status).toBe(200);
+    const out = await body<{ resources: { id: string; title: string }[] }>(res);
+    expect(out.resources.map((r) => r.id)).toContain('@default');
+  });
+
+  it('binds an account on create: many gtasks integrations per org, one per account', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const w = appWithActor(integrations, orgId, ['manage'], humanActorId);
+    const connect = (externalAccountId: string) =>
+      w.request('/', {
+        method: 'POST',
+        headers: J,
+        body: JSON.stringify({ provider: 'gtasks', pattern: 'connector', externalAccountId }),
+      });
+
+    const a = await body<IntegrationRes>(await connect('google-sub-A'));
+    const b = await body<IntegrationRes>(await connect('google-sub-B'));
+    expect(a.id).not.toBe(b.id);
+
+    // Reconnecting the same account is idempotent (reuses the row, keeping sourceIntegrationId stable).
+    const aAgain = await body<IntegrationRes>(await connect('google-sub-A'));
+    expect(aAgain.id).toBe(a.id);
+
+    const list = await body<{ items: IntegrationRes[] }>(await w.request('/'));
+    expect(list.items.filter((i) => i.provider === 'gtasks')).toHaveLength(2);
+  });
+});

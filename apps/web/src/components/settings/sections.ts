@@ -9,6 +9,7 @@
 import {
   Cable,
   CreditCard,
+  Inbox,
   ListChecks,
   Shield,
   Sparkles,
@@ -70,11 +71,19 @@ export const SETTINGS_SECTION_GROUPS: readonly SettingsSectionGroup[] = [
     label: 'Workspace',
     sections: [
       {
-        key: 'integrations',
-        label: 'Integrations',
-        description: 'Connect the tools your team already uses.',
+        key: 'connections',
+        label: 'Connections',
+        description: 'Connect a tool to keep it in sync with your team.',
         icon: Cable,
-        href: 'integrations',
+        href: 'connections',
+        status: 'available',
+      },
+      {
+        key: 'import',
+        label: 'Import',
+        description: 'Move everything from another tool into Docket, once.',
+        icon: Inbox,
+        href: 'import',
         status: 'available',
       },
       {

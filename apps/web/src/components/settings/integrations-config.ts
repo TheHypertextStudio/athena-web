@@ -75,6 +75,30 @@ export function connectorOAuthConfigured(provider: string): boolean {
   return configuredOAuthProviders().some((p) => p.id === social);
 }
 
+/**
+ * Whether this is the local mock deployment (every boundary is mocked).
+ *
+ * @remarks
+ * Read via DOT-notation `process.env.NEXT_PUBLIC_APP_MODE` so Next inlines it at build time.
+ */
+export function isMockMode(): boolean {
+  return process.env.NEXT_PUBLIC_APP_MODE === 'local';
+}
+
+/**
+ * Whether a connector can actually be set up in this deployment.
+ *
+ * @remarks
+ * A connector is "available" only when its OAuth grant is reachable — either the local mock
+ * (everything is mocked) or real OAuth is configured for its social provider. Without that,
+ * connecting would only ever produce a broken `needs_reauth`/`error` row, so the UI must show it
+ * as "Available soon" rather than offering to configure it (never claim a connector works when
+ * nothing is set up).
+ */
+export function connectorAvailable(provider: string): boolean {
+  return isMockMode() || connectorOAuthConfigured(provider);
+}
+
 /** categoryLabel returns display copy for an integration provider category. */
 export function categoryLabel(category: string): string {
   return (

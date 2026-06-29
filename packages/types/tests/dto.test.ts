@@ -80,6 +80,14 @@ import {
 } from '../src/milestone';
 import { NotificationBody, NotificationOut, NotificationType } from '../src/notification';
 import {
+  DailyDigestOut,
+  DailyDigestStatus,
+  InboundEventOut,
+  InboundEventStatus,
+  ObservationKind,
+  ObservationOut,
+} from '../src/observation';
+import {
   DefaultTeamOut,
   OrgCreate,
   OrgCreateResult,
@@ -278,15 +286,25 @@ describe('task DTOs', () => {
       cycleId: ID,
       parentTaskId: ID2,
       estimate: 3,
-      dueDate: '2026-01-01',
+      startDate: '2026-01-01',
+      dueDate: '2026-02-01',
       labels: [ID],
     });
     expect(full.priority).toBe('high');
+    expect(full.startDate).toBe('2026-01-01');
+  });
+
+  it('TaskCreate keeps description optional (title is the only required content field)', () => {
+    expect(TaskCreate.parse({ title: 'T', teamId: ID }).description).toBeUndefined();
   });
 
   it('TaskCreate rejects empty title and missing teamId', () => {
     expect(TaskCreate.safeParse({ title: '', teamId: ID }).success).toBe(false);
     expect(TaskCreate.safeParse({ title: 'T' }).success).toBe(false);
+  });
+
+  it('TaskCreate rejects a malformed startDate', () => {
+    expect(TaskCreate.safeParse({ title: 'T', teamId: ID, startDate: 'nope' }).success).toBe(false);
   });
 
   it('TaskCreate rejects a non-integer estimate', () => {
@@ -322,11 +340,13 @@ describe('task DTOs', () => {
       delegateId: null,
       projectId: null,
       programId: null,
+      startDate: null,
       dueDate: null,
       provenance: { source: 'native' },
       createdAt: 'x',
     });
     expect(parsed.provenance.source).toBe('native');
+    expect(parsed.startDate).toBeNull();
   });
 
   it('TaskOut rejects a missing provenance', () => {
@@ -347,6 +367,11 @@ describe('task DTOs', () => {
     expect(TaskUpdate.parse({ state: 'done' }).state).toBe('done');
     expect(TaskUpdate.parse({}).title).toBeUndefined();
     expect(TaskUpdate.safeParse({ title: '' }).success).toBe(false);
+  });
+
+  it('TaskUpdate sets and clears startDate', () => {
+    expect(TaskUpdate.parse({ startDate: '2026-05-01' }).startDate).toBe('2026-05-01');
+    expect(TaskUpdate.parse({ startDate: null }).startDate).toBeNull();
   });
 });
 
@@ -1256,6 +1281,7 @@ describe('integration DTOs', () => {
       status: 'connected',
       config: {},
       syncMode: 'mirror',
+      writeBack: false,
       lastSyncStatus: null,
       lastSyncedAt: null,
       lastError: null,
@@ -1584,6 +1610,138 @@ describe('hub DTOs', () => {
     });
     expect(parsed.items).toHaveLength(1);
     expect(parsed.nextCursor).toBe('cur');
+  });
+});
+
+describe('observation DTOs', () => {
+  it('ObservationKind / InboundEventStatus / DailyDigestStatus accept/reject', () => {
+    for (const k of [
+      'message',
+      'mention',
+      'assignment',
+      'status_change',
+      'comment',
+      'reaction',
+      'created',
+      'completed',
+      'calendar_invite',
+      'calendar_update',
+      'task_assignment',
+    ] as const) {
+      expect(ObservationKind.parse(k)).toBe(k);
+    }
+    expect(ObservationKind.safeParse('like').success).toBe(false);
+    for (const s of ['received', 'processing', 'processed', 'failed', 'skipped'] as const) {
+      expect(InboundEventStatus.parse(s)).toBe(s);
+    }
+    expect(InboundEventStatus.safeParse('queued').success).toBe(false);
+    for (const s of [
+      'pending',
+      'generating',
+      'generated',
+      'sent',
+      'failed',
+      'skipped_empty',
+    ] as const) {
+      expect(DailyDigestStatus.parse(s)).toBe(s);
+    }
+    expect(DailyDigestStatus.safeParse('draft').success).toBe(false);
+  });
+
+  it('ObservationOut parses with null + nested shapes', () => {
+    const parsed = ObservationOut.parse({
+      id: ID,
+      organizationId: ID2,
+      userId: 'user-1',
+      integrationId: ID,
+      provider: 'linear',
+      kind: 'mention',
+      occurredAt: '2026-06-28T12:00:00.000Z',
+      title: 'You were mentioned',
+      summary: null,
+      permalink: 'https://linear.app/x/issue/ABC-1',
+      externalActor: { externalId: 'usr_9', displayName: 'Jane' },
+      subject: { type: 'issue', externalId: 'ABC-1', title: 'Ship it' },
+      participants: [],
+      externalId: 'evt_1',
+      createdAt: 'x',
+    });
+    expect(parsed.kind).toBe('mention');
+    expect(parsed.subject?.externalId).toBe('ABC-1');
+    expect(parsed.summary).toBeNull();
+  });
+
+  it('ObservationOut rejects a bad kind and a missing required field', () => {
+    expect(
+      ObservationOut.safeParse({
+        id: ID,
+        organizationId: ID2,
+        userId: null,
+        integrationId: null,
+        provider: 'linear',
+        kind: 'like',
+        occurredAt: 'x',
+        title: 'T',
+        summary: null,
+        permalink: null,
+        externalActor: null,
+        subject: null,
+        participants: [],
+        externalId: null,
+        createdAt: 'x',
+      }).success,
+    ).toBe(false);
+    // `title` is required content; omitting it fails.
+    expect(
+      ObservationOut.safeParse({
+        id: ID,
+        organizationId: ID2,
+        userId: null,
+        integrationId: null,
+        provider: 'linear',
+        kind: 'mention',
+        occurredAt: 'x',
+        participants: [],
+        createdAt: 'x',
+      }).success,
+    ).toBe(false);
+  });
+
+  it('InboundEventOut parses with a null organizationId (unrouted)', () => {
+    const parsed = InboundEventOut.parse({
+      id: ID,
+      organizationId: null,
+      integrationId: null,
+      provider: 'linear',
+      externalEventId: 'evt_1',
+      eventType: 'Issue',
+      signatureVerified: true,
+      status: 'received',
+      attempts: 0,
+      lastError: null,
+      receivedAt: 'x',
+      processedAt: null,
+    });
+    expect(parsed.signatureVerified).toBe(true);
+    expect(parsed.organizationId).toBeNull();
+  });
+
+  it('DailyDigestOut parses with stats + nullable bodies', () => {
+    const parsed = DailyDigestOut.parse({
+      id: ID,
+      userId: 'user-1',
+      digestDate: '2026-06-28',
+      status: 'sent',
+      summaryMarkdown: '# Today',
+      summaryHtml: '<h1>Today</h1>',
+      stats: { total: 3, byProvider: { linear: 3 }, byKind: { mention: 2, assignment: 1 } },
+      observationCount: 3,
+      generatedAt: 'x',
+      sentAt: 'y',
+      createdAt: 'z',
+    });
+    expect(parsed.status).toBe('sent');
+    expect(parsed.stats?.total).toBe(3);
   });
 });
 

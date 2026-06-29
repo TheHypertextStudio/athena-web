@@ -70,6 +70,14 @@ export const NotificationId = id<'NotificationId'>();
 export const DailyPlanItemId = id<'DailyPlanItemId'>();
 /** Branded `AuditEvent` id. */
 export const AuditEventId = id<'AuditEventId'>();
+/** Branded `Observation` id (an ambient-context-intelligence timeline entry). */
+export const ObservationId = id<'ObservationId'>();
+/** Branded `InboundEvent` id (a row in the durable write-ahead ingestion inbox). */
+export const InboundEventId = id<'InboundEventId'>();
+/** Branded `DailyDigest` id (one user's end-of-day summary). */
+export const DailyDigestId = id<'DailyDigestId'>();
+/** Branded `EventSubscription` id (an external webhook/push-channel registration). */
+export const EventSubscriptionId = id<'EventSubscriptionId'>();
 
 /** An ISO date (`YYYY-MM-DD`) string. */
 export const DateString = z.iso.date();

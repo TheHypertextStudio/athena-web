@@ -197,6 +197,17 @@ export const integration = pgTable(
     status: integrationStatus('status').notNull().default('pending'),
     config: jsonb('config').$type<Record<string, unknown>>().notNull().default({}),
     syncMode: syncMode('sync_mode').notNull().default('mirror'),
+    /**
+     * Whether this connector also writes Docket changes back to the provider (two-way sync).
+     *
+     * @remarks
+     * An orthogonal capability layered on top of the read-only `mirror`: a write-back
+     * connector still pulls (`mirror`) but additionally pushes local edits/completions/
+     * deletions of its `linked` tasks back to the source. Only the Google Tasks (`gtasks`)
+     * connector sets this today. Modeled as a flag (not a third `syncMode`) so the migration
+     * needs no enum change — see the two-way sync plan for the rationale.
+     */
+    writeBack: boolean('write_back').notNull().default(false),
     /** Status of the most recent sync run (null = never synced). */
     lastSyncStatus: syncRunStatus('last_sync_status'),
     /** Timestamp of the last SUCCESSFUL sync (null = never succeeded). */

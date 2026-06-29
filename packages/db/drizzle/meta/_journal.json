@@ -43,6 +43,34 @@
       "when": 1781557311765,
       "tag": "0005_familiar_whiplash",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1782694477162,
+      "tag": "0006_eager_klaw",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1782694664513,
+      "tag": "0007_safe_marauders",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1782702872450,
+      "tag": "0008_nice_jubilee",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1782705660818,
+      "tag": "0009_breezy_omega_sentinel",
+      "breakpoints": true
     }
   ]
 }

@@ -56,6 +56,8 @@ export const authServer = {
   GITHUB_CLIENT_SECRET: z.string().optional(),
   LINEAR_CLIENT_ID: z.string().optional(),
   LINEAR_CLIENT_SECRET: z.string().optional(),
+  /** App-level Linear webhook signing secret — verifies inbound ambient-observation events. */
+  LINEAR_WEBHOOK_SECRET: z.string().optional(),
 };
 
 /** Stripe billing (server scope; publishable key is a client var). */

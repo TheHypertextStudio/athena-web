@@ -61,6 +61,20 @@ const JOBS: readonly CronJob[] = [
     schedule: '0 3 * * *',
     description: 'Docket: org data-lifecycle sweep (export_window → pending_deletion → deleted).',
   },
+  {
+    name: 'docket-process-events',
+    path: '/v1/cron/process-events',
+    schedule: '*/2 * * * *',
+    description:
+      'Docket: ambient-intelligence drain (normalize inbound webhook events into observations).',
+  },
+  {
+    name: 'docket-daily-digests',
+    path: '/v1/cron/daily-digests',
+    schedule: '*/15 * * * *',
+    description:
+      "Docket: daily-digest sweep (email each opted-in user's end-of-day summary at their local time).",
+  },
 ];
 
 // ── helpers ──────────────────────────────────────────────────────────────────

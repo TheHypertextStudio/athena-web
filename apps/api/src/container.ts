@@ -42,8 +42,10 @@ export function toBoundaryEnv(): BoundaryEnv {
     ...(env.STRIPE_BILLING_PORTAL_CONFIG_ID
       ? { STRIPE_BILLING_PORTAL_CONFIG_ID: env.STRIPE_BILLING_PORTAL_CONFIG_ID }
       : {}),
-    // agent runtime (Anthropic-backed Athena)
+    // agent runtime + daily-digest summarizer (Anthropic-backed Athena)
     ...(env.ANTHROPIC_API_KEY ? { ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY } : {}),
+    // observer (ambient-intelligence ingestion; app-level Linear webhook secret)
+    ...(env.LINEAR_WEBHOOK_SECRET ? { LINEAR_WEBHOOK_SECRET: env.LINEAR_WEBHOOK_SECRET } : {}),
     // mailer (SMTP)
     ...(env.SMTP_HOST ? { SMTP_HOST: env.SMTP_HOST } : {}),
     ...(env.SMTP_PORT ? { SMTP_PORT: env.SMTP_PORT } : {}),

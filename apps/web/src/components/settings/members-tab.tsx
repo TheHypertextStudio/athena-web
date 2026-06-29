@@ -29,7 +29,7 @@ import { useCallback, useMemo } from 'react';
 
 import { useSession } from '@/lib/auth-client';
 import { api } from '@/lib/api';
-import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
+import { apiQueryOptions, queryKeys, useApiListQuery } from '@/lib/query';
 
 import { InviteForm } from './invite-form';
 import { InvitationsList } from './invitations-list';
@@ -60,21 +60,21 @@ export function MembersTab({ orgId }: MembersTabProps): JSX.Element {
   const membersKey = queryKeys.members(orgId);
   const invitationsKey = queryKeys.invitations(orgId);
 
-  const membersQ = useApiQuery(
+  const membersQ = useApiListQuery(
     apiQueryOptions(
       membersKey,
       () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
       'Could not load members.',
     ),
   );
-  const rolesQ = useApiQuery(
+  const rolesQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.roles(orgId),
       () => api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
       'Could not load roles.',
     ),
   );
-  const invitationsQ = useApiQuery(
+  const invitationsQ = useApiListQuery(
     apiQueryOptions(
       invitationsKey,
       () => api.v1.orgs[':orgId'].members.invitations.$get({ param: { orgId } }),

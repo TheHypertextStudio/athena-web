@@ -16,7 +16,7 @@
  * ({@link projectColumns}), so the toolbar's groupable/sortable fields and the table's headers read
  * from one source of truth. The {@link FilterToolbar} stays mounted above the table over the same
  * catalog: the roster can be filtered by status / health / lead / team, grouped, and sorted — all
- * applied **client-side** over the already-loaded {@link useApiQuery} results (Phase B data flow is
+ * applied **client-side** over the already-loaded {@link useApiListQuery} results (Phase B data flow is
  * preserved; no manual refresh). The view state is held in the URL by {@link useViewState}, so a
  * filtered roster is shareable and survives a reload. Grouping renders full-width
  * {@link GroupHeader} boundary rows that span every column.
@@ -45,7 +45,7 @@ import type { FieldOption } from '@/components/views/field-catalog';
 import { FilterToolbar } from '@/components/views/filter-toolbar';
 import { useViewState } from '@/components/views/use-view-state';
 import { api } from '@/lib/api';
-import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
+import { apiQueryOptions, queryKeys, useApiListQuery } from '@/lib/query';
 
 /**
  * The Projects list page.
@@ -71,21 +71,21 @@ export default function ProjectsListPage(): JSX.Element {
 
   // The roster is the primary slice (its load gates the page); tasks + members enrich each row
   // and degrade gracefully (an empty list) if they fail, mirroring the prior behavior.
-  const projectsQ = useApiQuery(
+  const projectsQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.projects(orgId),
       () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
       `Could not load ${projectsLabel.toLowerCase()}.`,
     ),
   );
-  const tasksQ = useApiQuery(
+  const tasksQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.tasks(orgId),
       () => api.v1.orgs[':orgId'].tasks.$get({ param: { orgId } }),
       'Could not load tasks.',
     ),
   );
-  const membersQ = useApiQuery(
+  const membersQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.members(orgId),
       () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),

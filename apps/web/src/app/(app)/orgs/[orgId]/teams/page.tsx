@@ -16,7 +16,7 @@ import { applyView } from '@/components/views/apply-view';
 import { FilterToolbar } from '@/components/views/filter-toolbar';
 import { useViewState } from '@/components/views/use-view-state';
 import { api } from '@/lib/api';
-import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
+import { apiQueryOptions, queryKeys, useApiListQuery } from '@/lib/query';
 
 /**
  * The org Teams list — the roster of first-class units within the org (§7), as dense rows.
@@ -39,7 +39,7 @@ import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
  * Filtering is the unified engine: a single {@link FilterToolbar} over the team
  * {@link buildTeamCatalog | catalog} lets the roster be filtered by triage state, grouped, and
  * sorted (by triage, workflow-state count, key, or name) — all applied **client-side** over the
- * already-loaded {@link useApiQuery} results (Phase B data flow is preserved; no manual refresh).
+ * already-loaded {@link useApiListQuery} results (Phase B data flow is preserved; no manual refresh).
  * The view state is held in the URL by {@link useViewState}, so a filtered roster is shareable and
  * survives a reload. Entity nouns route through {@link useVocabulary}; data is fetched at runtime
  * so the production build needs no running server.
@@ -59,21 +59,21 @@ export default function TeamsListPage(): JSX.Element {
 
   // The roster is the primary slice (its load gates the page); projects + tasks enrich each row's
   // scope roll-up and degrade gracefully (an empty list) if they fail, mirroring prior behavior.
-  const teamsQ = useApiQuery(
+  const teamsQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.teams(orgId),
       () => api.v1.orgs[':orgId'].teams.$get({ param: { orgId } }),
       'Could not load your teams.',
     ),
   );
-  const projectsQ = useApiQuery(
+  const projectsQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.projects(orgId),
       () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
       'Could not load projects.',
     ),
   );
-  const tasksQ = useApiQuery(
+  const tasksQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.tasks(orgId),
       () => api.v1.orgs[':orgId'].tasks.$get({ param: { orgId } }),

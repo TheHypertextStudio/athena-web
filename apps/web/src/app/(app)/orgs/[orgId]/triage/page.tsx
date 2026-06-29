@@ -2,8 +2,8 @@
 
 import { ListView } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
-import { Inbox, RefreshCw } from '@docket/ui/icons';
-import { Button, Skeleton } from '@docket/ui/primitives';
+import { Inbox } from '@docket/ui/icons';
+import { Skeleton } from '@docket/ui/primitives';
 import { useParams, useRouter } from 'next/navigation';
 import { type JSX } from 'react';
 
@@ -31,7 +31,6 @@ export default function TriagePage(): JSX.Element {
     providerName,
     toRow,
     groupBy,
-    reload,
     sortToProject,
     sortToProgram,
     dismiss,
@@ -48,17 +47,11 @@ export default function TriagePage(): JSX.Element {
         </p>
       </header>
 
-      <div className="flex items-center justify-between gap-3">
-        <Button variant="outline" size="sm" className="gap-1.5" onClick={reload} disabled={loading}>
-          <RefreshCw className="h-4 w-4" />
-          Refresh
-        </Button>
-        {!loading && !loadError ? (
-          <p className="text-on-surface-variant text-xs tabular-nums">
-            {queue.length} {queue.length === 1 ? 'item' : 'items'} to sort
-          </p>
-        ) : null}
-      </div>
+      {!loading && !loadError ? (
+        <p className="text-on-surface-variant text-xs tabular-nums">
+          {queue.length} {queue.length === 1 ? 'item' : 'items'} to sort
+        </p>
+      ) : null}
 
       {actionError ? (
         <p role="alert" className="text-destructive text-body">

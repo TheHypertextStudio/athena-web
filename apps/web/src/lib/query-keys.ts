@@ -36,4 +36,11 @@ export const queryKeys = {
   orgs: () => ['me', 'orgs'] as const,
   portfolio: () => ['me', 'portfolio'] as const,
   hubSearch: (query: string) => ['me', 'search', query] as const,
+  today: (date: string) => ['me', 'today', date] as const,
+  // Notification count is keyed UNDER the list so invalidating `notifications()` (a prefix
+  // match) refreshes both the list and the pending-approval count in one call.
+  notifications: () => ['me', 'notifications'] as const,
+  notificationsCount: () => ['me', 'notifications', 'count'] as const,
+  activity: () => ['me', 'activity'] as const,
+  triage: (orgId: string) => ['org', orgId, 'triage'] as const,
 } as const;

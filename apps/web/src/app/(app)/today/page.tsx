@@ -1,6 +1,6 @@
 'use client';
 
-import { CheckCircle2, Inbox, RefreshCw, Sparkles, XCircle } from '@docket/ui/icons';
+import { CheckCircle2, Inbox, Sparkles, XCircle } from '@docket/ui/icons';
 import { Badge, Button, Skeleton } from '@docket/ui/primitives';
 import { type JSX, type ReactNode } from 'react';
 
@@ -17,9 +17,8 @@ export default function TodayPage(): JSX.Element {
   const {
     data,
     loading,
-    refreshing,
     error,
-    load,
+    refetch,
     planGroups,
     taskTitle,
     planCount,
@@ -32,33 +31,16 @@ export default function TodayPage(): JSX.Element {
 
   return (
     <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
-      <header className="flex flex-col gap-3 @2xl:flex-row @2xl:flex-wrap @2xl:items-center @2xl:justify-between">
-        <div className="flex flex-col gap-1">
-          <p className="text-on-surface-variant text-xs">{heading}</p>
-          <h1 className="text-on-surface text-h1">Today</h1>
-          <p className="text-on-surface-variant text-xs">Your plan and what needs you today.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              void load(false);
-            }}
-            disabled={loading || refreshing}
-          >
-            <RefreshCw className={refreshing ? 'animate-spin' : undefined} />
-            {refreshing ? 'Refreshing…' : 'Refresh'}
-          </Button>
-        </div>
+      <header className="flex flex-col gap-1">
+        <p className="text-on-surface-variant text-xs">{heading}</p>
+        <h1 className="text-on-surface text-h1">Today</h1>
+        <p className="text-on-surface-variant text-xs">Your plan and what needs you today.</p>
       </header>
 
       <TodayPrompt
         orgId={activeOrgId}
         orgLabel={activeOrgId ? orgName(activeOrgId) : 'your space'}
-        onCaptured={() => {
-          void load(false);
-        }}
+        onCaptured={refetch}
       />
 
       {error ? (
@@ -67,13 +49,7 @@ export default function TodayPage(): JSX.Element {
           className="border-destructive/40 bg-destructive/5 text-destructive text-body flex items-center justify-between gap-4 rounded-lg border p-4"
         >
           <span>{error}</span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              void load(true);
-            }}
-          >
+          <Button variant="outline" size="sm" onClick={refetch}>
             Try again
           </Button>
         </div>

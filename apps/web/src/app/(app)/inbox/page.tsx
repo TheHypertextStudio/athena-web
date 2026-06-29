@@ -1,6 +1,6 @@
 'use client';
 
-import { CheckCircle2, Inbox as InboxIcon, RefreshCw } from '@docket/ui/icons';
+import { CheckCircle2, Inbox as InboxIcon } from '@docket/ui/icons';
 import { Button, Skeleton } from '@docket/ui/primitives';
 import { type JSX } from 'react';
 
@@ -20,13 +20,12 @@ export default function InboxPage(): JSX.Element {
     activity,
     unreadCount,
     loading,
-    refreshing,
     error,
+    refetch,
     actionError,
     pendingIds,
     markingAll,
     segments,
-    load,
     onApprove,
     onMarkRead,
     onMarkAllRead,
@@ -36,24 +35,9 @@ export default function InboxPage(): JSX.Element {
 
   return (
     <div className="mx-auto flex h-full w-full max-w-4xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
-      <header className="flex flex-col gap-3 @2xl:flex-row @2xl:flex-wrap @2xl:items-center @2xl:justify-between">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-on-surface text-h1">Inbox</h1>
-          <p className="text-on-surface-variant text-xs">Everything that needs a response.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              void load(false);
-            }}
-            disabled={loading || refreshing}
-          >
-            <RefreshCw className={refreshing ? 'animate-spin' : undefined} />
-            {refreshing ? 'Refreshing…' : 'Refresh'}
-          </Button>
-        </div>
+      <header className="flex flex-col gap-1">
+        <h1 className="text-on-surface text-h1">Inbox</h1>
+        <p className="text-on-surface-variant text-xs">Everything that needs a response.</p>
       </header>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -85,13 +69,7 @@ export default function InboxPage(): JSX.Element {
           className="border-destructive/40 bg-destructive/5 text-destructive text-body flex items-center justify-between gap-4 rounded-lg border p-4"
         >
           <span>{error}</span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              void load(true);
-            }}
-          >
+          <Button variant="outline" size="sm" onClick={refetch}>
             Try again
           </Button>
         </div>

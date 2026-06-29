@@ -14,7 +14,7 @@ import { unwrap } from '@/lib/query-core';
 import { queryKeys } from '@/lib/query-keys';
 import { dehydrate, getServerApi, getServerQueryClient } from '@/lib/query-server';
 
-import { ProgramsListClient } from './programs-client';
+import ProgramsListClient from './programs-client';
 
 /**
  * The Programs list page (Server Component).

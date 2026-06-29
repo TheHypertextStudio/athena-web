@@ -18,7 +18,7 @@ import { unwrap } from '@/lib/query-core';
 import { queryKeys } from '@/lib/query-keys';
 import { dehydrate, getServerApi, getServerQueryClient } from '@/lib/query-server';
 
-import { ProjectsListClient } from './projects-client';
+import ProjectsListClient from './projects-client';
 
 /**
  * The Projects list page (Server Component).

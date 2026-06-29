@@ -109,6 +109,15 @@ export const opsServer = {
   SMTP_PASS: z.string().min(1).optional(),
   /** From-address every transactional email is sent as (`"Name <addr>"` or a bare address). */
   MAIL_FROM: z.string().min(1).optional(),
+  /**
+   * Dev-only operator bootstrap allowlist: comma-separated `email[:role]` (role ∈
+   * support|finance|superadmin, default superadmin). In non-production, a signed-in user
+   * whose email is listed is lazily granted that staff tier on first `/admin` hit — the
+   * one mechanism that works under embedded PGlite (single-process), where a separate seed
+   * CLI cannot open the DB while the API holds it. Ignored entirely when `APP_MODE` is
+   * `production`. Lenient string here; `scripts/seed-staff.ts` + the staff guard parse it.
+   */
+  STAFF_BOOTSTRAP_EMAILS: z.string().optional(),
 };
 
 /** Public client vars (Next.js `NEXT_PUBLIC_*`). */

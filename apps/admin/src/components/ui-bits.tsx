@@ -94,9 +94,16 @@ export function ErrorBanner({ message, action }: ErrorBannerProps): JSX.Element 
  */
 export function SignInAction(): JSX.Element {
   return (
-    <Link href="/sign-in" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
-      Sign in
-    </Link>
+    <div className="flex flex-col items-end gap-1">
+      <Link href="/sign-in" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+        Sign in
+      </Link>
+      {process.env.NODE_ENV !== 'production' ? (
+        <span className="text-on-surface-variant text-xs">
+          Dev: not an operator? Add your email to <code>STAFF_BOOTSTRAP_EMAILS</code>
+        </span>
+      ) : null}
+    </div>
   );
 }
 

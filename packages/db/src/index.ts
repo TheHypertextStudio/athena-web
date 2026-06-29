@@ -12,3 +12,17 @@ export type { Database } from './client';
 export * from './types';
 export * from './schema';
 export * from './relations';
+export {
+  STAFF_ROLES,
+  DEFAULT_STAFF_ROLE,
+  isStaffRole,
+  grantStaffByEmail,
+  parseStaffTarget,
+  parseStaffTargets,
+  roleForEmail,
+  bootstrapRoleFor,
+  type StaffRole,
+  type StaffTarget,
+  type GrantStaffOptions,
+  type GrantStaffResult,
+} from './seed';

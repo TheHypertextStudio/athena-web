@@ -7,6 +7,41 @@
 
 ## Completed Tasks
 
+### [AUTH-003] Browser-facing Better Auth baseURL + oAuthProxy + setup URL split
+
+- **Completed**: 2026-06-29
+- **Summary**: Fixed an OAuth host inconsistency surfaced while reviewing `pnpm integrations`.
+  Better Auth runs on the API but is reached **same-origin** via each Next app's `/api/auth/*`
+  rewrite, so its `baseURL` (which the OAuth `redirect_uri` + session cookie derive from) must be the
+  **browser-facing product origin**, not the API origin. Three fixes: (1) local `baseURL` was the
+  static API origin and couldn't serve two frontends — enabled dynamic `baseURL` locally; (2) social
+  OAuth on preview deploys would `redirect_uri_mismatch` — added the `oAuthProxy` plugin; (3)
+  `pnpm integrations` registered OAuth callbacks on the API origin and munged the homepage — split
+  the setup URLs into `webBases` (callbacks/homepage) vs `apiBase` (webhook only).
+- **Approach**: Added `OAUTH_PROXY_SECRET` + `OAUTH_PROXY_PRODUCTION_URL` to the auth slice +
+  registry with an all-or-nothing cross-field rule (`api.ts`); mounted `oAuthProxy` in
+  `buildAuthOptions` gated on both (unset ⇒ direct OAuth). Set `BETTER_AUTH_ALLOWED_HOSTS` in
+  `.env.example` + `bootstrap`'s `writeEnvLocal` (web/admin/api localhost) so dynamic `baseURL`
+  resolves per browser-facing host. Reworked `resolveBaseUrl`→`resolveSetupUrls` returning
+  `{ apiBase, webBases }` (webBases from `BETTER_AUTH_TRUSTED_ORIGINS`); the `instructions`/`steps`
+  signature is `(env, urls)`, each provider registering an OAuth callback per web frontend, the
+  webhook on the API host, and the GitHub homepage on the product origin.
+- **Files Changed**: `packages/env/src/{slices,registry-vars-core,api}.ts`,
+  `packages/auth/src/auth-builder.ts` (+ `tests/auth.test.ts`), `.env.example`,
+  `scripts/{bootstrap,integrations-setup,integration-providers}.ts`,
+  `docs/engineering/specs/env-and-bootstrap.md`.
+- **Learnings**: with two browser frontends (web + admin) a single static `baseURL` cannot serve
+  both — dynamic `baseURL` (per `x-forwarded-host`) is mandatory, not optional. `oAuthProxy` is the
+  supported answer for unregisterable preview URLs; dynamic `baseURL` alone does NOT fix OAuth on
+  previews (it would mint an unregistered `redirect_uri`). The webhook is the only genuinely
+  API-origin URL — everything else in the OAuth/connect flow is browser-facing.
+- **Gate**: `@docket/{env,auth}` typecheck + lint clean; auth tests pass (oAuthProxy gating);
+  `pnpm env:check` passes; `pnpm integrations` GitHub steps verified to render callbacks on the
+  web + admin origins and the webhook on the API origin. (The auth-builder mount lands with the
+  concurrent twoFactor work it co-occupies.)
+
+---
+
 ### [INT-003] GitHub App integration (sign-in + issue/PR connector + webhook firehose)
 
 - **Completed**: 2026-06-29

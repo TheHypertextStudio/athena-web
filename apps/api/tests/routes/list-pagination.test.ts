@@ -16,12 +16,16 @@ import { appWithActor, getDb, seedBaseOrg } from './harness.test';
 import type cyclesRouter from '../../src/routes/cycles';
 import type initiativesRouter from '../../src/routes/initiatives';
 import type programsRouter from '../../src/routes/programs';
+import type projectsRouter from '../../src/routes/projects';
+import type tasksRouter from '../../src/routes/tasks';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
 let cycles!: typeof cyclesRouter;
 let programs!: typeof programsRouter;
 let initiatives!: typeof initiativesRouter;
+let projects!: typeof projectsRouter;
+let tasks!: typeof tasksRouter;
 
 beforeAll(async () => {
   schema = await getDb();
@@ -29,6 +33,8 @@ beforeAll(async () => {
   cycles = (await import('../../src/routes/cycles')).default;
   programs = (await import('../../src/routes/programs')).default;
   initiatives = (await import('../../src/routes/initiatives')).default;
+  projects = (await import('../../src/routes/projects')).default;
+  tasks = (await import('../../src/routes/tasks')).default;
 });
 
 /** Parse a JSON response body as the given shape. */
@@ -134,5 +140,46 @@ describe('list pagination (keyset cursor)', () => {
       2,
       newestFirst,
     );
+  });
+
+  it('projects: optional limit pages the list newest-first', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const ids: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      const [row] = await db
+        .insert(schema.project)
+        .values({
+          organizationId: orgId,
+          name: `Proj${i}`,
+          teamId,
+          createdBy: humanActorId,
+          createdAt: new Date(Date.UTC(2026, i, 1)),
+        })
+        .returning({ id: schema.project.id });
+      ids.push(row!.id);
+    }
+    const newestFirst = [ids[2]!, ids[1]!, ids[0]!];
+    await assertPagesCover(appWithActor(projects, orgId, ['view'], humanActorId), 2, newestFirst);
+  });
+
+  it('tasks: optional limit pages the active-task list newest-first', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const ids: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      const [row] = await db
+        .insert(schema.task)
+        .values({
+          organizationId: orgId,
+          title: `T${i}`,
+          teamId,
+          state: 'todo',
+          createdBy: humanActorId,
+          createdAt: new Date(Date.UTC(2026, i, 1)),
+        })
+        .returning({ id: schema.task.id });
+      ids.push(row!.id);
+    }
+    const newestFirst = [ids[2]!, ids[1]!, ids[0]!];
+    await assertPagesCover(appWithActor(tasks, orgId, ['view'], humanActorId), 2, newestFirst);
   });
 });

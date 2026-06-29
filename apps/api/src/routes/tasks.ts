@@ -2,6 +2,7 @@
 import { type Capability, satisfies } from '@docket/authz';
 import { actor, cycle, db, program, project, task, taskDependency, team } from '@docket/db';
 import {
+  CursorQuery,
   pageOf,
   TaskArchived,
   TaskCreate,
@@ -10,14 +11,15 @@ import {
   TaskStateUpdate,
   TaskUpdate,
 } from '@docket/types';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, isNull } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { CapabilityError, NotFoundError } from '../error';
 import { ok } from '../lib/ok';
-import { zJson, zParam } from '../lib/validate';
+import { afterCursor, decodeListCursor, pageResult } from '../lib/list-cursor';
+import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 
 import {
@@ -88,13 +90,25 @@ const tasks = new Hono<AppEnv>()
     if (!row) throw new Error('task insert returned no row');
     return ok(c, TaskOut, toOut(row));
   })
-  .get('/', async (c) => {
+  .get('/', zQuery(CursorQuery), async (c) => {
     const { orgId } = c.get('actorCtx');
-    const rows = await db
+    const { cursor, limit } = c.req.valid('query');
+    // Keyset-paginate newest-first (createdAt, id tiebreak). `limit` is optional: omitted returns
+    // the full active-task list as before; supplied returns a bounded page + `nextCursor`.
+    const conds = [eq(task.organizationId, orgId), isNull(task.archivedAt)];
+    const decoded = decodeListCursor(cursor);
+    if (decoded) conds.push(afterCursor(task.createdAt, task.id, decoded));
+    const base = db
       .select()
       .from(task)
-      .where(and(eq(task.organizationId, orgId), isNull(task.archivedAt)));
-    return ok(c, pageOf(TaskOut), { items: rows.map(toOut) });
+      .where(and(...conds))
+      .orderBy(desc(task.createdAt), desc(task.id));
+    const rows = await (limit === undefined ? base : base.limit(limit + 1));
+    const { items, nextCursor } = pageResult(rows, limit, (r) => r.createdAt);
+    return ok(c, pageOf(TaskOut), {
+      items: items.map(toOut),
+      ...(nextCursor ? { nextCursor } : {}),
+    });
   })
   .get('/:id', zParam(idParam), async (c) => {
     const { orgId } = c.get('actorCtx');

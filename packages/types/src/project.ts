@@ -3,9 +3,11 @@
  */
 import { z } from 'zod';
 
+import { SessionActivityOut } from './agent';
 import { Health } from './capability';
 import {
   ActorId,
+  AgentId,
   InitiativeId,
   MilestoneId,
   OrganizationId,
@@ -115,12 +117,13 @@ export type ProjectProgress = z.infer<typeof ProjectProgress>;
  * lists, served in one round-trip.
  *
  * @remarks
- * The detail screen joins each of the project's tasks to its milestone and resolves which
- * initiative the project belongs to. Done client-side those become an N+1 (a `tasks/:id` read
- * per task, for the `milestoneId` that only `TaskDetail` carries) and an M+1 (an
- * `initiatives/:id/timeline` read per initiative to find the one containing the project). This
- * roll-up answers both directly from the `task.milestone_id` column and the `initiative_project`
- * join, so the screen makes one bounded read instead of `1 + N + M`.
+ * The detail screen joins each of the project's tasks to its milestone, resolves which initiative
+ * the project belongs to, and shows recent agent activity on its tasks' sessions. Done client-side
+ * those become an N+1 (a `tasks/:id` read per task, for the `milestoneId` that only `TaskDetail`
+ * carries), an M+1 (an `initiatives/:id/timeline` read per initiative), and a per-session
+ * `sessions/:id` fan-out for the activity feed. This roll-up answers all three directly — the
+ * `task.milestone_id` column, the `initiative_project` join, and one ordered `session_activity`
+ * read across the project's sessions — so the screen makes one bounded read instead of `1 + N + M`.
  */
 export const ProjectRollupOut = z
   .object({
@@ -128,10 +131,13 @@ export const ProjectRollupOut = z
     taskMilestones: z.array(z.object({ taskId: TaskId, milestoneId: MilestoneId.nullable() })),
     /** The initiative this project rolls up into, or `null` when it belongs to none. */
     currentInitiativeId: InitiativeId.nullable(),
+    /** Recent activity across the project's tasks' agent sessions, newest-first; each carries the
+     * session's `agentId` so the client resolves the actor without a per-session read. */
+    recentActivity: z.array(SessionActivityOut.extend({ agentId: AgentId })),
   })
   .meta({
     id: 'ProjectRollupOut',
-    description: "A project's task→milestone map and current initiative, in one read.",
+    description: "A project's task→milestone map, current initiative, and recent activity.",
   });
 /** Project detail roll-up value. */
 export type ProjectRollupOut = z.infer<typeof ProjectRollupOut>;

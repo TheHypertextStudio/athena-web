@@ -180,29 +180,18 @@ export function fetchProjectDetail(
       status: s.status,
     }));
 
-    const activityLists = await Promise.all(
-      here.slice(0, 5).map(async (s) => {
-        const detailRes = await api.v1.orgs[':orgId'].sessions[':id'].$get({
-          param: { orgId, id: s.id },
-        });
-        if (!detailRes.ok) return [];
-        const detail = await detailRes.json();
-        const agentName = directory(agentActorByAgentId.get(s.agentId) ?? null).name;
-        return detail.activities.map(
-          (a): AgentActivityEntry => ({
-            id: a.id,
-            agentName,
-            type: a.type,
-            summary: activitySummary(a),
-            createdAt: a.createdAt,
-          }),
-        );
+    // Recent agent activity comes from the roll-up (one ordered `session_activity` read across the
+    // project's sessions), replacing the per-session `sessions/:id` fan-out. Each entry carries its
+    // session's agentId, so the name resolves through the directory and the summary from the body.
+    const agentActivity: readonly AgentActivityEntry[] = (rollup?.recentActivity ?? []).map(
+      (a): AgentActivityEntry => ({
+        id: a.id,
+        agentName: directory(agentActorByAgentId.get(a.agentId) ?? null).name,
+        type: a.type,
+        summary: activitySummary(a),
+        createdAt: a.createdAt,
       }),
     );
-    const agentActivity = activityLists
-      .flat()
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      .slice(0, 8);
 
     const data: ProjectDetailData = {
       project: found,

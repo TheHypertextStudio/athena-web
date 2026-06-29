@@ -149,7 +149,6 @@ export function CreateTeamDialog({
       open={open}
       onOpenChange={handleOpenChange}
       heading="New team"
-      description="A team owns its own workflow, cycles, and triage queue. Give it a name and a short key."
       title={name}
       onTitleChange={onNameChange}
       titlePlaceholder="Team name"

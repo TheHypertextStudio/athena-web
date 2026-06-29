@@ -194,7 +194,6 @@ export function CreateCycleDialog({
       open={open}
       onOpenChange={handleOpenChange}
       heading={`New ${cycleNoun.toLowerCase()}`}
-      description={`Pick a team and a date range to time-box your work. Name it, or leave it as ${cycleNoun} ${String(nextNumber)}.`}
       title={name}
       onTitleChange={setName}
       titlePlaceholder={`${cycleNoun} ${String(nextNumber)} — name optional`}
@@ -208,15 +207,8 @@ export function CreateCycleDialog({
       onSubmit={() => void submit()}
       submitLabel={`Create ${cycleNoun}`}
     >
-      <TeamPicker
-        teams={teams}
-        value={teamId}
-        onChange={setTeamOverride}
-        disabled={creating}
-        className="h-8"
-      />
+      <TeamPicker teams={teams} value={teamId} onChange={setTeamOverride} disabled={creating} />
       <DateRangePicker
-        triggerVariant="outline"
         value={{ start: startsAt, end: endsAt }}
         onChange={({ start, end }) => {
           setStartsAt(start);
@@ -230,7 +222,6 @@ export function CreateCycleDialog({
         disabled={creating}
       />
       <EnumPicker
-        triggerVariant="outline"
         options={enumOptions(CYCLE_STATUS_ORDER, CYCLE_STATUS_LABEL)}
         value={status}
         onChange={(next) => {

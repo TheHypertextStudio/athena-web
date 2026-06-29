@@ -33,6 +33,7 @@ import {
   type WorkflowState,
 } from '@docket/types';
 import { useVocabulary } from '@docket/ui/hooks';
+import { TaskAlt } from '@docket/ui/icons';
 import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { api } from '@/lib/api';
@@ -105,6 +106,8 @@ export function CreateTaskDialog({
   const [error, setError] = useState<string | null>(null);
 
   const teamId = teamOverride ?? defaultTeamId;
+  // The breadcrumb shows the team the task will land in (its workflow + triage owner).
+  const teamName = teams.find((team) => team.id === teamId)?.name;
 
   // Load the chosen team's workflow states, defaulting the status to its first (the create
   // default the API would pick) so the status chip is never blank.
@@ -220,7 +223,8 @@ export function CreateTaskDialog({
       open={open}
       onOpenChange={handleOpenChange}
       heading="New task"
-      description="Give it a title, then set as much as you want now — or shape it later."
+      icon={<TaskAlt aria-hidden="true" />}
+      context={teams.length > 1 ? teamName : undefined}
       title={title}
       onTitleChange={setTitle}
       titlePlaceholder="Task title"

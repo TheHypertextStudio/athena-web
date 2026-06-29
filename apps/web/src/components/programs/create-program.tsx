@@ -158,7 +158,6 @@ export function CreateProgramDialog({
       open={open}
       onOpenChange={handleOpenChange}
       heading={`New ${programNoun.toLowerCase()}`}
-      description={`Name your ${programNounLower}, then set its owner, status, and health now — or later.`}
       title={name}
       onTitleChange={setName}
       titlePlaceholder={`${programNoun} name`}
@@ -172,7 +171,6 @@ export function CreateProgramDialog({
       submitLabel={`Create ${programNoun}`}
     >
       <ActorPicker
-        triggerVariant="outline"
         options={options.actorOptions}
         value={ownerId}
         onChange={setOwnerId}
@@ -182,7 +180,6 @@ export function CreateProgramDialog({
         disabled={creating}
       />
       <EnumPicker
-        triggerVariant="outline"
         options={enumOptions(PROGRAM_STATUS_ORDER, STATUS_LABEL)}
         value={status}
         onChange={(next) => {
@@ -193,7 +190,6 @@ export function CreateProgramDialog({
         disabled={creating}
       />
       <EnumPicker
-        triggerVariant="outline"
         options={HEALTH_OPTIONS}
         value={health}
         onChange={setHealth}
@@ -203,7 +199,6 @@ export function CreateProgramDialog({
         disabled={creating}
       />
       <EnumPicker
-        triggerVariant="outline"
         options={enumOptions(VISIBILITY_ORDER, VISIBILITY_LABEL)}
         value={visibility}
         onChange={(next) => {

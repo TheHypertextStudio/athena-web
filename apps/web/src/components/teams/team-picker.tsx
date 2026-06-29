@@ -66,10 +66,14 @@ export function TeamPicker({
       <DropdownMenuTrigger asChild>
         <Button
           type="button"
-          variant="outline"
+          variant="ghost"
+          size="sm"
           disabled={disabled}
           aria-label={`Team — currently ${selected?.name ?? 'none selected'}`}
-          className={cn('gap-1.5', className)}
+          className={cn(
+            'text-on-surface h-auto justify-start gap-1.5 px-2 py-1.5 font-normal',
+            className,
+          )}
         >
           <Users className="size-4 opacity-70" aria-hidden="true" />
           <span className="max-w-32 truncate">{selected?.name ?? 'Select team'}</span>

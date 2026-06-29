@@ -5,40 +5,42 @@
  *
  * @remarks
  * Every create modal — task, project, program, initiative, cycle, team — is the *same* shape: a
- * large autofocused title field, an optional description body, and an inline strip of compact
- * property pickers, all inside a focused {@link Dialog}. This shell owns that chrome (the dialog,
- * the title input, the description textarea, the property-strip wrapper, the error line, and the
- * Cancel / Create footer) so each composer only declares its fields and wires its create call.
+ * small contextual breadcrumb, a large title field, an optional auto-growing description, an inline
+ * row of compact property pills, and a recessed action bar with a single primary action — all inside
+ * a focused {@link Dialog}. This shell owns that chrome so each composer only declares its fields
+ * and wires its create call.
  *
- * The shell is intentionally presentational and fully controlled: the host composer owns the
+ * It is intentionally presentational and fully controlled: the host composer owns the
  * title/description text and the `open` state, and supplies the property pickers as `children`.
- * Submit is driven by Enter on the title field (a fast path) as well as the footer button, and
- * the whole form is disabled while a create is in flight.
+ * Submit is driven by Enter on the title field (a fast path) as well as the action-bar button, and
+ * the whole form is disabled while a create is in flight. Dismissing a *dirty* draft (a non-empty
+ * title or description) asks for confirmation first, so an accidental Esc / backdrop / close never
+ * silently discards typed work.
+ *
+ * The dialog deliberately carries no big "New task" heading or descriptive sentence: the title
+ * field is the focus, and a muted breadcrumb is the only label. The panel is a single flat surface
+ * (`surface-container-high`); structure comes from the borderless tonal property pills, not from
+ * extra surfaces or outlines.
  */
-import {
-  Button,
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@docket/ui/primitives';
-import { Plus } from '@docket/ui/icons';
+import { Button, Dialog, DialogContent, DialogTitle } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
-import { type JSX, type ReactNode, useId } from 'react';
+import { type JSX, type ReactNode, useId, useLayoutEffect, useRef, useState } from 'react';
 
 /** Props for {@link ComposerShell}. */
 export interface ComposerShellProps {
   /** Whether the dialog is open (the host page owns this state). */
   open: boolean;
-  /** Notify the parent that the open state changed (Esc, backdrop, X, Cancel, or success). */
+  /** Notify the parent that the open state changed (Esc, backdrop, X, discard, or success). */
   onOpenChange: (open: boolean) => void;
-  /** The dialog heading (e.g. "New Project"). */
+  /**
+   * The dialog heading (e.g. "New task"). Rendered as a small muted breadcrumb label — never a big
+   * self-referential heading — and doubles as the dialog's accessible title.
+   */
   heading: ReactNode;
-  /** A short supporting line under the heading. */
-  description?: ReactNode;
+  /** Optional leading badge glyph for the breadcrumb (e.g. the entity-type icon). */
+  icon?: ReactNode;
+  /** Optional context shown before the heading (e.g. the team name): `{context} › {heading}`. */
+  context?: ReactNode;
   /** The current title text. */
   title: string;
   /** Report a changed title. */
@@ -51,9 +53,9 @@ export interface ComposerShellProps {
   onBodyChange: (body: string) => void;
   /** Placeholder for the description field (omit to hide the description body entirely). */
   bodyPlaceholder?: string;
-  /** The inline strip of compact property pickers. */
+  /** The inline row of compact property pickers. */
   children: ReactNode;
-  /** A server/validation error to surface under the strip, if any. */
+  /** A server/validation error to surface under the pickers, if any. */
   error?: string | null;
   /** Whether a create is in flight (disables the form + shows the busy label). */
   creating: boolean;
@@ -61,7 +63,7 @@ export interface ComposerShellProps {
   canSubmit: boolean;
   /** Submit the create. */
   onSubmit: () => void;
-  /** The Create button label (e.g. "Create Project"). */
+  /** The Create button label (e.g. "Create project"). */
   submitLabel: string;
 }
 
@@ -75,7 +77,8 @@ export function ComposerShell({
   open,
   onOpenChange,
   heading,
-  description,
+  icon,
+  context,
   title,
   onTitleChange,
   titlePlaceholder,
@@ -90,27 +93,75 @@ export function ComposerShell({
   submitLabel,
 }: ComposerShellProps): JSX.Element {
   const formId = useId();
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
+  // Whether the user is being asked to confirm discarding a non-empty draft.
+  const [confirmingDiscard, setConfirmingDiscard] = useState(false);
+
+  // Auto-grow the description to fit its content so it reads as part of the surface rather than a
+  // fixed box with a resize grip. Reset to `auto` first so it can shrink as well as grow.
+  useLayoutEffect(() => {
+    const el = bodyRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [body]);
+
+  // A draft worth protecting is one with typed text; bare default property picks are not.
+  const isDirty = title.trim().length > 0 || body.trim().length > 0;
+
+  /** Gate every dismiss path (Esc, backdrop, X) so a dirty draft is never silently discarded. */
+  const requestClose = (): void => {
+    if (creating) return;
+    if (isDirty) {
+      setConfirmingDiscard(true);
+      return;
+    }
+    onOpenChange(false);
+  };
+
+  /** Discard the draft and close. */
+  const discard = (): void => {
+    setConfirmingDiscard(false);
+    onOpenChange(false);
+  };
 
   return (
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        if (creating) return;
-        onOpenChange(next);
+        if (next) return;
+        requestClose();
       }}
     >
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{heading}</DialogTitle>
-          {description ? <DialogDescription>{description}</DialogDescription> : null}
-        </DialogHeader>
+      <DialogContent className="max-w-2xl gap-0 p-0" aria-describedby={undefined}>
+        {/* Breadcrumb: a muted contextual label, not a heading. Reserve right room for the close X. */}
+        <div className="flex items-center gap-2 px-6 pt-5 pr-16 text-sm">
+          {icon ? (
+            <span className="border-outline-variant text-on-surface-variant flex size-5 shrink-0 items-center justify-center rounded-md border [&_svg]:size-3">
+              {icon}
+            </span>
+          ) : null}
+          {context ? (
+            <>
+              <span className="text-on-surface-variant min-w-0 truncate">{context}</span>
+              <span className="text-on-surface-variant shrink-0" aria-hidden="true">
+                ›
+              </span>
+            </>
+          ) : null}
+          <DialogTitle className="text-on-surface truncate text-sm font-medium">
+            {heading}
+          </DialogTitle>
+        </div>
+
+        {/* Content: the title + description own the bulk of the dialog. */}
         <form
           id={formId}
           onSubmit={(event) => {
             event.preventDefault();
             if (canSubmit && !creating) onSubmit();
           }}
-          className="flex flex-col gap-3"
+          className="flex flex-col gap-2 px-6 pt-3"
         >
           <input
             aria-label={titlePlaceholder}
@@ -125,11 +176,11 @@ export function ComposerShell({
           />
           {bodyPlaceholder !== undefined ? (
             <textarea
+              ref={bodyRef}
               aria-label={bodyPlaceholder}
               placeholder={bodyPlaceholder}
               value={body}
               disabled={creating}
-              rows={3}
               onChange={(event) => {
                 onBodyChange(event.target.value);
               }}
@@ -140,27 +191,50 @@ export function ComposerShell({
                   if (canSubmit && !creating) onSubmit();
                 }
               }}
-              className="placeholder:text-on-surface-variant text-on-surface text-body min-h-[4.5rem] w-full resize-y bg-transparent leading-relaxed outline-none disabled:opacity-50"
+              className="placeholder:text-on-surface-variant text-on-surface text-body max-h-[40vh] min-h-[9rem] w-full resize-none overflow-y-auto bg-transparent leading-relaxed outline-none disabled:opacity-50"
             />
           ) : null}
+        </form>
+
+        {/* Properties: one compact row of Linear-style pills. */}
+        <div className="flex flex-col gap-2 px-6 pt-2 pb-4">
           <PropertyStrip>{children}</PropertyStrip>
           {error ? (
             <p role="alert" className="text-destructive text-body">
               {error}
             </p>
           ) : null}
-        </form>
-        <DialogFooter>
-          <DialogClose asChild>
-            <Button type="button" variant="ghost" disabled={creating}>
-              Cancel
+        </div>
+
+        {/* Action row: flat with the panel — a single primary action, or the discard confirmation. */}
+        <div className="flex items-center gap-2 px-6 py-3">
+          {confirmingDiscard ? (
+            <>
+              <span className="text-on-surface-variant text-body mr-auto">Discard this draft?</span>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setConfirmingDiscard(false);
+                }}
+              >
+                Keep editing
+              </Button>
+              <Button type="button" variant="destructive" onClick={discard}>
+                Discard
+              </Button>
+            </>
+          ) : (
+            <Button
+              type="submit"
+              form={formId}
+              disabled={creating || !canSubmit}
+              className="ml-auto"
+            >
+              {creating ? 'Creating…' : submitLabel}
             </Button>
-          </DialogClose>
-          <Button type="submit" form={formId} disabled={creating || !canSubmit} className="gap-1.5">
-            <Plus aria-hidden="true" className="size-4" />
-            {creating ? 'Creating…' : submitLabel}
-          </Button>
-        </DialogFooter>
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   );
@@ -175,17 +249,19 @@ interface PropertyStripProps {
 }
 
 /**
- * The inline, wrapping row of compact property pickers above the composer footer.
+ * The inline, wrapping row of compact property pills.
  *
  * @remarks
- * A hairline-topped band that keeps the pickers visually grouped and clearly separate from the
- * title/body. Pickers wrap on narrow widths so the strip never overflows the dialog.
+ * Borderless tonal pills: each picker trigger gets a `surface-container-highest` fill (one
+ * elevation step off the dialog panel, so it reads as a distinct chip in both themes without an
+ * outline) and a fully-rounded shape; hover lifts to the indigo `secondary-container`. Pickers
+ * wrap on narrow widths so the row never overflows the dialog.
  */
 function PropertyStrip({ className, children }: PropertyStripProps): JSX.Element {
   return (
     <div
       className={cn(
-        'border-outline-variant flex flex-wrap items-center gap-1.5 border-t pt-3',
+        '[&_button]:bg-surface-container-highest [&_button:hover]:bg-secondary-container [&_button:hover]:text-on-secondary-container flex flex-wrap items-center gap-1.5 [&_button]:rounded-full',
         className,
       )}
     >

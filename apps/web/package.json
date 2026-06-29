@@ -11,7 +11,7 @@
   },
   "scripts": {
     "build": "next build",
-    "dev": "portless",
+    "dev": "portless run --force",
     "dev:app": "next dev",
     "start": "next start",
     "typecheck": "tsc --noEmit",
@@ -41,6 +41,7 @@
   "devDependencies": {
     "@docket/eslint-config": "workspace:*",
     "@docket/tsconfig": "workspace:*",
+    "@playwright/test": "^1.61.1",
     "@tailwindcss/postcss": "^4.3.0",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",

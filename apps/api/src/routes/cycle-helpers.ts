@@ -1,7 +1,7 @@
 import { cycle, db, task, team } from '@docket/db';
 import type { CycleOut } from '@docket/types';
 import { type CycleStats, type TaskOut } from '@docket/types';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { NotFoundError } from '../error';
@@ -168,6 +168,45 @@ export async function committedTasks(orgId: string, cycleId: string): Promise<Ta
     .select()
     .from(task)
     .where(and(eq(task.cycleId, cycleId), eq(task.organizationId, orgId), isNull(task.archivedAt)));
+}
+
+/**
+ * Load the active committed tasks for many cycles in **one** query, grouped by cycle id.
+ *
+ * @remarks
+ * The batched counterpart to {@link committedTasks}: the cycles list endpoint rolls up stats for
+ * every cycle, so fanning out one query per cycle would be an N+1. This issues a single
+ * `inArray` read over the org's cycle ids and groups the result, so the list computes all cycles'
+ * stats from one round-trip. An empty id list short-circuits to an empty map (an empty `inArray`
+ * is a degenerate query).
+ *
+ * @param orgId - The active org id (scopes the read).
+ * @param cycleIds - The cycle ids to load committed tasks for.
+ * @returns A map from cycle id to that cycle's active committed tasks (absent ids → no entry).
+ */
+export async function committedTasksForCycles(
+  orgId: string,
+  cycleIds: readonly string[],
+): Promise<Map<string, TaskRow[]>> {
+  const byCycle = new Map<string, TaskRow[]>();
+  if (cycleIds.length === 0) return byCycle;
+  const rows = await db
+    .select()
+    .from(task)
+    .where(
+      and(
+        inArray(task.cycleId, [...cycleIds]),
+        eq(task.organizationId, orgId),
+        isNull(task.archivedAt),
+      ),
+    );
+  for (const t of rows) {
+    if (!t.cycleId) continue;
+    const bucket = byCycle.get(t.cycleId);
+    if (bucket) bucket.push(t);
+    else byCycle.set(t.cycleId, [t]);
+  }
+  return byCycle;
 }
 
 /** Roll a cycle's committed tasks up into its pace stats. */

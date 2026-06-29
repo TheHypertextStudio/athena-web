@@ -27,6 +27,7 @@ import { capabilityGuard } from '../permissions/capability-guard';
 
 import {
   committedTasks,
+  committedTasksForCycles,
   computeStats,
   ensureCycleWindow,
   idParam,
@@ -48,9 +49,19 @@ const cycles = new Hono<AppEnv>()
       .from(cycle)
       .where(eq(cycle.organizationId, orgId))
       .orderBy(desc(cycle.startsAt));
-    // Surface the date-derived `isCurrent` on every listed cycle (whichever window
-    // contains today), so callers don't have to re-derive it client-side.
-    return ok(c, pageOf(CycleOut), { items: rows.map((r) => toOut(r, now)) });
+    // Roll up each cycle's pace stats inline so callers render a complete roster from one round
+    // trip — the committed tasks for every listed cycle are fetched in a single batched query
+    // (no per-cycle fan-out / N+1), then grouped and folded through the same pure `computeStats`
+    // the detail endpoint uses. Each item also surfaces the date-derived `isCurrent`.
+    const tasksByCycle = await committedTasksForCycles(
+      orgId,
+      rows.map((r) => r.id),
+    );
+    const items: z.input<typeof CycleDetail>[] = rows.map((r) => ({
+      ...toOut(r, now),
+      stats: computeStats(r, tasksByCycle.get(r.id) ?? []),
+    }));
+    return ok(c, pageOf(CycleDetail), { items });
   })
   .get('/current', zQuery(CycleWindowQuery), async (c) => {
     const { orgId, actorId } = c.get('actorCtx');

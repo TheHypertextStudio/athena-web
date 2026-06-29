@@ -161,6 +161,100 @@ describe('cycle detail (GET /:id)', () => {
   });
 });
 
+interface CycleListItem {
+  id: string;
+  stats: {
+    committed: number;
+    completed: number;
+    capacity: number;
+    completedCapacity: number;
+    scopeChange: number;
+    carryover: number;
+  };
+}
+
+describe('cycle list (GET /) — inline stats', () => {
+  it('rolls up each cycle’s stats inline (one batched query, no per-cycle fan-out)', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+
+    // Cycle A mirrors the detail-stats fixture: committed 4, completed 1, capacity 10, etc.
+    const cycleA = await makeCycle(orgId, teamId, humanActorId, {
+      number: 1,
+      startsAt: new Date('2026-01-01T00:00:00.000Z'),
+    });
+    await makeTask(orgId, teamId, humanActorId, {
+      cycleId: cycleA,
+      estimate: 3,
+      completedAt: new Date('2026-01-05T00:00:00.000Z'),
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    });
+    await makeTask(orgId, teamId, humanActorId, {
+      cycleId: cycleA,
+      estimate: 5,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    });
+    await makeTask(orgId, teamId, humanActorId, {
+      cycleId: cycleA,
+      estimate: 2,
+      createdAt: new Date('2026-01-08T00:00:00.000Z'), // after starts_at → scope change
+    });
+    await makeTask(orgId, teamId, humanActorId, {
+      cycleId: cycleA,
+      estimate: null,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    });
+
+    // Cycle B has no committed tasks → its stats must be all zeros (the empty-bucket path).
+    const cycleB = await makeCycle(orgId, teamId, humanActorId, {
+      number: 2,
+      startsAt: new Date('2026-02-01T00:00:00.000Z'),
+    });
+
+    // A task on no cycle must leak into neither cycle's roll-up.
+    await makeTask(orgId, teamId, humanActorId, { cycleId: null, estimate: 99 });
+
+    const writer = appWithActor(cycles, orgId, ['view'], humanActorId);
+    const res = await writer.request('/');
+    expect(res.status).toBe(200);
+    const { items } = await json<{ items: CycleListItem[] }>(res);
+
+    const a = items.find((i) => i.id === cycleA);
+    expect(a?.stats).toEqual({
+      committed: 4,
+      completed: 1,
+      capacity: 10, // 3 + 5 + 2 + 0
+      completedCapacity: 3,
+      scopeChange: 1,
+      carryover: 3,
+    });
+
+    const b = items.find((i) => i.id === cycleB);
+    expect(b?.stats).toEqual({
+      committed: 0,
+      completed: 0,
+      capacity: 0,
+      completedCapacity: 0,
+      scopeChange: 0,
+      carryover: 0,
+    });
+  });
+
+  it('isolates tenants: a cycle’s stats never include another org’s tasks', async () => {
+    const a = await seedBaseOrg(db, schema);
+    const b = await seedBaseOrg(db, schema);
+    const cycleA = await makeCycle(a.orgId, a.teamId, a.humanActorId);
+    await makeTask(a.orgId, a.teamId, a.humanActorId, { cycleId: cycleA, estimate: 4 });
+    // An org-B task that (impossibly) names org-A's cycle id must still be excluded by org scope.
+    await makeTask(b.orgId, b.teamId, b.humanActorId, { cycleId: cycleA, estimate: 7 });
+
+    const writerA = appWithActor(cycles, a.orgId, ['view'], a.humanActorId);
+    const { items } = await json<{ items: CycleListItem[] }>(await writerA.request('/'));
+    const found = items.find((i) => i.id === cycleA);
+    expect(found?.stats.committed).toBe(1); // only org-A's one task
+    expect(found?.stats.capacity).toBe(4);
+  });
+});
+
 describe('cycle committed tasks (GET /:id/tasks)', () => {
   it('groups committed tasks by project (default)', async () => {
     const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);

@@ -36,14 +36,21 @@ export const queryKeys = {
   connectedApps: () => ['me', 'connected-apps'] as const,
   identities: () => ['me', 'identities'] as const,
   publicConfig: () => ['public-config'] as const,
+  account: () => ['me', 'account'] as const,
+  recoveryCodes: () => ['me', 'recovery-codes'] as const,
   orgs: () => ['me', 'orgs'] as const,
   portfolio: () => ['me', 'portfolio'] as const,
   hubSearch: (query: string) => ['me', 'search', query] as const,
   today: (date: string) => ['me', 'today', date] as const,
+  dailyPlan: (date: string) => ['me', 'daily-plan', date] as const,
   // Notification count is keyed UNDER the list so invalidating `notifications()` (a prefix
   // match) refreshes both the list and the pending-approval count in one call.
   notifications: () => ['me', 'notifications'] as const,
   notificationsCount: () => ['me', 'notifications', 'count'] as const,
   activity: () => ['me', 'activity'] as const,
   triage: (orgId: string) => ['org', orgId, 'triage'] as const,
+  // Stream keys carry the serialized filter params so each filter variant caches apart; the
+  // coarse `['me','stream']` / `['org',orgId,'stream']` prefixes invalidate every variant.
+  streamMe: (params: string) => ['me', 'stream', params] as const,
+  streamOrg: (orgId: string, params: string) => ['org', orgId, 'stream', params] as const,
 } as const;

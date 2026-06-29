@@ -1,5 +1,15 @@
 import type { LucideIcon } from '@docket/ui/icons';
-import { Cable, Inbox, Link, ListChecks, Translate, Trash2, Users } from '@docket/ui/icons';
+import {
+  Cable,
+  Download,
+  Inbox,
+  Link,
+  ListChecks,
+  Shield,
+  Translate,
+  Trash2,
+  Users,
+} from '@docket/ui/icons';
 
 /** A settings section's availability: a live routed page, or a planned ("coming soon") stub. */
 export type SectionStatus = 'available' | 'coming-soon';
@@ -72,6 +82,14 @@ export const PERSONAL_SETTINGS_SECTION_GROUPS: readonly SettingsSectionGroup[] =
     label: 'Account',
     sections: [
       {
+        key: 'security',
+        label: 'Security',
+        description: 'Generate recovery codes to get back in if you lose your passkey.',
+        icon: Shield,
+        href: 'security',
+        status: 'available',
+      },
+      {
         key: 'connected-accounts',
         label: 'Connected accounts',
         description: 'The external accounts (Google, …) linked to your Docket identity.',
@@ -80,12 +98,20 @@ export const PERSONAL_SETTINGS_SECTION_GROUPS: readonly SettingsSectionGroup[] =
         status: 'available',
       },
       {
+        key: 'export',
+        label: 'Export data',
+        description: 'Download a copy of everything in Docket.',
+        icon: Download,
+        href: 'export',
+        status: 'available',
+      },
+      {
         key: 'danger',
         label: 'Danger zone',
-        description: 'Permanently delete your personal data.',
+        description: 'Permanently delete your account and personal data.',
         icon: Trash2,
         href: 'danger',
-        status: 'coming-soon',
+        status: 'available',
       },
     ],
   },

@@ -1,5 +1,6 @@
 import { passkeyClient } from '@better-auth/passkey/client';
 import { createAuthClient } from 'better-auth/react';
+import { twoFactorClient } from 'better-auth/client/plugins';
 
 /**
  * Resolve the same-origin base origin for the Better Auth client.
@@ -46,10 +47,16 @@ const AUTH_BASE_URL = `${resolveAuthOrigin()}/api/auth`;
  *
  * Secondary OAuth (Google / GitHub / Linear) is reached via `authClient.signIn.social(...)`
  * and is rendered only when the corresponding provider is configured (env-gated).
+ *
+ * The {@link twoFactorClient} plugin mirrors the server's `twoFactor` plugin, used here only for
+ * the locked-out **account recovery** flow: `authClient.twoFactor.verifyBackupCode()` consumes a
+ * code during `/recover` (paired with the custom `/two-factor/recovery-challenge` endpoint that
+ * arms the challenge when the user has no session). Generating codes for a signed-in user goes
+ * through Docket's REST API (`POST /v1/me/recovery-codes`), not this client.
  */
 export const authClient = createAuthClient({
   baseURL: AUTH_BASE_URL,
-  plugins: [passkeyClient()],
+  plugins: [passkeyClient(), twoFactorClient()],
 });
 
 /**
@@ -67,6 +74,14 @@ export const signIn = authClient.signIn;
  * @remarks Convenience re-export of {@link authClient.passkey}.
  */
 export const passkey = authClient.passkey;
+
+/**
+ * The two-factor namespace — used only for `twoFactor.verifyBackupCode(...)` in the locked-out
+ * `/recover` flow (generation goes through Docket's REST API, not this client).
+ *
+ * @remarks Convenience re-export of {@link authClient.twoFactor}.
+ */
+export const twoFactor = authClient.twoFactor;
 
 /**
  * Sign the current user out, clearing the session cookie.

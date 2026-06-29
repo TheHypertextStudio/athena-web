@@ -106,7 +106,7 @@ export function useLiveApiQuery<T>(def: UseQueryOptions<T>, intervalMs: number):
  *
  * @returns a `(def) => void` prefetcher bound to the active query client.
  */
-export function usePrefetchApi(): (def: Parameters<QueryClient['prefetchQuery']>[0]) => void {
+export function usePrefetchApi(): <T>(def: UseQueryOptions<T, DefaultError, T>) => void {
   const queryClient = useQueryClient();
   return (def) => {
     void queryClient.prefetchQuery(def);

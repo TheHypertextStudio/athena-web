@@ -11,7 +11,7 @@ import type {
 
 import { type ActorDirectory, buildActorDirectory } from '@/components/agents/actor-directory';
 import { api } from './api';
-import type { RpcResponse } from './query';
+import { type RpcResponse, apiQueryOptions, queryKeys } from './query';
 
 /** CycleDetailData describes the fetch cycle detail data contract shared by the hook or component. */
 export interface CycleDetailData {
@@ -24,6 +24,26 @@ export interface CycleDetailData {
   readonly members: readonly MemberOut[];
   readonly roles: readonly RoleOut[];
   readonly resolveActor: ActorDirectory['resolve'];
+}
+
+/**
+ * Typed query definition for the cycle detail — the single source the detail page reads with and
+ * list rows prefetch on hover, so they share one cache entry under `queryKeys.cycle`.
+ *
+ * @param orgId - The active org.
+ * @param cycleId - The cycle to load.
+ * @param fallbackMessage - Shown if the composite read fails (the page passes a vocabulary noun).
+ */
+export function cycleDetailDef(
+  orgId: string,
+  cycleId: string,
+  fallbackMessage = 'Could not load this cycle.',
+) {
+  return apiQueryOptions(
+    queryKeys.cycle(orgId, cycleId),
+    fetchCycleDetail(orgId, cycleId),
+    fallbackMessage,
+  );
 }
 
 /** fetchCycleDetail loads the fetch cycle detail detail data required by the page. */

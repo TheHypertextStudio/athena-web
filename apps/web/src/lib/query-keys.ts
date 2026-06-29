@@ -1,5 +1,3 @@
-'use client';
-
 /**
  * Org-scoped, hierarchical TanStack Query key convention.
  *

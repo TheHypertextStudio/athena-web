@@ -16,6 +16,16 @@ export {
 } from './billing';
 export { RealProviderRuntime, type RealProviderRuntimeConfig } from './agent-runtime';
 export { RealConnector, type RealConnectorConfig } from './connector';
+export {
+  buildAppJwt,
+  decodeAppPrivateKey,
+  mintInstallationToken,
+  resolveInstallationAccount,
+  InstallationTokenStore,
+  type AppJwtInput,
+  type GitHubAppConfig,
+  type InstallationToken,
+} from './connector-github-app';
 export { RealLinearObserver, type RealLinearObserverConfig } from './observer-linear';
 export {
   RealSummarizer,

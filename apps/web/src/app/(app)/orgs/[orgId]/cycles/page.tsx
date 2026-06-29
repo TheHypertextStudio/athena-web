@@ -39,7 +39,7 @@ import { FilterToolbar } from '@/components/views/filter-toolbar';
 import { useViewState } from '@/components/views/use-view-state';
 import { isEmptyViewState } from '@/components/views/view-state-url';
 import { api } from '@/lib/api';
-import { type RpcResponse, queryKeys, useApiQuery } from '@/lib/query';
+import { apiQueryOptions, type RpcResponse, queryKeys, useApiQuery } from '@/lib/query';
 
 /** The cycles roster joined with each cycle's pace stats (from its single-cycle read). */
 interface CyclesWithStats {
@@ -126,10 +126,12 @@ export default function CyclesPage(): JSX.Element {
   // (the ensure call inside the fetcher materializes each team's auto-rolled window).
   const teamIds = useMemo(() => teams.map((t) => t.id), [teams]);
   const cyclesQ = useApiQuery(
-    [...queryKeys.cycles(orgId), ...teamIds],
-    fetchCyclesWithStats(orgId, teamIds),
-    'Could not load your cycles.',
-    { enabled: !teamsLoading },
+    apiQueryOptions(
+      [...queryKeys.cycles(orgId), ...teamIds],
+      fetchCyclesWithStats(orgId, teamIds),
+      'Could not load your cycles.',
+      { enabled: !teamsLoading },
+    ),
   );
 
   const cycles = useMemo(() => cyclesQ.data?.cycles ?? [], [cyclesQ.data]);

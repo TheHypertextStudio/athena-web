@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 import { api } from '@/lib/api';
-import { queryKeys, useApiQuery } from '@/lib/query';
+import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 
 import type { PaletteItem, PaletteScope } from './types';
 
@@ -98,10 +98,12 @@ export function useHubSearch({ query, scope, close }: HubSearchInput): HubSearch
   const debouncedHasQuery = debounced.length > 0;
 
   const searchQ = useApiQuery(
-    queryKeys.hubSearch(debounced),
-    () => api.v1.hub.search.$get({ query: { q: debounced, limit: '20' } }),
-    'Search failed.',
-    { enabled: debouncedHasQuery },
+    apiQueryOptions(
+      queryKeys.hubSearch(debounced),
+      () => api.v1.hub.search.$get({ query: { q: debounced, limit: '20' } }),
+      'Search failed.',
+      { enabled: debouncedHasQuery },
+    ),
   );
 
   const toResultItem = useCallback(

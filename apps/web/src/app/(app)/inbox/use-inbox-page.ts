@@ -8,7 +8,7 @@ import { isApproval } from '@/components/inbox/notification-meta';
 import type { SegmentDef } from '@/components/inbox/segmented-tabs';
 import { api } from '@/lib/api';
 import { readError, readProblem } from '@/lib/problem';
-import { queryKeys, useApiQuery } from '@/lib/query';
+import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 
 /** The Inbox's two feeds. */
 type InboxTab = 'inbox' | 'activity';
@@ -54,19 +54,26 @@ export function useInboxPage(): InboxPageData {
   const [actionError, setActionError] = useState<string | null>(null);
 
   const inboxQ = useApiQuery(
-    queryKeys.notifications(),
-    () => api.v1.notifications.$get({ query: {} }),
-    'Could not load your inbox.',
+    apiQueryOptions(
+      queryKeys.notifications(),
+      () => api.v1.notifications.$get({ query: {} }),
+      'Could not load your inbox.',
+    ),
   );
   const countQ = useApiQuery(
-    queryKeys.notificationsCount(),
-    () => api.v1.notifications.count.$get(),
-    'Could not load your inbox.',
+    apiQueryOptions(
+      queryKeys.notificationsCount(),
+      () => api.v1.notifications.count.$get(),
+      'Could not load your inbox.',
+    ),
   );
   const activityQ = useApiQuery(
-    queryKeys.activity(),
-    () => api.v1.hub.activity.$get({ query: { limit: String(ACTIVITY_PAGE_SIZE), order: 'desc' } }),
-    'Could not load activity.',
+    apiQueryOptions(
+      queryKeys.activity(),
+      () =>
+        api.v1.hub.activity.$get({ query: { limit: String(ACTIVITY_PAGE_SIZE), order: 'desc' } }),
+      'Could not load activity.',
+    ),
   );
 
   const notifications = useMemo(() => inboxQ.data?.items ?? [], [inboxQ.data]);

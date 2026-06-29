@@ -12,7 +12,7 @@ import { RoadmapTimeline } from '@/components/portfolio/roadmap-timeline';
 import { ScaleMenu } from '@/components/portfolio/scale-menu';
 import { type Granularity, buildScale } from '@/components/portfolio/time-scale';
 import { api } from '@/lib/api';
-import { queryKeys, useApiQuery } from '@/lib/query';
+import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 
 /**
  * The Hub "Portfolio" surface — one cross-org roadmap timeline.
@@ -39,9 +39,11 @@ export default function PortfolioPage(): JSX.Element {
   const { orgName } = useActiveOrg();
 
   const portfolioQ = useApiQuery(
-    queryKeys.portfolio(),
-    () => api.v1.hub.portfolio.$get({ query: {} }),
-    'Could not load your portfolio.',
+    apiQueryOptions(
+      queryKeys.portfolio(),
+      () => api.v1.hub.portfolio.$get({ query: {} }),
+      'Could not load your portfolio.',
+    ),
   );
   const data = portfolioQ.data ?? null;
   const loading = portfolioQ.isPending;

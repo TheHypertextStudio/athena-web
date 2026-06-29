@@ -31,8 +31,10 @@
  */
 import {
   type DefaultError,
+  keepPreviousData,
   QueryClient,
   type QueryKey,
+  queryOptions,
   type UseMutationOptions,
   type UseMutationResult,
   type UseQueryOptions,
@@ -46,8 +48,26 @@ import { readError, readProblem } from '@/lib/problem';
 
 export { queryKeys } from './query-keys';
 
-/** The app-wide stale time: data is considered fresh for 30s before a background refetch. */
-const DEFAULT_STALE_TIME_MS = 30_000;
+/**
+ * Staleness tiers (ms). Every query picks one based on how fast its data changes, rather than a
+ * single flat default: `standard` is the {@link createQueryClient} default; pass
+ * `{ staleTime: STALE.volatile }` to {@link useApiQuery} for fast-moving data (task state,
+ * in-flight sessions, counts) and `STALE.static` for data that rarely changes within a session
+ * (members, teams, vocabulary, roles). See `docs/engineering/specs/data-layer.md`.
+ */
+export const STALE = {
+  /** Always considered stale — refetch eagerly (poll targets / hyper-volatile reads). */
+  realtime: 0,
+  /** Fast-moving: task state, in-flight sessions, pending counts. */
+  volatile: 5_000,
+  /** The default for most lists and detail reads. */
+  standard: 30_000,
+  /** Rarely changes within a session: members, teams, vocabulary, roles. */
+  static: 300_000,
+} as const;
+
+/** How long an unused query stays cached before GC — long enough that back-nav stays instant. */
+const DEFAULT_GC_TIME_MS = 5 * 60_000;
 
 /**
  * Build the single, stable {@link QueryClient} for the app.
@@ -65,7 +85,8 @@ export function createQueryClient(): QueryClient {
   return new QueryClient({
     defaultOptions: {
       queries: {
-        staleTime: DEFAULT_STALE_TIME_MS,
+        staleTime: STALE.standard,
+        gcTime: DEFAULT_GC_TIME_MS,
         refetchOnWindowFocus: true,
         retry: 1,
       },
@@ -128,33 +149,75 @@ export async function unwrap<T>(
 export type ApiQueryOptions<T> = Omit<UseQueryOptions<T>, 'queryKey' | 'queryFn'>;
 
 /**
- * Read hook: subscribe a component to one Hono RPC GET, with the app's live-data defaults.
+ * Build a **typed query definition** — the standard way to declare a read.
  *
  * @remarks
- * Replaces the hand-rolled `useEffect` + `useState` + `load()` pattern. The `queryFn` runs the
- * supplied Hono call through {@link unwrap}, so the hook's `data` is the parsed body and its
- * `error` carries the server's problem message on failure. It inherits the {@link createQueryClient}
- * defaults (30s stale time, refetch-on-focus, one retry), so the surface stays fresh without a
- * manual refresh button. Pass `enabled: false` (via `options`) to gate a query on a prerequisite.
+ * Returns a TanStack `queryOptions` object whose `queryKey` carries its data type (a `DataTag`), so
+ * `useApiQuery(def)`, `queryClient.prefetchQuery(def)`, and especially
+ * `queryClient.setQueryData(def.queryKey, value)` / cache priming are all **type-checked against
+ * `T`** — no `unknown`, no untyped keys that let cache writes drift from the read's type. The
+ * RPC error handling (problem-detail → readable message via {@link unwrap}) is baked into the
+ * query fn, and a {@link STALE} tier can be passed through `options`.
+ *
+ * @example
+ * ```ts
+ * const taskDef = (orgId: string, id: string) =>
+ *   apiQueryOptions(
+ *     queryKeys.task(orgId, id),
+ *     () => api.v1.orgs[':orgId'].tasks[':id'].$get({ param: { orgId, id } }),
+ *     'Could not load the task.',
+ *     { staleTime: STALE.volatile },
+ *   );
+ *
+ * const q = useApiQuery(taskDef(orgId, id));                  // q.data: TaskOut | undefined
+ * queryClient.setQueryData(taskDef(orgId, id).queryKey, row); // type error unless `row` is TaskOut
+ * ```
  *
  * @typeParam T - The parsed response body type, inferred from `call`.
- * @param key - The query key from {@link queryKeys}.
- * @param call - A thunk performing the Hono RPC GET.
- * @param fallbackMessage - The message to surface when the server sends no problem detail.
- * @param options - Extra `useQuery` options (e.g. `enabled`, `select`).
- * @returns the {@link UseQueryResult} for the parsed body.
  */
-export function useApiQuery<T>(
+export function apiQueryOptions<T>(
   key: QueryKey,
   call: () => Promise<RpcResponse<T>>,
   fallbackMessage: string,
   options?: ApiQueryOptions<T>,
-): UseQueryResult<T> {
-  return useQuery<T>({
+) {
+  return queryOptions<T>({
     queryKey: key,
     queryFn: () => unwrap(call, fallbackMessage),
     ...options,
   });
+}
+
+/**
+ * Read hook: subscribe a component to a typed query {@link apiQueryOptions | definition}.
+ *
+ * @remarks
+ * The one read primitive — always pass a definition from {@link apiQueryOptions} (key + fetcher +
+ * optional {@link STALE} tier). The hook's `data` is the parsed body and its `error` carries the
+ * server's problem message on failure (the error handling lives in the definition's query fn). It
+ * inherits the {@link createQueryClient} defaults (refetch-on-focus, one retry), so the surface
+ * stays fresh without a manual refresh button.
+ *
+ * @typeParam T - The parsed response body type, carried by the definition.
+ * @param def - A typed definition from {@link apiQueryOptions}.
+ * @returns the {@link UseQueryResult} for the parsed body.
+ */
+export function useApiQuery<T>(def: UseQueryOptions<T>): UseQueryResult<T> {
+  return useQuery(def);
+}
+
+/**
+ * Read hook for LIST surfaces — {@link useApiQuery} that keeps the previous data on screen while a
+ * refetch is in flight (filter change, pagination, focus refetch) instead of blanking to a
+ * skeleton. Use this for every list/table query so the UI never flickers; the first ever load
+ * still shows the loading state (there is nothing to keep yet).
+ *
+ * @typeParam T - The parsed response body type, carried by the definition.
+ * @param def - A typed definition from {@link apiQueryOptions}.
+ * @returns the {@link UseQueryResult} for the parsed body.
+ */
+export function useApiListQuery<T>(def: UseQueryOptions<T>): UseQueryResult<T> {
+  return useApiQuery({ placeholderData: keepPreviousData, ...def });
 }
 
 /**
@@ -166,25 +229,28 @@ export function useApiQuery<T>(
  * and (via `refetchIntervalInBackground: false`, TanStack's default) only polls while the tab is
  * focused, so a backgrounded tab does not burn requests.
  *
- * @typeParam T - The parsed response body type, inferred from `call`.
- * @param key - The query key from {@link queryKeys}.
- * @param call - A thunk performing the Hono RPC GET.
- * @param fallbackMessage - The message to surface when the server sends no problem detail.
+ * @typeParam T - The parsed response body type, carried by the definition.
+ * @param def - A typed definition from {@link apiQueryOptions}.
  * @param intervalMs - The polling interval in milliseconds.
- * @param options - Extra `useQuery` options (e.g. `enabled`).
  * @returns the {@link UseQueryResult} for the parsed body.
  */
-export function useLiveApiQuery<T>(
-  key: QueryKey,
-  call: () => Promise<RpcResponse<T>>,
-  fallbackMessage: string,
-  intervalMs: number,
-  options?: ApiQueryOptions<T>,
-): UseQueryResult<T> {
-  return useApiQuery(key, call, fallbackMessage, {
-    refetchInterval: intervalMs,
-    ...options,
-  });
+export function useLiveApiQuery<T>(def: UseQueryOptions<T>, intervalMs: number): UseQueryResult<T> {
+  return useApiQuery({ refetchInterval: intervalMs, ...def });
+}
+
+/**
+ * Returns a prefetch function that warms a query {@link apiQueryOptions | definition} into the
+ * cache — call it on a row's hover/focus (`onMouseEnter`/`onFocus`) so the subsequent navigation
+ * renders from cache instead of fetching after paint. Pass the SAME definition the destination
+ * reads with, so there is one source of truth. A no-op when the data is already fresh.
+ *
+ * @returns a `(def) => void` prefetcher bound to the active query client.
+ */
+export function usePrefetchApi(): (def: Parameters<QueryClient['prefetchQuery']>[0]) => void {
+  const queryClient = useQueryClient();
+  return (def) => {
+    void queryClient.prefetchQuery(def);
+  };
 }
 
 /** Options for {@link useApiMutation}. */
@@ -244,4 +310,45 @@ export function useApiMutation<TData, TVariables, TContext = unknown>(
       }
     },
   });
+}
+
+/**
+ * Optimistically patch one cached query and return a rollback — the easy path for making a write
+ * feel instant. Call it from a {@link useApiMutation} `onMutate` and return its result as the
+ * mutation context; call `rollback()` from `onError` to restore the pre-mutation cache if the
+ * server rejects the write. Pair with `invalidateKeys` so the cache reconciles with the server on
+ * settle. No-ops when the query is not cached yet.
+ *
+ * @example
+ * ```ts
+ * useApiMutation({
+ *   mutationFn: (vars) => unwrap(() => api.v1.orgs[':orgId'].tasks[':id'].$patch(...), '…'),
+ *   onMutate: (vars) =>
+ *     optimisticPatch<TaskOut>(queryClient, queryKeys.task(orgId, vars.id), (prev) => ({
+ *       ...prev,
+ *       state: vars.state,
+ *     })),
+ *   onError: (_e, _vars, ctx) => ctx?.rollback(),
+ *   invalidateKeys: [queryKeys.task(orgId, id)],
+ * });
+ * ```
+ *
+ * @typeParam T - The cached data type at `key`.
+ * @param queryClient - The active client (from `useQueryClient`).
+ * @param key - The query key to patch.
+ * @param recipe - Pure function producing the next cached value from the previous one.
+ * @returns `{ rollback }` restoring the snapshot taken before the patch.
+ */
+export function optimisticPatch<T>(
+  queryClient: QueryClient,
+  key: QueryKey,
+  recipe: (previous: T) => T,
+): { rollback: () => void } {
+  const previous = queryClient.getQueryData<T>(key);
+  if (previous !== undefined) queryClient.setQueryData<T>(key, recipe(previous));
+  return {
+    rollback: () => {
+      queryClient.setQueryData<T>(key, previous);
+    },
+  };
 }

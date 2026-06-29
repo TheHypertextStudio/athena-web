@@ -16,7 +16,7 @@ import { applyView } from '@/components/views/apply-view';
 import { FilterToolbar } from '@/components/views/filter-toolbar';
 import { useViewState } from '@/components/views/use-view-state';
 import { api } from '@/lib/api';
-import { queryKeys, useApiQuery } from '@/lib/query';
+import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 
 /**
  * The org Teams list — the roster of first-class units within the org (§7), as dense rows.
@@ -60,19 +60,25 @@ export default function TeamsListPage(): JSX.Element {
   // The roster is the primary slice (its load gates the page); projects + tasks enrich each row's
   // scope roll-up and degrade gracefully (an empty list) if they fail, mirroring prior behavior.
   const teamsQ = useApiQuery(
-    queryKeys.teams(orgId),
-    () => api.v1.orgs[':orgId'].teams.$get({ param: { orgId } }),
-    'Could not load your teams.',
+    apiQueryOptions(
+      queryKeys.teams(orgId),
+      () => api.v1.orgs[':orgId'].teams.$get({ param: { orgId } }),
+      'Could not load your teams.',
+    ),
   );
   const projectsQ = useApiQuery(
-    queryKeys.projects(orgId),
-    () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
-    'Could not load projects.',
+    apiQueryOptions(
+      queryKeys.projects(orgId),
+      () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
+      'Could not load projects.',
+    ),
   );
   const tasksQ = useApiQuery(
-    queryKeys.tasks(orgId),
-    () => api.v1.orgs[':orgId'].tasks.$get({ param: { orgId } }),
-    'Could not load tasks.',
+    apiQueryOptions(
+      queryKeys.tasks(orgId),
+      () => api.v1.orgs[':orgId'].tasks.$get({ param: { orgId } }),
+      'Could not load tasks.',
+    ),
   );
 
   const teams = useMemo(() => teamsQ.data?.items ?? [], [teamsQ.data]);

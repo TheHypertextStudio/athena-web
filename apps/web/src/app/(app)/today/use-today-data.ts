@@ -6,7 +6,7 @@ import { useMemo } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 import { api } from '@/lib/api';
-import { queryKeys, useApiQuery } from '@/lib/query';
+import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 import { todayISODate } from '@/lib/today';
 
 /** A plan group: one organization and the caller's tasks for the day within it. */
@@ -43,9 +43,11 @@ export function useTodayData(): TodayPageData {
 
   const date = todayISODate();
   const todayQ = useApiQuery(
-    queryKeys.today(date),
-    () => api.v1.hub.today.$get({ query: { date } }),
-    'Could not load your day.',
+    apiQueryOptions(
+      queryKeys.today(date),
+      () => api.v1.hub.today.$get({ query: { date } }),
+      'Could not load your day.',
+    ),
   );
   const data = todayQ.data ?? null;
 

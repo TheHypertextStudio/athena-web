@@ -28,7 +28,7 @@ import type { QueryKey } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
 import { api } from './api';
-import { queryKeys, useApiQuery } from './query';
+import { apiQueryOptions, queryKeys, useApiQuery } from './query';
 
 /** All data slices exposed by {@link useTaskDetail}. */
 export interface TaskDetailData {
@@ -65,81 +65,105 @@ export function useTaskDetail(orgId: string, taskId: string): TaskDetailData {
   const commentsKey = useMemo<QueryKey>(() => [...detailKey, 'comments'], [detailKey]);
 
   const taskQ = useApiQuery(
-    detailKey,
-    () => api.v1.orgs[':orgId'].tasks[':id'].$get({ param: { orgId, id: taskId } }),
-    'Could not load this task.',
+    apiQueryOptions(
+      detailKey,
+      () => api.v1.orgs[':orgId'].tasks[':id'].$get({ param: { orgId, id: taskId } }),
+      'Could not load this task.',
+    ),
   );
   const task = taskQ.data ?? null;
   const teamId = task?.teamId ?? null;
 
   const teamQ = useApiQuery(
-    [...queryKeys.team(orgId, teamId ?? ''), 'workflow'],
-    () => api.v1.orgs[':orgId'].teams[':teamId'].$get({ param: { orgId, teamId: teamId ?? '' } }),
-    'Could not load the workflow.',
-    { enabled: Boolean(teamId) },
+    apiQueryOptions(
+      [...queryKeys.team(orgId, teamId ?? ''), 'workflow'],
+      () => api.v1.orgs[':orgId'].teams[':teamId'].$get({ param: { orgId, teamId: teamId ?? '' } }),
+      'Could not load the workflow.',
+      { enabled: Boolean(teamId) },
+    ),
   );
 
   const projectsQ = useApiQuery(
-    queryKeys.projects(orgId),
-    () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
-    'Could not load projects.',
+    apiQueryOptions(
+      queryKeys.projects(orgId),
+      () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
+      'Could not load projects.',
+    ),
   );
   const programsQ = useApiQuery(
-    queryKeys.programs(orgId),
-    () => api.v1.orgs[':orgId'].programs.$get({ param: { orgId } }),
-    'Could not load programs.',
+    apiQueryOptions(
+      queryKeys.programs(orgId),
+      () => api.v1.orgs[':orgId'].programs.$get({ param: { orgId } }),
+      'Could not load programs.',
+    ),
   );
   const membersQ = useApiQuery(
-    queryKeys.members(orgId),
-    () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
-    'Could not load members.',
+    apiQueryOptions(
+      queryKeys.members(orgId),
+      () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
+      'Could not load members.',
+    ),
   );
   const agentsQ = useApiQuery(
-    ['org', orgId, 'agents'],
-    () => api.v1.orgs[':orgId'].agents.$get({ param: { orgId } }),
-    'Could not load agents.',
+    apiQueryOptions(
+      ['org', orgId, 'agents'],
+      () => api.v1.orgs[':orgId'].agents.$get({ param: { orgId } }),
+      'Could not load agents.',
+    ),
   );
   const milestonesQ = useApiQuery(
-    ['org', orgId, 'milestones'],
-    () => api.v1.orgs[':orgId'].milestones.$get({ param: { orgId }, query: {} }),
-    'Could not load milestones.',
+    apiQueryOptions(
+      ['org', orgId, 'milestones'],
+      () => api.v1.orgs[':orgId'].milestones.$get({ param: { orgId }, query: {} }),
+      'Could not load milestones.',
+    ),
   );
   const cyclesQ = useApiQuery(
-    queryKeys.cycles(orgId),
-    () => api.v1.orgs[':orgId'].cycles.$get({ param: { orgId } }),
-    'Could not load cycles.',
+    apiQueryOptions(
+      queryKeys.cycles(orgId),
+      () => api.v1.orgs[':orgId'].cycles.$get({ param: { orgId } }),
+      'Could not load cycles.',
+    ),
   );
   const rolesQ = useApiQuery(
-    queryKeys.roles(orgId),
-    () => api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
-    'Could not load roles.',
+    apiQueryOptions(
+      queryKeys.roles(orgId),
+      () => api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
+      'Could not load roles.',
+    ),
   );
 
   const commentsQ = useApiQuery(
-    commentsKey,
-    () =>
-      api.v1.orgs[':orgId'].comments.$get({
-        param: { orgId },
-        query: { subjectType: 'task', subjectId: taskId },
-      }),
-    'Could not load comments.',
+    apiQueryOptions(
+      commentsKey,
+      () =>
+        api.v1.orgs[':orgId'].comments.$get({
+          param: { orgId },
+          query: { subjectType: 'task', subjectId: taskId },
+        }),
+      'Could not load comments.',
+    ),
   );
 
   const sessionQ = useApiQuery(
-    [...detailKey, 'session'],
-    () => api.v1.orgs[':orgId'].sessions.$get({ param: { orgId }, query: {} }),
-    'Could not load sessions.',
+    apiQueryOptions(
+      [...detailKey, 'session'],
+      () => api.v1.orgs[':orgId'].sessions.$get({ param: { orgId }, query: {} }),
+      'Could not load sessions.',
+    ),
   );
   const taskSession = sessionQ.data?.items.find((s) => s.taskId === taskId) ?? null;
 
   const activityQ = useApiQuery(
-    [...detailKey, 'activity', taskSession?.id ?? ''],
-    () =>
-      api.v1.orgs[':orgId'].sessions[':id'].activity.$get({
-        param: { orgId, id: taskSession?.id ?? '' },
-      }),
-    'Could not load activity.',
-    { enabled: Boolean(taskSession) },
+    apiQueryOptions(
+      [...detailKey, 'activity', taskSession?.id ?? ''],
+      () =>
+        api.v1.orgs[':orgId'].sessions[':id'].activity.$get({
+          param: { orgId, id: taskSession?.id ?? '' },
+        }),
+      'Could not load activity.',
+      { enabled: Boolean(taskSession) },
+    ),
   );
 
   return {

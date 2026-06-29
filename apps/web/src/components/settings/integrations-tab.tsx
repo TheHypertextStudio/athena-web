@@ -32,7 +32,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
 import { readError } from '@/lib/problem';
-import { queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
+import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
 
 import { DisconnectConfirmDialog } from './disconnect-confirm-dialog';
 import { IntegrationProviderCard } from './integration-provider-card';
@@ -80,14 +80,18 @@ export function IntegrationsTab({
   } | null>(null);
 
   const directoryQ = useApiQuery(
-    queryKeys.integrationsDirectory(orgId),
-    () => api.v1.orgs[':orgId'].integrations.directory.$get({ param: { orgId } }),
-    'Could not load the integration directory.',
+    apiQueryOptions(
+      queryKeys.integrationsDirectory(orgId),
+      () => api.v1.orgs[':orgId'].integrations.directory.$get({ param: { orgId } }),
+      'Could not load the integration directory.',
+    ),
   );
   const integrationsQ = useApiQuery(
-    queryKeys.integrations(orgId),
-    () => api.v1.orgs[':orgId'].integrations.$get({ param: { orgId } }),
-    'Could not load integrations.',
+    apiQueryOptions(
+      queryKeys.integrations(orgId),
+      () => api.v1.orgs[':orgId'].integrations.$get({ param: { orgId } }),
+      'Could not load integrations.',
+    ),
   );
 
   const directory: readonly IntegrationDirectoryProvider[] = directoryQ.data?.providers ?? [];

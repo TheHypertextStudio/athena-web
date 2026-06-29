@@ -11,7 +11,7 @@ import {
 } from '@/components/property-pickers/options';
 import { api } from '@/lib/api';
 import { fetchProjectDetail } from '@/lib/fetch-project-detail';
-import { queryKeys, useApiQuery } from '@/lib/query';
+import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 import { useOrgCapability } from '@/lib/use-org-capability';
 import { useProjectMutations } from '@/lib/use-project-mutations';
 
@@ -22,27 +22,33 @@ export function useProjectDetailPage(orgId: string, projectId: string, teamId: s
   const updatesKey = useMemo(() => [...detailKey, 'updates'] as const, [detailKey]);
 
   const detailQ = useApiQuery(
-    detailKey,
-    fetchProjectDetail(orgId, projectId),
-    'Could not load this project.',
+    apiQueryOptions(
+      detailKey,
+      fetchProjectDetail(orgId, projectId),
+      'Could not load this project.',
+    ),
   );
   const commentsQ = useApiQuery(
-    commentsKey,
-    () =>
-      api.v1.orgs[':orgId'].comments.$get({
-        param: { orgId },
-        query: { subjectType: 'project', subjectId: projectId },
-      }),
-    'Could not load comments.',
+    apiQueryOptions(
+      commentsKey,
+      () =>
+        api.v1.orgs[':orgId'].comments.$get({
+          param: { orgId },
+          query: { subjectType: 'project', subjectId: projectId },
+        }),
+      'Could not load comments.',
+    ),
   );
   const updatesQ = useApiQuery(
-    updatesKey,
-    () =>
-      api.v1.orgs[':orgId'].updates.$get({
-        param: { orgId },
-        query: { subjectType: 'project', subjectId: projectId },
-      }),
-    'Could not load updates.',
+    apiQueryOptions(
+      updatesKey,
+      () =>
+        api.v1.orgs[':orgId'].updates.$get({
+          param: { orgId },
+          query: { subjectType: 'project', subjectId: projectId },
+        }),
+      'Could not load updates.',
+    ),
   );
 
   const comments = useMemo(() => commentsQ.data?.items ?? [], [commentsQ.data]);

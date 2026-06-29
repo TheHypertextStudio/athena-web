@@ -18,7 +18,7 @@ import type { TriageDestination } from '@/components/triage/triage-actions';
 import type { TriageRowData } from '@/components/triage/triage-row';
 import { api } from './api';
 import { readError, readProblem } from './problem';
-import { queryKeys, useApiQuery } from './query';
+import { apiQueryOptions, queryKeys, useApiQuery } from './query';
 import { stateTypeOf } from './work-state';
 
 function isUnsorted(task: TaskOut): boolean {
@@ -58,39 +58,53 @@ export function useTriage(orgId: string): TriageState {
   const [actionError, setActionError] = useState<string | null>(null);
 
   const tasksQ = useApiQuery(
-    queryKeys.tasks(orgId),
-    () => api.v1.orgs[':orgId'].tasks.$get({ param: { orgId } }),
-    'Could not load the triage queue.',
+    apiQueryOptions(
+      queryKeys.tasks(orgId),
+      () => api.v1.orgs[':orgId'].tasks.$get({ param: { orgId } }),
+      'Could not load the triage queue.',
+    ),
   );
   const teamsQ = useApiQuery(
-    queryKeys.teams(orgId),
-    () => api.v1.orgs[':orgId'].teams.$get({ param: { orgId } }),
-    'Could not load teams.',
+    apiQueryOptions(
+      queryKeys.teams(orgId),
+      () => api.v1.orgs[':orgId'].teams.$get({ param: { orgId } }),
+      'Could not load teams.',
+    ),
   );
   const membersQ = useApiQuery(
-    queryKeys.members(orgId),
-    () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
-    'Could not load members.',
+    apiQueryOptions(
+      queryKeys.members(orgId),
+      () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
+      'Could not load members.',
+    ),
   );
   const projectsQ = useApiQuery(
-    queryKeys.projects(orgId),
-    () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
-    'Could not load projects.',
+    apiQueryOptions(
+      queryKeys.projects(orgId),
+      () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
+      'Could not load projects.',
+    ),
   );
   const programsQ = useApiQuery(
-    queryKeys.programs(orgId),
-    () => api.v1.orgs[':orgId'].programs.$get({ param: { orgId } }),
-    'Could not load programs.',
+    apiQueryOptions(
+      queryKeys.programs(orgId),
+      () => api.v1.orgs[':orgId'].programs.$get({ param: { orgId } }),
+      'Could not load programs.',
+    ),
   );
   const integrationsQ = useApiQuery(
-    queryKeys.integrations(orgId),
-    () => api.v1.orgs[':orgId'].integrations.$get({ param: { orgId } }),
-    'Could not load integrations.',
+    apiQueryOptions(
+      queryKeys.integrations(orgId),
+      () => api.v1.orgs[':orgId'].integrations.$get({ param: { orgId } }),
+      'Could not load integrations.',
+    ),
   );
   const directoryQ = useApiQuery(
-    queryKeys.integrationsDirectory(orgId),
-    () => api.v1.orgs[':orgId'].integrations.directory.$get({ param: { orgId } }),
-    'Could not load the integration directory.',
+    apiQueryOptions(
+      queryKeys.integrationsDirectory(orgId),
+      () => api.v1.orgs[':orgId'].integrations.directory.$get({ param: { orgId } }),
+      'Could not load the integration directory.',
+    ),
   );
 
   const tasks = useMemo<readonly TaskOut[]>(() => tasksQ.data?.items ?? [], [tasksQ.data]);

@@ -17,7 +17,7 @@ import { StatsBanner } from '@/components/cycles/stats-banner';
 import { buildTaskCatalog } from '@/components/views/task-catalog';
 import { buildTaskColumns, TaskTable } from '@/components/views/task-table';
 import { fetchCycleDetail } from '@/lib/fetch-cycle-detail';
-import { queryKeys, useApiQuery } from '@/lib/query';
+import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 import { useCycleMutations } from '@/lib/use-cycle-mutations';
 import { useOrgCapability } from '@/lib/use-org-capability';
 import { STATE_GROUP_ORDER, stateTypeOf } from '@/lib/work-state';
@@ -38,9 +38,11 @@ export default function CycleDetailPage(): JSX.Element {
   const detailKey = queryKeys.cycle(orgId, cycleId);
 
   const detailQ = useApiQuery(
-    detailKey,
-    fetchCycleDetail(orgId, cycleId),
-    `Could not load this ${cycleNounLower}.`,
+    apiQueryOptions(
+      detailKey,
+      fetchCycleDetail(orgId, cycleId),
+      `Could not load this ${cycleNounLower}.`,
+    ),
   );
   const data = detailQ.data ?? null;
   const cycle = data?.cycle ?? null;

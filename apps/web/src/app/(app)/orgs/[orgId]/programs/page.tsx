@@ -19,7 +19,7 @@ import type { FieldOption } from '@/components/views/field-catalog';
 import { FilterToolbar } from '@/components/views/filter-toolbar';
 import { useViewState } from '@/components/views/use-view-state';
 import { api } from '@/lib/api';
-import { queryKeys, useApiQuery } from '@/lib/query';
+import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 
 /**
  * The org Programs list — the roster of ongoing operational lines of work (§8.4), as dense rows.
@@ -66,24 +66,32 @@ export default function ProgramsListPage(): JSX.Element {
   // enrich each row and degrade gracefully (an empty list) if they fail, mirroring the prior
   // behavior. Each stays live without a manual refresh.
   const programsQ = useApiQuery(
-    queryKeys.programs(orgId),
-    () => api.v1.orgs[':orgId'].programs.$get({ param: { orgId } }),
-    `Could not load ${programsLabel.toLowerCase()}.`,
+    apiQueryOptions(
+      queryKeys.programs(orgId),
+      () => api.v1.orgs[':orgId'].programs.$get({ param: { orgId } }),
+      `Could not load ${programsLabel.toLowerCase()}.`,
+    ),
   );
   const projectsQ = useApiQuery(
-    queryKeys.projects(orgId),
-    () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
-    'Could not load projects.',
+    apiQueryOptions(
+      queryKeys.projects(orgId),
+      () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
+      'Could not load projects.',
+    ),
   );
   const tasksQ = useApiQuery(
-    queryKeys.tasks(orgId),
-    () => api.v1.orgs[':orgId'].tasks.$get({ param: { orgId } }),
-    'Could not load tasks.',
+    apiQueryOptions(
+      queryKeys.tasks(orgId),
+      () => api.v1.orgs[':orgId'].tasks.$get({ param: { orgId } }),
+      'Could not load tasks.',
+    ),
   );
   const membersQ = useApiQuery(
-    queryKeys.members(orgId),
-    () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
-    'Could not load members.',
+    apiQueryOptions(
+      queryKeys.members(orgId),
+      () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
+      'Could not load members.',
+    ),
   );
 
   const programs = useMemo(() => programsQ.data?.items ?? [], [programsQ.data]);

@@ -15,7 +15,7 @@ import { type ResolveActor, UpdatesPanel } from '@/components/programs/updates-p
 import { WorkBoard } from '@/components/programs/work-board';
 import { memberActorOptions } from '@/components/property-pickers/options';
 import { api } from '@/lib/api';
-import { queryKeys, useApiQuery } from '@/lib/query';
+import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 import { useOrgCapability } from '@/lib/use-org-capability';
 import { stateTypeOf } from '@/lib/work-state';
 import { fetchProgramDetail } from '@/lib/fetch-program-detail';
@@ -43,9 +43,11 @@ export default function ProgramDetailPage(): JSX.Element {
   const [tab, setTab] = useState<TabId>('work');
 
   const detailQ = useApiQuery(
-    detailKey,
-    fetchProgramDetail(orgId, programId),
-    `Could not load this ${programLabel.toLowerCase()}.`,
+    apiQueryOptions(
+      detailKey,
+      fetchProgramDetail(orgId, programId),
+      `Could not load this ${programLabel.toLowerCase()}.`,
+    ),
   );
   const detail = detailQ.data ?? null;
   const program = detail?.program ?? null;
@@ -54,20 +56,24 @@ export default function ProgramDetailPage(): JSX.Element {
   const roles = detail?.roles ?? [];
 
   const workQ = useApiQuery(
-    workKey,
-    () =>
-      api.v1.orgs[':orgId'].programs[':id'].work.$get({
-        param: { orgId, id: programId },
-        query: {},
-      }),
-    "Could not load this program's work.",
+    apiQueryOptions(
+      workKey,
+      () =>
+        api.v1.orgs[':orgId'].programs[':id'].work.$get({
+          param: { orgId, id: programId },
+          query: {},
+        }),
+      "Could not load this program's work.",
+    ),
   );
   const work: ProgramWorkOut | null = workQ.data ?? null;
 
   const updatesQ = useApiQuery(
-    updatesKey,
-    () => api.v1.orgs[':orgId'].programs[':id'].updates.$get({ param: { orgId, id: programId } }),
-    'Could not load updates.',
+    apiQueryOptions(
+      updatesKey,
+      () => api.v1.orgs[':orgId'].programs[':id'].updates.$get({ param: { orgId, id: programId } }),
+      'Could not load updates.',
+    ),
   );
   const updates = useMemo<readonly UpdateOut[]>(() => updatesQ.data?.items ?? [], [updatesQ.data]);
 

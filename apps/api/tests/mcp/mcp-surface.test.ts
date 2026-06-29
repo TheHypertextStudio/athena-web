@@ -7,6 +7,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 
 // Stub Better Auth so we never pull the heavy ESM chain; identity is injected via ctx.
 vi.mock('@docket/auth', () => ({ auth: { api: { getSession: vi.fn(async () => null) } } }));
@@ -15,6 +16,7 @@ import type * as DbModule from '@docket/db';
 import type { Capability } from '@docket/types';
 
 import type { McpContext } from '../../src/mcp/auth';
+import { createMcpCatalog } from '../../src/mcp/catalog';
 import type { registerTools as RegisterTools } from '../../src/mcp/tools';
 import type { registerResources as RegisterResources } from '../../src/mcp/resources';
 import type { registerPrompts as RegisterPrompts } from '../../src/mcp/prompts';
@@ -225,9 +227,11 @@ async function connect(ctx: McpContext): Promise<Client> {
       },
     },
   );
-  registerTools(server, ctx);
-  registerResources(server, ctx);
-  registerPrompts(server, ctx);
+  const catalog = createMcpCatalog(server, { pageSize: 3 });
+  registerTools(catalog, ctx);
+  registerResources(catalog, ctx);
+  registerPrompts(catalog, ctx);
+  catalog.installListHandlers(ctx);
   const [ct, st] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: 'c', version: '0.0.0' });
   await Promise.all([server.connect(st), client.connect(ct)]);
@@ -256,6 +260,60 @@ function readJson(contents: readonly unknown[]): Record<string, unknown> {
 }
 
 const MISSING = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
+
+const PagedViewPayload = z.looseObject({
+  items: z.array(z.looseObject({ id: z.string() })),
+  nextCursor: z.string().optional(),
+});
+
+const PagedSearchPayload = z.looseObject({
+  results: z.array(z.looseObject({ id: z.string() })),
+  nextCursor: z.string().optional(),
+});
+
+async function collectToolNames(client: Client): Promise<string[]> {
+  const names: string[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await client.listTools(cursor ? { cursor } : undefined);
+    names.push(...page.tools.map((tool) => tool.name));
+    cursor = page.nextCursor;
+  } while (cursor);
+  return names;
+}
+
+async function collectResourceUris(client: Client): Promise<string[]> {
+  const uris: string[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await client.listResources(cursor ? { cursor } : undefined);
+    uris.push(...page.resources.map((resource) => resource.uri));
+    cursor = page.nextCursor;
+  } while (cursor);
+  return uris;
+}
+
+async function collectResourceTemplateUris(client: Client): Promise<string[]> {
+  const uris: string[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await client.listResourceTemplates(cursor ? { cursor } : undefined);
+    uris.push(...page.resourceTemplates.map((template) => template.uriTemplate));
+    cursor = page.nextCursor;
+  } while (cursor);
+  return uris;
+}
+
+async function collectPromptNames(client: Client): Promise<string[]> {
+  const names: string[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await client.listPrompts(cursor ? { cursor } : undefined);
+    names.push(...page.prompts.map((prompt) => prompt.name));
+    cursor = page.nextCursor;
+  } while (cursor);
+  return names;
+}
 
 describe('set_task_delegate tool', () => {
   it('sets a delegate (assign), clears it (null), validates the agent, 404s', async () => {
@@ -779,6 +837,102 @@ describe('run_view / search tools', () => {
     })) as CallToolResult;
     const results = payload(res)['results'] as { type: string }[];
     expect(results.some((r) => r.type === 'task')).toBe(true);
+  });
+
+  it('paginates run_view and search results with opaque cursors', async () => {
+    const s = await seedOrg(['view']);
+    await db.insert(schema.task).values([
+      {
+        organizationId: s.orgId,
+        title: 'Ship 3',
+        teamId: s.teamId,
+        state: 'todo',
+        createdBy: s.actorId,
+      },
+      {
+        organizationId: s.orgId,
+        title: 'Ship 4',
+        teamId: s.teamId,
+        state: 'todo',
+        createdBy: s.actorId,
+      },
+      {
+        organizationId: s.orgId,
+        title: 'Ship 5',
+        teamId: s.teamId,
+        state: 'todo',
+        createdBy: s.actorId,
+      },
+    ]);
+    const client = await connect(s.ctx);
+
+    const firstView = (await client.callTool({
+      name: 'run_view',
+      arguments: { orgId: s.orgId, entity: 'task', limit: 2 },
+    })) as CallToolResult;
+    const firstPayload = PagedViewPayload.parse(payload(firstView));
+    expect(firstPayload.items.length).toBe(2);
+    expect(firstPayload.nextCursor).toEqual(expect.any(String));
+
+    const secondView = (await client.callTool({
+      name: 'run_view',
+      arguments: {
+        orgId: s.orgId,
+        entity: 'task',
+        limit: 2,
+        cursor: firstPayload.nextCursor,
+      },
+    })) as CallToolResult;
+    const secondPayload = PagedViewPayload.parse(payload(secondView));
+    expect(secondPayload.items.length).toBe(2);
+    const firstIds = firstPayload.items.map((item) => item.id);
+    const secondIds = secondPayload.items.map((item) => item.id);
+    expect(new Set([...firstIds, ...secondIds]).size).toBe(4);
+
+    const firstSearch = (await client.callTool({
+      name: 'search',
+      arguments: { orgId: s.orgId, query: 'Ship', limit: 2 },
+    })) as CallToolResult;
+    const searchPayload = PagedSearchPayload.parse(payload(firstSearch));
+    expect(searchPayload.results.length).toBe(2);
+    expect(searchPayload.nextCursor).toEqual(expect.any(String));
+  });
+});
+
+describe('MCP list pagination', () => {
+  it('paginates tools, resources, templates, and prompts without duplicates', async () => {
+    const s = await seedOrg(['view']);
+    const client = await connect(s.ctx);
+
+    const firstTools = await client.listTools();
+    expect(firstTools.tools).toHaveLength(3);
+    expect(firstTools.nextCursor).toEqual(expect.any(String));
+
+    const toolNames = await collectToolNames(client);
+    expect(toolNames).toEqual([...new Set(toolNames)]);
+    expect(toolNames).toEqual(expect.arrayContaining(['run_view', 'search', 'create_task']));
+
+    const resourceUris = await collectResourceUris(client);
+    expect(resourceUris).toEqual([...new Set(resourceUris)]);
+    expect(resourceUris).toEqual(
+      expect.arrayContaining(['docket://orgs', 'docket://hub/today', 'docket://hub/inbox']),
+    );
+
+    const templateUris = await collectResourceTemplateUris(client);
+    expect(templateUris).toEqual(['docket://{org}/{type}/{id}']);
+
+    const promptNames = await collectPromptNames(client);
+    expect(promptNames).toEqual([...new Set(promptNames)]);
+    expect(promptNames).toEqual(expect.arrayContaining(['docket_system', 'task_brief', 'standup']));
+  });
+
+  it('rejects invalid list cursors as invalid params', async () => {
+    const s = await seedOrg(['view']);
+    const client = await connect(s.ctx);
+
+    await expect(client.listTools({ cursor: 'not-a-valid-cursor' })).rejects.toThrow(
+      /Invalid cursor/,
+    );
   });
 });
 

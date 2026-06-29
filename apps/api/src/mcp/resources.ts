@@ -20,7 +20,7 @@
  * trusted for access.
  */
 import type { ResourceKind } from '@docket/authz';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpRegistrar } from './catalog';
 import { ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ReadResourceResult } from '@modelcontextprotocol/sdk/types.js';
 
@@ -161,7 +161,7 @@ async function hydrate(type: ReadableType, orgId: string, id: string): Promise<u
  * @param server - The per-request {@link McpServer} to register resources on.
  * @param ctx - The authenticated MCP caller.
  */
-export function registerResources(server: McpServer, ctx: McpContext): void {
+export function registerResources(server: McpRegistrar, ctx: McpContext): void {
   registerStaticResources(server, ctx);
 
   server.registerResource(

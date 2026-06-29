@@ -15,7 +15,7 @@
  * per mcp-surface.md §3.2 — Docket's own DB is a closed world (`openWorldHint:false`)
  * except `link_external` and `trigger_agent` which touch external systems.
  */
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpRegistrar } from './catalog';
 
 import type { McpContext } from './auth';
 import { registerContentTools } from './content-tools';
@@ -40,7 +40,7 @@ import { registerViewPlanTools } from './view-plan-tools';
  * @param server - The per-request {@link McpServer} to register tools on.
  * @param ctx - The authenticated MCP caller.
  */
-export function registerTools(server: McpServer, ctx: McpContext): void {
+export function registerTools(server: McpRegistrar, ctx: McpContext): void {
   registerTaskCrudTools(server, ctx);
   registerTaskFieldTools(server, ctx);
   registerTaskDepTools(server, ctx);

@@ -22,6 +22,7 @@ import { env } from '../env';
 import { ApiError } from '../error';
 import type { McpContext } from './auth';
 import { resolveMcpContext } from './auth';
+import { createMcpCatalog } from './catalog';
 import { registerPrompts } from './prompts';
 import { registerResources } from './resources';
 import { challenge401, challenge403, MCP_SCOPES, TOOL_SCOPE } from './scope';
@@ -56,9 +57,11 @@ function buildServer(ctx: McpContext): McpServer {
       logging: {},
     },
   });
-  registerTools(server, ctx);
-  registerResources(server, ctx);
-  registerPrompts(server, ctx);
+  const catalog = createMcpCatalog(server);
+  registerTools(catalog, ctx);
+  registerResources(catalog, ctx);
+  registerPrompts(catalog, ctx);
+  catalog.installListHandlers(ctx);
   return server;
 }
 

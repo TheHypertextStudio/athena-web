@@ -1,5 +1,5 @@
 import { actor, db, program, project } from '@docket/db';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpRegistrar } from './catalog';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 
@@ -9,7 +9,7 @@ import { jsonResult, runTool, scopedActor, authorize } from './result';
 import { assertRefInOrg } from './tools-shared';
 
 /** Register create_project and update_project on `server`. */
-export function registerProjectTools(server: McpServer, ctx: McpContext): void {
+export function registerProjectTools(server: McpRegistrar, ctx: McpContext): void {
   server.registerTool(
     'create_project',
     {

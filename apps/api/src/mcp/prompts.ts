@@ -13,7 +13,7 @@
  * This is the `prompts` capability the spec left as a v1 follow-up; we advertise it and
  * register the agent-context prompts here.
  */
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpRegistrar } from './catalog';
 import type { GetPromptResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 
@@ -66,7 +66,7 @@ function textPrompt(
  * @param server - The per-request {@link McpServer} to register prompts on.
  * @param ctx - The authenticated MCP caller.
  */
-export function registerPrompts(server: McpServer, ctx: McpContext): void {
+export function registerPrompts(server: McpRegistrar, ctx: McpContext): void {
   server.registerPrompt(
     'docket_system',
     {

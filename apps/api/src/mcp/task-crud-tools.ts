@@ -1,6 +1,6 @@
 import { actor, db, project, task, team } from '@docket/db';
 import { Priority } from '@docket/types';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpRegistrar } from './catalog';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 
@@ -10,7 +10,7 @@ import { jsonResult, runTool, scopedActor, authorize } from './result';
 import { assertRefInOrg, loadTask, resolveStateTransition } from './tools-shared';
 
 /** Register create_task, update_task, move_task on `server`. */
-export function registerTaskCrudTools(server: McpServer, ctx: McpContext): void {
+export function registerTaskCrudTools(server: McpRegistrar, ctx: McpContext): void {
   server.registerTool(
     'create_task',
     {

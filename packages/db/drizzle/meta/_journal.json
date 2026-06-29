@@ -78,6 +78,13 @@
       "when": 1782789600000,
       "tag": "0010_bound_external_accounts",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1782776991825,
+      "tag": "0011_secret_mephistopheles",
+      "breakpoints": true
     }
   ]
 }

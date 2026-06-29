@@ -15,6 +15,9 @@ import { cn } from '@docket/ui';
 import Link from 'next/link';
 import type { JSX } from 'react';
 
+import { projectDetailDef } from '@/lib/fetch-project-detail';
+import { usePrefetchApi } from '@/lib/query';
+
 import { statusLabel } from './format';
 import { asHealth, fillFor, labelFor } from './health';
 
@@ -33,6 +36,7 @@ export interface UnscheduledTrayProps {
  * @returns the tray, or null.
  */
 export function UnscheduledTray({ bars, dimmed }: UnscheduledTrayProps): JSX.Element | null {
+  const prefetch = usePrefetchApi();
   if (bars.length === 0) return null;
   return (
     <div className={cn('flex flex-col gap-1.5 pt-1', dimmed && 'opacity-30')}>
@@ -40,10 +44,15 @@ export function UnscheduledTray({ bars, dimmed }: UnscheduledTrayProps): JSX.Ele
       <ul className="flex flex-wrap gap-1.5">
         {bars.map((bar) => {
           const health: Health | null = asHealth(bar.health);
+          const warm = (): void => {
+            prefetch(projectDetailDef(bar.organizationId, bar.id));
+          };
           return (
             <li key={bar.id}>
               <Link
                 href={`/orgs/${bar.organizationId}/projects/${bar.id}`}
+                onMouseEnter={warm}
+                onFocus={warm}
                 aria-label={`${bar.name} — ${statusLabel(bar.status)}, unscheduled, ${labelFor(health)}`}
                 className="border-outline-variant bg-surface-container-low hover:bg-surface-container-high focus-visible:ring-ring inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:outline-none"
               >

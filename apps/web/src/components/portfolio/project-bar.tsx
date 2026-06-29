@@ -20,6 +20,9 @@ import { cn } from '@docket/ui';
 import Link from 'next/link';
 import type { JSX } from 'react';
 
+import { projectDetailDef } from '@/lib/fetch-project-detail';
+import { usePrefetchApi } from '@/lib/query';
+
 import { formatDate, spanCopy, statusLabel } from './format';
 import { asHealth, barClassFor, labelFor } from './health';
 import { type TimeScale, pct } from './time-scale';
@@ -54,6 +57,10 @@ export interface ProjectBarProps {
  * @returns the rendered bar.
  */
 export function ProjectBar({ bar, start, end, scale, dimmed }: ProjectBarProps): JSX.Element {
+  const prefetch = usePrefetchApi();
+  const warmDetail = (): void => {
+    prefetch(projectDetailDef(bar.organizationId, bar.id));
+  };
   const health: Health | null = asHealth(bar.health);
   const left = pct(start, scale);
   const width = Math.max(pct(end, scale) - left, MIN_BAR_PCT);
@@ -76,6 +83,8 @@ export function ProjectBar({ bar, start, end, scale, dimmed }: ProjectBarProps):
     <div className="relative h-8">
       <Link
         href={`/orgs/${bar.organizationId}/projects/${bar.id}`}
+        onMouseEnter={warmDetail}
+        onFocus={warmDetail}
         aria-label={ariaLabel}
         title={`${bar.name} · ${span}`}
         className={cn(

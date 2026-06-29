@@ -71,13 +71,6 @@ export interface ProviderGroup {
    */
   readonly generate?: (env: Environment) => Record<string, string>;
   /**
-   * Marks a group as ONE credential shared across every environment and device (the GitHub App:
-   * its webhook URL is fixed to production and must never change per machine). The app is created
-   * once when configuring `production`; for any other environment the setup REUSES the same values
-   * by pulling them from production Secret Manager instead of creating a new app.
-   */
-  readonly shared?: boolean;
-  /**
    * Per-var input transforms applied to what the user enters BEFORE it is stored — so a prompt can
    * accept a friendly form and the script does the mechanical conversion (turnkey). Keyed by var
    * name. Example: the GitHub App private key is entered as a `.pem` path (or pasted PEM) and
@@ -119,7 +112,7 @@ function appName(env: Environment): string {
 
 export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
   {
-    title: 'Google — sign-in + Drive / Gmail / Calendar / Tasks connectors',
+    title: 'Google Integration Set-up',
     vars: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'],
     instructions: (env, base) => [
       'Creates an OAuth 2.0 Web-application client. ~5 min. You need a Google account.',
@@ -148,7 +141,7 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
     ],
   },
   {
-    title: 'GitHub — sign-in + issue/PR connector + webhook firehose',
+    title: 'GitHub Integration Set-up',
     vars: [
       'GITHUB_APP_ID',
       'GITHUB_APP_SLUG',
@@ -157,29 +150,25 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
       'GITHUB_APP_PRIVATE_KEY',
       'GITHUB_APP_WEBHOOK_SECRET',
     ],
-    // ONE GitHub App for EVERY environment and device. These create instructions are only shown
-    // when configuring `production` (where the app is born); local/staging REUSE the same values
-    // (pulled from prod Secret Manager — see `shared` handling in setupEnvironment), so the
-    // webhook URL is set once and never changes per device.
-    shared: true,
-    steps: (_env, base) => {
+    steps: (env, base) => {
       // Homepage is the product (web) URL, not the API host the callbacks/webhook live on.
       const homepage = base.replace('://api.', '://');
       return [
         {
           note: [
-            'This is the one GitHub App that Docket uses everywhere — it handles sign-in, the',
-            'issue and pull-request connector, and the real-time webhook firehose, all at once.',
-            'You only build it here, for production. Every other machine and environment quietly',
-            'reuses these same values (the bootstrap pulls them down for you), which is exactly',
-            'why the webhook URL only has to be set this one time and never per device.',
+            'GitHub is one GitHub App that does three jobs at once: sign-in, the issue and',
+            'pull-request connector, and the real-time webhook firehose. We will create it together,',
+            'one field at a time, and paste back the values it gives you.',
             '',
-            "We'll go through GitHub's form one piece at a time. Open the New GitHub App page now:",
+            'Setting up locally? This is optional — local dev runs against a built-in mock, so you',
+            'can press Enter past these prompts to skip and wire up GitHub later.',
+            '',
+            'Otherwise, open the New GitHub App page and click "New GitHub App":',
             '',
             '  https://github.com/organizations/<your-org>/settings/apps',
             '',
-            'and click "New GitHub App". (If you do not see it, that is Organization settings →',
-            'Developer settings → GitHub Apps.) Leave that tab open — the next steps walk down it.',
+            "(Can't find it? Organization settings → Developer settings → GitHub Apps.) Leave that",
+            'tab open — the next steps walk straight down the form.',
           ],
         },
         {
@@ -192,42 +181,47 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
         },
         {
           note: [
-            'Next is the "Identifying and authorizing users" section. This is how sign-in and the',
-            'connect flow get the user back to Docket afterwards.',
+            'Find the "Identifying and authorizing users" section — this is how sign-in and',
+            'connecting an account return the user to Docket.',
             '',
-            'In the "Callback URL" box, add these four, one per line — click "Add callback URL" to',
-            'get another box for each. One app covers both your production site and local dev:',
+            'In "Callback URL", add these two (click "Add callback URL" for the second):',
             '',
             `  • ${base}/api/auth/callback/github`,
             `  • ${base}/v1/integrations/github/callback`,
-            `  • ${DEFAULT_LOCAL_API_URL}/api/auth/callback/github`,
-            `  • ${DEFAULT_LOCAL_API_URL}/v1/integrations/github/callback`,
             '',
-            'Then tick all three checkboxes in that section:',
+            "(It's one app for every environment. When you set up another environment later, add",
+            "that environment's two URLs here too — a GitHub App allows several.)",
             '',
-            '  • "Expire user authorization tokens"  (so Docket gets a refresh token)',
+            'Then tick all three checkboxes:',
+            '',
+            '  • "Expire user authorization tokens"  (gives Docket a refresh token)',
             '  • "Request user authorization (OAuth) during installation"',
             '  • "Redirect on update"',
             '',
-            'Ignore the "Setup URL" field — GitHub greys it out once you tick "Request user',
-            'authorization during installation", which is exactly what we want.',
+            'Leave the "Setup URL" field alone — GitHub greys it out once you tick the',
+            'OAuth-during-install box, which is what we want.',
           ],
         },
         {
-          note: [
-            'Now the "Webhook" section — this is what makes the firehose real-time.',
-            '',
-            '  • Tick "Active".',
-            `  • Webhook URL:  ${base}/v1/ingest/github`,
-            '  • Secret: paste the webhook secret we generated a moment ago (it is already on your',
-            '    clipboard, so just paste).',
-            '  • Leave "Enable SSL verification" on.',
-            '',
-            'You are setting this URL to production on purpose. Local dev does not need its own',
-            'webhook — it uses a built-in mock. If you ever want to test the real firehose on your',
-            'machine, run a Cloudflare Tunnel (cloudflared tunnel --url http://localhost:3001)',
-            'against a throwaway personal test app, never this shared one.',
-          ],
+          note:
+            env === 'local'
+              ? [
+                  'Webhook — skip it for local dev. Local runs against a built-in mock, so just',
+                  'leave "Active" unchecked and move on.',
+                  '',
+                  '(When you deploy to production you will set the Webhook URL once, to your public',
+                  'API at https://your-api-host/v1/ingest/github, and turn it on. We have already',
+                  'generated GITHUB_APP_WEBHOOK_SECRET and saved it for that day.)',
+                ]
+              : [
+                  'Now the "Webhook" section — this is what makes the firehose real-time.',
+                  '',
+                  '  • Tick "Active".',
+                  `  • Webhook URL:  ${base}/v1/ingest/github`,
+                  '  • Secret: paste the webhook secret we generated a moment ago (already on your',
+                  '    clipboard, so just paste).',
+                  '  • Leave "Enable SSL verification" on.',
+                ],
         },
         {
           note: [
@@ -323,7 +317,7 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
     transform: { GITHUB_APP_PRIVATE_KEY: encodePrivateKeyInput },
   },
   {
-    title: 'Linear — sign-in + Linear issue migration',
+    title: 'Linear Integration Set-up',
     vars: ['LINEAR_CLIENT_ID', 'LINEAR_CLIENT_SECRET'],
     instructions: (env, base) => [
       'Creates a Linear OAuth2 application. ~2 min. You need a Linear workspace admin.',
@@ -341,7 +335,7 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
     ],
   },
   {
-    title: 'Stripe — billing (subscriptions + webhooks)',
+    title: 'Stripe Integration Set-up',
     vars: ['STRIPE_SECRET_KEY', 'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY', 'STRIPE_WEBHOOK_SECRET'],
     instructions: (env, base) => {
       const mode = env === 'production' ? 'live' : 'test';
@@ -383,7 +377,7 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
     },
   },
   {
-    title: 'Anthropic — built-in Athena agent (optional)',
+    title: 'Anthropic Integration Set-up (optional)',
     vars: ['ANTHROPIC_API_KEY'],
     instructions: (env) => [
       'Powers real Athena/Claude turns. Optional — blank keeps the deterministic mock runtime',
@@ -397,7 +391,7 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
     ],
   },
   {
-    title: 'Transactional email (SMTP) — optional',
+    title: 'Email Integration Set-up (optional)',
     vars: ['SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS', 'MAIL_FROM'],
     instructions: (env) =>
       env === 'local'
@@ -428,7 +422,7 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
           ],
   },
   {
-    title: 'Observability & storage — optional',
+    title: 'Observability & Storage Set-up (optional)',
     vars: ['SENTRY_DSN', 'BLOB_READ_WRITE_TOKEN', 'EXPORT_BUCKET_URL', 'EXPORT_BUCKET_TOKEN'],
     instructions: () => [
       'All optional. Leave blank to disable each.',

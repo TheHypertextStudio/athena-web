@@ -833,3 +833,39 @@ Remaining: marketing app (public landing) ; Playwright e2e flow films (needs bro
 Remaining: Playwright e2e flow films (needs browser install + a running api+web+PGlite stack — a CI-shaped lane).
 
 # fixes complete
+
+---
+
+## GitHub App integration (sign-in + connector + firehose)
+
+- **Decision** — Docket's GitHub integration is a **GitHub App**, not an OAuth App. Drivers: the
+  real-time webhook firehose is a GitHub-App-only primitive (OAuth Apps have no app-level webhook),
+  least-privilege consent (`Issues/PRs/Metadata` read, no `repo` scope), and a zero-migration path
+  to teams. See `docs/engineering/specs/env-and-bootstrap.md` for the env contract.
+
+- **Env consolidation** — replaced the GitHub OAuth App (`GITHUB_CLIENT_ID/SECRET`) with one
+  GitHub App: `GITHUB_APP_{ID,SLUG,CLIENT_ID,CLIENT_SECRET,PRIVATE_KEY,WEBHOOK_SECRET}` (auth slice
+  - registry + `.env.example` + `deploy.yml`). Sign-in now runs on the App's user-to-server OAuth
+    (`@docket/auth` `buildAuthOptions`, scope `user:email`).
+
+- **Token machinery** (`@docket/boundaries`) — `connector-github-app.ts`: RS256 app JWT via
+  `node:crypto` (no JWT dep), `mintInstallationToken` / `resolveInstallationAccount`, and an
+  `InstallationTokenStore` cache. Private key stored as single-line base64 PEM.
+
+- **Firehose** — `RealGitHubObserver` (verify `X-Hub-Signature-256` → route by installation id →
+  normalize issue/PR/comment events) wired into the observer resolver; `POST /v1/ingest/github`
+  reuses the Linear ambient-ingestion path (write-ahead inbox → per-provider drain → observations).
+
+- **Connect flow** — `GET …/integrations/:id/connect-url` returns the App install URL with a signed
+  `state`; the non-RPC `GET /v1/integrations/github/callback` verifies it, validates the
+  installation, and records `installation_id` on `connection.externalWorkspaceId` (the firehose
+  routing key).
+
+- **Bootstrap** — `pnpm integrations` walks GitHub App creation step-by-step (each instruction next
+  to the value it produces), takes the private key as a `.pem` path/paste and base64-encodes it,
+  and follows the create-from-scratch / verify-and-skip-if-present rule. Provider catalog split into
+  `scripts/integration-providers.ts`.
+
+- **Tests** — boundaries: `connector-github-app` (6) + `observer-github` (10) + observer selection;
+  api: `/v1/ingest/github` route + install-state sign/verify. typecheck clean across env/auth/
+  boundaries/api.

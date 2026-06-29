@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { MockObserver } from '../src/mock/observer';
 import { MockSummarizer } from '../src/mock/summarizer';
 import { RealLinearObserver } from '../src/real/observer-linear';
+import { RealGitHubObserver } from '../src/real/observer-github';
 import { RealSummarizer } from '../src/real/summarizer';
 import { type BoundaryEnv, selectAdapter } from '../src/select';
 
@@ -24,6 +25,30 @@ describe('selectAdapter — observer', () => {
   it('returns the mock when no secret is configured', () => {
     const env: BoundaryEnv = { APP_MODE: 'production' };
     expect(selectAdapter('observer', env, { observerProvider: 'linear' })).toBeInstanceOf(
+      MockObserver,
+    );
+  });
+
+  it('returns the real GitHub observer when the GitHub App webhook secret is real-shaped', () => {
+    const env: BoundaryEnv = {
+      APP_MODE: 'production',
+      GITHUB_APP_WEBHOOK_SECRET: 'whsec_gh_secret',
+    };
+    const observer = selectAdapter('observer', env, { observerProvider: 'github' });
+    expect(observer).toBeInstanceOf(RealGitHubObserver);
+    expect(observer.provider).toBe('github');
+  });
+
+  it('returns the mock for GitHub when no webhook secret is configured', () => {
+    const env: BoundaryEnv = { APP_MODE: 'production' };
+    expect(selectAdapter('observer', env, { observerProvider: 'github' })).toBeInstanceOf(
+      MockObserver,
+    );
+  });
+
+  it('returns the mock for GitHub when APP_MODE forces mocks even with a real secret', () => {
+    const env: BoundaryEnv = { APP_MODE: 'local', GITHUB_APP_WEBHOOK_SECRET: 'whsec_gh_secret' };
+    expect(selectAdapter('observer', env, { observerProvider: 'github' })).toBeInstanceOf(
       MockObserver,
     );
   });

@@ -85,20 +85,21 @@ Redirect URIs follow Better Auth's fixed routing (verified): social providers us
 | GitHub (sign-in) | `http://localhost:8787/api/auth/callback/github`        | `https://api.docket.app/api/auth/callback/github`        |
 | Linear           | `http://localhost:8787/api/auth/oauth2/callback/linear` | `https://api.docket.app/api/auth/oauth2/callback/linear` |
 
-**GitHub is a single shared GitHub App across every environment and device.** Unlike the OAuth
-providers above (one app per environment), the GitHub App is created **once** (when configuring
-`production`) and every other machine/environment **reuses the same credentials** — `pnpm
-integrations` pulls the `GITHUB_APP_*` values from production Secret Manager rather than creating a
-new app. This is deliberate: the webhook URL is a property of the app, so a per-environment app
-would force re-pointing the webhook on every device, which is untenable.
+**GitHub uses one GitHub App (not an OAuth App)** that does three jobs: sign-in (user-to-server
+OAuth, `user:email` only — no `repo` scope), the issue/PR connector, and the webhook firehose. The
+six `GITHUB_APP_*` vars are created and pasted in via `pnpm integrations`, exactly like the other
+providers; `bootstrap` follows the general rule — **create from scratch by default, but if a
+provider's vars are already present (a re-run, or pasted from the team's secret store), verify and
+skip rather than redo the work.** It does NOT pull credentials from production Secret Manager (an
+earlier design did, which broke first-time setup and used the wrong gcloud project).
 
-Because it is one app, its webhook URL is set **once to production** — `https://api.docket.app/v1/ingest/github`
-(public + stable; Cloudflare fronts the API host) — and never changes. Local dev does not receive
-webhooks: `APP_MODE=local` selects the mock observer. To exercise the real firehose locally, run a
-Cloudflare Tunnel (`cloudflared tunnel --url http://localhost:3001`) against a **personal** test
-app, never the shared one. The one app registers multiple callback URLs so both prod and local
-sign-in/connect work: `…/api/auth/callback/github` (sign-in, Better Auth) and
-`…/v1/integrations/github/callback` (install/connect) for each of the prod and local API hosts.
+Conceptually it is one app reused across environments — a GitHub App allows several callback URLs,
+so register each environment's `…/api/auth/callback/github` (sign-in, Better Auth) and
+`…/v1/integrations/github/callback` (install/connect) as you set that environment up. The **webhook
+is environment-aware**: local setup skips it entirely (`APP_MODE=local` selects the mock observer,
+so local needs no webhook), and only **production** sets the public webhook URL — `…/v1/ingest/github`
+on the public API host — and turns it on. To exercise the real firehose locally, run a Cloudflare
+Tunnel (`cloudflared tunnel --url http://localhost:3001`) against a personal test app.
 
 **Linear `genericOAuth` config values (constants in `@docket/auth`, not env):** `authorizationUrl = https://linear.app/oauth/authorize`, `tokenUrl = https://api.linear.app/oauth/token`, `userInfoUrl = https://api.linear.app/graphql` (resolve identity via the `viewer` GraphQL query in `getUserInfo`), `scopes = ["read"]` for login (request `["read","write","issues:create"]` only on the migration connect flow), `pkce: true`, comma-separated scope serialization (Linear quirk — pass scopes as a single comma-joined string).
 

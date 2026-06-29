@@ -27,6 +27,7 @@ export {
   type InstallationToken,
 } from './connector-github-app';
 export { RealLinearObserver, type RealLinearObserverConfig } from './observer-linear';
+export { RealGitHubObserver, type RealGitHubObserverConfig } from './observer-github';
 export {
   RealSummarizer,
   type RealSummarizerConfig,

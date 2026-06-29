@@ -2,23 +2,25 @@
  * `@docket/api` — the ambient-intelligence ingestion edge (mounted OUTSIDE the RPC `AppType`).
  *
  * @remarks
- * `POST /v1/ingest/linear` receives Linear webhooks and records them in the durable
- * write-ahead inbox ({@link inboundEvent}) — the "persist incoming data as fast as
- * possible" invariant. It is non-RPC (an untyped external edge), so it lives in
+ * `POST /v1/ingest/linear` and `POST /v1/ingest/github` receive provider webhooks and record
+ * them in the durable write-ahead inbox ({@link inboundEvent}) — the "persist incoming data as
+ * fast as possible" invariant. It is non-RPC (an untyped external edge), so it lives in
  * `server.ts` alongside `/v1/billing` and `/v1/cron`.
  *
- * The handler reads the **raw** body (the HMAC is computed over the exact bytes),
- * verifies it via the resolved {@link Observer}, parses + routes it to extract the
- * provider's workspace id and a per-delivery event id, maps that to the connected
- * {@link integration} (and thus the org), then writes one `inbound_event` row and ACKs
- * 200. No normalization or task/observation writes happen here — the lease-guarded drain
- * cron ({@link sweepInboundEvents}) does that asynchronously. Dedup against webhook
- * retries is the unique `(provider, external_event_id)` index. `now` is request-time.
+ * Both routes share one handler: read the **raw** body (the HMAC is computed over the exact
+ * bytes), verify it via the resolved {@link Observer}, parse + route it to extract the provider's
+ * workspace id (Linear workspace / GitHub installation) and a per-delivery event id, map that to
+ * the connected {@link integration} (and thus the org), then write one `inbound_event` row and ACK
+ * 200. No normalization or task/observation writes happen here — the lease-guarded drain cron
+ * ({@link sweepInboundEvents}) does that asynchronously. Dedup against webhook retries is the
+ * unique `(provider, external_event_id)` index.
  */
 import { db, inboundEvent, integration } from '@docket/db';
 import { selectAdapter } from '@docket/boundaries';
+import type { ConnectorProvider } from '@docket/boundaries';
 import { and, eq, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
+import type { Context } from 'hono';
 
 import { toBoundaryEnv } from '../container';
 
@@ -28,11 +30,21 @@ function asPayload(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
-/** The ingestion app: verify → write-ahead → 200, one provider edge per route. */
-const ingest = new Hono().post('/linear', async (c) => {
-  // Read the RAW bytes first: Linear's signature is an HMAC over the exact request body.
+/**
+ * Handle one inbound provider webhook: verify → route → map to integration → write-ahead → ACK.
+ *
+ * @remarks
+ * Provider-agnostic — the bound {@link Observer} owns the signature header and payload shape; the
+ * only per-provider input is which `observerProvider` to resolve and which `integration.provider`
+ * rows to map the workspace/installation against.
+ *
+ * @param c - The Hono request context.
+ * @param provider - The provider this route ingests (`linear` | `github`).
+ */
+async function ingestWebhook(c: Context, provider: ConnectorProvider): Promise<Response> {
+  // Read the RAW bytes first: the signature is an HMAC over the exact request body.
   const rawBody = await c.req.text();
-  const observer = selectAdapter('observer', toBoundaryEnv(), { observerProvider: 'linear' });
+  const observer = selectAdapter('observer', toBoundaryEnv(), { observerProvider: provider });
 
   // Authenticate before trusting any payload (the mock trusts the local path; see MockObserver).
   // Pass all headers through — the observer owns which signature header matters per provider.
@@ -50,9 +62,9 @@ const ingest = new Hono().post('/linear', async (c) => {
   const routing = observer.route(payload);
   if (!routing) return c.json({ error: 'unrecognized payload' }, 400);
 
-  // Map the Linear workspace to the connected integration (→ org). An event for a workspace
-  // Docket doesn't have connected is acknowledged (200) but recorded unrouted, so a missing
-  // integration never 500s a third-party retry storm.
+  // Map the provider workspace/installation to the connected integration (→ org). An event for a
+  // workspace Docket doesn't have connected is acknowledged (200) but recorded unrouted, so a
+  // missing integration never 500s a third-party retry storm.
   let organizationId: string | null = null;
   let integrationId: string | null = null;
   if (routing.externalWorkspaceId) {
@@ -61,7 +73,7 @@ const ingest = new Hono().post('/linear', async (c) => {
       .from(integration)
       .where(
         and(
-          eq(integration.provider, 'linear'),
+          eq(integration.provider, provider),
           sql`${integration.connection}->>'externalWorkspaceId' = ${routing.externalWorkspaceId}`,
         ),
       )
@@ -79,7 +91,7 @@ const ingest = new Hono().post('/linear', async (c) => {
     .values({
       organizationId,
       integrationId,
-      provider: 'linear',
+      provider,
       externalEventId: routing.externalEventId,
       eventType: routing.eventType,
       payload: asPayload(payload),
@@ -90,6 +102,11 @@ const ingest = new Hono().post('/linear', async (c) => {
     });
 
   return c.json({ received: true, routed: integrationId !== null });
-});
+}
+
+/** The ingestion app: verify → write-ahead → 200, one provider edge per route. */
+const ingest = new Hono()
+  .post('/linear', (c) => ingestWebhook(c, 'linear'))
+  .post('/github', (c) => ingestWebhook(c, 'github'));
 
 export default ingest;

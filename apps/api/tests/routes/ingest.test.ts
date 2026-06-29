@@ -131,3 +131,45 @@ describe('POST /v1/ingest/linear', () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe('POST /v1/ingest/github', () => {
+  it('verifies, routes by installation id, and write-aheads a github inbound event', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    // GitHub stores the installation id in connection.externalWorkspaceId (the routing key).
+    const [row] = await db
+      .insert(schema.integration)
+      .values({
+        organizationId: orgId,
+        provider: 'github',
+        pattern: 'connector',
+        roles: ['work'],
+        connection: { externalWorkspaceId: 'inst_42' },
+        status: 'connected',
+        createdBy: humanActorId,
+      })
+      .returning({ id: schema.integration.id });
+    const intgId = row!.id;
+
+    const res = await ingest.request('/github', {
+      method: 'POST',
+      headers: SIGNED,
+      body: JSON.stringify({
+        type: 'issues',
+        organizationId: 'inst_42',
+        id: 'iss_1',
+        externalEventId: 'gh_ev_1',
+      }),
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ received: true, routed: true });
+
+    const events = await db
+      .select()
+      .from(schema.inboundEvent)
+      .where(eq(schema.inboundEvent.externalEventId, 'gh_ev_1'));
+    expect(events).toHaveLength(1);
+    expect(events[0]!.organizationId).toBe(orgId);
+    expect(events[0]!.integrationId).toBe(intgId);
+    expect(events[0]!.provider).toBe('github');
+  });
+});

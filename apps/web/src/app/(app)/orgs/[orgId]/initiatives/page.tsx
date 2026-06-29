@@ -56,7 +56,8 @@ import { FilterToolbar } from '@/components/views/filter-toolbar';
 import { useViewState } from '@/components/views/use-view-state';
 import { type ViewState } from '@/components/views/field-catalog';
 import { isEmptyViewState } from '@/components/views/view-state-url';
-import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
+import { initiativeDetailDef } from '@/lib/fetch-initiative-detail';
+import { apiQueryOptions, queryKeys, useApiQuery, usePrefetchApi } from '@/lib/query';
 
 /** The default view applied when the URL carries none: group by status (the legacy sections). */
 const DEFAULT_VIEW: ViewState = {
@@ -74,6 +75,7 @@ export default function InitiativesListPage(): JSX.Element {
   const router = useRouter();
   const params = useParams<{ orgId: string }>();
   const orgId = params.orgId;
+  const prefetch = usePrefetchApi();
   const queryClient = useQueryClient();
 
   const initiativeNoun = useVocabulary('initiative');
@@ -242,12 +244,17 @@ export default function InitiativesListPage(): JSX.Element {
               href={lp.href}
               className={lp.className}
               onClick={lp.onClick}
+              onMouseEnter={lp.onMouseEnter}
+              onFocus={lp.onFocus}
               tabIndex={lp.tabIndex}
               aria-current={lp['aria-current']}
             >
               {lp.children}
             </Link>
           )}
+          onRowPrefetch={(initiative) => {
+            prefetch(initiativeDetailDef(orgId, initiative.id));
+          }}
         />
       )}
     </div>

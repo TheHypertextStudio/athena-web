@@ -25,7 +25,7 @@ import { formatDate } from '@/components/initiatives/format-date';
 import { RolledUpHealthPill } from '@/components/initiatives/health-pill';
 import { InitiativePropertiesPanel } from '@/components/initiatives/properties-panel';
 import { Roadmap } from '@/components/initiatives/roadmap';
-import { fetchInitiativeDetail } from '@/lib/fetch-initiative-detail';
+import { initiativeDetailDef } from '@/lib/fetch-initiative-detail';
 import { useInitiativeMutations } from '@/lib/use-initiative-mutations';
 
 const READ_ONLY_ROLE_KEYS = new Set(['guest']);
@@ -61,11 +61,7 @@ export default function InitiativeDetailPage(): JSX.Element {
   const timelineKey = useMemo(() => [...detailKey, 'timeline'] as const, [detailKey]);
 
   const detailQ = useApiQuery(
-    apiQueryOptions(
-      detailKey,
-      fetchInitiativeDetail(orgId, initiativeId),
-      `Could not load this ${initiativeNounLower}.`,
-    ),
+    initiativeDetailDef(orgId, initiativeId, `Could not load this ${initiativeNounLower}.`),
   );
   const data = detailQ.data ?? null;
   const detail = data?.detail ?? null;

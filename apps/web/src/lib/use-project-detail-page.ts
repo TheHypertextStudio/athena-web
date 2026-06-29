@@ -10,7 +10,7 @@ import {
   programOptions as toProgramOptions,
 } from '@/components/property-pickers/options';
 import { api } from '@/lib/api';
-import { fetchProjectDetail } from '@/lib/fetch-project-detail';
+import { projectDetailDef } from '@/lib/fetch-project-detail';
 import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 import { useOrgCapability } from '@/lib/use-org-capability';
 import { useProjectMutations } from '@/lib/use-project-mutations';
@@ -21,13 +21,7 @@ export function useProjectDetailPage(orgId: string, projectId: string, teamId: s
   const commentsKey = useMemo(() => [...detailKey, 'comments'] as const, [detailKey]);
   const updatesKey = useMemo(() => [...detailKey, 'updates'] as const, [detailKey]);
 
-  const detailQ = useApiQuery(
-    apiQueryOptions(
-      detailKey,
-      fetchProjectDetail(orgId, projectId),
-      'Could not load this project.',
-    ),
-  );
+  const detailQ = useApiQuery(projectDetailDef(orgId, projectId));
   const commentsQ = useApiQuery(
     apiQueryOptions(
       commentsKey,

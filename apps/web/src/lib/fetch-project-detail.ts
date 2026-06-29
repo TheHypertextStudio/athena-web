@@ -31,7 +31,7 @@ import {
   buildActorDirectory,
 } from '@/components/project-detail/actor-directory';
 import { api } from './api';
-import type { RpcResponse } from './query';
+import { type RpcResponse, apiQueryOptions, queryKeys } from './query';
 
 /** The composite project-detail payload assembled from the typed RPC surface. */
 export interface ProjectDetailData {
@@ -67,6 +67,26 @@ function activitySummary(activity: SessionActivityOut): string {
  * @param orgId - The active organization id.
  * @param projectId - The project being viewed.
  */
+/**
+ * Typed query definition for the project detail — the single source the detail page reads with and
+ * portfolio rows prefetch on hover, so they share one cache entry under `queryKeys.project`.
+ *
+ * @param orgId - The active org.
+ * @param projectId - The project to load.
+ * @param fallbackMessage - Shown if the composite read fails.
+ */
+export function projectDetailDef(
+  orgId: string,
+  projectId: string,
+  fallbackMessage = 'Could not load this project.',
+) {
+  return apiQueryOptions(
+    queryKeys.project(orgId, projectId),
+    fetchProjectDetail(orgId, projectId),
+    fallbackMessage,
+  );
+}
+
 export function fetchProjectDetail(
   orgId: string,
   projectId: string,

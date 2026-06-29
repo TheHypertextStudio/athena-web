@@ -2,16 +2,24 @@
  * `@docket/api` — projects router (mounted at `/v1/orgs/:orgId/projects`).
  */
 import { actor, db, initiative, initiativeProject, program, project, task, team } from '@docket/db';
-import { pageOf, ProjectCreate, ProjectOut, ProjectProgress, ProjectUpdate } from '@docket/types';
-import { and, eq, inArray } from 'drizzle-orm';
+import {
+  CursorQuery,
+  pageOf,
+  ProjectCreate,
+  ProjectOut,
+  ProjectProgress,
+  ProjectUpdate,
+} from '@docket/types';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { NotFoundError } from '../error';
 import { ok } from '../lib/ok';
+import { afterCursor, decodeListCursor, pageResult } from '../lib/list-cursor';
 import { capabilityGuard } from '../permissions/capability-guard';
-import { zJson, zParam } from '../lib/validate';
+import { zJson, zParam, zQuery } from '../lib/validate';
 
 type ProjectRow = typeof project.$inferSelect;
 
@@ -192,10 +200,25 @@ const projects = new Hono<AppEnv>()
 
     return ok(c, ProjectOut, toOut(row));
   })
-  .get('/', async (c) => {
+  .get('/', zQuery(CursorQuery), async (c) => {
     const { orgId } = c.get('actorCtx');
-    const rows = await db.select().from(project).where(eq(project.organizationId, orgId));
-    return ok(c, pageOf(ProjectOut), { items: rows.map(toOut) });
+    const { cursor, limit } = c.req.valid('query');
+    // Keyset-paginate newest-first (createdAt, id tiebreak). `limit` is optional: omitted returns
+    // the full list as before; supplied returns a bounded page + `nextCursor`.
+    const conds = [eq(project.organizationId, orgId)];
+    const decoded = decodeListCursor(cursor);
+    if (decoded) conds.push(afterCursor(project.createdAt, project.id, decoded));
+    const base = db
+      .select()
+      .from(project)
+      .where(and(...conds))
+      .orderBy(desc(project.createdAt), desc(project.id));
+    const rows = await (limit === undefined ? base : base.limit(limit + 1));
+    const { items, nextCursor } = pageResult(rows, limit, (r) => r.createdAt);
+    return ok(c, pageOf(ProjectOut), {
+      items: items.map(toOut),
+      ...(nextCursor ? { nextCursor } : {}),
+    });
   })
   .get('/:id', zParam(idParam), async (c) => {
     const { orgId } = c.get('actorCtx');

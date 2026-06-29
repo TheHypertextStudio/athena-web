@@ -19,6 +19,7 @@ import type { AppEnv } from '../context';
 import { ConflictError, NotFoundError } from '../error';
 import { ok } from '../lib/ok';
 import { zJson, zParam } from '../lib/validate';
+import { buildInstallUrl, signInstallState } from '../lib/github-app';
 import { capabilityGuard } from '../permissions/capability-guard';
 
 import {
@@ -346,6 +347,21 @@ const integrations = new Hono<AppEnv>()
     const run = await runSync(row, { actorId, trigger: 'manual' });
     if (!run) throw new ConflictError('A sync is already in progress for this integration.');
     return ok(c, SyncRunOut, toSyncRunOut(run));
+  })
+  // GitHub connect = installing the GitHub App. Returns the install URL (with a signed `state`
+  // binding this integration + org) the client sends the user to; the install redirects back to
+  // the non-RPC `/v1/integrations/github/callback`, which records the installation id.
+  .get('/:id/connect-url', capabilityGuard('manage'), zParam(idParam), async (c) => {
+    const { orgId } = c.get('actorCtx');
+    const { id } = c.req.valid('param');
+    const row = await loadIntegration(orgId, id);
+    if (row.provider !== 'github') {
+      throw new ConflictError('A connect URL is only available for GitHub integrations');
+    }
+    const url = buildInstallUrl(signInstallState({ integrationId: id, orgId }));
+    if (!url)
+      throw new ConflictError('The GitHub App is not configured (GITHUB_APP_SLUG is unset)');
+    return c.json({ url });
   });
 
 export default integrations;

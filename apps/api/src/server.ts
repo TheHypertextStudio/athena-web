@@ -21,6 +21,7 @@ import { authorizationServerMetadata, mcpHandler, protectedResourceMetadata } fr
 import { registerOpenapi } from './openapi';
 import cron from './routes/cron';
 import ingest from './routes/ingest';
+import integrationsGithub from './routes/integrations-github';
 import webhooks from './routes/webhooks';
 
 const trustedOrigins =
@@ -55,6 +56,7 @@ server.get('/.well-known/oauth-authorization-server', authorizationServerMetadat
 // Non-RPC external edges (webhooks, ingestion, cron) live OUTSIDE the typed `AppType` routes.
 server.route('/v1/billing', webhooks);
 server.route('/v1/ingest', ingest);
+server.route('/v1/integrations/github', integrationsGithub);
 server.route('/v1/cron', cron);
 server.route('/', app);
 server.get('/v1/health', (c) => c.json({ status: 'ok' as const }));

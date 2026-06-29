@@ -8,7 +8,10 @@
 export {
   ALREADY_REGISTERED_MESSAGE,
   isPasskeyPromptCancelled,
+  isPasskeyUnknownToServer,
   isServerUnavailable,
+  PASSKEY_NOT_FOUND_CODE,
+  PASSKEY_NOT_FOUND_MESSAGE,
   PASSKEY_PROMPT_CANCELLED_MESSAGE,
   passkeyErrorKind,
   passkeyErrorMessage,

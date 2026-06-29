@@ -29,6 +29,12 @@ declare global {
       readonly NEXT_PUBLIC_OAUTH_GITHUB?: string;
       /** Whether the Linear sign-in OAuth provider is configured. */
       readonly NEXT_PUBLIC_OAUTH_LINEAR?: string;
+      /**
+       * The WebAuthn relying-party ID, mirroring the server's required
+       * `BETTER_AUTH_PASSKEY_RP_ID`. Required (not a feature flag): the passkey Signal-API
+       * cleanup reads it with no fallback, so it must be set for every deployment.
+       */
+      readonly NEXT_PUBLIC_PASSKEY_RP_ID: string;
     }
   }
 }

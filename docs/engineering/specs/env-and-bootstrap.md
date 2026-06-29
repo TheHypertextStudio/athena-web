@@ -51,13 +51,14 @@ Conventions used in the tables:
 
 ### 1.2 Better Auth core
 
-| Name                          | Apps       | Scope  | D/P | What it is                                                                                                                                        | Where to obtain                                                                           |
-| ----------------------------- | ---------- | ------ | --- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `BETTER_AUTH_SECRET`          | api (auth) | server | D=P | 32+ byte secret for signing/encryption. **Per-environment** (dev ≠ prod).                                                                         | Bootstrap generates: `openssl rand -base64 32` (or `npx @better-auth/cli@1.6.14 secret`). |
-| `BETTER_AUTH_URL`             | api (auth) | server | D=P | Base URL Better Auth uses to build callback URLs. **Must equal `API_URL`** (the auth mount). Prevents `redirect_uri_mismatch`.                    | Set = `API_URL`. Bootstrap derives it; do not diverge.                                    |
-| `BETTER_AUTH_TRUSTED_ORIGINS` | api (auth) | server | D=P | Comma-separated allowed origins for CORS/cookie/CSRF: the web, marketing, and admin origins (+ `appleid.apple.com` only if Apple is added later). | Composed by bootstrap from the §0 domain table.                                           |
-| `BETTER_AUTH_PASSKEY_RP_ID`   | api (auth) | server | D=P | WebAuthn Relying Party ID. Dev: `localhost`. Prod: the shared apex (`docket.app`). Must be a registrable suffix of all app origins.               | Bootstrap: `localhost` for dev; prompts for apex in prod.                                 |
-| `BETTER_AUTH_PASSKEY_RP_NAME` | api (auth) | server | D=P | Human-readable RP name shown in the OS passkey prompt (`"Docket"`).                                                                               | Bootstrap default `"Docket"`.                                                             |
+| Name                          | Apps       | Scope  | D/P | What it is                                                                                                                                                                                                                                | Where to obtain                                                                           |
+| ----------------------------- | ---------- | ------ | --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `BETTER_AUTH_SECRET`          | api (auth) | server | D=P | 32+ byte secret for signing/encryption. **Per-environment** (dev ≠ prod).                                                                                                                                                                 | Bootstrap generates: `openssl rand -base64 32` (or `npx @better-auth/cli@1.6.14 secret`). |
+| `BETTER_AUTH_URL`             | api (auth) | server | D=P | Base URL Better Auth uses to build callback URLs. **Must equal `API_URL`** (the auth mount). Prevents `redirect_uri_mismatch`.                                                                                                            | Set = `API_URL`. Bootstrap derives it; do not diverge.                                    |
+| `BETTER_AUTH_TRUSTED_ORIGINS` | api (auth) | server | D=P | Comma-separated allowed origins for CORS/cookie/CSRF: the web, marketing, and admin origins (+ `appleid.apple.com` only if Apple is added later).                                                                                         | Composed by bootstrap from the §0 domain table.                                           |
+| `BETTER_AUTH_PASSKEY_RP_ID`   | api (auth) | server | D=P | WebAuthn Relying Party ID. Dev: `localhost`. Prod: the shared apex (`docket.app`). Must be a registrable suffix of all app origins.                                                                                                       | Bootstrap: `localhost` for dev; prompts for apex in prod.                                 |
+| `BETTER_AUTH_PASSKEY_RP_NAME` | api (auth) | server | D=P | Human-readable RP name shown in the OS passkey prompt (`"Docket"`).                                                                                                                                                                       | Bootstrap default `"Docket"`.                                                             |
+| `NEXT_PUBLIC_PASSKEY_RP_ID`   | web, adm   | client | D=P | Browser-exposed mirror of `BETTER_AUTH_PASSKEY_RP_ID` (**must equal it**). The sign-in flow passes it to the WebAuthn Signal API (`PublicKeyCredential.signalUnknownCredential`) to prune server-deleted passkeys. Read with no fallback. | Set = `BETTER_AUTH_PASSKEY_RP_ID`. Bootstrap derives it.                                  |
 
 ### 1.3 Social / OAuth providers (login + data-source links)
 
@@ -345,15 +346,22 @@ Verified commands:
 4. Migrate: with the **unpooled** string exported as `DATABASE_URL_UNPOOLED`, run `pnpm --filter @docket/db db:generate` (if schema changed) then `pnpm --filter @docket/db db:migrate` (`drizzle-kit migrate`). Better Auth tables were generated into `@docket/db` already (engineering §2 schema ownership), so this single migrate creates the full schema.
 5. Seed default roles per future org happens at runtime; bootstrap does **not** seed tenant data.
 
-### 3.4 Step 5 — OAuth applications (semi-automated)
+### 3.4 Step 5 — OAuth applications & third-party integrations (semi-automated)
 
-These provider consoles have **no scriptable creation API**, so bootstrap prints exact instructions + the exact redirect URIs from §1.3 and collects the resulting id/secret via masked prompts. For each provider it shows the dev **and** prod redirect URI (operator registers both, or one app per environment — recommend separate apps per environment to keep secrets isolated).
+> **Implemented** in `scripts/integrations-setup.ts`, runnable standalone as **`pnpm integrations`** and invoked automatically at the end of `pnpm bootstrap`. The flow generalizes beyond OAuth to **every external credential in `VAR_REGISTRY`** (Stripe, Anthropic, SMTP, observability), is **environment-aware** (`local` / `staging` / `production`, each configured in its own pass with its own credentials and redirect URIs), and routes writes per environment:
+>
+> - `local` → non-destructive upsert into the root `.env.local`.
+> - `staging` / `production` → server vars to **GCP Secret Manager**, public `NEXT_PUBLIC_*` vars to **GitHub environment variables**. Secret names follow the `deploy.yml` convention: production keeps the unqualified `docket-<kebab>` names; staging is suffixed `docket-staging-<kebab>`. For any **new** var the script prints the exact `deploy.yml` `secrets:` / `env_vars:` lines to add (Cloud Run only mounts secrets the workflow references — wiring a dedicated staging Cloud Run job remains a follow-up).
+>
+> Before any cloud write it **confirms the gcloud + gh accounts and the GCP project** (never assumes the active ones): it lists every authenticated account and every accessible project and lets the operator choose, scoping gcloud via `CLOUDSDK_CORE_ACCOUNT` (no global-config mutation) and `gh auth switch`-ing only when a different account is picked. `pnpm bootstrap` runs the same confirmation up front and reuses it.
+
+These provider consoles have **no scriptable creation API**, so the setup prints exact instructions + the exact redirect URI for the chosen environment (from §1.3) and collects the resulting id/secret via masked, schema-validated, re-promptable inputs (empty input keeps the current value or skips). Recommend separate OAuth apps per environment to keep secrets isolated.
 
 - **Google:** "Create an OAuth client (Web application) at https://console.cloud.google.com/apis/credentials. Authorized redirect URIs: `<dev>` and/or `<prod>`. Enable the People API for profile; enable Drive/Gmail/Calendar APIs if you'll use those connectors." Prompt `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`.
 - **GitHub:** "Create an OAuth App at https://github.com/settings/developers. Authorization callback URL: `<the redirect URI>` (GitHub allows one per app → create one app per environment)." Prompt `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`.
 - **Linear:** "Create an OAuth application at Linear → Settings → API → OAuth applications. Callback URL: `<the oauth2/callback/linear URI>`. Scopes: `read` (login) plus `write,issues:create` for migration." Prompt `LINEAR_CLIENT_ID`, `LINEAR_CLIENT_SECRET`.
 
-Bootstrap validates each pasted value against the `@docket/env` `authEnv` schema before continuing.
+Each pasted value is validated against its own `@docket/env` registry schema before being accepted (invalid values re-prompt rather than abort).
 
 ### 3.5 Step 6 — Stripe (automated via Stripe CLI)
 

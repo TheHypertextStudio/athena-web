@@ -80,16 +80,9 @@ export function TaskComposerPickers({
 
   return (
     <>
-      <TeamPicker
-        teams={teams}
-        value={teamId}
-        onChange={onTeamChange}
-        disabled={creating}
-        className="h-8"
-      />
+      <TeamPicker teams={teams} value={teamId} onChange={onTeamChange} disabled={creating} />
       {statusOptions.length > 0 ? (
         <EnumPicker
-          triggerVariant="outline"
           options={statusOptions}
           value={state}
           onChange={(next) => {
@@ -101,7 +94,6 @@ export function TaskComposerPickers({
         />
       ) : null}
       <EnumPicker
-        triggerVariant="outline"
         options={PRIORITY_OPTIONS}
         value={priority}
         onChange={(next) => {
@@ -112,7 +104,6 @@ export function TaskComposerPickers({
         disabled={creating}
       />
       <ActorPicker
-        triggerVariant="outline"
         options={actorOptions}
         value={assigneeId}
         onChange={onAssigneeChange}
@@ -122,7 +113,6 @@ export function TaskComposerPickers({
         disabled={creating}
       />
       <EntityPicker
-        triggerVariant="outline"
         options={projectOptions}
         value={projectId}
         onChange={onProjectChange}
@@ -134,7 +124,6 @@ export function TaskComposerPickers({
       />
       {cycleOptionsForTeam.length > 0 ? (
         <EntityPicker
-          triggerVariant="outline"
           options={cycleOptionsForTeam}
           value={cycleId}
           onChange={onCycleChange}
@@ -146,7 +135,6 @@ export function TaskComposerPickers({
         />
       ) : null}
       <DatePicker
-        triggerVariant="outline"
         value={dueDate}
         onChange={onDueDateChange}
         placeholder="Due date"
@@ -155,7 +143,6 @@ export function TaskComposerPickers({
         disabled={creating}
       />
       <LabelsPicker
-        triggerVariant="outline"
         options={labelOptions}
         value={labelIds}
         onToggle={onLabelToggle}

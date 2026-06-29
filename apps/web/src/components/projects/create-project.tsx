@@ -174,7 +174,6 @@ export function CreateProjectDialog({
       open={open}
       onOpenChange={handleOpenChange}
       heading={`New ${projectNoun.toLowerCase()}`}
-      description={`Name your ${projectNounLower}, then set its lead, timeline, and ${initiativeNoun.toLowerCase()}s now — or later.`}
       title={name}
       onTitleChange={setName}
       titlePlaceholder={`${projectNoun} name`}
@@ -187,15 +186,8 @@ export function CreateProjectDialog({
       onSubmit={() => void submit()}
       submitLabel={`Create ${projectNoun}`}
     >
-      <TeamPicker
-        teams={teams}
-        value={teamId}
-        onChange={setTeamOverride}
-        disabled={creating}
-        className="h-8"
-      />
+      <TeamPicker teams={teams} value={teamId} onChange={setTeamOverride} disabled={creating} />
       <ActorPicker
-        triggerVariant="outline"
         options={options.actorOptions}
         value={leadId}
         onChange={setLeadId}
@@ -205,7 +197,6 @@ export function CreateProjectDialog({
         disabled={creating}
       />
       <DateRangePicker
-        triggerVariant="outline"
         value={{ start: startDate, end: targetDate }}
         onChange={({ start, end }) => {
           setStartDate(start);
@@ -219,7 +210,6 @@ export function CreateProjectDialog({
         disabled={creating}
       />
       <LabelsPicker
-        triggerVariant="outline"
         options={options.initiativeOptions}
         value={initiativeIds}
         onToggle={toggleInitiative}

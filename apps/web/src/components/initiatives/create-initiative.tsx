@@ -149,7 +149,6 @@ export function CreateInitiativeDialog({
       open={open}
       onOpenChange={handleOpenChange}
       heading={`New ${initiativeNoun.toLowerCase()}`}
-      description={`Name a cross-cutting theme — set its owner, target, and health now, then associate work later.`}
       title={name}
       onTitleChange={setName}
       titlePlaceholder={`${initiativeNoun} name`}
@@ -163,7 +162,6 @@ export function CreateInitiativeDialog({
       submitLabel={`Create ${initiativeNoun}`}
     >
       <ActorPicker
-        triggerVariant="outline"
         options={options.actorOptions}
         value={ownerId}
         onChange={setOwnerId}
@@ -173,7 +171,6 @@ export function CreateInitiativeDialog({
         disabled={creating}
       />
       <EnumPicker
-        triggerVariant="outline"
         options={enumOptions(INITIATIVE_STATUS_ORDER, DERIVED_STATUS_LABEL)}
         value={status}
         onChange={(next) => {
@@ -184,7 +181,6 @@ export function CreateInitiativeDialog({
         disabled={creating}
       />
       <DatePicker
-        triggerVariant="outline"
         value={targetDate}
         onChange={setTargetDate}
         placeholder="Set target"
@@ -193,7 +189,6 @@ export function CreateInitiativeDialog({
         disabled={creating}
       />
       <EnumPicker
-        triggerVariant="outline"
         options={HEALTH_OPTIONS}
         value={health}
         onChange={setHealth}

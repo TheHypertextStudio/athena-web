@@ -17,7 +17,8 @@ import { StatsBanner } from '@/components/cycles/stats-banner';
 import { buildTaskCatalog } from '@/components/views/task-catalog';
 import { buildTaskColumns, TaskTable } from '@/components/views/task-table';
 import { cycleDetailDef } from '@/lib/fetch-cycle-detail';
-import { queryKeys, useApiQuery } from '@/lib/query';
+import { queryKeys, useApiQuery, usePrefetchApi } from '@/lib/query';
+import { taskDetailDef } from '@/lib/use-task-detail';
 import { useCycleMutations } from '@/lib/use-cycle-mutations';
 import { useOrgCapability } from '@/lib/use-org-capability';
 import { STATE_GROUP_ORDER, stateTypeOf } from '@/lib/work-state';
@@ -29,6 +30,7 @@ export default function CycleDetailPage(): JSX.Element {
   const router = useRouter();
   const params = useParams<{ orgId: string; cycleId: string }>();
   const { orgId, cycleId } = params;
+  const prefetch = usePrefetchApi();
 
   const cycleNoun = useVocabulary('cycle');
   const cycleNounLower = cycleNoun.toLowerCase();
@@ -251,6 +253,9 @@ export default function CycleDetailPage(): JSX.Element {
           columns={columns}
           groups={taskGroups}
           taskHref={(task) => `/orgs/${orgId}/tasks/${task.id}`}
+          onRowPrefetch={(task) => {
+            prefetch(taskDetailDef(orgId, task.id));
+          }}
           onOpenTask={(task) => {
             router.push(`/orgs/${orgId}/tasks/${task.id}`);
           }}

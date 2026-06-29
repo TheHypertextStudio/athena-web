@@ -33,6 +33,19 @@ import { STALE, apiQueryOptions, queryKeys, useApiQuery, useLiveApiQuery } from 
 /** Focus-only poll interval (ms) for a task's bound agent-session activity stream. */
 const TASK_ACTIVITY_POLL_MS = 4_000;
 
+/**
+ * Typed query definition for a task's primary detail read — shared by {@link useTaskDetail} and
+ * task-list row prefetch, so a hovered row warms the exact cache entry the detail opens from.
+ */
+export function taskDetailDef(orgId: string, taskId: string) {
+  return apiQueryOptions(
+    queryKeys.task(orgId, taskId),
+    () => api.v1.orgs[':orgId'].tasks[':id'].$get({ param: { orgId, id: taskId } }),
+    'Could not load this task.',
+    { staleTime: STALE.volatile },
+  );
+}
+
 /** All data slices exposed by {@link useTaskDetail}. */
 export interface TaskDetailData {
   task: TaskDetail | null;
@@ -67,14 +80,7 @@ export function useTaskDetail(orgId: string, taskId: string): TaskDetailData {
   const detailKey = useMemo<QueryKey>(() => queryKeys.task(orgId, taskId), [orgId, taskId]);
   const commentsKey = useMemo<QueryKey>(() => [...detailKey, 'comments'], [detailKey]);
 
-  const taskQ = useApiQuery(
-    apiQueryOptions(
-      detailKey,
-      () => api.v1.orgs[':orgId'].tasks[':id'].$get({ param: { orgId, id: taskId } }),
-      'Could not load this task.',
-      { staleTime: STALE.volatile },
-    ),
-  );
+  const taskQ = useApiQuery(taskDetailDef(orgId, taskId));
   const task = taskQ.data ?? null;
   const teamId = task?.teamId ?? null;
 

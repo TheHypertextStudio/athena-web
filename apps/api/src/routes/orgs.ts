@@ -35,6 +35,7 @@ import members from './members';
 import milestones from './milestones';
 import programs from './programs';
 import projects from './projects';
+import projectRollup from './project-rollup';
 import roles from './roles';
 import savedViews from './saved-views';
 import tasks from './tasks';
@@ -223,6 +224,7 @@ const orgs = new Hono<AppEnv>()
   .use('/:orgId/*', orgContextMiddleware)
   .route('/:orgId/teams', teams)
   .route('/:orgId/projects', projects)
+  .route('/:orgId/projects', projectRollup)
   .route('/:orgId/tasks', tasks)
   .route('/:orgId/initiatives', initiatives)
   .route('/:orgId/programs', programs)

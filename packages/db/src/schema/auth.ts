@@ -10,8 +10,9 @@
  * (Google/GitHub/Linear) and account linking reuse the core `account` table (no new
  * tables). The `oidcProvider` + `mcp` plugins share three additive oauth tables
  * ({@link oauthApplication}, {@link oauthAccessToken}, {@link oauthConsent}), mounted
- * env-gated in `@docket/auth`. sso / scim / stripe better-auth plugins are not installed
- * and are deliberately skipped. The drizzle property keys match Better Auth's model field
+ * env-gated in `@docket/auth`. The `twoFactor` plugin adds the {@link twoFactor} table plus a
+ * `user.twoFactorEnabled` flag — used backup-codes-only for passwordless account recovery. sso /
+ * scim / stripe better-auth plugins are not installed and are deliberately skipped. The drizzle property keys match Better Auth's model field
  * names (camelCase) so the adapter maps correctly; SQL column names are snake_case. IDs
  * are 26-char ULIDs (Better Auth `advanced.database.generateId` shares {@link genId}).
  */
@@ -36,6 +37,10 @@ export const user = pgTable(
     email: text('email').notNull(),
     emailVerified: boolean('email_verified').notNull().default(false),
     image: text('image'),
+    // Backs the `twoFactor` plugin (recovery/backup codes). The plugin flips this true when a
+    // user enables recovery codes (`input: false` — never client-set), and gates which users get
+    // a 2FA challenge. Docket uses the plugin backup-codes-only, so this is "has recovery codes".
+    twoFactorEnabled: boolean('two_factor_enabled').notNull().default(false),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at')
       .notNull()
@@ -136,6 +141,45 @@ export const passkey = pgTable(
   (t) => [
     index('passkey_user_id_idx').on(t.userId),
     index('passkey_credential_id_idx').on(t.credentialID),
+  ],
+);
+
+/**
+ * A user's two-factor record — in Docket, the home of their **recovery / backup codes**.
+ *
+ * @remarks
+ * Backs the Better Auth `twoFactor` plugin (mounted in `@docket/auth`), used **backup-codes-only**
+ * (TOTP/OTP are not surfaced) so a passwordless passkey user can recover access after losing their
+ * device. The drizzle property keys mirror the plugin's `twoFactor` model field-for-field
+ * (`secret`, `backupCodes`, `userId` FK→`user.id`, `verified`); the plugin declares `secret` and
+ * `userId` indexed (it scaffolds those indexes), mirrored here so the hand-authored schema stays
+ * byte-for-byte equivalent to the plugin codegen. `backupCodes` holds the encrypted
+ * (`storeBackupCodes: 'encrypted'`, keyed by `BETTER_AUTH_SECRET`) JSON array of remaining codes;
+ * a code is removed from it when consumed. One row per user (the plugin upserts), cascading on
+ * user delete like {@link passkey}.
+ *
+ * `backupCodesGeneratedAt` is a Docket-owned column (not part of the plugin schema) recording when
+ * the codes were last (re)generated, for the Security settings surface. Docket owns generation
+ * (`generateRecoveryCodes` in `@docket/auth`, behind `POST /v1/me/recovery-codes`), which sets this
+ * directly on every (re)generation — deliberately NOT touched on code *consumption* (the plugin's
+ * `verifyBackupCode` rewrites `backup_codes` but not this column), so it stays a true "last
+ * generated" time. `defaultNow()` covers the insert.
+ */
+export const twoFactor = pgTable(
+  'two_factor',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    secret: text('secret').notNull(),
+    backupCodes: text('backup_codes').notNull(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    verified: boolean('verified').notNull().default(true),
+    backupCodesGeneratedAt: timestamp('backup_codes_generated_at').notNull().defaultNow(),
+  },
+  (t) => [
+    index('two_factor_secret_idx').on(t.secret),
+    index('two_factor_user_id_idx').on(t.userId),
   ],
 );
 

@@ -44,19 +44,34 @@ function eventOf(ctx: ActionContext): AutomationEvent {
   return ctx.event as AutomationEvent;
 }
 
+/** Builds the concrete {@link MailAction} for a handler from the rule's `then` params. */
+type MailActionBuilder = (params: Record<string, unknown>) => MailAction | null;
+
 /**
- * Build a mail handler for one {@link MailAction}: find the firing task's email attachment,
- * apply the action to its thread (skipping if the same action was already applied — the
- * idempotency ledger), and stamp the ledger. No email attachment → no-op.
+ * Build a mail handler: find the firing task's email attachment(s), derive the concrete
+ * {@link MailAction} from the rule params, apply it, and record it on the attachment.
+ *
+ * @remarks
+ * No email attachment → no-op; a label action with no `params.label` → no-op. The
+ * `lastEmailStateAction` record is last-action-wins, not a full applied-set: it suppresses
+ * the *same* action firing twice in a row on a thread (the archive-on-complete case), which is
+ * all the shipped rules need.
  */
-function mailHandler(type: string, action: MailAction, deps: HandlerDeps) {
+function mailHandler(type: string, build: MailActionBuilder, deps: HandlerDeps) {
   return {
     type,
-    run: async (ctx: ActionContext): Promise<void> => {
+    run: async (ctx: ActionContext, params: Record<string, unknown>): Promise<void> => {
       const event = eventOf(ctx);
       if (!event.subjectId) return;
+      const action = build(params);
+      if (!action) return;
       const rows = await db
-        .select()
+        .select({
+          id: attachment.id,
+          sourceIntegrationId: attachment.sourceIntegrationId,
+          externalId: attachment.externalId,
+          lastEmailStateAction: attachment.lastEmailStateAction,
+        })
         .from(attachment)
         .where(
           and(
@@ -68,7 +83,7 @@ function mailHandler(type: string, action: MailAction, deps: HandlerDeps) {
         );
       for (const att of rows) {
         if (!att.sourceIntegrationId || !att.externalId) continue;
-        if (att.lastEmailStateAction === type) continue; // idempotency: already applied
+        if (att.lastEmailStateAction === type) continue; // same action already applied last
         await deps.mailApplier({
           organizationId: event.organizationId,
           integrationId: att.sourceIntegrationId,
@@ -84,6 +99,24 @@ function mailHandler(type: string, action: MailAction, deps: HandlerDeps) {
   };
 }
 
+/** The `mail.*` action types and how each derives its {@link MailAction} from rule params. */
+const MAIL_ACTIONS: { readonly type: string; readonly build: MailActionBuilder }[] = [
+  { type: 'mail.archive', build: () => ({ kind: 'archive' }) },
+  { type: 'mail.markRead', build: () => ({ kind: 'markRead' }) },
+  { type: 'mail.markUnread', build: () => ({ kind: 'markUnread' }) },
+  { type: 'mail.trash', build: () => ({ kind: 'trash' }) },
+  {
+    type: 'mail.applyLabel',
+    build: (p) =>
+      typeof p['label'] === 'string' ? { kind: 'applyLabel', label: p['label'] } : null,
+  },
+  {
+    type: 'mail.removeLabel',
+    build: (p) =>
+      typeof p['label'] === 'string' ? { kind: 'removeLabel', label: p['label'] } : null,
+  },
+];
+
 /**
  * Build the action-handler registry.
  *
@@ -93,13 +126,7 @@ function mailHandler(type: string, action: MailAction, deps: HandlerDeps) {
 export function buildAutomationRegistry(deps: HandlerDeps): Registry {
   const registry = createRegistry();
 
-  const mailActions: { readonly type: string; readonly action: MailAction }[] = [
-    { type: 'mail.archive', action: { kind: 'archive' } },
-    { type: 'mail.markRead', action: { kind: 'markRead' } },
-    { type: 'mail.markUnread', action: { kind: 'markUnread' } },
-    { type: 'mail.trash', action: { kind: 'trash' } },
-  ];
-  for (const m of mailActions) registry.register(mailHandler(m.type, m.action, deps));
+  for (const m of MAIL_ACTIONS) registry.register(mailHandler(m.type, m.build, deps));
 
   // suggestion.dismiss — discard the suggestion named in the event payload.
   registry.register({

@@ -13,6 +13,7 @@
 import { db, integration } from '@docket/db';
 import { and, eq, isNull } from 'drizzle-orm';
 
+import { seedDefaultAutomationRules } from '../automation/rules-store';
 import { connectorFor, resolveConnectorToken } from '../../routes/integration-provider';
 import { type CandidateThread, persistSuggestions } from './synthesize';
 
@@ -59,6 +60,10 @@ export async function sweepEmailSuggestions(_now: Date): Promise<EmailSweepResul
     const token = await resolveConnectorToken(row.createdBy, 'gmail', row.account);
     if (!token.ok) continue;
     processed += 1;
+
+    // Opt-in moment: ensure the org has the shipped default automation rules (idempotent), so
+    // a newly-enabled org gets the dismiss-promotions / archive-on-complete defaults to edit.
+    await seedDefaultAutomationRules(row.organizationId, row.createdBy);
 
     const items = await connectorFor('gmail', token.token).importWork({
       connectionId: row.id,

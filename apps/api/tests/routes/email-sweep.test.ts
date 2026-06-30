@@ -47,6 +47,14 @@ describe('sweepEmailSuggestions', () => {
       .where(eq(schema.emailSuggestion.integrationId, integrationId));
     expect(rows.length).toBeGreaterThanOrEqual(1);
     expect(rows[0]?.status).toBe('pending');
+
+    // The opt-in sweep also seeds the org's default automation rules (idempotently).
+    const seeded = await db
+      .select()
+      .from(schema.automationRule)
+      .where(eq(schema.automationRule.organizationId, orgId));
+    expect(seeded.length).toBeGreaterThan(0);
+    expect(seeded.every((r) => r.isSeed)).toBe(true);
   });
 
   it('is idempotent — a second sweep creates no new suggestions', async () => {

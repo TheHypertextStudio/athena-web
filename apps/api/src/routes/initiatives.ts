@@ -46,7 +46,7 @@ import {
   projectOverlapsWindow,
   toOut,
 } from './initiative-helpers';
-import { emitObservation } from './observation-emit';
+import { emitEvent } from './event-emit';
 
 /** Initiatives router: org-scoped CRUD + child associations + roadmap roll-up. */
 const initiatives = new Hono<AppEnv>()
@@ -110,7 +110,7 @@ const initiatives = new Hono<AppEnv>()
       const row = inserted[0];
       /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
       if (!row) throw new Error('initiative insert returned no row');
-      await emitObservation({
+      await emitEvent({
         organizationId: orgId,
         kind: 'created',
         actorId,
@@ -172,13 +172,13 @@ const initiatives = new Hono<AppEnv>()
       const row = updated[0];
       if (!row) throw new NotFoundError('Initiative not found');
       if (body.status !== undefined) {
-        await emitObservation({
+        await emitEvent({
           organizationId: orgId,
           kind: 'status_change',
           actorId,
           title: row.name,
           subject: { type: 'initiative', id: row.id, title: row.name },
-          payload: { status: row.status },
+          detail: { schema: 'docket.state_change', fromState: null, toState: row.status },
         });
       }
       return ok(c, InitiativeOut, toOut(row));

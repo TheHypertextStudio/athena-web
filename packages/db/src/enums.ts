@@ -281,15 +281,16 @@ export const viewScope = pgEnum('view_scope', ['personal', 'team', 'organization
  * ────────────────────────────────────────────────────────────────────────── */
 
 /**
- * The high-level kind of an ambient observation captured from an external tool.
+ * The canonical, source-agnostic verb of an event — what happened — shared across every
+ * tool (a Docket task completing and a Linear issue completing are both `completed`).
  *
  * @remarks
- * Distinct from `audit_event_type` (Docket's own internal feed): these describe
- * provider-shaped activity observed where the source of truth lives elsewhere
- * (a Linear mention, a Slack message, a calendar invite). The forward-looking
- * `calendar_*`/`task_assignment` kinds are reserved now so later providers add no enum migration.
+ * Distinct from `audit_event_type` (Docket's own compliance ledger): `event_kind` is the
+ * user-facing activity verb. The forward-looking `calendar_*`/`task_assignment` kinds are
+ * reserved now so later providers add no enum migration. Source attribution rides on the
+ * separate {@link sourceSystem} axis; "which thing" rides on {@link canonicalEntityKind}.
  */
-export const observationKind = pgEnum('observation_kind', [
+export const eventKind = pgEnum('event_kind', [
   'message',
   'mention',
   'assignment',
@@ -301,6 +302,44 @@ export const observationKind = pgEnum('observation_kind', [
   'calendar_invite',
   'calendar_update',
   'task_assignment',
+]);
+
+/**
+ * The tool an event came from (its attribution badge), replacing the old free-text
+ * `provider` string-as-discriminator. `docket` is the internal source; the rest are the
+ * external {@link ObserverProvider}s. Closed set — adding a tool adds a member here.
+ */
+export const sourceSystem = pgEnum('source_system', [
+  'docket',
+  'linear',
+  'github',
+  'slack',
+  'google_calendar',
+  'gmail',
+]);
+
+/**
+ * The canonical, source-agnostic type of the thing an event is about — the core of
+ * "scale to many tools": a Docket task, a Linear issue, and a GitHub PR all collapse to
+ * `work_item` and share one row UI, with the source as a badge.
+ *
+ * @remarks
+ * A deliberate superset of {@link resourceKind} — it adds the external-only kinds
+ * (`thread`, `message`, `document`) that have no Docket containment node. Each translator
+ * maps its native object types onto this closed taxonomy at the edge.
+ */
+export const canonicalEntityKind = pgEnum('canonical_entity_kind', [
+  'work_item',
+  'project',
+  'program',
+  'initiative',
+  'cycle',
+  'thread',
+  'message',
+  'document',
+  'calendar_event',
+  'person',
+  'organization',
 ]);
 /** Processing status of one raw inbound event in the durable write-ahead inbox. */
 export const inboundEventStatus = pgEnum('inbound_event_status', [

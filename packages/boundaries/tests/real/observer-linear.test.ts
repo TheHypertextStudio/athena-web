@@ -64,7 +64,7 @@ describe('RealLinearObserver.route', () => {
 });
 
 describe('RealLinearObserver.normalize', () => {
-  it('maps an Issue create to a created observation with actor + subject', () => {
+  it('maps an Issue create to a created event with actor + work_item entity + linear.issue detail', () => {
     const drafts = observer.normalize({
       eventType: 'Issue',
       receivedAt: AT,
@@ -77,6 +77,8 @@ describe('RealLinearObserver.normalize', () => {
           id: 'iss_1',
           title: 'Ship it',
           url: 'https://linear.app/x/issue/ABC-1',
+          priority: 2,
+          state: { name: 'In Progress', type: 'started' },
           assignee: { id: 'u1', name: 'Jane' },
         },
         webhookTimestamp: 5,
@@ -85,8 +87,18 @@ describe('RealLinearObserver.normalize', () => {
     expect(drafts).toHaveLength(1);
     expect(drafts[0]?.kind).toBe('created');
     expect(drafts[0]?.title).toContain('Ship it');
-    expect(drafts[0]?.subject?.externalId).toBe('iss_1');
-    expect(drafts[0]?.externalActor?.displayName).toBe('Jane');
+    expect(drafts[0]?.entity).toEqual({
+      kind: 'work_item',
+      externalId: 'iss_1',
+      title: 'Ship it',
+      url: 'https://linear.app/x/issue/ABC-1',
+    });
+    expect(drafts[0]?.actor?.displayName).toBe('Jane');
+    expect(drafts[0]?.detail).toEqual({
+      schema: 'linear.issue',
+      stateName: 'In Progress',
+      priority: 2,
+    });
     expect(drafts[0]?.dedupeKey).toBe('Issue:create:iss_1:5');
   });
 
@@ -120,7 +132,9 @@ describe('RealLinearObserver.normalize', () => {
     });
     expect(drafts[0]?.kind).toBe('comment');
     expect(drafts[0]?.summary).toBe('looks good');
-    expect(drafts[0]?.subject?.externalId).toBe('iss_1');
+    expect(drafts[0]?.entity?.kind).toBe('work_item');
+    expect(drafts[0]?.entity?.externalId).toBe('iss_1');
+    expect(drafts[0]?.detail?.schema).toBe('generic');
   });
 
   it('maps AppUserNotification issueAssignedToYou to an assignment', () => {
@@ -139,7 +153,9 @@ describe('RealLinearObserver.normalize', () => {
     });
     expect(drafts[0]?.kind).toBe('assignment');
     expect(drafts[0]?.title).toContain('Do this');
-    expect(drafts[0]?.externalActor?.displayName).toBe('Lee');
+    expect(drafts[0]?.entity?.kind).toBe('work_item');
+    expect(drafts[0]?.entity?.externalId).toBe('iss_3');
+    expect(drafts[0]?.actor?.displayName).toBe('Lee');
   });
 
   it('maps AppUserNotification issueMention to a mention', () => {
@@ -158,9 +174,24 @@ describe('RealLinearObserver.normalize', () => {
     expect(drafts[0]?.kind).toBe('mention');
   });
 
-  it('returns [] for an unhandled event type', () => {
-    expect(
-      observer.normalize({ eventType: 'Cycle', receivedAt: AT, payload: { type: 'Cycle' } }),
-    ).toEqual([]);
+  it('maps an unrecognized event type to a degraded generic draft (cycle → cycle entity)', () => {
+    const drafts = observer.normalize({
+      eventType: 'Cycle',
+      receivedAt: AT,
+      payload: { type: 'Cycle', action: 'update', data: { id: 'cyc_1', name: 'Sprint 7' } },
+    });
+    expect(drafts).toHaveLength(1);
+    expect(drafts[0]?.kind).toBe('status_change');
+    expect(drafts[0]?.entity).toEqual({ kind: 'cycle', externalId: 'cyc_1', title: 'Sprint 7' });
+    expect(drafts[0]?.detail).toEqual({
+      schema: 'generic',
+      title: 'Sprint 7',
+      summary: null,
+      url: null,
+    });
+  });
+
+  it('returns [] for a non-object payload', () => {
+    expect(observer.normalize({ eventType: 'Issue', receivedAt: AT, payload: 'nope' })).toEqual([]);
   });
 });

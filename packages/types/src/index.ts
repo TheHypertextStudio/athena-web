@@ -34,7 +34,7 @@ export * from './identity';
 export * from './public-config';
 export * from './account';
 export * from './notification';
-export * from './observation';
+export * from './event';
 export * from './stream';
 export * from './daily-plan';
 export * from './activity';

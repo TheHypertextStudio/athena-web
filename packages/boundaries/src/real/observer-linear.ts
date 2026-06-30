@@ -1,5 +1,5 @@
 /**
- * `@docket/boundaries/real` — `RealLinearObserver` (Linear webhook → observations).
+ * `@docket/boundaries/real` — `RealLinearObserver` (Linear webhook → canonical events).
  *
  * @remarks
  * The env-driven {@link Observer} for Linear. Linear signs each webhook with an
@@ -8,37 +8,92 @@
  * per-delivery event id (`type:action:dataId:webhookTimestamp`) so the caller can map the
  * event to an integration and dedup retries. `normalize` maps the high-value event types
  * — `Issue`, `Comment`, `Reaction`, and `AppUserNotification` (the "happened to me"
- * mentions/assignments) — into {@link ObservationDraft}s; unrecognized events yield `[]`.
+ * mentions/assignments) — into canonical {@link EventDraft}s, mapping Linear's native object
+ * types onto the {@link CanonicalEntityKind} taxonomy (issue → `work_item`, project →
+ * `project`, cycle → `cycle`) and attaching a typed {@link EventDetail} via an ordered chain
+ * of detail-builders. Unrecognized event types still surface as a degraded `generic` draft;
+ * only a non-object payload yields `[]`.
  *
  * Verification and normalization are pure (no network) — selected only when
  * `LINEAR_WEBHOOK_SECRET` is real-shaped; otherwise {@link MockObserver} is used.
  */
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
+import type { CanonicalEntityKind, EventDetail, EventKind } from '@docket/types';
+
+import { type DetailBuilder, genericDetail, runDetailBuilders } from '../event-detail';
 import { asRecord, str } from '../json';
 import type { ConnectorProvider } from '../ports/connector';
 import type {
+  EventActorRef,
+  EventDraft,
+  EventEntityRef,
   InboundRouting,
   Observer,
-  ObservationActorRef,
-  ObservationDraft,
-  ObservationSubjectRef,
   RawInboundEvent,
   VerifySignatureInput,
 } from '../ports/observer';
 
 /** Build the external person ref from a Linear user-shaped sub-object. */
-function actorFrom(user: Record<string, unknown> | undefined): ObservationActorRef | undefined {
+function actorFrom(user: Record<string, unknown> | undefined): EventActorRef | undefined {
   const externalId = str(user, 'id');
   if (!externalId) return undefined;
   const displayName = str(user, 'name') ?? str(user, 'displayName');
-  const avatar = str(user, 'avatarUrl');
+  const avatarUrl = str(user, 'avatarUrl');
   return {
     externalId,
     ...(displayName ? { displayName } : {}),
-    ...(avatar ? { avatar } : {}),
+    ...(avatarUrl ? { avatarUrl } : {}),
   };
 }
+
+/** Map a Linear native object type (its event `type`) onto the canonical entity taxonomy. */
+function linearEntityKind(eventType: string): CanonicalEntityKind | undefined {
+  switch (eventType) {
+    case 'Issue':
+      return 'work_item';
+    case 'Project':
+      return 'project';
+    case 'Cycle':
+      return 'cycle';
+    default:
+      return undefined;
+  }
+}
+
+/** The per-event context the Linear detail-builders inspect. */
+interface LinearDetailContext {
+  /** The Linear event `type` (`Issue`, `Comment`, …). */
+  readonly eventType: string;
+  /** The event's `data` sub-object, when present. */
+  readonly data: Record<string, unknown> | undefined;
+  /** The draft title (carried onto the `generic` fallback). */
+  readonly title: string;
+  /** The draft summary, when any. */
+  readonly summary?: string;
+  /** The source permalink, when any. */
+  readonly url?: string;
+}
+
+/** Issue events carry a typed `linear.issue` detail (workflow state + priority). */
+const buildLinearIssueDetail: DetailBuilder<LinearDetailContext> = (ctx) => {
+  if (ctx.eventType !== 'Issue') return null;
+  const state = asRecord(ctx.data?.['state']);
+  const stateName = str(state, 'name') ?? null;
+  const priorityRaw = ctx.data?.['priority'];
+  const priority = typeof priorityRaw === 'number' ? priorityRaw : null;
+  return { schema: 'linear.issue', stateName, priority };
+};
+
+/** Tail: anything without a specific shape surfaces as a degraded `generic` row. */
+const buildLinearGenericDetail: DetailBuilder<LinearDetailContext> = (ctx) =>
+  genericDetail(ctx.title, ctx.summary, ctx.url);
+
+/** The ordered Linear detail-builder chain ("first non-null wins"). */
+const LINEAR_DETAIL_BUILDERS: readonly DetailBuilder<LinearDetailContext>[] = [
+  buildLinearIssueDetail,
+  buildLinearGenericDetail,
+];
 
 /** Validated configuration for {@link RealLinearObserver}. */
 export interface RealLinearObserverConfig {
@@ -88,7 +143,7 @@ export class RealLinearObserver implements Observer {
   }
 
   /** {@inheritDoc Observer.normalize} */
-  normalize(event: RawInboundEvent): ObservationDraft[] {
+  normalize(event: RawInboundEvent): EventDraft[] {
     const body = asRecord(event.payload);
     if (!body) return [];
     const dedupeKey = this.route(body)?.externalEventId ?? `linear:${event.receivedAt}`;
@@ -102,7 +157,8 @@ export class RealLinearObserver implements Observer {
       case 'AppUserNotification':
         return this.normalizeAppNotification(body, event, dedupeKey);
       default:
-        return [];
+        // Unrecognized event type — surface a degraded `generic` draft instead of dropping it.
+        return this.normalizeGeneric(body, event, dedupeKey);
     }
   }
 
@@ -117,29 +173,36 @@ export class RealLinearObserver implements Observer {
     body: Record<string, unknown>,
     event: RawInboundEvent,
     dedupeKey: string,
-  ): ObservationDraft[] {
+  ): EventDraft[] {
     const data = asRecord(body['data']);
     const action = str(body, 'action');
     const title = str(data, 'title') ?? 'an issue';
     const state = asRecord(data?.['state']);
     const completed = str(state, 'type') === 'completed';
-    const kind = action === 'create' ? 'created' : completed ? 'completed' : 'status_change';
+    const kind: EventKind =
+      action === 'create' ? 'created' : completed ? 'completed' : 'status_change';
     const verb = action === 'create' ? 'Created' : completed ? 'Completed' : 'Updated';
-    const subject = this.issueSubject(data);
+    const entity = this.entityRef('work_item', data);
     const actor = actorFrom(asRecord(data?.['assignee']));
     const url = str(data, 'url');
     const id = str(data, 'id');
+    const draftTitle = `${verb} issue: ${title}`;
     return [
       {
         kind,
         occurredAt: str(body, 'createdAt') ?? event.receivedAt,
-        title: `${verb} issue: ${title}`,
-        ...(subject ? { subject } : {}),
-        ...(actor ? { externalActor: actor } : {}),
+        title: draftTitle,
+        ...(entity ? { entity } : {}),
+        ...(actor ? { actor } : {}),
         ...(url ? { permalink: url } : {}),
         ...(id ? { externalId: id } : {}),
         dedupeKey,
-        payload: body,
+        detail: this.detailFor({
+          eventType: 'Issue',
+          data,
+          title: draftTitle,
+          ...(url ? { url } : {}),
+        }),
       },
     ];
   }
@@ -148,26 +211,33 @@ export class RealLinearObserver implements Observer {
     body: Record<string, unknown>,
     event: RawInboundEvent,
     dedupeKey: string,
-  ): ObservationDraft[] {
+  ): EventDraft[] {
     const data = asRecord(body['data']);
     const issue = asRecord(data?.['issue']);
-    const subject = this.issueSubject(issue);
+    const entity = this.entityRef('work_item', issue);
     const actor = actorFrom(asRecord(data?.['user']));
     const summary = str(data, 'body');
     const url = str(data, 'url');
     const id = str(data, 'id');
+    const title = `Commented on ${str(issue, 'title') ?? 'an issue'}`;
     return [
       {
         kind: 'comment',
         occurredAt: str(body, 'createdAt') ?? event.receivedAt,
-        title: `Commented on ${str(issue, 'title') ?? 'an issue'}`,
+        title,
         ...(summary ? { summary } : {}),
-        ...(subject ? { subject } : {}),
-        ...(actor ? { externalActor: actor } : {}),
+        ...(entity ? { entity } : {}),
+        ...(actor ? { actor } : {}),
         ...(url ? { permalink: url } : {}),
         ...(id ? { externalId: id } : {}),
         dedupeKey,
-        payload: body,
+        detail: this.detailFor({
+          eventType: 'Comment',
+          data,
+          title,
+          ...(summary ? { summary } : {}),
+          ...(url ? { url } : {}),
+        }),
       },
     ];
   }
@@ -176,19 +246,20 @@ export class RealLinearObserver implements Observer {
     body: Record<string, unknown>,
     event: RawInboundEvent,
     dedupeKey: string,
-  ): ObservationDraft[] {
+  ): EventDraft[] {
     const data = asRecord(body['data']);
     const actor = actorFrom(asRecord(data?.['user']));
     const id = str(data, 'id');
+    const title = `Reacted ${str(data, 'emoji') ?? ''}`.trim();
     return [
       {
         kind: 'reaction',
         occurredAt: str(body, 'createdAt') ?? event.receivedAt,
-        title: `Reacted ${str(data, 'emoji') ?? ''}`.trim(),
-        ...(actor ? { externalActor: actor } : {}),
+        title,
+        ...(actor ? { actor } : {}),
         ...(id ? { externalId: id } : {}),
         dedupeKey,
-        payload: body,
+        detail: this.detailFor({ eventType: 'Reaction', data, title }),
       },
     ];
   }
@@ -197,43 +268,91 @@ export class RealLinearObserver implements Observer {
     body: Record<string, unknown>,
     event: RawInboundEvent,
     dedupeKey: string,
-  ): ObservationDraft[] {
+  ): EventDraft[] {
     const notification = asRecord(body['notification']);
     const notifType = str(notification, 'type') ?? '';
     // Assignment vs mention; anything else is still surfaced as a mention-class signal.
-    const kind = notifType === 'issueAssignedToYou' ? 'assignment' : 'mention';
+    const kind: EventKind = notifType === 'issueAssignedToYou' ? 'assignment' : 'mention';
     const issue = asRecord(notification?.['issue']);
-    const subject = this.issueSubject(issue);
+    const entity = this.entityRef('work_item', issue);
     const actor = actorFrom(asRecord(notification?.['actor']));
     const what = str(issue, 'title') ?? 'a Linear item';
     const url = str(issue, 'url');
     const id = str(notification, 'id');
+    const title =
+      kind === 'assignment' ? `Assigned to you: ${what}` : `You were mentioned: ${what}`;
     return [
       {
         kind,
         occurredAt: str(notification, 'createdAt') ?? str(body, 'createdAt') ?? event.receivedAt,
-        title: kind === 'assignment' ? `Assigned to you: ${what}` : `You were mentioned: ${what}`,
-        ...(subject ? { subject } : {}),
-        ...(actor ? { externalActor: actor } : {}),
+        title,
+        ...(entity ? { entity } : {}),
+        ...(actor ? { actor } : {}),
         ...(url ? { permalink: url } : {}),
         ...(id ? { externalId: id } : {}),
         dedupeKey,
-        payload: body,
+        detail: this.detailFor({
+          eventType: 'AppUserNotification',
+          data: issue,
+          title,
+          ...(url ? { url } : {}),
+        }),
       },
     ];
   }
 
-  /** Build an issue subject ref from a Linear issue-shaped object. */
-  private issueSubject(
-    issue: Record<string, unknown> | undefined,
-  ): ObservationSubjectRef | undefined {
-    const externalId = str(issue, 'id');
+  /** Map an unrecognized Linear event onto a degraded `generic` draft (nothing is dropped). */
+  private normalizeGeneric(
+    body: Record<string, unknown>,
+    event: RawInboundEvent,
+    dedupeKey: string,
+  ): EventDraft[] {
+    const data = asRecord(body['data']);
+    const action = str(body, 'action');
+    const kind: EventKind = action === 'create' ? 'created' : 'status_change';
+    const entityKind = linearEntityKind(event.eventType);
+    const entity = entityKind ? this.entityRef(entityKind, data) : undefined;
+    const title = str(data, 'title') ?? str(data, 'name') ?? `Linear ${event.eventType}`;
+    const url = str(data, 'url');
+    const id = str(data, 'id');
+    return [
+      {
+        kind,
+        occurredAt: str(body, 'createdAt') ?? event.receivedAt,
+        title,
+        ...(entity ? { entity } : {}),
+        ...(url ? { permalink: url } : {}),
+        ...(id ? { externalId: id } : {}),
+        dedupeKey,
+        detail: this.detailFor({
+          eventType: event.eventType,
+          data,
+          title,
+          ...(url ? { url } : {}),
+        }),
+      },
+    ];
+  }
+
+  /** Resolve the typed {@link EventDetail} for an event via the ordered builder chain. */
+  private detailFor(context: LinearDetailContext): EventDetail {
+    return runDetailBuilders(LINEAR_DETAIL_BUILDERS, context);
+  }
+
+  /** Build a canonical entity ref from a Linear issue/project/cycle-shaped object. */
+  private entityRef(
+    kind: CanonicalEntityKind,
+    obj: Record<string, unknown> | undefined,
+  ): EventEntityRef | undefined {
+    const externalId = str(obj, 'id');
     if (!externalId) return undefined;
+    const title = str(obj, 'title') ?? str(obj, 'name');
+    const url = str(obj, 'url');
     return {
-      type: 'issue',
+      kind,
       externalId,
-      ...(str(issue, 'title') ? { title: str(issue, 'title') } : {}),
-      ...(str(issue, 'url') ? { url: str(issue, 'url') } : {}),
+      ...(title ? { title } : {}),
+      ...(url ? { url } : {}),
     };
   }
 }

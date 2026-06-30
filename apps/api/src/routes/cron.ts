@@ -19,9 +19,8 @@ import { env } from '../env';
 import { sweepLifecycle } from '../billing/lifecycle';
 import { sweepEmailSuggestions } from '../lib/email-to-task/sweep';
 import { sweepConnectorSync } from './integration-sync';
-import { sweepInboundEvents } from './observation-sync';
+import { sweepInboundEvents } from './event-sync';
 import { sweepDailyDigests } from './daily-digest';
-import { sweepProactiveSessions } from './proactive-sweep';
 
 /** Extract the presented cron secret from `Authorization: Bearer …` or `x-cron-secret`. */
 function presentedSecret(
@@ -63,9 +62,9 @@ const cron = new Hono()
     const result = await sweepEmailSuggestions(new Date());
     return c.json({ swept: true, ...result });
   })
-  // Ambient-intelligence drain: normalize received webhook events into observations + bridges.
-  // Idempotent + lease-guarded (see {@link sweepInboundEvents}); run on a tight cadence so
-  // captured activity surfaces quickly.
+  // Activity-feed drain: normalize received webhook events into canonical events and
+  // fan them out to recipients. Idempotent + lease-guarded (see {@link sweepInboundEvents});
+  // run on a tight cadence so captured activity surfaces quickly.
   .post('/process-events', async (c) => {
     if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
     const result = await sweepInboundEvents(new Date());
@@ -77,13 +76,6 @@ const cron = new Hono()
   .post('/daily-digests', async (c) => {
     if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
     const result = await sweepDailyDigests(new Date());
-    return c.json({ swept: true, ...result });
-  })
-  // Proactive engine: draft (approval-gated) agent plans from recent mentions/assignments for
-  // opted-in users. Idempotent via each session's `external_run_ref`; run on a tight cadence.
-  .post('/run-proactive', async (c) => {
-    if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
-    const result = await sweepProactiveSessions(new Date());
     return c.json({ swept: true, ...result });
   })
   // Account-deletion sweep: hard-delete every account whose 14-day grace window has elapsed,

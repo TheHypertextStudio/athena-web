@@ -8,27 +8,44 @@
  * tone. Heterogeneous sources render through one homogeneous line: `{actor} {verb} {subject}`,
  * with the provider shown as an attribution badge by the row, not a separate layout.
  */
-import type { ObservationKind, StreamEventOut, StreamRelevance } from '@docket/types';
+import type {
+  CanonicalEntityKind,
+  EventDetail,
+  EventKind,
+  SourceSystemKind,
+  StreamEventOut,
+  StreamRelevance,
+} from '@docket/types';
 
-/** A flattened, presentation-ready projection of one stream event. */
+/**
+ * A flattened, presentation-ready projection of one stream event.
+ *
+ * @remarks
+ * Reads the canonical {@link StreamEventOut} shape: `source.system` (with the coarse
+ * `origin` derived from it), the canonical `entity` (its `kind` is what makes analogous
+ * things across tools share one row), and the typed `detail` pocket.
+ */
 export interface StreamEventRow {
   readonly id: string;
   readonly organizationId: string;
-  readonly provider: string;
+  readonly system: SourceSystemKind;
   readonly origin: 'docket' | 'external';
-  readonly kind: ObservationKind;
+  readonly externalUrl: string | null;
+  readonly kind: EventKind;
   readonly occurredAt: string;
   readonly title: string;
   readonly summary: string | null;
   readonly permalink: string | null;
   readonly actorName: string | null;
-  readonly actorAvatar: string | null;
-  readonly subjectType: string | null;
-  readonly subjectTitle: string | null;
-  readonly subjectId: string | null;
+  readonly actorAvatarUrl: string | null;
+  readonly entityKind: CanonicalEntityKind | null;
+  readonly entityTitle: string | null;
+  readonly entityExternalId: string | null;
+  readonly entityDocketId: string | null;
+  readonly entityUrl: string | null;
   readonly relevance: StreamRelevance | null;
   readonly rendering: { readonly icon: string; readonly category: string };
-  readonly payload: Record<string, unknown>;
+  readonly detail: EventDetail | null;
 }
 
 /** Flatten a wire {@link StreamEventOut} into a {@link StreamEventRow}. */
@@ -36,26 +53,29 @@ export function toRow(event: StreamEventOut): StreamEventRow {
   return {
     id: event.id,
     organizationId: event.organizationId,
-    provider: event.source.provider,
-    origin: event.source.origin,
+    system: event.source.system,
+    origin: event.source.system === 'docket' ? 'docket' : 'external',
+    externalUrl: event.source.externalUrl,
     kind: event.kind,
     occurredAt: event.occurredAt,
     title: event.title,
     summary: event.summary,
     permalink: event.permalink,
     actorName: event.actor?.displayName ?? null,
-    actorAvatar: event.actor?.avatar ?? null,
-    subjectType: event.subject?.type ?? null,
-    subjectTitle: event.subject?.title ?? null,
-    subjectId: event.subject?.externalId ?? null,
+    actorAvatarUrl: event.actor?.avatarUrl ?? null,
+    entityKind: event.entity?.kind ?? null,
+    entityTitle: event.entity?.title ?? null,
+    entityExternalId: event.entity?.externalId ?? null,
+    entityDocketId: event.entity?.docketEntityId ?? null,
+    entityUrl: event.entity?.url ?? null,
     relevance: event.relevance,
     rendering: event.rendering,
-    payload: event.payload,
+    detail: event.detail,
   };
 }
 
 /** Verb phrase per kind, written to read after an actor name ("{actor} {verb} {subject}"). */
-const KIND_VERB: Record<ObservationKind, string> = {
+const KIND_VERB: Record<EventKind, string> = {
   message: 'sent a message in',
   mention: 'mentioned you in',
   assignment: 'assigned you to',
@@ -70,7 +90,7 @@ const KIND_VERB: Record<ObservationKind, string> = {
 };
 
 /** Human label per kind (for filter chips / menus). */
-export const KIND_LABEL: Record<ObservationKind, string> = {
+export const KIND_LABEL: Record<EventKind, string> = {
   message: 'Message',
   mention: 'Mention',
   assignment: 'Assignment',
@@ -94,29 +114,31 @@ export const KIND_LABEL: Record<ObservationKind, string> = {
 export function streamDescription(row: StreamEventRow): string {
   const actor = row.actorName ?? 'Someone';
   const verb = KIND_VERB[row.kind];
-  const subject = row.subjectTitle ?? row.subjectType;
+  const subject = row.entityTitle;
   return subject ? `${actor} ${verb} ${subject}` : row.title;
 }
 
-/** Org-scoped subject kinds the stream can deep-link to internally, mapped to their route segment. */
-const SUBJECT_ROUTE: Record<string, string> = {
+/** Canonical entity kinds the stream can deep-link to internally, mapped to their route segment. */
+const SUBJECT_ROUTE: Partial<Record<CanonicalEntityKind, string>> = {
   project: 'projects',
   program: 'programs',
   initiative: 'initiatives',
   cycle: 'cycles',
-  team: 'teams',
 };
 
 /**
- * The deep link for an event's subject: the external permalink when present, else the internal
- * Docket route for a `docket`-origin subject, else `null` (renders inert).
+ * The deep link for an event's entity: the external permalink when present, else the internal
+ * Docket route for a `docket`-origin entity (keyed on canonical {@link CanonicalEntityKind}),
+ * else the entity/source external URL, else `null` (renders inert).
  */
 export function streamHref(row: StreamEventRow): string | null {
   if (row.permalink) return row.permalink;
-  if (row.origin !== 'docket' || !row.subjectType || !row.subjectId) return null;
-  if (row.subjectType === 'task') return `/orgs/${row.organizationId}/my-work`;
-  const segment = SUBJECT_ROUTE[row.subjectType];
-  return segment ? `/orgs/${row.organizationId}/${segment}/${row.subjectId}` : null;
+  if (row.origin === 'docket' && row.entityKind && row.entityDocketId) {
+    if (row.entityKind === 'work_item') return `/orgs/${row.organizationId}/my-work`;
+    const segment = SUBJECT_ROUTE[row.entityKind];
+    return segment ? `/orgs/${row.organizationId}/${segment}/${row.entityDocketId}` : null;
+  }
+  return row.entityUrl ?? row.externalUrl;
 }
 
 /** Glyph + tone descriptor for a kind (the row resolves `icon` to a real component). */
@@ -126,7 +148,7 @@ export interface KindGlyph {
 }
 
 /** The leading glyph + tone for a kind. */
-export function kindGlyph(kind: ObservationKind): KindGlyph {
+export function kindGlyph(kind: EventKind): KindGlyph {
   switch (kind) {
     case 'mention':
       return { icon: 'mention', tone: 'text-state-mention' };

@@ -151,9 +151,9 @@ export const DailyPlanItemId = id<'DailyPlanItemId'>().describe(
 export const AuditEventId = id<'AuditEventId'>().describe(
   'ULID id of an AuditEvent — a tenant-scoped record of a sensitive action.',
 );
-/** Branded `Observation` id (an ambient-context-intelligence timeline entry). */
-export const ObservationId = id<'ObservationId'>().describe(
-  'ULID id of an Observation — an ambient-context-intelligence timeline entry (a noticed mention/assignment/signal).',
+/** Branded `Event` id (a row in the canonical cross-tool activity log). */
+export const EventId = id<'EventId'>().describe(
+  'ULID id of an Event — a row in the canonical cross-tool activity log (internal or external).',
 );
 /** Branded `InboundEvent` id (a row in the durable write-ahead ingestion inbox). */
 export const InboundEventId = id<'InboundEventId'>().describe(

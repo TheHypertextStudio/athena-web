@@ -21,7 +21,7 @@ import { pageResult, seekAfter } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
 import { capabilityGuard } from '../permissions/capability-guard';
 import { zJson, zParam, zQuery } from '../lib/validate';
-import { emitObservation } from './observation-emit';
+import { emitEvent } from './event-emit';
 
 type ProjectRow = typeof project.$inferSelect;
 
@@ -211,7 +211,7 @@ const projects = new Hono<AppEnv>()
         return created;
       });
 
-      await emitObservation({
+      await emitEvent({
         organizationId: orgId,
         kind: 'created',
         actorId,
@@ -325,13 +325,13 @@ const projects = new Hono<AppEnv>()
       if (!row) throw new NotFoundError('Project not found');
 
       if (body.status !== undefined) {
-        await emitObservation({
+        await emitEvent({
           organizationId: orgId,
           kind: 'status_change',
           actorId,
           title: row.name,
           subject: { type: 'project', id: row.id, title: row.name },
-          payload: { status: row.status },
+          detail: { schema: 'docket.state_change', fromState: null, toState: row.status },
         });
       }
       return ok(c, ProjectOut, toOut(row));

@@ -26,7 +26,7 @@ import { resolveLandingTarget } from '../lib/task-landing';
 import { ok } from '../lib/ok';
 import { zJson, zParam } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
-import { emitObservation } from './observation-emit';
+import { emitEvent } from './event-emit';
 
 type SuggestionRow = typeof emailSuggestion.$inferSelect;
 
@@ -149,14 +149,13 @@ const emailSuggestions = new Hono<AppEnv>()
         return { taskRow, suggestionRow };
       });
 
-      // Emit a creation observation so automation rules can react to the accept.
-      await emitObservation({
+      // Emit a creation event so automation rules can react to the accept.
+      await emitEvent({
         organizationId: orgId,
         kind: 'created',
         actorId,
         title: created.taskRow.title,
         subject: { type: 'task', id: created.taskRow.id, title: created.taskRow.title },
-        payload: { source: 'email_suggestion', threadId: suggestion.externalThreadId },
       });
 
       return ok(c, EmailSuggestionOut, toOut(created.suggestionRow));

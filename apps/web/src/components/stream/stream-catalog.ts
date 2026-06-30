@@ -4,42 +4,54 @@
  * @remarks
  * Declares the stream's filterable/groupable/sortable fields so the shared {@link FilterToolbar}
  * + URL state work over events. The field `key`s deliberately MATCH the server's
- * `view-filter-sql` whitelist (`provider` / `kind` / `subjectType` / `actor` / `occurredAt` /
+ * `view-filter-sql` whitelist (`system` / `kind` / `entityKind` / `actor` / `occurredAt` /
  * `organizationId`) so a toolbar-built predicate translates straight to SQL. The cross-org
  * personal stream adds a Workspace field; the per-workspace firehose omits it.
  */
-import { ObservationKind } from '@docket/types';
+import { CanonicalEntityKind, EventKind } from '@docket/types';
 
 import type { FieldCatalog, FieldDescriptor, FieldOption } from '@/components/views/field-catalog';
 
 import { KIND_LABEL, type StreamEventRow } from './stream-meta';
 
 /** The known event sources, shown in the Source filter. */
-const PROVIDER_OPTIONS: readonly FieldOption[] = [
+const SYSTEM_OPTIONS: readonly FieldOption[] = [
   { value: 'docket', label: 'Docket', hint: 'docket' },
   { value: 'linear', label: 'Linear', hint: 'linear' },
-  { value: 'slack', label: 'Slack', hint: 'slack' },
   { value: 'github', label: 'GitHub', hint: 'github' },
+  { value: 'slack', label: 'Slack', hint: 'slack' },
+  { value: 'google_calendar', label: 'Google Calendar', hint: 'google_calendar' },
+  { value: 'gmail', label: 'Gmail', hint: 'gmail' },
 ];
 
 /** Canonical kinds, shown in the Kind filter. */
-const KIND_OPTIONS: readonly FieldOption[] = ObservationKind.options.map((kind) => ({
+const KIND_OPTIONS: readonly FieldOption[] = EventKind.options.map((kind) => ({
   value: kind,
   label: KIND_LABEL[kind],
   hint: kind,
 }));
 
-/** Subject kinds worth filtering by (a curated subset of the freeform subject types). */
-const SUBJECT_OPTIONS: readonly FieldOption[] = [
-  { value: 'project', label: 'Project' },
-  { value: 'initiative', label: 'Initiative' },
-  { value: 'program', label: 'Program' },
-  { value: 'cycle', label: 'Cycle' },
-  { value: 'task', label: 'Task' },
-  { value: 'issue', label: 'Issue' },
-  { value: 'comment', label: 'Comment' },
-  { value: 'channel', label: 'Channel' },
-];
+/** Human label per canonical entity kind (for the Subject filter). */
+const ENTITY_KIND_LABEL: Record<CanonicalEntityKind, string> = {
+  work_item: 'Work item',
+  project: 'Project',
+  program: 'Program',
+  initiative: 'Initiative',
+  cycle: 'Cycle',
+  thread: 'Thread',
+  message: 'Message',
+  document: 'Document',
+  calendar_event: 'Calendar event',
+  person: 'Person',
+  organization: 'Organization',
+};
+
+/** Canonical entity kinds, shown in the Subject filter. */
+const ENTITY_KIND_OPTIONS: readonly FieldOption[] = CanonicalEntityKind.options.map((kind) => ({
+  value: kind,
+  label: ENTITY_KIND_LABEL[kind],
+  hint: kind,
+}));
 
 /** Dependencies the page supplies (cross-org workspace resolution). */
 export interface StreamCatalogDeps {
@@ -60,12 +72,12 @@ export interface StreamCatalogDeps {
 export function buildStreamCatalog(deps: StreamCatalogDeps): FieldCatalog<StreamEventRow> {
   const fields: FieldDescriptor<StreamEventRow>[] = [
     {
-      key: 'provider',
+      key: 'system',
       label: 'Source',
       type: 'enum',
-      accessor: (r) => r.provider,
+      accessor: (r) => r.system,
       groupable: true,
-      options: PROVIDER_OPTIONS,
+      options: SYSTEM_OPTIONS,
     },
     {
       key: 'kind',
@@ -76,11 +88,11 @@ export function buildStreamCatalog(deps: StreamCatalogDeps): FieldCatalog<Stream
       options: KIND_OPTIONS,
     },
     {
-      key: 'subjectType',
+      key: 'entityKind',
       label: 'Subject',
       type: 'enum',
-      accessor: (r) => r.subjectType,
-      options: SUBJECT_OPTIONS,
+      accessor: (r) => r.entityKind,
+      options: ENTITY_KIND_OPTIONS,
     },
     {
       key: 'actor',

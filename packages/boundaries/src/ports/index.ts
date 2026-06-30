@@ -55,12 +55,12 @@ export type { TaskDraft, TaskDraftInput, TaskSynthesizer } from './task-synthesi
 export { TITLE_MAX, truncateTitle } from './task-synthesizer';
 export type { ConnectorErrorKind, ConnectorErrorOptions } from './connector-error';
 export type {
+  EventActorRef,
+  EventDraft,
+  EventEntityRef,
   InboundHeaders,
   InboundRouting,
   Observer,
-  ObservationActorRef,
-  ObservationDraft,
-  ObservationSubjectRef,
   ObserverProvider,
   RawInboundEvent,
   VerifySignatureInput,

@@ -140,13 +140,14 @@ describe('purgeUser', () => {
     await db.insert(schema.streamSubscription).values({
       organizationId: shared,
       userId: u,
-      subjectType: 'task',
-      subjectId: 't1',
+      entityKind: 'work_item',
+      source: 'docket',
+      externalId: 't1',
     });
-    await db.insert(schema.observation).values({
+    await db.insert(schema.event).values({
       organizationId: shared,
       userId: u,
-      provider: 'linear',
+      sourceSystem: 'linear',
       kind: 'mention',
       occurredAt: new Date(NOW),
       title: 'x',
@@ -169,9 +170,7 @@ describe('purgeUser', () => {
         .from(schema.streamSubscription)
         .where(eq(schema.streamSubscription.userId, u)),
     ).toHaveLength(0);
-    expect(
-      await db.select().from(schema.observation).where(eq(schema.observation.userId, u)),
-    ).toHaveLength(0);
+    expect(await db.select().from(schema.event).where(eq(schema.event.userId, u))).toHaveLength(0);
     expect(
       await db.select().from(schema.dailyDigest).where(eq(schema.dailyDigest.userId, u)),
     ).toHaveLength(0);

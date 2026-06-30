@@ -66,7 +66,7 @@ const JOBS: readonly CronJob[] = [
     path: '/internal/cron/process-events',
     schedule: '*/2 * * * *',
     description:
-      'Docket: ambient-intelligence drain (normalize inbound webhook events into observations).',
+      'Docket: ambient-intelligence drain (normalize inbound webhook events into canonical events).',
   },
   {
     name: 'docket-daily-digests',
@@ -74,13 +74,6 @@ const JOBS: readonly CronJob[] = [
     schedule: '*/15 * * * *',
     description:
       "Docket: daily-digest sweep (email each opted-in user's end-of-day summary at their local time).",
-  },
-  {
-    name: 'docket-run-proactive',
-    path: '/internal/cron/run-proactive',
-    schedule: '*/2 * * * *',
-    description:
-      'Docket: proactive engine (draft approval-gated agent plans from recent mentions/assignments).',
   },
   {
     name: 'docket-account-deletion-sweep',

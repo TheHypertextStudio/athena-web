@@ -14,8 +14,8 @@
  * double-sends. A no-activity day records `skipped_empty` and sends nothing (cost control).
  * `now` is always passed in. Cross-org + user-scoped: one digest per person per day.
  */
-import { dailyDigest, db, hub, observation, user } from '@docket/db';
-import type { DigestStats, ObservationActor, ObservationSubject } from '@docket/db';
+import { dailyDigest, db, event, hub, user } from '@docket/db';
+import type { ActorRef, DigestStats, EntityRef } from '@docket/db';
 import type { SummarizerObservation } from '@docket/boundaries';
 import { and, asc, eq, gte, lte, sql } from 'drizzle-orm';
 
@@ -26,15 +26,15 @@ const DEFAULT_SEND_AT = '18:00';
 /** The same default as minutes-since-midnight (the fallback for an unparseable send time). */
 const DEFAULT_SEND_MINUTES = 18 * 60;
 
-/** The observation columns the digest actually reads — avoids fetching the raw `payload` jsonb. */
+/** The event columns the digest actually reads — avoids fetching the raw `detail` jsonb. */
 interface DigestRow {
-  readonly provider: string;
+  readonly sourceSystem: string;
   readonly kind: string;
   readonly occurredAt: Date;
   readonly title: string;
   readonly summary: string | null;
-  readonly externalActor: ObservationActor | null;
-  readonly subject: ObservationSubject | null;
+  readonly actor: ActorRef | null;
+  readonly entity: EntityRef | null;
 }
 
 /** The result of one daily-digest sweep. */
@@ -148,28 +148,28 @@ function markdownToHtml(md: string): string {
   return out.join('\n');
 }
 
-/** Flatten an observation row to the summarizer's compact shape. */
+/** Flatten an event row to the summarizer's compact shape. */
 function toSummarizerObservation(row: DigestRow): SummarizerObservation {
   return {
-    provider: row.provider,
+    provider: row.sourceSystem,
     kind: row.kind,
     occurredAt: row.occurredAt.toISOString(),
     title: row.title,
     ...(row.summary ? { summary: row.summary } : {}),
-    ...(row.externalActor?.displayName ? { actor: row.externalActor.displayName } : {}),
-    ...(row.subject?.title ? { subject: row.subject.title } : {}),
+    ...(row.actor?.displayName ? { actor: row.actor.displayName } : {}),
+    ...(row.entity?.title ? { subject: row.entity.title } : {}),
   };
 }
 
-/** Build the per-provider / per-kind stat counts for a day's observations. */
+/** Build the per-source / per-kind stat counts for a day's events. */
 function buildStats(rows: readonly DigestRow[]): DigestStats {
-  const byProvider: Record<string, number> = {};
+  const bySource: Record<string, number> = {};
   const byKind: Record<string, number> = {};
   for (const row of rows) {
-    byProvider[row.provider] = (byProvider[row.provider] ?? 0) + 1;
+    bySource[row.sourceSystem] = (bySource[row.sourceSystem] ?? 0) + 1;
     byKind[row.kind] = (byKind[row.kind] ?? 0) + 1;
   }
-  return { total: rows.length, byProvider, byKind };
+  return { total: rows.length, bySource, byKind };
 }
 
 /** Generate, send, and persist one user's digest for their local day. Returns the outcome. */
@@ -186,7 +186,12 @@ async function generateForUser(
   // ticks. (Cadence defaults to 'eod'; the multi-cadence lunch/eow fan-out is a later milestone.)
   const [claimed] = await db
     .insert(dailyDigest)
-    .values({ userId: candidate.userId, digestDate: localDate, cadence: 'eod', status: 'generating' })
+    .values({
+      userId: candidate.userId,
+      digestDate: localDate,
+      cadence: 'eod',
+      status: 'generating',
+    })
     .onConflictDoNothing({
       target: [dailyDigest.userId, dailyDigest.digestDate, dailyDigest.cadence],
     })
@@ -197,28 +202,28 @@ async function generateForUser(
     const dayStart = localDayStartUtc(parts, candidate.tz);
     const rows = await db
       .select({
-        provider: observation.provider,
-        kind: observation.kind,
-        occurredAt: observation.occurredAt,
-        title: observation.title,
-        summary: observation.summary,
-        externalActor: observation.externalActor,
-        subject: observation.subject,
+        sourceSystem: event.sourceSystem,
+        kind: event.kind,
+        occurredAt: event.occurredAt,
+        title: event.title,
+        summary: event.summary,
+        actor: event.actor,
+        entity: event.entity,
       })
-      .from(observation)
+      .from(event)
       .where(
         and(
-          eq(observation.userId, candidate.userId),
-          gte(observation.occurredAt, dayStart),
-          lte(observation.occurredAt, now),
+          eq(event.userId, candidate.userId),
+          gte(event.occurredAt, dayStart),
+          lte(event.occurredAt, now),
         ),
       )
-      .orderBy(asc(observation.occurredAt));
+      .orderBy(asc(event.occurredAt));
 
     if (rows.length === 0) {
       await db
         .update(dailyDigest)
-        .set({ status: 'skipped_empty', observationCount: 0, generatedAt: now })
+        .set({ status: 'skipped_empty', eventCount: 0, generatedAt: now })
         .where(eq(dailyDigest.id, claimed.id));
       return 'empty';
     }
@@ -253,7 +258,7 @@ async function generateForUser(
         summaryMarkdown: markdown,
         summaryHtml: html,
         stats: buildStats(rows),
-        observationCount: rows.length,
+        eventCount: rows.length,
         generatedAt: now,
         sentAt: now,
       })

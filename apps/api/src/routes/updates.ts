@@ -14,7 +14,7 @@ import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
-import { emitObservation } from './observation-emit';
+import { emitEvent } from './event-emit';
 
 type UpdateRow = typeof update.$inferSelect;
 
@@ -202,14 +202,16 @@ Key side effect: when the post includes a \`health\`, the same transaction write
       });
 
       // Stream: a posted status update surfaces on its subject (project/initiative/program).
-      await emitObservation({
+      await emitEvent({
         organizationId: orgId,
         kind: 'status_change',
         actorId,
         title: 'Posted an update',
         summary: row.body,
         subject: { type: row.subjectType, id: row.subjectId },
-        ...(row.health ? { payload: { health: row.health } } : {}),
+        ...(row.health
+          ? { detail: { schema: 'docket.state_change', fromState: null, toState: row.health } }
+          : {}),
       });
       return ok(c, UpdateOut, toOut(row));
     },

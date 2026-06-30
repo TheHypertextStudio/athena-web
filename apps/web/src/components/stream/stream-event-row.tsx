@@ -48,20 +48,18 @@ export function StreamRow({
     <div className="group hover:bg-surface-container/40 relative flex items-start gap-3 rounded-lg px-3 py-3">
       <ActorAvatar
         name={row.actorName}
-        avatar={row.actorAvatar}
+        avatarUrl={row.actorAvatarUrl}
         glyph={glyph}
         seed={row.actorName ?? row.id}
       />
-      <button
-        type="button"
-        onClick={() => onSelect?.(row)}
-        className="min-w-0 flex-1 text-left"
-      >
+      <button type="button" onClick={() => onSelect?.(row)} className="min-w-0 flex-1 text-left">
         <p className="text-on-surface/90 text-body leading-snug">{streamDescription(row)}</p>
         <StreamEventDetail row={row} />
         <div className="text-on-surface-variant mt-1.5 flex flex-wrap items-center gap-2 text-xs">
-          <ProviderBadge provider={row.provider} />
-          {scope === 'me' ? <OrgChip orgId={row.organizationId} name={orgName ?? 'Workspace'} /> : null}
+          <ProviderBadge system={row.system} />
+          {scope === 'me' ? (
+            <OrgChip orgId={row.organizationId} name={orgName ?? 'Workspace'} />
+          ) : null}
           {row.actorName ? <span className="truncate">{row.actorName}</span> : null}
           <span aria-hidden="true" className="text-on-surface-variant/50">
             ·
@@ -69,7 +67,7 @@ export function StreamRow({
           <span>{relativeTime(row.occurredAt)}</span>
         </div>
       </button>
-      <div className="absolute top-2.5 right-2 hidden group-hover:flex group-focus-within:flex">
+      <div className="absolute top-2.5 right-2 hidden group-focus-within:flex group-hover:flex">
         <StreamEventActions row={row} actions={actions} pending={pending} />
       </div>
     </div>

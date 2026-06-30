@@ -4,7 +4,7 @@
  * @remarks
  * `collectAccountExport` snapshots everything tied to a user — their identity + linked
  * accounts + consents, every org they belong to (each org's work layer), and their cross-org
- * personal rows (hub, daily plan, notifications, observations, digests, stream follows) — into
+ * personal rows (hub, daily plan, notifications, events, digests, stream follows) — into
  * one JSON document. `sweepAccountExports` is the idempotent cron drain: it generates a
  * `pending` job's archive to blob storage, advances it to `ready`, emails the download link,
  * and expires `ready` artifacts past their TTL. Mirrors the daily-digest sweep (uses the
@@ -16,11 +16,11 @@ import {
   actor,
   dailyDigest,
   dailyPlanItem,
+  event,
+  eventRecipient,
   hub,
   notification,
   oauthConsent,
-  observation,
-  observationRecipient,
   organization,
   streamSubscription,
   user,
@@ -99,23 +99,22 @@ export async function collectAccountExport(
       orgs.map(async (org) => ({ organization: org, work: await collectWorkLayer(org.id, db) })),
     ),
     (async () => {
-      const [planItems, notifications, observations, recipients, digests, follows] =
-        await Promise.all([
-          hubId
-            ? db.select().from(dailyPlanItem).where(eq(dailyPlanItem.hubId, hubId))
-            : Promise.resolve([]),
-          db.select().from(notification).where(eq(notification.userId, userId)),
-          db.select().from(observation).where(eq(observation.userId, userId)),
-          db.select().from(observationRecipient).where(eq(observationRecipient.userId, userId)),
-          db.select().from(dailyDigest).where(eq(dailyDigest.userId, userId)),
-          db.select().from(streamSubscription).where(eq(streamSubscription.userId, userId)),
-        ]);
+      const [planItems, notifications, events, recipients, digests, follows] = await Promise.all([
+        hubId
+          ? db.select().from(dailyPlanItem).where(eq(dailyPlanItem.hubId, hubId))
+          : Promise.resolve([]),
+        db.select().from(notification).where(eq(notification.userId, userId)),
+        db.select().from(event).where(eq(event.userId, userId)),
+        db.select().from(eventRecipient).where(eq(eventRecipient.userId, userId)),
+        db.select().from(dailyDigest).where(eq(dailyDigest.userId, userId)),
+        db.select().from(streamSubscription).where(eq(streamSubscription.userId, userId)),
+      ]);
       return {
         hub: hubRow ?? null,
         dailyPlan: planItems,
         notifications,
-        observations,
-        observationRecipients: recipients,
+        events,
+        eventRecipients: recipients,
         dailyDigests: digests,
         streamSubscriptions: follows,
       };

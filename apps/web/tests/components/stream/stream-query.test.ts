@@ -14,19 +14,23 @@ describe('streamQueryFromViewState', () => {
 
   it('encodes filter predicates as base64url JSON ViewFilter[]', () => {
     const state: ViewState = {
-      filters: [{ field: 'provider', op: 'in', value: ['linear', 'slack'] }],
+      filters: [{ field: 'system', op: 'in', value: ['linear', 'slack'] }],
       groupBy: null,
       sort: [],
     };
     const params = streamQueryFromViewState(state);
     expect(params.filter).toBeDefined();
     expect(decode(params.filter!)).toEqual([
-      { field: 'provider', op: 'in', value: ['linear', 'slack'] },
+      { field: 'system', op: 'in', value: ['linear', 'slack'] },
     ]);
   });
 
   it('maps the occurredAt sort term to order', () => {
-    const state: ViewState = { filters: [], groupBy: null, sort: [{ field: 'occurredAt', dir: 'asc' }] };
+    const state: ViewState = {
+      filters: [],
+      groupBy: null,
+      sort: [{ field: 'occurredAt', dir: 'asc' }],
+    };
     expect(streamQueryFromViewState(state).order).toBe('asc');
   });
 

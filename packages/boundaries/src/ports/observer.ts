@@ -1,24 +1,27 @@
 /**
- * `@docket/boundaries/ports` — the `Observer` port.
+ * `@docket/boundaries/ports` — the `Observer` port (Adapter pattern).
  *
  * @remarks
- * The typed edge for **ambient context intelligence**: it turns an inbound provider
- * event (a Linear webhook, later a Slack/Calendar delivery) into normalized
- * {@link ObservationDraft}s for the knowledge timeline. It is the read/observe sibling
- * of the {@link Connector} port — where the Connector *pulls* work to materialize as
- * tasks, the Observer *receives* events to record as observations whose source of truth
- * stays external.
+ * The typed edge for the cross-tool activity feed: it turns an inbound provider event (a
+ * Linear webhook, a GitHub delivery, a Slack event) into normalized {@link EventDraft}s in
+ * the *canonical* shape — `kind` + `entity` + typed `detail` — so a Linear issue and a Docket
+ * task arrive identically (`entity.kind = 'work_item'`) and render through one row. It is the
+ * read/observe sibling of the {@link Connector} port.
  *
- * Three responsibilities, all provider-specific and all pure (no Docket-tenancy
- * knowledge — the caller resolves org/user from {@link InboundRouting}):
+ * Three responsibilities, all provider-specific and pure (no Docket-tenancy knowledge — the
+ * caller resolves org/user/source from {@link InboundRouting} + the bound provider):
  * 1. {@link Observer.verifySignature} — authenticate the raw request bytes.
  * 2. {@link Observer.route} — extract the routing identity (workspace + event id) so the
  *    caller can dedup and map the event to an integration *before* persisting it.
- * 3. {@link Observer.normalize} — map the parsed payload to zero-or-more observations.
+ * 3. {@link Observer.normalize} — map the parsed payload to zero-or-more canonical event drafts.
  *
- * The real adapters verify real HMAC signatures and map real payloads; `MockObserver`
- * trusts the local path and emits fixture drafts so the pipeline runs with no accounts.
+ * Each adapter's `normalize` should map its native object types onto the closed
+ * {@link CanonicalEntityKind} taxonomy and build a typed {@link EventDetail} via an ordered
+ * chain of detail-builders ending in a `generic` fallback — so an event we don't yet have a
+ * specific shape for still surfaces (a degraded row) instead of being dropped.
  */
+import type { CanonicalEntityKind, EventDetail, EventKind } from '@docket/types';
+
 import type { ConnectorProvider } from './connector';
 
 /**
@@ -26,9 +29,8 @@ import type { ConnectorProvider } from './connector';
  *
  * @remarks
  * A superset of {@link ConnectorProvider}: every connector can also be observed, plus
- * **observe-only** sources that have no work-import connector (e.g. Slack — Docket receives its
- * mentions/messages but never pulls tasks from it). Keeping observer providers as their own union
- * avoids polluting `ConnectorProvider`'s exhaustive switches with a source that has no connector.
+ * **observe-only** sources that have no work-import connector (e.g. Slack). Keeping observer
+ * providers as their own union avoids polluting `ConnectorProvider`'s exhaustive switches.
  */
 export type ObserverProvider = ConnectorProvider | 'slack';
 
@@ -70,21 +72,33 @@ export interface RawInboundEvent {
   readonly receivedAt: string;
 }
 
-/** The external person behind an observed action (matches `@docket/types` `ObservationActor`). */
-export interface ObservationActorRef {
+/**
+ * The person behind an event, as the adapter sees it in its source.
+ *
+ * @remarks
+ * The `source` and `docketActorId` of the canonical `ActorRef` are filled by the caller (the
+ * source is the bound provider; the Docket mapping is resolved later), so the draft omits them.
+ */
+export interface EventActorRef {
   /** The person's native id in the source system. */
   readonly externalId: string;
   /** Display name, when the provider exposes one. */
   readonly displayName?: string;
   /** Avatar URL, when known. */
-  readonly avatar?: string;
+  readonly avatarUrl?: string;
 }
 
-/** The external object an observation is about (matches `@docket/types` `ObservationSubject`). */
-export interface ObservationSubjectRef {
-  /** Subject kind in the source system (e.g. `issue`, `comment`, `thread`). */
-  readonly type: string;
-  /** The subject's native id in the source system. */
+/**
+ * The canonical reference to the thing an event is about, as the adapter resolves it.
+ *
+ * @remarks
+ * `kind` is the *canonical* entity kind (the adapter maps its native type — issue/PR/repo —
+ * onto it). The `source` and `docketEntityId` are filled by the caller.
+ */
+export interface EventEntityRef {
+  /** The canonical entity kind this maps onto. */
+  readonly kind: CanonicalEntityKind;
+  /** The entity's native id in the source system. */
   readonly externalId: string;
   /** Display title, when known. */
   readonly title?: string;
@@ -93,16 +107,17 @@ export interface ObservationSubjectRef {
 }
 
 /**
- * One normalized observation the caller will persist (tenancy resolved by the caller).
+ * One normalized canonical event the caller will persist (tenancy + source resolved by the caller).
  *
  * @remarks
- * Mirrors the `observation` table's content columns minus the Docket-owned fields
- * (`organizationId`/`userId`/`integrationId`/`sourceEventId`), which the caller fills.
- * `kind` is the string form of `@docket/types` `ObservationKind`.
+ * Mirrors the `event` table's content minus the Docket-owned fields
+ * (`organizationId`/`userId`/`integrationId`/`sourceSystem`/`sourceEventId`). `kind` is a
+ * `@docket/types` {@link EventKind}; `detail` is a typed {@link EventDetail} variant (incl. the
+ * `generic` fallback).
  */
-export interface ObservationDraft {
-  /** The high-level observation kind (a `@docket/types` `ObservationKind` value). */
-  readonly kind: string;
+export interface EventDraft {
+  /** The canonical event verb. */
+  readonly kind: EventKind;
   /** When it happened at the source (ISO-8601). */
   readonly occurredAt: string;
   /** Display title/headline. */
@@ -112,26 +127,25 @@ export interface ObservationDraft {
   /** Canonical URL of the source object, when available. */
   readonly permalink?: string;
   /** Who performed the action, when known. */
-  readonly externalActor?: ObservationActorRef;
-  /** What the action was about, when known. */
-  readonly subject?: ObservationSubjectRef;
+  readonly actor?: EventActorRef;
+  /** The canonical thing the event is about, when known. */
+  readonly entity?: EventEntityRef;
   /** Other people involved, when known. */
-  readonly participants?: readonly ObservationActorRef[];
+  readonly participants?: readonly EventActorRef[];
+  /** Typed, tool-specific detail (a closed-union variant, or `generic`). */
+  readonly detail?: EventDetail;
   /** The source object's native id. */
   readonly externalId?: string;
-  /** A stable key that collapses duplicates of this observation within an org. */
+  /** A stable key that collapses duplicates of this event within an org. */
   readonly dedupeKey: string;
-  /** Normalized structured detail retained for later enrichment. */
-  readonly payload?: Record<string, unknown>;
 }
 
 /**
- * The observer port: verify → route → normalize an inbound provider event.
+ * The observer port: verify → route → normalize an inbound provider event (Adapter pattern).
  *
  * @remarks
- * Bound to a single provider (like the connector is), selected via `selectAdapter`. Read-only
- * with respect to Docket: it never writes; the caller persists the inbound event and the
- * resulting observations.
+ * Bound to a single provider, selected via the `selectAdapter` registry. Read-only with respect
+ * to Docket: it never writes; the caller persists the inbound event and the resulting events.
  */
 export interface Observer {
   /** The provider this observer handles. */
@@ -154,10 +168,10 @@ export interface Observer {
   route(payload: unknown): InboundRouting | null;
 
   /**
-   * Normalize a raw event into zero-or-more observations.
+   * Normalize a raw event into zero-or-more canonical event drafts.
    *
    * @param event - The event type, parsed payload, and receipt time.
-   * @returns the observation drafts (empty when the event carries nothing worth recording).
+   * @returns the event drafts (empty when the event carries nothing worth recording).
    */
-  normalize(event: RawInboundEvent): ObservationDraft[];
+  normalize(event: RawInboundEvent): EventDraft[];
 }

@@ -9,9 +9,9 @@
 import {
   auditEvent,
   db,
+  event,
+  eventRecipient,
   notification,
-  observation,
-  observationRecipient,
   program,
   project,
   task,
@@ -153,37 +153,33 @@ Read-only; session-only, no capability. 401 when unauthenticated. To mutate read
       const orgIds = await callerOrgIds(session.user.id);
       if (orgIds.length === 0) return ok(c, StreamPageOut, { items: [] });
 
-      // Personal "concerns me" feed: the recipient index joined to its observation, scoped to
+      // Personal "concerns me" feed: the recipient index joined to its event, scoped to
       // the caller's orgs, attribute-filtered in SQL, keyset-paginated on the recipient's
-      // denormalized (occurredAt, observationId) — the index this table is built for.
+      // denormalized (occurredAt, eventId) — the index this table is built for.
       const conds: SQL[] = [
-        eq(observationRecipient.userId, session.user.id),
-        inArray(observation.organizationId, orgIds),
+        eq(eventRecipient.userId, session.user.id),
+        inArray(event.organizationId, orgIds),
         ...buildFilterConditions(decodeFilter(q.filter)),
       ];
-      if (q.provider) conds.push(eq(observation.provider, q.provider));
-      if (q.kind) conds.push(eq(observation.kind, q.kind));
+      if (q.system) conds.push(eq(event.sourceSystem, q.system));
+      if (q.kind) conds.push(eq(event.kind, q.kind));
+      if (q.entityKind) conds.push(eq(event.entityKind, q.entityKind));
       const cursor = decodeCursor(q.cursor);
       if (cursor) {
         conds.push(
-          cursorCondition(
-            cursor,
-            q.order,
-            observationRecipient.occurredAt,
-            observationRecipient.observationId,
-          ),
+          cursorCondition(cursor, q.order, eventRecipient.occurredAt, eventRecipient.eventId),
         );
       }
 
       const orderBy =
         q.order === 'asc'
-          ? [asc(observationRecipient.occurredAt), asc(observationRecipient.observationId)]
-          : [desc(observationRecipient.occurredAt), desc(observationRecipient.observationId)];
+          ? [asc(eventRecipient.occurredAt), asc(eventRecipient.eventId)]
+          : [desc(eventRecipient.occurredAt), desc(eventRecipient.eventId)];
 
       const rows = await db
-        .select({ obs: observation, reason: observationRecipient.reason })
-        .from(observationRecipient)
-        .innerJoin(observation, eq(observation.id, observationRecipient.observationId))
+        .select({ ev: event, reason: eventRecipient.reason })
+        .from(eventRecipient)
+        .innerJoin(event, eq(event.id, eventRecipient.eventId))
         .where(and(...conds))
         .orderBy(...orderBy)
         .limit(q.limit + 1);
@@ -192,8 +188,8 @@ Read-only; session-only, no capability. 401 when unauthenticated. To mutate read
       const page = hasMore ? rows.slice(0, q.limit) : rows;
       const last = page[page.length - 1];
       return ok(c, StreamPageOut, {
-        items: page.map((r) => toStreamEventOut(r.obs, r.reason)),
-        ...(hasMore && last ? { nextCursor: encodeCursor(last.obs.occurredAt, last.obs.id) } : {}),
+        items: page.map((r) => toStreamEventOut(r.ev, r.reason)),
+        ...(hasMore && last ? { nextCursor: encodeCursor(last.ev.occurredAt, last.ev.id) } : {}),
       });
     },
   )

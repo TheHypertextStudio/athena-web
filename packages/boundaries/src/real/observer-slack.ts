@@ -1,5 +1,5 @@
 /**
- * `@docket/boundaries/real` — `RealSlackObserver` (Slack Events API → observations).
+ * `@docket/boundaries/real` — `RealSlackObserver` (Slack Events API → canonical events).
  *
  * @remarks
  * The env-driven {@link Observer} for Slack. Slack signs each request with the app **signing
@@ -8,20 +8,27 @@
  * 5 min — the replay guard). `route` reads `team_id` (workspace) + `event_id` (dedup) + the inner
  * `event.type`. The initial `url_verification` handshake carries no event, so `route` returns null
  * and the ingest edge echoes its `challenge`. `normalize` maps `app_mention`→`mention`,
- * `message`→`message`, `reaction_added`→`reaction`. Observe-only (no Slack connector), so it binds
- * to the {@link ObserverProvider} `'slack'`.
+ * `message`→`message`, `reaction_added`→`reaction`; the Slack channel/thread the event happened in
+ * collapses to `entity.kind = 'thread'`, and message-class events carry a typed `slack.message`
+ * {@link EventDetail}. Any other inner event type still surfaces as a degraded `generic` draft;
+ * only a payload with no inner `event` (the handshake) yields `[]`. Observe-only (no Slack
+ * connector), so it binds to the {@link ObserverProvider} `'slack'`.
  *
  * Pure (verification uses only the secret + the request clock) — selected when
  * `SLACK_SIGNING_SECRET` is real-shaped; otherwise {@link MockObserver} is used.
  */
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
+import type { EventDetail, EventKind } from '@docket/types';
+
+import { type DetailBuilder, genericDetail, runDetailBuilders } from '../event-detail';
 import { asRecord, str } from '../json';
 import type {
+  EventActorRef,
+  EventDraft,
+  EventEntityRef,
   InboundRouting,
   Observer,
-  ObservationActorRef,
-  ObservationDraft,
   ObserverProvider,
   RawInboundEvent,
   VerifySignatureInput,
@@ -29,6 +36,42 @@ import type {
 
 /** Reject requests whose signed timestamp is older than this (Slack's replay window). */
 const SLACK_REPLAY_WINDOW_S = 300;
+
+/** The per-event context the Slack detail-builders inspect. */
+interface SlackDetailContext {
+  /** The inner Slack event `type` (`message`, `app_mention`, …). */
+  readonly eventType: string | undefined;
+  /** The channel the event happened in, when present. */
+  readonly channelId: string | undefined;
+  /** The parent thread timestamp, or `null` for a top-level message. */
+  readonly threadTs: string | null;
+  /** The message text (empty string when the event carries none). */
+  readonly text: string;
+  /** The draft title (carried onto the `generic` fallback). */
+  readonly title: string;
+}
+
+/** Message-class events (`message`/`app_mention`) carry a typed `slack.message` detail. */
+const buildSlackMessageDetail: DetailBuilder<SlackDetailContext> = (ctx) => {
+  if (ctx.eventType !== 'message' && ctx.eventType !== 'app_mention') return null;
+  if (!ctx.channelId) return null;
+  return {
+    schema: 'slack.message',
+    channelId: ctx.channelId,
+    threadTs: ctx.threadTs,
+    text: ctx.text,
+  };
+};
+
+/** Tail: anything without a specific shape surfaces as a degraded `generic` row. */
+const buildSlackGenericDetail: DetailBuilder<SlackDetailContext> = (ctx) =>
+  genericDetail(ctx.title, ctx.text || undefined);
+
+/** The ordered Slack detail-builder chain ("first non-null wins"). */
+const SLACK_DETAIL_BUILDERS: readonly DetailBuilder<SlackDetailContext>[] = [
+  buildSlackMessageDetail,
+  buildSlackGenericDetail,
+];
 
 /** Validated configuration for {@link RealSlackObserver}. */
 export interface RealSlackObserverConfig {
@@ -85,33 +128,50 @@ export class RealSlackObserver implements Observer {
   }
 
   /** {@inheritDoc Observer.normalize} */
-  normalize(event: RawInboundEvent): ObservationDraft[] {
+  normalize(event: RawInboundEvent): EventDraft[] {
     const body = asRecord(event.payload);
     const ev = asRecord(body?.['event']);
+    // No inner event (e.g. the url_verification handshake) — genuinely nothing to record.
     if (!ev) return [];
-    const kind = this.kindFor(str(ev, 'type'));
-    if (!kind) return [];
-    const channel = str(ev, 'channel');
+    const evType = str(ev, 'type');
+    const mappedKind = this.kindFor(evType);
+    // Slack is fundamentally a messaging surface, so an unmapped event still records as a
+    // `message`-kind row (with a `generic` detail) rather than being dropped.
+    const kind: EventKind = mappedKind ?? 'message';
+    const channelId = str(ev, 'channel');
     const userId = str(ev, 'user');
-    const actor: ObservationActorRef | undefined = userId ? { externalId: userId } : undefined;
-    const text = str(ev, 'text');
-    const dedupeKey = (body ? this.route(body)?.externalEventId : undefined) ?? `slack:${event.receivedAt}`;
+    const actor: EventActorRef | undefined = userId ? { externalId: userId } : undefined;
+    const text = str(ev, 'text') ?? '';
+    const threadTs = str(ev, 'thread_ts') ?? null;
+    const entity: EventEntityRef | undefined = channelId
+      ? { kind: 'thread', externalId: channelId }
+      : undefined;
+    const dedupeKey =
+      (body ? this.route(body)?.externalEventId : undefined) ?? `slack:${event.receivedAt}`;
+    const title = this.titleFor(mappedKind, evType);
+    const detail: EventDetail = runDetailBuilders(SLACK_DETAIL_BUILDERS, {
+      eventType: evType,
+      channelId,
+      threadTs,
+      text,
+      title,
+    });
     return [
       {
         kind,
         occurredAt: this.tsToIso(str(ev, 'event_ts') ?? str(ev, 'ts')) ?? event.receivedAt,
-        title: kind === 'mention' ? 'Mentioned you in Slack' : `New Slack ${kind}`,
+        title,
         ...(text ? { summary: text } : {}),
-        ...(actor ? { externalActor: actor } : {}),
-        ...(channel ? { subject: { type: 'channel', externalId: channel } } : {}),
+        ...(actor ? { actor } : {}),
+        ...(entity ? { entity } : {}),
         dedupeKey,
-        payload: body ?? {},
+        detail,
       },
     ];
   }
 
-  /** Map a Slack event type to an observation kind, or null to skip. */
-  private kindFor(type: string | undefined): string | null {
+  /** Map a Slack event type to a canonical event kind, or null when it has no specific kind. */
+  private kindFor(type: string | undefined): EventKind | null {
     switch (type) {
       case 'app_mention':
         return 'mention';
@@ -122,6 +182,13 @@ export class RealSlackObserver implements Observer {
       default:
         return null;
     }
+  }
+
+  /** The display title for a Slack event (degrades to the raw type for unmapped events). */
+  private titleFor(kind: EventKind | null, evType: string | undefined): string {
+    if (kind === 'mention') return 'Mentioned you in Slack';
+    if (kind) return `New Slack ${kind}`;
+    return `Slack event: ${evType ?? 'unknown'}`;
   }
 
   /** Convert a Slack `ts` (`"1700000000.000100"`) to an ISO timestamp. */

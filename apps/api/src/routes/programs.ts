@@ -25,6 +25,8 @@ import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 
+import { emitEvent } from './event-emit';
+
 type ProgramRow = typeof program.$inferSelect;
 type TaskRow = typeof task.$inferSelect;
 
@@ -142,6 +144,14 @@ const programs = new Hono<AppEnv>()
       const row = inserted[0];
       /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
       if (!row) throw new Error('program insert returned no row');
+      // Stream: record the creation (mirrors projects.ts) so it surfaces to owners/followers.
+      await emitEvent({
+        organizationId: orgId,
+        kind: 'created',
+        actorId,
+        title: row.name,
+        subject: { type: 'program', id: row.id, title: row.name },
+      });
       return ok(c, ProgramOut, toOut(row));
     },
   )
@@ -199,7 +209,7 @@ const programs = new Hono<AppEnv>()
     zParam(idParam),
     zJson(ProgramUpdate),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const body = c.req.valid('json');
       const updated = await db
@@ -216,6 +226,16 @@ const programs = new Hono<AppEnv>()
         .returning();
       const row = updated[0];
       if (!row) throw new NotFoundError('Program not found');
+      if (body.status !== undefined) {
+        await emitEvent({
+          organizationId: orgId,
+          kind: 'status_change',
+          actorId,
+          title: row.name,
+          subject: { type: 'program', id: row.id, title: row.name },
+          detail: { schema: 'docket.state_change', fromState: null, toState: row.status },
+        });
+      }
       return ok(c, ProgramOut, toOut(row));
     },
   )

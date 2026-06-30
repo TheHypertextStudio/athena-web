@@ -33,6 +33,7 @@ import type {
   LinkResourceInput,
   LinkResult,
   ListContainersInput,
+  MailActions,
   MirrorResult,
   MirrorStatusInput,
   ResourceRef,
@@ -44,6 +45,7 @@ import { LinearProviderClient } from './connector-linear';
 import { GoogleProviderClient } from './connector-google';
 import { ProviderHttp } from './connector-http';
 import {
+  isMailActionsProviderClient,
   isWritableProviderClient,
   type ConnectorProviderClient,
 } from './connector-provider-client';
@@ -197,6 +199,24 @@ export class RealConnector implements Connector {
     if (!isWritableProviderClient(client)) return undefined;
     return {
       pushTask: (input) => client.pushTask(input.op),
+    };
+  }
+
+  /**
+   * {@inheritDoc Connector.asMailActor}
+   *
+   * @remarks
+   * Gated on BOTH the provider being `gmail` AND the client implementing the mail methods —
+   * mirroring {@link RealConnector.asWritable}. `GoogleProviderClient` is shared across the
+   * Google products, so the provider check keeps mailbox actions exposed for Gmail only.
+   */
+  asMailActor(): MailActions | undefined {
+    if (this.provider !== 'gmail') return undefined;
+    const client = this.client;
+    if (!isMailActionsProviderClient(client)) return undefined;
+    return {
+      applyMailAction: (input) => client.applyMailAction(input),
+      fetchThread: (input) => client.fetchThread(input),
     };
   }
 

@@ -1,16 +1,24 @@
 import type {
   ConnectorProvider,
   ExternalWriteResult,
+  FetchThreadInput,
   ImportWorkInput,
   ImportedItem,
   LinkResourceInput,
+  MailAction,
+  MailActionInput,
+  MailMessage,
+  MailThread,
   MirrorResult,
   MirrorStatusInput,
   ResourceRef,
   TaskPushOp,
 } from '../ports/connector';
 import { ConnectorError } from '../ports/connector-error';
-import type { WritableConnectorProviderClient } from './connector-provider-client';
+import type {
+  MailActionsProviderClient,
+  WritableConnectorProviderClient,
+} from './connector-provider-client';
 import type { ProviderHttp } from './connector-http';
 import { MAX_IMPORT_PAGES, logConnectorTruncation } from './connector-log';
 
@@ -24,6 +32,32 @@ interface DriveAbout {
 /** Gmail profile identity payload. */
 interface GmailProfile {
   emailAddress?: string;
+}
+/** Body for Gmail's `threads.modify` (label add/remove deltas). */
+interface GmailModifyBody {
+  addLabelIds?: string[];
+  removeLabelIds?: string[];
+}
+/** One Gmail message header (`From`, `To`, `Subject`, `Date`, …). */
+interface GmailHeader {
+  name: string;
+  value: string;
+}
+/** The header-bearing part of a Gmail message (metadata format). */
+interface GmailMessagePayload {
+  headers?: GmailHeader[];
+}
+/** One Gmail message resource within a thread (metadata format). */
+interface GmailMessageResource {
+  id: string;
+  snippet?: string;
+  internalDate?: string;
+  payload?: GmailMessagePayload;
+}
+/** A Gmail thread resource (`threads.get`). */
+interface GmailThreadResource {
+  id?: string;
+  messages?: GmailMessageResource[];
 }
 /** Google Tasks list-collection payload (used for identity + container enumeration). */
 interface TaskListsPayload {
@@ -45,7 +79,9 @@ interface CalendarPrimary {
  * canonical product URL. One {@link GoogleProviderClient} is parameterized by the
  * concrete product so the providers share the bearer-token transport and mapping.
  */
-export class GoogleProviderClient implements WritableConnectorProviderClient {
+export class GoogleProviderClient
+  implements WritableConnectorProviderClient, MailActionsProviderClient
+{
   /**
    * @param product - Which Google product this client targets.
    * @param http - The provider HTTP wrapper bound to the product's API base.
@@ -332,6 +368,85 @@ export class GoogleProviderClient implements WritableConnectorProviderClient {
     if (this.product === 'gmail') return `https://mail.google.com/mail/#all/${input.externalId}`;
     if (this.product === 'gtasks') return `https://tasks.google.com/task/${input.externalId}`;
     return `https://calendar.google.com/calendar/event?eid=${input.externalId}`;
+  }
+
+  /** Assert this client targets Gmail, or throw a loud {@link ConnectorError}. */
+  private assertGmail(op: string): void {
+    if (this.product !== 'gmail') {
+      throw new ConnectorError(`${op} is not supported for ${this.product}`, {
+        provider: this.product,
+        kind: 'provider',
+      });
+    }
+  }
+
+  /**
+   * Map a {@link MailAction} onto Gmail's `threads.modify` label deltas, or the sentinel
+   * `'trash'` for the dedicated trash endpoint.
+   */
+  private gmailDelta(action: MailAction): GmailModifyBody | 'trash' {
+    switch (action.kind) {
+      case 'archive':
+        return { removeLabelIds: ['INBOX'] };
+      case 'markRead':
+        return { removeLabelIds: ['UNREAD'] };
+      case 'markUnread':
+        return { addLabelIds: ['UNREAD'] };
+      case 'applyLabel':
+        return { addLabelIds: [action.label] };
+      case 'removeLabel':
+        return { removeLabelIds: [action.label] };
+      case 'trash':
+        return 'trash';
+    }
+  }
+
+  /** {@inheritDoc MailActionsProviderClient.applyMailAction} */
+  async applyMailAction(input: MailActionInput): Promise<void> {
+    this.assertGmail('applyMailAction');
+    const delta = this.gmailDelta(input.action);
+    if (delta === 'trash') {
+      await this.http.postJson(`/users/me/threads/${input.threadId}/trash`, {});
+      return;
+    }
+    await this.http.postJson(`/users/me/threads/${input.threadId}/modify`, delta);
+  }
+
+  /** {@inheritDoc MailActionsProviderClient.fetchThread} */
+  async fetchThread(input: FetchThreadInput): Promise<MailThread> {
+    this.assertGmail('fetchThread');
+    const json = await this.http.getJson<GmailThreadResource>(
+      `/users/me/threads/${input.threadId}?format=metadata` +
+        `&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date`,
+    );
+    const messages = (json.messages ?? []).map((m) => this.toMailMessage(m));
+    return {
+      threadId: input.threadId,
+      subject: messages[0]?.subject ?? `Thread ${input.threadId}`,
+      messages,
+      externalUrl: `https://mail.google.com/mail/#all/${input.threadId}`,
+    };
+  }
+
+  /** Project one Gmail message resource into a render-ready {@link MailMessage}. */
+  private toMailMessage(m: GmailMessageResource): MailMessage {
+    const header = (name: string): string | undefined =>
+      m.payload?.headers?.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value;
+    const to = (header('To') ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    const sentAt = m.internalDate
+      ? new Date(Number(m.internalDate)).toISOString()
+      : (header('Date') ?? '');
+    return {
+      id: m.id,
+      from: header('From') ?? '',
+      to,
+      subject: header('Subject') ?? '',
+      snippet: m.snippet ?? '',
+      sentAt,
+    };
   }
 
   /**

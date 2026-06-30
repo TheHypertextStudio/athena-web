@@ -26,6 +26,7 @@ import {
 import type { ObservationActor, ObservationKind, StreamRelevance } from '@docket/types';
 import { and, eq, inArray } from 'drizzle-orm';
 
+import { projectObservation, runAutomationsForObservation } from '../lib/automation/runtime';
 import { publishStreamEvent } from './stream-helpers';
 
 /** The Docket entity an internal observation is about (addressed like an external subject). */
@@ -85,7 +86,11 @@ async function ownerCandidates(tx: Tx, subject: EmitSubject): Promise<OwnerCandi
   switch (subject.type) {
     case 'task': {
       const [r] = await tx
-        .select({ assigneeId: task.assigneeId, delegateId: task.delegateId, createdBy: task.createdBy })
+        .select({
+          assigneeId: task.assigneeId,
+          delegateId: task.delegateId,
+          createdBy: task.createdBy,
+        })
         .from(task)
         .where(eq(task.id, subject.id))
         .limit(1);
@@ -140,7 +145,8 @@ async function ownerCandidates(tx: Tx, subject: EmitSubject): Promise<OwnerCandi
 
 /** The relevance reason for an owner role, given the event kind. */
 function reasonFor(role: OwnerCandidate['role'], kind: ObservationKind): StreamRelevance {
-  if (role === 'assignee' && (kind === 'assignment' || kind === 'task_assignment')) return 'assignment';
+  if (role === 'assignee' && (kind === 'assignment' || kind === 'task_assignment'))
+    return 'assignment';
   return 'owned';
 }
 
@@ -162,7 +168,8 @@ export async function resolveRecipients(
   const consider = (actorId: string | null | undefined, reason: StreamRelevance): void => {
     if (!actorId) return;
     const existing = byActor.get(actorId);
-    if (!existing || RELEVANCE_RANK[reason] < RELEVANCE_RANK[existing]) byActor.set(actorId, reason);
+    if (!existing || RELEVANCE_RANK[reason] < RELEVANCE_RANK[existing])
+      byActor.set(actorId, reason);
   };
 
   for (const owner of await ownerCandidates(tx, input.subject)) {
@@ -303,5 +310,17 @@ async function emitInternal(
   if (result) {
     const recipients = [...result.recipients].map(([userId, reason]) => ({ userId, reason }));
     await publishStreamEvent(result.observationId, recipients).catch(() => undefined);
+
+    // Observer hook: run the automation engine against this fresh observation. Itself
+    // best-effort (swallows its own failures) so automations never roll back the domain write.
+    await runAutomationsForObservation(
+      projectObservation({
+        organizationId: input.organizationId,
+        kind: input.kind,
+        subject: { type: input.subject.type, id: input.subject.id },
+        payload: input.payload,
+        occurredAt,
+      }),
+    );
   }
 }

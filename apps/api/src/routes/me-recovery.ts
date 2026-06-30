@@ -61,7 +61,14 @@ async function loadStatus(userId: string): Promise<z.input<typeof RecoveryCodesS
 const meRecovery = new Hono<AppEnv>()
   .get(
     '/',
-    apiDoc({ tag: 'Me', summary: 'Get recovery-codes status', response: RecoveryCodesStatusOut }),
+    apiDoc({
+      tag: 'Me',
+      summary: 'Get recovery-codes status',
+      response: RecoveryCodesStatusOut,
+      description: `Report the caller's two-factor **recovery-code (backup-code)** status for the Security settings surface: whether a set of codes has been generated (\`enabled\`), how many unused codes remain (\`remaining\` — codes are consumed one per recovery), and when they were last (re)generated (\`generatedAt\`). Derived server-side from the \`twoFactor\` plugin.
+
+**The codes themselves are never returned here** — only their count crosses the boundary; the decrypted codes stay inside \`@docket/auth\` and are shown exactly once at generation time. When no codes exist, \`remaining\` is 0 and \`generatedAt\` is null. Read-only; session-only, no capability and no step-up (viewing the count is low-risk). **401** when unauthenticated. Related: \`POST /me/recovery-codes\` to (re)generate.`,
+    }),
     async (c) => {
       const { user } = requireSession(c);
       return ok(c, RecoveryCodesStatusOut, await loadStatus(user.id));
@@ -69,7 +76,14 @@ const meRecovery = new Hono<AppEnv>()
   )
   .post(
     '/',
-    apiDoc({ tag: 'Me', summary: 'Generate recovery codes', response: RecoveryCodesOut }),
+    apiDoc({
+      tag: 'Me',
+      summary: 'Generate recovery codes',
+      response: RecoveryCodesOut,
+      description: `(Re)generate the caller's two-factor recovery codes and return the **plaintext codes exactly once**. This is the only response that ever carries the codes in the clear — they are displayed for the user to save and are never retrievable again (the status read returns only a count). **Side effect:** replaces any previous code set (invalidating old codes) and resets \`generatedAt\`.
+
+Like account deletion, this is a **high-risk action gated by step-up**: it requires a **freshly re-authenticated passkey session** (created within the last 5 minutes), so an unattended or hijacked session can't silently mint a new set. A stale session is rejected with **401 \`reauth_required\`** so the client re-verifies the passkey and retries. Session-only otherwise (no capability). Note: the locked-out recovery flow for users with *no* session lives on the Better Auth sign-in surface (\`/two-factor/recovery-challenge\` + \`verify-backup-code\`), not here. Related: \`GET /me/recovery-codes\`.`,
+    }),
     async (c) => {
       const session = requireSession(c);
       requireFreshSession(session);

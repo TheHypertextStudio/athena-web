@@ -63,7 +63,14 @@ const searchQuery = z.object({
 const hubRouter = new Hono<AppEnv>()
   .get(
     '/today',
-    apiDoc({ tag: 'Hub', summary: 'Get the cross-org today view', response: HubTodayOut }),
+    apiDoc({
+      tag: 'Hub',
+      summary: 'Get the cross-org today view',
+      response: HubTodayOut,
+      description: `Aggregate the signed-in person's "what should I look at right now" across **every organization they belong to**, for a single \`date\` (required query param). Returns a three-pane cockpit: \`plan\` (Tasks the caller pulled into their daily plan plus Tasks due that date), \`calendar\` (daily-plan items that carry a timebox window), and \`needsAttention\` (the trio of pending approvals, blocked Tasks, and Tasks due today, plus the unread \`inbox\` count).
+
+Implemented as a **server-side fan-out** — one scoped query per membership where the caller has an active human Actor, merged in application code (never a cross-tenant SQL join). Each returned item carries its own \`organizationId\` (its org chip) and is individually run through that org's permission predicate, so the view is the **union of per-org decisions**, not a privileged bypass. Requires only an authenticated session (the per-resource gate already ran per row); no capability. 401 when unauthenticated; a caller with no memberships gets empty panes. Related: \`/daily-plan\` (the source of \`plan\`/\`calendar\`), \`/notifications/count\` (the \`inbox\` number), \`/hub/inbox\`, \`/hub/portfolio\`.`,
+    }),
     zQuery(todayQuery),
     async (c) => {
       const session = c.get('session');
@@ -74,7 +81,14 @@ const hubRouter = new Hono<AppEnv>()
   )
   .get(
     '/inbox',
-    apiDoc({ tag: 'Hub', summary: 'Get the cross-org inbox', response: HubInboxOut }),
+    apiDoc({
+      tag: 'Hub',
+      summary: 'Get the cross-org inbox',
+      response: HubInboxOut,
+      description: `Return the caller's notification feed across every organization they belong to, newest first, as the Hub's inbox pane. This is the same underlying cross-org notification set as \`GET /notifications\`, scoped by the mandatory \`userId = session.user.id\` predicate and rendered for the Hub cockpit (each item carries its originating \`organizationId\` org chip). Unlike \`/notifications\` it takes no narrowing filters — it is the full unread-first feed.
+
+Read-only; session-only, no capability. 401 when unauthenticated. To mutate read state use the \`/notifications/*\` read/act endpoints. Related: \`/hub/today\` surfaces the unread *count* in \`needsAttention.inbox\`.`,
+    }),
     async (c) => {
       const session = c.get('session');
       if (!session?.user) throw new AuthError();
@@ -88,7 +102,14 @@ const hubRouter = new Hono<AppEnv>()
   )
   .get(
     '/activity',
-    apiDoc({ tag: 'Hub', summary: 'List cross-org activity', response: HubActivityOut }),
+    apiDoc({
+      tag: 'Hub',
+      summary: 'List cross-org activity',
+      response: HubActivityOut,
+      description: `Return the caller's passive-awareness **audit feed** across every org they belong to — the "what's been happening" timeline. The route first resolves the caller's org ids (the orgs where they are an active human Actor), then selects audit events scoped to that org set with \`organizationId IN (...)\`, ordered by \`createdAt\` (\`order=asc|desc\`) and keyset-paginated by \`limit\`. A caller with no memberships gets an empty list immediately (no query).
+
+**Pagination:** the handler fetches \`limit + 1\` rows to detect more; when there is a next page it returns \`nextCursor\` set to the last event's id (an opaque forward cursor). Read-only; session-only, no capability. 401 when unauthenticated. Distinct from \`/hub/stream\`, which is the personalized "concerns me" observation feed rather than the raw org audit log.`,
+    }),
     zQuery(ListQuery),
     async (c) => {
       const session = c.get('session');
@@ -116,7 +137,14 @@ const hubRouter = new Hono<AppEnv>()
   )
   .get(
     '/stream',
-    apiDoc({ tag: 'Hub', summary: 'Get the cross-org activity stream', response: StreamPageOut }),
+    apiDoc({
+      tag: 'Hub',
+      summary: 'Get the cross-org activity stream',
+      response: StreamPageOut,
+      description: `Return the caller's personalized **"concerns me" event stream** across every org they belong to — the feed of external observations (provider activity) that name the caller as a recipient. This is distinct from \`/hub/activity\`'s raw org audit log: it reads the \`observationRecipient\` index (the per-user denormalization of who each observation concerns) joined to its \`observation\`, scoped to the caller (\`observationRecipient.userId = session.user.id\`) and to the caller's org set, so it is the union of "things that pertain to me" rather than everything that happened.
+
+**Filtering & pagination:** supports attribute filters (an encoded \`filter\` expression compiled to SQL), plus \`provider\` and \`kind\` narrowing. It is keyset-paginated on the recipient's denormalized \`(occurredAt, observationId)\` — the exact index this table exists to serve — fetching \`limit + 1\` to detect more and returning an opaque \`nextCursor\` (encoded \`occurredAt\`+id) when another page exists; \`order=asc|desc\` flips the sort. Each event carries the \`reason\` it reached the caller. A caller with no memberships gets an empty page. Mounted outside the typed RPC contract (a raw event-stream surface). Session-only, no capability; 401 when unauthenticated.`,
+    }),
     zQuery(StreamQuery),
     async (c) => {
       const session = c.get('session');
@@ -171,7 +199,14 @@ const hubRouter = new Hono<AppEnv>()
   )
   .get(
     '/portfolio',
-    apiDoc({ tag: 'Hub', summary: 'Get the cross-org portfolio', response: HubPortfolioOut }),
+    apiDoc({
+      tag: 'Hub',
+      summary: 'Get the cross-org portfolio',
+      response: HubPortfolioOut,
+      description: `Return the caller's cross-org **portfolio timeline** — org swimlanes, each containing Program lanes and the Project bars (with milestone diamonds) beneath them, laid out on one shared timeline. Projects with no program hang directly off the org swimlane as \`unassigned\` bars. Optional \`from\`/\`to\` (ISO dates) bound the timeline window and \`initiativeId\` narrows to a single initiative's projects.
+
+Built as a per-membership fan-out merged in application code: **tenant bands stay separate** — each swimlane carries its own \`OrgChip\` and bars carry their own \`organizationId\`, so this is a union of per-org rollups, never a cross-tenant join. Read-only; session-only, no capability. 401 when unauthenticated. Related: \`/hub/today\` (the day-level cockpit) vs this strategic, multi-week timeline view.`,
+    }),
     zQuery(portfolioQuery),
     async (c) => {
       const session = c.get('session');
@@ -186,7 +221,14 @@ const hubRouter = new Hono<AppEnv>()
   )
   .get(
     '/search',
-    apiDoc({ tag: 'Hub', summary: 'Search across orgs', response: HubSearchOut }),
+    apiDoc({
+      tag: 'Hub',
+      summary: 'Search across orgs',
+      response: HubSearchOut,
+      description: `Cross-org command-palette search: given a query \`q\` (min 1 char) and optional \`limit\` (1–50, default 20), return org-chipped, typed entity hits — Tasks, Projects, and Programs whose name/title matches — drawn from every org the caller belongs to. The handler resolves the caller's org ids, then runs three parallel case-insensitive \`ILIKE '%q%'\` lookups (task title, project name, program name) each \`inArray(organizationId, orgIds)\`-scoped, and merges the results, truncating to \`limit\`.
+
+Each hit carries its own \`organizationId\` chip and \`type\` so the palette can group and route across tenants — the result set is the union of per-org matches, never a cross-tenant join. A caller with no memberships gets \`{ query, results: [] }\`. Read-only; session-only, no capability. 401 when unauthenticated.`,
+    }),
     zQuery(searchQuery),
     async (c) => {
       const session = c.get('session');

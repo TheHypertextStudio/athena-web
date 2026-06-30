@@ -56,6 +56,9 @@ const activity = new Hono<AppEnv>().get(
     tag: 'Activity',
     summary: 'List the organization audit feed',
     response: pageOf(AuditEventOut),
+    description: `Return the organization's universal audit feed — every domain action over Docket's *own* entities (tasks, projects, agents, sessions, integrations, memberships, …), newest-first, as a page of {@link AuditEventOut}. This is the internal accountability ledger: who did what to which subject, written by the entity routers as side effects of their mutations. It is deliberately distinct from the **observation stream** (\`GET /v1/orgs/:orgId/stream\`), which records activity in *external* tools where the source of truth lives elsewhere.
+
+A key property for governed automation: an agent action carries BOTH an \`actorId\` (the agent's Actor — who acted) and an \`initiatorId\` (the human who triggered or authorized it — who is accountable); a direct human action carries just \`actorId\`. So approval-gate decisions land here as \`approved\`/\`rejected\` events with \`subjectType='agent_session'\`, attributing the agent while recording the human approver. Read-only over the API and org-scoped; org membership suffices. Related: \`GET /v1/orgs/:orgId/stream\` (external observations), and the session activity routes that generate the \`approved\`/\`rejected\` entries.`,
   }),
   async (c) => {
     const { orgId } = c.get('actorCtx');

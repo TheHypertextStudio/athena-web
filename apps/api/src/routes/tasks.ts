@@ -41,7 +41,19 @@ const tasks = new Hono<AppEnv>()
   .post(
     '/',
     capabilityGuard('contribute'),
-    apiDoc({ tag: 'Tasks', summary: 'Create a task', capability: 'contribute', response: TaskOut }),
+    apiDoc({
+      tag: 'Tasks',
+      summary: 'Create a task',
+      capability: 'contribute',
+      response: TaskOut,
+      description: `Create a new native task inside the org. A task is the atomic unit of work in Docket; it always belongs to exactly one team (\`teamId\`, required) and inherits that team's workflow. Requires the \`contribute\` capability — the privilege to create or edit work content.
+
+The team must exist in the caller's org or the request 404s. Tenant isolation is strict: every optional reference in the body (\`assigneeId\`, \`projectId\`, \`cycleId\`, \`milestoneId\`, \`parentTaskId\`) is checked to live in the same org, and any cross-org or unknown id 404s before insert — the existence of out-of-tenant rows is never leaked.
+
+Workflow state: if \`state\` is omitted the task lands in the team's first \`workflow_states\` entry (typically \`backlog\`); if supplied, the key is validated against the team's states and the transition is resolved so that a task created directly in a terminal state (\`completed\`/\`canceled\`) lands with the correct derived \`completedAt\`/\`canceledAt\` timestamps. \`priority\` defaults to \`none\`.
+
+Side effects: emits a \`created\` observation onto the org's activity stream, and — when the task is created already assigned — an additional \`assignment\` observation. Returns the created {@link TaskOut}. Note that creating a task on someone else's behalf (\`assigneeId\`) is permitted under \`contribute\` at creation time; later reassignment via PATCH requires \`assign\` (see {@link TaskUpdate}). Related: \`POST /:id/subtasks\` to create children, \`POST /:id/dependencies\` to wire blockers.`,
+    }),
     zJson(TaskCreate),
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
@@ -120,7 +132,14 @@ const tasks = new Hono<AppEnv>()
   )
   .get(
     '/',
-    apiDoc({ tag: 'Tasks', summary: 'List tasks', response: pageOf(TaskOut) }),
+    apiDoc({
+      tag: 'Tasks',
+      summary: 'List tasks',
+      response: pageOf(TaskOut),
+      description: `List the org's active (non-archived) tasks, newest-first. Ordering is a stable keyset on \`(createdAt DESC, id DESC)\`, so paging never skips or repeats a row even as tasks are created concurrently. Archived (soft-deleted) tasks are excluded — fetch those contexts via their parent/project surfaces, not here.
+
+Pagination is opt-in via the cursor query: omit \`limit\` to receive the full active-task list in one response (legacy behavior); supply \`limit\` to receive a bounded page plus a \`nextCursor\` you pass back as \`cursor\` to fetch the next page. \`nextCursor\` is \`null\` on the final page. Requires org membership (\`view\`); no extra capability. Each item is a {@link TaskOut} (the flat task shape without dependency/subtask edges — use \`GET /:id\` for those). Returns a cursor page of {@link TaskOut}.`,
+    }),
     zQuery(CursorQuery),
     async (c) => {
       const { orgId } = c.get('actorCtx');
@@ -145,7 +164,14 @@ const tasks = new Hono<AppEnv>()
   )
   .get(
     '/:id',
-    apiDoc({ tag: 'Tasks', summary: 'Get task detail', response: TaskDetail }),
+    apiDoc({
+      tag: 'Tasks',
+      summary: 'Get task detail',
+      response: TaskDetail,
+      description: `Fetch one task with its full relational context: the flat task fields plus the planning ids omitted from {@link TaskOut} (\`milestoneId\`, \`cycleId\`, \`parentTaskId\`, \`estimate\`), the terminal timestamps (\`completedAt\`/\`canceledAt\`), and three resolved edge lists — \`blocking\` (tasks this one blocks), \`blockedBy\` (tasks blocking this one), and \`subtasks\` (active children). Each edge is a slim {@link TaskRef} carrying \`projectId\` so the UI can render cross-project links.
+
+A cross-org or unknown id 404s (existence-hiding: another tenant's task is indistinguishable from a non-existent one). Subtasks exclude archived children. Requires org membership (\`view\`). Returns {@link TaskDetail}. For just the edge lists without the parent task, see \`GET /:id/dependencies\`; for the canvas projection across many tasks, see the graph endpoint.`,
+    }),
     zParam(idParam),
     async (c) => {
       const { orgId } = c.get('actorCtx');
@@ -192,7 +218,17 @@ const tasks = new Hono<AppEnv>()
   .patch(
     '/:id',
     capabilityGuard('contribute'),
-    apiDoc({ tag: 'Tasks', summary: 'Update a task', capability: 'contribute', response: TaskOut }),
+    apiDoc({
+      tag: 'Tasks',
+      summary: 'Update a task',
+      capability: 'contribute',
+      response: TaskOut,
+      description: `Partially update a task's editable fields; only fields present in the body change, and an empty body is a valid no-op that returns the task unchanged (the storage layer rejects an empty \`SET\`, so the handler short-circuits). Base mutation requires \`contribute\`.
+
+Reassigning (\`assigneeId\`) or delegating (\`delegateId\`) additionally requires the \`assign\` capability — \`contribute\` alone cannot move work onto another actor; without \`assign\` those two fields 403. Reparenting is NOT done here (there is no \`parentTaskId\` on the update body). Every referenced id (\`assigneeId\`, \`delegateId\`, \`projectId\`, \`programId\`, \`cycleId\`, \`milestoneId\`) must live in the caller's org or the request 404s (existence-hiding tenant isolation).
+
+Changing \`state\` runs the team's workflow-state transition: the key is validated against the team's \`workflow_states\`, and \`completedAt\`/\`canceledAt\` are derived (set when entering a terminal state, cleared when leaving one) — the timestamps are never client-supplied. Side effects: a state change emits a \`completed\` observation when it lands terminal, otherwise a \`status_change\`; setting an assignee emits an \`assignment\` observation. A missing/archived task 404s. Returns the updated {@link TaskOut}. To change only state, the dedicated \`POST /:id/state\` exists.`,
+    }),
     zParam(idParam),
     zJson(TaskUpdate),
     async (c) => {
@@ -293,6 +329,9 @@ const tasks = new Hono<AppEnv>()
       summary: 'Archive a task',
       capability: 'contribute',
       response: TaskArchived,
+      description: `Soft-delete a task by stamping \`archivedAt\`. This is an archive, not a hard delete: the row is retained for history/audit and simply filtered out of \`GET /\`, subtask listings, and the graph. Requires \`contribute\`.
+
+The write only matches a currently-active task in the caller's org (\`archivedAt IS NULL\`), so archiving an already-archived, cross-org, or unknown task 404s — and re-archiving is therefore not idempotent (the second call 404s). Child tasks and dependency edges are left intact in storage; they simply stop surfacing through active-task reads. Returns a {@link TaskArchived} acknowledgement with the \`id\` and the \`archivedAt\` timestamp.`,
     }),
     zParam(idParam),
     async (c) => {
@@ -321,6 +360,9 @@ const tasks = new Hono<AppEnv>()
       summary: 'Change task state',
       capability: 'contribute',
       response: TaskOut,
+      description: `Move a task to a new workflow state — the focused alternative to a full PATCH when only the state changes (e.g. a board drag-and-drop). Requires \`contribute\`. The \`state\` key must exist in the owning team's \`workflow_states\`; an unknown key is rejected.
+
+The transition is resolved server-side: entering a terminal state derives \`completedAt\` (for the completed category) or \`canceledAt\` (for canceled), and leaving a terminal state clears them — these timestamps are authoritative and never client-set, so progress rollups stay correct. Side effect: emits a \`completed\` observation when the task lands in a completed state, otherwise a \`status_change\` observation carrying the new \`state\` in its payload. A missing/archived task 404s. Returns the updated {@link TaskOut}.`,
     }),
     zParam(idParam),
     zJson(TaskStateUpdate),

@@ -42,7 +42,12 @@ const idParam = z.object({ id: z.string() });
 const agents = new Hono<AppEnv>()
   .get(
     '/',
-    apiDoc({ tag: 'Agents', summary: 'List agents', response: pageOf(AgentOut) }),
+    apiDoc({
+      tag: 'Agents',
+      summary: 'List agents',
+      response: pageOf(AgentOut),
+      description: `List every agent registered in the active organization, as a single (unpaginated) page of {@link AgentOut}. An agent is the persistent, org-scoped wrapper around an ephemeral external runtime (an MCP/A2A/webhook endpoint); each one IS an Actor (\`actor.kind = 'agent'\`) and so can be assigned work, appear in the activity feed, and run sessions exactly like a human member. The list reflects registered agents only — it does not enumerate running {@link AgentSessionOut} sessions (see \`GET /v1/orgs/:orgId/sessions\`). No capability is required beyond org membership; this is a plain read. Each row carries the agent's connection metadata, approval policy, accountable human owner, and approval routing, but never the connection secret itself (only a \`credentialsRef\`). Related: register with \`POST /\`, fetch one with \`GET /:id\`, and dispatch work via the sessions router.`,
+    }),
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const rows = await db.select().from(agent).where(eq(agent.organizationId, orgId));
@@ -57,6 +62,11 @@ const agents = new Hono<AppEnv>()
       summary: 'Register an agent',
       capability: 'manage',
       response: AgentOut,
+      description: `Register a new agent in the organization and return the created {@link AgentOut}. Registration resolves the agent's backing Actor one of two ways (mutually exclusive in practice): pass \`actorId\` to wrap an *existing* \`agent\`-kind Actor, or pass \`displayName\` to have Docket **materialize a fresh agent Actor** for this registration in the same transaction. Supplying neither fails with 409 (\`Either actorId or displayName is required\`).
+
+Side effects & conflicts: the whole operation is transactional. When \`actorId\` is given it must reference an \`agent\`-kind Actor in this org (else 404 \`Agent actor not found\`), and that Actor must not already back another agent (else 409 \`Agent already registered for this actor\` — one agent per Actor). The new agent starts with the connection, approval policy, accountable owner, guidance, and approval routing from the body (each optional; the connection secret is never stored, only a \`credentialsRef\`).
+
+The \`manage\` capability is required because registering an agent grants a new autonomous Actor the ability to act inside the org — an administrative trust decision, not everyday contribution. Once registered, the agent can be dispatched via the sessions router; its proposed mutations remain subject to the orthogonal approval gate per its \`approvalPolicy\`. Related: \`PATCH /:id\` (reconfigure), \`DELETE /:id\` (deregister).`,
     }),
     zJson(AgentCreate),
     async (c) => {
@@ -121,7 +131,12 @@ const agents = new Hono<AppEnv>()
   )
   .get(
     '/:id',
-    apiDoc({ tag: 'Agents', summary: 'Get an agent', response: AgentOut }),
+    apiDoc({
+      tag: 'Agents',
+      summary: 'Get an agent',
+      response: AgentOut,
+      description: `Fetch a single registered agent by id, scoped to the active organization, returning {@link AgentOut}. A non-existent id — or one belonging to another organization — yields 404 (\`Agent not found\`); the lookup is org-scoped so cross-tenant existence is hidden rather than leaked. No capability beyond org membership is required (a read). The response includes the agent's connection metadata (endpoint + protocol, never the secret), its \`approvalPolicy\`, \`accountableOwnerId\`, freeform \`guidance\`, and \`approvalRouting\`. Related: \`GET /\` (list), \`PATCH /:id\` (update), and the sessions router to see what the agent has actually been doing.`,
+    }),
     zParam(idParam),
     async (c) => {
       const { orgId } = c.get('actorCtx');
@@ -144,6 +159,9 @@ const agents = new Hono<AppEnv>()
       summary: 'Update an agent',
       capability: 'manage',
       response: AgentOut,
+      description: `Reconfigure a registered agent and return the updated {@link AgentOut}. This is a partial update: only the fields present in the body are written (\`connection\`, \`approvalPolicy\`, \`accountableOwnerId\`, \`guidance\`, \`approvalRouting\`); omitted fields are left untouched, and any of the nullable fields may be explicitly set to \`null\` to clear it. The agent's backing Actor and \`id\` are immutable here — re-pointing an agent at a different Actor is not an update operation. A missing/cross-tenant id returns 404 (\`Agent not found\`).
+
+The \`manage\` capability is required because these settings govern how much autonomy the agent has (e.g. tightening \`approvalPolicy\` from \`autonomous\` to \`act_with_approval\`, or re-routing who may approve its gated actions) — a governance control, not routine contribution. Changing \`approvalPolicy\`/\`approvalRouting\` affects *future* sessions and gate decisions; it does not retroactively re-gate activities already settled. Related: \`POST /\` (register), \`DELETE /:id\` (deregister).`,
     }),
     zParam(idParam),
     zJson(AgentUpdate),
@@ -186,6 +204,7 @@ const agents = new Hono<AppEnv>()
       summary: 'Delete an agent',
       capability: 'manage',
       response: AgentOut,
+      description: `Deregister an agent from the organization, returning the deleted {@link AgentOut} as it was just before removal. This removes the agent *registration*; the underlying \`agent\`-kind Actor is a distinct entity and is not necessarily destroyed here (the agent row is what is deleted). A missing/cross-tenant id returns 404 (\`Agent not found\`). Requires \`manage\` — revoking an autonomous Actor's standing to act in the org is an administrative trust decision. Deregistering stops the agent from being dispatched into new sessions; it does not retroactively rewrite history (past audit events and settled sessions remain). Related: \`POST /\` (register), \`PATCH /:id\` (reconfigure instead of removing).`,
     }),
     zParam(idParam),
     async (c) => {

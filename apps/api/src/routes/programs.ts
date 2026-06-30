@@ -88,7 +88,12 @@ async function loadProgram(orgId: string, id: string): Promise<ProgramRow> {
 const programs = new Hono<AppEnv>()
   .get(
     '/',
-    apiDoc({ tag: 'Programs', summary: 'List programs', response: pageOf(ProgramOut) }),
+    apiDoc({
+      tag: 'Programs',
+      summary: 'List programs',
+      response: pageOf(ProgramOut),
+      description: `List the organization's programs — ongoing areas of operation that have NO terminal state (a program is \`active\`, \`paused\`, or \`archived\`; intentionally never \`completed\`, because operational work never "finishes"). Unlike bounded Projects, Programs persist; they own Projects and host directly-attached Tasks. Keyset-paginated newest-first by \`createdAt\` (\`id\` tiebreak); the optional \`limit\` yields a bounded page plus \`nextCursor\` (omit for the full list). Each item is the flat {@link ProgramOut} — fetch \`GET /:id\` for the child-work roll-up. Read-only; org membership suffices. Strictly org-scoped.`,
+    }),
     zQuery(CursorQuery),
     async (c) => {
       const { orgId } = c.get('actorCtx');
@@ -115,6 +120,7 @@ const programs = new Hono<AppEnv>()
       summary: 'Create a program',
       capability: 'manage',
       response: ProgramOut,
+      description: `Create a new program in the organization. The \`organizationId\` comes from the path, never the body. \`status\` defaults to \`active\` and \`visibility\` defaults to \`public\` when omitted; \`description\`, \`ownerId\`, and \`health\` are optional. Requires \`manage\` — the highest capability — NOT \`contribute\`: a program is a top-level structural container in the org's operating model (Projects and Tasks hang off it and cascade-down containment means its grants propagate to that child work), so standing up or tearing down a program is an administrative act reserved for org managers. Returns the created {@link ProgramOut}. No observation is emitted on program create. (Note: \`private\` programs are visible only to actors with an explicit grant; \`public\` programs are visible to all org members.)`,
     }),
     zJson(ProgramCreate),
     async (c) => {
@@ -141,7 +147,12 @@ const programs = new Hono<AppEnv>()
   )
   .get(
     '/:id',
-    apiDoc({ tag: 'Programs', summary: 'Get program detail', response: ProgramDetail }),
+    apiDoc({
+      tag: 'Programs',
+      summary: 'Get program detail',
+      response: ProgramDetail,
+      description: `Fetch a single program plus a roll-up of its child work. Beyond the flat {@link ProgramOut} fields, the response carries \`rollup: { projects, tasks }\`: \`projects\` counts the Projects whose \`program_id\` is this program, and \`tasks\` counts every active (non-archived) Task under the program — meaning a Task attached directly via \`task.program_id\` OR belonging to one of those Projects (the union is de-duplicated by the query). This lets a detail card show the program's scope at a glance without a second round-trip. 404 (\`Program not found\`) when the id is absent or cross-tenant. Read-only; org membership suffices. Returns {@link ProgramDetail}. See \`GET /:id/work\` for the actual tasks grouped by cycle and project.`,
+    }),
     zParam(idParam),
     async (c) => {
       const { orgId } = c.get('actorCtx');
@@ -183,6 +194,7 @@ const programs = new Hono<AppEnv>()
       summary: 'Update a program',
       capability: 'manage',
       response: ProgramOut,
+      description: `Partially update a program. Every field is optional: an absent key leaves the column untouched, while \`null\` (where allowed — \`description\`, \`ownerId\`, \`health\`) clears it. \`status\` is constrained to \`active\`/\`paused\`/\`archived\` (a program has no \`completed\` state by design). Editing \`visibility\` flips a program between org-wide visibility and grant-only access. Requires \`manage\` for the same reason as create: a program is a structural container whose grants cascade to its child Projects and Tasks, so re-scoping or archiving it is an administrative act. Unlike Project/Initiative updates this route emits no observation. 404 (\`Program not found\`) when the id is absent or cross-tenant. Returns the updated {@link ProgramOut}.`,
     }),
     zParam(idParam),
     zJson(ProgramUpdate),
@@ -215,6 +227,7 @@ const programs = new Hono<AppEnv>()
       summary: 'Delete a program',
       capability: 'manage',
       response: ProgramOut,
+      description: `Permanently delete a program, scoped to the caller's org (404 \`Program not found\` when absent or cross-tenant). Requires \`manage\`. This removes the program row; child Projects' and Tasks' \`program_id\` references are handled by the database's foreign-key rules rather than being deleted here, and \`initiative_program\` association edges are cascaded away. Because tearing down a top-level operational container is irreversible and reshapes the portfolio, prefer setting \`status\` to \`archived\` via PATCH to retire a program while keeping its history. Returns the deleted {@link ProgramOut} as a tombstone.`,
     }),
     zParam(idParam),
     async (c) => {
@@ -231,7 +244,12 @@ const programs = new Hono<AppEnv>()
   )
   .get(
     '/:id/work',
-    apiDoc({ tag: 'Programs', summary: 'Get program work', response: ProgramWorkOut }),
+    apiDoc({
+      tag: 'Programs',
+      summary: 'Get program work',
+      response: ProgramWorkOut,
+      description: `The work under a program, grouped by Cycle and then segmented by Project — the program's two-level work board. "Work under the program" is every active (non-archived) Task that either carries the program's \`program_id\` directly or belongs to a Project whose \`program_id\` is the program. Tasks are first bucketed by their \`cycle_id\` (the \`null\`-keyed "no cycle" group holds unscheduled tasks), then within each group segmented by \`project_id\` (the \`null\`-keyed "no project" segment holds tasks attached straight to the program). Group/segment ordering is deterministic — tasks are read \`createdAt\` descending, so first-seen order is stable. Each cycle group carries a lightweight cycle ref (id, name, number, resolved from the real cycles referenced); each segment carries a project ref (id, name). Optional \`cycleId\` and/or \`projectId\` query filters narrow the board to a single cadence and/or project. The program must exist in the caller's org (404 \`Program not found\`). Read-only. Returns {@link ProgramWorkOut}.`,
+    }),
     zParam(idParam),
     zQuery(ProgramWorkQuery),
     async (c) => {
@@ -319,7 +337,12 @@ const programs = new Hono<AppEnv>()
   )
   .get(
     '/:id/updates',
-    apiDoc({ tag: 'Programs', summary: 'List program updates', response: pageOf(UpdateOut) }),
+    apiDoc({
+      tag: 'Programs',
+      summary: 'List program updates',
+      response: pageOf(UpdateOut),
+      description: `List the status Updates posted about this program — the narrative health log (each Update carries a \`health\` verdict and a free-text \`body\`, distinct from threaded Comments). Returns only Updates whose subject is THIS program (\`subjectType = 'program'\`, \`subjectId = :id\`), org-scoped, newest first. The program is confirmed to exist in the caller's org first (404 \`Program not found\`). This endpoint returns the full set (it does not key-paginate). Read-only; org membership suffices. Returns a page of {@link UpdateOut}. Updates are authored via the \`updates\` resource; this is the program-scoped read view of them.`,
+    }),
     zParam(idParam),
     async (c) => {
       const { orgId } = c.get('actorCtx');

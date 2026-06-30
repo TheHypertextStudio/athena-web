@@ -58,7 +58,12 @@ const attParam = z.object({ id: z.string(), attachmentId: z.string() });
 export const attachmentRoutes = new Hono<AppEnv>()
   .get(
     '/:id/attachments',
-    apiDoc({ tag: 'Tasks', summary: 'List task attachments', response: pageOf(AttachmentOut) }),
+    apiDoc({
+      tag: 'Tasks',
+      summary: 'List task attachments',
+      response: pageOf(AttachmentOut),
+      description: `List a task's attachments — typed references from the task to an external or stored resource (a pasted \`url\` link, or an integration-backed \`email\` pointer whose content stays in Gmail). Ordered oldest-first by creation. The subject is always derived from the route (\`task\` + \`:id\`), never the body, so a caller can only read attachments on a task it can already address; the host task is loaded first (cross-org/unknown 404s) and that single check is the tenant boundary. Archived attachments are excluded. Requires org membership (\`view\`). Returns a page of {@link AttachmentOut}.`,
+    }),
     zParam(taskParam),
     async (c) => {
       const { orgId } = c.get('actorCtx');
@@ -87,6 +92,9 @@ export const attachmentRoutes = new Hono<AppEnv>()
       summary: 'Add a task attachment',
       capability: 'contribute',
       response: AttachmentOut,
+      description: `Attach a resource to a task. The subject (\`task\` + the \`:id\`) is taken from the route, never the body. Requires \`contribute\`. The host task is loaded first (cross-org/unknown 404s), so an attachment can only be added to a task the caller can address.
+
+The \`kind\` determines the required fields, enforced at the schema edge: a \`url\` attachment requires \`url\`; an \`email\` attachment requires both \`sourceIntegrationId\` and \`externalId\` (the Gmail thread id) — a half-specified body 422s. \`metadata\` is an optional free-form JSON bag for kind-specific extras (e.g. fetched favicon, sender). Returns the created {@link AttachmentOut}.`,
     }),
     zParam(taskParam),
     zJson(AttachmentCreate),
@@ -125,6 +133,7 @@ export const attachmentRoutes = new Hono<AppEnv>()
       summary: 'Remove a task attachment',
       capability: 'contribute',
       response: AttachmentRemoved,
+      description: `Hard-delete an attachment from a task. Requires \`contribute\`. The host task is loaded first so a cross-org or unknown task id 404s before the attachment is addressable — the attachment id alone never leaks across tenants. The delete is additionally scoped to (\`organizationId\`, \`subjectType = task\`, \`subjectId = :id\`), so an attachment id that belongs to a different task or org 404s (\`Attachment not found\`). Returns an {@link AttachmentRemoved} acknowledgement.`,
     }),
     zParam(attParam),
     async (c) => {

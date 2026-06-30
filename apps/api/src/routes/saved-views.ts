@@ -37,7 +37,12 @@ const idParam = z.object({ id: z.string() });
 const savedViews = new Hono<AppEnv>()
   .get(
     '/',
-    apiDoc({ tag: 'Views', summary: 'List saved views', response: pageOf(SavedViewOut) }),
+    apiDoc({
+      tag: 'Views',
+      summary: 'List saved views',
+      response: pageOf(SavedViewOut),
+      description: `List the org's saved views — reusable list/board configurations bundling a filter set, an optional grouping, and a sort order so a member can re-open a curated slice of work (e.g. "My open bugs, grouped by status"). Returns every view in the org regardless of \`scope\` (personal/team/organization); clients filter by scope and \`ownerActorId\` for presentation. The list is unpaginated. Requires org membership (\`view\`). Returns a page wrapper of {@link SavedViewOut}.`,
+    }),
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const rows = await db.select().from(savedView).where(eq(savedView.organizationId, orgId));
@@ -52,6 +57,7 @@ const savedViews = new Hono<AppEnv>()
       summary: 'Create a saved view',
       capability: 'contribute',
       response: SavedViewOut,
+      description: `Create a saved view. Requires \`contribute\`. Only \`name\` is required; the rest default sensibly: \`scope\` defaults to \`personal\`, \`ownerActorId\` defaults to the calling actor, and \`filters\`/\`sort\` default to empty arrays (an unfiltered, unsorted view). \`grouping\` is optional (null = a flat list). \`organizationId\` is always derived from the path, never the body. Set \`scope\` to \`team\` (with \`teamId\`) or \`organization\` to share the view beyond yourself. Returns the created {@link SavedViewOut}.`,
     }),
     zJson(SavedViewCreate),
     async (c) => {
@@ -79,7 +85,12 @@ const savedViews = new Hono<AppEnv>()
   )
   .get(
     '/:id',
-    apiDoc({ tag: 'Views', summary: 'Get a saved view', response: SavedViewOut }),
+    apiDoc({
+      tag: 'Views',
+      summary: 'Get a saved view',
+      response: SavedViewOut,
+      description: `Fetch one saved view by id, including its full \`filters\`, \`grouping\`, and \`sort\` config so a client can hydrate the view. The lookup is org-scoped, so a cross-org or unknown id 404s (\`Saved view not found\`). Requires org membership (\`view\`). Returns {@link SavedViewOut}.`,
+    }),
     zParam(idParam),
     async (c) => {
       const { orgId } = c.get('actorCtx');
@@ -102,6 +113,7 @@ const savedViews = new Hono<AppEnv>()
       summary: 'Update a saved view',
       capability: 'contribute',
       response: SavedViewOut,
+      description: `Partially update a saved view; only fields present in the body change (\`name\`, \`scope\`, \`ownerActorId\`, \`teamId\`, \`filters\`, \`grouping\`, \`sort\`). Requires \`contribute\`. \`filters\` and \`sort\` are replaced wholesale when supplied (not merged); \`grouping\` may be set to null to flatten the view; re-scoping (\`scope\`/\`ownerActorId\`/\`teamId\`) changes who the view is shared with. The lookup is org-scoped, so a cross-org/unknown id 404s. Returns the updated {@link SavedViewOut}.`,
     }),
     zParam(idParam),
     zJson(SavedViewUpdate),
@@ -135,6 +147,7 @@ const savedViews = new Hono<AppEnv>()
       summary: 'Delete a saved view',
       capability: 'contribute',
       response: SavedViewOut,
+      description: `Hard-delete a saved view. Requires \`contribute\`. The lookup is org-scoped, so a cross-org/unknown id 404s (\`Saved view not found\`). Like the labels delete, this returns the full deleted {@link SavedViewOut} row (not a bare acknowledgement) so the client can confirm exactly what was removed.`,
     }),
     zParam(idParam),
     async (c) => {

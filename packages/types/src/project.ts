@@ -20,13 +20,35 @@ import {
 /** Body for creating a Project (organizationId comes from the path, never the body). */
 export const ProjectCreate = z
   .object({
-    name: z.string().min(1),
-    description: z.string().optional(),
-    leadId: ActorId.optional(),
-    teamId: TeamId.optional(),
-    startDate: z.iso.date().optional(),
-    targetDate: z.iso.date().optional(),
-    initiativeIds: z.array(InitiativeId).optional(),
+    name: z.string().min(1).describe('Human-readable project name. Required, non-empty.'),
+    description: z
+      .string()
+      .optional()
+      .describe('Optional free-text description of the project’s goal/scope.'),
+    leadId: ActorId.optional().describe(
+      'Optional project lead (the accountable Actor). Must reference an Actor in the caller’s org (404 otherwise).',
+    ),
+    teamId: TeamId.optional().describe(
+      'Optional owning Team. Must reference a Team in the caller’s org (404 otherwise).',
+    ),
+    startDate: z.iso
+      .date()
+      .optional()
+      .describe(
+        'Planned start date (ISO-8601 `YYYY-MM-DD`). Optional; positions the project’s bar on roadmaps.',
+      ),
+    targetDate: z.iso
+      .date()
+      .optional()
+      .describe(
+        'Planned completion/end date (ISO-8601 `YYYY-MM-DD`). Optional; the right edge of the project’s bar.',
+      ),
+    initiativeIds: z
+      .array(InitiativeId)
+      .optional()
+      .describe(
+        'Optional set of Initiative themes to associate at creation (writes `initiative_project` edges). Each id must live in the caller’s org (404 on any miss); duplicates are de-duplicated. Note `programId` is NOT accepted here — file the project under a Program later via PATCH.',
+      ),
   })
   .meta({ id: 'ProjectCreate', description: 'Create a project within an organization.' });
 /** Validated project-create body. */
@@ -39,7 +61,11 @@ export type ProjectCreate = z.infer<typeof ProjectCreate>;
  * Mirrors the `project_status` Postgres enum (data-model §4): a bounded effort moves
  * `planned → active → completed`, or is `canceled`.
  */
-export const ProjectStatus = z.enum(['planned', 'active', 'completed', 'canceled']);
+export const ProjectStatus = z
+  .enum(['planned', 'active', 'completed', 'canceled'])
+  .describe(
+    'Project lifecycle status (mirrors the `project_status` Postgres enum). `planned` = scoped but not started; `active` = in progress; `completed` = finished successfully; `canceled` = abandoned. `completed` and `canceled` are the two terminal states (a Project is terminal for an Initiative’s derived-`completed` roll-up when in either).',
+  );
 /** Project lifecycle status value. */
 export type ProjectStatus = z.infer<typeof ProjectStatus>;
 
@@ -52,15 +78,53 @@ export type ProjectStatus = z.infer<typeof ProjectStatus>;
  */
 export const ProjectUpdate = z
   .object({
-    name: z.string().min(1).optional(),
-    description: z.string().nullable().optional(),
-    leadId: ActorId.nullable().optional(),
-    programId: ProgramId.nullable().optional(),
-    teamId: TeamId.nullable().optional(),
-    status: ProjectStatus.optional(),
-    health: Health.nullable().optional(),
-    startDate: z.iso.date().nullable().optional(),
-    targetDate: z.iso.date().nullable().optional(),
+    name: z
+      .string()
+      .min(1)
+      .optional()
+      .describe('New project name. Omit to leave unchanged; non-empty when set.'),
+    description: z
+      .string()
+      .nullable()
+      .optional()
+      .describe('New description. Omit to leave unchanged; `null` clears it.'),
+    leadId: ActorId.nullable()
+      .optional()
+      .describe(
+        'Re-point the project lead (must be an Actor in the caller’s org). Omit to leave unchanged; `null` clears it.',
+      ),
+    programId: ProgramId.nullable()
+      .optional()
+      .describe(
+        'File the project under a Program (must be a Program in the caller’s org), or `null` to unfile it. Omit to leave unchanged. This is the only way to set a project’s Program (it is not accepted on create).',
+      ),
+    teamId: TeamId.nullable()
+      .optional()
+      .describe(
+        'Re-point the owning Team (must be a Team in the caller’s org). Omit to leave unchanged; `null` clears it.',
+      ),
+    status: ProjectStatus.optional().describe(
+      'New lifecycle status (`planned`/`active`/`completed`/`canceled`). Including this emits a `status_change` observation. Omit to leave unchanged.',
+    ),
+    health: Health.nullable()
+      .optional()
+      .describe(
+        'New health verdict (`on_track`/`at_risk`/`off_track`). Omit to leave unchanged; `null` clears it.',
+      ),
+    startDate: z.iso
+      .date()
+      .nullable()
+      .optional()
+      .describe(
+        'New start date (ISO-8601 `YYYY-MM-DD`). Omit to leave unchanged; `null` clears it.',
+      ),
+    targetDate: z.iso
+      .date()
+      .nullable()
+      .optional()
+      .describe(
+        'New target/end date (ISO-8601 `YYYY-MM-DD`). Omit to leave unchanged; `null` clears it.',
+      ),
   })
   .meta({ id: 'ProjectUpdate', description: 'Partially update a project.' });
 /** Validated project-update body. */
@@ -69,18 +133,40 @@ export type ProjectUpdate = z.infer<typeof ProjectUpdate>;
 /** Full project representation returned by reads. */
 export const ProjectOut = z
   .object({
-    id: ProjectId,
-    organizationId: OrganizationId,
-    name: z.string(),
-    description: z.string().nullable().optional(),
-    status: z.string(),
-    health: Health.nullable().optional(),
-    leadId: ActorId.nullable().optional(),
-    teamId: TeamId.nullable().optional(),
-    programId: ProgramId.nullable().optional(),
-    startDate: z.string().nullable().optional(),
-    targetDate: z.string().nullable().optional(),
-    createdAt: z.string(),
+    id: ProjectId.describe('Stable unique identifier of the project.'),
+    organizationId: OrganizationId.describe('The owning organization (tenant).'),
+    name: z.string().describe('Human-readable project name.'),
+    description: z
+      .string()
+      .nullable()
+      .optional()
+      .describe('Free-text description, or `null`/absent when none.'),
+    status: z
+      .string()
+      .describe(
+        'Current lifecycle status — one of `planned`/`active`/`completed`/`canceled` (see {@link ProjectStatus}). Typed as a plain string on the wire; the enum captures the allowed values.',
+      ),
+    health: Health.nullable()
+      .optional()
+      .describe('Current health verdict (`on_track`/`at_risk`/`off_track`), or `null` when unset.'),
+    leadId: ActorId.nullable()
+      .optional()
+      .describe('The accountable lead Actor, or `null` when unassigned.'),
+    teamId: TeamId.nullable().optional().describe('The owning Team, or `null` when none.'),
+    programId: ProgramId.nullable()
+      .optional()
+      .describe('The Program this project is filed under, or `null` when unfiled.'),
+    startDate: z
+      .string()
+      .nullable()
+      .optional()
+      .describe('Planned start date (ISO-8601 string), or `null` when unscheduled.'),
+    targetDate: z
+      .string()
+      .nullable()
+      .optional()
+      .describe('Planned target/end date (ISO-8601 string), or `null` when unscheduled.'),
+    createdAt: z.string().describe('When the project was created (ISO-8601 timestamp).'),
   })
   .meta({ id: 'ProjectOut', description: 'A project.' });
 /** Project representation value. */
@@ -97,16 +183,39 @@ export type ProjectOut = z.infer<typeof ProjectOut>;
  */
 export const ProjectProgress = z
   .object({
-    /** Completion ratio in `[0, 1]` (`completedWeight / totalWeight`; `0` when no tasks). */
-    percent: z.number().min(0).max(1),
-    /** Summed weight of completed tasks (estimate sum, or completed count in count mode). */
-    completedWeight: z.number().min(0),
-    /** Summed weight of all tasks (estimate sum, or total count in count mode). */
-    totalWeight: z.number().min(0),
-    /** Raw number of tasks in the project. */
-    taskCount: z.number().int().min(0),
-    /** Raw number of completed tasks in the project. */
-    completedCount: z.number().int().min(0),
+    percent: z
+      .number()
+      .min(0)
+      .max(1)
+      .describe(
+        'Completion ratio in `[0, 1]` (`completedWeight / totalWeight`). Exactly `0` for an empty project (never NaN). Multiply by 100 for a percentage.',
+      ),
+    completedWeight: z
+      .number()
+      .min(0)
+      .describe(
+        'Summed weight of completed tasks — the estimate sum of completed tasks in estimate mode, or the completed task count in count mode.',
+      ),
+    totalWeight: z
+      .number()
+      .min(0)
+      .describe(
+        'Summed weight of all tasks — the estimate sum in estimate mode (used when any task carries a positive estimate), or the total task count in count-fallback mode.',
+      ),
+    taskCount: z
+      .number()
+      .int()
+      .min(0)
+      .describe(
+        'Raw number of tasks in the project (always the row count, regardless of weighting mode).',
+      ),
+    completedCount: z
+      .number()
+      .int()
+      .min(0)
+      .describe(
+        'Raw number of completed tasks (those with a `completedAt`), regardless of weighting mode.',
+      ),
   })
   .meta({ id: 'ProjectProgress', description: 'Weighted completion roll-up for a project.' });
 /** Weighted project-progress value. */
@@ -127,13 +236,32 @@ export type ProjectProgress = z.infer<typeof ProjectProgress>;
  */
 export const ProjectRollupOut = z
   .object({
-    /** Each project task paired with the milestone it sits under (`null` when ungrouped). */
-    taskMilestones: z.array(z.object({ taskId: TaskId, milestoneId: MilestoneId.nullable() })),
-    /** The initiative this project rolls up into, or `null` when it belongs to none. */
-    currentInitiativeId: InitiativeId.nullable(),
-    /** Recent activity across the project's tasks' agent sessions, newest-first; each carries the
-     * session's `agentId` so the client resolves the actor without a per-session read. */
-    recentActivity: z.array(SessionActivityOut.extend({ agentId: AgentId })),
+    taskMilestones: z
+      .array(
+        z.object({
+          taskId: TaskId.describe('A task belonging to the project.'),
+          milestoneId: MilestoneId.nullable().describe(
+            'The milestone the task sits under, or `null` when the task is ungrouped.',
+          ),
+        }),
+      )
+      .describe(
+        'Each of the project’s tasks paired with its milestone — the `milestone_id` that otherwise only `TaskDetail` carries, collapsing an N+1 of per-task reads.',
+      ),
+    currentInitiativeId: InitiativeId.nullable().describe(
+      'The Initiative this project rolls up into (resolved from the `initiative_project` join; first taken deterministically as a project belongs to at most one in practice), or `null` when it belongs to none.',
+    ),
+    recentActivity: z
+      .array(
+        SessionActivityOut.extend({
+          agentId: AgentId.describe(
+            'The agent whose session produced this activity (annotated so the client resolves the actor without a per-session read).',
+          ),
+        }),
+      )
+      .describe(
+        'Recent activity across the project’s tasks’ agent sessions, newest-first (capped at 8). Each entry is a session-activity row extended with its session’s `agentId`.',
+      ),
   })
   .meta({
     id: 'ProjectRollupOut',

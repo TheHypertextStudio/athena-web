@@ -4,42 +4,65 @@
 import { z } from 'zod';
 
 /** Where the Hub lands on open: the Hub, the last-used context, or a specific org. */
-export const HubLanding = z.union([
-  z.literal('hub'),
-  z.literal('last'),
-  z.object({ orgId: z.string() }),
-]);
+export const HubLanding = z
+  .union([z.literal('hub'), z.literal('last'), z.object({ orgId: z.string() })])
+  .describe(
+    'The surface the Hub opens to. `"hub"`: the cross-org Hub home. `"last"`: the most recently used context. `{ orgId }`: always land in a specific org.',
+  );
 /** Hub landing value. */
 export type HubLanding = z.infer<typeof HubLanding>;
 
 /** Personal Hub preferences. */
-export const HubPreferences = z.object({
-  /** Landing surface on open. */
-  landing: HubLanding.optional(),
-  /** Row density. */
-  density: z.enum(['comfortable', 'compact']).optional(),
-  /** Theme preference. */
-  theme: z.enum(['system', 'light', 'dark']).optional(),
-  /** IANA timezone for the daily plan (also the digest's day boundary + send time). */
-  timezone: z.string().optional(),
-  /** Daily digest delivery settings (the Sunsama-style end-of-day summary). */
-  digest: z
-    .object({
-      /** Whether the daily digest is generated and delivered. */
-      enabled: z.boolean().optional(),
-      /** Local clock time to send, `"HH:MM"` 24-hour (interpreted in {@link timezone}). */
-      sendAtLocalTime: z.string().optional(),
-      /** Where to deliver the digest. */
-      channels: z.array(z.enum(['email', 'inApp'])).optional(),
-    })
-    .optional(),
-  /** Proactive-agent settings — whether incoming mentions/assignments auto-draft a plan. */
-  proactive: z
-    .object({
-      /** When true, a mention/assignment observation spawns an (approval-gated) agent plan. */
-      enabled: z.boolean().optional(),
-    })
-    .optional(),
-});
+export const HubPreferences = z
+  .object({
+    landing: HubLanding.optional().describe('Where the Hub lands on open (default: the Hub home).'),
+    density: z
+      .enum(['comfortable', 'compact'])
+      .optional()
+      .describe('Row density for lists. `comfortable`: roomier; `compact`: denser.'),
+    theme: z
+      .enum(['system', 'light', 'dark'])
+      .optional()
+      .describe('Color theme. `system` follows the OS setting; `light`/`dark` force one.'),
+    timezone: z
+      .string()
+      .optional()
+      .describe(
+        "IANA timezone (e.g. `America/Chicago`) anchoring the daily plan — also the digest's day boundary and send time.",
+      ),
+    digest: z
+      .object({
+        enabled: z
+          .boolean()
+          .optional()
+          .describe('Whether the daily digest is generated and delivered.'),
+        sendAtLocalTime: z
+          .string()
+          .optional()
+          .describe('Local clock time to send, `"HH:MM"` 24-hour, interpreted in `timezone`.'),
+        channels: z
+          .array(z.enum(['email', 'inApp']))
+          .optional()
+          .describe('Where to deliver the digest: any of `email`, `inApp`.'),
+      })
+      .optional()
+      .describe('Daily-digest delivery settings (the Sunsama-style end-of-day summary).'),
+    proactive: z
+      .object({
+        enabled: z
+          .boolean()
+          .optional()
+          .describe(
+            'When true, a mention/assignment observation spawns an approval-gated agent plan.',
+          ),
+      })
+      .optional()
+      .describe(
+        'Proactive-agent settings — whether incoming mentions/assignments auto-draft a plan.',
+      ),
+  })
+  .describe(
+    "A user's personal Hub preferences (cross-org UI + daily-plan/digest/proactive settings).",
+  );
 /** Hub preferences value. */
 export type HubPreferences = z.infer<typeof HubPreferences>;

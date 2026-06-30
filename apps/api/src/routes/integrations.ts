@@ -72,7 +72,12 @@ async function loadIntegration(orgId: string, id: string): Promise<IntegrationRo
 const integrations = new Hono<AppEnv>()
   .get(
     '/',
-    apiDoc({ tag: 'Integrations', summary: 'List integrations', response: pageOf(IntegrationOut) }),
+    apiDoc({
+      tag: 'Integrations',
+      summary: 'List integrations',
+      response: pageOf(IntegrationOut),
+      description: `List every integration connected to the active organization as a single page of {@link IntegrationOut}. An integration is an org-scoped external connection in one of two patterns — a **Migration** (replace: a one-time import that pulls work into Docket) or a **Connector** (complement: an ongoing read-only mirror, optionally two-way) — contributing one or more roles (\`work\`, \`context\`, \`signal\`, \`time\`, \`code\`). Each row exposes connection health (\`status\`), sync mode, write-back flag, and last-sync/last-error fields, but never the credential itself (only a \`credentialsRef\`). A read; org membership suffices. Related: connect via \`POST /\`, browse connectable providers via \`GET /directory\`, and inspect sync history via \`GET /:id/runs\`.`,
+    }),
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const rows = await db.select().from(integration).where(eq(integration.organizationId, orgId));
@@ -87,6 +92,11 @@ const integrations = new Hono<AppEnv>()
       summary: 'Connect an integration',
       capability: 'manage',
       response: IntegrationOut,
+      description: `Connect (or reconnect) an external provider to the organization and return the {@link IntegrationOut}. Connection is **idempotent per (org, provider, account)**: reconnecting reuses the existing integration row — refreshing its fields — so the integration id (and thus every mirrored task's \`sourceIntegrationId\`) stays stable across reconnects. With an \`externalAccountId\` an org can link several accounts of the same provider (one integration each); without one the original single-account row is matched.
+
+Critically, **health is never taken from the body**: a new or reconnected integration always starts \`pending\` and clears any prior error. It is only promoted to \`connected\` once \`POST /:id/verify\` (or a successful sync/import) validates a real credential — the spine of the "never report success when nothing happened" rule. \`writeBack\` defaults ON for connectors that support two-way sync (e.g. Google Tasks) unless the caller overrides it, so those connect two-way out of the box.
+
+Requires \`manage\` — wiring an external data source into the org is an administrative trust decision. Side effects: persists/refreshes the connection metadata (secret stored only by reference); no external call is made here (verification is a separate step). Note GitHub connects by installing the GitHub App — fetch its install URL via \`GET /:id/connect-url\` after creating the row. Related: \`POST /:id/verify\`, \`POST /:id/import\`, \`POST /:id/sync\`, \`GET /directory\`.`,
     }),
     zJson(IntegrationCreate),
     async (c) => {
@@ -165,6 +175,7 @@ const integrations = new Hono<AppEnv>()
       tag: 'Integrations',
       summary: 'List the integration provider directory',
       response: IntegrationDirectoryOut,
+      description: `Return the catalog of providers Docket can connect to as {@link IntegrationDirectoryOut} — the data behind the connect wizard. Each entry names the provider id, its human label, its pattern (\`migration\` vs \`connector\`), the roles it contributes (\`work\`/\`context\`/\`signal\`/\`time\`/\`code\`), and a category for grouping. This is static, org-agnostic capability metadata (the set of *connectable* providers), not the org's *connected* integrations — for those use \`GET /\`. A read; org membership suffices. Related: \`POST /\` to connect a provider chosen from this directory.`,
     }),
     async (c) => {
       const providers: z.input<typeof IntegrationDirectoryOut>['providers'] =
@@ -174,7 +185,12 @@ const integrations = new Hono<AppEnv>()
   )
   .get(
     '/:id',
-    apiDoc({ tag: 'Integrations', summary: 'Get an integration', response: IntegrationOut }),
+    apiDoc({
+      tag: 'Integrations',
+      summary: 'Get an integration',
+      response: IntegrationOut,
+      description: `Fetch a single integration by id, scoped to the active organization, returning {@link IntegrationOut}. A missing/cross-tenant id returns 404 (\`Integration not found\`; existence-hiding across tenants). A read; org membership suffices. The response is the full health picture — \`status\`, \`syncMode\`, \`writeBack\`, \`lastSyncStatus\`/\`lastSyncedAt\`, \`lastError\`/\`lastErrorAt\`, \`syncCadenceMinutes\` — without ever exposing the credential. Related: \`GET /:id/runs\` (sync history), \`GET /:id/lists\` (selectable provider containers), \`POST /:id/verify\` (re-check health).`,
+    }),
     zParam(idParam),
     async (c) => {
       const { orgId } = c.get('actorCtx');
@@ -191,6 +207,9 @@ const integrations = new Hono<AppEnv>()
       summary: 'List an integration provider resources',
       capability: 'manage',
       response: ConnectorResourceListOut,
+      description: `Enumerate the external containers (e.g. Google Tasks lists) a connector exposes for selection, as {@link ConnectorResourceListOut} — the picker data for choosing which lists to sync into \`config.listIds\`. This makes a **live call to the provider** using the bound account's credential, so a broken or unauthorized connection surfaces here as a real 409 (\`Integration provider has no selectable lists\` when the provider isn't a connector, or the token-resolution failure message) rather than an empty list that masquerades as "no lists". A missing/cross-tenant integration 404s.
+
+Requires \`manage\` — it touches live provider credentials and configures sync. Related: \`PATCH /:id\` (persist the chosen \`config.listIds\`/\`defaultListId\`), \`POST /:id/sync\`.`,
     }),
     zParam(idParam),
     async (c) => {
@@ -220,6 +239,7 @@ const integrations = new Hono<AppEnv>()
       tag: 'Integrations',
       summary: 'List integration sync runs',
       response: pageOf(SyncRunOut),
+      description: `List the most recent (up to 20) sync runs for an integration, newest-first, as a page of {@link SyncRunOut}. Each run is the **durable** record of one \`importWork\` pass — its \`status\` (\`running\`/\`succeeded\`/\`failed\`), \`trigger\` (\`manual\`/\`scheduled\`), \`processed\`/\`total\` counts, error reason, and start/finish timestamps — so a failed sync leaves a real, auditable trace instead of vanishing on restart (this replaced the former ephemeral in-memory job model). The org-scoped integration must exist (404 \`Integration not found\`). A read; org membership suffices. Related: \`POST /:id/sync\` (start a run), \`GET /:id\` (the integration's roll-up health).`,
     }),
     zParam(idParam),
     async (c) => {
@@ -243,6 +263,7 @@ const integrations = new Hono<AppEnv>()
       summary: 'Update an integration',
       capability: 'manage',
       response: IntegrationOut,
+      description: `Update an integration's mutable settings — \`roles\`, \`connection\` metadata, connector \`config\` (target team/project, \`listIds\`, \`defaultListId\`, \`pushNativeTasks\`), \`syncMode\`, and \`writeBack\` — returning the refreshed {@link IntegrationOut}. A partial update: only present fields are written. \`status\` is intentionally **not** accepted — connection health is *earned* through the connect/verify and sync paths, never declared by a client, so this route can never fabricate \`connected\`. A missing/cross-tenant id 404s. Requires \`manage\`. Related: \`POST /:id/verify\` (re-validate after changing the connection), \`GET /:id/lists\` (to discover valid \`config.listIds\`).`,
     }),
     zParam(idParam),
     zJson(IntegrationUpdate),
@@ -270,6 +291,7 @@ const integrations = new Hono<AppEnv>()
       summary: 'Disconnect an integration',
       capability: 'manage',
       response: IntegrationOut,
+      description: `Disconnect (delete) an integration from the organization, returning the deleted {@link IntegrationOut} as it was just before removal. A missing/cross-tenant id 404s (\`Integration not found\`). Requires \`manage\` — severing an external data source is an administrative decision. Removing the integration drops the org's link to that provider; tasks already mirrored into Docket persist as rows but their \`sourceIntegrationId\` no longer resolves to a live connection (a subsequent reconnect of the same provider/account reuses a fresh integration id). Related: \`POST /\` (reconnect), \`PATCH /:id\` (reconfigure instead of disconnecting).`,
     }),
     zParam(idParam),
     async (c) => {
@@ -292,6 +314,11 @@ const integrations = new Hono<AppEnv>()
       summary: 'Verify an integration connection',
       capability: 'manage',
       response: IntegrationOut,
+      description: `Verify an integration's credential against the live provider and return the **truthful** {@link IntegrationOut} reflecting the result. This is the ONLY place that promotes an integration to \`connected\` at connect time: a real \`connect()\` call must actually resolve the external account here. The connection is labeled by the linked **identity** (the account's email, resolved from its id token), not by a resource.
+
+Crucially, a failure is recorded, not thrown away: if the credential can't be resolved or the provider check doesn't succeed, the integration is set to \`status='error'\` with a real \`lastError\`/\`lastErrorAt\`, and that error state is returned as **200** (the honest current state) rather than an HTTP error — so the UI can show exactly why the connection is broken. A provider that doesn't support connection checks yields 409 (\`Integration provider does not support connection checks\`); a missing/cross-tenant id 404s.
+
+Requires \`manage\` — it exercises live credentials and mutates health. Side effect: writes \`status\`/\`lastError\`/connection label. Related: \`POST /\` (which leaves the integration \`pending\` for this route to verify), \`POST /:id/sync\` & \`POST /:id/import\` (which also prove health on success).`,
     }),
     zParam(idParam),
     async (c) => {
@@ -359,6 +386,11 @@ const integrations = new Hono<AppEnv>()
       summary: 'Import work from an integration',
       capability: 'contribute',
       response: pageOf(TaskOut),
+      description: `Pull work items from the provider into Docket as native {@link TaskOut} rows and return the created tasks. This is the Migration/onboarding path: it calls the connector's \`importWork\`, resolves the target team (\`resolveImportTeam\`), and materializes a task per imported item with provenance linking back to the source (\`sourceIntegrationId\`, \`externalId\`, \`externalUrl\`).
+
+The optional body flag \`assignToImporter\` (default \`false\`) controls landing: onboarding passes \`true\` so the owner's freshly-mirrored work appears under My Work's "Assigned to me"; the general sync path omits it so imported work lands in Triage instead. On success the integration is proven healthy — set to \`connected\` with \`lastSyncStatus='succeeded'\` and a fresh \`lastSyncedAt\`. On failure (no live credential, or the connector throwing) the integration is demoted to \`error\` with the real reason and the request fails 409 — e.g. \`Sign in with <provider> to import…\` when the OAuth grant is missing, or \`Integration provider does not support import\` for a non-connector. A missing/cross-tenant id 404s.
+
+Requires \`contribute\` (it creates tasks, the same bar as authoring work directly) — note this is a *lower* bar than the \`manage\`-gated \`POST /:id/sync\`, because import is a user pulling their own work in, whereas sync configures ongoing org-level mirroring. Related: \`POST /:id/sync\`, \`GET /:id/runs\`.`,
     }),
     zParam(idParam),
     zJson(ImportBody),
@@ -425,6 +457,11 @@ const integrations = new Hono<AppEnv>()
       summary: 'Trigger an integration sync',
       capability: 'manage',
       response: SyncRunOut,
+      description: `Start a manual sync run for a connector and return the created {@link SyncRunOut}. Synchronization reconciles the org's mirrored tasks with the provider's current state (and, for two-way connectors with \`writeBack\`, pushes eligible Docket changes back out). A run is durable and auditable via \`GET /:id/runs\`.
+
+Concurrency is guarded: only one sync may be in flight per integration, so if a run is already active this returns 409 (\`A sync is already in progress for this integration.\`) rather than starting a duplicate. A provider that can't sync yields 409 (\`Integration provider does not support sync\`); a missing/cross-tenant id 404s. The run is recorded with \`trigger='manual'\` (the background scheduler uses \`scheduled\`).
+
+Requires \`manage\` — triggering org-wide mirroring is an administrative action (contrast the \`contribute\`-level \`POST /:id/import\`, which is a user pulling their own work in). Related: \`GET /:id/runs\`, \`POST /:id/verify\`.`,
     }),
     zParam(idParam),
     async (c) => {
@@ -447,7 +484,14 @@ const integrations = new Hono<AppEnv>()
   .get(
     '/:id/connect-url',
     capabilityGuard('manage'),
-    apiDoc({ tag: 'Integrations', summary: 'Get a GitHub App install URL', capability: 'manage' }),
+    apiDoc({
+      tag: 'Integrations',
+      summary: 'Get a GitHub App install URL',
+      capability: 'manage',
+      description: `Return the GitHub App **install URL** the client redirects the user to in order to connect a GitHub integration — connecting GitHub means installing the GitHub App, not an OAuth token exchange. The response is \`{ url }\` (a bare JSON object, not the standard envelope). The URL embeds a signed \`state\` that binds this integration id + org, so when the user finishes installation GitHub redirects to the non-RPC \`/v1/integrations/github/callback\`, which records the installation id against this integration.
+
+Only valid for a GitHub integration row (else 409 \`A connect URL is only available for GitHub integrations\`), and only when the GitHub App is configured (else 409 \`The GitHub App is not configured (GITHUB_APP_SLUG is unset)\`); a missing/cross-tenant id 404s. Requires \`manage\`. Related: \`POST /\` (create the GitHub integration row first), \`POST /:id/sync\`.`,
+    }),
     zParam(idParam),
     async (c) => {
       const { orgId } = c.get('actorCtx');

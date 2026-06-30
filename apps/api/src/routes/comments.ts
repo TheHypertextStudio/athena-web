@@ -103,7 +103,12 @@ function assertAuthorOrManage(row: CommentRow, actorId: string, held: readonly C
 const comments = new Hono<AppEnv>()
   .get(
     '/',
-    apiDoc({ tag: 'Comments', summary: 'List comments', response: pageOf(CommentOut) }),
+    apiDoc({
+      tag: 'Comments',
+      summary: 'List comments',
+      response: pageOf(CommentOut),
+      description: `List the comments on one polymorphic subject, identified by the required \`subjectType\` (\`task | project | program | initiative | cycle\`) and \`subjectId\` query params. Comments are the discussion thread attached to a work item. Results are ordered ascending by creation time so the client can reconstruct the two-level thread tree in post order — a reply always sorts after the parent it references (\`parentCommentId\`). Scoped to the caller's org. Requires org membership (\`view\`); no per-route capability guard. Returns a page wrapper of {@link CommentOut}.`,
+    }),
     zQuery(CommentListQuery),
     async (c) => {
       const { orgId } = c.get('actorCtx');
@@ -132,6 +137,9 @@ const comments = new Hono<AppEnv>()
       summary: 'Add a comment',
       capability: 'comment',
       response: CommentOut,
+      description: `Post a comment on a subject. Requires the \`comment\` capability — distinctly lower than \`contribute\`: a participant may discuss work without being able to edit its content. The author is always the calling actor (taken from context, never the body), which is how an Agent Session's response/elicitation reaches the comment stream — it posts as its own Actor.
+
+Threading is single-level. Omit \`parentCommentId\` for a root comment; supply it to reply. A reply's parent must be an existing comment in the SAME org on the SAME subject (else 422), and the parent must itself be a root comment — replying to a reply is rejected (422), keeping the thread a strict two-level tree. Side effect: emits a \`comment\` observation onto the subject so its owners/followers are notified. Returns the created {@link CommentOut}.`,
     }),
     zJson(CommentCreate),
     async (c) => {
@@ -201,7 +209,12 @@ const comments = new Hono<AppEnv>()
   )
   .get(
     '/:id',
-    apiDoc({ tag: 'Comments', summary: 'Get a comment', response: CommentOut }),
+    apiDoc({
+      tag: 'Comments',
+      summary: 'Get a comment',
+      response: CommentOut,
+      description: `Fetch one comment by id. The lookup is org-scoped, so a cross-org or unknown id 404s (\`Comment not found\`) — existence is not leaked across tenants. Requires org membership (\`view\`). Returns {@link CommentOut}, including \`editedAt\` (null until the comment is edited) and \`parentCommentId\` (null for a root comment).`,
+    }),
     zParam(idParam),
     async (c) => {
       const { orgId } = c.get('actorCtx');
@@ -218,6 +231,7 @@ const comments = new Hono<AppEnv>()
       summary: 'Update a comment',
       capability: 'comment',
       response: CommentOut,
+      description: `Edit a comment's body. Only the \`body\` is mutable (subject and threading are fixed at creation); the edit stamps \`editedAt\` so clients can show an "edited" marker. Requires the \`comment\` capability AND an authorship gate: a \`comment\`-capable member may only edit their OWN comment unless they additionally hold \`manage\` (a moderator override). A non-author without \`manage\` is 403 (\`Only the author can modify this comment\`) — note the comment's existence is not hidden here, because org-scoped tenant isolation already 404s a cross-org id before the author check runs. Returns the updated {@link CommentOut}.`,
     }),
     zParam(idParam),
     zJson(CommentUpdate),
@@ -250,6 +264,9 @@ const comments = new Hono<AppEnv>()
       summary: 'Delete a comment',
       capability: 'comment',
       response: CommentRemoved,
+      description: `Hard-delete a comment. Requires the \`comment\` capability plus the same authorship gate as edit: only the author, or an actor holding \`manage\`, may delete (non-author without \`manage\` → 403). A cross-org/unknown id 404s.
+
+Deleting a root comment must not orphan its replies into a dangling thread. \`parent_comment_id\` carries no foreign key (it is plain text), so within one transaction the handler first re-parents every reply pointing at this comment to null — promoting them to root comments — and then deletes the row, keeping a subsequent list read internally consistent. Returns a {@link CommentRemoved} acknowledgement.`,
     }),
     zParam(idParam),
     async (c) => {

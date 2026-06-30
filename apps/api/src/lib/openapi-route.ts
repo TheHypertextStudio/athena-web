@@ -37,8 +37,13 @@ export interface ApiDocOptions {
   response?: z.ZodType;
   /** Success status code (default 200). */
   status?: StatusCode;
-  /** Response description (default 'OK'). */
+  /**
+   * Operation-level description — the main prose Scalar renders for the endpoint (purpose,
+   * behavior, side effects, capability rationale, errors, related routes). Markdown.
+   */
   description?: string;
+  /** Description of the success response body (default 'Success.'). */
+  responseDescription?: string;
   /** Extra `describeRoute` fields (e.g. `security: []` for public routes, more responses). */
   extra?: DescribeRouteOptions;
 }
@@ -64,12 +69,14 @@ export function apiDoc(opts: ApiDocOptions) {
   const spec: DescribeRouteOptions = {
     summary: opts.summary,
     tags: [opts.tag],
+    // Operation-level prose (what Scalar renders as the endpoint body), NOT the response label.
+    ...(opts.description ? { description: opts.description } : {}),
     ...(opts.capability ? { 'x-docket-capability': opts.capability } : {}),
     ...(response
       ? {
           responses: {
             [status]: {
-              description: opts.description ?? 'OK',
+              description: opts.responseDescription ?? 'Success.',
               content: { 'application/json': { schema: resolver(response) } },
             },
           },

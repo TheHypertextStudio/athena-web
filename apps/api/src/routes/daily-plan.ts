@@ -60,7 +60,14 @@ const idParam = z.object({ id: z.string() });
 const dailyPlan = new Hono<AppEnv>()
   .get(
     '/',
-    apiDoc({ tag: 'DailyPlan', summary: 'Get the daily plan', response: pageOf(DailyPlanItemOut) }),
+    apiDoc({
+      tag: 'DailyPlan',
+      summary: 'Get the daily plan',
+      response: pageOf(DailyPlanItemOut),
+      description: `Return the caller's personal daily plan for a single calendar \`date\` (required query param), ordered by \`sort\` ascending. The daily plan is a **cross-org, Hub-scoped** surface: each item references a Task in any of the orgs the caller is a human Actor in, pulled together into one prioritized list for the day. The owning Hub is resolved server-side from the session user (\`hub.userId = session.user.id\`); items are filtered to \`(hubId, date)\`, so the caller only ever sees their own plan.
+
+Session-only, no capability. 401 when unauthenticated; **404 (Hub not found)** if the session user has no Hub row. Side-effect-free read. Related: \`POST /\` to add an item, \`PATCH /:id\` to reorder/complete/timebox, \`DELETE /:id\` to remove; \`GET /hub/today\` folds this plan into the cross-org Today cockpit.`,
+    }),
     zQuery(listQuery),
     async (c) => {
       const session = c.get('session');
@@ -77,7 +84,14 @@ const dailyPlan = new Hono<AppEnv>()
   )
   .post(
     '/',
-    apiDoc({ tag: 'DailyPlan', summary: 'Add a daily-plan item', response: DailyPlanItemOut }),
+    apiDoc({
+      tag: 'DailyPlan',
+      summary: 'Add a daily-plan item',
+      response: DailyPlanItemOut,
+      description: `Pull a Task into the caller's daily plan for a date, creating a new daily-plan item. The body supplies the task reference \`(refOrganizationId, refTaskId)\`, the \`date\`, and optional \`sort\` position and timebox window. **The Task reference is validated in two steps before insert:** (1) \`refOrganizationId\` must be one of the orgs the caller is a human Actor in, and (2) the Task must actually exist in that org. A failure of either check returns **404 (Task not found)** — a single existence-hiding error that never reveals whether the org or the task was the problem, and never lets the caller reference a Task outside their own membership.
+
+The owning \`hubId\` is resolved server-side from the session user and is never accepted from the body. **Side effect:** inserts a \`dailyPlanItem\` row (status defaults to \`planned\`); the new item then appears in \`GET /daily-plan\` and the Hub Today cockpit. Session-only, no capability; 401 when unauthenticated, 404 if the caller has no Hub. Related: \`PATCH /:id\`, \`DELETE /:id\`.`,
+    }),
     zJson(DailyPlanItemCreate),
     async (c) => {
       const session = c.get('session');
@@ -118,7 +132,14 @@ const dailyPlan = new Hono<AppEnv>()
   )
   .patch(
     '/:id',
-    apiDoc({ tag: 'DailyPlan', summary: 'Update a daily-plan item', response: DailyPlanItemOut }),
+    apiDoc({
+      tag: 'DailyPlan',
+      summary: 'Update a daily-plan item',
+      response: DailyPlanItemOut,
+      description: `Update a daily-plan item's lifecycle: mark it \`done\`/\`planned\` (\`status\`), reorder it within the day (\`sort\`), or set/clear its calendar timebox (\`timeboxStartsAt\`/\`timeboxEndsAt\`). All body fields are optional — only the keys present are written, so this is a partial update; a null timebox value clears that side of the window. The task reference and date are immutable here (remove and re-add to retarget).
+
+**Ownership is enforced first:** the item must exist under the caller's own Hub (\`(id, hubId)\`), else **404 (Daily plan item not found)** — a caller cannot patch another person's plan item. The status/timebox changes flow into \`GET /daily-plan\` and the Hub Today calendar pane. Session-only, no capability; 401 when unauthenticated, 404 if the caller has no Hub or the item isn't theirs.`,
+    }),
     zParam(idParam),
     zJson(DailyPlanItemUpdate),
     async (c) => {
@@ -157,7 +178,14 @@ const dailyPlan = new Hono<AppEnv>()
   )
   .delete(
     '/:id',
-    apiDoc({ tag: 'DailyPlan', summary: 'Remove a daily-plan item', response: DailyPlanItemOut }),
+    apiDoc({
+      tag: 'DailyPlan',
+      summary: 'Remove a daily-plan item',
+      response: DailyPlanItemOut,
+      description: `Remove a Task from the caller's daily plan. **Side effect:** hard-deletes the \`dailyPlanItem\` row and returns the deleted item's representation (so the client can confirm/undo). This only unplans the Task for that day — the underlying Task in its org is untouched; the daily-plan item is purely a personal, Hub-scoped pointer.
+
+The delete is constrained to the caller's own Hub (\`(id, hubId)\`); an item that isn't theirs (or a missing id) returns **404 (Daily plan item not found)**. Session-only, no capability; 401 when unauthenticated, 404 if the caller has no Hub.`,
+    }),
     zParam(idParam),
     async (c) => {
       const session = c.get('session');

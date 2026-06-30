@@ -7,6 +7,7 @@ import { Skeleton } from '@docket/ui/primitives';
 import { useParams, useRouter } from 'next/navigation';
 import { type JSX } from 'react';
 
+import SuggestionsLane from '@/components/triage/suggestions-lane';
 import { TriageRow } from '@/components/triage/triage-row';
 import { useTriage } from '@/lib/use-triage';
 
@@ -46,6 +47,8 @@ export default function TriagePage(): JSX.Element {
           it.
         </p>
       </header>
+
+      <SuggestionsLane orgId={orgId} canAct />
 
       {!loading && !loadError ? (
         <p className="text-on-surface-variant text-xs tabular-nums">

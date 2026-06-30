@@ -51,9 +51,10 @@ export interface PersistSuggestionsResult {
 export async function persistSuggestions(
   input: PersistSuggestionsInput,
 ): Promise<PersistSuggestionsResult> {
-  const worthy = input.threads.filter(
-    (thread) => classifyTaskWorthiness(thread, input.threshold).worthy,
-  );
+  // Classify once and carry the verdict through (its score/category are reused below).
+  const worthy = input.threads
+    .map((thread) => ({ thread, verdict: classifyTaskWorthiness(thread, input.threshold) }))
+    .filter((candidate) => candidate.verdict.worthy);
   if (worthy.length === 0) return { created: 0, suggestionIds: [] };
 
   // Pre-dedup: skip synthesis for threads already suggested (sweeps re-pull recent threads,
@@ -66,16 +67,15 @@ export async function persistSuggestions(
         eq(emailSuggestion.organizationId, input.organizationId),
         inArray(
           emailSuggestion.externalThreadId,
-          worthy.map((t) => t.threadId),
+          worthy.map((candidate) => candidate.thread.threadId),
         ),
       ),
     );
   const seen = new Set(alreadySuggested.map((row) => row.threadId));
 
   const suggestionIds: string[] = [];
-  for (const thread of worthy) {
+  for (const { thread, verdict } of worthy) {
     if (seen.has(thread.threadId)) continue;
-    const verdict = classifyTaskWorthiness(thread, input.threshold);
     const draft = await input.synthesizer.synthesize({
       subject: thread.subject,
       snippet: thread.snippet,

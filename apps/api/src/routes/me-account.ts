@@ -85,8 +85,10 @@ function toExportOut(row: typeof accountExport.$inferSelect): z.input<typeof Acc
     requestedAt: row.requestedAt.toISOString(),
     readyAt: row.readyAt ? row.readyAt.toISOString() : null,
     expiresAt: row.expiresAt ? row.expiresAt.toISOString() : null,
-    // The RESTful binary sub-resource of this export (same-origin to the API; streams via blob.get).
-    downloadUrl: ready ? `${env.API_URL}/v1/me/account/exports/${row.id}/file` : null,
+    // The RESTful binary sub-resource of this export. Relative + same-origin to the web app so the
+    // browser carries the session cookie through Next's `/v1` proxy (an absolute API-origin URL is
+    // cross-origin and arrives unauthenticated → 401).
+    downloadUrl: ready ? `/v1/me/account/exports/${row.id}/file` : null,
   };
 }
 

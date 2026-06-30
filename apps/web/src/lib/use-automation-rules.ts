@@ -12,12 +12,7 @@ import type { QueryKey } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
 import { api } from './api';
-import { apiQueryOptions, unwrap, useApiMutation, useApiQuery } from './query';
-
-/** The stable React Query key for an org's automation rules. */
-export function automationRulesKey(orgId: string): QueryKey {
-  return ['org', orgId, 'automation-rules'];
-}
+import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from './query';
 
 /** All automation-rule data + mutation callbacks for the settings surface. */
 export interface AutomationRulesData {
@@ -34,7 +29,7 @@ export interface AutomationRulesData {
  * @param orgId - The active organization id.
  */
 export function useAutomationRules(orgId: string): AutomationRulesData {
-  const key = useMemo<QueryKey>(() => automationRulesKey(orgId), [orgId]);
+  const key = useMemo<QueryKey>(() => queryKeys.automationRules(orgId), [orgId]);
 
   const listQ = useApiQuery(
     apiQueryOptions(

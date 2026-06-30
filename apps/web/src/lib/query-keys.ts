@@ -28,6 +28,8 @@ export const queryKeys = {
   integrationLists: (orgId: string, integrationId: string) =>
     ['org', orgId, 'integrations', integrationId, 'lists'] as const,
   integrationsDirectory: (orgId: string) => ['org', orgId, 'integrations-directory'] as const,
+  emailSuggestions: (orgId: string) => ['org', orgId, 'email-suggestions'] as const,
+  automationRules: (orgId: string) => ['org', orgId, 'automation-rules'] as const,
   savedViews: (orgId: string) => ['org', orgId, 'saved-views'] as const,
   agents: (orgId: string) => ['org', orgId, 'agents'] as const,
   sessions: (orgId: string) => ['org', orgId, 'sessions'] as const,

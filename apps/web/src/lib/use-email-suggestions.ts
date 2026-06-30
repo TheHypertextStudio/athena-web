@@ -14,11 +14,6 @@ import { useMemo } from 'react';
 import { api } from './api';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from './query';
 
-/** The stable React Query key for an org's pending email suggestions. */
-export function emailSuggestionsKey(orgId: string): QueryKey {
-  return ['org', orgId, 'email-suggestions'];
-}
-
 /** All suggestion data + mutation callbacks for the triage lane. */
 export interface EmailSuggestionsData {
   suggestions: readonly EmailSuggestionOut[];
@@ -34,7 +29,7 @@ export interface EmailSuggestionsData {
  * @param orgId - The active organization id.
  */
 export function useEmailSuggestions(orgId: string): EmailSuggestionsData {
-  const key = useMemo<QueryKey>(() => emailSuggestionsKey(orgId), [orgId]);
+  const key = useMemo<QueryKey>(() => queryKeys.emailSuggestions(orgId), [orgId]);
 
   const listQ = useApiQuery(
     apiQueryOptions(

@@ -51,3 +51,8 @@ export {
   type SmtpTransportFactory,
 } from './mailer';
 export { RealBlob, type RealBlobConfig } from './blob';
+export {
+  RealTaskSynthesizer,
+  type RealTaskSynthesizerConfig,
+  DEFAULT_SYNTHESIS_MODEL,
+} from './task-synthesizer';

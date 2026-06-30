@@ -1,3 +1,4 @@
+import { MockTaskSynthesizer } from '@docket/boundaries';
 import { and, eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
@@ -5,6 +6,8 @@ import type * as DbModule from '@docket/db';
 
 import { getDb, one, seedBaseOrg } from './harness.test';
 import { persistSuggestions, type CandidateThread } from '../../src/lib/email-to-task/synthesize';
+
+const synthesizer = new MockTaskSynthesizer();
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -55,6 +58,7 @@ describe('persistSuggestions', () => {
       threads: THREADS,
       threshold: 50,
       actorId: humanActorId,
+      synthesizer,
     });
 
     expect(result.created).toBe(1); // the actionable one; the promo is funneled out
@@ -77,6 +81,7 @@ describe('persistSuggestions', () => {
       threads: THREADS,
       threshold: 50,
       actorId: humanActorId,
+      synthesizer,
     });
     const second = await persistSuggestions({
       organizationId: orgId,
@@ -84,6 +89,7 @@ describe('persistSuggestions', () => {
       threads: THREADS,
       threshold: 50,
       actorId: humanActorId,
+      synthesizer,
     });
     expect(second.created).toBe(0);
     const rows = await db
@@ -101,7 +107,9 @@ describe('persistSuggestions', () => {
       threads: [THREADS[0]!],
       threshold: 50,
       actorId: humanActorId,
-      synthesize: () => ({ title: 'Custom synthesized title', priority: 'urgent' }),
+      synthesizer: {
+        synthesize: async () => ({ title: 'Custom synthesized title', priority: 'urgent' }),
+      },
     });
     const row = one(
       await db

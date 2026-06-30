@@ -13,5 +13,6 @@ export { MockAgentRuntime, type MockAgentRuntimeOptions } from './agent-runtime'
 export { MockConnector, type MockConnectorOptions } from './connector';
 export { MockObserver, type MockObserverOptions } from './observer';
 export { MockSummarizer } from './summarizer';
+export { MockTaskSynthesizer } from './task-synthesizer';
 export { CaptureMailer, type CaptureMailerOptions, ConsoleMailer } from './mailer';
 export { LocalDiskBlob, type LocalDiskBlobOptions } from './blob';

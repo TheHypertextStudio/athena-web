@@ -9,8 +9,19 @@
  * `docs/engineering/specs/email-to-task.md` §6.
  */
 
-/** The priority a synthesized draft can carry (mirrors the task priority enum). */
-export type SynthesizedPriority = 'none' | 'urgent' | 'high' | 'medium' | 'low';
+import type { Priority } from '@docket/types';
+
+/** The default maximum synthesized-title length. */
+export const TITLE_MAX = 120;
+
+/**
+ * Cap a title at `max` characters with a trailing ellipsis, falling back to a generic label
+ * for an empty subject. Shared by every synthesizer so the cap rule lives in one place.
+ */
+export function truncateTitle(text: string, max = TITLE_MAX): string {
+  const trimmed = text.trim() || 'Follow up on an email';
+  return trimmed.length > max ? `${trimmed.slice(0, max - 1).trimEnd()}…` : trimmed;
+}
 
 /** The email signal handed to the synthesizer. */
 export interface TaskDraftInput {
@@ -28,8 +39,8 @@ export interface TaskDraft {
   readonly title: string;
   /** A short "why this matters" description. */
   readonly description?: string;
-  /** The inferred priority. */
-  readonly priority: SynthesizedPriority;
+  /** The inferred priority (the shared task {@link Priority}). */
+  readonly priority: Priority;
 }
 
 /** The task-synthesizer port: one email thread → one action-oriented task draft. */

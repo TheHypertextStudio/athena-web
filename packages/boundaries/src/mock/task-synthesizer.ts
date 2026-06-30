@@ -8,20 +8,19 @@
  * ({@link import('../real/task-synthesizer').RealTaskSynthesizer}) does the action-oriented
  * rewording.
  */
-import type { TaskDraft, TaskDraftInput, TaskSynthesizer } from '../ports/task-synthesizer';
-
-/** The maximum synthesized-title length. */
-const TITLE_MAX = 120;
+import {
+  type TaskDraft,
+  type TaskDraftInput,
+  type TaskSynthesizer,
+  truncateTitle,
+} from '../ports/task-synthesizer';
 
 /** A deterministic, model-free task synthesizer. */
 export class MockTaskSynthesizer implements TaskSynthesizer {
   /** {@inheritDoc TaskSynthesizer.synthesize} */
   async synthesize(input: TaskDraftInput): Promise<TaskDraft> {
-    const subject = input.subject.trim() || 'Follow up on an email';
-    const title =
-      subject.length > TITLE_MAX ? `${subject.slice(0, TITLE_MAX - 1).trimEnd()}…` : subject;
     return {
-      title,
+      title: truncateTitle(input.subject),
       description: input.snippet.trim() || undefined,
       priority: 'medium',
     };

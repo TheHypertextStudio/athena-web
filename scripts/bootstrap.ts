@@ -16,6 +16,7 @@
 
 import { execSync } from 'node:child_process';
 import { existsSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import process from 'node:process';
@@ -35,7 +36,7 @@ import {
   unwrap,
   upsertEnvVars,
 } from './integrations-setup';
-import { cloudflaredConfigYaml, cloudflaredSetupSteps, tunnelRegistrationUrls } from './tunnel';
+import { cloudflaredConfigYaml, launchAgentPlist, tunnelRegistrationUrls } from './tunnel';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const SA_NAME = 'docket-deploy';
@@ -614,17 +615,81 @@ function mergeCsvEnvVar(envPath: string, key: string, value: string): void {
   upsertEnvVars(envPath, { [key]: [...parts, value].join(',') });
 }
 
+/** Resolve a cloudflared tunnel's id by name, creating it if absent. Returns '' on failure. */
+function ensureTunnel(name: string): string {
+  const findId = (): string => {
+    try {
+      const list = JSON.parse(tryRun('cloudflared tunnel list --output json')) as {
+        id: string;
+        name: string;
+      }[];
+      return list.find((t) => t.name === name)?.id ?? '';
+    } catch {
+      return '';
+    }
+  };
+  const existing = findId();
+  if (existing) {
+    ok(`Reusing tunnel ${name} (${existing}).`);
+    return existing;
+  }
+  try {
+    exec(`cloudflared tunnel create ${name}`);
+  } catch {
+    return '';
+  }
+  return findId();
+}
+
+/** Write + (re)load the user LaunchAgent so the tunnel runs at login (persistent, no sudo). */
+function installTunnelAgent(cfBin: string, configPath: string, tunnel: string): void {
+  if (process.platform !== 'darwin') {
+    note(
+      `Run the tunnel persistently for your OS, e.g.:  ${cfBin} tunnel --config ${configPath} run ${tunnel}`,
+      'tunnel persistence',
+    );
+    return;
+  }
+  const label = 'studio.hypertext.docket-tunnel';
+  const plistPath = resolve(homedir(), 'Library/LaunchAgents', `${label}.plist`);
+  const logPath = resolve(homedir(), '.cloudflared', 'docket-tunnel.log');
+  writeFileSync(
+    plistPath,
+    launchAgentPlist({ label, cloudflaredBin: cfBin, configPath, tunnel, logPath }),
+  );
+  tryRun(`launchctl unload ${plistPath}`);
+  tryRun(`launchctl load -w ${plistPath}`);
+  ok(`Tunnel runs persistently via LaunchAgent (${plistPath}).`);
+}
+
+/** Ensure `BETTER_AUTH_ALLOWED_HOSTS` carries the local hosts + the tunnel host (idempotent). */
+function ensureAllowlistHosts(envPath: string, hostname: string): void {
+  const current = parseEnvFile(envPath)['BETTER_AUTH_ALLOWED_HOSTS'] ?? '';
+  const base =
+    current.trim().length > 0
+      ? current
+      : 'docket.localhost,admin.docket.localhost,marketing.docket.localhost,api.docket.localhost';
+  const parts = base
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (!parts.includes(hostname)) parts.push(hostname);
+  upsertEnvVars(envPath, { BETTER_AUTH_ALLOWED_HOSTS: parts.join(',') });
+}
+
 /**
- * Set up local OAuth + persistent tunnels (Phase 1, opt-in).
+ * Set up local OAuth + a persistent tunnel (Phase 1, opt-in) — all automated.
  *
  * @remarks
- * Two independent opt-ins, both folded into bootstrap (no separate command):
+ * Two independent opt-ins, folded into bootstrap (no separate command):
  *  - **Shared OAuth proxy** — point this machine at the team's always-on anchor host so real
  *    Google/GitHub sign-in works locally with NO per-dev Google registration (Better Auth's
  *    `oAuthProxy` relays through the one registered callback). Just two env vars; no tunnel.
- *  - **Personal cloudflared tunnel** — expose THIS stack at a public hostname for inbound webhooks
- *    or demos (and the same flow stands up the shared anchor). Prints the one-time cloudflared
- *    commands + config (login/create are interactive) and allowlists the host.
+ *  - **Personal cloudflared tunnel** — give this stack a public, Google-acceptable URL. This step
+ *    actually DOES the work: ensures cloudflared, logs in, creates/reuses the named tunnel, routes
+ *    DNS, writes the config, runs it persistently via a user LaunchAgent, and allowlists the host
+ *    in `.env.local`. The only things left to the operator are the Google Console redirect-URI
+ *    paste (their project) and a `pnpm dev` restart (to load the env).
  */
 async function setupDevTunnel(): Promise<void> {
   const envPath = resolve(ROOT, '.env.local');
@@ -640,7 +705,7 @@ async function setupDevTunnel(): Promise<void> {
     const anchor = await prompt(
       'Shared anchor URL (the team host registered with Google)',
       '',
-      'https://dev.usedocket.app',
+      'https://docket-dev.hypertext.studio',
     );
     const secret = unwrap(
       await password({
@@ -658,44 +723,79 @@ async function setupDevTunnel(): Promise<void> {
   const wantTunnel = unwrap(
     await confirm({
       message:
-        'Set up a persistent cloudflared tunnel to expose this stack (webhooks/demos, or to stand up the shared anchor)?',
+        'Set up a persistent cloudflared tunnel for this machine (real OAuth + inbound webhooks)?',
       initialValue: false,
     }),
   );
   if (!wantTunnel) return;
 
-  // Check + resolve the prerequisite — never assume cloudflared is installed.
+  // 1. Prerequisite — check + install cloudflared (never assume it's present).
   if (!(await ensureCloudflared())) return;
+  const cfBin = firstLine('command -v cloudflared') || 'cloudflared';
+  const cfDir = resolve(homedir(), '.cloudflared');
 
-  const tunnel = await prompt('cloudflared tunnel name', 'docket-dev', 'docket-dev');
-  const hostname = await prompt('Public hostname on your Cloudflare zone', '', 'dev.usedocket.app');
+  // 2. Cloudflare auth — interactive browser login only if there's no cert yet.
+  if (!existsSync(resolve(cfDir, 'cert.pem'))) {
+    note(
+      'Authorizing cloudflared with your Cloudflare account — a browser will open.',
+      'cloudflared login',
+    );
+    try {
+      exec('cloudflared tunnel login');
+    } catch {
+      warn('Login did not complete — run `cloudflared tunnel login`, then re-run bootstrap.');
+      return;
+    }
+  }
+
+  // 3. Name + hostname.
+  const tunnel = await prompt('Tunnel name', 'docket-dev', 'docket-dev');
+  const hostname = await prompt(
+    'Public hostname (a subdomain on YOUR Cloudflare zone)',
+    '',
+    'docket-dev.hypertext.studio',
+  );
   if (!hostname) {
     warn('Skipped tunnel setup (a public hostname is required).');
     return;
   }
 
+  // 4. Create/reuse the tunnel, route DNS, write the config.
+  const id = ensureTunnel(tunnel);
+  if (!id) {
+    warn('Could not create/find the tunnel — check `cloudflared tunnel list` and re-run.');
+    return;
+  }
+  tryRun(`cloudflared tunnel route dns ${tunnel} ${hostname}`);
+  const configPath = resolve(cfDir, 'config.yml');
+  writeFileSync(
+    configPath,
+    cloudflaredConfigYaml({ tunnel, hostname, credentialsFile: resolve(cfDir, `${id}.json`) }),
+  );
+  ok(`Wrote ${configPath} and routed ${hostname}.`);
+
+  // 5. Persistence (user LaunchAgent, no sudo) + env allowlist.
+  installTunnelAgent(cfBin, configPath, tunnel);
+  ensureAllowlistHosts(envPath, hostname);
+  mergeCsvEnvVar(envPath, 'BETTER_AUTH_TRUSTED_ORIGINS', `https://${hostname}`);
+  ok(`Allowlisted ${hostname} in .env.local.`);
+
+  // 6. The two irreducible operator steps.
   const urls = tunnelRegistrationUrls(hostname);
   note(
     [
-      'Run these once (login + create open a browser for your Cloudflare zone):',
+      'Tunnel is live + persistent. Two things only you can do:',
       '',
-      ...cloudflaredSetupSteps({ tunnel, hostname }).map((s) => `  ${s}`),
+      '1. In your Google OAuth client, add:',
+      `   • Authorized redirect URI : ${urls.googleRedirectUri}`,
+      `   • Authorized JS origin     : ${urls.googleOrigin}`,
+      '2. Restart `pnpm dev` (loads BETTER_AUTH_ALLOWED_HOSTS), then sign in at:',
+      `   ${urls.googleOrigin}`,
       '',
-      '~/.cloudflared/config.yml:',
-      '',
-      cloudflaredConfigYaml({ tunnel, hostname }),
-      'If this host is the SHARED OAuth anchor, register once with the provider:',
-      `  • Google redirect URI : ${urls.googleRedirectUri}`,
-      `  • Google JS origin     : ${urls.googleOrigin}`,
-      `  • GitHub App webhook   : ${urls.githubWebhook}`,
+      `GitHub firehose (optional): point a GitHub App webhook at ${urls.githubWebhook}`,
     ].join('\n'),
-    'cloudflared tunnel',
+    'cloudflared tunnel — set up',
   );
-
-  // Allowlist the host so the local apps answer on it (dynamic base URL + Next dev origins).
-  mergeCsvEnvVar(envPath, 'BETTER_AUTH_ALLOWED_HOSTS', hostname);
-  mergeCsvEnvVar(envPath, 'BETTER_AUTH_TRUSTED_ORIGINS', `https://${hostname}`);
-  ok(`Allowlisted ${hostname} (BETTER_AUTH_ALLOWED_HOSTS + TRUSTED_ORIGINS).`);
 }
 
 // ── main ──────────────────────────────────────────────────────────────────────

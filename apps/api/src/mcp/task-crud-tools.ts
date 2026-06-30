@@ -28,6 +28,10 @@ export function registerTaskCrudTools(server: McpRegistrar, ctx: McpContext): vo
         projectId: z.string().optional(),
         dueDate: z.iso.date().optional(),
       },
+      outputSchema: {
+        id: z.string(),
+        state: z.string(),
+      },
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,

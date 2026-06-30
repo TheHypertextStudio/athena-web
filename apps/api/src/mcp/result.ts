@@ -24,7 +24,12 @@ import { type McpScope, requireScope } from './scope';
  * @returns the MCP {@link CallToolResult} with a single text block.
  */
 export function jsonResult(data: unknown): CallToolResult {
-  return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+  return {
+    content: [{ type: 'text', text: JSON.stringify(data, null, 2) }],
+    ...(data !== null && typeof data === 'object' && !Array.isArray(data)
+      ? { structuredContent: data as Record<string, unknown> }
+      : {}),
+  };
 }
 
 /**

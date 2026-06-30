@@ -4,24 +4,56 @@ import { z } from 'zod';
 
 import { NotFoundError } from '../error';
 import type { McpContext } from './auth';
-import type { McpRegistrar } from './catalog';
+import { registerOptionalTaskTool, type McpRegistrar } from './catalog';
 import { authorize, jsonResult, runTool, scopedActor } from './result';
+import { createTaskToolHandler } from './task-tools';
 import { runEntityQuery, searchEntities } from './tools-shared';
+
+const runViewInputSchema = {
+  orgId: z.string().min(1),
+  entity: z.enum(['task', 'project', 'program', 'initiative']),
+  limit: z.number().int().min(1).max(200).default(50),
+  cursor: z.string().optional(),
+};
+
+const runViewOutputSchema = {
+  entity: z.enum(['task', 'project', 'program', 'initiative']),
+  items: z.array(z.looseObject({ id: z.string() })),
+  nextCursor: z.string().optional(),
+};
 
 /** Register run_view, search, and add_to_daily_plan on `server`. */
 export function registerViewPlanTools(server: McpRegistrar, ctx: McpContext): void {
-  server.registerTool(
+  const runView = (input: z.infer<z.ZodObject<typeof runViewInputSchema>>) =>
+    runTool(async () => {
+      // A read still requires `view` on the org root; a caller who can't see the org
+      // gets the existence-hiding not-found (-32002 surfaced as isError text), never a
+      // forbidden — mcp-surface.md §3.1.
+      const actorCtx = await scopedActor(ctx, input.orgId, 'work:read');
+      await authorize(actorCtx, 'view', {
+        kind: 'organization',
+        id: input.orgId,
+        orgId: input.orgId,
+      });
+
+      const { items, nextCursor } = await runEntityQuery(
+        input.orgId,
+        input.entity,
+        input.limit,
+        input.cursor,
+      );
+      return jsonResult({ entity: input.entity, items, nextCursor });
+    });
+
+  registerOptionalTaskTool(
+    server,
     'run_view',
     {
       title: 'Run view',
       description:
         'Run an ad-hoc, permission-filtered query over tasks/projects/programs/initiatives.',
-      inputSchema: {
-        orgId: z.string().min(1),
-        entity: z.enum(['task', 'project', 'program', 'initiative']),
-        limit: z.number().int().min(1).max(200).default(50),
-        cursor: z.string().optional(),
-      },
+      inputSchema: runViewInputSchema,
+      outputSchema: runViewOutputSchema,
       annotations: {
         title: 'Run view',
         readOnlyHint: true,
@@ -29,27 +61,10 @@ export function registerViewPlanTools(server: McpRegistrar, ctx: McpContext): vo
         idempotentHint: true,
         openWorldHint: false,
       },
+      execution: { taskSupport: 'optional' },
     },
-    (input) =>
-      runTool(async () => {
-        // A read still requires `view` on the org root; a caller who can't see the org
-        // gets the existence-hiding not-found (-32002 surfaced as isError text), never a
-        // forbidden — mcp-surface.md §3.1.
-        const actorCtx = await scopedActor(ctx, input.orgId, 'work:read');
-        await authorize(actorCtx, 'view', {
-          kind: 'organization',
-          id: input.orgId,
-          orgId: input.orgId,
-        });
-
-        const { items, nextCursor } = await runEntityQuery(
-          input.orgId,
-          input.entity,
-          input.limit,
-          input.cursor,
-        );
-        return jsonResult({ entity: input.entity, items, nextCursor });
-      }),
+    createTaskToolHandler<typeof runViewInputSchema>(runView),
+    runView,
   );
 
   server.registerTool(

@@ -1,11 +1,29 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-06-29
+> **Last Updated**: 2026-06-30
 
 ---
 
 ## Completed Tasks
+
+### [MCP-TASK-008] MCP tool metadata, structured results, and task execution
+
+- **Completed**: 2026-06-30
+- **Summary**: Finished the MCP tool surface upgrades for task-aware clients without adding
+  Docket-specific confirmation metadata. Tool list entries now advertise explicit execution
+  metadata, selected tools declare output schemas, JSON results include `structuredContent`
+  plus compatibility text, and `run_view` / `trigger_agent` can run through MCP Tasks when
+  `MCP_TASKS_ENABLED=true`.
+- **Files Changed**: `apps/api/src/mcp/{catalog,list-metadata,result,server,session-tools,task-crud-tools,task-store,task-tools,view-plan-tools}.ts`,
+  `apps/api/tests/mcp/mcp-surface.test.ts`.
+- **Learnings**: The MCP SDK already ships experimental task primitives (`TaskStore`,
+  `registerToolTask`, `tasks/get|result|list|cancel`), so Docket should lean on those instead
+  of owning a parallel task protocol. Because the `/mcp` transport is stateless, task storage
+  must be shared across requests but wrapped per caller so task IDs cannot cross auth contexts.
+- **Gate**: `pnpm --filter @docket/api lint`, `pnpm --filter @docket/api typecheck`,
+  `pnpm --filter @docket/api exec vitest run tests/mcp`, and `pnpm --filter @docket/api test`
+  all pass in the isolated worktree.
 
 ### [MCP-PAGE-007] MCP pagination protocol support
 
@@ -975,6 +993,7 @@ Replaced the buried Inbox "Activity" tab with a **first-class, filterable, sourc
 **Tests added:** `stream.test.ts` (types), `observation-emit.test.ts`, `stream-read.test.ts`, `event-bus.test.ts`, `proactive-sweep.test.ts`, `ingest-slack.test.ts`, `observer-slack.test.ts`, and web `stream/{stream-query,stream-grouping,stream-meta,stream-event-row}` suites.
 
 **NOT YET DONE (blocked / deferred, not abandoned):**
+
 - **Commit** — the working tree is mixed with a concurrent session's unrelated work (account lifecycle/export, recovery/security/danger-zone, `apps/admin`, agenda, dev-scheduler); needs a scoped, path-selective commit, not `git add -A`.
 - **Migration `0011` not applied to the dev DB** + observations not seeded → live `/design-review` of both surfaces is pending a single-owner dev bounce (PGlite is single-process; never a second writer while dev runs).
 - `programs.ts` emission; D2 multi-cadence summaries + suggestion card; the Slack provider group + `SLACK_SIGNING_SECRET` entry in `scripts/integrations-setup.ts` (concurrent session's hot file).

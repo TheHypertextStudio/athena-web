@@ -16,8 +16,15 @@ interface CursorCodecOptions<Payload> {
   readonly secretMissingError: () => Error;
 }
 
+/**
+ * Encodes and decodes signed, opaque pagination cursors.
+ *
+ * @typeParam Payload - The shape of the data carried inside the cursor.
+ */
 export interface CursorCodec<Payload> {
+  /** Serialize and sign a payload into an opaque base64url cursor string. */
   encode(payload: Payload): string;
+  /** Verify and decode an opaque cursor string back into its payload. */
   decode(cursor: string): Payload;
 }
 
@@ -27,6 +34,15 @@ function signingSecret(error: Error): string {
   return secret;
 }
 
+/**
+ * Build a {@link CursorCodec} that HMAC-signs payloads with the app secret.
+ *
+ * @typeParam Payload - The shape of the data carried inside the cursor.
+ * @param options - Payload schema plus factories for invalid-cursor and
+ *   missing-secret errors.
+ * @returns A codec whose cursors are tamper-evident via constant-time
+ *   signature comparison.
+ */
 export function createCursorCodec<Payload>({
   payloadSchema,
   invalidCursorError,

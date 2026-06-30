@@ -287,6 +287,17 @@ interface SearchResult {
   readonly title: string;
 }
 
+/**
+ * Search an org's tasks, projects, and programs by title and return a page of
+ * matches sorted by stable key.
+ *
+ * @param orgId - The organization to scope the search to.
+ * @param query - The substring to match against entity titles/names.
+ * @param limit - The maximum number of results to return.
+ * @param cursor - An opaque cursor from a prior page, or undefined for the first.
+ * @returns The matching results and an optional `nextCursor` when more remain.
+ * @throws {McpError} When the cursor is invalid or no longer resolves to a result.
+ */
 export async function searchEntities(
   orgId: string,
   query: string,

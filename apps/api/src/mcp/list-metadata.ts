@@ -5,9 +5,17 @@ import type { ResourceMetadata } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { Icon, ToolAnnotations, ToolExecution } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 
+/** Accepted forms for a tool's input schema: a raw shape, a Zod type, or none. */
 export type ToolInputSchema = z.ZodRawShape | z.ZodType | undefined;
+/** Accepted forms for a tool's output schema: a raw shape or a Zod type. */
 export type ToolOutputSchema = z.ZodRawShape | z.ZodType;
 
+/**
+ * Declarative configuration for registering an MCP tool.
+ *
+ * @typeParam InputArgs - The tool's input schema type.
+ * @typeParam OutputArgs - The tool's output schema type.
+ */
 export interface ToolConfig<
   InputArgs extends ToolInputSchema,
   OutputArgs extends ToolOutputSchema,
@@ -22,12 +30,18 @@ export interface ToolConfig<
   readonly _meta?: Record<string, unknown>;
 }
 
+/**
+ * Declarative configuration for registering an MCP prompt.
+ *
+ * @typeParam Args - The prompt's argument schema shape.
+ */
 export interface PromptConfig<Args extends z.ZodRawShape> {
   readonly title?: string;
   readonly description?: string;
   readonly argsSchema?: Args;
 }
 
+/** A single tool entry as serialized in an MCP `tools/list` response. */
 export interface ToolListValue {
   readonly name: string;
   readonly title?: string;
@@ -40,11 +54,13 @@ export interface ToolListValue {
   readonly _meta?: Record<string, unknown>;
 }
 
+/** A single resource entry as serialized in an MCP `resources/list` response. */
 export interface ResourceListValue extends ResourceMetadata {
   readonly uri: string;
   readonly name: string;
 }
 
+/** A resource-template entry as serialized in an MCP `resources/templates/list` response. */
 export interface ResourceTemplateListValue extends ResourceMetadata {
   readonly uriTemplate: string;
   readonly name: string;
@@ -56,6 +72,7 @@ interface PromptArgument {
   readonly required: boolean;
 }
 
+/** A single prompt entry as serialized in an MCP `prompts/list` response. */
 export interface PromptListValue {
   readonly name: string;
   readonly title?: string;
@@ -98,6 +115,16 @@ function promptArguments(schema: z.ZodRawShape | undefined): readonly PromptArgu
   }));
 }
 
+/**
+ * Build a {@link ToolListValue} from a tool's name and config, converting Zod
+ * schemas to JSON Schema for the wire format.
+ *
+ * @typeParam InputArgs - The tool's input schema type.
+ * @typeParam OutputArgs - The tool's output schema type.
+ * @param name - The tool's unique name.
+ * @param config - The tool's declarative configuration.
+ * @returns The serializable list entry for the tool.
+ */
 export function toolListValue<
   InputArgs extends ToolInputSchema,
   OutputArgs extends ToolOutputSchema,
@@ -115,6 +142,15 @@ export function toolListValue<
   };
 }
 
+/**
+ * Build a {@link PromptListValue} from a prompt's name and config, deriving its
+ * argument descriptors from the args schema.
+ *
+ * @typeParam Args - The prompt's argument schema shape.
+ * @param name - The prompt's unique name.
+ * @param config - The prompt's declarative configuration.
+ * @returns The serializable list entry for the prompt.
+ */
 export function promptListValue<Args extends z.ZodRawShape>(
   name: string,
   config: PromptConfig<Args>,

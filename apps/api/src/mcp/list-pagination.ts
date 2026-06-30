@@ -11,10 +11,18 @@ import { createCursorCodec } from './cursors';
 
 const CURSOR_VERSION = 1;
 
+/** The MCP catalog surface a cursor and page belong to. */
 export type ListSurface = 'tools' | 'resources' | 'resourceTemplates' | 'prompts';
 
+/**
+ * A keyed catalog item to paginate over.
+ *
+ * @typeParam Value - The item value emitted in a page.
+ */
 export interface CatalogEntry<Value> {
+  /** Stable sort/pagination key uniquely identifying the entry. */
   readonly key: string;
+  /** The value returned to clients for this entry. */
   readonly value: Value;
 }
 
@@ -64,6 +72,18 @@ function decodeCursor(
   return payload.key;
 }
 
+/**
+ * Return a single page of catalog values plus a signed cursor for the next page.
+ *
+ * @typeParam Value - The item value emitted in a page.
+ * @param entries - The full, ordered set of catalog entries.
+ * @param cursor - The opaque cursor from a prior page, or undefined for the first.
+ * @param surface - The catalog surface being paginated; bound into the cursor.
+ * @param ctx - The MCP request context used to scope the cursor to the caller.
+ * @param pageSize - The maximum number of items to return.
+ * @returns The page's items and an optional `nextCursor` when more remain.
+ * @throws {McpError} When the cursor is invalid or no longer resolves to an entry.
+ */
 export function pageValues<Value>(
   entries: readonly CatalogEntry<Value>[],
   cursor: string | undefined,

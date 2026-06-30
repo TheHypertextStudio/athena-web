@@ -22,6 +22,7 @@ export * from './label';
 export * from './comment';
 export * from './attachment';
 export * from './automation';
+export * from './email-suggestion';
 export * from './update';
 export * from './saved-view';
 export * from './member';

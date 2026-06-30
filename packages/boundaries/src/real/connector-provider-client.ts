@@ -1,8 +1,11 @@
 import type {
   ExternalWriteResult,
+  FetchThreadInput,
   ImportWorkInput,
   ImportedItem,
   LinkResourceInput,
+  MailActionInput,
+  MailThread,
   MirrorResult,
   MirrorStatusInput,
   ResourceRef,
@@ -80,4 +83,37 @@ export function isWritableProviderClient(
   client: ConnectorProviderClient,
 ): client is WritableConnectorProviderClient {
   return typeof (client as Partial<WritableConnectorProviderClient>).pushTask === 'function';
+}
+
+/**
+ * The mail-capable provider client (today only {@link GoogleProviderClient} for Gmail).
+ *
+ * @remarks
+ * Extends the read-only client with mailbox mutation + on-demand thread fetch. Kept as a
+ * separate interface so non-mail providers implement nothing extra; `RealConnector` narrows
+ * to it for `gmail` via {@link isMailActionsProviderClient} and exposes it through
+ * {@link import('../ports/connector').Connector.asMailActor}.
+ */
+export interface MailActionsProviderClient extends ConnectorProviderClient {
+  /**
+   * Apply one mailbox action to a thread.
+   *
+   * @param input - The connection, provider, thread, and action.
+   * @throws {ConnectorError} On auth, throttle, or provider failure.
+   */
+  applyMailAction(input: MailActionInput): Promise<void>;
+  /**
+   * Fetch a thread for on-demand rendering (the body is never persisted).
+   *
+   * @param input - The connection and thread id.
+   * @returns the render-ready thread.
+   */
+  fetchThread(input: FetchThreadInput): Promise<MailThread>;
+}
+
+/** Narrow a {@link ConnectorProviderClient} to a {@link MailActionsProviderClient}. */
+export function isMailActionsProviderClient(
+  client: ConnectorProviderClient,
+): client is MailActionsProviderClient {
+  return typeof (client as Partial<MailActionsProviderClient>).applyMailAction === 'function';
 }

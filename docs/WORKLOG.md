@@ -7,6 +7,22 @@
 
 ## Completed Tasks
 
+### [VCS-001] Turnkey linear-history enforcement
+
+- **Completed**: 2026-06-30
+- **Summary**: Made the no-merge-commits policy turnkey instead of relying on manual setup.
+  `pnpm install` now runs a native Git guardrail installer through `prepare`, removes the Husky
+  dependency, preserves lint-staged and commit-message hooks, and rejects merge commits before they
+  can land locally.
+- **Files Changed**: `scripts/install-git-guardrails.sh`, `.husky/commit-msg`, `.husky/pre-commit`,
+  `package.json`, `pnpm-lock.yaml`, `AGENTS.md`, `docs/contributing/workflow.md`.
+- **Learnings**: Documentation alone is not enforcement. The repo needs both server-side GitHub
+  linear-history protection and checkout-local native hook automation so fresh clones inherit the
+  same behavior without Husky.
+- **Gate**: `sh scripts/install-git-guardrails.sh` installs the expected local Git config and native
+  hooks; generated `pre-merge-commit` exits non-zero; `git rev-list --merges --count origin/main..HEAD`
+  remains `0`.
+
 ### [MCP-TASK-008] MCP tool metadata, structured results, and task execution
 
 - **Completed**: 2026-06-30

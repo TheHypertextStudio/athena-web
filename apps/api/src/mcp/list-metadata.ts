@@ -2,7 +2,7 @@
  * `@docket/api` -- MCP catalog metadata builders.
  */
 import type { ResourceMetadata } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type { ToolAnnotations, ToolExecution } from '@modelcontextprotocol/sdk/types.js';
+import type { Icon, ToolAnnotations, ToolExecution } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 
 export type ToolInputSchema = z.ZodRawShape | z.ZodType | undefined;
@@ -17,6 +17,7 @@ export interface ToolConfig<
   readonly inputSchema?: InputArgs;
   readonly outputSchema?: OutputArgs;
   readonly annotations?: ToolAnnotations;
+  readonly icons?: readonly Icon[];
   readonly execution?: ToolExecution;
   readonly _meta?: Record<string, unknown>;
 }
@@ -34,6 +35,7 @@ export interface ToolListValue {
   readonly inputSchema: Record<string, unknown>;
   readonly outputSchema?: Record<string, unknown>;
   readonly annotations?: ToolAnnotations;
+  readonly icons?: readonly Icon[];
   readonly execution?: ToolExecution;
   readonly _meta?: Record<string, unknown>;
 }
@@ -107,7 +109,8 @@ export function toolListValue<
     inputSchema: schemaToJson(config.inputSchema),
     outputSchema: outputSchemaToJson(config.outputSchema),
     annotations: config.annotations,
-    execution: config.execution,
+    icons: config.icons,
+    execution: config.execution ?? { taskSupport: 'forbidden' },
     _meta: config._meta,
   };
 }

@@ -23,7 +23,7 @@ describe('collectAccountExport', () => {
     await db.insert(schema.notification).values({ userId, type: 'mention', body: {} as never });
 
     const { document, user: userRow } = await collectAccountExport(db, userId);
-    const doc = document as {
+    const doc = document as unknown as {
       identity: { user: { id: string } | null };
       personal: { notifications: unknown[] };
     };

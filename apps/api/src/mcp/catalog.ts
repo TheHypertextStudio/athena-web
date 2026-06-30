@@ -14,6 +14,10 @@ import type {
   ResourceTemplate,
   ToolCallback,
 } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type {
+  TaskToolExecution,
+  ToolTaskHandler,
+} from '@modelcontextprotocol/sdk/experimental/tasks';
 import type { LoggingMessageNotification } from '@modelcontextprotocol/sdk/types.js';
 import {
   ListPromptsRequestSchema,
@@ -47,7 +51,15 @@ type ListToolsRequest = z.infer<typeof ListToolsRequestSchema>;
 
 interface CatalogOptions {
   readonly pageSize?: number;
+  readonly tasksEnabled?: boolean;
 }
+
+type TaskToolConfig<InputArgs extends ToolInputSchema, OutputArgs extends ToolOutputSchema> = Omit<
+  ToolConfig<InputArgs, OutputArgs>,
+  'execution'
+> & {
+  readonly execution: TaskToolExecution<'optional' | 'required'>;
+};
 
 type StaticResourceArgs = [
   name: string,
@@ -99,6 +111,7 @@ export interface McpRegistrar {
 
 /** Catalog wrapper for an SDK MCP server. */
 export class McpCatalog implements McpRegistrar {
+  readonly tasksEnabled: boolean;
   private readonly pageSize: number;
   private readonly protocol: McpServer['server'];
   private readonly tools: CatalogEntry<ToolListValue>[] = [];
@@ -111,6 +124,7 @@ export class McpCatalog implements McpRegistrar {
     options: CatalogOptions = {},
   ) {
     this.pageSize = options.pageSize ?? DEFAULT_PAGE_SIZE;
+    this.tasksEnabled = options.tasksEnabled ?? false;
     this.protocol = mcp.server;
   }
 
@@ -121,6 +135,32 @@ export class McpCatalog implements McpRegistrar {
   ): RegisteredTool {
     this.tools.push({ key: name, value: toolListValue(name, config) });
     return this.mcp.registerTool(name, config, cb);
+  }
+
+  registerTaskTool<
+    OutputArgs extends ToolOutputSchema,
+    InputArgs extends ToolInputSchema = undefined,
+  >(
+    name: string,
+    config: TaskToolConfig<InputArgs, OutputArgs>,
+    handler: ToolTaskHandler<InputArgs>,
+    fallback: ToolCallback<InputArgs>,
+  ): RegisteredTool {
+    if (!this.tasksEnabled) {
+      const syncConfig: ToolConfig<InputArgs, OutputArgs> = {
+        ...config,
+        execution: { taskSupport: 'forbidden' },
+      };
+      this.tools.push({ key: name, value: toolListValue(name, syncConfig) });
+      return this.mcp.registerTool(name, syncConfig, fallback);
+    }
+
+    this.tools.push({ key: name, value: toolListValue(name, config) });
+    return this.mcp.experimental.tasks.registerToolTask(
+      name,
+      config as Parameters<typeof this.mcp.experimental.tasks.registerToolTask>[1],
+      handler as Parameters<typeof this.mcp.experimental.tasks.registerToolTask>[2],
+    );
   }
 
   registerResource(
@@ -212,4 +252,26 @@ export class McpCatalog implements McpRegistrar {
 /** Create an MCP catalog wrapper around an SDK server. */
 export function createMcpCatalog(server: McpServer, options?: CatalogOptions): McpCatalog {
   return new McpCatalog(server, options);
+}
+
+/** Register a task-capable tool when the registrar supports tasks, else a synchronous fallback. */
+export function registerOptionalTaskTool<
+  OutputArgs extends ToolOutputSchema,
+  InputArgs extends ToolInputSchema = undefined,
+>(
+  server: McpRegistrar,
+  name: string,
+  config: TaskToolConfig<InputArgs, OutputArgs>,
+  handler: ToolTaskHandler<InputArgs>,
+  fallback: ToolCallback<InputArgs>,
+): RegisteredTool {
+  if (server instanceof McpCatalog && server.tasksEnabled) {
+    return server.registerTaskTool(name, config, handler, fallback);
+  }
+
+  return server.registerTool(
+    name,
+    { ...config, execution: { taskSupport: 'forbidden' } },
+    fallback,
+  );
 }

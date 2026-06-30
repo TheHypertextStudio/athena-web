@@ -25,6 +25,7 @@ import { createMcpCatalog } from './catalog';
 import { registerPrompts } from './prompts';
 import { registerResources } from './resources';
 import { challenge401, challenge403, MCP_SCOPES, TOOL_SCOPE } from './scope';
+import { taskStoreForContext } from './task-store';
 import { registerTools } from './tools';
 
 /** The advertised MCP server identity (name + version). */
@@ -42,6 +43,7 @@ const SERVER_INFO = { name: 'docket', version: '1.0.0' } as const;
  * @returns the configured {@link McpServer} with tools + resources registered.
  */
 function buildServer(ctx: McpContext): McpServer {
+  const tasksEnabled = env.MCP_TASKS_ENABLED;
   // Advertise the tool/resource/prompt/completion/logging capabilities Docket implements
   // (mcp-surface.md section 5). `resources.subscribe`/`listChanged` and `tools.listChanged`
   // are declared so a future event-bus fan-out can flip without re-negotiation; the
@@ -54,9 +56,13 @@ function buildServer(ctx: McpContext): McpServer {
       prompts: { listChanged: true },
       completions: {},
       logging: {},
+      ...(tasksEnabled
+        ? { tasks: { list: {}, cancel: {}, requests: { tools: { call: {} } } } }
+        : {}),
     },
+    ...(tasksEnabled ? { taskStore: taskStoreForContext(ctx) } : {}),
   });
-  const catalog = createMcpCatalog(server);
+  const catalog = createMcpCatalog(server, { tasksEnabled });
   registerTools(catalog, ctx);
   registerResources(catalog, ctx);
   registerPrompts(catalog, ctx);
@@ -165,7 +171,19 @@ export function protectedResourceMetadata(c: Context): Response {
 export function authorizationServerMetadata(c: Context): Response {
   const resource = canonicalResourceUrl(c);
   const issuer = env.MCP_ISSUER_URL?.replace(/\/$/, '') ?? new URL(resource).origin;
-  return c.redirect(`${issuer}/.well-known/openid-configuration`, 307);
+  if (typeof c.redirect === 'function') {
+    return c.redirect(`${issuer}/.well-known/openid-configuration`, 307);
+  }
+  return c.json({
+    issuer,
+    authorization_endpoint: `${issuer}/api/auth/mcp/authorize`,
+    token_endpoint: `${issuer}/api/auth/mcp/token`,
+    registration_endpoint: `${issuer}/api/auth/mcp/register`,
+    code_challenge_methods_supported: ['S256'],
+    scopes_supported: [...MCP_SCOPES],
+    token_endpoint_auth_methods_supported: ['none'],
+    client_id_metadata_document_supported: true,
+  });
 }
 
 /** A `tools/call` JSON-RPC request body (the only shape the scope preflight inspects). */
@@ -261,7 +279,8 @@ function cancellationNotifications(body: unknown): readonly CancellationNotifica
           ? (message.params as { readonly requestId?: unknown; readonly reason?: unknown })
           : null;
       if (!params || !isRequestId(params.requestId)) return null;
-      if (typeof params.reason === 'string') return { requestId: params.requestId, reason: params.reason };
+      if (typeof params.reason === 'string')
+        return { requestId: params.requestId, reason: params.reason };
       return { requestId: params.requestId };
     })
     .filter((message): message is CancellationNotification => Boolean(message));

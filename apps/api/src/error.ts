@@ -131,13 +131,12 @@ export class BillingFrozenError extends ApiError {
  */
 export class ValidationError extends ApiError {
   constructor(error: ZodError | readonly StandardSchemaV1.Issue[]) {
-    const issues: readonly StandardSchemaV1.Issue[] = error instanceof ZodError ? error.issues : error;
+    const issues: readonly StandardSchemaV1.Issue[] =
+      error instanceof ZodError ? error.issues : error;
     const fieldErrors: Record<string, string[]> = {};
     for (const issue of issues) {
       const key =
-        (issue.path ?? [])
-          .map((seg) => (typeof seg === 'object' && seg !== null ? seg.key : seg))
-          .join('.') || '_';
+        (issue.path ?? []).map((seg) => (typeof seg === 'object' ? seg.key : seg)).join('.') || '_';
       (fieldErrors[key] ??= []).push(issue.message);
     }
     super(422, 'validation_error', 'Validation failed', fieldErrors);

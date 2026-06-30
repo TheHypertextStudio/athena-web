@@ -1,9 +1,10 @@
 import { resolve } from 'node:path';
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTaskStore } from '@modelcontextprotocol/sdk/experimental/tasks';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { CallToolResultSchema, type CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -16,7 +17,7 @@ import type * as DbModule from '@docket/db';
 import type { Capability } from '@docket/types';
 
 import type { McpContext } from '../../src/mcp/auth';
-import { createMcpCatalog } from '../../src/mcp/catalog';
+import { createMcpCatalog, registerOptionalTaskTool } from '../../src/mcp/catalog';
 import type { registerTools as RegisterTools } from '../../src/mcp/tools';
 import type { registerResources as RegisterResources } from '../../src/mcp/resources';
 import type { registerPrompts as RegisterPrompts } from '../../src/mcp/prompts';
@@ -244,6 +245,38 @@ async function connect(ctx: McpContext): Promise<Client> {
   return client;
 }
 
+/** Connect a server that advertises task-augmented tool execution. */
+async function connectWithTasks(ctx: McpContext): Promise<Client> {
+  const server = new McpServer(
+    { name: 'test', version: '0.0.0' },
+    {
+      capabilities: {
+        tools: { listChanged: true },
+        resources: { subscribe: true, listChanged: true },
+        prompts: { listChanged: true },
+        completions: {},
+        tasks: { list: {}, cancel: {}, requests: { tools: { call: {} } } },
+      },
+      taskStore: new InMemoryTaskStore(),
+    },
+  );
+  const catalog = createMcpCatalog(server, { pageSize: 3, tasksEnabled: true });
+  registerTools(catalog, ctx);
+  registerResources(catalog, ctx);
+  registerPrompts(catalog, ctx);
+  catalog.installListHandlers(ctx);
+  const [ct, st] = InMemoryTransport.createLinkedPair();
+  const client = new Client({ name: 'c', version: '0.0.0' }, { capabilities: { tasks: {} } });
+  await Promise.all([server.connect(st), client.connect(ct)]);
+  harnesses.push({
+    close: async () => {
+      await client.close();
+      await server.close();
+    },
+  });
+  return client;
+}
+
 afterEach(async () => {
   while (harnesses.length > 0) await harnesses.pop()!.close();
 });
@@ -353,6 +386,150 @@ describe('set_task_delegate tool', () => {
     })) as CallToolResult;
     expect(res.isError).toBe(true);
     expect((res.content[0] as { text: string }).text).toContain('forbidden');
+  });
+});
+
+describe('MCP tool metadata and task execution', () => {
+  it('advertises standard metadata, output schemas, and task support without Docket confirmation meta', async () => {
+    const s = await seedOrg(['view', 'contribute', 'assign', 'manage']);
+    const client = await connectWithTasks(s.ctx);
+    const tools = [];
+    let cursor: string | undefined;
+    do {
+      const page = await client.listTools(cursor ? { cursor } : undefined);
+      tools.push(...page.tools);
+      cursor = page.nextCursor;
+    } while (cursor);
+
+    const createTask = tools.find((tool) => tool.name === 'create_task');
+    const runView = tools.find((tool) => tool.name === 'run_view');
+    const triggerAgent = tools.find((tool) => tool.name === 'trigger_agent');
+
+    expect(createTask?.outputSchema?.type).toBe('object');
+    expect(createTask?.execution?.taskSupport).toBe('forbidden');
+    expect(runView?.execution?.taskSupport).toBe('optional');
+    expect(triggerAgent?.execution?.taskSupport).toBe('optional');
+    for (const tool of tools) {
+      expect(tool._meta ?? {}).not.toHaveProperty('docket');
+    }
+  });
+
+  it('returns structured content alongside JSON text for tools with output schemas', async () => {
+    const s = await seedOrg(['contribute']);
+    const client = await connectWithTasks(s.ctx);
+    const res = (await client.callTool({
+      name: 'create_task',
+      arguments: { orgId: s.orgId, teamId: s.teamId, title: 'Structured task' },
+    })) as CallToolResult;
+
+    expect(res.structuredContent).toMatchObject({ state: 'backlog' });
+    expect(payload(res)['state']).toBe('backlog');
+  });
+
+  it('runs optional task-capable tools through MCP Tasks when requested', async () => {
+    const s = await seedOrg(['view']);
+    const client = await connectWithTasks(s.ctx);
+    const created = await client.request(
+      {
+        method: 'tools/call',
+        params: {
+          name: 'run_view',
+          arguments: { orgId: s.orgId, entity: 'task', limit: 5 },
+          task: { ttl: 60_000 },
+        },
+      },
+      z.object({
+        task: z.object({
+          taskId: z.string(),
+          status: z.string(),
+        }),
+      }),
+    );
+
+    const listed = await client.experimental.tasks.listTasks();
+    expect(listed.tasks.some((task) => task.taskId === created.task.taskId)).toBe(true);
+
+    const result = await client.experimental.tasks.getTaskResult(
+      created.task.taskId,
+      CallToolResultSchema,
+    );
+    expect(result.structuredContent).toMatchObject({ entity: 'task' });
+    expect(payload(result)['entity']).toBe('task');
+  });
+
+  it('cancels a working task through tasks/cancel', async () => {
+    const taskStore = new InMemoryTaskStore();
+    const server = new McpServer(
+      { name: 'test', version: '0.0.0' },
+      {
+        capabilities: {
+          tools: { listChanged: true },
+          resources: { subscribe: true, listChanged: true },
+          prompts: { listChanged: true },
+          completions: {},
+          tasks: { list: {}, cancel: {}, requests: { tools: { call: {} } } },
+        },
+        taskStore,
+      },
+    );
+    const catalog = createMcpCatalog(server, { tasksEnabled: true });
+    registerOptionalTaskTool(
+      catalog,
+      'hold_open',
+      {
+        title: 'Hold open',
+        inputSchema: {},
+        outputSchema: { ok: z.boolean() },
+        annotations: {
+          readOnlyHint: true,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: false,
+        },
+        execution: { taskSupport: 'optional' },
+      },
+      {
+        createTask: async (_input, extra) => ({
+          task: await extra.taskStore.createTask({ ttl: 60_000 }),
+        }),
+        getTask: (_input, extra) => extra.taskStore.getTask(extra.taskId),
+        getTaskResult: async (_input, extra) =>
+          (await extra.taskStore.getTaskResult(extra.taskId)) as CallToolResult,
+      },
+      () => ({
+        content: [{ type: 'text' as const, text: JSON.stringify({ ok: true }, null, 2) }],
+        structuredContent: { ok: true },
+      }),
+    );
+    catalog.installListHandlers({
+      userId: 'task-owner',
+      userName: 'Ada',
+      userEmail: 'ada@example.com',
+      scopes: ['work:read'],
+    });
+    const [ct, st] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: 'c', version: '0.0.0' }, { capabilities: { tasks: {} } });
+    await Promise.all([server.connect(st), client.connect(ct)]);
+    harnesses.push({
+      close: async () => {
+        await client.close();
+        await server.close();
+      },
+    });
+
+    const created = await client.request(
+      {
+        method: 'tools/call',
+        params: { name: 'hold_open', arguments: {}, task: { ttl: 60_000 } },
+      },
+      z.object({ task: z.object({ taskId: z.string(), status: z.literal('working') }) }),
+    );
+    const cancelled = await client.experimental.tasks.cancelTask(created.task.taskId);
+
+    expect(cancelled.status).toBe('cancelled');
+    await expect(
+      client.experimental.tasks.getTaskResult(created.task.taskId, CallToolResultSchema),
+    ).rejects.toThrow(/has no result|cancelled|no result/i);
   });
 });
 

@@ -13,6 +13,7 @@
  * @see `docs/engineering/specs/data-layer.md` for the full standard.
  */
 import {
+  infiniteQueryOptions,
   QueryClient,
   type QueryKey,
   queryOptions,
@@ -162,3 +163,48 @@ export function apiQueryOptions<T>(
     ...options,
   });
 }
+
+/** Tunables forwarded to an infinite read (staleness + polling for the live seam). */
+export interface ApiInfiniteOptions {
+  /** Override the {@link STALE} tier. */
+  readonly staleTime?: number;
+  /** Focus-gated poll interval (ms); set by the live variant for the stream seam. */
+  readonly refetchInterval?: number;
+}
+
+/**
+ * Build a **typed cursor-paginated query definition** — the standard way to declare an
+ * infinite read (the Stream firehose).
+ *
+ * @remarks
+ * Wraps TanStack `infiniteQueryOptions`: the fetcher takes the opaque `cursor` page-param and
+ * returns one page; `getNextPageParam` reads the page's `nextCursor` (absent → end). The same
+ * RPC error handling as {@link apiQueryOptions} is baked in via {@link unwrap}. The page param
+ * is `string | undefined` (the first page passes `undefined`).
+ *
+ * @typeParam TPage - The page response shape (e.g. `StreamPageOut`).
+ * @param key - The query key (carries the serialized filter params so each variant caches apart).
+ * @param call - Performs one page fetch for the given cursor.
+ * @param getNextPageParam - Returns the next cursor from a page, or `undefined` when exhausted.
+ * @param fallbackMessage - Surfaced when the server sends no problem detail.
+ * @param options - Optional staleness / poll interval.
+ */
+export function apiInfiniteQueryOptions<TPage>(
+  key: QueryKey,
+  call: (cursor: string | undefined) => Promise<RpcResponse<TPage>>,
+  getNextPageParam: (lastPage: TPage) => string | undefined,
+  fallbackMessage: string,
+  options?: ApiInfiniteOptions,
+) {
+  return infiniteQueryOptions({
+    queryKey: key,
+    queryFn: ({ pageParam }: { pageParam: string | undefined }) =>
+      unwrap(() => call(pageParam), fallbackMessage),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam,
+    ...options,
+  });
+}
+
+/** The typed definition returned by {@link apiInfiniteQueryOptions} for a page shape `TPage`. */
+export type ApiInfiniteDef<TPage> = ReturnType<typeof apiInfiniteQueryOptions<TPage>>;

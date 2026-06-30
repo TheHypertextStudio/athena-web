@@ -66,12 +66,7 @@ jobs:
             BETTER_AUTH_PASSKEY_RP_ID=${{ vars.PASSKEY_RP_ID }}
             BETTER_AUTH_PASSKEY_RP_NAME=Docket
             BILLING_ENABLED=false
-            MCP_ISSUER_URL=${{ vars.API_URL }}
-            MCP_RESOURCE_URL=${{ vars.API_URL }}/mcp
-            MCP_ALLOWED_ORIGINS=${{ vars.WEB_URL }}\,${{ vars.ADMIN_URL }}
-            OIDC_LOGIN_PAGE_URL=${{ vars.WEB_URL }}/sign-in
             MCP_TASKS_ENABLED=false
-            MCP_CIMD_TRUST_ALLOWLIST=${{ vars.MCP_CIMD_TRUST_ALLOWLIST }}
             MCP_CIMD_STRICT=true
           secrets: |
             DATABASE_URL=docket-database-url:latest

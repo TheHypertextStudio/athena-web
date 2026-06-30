@@ -1,8 +1,8 @@
 import type { actor, cycle, program } from '@docket/db';
-import { db, milestone, project, task, team } from '@docket/db';
+import { db, grant, milestone, project, task, team } from '@docket/db';
 import type { TaskRef } from '@docket/types';
 import type { TaskOut } from '@docket/types';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { NotFoundError, ValidationError } from '../error';
@@ -95,6 +95,120 @@ export async function assertMilestoneInOrg(
     .where(and(eq(milestone.id, milestoneId), eq(project.organizationId, orgId)))
     .limit(1);
   if (!rows[0]) throw new NotFoundError('Milestone not found');
+}
+
+/** The minimal task columns needed to decide view access. */
+export type ViewableTaskParts = Pick<
+  TaskRow,
+  'id' | 'teamId' | 'projectId' | 'programId' | 'visibility'
+>;
+
+/**
+ * Build a predicate deciding whether `actorId` may *view* a task, mirroring the
+ * `canActor('view', …)` grant cascade (task → team/project/program → organization) in
+ * bulk so a whole task set is filtered with a single grant read instead of one query
+ * per task.
+ *
+ * @remarks
+ * `task.ancestor_path` is not materialized yet, so the containment chain is derived from
+ * the task's own FK columns — the same chain {@link "@docket/authz"#ancestorChain} walks.
+ * A task is viewable when it is `public`, or the actor (or its role) holds a non-expired
+ * `allow` grant on the task, its team, its project, its program, or the organization root.
+ * This is the first list-time use of the visibility cascade; `GET /tasks` can adopt it later.
+ *
+ * @param orgId - The caller's organization.
+ * @param actorId - The caller's human actor id.
+ * @param roleId - The actor's role id (a role-level grant also confers access), or null.
+ * @returns a predicate over the minimal task columns.
+ */
+export async function buildTaskViewFilter(
+  orgId: string,
+  actorId: string,
+  roleId: string | null,
+): Promise<(t: ViewableTaskParts) => boolean> {
+  const subjects = [actorId, roleId].filter((x): x is string => Boolean(x));
+  const grants = await db
+    .select({
+      resourceKind: grant.resourceKind,
+      resourceId: grant.resourceId,
+      effect: grant.effect,
+      expiresAt: grant.expiresAt,
+    })
+    .from(grant)
+    .where(and(eq(grant.organizationId, orgId), inArray(grant.subjectId, subjects)));
+
+  const now = Date.now();
+  const granted = {
+    organization: new Set<string>(),
+    team: new Set<string>(),
+    project: new Set<string>(),
+    program: new Set<string>(),
+    task: new Set<string>(),
+  };
+  for (const g of grants) {
+    if (g.effect !== 'allow') continue;
+    if (g.expiresAt && g.expiresAt.getTime() < now) continue;
+    const bucket = granted[g.resourceKind as keyof typeof granted] as Set<string> | undefined;
+    bucket?.add(g.resourceId);
+  }
+  const orgRootView = granted.organization.has(orgId);
+
+  return (t) =>
+    t.visibility === 'public' ||
+    orgRootView ||
+    granted.task.has(t.id) ||
+    granted.team.has(t.teamId) ||
+    (t.projectId !== null && granted.project.has(t.projectId)) ||
+    (t.programId !== null && granted.program.has(t.programId));
+}
+
+/**
+ * Resolve the connected neighborhood of a task up to `depth` hops, following both
+ * dependency edges (either direction) and parent/child subtask links.
+ *
+ * @remarks
+ * The undirected edge set is assembled once as a non-recursive CTE, then a recursive CTE
+ * walks it breadth-first to `depth`. The recursive term references only `nb` (once) joined
+ * to the non-recursive `edges` CTE — Postgres forbids the recursive name inside a subquery,
+ * which this avoids. Returns active, org-scoped rows (a non-existent/foreign root → `[]`).
+ *
+ * @param orgId - The caller's organization.
+ * @param rootTaskId - The task at the center of the neighborhood.
+ * @param depth - Maximum hop distance from the root.
+ */
+export async function loadNeighborhood(
+  orgId: string,
+  rootTaskId: string,
+  depth: number,
+): Promise<TaskRow[]> {
+  const found = (await db.execute(sql`
+    WITH RECURSIVE edges AS (
+      SELECT blocking_task_id AS a, blocked_task_id AS b
+        FROM task_dependency WHERE organization_id = ${orgId}
+      UNION ALL
+      SELECT blocked_task_id AS a, blocking_task_id AS b
+        FROM task_dependency WHERE organization_id = ${orgId}
+      UNION ALL
+      SELECT parent_task_id AS a, id AS b
+        FROM task WHERE organization_id = ${orgId} AND parent_task_id IS NOT NULL
+      UNION ALL
+      SELECT id AS a, parent_task_id AS b
+        FROM task WHERE organization_id = ${orgId} AND parent_task_id IS NOT NULL
+    ),
+    nb AS (
+      SELECT ${rootTaskId}::text AS id, 0 AS d
+      UNION
+      SELECT e.b, nb.d + 1 FROM nb JOIN edges e ON e.a = nb.id WHERE nb.d < ${depth}
+    )
+    SELECT DISTINCT id FROM nb
+  `)) as unknown as { rows: { id: string }[] };
+
+  const ids = found.rows.map((r) => r.id);
+  if (ids.length === 0) return [];
+  return db
+    .select()
+    .from(task)
+    .where(and(eq(task.organizationId, orgId), isNull(task.archivedAt), inArray(task.id, ids)));
 }
 
 /** Load a single active task scoped to the org, or throw {@link NotFoundError}. */

@@ -11,11 +11,12 @@ import {
   type WorkspaceNavKey,
 } from '@docket/ui/components';
 import { VocabularyProvider } from '@docket/ui/hooks';
-import { Search } from '@docket/ui/icons';
+import { Calendar, Search } from '@docket/ui/icons';
 import { usePathname, useRouter } from 'next/navigation';
 import { type JSX, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { ActiveOrgContext, useActiveOrg } from '@/components/active-org';
+import Agenda from '@/components/agenda/agenda';
 import { CommandPaletteProvider, useCommandPalette } from '@/components/command-palette';
 import { OpenDocumentsProvider, useOpenDocuments } from '@/components/tabs';
 import { api } from '@/lib/api';
@@ -240,6 +241,8 @@ function AppShellInner({
         tabBar={tabBar}
         mobileBrand={mobileBrand}
         mobileActions={mobileActions}
+        // The portable agenda rides along on every authenticated page as the shell's right rail.
+        aside={{ node: <Agenda />, label: 'Agenda', icon: <Calendar aria-hidden="true" /> }}
       >
         {children}
       </AppShell>

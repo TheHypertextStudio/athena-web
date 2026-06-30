@@ -38,7 +38,7 @@ export async function resolveTabTitle(ref: TabRef): Promise<string> {
         break;
       }
       case 'project': {
-        const res = await api.v1.orgs[':orgId'].projects.$get({ param: { orgId } });
+        const res = await api.v1.orgs[':orgId'].projects.$get({ param: { orgId }, query: {} });
         if (res.ok) {
           const { items } = await res.json();
           const found = items.find((p) => p.id === id);
@@ -47,7 +47,7 @@ export async function resolveTabTitle(ref: TabRef): Promise<string> {
         break;
       }
       case 'initiative': {
-        const res = await api.v1.orgs[':orgId'].initiatives.$get({ param: { orgId } });
+        const res = await api.v1.orgs[':orgId'].initiatives.$get({ param: { orgId }, query: {} });
         if (res.ok) {
           const { items } = await res.json();
           const found = items.find((i) => i.id === id);
@@ -56,7 +56,7 @@ export async function resolveTabTitle(ref: TabRef): Promise<string> {
         break;
       }
       case 'program': {
-        const res = await api.v1.orgs[':orgId'].programs.$get({ param: { orgId } });
+        const res = await api.v1.orgs[':orgId'].programs.$get({ param: { orgId }, query: {} });
         if (res.ok) {
           const { items } = await res.json();
           const found = items.find((p) => p.id === id);
@@ -65,7 +65,7 @@ export async function resolveTabTitle(ref: TabRef): Promise<string> {
         break;
       }
       case 'cycle': {
-        const res = await api.v1.orgs[':orgId'].cycles.$get({ param: { orgId } });
+        const res = await api.v1.orgs[':orgId'].cycles.$get({ param: { orgId }, query: {} });
         if (res.ok) {
           const { items } = await res.json();
           const found = items.find((c) => c.id === id);

@@ -29,6 +29,7 @@ import { Hono } from 'hono';
 import type { AppEnv } from '../context';
 import { AuthError, ConflictError, NotFoundError } from '../error';
 import { ok } from '../lib/ok';
+import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 
@@ -44,67 +45,128 @@ import {
 
 /** Members router: list members, invite + accept-invite, and role/status patches. */
 const members = new Hono<AppEnv>()
-  .get('/', async (c) => {
-    const { orgId } = c.get('actorCtx');
-    const rows = await db
-      .select()
-      .from(actor)
-      .where(and(eq(actor.organizationId, orgId), eq(actor.kind, 'human')));
-    return ok(c, pageOf(MemberOut), { items: rows.map(toMemberOut) });
-  })
-  .post('/invite', capabilityGuard('manage'), zJson(MemberInvite), async (c) => {
-    const { orgId, actorId } = c.get('actorCtx');
-    const row = await createInvitation(orgId, actorId, c.req.valid('json'));
-    return ok(c, InvitationOut, toInvitationOut(row));
-  })
-  .post('/accept-invite', zJson(InvitationAccept), async (c) => {
-    const { orgId } = c.get('actorCtx');
-    const session = c.get('session');
-    if (!session?.user) throw new AuthError();
-    const invitedActor = await acceptInvitation(orgId, c.req.valid('json').token, session);
-    return ok(c, MemberOut, toMemberOut(invitedActor));
-  })
-  .get('/invitations', async (c) => {
-    const { orgId } = c.get('actorCtx');
-    const rows = await db
-      .select()
-      .from(invitation)
-      .where(and(eq(invitation.organizationId, orgId), eq(invitation.status, 'pending')));
-    return ok(c, pageOf(InvitationOut), { items: rows.map(toInvitationOut) });
-  })
-  .post('/invitations', capabilityGuard('manage'), zJson(MemberInvite), async (c) => {
-    const { orgId, actorId } = c.get('actorCtx');
-    const row = await createInvitation(orgId, actorId, c.req.valid('json'));
-    return ok(c, InvitationOut, toInvitationOut(row));
-  })
-  .post('/invitations/:token/accept', zParam(tokenParam), async (c) => {
-    const { orgId } = c.get('actorCtx');
-    const session = c.get('session');
-    if (!session?.user) throw new AuthError();
-    const invitedActor = await acceptInvitation(orgId, c.req.valid('param').token, session);
-    return ok(c, MemberOut, toMemberOut(invitedActor));
-  })
-  .delete('/invitations/:id', capabilityGuard('manage'), zParam(invitationIdParam), async (c) => {
-    const { orgId } = c.get('actorCtx');
-    const { id } = c.req.valid('param');
-    const updated = await db
-      .update(invitation)
-      .set({ status: 'revoked' })
-      .where(
-        and(
-          eq(invitation.id, id),
-          eq(invitation.organizationId, orgId),
-          eq(invitation.status, 'pending'),
-        ),
-      )
-      .returning({ id: invitation.id });
-    const row = updated[0];
-    if (!row) throw new NotFoundError('Pending invitation not found');
-    return ok(c, InvitationRevokeOut, { id: row.id, revoked: true });
-  })
+  .get(
+    '/',
+    apiDoc({ tag: 'Members', summary: 'List members', response: pageOf(MemberOut) }),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const rows = await db
+        .select()
+        .from(actor)
+        .where(and(eq(actor.organizationId, orgId), eq(actor.kind, 'human')));
+      return ok(c, pageOf(MemberOut), { items: rows.map(toMemberOut) });
+    },
+  )
+  .post(
+    '/invite',
+    capabilityGuard('manage'),
+    apiDoc({
+      tag: 'Members',
+      summary: 'Invite a member',
+      capability: 'manage',
+      response: InvitationOut,
+    }),
+    zJson(MemberInvite),
+    async (c) => {
+      const { orgId, actorId } = c.get('actorCtx');
+      const row = await createInvitation(orgId, actorId, c.req.valid('json'));
+      return ok(c, InvitationOut, toInvitationOut(row));
+    },
+  )
+  .post(
+    '/accept-invite',
+    apiDoc({ tag: 'Members', summary: 'Accept an invitation', response: MemberOut }),
+    zJson(InvitationAccept),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const session = c.get('session');
+      if (!session?.user) throw new AuthError();
+      const invitedActor = await acceptInvitation(orgId, c.req.valid('json').token, session);
+      return ok(c, MemberOut, toMemberOut(invitedActor));
+    },
+  )
+  .get(
+    '/invitations',
+    apiDoc({
+      tag: 'Members',
+      summary: 'List pending invitations',
+      response: pageOf(InvitationOut),
+    }),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const rows = await db
+        .select()
+        .from(invitation)
+        .where(and(eq(invitation.organizationId, orgId), eq(invitation.status, 'pending')));
+      return ok(c, pageOf(InvitationOut), { items: rows.map(toInvitationOut) });
+    },
+  )
+  .post(
+    '/invitations',
+    capabilityGuard('manage'),
+    apiDoc({
+      tag: 'Members',
+      summary: 'Create an invitation',
+      capability: 'manage',
+      response: InvitationOut,
+    }),
+    zJson(MemberInvite),
+    async (c) => {
+      const { orgId, actorId } = c.get('actorCtx');
+      const row = await createInvitation(orgId, actorId, c.req.valid('json'));
+      return ok(c, InvitationOut, toInvitationOut(row));
+    },
+  )
+  .post(
+    '/invitations/:token/accept',
+    apiDoc({ tag: 'Members', summary: 'Accept an invitation by token', response: MemberOut }),
+    zParam(tokenParam),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const session = c.get('session');
+      if (!session?.user) throw new AuthError();
+      const invitedActor = await acceptInvitation(orgId, c.req.valid('param').token, session);
+      return ok(c, MemberOut, toMemberOut(invitedActor));
+    },
+  )
+  .delete(
+    '/invitations/:id',
+    capabilityGuard('manage'),
+    apiDoc({
+      tag: 'Members',
+      summary: 'Revoke an invitation',
+      capability: 'manage',
+      response: InvitationRevokeOut,
+    }),
+    zParam(invitationIdParam),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { id } = c.req.valid('param');
+      const updated = await db
+        .update(invitation)
+        .set({ status: 'revoked' })
+        .where(
+          and(
+            eq(invitation.id, id),
+            eq(invitation.organizationId, orgId),
+            eq(invitation.status, 'pending'),
+          ),
+        )
+        .returning({ id: invitation.id });
+      const row = updated[0];
+      if (!row) throw new NotFoundError('Pending invitation not found');
+      return ok(c, InvitationRevokeOut, { id: row.id, revoked: true });
+    },
+  )
   .patch(
     '/:actorId',
     capabilityGuard('manage'),
+    apiDoc({
+      tag: 'Members',
+      summary: 'Update a member',
+      capability: 'manage',
+      response: MemberOut,
+    }),
     zParam(actorIdParam),
     zJson(MemberUpdate),
     async (c) => {
@@ -172,45 +234,56 @@ const members = new Hono<AppEnv>()
       return ok(c, MemberOut, toMemberOut(row));
     },
   )
-  .delete('/:actorId', capabilityGuard('manage'), zParam(actorIdParam), async (c) => {
-    const { orgId } = c.get('actorCtx');
-    const { actorId } = c.req.valid('param');
+  .delete(
+    '/:actorId',
+    capabilityGuard('manage'),
+    apiDoc({
+      tag: 'Members',
+      summary: 'Remove a member',
+      capability: 'manage',
+      response: MemberRemoveOut,
+    }),
+    zParam(actorIdParam),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { actorId } = c.req.valid('param');
 
-    const targetRows = await db
-      .select()
-      .from(actor)
-      .where(and(eq(actor.id, actorId), eq(actor.organizationId, orgId), eq(actor.kind, 'human')))
-      .limit(1);
-    const target = targetRows[0];
-    if (!target) throw new NotFoundError('Member not found');
+      const targetRows = await db
+        .select()
+        .from(actor)
+        .where(and(eq(actor.id, actorId), eq(actor.organizationId, orgId), eq(actor.kind, 'human')))
+        .limit(1);
+      const target = targetRows[0];
+      if (!target) throw new NotFoundError('Member not found');
 
-    // Removing the org's last active Owner would orphan it; the guard ensures
-    // another active Owner remains before the row is deleted.
-    const ownerRoleRows = await db
-      .select({ id: role.id })
-      .from(role)
-      .where(and(eq(role.organizationId, orgId), eq(role.key, 'owner')))
-      .limit(1);
-    const ownerRoleId = ownerRoleRows[0]?.id ?? null;
-    if (ownerRoleId !== null && target.roleId === ownerRoleId) {
-      try {
-        await lastOwnerGuard(db, orgId, actorId);
-        /* v8 ignore start -- @preserve lastOwnerGuard only ever throws LastOwnerError, so the non-LastOwnerError rethrow is unreachable */
-      } catch (err) {
-        if (err instanceof LastOwnerError) throw new ConflictError(err.message);
-        throw err;
+      // Removing the org's last active Owner would orphan it; the guard ensures
+      // another active Owner remains before the row is deleted.
+      const ownerRoleRows = await db
+        .select({ id: role.id })
+        .from(role)
+        .where(and(eq(role.organizationId, orgId), eq(role.key, 'owner')))
+        .limit(1);
+      const ownerRoleId = ownerRoleRows[0]?.id ?? null;
+      if (ownerRoleId !== null && target.roleId === ownerRoleId) {
+        try {
+          await lastOwnerGuard(db, orgId, actorId);
+          /* v8 ignore start -- @preserve lastOwnerGuard only ever throws LastOwnerError, so the non-LastOwnerError rethrow is unreachable */
+        } catch (err) {
+          if (err instanceof LastOwnerError) throw new ConflictError(err.message);
+          throw err;
+        }
+        /* v8 ignore stop */
       }
-      /* v8 ignore stop */
-    }
 
-    const deleted = await db
-      .delete(actor)
-      .where(and(eq(actor.id, actorId), eq(actor.organizationId, orgId)))
-      .returning({ id: actor.id });
-    const row = deleted[0];
-    /* v8 ignore next -- @preserve defensive: the target member was verified to exist above */
-    if (!row) throw new NotFoundError('Member not found');
-    return ok(c, MemberRemoveOut, { id: row.id, removed: true });
-  });
+      const deleted = await db
+        .delete(actor)
+        .where(and(eq(actor.id, actorId), eq(actor.organizationId, orgId)))
+        .returning({ id: actor.id });
+      const row = deleted[0];
+      /* v8 ignore next -- @preserve defensive: the target member was verified to exist above */
+      if (!row) throw new NotFoundError('Member not found');
+      return ok(c, MemberRemoveOut, { id: row.id, removed: true });
+    },
+  );
 
 export default members;

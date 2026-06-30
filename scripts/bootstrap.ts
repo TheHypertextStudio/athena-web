@@ -35,6 +35,7 @@ import {
   unwrap,
   upsertEnvVars,
 } from './integrations-setup';
+import { cloudflaredConfigYaml, cloudflaredSetupSteps, tunnelRegistrationUrls } from './tunnel';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const SA_NAME = 'docket-deploy';
@@ -109,6 +110,51 @@ function checkDevPrereqs(): void {
     cancel('Install openssl, then re-run pnpm bootstrap.');
     process.exit(1);
   }
+}
+
+/**
+ * Ensure `cloudflared` is installed before the tunnel step — CHECK, and RESOLVE by installing it
+ * via Homebrew (never assume the user already has it).
+ *
+ * @returns whether cloudflared is available after the check/install.
+ */
+async function ensureCloudflared(): Promise<boolean> {
+  const found = firstLine('cloudflared --version');
+  if (found) {
+    ok(`cloudflared ${found}`);
+    return true;
+  }
+  const brew = firstLine('brew --version');
+  if (!brew) {
+    warn(
+      'cloudflared is not installed, and Homebrew is unavailable to install it. Install it manually:\n' +
+        '  https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/',
+    );
+    return false;
+  }
+  const install = unwrap(
+    await confirm({
+      message: 'cloudflared is not installed. Install it now (brew install cloudflared)?',
+      initialValue: true,
+    }),
+  );
+  if (!install) {
+    warn('Skipped — cloudflared is required for the tunnel.');
+    return false;
+  }
+  try {
+    exec('brew install cloudflared');
+  } catch {
+    warn('brew install cloudflared failed — install it manually and re-run.');
+    return false;
+  }
+  const now = firstLine('cloudflared --version');
+  if (now) {
+    ok(`Installed cloudflared ${now}`);
+    return true;
+  }
+  warn('cloudflared still not found after install — install it manually and re-run.');
+  return false;
 }
 
 /** Verify gcloud + gh are installed AND authenticated — only needed when provisioning prod. */
@@ -557,6 +603,101 @@ function printNextSteps(cfg: Config): void {
   );
 }
 
+/** Merge a host/origin into a comma-separated env var in `.env.local` (idempotent). */
+function mergeCsvEnvVar(envPath: string, key: string, value: string): void {
+  const current = parseEnvFile(envPath)[key] ?? '';
+  const parts = current
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (parts.includes(value)) return;
+  upsertEnvVars(envPath, { [key]: [...parts, value].join(',') });
+}
+
+/**
+ * Set up local OAuth + persistent tunnels (Phase 1, opt-in).
+ *
+ * @remarks
+ * Two independent opt-ins, both folded into bootstrap (no separate command):
+ *  - **Shared OAuth proxy** — point this machine at the team's always-on anchor host so real
+ *    Google/GitHub sign-in works locally with NO per-dev Google registration (Better Auth's
+ *    `oAuthProxy` relays through the one registered callback). Just two env vars; no tunnel.
+ *  - **Personal cloudflared tunnel** — expose THIS stack at a public hostname for inbound webhooks
+ *    or demos (and the same flow stands up the shared anchor). Prints the one-time cloudflared
+ *    commands + config (login/create are interactive) and allowlists the host.
+ */
+async function setupDevTunnel(): Promise<void> {
+  const envPath = resolve(ROOT, '.env.local');
+
+  const useProxy = unwrap(
+    await confirm({
+      message:
+        'Link real Google/GitHub locally via the team OAuth proxy? (no tunnel; needs the shared anchor URL + secret)',
+      initialValue: false,
+    }),
+  );
+  if (useProxy) {
+    const anchor = await prompt(
+      'Shared anchor URL (the team host registered with Google)',
+      '',
+      'https://dev.usedocket.app',
+    );
+    const secret = unwrap(
+      await password({
+        message: 'OAUTH_PROXY_SECRET (shared across the team — from your secret store)',
+      }),
+    );
+    if (anchor && secret) {
+      upsertEnvVars(envPath, { OAUTH_PROXY_PRODUCTION_URL: anchor, OAUTH_PROXY_SECRET: secret });
+      ok('OAuth proxy configured — local sign-in relays through the shared anchor.');
+    } else {
+      warn('Skipped OAuth proxy (both the anchor URL and secret are required).');
+    }
+  }
+
+  const wantTunnel = unwrap(
+    await confirm({
+      message:
+        'Set up a persistent cloudflared tunnel to expose this stack (webhooks/demos, or to stand up the shared anchor)?',
+      initialValue: false,
+    }),
+  );
+  if (!wantTunnel) return;
+
+  // Check + resolve the prerequisite — never assume cloudflared is installed.
+  if (!(await ensureCloudflared())) return;
+
+  const tunnel = await prompt('cloudflared tunnel name', 'docket-dev', 'docket-dev');
+  const hostname = await prompt('Public hostname on your Cloudflare zone', '', 'dev.usedocket.app');
+  if (!hostname) {
+    warn('Skipped tunnel setup (a public hostname is required).');
+    return;
+  }
+
+  const urls = tunnelRegistrationUrls(hostname);
+  note(
+    [
+      'Run these once (login + create open a browser for your Cloudflare zone):',
+      '',
+      ...cloudflaredSetupSteps({ tunnel, hostname }).map((s) => `  ${s}`),
+      '',
+      '~/.cloudflared/config.yml:',
+      '',
+      cloudflaredConfigYaml({ tunnel, hostname }),
+      'If this host is the SHARED OAuth anchor, register once with the provider:',
+      `  • Google redirect URI : ${urls.googleRedirectUri}`,
+      `  • Google JS origin     : ${urls.googleOrigin}`,
+      `  • GitHub App webhook   : ${urls.githubWebhook}`,
+    ].join('\n'),
+    'cloudflared tunnel',
+  );
+
+  // Allowlist the host so the local apps answer on it (dynamic base URL + Next dev origins).
+  mergeCsvEnvVar(envPath, 'BETTER_AUTH_ALLOWED_HOSTS', hostname);
+  mergeCsvEnvVar(envPath, 'BETTER_AUTH_TRUSTED_ORIGINS', `https://${hostname}`);
+  ok(`Allowlisted ${hostname} (BETTER_AUTH_ALLOWED_HOSTS + TRUSTED_ORIGINS).`);
+}
+
 // ── main ──────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
@@ -589,6 +730,7 @@ async function main(): Promise<void> {
   if (localIntegrations) {
     await runIntegrationSetup({ environments: ['local'], embedded: true });
   }
+  await setupDevTunnel();
 
   // ── Phase 2 — production (opt-in) ───────────────────────────────────────────
   const doProd = unwrap(

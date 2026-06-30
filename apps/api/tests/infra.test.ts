@@ -44,20 +44,34 @@ describe('app.ts route composition', () => {
 });
 
 describe('openapi', () => {
-  it('buildOpenApiDocument returns a valid 3.1 document', async () => {
-    const { buildOpenApiDocument } = await import('../src/openapi');
-    const doc = buildOpenApiDocument();
+  it('registerOpenapi serves a valid generated 3.1 document at /v1/openapi.json', async () => {
+    const { registerOpenapi } = await import('../src/openapi');
+    const { app } = await import('../src/app');
+    const server = new Hono();
+    registerOpenapi(server as never, app);
+
+    const res = await server.request('/v1/openapi.json');
+    expect(res.status).toBe(200);
+    const doc = (await res.json()) as {
+      openapi: string;
+      info: { title: string };
+      components: { securitySchemes: { bearerAuth: { scheme: string } } };
+      paths: Record<string, unknown>;
+    };
     expect(doc.openapi).toBe('3.1.0');
     expect(doc.info.title).toBe('Docket API');
     expect(doc.components.securitySchemes.bearerAuth.scheme).toBe('bearer');
+    // Paths are generated from the route annotations — the validator-bearing routes appear,
+    // and every documented path is prefixed by the app's `/v1` basePath.
+    expect(typeof doc.paths).toBe('object');
+    for (const path of Object.keys(doc.paths)) expect(path.startsWith('/v1/')).toBe(true);
   });
 
-  it('registerOpenapi mounts /v1/openapi.json and /v1/docs', async () => {
+  it('registerOpenapi mounts the Scalar docs UI at /v1/docs', async () => {
     const { registerOpenapi } = await import('../src/openapi');
+    const { app } = await import('../src/app');
     const server = new Hono();
-    registerOpenapi(server as never);
-    const spec = await server.request('/v1/openapi.json');
-    expect(spec.status).toBe(200);
+    registerOpenapi(server as never, app);
     const docs = await server.request('/v1/docs');
     expect(docs.status).toBe(200);
   });

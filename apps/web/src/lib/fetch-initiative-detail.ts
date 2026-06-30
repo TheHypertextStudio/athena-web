@@ -36,8 +36,8 @@ export function fetchInitiativeDetail(
   return async () => {
     const [detailRes, projectsRes, programsRes, membersRes, rolesRes] = await Promise.all([
       api.v1.orgs[':orgId'].initiatives[':id'].$get({ param: { orgId, id: initiativeId } }),
-      api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
-      api.v1.orgs[':orgId'].programs.$get({ param: { orgId } }),
+      api.v1.orgs[':orgId'].projects.$get({ param: { orgId }, query: {} }),
+      api.v1.orgs[':orgId'].programs.$get({ param: { orgId }, query: {} }),
       api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
       api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
     ]);

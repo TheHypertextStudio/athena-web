@@ -21,6 +21,7 @@ import type { AppEnv } from '../context';
 import { NotFoundError } from '../error';
 import { ok } from '../lib/ok';
 import { pageResult, seekAfter } from '../lib/list-cursor';
+import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 
@@ -85,218 +86,273 @@ async function loadProgram(orgId: string, id: string): Promise<ProgramRow> {
 
 /** Programs router: org-scoped CRUD; `manage` to mutate. */
 const programs = new Hono<AppEnv>()
-  .get('/', zQuery(CursorQuery), async (c) => {
-    const { orgId } = c.get('actorCtx');
-    const { cursor, limit } = c.req.valid('query');
-    // Keyset-paginate newest-first (createdAt, id tiebreak). `limit` is optional: omitted returns
-    // the full list as before; supplied returns a bounded page + `nextCursor`.
-    const base = db
-      .select()
-      .from(program)
-      .where(
-        and(eq(program.organizationId, orgId), seekAfter(program.createdAt, program.id, cursor)),
-      )
-      .orderBy(desc(program.createdAt), desc(program.id));
-    const rows = await (limit === undefined ? base : base.limit(limit + 1));
-    const { items, nextCursor } = pageResult(rows, limit, (r) => r.createdAt);
-    return ok(c, pageOf(ProgramOut), { items: items.map(toOut), nextCursor });
-  })
-  .post('/', capabilityGuard('manage'), zJson(ProgramCreate), async (c) => {
-    const { orgId, actorId } = c.get('actorCtx');
-    const body = c.req.valid('json');
-    const inserted = await db
-      .insert(program)
-      .values({
-        organizationId: orgId,
-        name: body.name,
-        description: body.description,
-        ownerId: body.ownerId,
-        status: body.status ?? 'active',
-        health: body.health,
-        visibility: body.visibility ?? 'public',
-        createdBy: actorId,
-      })
-      .returning();
-    const row = inserted[0];
-    /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
-    if (!row) throw new Error('program insert returned no row');
-    return ok(c, ProgramOut, toOut(row));
-  })
-  .get('/:id', zParam(idParam), async (c) => {
-    const { orgId } = c.get('actorCtx');
-    const { id } = c.req.valid('param');
-    const row = await loadProgram(orgId, id);
+  .get(
+    '/',
+    apiDoc({ tag: 'Programs', summary: 'List programs', response: pageOf(ProgramOut) }),
+    zQuery(CursorQuery),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { cursor, limit } = c.req.valid('query');
+      // Keyset-paginate newest-first (createdAt, id tiebreak). `limit` is optional: omitted returns
+      // the full list as before; supplied returns a bounded page + `nextCursor`.
+      const base = db
+        .select()
+        .from(program)
+        .where(
+          and(eq(program.organizationId, orgId), seekAfter(program.createdAt, program.id, cursor)),
+        )
+        .orderBy(desc(program.createdAt), desc(program.id));
+      const rows = await (limit === undefined ? base : base.limit(limit + 1));
+      const { items, nextCursor } = pageResult(rows, limit, (r) => r.createdAt);
+      return ok(c, pageOf(ProgramOut), { items: items.map(toOut), nextCursor });
+    },
+  )
+  .post(
+    '/',
+    capabilityGuard('manage'),
+    apiDoc({
+      tag: 'Programs',
+      summary: 'Create a program',
+      capability: 'manage',
+      response: ProgramOut,
+    }),
+    zJson(ProgramCreate),
+    async (c) => {
+      const { orgId, actorId } = c.get('actorCtx');
+      const body = c.req.valid('json');
+      const inserted = await db
+        .insert(program)
+        .values({
+          organizationId: orgId,
+          name: body.name,
+          description: body.description,
+          ownerId: body.ownerId,
+          status: body.status ?? 'active',
+          health: body.health,
+          visibility: body.visibility ?? 'public',
+          createdBy: actorId,
+        })
+        .returning();
+      const row = inserted[0];
+      /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
+      if (!row) throw new Error('program insert returned no row');
+      return ok(c, ProgramOut, toOut(row));
+    },
+  )
+  .get(
+    '/:id',
+    apiDoc({ tag: 'Programs', summary: 'Get program detail', response: ProgramDetail }),
+    zParam(idParam),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { id } = c.req.valid('param');
+      const row = await loadProgram(orgId, id);
 
-    // Roll up the Program's child work: Projects pointing at it, and active Tasks under
-    // it (attached directly via task.program_id OR via one of those Projects).
-    const projectRows = await db
-      .select({ id: project.id })
-      .from(project)
-      .where(and(eq(project.programId, id), eq(project.organizationId, orgId)));
-    const projectIds = projectRows.map((p) => p.id);
+      // Roll up the Program's child work: Projects pointing at it, and active Tasks under
+      // it (attached directly via task.program_id OR via one of those Projects).
+      const projectRows = await db
+        .select({ id: project.id })
+        .from(project)
+        .where(and(eq(project.programId, id), eq(project.organizationId, orgId)));
+      const projectIds = projectRows.map((p) => p.id);
 
-    const taskRows = await db
-      .select({ id: task.id })
-      .from(task)
-      .where(
-        and(
-          eq(task.organizationId, orgId),
-          isNull(task.archivedAt),
-          projectIds.length > 0
-            ? or(eq(task.programId, id), inArray(task.projectId, projectIds))
-            : eq(task.programId, id),
-        ),
-      );
+      const taskRows = await db
+        .select({ id: task.id })
+        .from(task)
+        .where(
+          and(
+            eq(task.organizationId, orgId),
+            isNull(task.archivedAt),
+            projectIds.length > 0
+              ? or(eq(task.programId, id), inArray(task.projectId, projectIds))
+              : eq(task.programId, id),
+          ),
+        );
 
-    return ok(c, ProgramDetail, {
-      ...toOut(row),
-      rollup: { projects: projectIds.length, tasks: taskRows.length },
-    });
-  })
-  .patch('/:id', capabilityGuard('manage'), zParam(idParam), zJson(ProgramUpdate), async (c) => {
-    const { orgId } = c.get('actorCtx');
-    const { id } = c.req.valid('param');
-    const body = c.req.valid('json');
-    const updated = await db
-      .update(program)
-      .set({
-        ...(body.name !== undefined ? { name: body.name } : {}),
-        ...(body.description !== undefined ? { description: body.description } : {}),
-        ...(body.ownerId !== undefined ? { ownerId: body.ownerId } : {}),
-        ...(body.status !== undefined ? { status: body.status } : {}),
-        ...(body.health !== undefined ? { health: body.health } : {}),
-        ...(body.visibility !== undefined ? { visibility: body.visibility } : {}),
-      })
-      .where(and(eq(program.id, id), eq(program.organizationId, orgId)))
-      .returning();
-    const row = updated[0];
-    if (!row) throw new NotFoundError('Program not found');
-    return ok(c, ProgramOut, toOut(row));
-  })
-  .delete('/:id', capabilityGuard('manage'), zParam(idParam), async (c) => {
-    const { orgId } = c.get('actorCtx');
-    const { id } = c.req.valid('param');
-    const deleted = await db
-      .delete(program)
-      .where(and(eq(program.id, id), eq(program.organizationId, orgId)))
-      .returning();
-    const row = deleted[0];
-    if (!row) throw new NotFoundError('Program not found');
-    return ok(c, ProgramOut, toOut(row));
-  })
-  .get('/:id/work', zParam(idParam), zQuery(ProgramWorkQuery), async (c) => {
-    const { orgId } = c.get('actorCtx');
-    const { id } = c.req.valid('param');
-    const { cycleId, projectId } = c.req.valid('query');
-    await loadProgram(orgId, id);
+      return ok(c, ProgramDetail, {
+        ...toOut(row),
+        rollup: { projects: projectIds.length, tasks: taskRows.length },
+      });
+    },
+  )
+  .patch(
+    '/:id',
+    capabilityGuard('manage'),
+    apiDoc({
+      tag: 'Programs',
+      summary: 'Update a program',
+      capability: 'manage',
+      response: ProgramOut,
+    }),
+    zParam(idParam),
+    zJson(ProgramUpdate),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { id } = c.req.valid('param');
+      const body = c.req.valid('json');
+      const updated = await db
+        .update(program)
+        .set({
+          ...(body.name !== undefined ? { name: body.name } : {}),
+          ...(body.description !== undefined ? { description: body.description } : {}),
+          ...(body.ownerId !== undefined ? { ownerId: body.ownerId } : {}),
+          ...(body.status !== undefined ? { status: body.status } : {}),
+          ...(body.health !== undefined ? { health: body.health } : {}),
+          ...(body.visibility !== undefined ? { visibility: body.visibility } : {}),
+        })
+        .where(and(eq(program.id, id), eq(program.organizationId, orgId)))
+        .returning();
+      const row = updated[0];
+      if (!row) throw new NotFoundError('Program not found');
+      return ok(c, ProgramOut, toOut(row));
+    },
+  )
+  .delete(
+    '/:id',
+    capabilityGuard('manage'),
+    apiDoc({
+      tag: 'Programs',
+      summary: 'Delete a program',
+      capability: 'manage',
+      response: ProgramOut,
+    }),
+    zParam(idParam),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { id } = c.req.valid('param');
+      const deleted = await db
+        .delete(program)
+        .where(and(eq(program.id, id), eq(program.organizationId, orgId)))
+        .returning();
+      const row = deleted[0];
+      if (!row) throw new NotFoundError('Program not found');
+      return ok(c, ProgramOut, toOut(row));
+    },
+  )
+  .get(
+    '/:id/work',
+    apiDoc({ tag: 'Programs', summary: 'Get program work', response: ProgramWorkOut }),
+    zParam(idParam),
+    zQuery(ProgramWorkQuery),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { id } = c.req.valid('param');
+      const { cycleId, projectId } = c.req.valid('query');
+      await loadProgram(orgId, id);
 
-    // Projects under this Program; a task is "under the Program" if it carries the
-    // Program directly (task.program_id) OR belongs to one of these Projects.
-    const projectRows = await db
-      .select({ id: project.id, name: project.name })
-      .from(project)
-      .where(and(eq(project.programId, id), eq(project.organizationId, orgId)));
-    const projectIds = projectRows.map((p) => p.id);
-    const projectNameById = new Map(projectRows.map((p) => [p.id, p.name]));
+      // Projects under this Program; a task is "under the Program" if it carries the
+      // Program directly (task.program_id) OR belongs to one of these Projects.
+      const projectRows = await db
+        .select({ id: project.id, name: project.name })
+        .from(project)
+        .where(and(eq(project.programId, id), eq(project.organizationId, orgId)));
+      const projectIds = projectRows.map((p) => p.id);
+      const projectNameById = new Map(projectRows.map((p) => [p.id, p.name]));
 
-    const underProgram =
-      projectIds.length > 0
-        ? or(eq(task.programId, id), inArray(task.projectId, projectIds))
-        : eq(task.programId, id);
+      const underProgram =
+        projectIds.length > 0
+          ? or(eq(task.programId, id), inArray(task.projectId, projectIds))
+          : eq(task.programId, id);
 
-    const taskRows = await db
-      .select()
-      .from(task)
-      .where(
-        and(
-          eq(task.organizationId, orgId),
-          isNull(task.archivedAt),
-          underProgram,
-          // Optional filters narrow the view to one cadence / one project.
-          ...(cycleId !== undefined ? [eq(task.cycleId, cycleId)] : []),
-          ...(projectId !== undefined ? [eq(task.projectId, projectId)] : []),
-        ),
-      )
-      .orderBy(desc(task.createdAt));
+      const taskRows = await db
+        .select()
+        .from(task)
+        .where(
+          and(
+            eq(task.organizationId, orgId),
+            isNull(task.archivedAt),
+            underProgram,
+            // Optional filters narrow the view to one cadence / one project.
+            ...(cycleId !== undefined ? [eq(task.cycleId, cycleId)] : []),
+            ...(projectId !== undefined ? [eq(task.projectId, projectId)] : []),
+          ),
+        )
+        .orderBy(desc(task.createdAt));
 
-    // Names of any real cycles referenced, for the cycle-group labels.
-    const cycleIds = [...new Set(taskRows.map((t) => t.cycleId).filter((v): v is string => !!v))];
-    const cycleRows =
-      cycleIds.length > 0
-        ? await db
-            .select({ id: cycle.id, name: cycle.name, number: cycle.number })
-            .from(cycle)
-            .where(and(eq(cycle.organizationId, orgId), inArray(cycle.id, cycleIds)))
-        : [];
-    const cycleById = new Map(cycleRows.map((cy) => [cy.id, cy]));
+      // Names of any real cycles referenced, for the cycle-group labels.
+      const cycleIds = [...new Set(taskRows.map((t) => t.cycleId).filter((v): v is string => !!v))];
+      const cycleRows =
+        cycleIds.length > 0
+          ? await db
+              .select({ id: cycle.id, name: cycle.name, number: cycle.number })
+              .from(cycle)
+              .where(and(eq(cycle.organizationId, orgId), inArray(cycle.id, cycleIds)))
+          : [];
+      const cycleById = new Map(cycleRows.map((cy) => [cy.id, cy]));
 
-    // Group by cycle (null = "no cycle"), then segment by project (null = "no project").
-    // A Map<cycleKey, Map<projectKey, tasks[]>> preserves first-seen ordering, which the
-    // `desc(createdAt)` query fixes deterministically.
-    const groups = new Map<string, Map<string, TaskRow[]>>();
-    for (const t of taskRows) {
-      const cycleKey = t.cycleId ?? ' ';
-      const projectKey = t.projectId ?? ' ';
-      const byProject = groups.get(cycleKey) ?? new Map<string, TaskRow[]>();
-      if (!groups.has(cycleKey)) groups.set(cycleKey, byProject);
-      const bucket = byProject.get(projectKey) ?? [];
-      if (!byProject.has(projectKey)) byProject.set(projectKey, bucket);
-      bucket.push(t);
-    }
+      // Group by cycle (null = "no cycle"), then segment by project (null = "no project").
+      // A Map<cycleKey, Map<projectKey, tasks[]>> preserves first-seen ordering, which the
+      // `desc(createdAt)` query fixes deterministically.
+      const groups = new Map<string, Map<string, TaskRow[]>>();
+      for (const t of taskRows) {
+        const cycleKey = t.cycleId ?? ' ';
+        const projectKey = t.projectId ?? ' ';
+        const byProject = groups.get(cycleKey) ?? new Map<string, TaskRow[]>();
+        if (!groups.has(cycleKey)) groups.set(cycleKey, byProject);
+        const bucket = byProject.get(projectKey) ?? [];
+        if (!byProject.has(projectKey)) byProject.set(projectKey, bucket);
+        bucket.push(t);
+      }
 
-    const payload: z.input<typeof ProgramWorkOut> = {
-      groups: [...groups.entries()].map(([cycleKey, byProject]) => {
-        const cy = cycleKey === ' ' ? null : cycleById.get(cycleKey);
-        return {
-          cycle:
-            cy == null ? { id: null } : { id: cy.id, name: cy.name ?? null, number: cy.number },
-          segments: [...byProject.entries()].map(([projectKey, tasks]) => ({
-            project:
-              projectKey === ' '
-                ? { id: null }
-                : {
-                    id: projectKey,
-                    /* v8 ignore next -- @preserve defensive: projectKey came from a project row, so its name is always in the map */
-                    name: projectNameById.get(projectKey) ?? null,
-                  },
-            tasks: tasks.map(taskToOut),
-          })),
-        };
-      }),
-    };
-    return ok(c, ProgramWorkOut, payload);
-  })
-  .get('/:id/updates', zParam(idParam), async (c) => {
-    const { orgId } = c.get('actorCtx');
-    const { id } = c.req.valid('param');
-    await loadProgram(orgId, id);
+      const payload: z.input<typeof ProgramWorkOut> = {
+        groups: [...groups.entries()].map(([cycleKey, byProject]) => {
+          const cy = cycleKey === ' ' ? null : cycleById.get(cycleKey);
+          return {
+            cycle:
+              cy == null ? { id: null } : { id: cy.id, name: cy.name ?? null, number: cy.number },
+            segments: [...byProject.entries()].map(([projectKey, tasks]) => ({
+              project:
+                projectKey === ' '
+                  ? { id: null }
+                  : {
+                      id: projectKey,
+                      /* v8 ignore next -- @preserve defensive: projectKey came from a project row, so its name is always in the map */
+                      name: projectNameById.get(projectKey) ?? null,
+                    },
+              tasks: tasks.map(taskToOut),
+            })),
+          };
+        }),
+      };
+      return ok(c, ProgramWorkOut, payload);
+    },
+  )
+  .get(
+    '/:id/updates',
+    apiDoc({ tag: 'Programs', summary: 'List program updates', response: pageOf(UpdateOut) }),
+    zParam(idParam),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { id } = c.req.valid('param');
+      await loadProgram(orgId, id);
 
-    // Status updates whose subject is THIS program (subjectType='program', subjectId=id),
-    // org-scoped, newest first.
-    const rows = await db
-      .select()
-      .from(update)
-      .where(
-        and(
-          eq(update.organizationId, orgId),
-          eq(update.subjectType, 'program'),
-          eq(update.subjectId, id),
-        ),
-      )
-      .orderBy(desc(update.createdAt));
+      // Status updates whose subject is THIS program (subjectType='program', subjectId=id),
+      // org-scoped, newest first.
+      const rows = await db
+        .select()
+        .from(update)
+        .where(
+          and(
+            eq(update.organizationId, orgId),
+            eq(update.subjectType, 'program'),
+            eq(update.subjectId, id),
+          ),
+        )
+        .orderBy(desc(update.createdAt));
 
-    return ok(c, pageOf(UpdateOut), {
-      items: rows.map((u) => ({
-        id: u.id,
-        organizationId: u.organizationId,
-        authorId: u.authorId,
-        subjectType: u.subjectType,
-        subjectId: u.subjectId,
-        health: u.health,
-        body: u.body,
-        createdAt: u.createdAt.toISOString(),
-      })),
-    });
-  });
+      return ok(c, pageOf(UpdateOut), {
+        items: rows.map((u) => ({
+          id: u.id,
+          organizationId: u.organizationId,
+          authorId: u.authorId,
+          subjectType: u.subjectType,
+          subjectId: u.subjectId,
+          health: u.health,
+          body: u.body,
+          createdAt: u.createdAt.toISOString(),
+        })),
+      });
+    },
+  );
 
 export default programs;

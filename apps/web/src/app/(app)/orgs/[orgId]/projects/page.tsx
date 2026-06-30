@@ -42,7 +42,7 @@ export default async function ProjectsListPage({
       queryKey: queryKeys.projects(orgId),
       queryFn: () =>
         unwrap(
-          () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
+          () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId }, query: {} }),
           'Could not load projects.',
         ),
     }),
@@ -50,7 +50,7 @@ export default async function ProjectsListPage({
       queryKey: queryKeys.tasks(orgId),
       queryFn: () =>
         unwrap(
-          () => api.v1.orgs[':orgId'].tasks.$get({ param: { orgId } }),
+          () => api.v1.orgs[':orgId'].tasks.$get({ param: { orgId }, query: {} }),
           'Could not load tasks.',
         ),
     }),

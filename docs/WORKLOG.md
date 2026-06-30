@@ -5,10 +5,6 @@
 
 ---
 
-## Active Tasks
-
----
-
 ## Completed Tasks
 
 ### [MCP-PAGE-007] MCP pagination protocol support
@@ -64,44 +60,6 @@ tests/mcp/mcp-scope.test.ts` is currently blocked by unrelated dirty DB schema d
   `pnpm env:check` passes; `pnpm integrations` GitHub steps verified to render callbacks on the
   web + admin origins and the webhook on the API origin. (The auth-builder mount lands with the
   concurrent twoFactor work it co-occupies.)
-
----
-
-### [MCP-001] Complete CIMD support for MCP OAuth clients
-
-- **Completed**: 2026-06-29
-- **Summary**: Implemented URL-form Client ID Metadata Document (CIMD) support for the MCP OAuth
-  authorize flow. The API now resolves and validates HTTPS client metadata documents, rejects
-  private/loopback DNS answers before fetch, enforces strict metadata-host trust allowlisting, and
-  upserts validated clients as Better Auth public OAuth applications before `/api/auth/mcp/authorize`
-  continues. The implementation follows the modern MCP authorization guide by serving Protected
-  Resource Metadata, AS metadata with `client_id_metadata_document_supported`, PKCE S256 support,
-  URL-form `client_id` validation, and localhost redirect URI support for native clients.
-- **Approach**: Added `apps/api/src/mcp/cimd.ts` with dependency-injected DNS/fetch validation,
-  OAuth-style CIMD errors, SSRF protections, public PKCE-only metadata checks, and idempotent
-  `oauth_application` upsert ownership metadata. Replaced the AS metadata redirect with a root
-  metadata document advertising Better Auth MCP endpoints, S256 PKCE, DCR, and
-  `client_id_metadata_document_supported`. Wired the pre-authorize middleware before the Better
-  Auth catch-all, exposed MCP transport headers through CORS, mounted root
-  `/.well-known/openid-configuration`, and added production Cloud Run MCP env vars. Also finished
-  the connected-account/integration blockers by adding `integration.externalAccountId`, the missing
-  `/v1/me/account` route, and the connector reconciliation engine used by manual/scheduled sync.
-- **Files Changed**: `apps/api/src/mcp/cimd.ts`, `apps/api/src/mcp/server.ts`,
-  `apps/api/src/server.ts`, `apps/api/tests/mcp/{mcp-cimd,mcp-scope}.test.ts`,
-  `apps/api/src/routes/{me-account,integration-reconcile,integration-sync}.ts`,
-  `packages/db/src/schema/crosscutting.ts`, `packages/db/drizzle/0010_bound_external_accounts.sql`,
-  `packages/db/drizzle/meta/_journal.json`, `.github/workflows/deploy.yml`, `docs/WORKLOG.md`.
-- **Learnings**: The local Better Auth OAuth application table does not store a separate
-  `authenticationScheme`; public CIMD registration is represented here by `type: "public"` plus an
-  empty client secret. Returning the AS metadata document directly is necessary so clients can see
-  CIMD support at discovery time. The MCP guide allows localhost redirect URIs for native clients;
-  only the metadata-document URL itself remains HTTPS-only.
-- **Gate**: CIMD red tests failed first on missing `src/mcp/cimd` and then on localhost redirect
-  rejection. Final verification: `pnpm --filter @docket/api typecheck`, `pnpm --filter @docket/api
-lint`, `pnpm --filter @docket/api build`, `pnpm --filter @docket/api test` (737 tests),
-  targeted MCP + integration suites (87 tests), and `pnpm --filter @docket/db test` (39 tests) all
-  pass. The only warning is the local Node version (`v26.3.0`) being outside the repo's declared
-  `>=24 <25` engine.
 
 ---
 
@@ -546,6 +504,23 @@ resolveIdentityLabel(actorId, externalAccountId) ?? result.account` (Actor→use
 
 ## Active Tasks
 
+### [MCP-004] Streamable HTTP cancellation support
+
+- **Status**: REVIEW
+- **State**: VALIDATING
+- **Started**: 2026-06-29
+- **Priority**: P1
+- **Description**: Ensure the `/mcp` Streamable HTTP server handles MCP `notifications/cancelled` notifications for in-progress JSON-RPC requests.
+- **Subtasks**:
+  - [x] Review MCP cancellation requirements and local MCP surface spec.
+  - [x] Add a regression test for cancelling an active request.
+  - [x] Implement request tracking and cancellation cleanup in the MCP HTTP handler.
+  - [x] Validate targeted MCP tests/typecheck and record the outcome.
+- **Blockers**: Full `@docket/api` typecheck is currently blocked by unrelated existing errors in `src/openapi.ts`, `tests/account/export.test.ts`, `tests/infra.test.ts`, and `tests/routes/proactive-sweep.test.ts`.
+- **Notes**: The upstream spec says cancellation notifications are fire-and-forget, must not cancel `initialize`, and unknown/completed/malformed cancellations should be ignored. This repo uses a stateless per-request SDK transport, so cancellation now uses process-level active request tracking around the one-shot `/mcp` handler. Validation: `pnpm exec vitest run tests/mcp/mcp-cancellation.test.ts` passes; `pnpm exec eslint src/mcp/server.ts tests/mcp/mcp-cancellation.test.ts` passes; `pnpm --filter @docket/api typecheck` reaches only the unrelated existing errors listed above.
+
+---
+
 ### [BACKEND-PLAN-001] Backend Completion Plan (TASKS.yaml)
 
 - **Status**: IN_PROGRESS
@@ -974,3 +949,32 @@ Remaining: marketing app (public landing) ; Playwright e2e flow films (needs bro
 Remaining: Playwright e2e flow films (needs browser install + a running api+web+PGlite stack — a CI-shaped lane).
 
 # fixes complete
+
+---
+
+## Unified Event Stream ("Pulse") — 2026-06-29
+
+Replaced the buried Inbox "Activity" tab with a **first-class, filterable, source-agnostic event stream** — Docket's answer to Linear Pulse — surfaced both cross-org (`/stream`, Home nav) and per-workspace (`/orgs/[orgId]/stream`, Workspace nav). The `observation` table is the canonical substrate; internal Docket events emit observations alongside their writes, and third-party webhooks (Linear, GitHub, Slack) land through the existing Observer → `inbound_event` → drain pipeline. Source is an attribution badge, never a separate layout; provider-specifics stay in the `payload` jsonb (no per-provider columns).
+
+**A1 — substrate (db + DTOs).** `enums.ts`: `streamRelevance` (`mention|assignment|owned|followed|participant`) + `summaryCadence` (`lunch|eod|eow`). `schema/observation.ts`: `(organizationId, occurredAt, id)` index; new `observation_recipient` ("concerns me" fan-out read-model, PK `(observationId,userId)`, indexed `(userId,occurredAt,observationId)`) + `stream_subscription` (explicit follow, unique `(userId,subjectType,subjectId)`); `daily_digest` gained `cadence` (default `eod`), unique key widened to `(userId,digestDate,cadence)`. `schema/agents.ts`: partial unique index on `external_run_ref WHERE not null` (proactive dedup key). Migration `0011_elite_doctor_strange.sql` (generated; **not yet applied to the dev DB** — see below). `packages/types/src/stream.ts`: `StreamEventOut`, `StreamQuery` (extends `ListQuery` + base64url filter/viewId/provider/kind), `StreamPageOut`.
+
+**A2 — internal emission.** `observation-emit.ts`: `emitObservation(...)` (writes a `provider='docket'` observation + recipient fan-out in one tx, deduped, then publishes to the live bus; whole body best-effort so it never 500s a mutation) + `resolveRecipients(...)` (owners/followers/participants → user ids, ranked, excludes the actor). Wired into `tasks.ts` (create/assign/state/complete), `projects.ts`, `comments.ts`, `initiatives.ts`, `updates.ts`. `observation-sync.ts` drain now writes recipient rows + publishes. **`programs.ts` deferred** (concurrent session held the file).
+
+**A3 — read APIs + filter translator.** `lib/view-filter-sql.ts`: whitelisted `FILTER_FIELDS`, `buildFilterConditions` (eq/neq/in/nin/gt/lt/contains; unknown field → 400), base64url `decodeFilter`, keyset `(occurredAt,id)` cursor. `stream.ts` (`GET /v1/orgs/:orgId/stream` firehose) + `hub.ts` `GET /v1/hub/stream` (personal, recipient ⋈ observation across caller orgs). `stream-helpers.ts`: `toStreamEventOut` + `publishStreamEvent`.
+
+**A4–A7 — front end.** `useInfiniteApiQuery`/`useLiveInfiniteApiQuery` + `apiInfiniteQueryOptions`; `streamMe`/`streamOrg` query keys. Nav registration (Home + Workspace `stream` keys, sidebar rows, path mapping, `AtSign`/`MessageSquare` icons). Two thin routes over one shared `<StreamView>` + `use-stream-page.ts`. Components under `components/stream/`: rich row (actor avatar + kind-badge overlay, plain-English line, kind detail slot, provider/workspace/time meta, hover actions), `provider-badge`, `event-drawer`, grouping/meta/query helpers, infinite-scroll sentinel.
+
+**B — Slack ingestion.** Low-ripple `ObserverProvider = ConnectorProvider | 'slack'`. `observer-slack.ts` (v0 HMAC + 300s replay guard, route by team/event, normalize app_mention→mention / message→message / reaction_added→reaction), `select.ts` branch + `SLACK_SIGNING_SECRET` (env slice + container), `POST /v1/ingest/slack` with the `url_verification` handshake echo. (GitHub ingestion was landed separately by the concurrent session.)
+
+**C — live (SSE).** `lib/event-bus.ts` (in-process subscribe/publish) + `stream-sse.ts` (`GET /v1/stream/sse`, session-authed, 25s heartbeat, abort cleanup), mounted outside the RPC type. Polling remains the correctness baseline; SSE is best-effort until LISTEN/NOTIFY (multi-instance follow-up).
+
+**D — proactive (core).** `createSessionFromObservation(...)` (pending agent session, idempotent on `external_run_ref`) + `proactive-sweep.ts` (`sweepProactiveSessions` over recent mention/assignment recipients for opted-in users) + `hub.preferences.proactive.enabled` + `POST /v1/cron/run-proactive` + scheduler entry. FE: `athena-plan.tsx` drafted-plan approval panel in the drawer (reuses `useSessionDetail` + per-action `ActivityItem` approve/reject). **D2 deferred**: multi-cadence lunch/eow summaries + inline `athena-suggestion-card` (the `cadence` column is already in place).
+
+**E — gate.** Static gate green (web typecheck 0 + tests; types/db/env/boundaries typecheck 0 + suites; **API 805 tests pass**). The lone `mcp-cimd` failure + the `me-recovery`/`recovery-challenge` typecheck errors are the concurrent session's in-flight MCP/auth work, not this lane.
+
+**Tests added:** `stream.test.ts` (types), `observation-emit.test.ts`, `stream-read.test.ts`, `event-bus.test.ts`, `proactive-sweep.test.ts`, `ingest-slack.test.ts`, `observer-slack.test.ts`, and web `stream/{stream-query,stream-grouping,stream-meta,stream-event-row}` suites.
+
+**NOT YET DONE (blocked / deferred, not abandoned):**
+- **Commit** — the working tree is mixed with a concurrent session's unrelated work (account lifecycle/export, recovery/security/danger-zone, `apps/admin`, agenda, dev-scheduler); needs a scoped, path-selective commit, not `git add -A`.
+- **Migration `0011` not applied to the dev DB** + observations not seeded → live `/design-review` of both surfaces is pending a single-owner dev bounce (PGlite is single-process; never a second writer while dev runs).
+- `programs.ts` emission; D2 multi-cadence summaries + suggestion card; the Slack provider group + `SLACK_SIGNING_SECRET` entry in `scripts/integrations-setup.ts` (concurrent session's hot file).

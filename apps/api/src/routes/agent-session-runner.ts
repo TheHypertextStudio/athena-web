@@ -1,7 +1,7 @@
 import { actor, agent, agentSession, db, sessionActivity, task } from '@docket/db';
 import type { SessionActivityBody } from '@docket/db';
 import type { SessionActionBody, SessionActivity } from '@docket/boundaries';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, sql } from 'drizzle-orm';
 
 import { getContainer } from '../container';
 import { ConflictError, NotFoundError } from '../error';
@@ -88,6 +88,57 @@ export async function createAndRunFromPrompt(
   });
 
   return runSession(orgId, sessionId);
+}
+
+/**
+ * Create a PENDING agent session from an observation (the proactive trigger), without running it.
+ *
+ * @remarks
+ * The drafted-plan engine: a `mention`/`assignment` observation seeds a session whose first
+ * `response` activity is the prompt built from the event. Idempotent via the unique partial index
+ * on `external_run_ref` (`observation:<id>:<user>`), so a re-scan never spawns a duplicate run.
+ * The lease-guarded {@link sweepProactiveSessions} runs it later (decoupled from the LLM call).
+ *
+ * @param orgId - The org the observation belongs to.
+ * @param initiatorActorId - The recipient's Actor in that org (the accountable initiator).
+ * @param externalRunRef - The idempotency key (`observation:<observationId>:<userId>`).
+ * @param trigger - `mention` or `assignment`.
+ * @param prompt - The brief seeded as the session's first activity.
+ * @returns the new session id, or `null` when one already exists for this ref.
+ */
+export async function createSessionFromObservation(
+  orgId: string,
+  initiatorActorId: string,
+  externalRunRef: string,
+  trigger: 'mention' | 'assignment',
+  prompt: string,
+): Promise<string | null> {
+  const agentId = (await ensureDefaultAgent(orgId, initiatorActorId)).id;
+  return db.transaction(async (tx) => {
+    const [created] = await tx
+      .insert(agentSession)
+      .values({
+        organizationId: orgId,
+        agentId,
+        trigger,
+        status: 'pending',
+        initiatorId: initiatorActorId,
+        externalRunRef,
+      })
+      .onConflictDoNothing({
+        target: agentSession.externalRunRef,
+        where: sql`${agentSession.externalRunRef} is not null`,
+      })
+      .returning({ id: agentSession.id });
+    if (!created) return null;
+    await tx.insert(sessionActivity).values({
+      sessionId: created.id,
+      organizationId: orgId,
+      type: 'response',
+      body: { text: prompt },
+    });
+    return created.id;
+  });
 }
 
 /**

@@ -7,6 +7,7 @@
  * its visible Activity stream. Compute/cost/telemetry are NOT stored — the provider
  * owns execution; Docket owns the work model and the visible session.
  */
+import { sql } from 'drizzle-orm';
 import { index, jsonb, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 
 import {
@@ -63,6 +64,11 @@ export const agentSession = pgTable(
   (t) => [
     index('agent_session_org_idx').on(t.organizationId),
     index('agent_session_agent_idx').on(t.agentId),
+    // Idempotency for event-triggered (proactive) sessions: `external_run_ref` is set to
+    // `observation:<id>`, so re-processing the same observation can't spawn a duplicate run.
+    uniqueIndex('agent_session_external_run_uq')
+      .on(t.externalRunRef)
+      .where(sql`${t.externalRunRef} is not null`),
   ],
 );
 

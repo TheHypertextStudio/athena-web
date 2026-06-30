@@ -53,6 +53,7 @@ export type {
   ObservationActorRef,
   ObservationDraft,
   ObservationSubjectRef,
+  ObserverProvider,
   RawInboundEvent,
   VerifySignatureInput,
 } from './observer';

@@ -49,6 +49,7 @@ export function toBoundaryEnv(): BoundaryEnv {
     ...(env.GITHUB_APP_WEBHOOK_SECRET
       ? { GITHUB_APP_WEBHOOK_SECRET: env.GITHUB_APP_WEBHOOK_SECRET }
       : {}),
+    ...(env.SLACK_SIGNING_SECRET ? { SLACK_SIGNING_SECRET: env.SLACK_SIGNING_SECRET } : {}),
     // mailer (SMTP)
     ...(env.SMTP_HOST ? { SMTP_HOST: env.SMTP_HOST } : {}),
     ...(env.SMTP_PORT ? { SMTP_PORT: env.SMTP_PORT } : {}),

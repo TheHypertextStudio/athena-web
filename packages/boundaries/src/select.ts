@@ -24,13 +24,14 @@ import type { BillingGateway } from './ports/billing';
 import type { BlobStore } from './ports/blob';
 import type { Connector, ConnectorProvider } from './ports/connector';
 import type { Mailer } from './ports/mailer';
-import type { Observer } from './ports/observer';
+import type { Observer, ObserverProvider } from './ports/observer';
 import type { Summarizer } from './ports/summarizer';
 import { RealStripeGateway } from './real/billing';
 import { RealProviderRuntime } from './real/agent-runtime';
 import { RealConnector } from './real/connector';
 import { RealLinearObserver } from './real/observer-linear';
 import { RealGitHubObserver } from './real/observer-github';
+import { RealSlackObserver } from './real/observer-slack';
 import { RealSummarizer } from './real/summarizer';
 import { SmtpMailer, smtpConfigFromEnv } from './real/mailer';
 import { RealBlob } from './real/blob';
@@ -59,6 +60,8 @@ export interface BoundaryEnv {
   readonly LINEAR_WEBHOOK_SECRET?: string;
   /** App-level GitHub App webhook signing secret — selects {@link RealGitHubObserver} when real-shaped. */
   readonly GITHUB_APP_WEBHOOK_SECRET?: string;
+  /** Slack app signing secret — selects {@link RealSlackObserver} when real-shaped. */
+  readonly SLACK_SIGNING_SECRET?: string;
   /** SMTP relay host — selects {@link SmtpMailer} when present with {@link BoundaryEnv.MAIL_FROM}. */
   readonly SMTP_HOST?: string;
   /** SMTP port (string form; 587 STARTTLS, 465 implicit TLS, 1025 Mailpit). */
@@ -128,7 +131,7 @@ export interface SelectOptions {
   /** OAuth token for the real connector (from the resolved credential, not env). */
   readonly connectorToken?: string;
   /** Provider to bind the observer port to (defaults to `linear`). */
-  readonly observerProvider?: ConnectorProvider;
+  readonly observerProvider?: ObserverProvider;
 }
 
 /**
@@ -142,12 +145,14 @@ export interface SelectOptions {
  * @param env - The boundary-relevant env slice.
  * @returns the signing secret, or `undefined` when none is configured for the provider.
  */
-function observerSecret(provider: ConnectorProvider, env: BoundaryEnv): string | undefined {
+function observerSecret(provider: ObserverProvider, env: BoundaryEnv): string | undefined {
   switch (provider) {
     case 'linear':
       return env.LINEAR_WEBHOOK_SECRET;
     case 'github':
       return env.GITHUB_APP_WEBHOOK_SECRET;
+    case 'slack':
+      return env.SLACK_SIGNING_SECRET;
     default:
       return undefined;
   }
@@ -265,6 +270,8 @@ export function selectAdapter<P extends PortName>(
         adapter = new RealLinearObserver({ signingSecret: secret });
       } else if (useReal && provider === 'github') {
         adapter = new RealGitHubObserver({ signingSecret: secret });
+      } else if (useReal && provider === 'slack') {
+        adapter = new RealSlackObserver({ signingSecret: secret });
       } else {
         adapter = new MockObserver({ provider });
       }

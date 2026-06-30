@@ -16,6 +16,7 @@ import type { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { ok } from '../lib/ok';
+import { apiDoc } from '../lib/openapi-route';
 
 type AuditEventRow = typeof auditEvent.$inferSelect;
 
@@ -49,14 +50,22 @@ export async function writeAudit(values: typeof auditEvent.$inferInsert): Promis
 }
 
 /** Activity router: the organization's universal audit feed, newest first. */
-const activity = new Hono<AppEnv>().get('/', async (c) => {
-  const { orgId } = c.get('actorCtx');
-  const rows = await db
-    .select()
-    .from(auditEvent)
-    .where(eq(auditEvent.organizationId, orgId))
-    .orderBy(desc(auditEvent.createdAt));
-  return ok(c, pageOf(AuditEventOut), { items: rows.map(toOut) });
-});
+const activity = new Hono<AppEnv>().get(
+  '/',
+  apiDoc({
+    tag: 'Activity',
+    summary: 'List the organization audit feed',
+    response: pageOf(AuditEventOut),
+  }),
+  async (c) => {
+    const { orgId } = c.get('actorCtx');
+    const rows = await db
+      .select()
+      .from(auditEvent)
+      .where(eq(auditEvent.organizationId, orgId))
+      .orderBy(desc(auditEvent.createdAt));
+    return ok(c, pageOf(AuditEventOut), { items: rows.map(toOut) });
+  },
+);
 
 export default activity;

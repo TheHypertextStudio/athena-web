@@ -52,6 +52,8 @@ export const TaskId = id<'TaskId'>();
 export const LabelId = id<'LabelId'>();
 /** Branded `Comment` id. */
 export const CommentId = id<'CommentId'>();
+/** Branded `Attachment` id. */
+export const AttachmentId = id<'AttachmentId'>();
 /** Branded `Update` id. */
 export const UpdateId = id<'UpdateId'>();
 /** Branded `SavedView` id. */

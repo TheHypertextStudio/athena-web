@@ -33,6 +33,13 @@ export const HubPreferences = z.object({
       channels: z.array(z.enum(['email', 'inApp'])).optional(),
     })
     .optional(),
+  /** Proactive-agent settings — whether incoming mentions/assignments auto-draft a plan. */
+  proactive: z
+    .object({
+      /** When true, a mention/assignment observation spawns an (approval-gated) agent plan. */
+      enabled: z.boolean().optional(),
+    })
+    .optional(),
 });
 /** Hub preferences value. */
 export type HubPreferences = z.infer<typeof HubPreferences>;

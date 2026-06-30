@@ -36,7 +36,7 @@ export default async function ProgramsListPage({
       queryKey: queryKeys.programs(orgId),
       queryFn: () =>
         unwrap(
-          () => api.v1.orgs[':orgId'].programs.$get({ param: { orgId } }),
+          () => api.v1.orgs[':orgId'].programs.$get({ param: { orgId }, query: {} }),
           'Could not load programs.',
         ),
     }),
@@ -44,7 +44,7 @@ export default async function ProgramsListPage({
       queryKey: queryKeys.projects(orgId),
       queryFn: () =>
         unwrap(
-          () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
+          () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId }, query: {} }),
           'Could not load projects.',
         ),
     }),
@@ -52,7 +52,7 @@ export default async function ProgramsListPage({
       queryKey: queryKeys.tasks(orgId),
       queryFn: () =>
         unwrap(
-          () => api.v1.orgs[':orgId'].tasks.$get({ param: { orgId } }),
+          () => api.v1.orgs[':orgId'].tasks.$get({ param: { orgId }, query: {} }),
           'Could not load tasks.',
         ),
     }),

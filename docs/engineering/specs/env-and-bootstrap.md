@@ -122,8 +122,10 @@ so register each environment's `…/api/auth/callback/github` (sign-in, Better A
 `…/v1/integrations/github/callback` (install/connect) as you set that environment up. The **webhook
 is environment-aware**: local setup skips it entirely (`APP_MODE=local` selects the mock observer,
 so local needs no webhook), and only **production** sets the public webhook URL — `…/v1/ingest/github`
-on the public API host — and turns it on. To exercise the real firehose locally, run a Cloudflare
-Tunnel (`cloudflared tunnel --url http://localhost:3001`) against a personal test app.
+on the public API host — and turns it on. To exercise the real firehose locally, use the persistent
+cloudflared tunnel that `pnpm bootstrap` (Phase 1) sets up — it fronts the stable portless host
+(`https://docket.localhost`, which proxies `/v1` to the API), NOT a bare `localhost:port` (dev ports
+are ephemeral under portless). See `docs/local-development.md` → "Tunnels & local OAuth".
 
 **Linear `genericOAuth` config values (constants in `@docket/auth`, not env):** `authorizationUrl = https://linear.app/oauth/authorize`, `tokenUrl = https://api.linear.app/oauth/token`, `userInfoUrl = https://api.linear.app/graphql` (resolve identity via the `viewer` GraphQL query in `getUserInfo`), `scopes = ["read"]` for login (request `["read","write","issues:create"]` only on the migration connect flow), `pkce: true`, comma-separated scope serialization (Linear quirk — pass scopes as a single comma-joined string).
 

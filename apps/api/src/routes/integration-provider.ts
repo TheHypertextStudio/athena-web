@@ -3,7 +3,7 @@ import type { integration, task } from '@docket/db';
 import { auth } from '@docket/auth';
 import type { IdentityOut, IdentityProvider, IntegrationOut, TaskOut } from '@docket/types';
 import { type IntegrationDirectoryProvider } from '@docket/types';
-import type { ConnectorProvider } from '@docket/boundaries';
+import type { ConnectorProvider, ObserverProvider } from '@docket/boundaries';
 import { selectAdapter } from '@docket/boundaries';
 import { and, eq, inArray } from 'drizzle-orm';
 import type { z } from 'zod';
@@ -73,6 +73,14 @@ export const PROVIDER_DIRECTORY: Readonly<
 /** Narrow a stored integration `provider` string to a {@link ConnectorProvider}. */
 export function asConnectorProvider(provider: string): ConnectorProvider | null {
   return CONNECTOR_PROVIDERS.find((p) => p === provider) ?? null;
+}
+
+/** Every {@link ObserverProvider} — the connectors plus observe-only sources (Slack). */
+export const OBSERVER_PROVIDERS: readonly ObserverProvider[] = [...CONNECTOR_PROVIDERS, 'slack'];
+
+/** Narrow a stored integration/event `provider` string to an {@link ObserverProvider}. */
+export function asObserverProvider(provider: string): ObserverProvider | null {
+  return OBSERVER_PROVIDERS.find((p) => p === provider) ?? null;
 }
 
 /**

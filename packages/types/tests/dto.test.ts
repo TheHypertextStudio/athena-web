@@ -1280,6 +1280,7 @@ describe('integration DTOs', () => {
       connection: {},
       status: 'connected',
       config: {},
+      externalAccountId: null,
       syncMode: 'mirror',
       writeBack: false,
       lastSyncStatus: null,

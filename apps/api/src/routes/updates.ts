@@ -11,8 +11,10 @@ import { z } from 'zod';
 import type { AppEnv } from '../context';
 import { CapabilityError, NotFoundError } from '../error';
 import { ok } from '../lib/ok';
+import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
+import { emitObservation } from './observation-emit';
 
 type UpdateRow = typeof update.$inferSelect;
 
@@ -128,80 +130,122 @@ async function recomputeSubjectHealth(
  * health"), keeping the Project/Program/Initiative health in sync with its newest post.
  */
 const updates = new Hono<AppEnv>()
-  .get('/', zQuery(UpdateListQuery), async (c) => {
-    const { orgId } = c.get('actorCtx');
-    const { subjectType, subjectId } = c.req.valid('query');
-    const rows = await db
-      .select()
-      .from(update)
-      .where(
-        and(
-          eq(update.organizationId, orgId),
-          eq(update.subjectType, subjectType),
-          eq(update.subjectId, subjectId),
-        ),
-      )
-      .orderBy(desc(update.createdAt));
-    return ok(c, pageOf(UpdateOut), { items: rows.map(toOut) });
-  })
-  .post('/', capabilityGuard('contribute'), zJson(UpdateCreate), async (c) => {
-    const { orgId, actorId } = c.get('actorCtx');
-    const body = c.req.valid('json');
+  .get(
+    '/',
+    apiDoc({ tag: 'Updates', summary: 'List updates', response: pageOf(UpdateOut) }),
+    zQuery(UpdateListQuery),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { subjectType, subjectId } = c.req.valid('query');
+      const rows = await db
+        .select()
+        .from(update)
+        .where(
+          and(
+            eq(update.organizationId, orgId),
+            eq(update.subjectType, subjectType),
+            eq(update.subjectId, subjectId),
+          ),
+        )
+        .orderBy(desc(update.createdAt));
+      return ok(c, pageOf(UpdateOut), { items: rows.map(toOut) });
+    },
+  )
+  .post(
+    '/',
+    capabilityGuard('contribute'),
+    apiDoc({
+      tag: 'Updates',
+      summary: 'Post an update',
+      capability: 'contribute',
+      response: UpdateOut,
+    }),
+    zJson(UpdateCreate),
+    async (c) => {
+      const { orgId, actorId } = c.get('actorCtx');
+      const body = c.req.valid('json');
 
-    const row = await db.transaction(async (tx) => {
-      const inserted = await tx
-        .insert(update)
-        .values({
-          organizationId: orgId,
-          authorId: actorId,
-          subjectType: body.subjectType,
-          subjectId: body.subjectId,
-          health: body.health,
-          body: body.body,
-          createdBy: actorId,
-        })
-        .returning();
-      const created = inserted[0];
-      /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
-      if (!created) throw new Error('update insert returned no row');
+      const row = await db.transaction(async (tx) => {
+        const inserted = await tx
+          .insert(update)
+          .values({
+            organizationId: orgId,
+            authorId: actorId,
+            subjectType: body.subjectType,
+            subjectId: body.subjectId,
+            health: body.health,
+            body: body.body,
+            createdBy: actorId,
+          })
+          .returning();
+        const created = inserted[0];
+        /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
+        if (!created) throw new Error('update insert returned no row');
 
-      if (body.health !== undefined) {
-        const table = subjectTable[body.subjectType];
-        await tx
-          .update(table)
-          .set({ health: body.health })
-          .where(and(eq(table.id, body.subjectId), eq(table.organizationId, orgId)));
-      }
+        if (body.health !== undefined) {
+          const table = subjectTable[body.subjectType];
+          await tx
+            .update(table)
+            .set({ health: body.health })
+            .where(and(eq(table.id, body.subjectId), eq(table.organizationId, orgId)));
+        }
 
-      return created;
-    });
+        return created;
+      });
 
-    return ok(c, UpdateOut, toOut(row));
-  })
-  .get('/:id', zParam(idParam), async (c) => {
-    const { orgId } = c.get('actorCtx');
-    const { id } = c.req.valid('param');
-    const row = await loadUpdate(orgId, id);
-    return ok(c, UpdateOut, toOut(row));
-  })
-  .delete('/:id', capabilityGuard('contribute'), zParam(idParam), async (c) => {
-    const { orgId, actorId, capabilities } = c.get('actorCtx');
-    const { id } = c.req.valid('param');
+      // Stream: a posted status update surfaces on its subject (project/initiative/program).
+      await emitObservation({
+        organizationId: orgId,
+        kind: 'status_change',
+        actorId,
+        title: 'Posted an update',
+        summary: row.body,
+        subject: { type: row.subjectType, id: row.subjectId },
+        ...(row.health ? { payload: { health: row.health } } : {}),
+      });
+      return ok(c, UpdateOut, toOut(row));
+    },
+  )
+  .get(
+    '/:id',
+    apiDoc({ tag: 'Updates', summary: 'Get an update', response: UpdateOut }),
+    zParam(idParam),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { id } = c.req.valid('param');
+      const row = await loadUpdate(orgId, id);
+      return ok(c, UpdateOut, toOut(row));
+    },
+  )
+  .delete(
+    '/:id',
+    capabilityGuard('contribute'),
+    apiDoc({
+      tag: 'Updates',
+      summary: 'Delete an update',
+      capability: 'contribute',
+      response: UpdateRemoved,
+    }),
+    zParam(idParam),
+    async (c) => {
+      const { orgId, actorId, capabilities } = c.get('actorCtx');
+      const { id } = c.req.valid('param');
 
-    // Authorship gate: a `contribute`-capable member may only delete their OWN update
-    // unless they hold `manage`. Load first (404s a cross-org/unknown id) then check.
-    const existing = await loadUpdate(orgId, id);
-    assertAuthorOrManage(existing, actorId, capabilities as Capability[]);
+      // Authorship gate: a `contribute`-capable member may only delete their OWN update
+      // unless they hold `manage`. Load first (404s a cross-org/unknown id) then check.
+      const existing = await loadUpdate(orgId, id);
+      assertAuthorOrManage(existing, actorId, capabilities as Capability[]);
 
-    // Hard delete (the `update` table carries no soft-delete column), then recompute the
-    // subject health from the newest remaining health-bearing update — in one transaction
-    // so a concurrent read never sees the row gone but the stale health still attached.
-    await db.transaction(async (tx) => {
-      await tx.delete(update).where(and(eq(update.id, id), eq(update.organizationId, orgId)));
-      await recomputeSubjectHealth(tx, orgId, existing.subjectType, existing.subjectId);
-    });
+      // Hard delete (the `update` table carries no soft-delete column), then recompute the
+      // subject health from the newest remaining health-bearing update — in one transaction
+      // so a concurrent read never sees the row gone but the stale health still attached.
+      await db.transaction(async (tx) => {
+        await tx.delete(update).where(and(eq(update.id, id), eq(update.organizationId, orgId)));
+        await recomputeSubjectHealth(tx, orgId, existing.subjectType, existing.subjectId);
+      });
 
-    return ok(c, UpdateRemoved, { id, removed: true });
-  });
+      return ok(c, UpdateRemoved, { id, removed: true });
+    },
+  );
 
 export default updates;

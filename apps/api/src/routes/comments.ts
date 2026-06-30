@@ -26,8 +26,10 @@ import { z } from 'zod';
 import type { AppEnv } from '../context';
 import { CapabilityError, NotFoundError, ValidationError } from '../error';
 import { ok } from '../lib/ok';
+import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
+import { emitObservation } from './observation-emit';
 
 type CommentRow = typeof comment.$inferSelect;
 
@@ -99,130 +101,184 @@ function assertAuthorOrManage(row: CommentRow, actorId: string, held: readonly C
  * their parent so threads stay within one subject and tenant.
  */
 const comments = new Hono<AppEnv>()
-  .get('/', zQuery(CommentListQuery), async (c) => {
-    const { orgId } = c.get('actorCtx');
-    const { subjectType, subjectId } = c.req.valid('query');
-    // Ascending by creation so the client can reconstruct threads in post order:
-    // a reply always sorts after the parent it references.
-    const rows = await db
-      .select()
-      .from(comment)
-      .where(
-        and(
-          eq(comment.organizationId, orgId),
-          eq(comment.subjectType, subjectType),
-          eq(comment.subjectId, subjectId),
-        ),
-      )
-      .orderBy(asc(comment.createdAt));
-    return ok(c, pageOf(CommentOut), { items: rows.map(toOut) });
-  })
-  .post('/', capabilityGuard('comment'), zJson(CommentCreate), async (c) => {
-    const { orgId, actorId } = c.get('actorCtx');
-    const body = c.req.valid('json');
+  .get(
+    '/',
+    apiDoc({ tag: 'Comments', summary: 'List comments', response: pageOf(CommentOut) }),
+    zQuery(CommentListQuery),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { subjectType, subjectId } = c.req.valid('query');
+      // Ascending by creation so the client can reconstruct threads in post order:
+      // a reply always sorts after the parent it references.
+      const rows = await db
+        .select()
+        .from(comment)
+        .where(
+          and(
+            eq(comment.organizationId, orgId),
+            eq(comment.subjectType, subjectType),
+            eq(comment.subjectId, subjectId),
+          ),
+        )
+        .orderBy(asc(comment.createdAt));
+      return ok(c, pageOf(CommentOut), { items: rows.map(toOut) });
+    },
+  )
+  .post(
+    '/',
+    capabilityGuard('comment'),
+    apiDoc({
+      tag: 'Comments',
+      summary: 'Add a comment',
+      capability: 'comment',
+      response: CommentOut,
+    }),
+    zJson(CommentCreate),
+    async (c) => {
+      const { orgId, actorId } = c.get('actorCtx');
+      const body = c.req.valid('json');
 
-    // Threading: a reply's parent must be an existing comment in this org on the SAME
-    // subject. Without this a `parentCommentId` could dangle, point at another tenant's
-    // comment, or thread a task comment under a project comment — all of which corrupt
-    // the rendered thread tree. Nesting is single-level: a parent must itself be a root
-    // comment (replies cannot have replies), keeping the thread a two-level structure.
-    if (body.parentCommentId !== undefined) {
-      const parent = await loadComment(orgId, body.parentCommentId);
-      if (parent.subjectType !== body.subjectType || parent.subjectId !== body.subjectId) {
-        throw new ValidationError(
-          new z.ZodError([
-            {
-              code: 'custom',
-              path: ['parentCommentId'],
-              message: 'Parent comment is on a different subject',
-              input: body.parentCommentId,
-            },
-          ]),
-        );
+      // Threading: a reply's parent must be an existing comment in this org on the SAME
+      // subject. Without this a `parentCommentId` could dangle, point at another tenant's
+      // comment, or thread a task comment under a project comment — all of which corrupt
+      // the rendered thread tree. Nesting is single-level: a parent must itself be a root
+      // comment (replies cannot have replies), keeping the thread a two-level structure.
+      if (body.parentCommentId !== undefined) {
+        const parent = await loadComment(orgId, body.parentCommentId);
+        if (parent.subjectType !== body.subjectType || parent.subjectId !== body.subjectId) {
+          throw new ValidationError(
+            new z.ZodError([
+              {
+                code: 'custom',
+                path: ['parentCommentId'],
+                message: 'Parent comment is on a different subject',
+                input: body.parentCommentId,
+              },
+            ]),
+          );
+        }
+        if (parent.parentCommentId !== null) {
+          throw new ValidationError(
+            new z.ZodError([
+              {
+                code: 'custom',
+                path: ['parentCommentId'],
+                message: 'Cannot reply to a reply; replies are single-level',
+                input: body.parentCommentId,
+              },
+            ]),
+          );
+        }
       }
-      if (parent.parentCommentId !== null) {
-        throw new ValidationError(
-          new z.ZodError([
-            {
-              code: 'custom',
-              path: ['parentCommentId'],
-              message: 'Cannot reply to a reply; replies are single-level',
-              input: body.parentCommentId,
-            },
-          ]),
-        );
-      }
-    }
 
-    const inserted = await db
-      .insert(comment)
-      .values({
+      const inserted = await db
+        .insert(comment)
+        .values({
+          organizationId: orgId,
+          authorId: actorId,
+          subjectType: body.subjectType,
+          subjectId: body.subjectId,
+          body: body.body,
+          parentCommentId: body.parentCommentId,
+          createdBy: actorId,
+        })
+        .returning();
+      const row = inserted[0];
+      /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
+      if (!row) throw new Error('comment insert returned no row');
+
+      // Stream: a comment surfaces to the commented subject's owners/followers.
+      await emitObservation({
         organizationId: orgId,
-        authorId: actorId,
-        subjectType: body.subjectType,
-        subjectId: body.subjectId,
-        body: body.body,
-        parentCommentId: body.parentCommentId,
-        createdBy: actorId,
-      })
-      .returning();
-    const row = inserted[0];
-    /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
-    if (!row) throw new Error('comment insert returned no row');
-    return ok(c, CommentOut, toOut(row));
-  })
-  .get('/:id', zParam(idParam), async (c) => {
-    const { orgId } = c.get('actorCtx');
-    const { id } = c.req.valid('param');
-    const row = await loadComment(orgId, id);
-    return ok(c, CommentOut, toOut(row));
-  })
-  .patch('/:id', capabilityGuard('comment'), zParam(idParam), zJson(CommentUpdate), async (c) => {
-    const { orgId, actorId, capabilities } = c.get('actorCtx');
-    const { id } = c.req.valid('param');
-    const body = c.req.valid('json');
+        kind: 'comment',
+        actorId,
+        title: row.body,
+        summary: row.body,
+        subject: { type: row.subjectType, id: row.subjectId },
+      });
+      return ok(c, CommentOut, toOut(row));
+    },
+  )
+  .get(
+    '/:id',
+    apiDoc({ tag: 'Comments', summary: 'Get a comment', response: CommentOut }),
+    zParam(idParam),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { id } = c.req.valid('param');
+      const row = await loadComment(orgId, id);
+      return ok(c, CommentOut, toOut(row));
+    },
+  )
+  .patch(
+    '/:id',
+    capabilityGuard('comment'),
+    apiDoc({
+      tag: 'Comments',
+      summary: 'Update a comment',
+      capability: 'comment',
+      response: CommentOut,
+    }),
+    zParam(idParam),
+    zJson(CommentUpdate),
+    async (c) => {
+      const { orgId, actorId, capabilities } = c.get('actorCtx');
+      const { id } = c.req.valid('param');
+      const body = c.req.valid('json');
 
-    // Authorship gate: a `comment`-capable member may only edit their OWN comment unless
-    // they hold `manage`. Load first (404s a cross-org/unknown id) then check the author.
-    const existing = await loadComment(orgId, id);
-    assertAuthorOrManage(existing, actorId, capabilities as Capability[]);
+      // Authorship gate: a `comment`-capable member may only edit their OWN comment unless
+      // they hold `manage`. Load first (404s a cross-org/unknown id) then check the author.
+      const existing = await loadComment(orgId, id);
+      assertAuthorOrManage(existing, actorId, capabilities as Capability[]);
 
-    const updated = await db
-      .update(comment)
-      .set({ body: body.body, editedAt: new Date() })
-      .where(and(eq(comment.id, id), eq(comment.organizationId, orgId)))
-      .returning();
-    const row = updated[0];
-    /* v8 ignore next -- @preserve defensive: loadComment already proved the row exists */
-    if (!row) throw new NotFoundError('Comment not found');
-    return ok(c, CommentOut, toOut(row));
-  })
-  .delete('/:id', capabilityGuard('comment'), zParam(idParam), async (c) => {
-    const { orgId, actorId, capabilities } = c.get('actorCtx');
-    const { id } = c.req.valid('param');
-
-    // Authorship gate (same as PATCH): only the author or a `manage` holder may delete.
-    const existing = await loadComment(orgId, id);
-    assertAuthorOrManage(existing, actorId, capabilities as Capability[]);
-
-    // Deleting a root comment must not orphan its replies into a dangling thread:
-    // `parent_comment_id` carries no FK (it is plain text), so re-parent any replies to
-    // null first (promoting them to root comments) inside the same transaction as the
-    // delete. This keeps a subsequent list read internally consistent.
-    const removed = await db.transaction(async (tx) => {
-      await tx
+      const updated = await db
         .update(comment)
-        .set({ parentCommentId: null })
-        .where(and(eq(comment.parentCommentId, id), eq(comment.organizationId, orgId)));
-      const deleted = await tx
-        .delete(comment)
+        .set({ body: body.body, editedAt: new Date() })
         .where(and(eq(comment.id, id), eq(comment.organizationId, orgId)))
         .returning();
-      return deleted[0];
-    });
-    /* v8 ignore next -- @preserve defensive: loadComment already proved the row exists */
-    if (!removed) throw new NotFoundError('Comment not found');
-    return ok(c, CommentRemoved, { id: removed.id, removed: true });
-  });
+      const row = updated[0];
+      /* v8 ignore next -- @preserve defensive: loadComment already proved the row exists */
+      if (!row) throw new NotFoundError('Comment not found');
+      return ok(c, CommentOut, toOut(row));
+    },
+  )
+  .delete(
+    '/:id',
+    capabilityGuard('comment'),
+    apiDoc({
+      tag: 'Comments',
+      summary: 'Delete a comment',
+      capability: 'comment',
+      response: CommentRemoved,
+    }),
+    zParam(idParam),
+    async (c) => {
+      const { orgId, actorId, capabilities } = c.get('actorCtx');
+      const { id } = c.req.valid('param');
+
+      // Authorship gate (same as PATCH): only the author or a `manage` holder may delete.
+      const existing = await loadComment(orgId, id);
+      assertAuthorOrManage(existing, actorId, capabilities as Capability[]);
+
+      // Deleting a root comment must not orphan its replies into a dangling thread:
+      // `parent_comment_id` carries no FK (it is plain text), so re-parent any replies to
+      // null first (promoting them to root comments) inside the same transaction as the
+      // delete. This keeps a subsequent list read internally consistent.
+      const removed = await db.transaction(async (tx) => {
+        await tx
+          .update(comment)
+          .set({ parentCommentId: null })
+          .where(and(eq(comment.parentCommentId, id), eq(comment.organizationId, orgId)));
+        const deleted = await tx
+          .delete(comment)
+          .where(and(eq(comment.id, id), eq(comment.organizationId, orgId)))
+          .returning();
+        return deleted[0];
+      });
+      /* v8 ignore next -- @preserve defensive: loadComment already proved the row exists */
+      if (!removed) throw new NotFoundError('Comment not found');
+      return ok(c, CommentRemoved, { id: removed.id, removed: true });
+    },
+  );
 
 export default comments;

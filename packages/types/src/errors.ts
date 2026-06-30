@@ -21,6 +21,8 @@ export const ProblemCode = z.enum([
   'last_owner_guard',
   'self_escalation',
   'personal_org_no_invites',
+  'reauth_required',
+  'deletion_blocked',
   'card_required',
   'billing_frozen',
   'internal',

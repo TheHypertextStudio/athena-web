@@ -368,20 +368,14 @@ describe('discovery routes (PRM + AS metadata)', () => {
     );
   });
 
-  it('serves AS metadata with Better Auth MCP endpoints and CIMD support', async () => {
-    const res = await app().request('/.well-known/oauth-authorization-server');
-    expect(res.status).toBe(200);
-    const metadata = (await res.json()) as Record<string, unknown>;
-    expect(metadata['issuer']).toBe('https://auth.docket.test');
-    expect(metadata['authorization_endpoint']).toBe(
-      'https://auth.docket.test/api/auth/mcp/authorize',
+  it('redirects AS metadata to the issuer OIDC discovery document', async () => {
+    const res = await app().request('/.well-known/oauth-authorization-server', {
+      redirect: 'manual',
+    });
+    expect(res.status).toBe(307);
+    expect(res.headers.get('location')).toBe(
+      'https://auth.docket.test/.well-known/openid-configuration',
     );
-    expect(metadata['token_endpoint']).toBe('https://auth.docket.test/api/auth/mcp/token');
-    expect(metadata['registration_endpoint']).toBe(
-      'https://auth.docket.test/api/auth/mcp/register',
-    );
-    expect(metadata['code_challenge_methods_supported']).toEqual(['S256']);
-    expect(metadata['client_id_metadata_document_supported']).toBe(true);
   });
 });
 

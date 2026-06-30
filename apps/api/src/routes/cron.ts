@@ -13,11 +13,14 @@
 import { db } from '@docket/db';
 import { Hono } from 'hono';
 
+import { sweepAccountDeletions } from '../account/lifecycle';
+import { sweepAccountExports } from '../account/export';
 import { env } from '../env';
 import { sweepLifecycle } from '../billing/lifecycle';
 import { sweepConnectorSync } from './integration-sync';
 import { sweepInboundEvents } from './observation-sync';
 import { sweepDailyDigests } from './daily-digest';
+import { sweepProactiveSessions } from './proactive-sweep';
 
 /** Extract the presented cron secret from `Authorization: Bearer …` or `x-cron-secret`. */
 function presentedSecret(
@@ -66,6 +69,31 @@ const cron = new Hono()
   .post('/daily-digests', async (c) => {
     if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
     const result = await sweepDailyDigests(new Date());
+    return c.json({ swept: true, ...result });
+  })
+  // Proactive engine: draft (approval-gated) agent plans from recent mentions/assignments for
+  // opted-in users. Idempotent via each session's `external_run_ref`; run on a tight cadence.
+  .post('/run-proactive', async (c) => {
+    if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
+    const result = await sweepProactiveSessions(new Date());
+    return c.json({ swept: true, ...result });
+  })
+  // Account-deletion sweep: hard-delete every account whose 14-day grace window has elapsed,
+  // re-checking ownership blockers first so a late sole-owner conflict never orphans a shared
+  // org. Idempotent (the rows are gone after a purge), so safe on a fixed daily cadence.
+  .post('/account-deletion-sweep', async (c) => {
+    if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
+    const now = new Date().toISOString();
+    const result = await sweepAccountDeletions(db, now);
+    return c.json({ swept: true, ...result });
+  })
+  // Account-export sweep: generate each pending personal-data export to blob storage, email the
+  // download link, and expire artifacts past their TTL. Idempotent + safe to retry (only
+  // `pending` jobs are generated, only un-expired `ready` jobs are expired).
+  .post('/account-export-sweep', async (c) => {
+    if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
+    const now = new Date().toISOString();
+    const result = await sweepAccountExports(db, now);
     return c.json({ swept: true, ...result });
   });
 

@@ -21,6 +21,7 @@ import type { z } from 'zod';
 import type { AppEnv, AuthSession } from '../context';
 import { AuthError, ReauthRequiredError } from '../error';
 import { ok } from '../lib/ok';
+import { apiDoc } from '../lib/openapi-route';
 
 /** Seconds a session stays "fresh" for high-risk actions (generating recovery codes). */
 const FRESH_SESSION_MAX_AGE_S = 300;
@@ -58,14 +59,22 @@ async function loadStatus(userId: string): Promise<z.input<typeof RecoveryCodesS
 }
 
 const meRecovery = new Hono<AppEnv>()
-  .get('/', async (c) => {
-    const { user } = requireSession(c);
-    return ok(c, RecoveryCodesStatusOut, await loadStatus(user.id));
-  })
-  .post('/', async (c) => {
-    const session = requireSession(c);
-    requireFreshSession(session);
-    return ok(c, RecoveryCodesOut, { codes: await generateRecoveryCodes(session.user.id) });
-  });
+  .get(
+    '/',
+    apiDoc({ tag: 'Me', summary: 'Get recovery-codes status', response: RecoveryCodesStatusOut }),
+    async (c) => {
+      const { user } = requireSession(c);
+      return ok(c, RecoveryCodesStatusOut, await loadStatus(user.id));
+    },
+  )
+  .post(
+    '/',
+    apiDoc({ tag: 'Me', summary: 'Generate recovery codes', response: RecoveryCodesOut }),
+    async (c) => {
+      const session = requireSession(c);
+      requireFreshSession(session);
+      return ok(c, RecoveryCodesOut, { codes: await generateRecoveryCodes(session.user.id) });
+    },
+  );
 
 export default meRecovery;

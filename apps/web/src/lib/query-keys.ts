@@ -32,6 +32,9 @@ export const queryKeys = {
   agents: (orgId: string) => ['org', orgId, 'agents'] as const,
   sessions: (orgId: string) => ['org', orgId, 'sessions'] as const,
   views: (orgId: string) => ['org', orgId, 'views'] as const,
+  // The dependency-graph read carries its scope (`org` / `project:<id>` / `task:<id>:<depth>`)
+  // so each embed caches apart; the coarse `['org',orgId,'task-graph']` prefix invalidates all.
+  taskGraph: (orgId: string, scopeKey: string) => ['org', orgId, 'task-graph', scopeKey] as const,
   settings: (orgId: string, tab: string) => ['org', orgId, 'settings', tab] as const,
   connectedApps: () => ['me', 'connected-apps'] as const,
   identities: () => ['me', 'identities'] as const,

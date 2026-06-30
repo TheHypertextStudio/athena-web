@@ -75,6 +75,27 @@ const JOBS: readonly CronJob[] = [
     description:
       "Docket: daily-digest sweep (email each opted-in user's end-of-day summary at their local time).",
   },
+  {
+    name: 'docket-run-proactive',
+    path: '/v1/cron/run-proactive',
+    schedule: '*/2 * * * *',
+    description:
+      'Docket: proactive engine (draft approval-gated agent plans from recent mentions/assignments).',
+  },
+  {
+    name: 'docket-account-deletion-sweep',
+    path: '/v1/cron/account-deletion-sweep',
+    schedule: '30 3 * * *',
+    description:
+      'Docket: account-deletion sweep (purge accounts past their 14-day grace window).',
+  },
+  {
+    name: 'docket-account-export-sweep',
+    path: '/v1/cron/account-export-sweep',
+    schedule: '*/10 * * * *',
+    description:
+      'Docket: account-export sweep (generate pending personal-data exports + email the link).',
+  },
 ];
 
 // ── helpers ──────────────────────────────────────────────────────────────────

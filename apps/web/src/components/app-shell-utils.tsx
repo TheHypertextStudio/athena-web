@@ -11,7 +11,9 @@ import type { ReactNode } from 'react';
 /** homeKeyFromPath derives a stable app shell storage or navigation key. */
 export function homeKeyFromPath(pathname: string): HomeNavKey | undefined {
   if (/^\/today(?:\/|$)/.test(pathname)) return 'today';
+  if (/^\/tasks(?:\/|$)/.test(pathname)) return 'tasks';
   if (/^\/inbox(?:\/|$)/.test(pathname)) return 'inbox';
+  if (/^\/stream(?:\/|$)/.test(pathname)) return 'stream';
   if (/^\/portfolio(?:\/|$)/.test(pathname)) return 'portfolio';
   return undefined;
 }
@@ -31,12 +33,14 @@ export function orgIdFromPath(pathname: string): string | null {
 export const NAV_SEGMENTS: readonly WorkspaceNavKey[] = [
   'my-work',
   'triage',
+  'stream',
   'initiatives',
   'programs',
   'projects',
   'cycles',
   'teams',
   'views',
+  'graph',
   'agents',
   'settings',
 ];

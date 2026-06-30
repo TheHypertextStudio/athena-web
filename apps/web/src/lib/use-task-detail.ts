@@ -98,7 +98,7 @@ export function useTaskDetail(orgId: string, taskId: string): TaskDetailData {
   const projectsQ = useApiQuery(
     apiQueryOptions(
       queryKeys.projects(orgId),
-      () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
+      () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId }, query: {} }),
       'Could not load projects.',
       { staleTime: STALE.static },
     ),
@@ -106,7 +106,7 @@ export function useTaskDetail(orgId: string, taskId: string): TaskDetailData {
   const programsQ = useApiQuery(
     apiQueryOptions(
       queryKeys.programs(orgId),
-      () => api.v1.orgs[':orgId'].programs.$get({ param: { orgId } }),
+      () => api.v1.orgs[':orgId'].programs.$get({ param: { orgId }, query: {} }),
       'Could not load programs.',
       { staleTime: STALE.static },
     ),
@@ -138,7 +138,7 @@ export function useTaskDetail(orgId: string, taskId: string): TaskDetailData {
   const cyclesQ = useApiQuery(
     apiQueryOptions(
       queryKeys.cycles(orgId),
-      () => api.v1.orgs[':orgId'].cycles.$get({ param: { orgId } }),
+      () => api.v1.orgs[':orgId'].cycles.$get({ param: { orgId }, query: {} }),
       'Could not load cycles.',
       { staleTime: STALE.static },
     ),

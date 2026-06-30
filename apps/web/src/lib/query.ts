@@ -33,17 +33,22 @@
  */
 import {
   type DefaultError,
+  type InfiniteData,
   keepPreviousData,
   type QueryClient,
   type QueryKey,
+  type UseInfiniteQueryResult,
   type UseMutationOptions,
   type UseMutationResult,
   type UseQueryOptions,
   type UseQueryResult,
+  useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
+
+import type { ApiInfiniteDef } from './query-core';
 
 export * from './query-core';
 export { queryKeys } from './query-keys';
@@ -96,6 +101,38 @@ export function useApiListQuery<T>(def: UseQueryOptions<T>): UseQueryResult<T> {
  */
 export function useLiveApiQuery<T>(def: UseQueryOptions<T>, intervalMs: number): UseQueryResult<T> {
   return useApiQuery({ refetchInterval: intervalMs, ...def });
+}
+
+/**
+ * Read hook for CURSOR-PAGINATED surfaces — subscribe to an {@link apiInfiniteQueryOptions}
+ * definition. The Stream firehose's one read primitive: `data.pages` holds each fetched page,
+ * and `fetchNextPage()`/`hasNextPage` drive infinite scroll off the page's `nextCursor`.
+ *
+ * @typeParam TPage - The page response shape (carried by the definition).
+ * @param def - A typed definition from {@link apiInfiniteQueryOptions}.
+ * @returns the {@link UseInfiniteQueryResult} over `InfiniteData<TPage>`.
+ */
+export function useInfiniteApiQuery<TPage>(
+  def: ApiInfiniteDef<TPage>,
+): UseInfiniteQueryResult<InfiniteData<TPage>> {
+  return useInfiniteQuery(def);
+}
+
+/**
+ * Live cursor-paginated read: {@link useInfiniteApiQuery} that polls page 1 on an interval
+ * (focus-gated, like {@link useLiveApiQuery}). The Stream's polling-now / SSE-later seam — the
+ * interval is the only thing that changes when SSE lands.
+ *
+ * @typeParam TPage - The page response shape (carried by the definition).
+ * @param def - A typed definition from {@link apiInfiniteQueryOptions}.
+ * @param intervalMs - The polling interval in milliseconds.
+ * @returns the {@link UseInfiniteQueryResult} over `InfiniteData<TPage>`.
+ */
+export function useLiveInfiniteApiQuery<TPage>(
+  def: ApiInfiniteDef<TPage>,
+  intervalMs: number,
+): UseInfiniteQueryResult<InfiniteData<TPage>> {
+  return useInfiniteQuery({ ...def, refetchInterval: intervalMs });
 }
 
 /**

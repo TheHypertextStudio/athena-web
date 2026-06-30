@@ -29,6 +29,7 @@
 import * as React from 'react';
 
 import {
+  Activity,
   Building,
   FolderKanban,
   GanttChart,
@@ -36,6 +37,7 @@ import {
   Inbox,
   Layers,
   LayoutGrid,
+  ListChecks,
   type LucideIcon,
   RefreshCw,
   Search,
@@ -43,6 +45,7 @@ import {
   Sparkles,
   Target,
   Users,
+  Workflow,
 } from '../../icons';
 import { useVocabulary } from '../../hooks/useVocabulary';
 import { useContextState } from './ContextProvider';
@@ -153,7 +156,9 @@ export function Sidebar({
   /** The cross-org Home rows that route to a real page (Search is rendered separately). */
   const homeRows: readonly NavRow<Exclude<HomeNavKey, 'search'>>[] = [
     { key: 'today', label: 'Today', icon: Home },
+    { key: 'tasks', label: 'Tasks', icon: ListChecks },
     { key: 'inbox', label: 'Inbox', icon: Inbox },
+    { key: 'stream', label: 'Stream', icon: Activity },
     { key: 'portfolio', label: 'Portfolio', icon: GanttChart },
   ];
 
@@ -168,12 +173,14 @@ export function Sidebar({
   const workspaceRows: readonly NavRow<WorkspaceNavKey>[] = [
     { key: 'my-work', label: 'My Work', icon: Home },
     { key: 'triage', label: 'Triage', icon: Inbox },
+    { key: 'stream', label: 'Stream', icon: Activity },
     { key: 'initiatives', label: initiatives, icon: Target },
     { key: 'programs', label: programs, icon: Layers },
     { key: 'projects', label: projects, icon: FolderKanban },
     { key: 'cycles', label: cycles, icon: RefreshCw },
     ...(personalWorkspace ? [] : [{ key: 'teams' as const, label: teams, icon: Users }]),
     { key: 'views', label: 'Views', icon: LayoutGrid },
+    { key: 'graph', label: 'Graph', icon: Workflow },
     { key: 'agents', label: 'Agents', icon: Sparkles },
     { key: 'settings', label: 'Settings', icon: Settings },
   ];

@@ -191,12 +191,12 @@ export default function SignInPage(): JSX.Element {
       <OAuthButtons callbackURL={HOME_DESTINATION} disabled={pending} onError={setError} />
 
       <p className="text-on-surface-variant text-body text-center">
-        Lost your passkey?{' '}
+        Can&apos;t sign in?{' '}
         <Link
           href="/recover"
           className="text-primary font-medium underline-offset-4 hover:underline"
         >
-          Recover with a backup code
+          Recover your account
         </Link>
       </p>
     </AuthShell>

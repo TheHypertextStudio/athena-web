@@ -18,6 +18,7 @@ import { type JSX, type ReactNode, useCallback, useEffect, useMemo, useState } f
 import { ActiveOrgContext, useActiveOrg } from '@/components/active-org';
 import Agenda from '@/components/agenda/agenda';
 import { CommandPaletteProvider, useCommandPalette } from '@/components/command-palette';
+import { RecoveryNudgeBanner } from '@/components/recovery-nudge-banner';
 import { OpenDocumentsProvider, useOpenDocuments } from '@/components/tabs';
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
@@ -178,6 +179,9 @@ function AppShellInner({
     [orgs, resolvedOrgId],
   );
 
+  // The personal org owns the account-level Security settings the recovery-codes nudge links to.
+  const personalOrgId = useMemo(() => orgs.find((o) => o.isPersonal)?.id ?? null, [orgs]);
+
   useEffect(() => {
     if (resolvedOrgId) setContext(resolvedOrgId);
   }, [resolvedOrgId, setContext]);
@@ -244,6 +248,7 @@ function AppShellInner({
         // The portable agenda rides along on every authenticated page as the shell's right rail.
         aside={{ node: <Agenda />, label: 'Agenda', icon: <Calendar aria-hidden="true" /> }}
       >
+        <RecoveryNudgeBanner personalOrgId={personalOrgId} userId={userId} />
         {children}
       </AppShell>
     </VocabularyProvider>

@@ -39,21 +39,21 @@ export async function addVirtualAuthenticator(page) {
  *
  * @remarks
  * Installed via `addInitScript` so it wraps the static method on every subsequent navigation,
- * before the app's bundle loads. Each call's options are recorded on `window.__signalCalls`,
+ * before the app's bundle loads. Each call's options are recorded on `window.signalCalls`,
  * and the original method is still invoked so the real credential-pruning behavior is
  * preserved — the flow stays real; the spy only observes it. Read the calls back with
- * `page.evaluate(() => window.__signalCalls)`.
+ * `page.evaluate(() => window.signalCalls)`.
  *
  * @param page - The Playwright page to instrument.
  */
 export async function installSignalSpy(page) {
   await page.addInitScript(() => {
-    window.__signalCalls = [];
+    window.signalCalls = [];
     const PublicKeyCredentialCtor = window.PublicKeyCredential;
     if (!PublicKeyCredentialCtor) return;
     const original = PublicKeyCredentialCtor.signalUnknownCredential?.bind(PublicKeyCredentialCtor);
     PublicKeyCredentialCtor.signalUnknownCredential = (options) => {
-      window.__signalCalls.push(options);
+      window.signalCalls.push(options);
       return original ? original(options) : Promise.resolve();
     };
   });

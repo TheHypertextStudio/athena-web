@@ -18,9 +18,27 @@ import { buildTaskViewFilter, loadNeighborhood, type TaskRow } from './task-help
  * project; otherwise the whole org. Every scope is permission-filtered identically.
  */
 const GraphQuery = z.object({
-  projectId: z.string().optional(),
-  rootTaskId: z.string().optional(),
-  depth: z.coerce.number().int().min(1).max(5).optional(),
+  projectId: z
+    .string()
+    .optional()
+    .describe(
+      'Narrow the graph to one project (active tasks with this `projectId`). Ignored when `rootTaskId` is set, which takes precedence. Omitting both scopes the graph to the whole org.',
+    ),
+  rootTaskId: z
+    .string()
+    .optional()
+    .describe(
+      "Center the graph on this task's neighborhood instead of a project/org scope. Takes precedence over `projectId`. The reachable radius is bounded by `depth`.",
+    ),
+  depth: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(5)
+    .optional()
+    .describe(
+      'Neighborhood radius (in edge hops) around `rootTaskId`. Integer 1–5; defaults to 2. Only meaningful together with `rootTaskId`.',
+    ),
 });
 
 /** Project a task row into the slim graph-node shape. */
@@ -44,7 +62,16 @@ function toGraphNode(t: TaskRow): z.input<typeof TaskGraphNode> {
  */
 const graph = new Hono<AppEnv>().get(
   '/',
-  apiDoc({ tag: 'Tasks', summary: 'Get the dependency graph', response: GraphOut }),
+  apiDoc({
+    tag: 'Tasks',
+    summary: 'Get the dependency graph',
+    response: GraphOut,
+    description: `Return the task dependency canvas for a scope in a single read: the viewable node set plus the dependency and subtask edges among those nodes. Nodes are slim {@link TaskGraphNode} projections (id/title/state/priority/team/project/assignee/parent — no provenance or timestamps), sized for a node card and the layout engine.
+
+Scope is selected by query and is layered, most-specific first: \`rootTaskId\` returns a neighborhood around that task bounded by \`depth\` (1–5, default 2); otherwise \`projectId\` narrows to one project; otherwise the whole org's active tasks. Every scope is permission-filtered identically — the candidate set is reduced to what the caller may view, so the graph never reveals a task the caller couldn't open directly. Requires org membership (\`view\`).
+
+Edges are pre-pruned to the viewable set so there are no dangling endpoints: a \`dependency\` edge (\`source\` blocks \`target\`) is included only when both endpoints are viewable, and a \`subtask\` edge (\`parent → child\`) only when the parent is in the set. Each edge carries a stable synthetic \`id\` (\`dep:<a>:<b>\` or \`sub:<a>:<b>\`). Archived tasks are excluded. Returns {@link GraphOut}, ready to render as-is.`,
+  }),
   zQuery(GraphQuery),
   async (c) => {
     const { orgId, actorId, roleId } = c.get('actorCtx');

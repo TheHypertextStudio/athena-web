@@ -61,7 +61,20 @@ const admin = new Hono<AppEnv>()
   // ---- Users --------------------------------------------------------------
   .get(
     '/users',
-    apiDoc({ tag: 'Admin', summary: 'List users', response: AdminUserPage }),
+    apiDoc({
+      tag: 'Admin',
+      summary: 'List users',
+      response: AdminUserPage,
+      description: `Returns a paginated, newest-first slice of every Docket end-user account across all organizations — the operator back-office user directory.
+
+**Search & paging.** When \`search\` is supplied it filters case-insensitively on a substring of the user's name OR email; omit it to list everyone. Rows are ordered by \`createdAt\` descending and bounded by offset pagination (\`limit\` 1..100, default 50; \`offset\` default 0). The response carries \`items\` plus \`total\` — the full count of rows matching the (optional) search — so the UI can render pager controls.
+
+**Access.** Mounted under \`/v1/admin\`, which is gated by \`staffMiddleware\`: the caller must be a registered Docket operator (a \`staff_user\` row). A signed-in non-operator gets \`403 forbidden\`; an unauthenticated caller \`401 unauthorized\`. This is a read, so any staff tier (\`support\`, \`finance\`, \`superadmin\`) suffices — there is no \`requireStaffRole\` tier gate.
+
+**Side effects.** None — a pure read; writes no operator audit event.
+
+**Related.** \`GET /admin/users/{id}\` for one user plus their org memberships.`,
+    }),
     zQuery(AdminUserListQuery),
     async (c) => {
       const { search, limit, offset } = c.req.valid('query');
@@ -83,7 +96,20 @@ const admin = new Hono<AppEnv>()
   )
   .get(
     '/users/:id',
-    apiDoc({ tag: 'Admin', summary: 'Get a user', response: AdminUserDetail }),
+    apiDoc({
+      tag: 'Admin',
+      summary: 'Get a user',
+      response: AdminUserDetail,
+      description: `Returns one Docket account by id together with every organization it belongs to — the operator user-detail screen.
+
+**Behavior.** Loads the \`user\` row, then joins \`actor → organization\` to enumerate the human memberships (agent/service actors are excluded — only \`kind = 'human'\`). Each membership reports the org's id, name, slug, current data-lifecycle state, the user's \`actorId\` within that org, and its assigned \`roleId\` (\`null\` when the actor holds no role). Returns \`404 not_found\` when no user matches the id.
+
+**Access.** Behind \`staffMiddleware\` (any staff tier). A non-operator session gets \`403\`; an anonymous one \`401\`.
+
+**Side effects.** None — a read; no audit event.
+
+**Related.** \`GET /admin/users\` to find a user; \`POST /admin/impersonations\` to act as one for support.`,
+    }),
     zParam(idParam),
     async (c) => {
       const { id } = c.req.valid('param');
@@ -111,7 +137,20 @@ const admin = new Hono<AppEnv>()
   // ---- Orgs ---------------------------------------------------------------
   .get(
     '/orgs',
-    apiDoc({ tag: 'Admin', summary: 'List organizations', response: AdminOrgPage }),
+    apiDoc({
+      tag: 'Admin',
+      summary: 'List organizations',
+      response: AdminOrgPage,
+      description: `Returns a paginated, newest-first slice of every organization (tenant) in Docket — the operator org directory.
+
+**Search & filter.** \`search\` matches a case-insensitive substring of the org name OR slug; \`lifecycleState\` further restricts to one exact data-lifecycle bucket (\`trialing\`, \`active\`, \`past_due\`, \`export_window\`, \`pending_deletion\`, \`deleted\`). Both are optional and combine with AND. Ordered by \`createdAt\` descending; offset-paginated (\`limit\` 1..100 default 50, \`offset\` default 0). Each item also exposes \`exportReadyAt\` and \`deleteAfterAt\`, the timestamps that drive the export-window/deletion sweep.
+
+**Access.** Behind \`staffMiddleware\` (any staff tier — it's a read). Non-operator → \`403\`; anonymous → \`401\`.
+
+**Side effects.** None — a read; no audit event.
+
+**Related.** \`GET /admin/orgs/{id}\` for one org; \`GET /admin/lifecycle\` for the same orgs grouped into a pipeline board; the \`/admin/orgs/{id}/*\` billing actions to act on an org.`,
+    }),
     zQuery(AdminOrgListQuery),
     async (c) => {
       const { search, lifecycleState, limit, offset } = c.req.valid('query');
@@ -141,7 +180,20 @@ const admin = new Hono<AppEnv>()
   )
   .get(
     '/orgs/:id',
-    apiDoc({ tag: 'Admin', summary: 'Get an organization', response: AdminOrgOut }),
+    apiDoc({
+      tag: 'Admin',
+      summary: 'Get an organization',
+      response: AdminOrgOut,
+      description: `Returns one organization by id — the operator org-detail header.
+
+**Behavior.** Loads the \`organization\` row and serializes it, including \`isPersonal\` (a single-member personal workspace, which cannot take invites) and the lifecycle timestamps \`exportReadyAt\`/\`deleteAfterAt\`. Returns \`404 not_found\` when no org matches.
+
+**Access.** Behind \`staffMiddleware\` (any staff tier). Non-operator → \`403\`; anonymous → \`401\`.
+
+**Side effects.** None — a read; no audit event.
+
+**Related.** \`POST /admin/orgs/{id}/holds\`, \`/extend-trial\`, \`/reactivate\`, \`/lifecycle\` to mutate this org's billing/lifecycle.`,
+    }),
     zParam(idParam),
     async (c) => {
       const { id } = c.req.valid('param');
@@ -156,6 +208,17 @@ const admin = new Hono<AppEnv>()
       tag: 'Admin',
       summary: 'Get the lifecycle pipeline board',
       response: AdminLifecycleBoard,
+      description: `Returns every organization grouped into a kanban-style board, one column per data-lifecycle state — the operator's at-a-glance view of where each tenant sits in the billing/retention pipeline.
+
+**Behavior.** Loads all orgs (newest first) once, then buckets them into a fixed, ordered column set: \`trialing → active → past_due → export_window → pending_deletion → deleted\`. Columns are always present even when empty, so the board layout is stable. This is the same org data as \`GET /admin/orgs\`, reshaped for the pipeline UI.
+
+**Lifecycle meaning.** A trial ending or payment terminally lapsing moves an org into \`export_window\` (a 14-day grace period where data stays readable/exportable); an idempotent cron sweep then advances \`export_window → pending_deletion → deleted\`. A recovered subscription (or a \`reactivate\`/\`extend-trial\` operator action) rescues an org back to \`active\`/\`trialing\`.
+
+**Access.** Behind \`staffMiddleware\` (any staff tier — a read). Non-operator → \`403\`; anonymous → \`401\`.
+
+**Side effects.** None — a read; no audit event.
+
+**Related.** \`POST /admin/orgs/{id}/lifecycle\` to force a column move; \`GET /admin/metrics\` for the same buckets as counts.`,
     }),
     async (c) => {
       const rows = await db.select().from(organization).orderBy(desc(organization.createdAt));
@@ -176,6 +239,15 @@ const admin = new Hono<AppEnv>()
       tag: 'Admin',
       summary: 'Start an impersonation session',
       response: AdminImpersonationOut,
+      description: `Opens a time-boxed, audited support-impersonation session so an operator can view the product as a specific end-user while debugging a ticket.
+
+**Behavior.** Validates that \`targetUserId\` resolves to a real account (else \`404 not_found\`), then inserts an \`impersonation_session\` row owned by the calling operator (\`staffUserId\` from \`staffCtx\`) with the supplied \`reason\` and an \`expiresAt = now + ttlMinutes\` (TTL 1..480 min, default 60). The returned record carries \`startedAt\`/\`expiresAt\` and a null \`endedAt\` (still active).
+
+**Side effects.** Creates the impersonation session **and** writes an \`impersonation.started\` operator audit event (subject = the target actor/user) capturing the impersonation id, reason, and TTL. The reason is mandatory precisely so every impersonation is justified in the immutable audit trail.
+
+**Access.** Behind \`staffMiddleware\`. Any staff tier may impersonate (support is the primary user) — there is no \`requireStaffRole\` gate here — but the action is always attributed and audited. Non-operator → \`403\`; anonymous → \`401\`.
+
+**Related.** \`POST /admin/impersonations/{id}/end\` to close the session early; \`GET /admin/audit\` (superadmin) to review impersonation history.`,
     }),
     zJson(StartImpersonationBody),
     async (c) => {
@@ -209,6 +281,15 @@ const admin = new Hono<AppEnv>()
       tag: 'Admin',
       summary: 'End an impersonation session',
       response: AdminImpersonationOut,
+      description: `Closes an active support-impersonation session before its TTL elapses, stamping \`endedAt\`.
+
+**Behavior.** Conditionally updates the session — matched by id AND still un-ended (\`endedAt IS NULL\`) — to set \`endedAt = now\`. Returns the ended record. Returns \`404 not_found\` when the id is unknown OR the session was already ended (the guard makes ending idempotent: a second call no longer matches). Note a naturally expired session (past \`expiresAt\`) may still be ended here to make the closure explicit and audited.
+
+**Side effects.** Writes an \`impersonation.ended\` operator audit event (subject = the target user) referencing the impersonation id, completing the start/end pair in the audit trail.
+
+**Access.** Behind \`staffMiddleware\` (any staff tier). Non-operator → \`403\`; anonymous → \`401\`.
+
+**Related.** \`POST /admin/impersonations\` to start a session.`,
     }),
     zParam(impersonationParam),
     async (c) => {
@@ -231,7 +312,20 @@ const admin = new Hono<AppEnv>()
   .get(
     '/audit',
     requireStaffRole('superadmin'),
-    apiDoc({ tag: 'Admin', summary: 'List operator audit events', response: AdminAuditPage }),
+    apiDoc({
+      tag: 'Admin',
+      summary: 'List operator audit events',
+      response: AdminAuditPage,
+      description: `Returns the immutable operator audit feed — every privileged back-office action (impersonations, lifecycle holds, billing actions, lifecycle-state changes, staff grants/revocations) written by the other admin endpoints.
+
+**Filter & paging.** \`staffUserId\` narrows to one acting operator; \`type\` narrows to one event type (e.g. \`billing.reactivated\`, \`lifecycle_hold.placed\`, \`staff.granted\`). Both optional, combined with AND. Newest-first, offset-paginated (\`limit\` 1..200 default 50, \`offset\` default 0). Each event carries the acting \`staffUserId\`, the \`type\`, the \`subjectType\`/\`subjectId\` it acted on, and a free-form \`metadata\` object.
+
+**Access — superadmin only.** Gated by \`requireStaffRole('superadmin')\` on top of \`staffMiddleware\`. The audit log is the system of record for accountability, so it must not be readable (or tamperable) by the same \`support\`/\`finance\` operators whose actions it records — only \`superadmin\` may review it. \`support\`/\`finance\` callers get \`403 forbidden\`; non-operators \`403\`; anonymous \`401\`.
+
+**Side effects.** None — a read; reading the audit log does not itself produce an audit event.
+
+**Related.** Every mutating \`/admin/*\` route appends to this feed.`,
+    }),
     zQuery(AdminAuditQuery),
     async (c) => {
       const { staffUserId, type, limit, offset } = c.req.valid('query');
@@ -254,7 +348,22 @@ const admin = new Hono<AppEnv>()
   // ---- Metrics -----------------------------------------------------------
   .get(
     '/metrics',
-    apiDoc({ tag: 'Admin', summary: 'Get admin metrics', response: AdminMetricsOut }),
+    apiDoc({
+      tag: 'Admin',
+      summary: 'Get admin metrics',
+      response: AdminMetricsOut,
+      description: `Returns the operator home-dashboard metrics: steady-state totals plus actionable queue-health signals (mvp-plan §8.9 — deliberately aggregate counts only, never session contents).
+
+**Counts.** \`totalUsers\` and \`totalOrgs\` are the full account/tenant totals; \`orgsByLifecycle\` breaks orgs down by data-lifecycle state in the fixed pipeline order (states with no orgs report \`count: 0\`).
+
+**Queues (triage signals).** \`stuckApprovals\` = agent sessions parked in \`awaiting_approval\` (work blocked on a human decision); \`agentErrors\` = sessions in the \`failed\` terminal state; \`agentVolume\` = total agent sessions ever created; \`activeHolds\` = un-released lifecycle holds currently pausing the delete sweep. These are the numbers an operator triages from the home screen.
+
+**Access.** Behind \`staffMiddleware\` (any staff tier — a read). Non-operator → \`403\`; anonymous → \`401\`.
+
+**Side effects.** None — a read; no audit event.
+
+**Related.** \`GET /admin/lifecycle\` expands the \`orgsByLifecycle\` buckets into the full board; \`GET /admin/audit\` (superadmin) for the action history behind these signals.`,
+    }),
     async (c) => {
       const [userTotals, orgTotals, byState, holdTotals, agentVolume, agentErrors, stuckApprovals] =
         await Promise.all([

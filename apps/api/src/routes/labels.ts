@@ -34,7 +34,12 @@ const idParam = z.object({ id: z.string() });
 const labels = new Hono<AppEnv>()
   .get(
     '/',
-    apiDoc({ tag: 'Labels', summary: 'List labels', response: pageOf(LabelOut) }),
+    apiDoc({
+      tag: 'Labels',
+      summary: 'List labels',
+      response: pageOf(LabelOut),
+      description: `List every label defined in the org — both org-global labels (\`teamId\` null, available everywhere) and team-scoped labels (\`teamId\` set, intended for one team's tasks). Labels are lightweight, freely-applied tags used to classify and filter work (e.g. \`bug\`, \`design\`, \`needs-triage\`); they are orthogonal to workflow state and priority. The list is unpaginated — labels are a small, bounded set per org. Requires org membership (\`view\`). Returns a page wrapper of {@link LabelOut}.`,
+    }),
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const rows = await db.select().from(label).where(eq(label.organizationId, orgId));
@@ -49,6 +54,7 @@ const labels = new Hono<AppEnv>()
       summary: 'Create a label',
       capability: 'contribute',
       response: LabelOut,
+      description: `Create a label in the org. Requires \`contribute\`. \`name\` and \`color\` are required; supplying \`teamId\` scopes the label to one team, while omitting it makes the label org-global. An optional \`group\` clusters related labels into a mutually-recognizable set (e.g. a \`priority\` group) for grouped pickers. The \`organizationId\` is always derived from the verified path/context, never the body. Returns the created {@link LabelOut}.`,
     }),
     zJson(LabelCreate),
     async (c) => {
@@ -72,7 +78,12 @@ const labels = new Hono<AppEnv>()
   )
   .get(
     '/:id',
-    apiDoc({ tag: 'Labels', summary: 'Get a label', response: LabelOut }),
+    apiDoc({
+      tag: 'Labels',
+      summary: 'Get a label',
+      response: LabelOut,
+      description: `Fetch one label by id. The lookup is scoped to the caller's org, so a cross-org or unknown id 404s (\`Label not found\`) — existence is never leaked across tenants. Requires org membership (\`view\`). Returns {@link LabelOut}.`,
+    }),
     zParam(idParam),
     async (c) => {
       const { orgId } = c.get('actorCtx');
@@ -95,6 +106,7 @@ const labels = new Hono<AppEnv>()
       summary: 'Update a label',
       capability: 'contribute',
       response: LabelOut,
+      description: `Partially update a label; only the fields present in the body change (\`name\`, \`color\`, \`group\`, \`teamId\`). Requires \`contribute\`. Setting \`teamId\` to null re-scopes a team label to org-global; setting \`group\` to null removes it from its group. The lookup is org-scoped, so a cross-org/unknown id 404s. Returns the updated {@link LabelOut}.`,
     }),
     zParam(idParam),
     zJson(LabelUpdate),
@@ -125,6 +137,7 @@ const labels = new Hono<AppEnv>()
       summary: 'Delete a label',
       capability: 'contribute',
       response: LabelOut,
+      description: `Hard-delete a label from the org. Requires \`contribute\`. This removes the label definition itself; any task associations to it are dropped (a label is a tag, not a row that owns work). The lookup is org-scoped, so a cross-org/unknown id 404s. Unusually for a delete, this returns the full deleted {@link LabelOut} row (not a bare acknowledgement) so the client can confirm exactly what was removed.`,
     }),
     zParam(idParam),
     async (c) => {

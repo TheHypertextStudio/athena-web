@@ -20,12 +20,19 @@ import meIdentities from './routes/me-identities';
 import meRecovery from './routes/me-recovery';
 import notifications from './routes/notifications';
 import orgs from './routes/orgs';
+import { requireAuth } from './permissions/require-auth';
 
 /** The `/v1` app instance (shared with `server.ts` for mounting + non-RPC routes). */
 export const app = new Hono<AppEnv>().basePath('/v1');
 
 /** The type of the `/v1` {@link app} instance (used to type the OpenAPI generator input). */
 export type AppInstance = typeof app;
+
+// Defense-in-depth authentication: gate EVERY `/v1` route on a session (except the public
+// allowlist) before the route chain, so auth is opt-out, not opt-in. Registered before the
+// `.route()` chain so it applies to all children; it does not participate in the `AppType`
+// chain (membership/capability authz still layer on top per-route).
+app.use('*', requireAuth);
 
 /** The chained route tree; its type is the RPC contract (consumed only via `typeof`). */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars

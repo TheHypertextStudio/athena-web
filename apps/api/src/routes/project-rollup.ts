@@ -38,7 +38,12 @@ const RECENT_ACTIVITY_LIMIT = 8;
 /** Project roll-up router: the detail screen's waterfall-collapsing read. */
 const projectRollup = new Hono<AppEnv>().get(
   '/:id/rollup',
-  apiDoc({ tag: 'Projects', summary: 'Get project roll-up', response: ProjectRollupOut }),
+  apiDoc({
+    tag: 'Projects',
+    summary: 'Get project roll-up',
+    response: ProjectRollupOut,
+    description: `The project-detail screen's waterfall-collapsing read: the three lookups the screen would otherwise resolve with client-side fan-outs, served in one bounded round-trip. Returns \`taskMilestones\` (each of the project's tasks paired with its \`milestone_id\`, which only \`TaskDetail\` otherwise carries — collapsing an N+1 of \`tasks/:id\` reads), \`currentInitiativeId\` (the project's initiative resolved straight from the \`initiative_project\` join — a project belongs to at most one in practice, and the first is taken deterministically; \`null\` when it belongs to none — collapsing an M+1 of \`initiatives/:id/timeline\` scans), and \`recentActivity\` (up to 8 newest \`session_activity\` rows across the agent sessions on the project's tasks, each annotated with its session's \`agentId\` so the client resolves the actor without a per-session read — collapsing a per-session \`sessions/:id\` fan-out). So the screen makes one read instead of \`1 + N + M\`. The project must exist in the caller's org (404 \`Project not found\`); mounted under the same prefix as the projects router and, like the other project reads, needs no capability guard (guards gate writes only) — org membership suffices. Returns {@link ProjectRollupOut}.`,
+  }),
   zParam(idParam),
   async (c) => {
     const { orgId } = c.get('actorCtx');

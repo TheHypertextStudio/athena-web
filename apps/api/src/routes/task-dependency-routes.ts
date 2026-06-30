@@ -35,7 +35,12 @@ import {
 export const taskDependencyRoutes = new Hono<AppEnv>()
   .get(
     '/:id/subtasks',
-    apiDoc({ tag: 'Tasks', summary: 'List subtasks', response: pageOf(TaskOut) }),
+    apiDoc({
+      tag: 'Tasks',
+      summary: 'List subtasks',
+      response: pageOf(TaskOut),
+      description: `List the active (non-archived) direct children of a task — tasks whose \`parentTaskId\` is the path id. Subtasks are one level of the work hierarchy (a child may itself have children, fetched by listing on that child). The parent is loaded first, so a cross-org or unknown parent id 404s before any child read. Requires org membership (\`view\`). Returns a page of {@link TaskOut}; archived children are omitted. To create a child, see \`POST /:id/subtasks\`.`,
+    }),
     zParam(idParam),
     async (c) => {
       const { orgId } = c.get('actorCtx');
@@ -58,6 +63,9 @@ export const taskDependencyRoutes = new Hono<AppEnv>()
       summary: 'Create a subtask',
       capability: 'contribute',
       response: TaskOut,
+      description: `Create a child task under the path task. The parent is loaded first (cross-org/unknown parent 404s), then the child is inserted with \`parentTaskId\` set to the parent and \`teamId\` inherited from the parent — a subtask always lives on the parent's team and cannot be re-teamed at creation. Requires \`contribute\`.
+
+The child inherits sensible defaults but can override them: \`state\` defaults to the parent's current state (not the team's first state), \`projectId\` defaults to the parent's project when omitted, and \`priority\` defaults to \`none\`. Body-provided references (\`assigneeId\`, \`projectId\`, \`cycleId\`, \`milestoneId\`) must live in the caller's org or 404; values inherited from the already-in-org parent are not re-checked. Unlike the top-level create, this handler does not emit \`created\`/\`assignment\` observations. Returns the new child {@link TaskOut}.`,
     }),
     zParam(idParam),
     zJson(SubtaskCreate),
@@ -106,7 +114,12 @@ export const taskDependencyRoutes = new Hono<AppEnv>()
   )
   .get(
     '/:id/dependencies',
-    apiDoc({ tag: 'Tasks', summary: 'List task dependencies', response: TaskDependencyOut }),
+    apiDoc({
+      tag: 'Tasks',
+      summary: 'List task dependencies',
+      response: TaskDependencyOut,
+      description: `Return the path task's two directed dependency lists. \`blocking\` are the tasks THIS task blocks (this task is the blocking side of the edge); \`blockedBy\` are the tasks that block THIS task (this task is the blocked side). The dependency graph is directed \`blocking → blocked\`: a blocked task should not start until its blockers complete. Each entry is a slim {@link TaskRef} carrying \`projectId\` for cross-project rendering. The parent is loaded first (cross-org/unknown id 404s). Requires org membership (\`view\`). Returns {@link TaskDependencyOut}. These same lists are embedded in \`GET /:id\` (task detail).`,
+    }),
     zParam(idParam),
     async (c) => {
       const { orgId } = c.get('actorCtx');
@@ -143,6 +156,9 @@ export const taskDependencyRoutes = new Hono<AppEnv>()
       summary: 'Add a task dependency',
       capability: 'contribute',
       response: TaskDependencyCreated,
+      description: `Add a directed \`blocking → blocked\` dependency edge involving the path task. The body supplies exactly one of \`blockingTaskId\` / \`blockedTaskId\` (the other endpoint is the path task): \`blockingTaskId\` makes that task block the path task; \`blockedTaskId\` makes the path task block that task. Requires \`contribute\`. Both endpoints must be active tasks in the caller's org (each is loaded, so a cross-org/unknown id 404s).
+
+Two invariants are enforced. A task cannot depend on itself (self-edge → 422 validation error). And the edge must not introduce a cycle: the duplicate-check, an acyclic-reachability check, and the insert all run inside one SERIALIZABLE transaction — under a weaker isolation level two concurrent inserts of A→B and B→A could each pass the guard and commit, producing a 2-cycle. A duplicate edge 409s (\`ConflictError\`); an edge that would close a cycle 409s (\`CycleError\`). On success returns {@link TaskDependencyCreated} echoing the resolved \`blockingTaskId\`/\`blockedTaskId\`. Remove an edge via \`DELETE /:id/dependencies/:depId\`.`,
     }),
     zParam(idParam),
     zJson(TaskDependencyCreate),
@@ -212,6 +228,7 @@ export const taskDependencyRoutes = new Hono<AppEnv>()
       summary: 'Remove a task dependency',
       capability: 'contribute',
       response: TaskRemoved,
+      description: `Remove the dependency edge between the path task \`:id\` and \`:depId\`, regardless of direction — the delete matches either orientation (\`id → depId\` or \`depId → id\`), so the caller need not know which task is the blocking side. This is a hard delete of the edge row only; neither task is affected. Requires \`contribute\`. The path task is loaded first (cross-org/unknown 404s); if no matching edge exists in the org the request 404s (\`Dependency edge not found\`). Returns a {@link TaskRemoved} acknowledgement.`,
     }),
     zParam(depParam),
     async (c) => {

@@ -132,7 +132,12 @@ async function recomputeSubjectHealth(
 const updates = new Hono<AppEnv>()
   .get(
     '/',
-    apiDoc({ tag: 'Updates', summary: 'List updates', response: pageOf(UpdateOut) }),
+    apiDoc({
+      tag: 'Updates',
+      summary: 'List updates',
+      response: pageOf(UpdateOut),
+      description: `List the status updates posted on one subject — a Project, Program, or Initiative — identified by the required \`subjectType\` and \`subjectId\` query params. An Update is a narrative status post that optionally carries a \`health\` signal (\`on_track | at_risk | off_track\`); the newest health-bearing post drives the subject's current health. Results are ordered newest-first. Scoped to the caller's org. Requires org membership (\`view\`). Returns a page wrapper of {@link UpdateOut}.`,
+    }),
     zQuery(UpdateListQuery),
     async (c) => {
       const { orgId } = c.get('actorCtx');
@@ -159,6 +164,9 @@ const updates = new Hono<AppEnv>()
       summary: 'Post an update',
       capability: 'contribute',
       response: UpdateOut,
+      description: `Post a status update on a Project, Program, or Initiative. Requires \`contribute\`. The author is the calling actor (from context, never the body). The required \`body\` is the narrative; \`health\` is optional.
+
+Key side effect: when the post includes a \`health\`, the same transaction writes that value to the subject's own \`health\` column — "the latest update sets the subject's current health" (api-rpc-contract §3.9) — so the Project/Program/Initiative health stays in sync with its newest post. A post without \`health\` leaves the subject's current health untouched. The insert and the subject-health write are one transaction so a concurrent read never sees them diverge. Also emits a \`status_change\` observation on the subject (carrying \`health\` in its payload when set). Returns the created {@link UpdateOut}.`,
     }),
     zJson(UpdateCreate),
     async (c) => {
@@ -208,7 +216,12 @@ const updates = new Hono<AppEnv>()
   )
   .get(
     '/:id',
-    apiDoc({ tag: 'Updates', summary: 'Get an update', response: UpdateOut }),
+    apiDoc({
+      tag: 'Updates',
+      summary: 'Get an update',
+      response: UpdateOut,
+      description: `Fetch one status update by id. The org filter is the tenant-isolation boundary: an id belonging to another org reads as 404 (\`Update not found\`) rather than leaking its existence. Requires org membership (\`view\`). Returns {@link UpdateOut}.`,
+    }),
     zParam(idParam),
     async (c) => {
       const { orgId } = c.get('actorCtx');
@@ -225,6 +238,9 @@ const updates = new Hono<AppEnv>()
       summary: 'Delete an update',
       capability: 'contribute',
       response: UpdateRemoved,
+      description: `Delete a status update. Requires \`contribute\` plus an authorship gate: a \`contribute\`-capable member may only delete their OWN update unless they hold \`manage\` (non-author without \`manage\` → 403). A cross-org/unknown id 404s.
+
+Because the latest update drives the subject's current health, deletion is not a plain row removal: within one transaction the update is hard-deleted (the table has no soft-delete column) and the subject's \`health\` is recomputed from the newest *remaining* health-bearing update — older healthless posts are skipped, and when no health-bearing update remains the subject health is cleared to null. The single transaction guarantees a concurrent read never sees the row gone but the stale health still attached. Returns an {@link UpdateRemoved} acknowledgement.`,
     }),
     zParam(idParam),
     async (c) => {

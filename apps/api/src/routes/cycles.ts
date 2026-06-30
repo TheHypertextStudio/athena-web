@@ -54,7 +54,12 @@ const CycleListQuery = CursorQuery.extend({ roll: z.enum(['true', 'false']).opti
 const cycles = new Hono<AppEnv>()
   .get(
     '/',
-    apiDoc({ tag: 'Cycles', summary: 'List cycles', response: pageOf(CycleDetail) }),
+    apiDoc({
+      tag: 'Cycles',
+      summary: 'List cycles',
+      response: pageOf(CycleDetail),
+      description: `List the organization's cycles — fixed-length team iterations (sprints) on a configurable cadence. Each item is a {@link CycleDetail}: the cycle plus its pace \`stats\` (committed/completed/capacity/scopeChange/carryover) folded in inline, and the date-derived \`isCurrent\` flag, so a roster renders complete without a per-cycle fan-out. The page's committed tasks are fetched in ONE batched query and run through the same pure \`computeStats\` the detail endpoint uses (avoiding an N+1). Keyset-paginated newest-first by \`startsAt\` (\`id\` tiebreak); \`limit\` optional. Opt-in side effect: pass \`roll=true\` to auto-materialize every team's rolling cycle window in-process before listing (one batched ensure instead of a per-team \`/current\` HTTP fan-out on SSR) — so surfaces that need the live rolling roster never see an empty list; other callers omit \`roll\` and get the raw stored roster with NO write. Read-only otherwise; org membership suffices. Returns a page of {@link CycleDetail}.`,
+    }),
     zQuery(CycleListQuery),
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
@@ -93,7 +98,12 @@ const cycles = new Hono<AppEnv>()
   )
   .get(
     '/current',
-    apiDoc({ tag: 'Cycles', summary: 'Get current cycle window', response: CycleWindow }),
+    apiDoc({
+      tag: 'Cycles',
+      summary: 'Get current cycle window',
+      response: CycleWindow,
+      description: `Resolve a team's rolling cycle window plus its current cycle. Cycles auto-roll on a configurable cadence (\`team.cycle_cadence_weeks\`, default 1 = weekly) so users never create cycles by hand. The required \`teamId\` query names the team (which must belong to the caller's org — 404 \`Team not found\` otherwise). Side effect: this lazily and idempotently ENSURES the rolling window exists — a few past cycles + the current + a few upcoming, anchored to a week-aligned start and stepping by the team's cadence — inserting any missing slots (concurrency-safe via \`onConflictDoNothing\` on the stable epoch-anchored cycle \`number\`); existing and manually-created cycles are left untouched. It then returns all the team's cycles with \`current\` broken out — whichever window contains today (\`startsAt <= now <= endsAt\`); on a tie the earliest-starting wins. Each cycle in \`cycles\` carries the same date-derived \`isCurrent\`, and \`cadenceWeeks\` echoes the team's setting. Requires no capability guard, but note it writes (the ensure) — it is a read with an idempotent materialization side effect. Returns {@link CycleWindow}.`,
+    }),
     zQuery(CycleWindowQuery),
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
@@ -130,6 +140,7 @@ const cycles = new Hono<AppEnv>()
       summary: 'Create a cycle',
       capability: 'contribute',
       response: CycleOut,
+      description: `Manually create a cycle for a team. Although cycles normally auto-roll (see \`GET /current\`), this endpoint backs explicit creation. The body's \`teamId\` is required and re-read scoped to the caller's org (404 \`Team not found\`, existence-hiding) — cycles are team-scoped and cannot be created cross-tenant. \`number\` (the team-local sequence number), \`startsAt\`, and \`endsAt\` are required ISO dates/values; \`name\` is optional; \`status\` defaults to \`upcoming\`. Note the \`(teamId, number)\` pair is unique per team, so reusing a number a manual or auto-rolled cycle already holds collides at the database. Requires \`contribute\`. Returns the created {@link CycleOut} (the flat shape, without the \`stats\` roll-up — fetch \`GET /:id\` for those).`,
     }),
     zJson(CycleCreate),
     async (c) => {
@@ -164,7 +175,12 @@ const cycles = new Hono<AppEnv>()
   )
   .get(
     '/:id',
-    apiDoc({ tag: 'Cycles', summary: 'Get cycle detail', response: CycleDetail }),
+    apiDoc({
+      tag: 'Cycles',
+      summary: 'Get cycle detail',
+      response: CycleDetail,
+      description: `Fetch a single cycle plus its rolled-up pace \`stats\` — the "are we on pace?" banner. The cycle must exist in the caller's org (404 \`Cycle not found\`). \`stats\` is computed from the cycle's active committed tasks: \`committed\` (tasks currently on the cycle), \`completed\` (those with a \`completed_at\`), \`capacity\` (sum of committed estimates, unestimated = 0), \`completedCapacity\` (estimate sum of the completed subset), \`scopeChange\` (tasks added after \`starts_at\`, i.e. mid-cycle scope creep), and \`carryover\` (still-incomplete committed tasks — what would roll if the cycle closed now). The response also carries the date-derived \`isCurrent\`. Read-only; org membership suffices. Returns {@link CycleDetail}. See \`GET /:id/burnup\` for the daily series and \`GET /:id/tasks\` for the grouped task list.`,
+    }),
     zParam(idParam),
     async (c) => {
       const { orgId } = c.get('actorCtx');
@@ -186,6 +202,7 @@ const cycles = new Hono<AppEnv>()
       summary: 'Update a cycle',
       capability: 'contribute',
       response: CycleOut,
+      description: `Partially update a cycle's \`number\`, \`name\`, \`startsAt\`, \`endsAt\`, and/or \`status\`. Each field is optional: an absent key leaves the column untouched (an explicit \`null\` \`name\` clears it). The team is fixed at creation — there is no \`teamId\` in the body, so a cycle cannot be moved between teams. Editing \`startsAt\`/\`endsAt\` shifts the window, which in turn changes every date-derived quantity (\`isCurrent\`, \`scopeChange\`, and the \`burnup\` series day range) the next time they are read. To formally end a cycle with carryover review, prefer \`POST /:id/close\` over manually setting \`status\` to \`completed\` here. 404 (\`Cycle not found\`) when absent or cross-tenant. Requires \`contribute\`. Returns the updated {@link CycleOut}.`,
     }),
     zParam(idParam),
     zJson(CycleUpdate),
@@ -217,6 +234,7 @@ const cycles = new Hono<AppEnv>()
       summary: 'Delete a cycle',
       capability: 'contribute',
       response: CycleOut,
+      description: `Delete a cycle, scoped to the caller's org (404 \`Cycle not found\` when absent or cross-tenant). Like the other cycle mutations this requires only \`contribute\` (a cycle is a team's cadence container, not an org-structural one). Tasks committed to the deleted cycle have their \`cycle_id\` resolved by the database's foreign-key rules rather than re-implemented here (they are not deleted). Beware: if this cycle is part of an auto-rolled window, a later \`GET /current\` (or a list with \`roll=true\`) will re-materialize the slot for its \`number\`, so deletion is durable only for cycles outside the live rolling window. To wind a cycle down with proper carryover handling use \`POST /:id/close\` instead. Returns the deleted {@link CycleOut} as a tombstone.`,
     }),
     zParam(idParam),
     async (c) => {
@@ -233,7 +251,12 @@ const cycles = new Hono<AppEnv>()
   )
   .get(
     '/:id/tasks',
-    apiDoc({ tag: 'Cycles', summary: 'List cycle tasks', response: CycleTasksOut }),
+    apiDoc({
+      tag: 'Cycles',
+      summary: 'List cycle tasks',
+      response: CycleTasksOut,
+      description: `List a cycle's active committed tasks, grouped by a containment axis. The \`groupBy\` query selects the axis — \`project\` (default) buckets tasks by their \`project_id\`, \`program\` buckets by their \`program_id\` — and the response echoes the chosen \`groupBy\`. Exactly one id field is populated per group (\`projectId\` when grouped by project, \`programId\` when by program), and it is \`null\` for the "no project"/"no program" bucket holding tasks not filed under that axis. Only active (non-archived) tasks currently committed to the cycle are returned. The cycle must exist in the caller's org (404 \`Cycle not found\`). Read-only; org membership suffices. Returns {@link CycleTasksOut}.`,
+    }),
     zParam(idParam),
     zQuery(CycleTasksQuery),
     async (c) => {
@@ -264,7 +287,12 @@ const cycles = new Hono<AppEnv>()
   )
   .get(
     '/:id/burnup',
-    apiDoc({ tag: 'Cycles', summary: 'Get cycle burn-up', response: CycleBurnupOut }),
+    apiDoc({
+      tag: 'Cycles',
+      summary: 'Get cycle burn-up',
+      response: CycleBurnupOut,
+      description: `The cycle's burn-up report — the data behind the "are we on pace?" chart. \`series\` walks every calendar day of the window \`[starts_at, ends_at]\` inclusive (UTC day boundaries); for each day \`planned\` is the cumulative committed capacity KNOWN by that day (it rises as scope is added mid-cycle, which is why this is a burn-UP not a burn-down), \`completed\` is the cumulative effort whose \`completed_at\` falls on or before that day, and \`remaining = planned - completed\` is the open distance to the plan line. \`scopeChanges\` itemizes every task added after \`starts_at\` (its \`taskId\`, when it joined, and the estimate it added), sorted by when it joined. The flat \`capacity\` and \`stats\` mirror {@link CycleStats} so the chart and its summary come from one read. The cycle must exist in the caller's org (404 \`Cycle not found\`). Read-only; org membership suffices. Returns {@link CycleBurnupOut}.`,
+    }),
     zParam(idParam),
     async (c) => {
       const { orgId } = c.get('actorCtx');
@@ -280,6 +308,7 @@ const cycles = new Hono<AppEnv>()
       summary: 'Close a cycle',
       capability: 'contribute',
       response: CycleClosed,
+      description: `Close a cycle with an explicit, reviewed carryover plan — nothing rolls by accident (product §8.5: carryover is reviewed before it rolls). The body's \`carryover\` is a per-task decision list covering the cycle's still-incomplete committed tasks; \`keep\` leaves the task on the now-closed cycle (no write), \`move\` reassigns it to \`targetCycleId\` (required), and \`triage\` detaches it from any cycle (\`cycle_id\` set null), returning it to the team's triage queue. All decisions plus the close are applied in ONE transaction, so the cycle never half-closes. Validation (422, as field errors): every decision must name a task that is currently incomplete AND committed to THIS cycle (a completed task, an unrelated/cross-tenant task id is rejected); a \`move\` target must be a DIFFERENT cycle on the SAME team within the org (never the cycle being closed, never cross-team). After the carryover applies, the cycle's \`status\` is set \`completed\`. Requires \`contribute\`. Returns {@link CycleClosed} \`{ closed: true, keptCount, movedCount, triagedCount }\`. (Note: tasks already done need no decision; only incomplete committed tasks may appear in \`carryover\`.) See \`GET /:id/burnup\` for the pace data informing the review.`,
     }),
     zParam(idParam),
     zJson(CycleCloseBody),

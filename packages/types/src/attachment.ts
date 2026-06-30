@@ -32,12 +32,41 @@ export type AttachmentKind = z.infer<typeof AttachmentKind>;
  */
 export const AttachmentCreate = z
   .object({
-    kind: AttachmentKind,
-    title: z.string().min(1),
-    url: z.url().optional(),
-    sourceIntegrationId: z.string().min(1).optional(),
-    externalId: z.string().min(1).optional(),
-    metadata: z.record(z.string(), z.unknown()).optional(),
+    kind: AttachmentKind.describe(
+      "Resource kind: 'url' (a dumb link pointer) or 'email' (an integration-backed Gmail-thread pointer). Determines which other fields are required.",
+    ),
+    title: z
+      .string()
+      .min(1)
+      .describe(
+        'Human label for the attachment (e.g. the page title or email subject). Required, non-empty.',
+      ),
+    url: z
+      .url()
+      .optional()
+      .describe(
+        'The link target. Required when `kind` is `url`; ignored for `email`. Must be a valid URL.',
+      ),
+    sourceIntegrationId: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        'Id of the integration backing an `email` attachment. Required (with `externalId`) when `kind` is `email`.',
+      ),
+    externalId: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        'The external resource id — for `email`, the Gmail thread id. Required (with `sourceIntegrationId`) when `kind` is `email`.',
+      ),
+    metadata: z
+      .record(z.string(), z.unknown())
+      .optional()
+      .describe(
+        'Optional free-form JSON bag of kind-specific extras (e.g. fetched favicon, sender, snippet).',
+      ),
   })
   .refine((v) => v.kind !== 'url' || v.url !== undefined, {
     path: ['url'],
@@ -58,17 +87,30 @@ export type AttachmentCreate = z.infer<typeof AttachmentCreate>;
 /** Full attachment representation returned by reads. */
 export const AttachmentOut = z
   .object({
-    id: AttachmentId,
-    organizationId: OrganizationId,
-    subjectType: AttachmentSubjectType,
-    subjectId: z.string(),
-    kind: AttachmentKind,
-    title: z.string(),
-    url: z.string().nullable(),
-    sourceIntegrationId: z.string().nullable(),
-    externalId: z.string().nullable(),
-    metadata: z.record(z.string(), z.unknown()).nullable(),
-    createdAt: z.string(),
+    id: AttachmentId.describe('Opaque attachment id.'),
+    organizationId: OrganizationId.describe('Owning org id (the tenant key).'),
+    subjectType: AttachmentSubjectType.describe(
+      "Kind of subject the attachment hangs off (only 'task' in v1).",
+    ),
+    subjectId: z.string().describe('Id of the subject (the host task) the attachment belongs to.'),
+    kind: AttachmentKind.describe("Resource kind: 'url' or 'email'."),
+    title: z.string().describe('Human label for the attachment.'),
+    url: z.string().nullable().describe('Link target for a `url` attachment; null for `email`.'),
+    sourceIntegrationId: z
+      .string()
+      .nullable()
+      .describe('Backing integration id for an `email` attachment; null for `url`.'),
+    externalId: z
+      .string()
+      .nullable()
+      .describe(
+        'External resource id (e.g. Gmail thread id) for an `email` attachment; null for `url`.',
+      ),
+    metadata: z
+      .record(z.string(), z.unknown())
+      .nullable()
+      .describe('Free-form JSON bag of kind-specific extras; null when none.'),
+    createdAt: z.string().describe('Creation timestamp (ISO 8601); attachments list oldest-first.'),
   })
   .meta({ id: 'AttachmentOut', description: 'An attachment on a subject.' });
 /** Attachment representation value. */
@@ -77,8 +119,8 @@ export type AttachmentOut = z.infer<typeof AttachmentOut>;
 /** Acknowledgement returned when an Attachment is removed. */
 export const AttachmentRemoved = z
   .object({
-    id: AttachmentId,
-    removed: z.literal(true),
+    id: AttachmentId.describe('Id of the removed attachment.'),
+    removed: z.literal(true).describe('Always `true`; confirms the attachment was hard-deleted.'),
   })
   .meta({ id: 'AttachmentRemoved', description: 'A removed-attachment acknowledgement.' });
 /** Removal acknowledgement value. */

@@ -81,6 +81,11 @@ const notifications = new Hono<AppEnv>()
       tag: 'Notifications',
       summary: 'List notifications',
       response: pageOf(NotificationOut),
+      description: `List the signed-in person's notifications across **every organization they belong to**, newest first. This is a cross-org personal surface: it reads the session directly (not an org-scoped actor context), and tenant isolation is enforced by a mandatory \`userId = session.user.id\` predicate — the recipient is always the caller. The optional \`organizationId\`, \`type\`, and \`unreadOnly\` query filters only **narrow within** the caller's own inbox (AND-combined); they can never widen scope to another user's notifications or to an org the caller isn't a member of.
+
+A notification is a read-only message aside from the read/act transitions, all of which converge on the single persisted \`readAt\` column. No capability is required — an authenticated session is sufficient. An unauthenticated request throws 401.
+
+Related: \`GET /notifications/count\` for the unread/approval badge counts; \`POST /notifications/read-all\` and \`POST /notifications/:id/read\` to mark read; \`GET /hub/inbox\` for the same data inside the Hub cockpit.`,
     }),
     zQuery(NotificationListQuery),
     async (c) => {
@@ -101,6 +106,9 @@ const notifications = new Hono<AppEnv>()
       tag: 'Notifications',
       summary: 'Get notification counts',
       response: NotificationCount,
+      description: `Return the caller's cross-org **unread attention counts** — the numbers that drive the rail badges. \`unread\` is the total of every unread notification across all of the caller's orgs; \`pendingApprovals\` is the subset of those whose type is \`approval_request\` (the actionable approval queue surfaced in the Inbox). Implemented as a single scan of the caller's unread set, partitioned by type in memory rather than issuing two COUNT queries (the inbox is small and already user-scoped).
+
+No capability required; session-only. 401 when unauthenticated. Side-effect-free read. Related: \`GET /notifications\` for the full list; marking notifications read via the read/read-all endpoints decrements these counts.`,
     }),
     async (c) => {
       const session = c.get('session');
@@ -121,6 +129,9 @@ const notifications = new Hono<AppEnv>()
       tag: 'Notifications',
       summary: 'Mark notifications read',
       response: NotificationReadAllResult,
+      description: `Bulk-mark the caller's notifications read by stamping \`readAt = now\`. **Side effect:** flips unread rows to read, which decrements the badge counts from \`GET /notifications/count\`. With an empty body the caller's entire inbox is marked read; the optional \`organizationId\` and \`type\` filters (AND-combined) scope the action to one org and/or one notification kind.
+
+Only rows that are still unread (\`readAt IS NULL\`) are updated, so the returned \`updated\` count reflects the **real transition count** and the operation is idempotent — re-running it reports 0 on the second call. Scoped to the caller by the mandatory \`userId\` predicate; session-only, no capability. 401 when unauthenticated. Related: \`POST /notifications/:id/read\` for a single notification.`,
     }),
     zJson(NotificationReadAll),
     async (c) => {
@@ -143,6 +154,9 @@ const notifications = new Hono<AppEnv>()
       tag: 'Notifications',
       summary: 'Mark a notification read',
       response: NotificationOut,
+      description: `Mark a single notification read by id and return its updated representation. **Side effect:** stamps \`readAt = now\` on the row, decrementing the unread/approval counts. The update is constrained to \`(id, userId = session.user.id)\`, so a caller can only ever mark their own notifications — a notification belonging to another user (or a non-existent id) yields **404 Not Found** (existence-hiding), never a cross-user write.
+
+Session-only, no capability; 401 when unauthenticated. Related: \`POST /notifications/read-all\` for the bulk variant; \`POST /notifications/:id/act\` to handle an actionable notification inline.`,
     }),
     zParam(idParam),
     async (c) => {
@@ -161,7 +175,14 @@ const notifications = new Hono<AppEnv>()
   )
   .post(
     '/:id/act',
-    apiDoc({ tag: 'Notifications', summary: 'Act on a notification', response: NotificationOut }),
+    apiDoc({
+      tag: 'Notifications',
+      summary: 'Act on a notification',
+      response: NotificationOut,
+      description: `Take a low-risk inline action on a notification directly from the Inbox (e.g. acknowledge or approve) and return its updated representation. The request body's \`action\` string names the inline action the client invoked. **Side effect / persisted model:** acting *handles* the item, which in the persisted model means marking it read — the schema carries no separate \`actedAt\` column, so the resulting state is simply the read notification (\`readAt = now\`). The action name is not stored; it conveys client intent for the transition only.
+
+The update is constrained to \`(id, userId = session.user.id)\`; a notification the caller doesn't own (or a missing id) returns **404**. Session-only, no capability; 401 when unauthenticated. Related: \`POST /notifications/:id/read\` (plain read, no action semantics).`,
+    }),
     zParam(idParam),
     zJson(NotificationAct),
     async (c) => {

@@ -40,7 +40,12 @@ const idParam = z.object({ id: z.string() });
 const milestones = new Hono<AppEnv>()
   .get(
     '/',
-    apiDoc({ tag: 'Milestones', summary: 'List milestones', response: pageOf(MilestoneOut) }),
+    apiDoc({
+      tag: 'Milestones',
+      summary: 'List milestones',
+      response: pageOf(MilestoneOut),
+      description: `List milestones — the named checkpoints inside a Project (its own table, but conceptually a Project attribute). Each milestone belongs to exactly one Project. The optional \`projectId\` query narrows the list to a single project's milestones; omit it to list every milestone in the org. Results are ordered by the manual \`sort\` key ascending (the order milestones render on the project's timeline), NOT by date — so a client can present them as an ordered sequence regardless of target dates. Unlike the other planning lists this read returns the full set rather than key-paginating. Read-only; org membership suffices. Returns a page of {@link MilestoneOut}.`,
+    }),
     zQuery(MilestoneListQuery),
     async (c) => {
       const { orgId } = c.get('actorCtx');
@@ -60,6 +65,7 @@ const milestones = new Hono<AppEnv>()
       summary: 'Create a milestone',
       capability: 'contribute',
       response: MilestoneOut,
+      description: `Create a milestone within a Project. The body's \`projectId\` is required and is re-read scoped to the caller's org BEFORE inserting (404 \`Project not found\`, existence-hiding for cross-tenant ids) — a milestone can never be parented to another tenant's project. \`targetDate\` is an optional ISO date (the checkpoint's planned completion, which drives its on-track/at-risk signal relative to today); \`sort\` defaults to \`0\` when omitted and orders the milestone among its siblings. The parent project is fixed at creation and cannot be moved later (\`MilestoneUpdate\` has no \`projectId\`). Requires \`contribute\`. Returns the created {@link MilestoneOut}.`,
     }),
     zJson(MilestoneCreate),
     async (c) => {
@@ -92,7 +98,12 @@ const milestones = new Hono<AppEnv>()
   )
   .get(
     '/:id',
-    apiDoc({ tag: 'Milestones', summary: 'Get a milestone', response: MilestoneOut }),
+    apiDoc({
+      tag: 'Milestones',
+      summary: 'Get a milestone',
+      response: MilestoneOut,
+      description: `Fetch a single milestone by id, scoped to the caller's org (404 \`Milestone not found\` when absent or cross-tenant). Returns the {@link MilestoneOut} — its parent \`projectId\`, \`name\`, optional \`targetDate\`, and \`sort\` position. Read-only; org membership suffices. Tasks are grouped under their milestone via the tasks/project endpoints; this read returns the milestone metadata only.`,
+    }),
     zParam(idParam),
     async (c) => {
       const { orgId } = c.get('actorCtx');
@@ -115,6 +126,7 @@ const milestones = new Hono<AppEnv>()
       summary: 'Update a milestone',
       capability: 'contribute',
       response: MilestoneOut,
+      description: `Partially update a milestone's \`name\`, \`targetDate\`, and/or \`sort\`. Each field is optional: an absent key leaves the column untouched, and an explicit \`null\` \`targetDate\` clears the date (making the checkpoint undated). The parent project is immutable — there is intentionally no \`projectId\` in the body, so a milestone cannot be moved between projects (delete and recreate to re-parent). Editing \`sort\` reorders the milestone among its siblings on the project timeline. 404 (\`Milestone not found\`) when absent or cross-tenant. Requires \`contribute\`. Returns the updated {@link MilestoneOut}.`,
     }),
     zParam(idParam),
     zJson(MilestoneUpdate),
@@ -146,6 +158,7 @@ const milestones = new Hono<AppEnv>()
       summary: 'Delete a milestone',
       capability: 'contribute',
       response: MilestoneOut,
+      description: `Delete a milestone, scoped to the caller's org (404 \`Milestone not found\` when absent or cross-tenant). Note this requires only \`contribute\`, NOT \`manage\` like deleting a Project or Initiative — a milestone is a lightweight checkpoint inside a project rather than a structural container, so removing it is ordinary contributor work. Side effect: per the contract, any Tasks pointing at this milestone have their \`milestone_id\` nulled (the tasks survive, returning to the project's ungrouped pool) rather than being deleted. Returns the deleted {@link MilestoneOut} as a tombstone.`,
     }),
     zParam(idParam),
     async (c) => {

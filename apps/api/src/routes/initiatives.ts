@@ -52,7 +52,12 @@ import { emitObservation } from './observation-emit';
 const initiatives = new Hono<AppEnv>()
   .get(
     '/',
-    apiDoc({ tag: 'Initiatives', summary: 'List initiatives', response: pageOf(InitiativeOut) }),
+    apiDoc({
+      tag: 'Initiatives',
+      summary: 'List initiatives',
+      response: pageOf(InitiativeOut),
+      description: `List the organization's initiatives — the cross-cutting themes that span many Programs and Projects (an Initiative contains no work of its own; it associates with work via many-to-many edges). Results are keyset-paginated newest-first, ordered by \`createdAt\` with \`id\` as the tiebreak. The \`limit\` query param is optional: omit it to receive the full list (legacy behavior), or supply it to receive a bounded page plus a \`nextCursor\` for the next page; pass that opaque cursor back as \`cursor\` to continue. Each item is the flat {@link InitiativeOut} (no rolled-up child mix or health) — fetch a single initiative via \`GET /:id\` for the derived roll-up. Reads require only org membership (the implicit \`view\` capability supplied by the org-context middleware); no capability guard gates this route. Scoped strictly to the caller's organization, so initiatives owned by other tenants are never returned.`,
+    }),
     zQuery(CursorQuery),
     async (c) => {
       const { orgId } = c.get('actorCtx');
@@ -82,6 +87,7 @@ const initiatives = new Hono<AppEnv>()
       summary: 'Create an initiative',
       capability: 'contribute',
       response: InitiativeOut,
+      description: `Create a new initiative (theme) within the organization. The \`organizationId\` is always taken from the path, never the body — initiatives cannot be created cross-tenant. \`status\` defaults to \`active\` when omitted; \`targetDate\` (an ISO date) is parsed to a timestamp; \`ownerId\`, \`description\`, and \`health\` are optional. When \`ownerId\` is supplied it MUST reference an Actor in the caller's org — the bare \`owner_id → actor.id\` foreign key targets the actor's global primary key with no tenant constraint, so the handler re-reads the owner scoped to the org and returns 404 (\`Owner not found\`, existence-hiding) when it belongs to another tenant. Side effect: emits a \`created\` observation whose subject is the new initiative, feeding activity streams and the daily digest. Requires \`contribute\` because creating a theme is structural authoring, not a mere comment. Returns the created {@link InitiativeOut}. See \`POST /:id/projects\` and \`POST /:id/programs\` to associate work afterward.`,
     }),
     zJson(InitiativeCreate),
     async (c) => {
@@ -116,7 +122,12 @@ const initiatives = new Hono<AppEnv>()
   )
   .get(
     '/:id',
-    apiDoc({ tag: 'Initiatives', summary: 'Get initiative detail', response: InitiativeDetail }),
+    apiDoc({
+      tag: 'Initiatives',
+      summary: 'Get initiative detail',
+      response: InitiativeDetail,
+      description: `Fetch a single initiative enriched with the roll-up derived from its associated children. Because an initiative holds no work itself, the detail loads every associated Project (via \`initiative_project\`) and Program (via \`initiative_program\`) and computes: \`childMix\` (how many Programs/Projects it spans), \`distribution\` (per-health-bucket counts of those children, with children that carry no health verdict counted as \`unknown\` rather than silently treated as on-track), \`rolledUpHealth\` (the single worst child health, ordered \`off_track ≻ at_risk ≻ on_track\`, or null when no child has a verdict), and \`derivedStatus\` (\`completed\` only when there is at least one child and every associated Project has reached a terminal \`completed\`/\`canceled\` status — otherwise \`active\`; this reflects the children's reality independent of the stored \`status\` column). 404 (\`Initiative not found\`) when the id is absent or owned by another org. Read-only; org membership suffices, no capability guard. Returns {@link InitiativeDetail}. See \`GET /:id/timeline\` for the roadmap view of the same children.`,
+    }),
     zParam(idParam),
     async (c) => {
       const { orgId } = c.get('actorCtx');
@@ -135,6 +146,7 @@ const initiatives = new Hono<AppEnv>()
       summary: 'Update an initiative',
       capability: 'contribute',
       response: InitiativeOut,
+      description: `Partially update an initiative. Every field is optional: an absent key leaves that column untouched, while an explicit \`null\` (where the field is nullable — \`description\`, \`ownerId\`, \`targetDate\`, \`health\`) clears it. A re-pointed \`ownerId\` is re-validated to live in the caller's org (404 \`Owner not found\` otherwise, existence-hiding), exactly as on create. Note this edits ONLY the stored row; it does not touch the derived \`derivedStatus\`/\`rolledUpHealth\` you see on \`GET /:id\`, which are always recomputed live from the children. Side effect: when \`status\` is included in the body, emits a \`status_change\` observation carrying the new status (no observation is emitted for other field edits). 404 (\`Initiative not found\`) when the id is absent or cross-tenant. Requires \`contribute\`. Returns the updated {@link InitiativeOut}.`,
     }),
     zParam(idParam),
     zJson(InitiativeUpdate),
@@ -180,6 +192,7 @@ const initiatives = new Hono<AppEnv>()
       summary: 'Delete an initiative',
       capability: 'manage',
       response: InitiativeOut,
+      description: `Permanently delete an initiative. Scoped to the caller's org: 404 (\`Initiative not found\`) when the id is absent or cross-tenant. This removes only the theme itself — the associated \`initiative_project\`/\`initiative_program\` edges are cascaded away by the database, but the Programs and Projects themselves are NOT deleted (an initiative owns no work, so there is nothing to cascade into the work hierarchy). Requires \`manage\` (the highest capability) rather than \`contribute\` because deletion is irreversible structural teardown that affects how the whole portfolio rolls up, so it is restricted to administrators. Returns the deleted {@link InitiativeOut} as a tombstone. To merely retire an initiative without losing it, PATCH its \`status\` to \`completed\` instead.`,
     }),
     zParam(idParam),
     async (c) => {
@@ -202,6 +215,7 @@ const initiatives = new Hono<AppEnv>()
       summary: 'Link a project to an initiative',
       capability: 'contribute',
       response: InitiativeProjectLinked,
+      description: `Associate a Project with this initiative by writing an \`initiative_project\` edge (a many-to-many join carrying a frozen \`organization_id\`). Both endpoints must already exist in the caller's org: the initiative is loaded (404 \`Initiative not found\`) and the Project is re-read scoped to the org (404 \`Project not found\`, existence-hiding for cross-tenant ids). If the edge already exists the request fails with 409 (\`Project already linked to this initiative\`) — the operation is guarded, not silently idempotent. Side effect: once linked, the Project's health/status begins feeding this initiative's derived roll-up (\`GET /:id\` distribution, \`rolledUpHealth\`, \`derivedStatus\`) and it appears as a bar on \`GET /:id/timeline\`. Requires \`contribute\`. Returns {@link InitiativeProjectLinked} \`{ initiativeId, projectId, linked: true }\`. Reverse with \`DELETE /:id/projects/:projectId\`.`,
     }),
     zParam(idParam),
     zJson(InitiativeProjectLink),
@@ -246,6 +260,7 @@ const initiatives = new Hono<AppEnv>()
       summary: 'Unlink a project from an initiative',
       capability: 'contribute',
       response: InitiativeUnlinked,
+      description: `Remove the \`initiative_project\` edge between this initiative and the named Project. The initiative is first confirmed to live in the caller's org (404 \`Initiative not found\`); the join row is then deleted scoped to the initiative, project, and org. 404 (\`Project link not found\`) when no such edge exists. Deletes only the association — the Project itself is untouched and remains in the org. Side effect: the Project stops contributing to this initiative's derived roll-up and timeline. Requires \`contribute\`. Returns {@link InitiativeUnlinked} \`{ unlinked: true }\`.`,
     }),
     zParam(projectLinkParam),
     async (c) => {
@@ -275,6 +290,7 @@ const initiatives = new Hono<AppEnv>()
       summary: 'Link a program to an initiative',
       capability: 'contribute',
       response: InitiativeProgramLinked,
+      description: `Associate a Program with this initiative by writing an \`initiative_program\` edge. Mirrors project linking: the initiative must exist in the caller's org (404 \`Initiative not found\`) and the Program is re-read scoped to the org (404 \`Program not found\`, existence-hiding). A duplicate edge fails with 409 (\`Program already linked to this initiative\`). Side effect: the Program then renders as an ongoing lane (no end date) on \`GET /:id/timeline\` and its health folds into the initiative's distribution and \`rolledUpHealth\`; note that derived \`completed\` status keys off Projects only, so a Program never makes \`derivedStatus\` terminal. Requires \`contribute\`. Returns {@link InitiativeProgramLinked} \`{ initiativeId, programId, linked: true }\`. Reverse with \`DELETE /:id/programs/:programId\`.`,
     }),
     zParam(idParam),
     zJson(InitiativeProgramLink),
@@ -318,6 +334,7 @@ const initiatives = new Hono<AppEnv>()
       summary: 'Unlink a program from an initiative',
       capability: 'contribute',
       response: InitiativeUnlinked,
+      description: `Remove the \`initiative_program\` edge between this initiative and the named Program. The initiative is confirmed in the caller's org (404 \`Initiative not found\`); the join row is then deleted scoped to initiative, program, and org. 404 (\`Program link not found\`) when no such edge exists. Deletes only the association — the Program is untouched. Side effect: the Program drops off this initiative's timeline lanes and its health stops feeding the roll-up. Requires \`contribute\`. Returns {@link InitiativeUnlinked} \`{ unlinked: true }\`.`,
     }),
     zParam(programLinkParam),
     async (c) => {
@@ -345,6 +362,7 @@ const initiatives = new Hono<AppEnv>()
       tag: 'Initiatives',
       summary: 'Get initiative timeline',
       response: InitiativeTimelineOut,
+      description: `The roadmap-first roll-up for an initiative: its associated Programs returned as ongoing, undated lanes and its associated Projects returned as dated bars (each with current \`status\`/\`health\` and ISO \`startDate\`/\`targetDate\`, either of which may be null when unscheduled). The optional \`from\`/\`to\` query bounds (ISO dates, either side open) filter ONLY the Project bars to those overlapping the window — a Project overlaps when it has no dates at all (unscheduled projects always remain visible) or its \`[startDate, targetDate]\` intersects \`[from, to]\`. Program lanes are always returned in full, since they are ongoing and carry no end date. The initiative must exist in the caller's org (404 \`Initiative not found\`). Read-only; org membership suffices. Returns {@link InitiativeTimelineOut}. See \`GET /:id\` for the numeric health/status roll-up over the same children.`,
     }),
     zParam(idParam),
     zQuery(InitiativeTimelineQuery),

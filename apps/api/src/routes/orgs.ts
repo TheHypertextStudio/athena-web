@@ -49,7 +49,12 @@ import updates from './updates';
 const orgs = new Hono<AppEnv>()
   .get(
     '/',
-    apiDoc({ tag: 'Orgs', summary: 'List organizations', response: pageOf(OrgSummary) }),
+    apiDoc({
+      tag: 'Orgs',
+      summary: 'List organizations',
+      response: pageOf(OrgSummary),
+      description: `List every organization the authenticated user belongs to, as compact \`OrgSummary\` rows for the org switcher / rail. Membership is derived from the user's **human Actor** rows: the query joins \`actor\` (where \`kind = 'human'\` and \`user_id\` = the session user) to \`organization\`, so an org appears here only if the caller has a human Actor in it. Personal spaces (\`isPersonal: true\`) are included alongside team orgs. This is the only un-nested org read — it is NOT behind \`orgContextMiddleware\` because it spans orgs; every other org route lives under \`/:orgId\` and resolves a single membership. Requires only an authenticated session (no capability), since it returns only the orgs the caller already belongs to. Results are unpaginated in practice (a user's membership count is small) but still wrapped in the standard \`{ items }\` page envelope. See \`GET /:orgId\` for the full representation of one org.`,
+    }),
     async (c) => {
       const session = c.get('session');
       if (!session?.user) throw new AuthError();
@@ -70,7 +75,25 @@ const orgs = new Hono<AppEnv>()
   )
   .post(
     '/',
-    apiDoc({ tag: 'Orgs', summary: 'Create an organization', response: OrgCreateResult }),
+    apiDoc({
+      tag: 'Orgs',
+      summary: 'Create an organization',
+      response: OrgCreateResult,
+      description: `Create a new organization. This is the single un-nested write in the API: the org does not exist yet, so there is no \`orgId\` to guard and no capability is required beyond an authenticated session — the caller becomes the org's first **Owner**.
+
+The handler runs ONE database transaction that seeds the entire tenant baseline so the org is immediately usable:
+- the \`organization\` row (name, resolved slug, purpose, \`isPersonal\`, and the chosen vocabulary skin);
+- the **four system roles** — Owner, Admin, Member, Guest (\`isSystem = true\`) — each with its seeded capability bundle and default visibility;
+- the creator's **Owner human Actor** (\`kind = 'human'\`, \`user_id\` = the caller), bound to the Owner role;
+- a default team named **"General"** (key \`GEN\`), its backing team Actor (\`kind = 'team'\`), and the Owner's membership in it;
+- the org-root **role grants** that materialize each role's org-wide base capability (Owner/Admin → \`manage\`, Member → \`contribute\`; Guest gets none, which is what makes guests grant-only).
+
+Two creation shapes (see \`OrgCreate\`): a **team org** (\`isPersonal: false\`, default) requires \`name\`; a **personal space** (\`isPersonal: true\`) is an org-of-one whose name defaults to \`'Personal'\`. Personal-space creation is **idempotent per user** — if the caller already owns an \`is_personal\` org, that existing org (with its default team + owner actor) is returned instead of seeding a duplicate.
+
+Slug handling: an explicitly supplied \`slug\` that collides on the unique org-slug index returns **409**; an auto-derived slug (from the name, or a per-user \`personal-<userId>\` slug for personal spaces) is silently disambiguated with a random suffix so a repeated workspace name still succeeds. The slug is resolved BEFORE the transaction so a collision is a clean 409 rather than an opaque 500.
+
+Returns \`OrgCreateResult\` — the new org plus its seeded \`defaultTeam\` and \`ownerActorId\`, which the client needs to immediately scope subsequent \`/:orgId/*\` calls. See \`GET /\` to list memberships and \`POST /:orgId/members/invitations\` to grow a team org.`,
+    }),
     zJson(OrgCreate),
     async (c) => {
       const session = c.get('session');
@@ -232,7 +255,16 @@ const orgs = new Hono<AppEnv>()
   .get(
     '/:orgId',
     orgContextMiddleware,
-    apiDoc({ tag: 'Orgs', summary: 'Get an organization', response: OrgOut }),
+    apiDoc({
+      tag: 'Orgs',
+      summary: 'Get an organization',
+      response: OrgOut,
+      description: `Fetch the full \`OrgOut\` representation of a single organization — name, slug, purpose, avatar, \`isPersonal\`, the resolved vocabulary skin, lifecycle state, and creation time. The org id comes from the verified actor context, not a re-read of the path, so the response always reflects the org the caller is actually a member of.
+
+Membership is enforced by \`orgContextMiddleware\` (which runs before this handler for every \`/:orgId/*\` route): it loads the caller's human Actor for \`(session user, orgId)\` and **404s when no membership exists** — existence-hiding, so a non-member cannot even confirm the org exists. No explicit capability is required beyond membership; any role (including Guest) that has a resolved Actor in the org may read its top-level metadata. The post-middleware \`org\` lookup is purely defensive — middleware has already proven the org exists.
+
+Related: \`GET /\` lists all orgs the caller belongs to; the nested routers under this path (\`/teams\`, \`/members\`, \`/roles\`, \`/grants\`, …) expose the org's contents.`,
+    }),
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const rows = await db.select().from(organization).where(eq(organization.id, orgId)).limit(1);

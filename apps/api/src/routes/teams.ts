@@ -74,7 +74,14 @@ async function assertKeyAvailable(orgId: string, key: string, exceptId?: string)
 const teams = new Hono<AppEnv>()
   .get(
     '/',
-    apiDoc({ tag: 'Teams', summary: 'List teams', response: pageOf(TeamOut) }),
+    apiDoc({
+      tag: 'Teams',
+      summary: 'List teams',
+      response: pageOf(TeamOut),
+      description: `List the organization's **active** teams. A Team is a first-class unit within an org that owns its own \`workflow_states\`, Cycles, and the Triage queue. The query filters on \`archived_at IS NULL\`, so soft-deleted (archived) teams are excluded. Each \`TeamOut\` carries the team's name, unique \`key\`, description, workflow states, \`triageEnabled\` flag, and optional agent guidance / approval routing.
+
+Requires only org membership to read (the \`view\` capability is satisfied by any member). Returns the standard \`{ items }\` page envelope. Every new org seeds a default "General" team (key \`GEN\`). See \`POST /\` to create a team and \`GET /:teamId\` for full detail.`,
+    }),
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const rows = await db
@@ -87,7 +94,15 @@ const teams = new Hono<AppEnv>()
   .post(
     '/',
     capabilityGuard('manage'),
-    apiDoc({ tag: 'Teams', summary: 'Create a team', capability: 'manage', response: TeamDetail }),
+    apiDoc({
+      tag: 'Teams',
+      summary: 'Create a team',
+      capability: 'manage',
+      response: TeamDetail,
+      description: `Create a team within the org. Requires the \`manage\` capability (creating an org structural unit). \`organizationId\` is always taken from the path, never the body. The team's \`key\` must be unique among the org's teams: the handler checks availability first and returns **409** on a collision (surfacing the \`(organization_id, key)\` uniqueness constraint as a clean Problem rather than a raw DB error).
+
+Defaults applied when omitted: \`workflowStates\` seeds the canonical five-state workflow (Backlog › Todo › In Progress › Done › Canceled — the first state, \`backlog\`, is the new-task default); \`triageEnabled\` defaults to \`true\`; \`description\`, \`agentGuidance\`, and \`approvalRouting\` default to null. Returns the full \`TeamDetail\` (workflow states always materialized). Unlike the org-create transaction, this does NOT seed a team Actor membership set — it creates the team row only. See \`PATCH /:teamId\` to edit and \`DELETE /:teamId\` to archive.`,
+    }),
     zJson(TeamCreate),
     async (c) => {
       const { orgId } = c.get('actorCtx');
@@ -114,7 +129,12 @@ const teams = new Hono<AppEnv>()
   )
   .get(
     '/:teamId',
-    apiDoc({ tag: 'Teams', summary: 'Get a team', response: TeamDetail }),
+    apiDoc({
+      tag: 'Teams',
+      summary: 'Get a team',
+      response: TeamDetail,
+      description: `Fetch one active team by id, returning the full \`TeamDetail\` — name, unique \`key\`, description, the complete \`workflowStates\` list, \`triageEnabled\`, and any \`agentGuidance\`/\`approvalRouting\`. The lookup is scoped to \`(teamId, orgId)\` AND \`archived_at IS NULL\`, so an archived team or a team id from another org returns **404** (existence-hiding). Requires only org membership (the \`view\` capability) to read. See \`GET /\` to list teams.`,
+    }),
     zParam(idParam),
     async (c) => {
       const { orgId } = c.get('actorCtx');
@@ -132,7 +152,15 @@ const teams = new Hono<AppEnv>()
   .patch(
     '/:teamId',
     capabilityGuard('manage'),
-    apiDoc({ tag: 'Teams', summary: 'Update a team', capability: 'manage', response: TeamDetail }),
+    apiDoc({
+      tag: 'Teams',
+      summary: 'Update a team',
+      capability: 'manage',
+      response: TeamDetail,
+      description: `Patch an active team's settings. Requires the \`manage\` capability. Every field is optional; only supplied fields change. The team must be active and in this org — otherwise **404** (the where-clause enforces \`(teamId, orgId)\` AND \`archived_at IS NULL\`). Changing \`key\` re-checks org-wide uniqueness and returns **409** on a collision with another team (the row being patched is excluded from the check).
+
+Setting \`workflowStates\` **replaces the entire array** (it is not a merge). \`description\`, \`agentGuidance\`, and \`approvalRouting\` accept \`null\` to clear. An **empty patch body is a valid no-op**: since the DB rejects an empty \`SET\`, the handler re-reads the row (still enforcing the org-scoped existence check) and returns it unchanged. Returns the updated \`TeamDetail\`. To archive a team use \`DELETE /:teamId\`.`,
+    }),
     zParam(idParam),
     zJson(TeamUpdate),
     async (c) => {
@@ -178,6 +206,9 @@ const teams = new Hono<AppEnv>()
       summary: 'Delete a team',
       capability: 'manage',
       response: TeamDeleteResult,
+      description: `Archive a team — a **soft delete** that stamps \`archived_at\` rather than removing the row, preserving the team's Cycles, tasks, and history for audit and possible restoration. Requires the \`manage\` capability. The update is scoped to \`(teamId, orgId)\` AND \`archived_at IS NULL\`, so deleting an already-archived team or one from another org returns **404**; this also makes the operation effectively idempotent (a second delete 404s rather than re-archiving).
+
+After archival the team disappears from \`GET /\` and \`GET /:teamId\` (both filter \`archived_at IS NULL\`). Returns \`TeamDeleteResult\` — the archived team id plus the \`archivedAt\` timestamp. Note this endpoint does not block archiving the org's last/default team, nor does it reassign that team's tasks.`,
     }),
     zParam(idParam),
     async (c) => {

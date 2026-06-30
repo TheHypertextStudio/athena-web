@@ -173,7 +173,14 @@ const meAccount = new Hono<AppEnv>()
   // The account resource: read its end-of-life status (deletion state, blockers, latest export).
   .get(
     '/',
-    apiDoc({ tag: 'Me', summary: 'Get account status', response: AccountStatusOut }),
+    apiDoc({
+      tag: 'Me',
+      summary: 'Get account status',
+      response: AccountStatusOut,
+      description: `Return the caller's complete **account end-of-life status** in one read — the data behind the personal-workspace *Export data* and *Danger zone* settings. Reports the deletion state (\`active\` vs \`pending_deletion\`) with its \`deletionRequestedAt\`/\`deleteAfterAt\` timestamps, the set of **ownership blockers** (shared orgs the caller is the sole active owner of, which must be transferred or deleted before the account can be removed), and the caller's latest data export (status + download link when ready, else null).
+
+Computed by scanning the caller's Hub deletion fields, recomputing ownership blockers, and loading the latest export — all in parallel. Read-only; session-only, no capability (no step-up needed just to view status). **401** when unauthenticated. Related: \`DELETE /me/account\` (schedule deletion), \`POST /me/account/reactivation\` (cancel it), \`GET /me/account/exports\`.`,
+    }),
     async (c) => {
       const { user } = requireSession(c);
       return ok(c, AccountStatusOut, await loadStatus(user.id));
@@ -189,7 +196,11 @@ const meAccount = new Hono<AppEnv>()
       summary: 'Schedule account deletion',
       response: AccountStatusOut,
       status: 202,
-      description: 'Accepted',
+      description: `Schedule a **recoverable, 14-day-grace** deletion of the caller's account, returning the updated account status. Responds **202 Accepted** because the request only *records intent*: the account flips to \`pending_deletion\` now, but the irreversible purge is enacted later by a cron sweep once the grace window (\`deleteAfterAt\`) closes — until then the deletion can be undone via \`POST /me/account/reactivation\`.
+
+**Two gates must pass.** First, step-up: the action requires a **freshly re-authenticated session** (created within the last 5 minutes); a passkey re-verification on the client mints a new session, and a stale session is rejected with **401 \`reauth_required\`** so the client re-challenges and retries. Second, ownership: if the caller is the sole active owner of any shared org, the request is refused with **409 \`deletion_blocked\`** (the blocking orgs are listed in account status) — they must transfer ownership or delete those orgs first.
+
+**Side effects** on success: marks the Hub \`pending_deletion\` with \`deleteAfterAt\`, automatically queues a fresh data export (so the user can grab everything before the purge), and emails a deletion-scheduled confirmation. Session-only otherwise (no capability). Related: \`POST /me/account/reactivation\`, \`GET /me/account\`.`,
     }),
     async (c) => {
       const session = requireSession(c);
@@ -219,7 +230,14 @@ const meAccount = new Hono<AppEnv>()
   // Recover a scheduled deletion during its grace window (the inverse of DELETE /me/account).
   .post(
     '/reactivation',
-    apiDoc({ tag: 'Me', summary: 'Cancel account deletion', response: AccountStatusOut }),
+    apiDoc({
+      tag: 'Me',
+      summary: 'Cancel account deletion',
+      response: AccountStatusOut,
+      description: `Recover an account that is scheduled for deletion — the inverse of \`DELETE /me/account\`. Modelled as creating a *reactivation* on the account resource. **Side effects:** clears the Hub's \`pending_deletion\` state (returning it to \`active\`, clearing \`deletionRequestedAt\`/\`deleteAfterAt\` so the cron purge will not run) and emails a deletion-canceled confirmation. Returns the refreshed account status.
+
+Only effective during the grace window, before the cron sweep has purged the account. Unlike scheduling, cancellation does **not** require a fresh/step-up session — recovering access should be low-friction — but it does require an authenticated session (no capability). **401** when unauthenticated. Related: \`DELETE /me/account\`, \`GET /me/account\`.`,
+    }),
     async (c) => {
       const { user } = requireSession(c);
       await cancelAccountDeletion(db, user.id);
@@ -234,7 +252,14 @@ const meAccount = new Hono<AppEnv>()
   // separately outside the RPC contract; see meAccountExportDownload.)
   .get(
     '/exports',
-    apiDoc({ tag: 'Me', summary: 'List account exports', response: AccountExportListOut }),
+    apiDoc({
+      tag: 'Me',
+      summary: 'List account exports',
+      response: AccountExportListOut,
+      description: `List the caller's **personal-data export** jobs, newest first. Each export is an asynchronous job that bundles the user's data into a downloadable ZIP archive; the list shows each job's lifecycle status (\`pending\`/\`ready\`/\`failed\`/\`expired\`), request/ready/expiry timestamps, and a \`downloadUrl\` that is populated only once the archive is \`ready\` (and stops being offered after it expires).
+
+User-scoped to \`session.user.id\`; read-only; session-only, no capability. **401** when unauthenticated. Related: \`POST /me/account/exports\` to request one, \`GET /me/account/exports/:exportId\` for a single job, and the binary download at \`GET /me/account/exports/:exportId/file\`.`,
+    }),
     async (c) => {
       const { user } = requireSession(c);
       const rows = await db
@@ -252,7 +277,9 @@ const meAccount = new Hono<AppEnv>()
       summary: 'Request an account export',
       response: AccountExportOut,
       status: 201,
-      description: 'Created',
+      description: `Queue an asynchronous **personal-data export** and return the export job. **The request is idempotent / de-duplicated:** if the caller already has a \`pending\` export, that existing job is returned with **200 OK** and no new job is created; only when there is no pending job is a fresh one queued and returned with **201 Created**. Either way a \`Location\` header points at the new job's resource (\`/v1/me/account/exports/:id\`).
+
+This route only *records intent* — the actual archive generation runs in a cron sweep, which flips the job to \`ready\` (with a download link) or \`failed\`. **Side effect:** inserts an \`accountExport\` row (when none pending). Session-only, no capability; **401** when unauthenticated. The same enqueue is triggered automatically when scheduling account deletion. Related: \`GET /me/account/exports\`, and the binary \`GET …/:exportId/file\`.`,
     }),
     async (c) => {
       const { user } = requireSession(c);
@@ -263,7 +290,14 @@ const meAccount = new Hono<AppEnv>()
   )
   .get(
     '/exports/:exportId',
-    apiDoc({ tag: 'Me', summary: 'Get an account export', response: AccountExportOut }),
+    apiDoc({
+      tag: 'Me',
+      summary: 'Get an account export',
+      response: AccountExportOut,
+      description: `Fetch a single personal-data export job by \`:exportId\` — used to poll a queued export until it becomes \`ready\` (at which point \`downloadUrl\`/\`readyAt\`/\`expiresAt\` are populated). The lookup is constrained to \`(id, userId = session.user.id)\`, so a caller can only ever read their own export; an id that doesn't exist or isn't theirs returns **404 Not Found** (existence-hiding).
+
+Read-only; session-only, no capability. **401** when unauthenticated. The JSON returned here describes the job; the actual archive bytes are streamed by the separate binary sub-resource \`GET /me/account/exports/:exportId/file\`.`,
+    }),
     async (c) => {
       const { user } = requireSession(c);
       const row = await getExportRow(user.id, c.req.param('exportId'));
@@ -294,7 +328,13 @@ const NOT_READY_MESSAGE: Partial<Record<AccountExportStatus, string>> = {
  */
 export const meAccountExportDownload: Hono<AppEnv> = new Hono<AppEnv>().get(
   '/:exportId/file',
-  describeRoute({ tags: ['Me'], summary: 'Download an account export file' }),
+  describeRoute({
+    tags: ['Me'],
+    summary: 'Download an account export file',
+    description: `Stream the generated ZIP archive for a \`ready\` export — the **binary sub-resource** of an export job. Unlike the rest of the account surface this returns raw bytes (\`Content-Type: application/zip\`, \`Content-Disposition: attachment\`), not a JSON envelope, and is fetched via a plain \`<a href>\` link rather than the typed RPC client; it is therefore mounted **outside** the typed RPC \`AppType\` contract (same convention as cron/webhooks/stream). The bytes flow through the \`BlobStore.get\` port, so it works identically against local disk in dev and Vercel Blob in production.
+
+**Authorization is implicit and per-user:** only the caller's own export is served — \`:exportId\` is verified to belong to the session user. Errors: **404** when the export doesn't exist / isn't theirs, or when the underlying blob has already been swept; **409** when the export exists but isn't downloadable yet (\`pending\`), didn't finish (\`failed\`), or has \`expired\` (each with a status-specific message). Session-only, no capability; **401** when unauthenticated.`,
+  }),
   async (c) => {
     const { user } = requireSession(c);
     const row = await getExportRow(user.id, c.req.param('exportId'));
@@ -306,7 +346,10 @@ export const meAccountExportDownload: Hono<AppEnv> = new Hono<AppEnv>().get(
     const bytes = await getContainer().blob.get(row.blobKey);
     if (!bytes) throw new NotFoundError('Export file is no longer available.');
     const filename = exportFilename(user.name, row.readyAt ?? row.requestedAt);
-    return new Response(bytes, {
+    // Copy into a fresh `ArrayBuffer`-backed Uint8Array so the body is a valid `BodyInit`: the
+    // blob port returns `Uint8Array<ArrayBufferLike>`, which the DOM `Response` typings (used
+    // when the admin app compiles this source) reject in favour of the concrete `ArrayBuffer`.
+    return new Response(new Uint8Array(bytes), {
       status: 200,
       headers: {
         'Content-Type': 'application/zip',

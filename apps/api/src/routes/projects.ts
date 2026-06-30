@@ -161,6 +161,7 @@ const projects = new Hono<AppEnv>()
       summary: 'Create a project',
       capability: 'contribute',
       response: ProjectOut,
+      description: `Create a bounded, dated effort (a Project moves \`planned → active → completed\`, or is \`canceled\`). The \`organizationId\` comes from the path. \`startDate\`/\`targetDate\` are optional ISO dates parsed to timestamps; \`leadId\` and \`teamId\` are optional references and \`initiativeIds\` is an optional set of themes to associate at creation. Tenant isolation: a supplied \`leadId\` (Actor) and \`teamId\` (Team) are each re-read scoped to the caller's org and rejected with 404 (\`Lead not found\` / \`Team not found\`, existence-hiding) when they belong to another tenant — the bare FKs target global PKs without a tenant constraint, so this guard is what prevents cross-org attachment. (\`programId\` is not accepted on create; set it later via PATCH.) Every \`initiativeIds\` entry is validated to live in the org BEFORE the write (404 \`Initiative not found\` on any miss) and de-duplicated so the \`initiative_project\` join's composite PK never collides. The project row and its initiative links are written in a single transaction, so a partial create (project saved but links lost) is impossible. Side effect: emits a \`created\` observation. Requires \`contribute\`. Returns the created {@link ProjectOut}. Track completion via \`GET /:id/progress\`.`,
     }),
     zJson(ProjectCreate),
     async (c) => {
@@ -222,7 +223,12 @@ const projects = new Hono<AppEnv>()
   )
   .get(
     '/',
-    apiDoc({ tag: 'Projects', summary: 'List projects', response: pageOf(ProjectOut) }),
+    apiDoc({
+      tag: 'Projects',
+      summary: 'List projects',
+      response: pageOf(ProjectOut),
+      description: `List the organization's projects — the bounded, dated efforts that sit between ongoing Programs above and Tasks/Milestones below. Keyset-paginated newest-first by \`createdAt\` (\`id\` tiebreak); the optional \`limit\` yields a bounded page plus \`nextCursor\` (omit for the full list). Each item is the flat {@link ProjectOut} (no progress roll-up — call \`GET /:id/progress\` for weighted completion, or \`GET /:id/rollup\` for the detail-screen extras). Read-only; org membership suffices. Strictly org-scoped.`,
+    }),
     zQuery(CursorQuery),
     async (c) => {
       const { orgId } = c.get('actorCtx');
@@ -243,7 +249,12 @@ const projects = new Hono<AppEnv>()
   )
   .get(
     '/:id',
-    apiDoc({ tag: 'Projects', summary: 'Get a project', response: ProjectOut }),
+    apiDoc({
+      tag: 'Projects',
+      summary: 'Get a project',
+      response: ProjectOut,
+      description: `Fetch a single project by id, scoped to the caller's org (404 \`Project not found\` when absent or cross-tenant). Returns the flat {@link ProjectOut} — its lifecycle \`status\`, \`health\` verdict, \`leadId\`/\`teamId\`/\`programId\` references, and \`startDate\`/\`targetDate\`. This read does NOT include the weighted completion roll-up or the milestone/initiative/activity extras; use \`GET /:id/progress\` and \`GET /:id/rollup\` respectively for those. Read-only; org membership suffices.`,
+    }),
     zParam(idParam),
     async (c) => {
       const { orgId } = c.get('actorCtx');
@@ -266,6 +277,7 @@ const projects = new Hono<AppEnv>()
       summary: 'Update a project',
       capability: 'contribute',
       response: ProjectOut,
+      description: `Partially update a project. Every field is optional: an absent key leaves the column untouched, while \`null\` (where allowed) clears a nullable column. A re-pointed \`leadId\` (Actor), \`programId\` (Program), or \`teamId\` (Team) is re-validated to live in the caller's org — 404 (\`Lead not found\` / \`Program not found\` / \`Team not found\`, existence-hiding) on a cross-tenant id; clearing (\`null\`) or omitting a reference skips the check. An empty patch body is a valid no-op: rather than issue an empty UPDATE the handler re-reads the row (still enforcing the org-scoped existence check) and returns it unchanged. Setting \`programId\` is how a project is filed under a Program; setting \`status\`/\`health\`/dates drives the project's roll-ups and its bar on the initiative timeline. Side effect: when \`status\` is included, emits a \`status_change\` observation carrying the new status (other field edits emit nothing). 404 (\`Project not found\`) when absent or cross-tenant. Requires \`contribute\`. Returns the updated {@link ProjectOut}.`,
     }),
     zParam(idParam),
     zJson(ProjectUpdate),
@@ -333,6 +345,7 @@ const projects = new Hono<AppEnv>()
       summary: 'Delete a project',
       capability: 'manage',
       response: ProjectOut,
+      description: `Permanently delete a project, scoped to the caller's org (404 \`Project not found\` when absent or cross-tenant). Requires \`manage\` (not \`contribute\`, which gates ordinary edits) because deletion is irreversible teardown of a container that Tasks and Milestones hang off and that feeds Program/Initiative roll-ups. Dependent rows (Milestones, the project's Tasks' \`project_id\`, \`initiative_project\` edges) are resolved by the database's foreign-key rules rather than re-implemented here. To retire a project without losing it, PATCH its \`status\` to \`completed\` or \`canceled\` instead. Returns the deleted {@link ProjectOut} as a tombstone.`,
     }),
     zParam(idParam),
     async (c) => {
@@ -349,7 +362,12 @@ const projects = new Hono<AppEnv>()
   )
   .get(
     '/:id/progress',
-    apiDoc({ tag: 'Projects', summary: 'Get project progress', response: ProjectProgress }),
+    apiDoc({
+      tag: 'Projects',
+      summary: 'Get project progress',
+      response: ProjectProgress,
+      description: `Compute a project's weighted completion roll-up across its Tasks. A Task counts as completed when its \`completedAt\` timestamp is set. Weighting is estimate-based when ANY task in the project carries a positive \`estimate\` (bigger tasks count for more; a missing estimate is treated as 0); when no task is estimated it falls back to a plain count where each task weighs 1. \`percent\` is \`completedWeight / totalWeight\`, or exactly \`0\` for an empty project (never NaN). \`taskCount\`/\`completedCount\` are always the raw row counts regardless of which weighting mode applied, so a client can show both "N of M tasks" and the weighted bar. The project must exist in the caller's org (404 \`Project not found\`); tasks are read org-scoped as defense in depth. Read-only; org membership suffices. Returns {@link ProjectProgress}.`,
+    }),
     zParam(idParam),
     async (c) => {
       const { orgId } = c.get('actorCtx');

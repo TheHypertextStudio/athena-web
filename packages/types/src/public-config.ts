@@ -26,13 +26,34 @@ import { IdentityProvider } from './identity';
 export const PublicConfigOut = z
   .object({
     /** The deployment mode — `local` enables the mock-everything affordances. */
-    appMode: z.enum(['local', 'test', 'production']),
+    appMode: z
+      .enum(['local', 'test', 'production'])
+      .describe(
+        'The deployment mode the API is running in. `local` enables mock-everything affordances (stub OAuth, fixtures); `test` is the CI/test profile; `production` is the live deployment. The web client branches dev-only UI on this.',
+      )
+      .meta({ example: 'production' }),
     /** The social providers whose OAuth credentials are configured server-side. */
-    oauthProviders: z.array(IdentityProvider),
+    oauthProviders: z
+      .array(IdentityProvider)
+      .describe(
+        'The social providers a user can sign in with / link an identity from, derived from real server credentials: a provider appears here iff its OAuth client id + secret are configured. The sign-in page renders exactly these buttons. One of `google` | `github` | `linear`.',
+      )
+      .meta({ example: ['google', 'github'] }),
     /** The connector keys unlocked by the configured providers (e.g. `gtasks`, `github`). */
-    connectors: z.array(z.string()),
+    connectors: z
+      .array(z.string())
+      .describe(
+        'The connector keys unlocked by the configured providers — the data sources an org can sync. A configured Google grant unlocks `drive`/`gmail`/`calendar`/`gtasks`; GitHub unlocks `github`; Linear unlocks `linear`. Empty when no providers are configured.',
+      )
+      .meta({ example: ['drive', 'gmail', 'calendar', 'gtasks', 'github'] }),
     /** The MCP server URL, or null when not configured. */
-    mcpUrl: z.string().nullable(),
+    mcpUrl: z
+      .string()
+      .nullable()
+      .describe(
+        'The Model Context Protocol server URL to show in the Authorized-apps setup guide, or null when `MCP_RESOURCE_URL` is unset (the client then derives it from its own origin). Absolute URL when present.',
+      )
+      .meta({ example: 'https://api.docket.example/mcp' }),
   })
   .meta({
     id: 'PublicConfigOut',

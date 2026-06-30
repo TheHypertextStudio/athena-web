@@ -36,7 +36,12 @@ import { decideActivity, replyToElicitation, resolveAction } from './agent-sessi
 const agentSessions = new Hono<AppEnv>()
   .get(
     '/',
-    apiDoc({ tag: 'Agents', summary: 'List agent sessions', response: pageOf(AgentSessionOut) }),
+    apiDoc({
+      tag: 'Agents',
+      summary: 'List agent sessions',
+      response: pageOf(AgentSessionOut),
+      description: `List the organization's agent sessions, newest first, as a single page of {@link AgentSessionOut} summaries (no activity stream — use \`GET /:id\` for that). An agent session is the Docket-hosted lifecycle of one agent task: it tracks status, trigger, the bound agent, an optional linked task, the human initiator, and start/end timestamps, but deliberately does NOT model compute/cost/telemetry (the external provider owns execution). Pass \`?status=\` to filter to a single lifecycle state (\`pending\`, \`running\`, \`awaiting_input\`, \`awaiting_approval\`, \`completed\`, \`failed\`, or \`canceled\`) — useful for surfacing the review queue (\`awaiting_approval\`) or live work (\`running\`). A read; org membership is sufficient. Related: start one via \`POST /\`, inspect via \`GET /:id\`, and watch live via \`GET /:id/stream\`.`,
+    }),
     zQuery(listQuery),
     async (c) => {
       const { orgId } = c.get('actorCtx');
@@ -60,6 +65,11 @@ const agentSessions = new Hono<AppEnv>()
       summary: 'Start an agent session from a prompt',
       capability: 'contribute',
       response: AgentSessionOut,
+      description: `Create and run an agent session from a freeform \`prompt\`, returning the **settled** {@link AgentSessionOut} (the call runs the session synchronously to its first resting point, so the returned \`status\` is already past \`running\` — typically \`awaiting_approval\` or \`completed\`). This is the "ask Athena to plan" escalation of the hybrid Home prompt box; its sibling, plain quick-capture, lives at \`POST /v1/orgs/:orgId/capture\` and never invokes an agent.
+
+Behavior: the session binds to the supplied \`agentId\` (validated to be a registered agent in this org, else 404 \`Agent not found\`) or, when omitted, to the org's **default agent**, which is lazily created on first use so escalation works with zero agent pre-setup. The prompt is persisted as the session's first \`response\` activity (there is no schema brief column) and threaded through as the runtime task brief. \`trigger\` is recorded as \`delegation\` (a human delegating planning), and the caller becomes the session \`initiatorId\`.
+
+Side effects: dispatches the agent against the runtime; each yielded activity (thought/action/response/elicitation/error) is persisted as a {@link SessionActivityOut} row and streams live over \`GET /:id/stream\`. The agent acts as its own Actor under the same capability checks as a human, plus an orthogonal **approval gate**: a proposed \`action\` it emits is stamped \`proposed\` and parks the session in \`awaiting_approval\` until a reviewer approves/rejects it. Requires \`contribute\` (the same bar as creating a task directly). Related: \`POST /:id/run\` (re-run an existing session), the activity approve/reject/reply routes, and the pause/resume/cancel lifecycle routes.`,
     }),
     zJson(SessionFromPromptBody),
     async (c) => {
@@ -71,7 +81,12 @@ const agentSessions = new Hono<AppEnv>()
   )
   .get(
     '/:id',
-    apiDoc({ tag: 'Agents', summary: 'Get an agent session', response: AgentSessionDetailOut }),
+    apiDoc({
+      tag: 'Agents',
+      summary: 'Get an agent session',
+      response: AgentSessionDetailOut,
+      description: `Fetch a single agent session with its **full, ordered Activity stream** as {@link AgentSessionDetailOut} — the session summary plus every persisted activity (thoughts, actions, responses, elicitations, errors) sorted oldest-first, so a client can render the whole transcript in one read. Org-scoped: a missing/cross-tenant id returns 404 (\`Session not found\`). A read; org membership suffices. Each \`action\` activity carries an \`approvalStatus\` (\`proposed\` / \`approved\` / \`rejected\` / \`applied\`) reflecting where it sits in the approval gate. For an incremental or live view use \`GET /:id/activity\` (paged) or \`GET /:id/stream\` (SSE) instead of re-fetching the whole detail.`,
+    }),
     zParam(idParam),
     async (c) => {
       const { orgId } = c.get('actorCtx');
@@ -102,6 +117,9 @@ const agentSessions = new Hono<AppEnv>()
       summary: 'Run an agent session',
       capability: 'contribute',
       response: AgentSessionOut,
+      description: `Run (or resume execution of) an existing session against the agent runtime and return the **settled** {@link AgentSessionOut}. Only a session in a *runnable* state — \`pending\` (created but not yet dispatched, e.g. a proactively drafted plan) or \`running\` — may be run; any other state (terminal, or parked awaiting human input/approval) yields 409 (\`Session is not in a runnable state\`). A missing/cross-tenant id returns 404, and a session whose agent has since been deregistered returns 404 (\`Agent not found\`).
+
+Behavior & side effects: derives the task brief (a linked task's title, else the session's seed \`response\` prompt), flips the session to \`running\` (stamping \`startedAt\` on first run), then consumes the runtime's activity stream — persisting one {@link SessionActivityOut} per yielded activity and stamping \`proposed\` on gated actions. When the stream ends the session settles to \`awaiting_approval\` if any proposed action remains unresolved, otherwise \`completed\` (stamping \`endedAt\`). Activities stream live to \`GET /:id/stream\`. Requires \`contribute\`. The body is an empty object. Related: \`POST /\` (create-and-run from a prompt), the approve/reject routes to clear an \`awaiting_approval\` gate.`,
     }),
     zParam(idParam),
     zJson(z.object({})),
@@ -114,7 +132,13 @@ const agentSessions = new Hono<AppEnv>()
   )
   .get(
     '/:id/stream',
-    describeRoute({ tags: ['Agents'], summary: 'Stream agent session activity (SSE)' }),
+    describeRoute({
+      tags: ['Agents'],
+      summary: 'Stream agent session activity (SSE)',
+      description: `Stream a session's Activity entries as **Server-Sent Events** (\`text/event-stream\`), rather than a JSON envelope. Each persisted activity is emitted as one SSE message whose \`id\` is the activity id, whose \`event\` name is the activity \`type\` (\`thought\` | \`action\` | \`response\` | \`elicitation\` | \`error\`), and whose \`data\` is the JSON-serialized {@link SessionActivityOut}. A client subscribes (e.g. via \`EventSource\`) to render the agent's reasoning, proposed actions, questions, and results as they arrive — the live counterpart to the one-shot \`GET /:id\` transcript.
+
+Semantics: the org-scoped session must exist (404 \`Session not found\` otherwise). The stream replays the session's existing activities in chronological order. Because each event carries the activity \`id\`, a reconnecting client can use the standard SSE \`Last-Event-ID\` header to resume after the last entry it saw. Reads only; org membership suffices. Approval is driven separately via the activity approve/reject/reply routes; this endpoint is read-only observation.`,
+    }),
     zParam(idParam),
     async (c) => {
       const { orgId } = c.get('actorCtx');
@@ -147,6 +171,7 @@ const agentSessions = new Hono<AppEnv>()
       tag: 'Agents',
       summary: 'List agent session activity',
       response: pageOf(SessionActivityOut),
+      description: `List a session's Activity entries as a single page of {@link SessionActivityOut}, oldest-first — the JSON (non-streaming) equivalent of \`GET /:id/stream\`, suited to a plain fetch/poll rather than an \`EventSource\`. The org-scoped session must exist (404 \`Session not found\`). Each entry has a \`type\` (\`thought\`/\`action\`/\`response\`/\`elicitation\`/\`error\`) and, for \`action\` rows, an \`approvalStatus\` showing its position in the approval gate. A read; org membership suffices. To drive the gate, see the activity-scoped \`/activity/:activityId/approve|reject|reply\` routes.`,
     }),
     zParam(idParam),
     async (c) => {
@@ -169,6 +194,11 @@ const agentSessions = new Hono<AppEnv>()
       summary: 'Approve a gated session activity',
       capability: 'assign',
       response: SessionActivityOut,
+      description: `Approve a single gated \`action\` the agent has proposed, clearing the approval gate so the mutation may apply. Returns the decided {@link SessionActivityOut} (the one named by \`:activityId\`), now \`applied\`. The target must belong to this org-scoped session, be \`type='action'\`, and currently be \`proposed\` — otherwise 404 (\`Activity not found\` / \`Session not found\`) or 409 (\`Activity is not a proposed action\`).
+
+Side effects (transactional): the activity advances \`proposed → applied\` (the gate's terminal applied state) and an \`audit_event\` (\`type='approved'\`, \`subjectType='agent_session'\`) is written with the **agent's** Actor as \`actorId\`, the session \`initiatorId\` as \`initiatorId\`, and the approved activity id + approver recorded in \`metadata\` — so the feed always shows both who acted (the agent) and who authorized it. Pass body \`{ scope: 'all_in_session' }\` to approve every still-\`proposed\` action in the session in one transaction (default \`{ scope: 'this' }\`, just the target). Once no proposed action remains, the session advances from \`awaiting_approval\` back to \`running\` so the agent can continue.
+
+Requires \`assign\` — the approval gate is orthogonal to the \`contribute\` bar that lets a human *propose* work: clearing an agent's write is an authorization act, so a contribute-only actor must not self-approve. Related: \`/reject\` (deny), \`/reply\` (answer an elicitation instead of a gated action), and the session-level \`POST /:id/approve\` shortcut.`,
     }),
     zParam(activityParam),
     zJson(z.object({ scope: z.enum(['this', 'all_in_session']).optional() }).optional()),
@@ -191,6 +221,11 @@ const agentSessions = new Hono<AppEnv>()
       summary: 'Reject a gated session activity',
       capability: 'assign',
       response: SessionActivityOut,
+      description: `Reject a single gated \`action\` the agent has proposed, so the mutation is **never applied**. Returns the decided {@link SessionActivityOut} (named by \`:activityId\`), now \`rejected\`. Same preconditions as approve: the target must belong to the org-scoped session, be \`type='action'\`, and be \`proposed\` (else 404 or 409 \`Activity is not a proposed action\`).
+
+Side effects (transactional): the activity becomes \`rejected\` (no apply) and a \`type='rejected'\` \`audit_event\` is written attributing the agent as \`actorId\`, the session \`initiatorId\`, and the rejecting approver in \`metadata\`. Pass \`{ scope: 'all_in_session' }\` to reject every still-\`proposed\` action at once (default \`{ scope: 'this' }\`). When no proposed action remains after a rejection, the session is moved to \`canceled\` (stamping \`endedAt\`) — a rejection ends the run rather than resuming it.
+
+Requires \`assign\`: vetoing an agent's proposed write is an authorization act, the same bar as approving. Related: \`/approve\` (allow), \`/reply\` (answer an elicitation), and the session-level \`POST /:id/reject\` shortcut.`,
     }),
     zParam(activityParam),
     zJson(z.object({ scope: z.enum(['this', 'all_in_session']).optional() }).optional()),
@@ -213,6 +248,9 @@ const agentSessions = new Hono<AppEnv>()
       summary: 'Reply to a session elicitation',
       capability: 'contribute',
       response: SessionActivityOut,
+      description: `Answer an agent's \`elicitation\` (a mid-run question the agent asked the human) by appending a human \`response\` activity carrying the reply \`body\`, and return that new {@link SessionActivityOut}. The referenced \`:activityId\` must be an \`elicitation\` belonging to this org-scoped session — otherwise 404 (\`Activity not found\` / \`Session not found\`) or 409 (\`Activity is not an elicitation\`).
+
+Side effect: when the session was parked in \`awaiting_input\` it is resumed to \`running\` so the agent can continue with the answer; if it was already running the reply is simply recorded into the stream. This is distinct from the approval gate — replying *steers/answers* the agent, whereas approve/reject *authorizes or vetoes a proposed write* — which is why this is a \`contribute\` act (participating in the conversation) rather than the \`assign\`-level approval bar. Related: \`/approve\` & \`/reject\` (for gated actions), and \`POST /:id/resume\` (resume without a textual answer).`,
     }),
     zParam(activityParam),
     zJson(SessionReplyBody),
@@ -232,6 +270,7 @@ const agentSessions = new Hono<AppEnv>()
       summary: 'Pause an agent session',
       capability: 'contribute',
       response: AgentSessionOut,
+      description: `Pause a \`running\` session, transitioning it to \`awaiting_input\` and returning the updated {@link AgentSessionOut}. Only a \`running\` session may be paused; any other state yields 409 (\`Session is not running\`), and a missing/cross-tenant id 404. Pausing parks the session pending human attention without ending it; \`POST /:id/resume\` returns it to \`running\`. Requires \`contribute\` (steering an in-flight run is a contribution act, not an authorization one). Related: \`/resume\`, \`/cancel\` (terminal stop), and \`/activity/:activityId/reply\` (which also resumes an \`awaiting_input\` session when it carries an answer).`,
     }),
     zParam(idParam),
     async (c) => {
@@ -249,6 +288,7 @@ const agentSessions = new Hono<AppEnv>()
       summary: 'Resume an agent session',
       capability: 'contribute',
       response: AgentSessionOut,
+      description: `Resume a session that is parked in \`awaiting_input\`, transitioning it back to \`running\` and returning the updated {@link AgentSessionOut}. Only an \`awaiting_input\` session may be resumed; any other state yields 409 (\`Session is not awaiting input\`), and a missing/cross-tenant id 404. This is the inverse of \`POST /:id/pause\`. Note resuming does not by itself re-drive the runtime — use \`POST /:id/run\` to continue consuming the activity stream — and that replying to an elicitation via \`/activity/:activityId/reply\` resumes automatically. Requires \`contribute\`. Related: \`/pause\`, \`/cancel\`.`,
     }),
     zParam(idParam),
     async (c) => {
@@ -266,6 +306,7 @@ const agentSessions = new Hono<AppEnv>()
       summary: 'Cancel an agent session',
       capability: 'contribute',
       response: AgentSessionOut,
+      description: `Cancel a session, driving it to the terminal \`canceled\` state (stamping \`endedAt\`) and returning the updated {@link AgentSessionOut}. Any non-terminal session may be canceled; a session already in a terminal state (\`completed\`/\`failed\`/\`canceled\`) yields 409 (\`Session is already in a terminal state\`), and a missing/cross-tenant id 404. Cancellation is final — unlike pause, it cannot be resumed, and any still-\`proposed\` gated actions are abandoned (never applied). Requires \`contribute\`. Related: \`/pause\` (recoverable stop), and the reject routes (which can also cancel a session by vetoing its last proposed action).`,
     }),
     zParam(idParam),
     async (c) => {
@@ -287,6 +328,9 @@ const agentSessions = new Hono<AppEnv>()
       summary: 'Approve a session-level proposed action',
       capability: 'assign',
       response: AgentSessionOut,
+      description: `Legacy session-level approval shortcut: approve the session's **latest** \`proposed\` action and move the session forward, returning the updated {@link AgentSessionOut}. Unlike the activity-scoped \`/activity/:activityId/approve\`, this does not name a specific activity — it flips the most recent proposed action to \`approved\` and transitions the session from \`awaiting_approval\` to \`running\`. The session must be \`awaiting_approval\` (else 409 \`Session is not awaiting approval\`) with a proposed action present (else 409 \`No proposed action awaiting approval\`); a missing/cross-tenant id 404. The body is an empty object.
+
+Requires \`assign\` — the same authorization bar as the activity-scoped route: clearing an agent's proposed write is an authorization act (permissions §9.3; the contract maps \`POST /:sessionId/approvals/:activityId\` → \`org:assign\`), so a contribute-only actor must not clear a gate via this shortcut. Prefer the activity-scoped \`/activity/:activityId/approve\` (which writes a richer audit event and supports \`scope: 'all_in_session'\`); this route remains for the simple single-gate case. Related: \`POST /:id/reject\`.`,
     }),
     zParam(idParam),
     zJson(z.object({})),
@@ -306,6 +350,9 @@ const agentSessions = new Hono<AppEnv>()
       summary: 'Reject a session-level proposed action',
       capability: 'assign',
       response: AgentSessionOut,
+      description: `Legacy session-level rejection shortcut: reject the session's **latest** \`proposed\` action and move the session to \`canceled\` (stamping \`endedAt\`), returning the updated {@link AgentSessionOut}. The session must be \`awaiting_approval\` (else 409 \`Session is not awaiting approval\`) with a proposed action present (else 409 \`No proposed action awaiting approval\`); a missing/cross-tenant id 404. The body is an empty object.
+
+Requires \`assign\` — rejecting a proposed write is likewise an authorization act, the same bar as approving. Prefer the activity-scoped \`/activity/:activityId/reject\` (richer audit event, \`scope\` support); this remains for the simple single-gate case. Related: \`POST /:id/approve\`.`,
     }),
     zParam(idParam),
     zJson(z.object({})),

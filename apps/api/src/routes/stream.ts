@@ -2,12 +2,12 @@
  * `@docket/api` — per-workspace stream router (ORG-SCOPED, mounted at `/v1/orgs/:orgId/stream`).
  *
  * @remarks
- * The workspace firehose: every {@link observation} in the org, newest-first, attribute-
+ * The workspace firehose: every {@link event} in the org, newest-first, attribute-
  * filtered in SQL and keyset-paginated. Unlike the cross-org personal stream (in `hub.ts`,
- * relevance-curated via `observation_recipient`), this surface shows all org activity, so
+ * relevance-curated via `event_recipient`), this surface shows all org activity, so
  * `relevance` is always `null`. Reads `orgId` from `orgContextMiddleware`.
  */
-import { db, observation } from '@docket/db';
+import { db, event } from '@docket/db';
 import { StreamPageOut, StreamQuery } from '@docket/types';
 import { and, asc, desc, eq, type SQL } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -26,12 +26,12 @@ import { zQuery } from '../lib/validate';
 
 import { toStreamEventOut } from './stream-helpers';
 
-/** Workspace stream router: the org's full observation firehose, filtered + paginated. */
+/** Workspace stream router: the org's full event firehose, filtered + paginated. */
 const stream = new Hono<AppEnv>().get(
   '/',
   apiDoc({
     tag: 'Stream',
-    summary: 'List the workspace observation stream',
+    summary: 'List the workspace event stream',
     response: StreamPageOut,
     description: `The workspace firehose: every {@link StreamEventOut} in the organization — a read-projection of each \`observation\` — newest-first, attribute-filtered in SQL and keyset-paginated as a {@link StreamPageOut}. Each event is source-tagged (a \`docket\`-internal event or an external webhook from Linear/Slack/GitHub/…) so heterogeneous origins render through one homogeneous row with a provider badge and source-agnostic rendering hints. Unlike the cross-org **personal** stream (relevance-curated per recipient, in the Hub surface), this org-wide firehose shows all activity, so every row's \`relevance\` is \`null\`.
 
@@ -43,22 +43,23 @@ Filtering & paging: \`?provider\` and \`?kind\` are convenience quick-filters; \
     const q = c.req.valid('query');
 
     const conds: SQL[] = [
-      eq(observation.organizationId, orgId),
+      eq(event.organizationId, orgId),
       ...buildFilterConditions(decodeFilter(q.filter)),
     ];
-    if (q.provider) conds.push(eq(observation.provider, q.provider));
-    if (q.kind) conds.push(eq(observation.kind, q.kind));
+    if (q.system) conds.push(eq(event.sourceSystem, q.system));
+    if (q.kind) conds.push(eq(event.kind, q.kind));
+    if (q.entityKind) conds.push(eq(event.entityKind, q.entityKind));
     const cursor = decodeCursor(q.cursor);
     if (cursor) conds.push(cursorCondition(cursor, q.order));
 
     const orderBy =
       q.order === 'asc'
-        ? [asc(observation.occurredAt), asc(observation.id)]
-        : [desc(observation.occurredAt), desc(observation.id)];
+        ? [asc(event.occurredAt), asc(event.id)]
+        : [desc(event.occurredAt), desc(event.id)];
 
     const rows = await db
       .select()
-      .from(observation)
+      .from(event)
       .where(and(...conds))
       .orderBy(...orderBy)
       .limit(q.limit + 1);

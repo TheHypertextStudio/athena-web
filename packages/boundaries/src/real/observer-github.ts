@@ -1,5 +1,5 @@
 /**
- * `@docket/boundaries/real` — `RealGitHubObserver` (GitHub App webhook → observations).
+ * `@docket/boundaries/real` — `RealGitHubObserver` (GitHub App webhook → canonical events).
  *
  * @remarks
  * The env-driven {@link Observer} for the GitHub App firehose. GitHub signs every webhook with
@@ -11,22 +11,28 @@
  * an org owns — plus a per-delivery event id for dedup. The GitHub *event type* (issues /
  * issue_comment / pull_request / …) is carried in the `X-GitHub-Event` header, which `route`
  * does not receive, so it is **inferred from the payload shape** (which top-level objects are
- * present) instead. `normalize` maps the high-value events into {@link ObservationDraft}s off the
- * webhook payload alone (GitHub embeds the full issue/PR object, so no extra API call is needed).
+ * present) instead. `normalize` maps the high-value events into canonical {@link EventDraft}s off
+ * the webhook payload alone (GitHub embeds the full issue/PR object, so no extra API call is
+ * needed): issues and pull requests both collapse to `entity.kind = 'work_item'`, PR events carry
+ * a typed `github.pull_request` {@link EventDetail}, and everything else falls back to `generic`.
+ * Payloads that carry no issue/PR/comment (ping/health deliveries) yield `[]`.
  *
  * Verification and normalization are pure (no network) — selected only when
  * `GITHUB_APP_WEBHOOK_SECRET` is real-shaped; otherwise {@link MockObserver} is used.
  */
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
+import type { CanonicalEntityKind, EventKind } from '@docket/types';
+
+import { type DetailBuilder, genericDetail, runDetailBuilders } from '../event-detail';
 import { asRecord, str } from '../json';
 import type { ConnectorProvider } from '../ports/connector';
 import type {
+  EventActorRef,
+  EventDraft,
+  EventEntityRef,
   InboundRouting,
   Observer,
-  ObservationActorRef,
-  ObservationDraft,
-  ObservationSubjectRef,
   RawInboundEvent,
   VerifySignatureInput,
 } from '../ports/observer';
@@ -40,17 +46,54 @@ type GitHubEventType =
   | 'unknown';
 
 /** Build the external person ref from a GitHub user-shaped sub-object (`login`/`id`/`avatar_url`). */
-function actorFrom(user: Record<string, unknown> | undefined): ObservationActorRef | undefined {
+function actorFrom(user: Record<string, unknown> | undefined): EventActorRef | undefined {
   const externalId = str(user, 'login') ?? (user && 'id' in user ? String(user['id']) : undefined);
   if (!externalId) return undefined;
   const displayName = str(user, 'login');
-  const avatar = str(user, 'avatar_url');
+  const avatarUrl = str(user, 'avatar_url');
   return {
     externalId,
     ...(displayName ? { displayName } : {}),
-    ...(avatar ? { avatar } : {}),
+    ...(avatarUrl ? { avatarUrl } : {}),
   };
 }
+
+/** The per-event context the GitHub detail-builders inspect. */
+interface GitHubDetailContext {
+  /** The inferred GitHub event type. */
+  readonly eventType: GitHubEventType;
+  /** The raw issue/PR/comment object the event concerns. */
+  readonly object: Record<string, unknown> | undefined;
+  /** The draft title (carried onto the `generic` fallback). */
+  readonly title: string;
+  /** The draft summary, when any. */
+  readonly summary?: string;
+  /** The source permalink, when any. */
+  readonly url?: string;
+}
+
+/** Pull-request events carry a typed `github.pull_request` detail (number + merged/draft flags). */
+const buildGitHubPullRequestDetail: DetailBuilder<GitHubDetailContext> = (ctx) => {
+  if (ctx.eventType !== 'pull_request') return null;
+  const numberRaw = ctx.object?.['number'];
+  if (typeof numberRaw !== 'number') return null;
+  return {
+    schema: 'github.pull_request',
+    number: numberRaw,
+    merged: ctx.object?.['merged'] === true,
+    draft: ctx.object?.['draft'] === true,
+  };
+};
+
+/** Tail: anything without a specific shape surfaces as a degraded `generic` row. */
+const buildGitHubGenericDetail: DetailBuilder<GitHubDetailContext> = (ctx) =>
+  genericDetail(ctx.title, ctx.summary, ctx.url);
+
+/** The ordered GitHub detail-builder chain ("first non-null wins"). */
+const GITHUB_DETAIL_BUILDERS: readonly DetailBuilder<GitHubDetailContext>[] = [
+  buildGitHubPullRequestDetail,
+  buildGitHubGenericDetail,
+];
 
 /** Validated configuration for {@link RealGitHubObserver}. */
 export interface RealGitHubObserverConfig {
@@ -127,7 +170,7 @@ export class RealGitHubObserver implements Observer {
   }
 
   /** {@inheritDoc Observer.normalize} */
-  normalize(event: RawInboundEvent): ObservationDraft[] {
+  normalize(event: RawInboundEvent): EventDraft[] {
     const body = asRecord(event.payload);
     if (!body) return [];
     const dedupeKey = this.route(body)?.externalEventId ?? `github:${event.receivedAt}`;
@@ -140,6 +183,7 @@ export class RealGitHubObserver implements Observer {
       case 'pull_request_review_comment':
         return this.normalizeComment(body, event, dedupeKey);
       default:
+        // A ping/health delivery carries no issue/PR/comment — genuinely nothing to record.
         return [];
     }
   }
@@ -148,21 +192,22 @@ export class RealGitHubObserver implements Observer {
     body: Record<string, unknown>,
     event: RawInboundEvent,
     dedupeKey: string,
-  ): ObservationDraft[] {
+  ): EventDraft[] {
     const issue = asRecord(body['issue']);
     const action = str(body, 'action');
     const title = str(issue, 'title') ?? 'an issue';
     const closed = str(issue, 'state') === 'closed';
-    const kind = action === 'opened' ? 'created' : closed ? 'completed' : 'status_change';
+    const kind: EventKind =
+      action === 'opened' ? 'created' : closed ? 'completed' : 'status_change';
     const verb = action === 'opened' ? 'Opened' : closed ? 'Closed' : 'Updated';
     return [
       this.draft({
         kind,
+        eventType: 'issues',
         title: `${verb} issue: ${title}`,
-        subject: this.subject('issue', issue),
+        entity: this.entityRef('work_item', issue),
         actor: actorFrom(asRecord(body['sender'])),
-        entity: issue,
-        body,
+        object: issue,
         event,
         dedupeKey,
       }),
@@ -173,22 +218,23 @@ export class RealGitHubObserver implements Observer {
     body: Record<string, unknown>,
     event: RawInboundEvent,
     dedupeKey: string,
-  ): ObservationDraft[] {
+  ): EventDraft[] {
     const pr = asRecord(body['pull_request']);
     const action = str(body, 'action');
     const title = str(pr, 'title') ?? 'a pull request';
     const merged = pr?.['merged'] === true;
     const closed = str(pr, 'state') === 'closed';
-    const kind = action === 'opened' ? 'created' : merged || closed ? 'completed' : 'status_change';
+    const kind: EventKind =
+      action === 'opened' ? 'created' : merged || closed ? 'completed' : 'status_change';
     const verb = action === 'opened' ? 'Opened' : merged ? 'Merged' : closed ? 'Closed' : 'Updated';
     return [
       this.draft({
         kind,
+        eventType: 'pull_request',
         title: `${verb} PR: ${title}`,
-        subject: this.subject('pull_request', pr),
+        entity: this.entityRef('work_item', pr),
         actor: actorFrom(asRecord(body['sender'])),
-        entity: pr,
-        body,
+        object: pr,
         event,
         dedupeKey,
       }),
@@ -199,65 +245,74 @@ export class RealGitHubObserver implements Observer {
     body: Record<string, unknown>,
     event: RawInboundEvent,
     dedupeKey: string,
-  ): ObservationDraft[] {
+  ): EventDraft[] {
     const comment = asRecord(body['comment']);
     const parent = asRecord(body['issue']) ?? asRecord(body['pull_request']);
     const summary = str(comment, 'body');
+    const eventType: GitHubEventType = body['pull_request']
+      ? 'pull_request_review_comment'
+      : 'issue_comment';
     return [
       this.draft({
         kind: 'comment',
+        eventType,
         title: `Commented on ${str(parent, 'title') ?? 'a thread'}`,
         ...(summary ? { summary } : {}),
-        subject: this.subject(body['pull_request'] ? 'pull_request' : 'issue', parent),
+        entity: this.entityRef('work_item', parent),
         actor: actorFrom(asRecord(comment?.['user']) ?? asRecord(body['sender'])),
-        entity: comment,
-        body,
+        object: comment,
         event,
         dedupeKey,
       }),
     ];
   }
 
-  /** Assemble one {@link ObservationDraft}, threading the common provenance fields. */
+  /** Assemble one {@link EventDraft}, threading the common provenance + typed detail. */
   private draft(input: {
-    kind: string;
+    kind: EventKind;
+    eventType: GitHubEventType;
     title: string;
     summary?: string;
-    subject: ObservationSubjectRef | undefined;
-    actor: ObservationActorRef | undefined;
-    entity: Record<string, unknown> | undefined;
-    body: Record<string, unknown>;
+    entity: EventEntityRef | undefined;
+    actor: EventActorRef | undefined;
+    object: Record<string, unknown> | undefined;
     event: RawInboundEvent;
     dedupeKey: string;
-  }): ObservationDraft {
-    const url = str(input.entity, 'html_url');
-    const id = input.entity && 'id' in input.entity ? String(input.entity['id']) : undefined;
+  }): EventDraft {
+    const url = str(input.object, 'html_url');
+    const id = input.object && 'id' in input.object ? String(input.object['id']) : undefined;
     return {
       kind: input.kind,
-      occurredAt: str(input.entity, 'updated_at') ?? input.event.receivedAt,
+      occurredAt: str(input.object, 'updated_at') ?? input.event.receivedAt,
       title: input.title,
       ...(input.summary ? { summary: input.summary } : {}),
-      ...(input.subject ? { subject: input.subject } : {}),
-      ...(input.actor ? { externalActor: input.actor } : {}),
+      ...(input.entity ? { entity: input.entity } : {}),
+      ...(input.actor ? { actor: input.actor } : {}),
       ...(url ? { permalink: url } : {}),
       ...(id ? { externalId: id } : {}),
       dedupeKey: input.dedupeKey,
-      payload: input.body,
+      detail: runDetailBuilders(GITHUB_DETAIL_BUILDERS, {
+        eventType: input.eventType,
+        object: input.object,
+        title: input.title,
+        ...(input.summary ? { summary: input.summary } : {}),
+        ...(url ? { url } : {}),
+      }),
     };
   }
 
-  /** Build a subject ref from a GitHub issue/PR-shaped object. */
-  private subject(
-    type: 'issue' | 'pull_request',
-    entity: Record<string, unknown> | undefined,
-  ): ObservationSubjectRef | undefined {
-    const externalId = entity && 'id' in entity ? String(entity['id']) : undefined;
+  /** Build a canonical entity ref from a GitHub issue/PR-shaped object. */
+  private entityRef(
+    kind: CanonicalEntityKind,
+    object: Record<string, unknown> | undefined,
+  ): EventEntityRef | undefined {
+    const externalId = object && 'id' in object ? String(object['id']) : undefined;
     if (!externalId) return undefined;
     return {
-      type,
+      kind,
       externalId,
-      ...(str(entity, 'title') ? { title: str(entity, 'title') } : {}),
-      ...(str(entity, 'html_url') ? { url: str(entity, 'html_url') } : {}),
+      ...(str(object, 'title') ? { title: str(object, 'title') } : {}),
+      ...(str(object, 'html_url') ? { url: str(object, 'html_url') } : {}),
     };
   }
 }

@@ -52,13 +52,13 @@ async function seedDigestUser(opts: {
   return { userId: u!.id, email };
 }
 
-/** Seed one observation attributed to `userId`, occurring earlier on the reference day. */
-async function seedObservation(orgId: string, userId: string, title: string): Promise<void> {
+/** Seed one event attributed to `userId`, occurring earlier on the reference day. */
+async function seedEvent(orgId: string, userId: string, title: string): Promise<void> {
   seq += 1;
-  await db.insert(schema.observation).values({
+  await db.insert(schema.event).values({
     organizationId: orgId,
     userId,
-    provider: 'linear',
+    sourceSystem: 'linear',
     kind: 'created',
     occurredAt: new Date('2026-06-28T09:00:00.000Z'),
     title,
@@ -70,8 +70,8 @@ describe('sweepDailyDigests (the hero feature)', () => {
   it('generates, persists, and emails a digest for a due opted-in user with activity', async () => {
     const { orgId } = await seedBaseOrg(db, schema);
     const { userId, email } = await seedDigestUser({ enabled: true, sendAt: '18:00', tz: 'UTC' });
-    await seedObservation(orgId, userId, 'Created issue: Ship it');
-    await seedObservation(orgId, userId, 'Created issue: Fix bug');
+    await seedEvent(orgId, userId, 'Created issue: Ship it');
+    await seedEvent(orgId, userId, 'Created issue: Fix bug');
 
     await sweepDailyDigests(NOW);
 
@@ -81,7 +81,7 @@ describe('sweepDailyDigests (the hero feature)', () => {
       .where(eq(schema.dailyDigest.userId, userId));
     expect(digest!.status).toBe('sent');
     expect(digest!.digestDate).toBe('2026-06-28');
-    expect(digest!.observationCount).toBe(2);
+    expect(digest!.eventCount).toBe(2);
     expect(digest!.summaryMarkdown).toBeTruthy();
     expect(digest!.summaryHtml).toBeTruthy();
     expect(digest!.stats?.total).toBe(2);
@@ -99,7 +99,7 @@ describe('sweepDailyDigests (the hero feature)', () => {
       .from(schema.dailyDigest)
       .where(eq(schema.dailyDigest.userId, userId));
     expect(digest!.status).toBe('skipped_empty');
-    expect(digest!.observationCount).toBe(0);
+    expect(digest!.eventCount).toBe(0);
     expect(outbox.some((m) => m.to === email)).toBe(false);
   });
 
@@ -118,7 +118,7 @@ describe('sweepDailyDigests (the hero feature)', () => {
   it('is idempotent: a second sweep does not create or send a second digest', async () => {
     const { orgId } = await seedBaseOrg(db, schema);
     const { userId, email } = await seedDigestUser({ enabled: true, sendAt: '18:00', tz: 'UTC' });
-    await seedObservation(orgId, userId, 'Did a thing');
+    await seedEvent(orgId, userId, 'Did a thing');
 
     await sweepDailyDigests(NOW);
     await sweepDailyDigests(NOW);

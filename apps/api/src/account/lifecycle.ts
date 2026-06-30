@@ -13,11 +13,11 @@
 import type { Database } from '@docket/db';
 import {
   dailyDigest,
+  event,
+  eventRecipient,
   hub,
   idempotencyKey,
   notification,
-  observation,
-  observationRecipient,
   organization,
   streamSubscription,
   user,
@@ -37,8 +37,8 @@ import { analyzeAccountOwnership, findSoleOccupiedOrgIds } from './blockers';
  */
 export const USER_KEYED_NO_FK_TABLES = [
   notification,
-  observation,
-  observationRecipient,
+  event,
+  eventRecipient,
   streamSubscription,
   dailyDigest,
   idempotencyKey,

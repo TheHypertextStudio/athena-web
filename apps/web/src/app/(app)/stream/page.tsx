@@ -8,6 +8,12 @@ import type { StreamEventRow } from '@/components/stream/stream-meta';
 import { StreamView } from '@/components/stream/stream-view';
 import { useStreamPage } from '@/components/stream/use-stream-page';
 
+/**
+ * The cross-org personal Stream route — the relevance-curated feed of everything concerning
+ * the caller across all their workspaces, with a click-to-open event drawer.
+ *
+ * @returns the personal Stream page.
+ */
 export default function StreamPage(): JSX.Element {
   const data = useStreamPage({ scope: 'me' });
   const [selected, setSelected] = useState<StreamEventRow | null>(null);

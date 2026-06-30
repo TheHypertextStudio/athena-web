@@ -164,6 +164,24 @@ function observerSecret(provider: ObserverProvider, env: BoundaryEnv): string | 
   }
 }
 
+/** Constructs a real {@link Observer} for a provider from its app-level signing secret. */
+type ObserverFactory = (signingSecret: string) => Observer;
+
+/**
+ * Strategy registry mapping each observer provider to its real-adapter factory.
+ *
+ * @remarks
+ * The single extension point for the observer port: adding a provider's real observer is one
+ * registry entry (plus its env secret in {@link observerSecret}). Providers absent here — those
+ * with no real observer yet (e.g. `drive`/`gmail`/`calendar`/`gtasks`) — resolve to
+ * {@link MockObserver}. Each real observer verifies inbound webhooks with its own provider secret.
+ */
+const OBSERVER_FACTORIES: Partial<Record<ObserverProvider, ObserverFactory>> = {
+  linear: (signingSecret) => new RealLinearObserver({ signingSecret }),
+  github: (signingSecret) => new RealGitHubObserver({ signingSecret }),
+  slack: (signingSecret) => new RealSlackObserver({ signingSecret }),
+};
+
 /** Whether `APP_MODE` forces the mock adapters (`local`/`test`). */
 function forcesMock(env: BoundaryEnv): boolean {
   return env.APP_MODE === 'local' || env.APP_MODE === 'test';
@@ -274,21 +292,17 @@ export function selectAdapter<P extends PortName>(
       return adapter as PortMap[P];
     }
     case 'observer': {
-      // Bound to one provider (like the connector). Linear and GitHub have real observers, each
-      // verifying with its own app-level webhook secret; anything else uses the mock.
+      // Bound to one provider (like the connector). Each real observer is looked up in the
+      // OBSERVER_FACTORIES strategy registry and verifies inbound webhooks with its own
+      // app-level secret; a provider with no registry entry (or no real-shaped secret) uses
+      // the mock.
       const provider = options.observerProvider ?? 'linear';
       const secret = observerSecret(provider, env);
-      const useReal = !mock && isRealValue(secret);
-      let adapter: Observer;
-      if (useReal && provider === 'linear') {
-        adapter = new RealLinearObserver({ signingSecret: secret });
-      } else if (useReal && provider === 'github') {
-        adapter = new RealGitHubObserver({ signingSecret: secret });
-      } else if (useReal && provider === 'slack') {
-        adapter = new RealSlackObserver({ signingSecret: secret });
-      } else {
-        adapter = new MockObserver({ provider });
-      }
+      const factory = OBSERVER_FACTORIES[provider];
+      const adapter: Observer =
+        !mock && factory !== undefined && isRealValue(secret)
+          ? factory(secret)
+          : new MockObserver({ provider });
       return adapter as PortMap[P];
     }
     case 'summarizer': {

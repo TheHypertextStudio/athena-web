@@ -6,14 +6,20 @@
  * webhook secret is configured. Signature verification is the trusted local path: it
  * accepts any present `linear-signature` header except the literal `"invalid"` (so route
  * tests can still exercise the 400 path deterministically). `route`/`normalize` parse the
- * payload generically and honor optional `kind`/`title`/`occurredAt` overrides, so a test
- * fixture fully controls the observation the pipeline produces with no Linear account.
+ * payload generically and honor optional `kind`/`title`/`occurredAt`/`summary` overrides, so a
+ * test fixture fully controls the canonical {@link EventDraft} the pipeline produces with no
+ * Linear account; the fixture entity collapses to `entity.kind = 'work_item'` with a `generic`
+ * detail.
  */
+import { EventKind } from '@docket/types';
+
+import { genericDetail } from '../event-detail';
 import { asRecord, str } from '../json';
 import type {
+  EventDraft,
+  EventEntityRef,
   InboundRouting,
   Observer,
-  ObservationDraft,
   ObserverProvider,
   RawInboundEvent,
   VerifySignatureInput,
@@ -58,17 +64,26 @@ export class MockObserver implements Observer {
   }
 
   /** {@inheritDoc Observer.normalize} — one draft, honoring optional fixture overrides. */
-  normalize(event: RawInboundEvent): ObservationDraft[] {
+  normalize(event: RawInboundEvent): EventDraft[] {
     const body = asRecord(event.payload) ?? {};
     const dedupeKey = this.route(body)?.externalEventId ?? `mock:${event.receivedAt}`;
+    const kind: EventKind = EventKind.safeParse(str(body, 'kind')).data ?? 'mention';
+    const title = str(body, 'title') ?? 'Mock observation';
+    const summary = str(body, 'summary');
+    const externalId = str(body, 'id');
+    const fixtureTitle = str(body, 'title');
+    const entity: EventEntityRef | undefined = externalId
+      ? { kind: 'work_item', externalId, ...(fixtureTitle ? { title: fixtureTitle } : {}) }
+      : undefined;
     return [
       {
-        kind: str(body, 'kind') ?? 'mention',
+        kind,
         occurredAt: str(body, 'occurredAt') ?? event.receivedAt,
-        title: str(body, 'title') ?? 'Mock observation',
-        ...(str(body, 'summary') ? { summary: str(body, 'summary') } : {}),
+        title,
+        ...(summary ? { summary } : {}),
+        ...(entity ? { entity } : {}),
         dedupeKey,
-        payload: body,
+        detail: genericDetail(title, summary),
       },
     ];
   }

@@ -9,6 +9,12 @@ import type { StreamEventRow } from '@/components/stream/stream-meta';
 import { StreamView } from '@/components/stream/stream-view';
 import { useStreamPage } from '@/components/stream/use-stream-page';
 
+/**
+ * The per-workspace Stream route — the firehose of every event in this org, filterable, with a
+ * click-to-open event drawer.
+ *
+ * @returns the workspace Stream page.
+ */
 export default function WorkspaceStreamPage(): JSX.Element {
   const { orgId } = useParams<{ orgId: string }>();
   const data = useStreamPage({ scope: 'org', orgId });

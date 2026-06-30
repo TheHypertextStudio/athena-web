@@ -29,7 +29,7 @@ import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
-import { emitObservation } from './observation-emit';
+import { emitEvent } from './event-emit';
 
 type CommentRow = typeof comment.$inferSelect;
 
@@ -196,7 +196,7 @@ Threading is single-level. Omit \`parentCommentId\` for a root comment; supply i
       if (!row) throw new Error('comment insert returned no row');
 
       // Stream: a comment surfaces to the commented subject's owners/followers.
-      await emitObservation({
+      await emitEvent({
         organizationId: orgId,
         kind: 'comment',
         actorId,

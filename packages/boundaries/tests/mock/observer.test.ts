@@ -44,11 +44,24 @@ describe('MockObserver.route + normalize', () => {
     expect(drafts[0]?.kind).toBe('assignment');
     expect(drafts[0]?.title).toBe('Fixture title');
     expect(drafts[0]?.occurredAt).toBe(AT);
+    expect(drafts[0]?.entity).toEqual({
+      kind: 'work_item',
+      externalId: 'x1',
+      title: 'Fixture title',
+    });
+    expect(drafts[0]?.detail).toEqual({
+      schema: 'generic',
+      title: 'Fixture title',
+      summary: null,
+      url: null,
+    });
   });
 
   it('defaults kind to mention when unspecified', () => {
     const drafts = observer.normalize({ eventType: 'mock', receivedAt: AT, payload: {} });
     expect(drafts[0]?.kind).toBe('mention');
     expect(drafts[0]?.title).toBe('Mock observation');
+    expect(drafts[0]?.entity).toBeUndefined();
+    expect(drafts[0]?.detail?.schema).toBe('generic');
   });
 });

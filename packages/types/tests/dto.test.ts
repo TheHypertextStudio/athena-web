@@ -91,11 +91,11 @@ import { NotificationBody, NotificationOut, NotificationType } from '../src/noti
 import {
   DailyDigestOut,
   DailyDigestStatus,
+  EventKind,
+  EventOut,
   InboundEventOut,
   InboundEventStatus,
-  ObservationKind,
-  ObservationOut,
-} from '../src/observation';
+} from '../src/event';
 import {
   DefaultTeamOut,
   OrgCreate,
@@ -1812,8 +1812,8 @@ describe('hub DTOs', () => {
   });
 });
 
-describe('observation DTOs', () => {
-  it('ObservationKind / InboundEventStatus / DailyDigestStatus accept/reject', () => {
+describe('event DTOs', () => {
+  it('EventKind / InboundEventStatus / DailyDigestStatus accept/reject', () => {
     for (const k of [
       'message',
       'mention',
@@ -1827,9 +1827,9 @@ describe('observation DTOs', () => {
       'calendar_update',
       'task_assignment',
     ] as const) {
-      expect(ObservationKind.parse(k)).toBe(k);
+      expect(EventKind.parse(k)).toBe(k);
     }
-    expect(ObservationKind.safeParse('like').success).toBe(false);
+    expect(EventKind.safeParse('like').success).toBe(false);
     for (const s of ['received', 'processing', 'processed', 'failed', 'skipped'] as const) {
       expect(InboundEventStatus.parse(s)).toBe(s);
     }
@@ -1847,59 +1847,72 @@ describe('observation DTOs', () => {
     expect(DailyDigestStatus.safeParse('draft').success).toBe(false);
   });
 
-  it('ObservationOut parses with null + nested shapes', () => {
-    const parsed = ObservationOut.parse({
+  it('EventOut parses with null + canonical nested shapes', () => {
+    const parsed = EventOut.parse({
       id: ID,
       organizationId: ID2,
       userId: 'user-1',
-      integrationId: ID,
-      provider: 'linear',
       kind: 'mention',
       occurredAt: '2026-06-28T12:00:00.000Z',
       title: 'You were mentioned',
       summary: null,
       permalink: 'https://linear.app/x/issue/ABC-1',
-      externalActor: { externalId: 'usr_9', displayName: 'Jane' },
-      subject: { type: 'issue', externalId: 'ABC-1', title: 'Ship it' },
+      source: { system: 'linear', integrationId: ID, externalUrl: null },
+      actor: {
+        source: 'linear',
+        externalId: 'usr_9',
+        displayName: 'Jane',
+        avatarUrl: null,
+        docketActorId: null,
+      },
+      entity: {
+        kind: 'work_item',
+        source: 'linear',
+        externalId: 'ABC-1',
+        title: 'Ship it',
+        url: null,
+        docketEntityId: null,
+      },
       participants: [],
+      detail: null,
       externalId: 'evt_1',
       createdAt: 'x',
     });
     expect(parsed.kind).toBe('mention');
-    expect(parsed.subject?.externalId).toBe('ABC-1');
+    expect(parsed.entity?.externalId).toBe('ABC-1');
+    expect(parsed.entity?.kind).toBe('work_item');
     expect(parsed.summary).toBeNull();
   });
 
-  it('ObservationOut rejects a bad kind and a missing required field', () => {
+  it('EventOut rejects a bad kind and a missing required field', () => {
     expect(
-      ObservationOut.safeParse({
+      EventOut.safeParse({
         id: ID,
         organizationId: ID2,
         userId: null,
-        integrationId: null,
-        provider: 'linear',
         kind: 'like',
         occurredAt: 'x',
         title: 'T',
         summary: null,
         permalink: null,
-        externalActor: null,
-        subject: null,
+        source: { system: 'linear', integrationId: null, externalUrl: null },
+        actor: null,
+        entity: null,
         participants: [],
+        detail: null,
         externalId: null,
         createdAt: 'x',
       }).success,
     ).toBe(false);
     // `title` is required content; omitting it fails.
     expect(
-      ObservationOut.safeParse({
+      EventOut.safeParse({
         id: ID,
         organizationId: ID2,
         userId: null,
-        integrationId: null,
-        provider: 'linear',
         kind: 'mention',
         occurredAt: 'x',
+        source: { system: 'linear', integrationId: null, externalUrl: null },
         participants: [],
         createdAt: 'x',
       }).success,
@@ -1933,8 +1946,8 @@ describe('observation DTOs', () => {
       status: 'sent',
       summaryMarkdown: '# Today',
       summaryHtml: '<h1>Today</h1>',
-      stats: { total: 3, byProvider: { linear: 3 }, byKind: { mention: 2, assignment: 1 } },
-      observationCount: 3,
+      stats: { total: 3, bySource: { linear: 3 }, byKind: { mention: 2, assignment: 1 } },
+      eventCount: 3,
       generatedAt: 'x',
       sentAt: 'y',
       createdAt: 'z',

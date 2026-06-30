@@ -1110,3 +1110,23 @@ Replaced the buried Inbox "Activity" tab with a **first-class, filterable, sourc
 - **Commit** — the working tree is mixed with a concurrent session's unrelated work (account lifecycle/export, recovery/security/danger-zone, `apps/admin`, agenda, dev-scheduler); needs a scoped, path-selective commit, not `git add -A`.
 - **Migration `0011` not applied to the dev DB** + observations not seeded → live `/design-review` of both surfaces is pending a single-owner dev bounce (PGlite is single-process; never a second writer while dev runs).
 - `programs.ts` emission; D2 multi-cadence summaries + suggestion card; the Slack provider group + `SLACK_SIGNING_SECRET` entry in `scripts/integrations-setup.ts` (concurrent session's hot file).
+
+---
+
+## Refactor: observation → canonical Event substrate — 2026-06-29
+
+Re-architected the activity-feed substrate after review found the first version "architected on vibes": internal + external events were dumped in one `observation` table told apart by a `provider` string, with a contract-free `payload` jsonb; "which thing" was free text; the assistant's proactive switch was buried in the `HubPreferences` display blob and driven by a polling cron. Reshaped into bounded contexts with a real shared contract, grounded in named GoF patterns (see `docs/engineering/specs/activity-feed.md`). Built in an isolated git worktree (`refactor/event-substrate`) to stay clear of a concurrent session sharing `main`'s HEAD.
+
+**Substrate (P1.1/P1.2).** `observation`→`event` (+ `event_recipient`, reshaped `stream_subscription`). Canonical contract in `@docket/types/event.ts`: `EventKind`, typed `SourceSystem`, the closed `CanonicalEntityKind` taxonomy + `EntityRef` (a Docket task, Linear issue, GitHub PR all become `work_item` → one shared row), `ActorRef`, and a closed `EventDetail` discriminated union **with a `generic` variant** so unmapped-but-valid events still surface instead of being dropped (raw kept in `inbound_event`). `@docket/db` `$type` shapes now **import** the canonical types from `@docket/types` instead of re-mirroring — eliminating the drift class that caused the original `HubPreferences` bug. Migration `0013_event_substrate` (hand-authored; drizzle's generator needs a TTY for the rename) **applies cleanly `0000`→`0013`** on PGlite. `audit_event` kept as a separate compliance ledger; the feed reads `event` only.
+
+**Translation (P1.3) — Adapter + Chain of Responsibility.** Observer port → canonical `EventDraft`. Each adapter (`observer-{linear,github,slack}`) maps native types onto `EntityRef.kind` and builds a typed `detail` via an ordered builder chain ending in `genericDetail` (`packages/boundaries/src/event-detail.ts`) — unmapped event types now surface generically rather than as `[]`. `selectAdapter`'s observer case → an `OBSERVER_FACTORIES` Strategy registry (add a tool = add an entry).
+
+**Routing (P1.4) — one Strategy resolver.** `apps/api/src/consumers/routing.ts` resolves "who does this concern" via `OWNER_RULES` keyed on `CanonicalEntityKind`, absorbing BOTH old duplicated implementations (internal `resolveRecipients` + the external owner-fallback). Internal emit (`routes/event-emit.ts`, a Facade) and the external drain (`routes/event-sync.ts`, renamed) both call it.
+
+**Read + UI (P1.5).** `view-filter-sql` whitelist + `stream.ts` (firehose) + `hub.ts /stream` (personal `event_recipient ⋈ event`) retargeted; `stream-helpers` projects `event`→`StreamEventOut`. Web stream UI retargeted to `source.system`/`entity.kind`/typed `detail` (+ `generic` rendering).
+
+**Removed (Phase-2 rebuild).** The polling proactive engine (`proactive-sweep.ts` + `/run-proactive` cron + scheduler entry) was ripped out per the approved plan; it returns as an event-driven consumer with its config moved into the agent domain. Notifications likewise become a Phase-2 consumer.
+
+**Gate (in worktree).** `@docket/types` typecheck + 201 tests; `@docket/db` typecheck + migration applies; `@docket/boundaries` typecheck + 245 tests + lint; `@docket/api` typecheck + 827 tests. Web layer + full repo gate in progress.
+
+**Phase 2 (deliberate follow-up):** proactive drafting + notifications + multi-cadence summaries as event-bus consumers (`apps/api/src/consumers/`), with assistant config on the `agent` table (not `HubPreferences`).

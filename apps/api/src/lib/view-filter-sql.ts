@@ -1,14 +1,15 @@
 /**
- * `@docket/api` — translate stored {@link ViewFilter} predicates into SQL over `observation`.
+ * `@docket/api` — translate stored {@link ViewFilter} predicates into SQL over `event`.
  *
  * @remarks
  * The Stream is a firehose, so its attribute filters must run in SQL (not the client-side
  * `applyView` the entity lists use). Fields are **whitelisted** — real columns for the hot
- * path, jsonb `->>'…'` paths for the few subject/actor facets — and an unknown field is a
- * 400, never a silent no-op. Also exports the `(occurredAt, id)` cursor codec the stream
- * read endpoints page with.
+ * path, jsonb `->>'…'` paths for the few entity/actor facets — and an unknown field is a
+ * 400, never a silent no-op. The field keys mirror the web stream-catalog + `StreamQuery`
+ * quick-filters (`system`/`kind`/`entityKind`). Also exports the `(occurredAt, id)` cursor
+ * codec the stream read endpoints page with.
  */
-import { observation } from '@docket/db';
+import { event } from '@docket/db';
 import type { ViewFilter } from '@docket/db';
 import {
   and,
@@ -29,16 +30,17 @@ import { ApiError } from '../error';
 
 /** Whitelisted filterable fields → the SQL expression they map to (columns wrapped uniformly). */
 const FILTER_FIELDS: Record<string, SQL> = {
-  provider: sql`${observation.provider}`,
-  kind: sql`${observation.kind}`,
-  title: sql`${observation.title}`,
-  summary: sql`${observation.summary}`,
-  integrationId: sql`${observation.integrationId}`,
-  organizationId: sql`${observation.organizationId}`,
-  occurredAt: sql`${observation.occurredAt}`,
-  subjectType: sql`${observation.subject}->>'type'`,
-  subjectTitle: sql`${observation.subject}->>'title'`,
-  actor: sql`${observation.externalActor}->>'displayName'`,
+  system: sql`${event.sourceSystem}`,
+  kind: sql`${event.kind}`,
+  entityKind: sql`${event.entityKind}`,
+  title: sql`${event.title}`,
+  summary: sql`${event.summary}`,
+  integrationId: sql`${event.integrationId}`,
+  organizationId: sql`${event.organizationId}`,
+  occurredAt: sql`${event.occurredAt}`,
+  entityExternalId: sql`${event.entity}->>'externalId'`,
+  entityTitle: sql`${event.entity}->>'title'`,
+  actor: sql`${event.actor}->>'displayName'`,
 };
 
 /** Fields whose values are timestamps and must be coerced from ISO strings. */
@@ -140,17 +142,20 @@ export function decodeCursor(cursor: string | undefined): StreamCursor | null {
  *
  * @param cursor - The decoded position.
  * @param order - Sort direction (matches the query's `order`).
- * @param occCol - The `occurred_at` column to compare (observation's, or the recipient's denormalized copy).
+ * @param occCol - The `occurred_at` column to compare (event's, or the recipient's denormalized copy).
  * @param idCol - The tiebreaker id column paired with `occCol`.
  */
 export function cursorCondition(
   cursor: StreamCursor,
   order: 'asc' | 'desc',
-  occCol: AnyColumn = observation.occurredAt,
-  idCol: AnyColumn = observation.id,
+  occCol: AnyColumn = event.occurredAt,
+  idCol: AnyColumn = event.id,
 ): SQL {
   const cmp = order === 'asc' ? gt : lt;
-  const condition = or(cmp(occCol, cursor.occurredAt), and(eq(occCol, cursor.occurredAt), cmp(idCol, cursor.id)));
+  const condition = or(
+    cmp(occCol, cursor.occurredAt),
+    and(eq(occCol, cursor.occurredAt), cmp(idCol, cursor.id)),
+  );
   /* v8 ignore next -- @preserve defensive: or() of two defined conditions is never undefined */
   if (!condition) throw new Error('cursor condition was empty');
   return condition;

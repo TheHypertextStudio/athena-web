@@ -13,7 +13,7 @@ import { db, emailSuggestion } from '@docket/db';
 import type { TaskSynthesizer } from '@docket/boundaries';
 import { and, eq, inArray } from 'drizzle-orm';
 
-import { emitObservation } from '../../routes/observation-emit';
+import { emitEvent } from '../../routes/event-emit';
 import { classifyTaskWorthiness, type ThreadSignal } from './funnel';
 
 /** A thread to consider, with its external id and snapshot signal. */
@@ -103,17 +103,12 @@ export async function persistSuggestions(
     if (!row) continue; // raced with another writer — already suggested
 
     suggestionIds.push(row.id);
-    await emitObservation({
+    await emitEvent({
       organizationId: input.organizationId,
       kind: 'created',
       actorId: input.actorId,
       title: draft.title,
       subject: { type: 'email_suggestion', id: row.id, title: draft.title },
-      payload: {
-        suggestionId: row.id,
-        threadId: thread.threadId,
-        ...(verdict.category ? { category: verdict.category } : {}),
-      },
     });
   }
 

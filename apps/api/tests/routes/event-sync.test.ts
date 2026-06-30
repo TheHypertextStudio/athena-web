@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
-import type * as DrainModule from '../../src/routes/observation-sync';
+import type * as DrainModule from '../../src/routes/event-sync';
 import { getDb, seedBaseOrg } from './harness.test';
 
 let schema!: typeof DbModule;
@@ -13,7 +13,7 @@ let sweepInboundEvents!: typeof DrainModule.sweepInboundEvents;
 beforeAll(async () => {
   schema = await getDb();
   db = schema.db;
-  sweepInboundEvents = (await import('../../src/routes/observation-sync')).sweepInboundEvents;
+  sweepInboundEvents = (await import('../../src/routes/event-sync')).sweepInboundEvents;
 });
 
 let seq = 0;
@@ -67,8 +67,8 @@ async function seedInboundEvent(
   });
 }
 
-describe('sweepInboundEvents (the observation drain)', () => {
-  it('normalizes a received event into an observation and fires the mention bridge', async () => {
+describe('sweepInboundEvents (the event drain)', () => {
+  it('normalizes a received event into a canonical event and fans it to the owner', async () => {
     const { orgId } = await seedBaseOrg(db, schema);
     const { userId, actorId } = await seedUserActor(orgId);
     const intgId = await seedIntegration(orgId, actorId);
@@ -79,16 +79,15 @@ describe('sweepInboundEvents (the observation drain)', () => {
     });
 
     const result = await sweepInboundEvents(new Date());
-    expect(result.observations).toBe(1);
+    expect(result.events).toBe(1);
 
-    const obs = await db
-      .select()
-      .from(schema.observation)
-      .where(eq(schema.observation.organizationId, orgId));
-    expect(obs).toHaveLength(1);
-    expect(obs[0]!.kind).toBe('mention');
-    expect(obs[0]!.userId).toBe(userId);
-    expect(obs[0]!.sourceEventId).not.toBeNull();
+    const evs = await db.select().from(schema.event).where(eq(schema.event.organizationId, orgId));
+    expect(evs).toHaveLength(1);
+    expect(evs[0]!.kind).toBe('mention');
+    expect(evs[0]!.sourceSystem).toBe('linear');
+    expect(evs[0]!.userId).toBe(userId);
+    expect(evs[0]!.entityKind).toBe('work_item');
+    expect(evs[0]!.sourceEventId).not.toBeNull();
 
     const ev = await db
       .select()
@@ -96,14 +95,16 @@ describe('sweepInboundEvents (the observation drain)', () => {
       .where(eq(schema.inboundEvent.externalEventId, 'ev_m1'));
     expect(ev[0]!.status).toBe('processed');
 
-    const notes = await db
+    // The mention reaches the integration owner's personal feed (event_recipient), reason 'mention'.
+    const recips = await db
       .select()
-      .from(schema.notification)
-      .where(eq(schema.notification.userId, userId));
-    expect(notes.some((n) => n.type === 'mention')).toBe(true);
+      .from(schema.eventRecipient)
+      .where(eq(schema.eventRecipient.userId, userId));
+    expect(recips).toHaveLength(1);
+    expect(recips[0]!.reason).toBe('mention');
   });
 
-  it('is idempotent: a re-sweep neither reprocesses nor duplicates the observation', async () => {
+  it('is idempotent: a re-sweep neither reprocesses nor duplicates the event', async () => {
     const { orgId } = await seedBaseOrg(db, schema);
     const { actorId } = await seedUserActor(orgId);
     const intgId = await seedIntegration(orgId, actorId);
@@ -118,14 +119,11 @@ describe('sweepInboundEvents (the observation drain)', () => {
     // The first sweep marked the event processed, so the second finds nothing to claim here.
     expect(second.processed).toBe(0);
 
-    const obs = await db
-      .select()
-      .from(schema.observation)
-      .where(eq(schema.observation.organizationId, orgId));
-    expect(obs).toHaveLength(1);
+    const evs = await db.select().from(schema.event).where(eq(schema.event.organizationId, orgId));
+    expect(evs).toHaveLength(1);
   });
 
-  it('marks an unrouted event (no org) as skipped without creating an observation', async () => {
+  it('marks an unrouted event (no org) as skipped without creating an event', async () => {
     await seedInboundEvent(null, null, 'ev_unrouted', { kind: 'mention', title: 'x', id: 'u1' });
 
     await sweepInboundEvents(new Date());

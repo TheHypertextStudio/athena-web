@@ -77,7 +77,7 @@ describe('RealSlackObserver.route', () => {
 });
 
 describe('RealSlackObserver.normalize', () => {
-  it('maps an app_mention to a mention observation (channel subject + actor + text)', () => {
+  it('maps an app_mention to a mention event (thread entity + actor + slack.message detail)', () => {
     const payload = {
       type: 'event_callback',
       team_id: 'T1',
@@ -87,21 +87,43 @@ describe('RealSlackObserver.normalize', () => {
         user: 'U9',
         channel: 'C5',
         text: 'hey @docket',
+        thread_ts: '1699999999.000050',
         ts: '1700000000.000100',
       },
     };
-    const [obs] = observer.normalize({ eventType: 'app_mention', payload, receivedAt: RECEIVED_AT });
+    const [obs] = observer.normalize({
+      eventType: 'app_mention',
+      payload,
+      receivedAt: RECEIVED_AT,
+    });
     expect(obs?.kind).toBe('mention');
     expect(obs?.summary).toBe('hey @docket');
-    expect(obs?.externalActor?.externalId).toBe('U9');
-    expect(obs?.subject).toEqual({ type: 'channel', externalId: 'C5' });
+    expect(obs?.actor?.externalId).toBe('U9');
+    expect(obs?.entity).toEqual({ kind: 'thread', externalId: 'C5' });
+    expect(obs?.detail).toEqual({
+      schema: 'slack.message',
+      channelId: 'C5',
+      threadTs: '1699999999.000050',
+      text: 'hey @docket',
+    });
   });
 
-  it('ignores an unhandled event type', () => {
+  it('maps an unhandled event type to a degraded message-kind generic draft', () => {
+    const drafts = observer.normalize({
+      eventType: 'channel_created',
+      payload: { event: { type: 'channel_created' } },
+      receivedAt: RECEIVED_AT,
+    });
+    expect(drafts).toHaveLength(1);
+    expect(drafts[0]?.kind).toBe('message');
+    expect(drafts[0]?.detail?.schema).toBe('generic');
+  });
+
+  it('returns [] for a handshake payload with no inner event', () => {
     expect(
       observer.normalize({
-        eventType: 'channel_created',
-        payload: { event: { type: 'channel_created' } },
+        eventType: 'url_verification',
+        payload: { type: 'url_verification', challenge: 'c' },
         receivedAt: RECEIVED_AT,
       }),
     ).toEqual([]);

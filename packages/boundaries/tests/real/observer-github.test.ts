@@ -65,7 +65,7 @@ describe('RealGitHubObserver.route', () => {
 });
 
 describe('RealGitHubObserver.normalize', () => {
-  it('maps a closed issue to a completed observation with subject + actor + permalink', () => {
+  it('maps a closed issue to a completed event with work_item entity + actor + permalink', () => {
     const payload = {
       action: 'closed',
       issue: {
@@ -83,23 +83,27 @@ describe('RealGitHubObserver.normalize', () => {
     expect(obs?.title).toBe('Closed issue: Fix the bug');
     expect(obs?.occurredAt).toBe('2026-06-28T11:00:00Z');
     expect(obs?.permalink).toBe('https://github.com/o/r/issues/7');
-    expect(obs?.subject).toEqual({
-      type: 'issue',
+    expect(obs?.entity).toEqual({
+      kind: 'work_item',
       externalId: '7',
       title: 'Fix the bug',
       url: 'https://github.com/o/r/issues/7',
     });
-    expect(obs?.externalActor?.externalId).toBe('octocat');
+    expect(obs?.actor?.externalId).toBe('octocat');
+    expect(obs?.actor?.avatarUrl).toBe('https://x/a.png');
+    expect(obs?.detail?.schema).toBe('generic');
   });
 
-  it('maps a merged pull request to a completed observation', () => {
+  it('maps a merged pull request to a completed event with a github.pull_request detail', () => {
     const payload = {
       action: 'closed',
       pull_request: {
         id: 12,
+        number: 12,
         title: 'Add feature',
         state: 'closed',
         merged: true,
+        draft: false,
         html_url: 'https://github.com/o/r/pull/12',
       },
       sender: { login: 'octocat' },
@@ -112,10 +116,16 @@ describe('RealGitHubObserver.normalize', () => {
     });
     expect(obs?.kind).toBe('completed');
     expect(obs?.title).toBe('Merged PR: Add feature');
-    expect(obs?.subject?.type).toBe('pull_request');
+    expect(obs?.entity?.kind).toBe('work_item');
+    expect(obs?.detail).toEqual({
+      schema: 'github.pull_request',
+      number: 12,
+      merged: true,
+      draft: false,
+    });
   });
 
-  it('maps an issue comment to a comment observation carrying the body', () => {
+  it('maps an issue comment to a comment event carrying the body', () => {
     const payload = {
       action: 'created',
       issue: { id: 7, title: 'Fix the bug', html_url: 'https://github.com/o/r/issues/7' },
@@ -130,10 +140,13 @@ describe('RealGitHubObserver.normalize', () => {
     expect(obs?.kind).toBe('comment');
     expect(obs?.title).toBe('Commented on Fix the bug');
     expect(obs?.summary).toBe('nice work');
-    expect(obs?.externalActor?.externalId).toBe('reviewer');
+    expect(obs?.entity?.kind).toBe('work_item');
+    expect(obs?.entity?.externalId).toBe('7');
+    expect(obs?.actor?.externalId).toBe('reviewer');
+    expect(obs?.detail?.schema).toBe('generic');
   });
 
-  it('ignores an unknown event type', () => {
+  it('ignores an unknown event type (ping/health delivery carries no activity)', () => {
     expect(
       observer.normalize({ eventType: 'unknown', payload: {}, receivedAt: RECEIVED_AT }),
     ).toEqual([]);

@@ -39,7 +39,12 @@ export interface EventDrawerProps {
 }
 
 /** The expanded-event drawer (renders nothing when no row is selected). */
-export function EventDrawer({ row, onClose, actions, pending }: EventDrawerProps): JSX.Element | null {
+export function EventDrawer({
+  row,
+  onClose,
+  actions,
+  pending,
+}: EventDrawerProps): JSX.Element | null {
   if (!row) return null;
   const glyph = kindGlyph(row.kind);
   return (
@@ -52,7 +57,7 @@ export function EventDrawer({ row, onClose, actions, pending }: EventDrawerProps
       />
       <aside className="bg-surface border-outline-variant absolute top-0 right-0 flex h-full w-[420px] max-w-[92vw] flex-col border-l shadow-xl">
         <header className="border-outline-variant flex items-center gap-2 border-b px-4 py-3">
-          <ProviderBadge provider={row.provider} />
+          <ProviderBadge system={row.system} />
           <span className="text-on-surface-variant text-xs capitalize">
             {row.kind.replace(/_/g, ' ')}
           </span>
@@ -70,20 +75,20 @@ export function EventDrawer({ row, onClose, actions, pending }: EventDrawerProps
           <div className="flex items-start gap-3">
             <ActorAvatar
               name={row.actorName}
-              avatar={row.actorAvatar}
+              avatarUrl={row.actorAvatarUrl}
               glyph={glyph}
               seed={row.actorName ?? row.id}
             />
             <div className="min-w-0">
-              <p className="text-on-surface font-medium leading-snug">{streamDescription(row)}</p>
+              <p className="text-on-surface leading-snug font-medium">{streamDescription(row)}</p>
               <p className="text-on-surface-variant mt-0.5 text-xs">
                 {new Date(row.occurredAt).toLocaleString()}
               </p>
             </div>
           </div>
 
-          {row.subjectTitle ? (
-            <p className="text-on-surface mt-4 text-base font-semibold">{row.subjectTitle}</p>
+          {row.entityTitle ? (
+            <p className="text-on-surface mt-4 text-base font-semibold">{row.entityTitle}</p>
           ) : null}
           {row.summary ? (
             <p className="text-on-surface/80 bg-surface-container mt-3 rounded-lg p-3 text-sm whitespace-pre-wrap">

@@ -4,22 +4,47 @@ import { StreamEventOut, StreamPageOut, StreamQuery, StreamRelevance } from '../
 
 // Valid ULID-shaped ids for the branded primitives.
 const ORG = '01KW8H4PY49X0PCHXY0G8Y68PX';
-const OBS = '01KW8H4PYWAZECQC0GJPABN60X';
+const EVT = '01KW8H4PYWAZECQC0GJPABN60X';
 const INT = '01KW8RPQ0MN015ZFCRBX0HR60G';
 
 const baseEvent = {
-  id: OBS,
+  id: EVT,
   organizationId: ORG,
-  source: { provider: 'linear', integrationId: INT, origin: 'external' as const },
+  source: {
+    system: 'linear' as const,
+    integrationId: INT,
+    externalUrl: 'https://linear.app/acme/issue/ENG-482',
+  },
   kind: 'status_change' as const,
   occurredAt: '2026-06-29T17:00:00.000Z',
   title: 'ENG-482 moved to Done',
   summary: 'In Progress → Done',
   permalink: 'https://linear.app/acme/issue/ENG-482',
-  actor: { externalId: 'u_dani', displayName: 'Dani' },
-  subject: { type: 'issue', externalId: 'ENG-482', title: 'Ship the beta' },
-  participants: [{ externalId: 'u_dani', displayName: 'Dani' }],
-  payload: { state: { from: 'In Progress', to: 'Done' } },
+  actor: {
+    source: 'linear' as const,
+    externalId: 'u_dani',
+    displayName: 'Dani',
+    avatarUrl: null,
+    docketActorId: null,
+  },
+  entity: {
+    kind: 'work_item' as const,
+    source: 'linear' as const,
+    externalId: 'ENG-482',
+    title: 'Ship the beta',
+    url: 'https://linear.app/acme/issue/ENG-482',
+    docketEntityId: null,
+  },
+  participants: [
+    {
+      source: 'linear' as const,
+      externalId: 'u_dani',
+      displayName: 'Dani',
+      avatarUrl: null,
+      docketActorId: null,
+    },
+  ],
+  detail: { schema: 'docket.state_change' as const, fromState: 'In Progress', toState: 'Done' },
   relevance: 'owned' as const,
   rendering: { icon: 'check', category: 'progress' },
   createdAt: '2026-06-29T17:00:01.000Z',
@@ -28,34 +53,49 @@ const baseEvent = {
 describe('StreamEventOut', () => {
   it('parses a full external event', () => {
     const parsed = StreamEventOut.parse(baseEvent);
-    expect(parsed.source.provider).toBe('linear');
+    expect(parsed.source.system).toBe('linear');
     expect(parsed.relevance).toBe('owned');
-    expect(parsed.payload).toEqual({ state: { from: 'In Progress', to: 'Done' } });
+    expect(parsed.entity?.kind).toBe('work_item');
   });
 
   it('accepts null relevance (workspace firehose) and null nullables', () => {
     const parsed = StreamEventOut.parse({
       ...baseEvent,
-      source: { provider: 'docket', integrationId: null, origin: 'docket' },
+      source: { system: 'docket', integrationId: null, externalUrl: null },
       summary: null,
       permalink: null,
       actor: null,
-      subject: null,
+      entity: null,
+      detail: null,
       relevance: null,
     });
     expect(parsed.relevance).toBeNull();
     expect(parsed.source.integrationId).toBeNull();
+    expect(parsed.detail).toBeNull();
   });
 
   it('rejects an unknown kind', () => {
     expect(StreamEventOut.safeParse({ ...baseEvent, kind: 'exploded' }).success).toBe(false);
   });
 
-  it('rejects an unknown source origin', () => {
+  it('rejects an unknown source system', () => {
     expect(
-      StreamEventOut.safeParse({ ...baseEvent, source: { ...baseEvent.source, origin: 'other' } })
+      StreamEventOut.safeParse({ ...baseEvent, source: { ...baseEvent.source, system: 'other' } })
         .success,
     ).toBe(false);
+  });
+
+  it('accepts the generic detail variant for unmapped events', () => {
+    const parsed = StreamEventOut.parse({
+      ...baseEvent,
+      detail: {
+        schema: 'generic',
+        title: 'Something happened in Figma',
+        summary: null,
+        url: 'https://figma.com/x',
+      },
+    });
+    expect(parsed.detail?.schema).toBe('generic');
   });
 });
 
@@ -77,12 +117,14 @@ describe('StreamQuery', () => {
     const parsed = StreamQuery.parse({
       filter: 'eyJ4IjoxfQ==',
       viewId: 'v1',
-      provider: 'slack',
+      system: 'slack',
       kind: 'mention',
+      entityKind: 'thread',
     });
     expect(parsed.filter).toBe('eyJ4IjoxfQ==');
-    expect(parsed.provider).toBe('slack');
+    expect(parsed.system).toBe('slack');
     expect(parsed.kind).toBe('mention');
+    expect(parsed.entityKind).toBe('thread');
   });
 
   it('rejects an invalid quick-filter kind', () => {

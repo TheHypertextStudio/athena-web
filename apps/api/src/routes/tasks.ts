@@ -23,7 +23,7 @@ import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 
-import { emitObservation } from './observation-emit';
+import { emitEvent } from './event-emit';
 import {
   assertMilestoneInOrg,
   assertRefInOrg,
@@ -111,7 +111,7 @@ Side effects: emits a \`created\` observation onto the org's activity stream, an
 
       // Stream: record the creation, plus an assignment event when it lands on someone.
       const subject = { type: 'task', id: row.id, title: row.title };
-      await emitObservation({
+      await emitEvent({
         organizationId: orgId,
         kind: 'created',
         actorId,
@@ -119,7 +119,7 @@ Side effects: emits a \`created\` observation onto the org's activity stream, an
         subject,
       });
       if (row.assigneeId) {
-        await emitObservation({
+        await emitEvent({
           organizationId: orgId,
           kind: 'assignment',
           actorId,
@@ -300,17 +300,17 @@ Changing \`state\` runs the team's workflow-state transition: the key is validat
       // Stream: a state transition (completed when it landed terminal) and/or a reassignment.
       const subject = { type: 'task', id: row.id, title: row.title };
       if (statePatch !== undefined) {
-        await emitObservation({
+        await emitEvent({
           organizationId: orgId,
           kind: statePatch.completedAt ? 'completed' : 'status_change',
           actorId: ctx.actorId,
           title: row.title,
           subject,
-          payload: { state: row.state },
+          detail: { schema: 'docket.state_change', fromState: null, toState: row.state },
         });
       }
       if (body.assigneeId) {
-        await emitObservation({
+        await emitEvent({
           organizationId: orgId,
           kind: 'assignment',
           actorId: ctx.actorId,
@@ -385,13 +385,13 @@ The transition is resolved server-side: entering a terminal state derives \`comp
       /* v8 ignore next -- @preserve defensive: loadTask above proved the row exists + is active */
       if (!next) throw new NotFoundError('Task not found');
 
-      await emitObservation({
+      await emitEvent({
         organizationId: orgId,
         kind: transition.completedAt ? 'completed' : 'status_change',
         actorId,
         title: next.title,
         subject: { type: 'task', id: next.id, title: next.title },
-        payload: { state: next.state },
+        detail: { schema: 'docket.state_change', fromState: null, toState: next.state },
       });
       return ok(c, TaskOut, toOut(next));
     },

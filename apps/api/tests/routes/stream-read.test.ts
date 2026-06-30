@@ -6,7 +6,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
-import type { ObservationKind, StreamPageOut } from '@docket/types';
+import type { EventKind, SourceSystemKind, StreamPageOut } from '@docket/types';
 import type { z } from 'zod';
 
 import { appWithActor, appWithSession, fakeSession, getDb, seedBaseOrg } from './harness.test';
@@ -44,33 +44,33 @@ async function joinOrg(userId: string, orgId: string): Promise<void> {
     .values({ organizationId: orgId, kind: 'human', displayName: 'U', userId });
 }
 
-interface ObsOpts {
-  provider?: string;
-  kind?: ObservationKind;
+interface EventOpts {
+  system?: SourceSystemKind;
+  kind?: EventKind;
   title?: string;
   occurredAt: Date;
 }
 
-async function seedObs(orgId: string, opts: ObsOpts): Promise<string> {
+async function seedEvent(orgId: string, opts: EventOpts): Promise<string> {
   seq += 1;
   const [o] = await db
-    .insert(schema.observation)
+    .insert(schema.event)
     .values({
       organizationId: orgId,
-      provider: opts.provider ?? 'docket',
+      sourceSystem: opts.system ?? 'docket',
       kind: opts.kind ?? 'status_change',
       occurredAt: opts.occurredAt,
       title: opts.title ?? 'Event',
       dedupeKey: `k-${String(seq)}`,
     })
-    .returning({ id: schema.observation.id });
+    .returning({ id: schema.event.id });
   return o!.id;
 }
 
-async function recip(observationId: string, userId: string, orgId: string, at: Date): Promise<void> {
+async function recip(eventId: string, userId: string, orgId: string, at: Date): Promise<void> {
   await db
-    .insert(schema.observationRecipient)
-    .values({ observationId, userId, organizationId: orgId, occurredAt: at, reason: 'owned' });
+    .insert(schema.eventRecipient)
+    .values({ eventId, userId, organizationId: orgId, occurredAt: at, reason: 'owned' });
 }
 
 function b64(filters: unknown): string {
@@ -85,14 +85,29 @@ const T1 = new Date('2026-06-29T10:00:00.000Z');
 const T2 = new Date('2026-06-29T11:00:00.000Z');
 const T3 = new Date('2026-06-29T12:00:00.000Z');
 
-/** Seed a user joined to a base org with three recipient observations (linear/docket/slack). */
+/** Seed a user joined to a base org with three recipient events (linear/docket/slack). */
 async function seedPersonal(): Promise<{ userId: string; orgId: string }> {
   const userId = await seedUser();
   const { orgId } = await seedBaseOrg(db, schema);
   await joinOrg(userId, orgId);
-  const a = await seedObs(orgId, { provider: 'linear', kind: 'mention', title: 'Mentioned', occurredAt: T1 });
-  const b = await seedObs(orgId, { provider: 'docket', kind: 'status_change', title: 'Moved', occurredAt: T2 });
-  const c = await seedObs(orgId, { provider: 'slack', kind: 'comment', title: 'Commented', occurredAt: T3 });
+  const a = await seedEvent(orgId, {
+    system: 'linear',
+    kind: 'mention',
+    title: 'Mentioned',
+    occurredAt: T1,
+  });
+  const b = await seedEvent(orgId, {
+    system: 'docket',
+    kind: 'status_change',
+    title: 'Moved',
+    occurredAt: T2,
+  });
+  const c = await seedEvent(orgId, {
+    system: 'slack',
+    kind: 'comment',
+    title: 'Commented',
+    occurredAt: T3,
+  });
   await recip(a, userId, orgId, T1);
   await recip(b, userId, orgId, T2);
   await recip(c, userId, orgId, T3);
@@ -109,13 +124,13 @@ describe('GET /v1/hub/stream (personal, recipient-curated)', () => {
     const res = await appWithSession(hub, fakeSession(userId)).request('/stream');
     const body = await page(res);
     expect(body.items.map((i) => i.kind)).toEqual(['comment', 'status_change', 'mention']);
-    expect(body.items.map((i) => i.source.provider)).toEqual(['slack', 'docket', 'linear']);
+    expect(body.items.map((i) => i.source.system)).toEqual(['slack', 'docket', 'linear']);
     expect(body.items.every((i) => i.relevance === 'owned')).toBe(true);
   });
 
-  it('applies the provider quick-filter', async () => {
+  it('applies the system quick-filter', async () => {
     const { userId } = await seedPersonal();
-    const res = await appWithSession(hub, fakeSession(userId)).request('/stream?provider=linear');
+    const res = await appWithSession(hub, fakeSession(userId)).request('/stream?system=linear');
     const body = await page(res);
     expect(body.items).toHaveLength(1);
     expect(body.items[0]!.kind).toBe('mention');
@@ -151,7 +166,7 @@ describe('GET /v1/hub/stream (personal, recipient-curated)', () => {
     const { userId } = await seedPersonal();
     // A recipient row for the same user in an org they never joined must not leak.
     const other = await seedBaseOrg(db, schema);
-    const o = await seedObs(other.orgId, { kind: 'created', title: 'Other', occurredAt: T3 });
+    const o = await seedEvent(other.orgId, { kind: 'created', title: 'Other', occurredAt: T3 });
     await recip(o, userId, other.orgId, T3);
     const body = await page(await appWithSession(hub, fakeSession(userId)).request('/stream'));
     expect(body.items).toHaveLength(3);
@@ -160,10 +175,10 @@ describe('GET /v1/hub/stream (personal, recipient-curated)', () => {
 });
 
 describe('GET /v1/orgs/:orgId/stream (workspace firehose)', () => {
-  it('returns every org observation with null relevance', async () => {
+  it('returns every org event with null relevance', async () => {
     const { orgId } = await seedBaseOrg(db, schema);
-    await seedObs(orgId, { provider: 'github', kind: 'assignment', title: 'A', occurredAt: T1 });
-    await seedObs(orgId, { provider: 'docket', kind: 'created', title: 'B', occurredAt: T2 });
+    await seedEvent(orgId, { system: 'github', kind: 'assignment', title: 'A', occurredAt: T1 });
+    await seedEvent(orgId, { system: 'docket', kind: 'created', title: 'B', occurredAt: T2 });
     const app = appWithActor(stream, orgId, ['view']);
     const body = await page(await app.request('/'));
     expect(body.items).toHaveLength(2);

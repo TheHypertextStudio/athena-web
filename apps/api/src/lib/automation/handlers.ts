@@ -99,22 +99,20 @@ function mailHandler(type: string, build: MailActionBuilder, deps: HandlerDeps) 
   };
 }
 
+/** A label action reads `params.label`, no-op'ing (`null`) when the rule omits it. */
+const labelBuilder =
+  (kind: 'applyLabel' | 'removeLabel'): MailActionBuilder =>
+  (params) =>
+    typeof params['label'] === 'string' ? { kind, label: params['label'] } : null;
+
 /** The `mail.*` action types and how each derives its {@link MailAction} from rule params. */
 const MAIL_ACTIONS: { readonly type: string; readonly build: MailActionBuilder }[] = [
   { type: 'mail.archive', build: () => ({ kind: 'archive' }) },
   { type: 'mail.markRead', build: () => ({ kind: 'markRead' }) },
   { type: 'mail.markUnread', build: () => ({ kind: 'markUnread' }) },
   { type: 'mail.trash', build: () => ({ kind: 'trash' }) },
-  {
-    type: 'mail.applyLabel',
-    build: (p) =>
-      typeof p['label'] === 'string' ? { kind: 'applyLabel', label: p['label'] } : null,
-  },
-  {
-    type: 'mail.removeLabel',
-    build: (p) =>
-      typeof p['label'] === 'string' ? { kind: 'removeLabel', label: p['label'] } : null,
-  },
+  { type: 'mail.applyLabel', build: labelBuilder('applyLabel') },
+  { type: 'mail.removeLabel', build: labelBuilder('removeLabel') },
 ];
 
 /**

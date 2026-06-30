@@ -26,6 +26,8 @@ import {
   auditEventType,
   auditSubjectType,
   commentSubjectType,
+  emailSuggestionStatus,
+  taskPriority,
   dailyPlanItemStatus,
   grantCapability,
   grantEffect,
@@ -355,6 +357,64 @@ export const attachment = pgTable(
       .on(t.sourceIntegrationId, t.externalId)
       .where(sql`${t.kind} = 'email'`),
   ],
+);
+
+/**
+ * An Athena-synthesized task suggestion drawn from an email thread — a *proposal*, not a task.
+ *
+ * @remarks
+ * Produced by the ingest→funnel→synthesize pipeline; lives in a triage lane until the user
+ * accepts (→ materializes a `task`, stamping {@link emailSuggestion.createdTaskId}) or dismisses.
+ * Deduped one-per-thread by the unique `(organizationId, externalThreadId)` index so a
+ * re-sweep never double-proposes. `createdTaskId` is plain text (no FK) to avoid a circular
+ * schema-island import with `work.ts`. See `docs/engineering/specs/email-to-task.md` §2/§6.
+ */
+export const emailSuggestion = pgTable(
+  'email_suggestion',
+  {
+    ...auditColumns(),
+    integrationId: text('integration_id')
+      .notNull()
+      .references(() => integration.id, { onDelete: 'cascade' }),
+    externalThreadId: text('external_thread_id').notNull(),
+    title: text('title').notNull(),
+    description: text('description'),
+    dueDate: timestamp('due_date'),
+    priority: taskPriority('priority').notNull().default('none'),
+    suggestedProjectId: text('suggested_project_id'),
+    suggestedProgramId: text('suggested_program_id'),
+    confidence: integer('confidence'),
+    status: emailSuggestionStatus('status').notNull().default('pending'),
+    emailMeta: jsonb('email_meta'),
+    createdTaskId: text('created_task_id'),
+  },
+  (t) => [
+    index('email_suggestion_org_status_idx').on(t.organizationId, t.status),
+    uniqueIndex('email_suggestion_thread_uq').on(t.organizationId, t.externalThreadId),
+  ],
+);
+
+/**
+ * A user-owned automation rule — data, not code: `(on → when → then)`.
+ *
+ * @remarks
+ * `eventMatch` (`on`) matches an observation by kind/subjectType; `condition` (`when`) is the
+ * declarative predicate Composite; `actions` (`then`) is the ordered list of action commands.
+ * Defaults ship as `isSeed` rows. The engine observes the observation stream and dispatches
+ * actions via the handler registry — see `docs/engineering/specs/email-to-task.md` §7.
+ */
+export const automationRule = pgTable(
+  'automation_rule',
+  {
+    ...auditColumns(),
+    name: text('name').notNull(),
+    enabled: boolean('enabled').notNull().default(true),
+    eventMatch: jsonb('event_match').notNull(),
+    condition: jsonb('condition').notNull(),
+    actions: jsonb('actions').notNull(),
+    isSeed: boolean('is_seed').notNull().default(false),
+  },
+  (t) => [index('automation_rule_org_idx').on(t.organizationId)],
 );
 
 /** The universal audit feed; agent actions carry `actorId`=agent + `initiatorId`=human. */

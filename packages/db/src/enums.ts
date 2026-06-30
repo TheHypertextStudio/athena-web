@@ -157,6 +157,19 @@ export const attachmentSubjectType = pgEnum('attachment_subject_type', ['task'])
  * title/favicon). Future kinds (`file` via the BlobStore port, `drive`) extend this union.
  */
 export const attachmentKind = pgEnum('attachment_kind', ['email', 'url']);
+/**
+ * Lifecycle of an Athena-synthesized task suggestion drawn from an email.
+ *
+ * @remarks
+ * `pending` until the user acts in triage: `accepted` materializes a real task (and stamps
+ * `createdTaskId`), `dismissed` discards it. A suggestion is never a task — see the
+ * email-to-task spec §2.
+ */
+export const emailSuggestionStatus = pgEnum('email_suggestion_status', [
+  'pending',
+  'accepted',
+  'dismissed',
+]);
 /** Notification kinds surfaced in the cross-org Hub inbox. */
 export const notificationType = pgEnum('notification_type', [
   'mention',

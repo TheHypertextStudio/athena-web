@@ -111,6 +111,10 @@ export const AttachmentId = id<'AttachmentId'>().describe(
 export const AutomationRuleId = id<'AutomationRuleId'>().describe(
   'ULID id of an AutomationRule — a configured rule that triggers actions when matching events occur.',
 );
+/** Branded `EmailSuggestion` id. */
+export const EmailSuggestionId = id<'EmailSuggestionId'>().describe(
+  'ULID id of an EmailSuggestion — an Athena-synthesized task proposal drawn from an email thread.',
+);
 /** Branded `Update` id. */
 export const UpdateId = id<'UpdateId'>().describe(
   'ULID id of an Update — a posted status/progress narrative on a Project, Program, or Initiative.',

@@ -35,7 +35,7 @@ jobs:
         with:
           node-version-file: '.node-version'
 
-      - run: corepack enable
+      - run: npm install -g corepack@0.35.0 && corepack enable
 
       # Turbo task cache — on exact SHA hit turbo replays outputs without re-running.
       # restore-keys falls back to the nearest ancestor commit's cache so only
@@ -66,7 +66,7 @@ jobs:
         with:
           node-version-file: '.node-version'
 
-      - run: corepack enable
+      - run: npm install -g corepack@0.35.0 && corepack enable
 
       - uses: actions/cache@v5
         with:

@@ -44,7 +44,12 @@ export function OAuthButtons({
   /** Begin the OAuth redirect for `provider`, reporting a failure if the call rejects. */
   async function continueWith(provider: OAuthProvider['id']): Promise<void> {
     try {
-      await authClient.signIn.social({ provider, callbackURL });
+      // Resolve to an ABSOLUTE URL on the current origin. The `oAuthProxy` social flow relays the
+      // callback through the API host and resolves a relative `callbackURL` against *that* host —
+      // landing the user on `api.docket.localhost/<path>` (a 404) instead of the app. Pinning the
+      // origin keeps the post-login redirect on the host the user is actually browsing.
+      const absoluteCallbackURL = new URL(callbackURL, window.location.origin).toString();
+      await authClient.signIn.social({ provider, callbackURL: absoluteCallbackURL });
     } catch {
       onError('Could not reach that provider. Please try again.');
     }

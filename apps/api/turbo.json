@@ -8,9 +8,11 @@
     "dev": {
       "env": [
         "BETTER_AUTH_*",
+        "OAUTH_PROXY_*",
         "GOOGLE_*",
         "GITHUB_*",
         "LINEAR_*",
+        "SLACK_SIGNING_SECRET",
         "MCP_*",
         "OIDC_*",
         "STRIPE_*",
@@ -21,7 +23,10 @@
         "SENTRY_DSN",
         "BLOB_READ_WRITE_TOKEN",
         "EXPORT_BUCKET_*",
-        "BILLING_ENABLED"
+        "BILLING_ENABLED",
+        "SMTP_*",
+        "MAIL_FROM",
+        "STAFF_BOOTSTRAP_EMAILS"
       ]
     }
   }

@@ -135,16 +135,31 @@ not just print it:
 1. ensures `cloudflared` is installed (offers `brew install` if missing);
 2. runs `cloudflared tunnel login` if you have no cert yet (opens your browser for your Cloudflare zone);
 3. creates/reuses a named tunnel and **routes DNS** for the hostname you give (a subdomain on your zone);
-4. writes `~/.cloudflared/config.yml` fronting the portless **web** host `https://docket.localhost`
-   (whose Next rewrites proxy `/api/auth` + `/v1` to the API, so one ingress covers OAuth **and** the
-   GitHub firehose). Origin uses `noTLSVerify` + `httpHostHeader` because dev ports are ephemeral
-   (target the stable portless host) and portless serves a local-CA cert;
+4. writes `~/.cloudflared/config.yml` with a **split ingress** (so **`pnpm dev` must be running** — it
+   reads the API's port from `~/.portless/routes.json`):
+   - `/(api|v1)/*` → **straight to the local API port** (`http://127.0.0.1:<apiPort>`), preserving the
+     public `Host`. This is load-bearing for OAuth: portless rewrites the upstream `Host` to its
+     loopback address (the real host survives only in `X-Forwarded-Host`) and Next's rewrite then
+     re-derives _its_ forwarded host from that loopback — so going through portless makes Better Auth
+     resolve the token-exchange `redirect_uri` to a `.localhost` host instead of the tunnel host Google
+     saw, → `invalid_grant` → `invalid_code`. Direct routing keeps `Host = <tunnel>` end-to-end;
+   - everything else → the portless **web** host `https://docket.localhost` (`noTLSVerify` +
+     `httpHostHeader`, since portless routes by name and serves a local-CA cert).
 5. makes it **persistent via a user LaunchAgent** (`~/Library/LaunchAgents/studio.hypertext.docket-tunnel.plist`)
    — runs at login, no sudo. (Avoids `cloudflared service install`, whose root daemon can't read your
    `~/.cloudflared` config and ships a non-functional plist on recent versions.)
 6. adds the host to `BETTER_AUTH_ALLOWED_HOSTS` + `BETTER_AUTH_TRUSTED_ORIGINS` in `.env.local`.
    `BETTER_AUTH_ALLOWED_HOSTS` is the single source of truth — it also flows to each app's
    `next.config.ts` `allowedDevOrigins`, so Next 16 doesn't block the origin's HMR.
+
+**Session cookie sharing (`BETTER_AUTH_COOKIE_DOMAIN`).** The `oAuthProxy` social flow relays the
+callback through `api.docket.localhost` and writes the session there, but the app runs on
+`docket.localhost` — a host-only cookie would be invisible to it. `.env.local` sets
+`BETTER_AUTH_COOKIE_DOMAIN=docket.localhost`, which scopes the session cookie to the shared parent so
+all `*.docket.localhost` hosts see it. The sign-in buttons also pass an **absolute** `callbackURL` on
+the current origin, so the post-login redirect lands on the app host (not the API host). A new
+`BETTER_AUTH_COOKIE_DOMAIN` value needs a full `pnpm dev` restart (it's loaded by the root
+`dotenv -e .env.local`, not hot-reloaded).
 
 Only **two** things are left to you (bootstrap prints both):
 

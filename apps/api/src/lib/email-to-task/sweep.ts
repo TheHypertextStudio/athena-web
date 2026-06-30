@@ -16,7 +16,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { getContainer } from '../../container';
 import { seedDefaultAutomationRules } from '../automation/rules-store';
 import { connectorFor, resolveConnectorToken } from '../../routes/integration-provider';
-import { type CandidateThread, type Synthesizer, persistSuggestions } from './synthesize';
+import { type CandidateThread, persistSuggestions } from './synthesize';
 
 /** Per-integration email-to-task config (lives on `integration.config.emailToTask`). */
 interface EmailToTaskConfig {
@@ -51,9 +51,7 @@ export async function sweepEmailSuggestions(_now: Date): Promise<EmailSweepResul
 
   // Athena drafts the action-oriented task; the env-resolved synthesizer is the real model
   // when ANTHROPIC_API_KEY is set, else the deterministic mock (so the sweep runs offline).
-  const synth = getContainer().taskSynthesizer;
-  const synthesize: Synthesizer = (thread) =>
-    synth.synthesize({ subject: thread.subject, snippet: thread.snippet, sender: thread.sender });
+  const synthesizer = getContainer().taskSynthesizer;
 
   let processed = 0;
   let created = 0;
@@ -89,7 +87,7 @@ export async function sweepEmailSuggestions(_now: Date): Promise<EmailSweepResul
       threads,
       threshold: cfg.threshold,
       actorId: row.createdBy,
-      synthesize,
+      synthesizer,
     });
     created += result.created;
   }

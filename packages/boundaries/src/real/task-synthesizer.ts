@@ -9,12 +9,13 @@
  * is never broken by a bad completion. See `docs/engineering/specs/email-to-task.md` §6.
  */
 import type Anthropic from '@anthropic-ai/sdk';
+import type { Priority } from '@docket/types';
 
-import type {
-  SynthesizedPriority,
-  TaskDraft,
-  TaskDraftInput,
-  TaskSynthesizer,
+import {
+  type TaskDraft,
+  type TaskDraftInput,
+  type TaskSynthesizer,
+  truncateTitle,
 } from '../ports/task-synthesizer';
 import { type AnthropicClientConfig, makeAnthropicClient, wrapAnthropicError } from './anthropic';
 
@@ -35,13 +36,12 @@ const SYSTEM_PROMPT = [
 ].join(' ');
 
 /** The valid priorities, for validating the model's output. */
-const PRIORITIES: readonly SynthesizedPriority[] = ['none', 'urgent', 'high', 'medium', 'low'];
+const PRIORITIES: readonly Priority[] = ['none', 'urgent', 'high', 'medium', 'low'];
 
 /** A deterministic, safe draft used when the model output can't be parsed. */
 function fallbackDraft(input: TaskDraftInput): TaskDraft {
-  const subject = input.subject.trim() || 'Follow up on an email';
   return {
-    title: subject.length > 120 ? `${subject.slice(0, 119).trimEnd()}…` : subject,
+    title: truncateTitle(input.subject),
     description: input.snippet.trim() || undefined,
     priority: 'medium',
   };
@@ -56,8 +56,8 @@ function parseDraft(text: string): TaskDraft | null {
     const parsed = JSON.parse(text.slice(start, end + 1)) as Record<string, unknown>;
     const title = typeof parsed['title'] === 'string' ? parsed['title'].trim() : '';
     if (!title) return null;
-    const priority = PRIORITIES.includes(parsed['priority'] as SynthesizedPriority)
-      ? (parsed['priority'] as SynthesizedPriority)
+    const priority = PRIORITIES.includes(parsed['priority'] as Priority)
+      ? (parsed['priority'] as Priority)
       : 'medium';
     const description =
       typeof parsed['description'] === 'string' && parsed['description'].trim().length > 0

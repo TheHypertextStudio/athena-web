@@ -47,7 +47,9 @@ export const queryKeys = {
   portfolio: () => ['me', 'portfolio'] as const,
   hubSearch: (query: string) => ['me', 'search', query] as const,
   today: (date: string) => ['me', 'today', date] as const,
+  agenda: (date: string) => ['me', 'agenda', date] as const,
   dailyPlan: (date: string) => ['me', 'daily-plan', date] as const,
+  calendarSettings: () => ['me', 'calendar-settings'] as const,
   // Notification count is keyed UNDER the list so invalidating `notifications()` (a prefix
   // match) refreshes both the list and the pending-approval count in one call.
   notifications: () => ['me', 'notifications'] as const,

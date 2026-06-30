@@ -42,6 +42,8 @@ import { categoryLabel, socialProviderForConnector } from './integrations-config
 
 /** The provider rendered as its own multi-account identity surface (Connections only). */
 const MULTI_ACCOUNT_PROVIDER = 'gtasks';
+/** First-party Google Calendar has dedicated nested configuration. */
+const FIRST_PARTY_CALENDAR_PROVIDER = 'calendar';
 
 /** Which integration surface this instance renders. */
 export type IntegrationSurface = 'connections' | 'import';
@@ -311,6 +313,13 @@ export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabPr
         : null,
     [directory, surface],
   );
+  const calendarDirectory = useMemo(
+    () =>
+      surface === 'connections'
+        ? (directory.find((p) => p.provider === FIRST_PARTY_CALENDAR_PROVIDER) ?? null)
+        : null,
+    [directory, surface],
+  );
 
   if (loading) {
     return (
@@ -363,6 +372,26 @@ export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabPr
         />
       ) : null}
 
+      {calendarDirectory ? (
+        <section aria-label="Google Calendar" className="flex flex-col gap-3">
+          <h2 className="text-on-surface-variant text-xs font-medium">Calendar</h2>
+          <NextLink
+            href={`/orgs/${orgId}/settings/connections/google-calendar`}
+            className="border-outline-variant bg-surface-container-low hover:bg-surface-container flex items-center justify-between gap-3 rounded-lg border px-4 py-3 transition-colors"
+          >
+            <span className="min-w-0">
+              <span className="text-on-surface block truncate text-sm font-medium">
+                {calendarDirectory.name}
+              </span>
+              <span className="text-on-surface-variant block truncate text-xs">
+                Accounts and visible calendars
+              </span>
+            </span>
+            <span className="text-primary shrink-0 text-sm font-medium">Configure</span>
+          </NextLink>
+        </section>
+      ) : null}
+
       {grouped.map(({ category, providers }) => (
         <section
           key={category}
@@ -374,6 +403,7 @@ export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabPr
             {providers.map((provider) => {
               // Google Tasks renders in its own identity section (above), not as a card here.
               if (provider.provider === MULTI_ACCOUNT_PROVIDER) return null;
+              if (provider.provider === FIRST_PARTY_CALENDAR_PROVIDER) return null;
               const existing = byProvider.get(provider.provider)?.[0];
               return (
                 <IntegrationProviderCard

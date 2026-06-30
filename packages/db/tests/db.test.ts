@@ -17,6 +17,9 @@ import {
   agentSession,
   auditEvent,
   auditEventType,
+  calendarConnection,
+  calendarEvent,
+  calendarList,
   comment,
   cycle,
   dailyPlanItem,
@@ -98,6 +101,9 @@ describe('migrations', () => {
       'task',
       'role',
       'grant',
+      'calendar_connection',
+      'calendar_list',
+      'calendar_event',
       'user',
       'passkey',
     ];
@@ -196,6 +202,9 @@ describe('schema foreign-key references (covers every `.references(() => …)` c
     dailyPlanItem,
     notification,
     integration,
+    calendarConnection,
+    calendarList,
+    calendarEvent,
     label,
     comment,
     auditEvent,
@@ -681,6 +690,58 @@ describe('schema inserts + updates (covers $defaultFn + $onUpdate callbacks)', (
       .from(organization)
       .where(eq(organization.id, ids['org']!));
     expect(refreshed[0]?.name).toBe('Acme Inc');
+  });
+
+  it('stores user-scoped Google Calendar accounts, calendars, and events', async () => {
+    const userId = ids['user']!;
+    const conn = (
+      await db
+        .insert(calendarConnection)
+        .values({
+          userId,
+          provider: 'google',
+          externalAccountId: 'google-sub-1',
+          accountEmail: 'ada@example.com',
+          accountName: 'Ada Lovelace',
+          status: 'connected',
+        })
+        .returning()
+    )[0]!;
+    const cal = (
+      await db
+        .insert(calendarList)
+        .values({
+          userId,
+          connectionId: conn.id,
+          externalCalendarId: 'primary',
+          title: 'Ada',
+          timezone: 'America/Los_Angeles',
+          selected: true,
+          visibleByDefault: true,
+        })
+        .returning()
+    )[0]!;
+    const event = (
+      await db
+        .insert(calendarEvent)
+        .values({
+          userId,
+          connectionId: conn.id,
+          calendarId: cal.id,
+          externalCalendarId: 'primary',
+          externalEventId: 'event-1',
+          status: 'confirmed',
+          title: 'Design review',
+          startsAt: new Date('2026-06-30T16:00:00.000Z'),
+          endsAt: new Date('2026-06-30T17:00:00.000Z'),
+          organizer: { email: 'ada@example.com', displayName: 'Ada', self: true },
+          attendees: [{ email: 'grace@example.com', responseStatus: 'accepted' }],
+        })
+        .returning()
+    )[0]!;
+
+    expect(event.calendarId).toBe(cal.id);
+    expect(event.organizer?.email).toBe('ada@example.com');
   });
 
   it('serves the relational query API built from the full schema', async () => {

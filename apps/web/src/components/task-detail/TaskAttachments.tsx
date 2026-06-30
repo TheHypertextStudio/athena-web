@@ -4,8 +4,9 @@
  * @remarks
  * Renders each attachment as a card: an `email` card shows the source thread's sender/subject/
  * snippet with an open-in-Gmail link (created by accepting an Athena suggestion; read-only
- * here), while a `url` card shows a pasted link. A small form attaches a new link. The email is
- * context that rides along with the task — it is never the task itself.
+ * here), a `calendar_event` card shows Google Calendar event context, and a `url` card shows a
+ * pasted link. A small form attaches a new link. External context rides along with the task — it
+ * is never the task itself.
  * See `docs/engineering/specs/email-to-task.md` §9.
  */
 'use client';
@@ -24,7 +25,7 @@ function metaString(attachment: AttachmentOut, field: string): string | null {
   return typeof value === 'string' ? value : null;
 }
 
-/** One attachment card — email (sender/subject/snippet + open link) or url (title + link). */
+/** One attachment card — email/calendar context or a plain URL link. */
 function AttachmentCard({
   attachment,
   onRemove,
@@ -35,15 +36,18 @@ function AttachmentCard({
   canEdit: boolean;
 }): JSX.Element {
   const isEmail = attachment.kind === 'email';
+  const isCalendarEvent = attachment.kind === 'calendar_event';
   const sender = metaString(attachment, 'sender');
   const snippet = metaString(attachment, 'snippet');
+  const calendarTitle = metaString(attachment, 'calendarTitle');
+  const startsAt = metaString(attachment, 'startsAt');
   return (
     <Card>
       <CardContent className="flex items-start justify-between gap-3 p-3">
         <div className="flex min-w-0 flex-col gap-0.5">
           <div className="flex items-center gap-2">
             <span className="text-muted-foreground text-xs tracking-wide uppercase">
-              {isEmail ? 'Email' : 'Link'}
+              {isEmail ? 'Email' : isCalendarEvent ? 'Calendar' : 'Link'}
             </span>
             <span className="truncate text-sm font-medium">{attachment.title}</span>
           </div>
@@ -53,6 +57,14 @@ function AttachmentCard({
           {isEmail && snippet ? (
             <span className="text-muted-foreground line-clamp-2 text-xs">{snippet}</span>
           ) : null}
+          {isCalendarEvent && calendarTitle ? (
+            <span className="text-muted-foreground truncate text-xs">{calendarTitle}</span>
+          ) : null}
+          {isCalendarEvent && startsAt ? (
+            <span className="text-muted-foreground truncate text-xs">
+              {new Date(startsAt).toLocaleString()}
+            </span>
+          ) : null}
           {attachment.url ? (
             <a
               href={attachment.url}
@@ -60,7 +72,11 @@ function AttachmentCard({
               rel="noreferrer"
               className="text-primary truncate text-xs hover:underline"
             >
-              {isEmail ? 'Open in Gmail' : attachment.url}
+              {isEmail
+                ? 'Open in Gmail'
+                : isCalendarEvent
+                  ? 'Open in Google Calendar'
+                  : attachment.url}
             </a>
           ) : null}
         </div>

@@ -7,6 +7,27 @@
 
 ## Completed Tasks
 
+### [CALENDAR-001] First-party Google Calendar integration
+
+- **Completed**: 2026-06-30
+- **Summary**: Added user-scoped first-party Google Calendar support. Docket can now model
+  multiple linked Google accounts, discover/select calendars, cache Google events for agenda
+  contexts, render selected events alongside Docket timeboxes, and create native tasks with a
+  `calendar_event` attachment preserving the event/account/calendar context.
+- **Files Changed**: `packages/types/src/{calendar,agenda,attachment,primitives}.ts`,
+  `packages/db/src/schema/calendar.ts`, `packages/db/drizzle/0014_parched_magik.sql`,
+  `apps/api/src/routes/{me-calendar,agenda,calendar-shared,google-calendar-sync}.ts`,
+  `apps/web/src/components/{agenda,settings,task-detail}/...`, nested
+  `settings/connections/google-calendar` page, plus focused tests.
+- **Learnings**: Calendar needs to stay user-global rather than org-scoped; org scope only enters
+  when an event is materialized as a native task. The top-level Connections page should route to a
+  dedicated Calendar configuration surface instead of treating calendars like generic importable
+  work items.
+- **Gate**: `@docket/types` typecheck/lint/test pass; `@docket/db` typecheck/lint/test pass;
+  `@docket/api` typecheck/lint/test pass; `@docket/web` typecheck/test pass and touched-file
+  ESLint passes. `pnpm build` passes. Full `@docket/web lint` is still blocked by pre-existing
+  e2e `.mjs` project-service parse errors.
+
 ### [VCS-001] Turnkey linear-history enforcement
 
 - **Completed**: 2026-06-30

@@ -13,3 +13,4 @@ export * from './agents';
 export * from './admin';
 export * from './infra';
 export * from './observation';
+export * from './calendar';

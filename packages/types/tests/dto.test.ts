@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { ActorOut } from '../src/actor';
 import { AuditEventOut, AuditEventType, AuditSubjectType } from '../src/activity';
+import { AgendaOut, AgendaQuery, CalendarAgendaEventOut } from '../src/agenda';
 import {
   AgentConnection,
   AgentCreate,
@@ -18,6 +19,14 @@ import {
   SessionStatus,
   SessionTrigger,
 } from '../src/agent';
+import { AttachmentCreate } from '../src/attachment';
+import {
+  CalendarConnectionOut,
+  CalendarEventCreateTask,
+  CalendarEventOut,
+  CalendarListOut,
+  CalendarSyncResultOut,
+} from '../src/calendar';
 import {
   CommentCreate,
   CommentListQuery,
@@ -114,6 +123,8 @@ import { UpdateCreate, UpdateListQuery, UpdateOut, UpdateSubjectType } from '../
 const ID = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
 /** A second distinct valid ULID. */
 const ID2 = '01BX5ZZKBKACTAV9WEVGEMMVRZ';
+/** A third distinct valid ULID. */
+const ID3 = '01BX5ZZKBKACTAV9WEVGEMMVS0';
 
 describe('organization DTOs', () => {
   it('OrgCreate applies defaults and parses', () => {
@@ -1479,6 +1490,193 @@ describe('activity DTOs', () => {
         subjectId: ID,
         type: 'created',
         createdAt: 'x',
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe('calendar DTOs', () => {
+  it('CalendarConnectionOut parses a connected Google account', () => {
+    const parsed = CalendarConnectionOut.parse({
+      id: ID,
+      provider: 'google',
+      externalAccountId: 'google-sub-1',
+      accountEmail: 'ada@example.com',
+      accountName: 'Ada Lovelace',
+      accountPictureUrl: null,
+      status: 'connected',
+      calendarsTotal: 2,
+      calendarsEnabled: 1,
+      lastSyncedAt: '2026-06-30T09:00:00.000Z',
+      lastError: null,
+      createdAt: '2026-06-30T08:00:00.000Z',
+      updatedAt: '2026-06-30T09:00:00.000Z',
+    });
+    expect(parsed.accountEmail).toBe('ada@example.com');
+    expect(parsed.calendarsEnabled).toBe(1);
+  });
+
+  it('CalendarListOut parses selected calendar configuration', () => {
+    const parsed = CalendarListOut.parse({
+      id: ID2,
+      connectionId: ID,
+      externalCalendarId: 'primary',
+      title: 'Ada',
+      description: null,
+      timezone: 'America/Los_Angeles',
+      color: '#16a34a',
+      accessRole: 'owner',
+      primary: true,
+      selected: true,
+      visibleByDefault: true,
+      lastSyncedAt: null,
+      lastError: null,
+      updatedAt: '2026-06-30T09:00:00.000Z',
+    });
+    expect(parsed.selected).toBe(true);
+  });
+
+  it('CalendarEventOut parses all-day and timed Google events', () => {
+    const timed = CalendarEventOut.parse({
+      id: ID3,
+      connectionId: ID,
+      calendarId: ID2,
+      externalCalendarId: 'primary',
+      externalEventId: 'event-1',
+      status: 'confirmed',
+      title: 'Design review',
+      description: 'Bring notes',
+      location: 'Room 3',
+      htmlLink: 'https://calendar.google.com/calendar/event?eid=event-1',
+      startsAt: '2026-06-30T16:00:00.000Z',
+      endsAt: '2026-06-30T17:00:00.000Z',
+      allDayStartDate: null,
+      allDayEndDate: null,
+      organizer: { email: 'ada@example.com', displayName: 'Ada', self: true },
+      attendees: [{ email: 'grace@example.com', displayName: 'Grace', responseStatus: 'accepted' }],
+      updatedExternalAt: '2026-06-30T15:00:00.000Z',
+      createdAt: '2026-06-30T15:01:00.000Z',
+      updatedAt: '2026-06-30T15:01:00.000Z',
+    });
+    expect(timed.startsAt).toContain('T16:00');
+
+    const allDay = CalendarEventOut.parse({
+      ...timed,
+      startsAt: null,
+      endsAt: null,
+      allDayStartDate: '2026-06-30',
+      allDayEndDate: '2026-07-01',
+    });
+    expect(allDay.allDayStartDate).toBe('2026-06-30');
+  });
+
+  it('AgendaOut mixes Docket timeboxes and selected Google events', () => {
+    const parsed = AgendaOut.parse({
+      date: '2026-06-30',
+      entries: [
+        {
+          kind: 'task_timebox',
+          taskId: ID,
+          organizationId: ID2,
+          title: 'Ship calendar',
+          state: 'todo',
+          priority: 'high',
+          startsAt: '2026-06-30T15:00:00.000Z',
+          endsAt: '2026-06-30T16:00:00.000Z',
+        },
+        {
+          kind: 'google_calendar_event',
+          event: {
+            id: ID3,
+            connectionId: ID,
+            calendarId: ID2,
+            externalCalendarId: 'primary',
+            externalEventId: 'event-1',
+            status: 'confirmed',
+            title: 'Design review',
+            description: null,
+            location: null,
+            htmlLink: null,
+            startsAt: '2026-06-30T16:00:00.000Z',
+            endsAt: '2026-06-30T17:00:00.000Z',
+            allDayStartDate: null,
+            allDayEndDate: null,
+            organizer: null,
+            attendees: [],
+            updatedExternalAt: null,
+            createdAt: '2026-06-30T15:01:00.000Z',
+            updatedAt: '2026-06-30T15:01:00.000Z',
+          },
+          connection: { id: ID, accountEmail: 'ada@example.com', accountName: 'Ada' },
+          calendar: { id: ID2, title: 'Ada', color: '#16a34a', timezone: 'America/Los_Angeles' },
+        },
+      ],
+    });
+    expect(parsed.entries.map((entry) => entry.kind)).toEqual([
+      'task_timebox',
+      'google_calendar_event',
+    ]);
+  });
+
+  it('AgendaQuery accepts calendar filters for temporary agenda views', () => {
+    const parsed = AgendaQuery.parse({
+      date: '2026-06-30',
+      connectionIds: [ID],
+      calendarIds: [ID2],
+      includeGoogleCalendar: true,
+    });
+    expect(parsed.calendarIds).toEqual([ID2]);
+  });
+
+  it('CalendarEventCreateTask targets a workspace and stores event attachment context', () => {
+    const parsed = CalendarEventCreateTask.parse({
+      organizationId: ID2,
+      teamId: ID3,
+      title: 'Follow up: Design review',
+      note: 'Turn the event into a task.',
+    });
+    expect(parsed.title).toContain('Follow up');
+  });
+
+  it('CalendarSyncResultOut reports pulled accounts, calendars, and events', () => {
+    const parsed = CalendarSyncResultOut.parse({
+      connections: 2,
+      calendars: 4,
+      eventsCreated: 5,
+      eventsUpdated: 3,
+      eventsDeleted: 1,
+      errors: [],
+    });
+    expect(parsed.eventsCreated + parsed.eventsUpdated).toBe(8);
+  });
+
+  it('AttachmentCreate accepts a Google Calendar event attachment', () => {
+    const parsed = AttachmentCreate.parse({
+      kind: 'calendar_event',
+      title: 'Design review',
+      externalId: 'event-1',
+      metadata: { calendarId: ID2, connectionId: ID, startsAt: '2026-06-30T16:00:00.000Z' },
+    });
+    expect(parsed.kind).toBe('calendar_event');
+  });
+
+  it('AttachmentCreate rejects a calendar event attachment without an external event id', () => {
+    expect(
+      AttachmentCreate.safeParse({
+        kind: 'calendar_event',
+        title: 'Design review',
+        metadata: { calendarId: ID2, connectionId: ID },
+      }).success,
+    ).toBe(false);
+  });
+
+  it('CalendarAgendaEventOut rejects events from unselected calendars at the contract edge', () => {
+    expect(
+      CalendarAgendaEventOut.safeParse({
+        kind: 'google_calendar_event',
+        event: null,
+        connection: { id: ID, accountEmail: 'ada@example.com', accountName: 'Ada' },
+        calendar: { id: ID2, title: 'Ada', color: null, timezone: null },
       }).success,
     ).toBe(false);
   });

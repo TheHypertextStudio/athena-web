@@ -107,6 +107,10 @@ export const CommentId = id<'CommentId'>().describe(
 export const AttachmentId = id<'AttachmentId'>().describe(
   'ULID id of an Attachment — an uploaded file linked to an entity.',
 );
+/** Branded `AutomationRule` id. */
+export const AutomationRuleId = id<'AutomationRuleId'>().describe(
+  'ULID id of an AutomationRule — a configured rule that triggers actions when matching events occur.',
+);
 /** Branded `Update` id. */
 export const UpdateId = id<'UpdateId'>().describe(
   'ULID id of an Update — a posted status/progress narrative on a Project, Program, or Initiative.',

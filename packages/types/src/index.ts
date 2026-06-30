@@ -21,6 +21,7 @@ export * from './team';
 export * from './label';
 export * from './comment';
 export * from './attachment';
+export * from './automation';
 export * from './update';
 export * from './saved-view';
 export * from './member';

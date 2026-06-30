@@ -167,6 +167,18 @@ export const DailyDigestId = id<'DailyDigestId'>().describe(
 export const EventSubscriptionId = id<'EventSubscriptionId'>().describe(
   'ULID id of an EventSubscription — an external webhook/push-channel registration.',
 );
+/** Branded `CalendarConnection` id (one linked Google account for Calendar). */
+export const CalendarConnectionId = id<'CalendarConnectionId'>().describe(
+  'ULID id of a CalendarConnection — one user-scoped linked Google account used by Calendar.',
+);
+/** Branded `CalendarList` id (one selectable calendar under a connection). */
+export const CalendarListId = id<'CalendarListId'>().describe(
+  'ULID id of a CalendarList — one Google calendar that can be selected for agenda visibility.',
+);
+/** Branded `CalendarEvent` id (one cached external calendar event). */
+export const CalendarEventId = id<'CalendarEventId'>().describe(
+  'ULID id of a CalendarEvent — one cached Google Calendar event visible to agenda contexts.',
+);
 
 /** An ISO date (`YYYY-MM-DD`) string. */
 export const DateString = z.iso

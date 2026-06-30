@@ -39,3 +39,5 @@ export * from './stream';
 export * from './daily-plan';
 export * from './activity';
 export * from './hub';
+export * from './calendar';
+export * from './agenda';

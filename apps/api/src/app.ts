@@ -17,12 +17,14 @@
 import { Hono } from 'hono';
 
 import admin from './routes/admin';
+import agenda from './routes/agenda';
 import config from './routes/config';
 import connectedApps from './routes/connected-apps';
 import type { AppEnv } from './context';
 import dailyPlan from './routes/daily-plan';
 import hubRouter from './routes/hub';
 import meAccount from './routes/me-account';
+import meCalendar from './routes/me-calendar';
 import meIdentities from './routes/me-identities';
 import meRecovery from './routes/me-recovery';
 import notifications from './routes/notifications';
@@ -48,8 +50,10 @@ const routes = app
   .route('/orgs', orgs)
   .route('/notifications', notifications)
   .route('/daily-plan', dailyPlan)
+  .route('/agenda', agenda)
   .route('/hub', hubRouter)
   .route('/me/connected-apps', connectedApps)
+  .route('/me/calendar', meCalendar)
   .route('/me/identities', meIdentities)
   .route('/me/account', meAccount)
   .route('/me/recovery-codes', meRecovery);

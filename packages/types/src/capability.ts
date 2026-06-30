@@ -18,9 +18,7 @@ export const Capability = z
 export type Capability = z.infer<typeof Capability>;
 
 /** Alias used by the grant/role schemas. */
-export const GrantCapability = Capability.describe(
-  'A capability awarded by a grant or role; same ladder as `Capability`.',
-);
+export const GrantCapability = Capability;
 
 /** Ascending privilege rank for each capability (higher satisfies lower). */
 export const CAPABILITY_RANK: Record<Capability, number> = {

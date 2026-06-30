@@ -39,7 +39,11 @@ describe('openapi documentation richness', () => {
     for (const tag of doc.tags) expect((tag.description ?? '').length).toBeGreaterThan(80);
 
     // Walk all operations.
-    type Op = { description?: string; security?: unknown[]; tags?: string[] };
+    interface Op {
+      description?: string;
+      security?: unknown[];
+      tags?: string[];
+    }
     const ops: { method: string; path: string; op: Op }[] = [];
     for (const path of Object.keys(doc.paths)) {
       const item = doc.paths[path];

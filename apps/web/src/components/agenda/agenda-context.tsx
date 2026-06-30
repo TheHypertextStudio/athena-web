@@ -10,7 +10,7 @@
  * model is the seam between source and views — when a later slice swaps the source to the
  * `/v1/daily-plan` CRUD, only {@link toAgendaEntries} and the query in {@link AgendaProvider} change.
  */
-import type { DailyPlanItemOut, DailyPlanItemStatus, HubTodayOut } from '@docket/types';
+import type { AgendaOut, DailyPlanItemOut, DailyPlanItemStatus, HubTodayOut } from '@docket/types';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   createContext,
@@ -49,14 +49,16 @@ export function shiftISODate(iso: string, deltaDays: number): string {
   return todayISODate(day);
 }
 
-/** One planned thing on the agenda for a day — a task, optionally timeboxed to a window. */
+/** One planned thing or external event on the agenda for a day. */
 export interface AgendaEntry {
-  /** Stable key — the task id (one plan entry per task per day). */
+  /** Stable key for transitions and list rendering. */
   id: string;
-  /** The underlying task. */
-  taskId: string;
-  /** The org that owns the task (the agenda is cross-org). */
-  organizationId: string;
+  /** Entry source. */
+  source: 'task' | 'google_calendar_event';
+  /** The underlying task, present for Docket task entries. */
+  taskId?: string;
+  /** The org that owns the task (the agenda is cross-org); absent for external calendar events. */
+  organizationId?: string;
   /** Display title. */
   title: string;
   /** Timebox window start (ISO), when the entry is scheduled to a time. */
@@ -69,6 +71,10 @@ export interface AgendaEntry {
   done: boolean;
   /** The daily-plan item id, present when the entry is on the plan (enables check-off / edits). */
   planItemId?: string;
+  /** Provider deep link for external events. */
+  externalUrl?: string | null;
+  /** Calendar/account context for external events. */
+  calendar?: { title: string; color: string | null; accountEmail: string | null };
 }
 
 /** A timeboxed entry — one that occupies a window and therefore renders on the timeline. */
@@ -87,13 +93,46 @@ export function isTimeboxed(entry: AgendaEntry): entry is TimeboxedEntry {
  * projection. Any timeboxed block whose task isn't in the plan is appended (defensive), so the
  * timeline never silently drops a scheduled block.
  */
-export function toAgendaEntries(data: HubTodayOut | null): AgendaEntry[] {
+export function toAgendaEntries(data: HubTodayOut | AgendaOut | null): AgendaEntry[] {
   if (!data) return [];
+  if ('entries' in data) {
+    return data.entries.map((entry, i) => {
+      if (entry.kind === 'task_timebox') {
+        return {
+          id: entry.taskId,
+          source: 'task',
+          taskId: entry.taskId,
+          organizationId: entry.organizationId,
+          title: entry.title,
+          startsAt: entry.startsAt,
+          endsAt: entry.endsAt,
+          sort: i,
+          done: false,
+        };
+      }
+      return {
+        id: entry.event.id,
+        source: 'google_calendar_event',
+        title: entry.event.title,
+        startsAt: entry.event.startsAt ?? undefined,
+        endsAt: entry.event.endsAt ?? undefined,
+        sort: i,
+        done: false,
+        externalUrl: entry.event.htmlLink,
+        calendar: {
+          title: entry.calendar.title,
+          color: entry.calendar.color,
+          accountEmail: entry.connection.accountEmail,
+        },
+      };
+    });
+  }
   const box = new Map(data.calendar.map((b) => [b.taskId, b]));
   const planned: AgendaEntry[] = data.plan.map((task, i) => {
     const block = box.get(task.id);
     return {
       id: task.id,
+      source: 'task',
       taskId: task.id,
       organizationId: task.organizationId,
       title: task.title,
@@ -108,6 +147,7 @@ export function toAgendaEntries(data: HubTodayOut | null): AgendaEntry[] {
     .filter((b) => !planIds.has(b.taskId))
     .map((b, i) => ({
       id: b.taskId,
+      source: 'task',
       taskId: b.taskId,
       organizationId: b.organizationId,
       title: 'Timeboxed work',
@@ -162,11 +202,11 @@ interface AgendaProviderProps {
 // adjacent-day prefetch (no drift between what we show and what we warm). Module-level because they
 // close over nothing from the component — stable references, free of `useCallback`.
 
-/** The Hub `today` query definition for a given day. */
-function todayDef(date: string) {
+/** The combined agenda query definition for a given day. */
+function agendaDef(date: string) {
   return apiQueryOptions(
-    queryKeys.today(date),
-    () => api.v1.hub.today.$get({ query: { date } }),
+    queryKeys.agenda(date),
+    () => api.v1.agenda.$get({ query: { date } }),
     'Could not load your agenda.',
   );
 }
@@ -197,8 +237,8 @@ export function AgendaProvider({ initialDate, children }: AgendaProviderProps): 
   // `useApiListQuery` keeps the current day on screen while the next day loads (it bundles
   // `placeholderData: keepPreviousData`), so stepping days never blanks the grid to a skeleton —
   // only the very first load (no data at all) shows one.
-  const query = useApiListQuery(todayDef(date));
-  const data: HubTodayOut | null = query.data ?? null;
+  const query = useApiListQuery(agendaDef(date));
+  const data: AgendaOut | null = query.data ?? null;
 
   // The daily plan carries the item id + checked-off status the Hub `today` projection lacks: we
   // source display (titles, timeboxes) from `today` and augment each entry with its plan-item id +
@@ -214,7 +254,7 @@ export function AgendaProvider({ initialDate, children }: AgendaProviderProps): 
   const prefetch = usePrefetchApi();
   useEffect(() => {
     for (const neighbour of [shiftISODate(date, -1), shiftISODate(date, 1)]) {
-      prefetch(todayDef(neighbour));
+      prefetch(agendaDef(neighbour));
       prefetch(planDef(neighbour));
     }
   }, [date, prefetch]);
@@ -222,7 +262,7 @@ export function AgendaProvider({ initialDate, children }: AgendaProviderProps): 
   const entries = useMemo(
     () =>
       toAgendaEntries(data).map((entry) => {
-        const item = planByTask.get(entry.taskId);
+        const item = entry.taskId ? planByTask.get(entry.taskId) : undefined;
         return item ? { ...entry, planItemId: item.id, done: item.status === 'done' } : entry;
       }),
     [data, planByTask],
@@ -249,7 +289,7 @@ export function AgendaProvider({ initialDate, children }: AgendaProviderProps): 
         }),
       ),
     onError: (_error, _vars, context) => context?.rollback(),
-    invalidateKeys: [queryKeys.dailyPlan(date), queryKeys.today(date)],
+    invalidateKeys: [queryKeys.dailyPlan(date), queryKeys.agenda(date), queryKeys.today(date)],
   });
 
   const toggleDone = useCallback(

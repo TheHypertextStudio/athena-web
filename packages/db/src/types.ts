@@ -116,6 +116,30 @@ export interface IntegrationConnection {
   readonly externalWorkspaceId?: string;
 }
 
+/** Organizer details cached from a Google Calendar event. */
+export interface CalendarEventOrganizer {
+  /** Organizer email, when provided by Google. */
+  readonly email?: string | null;
+  /** Organizer display name, when provided by Google. */
+  readonly displayName?: string | null;
+  /** Whether the organizer is the linked Google account. */
+  readonly self?: boolean;
+}
+
+/** Attendee details cached from a Google Calendar event. */
+export interface CalendarEventAttendee {
+  /** Attendee email, when provided by Google. */
+  readonly email?: string | null;
+  /** Attendee display name, when provided by Google. */
+  readonly displayName?: string | null;
+  /** Provider response status, such as accepted/declined/needsAction. */
+  readonly responseStatus?: string | null;
+  /** Whether the attendee is optional. */
+  readonly optional?: boolean;
+  /** Whether the attendee is the linked Google account. */
+  readonly self?: boolean;
+}
+
 /** Notification payload; `title` is required, the rest is type-specific. */
 export interface NotificationBody {
   /** Headline shown in the inbox. */

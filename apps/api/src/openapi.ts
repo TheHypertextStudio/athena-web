@@ -326,7 +326,7 @@ export function registerOpenapi(
 ): void {
   // Scalar's config is a union whose object-literal excess-property check is over-strict;
   // the `{ url }` form is the documented runtime usage, so cast past the type quirk.
-  const scalar = (url: string) => Scalar({ url } as unknown as Parameters<typeof Scalar>[0]);
+  const scalar = (url: string) => Scalar({ url });
 
   // Public reference (`/v1`).
   server.get('/v1/openapi.json', openAPIRouteHandler(app, { documentation: buildDocumentation() }));

@@ -13,7 +13,7 @@
  * The card carries the check-off control (when the entry is on the plan) as a sibling of the
  * navigating content, so neither nests inside the other.
  */
-import { CheckCircle2, Circle } from '@docket/ui/icons';
+import { Calendar, CheckCircle2, Circle } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import Link from 'next/link';
 import { type JSX } from 'react';
@@ -59,9 +59,41 @@ export default function AgendaEntryCard({
     : block
       ? 'Anytime'
       : '—';
+  const taskOrgId = entry.source === 'task' ? entry.organizationId : undefined;
+  const taskId = entry.source === 'task' ? entry.taskId : undefined;
+  const isTask = taskId !== undefined && taskOrgId !== undefined;
   const titleClass = cn(
     'truncate text-sm font-medium',
     entry.done ? 'text-on-surface-variant line-through' : 'text-on-surface',
+  );
+  const contextLabel =
+    entry.source === 'google_calendar_event'
+      ? [entry.calendar?.title, entry.calendar?.accountEmail].filter(Boolean).join(' · ')
+      : null;
+  const content = block ? (
+    <>
+      <span className={titleClass}>{entry.title}</span>
+      <span className="text-on-surface-variant truncate text-xs tabular-nums">{time}</span>
+      <div className="mt-auto pt-1">
+        {isTask ? (
+          <OrgChip orgId={taskOrgId} name={orgName(taskOrgId)} />
+        ) : (
+          <span className="text-on-surface-variant truncate text-xs">{contextLabel}</span>
+        )}
+      </div>
+    </>
+  ) : (
+    <>
+      <span className="text-on-surface-variant w-14 shrink-0 pt-0.5 text-xs tabular-nums">
+        {time}
+      </span>
+      <span className={cn('flex-1', titleClass)}>{entry.title}</span>
+      {isTask ? (
+        <OrgChip orgId={taskOrgId} name={orgName(taskOrgId)} />
+      ) : (
+        <span className="text-on-surface-variant max-w-28 truncate text-xs">{contextLabel}</span>
+      )}
+    </>
   );
 
   return (
@@ -84,32 +116,43 @@ export default function AgendaEntryCard({
         >
           {entry.done ? <CheckCircle2 className="text-primary" /> : <Circle />}
         </button>
+      ) : entry.source === 'google_calendar_event' ? (
+        <span
+          aria-hidden="true"
+          className="text-on-surface-variant mt-0.5 shrink-0 rounded-full [&_svg]:size-4"
+        >
+          <Calendar style={{ color: entry.calendar?.color ?? undefined }} />
+        </span>
       ) : null}
-      <Link
-        href={`/orgs/${entry.organizationId}/tasks/${entry.taskId}`}
-        className={cn(
-          'focus-visible:ring-ring flex min-w-0 flex-1 rounded-sm focus-visible:ring-2 focus-visible:outline-none',
-          block ? 'flex-col gap-0.5' : 'flex-row items-start gap-3',
-        )}
-      >
-        {block ? (
-          <>
-            <span className={titleClass}>{entry.title}</span>
-            <span className="text-on-surface-variant truncate text-xs tabular-nums">{time}</span>
-            <div className="mt-auto pt-1">
-              <OrgChip orgId={entry.organizationId} name={orgName(entry.organizationId)} />
-            </div>
-          </>
-        ) : (
-          <>
-            <span className="text-on-surface-variant w-14 shrink-0 pt-0.5 text-xs tabular-nums">
-              {time}
-            </span>
-            <span className={cn('flex-1', titleClass)}>{entry.title}</span>
-            <OrgChip orgId={entry.organizationId} name={orgName(entry.organizationId)} />
-          </>
-        )}
-      </Link>
+      {isTask ? (
+        <Link
+          href={`/orgs/${taskOrgId}/tasks/${taskId}`}
+          className={cn(
+            'focus-visible:ring-ring flex min-w-0 flex-1 rounded-sm focus-visible:ring-2 focus-visible:outline-none',
+            block ? 'flex-col gap-0.5' : 'flex-row items-start gap-3',
+          )}
+        >
+          {content}
+        </Link>
+      ) : entry.externalUrl ? (
+        <a
+          href={entry.externalUrl}
+          target="_blank"
+          rel="noreferrer"
+          className={cn(
+            'focus-visible:ring-ring flex min-w-0 flex-1 rounded-sm focus-visible:ring-2 focus-visible:outline-none',
+            block ? 'flex-col gap-0.5' : 'flex-row items-start gap-3',
+          )}
+        >
+          {content}
+        </a>
+      ) : (
+        <div
+          className={cn('flex min-w-0 flex-1', block ? 'flex-col gap-0.5' : 'items-start gap-3')}
+        >
+          {content}
+        </div>
+      )}
     </div>
   );
 }

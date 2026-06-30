@@ -5,7 +5,8 @@
  * An attachment is a typed reference from a subject (a task, for now) to an external or
  * stored resource. `url` attachments are dumb pointers (a pasted link + fetched
  * title/favicon); `email` attachments are integration-backed pointers (the content stays in
- * Gmail). The conceptual model lives in `docs/engineering/specs/email-to-task.md`.
+ * Gmail); `calendar_event` attachments point at cached first-party Google Calendar context.
+ * The conceptual model lives in `docs/engineering/specs/email-to-task.md`.
  */
 import { z } from 'zod';
 
@@ -17,7 +18,7 @@ export const AttachmentSubjectType = z.enum(['task']);
 export type AttachmentSubjectType = z.infer<typeof AttachmentSubjectType>;
 
 /** The kind of resource an Attachment references. */
-export const AttachmentKind = z.enum(['email', 'url']);
+export const AttachmentKind = z.enum(['email', 'url', 'calendar_event']);
 /** Attachment kind value. */
 export type AttachmentKind = z.infer<typeof AttachmentKind>;
 
@@ -27,13 +28,13 @@ export type AttachmentKind = z.infer<typeof AttachmentKind>;
  *
  * @remarks
  * A `url` attachment requires `url`; an `email` attachment requires both `sourceIntegrationId`
- * and `externalId` (the Gmail thread id). The refinement keeps malformed kinds out at the
- * edge so handlers never see a half-specified attachment.
+ * and `externalId` (the Gmail thread id); a `calendar_event` attachment requires the external
+ * Google event id, with first-party calendar context stored in metadata.
  */
 export const AttachmentCreate = z
   .object({
     kind: AttachmentKind.describe(
-      "Resource kind: 'url' (a dumb link pointer) or 'email' (an integration-backed Gmail-thread pointer). Determines which other fields are required.",
+      "Resource kind: 'url' (a dumb link pointer), 'email' (an integration-backed Gmail-thread pointer), or 'calendar_event' (a first-party Google Calendar event pointer). Determines which other fields are required.",
     ),
     title: z
       .string()
@@ -59,7 +60,7 @@ export const AttachmentCreate = z
       .min(1)
       .optional()
       .describe(
-        'The external resource id — for `email`, the Gmail thread id. Required (with `sourceIntegrationId`) when `kind` is `email`.',
+        'The external resource id — for `email`, the Gmail thread id; for `calendar_event`, the Google event id.',
       ),
     metadata: z
       .record(z.string(), z.unknown())
@@ -80,6 +81,10 @@ export const AttachmentCreate = z
       message: 'An email attachment requires sourceIntegrationId and externalId',
     },
   )
+  .refine((v) => v.kind !== 'calendar_event' || v.externalId !== undefined, {
+    path: ['externalId'],
+    message: 'A calendar event attachment requires externalId',
+  })
   .meta({ id: 'AttachmentCreate', description: 'Attach a resource to a task.' });
 /** Validated attachment-create body. */
 export type AttachmentCreate = z.infer<typeof AttachmentCreate>;
@@ -93,19 +98,20 @@ export const AttachmentOut = z
       "Kind of subject the attachment hangs off (only 'task' in v1).",
     ),
     subjectId: z.string().describe('Id of the subject (the host task) the attachment belongs to.'),
-    kind: AttachmentKind.describe("Resource kind: 'url' or 'email'."),
+    kind: AttachmentKind.describe("Resource kind: 'url', 'email', or 'calendar_event'."),
     title: z.string().describe('Human label for the attachment.'),
-    url: z.string().nullable().describe('Link target for a `url` attachment; null for `email`.'),
+    url: z
+      .string()
+      .nullable()
+      .describe('Link target for a `url` attachment; null for integration-backed kinds.'),
     sourceIntegrationId: z
       .string()
       .nullable()
-      .describe('Backing integration id for an `email` attachment; null for `url`.'),
+      .describe('Backing integration id for an `email` attachment; null for other kinds.'),
     externalId: z
       .string()
       .nullable()
-      .describe(
-        'External resource id (e.g. Gmail thread id) for an `email` attachment; null for `url`.',
-      ),
+      .describe('External resource id (e.g. Gmail thread id or Google event id); null for `url`.'),
     metadata: z
       .record(z.string(), z.unknown())
       .nullable()

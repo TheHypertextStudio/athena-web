@@ -124,14 +124,26 @@ Do not use:
 - `git merge --no-ff`
 - Pulls that create merge commits
 
-Required local config:
+This setup is automatic: `pnpm install` runs `scripts/install-git-guardrails.sh` via `prepare`.
+
+The installer sets this repository-local Git config:
 
 ```bash
 git config --local pull.ff only
 git config --local pull.rebase true
 git config --local branch.main.rebase true
 git config --local branch.main.mergeOptions --ff-only
+git config --local core.hooksPath "$(git rev-parse --git-common-dir)/docket-hooks"
 ```
+
+The generated native Git hooks are:
+
+- `pre-commit` - runs `pnpm lint-staged`
+- `commit-msg` - runs `node scripts/validate-commit-message.mjs "$1"`
+- `pre-merge-commit` - rejects merge commits before Git opens an editor
+- `prepare-commit-msg` - blocks commits while `.git/MERGE_HEAD` exists
+
+Do not add Husky for this. Native Git hooks are enough, and the installer makes them turnkey.
 
 Required verification before saying work is landed:
 

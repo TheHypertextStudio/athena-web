@@ -31,7 +31,26 @@ export async function addVirtualAuthenticator(page) {
       automaticPresenceSimulation: true,
     },
   });
+  // Stash the CDP session + id so a spec can later wipe the device's credentials
+  // (see {@link clearVirtualCredentials}) to simulate a lost passkey.
+  page.__webauthn = { cdp, authenticatorId };
   return authenticatorId;
+}
+
+/**
+ * Wipe every credential from the page's virtual authenticator — simulating a **lost device**.
+ *
+ * @remarks
+ * The credential vanishes from the authenticator (as if the device were lost) but still exists
+ * server-side, so a later passkey *registration* won't collide with it via `excludeCredentials`.
+ * Use this before driving the recovery flow, which enrols a fresh passkey on a clean device.
+ *
+ * @param page - A page whose `addVirtualAuthenticator` ran (via the base fixture).
+ */
+export async function clearVirtualCredentials(page) {
+  const wa = page.__webauthn;
+  if (!wa) throw new Error('clearVirtualCredentials: no virtual authenticator on this page');
+  await wa.cdp.send('WebAuthn.clearCredentials', { authenticatorId: wa.authenticatorId });
 }
 
 /**

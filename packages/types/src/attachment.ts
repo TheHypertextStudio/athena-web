@@ -34,7 +34,7 @@ export const AttachmentCreate = z
   .object({
     kind: AttachmentKind,
     title: z.string().min(1),
-    url: z.string().url().optional(),
+    url: z.url().optional(),
     sourceIntegrationId: z.string().min(1).optional(),
     externalId: z.string().min(1).optional(),
     metadata: z.record(z.string(), z.unknown()).optional(),
@@ -43,10 +43,14 @@ export const AttachmentCreate = z
     path: ['url'],
     message: 'A url attachment requires a url',
   })
-  .refine((v) => v.kind !== 'email' || (v.sourceIntegrationId !== undefined && v.externalId !== undefined), {
-    path: ['externalId'],
-    message: 'An email attachment requires sourceIntegrationId and externalId',
-  })
+  .refine(
+    (v) =>
+      v.kind !== 'email' || (v.sourceIntegrationId !== undefined && v.externalId !== undefined),
+    {
+      path: ['externalId'],
+      message: 'An email attachment requires sourceIntegrationId and externalId',
+    },
+  )
   .meta({ id: 'AttachmentCreate', description: 'Attach a resource to a task.' });
 /** Validated attachment-create body. */
 export type AttachmentCreate = z.infer<typeof AttachmentCreate>;

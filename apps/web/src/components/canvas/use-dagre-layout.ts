@@ -15,23 +15,27 @@ import { useMemo } from 'react';
 
 /** Rendered node box size per density, used both for layout spacing and node CSS. */
 export const NODE_SIZE = {
-  full: { width: 224, height: 64 },
-  compact: { width: 184, height: 44 },
+  full: { width: 248, height: 68 },
+  compact: { width: 208, height: 44 },
 } as const;
 
 /** Canvas density: `compact` for small embeds, `full` for the focused view. */
 export type CanvasDensity = keyof typeof NODE_SIZE;
 
-/** Compute `{x,y}` for every node id via dagre (left-to-right, layered). */
+/** Layout flow direction: left-to-right (default) or top-to-bottom. */
+export type LayoutDirection = 'LR' | 'TB';
+
+/** Compute `{x,y}` for every node id via dagre (layered along `direction`). */
 function computePositions(
   nodes: readonly Node[],
   edges: readonly Edge[],
   density: CanvasDensity,
+  direction: LayoutDirection,
 ): Record<string, { x: number; y: number }> {
   const { width, height } = NODE_SIZE[density];
   const g = new dagre.graphlib.Graph();
   g.setGraph({
-    rankdir: 'LR',
+    rankdir: direction,
     nodesep: density === 'compact' ? 22 : 36,
     ranksep: density === 'compact' ? 64 : 96,
   });
@@ -65,33 +69,41 @@ export function useDagreLayout(
   nodes: readonly Node[],
   edges: readonly Edge[],
   density: CanvasDensity,
+  direction: LayoutDirection = 'LR',
 ): Node[] {
   // Structure key: only re-run dagre when the graph shape (not node data) changes.
   const structureKey = useMemo(
     () =>
-      `${density}|${nodes
+      `${density}|${direction}|${nodes
         .map((n) => n.id)
         .sort()
         .join(',')}|${edges
         .map((e) => `${e.source}>${e.target}`)
         .sort()
         .join(',')}`,
-    [nodes, edges, density],
+    [nodes, edges, density, direction],
   );
 
   // Keyed on `structureKey` (not the raw arrays) on purpose: re-running dagre on node-data
   // churn would needlessly reshuffle the canvas. `structureKey` is derived from `nodes`,
-  // `edges`, and `density`, so it captures every layout-relevant input.
-  const positions = useMemo(() => computePositions(nodes, edges, density), [structureKey]);
+  // `edges`, `density`, and `direction`, so it captures every layout-relevant input.
+  const positions = useMemo(
+    () => computePositions(nodes, edges, density, direction),
+    [structureKey],
+  );
+
+  // Handles sit on the flow's leading/trailing edge so arrows read along the direction.
+  const [sourcePos, targetPos] =
+    direction === 'TB' ? [Position.Bottom, Position.Top] : [Position.Right, Position.Left];
 
   return useMemo(
     () =>
       nodes.map((n) => ({
         ...n,
         position: positions[n.id] ?? { x: 0, y: 0 },
-        sourcePosition: Position.Right,
-        targetPosition: Position.Left,
+        sourcePosition: sourcePos,
+        targetPosition: targetPos,
       })),
-    [nodes, positions],
+    [nodes, positions, sourcePos, targetPos],
   );
 }

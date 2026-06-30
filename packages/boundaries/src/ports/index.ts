@@ -51,6 +51,12 @@ export type {
   WritableConnector,
 } from './connector';
 export { ConnectorError, isConnectorError } from './connector-error';
+export type {
+  SynthesizedPriority,
+  TaskDraft,
+  TaskDraftInput,
+  TaskSynthesizer,
+} from './task-synthesizer';
 export type { ConnectorErrorKind, ConnectorErrorOptions } from './connector-error';
 export type {
   InboundHeaders,

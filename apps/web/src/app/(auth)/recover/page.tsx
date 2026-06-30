@@ -15,20 +15,34 @@ import { isWebAuthnSupported } from '../_lib/webauthn';
 /** Where a recovered user lands once they've re-enrolled (or skipped) a passkey. */
 const HOME_DESTINATION = '/today';
 
+/** Shown when the recovery endpoints return 429 (rate-limited, 10/min). */
+const RATE_LIMIT_MESSAGE = 'Too many attempts. Please wait a minute and try again.';
+
 /**
  * Begin the recovery challenge for an email so a backup code can be verified without a session.
  *
  * @remarks
  * Hits the custom `/two-factor/recovery-challenge` endpoint, which sets the signed `two_factor`
- * challenge cookie when the email has recovery codes. It always returns 200 (anti-enumeration), so
- * this is best-effort: the real gate is {@link twoFactor.verifyBackupCode}, which fails clearly if
- * no challenge was armed or the code is wrong.
+ * challenge cookie when the email has recovery codes. It always returns 200 (anti-enumeration)
+ * unless rate-limited (429), so this is best-effort: the real gate is
+ * {@link twoFactor.verifyBackupCode}, which fails clearly if no challenge was armed or the code is
+ * wrong. Returns whether the call was rate-limited so the caller can message that distinctly.
  */
-async function armRecoveryChallenge(email: string): Promise<void> {
-  await authClient.$fetch('/two-factor/recovery-challenge', {
+async function armRecoveryChallenge(email: string): Promise<{ rateLimited: boolean }> {
+  const res = await authClient.$fetch('/two-factor/recovery-challenge', {
     method: 'POST',
     body: { email },
   });
+  return { rateLimited: res.error?.status === 429 };
+}
+
+/**
+ * Normalize a recovery code as the user types: drop non-alphanumerics, cap at 10 chars, and
+ * re-insert the `xxxxx-xxxxx` hyphen. Codes are case-sensitive, so case is preserved.
+ */
+function formatRecoveryCode(raw: string): string {
+  const alnum = raw.replace(/[^a-zA-Z0-9]/g, '').slice(0, 10);
+  return alnum.length > 5 ? `${alnum.slice(0, 5)}-${alnum.slice(5)}` : alnum;
 }
 
 /**
@@ -62,10 +76,18 @@ export default function RecoverPage(): JSX.Element {
     setError(null);
     setPending(true);
     try {
-      await armRecoveryChallenge(email.trim().toLowerCase());
+      const { rateLimited } = await armRecoveryChallenge(email.trim().toLowerCase());
+      if (rateLimited) {
+        setError(RATE_LIMIT_MESSAGE);
+        return;
+      }
       const { error: verifyError } = await twoFactor.verifyBackupCode({ code: code.trim() });
       if (verifyError) {
-        setError(verifyError.message ?? 'That code didn’t work. Check it and try again.');
+        setError(
+          verifyError.status === 429
+            ? RATE_LIMIT_MESSAGE
+            : (verifyError.message ?? 'That code didn’t work. Check it and try again.'),
+        );
         return;
       }
       setPhase('enroll');
@@ -200,7 +222,7 @@ export default function RecoverPage(): JSX.Element {
             required
             value={code}
             onChange={(e) => {
-              setCode(e.target.value);
+              setCode(formatRecoveryCode(e.target.value));
             }}
             placeholder="xxxxx-xxxxx"
             className="font-mono"

@@ -104,6 +104,32 @@ export function writeDensity(userId: string | null, density: Density): void {
   }
 }
 
+/** recoveryNudgeDismissedKey derives the per-user key for the recovery-codes nudge dismissal. */
+export function recoveryNudgeDismissedKey(userId: string): string {
+  return `docket:recovery-nudge-dismissed:${userId}`;
+}
+
+/** readRecoveryNudgeDismissed reads whether the recovery-codes nudge was dismissed. */
+export function readRecoveryNudgeDismissed(userId: string | null): boolean {
+  if (!userId || typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(recoveryNudgeDismissedKey(userId)) === '1';
+  } catch {
+    return false;
+  }
+}
+
+/** writeRecoveryNudgeDismissed persists (or clears) the recovery-codes nudge dismissal (best-effort). */
+export function writeRecoveryNudgeDismissed(userId: string | null, dismissed: boolean): void {
+  if (!userId || typeof window === 'undefined') return;
+  try {
+    if (dismissed) window.localStorage.setItem(recoveryNudgeDismissedKey(userId), '1');
+    else window.localStorage.removeItem(recoveryNudgeDismissedKey(userId));
+  } catch {
+    // Non-fatal: persistence is best-effort.
+  }
+}
+
 /** resolveActiveOrg supports the app shell workflow. */
 export function resolveActiveOrg(
   routeOrgId: string | null,

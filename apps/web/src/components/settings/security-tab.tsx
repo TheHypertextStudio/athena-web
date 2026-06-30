@@ -79,8 +79,9 @@ export function SecurityTab(): JSX.Element {
             ) : null}
           </div>
         ) : (
-          <p className="text-on-surface-variant text-body">
-            You haven&apos;t set up recovery codes yet.
+          <p className="text-destructive text-body">
+            You haven&apos;t set up recovery codes. Without them, losing your passkey means losing
+            access to your account for good.
           </p>
         )}
 

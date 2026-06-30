@@ -55,13 +55,13 @@ async function generateCodes(): Promise<string[]> {
   return RecoveryCodesOut.parse(data).codes;
 }
 
-/** Serialize codes into a plain-text file the user can download as a backup. */
+/** Serialize codes into a dated plain-text file the user can download as a backup. */
 function downloadCodes(codes: string[]): void {
   const blob = new Blob([`${codes.join('\n')}\n`], { type: 'text/plain' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'docket-recovery-codes.txt';
+  a.download = `docket-recovery-codes-${new Date().toISOString().slice(0, 10)}.txt`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -77,6 +77,7 @@ export function RecoveryCodesDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [downloaded, setDownloaded] = useState(false);
   const reauth = useReauth();
 
   function close(next: boolean): void {
@@ -86,6 +87,7 @@ export function RecoveryCodesDialog({
       setCodes(null);
       setError(null);
       setCopied(false);
+      setDownloaded(false);
       if (revealed) onGenerated();
     }
     onOpenChange(next);
@@ -147,13 +149,21 @@ export function RecoveryCodesDialog({
         </DialogHeader>
 
         {revealed ? (
-          <ul className="bg-surface-container text-body grid grid-cols-2 gap-x-6 gap-y-1 rounded-md p-4 font-mono">
-            {codes.map((code) => (
-              <li key={code} className="text-on-surface tabular-nums">
-                {code}
-              </li>
-            ))}
-          </ul>
+          <div className="flex flex-col gap-2">
+            <ol className="bg-surface-container text-body grid grid-cols-2 gap-x-6 gap-y-1 rounded-md p-4 font-mono">
+              {codes.map((code, i) => (
+                <li key={code} className="text-on-surface flex gap-2 tabular-nums">
+                  <span className="text-on-surface-variant w-5 shrink-0 text-right select-none">
+                    {i + 1}.
+                  </span>
+                  {code}
+                </li>
+              ))}
+            </ol>
+            <p className="text-on-surface-variant text-xs">
+              Copy or download your codes — you won&apos;t see them again.
+            </p>
+          </div>
         ) : null}
 
         {error ? (
@@ -179,12 +189,14 @@ export function RecoveryCodesDialog({
                 variant="outline"
                 onClick={() => {
                   downloadCodes(codes);
+                  setDownloaded(true);
                 }}
               >
                 Download
               </Button>
               <Button
                 type="button"
+                disabled={!copied && !downloaded}
                 onClick={() => {
                   close(false);
                 }}

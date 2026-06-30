@@ -12,14 +12,14 @@ export default function GoogleCalendarSettingsPage({
 }: {
   params: Promise<{ orgId: string }>;
 }): JSX.Element {
-  use(params);
+  const { orgId } = use(params);
   return (
     <div className="flex flex-col gap-6">
       <SectionHeader
         title="Google Calendar"
         description="Choose which linked Google calendars appear in agenda views."
       />
-      <GoogleCalendarSettings />
+      <GoogleCalendarSettings orgId={orgId} />
     </div>
   );
 }

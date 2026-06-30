@@ -68,11 +68,18 @@ export const defaultMailApplier: MailApplier = async ({ integrationId, threadId,
 };
 
 /**
+ * The default action-handler registry, built once. Its only dependency is the module-constant
+ * {@link defaultMailApplier}, so it's immutable for the process lifetime — no need to rebuild it
+ * (a fresh Map + handler closures) on every observation.
+ */
+const defaultRegistry = buildAutomationRegistry({ mailApplier: defaultMailApplier });
+
+/**
  * Run all matching automation rules for one observation. Best-effort: never throws.
  *
  * @param event - The projected observation event.
  * @param registry - Optional registry override (tests inject a recording one); defaults to the
- *   real registry built with {@link defaultMailApplier}.
+ *   shared {@link defaultRegistry}.
  */
 export async function runAutomationsForObservation(
   event: AutomationEvent,
@@ -81,10 +88,10 @@ export async function runAutomationsForObservation(
   try {
     const rules = await loadEnabledRules(event.organizationId);
     if (rules.length === 0) return;
-    const reg = registry ?? buildAutomationRegistry({ mailApplier: defaultMailApplier });
-    await runAutomations(event, rules, reg);
-  } catch {
+    await runAutomations(event, rules, registry ?? defaultRegistry);
+  } catch (error) {
     // Automations are best-effort awareness side-effects; a failure must never roll back or
-    // 500 the domain mutation that produced the observation.
+    // 500 the domain mutation that produced the observation — but it shouldn't vanish silently.
+    console.warn('[automation] rule run failed', { kind: event.kind, error });
   }
 }

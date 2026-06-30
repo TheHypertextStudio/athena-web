@@ -97,7 +97,7 @@ const automationRules = new Hono<AppEnv>()
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const b = c.req.valid('json');
-      await loadRule(orgId, id);
+      const existing = await loadRule(orgId, id);
       const patch = {
         ...(b.name !== undefined ? { name: b.name } : {}),
         ...(b.enabled !== undefined ? { enabled: b.enabled } : {}),
@@ -105,8 +105,7 @@ const automationRules = new Hono<AppEnv>()
         ...(b.when !== undefined ? { condition: b.when } : {}),
         ...(b.then !== undefined ? { actions: b.then } : {}),
       };
-      if (Object.keys(patch).length === 0)
-        return ok(c, AutomationRuleOut, toOut(await loadRule(orgId, id)));
+      if (Object.keys(patch).length === 0) return ok(c, AutomationRuleOut, toOut(existing));
       const updated = await db
         .update(automationRule)
         .set(patch)

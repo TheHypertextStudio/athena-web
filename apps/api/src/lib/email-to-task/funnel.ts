@@ -68,7 +68,10 @@ function isNoReply(sender: string): boolean {
 export function classifyTaskWorthiness(signal: ThreadSignal, threshold: number): ThreadVerdict {
   const haystack = `${signal.subject}\n${signal.snippet}`.toLowerCase();
   const isPromo = PROMO_CUES.some((cue) => haystack.includes(cue));
-  if (isPromo) return { score: 5, category: 'promotions', worthy: 5 >= threshold };
+  if (isPromo) {
+    const score = 5; // promotional mail floors low; almost never a personal task
+    return { score, category: 'promotions', worthy: score >= threshold };
+  }
 
   let score = 30; // a neutral baseline for a real personal thread
   for (const cue of ACTION_CUES) if (haystack.includes(cue)) score += 18;

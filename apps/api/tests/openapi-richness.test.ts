@@ -19,9 +19,9 @@ describe('openapi documentation richness', () => {
   it('serves an exhaustive, truthful, self-documenting spec', async () => {
     const { Hono } = await import('hono');
     const { registerOpenapi } = await import('../src/openapi');
-    const { app } = await import('../src/app');
+    const { app, adminApp } = await import('../src/app');
     const server = new Hono();
-    registerOpenapi(server as never, app);
+    registerOpenapi(server as never, app, adminApp);
     const doc = (await (await server.request('/v1/openapi.json')).json()) as {
       info: { description: string };
       tags: { name: string; description?: string }[];

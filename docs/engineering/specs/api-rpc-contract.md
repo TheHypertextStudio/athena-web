@@ -36,19 +36,29 @@ export default tasks;
 ```
 
 ```ts
-// apps/api/src/app.ts — the single composition root
+// apps/api/src/app.ts — TWO composition roots, kept apart
 import { Hono } from 'hono';
-const app = new Hono<AppEnv>().basePath('/v1');
 
+// (1) The PUBLIC product API under /v1 — consumed by apps/web.
+const app = new Hono<AppEnv>().basePath('/v1');
 const routes = app
   .route('/orgs', orgs)
-  .route('/hub', hub) // cross-org Hub surfaces
-  .route('/admin', admin) // service-admin (staff-gated)
-  .route('/integrations/oauth', oauthCallbacks); // public-ish callback group
+  .route('/hub', hub); // cross-org Hub surfaces
+export type AppType = typeof routes; // ← THE public contract
 
-export type AppType = typeof routes; // ← THE contract, re-exported from @docket/types
+// (2) The INTERNAL staff back-office under /admin — consumed ONLY by apps/admin.
+// Off /v1 so it is neither in the public AppType nor the public Scalar spec.
+export const adminApp = new Hono<AppEnv>();
+const adminRoutes = adminApp.route('/admin', admin); // self-gated by staffMiddleware
+export type AdminAppType = typeof adminRoutes; // ← the admin contract (api.admin.*)
+
 export { app };
 ```
+
+Machine/webhook edges (Stripe webhook, provider ingest, cron, the GitHub OAuth callback)
+are mounted in `server.ts` under a single non-versioned `/internal/*` umbrella — outside both
+contracts and the public spec — each self-authenticated by a signature or `CRON_SECRET`. Only
+the user-facing SSE stream and the binary export download stay on `/v1` outside `AppType`.
 
 - The compiled `apps/api` package exports **`type AppType`** only (no runtime) for consumers. `@docket/types` re-exports it as the canonical contract import: `import type { AppType } from "@docket/types/api"`.
 - Client: `const api = hc<AppType>(env.NEXT_PUBLIC_API_URL + "/v1", { headers, fetch })`. `strict: true` in **both** client and server `tsconfig` (RPC inference requirement).
@@ -346,7 +356,7 @@ Mounted at top-level `/hub`. **These endpoints aggregate across every Organizati
 
 ### 3.16 `admin` (service operator back-office — staff-gated, NOT per-org tenant data)
 
-Mounted at top-level `/admin`. Consumed by `apps/admin`. Backed by `StaffUser`/`ImpersonationSession`/`LifecycleHold`/`OperatorAuditEvent`. **Every admin action writes an `OperatorAuditEvent`.** "View as" is banner-wrapped, time-boxed, reason-logged.
+Mounted at `/admin` — its **own** non-`/v1` app exporting `AdminAppType`, consumed ONLY by `apps/admin` via `hc<AdminAppType>` (`api.admin.*`), and **excluded from the public `AppType` and the `/v1` Scalar spec** (it has its own staff-gated reference at `/admin/docs`). Self-gated by `staffMiddleware`. Backed by `StaffUser`/`ImpersonationSession`/`LifecycleHold`/`OperatorAuditEvent`. **Every admin action writes an `OperatorAuditEvent`.** "View as" is banner-wrapped, time-boxed, reason-logged.
 
 | Method + Path                             | Input                                                       | Output                                                                                                             | Auth            | Capability         |
 | ----------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | --------------- | ------------------ | -------------------------------------- | ------------------------- | ----- | --------------- |

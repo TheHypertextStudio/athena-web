@@ -197,7 +197,7 @@ export const CORE_VARS: readonly VarSpec[] = [
     targets: ['api'],
     required: false,
     zod: authServer.GITHUB_APP_WEBHOOK_SECRET,
-    where: 'GitHub App webhook secret — verifies the firehose at POST /v1/ingest/github',
+    where: 'GitHub App webhook secret — verifies the firehose at POST /internal/ingest/github',
     sensitive: true,
     generate: 'openssl rand -hex 24',
   },

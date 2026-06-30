@@ -35,9 +35,9 @@ const IMPERSONATION_TTL_MINUTES = 60;
  * (impersonation) action.
  *
  * @remarks
- * A Client Component. Reads `GET /v1/admin/users/:id` (the user plus every cross-org
+ * A Client Component. Reads `GET /admin/users/:id` (the user plus every cross-org
  * membership) at runtime. The "View as" control starts a time-boxed impersonation via
- * `POST /v1/admin/impersonations` (requires a free-text reason) and records it in the
+ * `POST /admin/impersonations` (requires a free-text reason) and records it in the
  * {@link useImpersonation} context so the persistent banner appears across the console.
  */
 export default function UserDetailPage(): JSX.Element {
@@ -58,7 +58,7 @@ export default function UserDetailPage(): JSX.Element {
     setError(null);
     setAuthFailed(false);
     try {
-      const res = await api.v1.admin.users[':id'].$get({ param: { id: params.id } });
+      const res = await api.admin.users[':id'].$get({ param: { id: params.id } });
       if (!res.ok) {
         setAuthFailed(isAuthError(res));
         setError(await readProblem(res, 'Could not load this user.'));
@@ -82,7 +82,7 @@ export default function UserDetailPage(): JSX.Element {
     setImpersonateError(null);
     setImpersonating(true);
     try {
-      const res = await api.v1.admin.impersonations.$post({
+      const res = await api.admin.impersonations.$post({
         json: { targetUserId: detail.user.id, reason, ttlMinutes: IMPERSONATION_TTL_MINUTES },
       });
       if (!res.ok) {

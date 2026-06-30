@@ -2,7 +2,7 @@
  * `@docket/api` — the billing webhook handler (mounted OUTSIDE the RPC `AppType`).
  *
  * @remarks
- * `POST /v1/billing/webhook` receives provider webhook payloads and folds each into the
+ * `POST /internal/billing/webhook` receives provider webhook payloads and folds each into the
  * org data-lifecycle via {@link applyBillingEvent}. It is non-RPC (no typed client
  * contract) and lives in `server.ts` next to `/api/auth`, because webhooks are an
  * untyped external edge.

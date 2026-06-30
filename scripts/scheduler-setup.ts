@@ -3,7 +3,7 @@
  * secret-guarded cron endpoints.
  *
  * @remarks
- * The cron endpoints (`POST /v1/cron/sync-connectors`, `POST /v1/cron/lifecycle-sweep`)
+ * The cron endpoints (`POST /internal/cron/sync-connectors`, `POST /internal/cron/lifecycle-sweep`)
  * only ever run when something calls them on a cadence. Background connector auto-mirror is
  * a core feature, so a missing scheduler is a silent failure — this script makes the jobs
  * config-as-code instead of a manual `gcloud` incantation. It is the single source of truth,
@@ -50,48 +50,47 @@ interface CronJob {
 const JOBS: readonly CronJob[] = [
   {
     name: 'docket-sync-connectors',
-    path: '/v1/cron/sync-connectors',
+    path: '/internal/cron/sync-connectors',
     schedule: '*/15 * * * *',
     description:
       'Docket: background connector auto-mirror (re-syncs every due mirror integration).',
   },
   {
     name: 'docket-lifecycle-sweep',
-    path: '/v1/cron/lifecycle-sweep',
+    path: '/internal/cron/lifecycle-sweep',
     schedule: '0 3 * * *',
     description: 'Docket: org data-lifecycle sweep (export_window → pending_deletion → deleted).',
   },
   {
     name: 'docket-process-events',
-    path: '/v1/cron/process-events',
+    path: '/internal/cron/process-events',
     schedule: '*/2 * * * *',
     description:
       'Docket: ambient-intelligence drain (normalize inbound webhook events into observations).',
   },
   {
     name: 'docket-daily-digests',
-    path: '/v1/cron/daily-digests',
+    path: '/internal/cron/daily-digests',
     schedule: '*/15 * * * *',
     description:
       "Docket: daily-digest sweep (email each opted-in user's end-of-day summary at their local time).",
   },
   {
     name: 'docket-run-proactive',
-    path: '/v1/cron/run-proactive',
+    path: '/internal/cron/run-proactive',
     schedule: '*/2 * * * *',
     description:
       'Docket: proactive engine (draft approval-gated agent plans from recent mentions/assignments).',
   },
   {
     name: 'docket-account-deletion-sweep',
-    path: '/v1/cron/account-deletion-sweep',
+    path: '/internal/cron/account-deletion-sweep',
     schedule: '30 3 * * *',
-    description:
-      'Docket: account-deletion sweep (purge accounts past their 14-day grace window).',
+    description: 'Docket: account-deletion sweep (purge accounts past their 14-day grace window).',
   },
   {
     name: 'docket-account-export-sweep',
-    path: '/v1/cron/account-export-sweep',
+    path: '/internal/cron/account-export-sweep',
     schedule: '*/10 * * * *',
     description:
       'Docket: account-export sweep (generate pending personal-data exports + email the link).',

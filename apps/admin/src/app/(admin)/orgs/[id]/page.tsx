@@ -15,7 +15,7 @@ import { useOrgDetail } from './use-org-detail';
  * The organization detail screen with inline billing actions and lifecycle holds.
  *
  * @remarks
- * A Client Component. Reads `GET /v1/admin/orgs/:id` at runtime. Billing actions (finance+
+ * A Client Component. Reads `GET /admin/orgs/:id` at runtime. Billing actions (finance+
  * on the API) post to `extend-trial`, `reactivate`, and `lifecycle`; each refreshes the org
  * from the response. Holds are placed via `POST .../holds` and released via
  * `DELETE .../holds/:holdId`. The admin API exposes no holds-list endpoint, so the holds

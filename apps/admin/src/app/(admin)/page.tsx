@@ -19,7 +19,7 @@ import type { AdminMetrics, AdminOrg } from '@/lib/types';
 
 /** The dashboard's loaded data: headline metrics and the at-risk org queues. */
 interface DashboardData {
-  /** Totals + per-lifecycle org counts from `GET /v1/admin/metrics`. */
+  /** Totals + per-lifecycle org counts from `GET /admin/metrics`. */
   metrics: AdminMetrics;
   /** Orgs in the read-only export window (recently lapsed, recoverable). */
   exportWindow: readonly AdminOrg[];
@@ -32,8 +32,8 @@ interface DashboardData {
  *
  * @remarks
  * A Client Component that fetches at runtime (no build-time API dependency). It loads the
- * headline metrics (`GET /v1/admin/metrics`) alongside the two "needs attention" queues —
- * orgs in `export_window` and `pending_deletion` — via filtered `GET /v1/admin/orgs`
+ * headline metrics (`GET /admin/metrics`) alongside the two "needs attention" queues —
+ * orgs in `export_window` and `pending_deletion` — via filtered `GET /admin/orgs`
  * lookups. The layout splits metrics (left) from the queues (right). A 403 from any call
  * (non-staff session) surfaces inline.
  */
@@ -50,11 +50,11 @@ export default function DashboardPage(): JSX.Element {
     setAuthFailed(false);
     try {
       const [metricsRes, exportRes, deleteRes] = await Promise.all([
-        api.v1.admin.metrics.$get(),
-        api.v1.admin.orgs.$get({
+        api.admin.metrics.$get(),
+        api.admin.orgs.$get({
           query: { lifecycleState: 'export_window', limit: '5', offset: '0' },
         }),
-        api.v1.admin.orgs.$get({
+        api.admin.orgs.$get({
           query: { lifecycleState: 'pending_deletion', limit: '5', offset: '0' },
         }),
       ]);

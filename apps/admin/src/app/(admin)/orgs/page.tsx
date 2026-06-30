@@ -28,7 +28,7 @@ const PAGE_SIZE = 50;
  * The organization list with search and a lifecycle-state filter.
  *
  * @remarks
- * A Client Component. Reads `GET /v1/admin/orgs` (paginated, searchable, lifecycle-
+ * A Client Component. Reads `GET /admin/orgs` (paginated, searchable, lifecycle-
  * filterable) at runtime; search debounces, the filter re-queries immediately. Each row
  * links to the org detail screen and shows its current lifecycle state. A 403 (non-staff
  * session) surfaces inline.
@@ -48,7 +48,7 @@ export default function OrgsPage(): JSX.Element {
     setError(null);
     setAuthFailed(false);
     try {
-      const res = await api.v1.admin.orgs.$get({
+      const res = await api.admin.orgs.$get({
         query: {
           search: term || undefined,
           lifecycleState: state === ALL_STATES ? undefined : state,

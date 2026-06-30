@@ -2,10 +2,10 @@
  * `@docket/api` — the ambient-intelligence ingestion edge (mounted OUTSIDE the RPC `AppType`).
  *
  * @remarks
- * `POST /v1/ingest/linear` and `POST /v1/ingest/github` receive provider webhooks and record
+ * `POST /internal/ingest/linear` and `POST /internal/ingest/github` receive provider webhooks and record
  * them in the durable write-ahead inbox ({@link inboundEvent}) — the "persist incoming data as
  * fast as possible" invariant. It is non-RPC (an untyped external edge), so it lives in
- * `server.ts` alongside `/v1/billing` and `/v1/cron`.
+ * `server.ts` alongside `/internal/billing` and `/internal/cron`.
  *
  * Both routes share one handler: read the **raw** body (the HMAC is computed over the exact
  * bytes), verify it via the resolved {@link Observer}, parse + route it to extract the provider's

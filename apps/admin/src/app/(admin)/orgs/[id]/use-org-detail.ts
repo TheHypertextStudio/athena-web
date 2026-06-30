@@ -48,7 +48,7 @@ export function useOrgDetail(orgId: string): OrgDetailData {
     setError(null);
     setAuthFailed(false);
     try {
-      const res = await api.v1.admin.orgs[':id'].$get({ param: { id: orgId } });
+      const res = await api.admin.orgs[':id'].$get({ param: { id: orgId } });
       if (!res.ok) {
         setAuthFailed(isAuthError(res));
         setError(await readProblem(res, 'Could not load this organization.'));
@@ -90,7 +90,7 @@ export function useOrgDetail(orgId: string): OrgDetailData {
     void runOrgAction(
       'extend-trial',
       () =>
-        api.v1.admin.orgs[':id']['extend-trial'].$post({
+        api.admin.orgs[':id']['extend-trial'].$post({
           param: { id: orgId },
           json: { days: Number(trialDays) },
         }),
@@ -101,7 +101,7 @@ export function useOrgDetail(orgId: string): OrgDetailData {
   const reactivate = useCallback((): void => {
     void runOrgAction(
       'reactivate',
-      () => api.v1.admin.orgs[':id'].reactivate.$post({ param: { id: orgId } }),
+      () => api.admin.orgs[':id'].reactivate.$post({ param: { id: orgId } }),
       'Could not reactivate the organization.',
     );
   }, [orgId, runOrgAction]);
@@ -110,7 +110,7 @@ export function useOrgDetail(orgId: string): OrgDetailData {
     void runOrgAction(
       'lifecycle',
       () =>
-        api.v1.admin.orgs[':id'].lifecycle.$post({
+        api.admin.orgs[':id'].lifecycle.$post({
           param: { id: orgId },
           json: { lifecycleState: targetState },
         }),
@@ -122,7 +122,7 @@ export function useOrgDetail(orgId: string): OrgDetailData {
     setActionError(null);
     setPending('place-hold');
     try {
-      const res = await api.v1.admin.orgs[':id'].holds.$post({
+      const res = await api.admin.orgs[':id'].holds.$post({
         param: { id: orgId },
         json: { reason: holdReason },
       });
@@ -145,7 +145,7 @@ export function useOrgDetail(orgId: string): OrgDetailData {
       setActionError(null);
       setPending(`release-${holdId}`);
       try {
-        const res = await api.v1.admin.orgs[':id'].holds[':holdId'].$delete({
+        const res = await api.admin.orgs[':id'].holds[':holdId'].$delete({
           param: { id: orgId, holdId },
         });
         if (!res.ok) {

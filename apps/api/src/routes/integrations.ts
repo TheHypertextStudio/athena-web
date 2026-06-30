@@ -480,7 +480,7 @@ Requires \`manage\` — triggering org-wide mirroring is an administrative actio
   )
   // GitHub connect = installing the GitHub App. Returns the install URL (with a signed `state`
   // binding this integration + org) the client sends the user to; the install redirects back to
-  // the non-RPC `/v1/integrations/github/callback`, which records the installation id.
+  // the non-RPC `/internal/integrations/github/callback`, which records the installation id.
   .get(
     '/:id/connect-url',
     capabilityGuard('manage'),
@@ -488,7 +488,7 @@ Requires \`manage\` — triggering org-wide mirroring is an administrative actio
       tag: 'Integrations',
       summary: 'Get a GitHub App install URL',
       capability: 'manage',
-      description: `Return the GitHub App **install URL** the client redirects the user to in order to connect a GitHub integration — connecting GitHub means installing the GitHub App, not an OAuth token exchange. The response is \`{ url }\` (a bare JSON object, not the standard envelope). The URL embeds a signed \`state\` that binds this integration id + org, so when the user finishes installation GitHub redirects to the non-RPC \`/v1/integrations/github/callback\`, which records the installation id against this integration.
+      description: `Return the GitHub App **install URL** the client redirects the user to in order to connect a GitHub integration — connecting GitHub means installing the GitHub App, not an OAuth token exchange. The response is \`{ url }\` (a bare JSON object, not the standard envelope). The URL embeds a signed \`state\` that binds this integration id + org, so when the user finishes installation GitHub redirects to the non-RPC \`/internal/integrations/github/callback\`, which records the installation id against this integration.
 
 Only valid for a GitHub integration row (else 409 \`A connect URL is only available for GitHub integrations\`), and only when the GitHub App is configured (else 409 \`The GitHub App is not configured (GITHUB_APP_SLUG is unset)\`); a missing/cross-tenant id 404s. Requires \`manage\`. Related: \`POST /\` (create the GitHub integration row first), \`POST /:id/sync\`.`,
     }),

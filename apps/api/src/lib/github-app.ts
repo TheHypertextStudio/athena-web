@@ -3,7 +3,7 @@
  *
  * @remarks
  * Connecting GitHub is an *installation*: Docket sends the user to the GitHub App's install page,
- * GitHub redirects back to `/v1/integrations/github/callback` with an `installation_id`, and the
+ * GitHub redirects back to `/internal/integrations/github/callback` with an `installation_id`, and the
  * callback records that id on the org's integration so the webhook firehose can route to it.
  *
  * To survive the round-trip through github.com, the org + integration the install is for is carried

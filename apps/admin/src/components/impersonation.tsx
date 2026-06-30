@@ -13,7 +13,7 @@ import {
 
 /** A persisted record of the currently-active "viewing as" impersonation session. */
 export interface ActiveImpersonation {
-  /** The impersonation-session id returned by `POST /v1/admin/impersonations`. */
+  /** The impersonation-session id returned by `POST /admin/impersonations`. */
   id: string;
   /** The id of the user being viewed as. */
   targetUserId: string;
@@ -63,7 +63,7 @@ export interface ImpersonationProviderProps {
  * The active session is persisted to `localStorage` so the persistent banner survives
  * navigation and reloads. It is hydrated lazily after mount (never during SSR) to avoid a
  * hydration mismatch. Screens call {@link ImpersonationContextValue.start} after a
- * successful `POST /v1/admin/impersonations` and {@link ImpersonationContextValue.clear}
+ * successful `POST /admin/impersonations` and {@link ImpersonationContextValue.clear}
  * after ending the session.
  */
 export function ImpersonationProvider({ children }: ImpersonationProviderProps): JSX.Element {

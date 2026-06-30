@@ -75,7 +75,7 @@ Redirect URIs follow Better Auth's fixed routing (verified): social providers us
 | `GITHUB_APP_CLIENT_ID`      | api (auth) | server | D=P | GitHub App OAuth client id (`Iv…`) — user-to-server flow for sign-in + "my issues" pull + identity.      | Same GitHub App → "Client ID".                                                              |
 | `GITHUB_APP_CLIENT_SECRET`  | api (auth) | server | D=P | Matching user-to-server client secret.                                                                   | Same GitHub App → "Generate a new client secret".                                           |
 | `GITHUB_APP_PRIVATE_KEY`    | api (auth) | server | D=P | App private key as single-line base64 PEM (`base64 -i key.pem \| tr -d '\n'`); signs the app JWT.        | Same GitHub App → "Generate a private key" (.pem).                                          |
-| `GITHUB_APP_WEBHOOK_SECRET` | api (auth) | server | D=P | Webhook signing secret; verifies the firehose at `POST /v1/ingest/github`.                               | Generate (`openssl rand -hex 24`); paste into the App's Webhook secret field too.           |
+| `GITHUB_APP_WEBHOOK_SECRET` | api (auth) | server | D=P | Webhook signing secret; verifies the firehose at `POST /internal/ingest/github`.                               | Generate (`openssl rand -hex 24`); paste into the App's Webhook secret field too.           |
 | `LINEAR_CLIENT_ID`          | api (auth) | server | D=P | Linear OAuth2 application client ID (`genericOAuth` `providerId: "linear"`; sign-in + Linear migration). | Linear → Settings → **API** → OAuth applications → Create.                                  |
 | `LINEAR_CLIENT_SECRET`      | api (auth) | server | D=P | Matching client secret.                                                                                  | Same Linear OAuth application.                                                              |
 
@@ -91,8 +91,8 @@ the redirect URI you register with each provider is the _product_ origin, per fr
 | Linear   | `https://docket.localhost/api/auth/oauth2/callback/linear` | `https://app.docket.app/api/auth/oauth2/callback/linear` |
 
 Register the same set for **each** signing-in frontend (web + `admin.…`). The GitHub App also gets
-a connect callback `…/v1/integrations/github/callback` (browser-facing → product origin) per
-frontend; only its **webhook** `…/v1/ingest/github` is the **API** origin (GitHub's servers POST it
+a connect callback `…/internal/integrations/github/callback` (browser-facing → product origin) per
+frontend; only its **webhook** `…/internal/ingest/github` is the **API** origin (GitHub's servers POST it
 directly). `pnpm integrations` emits exactly these — `webBases` (from `BETTER_AUTH_TRUSTED_ORIGINS`)
 for callbacks, `apiBase` (from `API_URL`) for the webhook.
 
@@ -119,9 +119,9 @@ earlier design did, which broke first-time setup and used the wrong gcloud proje
 
 Conceptually it is one app reused across environments — a GitHub App allows several callback URLs,
 so register each environment's `…/api/auth/callback/github` (sign-in, Better Auth) and
-`…/v1/integrations/github/callback` (install/connect) as you set that environment up. The **webhook
+`…/internal/integrations/github/callback` (install/connect) as you set that environment up. The **webhook
 is environment-aware**: local setup skips it entirely (`APP_MODE=local` selects the mock observer,
-so local needs no webhook), and only **production** sets the public webhook URL — `…/v1/ingest/github`
+so local needs no webhook), and only **production** sets the public webhook URL — `…/internal/ingest/github`
 on the public API host — and turns it on. To exercise the real firehose locally, use the persistent
 cloudflared tunnel that `pnpm bootstrap` (Phase 1) sets up — it fronts the stable portless host
 (`https://docket.localhost`, which proxies `/v1` to the API), NOT a bare `localhost:port` (dev ports
@@ -408,7 +408,7 @@ Verified commands:
 These provider consoles have **no scriptable creation API**, so the setup prints exact instructions + the exact redirect URI for the chosen environment (from §1.3) and collects the resulting id/secret via masked, schema-validated, re-promptable inputs (empty input keeps the current value or skips). Recommend separate OAuth apps per environment to keep secrets isolated.
 
 - **Google:** "Create an OAuth client (Web application) at https://console.cloud.google.com/apis/credentials. Authorized redirect URIs: `<dev>` and/or `<prod>`. Enable the People API for profile; enable Drive/Gmail/Calendar APIs if you'll use those connectors." Prompt `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`.
-- **GitHub:** "Create ONE **GitHub App** under your org (Org → Settings → Developer settings → GitHub Apps) at `https://github.com/organizations/<org>/settings/apps` (not an OAuth App) — it powers sign-in, the issue/PR connector, and the webhook firehose. User-authorization callback `<…/v1/integrations/github/callback>`, setup URL `<…/v1/integrations/github/setup>`, webhook URL `<…/v1/ingest/github>`. Repository permissions Issues/PRs/Metadata read; account permission Email addresses read; subscribe to Issues/Issue comment/Pull request events; create one app per environment." Prompt `GITHUB_APP_ID`, `GITHUB_APP_SLUG`, `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_PRIVATE_KEY` (single-line base64 PEM), `GITHUB_APP_WEBHOOK_SECRET`.
+- **GitHub:** "Create ONE **GitHub App** under your org (Org → Settings → Developer settings → GitHub Apps) at `https://github.com/organizations/<org>/settings/apps` (not an OAuth App) — it powers sign-in, the issue/PR connector, and the webhook firehose. User-authorization callback `<…/internal/integrations/github/callback>`, setup URL `<…/internal/integrations/github/setup>`, webhook URL `<…/internal/ingest/github>`. Repository permissions Issues/PRs/Metadata read; account permission Email addresses read; subscribe to Issues/Issue comment/Pull request events; create one app per environment." Prompt `GITHUB_APP_ID`, `GITHUB_APP_SLUG`, `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_PRIVATE_KEY` (single-line base64 PEM), `GITHUB_APP_WEBHOOK_SECRET`.
 - **Linear:** "Create an OAuth application at Linear → Settings → API → OAuth applications. Callback URL: `<the oauth2/callback/linear URI>`. Scopes: `read` (login) plus `write,issues:create` for migration." Prompt `LINEAR_CLIENT_ID`, `LINEAR_CLIENT_SECRET`.
 
 Each pasted value is validated against its own `@docket/env` registry schema before being accepted (invalid values re-prompt rather than abort).

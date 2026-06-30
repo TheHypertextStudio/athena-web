@@ -1,11 +1,18 @@
 /**
- * `@docket/api` — the chained route composition that defines the RPC `AppType`.
+ * `@docket/api` — the chained route compositions that define the RPC contracts.
  *
  * @remarks
- * The method chain must never be broken — `AppType = typeof routes` is what the Next
- * apps consume via `hc<AppType>`. Cross-cutting concerns (CORS, session, `/api/auth/*`,
- * health, openapi, docs) live in `server.ts` OUTSIDE this `routes` const so they don't
- * pollute the typed client contract.
+ * Two separate typed surfaces, never mixed:
+ * - **`AppType`** — the public product API under `/v1`, consumed by `apps/web` (and any
+ *   future public client) via `hc<AppType>`.
+ * - **`AdminAppType`** — the internal staff back-office under `/admin`, consumed ONLY by
+ *   `apps/admin` via `hc<AdminAppType>`. Kept off `/v1` so it is neither in the public RPC
+ *   type nor the public Scalar spec.
+ *
+ * Each method chain must never be broken — `*AppType = typeof routes` is what the Next apps
+ * consume. Cross-cutting concerns (CORS, session, `/api/auth/*`, `/internal/*` machine edges,
+ * health, openapi, docs) live in `server.ts` OUTSIDE these `routes` consts so they don't
+ * pollute the typed client contracts.
  */
 import { Hono } from 'hono';
 
@@ -34,7 +41,7 @@ export type AppInstance = typeof app;
 // chain (membership/capability authz still layer on top per-route).
 app.use('*', requireAuth);
 
-/** The chained route tree; its type is the RPC contract (consumed only via `typeof`). */
+/** The chained route tree; its type is the public RPC contract (consumed only via `typeof`). */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const routes = app
   .route('/config', config)
@@ -42,11 +49,27 @@ const routes = app
   .route('/notifications', notifications)
   .route('/daily-plan', dailyPlan)
   .route('/hub', hubRouter)
-  .route('/admin', admin)
   .route('/me/connected-apps', connectedApps)
   .route('/me/identities', meIdentities)
   .route('/me/account', meAccount)
   .route('/me/recovery-codes', meRecovery);
 
-/** The Hono RPC contract consumed by clients via `hc<AppType>`. */
+/** The public Hono RPC contract consumed by the web app via `hc<AppType>`. */
 export type AppType = typeof routes;
+
+/**
+ * The internal staff back-office app, mounted at `/admin` (NOT `/v1`). It is gated by the
+ * admin router's own `staffMiddleware` (session + staff role), so it needs no `requireAuth`.
+ * Mounted on the root server in `server.ts`; excluded from the public `/v1` spec.
+ */
+export const adminApp = new Hono<AppEnv>();
+
+/** The type of the {@link adminApp} instance (used to type its own OpenAPI generator input). */
+export type AdminInstance = typeof adminApp;
+
+/** The chained admin route tree; its type is the admin RPC contract (`apps/admin` only). */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const adminRoutes = adminApp.route('/admin', admin);
+
+/** The internal admin RPC contract consumed by `apps/admin` via `hc<AdminAppType>`. */
+export type AdminAppType = typeof adminRoutes;

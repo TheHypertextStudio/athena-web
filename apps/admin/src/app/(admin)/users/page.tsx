@@ -17,7 +17,7 @@ const PAGE_SIZE = 50;
  * The user-primary list with debounced search.
  *
  * @remarks
- * A Client Component. Reads `GET /v1/admin/users` (paginated + searchable) at runtime; the
+ * A Client Component. Reads `GET /admin/users` (paginated + searchable) at runtime; the
  * search box re-queries on a short debounce. Each row links to the user detail screen. A
  * 403 (non-staff session) surfaces inline.
  */
@@ -35,7 +35,7 @@ export default function UsersPage(): JSX.Element {
     setError(null);
     setAuthFailed(false);
     try {
-      const res = await api.v1.admin.users.$get({
+      const res = await api.admin.users.$get({
         query: { search: term || undefined, limit: String(PAGE_SIZE), offset: '0' },
       });
       if (!res.ok) {

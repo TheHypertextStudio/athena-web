@@ -23,7 +23,7 @@ beforeAll(async () => {
 /** Headers the mock Slack observer accepts (any present x-slack-signature except "invalid"). */
 const SIGNED = { 'content-type': 'application/json', 'x-slack-signature': 'v0=ok' };
 
-describe('POST /v1/ingest/slack', () => {
+describe('POST /internal/ingest/slack', () => {
   it('echoes the url_verification challenge', async () => {
     const res = await ingest.request('/slack', {
       method: 'POST',

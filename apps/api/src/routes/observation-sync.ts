@@ -12,7 +12,7 @@
  * {@link notification}. (A "suggested daily-plan item" was considered but `daily_plan_item`
  * requires a real Task; an observation isn't one, so both bridges surface as notifications.)
  *
- * Kept behind one function so a `/v1/cron/process-events` tick and any future Cloud Tasks
+ * Kept behind one function so a `/internal/cron/process-events` tick and any future Cloud Tasks
  * push share identical, idempotent behavior. `now` is always passed in (never module scope).
  */
 import {
@@ -25,12 +25,7 @@ import {
   observationRecipient,
 } from '@docket/db';
 import { selectAdapter } from '@docket/boundaries';
-import type {
-  BoundaryEnv,
-  Observer,
-  ObservationDraft,
-  ObserverProvider,
-} from '@docket/boundaries';
+import type { BoundaryEnv, Observer, ObservationDraft, ObserverProvider } from '@docket/boundaries';
 import { ObservationKind, type StreamRelevance } from '@docket/types';
 import { and, eq, lt, or } from 'drizzle-orm';
 

@@ -208,7 +208,7 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
             '',
             ...urls.webBases.flatMap((web) => [
               `  • ${web}/api/auth/callback/github`,
-              `  • ${web}/v1/integrations/github/callback`,
+              `  • ${web}/internal/integrations/github/callback`,
             ]),
             '',
             "(It's one app for every environment. In prod, oAuthProxy means you register ONLY the",
@@ -232,7 +232,7 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
                   'leave "Active" unchecked and move on.',
                   '',
                   '(When you deploy to production you will set the Webhook URL once, to your public',
-                  'API at https://your-api-host/v1/ingest/github, and turn it on. We have already',
+                  'API at https://your-api-host/internal/ingest/github, and turn it on. We have already',
                   'generated GITHUB_APP_WEBHOOK_SECRET and saved it for that day.)',
                 ]
               : [
@@ -241,7 +241,7 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
                   'at the public API host.',
                   '',
                   '  • Tick "Active".',
-                  `  • Webhook URL:  ${urls.apiBase}/v1/ingest/github`,
+                  `  • Webhook URL:  ${urls.apiBase}/internal/ingest/github`,
                   '  • Secret: paste the webhook secret we generated a moment ago (already on your',
                   '    clipboard, so just paste).',
                   '  • Leave "Enable SSL verification" on.',

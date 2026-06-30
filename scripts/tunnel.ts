@@ -107,6 +107,6 @@ export function tunnelRegistrationUrls(hostname: string): {
   return {
     googleRedirectUri: `${origin}/api/auth/callback/google`,
     googleOrigin: origin,
-    githubWebhook: `${origin}/v1/ingest/github`,
+    githubWebhook: `${origin}/internal/ingest/github`,
   };
 }

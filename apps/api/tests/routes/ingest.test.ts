@@ -35,7 +35,7 @@ async function seedLinearIntegration(orgId: string, actorId: string, ws: string)
   return row!.id;
 }
 
-describe('POST /v1/ingest/linear', () => {
+describe('POST /internal/ingest/linear', () => {
   it('verifies, routes to the integration, and write-aheads one inbound event', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
     const intgId = await seedLinearIntegration(orgId, humanActorId, 'ws_alpha');
@@ -132,7 +132,7 @@ describe('POST /v1/ingest/linear', () => {
   });
 });
 
-describe('POST /v1/ingest/github', () => {
+describe('POST /internal/ingest/github', () => {
   it('verifies, routes by installation id, and write-aheads a github inbound event', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
     // GitHub stores the installation id in connection.externalWorkspaceId (the routing key).

@@ -8,16 +8,17 @@
  * `/v1/docs`. The bearer requirement is declared once document-wide via `security` (public
  * routes opt out with `security: []` in their `apiDoc` — only `/v1/config` does).
  *
- * Only the typed `AppType` app is documented. The non-RPC external edges mounted directly on
- * the root server (webhooks, ingest, stream, cron, github integration, the binary account
- * export) are intentionally excluded — they are machine/webhook endpoints, not the public RPC
- * contract, and `openAPIRouteHandler(app)` only sees the routes registered on `app`.
+ * Two SEPARATE references are served: the **public** `/v1` spec/docs from the `AppType` app, and
+ * the **internal** `/admin` spec/docs from the `AdminAppType` app (staff-gated). The machine
+ * edges under `/internal/*` (webhooks, ingest, cron, the GitHub OAuth callback) carry no typed
+ * contract and are documented by neither. `openAPIRouteHandler(app)` only sees the routes
+ * registered on the app it is given, which is what keeps the two surfaces cleanly apart.
  */
 import { Scalar } from '@scalar/hono-api-reference';
 import { openAPIRouteHandler } from 'hono-openapi';
 import type { Hono } from 'hono';
 
-import type { AppInstance } from './app';
+import type { AdminInstance, AppInstance } from './app';
 import type { AppEnv } from './context';
 import { env } from './env';
 
@@ -241,11 +242,9 @@ const TAGS = [
     description:
       'The signed-in person (not an org Actor): account profile, lifecycle (export / scheduled deletion with step-up reauth), linked identities/passkeys, recovery codes, and connected OAuth apps. Session-scoped; high-risk actions require a freshly re-authenticated session.',
   },
-  {
-    name: 'Admin',
-    description:
-      'Internal staff operations, gated by a staff role (with `superadmin`/`finance` tiers for sensitive actions) — not reachable by normal org members. Covers user/org administration, lifecycle boards, impersonation, billing holds/trial actions, the audit log, and staff management.',
-  },
+  // NOTE: the `Admin` tag is intentionally absent here — staff/admin operations live on the
+  // separate `/admin` app (`AdminAppType`), documented by its own spec at `/admin/docs`, and
+  // must never appear in this public reference.
 ];
 
 /** Build the base OpenAPI 3.1 documentation (paths are filled by route annotations). */
@@ -284,16 +283,59 @@ function buildDocumentation() {
   };
 }
 
-/** Register `/v1/openapi.json` (the generated spec) and `/v1/docs` (Scalar) on the root server. */
-export function registerOpenapi(server: Hono<AppEnv>, app: AppInstance): void {
-  server.get(
-    '/v1/openapi.json',
-    openAPIRouteHandler(app, {
-      documentation: buildDocumentation(),
-    }),
-  );
+/**
+ * The internal admin OpenAPI document — a SEPARATE spec for the `/admin` staff surface, never
+ * merged into the public one.
+ */
+function buildAdminDocumentation() {
+  return {
+    openapi: '3.1.0',
+    info: {
+      title: 'Docket Admin API (internal)',
+      version: '0.0.0',
+      description:
+        'Internal staff back-office API. **Not part of the public Docket API** — these operations live on the `/admin` mount, require a staff role, and are consumed only by the staff console (`apps/admin`). Staff tiers (`support`/`finance`/`superadmin`) gate the more sensitive actions.',
+    },
+    servers: [{ url: env.API_URL }],
+    components: {
+      securitySchemes: { bearerAuth: { type: 'http' as const, scheme: 'bearer' } },
+    },
+    security: [{ bearerAuth: [] }],
+    tags: [
+      {
+        name: 'Admin',
+        description:
+          'Staff operations: user/org administration, lifecycle boards, impersonation, billing holds/trial actions, the audit log, and staff management. Gated by `staffMiddleware` (session + staff role).',
+      },
+    ],
+  };
+}
+
+/**
+ * Register the API reference UIs on the root server:
+ * - the **public** spec/docs from the `/v1` {@link app} at `/v1/openapi.json` + `/v1/docs`;
+ * - the **internal** spec/docs from the `/admin` {@link adminApp} at `/admin/openapi.json` +
+ *   `/admin/docs`. These are registered after the admin app is mounted, so the admin router's
+ *   `staffMiddleware` gates them (a non-staff request to `/admin/*` is rejected before it can
+ *   reach these handlers) — keeping the internal reference out of public reach.
+ */
+export function registerOpenapi(
+  server: Hono<AppEnv>,
+  app: AppInstance,
+  adminApp: AdminInstance,
+): void {
   // Scalar's config is a union whose object-literal excess-property check is over-strict;
   // the `{ url }` form is the documented runtime usage, so cast past the type quirk.
-  const docsConfig = { url: '/v1/openapi.json' } as unknown as Parameters<typeof Scalar>[0];
-  server.get('/v1/docs', Scalar(docsConfig));
+  const scalar = (url: string) => Scalar({ url } as unknown as Parameters<typeof Scalar>[0]);
+
+  // Public reference (`/v1`).
+  server.get('/v1/openapi.json', openAPIRouteHandler(app, { documentation: buildDocumentation() }));
+  server.get('/v1/docs', scalar('/v1/openapi.json'));
+
+  // Internal staff reference (`/admin`) — staff-gated by fall-through past the admin router.
+  server.get(
+    '/admin/openapi.json',
+    openAPIRouteHandler(adminApp, { documentation: buildAdminDocumentation() }),
+  );
+  server.get('/admin/docs', scalar('/admin/openapi.json'));
 }

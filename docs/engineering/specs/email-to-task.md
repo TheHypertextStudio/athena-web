@@ -4,10 +4,15 @@
 > email **attached as context**. The task is the real object; the email is an attachment — the
 > first instance of a general, MIME-agnostic attachment abstraction.
 >
-> **Status**: backend complete (data model, attachment + suggestions APIs, Gmail mail-actions
-> adapter, automation engine fully wired, funnel + synthesis + scheduled ingest sweep) — all
-> tested and committed. Remaining: Athena LLM synthesizer (default is heuristic), seed-on-
-> bootstrap wiring, and the web UI (triage suggestions lane, task-detail attachments, settings).
+> **Status**: shipped end-to-end. Backend (data model, attachment + suggestions APIs, Gmail
+> mail-actions adapter, automation engine fully wired, funnel + Athena synthesis + scheduled
+> ingest sweep + seed-on-opt-in) and web UI (task-detail attachments, triage suggestions lane,
+> automations settings) — all committed. The synthesizer is a `TaskSynthesizer` boundary port:
+> the **real Anthropic-backed adapter** (action-oriented rewording) when `ANTHROPIC_API_KEY` is
+> set, else a deterministic mock — so the pipeline runs/tests offline. Backend covered by ~70
+> tests; UI compiles + lints against the RPC types. Verified headlessly to the same bar as the
+> rest of the boundary layer (mocks tested, real adapters typechecked). Live model output and
+> the rendered UI still warrant a visual/end-to-end pass with real accounts.
 > **Source of truth for intent**: `docs/_archive/core/overview.md` §"Semantics-Aware Data
 > Attachments"; this spec supersedes it for the engineering contract.
 

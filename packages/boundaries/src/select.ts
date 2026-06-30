@@ -14,12 +14,14 @@ import type { AppMode } from '@docket/env';
 
 import { InMemoryBillingGateway } from './mock/billing';
 import { MockAgentRuntime } from './mock/agent-runtime';
+import { MockTaskSynthesizer } from './mock/task-synthesizer';
 import { MockConnector } from './mock/connector';
 import { MockObserver } from './mock/observer';
 import { MockSummarizer } from './mock/summarizer';
 import { CaptureMailer } from './mock/mailer';
 import { LocalDiskBlob } from './mock/blob';
 import type { AgentRuntime } from './ports/agent-runtime';
+import type { TaskSynthesizer } from './ports/task-synthesizer';
 import type { BillingGateway } from './ports/billing';
 import type { BlobStore } from './ports/blob';
 import type { Connector, ConnectorProvider } from './ports/connector';
@@ -28,6 +30,7 @@ import type { Observer, ObserverProvider } from './ports/observer';
 import type { Summarizer } from './ports/summarizer';
 import { RealStripeGateway } from './real/billing';
 import { RealProviderRuntime } from './real/agent-runtime';
+import { RealTaskSynthesizer } from './real/task-synthesizer';
 import { RealConnector } from './real/connector';
 import { RealLinearObserver } from './real/observer-linear';
 import { RealGitHubObserver } from './real/observer-github';
@@ -99,6 +102,7 @@ export type PortName =
   | 'connector'
   | 'observer'
   | 'summarizer'
+  | 'taskSynthesizer'
   | 'mailer'
   | 'blob';
 
@@ -114,6 +118,8 @@ export interface PortMap {
   readonly observer: Observer;
   /** The summarizer port (daily-digest narration). */
   readonly summarizer: Summarizer;
+  /** The task-synthesizer port (email-to-task drafting). */
+  readonly taskSynthesizer: TaskSynthesizer;
   /** The mailer port. */
   readonly mailer: Mailer;
   /** The blob store port. */
@@ -243,6 +249,14 @@ export function selectAdapter<P extends PortName>(
         : new MockAgentRuntime();
       return adapter as PortMap[P];
     }
+    case 'taskSynthesizer': {
+      // Like the agent runtime: Anthropic-backed when the key is real-shaped, else deterministic.
+      const useReal = !mock && isRealValue(env.ANTHROPIC_API_KEY);
+      const adapter: TaskSynthesizer = useReal
+        ? new RealTaskSynthesizer({ apiKey: env.ANTHROPIC_API_KEY })
+        : new MockTaskSynthesizer();
+      return adapter as PortMap[P];
+    }
     case 'connector': {
       const provider = options.connectorProvider ?? 'github';
       const useReal = !mock && isRealValue(options.connectorToken);
@@ -332,6 +346,8 @@ export interface BoundaryContainer {
   readonly observer: Observer;
   /** The selected daily-digest summarizer. */
   readonly summarizer: Summarizer;
+  /** The selected task synthesizer (email-to-task drafting). */
+  readonly taskSynthesizer: TaskSynthesizer;
   /** The selected mailer. */
   readonly mailer: Mailer;
   /** The selected blob store. */
@@ -352,6 +368,7 @@ export function buildContainer(env: BoundaryEnv, options: SelectOptions = {}): B
     connector: selectAdapter('connector', env, options),
     observer: selectAdapter('observer', env, options),
     summarizer: selectAdapter('summarizer', env, options),
+    taskSynthesizer: selectAdapter('taskSynthesizer', env, options),
     mailer: selectAdapter('mailer', env, options),
     blob: selectAdapter('blob', env, options),
   };

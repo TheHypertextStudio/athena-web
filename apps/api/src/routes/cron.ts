@@ -17,6 +17,7 @@ import { sweepAccountDeletions } from '../account/lifecycle';
 import { sweepAccountExports } from '../account/export';
 import { env } from '../env';
 import { sweepLifecycle } from '../billing/lifecycle';
+import { sweepEmailSuggestions } from '../lib/email-to-task/sweep';
 import { sweepConnectorSync } from './integration-sync';
 import { sweepInboundEvents } from './observation-sync';
 import { sweepDailyDigests } from './daily-digest';
@@ -53,6 +54,13 @@ const cron = new Hono()
   .post('/sync-connectors', async (c) => {
     if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
     const result = await sweepConnectorSync(new Date());
+    return c.json({ swept: true, ...result });
+  })
+  // Email-to-task ingest: pull threads from every opted-in Gmail integration and synthesize
+  // task suggestions (funnel → synthesize → persist). Idempotent (one suggestion per thread).
+  .post('/email-suggestions', async (c) => {
+    if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
+    const result = await sweepEmailSuggestions(new Date());
     return c.json({ swept: true, ...result });
   })
   // Ambient-intelligence drain: normalize received webhook events into observations + bridges.

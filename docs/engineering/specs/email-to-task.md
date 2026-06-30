@@ -4,7 +4,10 @@
 > email **attached as context**. The task is the real object; the email is an attachment — the
 > first instance of a general, MIME-agnostic attachment abstraction.
 >
-> **Status**: design approved, implementation in progress.
+> **Status**: backend complete (data model, attachment + suggestions APIs, Gmail mail-actions
+> adapter, automation engine fully wired, funnel + synthesis + scheduled ingest sweep) — all
+> tested and committed. Remaining: Athena LLM synthesizer (default is heuristic), seed-on-
+> bootstrap wiring, and the web UI (triage suggestions lane, task-detail attachments, settings).
 > **Source of truth for intent**: `docs/_archive/core/overview.md` §"Semantics-Aware Data
 > Attachments"; this spec supersedes it for the engineering contract.
 

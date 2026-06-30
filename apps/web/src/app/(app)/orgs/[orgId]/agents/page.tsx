@@ -62,7 +62,7 @@ export default function AgentsFeedPage(): JSX.Element {
         api.v1.orgs[':orgId'].sessions.$get({ param: { orgId }, query: {} }),
         api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
         api.v1.orgs[':orgId'].agents.$get({ param: { orgId } }),
-        api.v1.orgs[':orgId'].tasks.$get({ param: { orgId } }),
+        api.v1.orgs[':orgId'].tasks.$get({ param: { orgId }, query: {} }),
       ]);
       if (!sessionsRes.ok) {
         setLoadError(await readProblem(sessionsRes, 'Could not load agent sessions.'));

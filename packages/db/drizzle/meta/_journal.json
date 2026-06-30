@@ -85,6 +85,13 @@
       "when": 1782776991825,
       "tag": "0011_secret_mephistopheles",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1782777496091,
+      "tag": "0012_sour_whizzer",
+      "breakpoints": true
     }
   ]
 }

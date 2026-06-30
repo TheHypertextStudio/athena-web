@@ -66,11 +66,11 @@ export function fetchCycleDetail(
       api.v1.orgs[':orgId'].cycles[':id'].$get({ param: { orgId, id: cycleId } }),
       api.v1.orgs[':orgId'].cycles[':id'].burnup.$get({ param: { orgId, id: cycleId } }),
       api.v1.orgs[':orgId'].cycles[':id'].tasks.$get({ param: { orgId, id: cycleId }, query: {} }),
-      api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
-      api.v1.orgs[':orgId'].programs.$get({ param: { orgId } }),
+      api.v1.orgs[':orgId'].projects.$get({ param: { orgId }, query: {} }),
+      api.v1.orgs[':orgId'].programs.$get({ param: { orgId }, query: {} }),
       api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
       api.v1.orgs[':orgId'].agents.$get({ param: { orgId } }),
-      api.v1.orgs[':orgId'].cycles.$get({ param: { orgId } }),
+      api.v1.orgs[':orgId'].cycles.$get({ param: { orgId }, query: {} }),
       api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
     ]);
 

@@ -16,6 +16,7 @@ import { Hono } from 'hono';
 import type { AppEnv } from '../context';
 import { env } from '../env';
 import { ok } from '../lib/ok';
+import { apiDoc } from '../lib/openapi-route';
 
 /**
  * The connector keys each configured social provider unlocks.
@@ -30,15 +31,24 @@ const CONNECTORS_BY_PROVIDER: Record<SocialProvider, readonly string[]> = {
   linear: ['linear'],
 };
 
-const config = new Hono<AppEnv>().get('/', (c) => {
-  const oauthProviders = configuredSocialProviders(env);
-  const connectors = oauthProviders.flatMap((p) => CONNECTORS_BY_PROVIDER[p]);
-  return ok(c, PublicConfigOut, {
-    appMode: env.APP_MODE,
-    oauthProviders,
-    connectors: [...connectors],
-    mcpUrl: env.MCP_RESOURCE_URL ?? null,
-  });
-});
+const config = new Hono<AppEnv>().get(
+  '/',
+  apiDoc({
+    tag: 'Config',
+    summary: 'Get public client config',
+    response: PublicConfigOut,
+    extra: { security: [] },
+  }),
+  (c) => {
+    const oauthProviders = configuredSocialProviders(env);
+    const connectors = oauthProviders.flatMap((p) => CONNECTORS_BY_PROVIDER[p]);
+    return ok(c, PublicConfigOut, {
+      appMode: env.APP_MODE,
+      oauthProviders,
+      connectors: [...connectors],
+      mcpUrl: env.MCP_RESOURCE_URL ?? null,
+    });
+  },
+);
 
 export default config;

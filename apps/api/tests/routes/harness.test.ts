@@ -1,5 +1,7 @@
 import { resolve } from 'node:path';
 
+import { CaptureMailer } from '@docket/boundaries';
+import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 import { expect, it } from 'vitest';
@@ -118,6 +120,114 @@ export async function seedBaseOrg(
   const humanActorId = human!.id;
 
   return { orgId, teamId, humanActorId };
+}
+
+/**
+ * Return the single row a query/insert was expected to produce, throwing if there is none.
+ *
+ * @remarks
+ * The clean alternative to `const [row] = await …; row!.id` — keeps tests free of non-null
+ * assertions while still failing loudly on an unexpected empty result.
+ *
+ * @param rows - The query/insert result array.
+ * @returns the first row.
+ */
+export function one<T>(rows: readonly T[]): T {
+  const row = rows[0];
+  if (!row) throw new Error('expected at least one row, got none');
+  return row;
+}
+
+/**
+ * Seed a user + their 1:1 hub; returns the user id.
+ *
+ * @param db - The database client.
+ * @param schema - The `@docket/db` module (for table references).
+ * @param name - The user's display name (also seeds a unique email).
+ */
+export async function seedUserWithHub(
+  db: Db,
+  schema: typeof DbModule,
+  name = 'User',
+): Promise<string> {
+  const u = one(
+    await db
+      .insert(schema.user)
+      .values({ name, email: `${name}-${Math.random().toString(36).slice(2)}@x.test` })
+      .returning({ id: schema.user.id }),
+  );
+  await db.insert(schema.hub).values({ userId: u.id });
+  return u.id;
+}
+
+/** Seed an organization (personal or shared); returns its id. */
+export async function seedOrg(
+  db: Db,
+  schema: typeof DbModule,
+  isPersonal = false,
+): Promise<string> {
+  const slug = `org-${Math.random().toString(36).slice(2, 10)}`;
+  const o = one(
+    await db
+      .insert(schema.organization)
+      .values({ name: slug, slug, isPersonal })
+      .returning({ id: schema.organization.id }),
+  );
+  return o.id;
+}
+
+/**
+ * Add a human member to an org with the given role, reusing the org's role of that key (or
+ * creating it). Returns the new actor id.
+ */
+export async function addMember(
+  db: Db,
+  schema: typeof DbModule,
+  orgId: string,
+  userId: string,
+  roleKey: 'owner' | 'member' = 'member',
+  status: 'active' | 'suspended' = 'active',
+): Promise<string> {
+  const existing = await db
+    .select({ id: schema.role.id })
+    .from(schema.role)
+    .where(and(eq(schema.role.organizationId, orgId), eq(schema.role.key, roleKey)))
+    .limit(1);
+  const roleId =
+    existing[0]?.id ??
+    one(
+      await db
+        .insert(schema.role)
+        .values({
+          organizationId: orgId,
+          key: roleKey,
+          name: roleKey === 'owner' ? 'Owner' : 'Member',
+          isSystem: roleKey === 'owner',
+        })
+        .returning({ id: schema.role.id }),
+    ).id;
+  const a = one(
+    await db
+      .insert(schema.actor)
+      .values({ organizationId: orgId, kind: 'human', displayName: 'M', userId, roleId, status })
+      .returning({ id: schema.actor.id }),
+  );
+  return a.id;
+}
+
+/** A fake session whose `createdAt` is `ageMs` in the past (for the freshness step-up gate). */
+export function agedSession(userId: string, ageMs: number): AuthSession {
+  const base = fakeSession(userId);
+  if (!base) throw new Error('fakeSession returned null');
+  return { ...base, session: { ...base.session, createdAt: new Date(Date.now() - ageMs) } };
+}
+
+/** The in-memory capture-mailer outbox (asserts the test container wired the mock mailer). */
+export async function captureOutbox(): Promise<CaptureMailer['outbox']> {
+  const { getContainer } = await import('../../src/container');
+  const mailer = getContainer().mailer;
+  if (!(mailer instanceof CaptureMailer)) throw new Error('expected the capture mailer in tests');
+  return mailer.outbox;
 }
 
 // A no-op suite so vitest accepts this file as a valid (non-empty) module.

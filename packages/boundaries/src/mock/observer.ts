@@ -10,11 +10,11 @@
  * fixture fully controls the observation the pipeline produces with no Linear account.
  */
 import { asRecord, str } from '../json';
-import type { ConnectorProvider } from '../ports/connector';
 import type {
   InboundRouting,
   Observer,
   ObservationDraft,
+  ObserverProvider,
   RawInboundEvent,
   VerifySignatureInput,
 } from '../ports/observer';
@@ -22,22 +22,28 @@ import type {
 /** Construction options for {@link MockObserver}. */
 export interface MockObserverOptions {
   /** The provider this observer reports (defaults to `linear`). */
-  readonly provider?: ConnectorProvider;
+  readonly provider?: ObserverProvider;
 }
+
+/** The signature headers Docket's providers use; the mock accepts any one (local path). */
+const SIGNATURE_HEADERS = ['linear-signature', 'x-hub-signature-256', 'x-slack-signature'] as const;
 
 /** A deterministic, offline {@link Observer} backed by the request payload itself. */
 export class MockObserver implements Observer {
   /** {@inheritDoc Observer.provider} */
-  readonly provider: ConnectorProvider;
+  readonly provider: ObserverProvider;
 
   constructor(options: MockObserverOptions = {}) {
     this.provider = options.provider ?? 'linear';
   }
 
-  /** {@inheritDoc Observer.verifySignature} — trusted local path; only `"invalid"` is rejected. */
+  /**
+   * {@inheritDoc Observer.verifySignature} — trusted local path: accepts any present provider
+   * signature header (any value except the literal `"invalid"`, so route tests still hit the 400).
+   */
   verifySignature(input: VerifySignatureInput): boolean {
-    const sig = input.headers['linear-signature'];
-    return sig !== undefined && sig !== 'invalid';
+    const present = SIGNATURE_HEADERS.map((h) => input.headers[h]).find((v) => v !== undefined);
+    return present !== undefined && present !== 'invalid';
   }
 
   /** {@inheritDoc Observer.route} */

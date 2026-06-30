@@ -10,9 +10,8 @@
  * (required because the stateless transport is single-use per request). Tools and
  * resources reuse the same `db` + {@link canActor} engine as the RPC routers.
  *
- * OAuth 2.1 Resource-Server discovery metadata + Dynamic Client Registration are
- * backed by Better Auth's MCP/OIDC plugin. URL-form client IDs are registered by
- * the CIMD pre-authorize middleware in `server.ts`.
+ * OAuth 2.1 Resource-Server discovery metadata + Dynamic Client Registration are a
+ * documented follow-up; for now the Better Auth session/bearer guard IS the auth.
  */
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
@@ -149,36 +148,24 @@ export function protectedResourceMetadata(c: Context): Response {
 }
 
 /**
- * Serve the OAuth 2.0 Authorization Server metadata document (RFC 8414/OIDC).
+ * Serve the OAuth 2.0 Authorization Server metadata pointer (RFC 8414).
  *
  * @remarks
- * Docket keeps this document at the root well-known paths so MCP clients can discover
- * the exact Better Auth MCP endpoints and the CIMD extension without first knowing the
- * internal `/api/auth` mount. Better Auth still owns the endpoint implementations.
+ * The single Docket AS is Better Auth mounted at `/api/auth`, whose `mcp()`/`oidcProvider`
+ * plugin already serves the canonical discovery document (with `issuer`, the authorization/
+ * token/registration endpoints, `code_challenge_methods_supported:["S256"]`, and the scope
+ * set) at `<issuer>/.well-known/openid-configuration`. The RS-level
+ * `/.well-known/oauth-authorization-server` route 307-redirects there so a client that
+ * discovered the AS via the PRM `authorization_servers` entry lands on the live document
+ * (mcp-surface.md §2.3) — without re-importing the heavy Better Auth plugin chain.
  *
  * @param c - The Hono context.
- * @returns the AS metadata JSON document.
+ * @returns a 307 redirect to the AS's OIDC discovery document.
  */
 export function authorizationServerMetadata(c: Context): Response {
   const resource = canonicalResourceUrl(c);
   const issuer = env.MCP_ISSUER_URL?.replace(/\/$/, '') ?? new URL(resource).origin;
-  const authBase = `${issuer}/api/auth`;
-  return c.json({
-    issuer,
-    authorization_endpoint: `${authBase}/mcp/authorize`,
-    token_endpoint: `${authBase}/mcp/token`,
-    userinfo_endpoint: `${authBase}/userinfo`,
-    jwks_uri: `${authBase}/jwks`,
-    registration_endpoint: `${authBase}/mcp/register`,
-    response_types_supported: ['code'],
-    grant_types_supported: ['authorization_code', 'refresh_token'],
-    scopes_supported: ['openid', 'profile', 'email', 'offline_access', ...MCP_SCOPES],
-    token_endpoint_auth_methods_supported: ['client_secret_basic', 'client_secret_post', 'none'],
-    code_challenge_methods_supported: ['S256'],
-    claims_supported: ['sub', 'name', 'email', 'email_verified'],
-    resource,
-    client_id_metadata_document_supported: true,
-  });
+  return c.redirect(`${issuer}/.well-known/openid-configuration`, 307);
 }
 
 /** A `tools/call` JSON-RPC request body (the only shape the scope preflight inspects). */
@@ -186,6 +173,28 @@ interface ToolsCallBody {
   readonly method?: unknown;
   readonly params?: { readonly name?: unknown };
 }
+
+/** JSON-RPC request IDs are strings or integer numbers. */
+type JsonRpcRequestId = string | number;
+
+/** A minimal JSON-RPC message shape for transport-level request lifecycle checks. */
+interface JsonRpcMessageBody {
+  readonly jsonrpc?: unknown;
+  readonly id?: unknown;
+  readonly method?: unknown;
+  readonly params?: unknown;
+}
+
+interface ActiveMcpRequest {
+  cancel(reason?: string): void;
+}
+
+interface CancellationNotification {
+  readonly requestId: JsonRpcRequestId;
+  readonly reason?: string;
+}
+
+const activeMcpRequests = new Map<string, ActiveMcpRequest>();
 
 /** Parse a request body text to JSON, returning `null` on empty/malformed input. */
 function safeJson(text: string): unknown {
@@ -196,6 +205,66 @@ function safeJson(text: string): unknown {
   } catch {
     return null;
   }
+}
+
+/** Convert a JSON-RPC request ID to a collision-resistant process-local map key. */
+function requestKey(id: JsonRpcRequestId): string {
+  return `${typeof id}:${String(id)}`;
+}
+
+/** Whether `value` is a JSON-RPC request ID. */
+function isRequestId(value: unknown): value is JsonRpcRequestId {
+  return typeof value === 'string' || (typeof value === 'number' && Number.isInteger(value));
+}
+
+/** Return a normalized array of JSON-RPC messages from a parsed body. */
+function rpcMessages(body: unknown): readonly JsonRpcMessageBody[] {
+  const messages = Array.isArray(body) ? body : [body];
+  return messages.filter(
+    (message): message is JsonRpcMessageBody => typeof message === 'object' && message !== null,
+  );
+}
+
+/** Whether a request is task-augmented and must be cancelled via `tasks/cancel`. */
+function isTaskAugmentedRequest(message: JsonRpcMessageBody): boolean {
+  if (typeof message.params !== 'object' || message.params === null) return false;
+  return 'task' in message.params;
+}
+
+/**
+ * IDs for in-progress requests that may be cancelled by `notifications/cancelled`.
+ *
+ * @remarks
+ * `initialize` and task-augmented requests are excluded because the MCP spec gives each
+ * of those flows distinct cancellation rules.
+ */
+function cancellableRequestIds(body: unknown): readonly JsonRpcRequestId[] {
+  return rpcMessages(body)
+    .filter(
+      (message) =>
+        message.jsonrpc === '2.0' &&
+        typeof message.method === 'string' &&
+        message.method !== 'initialize' &&
+        isRequestId(message.id) &&
+        !isTaskAugmentedRequest(message),
+    )
+    .map((message) => message.id as JsonRpcRequestId);
+}
+
+/** Extract fire-and-forget cancellation notifications from a parsed JSON-RPC body. */
+function cancellationNotifications(body: unknown): readonly CancellationNotification[] {
+  return rpcMessages(body)
+    .filter((message) => message.jsonrpc === '2.0' && message.method === 'notifications/cancelled')
+    .map((message): CancellationNotification | null => {
+      const params =
+        typeof message.params === 'object' && message.params !== null
+          ? (message.params as { readonly requestId?: unknown; readonly reason?: unknown })
+          : null;
+      if (!params || !isRequestId(params.requestId)) return null;
+      if (typeof params.reason === 'string') return { requestId: params.requestId, reason: params.reason };
+      return { requestId: params.requestId };
+    })
+    .filter((message): message is CancellationNotification => Boolean(message));
 }
 
 /**
@@ -240,6 +309,51 @@ function scopeStepUp(c: Context, ctx: McpContext, body: unknown): Response | nul
   );
 }
 
+/** Close transport resources after the response stream completes or is cancelled. */
+function responseWithCleanup(response: Response, cleanup: () => void): Response {
+  let cleaned = false;
+  const cleanupOnce = (): void => {
+    if (cleaned) return;
+    cleaned = true;
+    cleanup();
+  };
+
+  if (!response.body) {
+    cleanupOnce();
+    return response;
+  }
+
+  const reader: ReadableStreamDefaultReader<Uint8Array> = response.body.getReader();
+  const body = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      try {
+        for (;;) {
+          const chunk = await reader.read();
+          if (chunk.done) {
+            cleanupOnce();
+            controller.close();
+            return;
+          }
+          controller.enqueue(chunk.value);
+        }
+      } catch (err) {
+        cleanupOnce();
+        controller.error(err);
+      }
+    },
+    async cancel(reason) {
+      cleanupOnce();
+      await reader.cancel(reason);
+    },
+  });
+
+  return new Response(body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers,
+  });
+}
+
 /**
  * The Hono handler for `POST`/`GET` `/mcp` (Streamable HTTP).
  *
@@ -266,9 +380,20 @@ export async function mcpHandler(c: Context): Promise<Response> {
   // Read the body once so we can both run the scope preflight AND hand an intact request to
   // the transport (the web `Request` body is a single-use stream).
   let raw = c.req.raw;
+  let body: unknown = null;
   if (raw.method === 'POST') {
     const text = await raw.clone().text();
-    const stepUp = scopeStepUp(c, ctx, safeJson(text));
+    body = safeJson(text);
+
+    const cancellations = cancellationNotifications(body);
+    if (cancellations.length > 0) {
+      for (const cancellation of cancellations) {
+        activeMcpRequests.get(requestKey(cancellation.requestId))?.cancel(cancellation.reason);
+      }
+      return new Response(null, { status: 202 });
+    }
+
+    const stepUp = scopeStepUp(c, ctx, body);
     if (stepUp) return stepUp;
     // Rebuild the request from the buffered text since `clone()` above already tee'd it.
     raw = new Request(raw.url, { method: raw.method, headers: raw.headers, body: text });
@@ -277,10 +402,32 @@ export async function mcpHandler(c: Context): Promise<Response> {
   const server = buildServer(ctx);
   const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined });
   await server.connect(transport);
-  try {
-    return await transport.handleRequest(raw);
-  } finally {
+  const activeIds = raw.method === 'POST' ? [...new Set(cancellableRequestIds(body))] : [];
+  let cleaned = false;
+  const cleanup = (reason?: string): void => {
+    if (cleaned) return;
+    cleaned = true;
+    for (const id of activeIds) {
+      const key = requestKey(id);
+      const active = activeMcpRequests.get(key);
+      if (active?.cancel === activeEntry.cancel) activeMcpRequests.delete(key);
+    }
+    if (reason) console.info(`MCP request cancelled: ${reason}`);
     void transport.close();
     void server.close();
+  };
+  const activeEntry: ActiveMcpRequest = {
+    cancel: (reason) => {
+      cleanup(reason);
+    },
+  };
+  for (const id of activeIds) activeMcpRequests.set(requestKey(id), activeEntry);
+
+  try {
+    const response = await transport.handleRequest(raw);
+    return responseWithCleanup(response, cleanup);
+  } catch (err) {
+    cleanup();
+    throw err;
   }
 }

@@ -140,6 +140,23 @@ export const commentSubjectType = pgEnum('comment_subject_type', [
   'initiative',
   'cycle',
 ]);
+/**
+ * Which entity an Attachment is attached to (polymorphic subject).
+ *
+ * @remarks
+ * Only `task` ships in v1; the enum exists so the subject can widen (calendar events,
+ * projects) without reshaping the table — mirroring {@link commentSubjectType}.
+ */
+export const attachmentSubjectType = pgEnum('attachment_subject_type', ['task']);
+/**
+ * The kind of resource an Attachment references.
+ *
+ * @remarks
+ * `email` is an integration-backed pointer (content stays in Gmail; we hold metadata + a
+ * snapshot snippet and fetch on demand). `url` is a dumb pointer (a pasted link + fetched
+ * title/favicon). Future kinds (`file` via the BlobStore port, `drive`) extend this union.
+ */
+export const attachmentKind = pgEnum('attachment_kind', ['email', 'url']);
 /** Notification kinds surfaced in the cross-org Hub inbox. */
 export const notificationType = pgEnum('notification_type', [
   'mention',
@@ -204,6 +221,35 @@ export const orgLifecycleState = pgEnum('org_lifecycle_state', [
 /** Service-operator staff tiers. */
 export const staffRole = pgEnum('staff_role', ['support', 'finance', 'superadmin']);
 
+/**
+ * User account end-of-life state (the account-level mirror of {@link orgLifecycleState}).
+ *
+ * @remarks
+ * Lives on the app-owned `hub` row (1:1 with a User), never the Better-Auth-managed
+ * `user` table. `pending_deletion` is a recoverable grace state: the user can sign back
+ * in and cancel until `hub.delete_after_at` elapses, at which point the account-deletion
+ * cron sweep hard-deletes the user. There is no `deleted` member because the row is gone
+ * once the purge completes — `active`/`pending_deletion` are the only observable states.
+ */
+export const accountDeletionState = pgEnum('account_deletion_state', [
+  'active',
+  'pending_deletion',
+]);
+/**
+ * Status of one asynchronous personal-data export job (the `account_export` queue).
+ *
+ * @remarks
+ * A request inserts a `pending` row; the export cron sweep generates the archive to blob
+ * storage and advances it to `ready` (or `failed`). A `ready` artifact past its
+ * `expires_at` is swept to `expired` so its download link is no longer offered.
+ */
+export const accountExportStatus = pgEnum('account_export_status', [
+  'pending',
+  'ready',
+  'failed',
+  'expired',
+]);
+
 /** Invitation status (frozen addition). */
 export const invitationStatus = pgEnum('invitation_status', [
   'pending',
@@ -266,3 +312,22 @@ export const eventSubscriptionStatus = pgEnum('event_subscription_status', [
   'revoked',
   'error',
 ]);
+
+/**
+ * Why an observation reached a given user — the relevance reason stored on
+ * `observation_recipient` and surfaced as the personal stream's `relevance`.
+ *
+ * @remarks
+ * The cross-org "concerns me" feed fans out only these targeted reasons; the
+ * org-wide firehose (`/orgs/:orgId/stream`) is served by the org query with a
+ * null relevance, so there is no `workspace` reason here.
+ */
+export const streamRelevance = pgEnum('stream_relevance', [
+  'mention',
+  'assignment',
+  'owned',
+  'followed',
+  'participant',
+]);
+/** Cadence of a generated cross-org summary (lunch / end-of-day / end-of-week). */
+export const summaryCadence = pgEnum('summary_cadence', ['lunch', 'eod', 'eow']);

@@ -18,8 +18,10 @@ import type { AppEnv } from '../context';
 import { NotFoundError } from '../error';
 import { ok } from '../lib/ok';
 import { pageResult, seekAfter } from '../lib/list-cursor';
+import { apiDoc } from '../lib/openapi-route';
 import { capabilityGuard } from '../permissions/capability-guard';
 import { zJson, zParam, zQuery } from '../lib/validate';
+import { emitObservation } from './observation-emit';
 
 type ProjectRow = typeof project.$inferSelect;
 
@@ -151,90 +153,124 @@ function computeProgress(
 
 /** Projects router: org-scoped CRUD + weighted-progress; `contribute` to edit, `manage` to delete. */
 const projects = new Hono<AppEnv>()
-  .post('/', capabilityGuard('contribute'), zJson(ProjectCreate), async (c) => {
-    const { orgId, actorId } = c.get('actorCtx');
-    const body = c.req.valid('json');
+  .post(
+    '/',
+    capabilityGuard('contribute'),
+    apiDoc({
+      tag: 'Projects',
+      summary: 'Create a project',
+      capability: 'contribute',
+      response: ProjectOut,
+    }),
+    zJson(ProjectCreate),
+    async (c) => {
+      const { orgId, actorId } = c.get('actorCtx');
+      const body = c.req.valid('json');
 
-    // Tenant isolation: a body-provided lead/team must live in the caller's org. The bare
-    // FK references each table's global PK, so without this a CREATE could attach another
-    // tenant's actor/team to this project — exactly the gap PATCH already closes. Omitted
-    // fields are no-ops inside the helper. (`programId` is not on ProjectCreate.)
-    await assertRefInOrg(actor, orgId, body.leadId, 'Lead not found');
-    await assertRefInOrg(team, orgId, body.teamId, 'Team not found');
+      // Tenant isolation: a body-provided lead/team must live in the caller's org. The bare
+      // FK references each table's global PK, so without this a CREATE could attach another
+      // tenant's actor/team to this project — exactly the gap PATCH already closes. Omitted
+      // fields are no-ops inside the helper. (`programId` is not on ProjectCreate.)
+      await assertRefInOrg(actor, orgId, body.leadId, 'Lead not found');
+      await assertRefInOrg(team, orgId, body.teamId, 'Team not found');
 
-    // `initiativeIds` writes `initiative_project` association rows; validate each lives in
-    // the caller's org BEFORE the transaction so a bad id rejects the whole create.
-    const initiativeIds = await validatedInitiativeIds(orgId, body.initiativeIds);
+      // `initiativeIds` writes `initiative_project` association rows; validate each lives in
+      // the caller's org BEFORE the transaction so a bad id rejects the whole create.
+      const initiativeIds = await validatedInitiativeIds(orgId, body.initiativeIds);
 
-    const row = await db.transaction(async (tx) => {
-      const inserted = await tx
-        .insert(project)
-        .values({
-          organizationId: orgId,
-          name: body.name,
-          description: body.description,
-          leadId: body.leadId,
-          teamId: body.teamId,
-          startDate: body.startDate ? new Date(body.startDate) : undefined,
-          targetDate: body.targetDate ? new Date(body.targetDate) : undefined,
-          createdBy: actorId,
-        })
-        .returning();
-      const created = inserted[0];
-      /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
-      if (!created) throw new Error('project insert returned no row');
-
-      // Persist the m2m Initiative links inside the same transaction so a partial create
-      // (project saved, links lost) is impossible.
-      if (initiativeIds.length > 0) {
-        await tx.insert(initiativeProject).values(
-          initiativeIds.map((initiativeId) => ({
-            initiativeId,
-            projectId: created.id,
+      const row = await db.transaction(async (tx) => {
+        const inserted = await tx
+          .insert(project)
+          .values({
             organizationId: orgId,
-          })),
-        );
-      }
-      return created;
-    });
+            name: body.name,
+            description: body.description,
+            leadId: body.leadId,
+            teamId: body.teamId,
+            startDate: body.startDate ? new Date(body.startDate) : undefined,
+            targetDate: body.targetDate ? new Date(body.targetDate) : undefined,
+            createdBy: actorId,
+          })
+          .returning();
+        const created = inserted[0];
+        /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
+        if (!created) throw new Error('project insert returned no row');
 
-    return ok(c, ProjectOut, toOut(row));
-  })
-  .get('/', zQuery(CursorQuery), async (c) => {
-    const { orgId } = c.get('actorCtx');
-    const { cursor, limit } = c.req.valid('query');
-    // Keyset-paginate newest-first (createdAt, id tiebreak). `limit` is optional: omitted returns
-    // the full list as before; supplied returns a bounded page + `nextCursor`.
-    const base = db
-      .select()
-      .from(project)
-      .where(
-        and(eq(project.organizationId, orgId), seekAfter(project.createdAt, project.id, cursor)),
-      )
-      .orderBy(desc(project.createdAt), desc(project.id));
-    const rows = await (limit === undefined ? base : base.limit(limit + 1));
-    const { items, nextCursor } = pageResult(rows, limit, (r) => r.createdAt);
-    return ok(c, pageOf(ProjectOut), { items: items.map(toOut), nextCursor });
-  })
-  .get('/:id', zParam(idParam), async (c) => {
-    const { orgId } = c.get('actorCtx');
-    const { id } = c.req.valid('param');
-    const rows = await db
-      .select()
-      .from(project)
-      .where(and(eq(project.id, id), eq(project.organizationId, orgId)))
-      .limit(1);
-    const row = rows[0];
-    if (!row) throw new NotFoundError('Project not found');
-    return ok(c, ProjectOut, toOut(row));
-  })
+        // Persist the m2m Initiative links inside the same transaction so a partial create
+        // (project saved, links lost) is impossible.
+        if (initiativeIds.length > 0) {
+          await tx.insert(initiativeProject).values(
+            initiativeIds.map((initiativeId) => ({
+              initiativeId,
+              projectId: created.id,
+              organizationId: orgId,
+            })),
+          );
+        }
+        return created;
+      });
+
+      await emitObservation({
+        organizationId: orgId,
+        kind: 'created',
+        actorId,
+        title: row.name,
+        subject: { type: 'project', id: row.id, title: row.name },
+      });
+      return ok(c, ProjectOut, toOut(row));
+    },
+  )
+  .get(
+    '/',
+    apiDoc({ tag: 'Projects', summary: 'List projects', response: pageOf(ProjectOut) }),
+    zQuery(CursorQuery),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { cursor, limit } = c.req.valid('query');
+      // Keyset-paginate newest-first (createdAt, id tiebreak). `limit` is optional: omitted returns
+      // the full list as before; supplied returns a bounded page + `nextCursor`.
+      const base = db
+        .select()
+        .from(project)
+        .where(
+          and(eq(project.organizationId, orgId), seekAfter(project.createdAt, project.id, cursor)),
+        )
+        .orderBy(desc(project.createdAt), desc(project.id));
+      const rows = await (limit === undefined ? base : base.limit(limit + 1));
+      const { items, nextCursor } = pageResult(rows, limit, (r) => r.createdAt);
+      return ok(c, pageOf(ProjectOut), { items: items.map(toOut), nextCursor });
+    },
+  )
+  .get(
+    '/:id',
+    apiDoc({ tag: 'Projects', summary: 'Get a project', response: ProjectOut }),
+    zParam(idParam),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { id } = c.req.valid('param');
+      const rows = await db
+        .select()
+        .from(project)
+        .where(and(eq(project.id, id), eq(project.organizationId, orgId)))
+        .limit(1);
+      const row = rows[0];
+      if (!row) throw new NotFoundError('Project not found');
+      return ok(c, ProjectOut, toOut(row));
+    },
+  )
   .patch(
     '/:id',
     capabilityGuard('contribute'),
+    apiDoc({
+      tag: 'Projects',
+      summary: 'Update a project',
+      capability: 'contribute',
+      response: ProjectOut,
+    }),
     zParam(idParam),
     zJson(ProjectUpdate),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const body = c.req.valid('json');
 
@@ -275,39 +311,66 @@ const projects = new Hono<AppEnv>()
       const updated = await db.update(project).set(patch).where(where).returning();
       const row = updated[0];
       if (!row) throw new NotFoundError('Project not found');
+
+      if (body.status !== undefined) {
+        await emitObservation({
+          organizationId: orgId,
+          kind: 'status_change',
+          actorId,
+          title: row.name,
+          subject: { type: 'project', id: row.id, title: row.name },
+          payload: { status: row.status },
+        });
+      }
       return ok(c, ProjectOut, toOut(row));
     },
   )
-  .delete('/:id', capabilityGuard('manage'), zParam(idParam), async (c) => {
-    const { orgId } = c.get('actorCtx');
-    const { id } = c.req.valid('param');
-    const deleted = await db
-      .delete(project)
-      .where(and(eq(project.id, id), eq(project.organizationId, orgId)))
-      .returning();
-    const row = deleted[0];
-    if (!row) throw new NotFoundError('Project not found');
-    return ok(c, ProjectOut, toOut(row));
-  })
-  .get('/:id/progress', zParam(idParam), async (c) => {
-    const { orgId } = c.get('actorCtx');
-    const { id } = c.req.valid('param');
+  .delete(
+    '/:id',
+    capabilityGuard('manage'),
+    apiDoc({
+      tag: 'Projects',
+      summary: 'Delete a project',
+      capability: 'manage',
+      response: ProjectOut,
+    }),
+    zParam(idParam),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { id } = c.req.valid('param');
+      const deleted = await db
+        .delete(project)
+        .where(and(eq(project.id, id), eq(project.organizationId, orgId)))
+        .returning();
+      const row = deleted[0];
+      if (!row) throw new NotFoundError('Project not found');
+      return ok(c, ProjectOut, toOut(row));
+    },
+  )
+  .get(
+    '/:id/progress',
+    apiDoc({ tag: 'Projects', summary: 'Get project progress', response: ProjectProgress }),
+    zParam(idParam),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { id } = c.req.valid('param');
 
-    // Existence + tenant check: the project must live in the caller's org.
-    const projectRows = await db
-      .select({ id: project.id })
-      .from(project)
-      .where(and(eq(project.id, id), eq(project.organizationId, orgId)))
-      .limit(1);
-    if (!projectRows[0]) throw new NotFoundError('Project not found');
+      // Existence + tenant check: the project must live in the caller's org.
+      const projectRows = await db
+        .select({ id: project.id })
+        .from(project)
+        .where(and(eq(project.id, id), eq(project.organizationId, orgId)))
+        .limit(1);
+      if (!projectRows[0]) throw new NotFoundError('Project not found');
 
-    // Pull this project's tasks, scoped to the same org as a defense-in-depth check.
-    const taskRows = await db
-      .select({ estimate: task.estimate, completedAt: task.completedAt })
-      .from(task)
-      .where(and(eq(task.projectId, id), eq(task.organizationId, orgId)));
+      // Pull this project's tasks, scoped to the same org as a defense-in-depth check.
+      const taskRows = await db
+        .select({ estimate: task.estimate, completedAt: task.completedAt })
+        .from(task)
+        .where(and(eq(task.projectId, id), eq(task.organizationId, orgId)));
 
-    return ok(c, ProjectProgress, computeProgress(taskRows));
-  });
+      return ok(c, ProjectProgress, computeProgress(taskRows));
+    },
+  );
 
 export default projects;

@@ -28,6 +28,7 @@ import { z } from 'zod';
 import type { AppEnv } from '../context';
 import { AuthError, NotFoundError } from '../error';
 import { ok } from '../lib/ok';
+import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 
 type NotificationRow = typeof notification.$inferSelect;
@@ -74,70 +75,111 @@ function inboxWhere(
 
 /** Notifications router: the caller's cross-org Hub inbox + read/act transitions. */
 const notifications = new Hono<AppEnv>()
-  .get('/', zQuery(NotificationListQuery), async (c) => {
-    const session = c.get('session');
-    if (!session?.user) throw new AuthError();
-    const { unreadOnly, organizationId, type } = c.req.valid('query');
-    const rows = await db
-      .select()
-      .from(notification)
-      .where(inboxWhere(session.user.id, { unreadOnly, organizationId, type }))
-      .orderBy(desc(notification.createdAt));
-    return ok(c, pageOf(NotificationOut), { items: rows.map(toOut) });
-  })
-  .get('/count', async (c) => {
-    const session = c.get('session');
-    if (!session?.user) throw new AuthError();
-    // One scan of the caller's unread set; partition by type in memory rather than
-    // issuing two COUNT queries (the inbox is small and already user-scoped).
-    const rows = await db
-      .select({ type: notification.type })
-      .from(notification)
-      .where(inboxWhere(session.user.id, { unreadOnly: true }));
-    const pendingApprovals = rows.filter((r) => r.type === 'approval_request').length;
-    return ok(c, NotificationCount, { unread: rows.length, pendingApprovals });
-  })
-  .post('/read-all', zJson(NotificationReadAll), async (c) => {
-    const session = c.get('session');
-    if (!session?.user) throw new AuthError();
-    const { organizationId, type } = c.req.valid('json');
-    // Only flip rows that are still unread so `updated` reflects the real transition
-    // count (re-running read-all is idempotent and reports 0 on the second call).
-    const updated = await db
-      .update(notification)
-      .set({ readAt: new Date() })
-      .where(inboxWhere(session.user.id, { organizationId, type, unreadOnly: true }))
-      .returning({ id: notification.id });
-    return ok(c, NotificationReadAllResult, { updated: updated.length });
-  })
-  .post('/:id/read', zParam(idParam), async (c) => {
-    const session = c.get('session');
-    if (!session?.user) throw new AuthError();
-    const { id } = c.req.valid('param');
-    const updated = await db
-      .update(notification)
-      .set({ readAt: new Date() })
-      .where(and(eq(notification.id, id), eq(notification.userId, session.user.id)))
-      .returning();
-    const row = updated[0];
-    if (!row) throw new NotFoundError('Notification not found');
-    return ok(c, NotificationOut, toOut(row));
-  })
-  .post('/:id/act', zParam(idParam), zJson(NotificationAct), async (c) => {
-    const session = c.get('session');
-    if (!session?.user) throw new AuthError();
-    const { id } = c.req.valid('param');
-    // Acting on an inbox item handles it — which, in the persisted model, means marking
-    // it read (the schema carries no separate `acted_at`). The `action` body names the
-    // inline action the client invoked; the resulting state is the read notification.
-    const updated = await db
-      .update(notification)
-      .set({ readAt: new Date() })
-      .where(and(eq(notification.id, id), eq(notification.userId, session.user.id)))
-      .returning();
-    const row = updated[0];
-    if (!row) throw new NotFoundError('Notification not found');
-    return ok(c, NotificationOut, toOut(row));
-  });
+  .get(
+    '/',
+    apiDoc({
+      tag: 'Notifications',
+      summary: 'List notifications',
+      response: pageOf(NotificationOut),
+    }),
+    zQuery(NotificationListQuery),
+    async (c) => {
+      const session = c.get('session');
+      if (!session?.user) throw new AuthError();
+      const { unreadOnly, organizationId, type } = c.req.valid('query');
+      const rows = await db
+        .select()
+        .from(notification)
+        .where(inboxWhere(session.user.id, { unreadOnly, organizationId, type }))
+        .orderBy(desc(notification.createdAt));
+      return ok(c, pageOf(NotificationOut), { items: rows.map(toOut) });
+    },
+  )
+  .get(
+    '/count',
+    apiDoc({
+      tag: 'Notifications',
+      summary: 'Get notification counts',
+      response: NotificationCount,
+    }),
+    async (c) => {
+      const session = c.get('session');
+      if (!session?.user) throw new AuthError();
+      // One scan of the caller's unread set; partition by type in memory rather than
+      // issuing two COUNT queries (the inbox is small and already user-scoped).
+      const rows = await db
+        .select({ type: notification.type })
+        .from(notification)
+        .where(inboxWhere(session.user.id, { unreadOnly: true }));
+      const pendingApprovals = rows.filter((r) => r.type === 'approval_request').length;
+      return ok(c, NotificationCount, { unread: rows.length, pendingApprovals });
+    },
+  )
+  .post(
+    '/read-all',
+    apiDoc({
+      tag: 'Notifications',
+      summary: 'Mark notifications read',
+      response: NotificationReadAllResult,
+    }),
+    zJson(NotificationReadAll),
+    async (c) => {
+      const session = c.get('session');
+      if (!session?.user) throw new AuthError();
+      const { organizationId, type } = c.req.valid('json');
+      // Only flip rows that are still unread so `updated` reflects the real transition
+      // count (re-running read-all is idempotent and reports 0 on the second call).
+      const updated = await db
+        .update(notification)
+        .set({ readAt: new Date() })
+        .where(inboxWhere(session.user.id, { organizationId, type, unreadOnly: true }))
+        .returning({ id: notification.id });
+      return ok(c, NotificationReadAllResult, { updated: updated.length });
+    },
+  )
+  .post(
+    '/:id/read',
+    apiDoc({
+      tag: 'Notifications',
+      summary: 'Mark a notification read',
+      response: NotificationOut,
+    }),
+    zParam(idParam),
+    async (c) => {
+      const session = c.get('session');
+      if (!session?.user) throw new AuthError();
+      const { id } = c.req.valid('param');
+      const updated = await db
+        .update(notification)
+        .set({ readAt: new Date() })
+        .where(and(eq(notification.id, id), eq(notification.userId, session.user.id)))
+        .returning();
+      const row = updated[0];
+      if (!row) throw new NotFoundError('Notification not found');
+      return ok(c, NotificationOut, toOut(row));
+    },
+  )
+  .post(
+    '/:id/act',
+    apiDoc({ tag: 'Notifications', summary: 'Act on a notification', response: NotificationOut }),
+    zParam(idParam),
+    zJson(NotificationAct),
+    async (c) => {
+      const session = c.get('session');
+      if (!session?.user) throw new AuthError();
+      const { id } = c.req.valid('param');
+      // Acting on an inbox item handles it — which, in the persisted model, means marking
+      // it read (the schema carries no separate `acted_at`). The `action` body names the
+      // inline action the client invoked; the resulting state is the read notification.
+      const updated = await db
+        .update(notification)
+        .set({ readAt: new Date() })
+        .where(and(eq(notification.id, id), eq(notification.userId, session.user.id)))
+        .returning();
+      const row = updated[0];
+      if (!row) throw new NotFoundError('Notification not found');
+      return ok(c, NotificationOut, toOut(row));
+    },
+  );
 
 export default notifications;

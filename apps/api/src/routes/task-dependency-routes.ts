@@ -16,6 +16,7 @@ import type { AppEnv } from '../context';
 import { ConflictError, CycleError, NotFoundError, ValidationError } from '../error';
 import { serializableTx } from '../lib/serializable-tx';
 import { ok } from '../lib/ok';
+import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 
@@ -32,21 +33,32 @@ import {
 
 /** Subtask + dependency routes, mounted on the tasks router at `/`. */
 export const taskDependencyRoutes = new Hono<AppEnv>()
-  .get('/:id/subtasks', zParam(idParam), async (c) => {
-    const { orgId } = c.get('actorCtx');
-    const { id } = c.req.valid('param');
-    await loadTask(orgId, id);
-    const rows = await db
-      .select()
-      .from(task)
-      .where(
-        and(eq(task.parentTaskId, id), eq(task.organizationId, orgId), isNull(task.archivedAt)),
-      );
-    return ok(c, pageOf(TaskOut), { items: rows.map(toOut) });
-  })
+  .get(
+    '/:id/subtasks',
+    apiDoc({ tag: 'Tasks', summary: 'List subtasks', response: pageOf(TaskOut) }),
+    zParam(idParam),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { id } = c.req.valid('param');
+      await loadTask(orgId, id);
+      const rows = await db
+        .select()
+        .from(task)
+        .where(
+          and(eq(task.parentTaskId, id), eq(task.organizationId, orgId), isNull(task.archivedAt)),
+        );
+      return ok(c, pageOf(TaskOut), { items: rows.map(toOut) });
+    },
+  )
   .post(
     '/:id/subtasks',
     capabilityGuard('contribute'),
+    apiDoc({
+      tag: 'Tasks',
+      summary: 'Create a subtask',
+      capability: 'contribute',
+      response: TaskOut,
+    }),
     zParam(idParam),
     zJson(SubtaskCreate),
     async (c) => {
@@ -92,33 +104,46 @@ export const taskDependencyRoutes = new Hono<AppEnv>()
       return ok(c, TaskOut, toOut(row));
     },
   )
-  .get('/:id/dependencies', zParam(idParam), async (c) => {
-    const { orgId } = c.get('actorCtx');
-    const { id } = c.req.valid('param');
-    await loadTask(orgId, id);
+  .get(
+    '/:id/dependencies',
+    apiDoc({ tag: 'Tasks', summary: 'List task dependencies', response: TaskDependencyOut }),
+    zParam(idParam),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { id } = c.req.valid('param');
+      await loadTask(orgId, id);
 
-    // `blocking`: tasks THIS task blocks (this is the blocking side of the edge).
-    const blocking = await db
-      .select({ id: task.id, title: task.title, state: task.state, projectId: task.projectId })
-      .from(taskDependency)
-      .innerJoin(task, eq(taskDependency.blockedTaskId, task.id))
-      .where(and(eq(taskDependency.blockingTaskId, id), eq(taskDependency.organizationId, orgId)));
-    // `blockedBy`: tasks blocking THIS task (this is the blocked side of the edge).
-    const blockedBy = await db
-      .select({ id: task.id, title: task.title, state: task.state, projectId: task.projectId })
-      .from(taskDependency)
-      .innerJoin(task, eq(taskDependency.blockingTaskId, task.id))
-      .where(and(eq(taskDependency.blockedTaskId, id), eq(taskDependency.organizationId, orgId)));
+      // `blocking`: tasks THIS task blocks (this is the blocking side of the edge).
+      const blocking = await db
+        .select({ id: task.id, title: task.title, state: task.state, projectId: task.projectId })
+        .from(taskDependency)
+        .innerJoin(task, eq(taskDependency.blockedTaskId, task.id))
+        .where(
+          and(eq(taskDependency.blockingTaskId, id), eq(taskDependency.organizationId, orgId)),
+        );
+      // `blockedBy`: tasks blocking THIS task (this is the blocked side of the edge).
+      const blockedBy = await db
+        .select({ id: task.id, title: task.title, state: task.state, projectId: task.projectId })
+        .from(taskDependency)
+        .innerJoin(task, eq(taskDependency.blockingTaskId, task.id))
+        .where(and(eq(taskDependency.blockedTaskId, id), eq(taskDependency.organizationId, orgId)));
 
-    const payload: z.input<typeof TaskDependencyOut> = {
-      blocking: blocking.map(toRef),
-      blockedBy: blockedBy.map(toRef),
-    };
-    return ok(c, TaskDependencyOut, payload);
-  })
+      const payload: z.input<typeof TaskDependencyOut> = {
+        blocking: blocking.map(toRef),
+        blockedBy: blockedBy.map(toRef),
+      };
+      return ok(c, TaskDependencyOut, payload);
+    },
+  )
   .post(
     '/:id/dependencies',
     capabilityGuard('contribute'),
+    apiDoc({
+      tag: 'Tasks',
+      summary: 'Add a task dependency',
+      capability: 'contribute',
+      response: TaskDependencyCreated,
+    }),
     zParam(idParam),
     zJson(TaskDependencyCreate),
     async (c) => {
@@ -182,6 +207,12 @@ export const taskDependencyRoutes = new Hono<AppEnv>()
   .delete(
     '/:id/dependencies/:depId',
     capabilityGuard('contribute'),
+    apiDoc({
+      tag: 'Tasks',
+      summary: 'Remove a task dependency',
+      capability: 'contribute',
+      response: TaskRemoved,
+    }),
     zParam(depParam),
     async (c) => {
       const { orgId } = c.get('actorCtx');

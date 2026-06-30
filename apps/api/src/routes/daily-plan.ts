@@ -17,6 +17,7 @@ import { z } from 'zod';
 import type { AppEnv } from '../context';
 import { AuthError, NotFoundError } from '../error';
 import { ok } from '../lib/ok';
+import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 
 type DailyPlanItemRow = typeof dailyPlanItem.$inferSelect;
@@ -57,99 +58,120 @@ const idParam = z.object({ id: z.string() });
 
 /** Daily-plan router: the caller's Hub daily plan for a date + add/update/remove items. */
 const dailyPlan = new Hono<AppEnv>()
-  .get('/', zQuery(listQuery), async (c) => {
-    const session = c.get('session');
-    if (!session?.user) throw new AuthError();
-    const { date } = c.req.valid('query');
-    const hubId = await resolveHubId(session.user.id);
-    const rows = await db
-      .select()
-      .from(dailyPlanItem)
-      .where(and(eq(dailyPlanItem.hubId, hubId), eq(dailyPlanItem.date, date)))
-      .orderBy(asc(dailyPlanItem.sort));
-    return ok(c, pageOf(DailyPlanItemOut), { items: rows.map(toOut) });
-  })
-  .post('/', zJson(DailyPlanItemCreate), async (c) => {
-    const session = c.get('session');
-    if (!session?.user) throw new AuthError();
-    const body = c.req.valid('json');
-    const hubId = await resolveHubId(session.user.id);
+  .get(
+    '/',
+    apiDoc({ tag: 'DailyPlan', summary: 'Get the daily plan', response: pageOf(DailyPlanItemOut) }),
+    zQuery(listQuery),
+    async (c) => {
+      const session = c.get('session');
+      if (!session?.user) throw new AuthError();
+      const { date } = c.req.valid('query');
+      const hubId = await resolveHubId(session.user.id);
+      const rows = await db
+        .select()
+        .from(dailyPlanItem)
+        .where(and(eq(dailyPlanItem.hubId, hubId), eq(dailyPlanItem.date, date)))
+        .orderBy(asc(dailyPlanItem.sort));
+      return ok(c, pageOf(DailyPlanItemOut), { items: rows.map(toOut) });
+    },
+  )
+  .post(
+    '/',
+    apiDoc({ tag: 'DailyPlan', summary: 'Add a daily-plan item', response: DailyPlanItemOut }),
+    zJson(DailyPlanItemCreate),
+    async (c) => {
+      const session = c.get('session');
+      if (!session?.user) throw new AuthError();
+      const body = c.req.valid('json');
+      const hubId = await resolveHubId(session.user.id);
 
-    const orgIds = await callerOrgIds(session.user.id);
-    if (!orgIds.includes(body.refOrganizationId)) throw new NotFoundError('Task not found');
-    const taskRows = await db
-      .select({ id: task.id })
-      .from(task)
-      .where(and(eq(task.id, body.refTaskId), eq(task.organizationId, body.refOrganizationId)))
-      .limit(1);
-    if (!taskRows[0]) throw new NotFoundError('Task not found');
+      const orgIds = await callerOrgIds(session.user.id);
+      if (!orgIds.includes(body.refOrganizationId)) throw new NotFoundError('Task not found');
+      const taskRows = await db
+        .select({ id: task.id })
+        .from(task)
+        .where(and(eq(task.id, body.refTaskId), eq(task.organizationId, body.refOrganizationId)))
+        .limit(1);
+      if (!taskRows[0]) throw new NotFoundError('Task not found');
 
-    const inserted = await db
-      .insert(dailyPlanItem)
-      .values({
-        hubId,
-        refOrganizationId: body.refOrganizationId,
-        refTaskId: body.refTaskId,
-        date: body.date,
-        ...(body.sort !== undefined ? { sort: body.sort } : {}),
-        ...(body.timeboxStartsAt !== undefined
-          ? { timeboxStartsAt: body.timeboxStartsAt ? new Date(body.timeboxStartsAt) : null }
-          : {}),
-        ...(body.timeboxEndsAt !== undefined
-          ? { timeboxEndsAt: body.timeboxEndsAt ? new Date(body.timeboxEndsAt) : null }
-          : {}),
-      })
-      .returning();
-    const row = inserted[0];
-    /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
-    if (!row) throw new Error('daily plan item insert returned no row');
-    return ok(c, DailyPlanItemOut, toOut(row));
-  })
-  .patch('/:id', zParam(idParam), zJson(DailyPlanItemUpdate), async (c) => {
-    const session = c.get('session');
-    if (!session?.user) throw new AuthError();
-    const { id } = c.req.valid('param');
-    const body = c.req.valid('json');
-    const hubId = await resolveHubId(session.user.id);
+      const inserted = await db
+        .insert(dailyPlanItem)
+        .values({
+          hubId,
+          refOrganizationId: body.refOrganizationId,
+          refTaskId: body.refTaskId,
+          date: body.date,
+          ...(body.sort !== undefined ? { sort: body.sort } : {}),
+          ...(body.timeboxStartsAt !== undefined
+            ? { timeboxStartsAt: body.timeboxStartsAt ? new Date(body.timeboxStartsAt) : null }
+            : {}),
+          ...(body.timeboxEndsAt !== undefined
+            ? { timeboxEndsAt: body.timeboxEndsAt ? new Date(body.timeboxEndsAt) : null }
+            : {}),
+        })
+        .returning();
+      const row = inserted[0];
+      /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
+      if (!row) throw new Error('daily plan item insert returned no row');
+      return ok(c, DailyPlanItemOut, toOut(row));
+    },
+  )
+  .patch(
+    '/:id',
+    apiDoc({ tag: 'DailyPlan', summary: 'Update a daily-plan item', response: DailyPlanItemOut }),
+    zParam(idParam),
+    zJson(DailyPlanItemUpdate),
+    async (c) => {
+      const session = c.get('session');
+      if (!session?.user) throw new AuthError();
+      const { id } = c.req.valid('param');
+      const body = c.req.valid('json');
+      const hubId = await resolveHubId(session.user.id);
 
-    const existing = await db
-      .select({ id: dailyPlanItem.id })
-      .from(dailyPlanItem)
-      .where(and(eq(dailyPlanItem.id, id), eq(dailyPlanItem.hubId, hubId)))
-      .limit(1);
-    if (!existing[0]) throw new NotFoundError('Daily plan item not found');
+      const existing = await db
+        .select({ id: dailyPlanItem.id })
+        .from(dailyPlanItem)
+        .where(and(eq(dailyPlanItem.id, id), eq(dailyPlanItem.hubId, hubId)))
+        .limit(1);
+      if (!existing[0]) throw new NotFoundError('Daily plan item not found');
 
-    const updated = await db
-      .update(dailyPlanItem)
-      .set({
-        ...(body.status !== undefined ? { status: body.status } : {}),
-        ...(body.sort !== undefined ? { sort: body.sort } : {}),
-        ...(body.timeboxStartsAt !== undefined
-          ? { timeboxStartsAt: body.timeboxStartsAt ? new Date(body.timeboxStartsAt) : null }
-          : {}),
-        ...(body.timeboxEndsAt !== undefined
-          ? { timeboxEndsAt: body.timeboxEndsAt ? new Date(body.timeboxEndsAt) : null }
-          : {}),
-      })
-      .where(and(eq(dailyPlanItem.id, id), eq(dailyPlanItem.hubId, hubId)))
-      .returning();
-    const row = updated[0];
-    /* v8 ignore next -- @preserve defensive: the daily-plan item was verified to exist above */
-    if (!row) throw new NotFoundError('Daily plan item not found');
-    return ok(c, DailyPlanItemOut, toOut(row));
-  })
-  .delete('/:id', zParam(idParam), async (c) => {
-    const session = c.get('session');
-    if (!session?.user) throw new AuthError();
-    const { id } = c.req.valid('param');
-    const hubId = await resolveHubId(session.user.id);
-    const deleted = await db
-      .delete(dailyPlanItem)
-      .where(and(eq(dailyPlanItem.id, id), eq(dailyPlanItem.hubId, hubId)))
-      .returning();
-    const row = deleted[0];
-    if (!row) throw new NotFoundError('Daily plan item not found');
-    return ok(c, DailyPlanItemOut, toOut(row));
-  });
+      const updated = await db
+        .update(dailyPlanItem)
+        .set({
+          ...(body.status !== undefined ? { status: body.status } : {}),
+          ...(body.sort !== undefined ? { sort: body.sort } : {}),
+          ...(body.timeboxStartsAt !== undefined
+            ? { timeboxStartsAt: body.timeboxStartsAt ? new Date(body.timeboxStartsAt) : null }
+            : {}),
+          ...(body.timeboxEndsAt !== undefined
+            ? { timeboxEndsAt: body.timeboxEndsAt ? new Date(body.timeboxEndsAt) : null }
+            : {}),
+        })
+        .where(and(eq(dailyPlanItem.id, id), eq(dailyPlanItem.hubId, hubId)))
+        .returning();
+      const row = updated[0];
+      /* v8 ignore next -- @preserve defensive: the daily-plan item was verified to exist above */
+      if (!row) throw new NotFoundError('Daily plan item not found');
+      return ok(c, DailyPlanItemOut, toOut(row));
+    },
+  )
+  .delete(
+    '/:id',
+    apiDoc({ tag: 'DailyPlan', summary: 'Remove a daily-plan item', response: DailyPlanItemOut }),
+    zParam(idParam),
+    async (c) => {
+      const session = c.get('session');
+      if (!session?.user) throw new AuthError();
+      const { id } = c.req.valid('param');
+      const hubId = await resolveHubId(session.user.id);
+      const deleted = await db
+        .delete(dailyPlanItem)
+        .where(and(eq(dailyPlanItem.id, id), eq(dailyPlanItem.hubId, hubId)))
+        .returning();
+      const row = deleted[0];
+      if (!row) throw new NotFoundError('Daily plan item not found');
+      return ok(c, DailyPlanItemOut, toOut(row));
+    },
+  );
 
 export default dailyPlan;

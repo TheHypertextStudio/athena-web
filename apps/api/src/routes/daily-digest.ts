@@ -182,11 +182,14 @@ async function generateForUser(
   const localMinutes = parts.h * 60 + parts.mi;
   if (localMinutes < sendMinutes(candidate.sendAt)) return 'skipped'; // not yet send time today
 
-  // Claim today's digest atomically — the unique (user_id, digest_date) index dedups ticks.
+  // Claim today's digest atomically — the unique (user_id, digest_date, cadence) index dedups
+  // ticks. (Cadence defaults to 'eod'; the multi-cadence lunch/eow fan-out is a later milestone.)
   const [claimed] = await db
     .insert(dailyDigest)
-    .values({ userId: candidate.userId, digestDate: localDate, status: 'generating' })
-    .onConflictDoNothing({ target: [dailyDigest.userId, dailyDigest.digestDate] })
+    .values({ userId: candidate.userId, digestDate: localDate, cadence: 'eod', status: 'generating' })
+    .onConflictDoNothing({
+      target: [dailyDigest.userId, dailyDigest.digestDate, dailyDigest.cadence],
+    })
     .returning({ id: dailyDigest.id });
   if (!claimed) return 'skipped';
 

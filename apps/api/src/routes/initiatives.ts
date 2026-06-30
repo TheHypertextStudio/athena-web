@@ -30,6 +30,7 @@ import type { AppEnv } from '../context';
 import { ConflictError, NotFoundError } from '../error';
 import { ok } from '../lib/ok';
 import { pageResult, seekAfter } from '../lib/list-cursor';
+import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 
@@ -45,65 +46,100 @@ import {
   projectOverlapsWindow,
   toOut,
 } from './initiative-helpers';
+import { emitObservation } from './observation-emit';
 
 /** Initiatives router: org-scoped CRUD + child associations + roadmap roll-up. */
 const initiatives = new Hono<AppEnv>()
-  .get('/', zQuery(CursorQuery), async (c) => {
-    const { orgId } = c.get('actorCtx');
-    const { cursor, limit } = c.req.valid('query');
-    // Keyset-paginate newest-first (createdAt, id tiebreak). `limit` is optional: omitted returns
-    // the full list as before; supplied returns a bounded page + `nextCursor`.
-    const base = db
-      .select()
-      .from(initiative)
-      .where(
-        and(
-          eq(initiative.organizationId, orgId),
-          seekAfter(initiative.createdAt, initiative.id, cursor),
-        ),
-      )
-      .orderBy(desc(initiative.createdAt), desc(initiative.id));
-    const rows = await (limit === undefined ? base : base.limit(limit + 1));
-    const { items, nextCursor } = pageResult(rows, limit, (r) => r.createdAt);
-    return ok(c, pageOf(InitiativeOut), { items: items.map(toOut), nextCursor });
-  })
-  .post('/', capabilityGuard('contribute'), zJson(InitiativeCreate), async (c) => {
-    const { orgId, actorId } = c.get('actorCtx');
-    const body = c.req.valid('json');
-    await assertOwnerInOrg(orgId, body.ownerId);
-    const inserted = await db
-      .insert(initiative)
-      .values({
+  .get(
+    '/',
+    apiDoc({ tag: 'Initiatives', summary: 'List initiatives', response: pageOf(InitiativeOut) }),
+    zQuery(CursorQuery),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { cursor, limit } = c.req.valid('query');
+      // Keyset-paginate newest-first (createdAt, id tiebreak). `limit` is optional: omitted returns
+      // the full list as before; supplied returns a bounded page + `nextCursor`.
+      const base = db
+        .select()
+        .from(initiative)
+        .where(
+          and(
+            eq(initiative.organizationId, orgId),
+            seekAfter(initiative.createdAt, initiative.id, cursor),
+          ),
+        )
+        .orderBy(desc(initiative.createdAt), desc(initiative.id));
+      const rows = await (limit === undefined ? base : base.limit(limit + 1));
+      const { items, nextCursor } = pageResult(rows, limit, (r) => r.createdAt);
+      return ok(c, pageOf(InitiativeOut), { items: items.map(toOut), nextCursor });
+    },
+  )
+  .post(
+    '/',
+    capabilityGuard('contribute'),
+    apiDoc({
+      tag: 'Initiatives',
+      summary: 'Create an initiative',
+      capability: 'contribute',
+      response: InitiativeOut,
+    }),
+    zJson(InitiativeCreate),
+    async (c) => {
+      const { orgId, actorId } = c.get('actorCtx');
+      const body = c.req.valid('json');
+      await assertOwnerInOrg(orgId, body.ownerId);
+      const inserted = await db
+        .insert(initiative)
+        .values({
+          organizationId: orgId,
+          name: body.name,
+          description: body.description,
+          ownerId: body.ownerId,
+          status: body.status ?? 'active',
+          targetDate: body.targetDate ? new Date(body.targetDate) : undefined,
+          health: body.health,
+          createdBy: actorId,
+        })
+        .returning();
+      const row = inserted[0];
+      /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
+      if (!row) throw new Error('initiative insert returned no row');
+      await emitObservation({
         organizationId: orgId,
-        name: body.name,
-        description: body.description,
-        ownerId: body.ownerId,
-        status: body.status ?? 'active',
-        targetDate: body.targetDate ? new Date(body.targetDate) : undefined,
-        health: body.health,
-        createdBy: actorId,
-      })
-      .returning();
-    const row = inserted[0];
-    /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
-    if (!row) throw new Error('initiative insert returned no row');
-    return ok(c, InitiativeOut, toOut(row));
-  })
-  .get('/:id', zParam(idParam), async (c) => {
-    const { orgId } = c.get('actorCtx');
-    const { id } = c.req.valid('param');
-    const row = await loadInitiative(orgId, id);
-    const projects = await associatedProjects(orgId, id);
-    const programs = await associatedPrograms(orgId, id);
-    return ok(c, InitiativeDetail, buildInitiativeDetail(row, projects, programs));
-  })
+        kind: 'created',
+        actorId,
+        title: row.name,
+        subject: { type: 'initiative', id: row.id, title: row.name },
+      });
+      return ok(c, InitiativeOut, toOut(row));
+    },
+  )
+  .get(
+    '/:id',
+    apiDoc({ tag: 'Initiatives', summary: 'Get initiative detail', response: InitiativeDetail }),
+    zParam(idParam),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { id } = c.req.valid('param');
+      const row = await loadInitiative(orgId, id);
+      const projects = await associatedProjects(orgId, id);
+      const programs = await associatedPrograms(orgId, id);
+      return ok(c, InitiativeDetail, buildInitiativeDetail(row, projects, programs));
+    },
+  )
   .patch(
     '/:id',
     capabilityGuard('contribute'),
+    apiDoc({
+      tag: 'Initiatives',
+      summary: 'Update an initiative',
+      capability: 'contribute',
+      response: InitiativeOut,
+    }),
     zParam(idParam),
     zJson(InitiativeUpdate),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const body = c.req.valid('json');
       await assertOwnerInOrg(orgId, body.ownerId);
@@ -123,23 +159,50 @@ const initiatives = new Hono<AppEnv>()
         .returning();
       const row = updated[0];
       if (!row) throw new NotFoundError('Initiative not found');
+      if (body.status !== undefined) {
+        await emitObservation({
+          organizationId: orgId,
+          kind: 'status_change',
+          actorId,
+          title: row.name,
+          subject: { type: 'initiative', id: row.id, title: row.name },
+          payload: { status: row.status },
+        });
+      }
       return ok(c, InitiativeOut, toOut(row));
     },
   )
-  .delete('/:id', capabilityGuard('manage'), zParam(idParam), async (c) => {
-    const { orgId } = c.get('actorCtx');
-    const { id } = c.req.valid('param');
-    const deleted = await db
-      .delete(initiative)
-      .where(and(eq(initiative.id, id), eq(initiative.organizationId, orgId)))
-      .returning();
-    const row = deleted[0];
-    if (!row) throw new NotFoundError('Initiative not found');
-    return ok(c, InitiativeOut, toOut(row));
-  })
+  .delete(
+    '/:id',
+    capabilityGuard('manage'),
+    apiDoc({
+      tag: 'Initiatives',
+      summary: 'Delete an initiative',
+      capability: 'manage',
+      response: InitiativeOut,
+    }),
+    zParam(idParam),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { id } = c.req.valid('param');
+      const deleted = await db
+        .delete(initiative)
+        .where(and(eq(initiative.id, id), eq(initiative.organizationId, orgId)))
+        .returning();
+      const row = deleted[0];
+      if (!row) throw new NotFoundError('Initiative not found');
+      return ok(c, InitiativeOut, toOut(row));
+    },
+  )
   .post(
     '/:id/projects',
     capabilityGuard('contribute'),
+    apiDoc({
+      tag: 'Initiatives',
+      summary: 'Link a project to an initiative',
+      capability: 'contribute',
+      response: InitiativeProjectLinked,
+    }),
     zParam(idParam),
     zJson(InitiativeProjectLink),
     async (c) => {
@@ -178,6 +241,12 @@ const initiatives = new Hono<AppEnv>()
   .delete(
     '/:id/projects/:projectId',
     capabilityGuard('contribute'),
+    apiDoc({
+      tag: 'Initiatives',
+      summary: 'Unlink a project from an initiative',
+      capability: 'contribute',
+      response: InitiativeUnlinked,
+    }),
     zParam(projectLinkParam),
     async (c) => {
       const { orgId } = c.get('actorCtx');
@@ -201,6 +270,12 @@ const initiatives = new Hono<AppEnv>()
   .post(
     '/:id/programs',
     capabilityGuard('contribute'),
+    apiDoc({
+      tag: 'Initiatives',
+      summary: 'Link a program to an initiative',
+      capability: 'contribute',
+      response: InitiativeProgramLinked,
+    }),
     zParam(idParam),
     zJson(InitiativeProgramLink),
     async (c) => {
@@ -238,6 +313,12 @@ const initiatives = new Hono<AppEnv>()
   .delete(
     '/:id/programs/:programId',
     capabilityGuard('contribute'),
+    apiDoc({
+      tag: 'Initiatives',
+      summary: 'Unlink a program from an initiative',
+      capability: 'contribute',
+      response: InitiativeUnlinked,
+    }),
     zParam(programLinkParam),
     async (c) => {
       const { orgId } = c.get('actorCtx');
@@ -258,34 +339,44 @@ const initiatives = new Hono<AppEnv>()
       return ok(c, InitiativeUnlinked, { unlinked: true });
     },
   )
-  .get('/:id/timeline', zParam(idParam), zQuery(InitiativeTimelineQuery), async (c) => {
-    const { orgId } = c.get('actorCtx');
-    const { id } = c.req.valid('param');
-    const { from, to } = c.req.valid('query');
-    await loadInitiative(orgId, id);
+  .get(
+    '/:id/timeline',
+    apiDoc({
+      tag: 'Initiatives',
+      summary: 'Get initiative timeline',
+      response: InitiativeTimelineOut,
+    }),
+    zParam(idParam),
+    zQuery(InitiativeTimelineQuery),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { id } = c.req.valid('param');
+      const { from, to } = c.req.valid('query');
+      await loadInitiative(orgId, id);
 
-    const projects = await associatedProjects(orgId, id);
-    const programs = await associatedPrograms(orgId, id);
+      const projects = await associatedProjects(orgId, id);
+      const programs = await associatedPrograms(orgId, id);
 
-    const payload: z.input<typeof InitiativeTimelineOut> = {
-      programs: programs.map((p) => ({
-        id: p.id,
-        name: p.name,
-        status: p.status,
-        health: p.health,
-      })),
-      projects: projects
-        .filter((p) => projectOverlapsWindow(p, from, to))
-        .map((p) => ({
+      const payload: z.input<typeof InitiativeTimelineOut> = {
+        programs: programs.map((p) => ({
           id: p.id,
           name: p.name,
           status: p.status,
           health: p.health,
-          startDate: p.startDate?.toISOString() ?? null,
-          targetDate: p.targetDate?.toISOString() ?? null,
         })),
-    };
-    return ok(c, InitiativeTimelineOut, payload);
-  });
+        projects: projects
+          .filter((p) => projectOverlapsWindow(p, from, to))
+          .map((p) => ({
+            id: p.id,
+            name: p.name,
+            status: p.status,
+            health: p.health,
+            startDate: p.startDate?.toISOString() ?? null,
+            targetDate: p.targetDate?.toISOString() ?? null,
+          })),
+      };
+      return ok(c, InitiativeTimelineOut, payload);
+    },
+  );
 
 export default initiatives;

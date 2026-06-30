@@ -41,10 +41,12 @@
  */
 import * as React from 'react';
 
-import { Menu } from '../../icons';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
+import { ChevronLeft, Menu } from '../../icons';
 import { cn } from '../../lib/utils';
 import { Sheet, SheetContent, SheetTitle } from '../../primitives';
 import { useContextState } from './ContextProvider';
+import { SHELL_ASIDE_ID, ShellAside, type ShellAsidePanel } from './ShellAside';
 import { ShellDrawerProvider } from './ShellDrawerContext';
 
 /** Props for {@link AppShell}. */
@@ -64,6 +66,13 @@ export interface AppShellProps {
    * affordance. Rendered at the bar's right edge.
    */
   mobileActions?: React.ReactNode;
+  /**
+   * The optional right-hand **rail** — a floating sibling surface to the main panel (like
+   * {@link sidebar}, a host-wired slot, not page content). Shown by default on `lg` and up
+   * (collapsible to a strip); below `lg` it's a right-anchored {@link Sheet} opened from the mobile
+   * top bar. Omit it and no rail renders.
+   */
+  aside?: ShellAsidePanel;
   /** Extra class names for the root shell element. */
   className?: string;
   /** The main-area content. */
@@ -71,7 +80,8 @@ export interface AppShellProps {
 }
 
 /**
- * The Docket app shell: a responsive Sidebar + TabBar + main layout, with org-accent rebinding.
+ * The Docket app shell: a responsive Sidebar + TabBar + main panel (+ optional rail), with
+ * org-accent rebinding.
  *
  * @remarks
  * On context rebind the active org's accent is applied as `--org-accent` on the shell root
@@ -79,17 +89,30 @@ export interface AppShellProps {
  * throughout the subtree. The same `sidebar` node renders in two slots — the static desktop
  * rail (`lg` and up) and the mobile off-canvas drawer (below `lg`) — so the navigation stays
  * a single source of truth across breakpoints.
+ *
+ * The optional **right-hand rail** (`aside`) is a host-wired slot, exactly like `sidebar`/`tabBar`:
+ * at `lg` and up it renders as a third floating sibling surface in the shell row
+ * (`sidebar | content | aside`), narrowing the main panel; below `lg` the *same* slot is a
+ * right-anchored {@link Sheet} opened from the mobile top bar. Its open-state lives here — the rail
+ * is collapsible (shown by default), the sheet is modal (hidden by default) — not in any context.
  */
 export function AppShell({
   sidebar,
   tabBar,
   mobileBrand,
   mobileActions,
+  aside,
   className,
   children,
 }: AppShellProps): React.JSX.Element {
   const { orgAccent, density, activeOrgId } = useContextState();
+  const isLgUp = useMediaQuery('(min-width: 64rem)');
   const [drawerOpen, setDrawerOpen] = React.useState(false);
+  // Two states because the two rail presentations have opposite defaults and different interactions:
+  // the desktop rail is a collapsible inline surface (shown by default), the mobile sheet is a modal
+  // (hidden by default, opened from the top-bar trigger).
+  const [railCollapsed, setRailCollapsed] = React.useState(false);
+  const [mobileSheetOpen, setMobileSheetOpen] = React.useState(false);
 
   // Stable dismiss callback handed to the drawer-rendered sidebar so a nav selection closes the
   // drawer (the static desktop rail sits under a `null` provider, so it never closes anything).
@@ -154,6 +177,22 @@ export function AppShell({
           {mobileBrand ?? <span className="text-body truncate font-semibold">Docket</span>}
         </div>
         {mobileActions}
+        {/* Mobile rail trigger — opens the rail slot as a right sheet. Uses the slot's glyph
+            (falling back to a chevron). */}
+        {aside ? (
+          <button
+            type="button"
+            aria-label={`Show ${aside.label}`}
+            aria-controls={SHELL_ASIDE_ID}
+            aria-expanded={mobileSheetOpen}
+            onClick={() => {
+              setMobileSheetOpen(true);
+            }}
+            className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-ring flex size-9 shrink-0 items-center justify-center rounded-lg transition-colors focus-visible:ring-2 focus-visible:outline-none [&_svg]:size-5"
+          >
+            {aside.icon ?? <ChevronLeft aria-hidden="true" className="size-5" />}
+          </button>
+        ) : null}
       </div>
 
       {/* Off-canvas navigation drawer — the SAME sidebar node, shown below `lg` on demand. */}
@@ -194,6 +233,39 @@ export function AppShell({
           {children}
         </main>
       </div>
+
+      {/* Right-hand rail (desktop): a floating sibling surface to the main panel, shown by default
+          at `lg` and up and collapsible to a strip. */}
+      {aside && isLgUp ? (
+        <ShellAside
+          panel={aside}
+          collapsed={railCollapsed}
+          onToggle={() => {
+            setRailCollapsed((c) => !c);
+          }}
+        />
+      ) : null}
+
+      {/* The same rail slot as a right-anchored modal Sheet below `lg`, opened from the top-bar
+          trigger. Mutually exclusive with the inline rail (the `isLgUp` gate), so the shared id stays
+          unique and the slot mounts in exactly one place. Escape/backdrop dismiss closes it. */}
+      <Sheet
+        open={aside != null && !isLgUp && mobileSheetOpen}
+        onOpenChange={(next) => {
+          if (!next) setMobileSheetOpen(false);
+        }}
+      >
+        <SheetContent
+          side="right"
+          id={SHELL_ASIDE_ID}
+          aria-label={aside?.label}
+          aria-describedby={undefined}
+          className="@container w-[22rem] max-w-[90vw] overflow-auto lg:hidden"
+        >
+          <SheetTitle className="sr-only">{aside?.label}</SheetTitle>
+          {aside?.node}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

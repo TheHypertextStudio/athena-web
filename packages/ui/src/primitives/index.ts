@@ -60,6 +60,7 @@ export {
 export { focusRing, focusRingInset } from './focus';
 export { HoverCard, HoverCardContent, HoverCardTrigger } from './hover-card';
 export { Input, type InputProps } from './input';
+export { Row, type RowProps, Stack, type StackProps } from './layout';
 export { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from './popover';
 export {
   Sheet,

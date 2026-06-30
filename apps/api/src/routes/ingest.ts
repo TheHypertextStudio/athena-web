@@ -17,7 +17,7 @@
  */
 import { db, inboundEvent, integration } from '@docket/db';
 import { selectAdapter } from '@docket/boundaries';
-import type { ConnectorProvider } from '@docket/boundaries';
+import type { ObserverProvider } from '@docket/boundaries';
 import { and, eq, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type { Context } from 'hono';
@@ -41,7 +41,7 @@ function asPayload(value: unknown): Record<string, unknown> {
  * @param c - The Hono request context.
  * @param provider - The provider this route ingests (`linear` | `github`).
  */
-async function ingestWebhook(c: Context, provider: ConnectorProvider): Promise<Response> {
+async function ingestWebhook(c: Context, provider: ObserverProvider): Promise<Response> {
   // Read the RAW bytes first: the signature is an HMAC over the exact request body.
   const rawBody = await c.req.text();
   const observer = selectAdapter('observer', toBoundaryEnv(), { observerProvider: provider });
@@ -57,6 +57,15 @@ async function ingestWebhook(c: Context, provider: ConnectorProvider): Promise<R
     payload = JSON.parse(rawBody);
   } catch {
     return c.json({ error: 'invalid json' }, 400);
+  }
+
+  // Slack's one-time URL-verification handshake: echo the challenge (already signature-checked).
+  if (provider === 'slack') {
+    const obj = payload as Record<string, unknown> | null;
+    if (obj?.['type'] === 'url_verification') {
+      const challenge = obj['challenge'];
+      if (typeof challenge === 'string') return c.json({ challenge });
+    }
   }
 
   const routing = observer.route(payload);
@@ -107,6 +116,7 @@ async function ingestWebhook(c: Context, provider: ConnectorProvider): Promise<R
 /** The ingestion app: verify → write-ahead → 200, one provider edge per route. */
 const ingest = new Hono()
   .post('/linear', (c) => ingestWebhook(c, 'linear'))
-  .post('/github', (c) => ingestWebhook(c, 'github'));
+  .post('/github', (c) => ingestWebhook(c, 'github'))
+  .post('/slack', (c) => ingestWebhook(c, 'slack'));
 
 export default ingest;

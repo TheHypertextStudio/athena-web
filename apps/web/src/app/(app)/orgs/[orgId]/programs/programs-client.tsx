@@ -68,21 +68,21 @@ export default function ProgramsListClient(): JSX.Element {
   const programsQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.programs(orgId),
-      () => api.v1.orgs[':orgId'].programs.$get({ param: { orgId } }),
+      () => api.v1.orgs[':orgId'].programs.$get({ param: { orgId }, query: {} }),
       `Could not load ${programsLabel.toLowerCase()}.`,
     ),
   );
   const projectsQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.projects(orgId),
-      () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
+      () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId }, query: {} }),
       'Could not load projects.',
     ),
   );
   const tasksQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.tasks(orgId),
-      () => api.v1.orgs[':orgId'].tasks.$get({ param: { orgId } }),
+      () => api.v1.orgs[':orgId'].tasks.$get({ param: { orgId }, query: {} }),
       'Could not load tasks.',
     ),
   );

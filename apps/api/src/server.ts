@@ -15,13 +15,15 @@ import { cors } from 'hono/cors';
 import { app } from './app';
 import { sessionMiddleware } from './auth/session-middleware';
 import type { AppEnv } from './context';
+import { startDevScheduler } from './dev-scheduler';
 import { env } from './env';
 import { onError } from './error';
-import { cimdAuthorizeMiddleware } from './mcp/cimd';
 import { authorizationServerMetadata, mcpHandler, protectedResourceMetadata } from './mcp/server';
 import { registerOpenapi } from './openapi';
 import cron from './routes/cron';
 import ingest from './routes/ingest';
+import { meAccountExportDownload } from './routes/me-account';
+import streamSse from './routes/stream-sse';
 import integrationsGithub from './routes/integrations-github';
 import webhooks from './routes/webhooks';
 
@@ -38,12 +40,11 @@ server.use(
   cors({
     origin: trustedOrigins,
     credentials: true,
-    allowHeaders: ['Content-Type', 'Authorization', 'MCP-Protocol-Version', 'Last-Event-ID'],
-    exposeHeaders: ['Authorization', 'WWW-Authenticate', 'MCP-Protocol-Version', 'Mcp-Session-Id'],
+    allowHeaders: ['Content-Type', 'Authorization'],
+    exposeHeaders: ['Authorization', 'WWW-Authenticate'],
   }),
 );
 server.use('*', sessionMiddleware);
-server.use('/api/auth/mcp/authorize', cimdAuthorizeMiddleware);
 server.on(['POST', 'GET'], '/api/auth/*', (c) => auth.handler(c.req.raw));
 // The MCP Streamable HTTP endpoint lives OUTSIDE the typed `AppType` routes (like
 // `/api/auth`): it carries its own Origin + session guard and is not part of the RPC
@@ -55,20 +56,26 @@ server.on(['POST', 'GET'], '/mcp', mcpHandler);
 server.get('/.well-known/oauth-protected-resource', protectedResourceMetadata);
 server.get('/.well-known/oauth-protected-resource/mcp', protectedResourceMetadata);
 server.get('/.well-known/oauth-authorization-server', authorizationServerMetadata);
-server.get('/.well-known/openid-configuration', authorizationServerMetadata);
 // Non-RPC external edges (webhooks, ingestion, cron) live OUTSIDE the typed `AppType` routes.
 server.route('/v1/billing', webhooks);
 server.route('/v1/ingest', ingest);
+server.route('/v1/stream', streamSse);
 server.route('/v1/integrations/github', integrationsGithub);
 server.route('/v1/cron', cron);
+// Binary export download (non-RPC; streams a ZIP). Registered before the typed app so its GET
+// matches; the typed app still owns POST /v1/me/account/exports.
+server.route('/v1/me/account/exports', meAccountExportDownload);
 server.route('/', app);
 server.get('/v1/health', (c) => c.json({ status: 'ok' as const }));
-registerOpenapi(server);
+registerOpenapi(server, app);
 server.onError(onError);
 
 const nodeServer = serve({ fetch: server.fetch, port: env.PORT });
 
 console.log(`▶ Docket API listening on :${String(env.PORT)}`);
+
+// Local dev has no Cloud Scheduler, so run the account sweeps in-process (export/deletion).
+if (env.APP_MODE === 'local') startDevScheduler();
 
 // Cloud Run sends SIGTERM before SIGKILL; finish in-flight requests then exit cleanly.
 process.on('SIGTERM', () => {

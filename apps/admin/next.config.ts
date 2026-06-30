@@ -10,6 +10,21 @@ if (!API_ORIGIN) {
 }
 
 /**
+ * Extra allowed dev origins taken from the auth allowlist (e.g. a cloudflared tunnel host).
+ *
+ * @remarks
+ * `BETTER_AUTH_ALLOWED_HOSTS` is the single source of truth for hosts the app answers on, so a
+ * tunnel host added there also clears Next 16's cross-origin dev-resource block — no extra env
+ * var. The `*.docket.localhost` wildcard already covers the portless hosts.
+ */
+function authAllowedDevOrigins(): string[] {
+  return (process.env['BETTER_AUTH_ALLOWED_HOSTS'] ?? '')
+    .split(',')
+    .map((host) => host.trim())
+    .filter((host) => host.length > 0 && !host.endsWith('docket.localhost'));
+}
+
+/**
  * Next.js config for the Docket service-admin console.
  *
  * @remarks
@@ -30,7 +45,7 @@ const nextConfig: NextConfig = {
   transpilePackages: ['@docket/ui', '@docket/types', '@docket/env'],
   // Portless serves dev over https://admin.docket.localhost; allow its HMR/devtools
   // resources so hot-reload works (Next 16 blocks cross-origin dev resources by default).
-  allowedDevOrigins: ['admin.docket.localhost', '*.docket.localhost'],
+  allowedDevOrigins: ['admin.docket.localhost', '*.docket.localhost', ...authAllowedDevOrigins()],
   async rewrites() {
     return [
       { source: '/v1/:path*', destination: `${API_ORIGIN}/v1/:path*` },

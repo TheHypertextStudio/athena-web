@@ -5,6 +5,7 @@
  * Handlers throw these domain errors; {@link onError} maps each to its HTTP status
  * and emits the `@docket/types` {@link Problem} shape as `application/problem+json`.
  */
+import type { StandardSchemaV1 } from '@standard-schema/spec';
 import type { ProblemCode } from '@docket/types';
 import type { Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
@@ -67,6 +68,27 @@ export class InsufficientScopeError extends ApiError {
   }
 }
 
+/**
+ * 401 — the action needs a freshly re-authenticated session (step-up).
+ *
+ * @remarks
+ * Distinct from {@link AuthError}: the caller IS authenticated, but the session is too old
+ * for a high-risk action (scheduling account deletion). The `reauth_required` code lets the
+ * client re-verify the passkey and retry, rather than treating it as a sign-out.
+ */
+export class ReauthRequiredError extends ApiError {
+  constructor(message = 'Re-authentication required') {
+    super(401, 'reauth_required', message);
+  }
+}
+
+/** 409 — account deletion is blocked by unresolved sole-owner shared orgs. */
+export class DeletionBlockedError extends ApiError {
+  constructor(message = 'Resolve sole-owned shared workspaces before deleting your account') {
+    super(409, 'deletion_blocked', message);
+  }
+}
+
 /** 404 — not found, or hidden by existence-hiding. */
 export class NotFoundError extends ApiError {
   constructor(message = 'Not found') {
@@ -102,12 +124,20 @@ export class BillingFrozenError extends ApiError {
   }
 }
 
-/** 422 — request body/params failed validation. */
+/**
+ * 422 — request body/params failed validation. Accepts either a {@link ZodError} (raw zod
+ * failures bubbling to {@link onError}) or the Standard-Schema issue list that
+ * `hono-openapi`'s validator hook yields — both map to the Problem `fieldErrors`.
+ */
 export class ValidationError extends ApiError {
-  constructor(error: ZodError) {
+  constructor(error: ZodError | readonly StandardSchemaV1.Issue[]) {
+    const issues: readonly StandardSchemaV1.Issue[] = error instanceof ZodError ? error.issues : error;
     const fieldErrors: Record<string, string[]> = {};
-    for (const issue of error.issues) {
-      const key = issue.path.join('.') || '_';
+    for (const issue of issues) {
+      const key =
+        (issue.path ?? [])
+          .map((seg) => (typeof seg === 'object' && seg !== null ? seg.key : seg))
+          .join('.') || '_';
       (fieldErrors[key] ??= []).push(issue.message);
     }
     super(422, 'validation_error', 'Validation failed', fieldErrors);

@@ -5,6 +5,7 @@ import { Badge, Skeleton } from '@docket/ui/primitives';
 import { useParams, useRouter } from 'next/navigation';
 import { type JSX, useMemo, useState } from 'react';
 
+import TaskGraphPanel from '@/components/canvas/task-graph-panel';
 import { AgentsStrip } from '@/components/project-detail/agents-strip';
 import { Discussion } from '@/components/project-detail/discussion';
 import { MilestoneTasks } from '@/components/project-detail/milestone-tasks';
@@ -233,7 +234,19 @@ export default function ProjectDetailPage(): JSX.Element {
       ) : null}
 
       {tab === 'tasks' ? (
-        <div role="tabpanel" id="tabpanel-tasks" aria-labelledby="tab-tasks">
+        <div role="tabpanel" id="tabpanel-tasks" aria-labelledby="tab-tasks" className="flex flex-col gap-6">
+          <section className="flex flex-col gap-2">
+            <h2 className="text-on-surface text-h3 font-medium">Dependency map</h2>
+            <div className="h-96 overflow-hidden rounded-xl border border-outline-variant">
+              <TaskGraphPanel
+                scope={{ orgId, projectId }}
+                density="compact"
+                onExpand={() => {
+                  router.push(`/orgs/${orgId}/graph?projectId=${projectId}`);
+                }}
+              />
+            </div>
+          </section>
           <MilestoneTasks
             orgId={orgId}
             tasks={milestoneTasks}

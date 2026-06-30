@@ -56,7 +56,7 @@ function renderLink(href: string, content: React.ReactNode, className?: string):
 /** The full set of href builders a {@link Sidebar} needs. */
 function sidebarHrefs() {
   return {
-    hrefForHome: (key: 'today' | 'inbox' | 'portfolio') => `/${key}`,
+    hrefForHome: (key: 'today' | 'tasks' | 'inbox' | 'stream' | 'portfolio') => `/${key}`,
     hrefForWorkspace: (orgId: string, key: string) => `/orgs/${orgId}/${key}`,
     renderLink,
   };

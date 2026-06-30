@@ -62,7 +62,7 @@ export function useTriage(orgId: string): TriageState {
   const tasksQ = useApiQuery(
     apiQueryOptions(
       queryKeys.tasks(orgId),
-      () => api.v1.orgs[':orgId'].tasks.$get({ param: { orgId } }),
+      () => api.v1.orgs[':orgId'].tasks.$get({ param: { orgId }, query: {} }),
       'Could not load the triage queue.',
       { staleTime: STALE.volatile },
     ),
@@ -86,7 +86,7 @@ export function useTriage(orgId: string): TriageState {
   const projectsQ = useApiQuery(
     apiQueryOptions(
       queryKeys.projects(orgId),
-      () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
+      () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId }, query: {} }),
       'Could not load projects.',
       { staleTime: STALE.static },
     ),
@@ -94,7 +94,7 @@ export function useTriage(orgId: string): TriageState {
   const programsQ = useApiQuery(
     apiQueryOptions(
       queryKeys.programs(orgId),
-      () => api.v1.orgs[':orgId'].programs.$get({ param: { orgId } }),
+      () => api.v1.orgs[':orgId'].programs.$get({ param: { orgId }, query: {} }),
       'Could not load programs.',
       { staleTime: STALE.static },
     ),

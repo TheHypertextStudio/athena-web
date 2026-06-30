@@ -73,21 +73,21 @@ export function useViewsPage(orgId: string): ViewsPageData {
   const tasksQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.tasks(orgId),
-      () => api.v1.orgs[':orgId'].tasks.$get({ param: { orgId } }),
+      () => api.v1.orgs[':orgId'].tasks.$get({ param: { orgId }, query: {} }),
       'Could not load tasks.',
     ),
   );
   const projectsQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.projects(orgId),
-      () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
+      () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId }, query: {} }),
       'Could not load projects.',
     ),
   );
   const programsQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.programs(orgId),
-      () => api.v1.orgs[':orgId'].programs.$get({ param: { orgId } }),
+      () => api.v1.orgs[':orgId'].programs.$get({ param: { orgId }, query: {} }),
       'Could not load programs.',
     ),
   );

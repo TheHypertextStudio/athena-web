@@ -19,9 +19,11 @@ import type { AppEnv } from '../context';
 import { CapabilityError, NotFoundError } from '../error';
 import { ok } from '../lib/ok';
 import { pageResult, seekAfter } from '../lib/list-cursor';
+import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 
+import { emitObservation } from './observation-emit';
 import {
   assertMilestoneInOrg,
   assertRefInOrg,
@@ -31,215 +33,299 @@ import {
   toOut,
   toRef,
 } from './task-helpers';
+import { attachmentRoutes } from './attachment-routes';
 import { taskDependencyRoutes } from './task-dependency-routes';
 
 /** Tasks router: lifecycle (create/list/detail/update/archive/state) + subtasks + dependencies. */
 const tasks = new Hono<AppEnv>()
-  .post('/', capabilityGuard('contribute'), zJson(TaskCreate), async (c) => {
-    const { orgId, actorId } = c.get('actorCtx');
-    const body = c.req.valid('json');
+  .post(
+    '/',
+    capabilityGuard('contribute'),
+    apiDoc({ tag: 'Tasks', summary: 'Create a task', capability: 'contribute', response: TaskOut }),
+    zJson(TaskCreate),
+    async (c) => {
+      const { orgId, actorId } = c.get('actorCtx');
+      const body = c.req.valid('json');
 
-    const teamRows = await db
-      .select()
-      .from(team)
-      .where(and(eq(team.id, body.teamId), eq(team.organizationId, orgId)))
-      .limit(1);
-    const teamRow = teamRows[0];
-    if (!teamRow) throw new NotFoundError('Team not found');
+      const teamRows = await db
+        .select()
+        .from(team)
+        .where(and(eq(team.id, body.teamId), eq(team.organizationId, orgId)))
+        .limit(1);
+      const teamRow = teamRows[0];
+      if (!teamRow) throw new NotFoundError('Team not found');
 
-    // Tenant isolation: every body-provided reference must live in the caller's org.
-    await assertRefInOrg(actor, orgId, body.assigneeId, 'Assignee not found');
-    await assertRefInOrg(project, orgId, body.projectId, 'Project not found');
-    await assertRefInOrg(cycle, orgId, body.cycleId, 'Cycle not found');
-    await assertMilestoneInOrg(orgId, body.milestoneId);
-    if (body.parentTaskId !== undefined) await loadTask(orgId, body.parentTaskId);
+      // Tenant isolation: every body-provided reference must live in the caller's org.
+      await assertRefInOrg(actor, orgId, body.assigneeId, 'Assignee not found');
+      await assertRefInOrg(project, orgId, body.projectId, 'Project not found');
+      await assertRefInOrg(cycle, orgId, body.cycleId, 'Cycle not found');
+      await assertMilestoneInOrg(orgId, body.milestoneId);
+      if (body.parentTaskId !== undefined) await loadTask(orgId, body.parentTaskId);
 
-    // resolveStateTransition validates the state key and derives terminal timestamps so
-    // a task created directly in a `completed`/`canceled` state lands with correct fields.
-    const firstState = teamRow.workflowStates[0];
-    const { state, completedAt, canceledAt } = firstState
-      ? await resolveStateTransition(orgId, body.teamId, body.state ?? firstState.key)
-      : { state: body.state ?? 'backlog', completedAt: null, canceledAt: null };
+      // resolveStateTransition validates the state key and derives terminal timestamps so
+      // a task created directly in a `completed`/`canceled` state lands with correct fields.
+      const firstState = teamRow.workflowStates[0];
+      const { state, completedAt, canceledAt } = firstState
+        ? await resolveStateTransition(orgId, body.teamId, body.state ?? firstState.key)
+        : { state: body.state ?? 'backlog', completedAt: null, canceledAt: null };
 
-    const inserted = await db
-      .insert(task)
-      .values({
+      const inserted = await db
+        .insert(task)
+        .values({
+          organizationId: orgId,
+          title: body.title,
+          description: body.description,
+          teamId: body.teamId,
+          state,
+          completedAt,
+          canceledAt,
+          priority: body.priority ?? 'none',
+          assigneeId: body.assigneeId,
+          projectId: body.projectId,
+          milestoneId: body.milestoneId,
+          cycleId: body.cycleId,
+          parentTaskId: body.parentTaskId,
+          estimate: body.estimate,
+          estimateMinutes: body.estimateMinutes,
+          startDate: body.startDate ? new Date(body.startDate) : undefined,
+          dueDate: body.dueDate ? new Date(body.dueDate) : undefined,
+          source: 'native',
+          createdBy: actorId,
+        })
+        .returning();
+      const row = inserted[0];
+      /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
+      if (!row) throw new Error('task insert returned no row');
+
+      // Stream: record the creation, plus an assignment event when it lands on someone.
+      const subject = { type: 'task', id: row.id, title: row.title };
+      await emitObservation({
         organizationId: orgId,
-        title: body.title,
-        description: body.description,
-        teamId: body.teamId,
-        state,
-        completedAt,
-        canceledAt,
-        priority: body.priority ?? 'none',
-        assigneeId: body.assigneeId,
-        projectId: body.projectId,
-        milestoneId: body.milestoneId,
-        cycleId: body.cycleId,
-        parentTaskId: body.parentTaskId,
-        estimate: body.estimate,
-        estimateMinutes: body.estimateMinutes,
-        startDate: body.startDate ? new Date(body.startDate) : undefined,
-        dueDate: body.dueDate ? new Date(body.dueDate) : undefined,
-        source: 'native',
-        createdBy: actorId,
-      })
-      .returning();
-    const row = inserted[0];
-    /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
-    if (!row) throw new Error('task insert returned no row');
-    return ok(c, TaskOut, toOut(row));
-  })
-  .get('/', zQuery(CursorQuery), async (c) => {
-    const { orgId } = c.get('actorCtx');
-    const { cursor, limit } = c.req.valid('query');
-    // Keyset-paginate newest-first (createdAt, id tiebreak). `limit` is optional: omitted returns
-    // the full active-task list as before; supplied returns a bounded page + `nextCursor`.
-    const base = db
-      .select()
-      .from(task)
-      .where(
-        and(
-          eq(task.organizationId, orgId),
-          isNull(task.archivedAt),
-          seekAfter(task.createdAt, task.id, cursor),
-        ),
-      )
-      .orderBy(desc(task.createdAt), desc(task.id));
-    const rows = await (limit === undefined ? base : base.limit(limit + 1));
-    const { items, nextCursor } = pageResult(rows, limit, (r) => r.createdAt);
-    return ok(c, pageOf(TaskOut), { items: items.map(toOut), nextCursor });
-  })
-  .get('/:id', zParam(idParam), async (c) => {
-    const { orgId } = c.get('actorCtx');
-    const { id } = c.req.valid('param');
-    const row = await loadTask(orgId, id);
+        kind: 'created',
+        actorId,
+        title: row.title,
+        subject,
+      });
+      if (row.assigneeId) {
+        await emitObservation({
+          organizationId: orgId,
+          kind: 'assignment',
+          actorId,
+          title: row.title,
+          subject,
+        });
+      }
+      return ok(c, TaskOut, toOut(row));
+    },
+  )
+  .get(
+    '/',
+    apiDoc({ tag: 'Tasks', summary: 'List tasks', response: pageOf(TaskOut) }),
+    zQuery(CursorQuery),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { cursor, limit } = c.req.valid('query');
+      // Keyset-paginate newest-first (createdAt, id tiebreak). `limit` is optional: omitted returns
+      // the full active-task list as before; supplied returns a bounded page + `nextCursor`.
+      const base = db
+        .select()
+        .from(task)
+        .where(
+          and(
+            eq(task.organizationId, orgId),
+            isNull(task.archivedAt),
+            seekAfter(task.createdAt, task.id, cursor),
+          ),
+        )
+        .orderBy(desc(task.createdAt), desc(task.id));
+      const rows = await (limit === undefined ? base : base.limit(limit + 1));
+      const { items, nextCursor } = pageResult(rows, limit, (r) => r.createdAt);
+      return ok(c, pageOf(TaskOut), { items: items.map(toOut), nextCursor });
+    },
+  )
+  .get(
+    '/:id',
+    apiDoc({ tag: 'Tasks', summary: 'Get task detail', response: TaskDetail }),
+    zParam(idParam),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { id } = c.req.valid('param');
+      const row = await loadTask(orgId, id);
 
-    // Tasks blocking THIS one (blockers): edges where this task is the blocked side.
-    const blockedByRows = await db
-      .select({ id: task.id, title: task.title, state: task.state, projectId: task.projectId })
-      .from(taskDependency)
-      .innerJoin(task, eq(taskDependency.blockingTaskId, task.id))
-      .where(and(eq(taskDependency.blockedTaskId, id), eq(taskDependency.organizationId, orgId)));
-    // Tasks THIS one blocks: edges where this task is the blocking side.
-    const blockingRows = await db
-      .select({ id: task.id, title: task.title, state: task.state, projectId: task.projectId })
-      .from(taskDependency)
-      .innerJoin(task, eq(taskDependency.blockedTaskId, task.id))
-      .where(and(eq(taskDependency.blockingTaskId, id), eq(taskDependency.organizationId, orgId)));
-    const subtaskRows = await db
-      .select({ id: task.id, title: task.title, state: task.state, projectId: task.projectId })
-      .from(task)
-      .where(
-        and(eq(task.parentTaskId, id), eq(task.organizationId, orgId), isNull(task.archivedAt)),
-      );
+      // Tasks blocking THIS one (blockers): edges where this task is the blocked side.
+      const blockedByRows = await db
+        .select({ id: task.id, title: task.title, state: task.state, projectId: task.projectId })
+        .from(taskDependency)
+        .innerJoin(task, eq(taskDependency.blockingTaskId, task.id))
+        .where(and(eq(taskDependency.blockedTaskId, id), eq(taskDependency.organizationId, orgId)));
+      // Tasks THIS one blocks: edges where this task is the blocking side.
+      const blockingRows = await db
+        .select({ id: task.id, title: task.title, state: task.state, projectId: task.projectId })
+        .from(taskDependency)
+        .innerJoin(task, eq(taskDependency.blockedTaskId, task.id))
+        .where(
+          and(eq(taskDependency.blockingTaskId, id), eq(taskDependency.organizationId, orgId)),
+        );
+      const subtaskRows = await db
+        .select({ id: task.id, title: task.title, state: task.state, projectId: task.projectId })
+        .from(task)
+        .where(
+          and(eq(task.parentTaskId, id), eq(task.organizationId, orgId), isNull(task.archivedAt)),
+        );
 
-    const detail: z.input<typeof TaskDetail> = {
-      ...toOut(row),
-      milestoneId: row.milestoneId,
-      cycleId: row.cycleId,
-      parentTaskId: row.parentTaskId,
-      estimate: row.estimate,
-      estimateMinutes: row.estimateMinutes,
-      completedAt: row.completedAt?.toISOString() ?? null,
-      canceledAt: row.canceledAt?.toISOString() ?? null,
-      blocking: blockingRows.map(toRef),
-      blockedBy: blockedByRows.map(toRef),
-      subtasks: subtaskRows.map(toRef),
-    };
-    return ok(c, TaskDetail, detail);
-  })
-  .patch('/:id', capabilityGuard('contribute'), zParam(idParam), zJson(TaskUpdate), async (c) => {
-    const ctx = c.get('actorCtx');
-    const { orgId } = ctx;
-    const { id } = c.req.valid('param');
-    const body = c.req.valid('json');
+      const detail: z.input<typeof TaskDetail> = {
+        ...toOut(row),
+        milestoneId: row.milestoneId,
+        cycleId: row.cycleId,
+        parentTaskId: row.parentTaskId,
+        estimate: row.estimate,
+        estimateMinutes: row.estimateMinutes,
+        completedAt: row.completedAt?.toISOString() ?? null,
+        canceledAt: row.canceledAt?.toISOString() ?? null,
+        blocking: blockingRows.map(toRef),
+        blockedBy: blockedByRows.map(toRef),
+        subtasks: subtaskRows.map(toRef),
+      };
+      return ok(c, TaskDetail, detail);
+    },
+  )
+  .patch(
+    '/:id',
+    capabilityGuard('contribute'),
+    apiDoc({ tag: 'Tasks', summary: 'Update a task', capability: 'contribute', response: TaskOut }),
+    zParam(idParam),
+    zJson(TaskUpdate),
+    async (c) => {
+      const ctx = c.get('actorCtx');
+      const { orgId } = ctx;
+      const { id } = c.req.valid('param');
+      const body = c.req.valid('json');
 
-    // Changing assignee/delegate requires `assign` capability (permissions §2).
-    if (body.assigneeId !== undefined || body.delegateId !== undefined) {
-      const held = ctx.capabilities as Capability[];
-      if (!held.some((cap) => satisfies(cap, 'assign'))) throw new CapabilityError();
-    }
+      // Changing assignee/delegate requires `assign` capability (permissions §2).
+      if (body.assigneeId !== undefined || body.delegateId !== undefined) {
+        const held = ctx.capabilities as Capability[];
+        if (!held.some((cap) => satisfies(cap, 'assign'))) throw new CapabilityError();
+      }
 
-    // Tenant isolation: every re-pointed reference must live in the caller's org.
-    await assertRefInOrg(actor, orgId, body.assigneeId, 'Assignee not found');
-    await assertRefInOrg(actor, orgId, body.delegateId, 'Delegate not found');
-    await assertRefInOrg(project, orgId, body.projectId, 'Project not found');
-    await assertRefInOrg(program, orgId, body.programId, 'Program not found');
-    await assertRefInOrg(cycle, orgId, body.cycleId, 'Cycle not found');
-    await assertMilestoneInOrg(orgId, body.milestoneId);
+      // Tenant isolation: every re-pointed reference must live in the caller's org.
+      await assertRefInOrg(actor, orgId, body.assigneeId, 'Assignee not found');
+      await assertRefInOrg(actor, orgId, body.delegateId, 'Delegate not found');
+      await assertRefInOrg(project, orgId, body.projectId, 'Project not found');
+      await assertRefInOrg(program, orgId, body.programId, 'Program not found');
+      await assertRefInOrg(cycle, orgId, body.cycleId, 'Cycle not found');
+      await assertMilestoneInOrg(orgId, body.milestoneId);
 
-    // resolveStateTransition validates + derives timestamps; bypassing it would corrupt progress.
-    const statePatch =
-      body.state !== undefined
-        ? await resolveStateTransition(orgId, (await loadTask(orgId, id)).teamId, body.state)
-        : undefined;
+      // resolveStateTransition validates + derives timestamps; bypassing it would corrupt progress.
+      const statePatch =
+        body.state !== undefined
+          ? await resolveStateTransition(orgId, (await loadTask(orgId, id)).teamId, body.state)
+          : undefined;
 
-    const patch = {
-      ...(body.title !== undefined ? { title: body.title } : {}),
-      ...(body.description !== undefined ? { description: body.description } : {}),
-      ...(statePatch !== undefined
-        ? {
-            state: statePatch.state,
-            completedAt: statePatch.completedAt,
-            canceledAt: statePatch.canceledAt,
-          }
-        : {}),
-      ...(body.priority !== undefined ? { priority: body.priority } : {}),
-      ...(body.assigneeId !== undefined ? { assigneeId: body.assigneeId } : {}),
-      ...(body.delegateId !== undefined ? { delegateId: body.delegateId } : {}),
-      ...(body.projectId !== undefined ? { projectId: body.projectId } : {}),
-      ...(body.programId !== undefined ? { programId: body.programId } : {}),
-      ...(body.milestoneId !== undefined ? { milestoneId: body.milestoneId } : {}),
-      ...(body.cycleId !== undefined ? { cycleId: body.cycleId } : {}),
-      ...(body.estimate !== undefined ? { estimate: body.estimate } : {}),
-      ...(body.estimateMinutes !== undefined ? { estimateMinutes: body.estimateMinutes } : {}),
-      ...(body.startDate !== undefined
-        ? { startDate: body.startDate ? new Date(body.startDate) : null }
-        : {}),
-      ...(body.dueDate !== undefined
-        ? { dueDate: body.dueDate ? new Date(body.dueDate) : null }
-        : {}),
-    };
+      const patch = {
+        ...(body.title !== undefined ? { title: body.title } : {}),
+        ...(body.description !== undefined ? { description: body.description } : {}),
+        ...(statePatch !== undefined
+          ? {
+              state: statePatch.state,
+              completedAt: statePatch.completedAt,
+              canceledAt: statePatch.canceledAt,
+            }
+          : {}),
+        ...(body.priority !== undefined ? { priority: body.priority } : {}),
+        ...(body.assigneeId !== undefined ? { assigneeId: body.assigneeId } : {}),
+        ...(body.delegateId !== undefined ? { delegateId: body.delegateId } : {}),
+        ...(body.projectId !== undefined ? { projectId: body.projectId } : {}),
+        ...(body.programId !== undefined ? { programId: body.programId } : {}),
+        ...(body.milestoneId !== undefined ? { milestoneId: body.milestoneId } : {}),
+        ...(body.cycleId !== undefined ? { cycleId: body.cycleId } : {}),
+        ...(body.estimate !== undefined ? { estimate: body.estimate } : {}),
+        ...(body.estimateMinutes !== undefined ? { estimateMinutes: body.estimateMinutes } : {}),
+        ...(body.startDate !== undefined
+          ? { startDate: body.startDate ? new Date(body.startDate) : null }
+          : {}),
+        ...(body.dueDate !== undefined
+          ? { dueDate: body.dueDate ? new Date(body.dueDate) : null }
+          : {}),
+      };
 
-    // An empty patch body is a valid no-op: Drizzle rejects an empty `.set({})`.
-    if (Object.keys(patch).length === 0) {
-      return ok(c, TaskOut, toOut(await loadTask(orgId, id)));
-    }
+      // An empty patch body is a valid no-op: Drizzle rejects an empty `.set({})`.
+      if (Object.keys(patch).length === 0) {
+        return ok(c, TaskOut, toOut(await loadTask(orgId, id)));
+      }
 
-    const updated = await db
-      .update(task)
-      .set(patch)
-      .where(and(eq(task.id, id), eq(task.organizationId, orgId), isNull(task.archivedAt)))
-      .returning();
-    const row = updated[0];
-    if (!row) throw new NotFoundError('Task not found');
-    return ok(c, TaskOut, toOut(row));
-  })
-  .delete('/:id', capabilityGuard('contribute'), zParam(idParam), async (c) => {
-    const { orgId } = c.get('actorCtx');
-    const { id } = c.req.valid('param');
-    const archivedAt = new Date();
-    const updated = await db
-      .update(task)
-      .set({ archivedAt })
-      .where(and(eq(task.id, id), eq(task.organizationId, orgId), isNull(task.archivedAt)))
-      .returning();
-    const row = updated[0];
-    if (!row) throw new NotFoundError('Task not found');
-    return ok(c, TaskArchived, {
-      id: row.id,
-      /* v8 ignore next -- @preserve defensive: archivedAt was just set above */
-      archivedAt: (row.archivedAt ?? archivedAt).toISOString(),
-    });
-  })
+      const updated = await db
+        .update(task)
+        .set(patch)
+        .where(and(eq(task.id, id), eq(task.organizationId, orgId), isNull(task.archivedAt)))
+        .returning();
+      const row = updated[0];
+      if (!row) throw new NotFoundError('Task not found');
+
+      // Stream: a state transition (completed when it landed terminal) and/or a reassignment.
+      const subject = { type: 'task', id: row.id, title: row.title };
+      if (statePatch !== undefined) {
+        await emitObservation({
+          organizationId: orgId,
+          kind: statePatch.completedAt ? 'completed' : 'status_change',
+          actorId: ctx.actorId,
+          title: row.title,
+          subject,
+          payload: { state: row.state },
+        });
+      }
+      if (body.assigneeId) {
+        await emitObservation({
+          organizationId: orgId,
+          kind: 'assignment',
+          actorId: ctx.actorId,
+          title: row.title,
+          subject,
+        });
+      }
+      return ok(c, TaskOut, toOut(row));
+    },
+  )
+  .delete(
+    '/:id',
+    capabilityGuard('contribute'),
+    apiDoc({
+      tag: 'Tasks',
+      summary: 'Archive a task',
+      capability: 'contribute',
+      response: TaskArchived,
+    }),
+    zParam(idParam),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { id } = c.req.valid('param');
+      const archivedAt = new Date();
+      const updated = await db
+        .update(task)
+        .set({ archivedAt })
+        .where(and(eq(task.id, id), eq(task.organizationId, orgId), isNull(task.archivedAt)))
+        .returning();
+      const row = updated[0];
+      if (!row) throw new NotFoundError('Task not found');
+      return ok(c, TaskArchived, {
+        id: row.id,
+        /* v8 ignore next -- @preserve defensive: archivedAt was just set above */
+        archivedAt: (row.archivedAt ?? archivedAt).toISOString(),
+      });
+    },
+  )
   .post(
     '/:id/state',
     capabilityGuard('contribute'),
+    apiDoc({
+      tag: 'Tasks',
+      summary: 'Change task state',
+      capability: 'contribute',
+      response: TaskOut,
+    }),
     zParam(idParam),
     zJson(TaskStateUpdate),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const { state } = c.req.valid('json');
       const row = await loadTask(orgId, id);
@@ -256,9 +342,19 @@ const tasks = new Hono<AppEnv>()
       const next = updated[0];
       /* v8 ignore next -- @preserve defensive: loadTask above proved the row exists + is active */
       if (!next) throw new NotFoundError('Task not found');
+
+      await emitObservation({
+        organizationId: orgId,
+        kind: transition.completedAt ? 'completed' : 'status_change',
+        actorId,
+        title: next.title,
+        subject: { type: 'task', id: next.id, title: next.title },
+        payload: { state: next.state },
+      });
       return ok(c, TaskOut, toOut(next));
     },
   )
-  .route('/', taskDependencyRoutes);
+  .route('/', taskDependencyRoutes)
+  .route('/', attachmentRoutes);
 
 export default tasks;

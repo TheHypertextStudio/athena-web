@@ -15,6 +15,7 @@ import { type Context, Hono } from 'hono';
 import type { AppEnv } from '../context';
 import { AuthError } from '../error';
 import { ok } from '../lib/ok';
+import { apiDoc } from '../lib/openapi-route';
 
 import { linkedIdentities } from './integration-provider';
 
@@ -25,10 +26,14 @@ function requireUserId(c: Context<AppEnv>): string {
   return session.user.id;
 }
 
-const meIdentities = new Hono<AppEnv>().get('/', async (c) => {
-  const userId = requireUserId(c);
-  const items = await linkedIdentities(userId);
-  return ok(c, IdentityListOut, { items });
-});
+const meIdentities = new Hono<AppEnv>().get(
+  '/',
+  apiDoc({ tag: 'Me', summary: 'List linked identities', response: IdentityListOut }),
+  async (c) => {
+    const userId = requireUserId(c);
+    const items = await linkedIdentities(userId);
+    return ok(c, IdentityListOut, { items });
+  },
+);
 
 export default meIdentities;

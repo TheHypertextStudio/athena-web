@@ -214,6 +214,63 @@ export const TaskRemoved = z
 /** Removal acknowledgement value. */
 export type TaskRemoved = z.infer<typeof TaskRemoved>;
 
+/**
+ * A node in the dependency canvas: a slim task projection.
+ *
+ * @remarks
+ * The canvas renderer is dataset-agnostic, so this carries only what a node card and the
+ * layout need (no provenance/timestamps). FK fields that can be unset are `null` (matching
+ * the column), never optional — see {@link GraphOut}.
+ */
+export const TaskGraphNode = z
+  .object({
+    id: TaskId,
+    title: z.string(),
+    state: z.string(),
+    priority: Priority,
+    teamId: TeamId,
+    projectId: ProjectId.nullable(),
+    assigneeId: ActorId.nullable(),
+    parentTaskId: TaskId.nullable(),
+  })
+  .meta({ id: 'TaskGraphNode', description: 'A task node in the dependency graph.' });
+/** Dependency-graph node value. */
+export type TaskGraphNode = z.infer<typeof TaskGraphNode>;
+
+/**
+ * A directed edge in the dependency canvas.
+ *
+ * @remarks
+ * `dependency` edges run `blocking → blocked` (source blocks target); `subtask` edges run
+ * `parent → child`. `id` is a stable synthetic key (`dep:<a>:<b>` / `sub:<a>:<b>`).
+ */
+export const TaskGraphEdge = z
+  .object({
+    id: z.string(),
+    source: TaskId,
+    target: TaskId,
+    kind: z.enum(['dependency', 'subtask']),
+  })
+  .meta({ id: 'TaskGraphEdge', description: 'A directed dependency or subtask edge.' });
+/** Dependency-graph edge value. */
+export type TaskGraphEdge = z.infer<typeof TaskGraphEdge>;
+
+/**
+ * The whole dependency graph for a scope: every viewable node plus the edges among them.
+ *
+ * @remarks
+ * Edges are pre-pruned so both endpoints are present in `nodes` (no dangling edges). The
+ * node set is already filtered to what the caller may view, so the renderer can draw it as-is.
+ */
+export const GraphOut = z
+  .object({
+    nodes: z.array(TaskGraphNode),
+    edges: z.array(TaskGraphEdge),
+  })
+  .meta({ id: 'GraphOut', description: 'A scoped task dependency + subtask graph.' });
+/** Dependency-graph payload value. */
+export type GraphOut = z.infer<typeof GraphOut>;
+
 /** Acknowledgement returned when a Task is archived (soft-deleted). */
 export const TaskArchived = z
   .object({

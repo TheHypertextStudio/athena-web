@@ -108,3 +108,48 @@ pnpm dev
 `turbo` resolves the task graph natively — `//#db:up` (Docker Postgres) →
 `@docket/db#db:migrate` → each app's `dev` — so the database is up and migrated before the
 servers start. No shell chaining required.
+
+## Tunnels & local OAuth (real Google/GitHub locally)
+
+`APP_MODE=local` runs every connector against **mock** adapters, so most dev needs no tunnel. You
+only need the below to exercise **real** OAuth (linking a real Google/GitHub account) or **inbound
+webhooks** (the GitHub firehose) locally. It is all driven by `pnpm bootstrap` (Phase 1) — there is
+no separate tunnel command.
+
+**Why a tunnel at all:** Google rejects `*.docket.localhost` redirect URIs (non-public TLD), and a
+per-dev tunnel URL can't be self-registered on the shared Google OAuth client. So OAuth goes through
+**one shared, registered anchor** + Better Auth's `oAuthProxy` (mounted when `OAUTH_PROXY_SECRET` +
+`OAUTH_PROXY_PRODUCTION_URL` are set — `packages/auth/src/auth-builder.ts`).
+
+### Per-dev: link real accounts locally (turnkey)
+
+`pnpm bootstrap` → answer **yes** to "Link real Google/GitHub via the team OAuth proxy", and paste
+the shared anchor URL + `OAUTH_PROXY_SECRET` (from the team secret store). That's it — no tunnel, no
+Google registration on your part. Your local sign-in relays through the anchor's registered callback.
+
+### Maintainer one-time: stand up the shared anchor
+
+Run an always-on Docket instance behind a persistent **cloudflared named tunnel** on the team
+Cloudflare zone, register it once, and distribute `OAUTH_PROXY_SECRET`. `pnpm bootstrap` → answer
+**yes** to "Set up a persistent cloudflared tunnel"; it prints the exact commands + `config.yml` and
+the URLs to register. The tunnel fronts the portless **web** host (`https://docket.localhost`), whose
+Next rewrites proxy `/api/auth` + `/v1` to the API, so one ingress covers OAuth **and** the GitHub
+firehose. Origin uses `noTLSVerify` + `httpHostHeader` because dev ports are ephemeral (target the
+stable portless host) and portless serves a local-CA cert. Then register once:
+
+- Google → Authorized redirect URI `https://<anchor>/api/auth/callback/google`, JS origin `https://<anchor>`
+- Shared dev GitHub App → webhook `https://<anchor>/v1/ingest/github`
+
+The anchor host is added to `BETTER_AUTH_ALLOWED_HOSTS` (the single source of truth — it also flows
+to each app's `next.config.ts` `allowedDevOrigins`, so Next 16 doesn't block the origin's HMR).
+
+### Webhooks
+
+- **GitHub firehose** — handled by the **shared dev GitHub App** → the shared anchor's
+  `/v1/ingest/github`; real events are exercised on the shared instance. (For an isolated personal
+  firehose, the same `pnpm bootstrap` tunnel step exposes your own stack — point a personal GitHub
+  App's webhook at it.)
+- **Stripe** — no tunnel; use the Stripe CLI (`stripe listen`), and locally the billing gateway is
+  mocked anyway. Note the handler path is `POST /v1/billing/webhook`
+  (`apps/api/src/routes/webhooks.ts`), not the `@better-auth/stripe` `/api/auth/stripe/webhook`
+  some older docs reference.

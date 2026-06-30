@@ -15,20 +15,29 @@
  * Kept behind one function so a `/v1/cron/process-events` tick and any future Cloud Tasks
  * push share identical, idempotent behavior. `now` is always passed in (never module scope).
  */
-import { actor, db, inboundEvent, integration, notification, observation } from '@docket/db';
+import {
+  actor,
+  db,
+  inboundEvent,
+  integration,
+  notification,
+  observation,
+  observationRecipient,
+} from '@docket/db';
 import { selectAdapter } from '@docket/boundaries';
 import type {
   BoundaryEnv,
-  ConnectorProvider,
   Observer,
   ObservationDraft,
+  ObserverProvider,
 } from '@docket/boundaries';
-import { ObservationKind } from '@docket/types';
+import { ObservationKind, type StreamRelevance } from '@docket/types';
 import { and, eq, lt, or } from 'drizzle-orm';
 
 import { toBoundaryEnv } from '../container';
-import { asConnectorProvider } from './integration-provider';
+import { asObserverProvider } from './integration-provider';
 import { LEASE_STALE_MS } from './integration-sync';
+import { publishStreamEvent } from './stream-helpers';
 
 /** The selected `inbound_event` row shape. */
 type InboundEventRow = typeof inboundEvent.$inferSelect;
@@ -73,12 +82,12 @@ async function claimEvent(id: string, now: Date, staleBefore: Date): Promise<boo
 interface SweepCtx {
   readonly now: Date;
   readonly env: BoundaryEnv;
-  readonly observers: Map<ConnectorProvider, Observer>;
+  readonly observers: Map<ObserverProvider, Observer>;
   readonly owners: Map<string, string | null>;
 }
 
 /** Resolve (and cache for the sweep) the provider observer. */
-function observerFor(ctx: SweepCtx, provider: ConnectorProvider): Observer {
+function observerFor(ctx: SweepCtx, provider: ObserverProvider): Observer {
   let observer = ctx.observers.get(provider);
   if (!observer) {
     observer = selectAdapter('observer', ctx.env, { observerProvider: provider });
@@ -106,6 +115,13 @@ async function ownerUserId(ctx: SweepCtx, integrationId: string): Promise<string
   return userId;
 }
 
+/** The personal-stream relevance reason for an external observation, keyed off its kind. */
+function externalRelevance(kind: ObservationKind): StreamRelevance {
+  if (kind === 'mention') return 'mention';
+  if (kind === 'assignment' || kind === 'task_assignment') return 'assignment';
+  return 'owned';
+}
+
 /** Surface a fresh observation into the Hub inbox when it's a mention/assignment about the user. */
 async function runBridges(
   draft: ObservationDraft,
@@ -129,7 +145,7 @@ async function runBridges(
 /** Normalize + persist one inbound event's observations; returns the count created. */
 async function processOne(ev: InboundEventRow, ctx: SweepCtx): Promise<number> {
   const now = ctx.now;
-  const provider = asConnectorProvider(ev.provider);
+  const provider = asObserverProvider(ev.provider);
   const orgId = ev.organizationId;
   // Unrouted (no matching integration) or unsupported provider: acknowledge without observations.
   if (!provider || !orgId) {
@@ -152,7 +168,8 @@ async function processOne(ev: InboundEventRow, ctx: SweepCtx): Promise<number> {
   for (const draft of drafts) {
     const kind = ObservationKind.safeParse(draft.kind);
     if (!kind.success) continue; // skip drafts whose kind isn't a known enum value
-    const inserted = await db
+    const occurredAt = new Date(draft.occurredAt);
+    const [obs] = await db
       .insert(observation)
       .values({
         organizationId: orgId,
@@ -160,7 +177,7 @@ async function processOne(ev: InboundEventRow, ctx: SweepCtx): Promise<number> {
         integrationId: ev.integrationId,
         provider: ev.provider,
         kind: kind.data,
-        occurredAt: new Date(draft.occurredAt),
+        occurredAt,
         title: draft.title,
         summary: draft.summary ?? null,
         permalink: draft.permalink ?? null,
@@ -174,8 +191,17 @@ async function processOne(ev: InboundEventRow, ctx: SweepCtx): Promise<number> {
       })
       .onConflictDoNothing({ target: [observation.organizationId, observation.dedupeKey] })
       .returning({ id: observation.id });
-    if (inserted.length > 0) {
+    if (obs) {
       created += 1;
+      // Fan the external observation into the integration owner's personal stream + live SSE.
+      if (userId) {
+        const reason = externalRelevance(kind.data);
+        await db
+          .insert(observationRecipient)
+          .values({ observationId: obs.id, userId, organizationId: orgId, occurredAt, reason })
+          .onConflictDoNothing();
+        await publishStreamEvent(obs.id, [{ userId, reason }]).catch(() => undefined);
+      }
       await runBridges(draft, orgId, userId);
     }
   }

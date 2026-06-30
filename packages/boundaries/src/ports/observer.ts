@@ -21,6 +21,17 @@
  */
 import type { ConnectorProvider } from './connector';
 
+/**
+ * The providers an {@link Observer} can be bound to.
+ *
+ * @remarks
+ * A superset of {@link ConnectorProvider}: every connector can also be observed, plus
+ * **observe-only** sources that have no work-import connector (e.g. Slack — Docket receives its
+ * mentions/messages but never pulls tasks from it). Keeping observer providers as their own union
+ * avoids polluting `ConnectorProvider`'s exhaustive switches with a source that has no connector.
+ */
+export type ObserverProvider = ConnectorProvider | 'slack';
+
 /** Inbound webhook request headers, lower-cased keys (Hono header lookup is case-insensitive). */
 export type InboundHeaders = Record<string, string | undefined>;
 
@@ -124,7 +135,7 @@ export interface ObservationDraft {
  */
 export interface Observer {
   /** The provider this observer handles. */
-  readonly provider: ConnectorProvider;
+  readonly provider: ObserverProvider;
 
   /**
    * Verify the inbound request is authentically from the provider.

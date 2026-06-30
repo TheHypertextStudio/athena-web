@@ -20,6 +20,7 @@ import { z } from 'zod';
 import type { AppEnv } from '../context';
 import { AuthError } from '../error';
 import { ok } from '../lib/ok';
+import { apiDoc } from '../lib/openapi-route';
 import { zParam } from '../lib/validate';
 
 /** One authorized MCP client returned by the list endpoint. */
@@ -45,47 +46,56 @@ function requireUserId(c: Context<AppEnv>): string {
 }
 
 const connectedApps = new Hono<AppEnv>()
-  .get('/', async (c) => {
-    const userId = requireUserId(c);
+  .get(
+    '/',
+    apiDoc({ tag: 'Me', summary: 'List connected apps', response: ConnectedAppsListOut }),
+    async (c) => {
+      const userId = requireUserId(c);
 
-    const rows = await db
-      .select({
-        clientId: oauthConsent.clientId,
-        name: oauthApplication.name,
-        icon: oauthApplication.icon,
-        scopes: oauthConsent.scopes,
-        consentedAt: oauthConsent.createdAt,
-      })
-      .from(oauthConsent)
-      .innerJoin(oauthApplication, eq(oauthApplication.clientId, oauthConsent.clientId))
-      .where(and(eq(oauthConsent.userId, userId), eq(oauthConsent.consentGiven, true)));
+      const rows = await db
+        .select({
+          clientId: oauthConsent.clientId,
+          name: oauthApplication.name,
+          icon: oauthApplication.icon,
+          scopes: oauthConsent.scopes,
+          consentedAt: oauthConsent.createdAt,
+        })
+        .from(oauthConsent)
+        .innerJoin(oauthApplication, eq(oauthApplication.clientId, oauthConsent.clientId))
+        .where(and(eq(oauthConsent.userId, userId), eq(oauthConsent.consentGiven, true)));
 
-    const items: ConnectedAppOut[] = rows.map((row) => ({
-      clientId: row.clientId,
-      name: row.name,
-      icon: row.icon,
-      scopes: row.scopes
-        .split(' ')
-        .map((s) => s.trim())
-        .filter(Boolean),
-      consentedAt: row.consentedAt.toISOString(),
-    }));
+      const items: ConnectedAppOut[] = rows.map((row) => ({
+        clientId: row.clientId,
+        name: row.name,
+        icon: row.icon,
+        scopes: row.scopes
+          .split(' ')
+          .map((s) => s.trim())
+          .filter(Boolean),
+        consentedAt: row.consentedAt.toISOString(),
+      }));
 
-    return ok(c, ConnectedAppsListOut, { items });
-  })
-  .delete('/:clientId', zParam(clientIdParam), async (c) => {
-    const userId = requireUserId(c);
-    const { clientId } = c.req.valid('param');
+      return ok(c, ConnectedAppsListOut, { items });
+    },
+  )
+  .delete(
+    '/:clientId',
+    apiDoc({ tag: 'Me', summary: 'Revoke a connected app', response: RevokeOut }),
+    zParam(clientIdParam),
+    async (c) => {
+      const userId = requireUserId(c);
+      const { clientId } = c.req.valid('param');
 
-    await db
-      .delete(oauthAccessToken)
-      .where(and(eq(oauthAccessToken.userId, userId), eq(oauthAccessToken.clientId, clientId)));
+      await db
+        .delete(oauthAccessToken)
+        .where(and(eq(oauthAccessToken.userId, userId), eq(oauthAccessToken.clientId, clientId)));
 
-    await db
-      .delete(oauthConsent)
-      .where(and(eq(oauthConsent.userId, userId), eq(oauthConsent.clientId, clientId)));
+      await db
+        .delete(oauthConsent)
+        .where(and(eq(oauthConsent.userId, userId), eq(oauthConsent.clientId, clientId)));
 
-    return ok(c, RevokeOut, { revoked: true as const });
-  });
+      return ok(c, RevokeOut, { revoked: true as const });
+    },
+  );
 
 export default connectedApps;

@@ -7,6 +7,7 @@ import { Separator, Skeleton } from '@docket/ui/primitives';
 import { useParams, useRouter } from 'next/navigation';
 import { type JSX, useCallback, useMemo } from 'react';
 
+import TaskGraphPanel from '@/components/canvas/task-graph-panel';
 import { formatWindow } from '@/components/cycles/format-window';
 import { CommentActivityFeed, type FeedActor } from '@/components/task-detail/CommentActivityFeed';
 import { Dependencies } from '@/components/task-detail/Dependencies';
@@ -262,6 +263,19 @@ export default function TaskDetailPage(): JSX.Element {
             projectLabel={projectLabel}
             onOpen={openTask}
           />
+
+          <section className="flex flex-col gap-2">
+            <h2 className="text-on-surface text-h3 font-medium">Dependency map</h2>
+            <div className="h-80 overflow-hidden rounded-lg border border-outline-variant">
+              <TaskGraphPanel
+                scope={{ orgId, rootTaskId: taskId, depth: 2 }}
+                density="compact"
+                onExpand={() => {
+                  router.push(`/orgs/${orgId}/graph?rootTaskId=${taskId}`);
+                }}
+              />
+            </div>
+          </section>
 
           <CommentActivityFeed
             comments={comments}

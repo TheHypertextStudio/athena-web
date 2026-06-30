@@ -85,6 +85,8 @@ export const authServer = {
   LINEAR_CLIENT_SECRET: z.string().optional(),
   /** App-level Linear webhook signing secret — verifies inbound ambient-observation events. */
   LINEAR_WEBHOOK_SECRET: z.string().optional(),
+  /** Slack app signing secret — verifies inbound Slack Events API requests (`v0=` HMAC). */
+  SLACK_SIGNING_SECRET: z.string().optional(),
   /**
    * Shared secret for Better Auth's `oAuthProxy` plugin — lets preview/branch deployments run the
    * social-OAuth flow through production (whose callback URL is the only one registered with the

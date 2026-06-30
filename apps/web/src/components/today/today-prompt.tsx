@@ -117,8 +117,8 @@ export function TodayPrompt({ orgId, orgLabel, onCaptured }: TodayPromptProps): 
   );
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="border-outline-variant bg-surface-container-low focus-within:ring-ring flex flex-col gap-2 rounded-xl border p-3 transition-shadow focus-within:ring-1">
+    <div className="flex flex-col gap-2">
+      <div className="border-outline-variant bg-surface-container-low focus-within:ring-ring focus-within:border-ring flex flex-col gap-3 rounded-2xl border p-4 shadow-sm transition-shadow focus-within:ring-1 @2xl:p-5">
         <textarea
           value={text}
           onChange={(event) => {
@@ -126,21 +126,20 @@ export function TodayPrompt({ orgId, orgLabel, onCaptured }: TodayPromptProps): 
             if (notice) setNotice(null);
           }}
           onKeyDown={onKeyDown}
-          rows={text.includes('\n') || text.length > 90 ? 3 : 1}
+          rows={text.includes('\n') || text.length > 90 ? 3 : 2}
           placeholder="Capture a task, paste a plan, or ask Athena…"
           aria-label="Capture a task or ask Athena"
           disabled={orgId === null}
-          className="placeholder:text-on-surface-variant text-on-surface text-body w-full resize-none bg-transparent outline-none disabled:opacity-50"
+          className="placeholder:text-on-surface-variant text-on-surface w-full resize-none bg-transparent text-base leading-relaxed outline-none disabled:opacity-50 @2xl:text-lg"
         />
         <div className="flex items-center justify-between gap-3">
-          <span className="text-on-surface-variant truncate text-xs">
+          <span className="text-on-surface-variant truncate text-sm">
             into <span className="text-on-surface font-medium">{orgLabel}</span>
           </span>
           <div className="flex shrink-0 items-center gap-2">
             <Button
               type="button"
               variant="ghost"
-              size="sm"
               disabled={!canSubmit}
               onClick={() => {
                 void askAthena();
@@ -154,7 +153,6 @@ export function TodayPrompt({ orgId, orgLabel, onCaptured }: TodayPromptProps): 
             </Button>
             <Button
               type="button"
-              size="sm"
               disabled={!canSubmit}
               onClick={() => {
                 void capture();
@@ -168,9 +166,9 @@ export function TodayPrompt({ orgId, orgLabel, onCaptured }: TodayPromptProps): 
       </div>
       <div aria-live="polite" className="min-h-4 px-1">
         {error ? (
-          <p className="text-destructive text-xs">{error}</p>
+          <p className="text-destructive text-sm">{error}</p>
         ) : notice ? (
-          <p className="text-on-surface-variant text-xs">
+          <p className="text-on-surface-variant text-sm">
             Added <span className="text-on-surface font-medium">“{notice.title}”</span> to{' '}
             {orgLabel} —{' '}
             <Link

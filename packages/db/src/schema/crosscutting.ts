@@ -21,6 +21,8 @@ import {
 } from 'drizzle-orm/pg-core';
 
 import {
+  attachmentKind,
+  attachmentSubjectType,
   auditEventType,
   auditSubjectType,
   commentSubjectType,
@@ -198,11 +200,6 @@ export const integration = pgTable(
     config: jsonb('config').$type<Record<string, unknown>>().notNull().default({}),
     syncMode: syncMode('sync_mode').notNull().default('mirror'),
     /**
-     * The provider account this integration is bound to, when the provider supports linking
-     * multiple identities for one Docket user (for example, several Google accounts).
-     */
-    externalAccountId: text('external_account_id'),
-    /**
      * Whether this connector also writes Docket changes back to the provider (two-way sync).
      *
      * @remarks
@@ -213,6 +210,17 @@ export const integration = pgTable(
      * needs no enum change — see the two-way sync plan for the rationale.
      */
     writeBack: boolean('write_back').notNull().default(false),
+    /**
+     * The provider account this integration binds to (e.g. a Google `sub`), or null for
+     * single-account/legacy integrations.
+     *
+     * @remarks
+     * Lets one org link multiple accounts of the same provider (e.g. several Google Tasks
+     * accounts): each linked account gets its own integration row, disambiguated here. The
+     * sync engine threads this into the OAuth token fetch (`getAccessToken({ accountId })`) so
+     * the right account's grant is used. Null preserves the original one-account behavior.
+     */
+    externalAccountId: text('external_account_id'),
     /** Status of the most recent sync run (null = never synced). */
     lastSyncStatus: syncRunStatus('last_sync_status'),
     /** Timestamp of the last SUCCESSFUL sync (null = never succeeded). */
@@ -226,7 +234,15 @@ export const integration = pgTable(
     /** Background re-sync cadence in minutes (null = manual-only, no auto-sync). */
     syncCadenceMinutes: integer('sync_cadence_minutes').default(60),
   },
-  (t) => [index('integration_org_idx').on(t.organizationId)],
+  (t) => [
+    index('integration_org_idx').on(t.organizationId),
+    // One integration per (org, provider, account): lets an org link several accounts of the
+    // same provider (multi-account Google Tasks). Partial so legacy single-account rows
+    // (external_account_id IS NULL) are exempt and the old per-(org,provider) reconnect still works.
+    uniqueIndex('integration_org_provider_account_uq')
+      .on(t.organizationId, t.provider, t.externalAccountId)
+      .where(sql`${t.externalAccountId} is not null`),
+  ],
 );
 
 /**
@@ -300,6 +316,45 @@ export const comment = pgTable(
     editedAt: timestamp('edited_at'),
   },
   (t) => [index('comment_subject_idx').on(t.subjectType, t.subjectId)],
+);
+
+/**
+ * A typed reference from a polymorphic subject (a task, for now) to an external/stored
+ * resource — the general attachment model.
+ *
+ * @remarks
+ * Polymorphic on `(subjectType, subjectId)` like {@link comment}. `kind` selects the shape:
+ * an `email` attachment is an integration-backed pointer (content lives in Gmail; we keep
+ * `metadata` + a snapshot snippet and fetch the thread on demand via the already-granted
+ * read scope), while a `url` attachment is a dumb pointer (the pasted link + fetched
+ * title/favicon). The partial-unique `(sourceIntegrationId, externalId)` index dedupes
+ * email attachments so one Gmail thread attaches at most once. `lastEmailStateAction*` is
+ * the write-back action ledger (mirroring the task provenance `lastPushedAt`) that keeps
+ * lifecycle automations idempotent — see `docs/engineering/specs/email-to-task.md`.
+ */
+export const attachment = pgTable(
+  'attachment',
+  {
+    ...auditColumns(),
+    subjectType: attachmentSubjectType('subject_type').notNull(),
+    subjectId: text('subject_id').notNull(),
+    kind: attachmentKind('kind').notNull(),
+    title: text('title').notNull(),
+    url: text('url'),
+    sourceIntegrationId: text('source_integration_id').references(() => integration.id, {
+      onDelete: 'set null',
+    }),
+    externalId: text('external_id'),
+    metadata: jsonb('metadata'),
+    lastEmailStateAction: text('last_email_state_action'),
+    lastEmailStateActionAt: timestamp('last_email_state_action_at'),
+  },
+  (t) => [
+    index('attachment_subject_idx').on(t.subjectType, t.subjectId),
+    uniqueIndex('attachment_source_uq')
+      .on(t.sourceIntegrationId, t.externalId)
+      .where(sql`${t.kind} = 'email'`),
+  ],
 );
 
 /** The universal audit feed; agent actions carry `actorId`=agent + `initiatorId`=human. */

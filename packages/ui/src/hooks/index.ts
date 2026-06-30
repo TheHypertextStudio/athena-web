@@ -11,6 +11,7 @@ export {
   type UseListKeyboardOptions,
   type UseListKeyboardResult,
 } from './useListKeyboard';
+export { useMediaQuery } from './useMediaQuery';
 export {
   type UseVocabularyOptions,
   useVocabulary,

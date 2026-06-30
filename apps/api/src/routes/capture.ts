@@ -21,6 +21,7 @@ import type { AppEnv } from '../context';
 import { NotFoundError } from '../error';
 import { resolveCurrentCycleId } from '../lib/current-cycle';
 import { ok } from '../lib/ok';
+import { apiDoc } from '../lib/openapi-route';
 import { zJson } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 
@@ -80,6 +81,12 @@ function toOut(t: TaskRow): z.input<typeof TaskOut> {
 const capture = new Hono<AppEnv>().post(
   '/',
   capabilityGuard('contribute'),
+  apiDoc({
+    tag: 'Capture',
+    summary: 'Quick-capture text into a task',
+    capability: 'contribute',
+    response: TaskOut,
+  }),
   zJson(CaptureBody),
   async (c) => {
     const { orgId, actorId } = c.get('actorCtx');

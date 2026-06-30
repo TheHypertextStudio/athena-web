@@ -103,7 +103,7 @@ export function useComposerOptions(
   const projectsQ = useApiQuery(
     apiQueryOptions(
       queryKeys.projects(orgId),
-      () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId } }),
+      () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId }, query: {} }),
       'Could not load projects.',
       { enabled: on('projects'), staleTime: STALE.static },
     ),
@@ -111,7 +111,7 @@ export function useComposerOptions(
   const programsQ = useApiQuery(
     apiQueryOptions(
       queryKeys.programs(orgId),
-      () => api.v1.orgs[':orgId'].programs.$get({ param: { orgId } }),
+      () => api.v1.orgs[':orgId'].programs.$get({ param: { orgId }, query: {} }),
       'Could not load programs.',
       { enabled: on('programs'), staleTime: STALE.static },
     ),
@@ -119,7 +119,7 @@ export function useComposerOptions(
   const initiativesQ = useApiQuery(
     apiQueryOptions(
       queryKeys.initiatives(orgId),
-      () => api.v1.orgs[':orgId'].initiatives.$get({ param: { orgId } }),
+      () => api.v1.orgs[':orgId'].initiatives.$get({ param: { orgId }, query: {} }),
       'Could not load initiatives.',
       { enabled: on('initiatives'), staleTime: STALE.static },
     ),
@@ -135,7 +135,7 @@ export function useComposerOptions(
   const cyclesQ = useApiQuery(
     apiQueryOptions(
       queryKeys.cycles(orgId),
-      () => api.v1.orgs[':orgId'].cycles.$get({ param: { orgId } }),
+      () => api.v1.orgs[':orgId'].cycles.$get({ param: { orgId }, query: {} }),
       'Could not load cycles.',
       { enabled: on('cycles'), staleTime: STALE.static },
     ),

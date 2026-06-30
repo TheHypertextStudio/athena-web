@@ -37,6 +37,10 @@ const config = docketVitest({
     // The task estimate formatter is pure, behavior-bearing display logic (an unset/zero estimate
     // must collapse to a neutral placeholder, not "0m"), shared by every aligned task table.
     'src/lib/format-estimate.ts',
+    // The Today "Next up" selector is pure, behavior-bearing logic: which few things show next
+    // (upcoming timeboxed blocks, start-ordered, else tasks due today) must stay correct
+    // independent of the React tree that renders the list.
+    'src/components/today/next-up-select.ts',
   ],
 });
 

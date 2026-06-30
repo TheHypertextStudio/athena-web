@@ -76,6 +76,11 @@ export interface HubPreferences {
     /** Where to deliver the digest. */
     readonly channels?: readonly ('email' | 'inApp')[];
   };
+  /** Proactive-agent settings — whether incoming mentions/assignments auto-draft a plan. */
+  readonly proactive?: {
+    /** When true, a mention/assignment observation spawns an (approval-gated) agent plan. */
+    readonly enabled?: boolean;
+  };
 }
 
 /** The wire protocol an agent's runtime speaks. */

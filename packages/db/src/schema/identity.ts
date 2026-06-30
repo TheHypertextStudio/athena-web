@@ -25,7 +25,15 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
 
-import { actorKind, actorStatus, invitationStatus, orgLifecycleState, visibility } from '../enums';
+import {
+  accountDeletionState,
+  accountExportStatus,
+  actorKind,
+  actorStatus,
+  invitationStatus,
+  orgLifecycleState,
+  visibility,
+} from '../enums';
 import { genId } from '../id';
 import type { ApprovalRouting, HubPreferences, VocabularySkin, WorkflowState } from '../types';
 import { defaultWorkflowStates, presetStartup } from '../types';
@@ -63,6 +71,16 @@ export const hub = pgTable(
       .references(() => user.id, { onDelete: 'cascade' }),
     name: text('name'),
     preferences: jsonb('preferences').$type<HubPreferences>().notNull().default({}),
+    /**
+     * Account end-of-life state. `pending_deletion` is a recoverable 14-day grace window
+     * (mirrors the org lifecycle on the user/account layer); the account-deletion cron
+     * sweep hard-deletes the user once {@link hub.deleteAfterAt} elapses.
+     */
+    deletionState: accountDeletionState('deletion_state').notNull().default('active'),
+    /** When the user scheduled deletion (for "scheduled on …" display); null when active. */
+    deletionRequestedAt: timestamp('deletion_requested_at'),
+    /** The instant the grace window closes and the purge becomes eligible; null when active. */
+    deleteAfterAt: timestamp('delete_after_at'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at')
       .notNull()
@@ -70,6 +88,35 @@ export const hub = pgTable(
       .$onUpdate(() => new Date()),
   },
   (t) => [uniqueIndex('hub_user_id_uq').on(t.userId)],
+);
+
+/**
+ * The asynchronous personal-data export queue (one row per requested export).
+ *
+ * @remarks
+ * A request inserts a `pending` row; the export cron sweep generates a full cross-org
+ * archive to blob storage, stamps `blobKey`/`readyAt`/`expiresAt`, and
+ * advances it to `ready`. Cascade-deleted with the user, so a purged account leaves no
+ * export rows behind.
+ */
+export const accountExport = pgTable(
+  'account_export',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    status: accountExportStatus('status').notNull().default('pending'),
+    blobKey: text('blob_key'),
+    requestedAt: timestamp('requested_at').notNull().defaultNow(),
+    readyAt: timestamp('ready_at'),
+    expiresAt: timestamp('expires_at'),
+    error: text('error'),
+  },
+  (t) => [
+    index('account_export_user_idx').on(t.userId),
+    index('account_export_status_idx').on(t.status),
+  ],
 );
 
 /** The shared tenant + context boundary; `is_personal` orgs are an org-of-one. */

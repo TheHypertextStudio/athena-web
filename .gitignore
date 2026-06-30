@@ -72,3 +72,6 @@ temp/
 # UI verification screenshots (captured by agents during dev sessions)
 *-verify-*.png
 *-verify-*.jpg
+
+# Superpowers brainstorm visual companion
+.superpowers/

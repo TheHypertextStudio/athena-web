@@ -87,6 +87,14 @@ export const SETTINGS_SECTION_GROUPS: readonly SettingsSectionGroup[] = [
         status: 'available',
       },
       {
+        key: 'automations',
+        label: 'Automations',
+        description: 'Rules that act on your email suggestions and tasks.',
+        icon: Sparkles,
+        href: 'automations',
+        status: 'available',
+      },
+      {
         key: 'vocabulary',
         label: 'Language',
         description: 'Choose the language Docket speaks across this organization.',

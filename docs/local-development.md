@@ -127,21 +127,33 @@ per-dev tunnel URL can't be self-registered on the shared Google OAuth client. S
 the shared anchor URL + `OAUTH_PROXY_SECRET` (from the team secret store). That's it — no tunnel, no
 Google registration on your part. Your local sign-in relays through the anchor's registered callback.
 
-### Maintainer one-time: stand up the shared anchor
+### Set up a persistent tunnel (real OAuth + webhooks) — `pnpm bootstrap` does it
 
-Run an always-on Docket instance behind a persistent **cloudflared named tunnel** on the team
-Cloudflare zone, register it once, and distribute `OAUTH_PROXY_SECRET`. `pnpm bootstrap` → answer
-**yes** to "Set up a persistent cloudflared tunnel"; it prints the exact commands + `config.yml` and
-the URLs to register. The tunnel fronts the portless **web** host (`https://docket.localhost`), whose
-Next rewrites proxy `/api/auth` + `/v1` to the API, so one ingress covers OAuth **and** the GitHub
-firehose. Origin uses `noTLSVerify` + `httpHostHeader` because dev ports are ephemeral (target the
-stable portless host) and portless serves a local-CA cert. Then register once:
+`pnpm bootstrap` → answer **yes** to "Set up a persistent cloudflared tunnel". It **does the work**,
+not just print it:
 
-- Google → Authorized redirect URI `https://<anchor>/api/auth/callback/google`, JS origin `https://<anchor>`
-- Shared dev GitHub App → webhook `https://<anchor>/v1/ingest/github`
+1. ensures `cloudflared` is installed (offers `brew install` if missing);
+2. runs `cloudflared tunnel login` if you have no cert yet (opens your browser for your Cloudflare zone);
+3. creates/reuses a named tunnel and **routes DNS** for the hostname you give (a subdomain on your zone);
+4. writes `~/.cloudflared/config.yml` fronting the portless **web** host `https://docket.localhost`
+   (whose Next rewrites proxy `/api/auth` + `/v1` to the API, so one ingress covers OAuth **and** the
+   GitHub firehose). Origin uses `noTLSVerify` + `httpHostHeader` because dev ports are ephemeral
+   (target the stable portless host) and portless serves a local-CA cert;
+5. makes it **persistent via a user LaunchAgent** (`~/Library/LaunchAgents/studio.hypertext.docket-tunnel.plist`)
+   — runs at login, no sudo. (Avoids `cloudflared service install`, whose root daemon can't read your
+   `~/.cloudflared` config and ships a non-functional plist on recent versions.)
+6. adds the host to `BETTER_AUTH_ALLOWED_HOSTS` + `BETTER_AUTH_TRUSTED_ORIGINS` in `.env.local`.
+   `BETTER_AUTH_ALLOWED_HOSTS` is the single source of truth — it also flows to each app's
+   `next.config.ts` `allowedDevOrigins`, so Next 16 doesn't block the origin's HMR.
 
-The anchor host is added to `BETTER_AUTH_ALLOWED_HOSTS` (the single source of truth — it also flows
-to each app's `next.config.ts` `allowedDevOrigins`, so Next 16 doesn't block the origin's HMR).
+Only **two** things are left to you (bootstrap prints both):
+
+- In your Google OAuth client: add redirect URI `https://<host>/api/auth/callback/google` + JS origin
+  `https://<host>` (a public TLD like `*.hypertext.studio` — Google accepts it).
+- Restart `pnpm dev` (so the API loads the new `BETTER_AUTH_ALLOWED_HOSTS`), then open `https://<host>`.
+
+To anchor the shared OAuth proxy for OTHER devs, this same tunnel is the anchor: register it once in
+Google, run an always-on instance behind it, and hand teammates `OAUTH_PROXY_*` (the section above).
 
 ### Webhooks
 

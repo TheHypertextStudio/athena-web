@@ -19,13 +19,24 @@ import type {
   ImportedItem,
   LinkResourceInput,
   LinkResult,
+  FetchThreadInput,
   ListContainersInput,
+  MailAction,
+  MailActionInput,
+  MailActions,
+  MailThread,
   MirrorResult,
   MirrorStatusInput,
   ResourceRef,
   TaskPushOp,
   WritableConnector,
 } from '../ports/connector';
+
+/** One mailbox action recorded by {@link MockConnector} (record-only, for test assertions). */
+export interface RecordedMailAction {
+  readonly threadId: string;
+  readonly action: MailAction;
+}
 
 /** Construction options for {@link MockConnector}. */
 export interface MockConnectorOptions {
@@ -50,6 +61,15 @@ export class MockConnector implements Connector {
   private readonly now: string;
   private readonly provider: ConnectorProvider;
   private counter = 0;
+
+  /**
+   * Record-only log of mailbox actions applied through {@link MockConnector.asMailActor}.
+   *
+   * @remarks
+   * The mock performs no I/O; it records every `(threadId, action)` here so tests can assert
+   * intent offline (e.g. "completing a task with an email attachment archived its thread").
+   */
+  readonly mailActionLog: RecordedMailAction[] = [];
 
   /**
    * @param options - Optional fixed `now` and the bound provider for write-back gating.
@@ -132,6 +152,40 @@ export class MockConnector implements Connector {
       externalId: op.kind === 'create' ? this.nextId('gtask') : op.externalId,
       externalUpdatedAt: stamp,
       externalEtag: `etag_${this.counter.toString().padStart(6, '0')}`,
+    };
+  }
+
+  /**
+   * {@inheritDoc Connector.asMailActor}
+   *
+   * @remarks
+   * Mail-capable for `gmail` only. The returned {@link MailActions} is record-only:
+   * `applyMailAction` appends to {@link MockConnector.mailActionLog} (no I/O), and
+   * `fetchThread` returns a deterministic single-message fixture thread so the email-
+   * attachment rendering path is exercised offline.
+   */
+  asMailActor(): MailActions | undefined {
+    if (this.provider !== 'gmail') return undefined;
+    return {
+      applyMailAction: async (input: MailActionInput): Promise<void> => {
+        this.mailActionLog.push({ threadId: input.threadId, action: input.action });
+      },
+      fetchThread: async (input: FetchThreadInput): Promise<MailThread> => ({
+        threadId: input.threadId,
+        subject: `Mock thread ${input.threadId}`,
+        messages: [
+          {
+            id: `${input.threadId}-msg-1`,
+            from: 'Ada Lovelace <ada@mock.docket.local>',
+            to: ['you@mock.docket.local'],
+            subject: `Mock thread ${input.threadId}`,
+            snippet: 'This is a deterministic mock email body.',
+            sentAt: this.now,
+            bodyHtml: '<p>This is a deterministic mock email body.</p>',
+          },
+        ],
+        externalUrl: `https://mail.mock.docket.local/#all/${input.threadId}`,
+      }),
     };
   }
 

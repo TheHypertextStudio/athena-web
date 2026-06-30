@@ -99,6 +99,26 @@ export const AutomationRuleCreate = z
 /** Automation-rule-create value. */
 export type AutomationRuleCreate = z.infer<typeof AutomationRuleCreate>;
 
+/** Body for updating an automation rule (any subset of fields). */
+export const AutomationRuleUpdate = z
+  .object({
+    name: z.string().min(1).optional(),
+    enabled: z.boolean().optional(),
+    on: AutomationEventMatch.optional(),
+    when: Predicate.optional(),
+    then: z.array(ActionSpec).optional(),
+  })
+  .meta({ id: 'AutomationRuleUpdate', description: 'Update an automation rule.' });
+/** Automation-rule-update value. */
+export type AutomationRuleUpdate = z.infer<typeof AutomationRuleUpdate>;
+
+/** Acknowledgement returned when an automation rule is removed. */
+export const AutomationRuleRemoved = z
+  .object({ id: AutomationRuleId, removed: z.literal(true) })
+  .meta({ id: 'AutomationRuleRemoved', description: 'A removed-rule acknowledgement.' });
+/** Removal acknowledgement value. */
+export type AutomationRuleRemoved = z.infer<typeof AutomationRuleRemoved>;
+
 /** Full automation-rule representation returned by reads. */
 export const AutomationRuleOut = z
   .object({

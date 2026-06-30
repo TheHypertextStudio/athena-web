@@ -7,8 +7,8 @@
  * One entry, one component, used by every view — the list stacks it, the timeline positions it. It
  * both **rearranges** (the view places it) and **reshapes** (the `layout` prop): a compact `row`
  * (time · title · org) in the list, a fill-height `block` (title / time / org) in the timeline.
- * Because it's the same element keyed by a stable `view-transition-name`, switching views (or days)
- * morphs each card from one shape/position to the other rather than swapping.
+ * Because it's the same element keyed by a stable `view-transition-name`, switching views morphs
+ * each card from one shape/position to the other rather than swapping.
  *
  * The card carries the check-off control (when the entry is on the plan) as a sibling of the
  * navigating content, so neither nests inside the other.
@@ -21,7 +21,12 @@ import { type JSX } from 'react';
 import { useActiveOrg } from '@/components/active-org';
 import { OrgChip } from '@/components/org-chip';
 
-import { type AgendaEntry, agendaEntryTransitionName, isTimeboxed, useAgenda } from './agenda-context';
+import {
+  type AgendaEntry,
+  agendaEntryTransitionName,
+  isTimeboxed,
+  useAgenda,
+} from './agenda-context';
 
 /** How the card lays out: a compact list `row`, or a fill-height timeline `block`. */
 export type AgendaEntryLayout = 'row' | 'block';
@@ -40,7 +45,10 @@ export interface AgendaEntryCardProps {
 }
 
 /** The shared entry card, reshaped by `layout`, with a check-off and a link to the task. */
-export default function AgendaEntryCard({ entry, layout = 'row' }: AgendaEntryCardProps): JSX.Element {
+export default function AgendaEntryCard({
+  entry,
+  layout = 'row',
+}: AgendaEntryCardProps): JSX.Element {
   const { orgName } = useActiveOrg();
   const { toggleDone } = useAgenda();
   const block = layout === 'block';

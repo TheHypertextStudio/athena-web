@@ -249,6 +249,106 @@ export interface WritableConnector {
 }
 
 /**
+ * One mailbox-state action applied to a mail thread.
+ *
+ * @remarks
+ * A discriminated union so a `label` is carried only by the label ops — `archive` /
+ * `markRead` / `markUnread` / `trash` cannot be given a stray label, and `applyLabel` /
+ * `removeLabel` cannot omit one. Adapters map each variant to the provider's real verbs
+ * (for Gmail: `INBOX`/`UNREAD` label deltas + trash).
+ */
+export type MailAction =
+  | { readonly kind: 'archive' }
+  | { readonly kind: 'markRead' }
+  | { readonly kind: 'markUnread' }
+  | { readonly kind: 'trash' }
+  | { readonly kind: 'applyLabel'; readonly label: string }
+  | { readonly kind: 'removeLabel'; readonly label: string };
+
+/** Input to apply one mailbox action to a thread. */
+export interface MailActionInput {
+  /** The connection performing the action. */
+  readonly connectionId: string;
+  /** The mail provider (today `gmail`). */
+  readonly provider: ConnectorProvider;
+  /** The external mail-thread id to act on. */
+  readonly threadId: string;
+  /** The action to apply. */
+  readonly action: MailAction;
+}
+
+/** Input to fetch a mail thread for on-demand rendering. */
+export interface FetchThreadInput {
+  /** The connection to read through. */
+  readonly connectionId: string;
+  /** The external mail-thread id. */
+  readonly threadId: string;
+}
+
+/** One message within a fetched mail thread. */
+export interface MailMessage {
+  /** The message's external id. */
+  readonly id: string;
+  /** The sender (display form, e.g. `Ada <ada@x.com>`). */
+  readonly from: string;
+  /** Recipients. */
+  readonly to: readonly string[];
+  /** Subject line. */
+  readonly subject: string;
+  /** Short preview snippet. */
+  readonly snippet: string;
+  /** When the message was sent (RFC3339). */
+  readonly sentAt: string;
+  /**
+   * The rendered message body, when fetched.
+   *
+   * @remarks
+   * Read-on-demand only — the body is NEVER persisted on the attachment row (only metadata
+   * + snippet are). Present after a {@link MailActions.fetchThread}; absent in stored data.
+   */
+  readonly bodyHtml?: string;
+}
+
+/** A fetched mail thread, for rendering an `email` attachment. */
+export interface MailThread {
+  /** The thread's external id. */
+  readonly threadId: string;
+  /** The thread subject. */
+  readonly subject: string;
+  /** The messages in the thread, oldest first. */
+  readonly messages: readonly MailMessage[];
+  /** Canonical URL to open the thread in the provider. */
+  readonly externalUrl: string;
+}
+
+/**
+ * The mailbox-actions capability of a mail connector: mutate mailbox state and fetch a
+ * thread on demand.
+ *
+ * @remarks
+ * Exposed only by mail providers (Gmail), discovered via {@link Connector.asMailActor};
+ * non-mail connectors return `undefined` there and never implement this. Sibling to
+ * {@link WritableConnector} — mailbox actions are NOT task pushes, so Gmail joins write-
+ * *capable* discovery but stays out of `WRITE_BACK_PROVIDERS`. See the email-to-task spec §5.
+ */
+export interface MailActions {
+  /**
+   * Apply one mailbox action to a thread.
+   *
+   * @param input - The connection, provider, thread, and action.
+   * @throws {ConnectorError} On auth (`auth`), throttle (`rate_limit`), or provider failure.
+   */
+  applyMailAction(input: MailActionInput): Promise<void>;
+  /**
+   * Fetch a thread for rendering (the body is never persisted).
+   *
+   * @param input - The connection and thread id.
+   * @returns the render-ready thread.
+   */
+  fetchThread(input: FetchThreadInput): Promise<MailThread>;
+}
+
+/**
  * The connector port: a single typed edge for connecting to a provider and pulling /
  * mirroring / linking its work. Implemented by the real provider adapters and
  * `MockConnector`.
@@ -295,6 +395,17 @@ export interface Connector {
    * a write-back connector (Google Tasks) returns a {@link WritableConnector}.
    */
   asWritable?(): WritableConnector | undefined;
+
+  /**
+   * Return this connector's mailbox-actions capability, or `undefined` when it is not a mail
+   * provider.
+   *
+   * @remarks
+   * The single typed seam for mailbox write-back + on-demand thread fetch, discovered exactly
+   * like {@link Connector.asWritable}. Only a mail connector (Gmail) returns a
+   * {@link MailActions}; every other provider omits it or returns `undefined`.
+   */
+  asMailActor?(): MailActions | undefined;
 
   /**
    * Enumerate the external containers (e.g. Google Tasks lists) this connection can sync from,

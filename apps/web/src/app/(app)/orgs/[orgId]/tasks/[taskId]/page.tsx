@@ -14,6 +14,7 @@ import { Dependencies } from '@/components/task-detail/Dependencies';
 import { PriorityPicker } from '@/components/task-detail/PriorityPicker';
 import { StatusPicker } from '@/components/task-detail/StatusPicker';
 import { Subtasks } from '@/components/task-detail/Subtasks';
+import TaskAttachments from '@/components/task-detail/TaskAttachments';
 import { TaskPropertiesRail } from '@/components/task-detail/task-properties-rail';
 import {
   cycleOptions as toCycleOptions,
@@ -256,6 +257,8 @@ export default function TaskDetailPage(): JSX.Element {
             canEdit
           />
 
+          <TaskAttachments orgId={orgId} taskId={taskId} canEdit={canEdit} />
+
           <Dependencies
             blocking={task.blocking}
             blockedBy={task.blockedBy}
@@ -266,7 +269,7 @@ export default function TaskDetailPage(): JSX.Element {
 
           <section className="flex flex-col gap-2">
             <h2 className="text-on-surface text-h3 font-medium">Dependency map</h2>
-            <div className="h-80 overflow-hidden rounded-lg border border-outline-variant">
+            <div className="border-outline-variant h-80 overflow-hidden rounded-lg border">
               <TaskGraphPanel
                 scope={{ orgId, rootTaskId: taskId, depth: 2 }}
                 density="compact"

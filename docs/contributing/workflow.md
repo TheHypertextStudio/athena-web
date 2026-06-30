@@ -1,7 +1,7 @@
 # Development Workflow
 
-> **Version**: 1.0.0
-> **Last Updated**: 2026-01-04
+> **Version**: 1.0.1
+> **Last Updated**: 2026-06-30
 
 ## Overview
 
@@ -104,7 +104,42 @@ chore/update-dependencies
 1. **Never commit directly to `main`**
 2. **Create feature branches from `main`**
 3. **Keep branches focused** - One feature/fix per branch
-4. **Rebase before merging** - Keep history clean
+4. **Rebase before landing** - Keep history linear
+5. **Never create merge commits** - `main` is linear-history only
+
+### Linear History Only
+
+Merge commits are not allowed on `main`.
+
+Use one of these landing paths:
+
+- `git merge --ff-only <branch>` when the branch is already ahead of `main`
+- `git rebase main` on the branch, then fast-forward `main`
+- `git cherry-pick <commit>` for one or more finished commits
+- GitHub squash/rebase merge buttons, never the merge-commit button
+
+Do not use:
+
+- `git merge <branch>` when it would create a merge commit
+- `git merge --no-ff`
+- Pulls that create merge commits
+
+Required local config:
+
+```bash
+git config --local pull.ff only
+git config --local pull.rebase true
+git config --local branch.main.rebase true
+git config --local branch.main.mergeOptions --ff-only
+```
+
+Required verification before saying work is landed:
+
+```bash
+git rev-list --merges --count origin/main..HEAD
+```
+
+The command must print `0`. If it does not, reset to the first parent before the merge and replay the intended commits with `git cherry-pick`.
 
 ## Making Changes
 
@@ -264,12 +299,14 @@ Brief description of changes.
 2. **Request review** - Assign reviewers
 3. **Address feedback** - Make requested changes
 4. **Approval** - Get at least one approval
-5. **Merge** - Squash and merge to main
+5. **Land** - Squash, rebase, cherry-pick, or fast-forward to `main`
 
 ### Merge Strategy
 
-- **Squash merge** - For feature branches
-- **Rebase merge** - For small fixes
+- **Squash** - For feature branches with multiple noisy commits
+- **Rebase** - For small fixes and branches that should preserve individual commits
+- **Fast-forward** - When `main` can advance directly to the branch tip
+- **Cherry-pick** - When landing selected commits from another branch
 - **Never** use merge commits
 
 ## Release Process

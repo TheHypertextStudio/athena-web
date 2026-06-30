@@ -1,7 +1,7 @@
 # AGENTS.md - Project Athena Agent Guidelines
 
-> **Version**: 1.0.0
-> **Last Updated**: 2026-01-04
+> **Version**: 1.0.1
+> **Last Updated**: 2026-06-30
 > **Applies To**: All AI coding agents working on Project Athena
 
 This document defines the operational framework for AI agents contributing to Project Athena. All agents MUST adhere to these guidelines to ensure consistent, high-quality, autonomous development.
@@ -201,6 +201,24 @@ main
   └── docs/<description>
   └── refactor/<description>
 ```
+
+### Linear History Requirement
+
+**Merge commits are forbidden. `main` MUST have linear history only.**
+
+Required behavior:
+
+1. Use `git merge --ff-only`, `git rebase`, or `git cherry-pick`
+2. Never run plain `git merge` into `main`
+3. Never use `git merge --no-ff`
+4. If a merge commit is created locally, immediately remove it with `git reset --hard <first-parent-before-merge>` and replay the intended commits with `git cherry-pick`
+5. Before declaring work landed, verify `git rev-list --merges --count origin/main..HEAD` prints `0`
+
+Repository enforcement:
+
+- GitHub branch protection for `main` requires linear history
+- Local config should keep `pull.ff=only`, `pull.rebase=true`, `branch.main.rebase=true`, and `branch.main.mergeOptions=--ff-only`
+- Local hooks may reject merge commits via `pre-merge-commit` and `prepare-commit-msg`
 
 ### Commit Policy
 

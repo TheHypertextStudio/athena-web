@@ -9,7 +9,7 @@
  * `created` observation so the automation engine can react (e.g. archive the thread on accept).
  * See `docs/engineering/specs/email-to-task.md` §6.
  */
-import { actor, attachment, db, emailSuggestion, task, team } from '@docket/db';
+import { attachment, db, emailSuggestion, task } from '@docket/db';
 import {
   EmailSuggestionOut,
   SuggestionAcceptBody,
@@ -22,7 +22,7 @@ import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { ConflictError, NotFoundError } from '../error';
-import { resolveCurrentCycleId } from '../lib/current-cycle';
+import { resolveLandingTarget } from '../lib/task-landing';
 import { ok } from '../lib/ok';
 import { zJson, zParam } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
@@ -93,27 +93,14 @@ const emailSuggestions = new Hono<AppEnv>()
       const overrides = c.req.valid('json');
       const suggestion = await loadPending(orgId, id);
 
-      // Land the materialized task exactly like quick-capture: oldest active team, its first
-      // workflow state, caller as assignee, current cycle when the team has a live window.
-      const teamRows = await db
-        .select({ id: team.id, workflowStates: team.workflowStates })
-        .from(team)
-        .where(eq(team.organizationId, orgId))
-        .orderBy(asc(team.createdAt))
-        .limit(1);
-      const teamRow = teamRows[0];
-      if (!teamRow) throw new NotFoundError('No team to accept into');
+      // Land the materialized task exactly like quick-capture (shared resolver): oldest active
+      // team, its first workflow state, caller as assignee, current cycle when one covers today.
+      const landing = await resolveLandingTarget(orgId, actorId);
+      if (!landing) throw new NotFoundError('No team to accept into');
 
-      const assigneeRows = await db
-        .select({ id: actor.id })
-        .from(actor)
-        .where(and(eq(actor.id, actorId), eq(actor.organizationId, orgId)))
-        .limit(1);
-      const assigneeId = assigneeRows[0]?.id ?? null;
-      const cycleId = await resolveCurrentCycleId(orgId, teamRow.id);
-      const state = teamRow.workflowStates[0]?.key ?? 'backlog';
-
-      const dueDate = overrides.dueDate ?? suggestion.dueDate?.toISOString();
+      const dueDate = overrides.dueDate
+        ? new Date(overrides.dueDate)
+        : (suggestion.dueDate ?? undefined);
 
       const created = await db.transaction(async (tx) => {
         const inserted = await tx
@@ -122,12 +109,12 @@ const emailSuggestions = new Hono<AppEnv>()
             organizationId: orgId,
             title: overrides.title ?? suggestion.title,
             description: overrides.description ?? suggestion.description,
-            teamId: teamRow.id,
-            state,
+            teamId: landing.teamId,
+            state: landing.state,
             priority: overrides.priority ?? suggestion.priority,
-            assigneeId,
-            cycleId,
-            dueDate: dueDate ? new Date(dueDate) : undefined,
+            assigneeId: landing.assigneeId,
+            cycleId: landing.cycleId,
+            dueDate,
             source: 'native',
             createdBy: actorId,
           })

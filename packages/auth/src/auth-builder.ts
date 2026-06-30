@@ -33,6 +33,7 @@ export interface AuthEnv {
   readonly BETTER_AUTH_URL: string;
   readonly BETTER_AUTH_TRUSTED_ORIGINS?: string | undefined;
   readonly BETTER_AUTH_ALLOWED_HOSTS?: string;
+  readonly BETTER_AUTH_COOKIE_DOMAIN?: string | undefined;
   readonly BETTER_AUTH_PASSKEY_RP_ID: string;
   readonly BETTER_AUTH_PASSKEY_RP_NAME: string;
   readonly GOOGLE_CLIENT_ID?: string | undefined;
@@ -266,6 +267,18 @@ export function buildAuthOptions(e: AuthEnv): BetterAuthOptions {
   const allowedHosts = parseTrustedOrigins(e.BETTER_AUTH_ALLOWED_HOSTS);
   const dynamicBaseURL = allowedHosts.length > 0;
 
+  // `BETTER_AUTH_COOKIE_DOMAIN`, when set, scopes session cookies to a shared parent domain so a
+  // cookie written by one subdomain is readable by its siblings. This is required wherever the
+  // browser and the auth handler answer on DIFFERENT hosts: locally the `oAuthProxy` social flow
+  // relays the callback through `api.docket.localhost` and writes the session there, but the app
+  // runs on `docket.localhost` — host-only cookies would be invisible to it. Setting the domain to
+  // `docket.localhost` shares the cookie across the whole `*.docket.localhost` family (app, api,
+  // admin). Unset ⇒ host-only cookies (the same-origin production default). See
+  // `docs/local-development.md` (Tunnels & local OAuth).
+  const cookieDomain = isRealValue(e.BETTER_AUTH_COOKIE_DOMAIN)
+    ? e.BETTER_AUTH_COOKIE_DOMAIN
+    : undefined;
+
   return {
     secret: e.BETTER_AUTH_SECRET,
     baseURL: dynamicBaseURL
@@ -289,6 +302,7 @@ export function buildAuthOptions(e: AuthEnv): BetterAuthOptions {
       // only reaches it via `x-forwarded-host` — which the dynamic resolver honors ONLY
       // when proxy headers are trusted. Safe here: hosts are still allowlist-validated.
       ...(dynamicBaseURL ? { trustedProxyHeaders: true } : {}),
+      ...(cookieDomain ? { crossSubDomainCookies: { enabled: true, domain: cookieDomain } } : {}),
     },
     ...(hasSocial
       ? { socialProviders, account: { accountLinking: { enabled: true, trustedProviders } } }

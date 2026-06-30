@@ -49,6 +49,7 @@ export const authServer = {
   BETTER_AUTH_URL: z.string().min(1),
   BETTER_AUTH_TRUSTED_ORIGINS: z.string().optional(),
   BETTER_AUTH_ALLOWED_HOSTS: z.string().optional(),
+  BETTER_AUTH_COOKIE_DOMAIN: z.string().optional(),
   BETTER_AUTH_PASSKEY_RP_ID: z.string().min(1),
   BETTER_AUTH_PASSKEY_RP_NAME: z.string().min(1),
   GOOGLE_CLIENT_ID: z.string().optional(),

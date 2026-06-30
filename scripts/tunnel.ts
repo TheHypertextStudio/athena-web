@@ -6,12 +6,19 @@
  * gives the local stack a public, Google-acceptable URL (`*.localhost` is rejected) for real OAuth
  * and inbound webhooks.
  *
- * The tunnel fronts the portless WEB host (`https://docket.localhost`), whose Next rewrites already
- * proxy `/api/auth` + `/v1` to the API — so one ingress covers OAuth callbacks AND the GitHub
- * firehose. Dev ports are ephemeral under portless, so the origin is the STABLE portless host with
- * `noTLSVerify` (portless serves a local-CA cert cloudflared may not trust) + `httpHostHeader` so
- * portless still routes by name. The browser's host flows through as `X-Forwarded-Host`, which
- * Better Auth's dynamic base resolver honours once the host is in `BETTER_AUTH_ALLOWED_HOSTS`.
+ * Ingress is SPLIT by path:
+ *
+ * - `/(api|v1)/*` → **straight to the local API port** (`http://127.0.0.1:<apiPort>`), preserving the
+ *   public `Host`. This is load-bearing for OAuth: portless rewrites the upstream `Host` to its
+ *   loopback address (the real host survives only in `X-Forwarded-Host`), and Next's rewrite then
+ *   re-derives its own forwarded host from that loopback — so going through portless makes Better
+ *   Auth resolve its base (and the OAuth token-exchange `redirect_uri`) to a `.localhost` host
+ *   instead of the tunnel host Google saw at authorize time → `invalid_grant` → `invalid_code`.
+ *   Routing the API directly keeps `Host = <tunnel hostname>` intact end-to-end so the exchange
+ *   `redirect_uri` matches. (`apiPort` is portless's stable per-name port for `api.docket`.)
+ * - everything else → the portless WEB host (`https://docket.localhost`) with `noTLSVerify` (portless
+ *   serves a local-CA cert cloudflared may not trust) + `httpHostHeader` so portless still routes by
+ *   name. This serves the Next app; its pages are host-agnostic.
  *
  * Persistence is a **user LaunchAgent**, not `cloudflared service install`: the root daemon can't
  * read the user's `~/.cloudflared` config (and recent versions install a non-functional plist),
@@ -29,14 +36,26 @@ export interface TunnelConfig {
   readonly hostname: string;
   /** Absolute path to the tunnel's credentials JSON (`~/.cloudflared/<id>.json`). */
   readonly credentialsFile: string;
+  /** The local port the Hono API listens on (portless's stable per-name port for `api.docket`). */
+  readonly apiPort: number;
 }
 
 /** The `~/.cloudflared/config.yml` that fronts the local portless stack at `hostname`. */
-export function cloudflaredConfigYaml({ tunnel, hostname, credentialsFile }: TunnelConfig): string {
+export function cloudflaredConfigYaml({
+  tunnel,
+  hostname,
+  credentialsFile,
+  apiPort,
+}: TunnelConfig): string {
   return [
     `tunnel: ${tunnel}`,
     `credentials-file: ${credentialsFile}`,
     `ingress:`,
+    `  # API + auth callbacks + webhooks: straight to the API, Host preserved (see module docstring).`,
+    `  - hostname: ${hostname}`,
+    `    path: ^/(api|v1)/.*`,
+    `    service: http://127.0.0.1:${String(apiPort)}`,
+    `  # Everything else: the Next web app via portless (routes by name, local-CA cert).`,
     `  - hostname: ${hostname}`,
     `    service: https://${ORIGIN_HOST}`,
     `    originRequest:`,

@@ -15,7 +15,7 @@
  */
 
 import { execSync } from 'node:child_process';
-import { existsSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -641,6 +641,30 @@ function ensureTunnel(name: string): string {
   return findId();
 }
 
+/**
+ * The local port the API is listening on, read from portless's route table.
+ *
+ * @remarks
+ * portless assigns each app a stable per-name port and records it in `~/.portless/routes.json`. The
+ * tunnel routes `/api`+`/v1` straight to this port (preserving the public Host — see `tunnel.ts`),
+ * so the table must be populated, i.e. `pnpm dev` must have run at least once. Matches the `api.*`
+ * route by name so it works in worktrees too.
+ */
+function readPortlessApiPort(): number | undefined {
+  const routesPath = resolve(homedir(), '.portless', 'routes.json');
+  if (!existsSync(routesPath)) return undefined;
+  try {
+    const routes = JSON.parse(readFileSync(routesPath, 'utf8')) as readonly {
+      hostname?: string;
+      port?: number;
+    }[];
+    const api = routes.find((r) => typeof r.hostname === 'string' && r.hostname.startsWith('api.'));
+    return typeof api?.port === 'number' ? api.port : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Write + (re)load the user LaunchAgent so the tunnel runs at login (persistent, no sudo). */
 function installTunnelAgent(cfBin: string, configPath: string, tunnel: string): void {
   if (process.platform !== 'darwin') {
@@ -767,12 +791,25 @@ async function setupDevTunnel(): Promise<void> {
     return;
   }
   tryRun(`cloudflared tunnel route dns ${tunnel} ${hostname}`);
+  const apiPort = readPortlessApiPort();
+  if (!apiPort) {
+    warn(
+      'Could not find the local API port in ~/.portless/routes.json — the tunnel routes /api + /v1 ' +
+        'straight to it. Start `pnpm dev` once (so portless registers the route), then re-run bootstrap.',
+    );
+    return;
+  }
   const configPath = resolve(cfDir, 'config.yml');
   writeFileSync(
     configPath,
-    cloudflaredConfigYaml({ tunnel, hostname, credentialsFile: resolve(cfDir, `${id}.json`) }),
+    cloudflaredConfigYaml({
+      tunnel,
+      hostname,
+      credentialsFile: resolve(cfDir, `${id}.json`),
+      apiPort,
+    }),
   );
-  ok(`Wrote ${configPath} and routed ${hostname}.`);
+  ok(`Wrote ${configPath} (API → :${String(apiPort)}) and routed ${hostname}.`);
 
   // 5. Persistence (user LaunchAgent, no sudo) + env allowlist.
   installTunnelAgent(cfBin, configPath, tunnel);

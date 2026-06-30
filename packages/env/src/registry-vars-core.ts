@@ -105,6 +105,16 @@ export const CORE_VARS: readonly VarSpec[] = [
       'CSV of host patterns Better Auth issues cookies/redirects for (wildcards ok, e.g. *.vercel.app); enables dynamic base URL when set',
   },
   {
+    name: 'BETTER_AUTH_COOKIE_DOMAIN',
+    slice: 'auth',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: authServer.BETTER_AUTH_COOKIE_DOMAIN,
+    where:
+      'Parent domain to scope session cookies to (e.g. docket.localhost) so sibling subdomains share the session — required for the local oAuthProxy relay; unset ⇒ host-only cookies',
+  },
+  {
     name: 'BETTER_AUTH_PASSKEY_RP_ID',
     slice: 'auth',
     scope: 'server',

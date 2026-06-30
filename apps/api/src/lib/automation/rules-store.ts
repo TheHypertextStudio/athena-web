@@ -65,7 +65,7 @@ export const DEFAULT_RULES: readonly DefaultRule[] = [
   },
   {
     name: 'Dismiss promotional email suggestions',
-    on: { kind: 'suggestion.created' },
+    on: { kind: 'created', subjectType: 'email_suggestion' },
     when: { op: 'eq', path: 'payload.category', value: 'promotions' },
     then: [{ type: 'suggestion.dismiss', params: {} }],
   },

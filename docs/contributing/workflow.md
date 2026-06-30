@@ -11,7 +11,7 @@ This document describes the development workflow for Project Athena, including h
 
 ### Prerequisites
 
-- Node.js 20 LTS
+- Node.js 26 Current, or Node.js 24.15+ when staying on the 24 line
 - pnpm 9.x
 - PostgreSQL 16
 - Git

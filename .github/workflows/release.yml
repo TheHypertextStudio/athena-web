@@ -24,7 +24,7 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version-file: '.node-version'
-      - run: corepack enable
+      - run: npm install -g corepack@0.35.0 && corepack enable
       - run: pnpm install --no-frozen-lockfile
       - name: Run semantic-release
         env:

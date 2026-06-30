@@ -7,6 +7,24 @@
 
 ## Completed Tasks
 
+### [TOOLING-001] Allow Node 26 and refresh package-manager tooling
+
+- **Completed**: 2026-06-30
+- **Summary**: Widened the repository Node engine contract from Node 24-only to Node 24.15 through
+  Node 26 so current developer machines do not warn when running pnpm under Node 26. Updated the
+  repo package-manager pin to `pnpm@11.9.0` and made CI/release bootstrap `corepack@0.35.0`
+  before enabling the pinned pnpm. Moved `.nvmrc`/`.node-version` and the API Docker default to
+  Node 26 so the default local, CI, and container paths match the supported current runtime.
+- **Files Changed**: `package.json`, `.github/workflows/{ci,release}.yml`,
+  `docs/engineering/DECISIONS.md`, `docs/engineering/build-manifest.md`,
+  `docs/contributing/workflow.md`, and `docs/WORKLOG.md`.
+- **Learnings**: The original warning was caused by `package.json#engines.node`; Corepack 0.35 adds
+  its own Node floor of ^24.15 or >=26, so the repo should not advertise older Node 24 patches.
+  Running several pnpm commands in parallel can race the repo `prepare` hook's Git config writes,
+  so verification should run pnpm gates sequentially.
+- **Gate**: `pnpm --filter @docket/web lint`, `typecheck`, and `test` pass under Node 26 without
+  engine warnings.
+
 ### [CALENDAR-002] Google Calendar e2e coverage and UX audit
 
 - **Completed**: 2026-06-30
@@ -573,7 +591,7 @@ resolveIdentityLabel(actorId, externalAccountId) ?? result.account` (Actor→use
   - **OpenAPI**: hono-openapi 0.4.8 declares a zod-3 peer; to stay zod-4-native the slice validates with Hono's built-in `validator` (RPC-typed) and serves a minimal 3.1 doc + Scalar. Per-route `describeRoute` spec generation is a P6 api-lane task.
   - **`@docket/types/api` does NOT re-export `AppType`** — that would make types depend on api (which depends on types) and turbo rejects the package cycle. Consumers import `import type { AppType } from '@docket/api'` directly.
   - **Auth schema is hand-authored** in `@docket/db/schema/auth.ts` (the @better-auth/cli is pinned to 1.4.x and interactive); the P6 auth lane regenerates it with the full plugin set.
-  - **Tooling**: `vite` pinned to ^7 (vitest 4 needs Vite 6/7; the peer mis-resolved to 5). Per-package `tsconfig` sets `types: ["node"]` where Node globals are used. Node 25 on the dev machine warns against the `>=24 <25` engine pin (LTS target) but installs/runs fine.
+  - **Tooling**: `vite` pinned to ^7 (vitest 4 needs Vite 6/7; the peer mis-resolved to 5). Per-package `tsconfig` sets `types: ["node"]` where Node globals are used. The original `>=24 <25` engine pin was later superseded by TOOLING-001 (`>=24.15 <27` with Node 26 as the default).
 - **Remaining (the fan-out)**: FND-P5-02 shadcn primitives · FND-P5-03 app shell (GlobalRail/ContextSidebar/Vocabulary) · FND-P5-04 virtualized ListView · then the P6 lanes (data-and-api entities, permissions-auth-billing, mcp, ui-screens, testing, connectors) — to be driven via a dynamic workflow against this green foundation, honoring the single-owner rules in `build-readiness.md`.
 
 ---

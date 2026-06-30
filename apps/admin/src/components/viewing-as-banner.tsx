@@ -15,7 +15,7 @@ import { readError, readProblem } from '@/lib/problem';
  * Reads the active session from the {@link useImpersonation} context (persisted across
  * navigation) and pins a high-contrast bar to the top of the shell so an operator is never
  * unaware they are impersonating. The "End session" action calls
- * `POST /v1/admin/impersonations/:id/end` and, on success, clears the local session so the
+ * `POST /admin/impersonations/:id/end` and, on success, clears the local session so the
  * banner disappears. Renders nothing when no impersonation is active.
  */
 export function ViewingAsBanner(): JSX.Element | null {
@@ -31,7 +31,7 @@ export function ViewingAsBanner(): JSX.Element | null {
     setError(null);
     setPending(true);
     try {
-      const res = await api.v1.admin.impersonations[':id'].end.$post({ param: { id: active.id } });
+      const res = await api.admin.impersonations[':id'].end.$post({ param: { id: active.id } });
       if (!res.ok) {
         setError(await readProblem(res, 'Could not end the impersonation session.'));
         return;

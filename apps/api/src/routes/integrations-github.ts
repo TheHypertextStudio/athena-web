@@ -3,15 +3,15 @@
  *
  * @remarks
  * GitHub redirects the user's browser here after they install the Docket GitHub App:
- * `GET /v1/integrations/github/callback?installation_id=…&setup_action=install&state=…`.
- * It is a top-level browser navigation (not an API/RPC call), so — like `/v1/ingest` and
+ * `GET /internal/integrations/github/callback?installation_id=…&setup_action=install&state=…`.
+ * It is a top-level browser navigation (not an API/RPC call), so — like `/internal/ingest` and
  * `/api/auth/*` — it lives on `server` rather than the typed router.
  *
  * The handler verifies the signed `state` (which carries the org + integration the install is for,
  * tamper-proof via {@link verifyInstallState}), validates the installation by minting an app token
  * and resolving its account, then records the `installation_id` on the integration's
  * `connection.externalWorkspaceId` — the routing key the webhook firehose matches against
- * (`/v1/ingest/github`). Finally it redirects back to the web app's integration settings.
+ * (`/internal/ingest/github`). Finally it redirects back to the web app's integration settings.
  *
  * Failures never 500 a browser redirect: they bounce back to settings with a `?github=error` flag
  * so the UI can surface a retry, and the integration is left `error` with a real reason.

@@ -260,7 +260,7 @@ Validation runs in both directions through `hono-openapi`, and the choice of lib
 
 Authorization is two complementary layers, and the route tree only works because both are present. `capabilityGuard(capability, resourceLocator)` is the point-check on mutating and single-resource routes: it resolves the target's containment chain (Org→Team/Program→Project→Task), walks grants root-to-self with most-specific-wins and cascade-down override, and 403s on failure — except where the actor lacks even `view`, in which case it returns 404 to avoid leaking the existence of a resource. List and search endpoints cannot use that pattern without leaking counts and breaking cursor pagination, so they instead compose a visibility/grant predicate directly into the SQL `WHERE`, returning only permitted rows from the database. For a plain Member the predicate collapses to `effectiveVisibility = 'public'` (a cheap indexed scan); for a Guest it collapses to `id IN (granted set)`, which is empty until something is granted — "guests see nothing ungranted" enforced at the storage layer, not patched on in the handler. Agents traverse the identical path: an Agent is just an `Actor{kind:'agent', role_id:null}` with explicit Actor-grants, so `canActor` is called with the agent's actor id for every read and write, with the approval gate layered orthogonally on top.
 
-Finally, two mounts deliberately live outside `/v1` and outside `AppType`: `/api/auth/*` (the Better Auth handler, which calls `auth.handler(c.req.raw)`) and `/mcp` (the MCP Streamable HTTP transport behind `withMcpAuth`), alongside the public `/.well-known/oauth-protected-resource` PRM document and the signed-state `/integrations/oauth/:provider/callback`. They share the same Hono deploy but are excluded from the typed contract for principled reasons. Better Auth owns its own request/response lifecycle and its OAuth 2.1 / OIDC framing — it is not a Docket RPC route and should never be callable through `hc<AppType>`. The MCP surface speaks JSON-RPC over Streamable HTTP, not the REST-shaped request/response that RPC inference models, and its authentication is an audience-bound bearer token rather than the session cookie that `sessionMiddleware` resolves. Crucially, keeping MCP out of `AppType` is not keeping it out of the system: its tools (`create_task`, `move_task`, `post_update`, `trigger_agent_session`, `approve`/`reject`, `run_view`) and its `docket://{org}/{type}/{id}` resources call the _same_ service functions the REST handlers call and share the same `@docket/types` Zod schemas, so the MCP layer re-implements no logic — it is a second front door onto one service layer, gated by the same `canActor` engine plus a coarse OAuth scope check (`work:read`, `work:write`, `agents:run`, `connectors:link`) layered above it.
+Finally, several mounts deliberately live outside `/v1` and outside the public `AppType`. `/api/auth/*` (the Better Auth handler, which calls `auth.handler(c.req.raw)`) and `/mcp` (the MCP Streamable HTTP transport behind `withMcpAuth`) sit alongside the public `/.well-known/oauth-protected-resource` PRM document. The machine/webhook edges live under a single `/internal/*` umbrella — `/internal/billing/webhook` (Stripe), `/internal/ingest/{linear,github,slack}` (provider webhooks), `/internal/cron/*` (`CRON_SECRET`), and the signed-state `/internal/integrations/github/callback` — each self-authenticated by a signature or secret, never the session, and so deliberately kept out of the public API namespace and the public spec. The internal staff back-office is its own typed surface at `/admin` (`AdminAppType`, consumed only by `apps/admin` and gated by `staffMiddleware`), with its own staff-gated reference at `/admin/docs`; it is **not** part of the public `AppType` or the `/v1` Scalar reference. Only two non-RPC edges stay on `/v1` because they are user-facing: the SSE live stream (`/v1/stream/sse`) and the binary account-export download (`/v1/me/account/exports/:id/file`). They share the same Hono deploy but are excluded from the typed contract for principled reasons. Better Auth owns its own request/response lifecycle and its OAuth 2.1 / OIDC framing — it is not a Docket RPC route and should never be callable through `hc<AppType>`. The MCP surface speaks JSON-RPC over Streamable HTTP, not the REST-shaped request/response that RPC inference models, and its authentication is an audience-bound bearer token rather than the session cookie that `sessionMiddleware` resolves. Crucially, keeping MCP out of `AppType` is not keeping it out of the system: its tools (`create_task`, `move_task`, `post_update`, `trigger_agent_session`, `approve`/`reject`, `run_view`) and its `docket://{org}/{type}/{id}` resources call the _same_ service functions the REST handlers call and share the same `@docket/types` Zod schemas, so the MCP layer re-implements no logic — it is a second front door onto one service layer, gated by the same `canActor` engine plus a coarse OAuth scope check (`work:read`, `work:write`, `agents:run`, `connectors:link`) layered above it.
 
 Every route below is one `Hono` instance, chained with `.route()` on the
 `apps/api` composition root and exported as the `AppType` contract. Each
@@ -278,6 +278,12 @@ handler carries a Zod schema **in** (`validator`) and **out** (`resolver` +
   /mcp         ── MCP Resource Server · Streamable HTTP (POST+GET-SSE)
                   withMcpAuth · audience-bound Bearer · same service layer
   /.well-known/oauth-protected-resource[/mcp]  ── PRM (RFC 9728)
+  /internal/*  ── machine edges · self-authed (NOT session-gated):
+                  /billing/webhook (Stripe sig) · /ingest/{linear,
+                  github,slack} (provider sig) · /cron/* (CRON_SECRET)
+                  · /integrations/github/{callback,setup} (signed state)
+  /admin/*     ── staff back-office (AdminAppType · apps/admin only)
+                  staffMiddleware-gated · own /admin/docs reference
 ══════════════════════════════════════════════════════════════════════
  /v1  (basePath)                            CAP = x-docket-capability
 ──────────────────────────────────────────────────────────────────────
@@ -315,12 +321,10 @@ handler carries a Zod schema **in** (`validator`) and **out** (`resolver` +
   │   ├─ /notifications ... cross-org inbox + /count /read-all     auth
   │   └─ /dailyplan ....... Today pull (verifies org:view)         auth
   │
-  ├─ /admin ........ staff-gated back-office (apps/admin)
-  │      /metrics /users /orgs /lifecycle /holds
-  │      /impersonations /audit /staff ... staff:{support|finance|
-  │                                               superadmin}
-  │
-  └─ /integrations/oauth/:provider/callback .. signed state .... public
+  ├─ /stream/sse ......... live push (SSE) · session-gated         auth
+  └─ /me/account/exports/:id/file .. binary ZIP download           auth
+       (admin, machine webhooks/cron, and OAuth callbacks are NOT
+        under /v1 — see the non-versioned mounts above)
 ══════════════════════════════════════════════════════════════════════
  IDs = text ULIDs (branded *Id)   Errors = Problem/RFC9457
  POST creates accept Idempotency-Key   DELETE = soft (archived_at)

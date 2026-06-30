@@ -19,7 +19,7 @@ beforeAll(async () => {
 });
 
 /** The callback always bounces back to the web app's integration settings with a status flag. */
-describe('GET /v1/integrations/github/callback', () => {
+describe('GET /internal/integrations/github/callback', () => {
   it('redirects to settings with ?github=error when no state is present', async () => {
     const res = await app.request('/callback');
     expect(res.status).toBe(302);

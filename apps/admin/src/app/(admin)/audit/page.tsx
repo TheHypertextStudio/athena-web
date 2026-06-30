@@ -16,7 +16,7 @@ const PAGE_SIZE = 100;
  * The operator audit trail.
  *
  * @remarks
- * A Client Component. Reads `GET /v1/admin/audit` (newest first) at runtime. Every operator
+ * A Client Component. Reads `GET /admin/audit` (newest first) at runtime. Every operator
  * mutation across the console — holds, billing actions, lifecycle overrides, impersonation —
  * writes an audit event, rendered here with its type, subject, actor, timestamp, and the raw
  * metadata payload. A 403 (non-staff session) surfaces inline.
@@ -33,7 +33,7 @@ export default function AuditPage(): JSX.Element {
     setError(null);
     setAuthFailed(false);
     try {
-      const res = await api.v1.admin.audit.$get({
+      const res = await api.admin.audit.$get({
         query: { limit: String(PAGE_SIZE), offset: '0' },
       });
       if (!res.ok) {

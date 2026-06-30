@@ -2,7 +2,7 @@
  * `@docket/api` — the lifecycle-sweep cron handler (mounted OUTSIDE the RPC `AppType`).
  *
  * @remarks
- * `POST /v1/cron/lifecycle-sweep` runs the idempotent org data-lifecycle sweep
+ * `POST /internal/cron/lifecycle-sweep` runs the idempotent org data-lifecycle sweep
  * ({@link sweepLifecycle}): orgs past their export-window deadline advance
  * `export_window → pending_deletion → deleted`. It is guarded by a shared
  * `CRON_SECRET` bearer (matching the platform scheduler's `Authorization: Bearer …`

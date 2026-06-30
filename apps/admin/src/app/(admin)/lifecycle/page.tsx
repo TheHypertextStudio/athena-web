@@ -14,7 +14,7 @@ import type { AdminLifecycleBoard } from '@/lib/types';
  * The data-lifecycle pipeline board.
  *
  * @remarks
- * A Client Component. Reads `GET /v1/admin/lifecycle` at runtime — one column per lifecycle
+ * A Client Component. Reads `GET /admin/lifecycle` at runtime — one column per lifecycle
  * state (trial → active → past due → export window → pending deletion → deleted), each
  * holding the orgs currently in that state. Cards link to the org detail screen. A 403
  * (non-staff session) surfaces inline. The column layout scrolls horizontally on narrow
@@ -32,7 +32,7 @@ export default function LifecyclePage(): JSX.Element {
     setError(null);
     setAuthFailed(false);
     try {
-      const res = await api.v1.admin.lifecycle.$get();
+      const res = await api.admin.lifecycle.$get();
       if (!res.ok) {
         setAuthFailed(isAuthError(res));
         setError(await readProblem(res, 'Could not load the lifecycle board.'));

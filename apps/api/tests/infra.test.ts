@@ -46,9 +46,9 @@ describe('app.ts route composition', () => {
 describe('openapi', () => {
   it('registerOpenapi serves a valid generated 3.1 document at /v1/openapi.json', async () => {
     const { registerOpenapi } = await import('../src/openapi');
-    const { app } = await import('../src/app');
+    const { app, adminApp } = await import('../src/app');
     const server = new Hono();
-    registerOpenapi(server as never, app);
+    registerOpenapi(server as never, app, adminApp);
 
     const res = await server.request('/v1/openapi.json');
     expect(res.status).toBe(200);
@@ -69,9 +69,9 @@ describe('openapi', () => {
 
   it('registerOpenapi mounts the Scalar docs UI at /v1/docs', async () => {
     const { registerOpenapi } = await import('../src/openapi');
-    const { app } = await import('../src/app');
+    const { app, adminApp } = await import('../src/app');
     const server = new Hono();
-    registerOpenapi(server as never, app);
+    registerOpenapi(server as never, app, adminApp);
     const docs = await server.request('/v1/docs');
     expect(docs.status).toBe(200);
   });

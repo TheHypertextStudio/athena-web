@@ -2,8 +2,11 @@
  * `@docket/api` — runtime entrypoint.
  *
  * @remarks
- * Boot order: CORS (first) → session middleware → `/api/auth/*` (Better Auth, outside
- * the RPC `AppType`) → the `/v1` app → health/openapi/docs → the Problem `onError`.
+ * Boot order: CORS (first) → session middleware → `/api/auth/*` (Better Auth) → the
+ * `/internal/*` machine edges (webhooks/ingest/cron/oauth-callback, each self-authed) → the
+ * `/admin` staff app → the `/v1` public app → health/openapi/docs → the Problem `onError`.
+ * Three typed surfaces are kept apart: the public `/v1` app (`AppType`), the staff `/admin`
+ * app (`AdminAppType`), and the un-typed `/internal/*` machine edges.
  * Importing `@docket/api` (the package entry) does NOT run this; only `node dist/server.js`
  * / `tsx watch src/server.ts` does.
  */
@@ -12,7 +15,7 @@ import { auth } from '@docket/auth';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 
-import { app } from './app';
+import { adminApp, app } from './app';
 import { sessionMiddleware } from './auth/session-middleware';
 import type { AppEnv } from './context';
 import { startDevScheduler } from './dev-scheduler';
@@ -56,18 +59,25 @@ server.on(['POST', 'GET'], '/mcp', mcpHandler);
 server.get('/.well-known/oauth-protected-resource', protectedResourceMetadata);
 server.get('/.well-known/oauth-protected-resource/mcp', protectedResourceMetadata);
 server.get('/.well-known/oauth-authorization-server', authorizationServerMetadata);
-// Non-RPC external edges (webhooks, ingestion, cron) live OUTSIDE the typed `AppType` routes.
-server.route('/v1/billing', webhooks);
-server.route('/v1/ingest', ingest);
+// Internal machine edges (webhooks, ingestion, cron, OAuth callback) live OUTSIDE the public
+// `/v1` API and outside any typed contract, under a single `/internal/*` umbrella. Each carries
+// its own auth (Stripe/provider signatures, `CRON_SECRET`, signed OAuth state) — they are NOT
+// session-gated by `requireAuth` (which only guards the `/v1` app).
+server.route('/internal/billing', webhooks);
+server.route('/internal/ingest', ingest);
+server.route('/internal/integrations/github', integrationsGithub);
+server.route('/internal/cron', cron);
+// User-facing non-RPC edges that stay on `/v1`: the SSE live stream, and the binary account
+// export download (GET registered before the typed app so its path matches; the typed app still
+// owns POST /v1/me/account/exports).
 server.route('/v1/stream', streamSse);
-server.route('/v1/integrations/github', integrationsGithub);
-server.route('/v1/cron', cron);
-// Binary export download (non-RPC; streams a ZIP). Registered before the typed app so its GET
-// matches; the typed app still owns POST /v1/me/account/exports.
 server.route('/v1/me/account/exports', meAccountExportDownload);
+// The internal staff back-office (`AdminAppType`) under `/admin`, self-gated by staffMiddleware
+// — separate from the public `/v1` app and absent from the public spec.
+server.route('/', adminApp);
 server.route('/', app);
 server.get('/v1/health', (c) => c.json({ status: 'ok' as const }));
-registerOpenapi(server, app);
+registerOpenapi(server, app, adminApp);
 server.onError(onError);
 
 const nodeServer = serve({ fetch: server.fetch, port: env.PORT });

@@ -7,6 +7,27 @@
 
 ## Completed Tasks
 
+### [CALENDAR-002] Google Calendar e2e coverage and UX audit
+
+- **Completed**: 2026-06-30
+- **Summary**: Added a Playwright end-to-end flow for first-party Google Calendar that signs up a
+  real throwaway user, verifies the nested Connections → Google Calendar configuration path,
+  toggles a calendar's visibility, syncs the account, and confirms selected Google Calendar
+  events appear in the agenda rail. Audited and tightened the nested settings UI with visible
+  sync feedback, account status badges, last-sync/error details, mutation-disabled controls, and a
+  direct route back to Connected accounts for adding more Google identities.
+- **Files Changed**: `apps/web/e2e/google-calendar.spec.mjs`,
+  `apps/web/e2e/verify-composer.spec.mjs`,
+  `apps/web/src/app/(app)/orgs/[orgId]/settings/connections/google-calendar/page.tsx`,
+  `apps/web/src/components/settings/google-calendar-settings.tsx`, and
+  `tooling/eslint-config/index.js`.
+- **Learnings**: Portless worktrees register branch-prefixed hosts, so e2e runs must target the
+  branch web/API origins and still expose `NEXT_PUBLIC_PASSKEY_RP_ID=docket.localhost`. The full
+  e2e suite also exposed a flaky pointer click in the existing composer smoke test; opening the
+  already-visible button through the DOM keeps the screenshot contract deterministic.
+- **Gate**: `@docket/web` lint, typecheck, and 169 unit tests pass. Full web e2e passes
+  (`5 passed`) against the branch-prefixed dev stack. `pnpm build` passes.
+
 ### [CALENDAR-001] First-party Google Calendar integration
 
 - **Completed**: 2026-06-30

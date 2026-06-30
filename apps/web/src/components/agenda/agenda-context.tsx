@@ -18,6 +18,7 @@ import {
   type ReactNode,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
 } from 'react';
@@ -28,8 +29,9 @@ import {
   optimisticPatch,
   queryKeys,
   unwrap,
+  useApiListQuery,
   useApiMutation,
-  useApiQuery,
+  usePrefetchApi,
 } from '@/lib/query';
 import { todayISODate } from '@/lib/today';
 import { startViewTransition } from '@/lib/view-transition';
@@ -156,6 +158,28 @@ interface AgendaProviderProps {
   readonly children: ReactNode;
 }
 
+// Day-parameterized query definitions, so the same key/fetcher serves both the active read and the
+// adjacent-day prefetch (no drift between what we show and what we warm). Module-level because they
+// close over nothing from the component — stable references, free of `useCallback`.
+
+/** The Hub `today` query definition for a given day. */
+function todayDef(date: string) {
+  return apiQueryOptions(
+    queryKeys.today(date),
+    () => api.v1.hub.today.$get({ query: { date } }),
+    'Could not load your agenda.',
+  );
+}
+
+/** The daily-plan query definition for a given day (source of plan-item ids + done status). */
+function planDef(date: string) {
+  return apiQueryOptions(
+    queryKeys.dailyPlan(date),
+    () => api.v1['daily-plan'].$get({ query: { date } }),
+    'Could not load your plan.',
+  );
+}
+
 /**
  * Owns the selected day, fetches its agenda, and provides both to descendants.
  *
@@ -166,33 +190,34 @@ interface AgendaProviderProps {
  */
 export function AgendaProvider({ initialDate, children }: AgendaProviderProps): JSX.Element {
   const [date, setDate] = useState(() => initialDate ?? todayISODate());
-  const [view, setViewState] = useState<AgendaView>('list');
+  const [view, setViewState] = useState<AgendaView>('timeline');
 
   const queryClient = useQueryClient();
 
-  const query = useApiQuery(
-    apiQueryOptions(
-      queryKeys.today(date),
-      () => api.v1.hub.today.$get({ query: { date } }),
-      'Could not load your agenda.',
-    ),
-  );
+  // `useApiListQuery` keeps the current day on screen while the next day loads (it bundles
+  // `placeholderData: keepPreviousData`), so stepping days never blanks the grid to a skeleton —
+  // only the very first load (no data at all) shows one.
+  const query = useApiListQuery(todayDef(date));
   const data: HubTodayOut | null = query.data ?? null;
 
   // The daily plan carries the item id + checked-off status the Hub `today` projection lacks: we
   // source display (titles, timeboxes) from `today` and augment each entry with its plan-item id +
   // done flag, matched by task. Editing then has the id it needs without changing what's shown.
-  const planQuery = useApiQuery(
-    apiQueryOptions(
-      queryKeys.dailyPlan(date),
-      () => api.v1['daily-plan'].$get({ query: { date } }),
-      'Could not load your plan.',
-    ),
-  );
+  const planQuery = useApiListQuery(planDef(date));
   const planByTask = useMemo(() => {
     const items = planQuery.data?.items ?? [];
     return new Map<string, DailyPlanItemOut>(items.map((item) => [item.refTaskId, item]));
   }, [planQuery.data]);
+
+  // Warm the neighbouring days so prev/next resolve from cache: the day switch is then an instant
+  // in-place update rather than a fetch-and-wait.
+  const prefetch = usePrefetchApi();
+  useEffect(() => {
+    for (const neighbour of [shiftISODate(date, -1), shiftISODate(date, 1)]) {
+      prefetch(todayDef(neighbour));
+      prefetch(planDef(neighbour));
+    }
+  }, [date, prefetch]);
 
   const entries = useMemo(
     () =>
@@ -236,28 +261,26 @@ export function AgendaProvider({ initialDate, children }: AgendaProviderProps): 
     [toggle],
   );
 
-  // Every state change runs inside a View Transition, so the change ANIMATES rather than swaps:
-  // entries that carry a `view-transition-name` morph between arrangements (list ↔ timeline, day →
-  // day). Unsupported browsers fall back to an instant update.
+  // Switching list ↔ timeline reshapes the *same* cards, so it runs inside a View Transition: each
+  // carries a `view-transition-name` and morphs from its row box to its grid box. (Unsupported
+  // browsers fall back to an instant update.)
   const setView = useCallback((next: AgendaView) => {
     startViewTransition(() => {
       setViewState(next);
     });
   }, []);
+  // Day navigation is a plain, synchronous state change — deliberately NOT wrapped in a View
+  // Transition. A different day is different data behind a fetch, not a reshape of what's on screen;
+  // the browser's default full-page cross-fade only added latency. The hour grid is identical
+  // structure and reconciles in place, so the click lands instantly and only the cards swap.
   const goToPreviousDay = useCallback(() => {
-    startViewTransition(() => {
-      setDate((d) => shiftISODate(d, -1));
-    });
+    setDate((d) => shiftISODate(d, -1));
   }, []);
   const goToNextDay = useCallback(() => {
-    startViewTransition(() => {
-      setDate((d) => shiftISODate(d, 1));
-    });
+    setDate((d) => shiftISODate(d, 1));
   }, []);
   const goToToday = useCallback(() => {
-    startViewTransition(() => {
-      setDate(todayISODate());
-    });
+    setDate(todayISODate());
   }, []);
 
   const value = useMemo<AgendaContextValue>(

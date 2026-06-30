@@ -31,6 +31,8 @@
  * optimistic recipe, prefetch/prime, SSR hydration, and pitfalls).
  * @see {@link api} for the underlying typed Hono RPC client.
  */
+import { useCallback } from 'react';
+
 import {
   type DefaultError,
   type InfiniteData,
@@ -145,9 +147,14 @@ export function useLiveInfiniteApiQuery<TPage>(
  */
 export function usePrefetchApi(): <T>(def: UseQueryOptions<T, DefaultError, T>) => void {
   const queryClient = useQueryClient();
-  return (def) => {
-    void queryClient.prefetchQuery(def);
-  };
+  // Stable identity (only `queryClient` is captured) so callers can list the prefetcher in effect
+  // deps without the effect refiring every render.
+  return useCallback(
+    <T>(def: UseQueryOptions<T, DefaultError, T>) => {
+      void queryClient.prefetchQuery(def);
+    },
+    [queryClient],
+  );
 }
 
 /** Options for {@link useApiMutation}. */

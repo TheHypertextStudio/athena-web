@@ -7,9 +7,9 @@
  * A singular surface for multiple views of the same data: it renders the shared {@link
  * AgendaEntryCard}s either stacked (the **list**) or positioned by time on an hour grid (the
  * **timeline**). The cards are the same elements in both arrangements — keyed by a stable
- * `view-transition-name` — so switching the view (or the day, both wrapped in a View Transition by
- * {@link useAgenda}) *rearranges* the same cards and the browser morphs them, rather than swapping
- * two separate view components.
+ * `view-transition-name` — so switching the view (wrapped in a View Transition by {@link useAgenda})
+ * *rearranges* the same cards and the browser morphs them, rather than swapping two separate view
+ * components. (Day navigation is a plain in-place update, not a transition — see {@link useAgenda}.)
  */
 import { Stack } from '@docket/ui/primitives';
 import { type JSX, useMemo } from 'react';
@@ -61,9 +61,15 @@ function chronological(entries: readonly AgendaEntry[]): AgendaEntry[] {
 
 /** Arranges the agenda for the active view. */
 export default function AgendaCanvas(): JSX.Element {
-  const { entries, view } = useAgenda();
-  if (entries.length === 0) return <AgendaEmpty />;
-  return view === 'timeline' ? <TimelineArrangement entries={entries} /> : <ListArrangement entries={entries} />;
+  // The single context read for the canvas: the arrangements below are pure, props-driven views.
+  const { entries, view, isToday } = useAgenda();
+  // No empty state: the timeline is the default and always renders its hour grid (an empty calendar
+  // is still a calendar). The list simply stacks whatever entries there are.
+  return view === 'list' ? (
+    <ListArrangement entries={entries} />
+  ) : (
+    <TimelineArrangement entries={entries} isToday={isToday} />
+  );
 }
 
 /** Props shared by the view arrangements. */
@@ -93,8 +99,14 @@ interface PlacedEntry {
   height: number;
 }
 
+/** Props for {@link TimelineArrangement}: the shared entries plus whether the day is today. */
+interface TimelineArrangementProps extends ArrangementProps {
+  /** Whether the shown day is today — drives the "now" line. */
+  isToday: boolean;
+}
+
 /** The timeline arrangement: the same cards, positioned by time on an hour grid. */
-function TimelineArrangement({ entries }: ArrangementProps): JSX.Element {
+function TimelineArrangement({ entries, isToday }: TimelineArrangementProps): JSX.Element {
   const placed = useMemo<PlacedEntry[]>(
     () =>
       entries
@@ -112,6 +124,12 @@ function TimelineArrangement({ entries }: ArrangementProps): JSX.Element {
   );
   const gridHeight = HOUR_LABELS.length * HOUR_HEIGHT;
 
+  // A "now" line on today's grid, so even an empty calendar reads as live rather than blank.
+  const now = new Date();
+  const nowHours = now.getHours() + now.getMinutes() / 60;
+  const showNow = isToday && nowHours >= DAY_START_HOUR && nowHours <= DAY_END_HOUR + 1;
+  const nowTop = (nowHours - DAY_START_HOUR) * HOUR_HEIGHT;
+
   return (
     <div className="relative" style={{ height: gridHeight }}>
       {HOUR_LABELS.map((hour, i) => (
@@ -125,6 +143,14 @@ function TimelineArrangement({ entries }: ArrangementProps): JSX.Element {
           </span>
         </div>
       ))}
+      {showNow ? (
+        <div
+          className="bg-primary pointer-events-none absolute inset-x-0 z-10 h-px"
+          style={{ top: nowTop }}
+        >
+          <div className="bg-primary absolute top-1/2 left-0 size-2 -translate-y-1/2 rounded-full" />
+        </div>
+      ) : null}
       <div className="absolute inset-y-0 right-0 left-12">
         {placed.map(({ entry, top, height }) => (
           <div key={entry.id} className="absolute inset-x-0" style={{ top, height }}>
@@ -133,19 +159,5 @@ function TimelineArrangement({ entries }: ArrangementProps): JSX.Element {
         ))}
       </div>
     </div>
-  );
-}
-
-/** Calm empty state when the day has no planned entries. */
-function AgendaEmpty(): JSX.Element {
-  return (
-    <Stack
-      align="center"
-      gap={2}
-      className="border-outline-variant text-on-surface-variant justify-center rounded-xl border border-dashed p-8 text-center"
-    >
-      <p className="text-on-surface text-body font-medium">Nothing planned</p>
-      <p className="max-w-xs text-xs">Capture or pull in tasks to plan this day.</p>
-    </Stack>
   );
 }

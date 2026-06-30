@@ -40,7 +40,9 @@ export default function AgendaHeader(): JSX.Element {
         <Button variant="ghost" size="icon" aria-label="Previous day" onClick={goToPreviousDay}>
           <ChevronLeft />
         </Button>
-        <span className="text-on-surface px-1 text-sm font-semibold">{formatAgendaDate(date)}</span>
+        <span className="text-on-surface w-28 shrink-0 px-1 text-center text-sm font-semibold whitespace-nowrap">
+          {formatAgendaDate(date)}
+        </span>
         <Button variant="ghost" size="icon" aria-label="Next day" onClick={goToNextDay}>
           <ChevronRight />
         </Button>

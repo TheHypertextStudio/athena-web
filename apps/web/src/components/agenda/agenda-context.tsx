@@ -10,8 +10,7 @@
  * model is the seam between source and views — when a later slice swaps the source to the
  * `/v1/daily-plan` CRUD, only {@link toAgendaEntries} and the query in {@link AgendaProvider} change.
  */
-import type { AgendaOut, DailyPlanItemOut, DailyPlanItemStatus, HubTodayOut } from '@docket/types';
-import { useQueryClient } from '@tanstack/react-query';
+import type { AgendaOut, DailyPlanItemOut, HubTodayOut } from '@docket/types';
 import {
   createContext,
   type JSX,
@@ -24,17 +23,11 @@ import {
 } from 'react';
 
 import { api } from '@/lib/api';
-import {
-  apiQueryOptions,
-  optimisticPatch,
-  queryKeys,
-  unwrap,
-  useApiListQuery,
-  useApiMutation,
-  usePrefetchApi,
-} from '@/lib/query';
+import { apiQueryOptions, queryKeys, useApiListQuery, usePrefetchApi } from '@/lib/query';
 import { todayISODate } from '@/lib/today';
 import { startViewTransition } from '@/lib/view-transition';
+
+import { type AgendaPlanMutations, useAgendaPlanMutations } from './agenda-mutations';
 
 /** Stable `view-transition-name` for an agenda entry, so it morphs across views (list ↔ timeline). */
 export function agendaEntryTransitionName(entryId: string): string {
@@ -162,8 +155,11 @@ export function toAgendaEntries(data: HubTodayOut | AgendaOut | null): AgendaEnt
 /** The agenda's view modes. `list` is a chronological stream; `timeline` is the hour grid. */
 export type AgendaView = 'list' | 'timeline';
 
-/** What every agenda component reads from context. */
-interface AgendaContextValue {
+/**
+ * What every agenda component reads from context: the day's read + navigation state, plus the
+ * in-place edit operations from {@link AgendaPlanMutations}.
+ */
+interface AgendaContextValue extends AgendaPlanMutations {
   /** The ISO date this agenda is showing. */
   date: string;
   /** Whether {@link date} is today (drives the "jump to today" affordance). */
@@ -184,8 +180,6 @@ interface AgendaContextValue {
   goToNextDay: () => void;
   /** Jump back to today. */
   goToToday: () => void;
-  /** Check an entry off for the day (or un-check it). No-op for entries not on the plan. */
-  toggleDone: (entry: AgendaEntry) => void;
 }
 
 const AgendaContext = createContext<AgendaContextValue | null>(null);
@@ -232,8 +226,6 @@ export function AgendaProvider({ initialDate, children }: AgendaProviderProps): 
   const [date, setDate] = useState(() => initialDate ?? todayISODate());
   const [view, setViewState] = useState<AgendaView>('timeline');
 
-  const queryClient = useQueryClient();
-
   // `useApiListQuery` keeps the current day on screen while the next day loads (it bundles
   // `placeholderData: keepPreviousData`), so stepping days never blanks the grid to a skeleton —
   // only the very first load (no data at all) shows one.
@@ -268,38 +260,9 @@ export function AgendaProvider({ initialDate, children }: AgendaProviderProps): 
     [data, planByTask],
   );
 
-  const toggle = useApiMutation({
-    mutationFn: (vars: { id: string; status: DailyPlanItemStatus }) =>
-      unwrap(
-        () =>
-          api.v1['daily-plan'][':id'].$patch({
-            param: { id: vars.id },
-            json: { status: vars.status },
-          }),
-        'Could not update your plan.',
-      ),
-    onMutate: (vars) =>
-      optimisticPatch<{ items: DailyPlanItemOut[] }>(
-        queryClient,
-        queryKeys.dailyPlan(date),
-        (prev) => ({
-          items: prev.items.map((item) =>
-            item.id === vars.id ? { ...item, status: vars.status } : item,
-          ),
-        }),
-      ),
-    onError: (_error, _vars, context) => context?.rollback(),
-    invalidateKeys: [queryKeys.dailyPlan(date), queryKeys.agenda(date), queryKeys.today(date)],
-  });
-
-  const toggleDone = useCallback(
-    (entry: AgendaEntry) => {
-      const id = entry.planItemId;
-      if (!id) return;
-      toggle.mutate({ id, status: entry.done ? 'planned' : 'done' });
-    },
-    [toggle],
-  );
+  // The day's in-place edit operations (check-off, set/clear timebox, move, remove), bound to this
+  // day's caches. Owned by the write layer so the provider stays read + navigation only.
+  const mutations = useAgendaPlanMutations(date);
 
   // Switching list ↔ timeline reshapes the *same* cards, so it runs inside a View Transition: each
   // carries a `view-transition-name` and morphs from its row box to its grid box. (Unsupported
@@ -335,7 +298,7 @@ export function AgendaProvider({ initialDate, children }: AgendaProviderProps): 
       goToPreviousDay,
       goToNextDay,
       goToToday,
-      toggleDone,
+      ...mutations,
     }),
     [
       date,
@@ -347,7 +310,7 @@ export function AgendaProvider({ initialDate, children }: AgendaProviderProps): 
       goToPreviousDay,
       goToNextDay,
       goToToday,
-      toggleDone,
+      mutations,
     ],
   );
   return <AgendaContext.Provider value={value}>{children}</AgendaContext.Provider>;

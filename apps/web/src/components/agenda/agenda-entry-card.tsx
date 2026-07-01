@@ -21,6 +21,7 @@ import { type JSX } from 'react';
 import { useActiveOrg } from '@/components/active-org';
 import { OrgChip } from '@/components/org-chip';
 
+import AgendaEntryActions from './agenda-entry-actions';
 import {
   type AgendaEntry,
   agendaEntryTransitionName,
@@ -153,6 +154,7 @@ export default function AgendaEntryCard({
           {content}
         </div>
       )}
+      {entry.planItemId && isTask ? <AgendaEntryActions entry={entry} /> : null}
     </div>
   );
 }

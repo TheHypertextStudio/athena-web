@@ -7,6 +7,25 @@
 
 ## Completed Tasks
 
+### [AGENDA-001] Add daily-plan edit actions to the agenda rail
+
+- **Completed**: 2026-07-01
+- **Summary**: Added a per-entry action menu for planned task agenda entries and moved the
+  daily-plan write behavior into a dedicated agenda mutation layer. The agenda can now check off
+  plan items, edit/clear timeboxes, move tasks to another day, and remove tasks from the plan while
+  updating the rendered agenda cache optimistically.
+- **Files Changed**: `apps/web/src/components/agenda/agenda-{context,entry-card,entry-actions}.tsx`,
+  `apps/web/src/components/agenda/agenda-mutations.ts`,
+  `apps/web/tests/agenda/{agenda-mutations,agenda-entry-actions}.test.tsx`, and
+  `docs/WORKLOG.md`.
+- **Learnings**: The agenda provider renders from `queryKeys.agenda(date)`, so write operations
+  must patch that cache directly; patching only `dailyPlan`/`today` leaves the visible rail stale.
+  Radix dropdown selection also needs a controlled handoff before opening the popover editor.
+- **Gate**: The new agenda mutation tests first failed against the stale agenda cache, then passed
+  after patching `agenda(date)`. `pnpm --filter @docket/web typecheck` and the focused agenda test
+  run pass. The local Node runtime still warns because it is `v24.3.0` and the repo requires
+  `>=24.15 <27`.
+
 ### [E2E-001] Convert web Playwright suite to TypeScript
 
 - **Completed**: 2026-07-01

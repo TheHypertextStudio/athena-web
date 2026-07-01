@@ -1,11 +1,29 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-06-30
+> **Last Updated**: 2026-07-01
 
 ---
 
 ## Completed Tasks
+
+### [E2E-001] Convert web Playwright suite to TypeScript
+
+- **Completed**: 2026-07-01
+- **Summary**: Converted the web Playwright specs and shared helpers from `.mjs` to typed
+  TypeScript, moved e2e constants/helpers into a dedicated `apps/web/e2e/tsconfig.json`, and
+  updated Playwright to discover only `.spec.ts` files. Kept the app `tsconfig` focused on Next
+  sources by excluding `e2e`, and removed the stale `.mjs` lint escape hatch in favor of a narrow
+  helper override for CDP/page-context glue.
+- **Files Changed**: `apps/web/e2e/**/*.ts`, `apps/web/e2e/tsconfig.json`,
+  `apps/web/playwright.config.ts`, `apps/web/tsconfig.json`, `tooling/eslint-config/index.js`,
+  and `docs/WORKLOG.md`.
+- **Learnings**: The composer smoke test must keep the established DOM `button.click()` activation
+  path; a normal Playwright pointer click can hang after resolving the visible enabled button.
+- **Gate**: `pnpm --dir apps/web exec tsc -p e2e/tsconfig.json --noEmit`,
+  `pnpm --filter @docket/web typecheck`, `pnpm --filter @docket/web lint`, and
+  `pnpm --filter @docket/web test:e2e -- e2e/verify-composer.spec.ts` pass. The local Node
+  runtime still warns because it is `v24.3.0` and the repo requires `>=24.15 <27`.
 
 ### [TOOLING-001] Allow Node 26 and refresh package-manager tooling
 

@@ -251,7 +251,7 @@ describe('EntityTable — selection', () => {
     );
     const selectedRow = screen.getByRole('row', { name: /Auth migration/ });
     expect(selectedRow).toHaveAttribute('data-selected', '');
-    expect(selectedRow).toHaveClass('bg-surface-container-highest');
+    expect(selectedRow).toHaveClass('bg-secondary-container');
 
     const unselectedRow = screen.getByRole('row', { name: /Billing revamp/ });
     expect(unselectedRow).not.toHaveAttribute('data-selected');

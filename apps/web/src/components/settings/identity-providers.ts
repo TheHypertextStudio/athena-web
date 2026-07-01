@@ -10,7 +10,16 @@
  * here — that lives in `@/lib/public-config`; this file is the pure display catalog (id, name, icon).
  */
 import type { IdentityProvider } from '@docket/types';
-import { Calendar, Github, Google, Layers, type LucideIcon, MessageSquare, Target, Workflow } from '@docket/ui/icons';
+import {
+  Calendar,
+  Github,
+  Google,
+  Layers,
+  type LucideIcon,
+  MessageSquare,
+  Target,
+  Workflow,
+} from '@docket/ui/icons';
 
 /** A real, linkable identity provider (its OAuth may or may not be wired in this deployment). */
 export interface LiveIdentityProvider {

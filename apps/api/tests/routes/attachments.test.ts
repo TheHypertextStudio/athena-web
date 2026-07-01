@@ -130,7 +130,9 @@ describe('attachment routes', () => {
       removed: true,
     });
 
-    expect((await body<Page<AttachmentOut>>(await w.request(`/${taskId}/attachments`))).items).toHaveLength(0);
+    expect(
+      (await body<Page<AttachmentOut>>(await w.request(`/${taskId}/attachments`))).items,
+    ).toHaveLength(0);
     expect(
       (await w.request(`/${taskId}/attachments/${created.id}`, { method: 'DELETE' })).status,
     ).toBe(404);

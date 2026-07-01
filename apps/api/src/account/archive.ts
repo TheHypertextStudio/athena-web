@@ -87,7 +87,9 @@ function renderReadme(doc: ExportDocument, meta: ExportArchiveMeta): string {
     projects += count(m.work, 'project');
     comments += count(m.work, 'comment');
   }
-  const who = meta.name ? `${meta.name}${meta.email ? ` <${meta.email}>` : ''}` : (meta.email ?? 'your account');
+  const who = meta.name
+    ? `${meta.name}${meta.email ? ` <${meta.email}>` : ''}`
+    : (meta.email ?? 'your account');
 
   return `# Your Docket data export
 

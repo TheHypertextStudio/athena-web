@@ -15,9 +15,9 @@ From the product decisions:
 
 - **Portable** = rides along on **every page** (a persistent companion), is a **reusable surface**
   (same component can be a rail today, a full page later), and supports **draggable items**
-  (reorder / timebox by dragging). *Not* a resizable/movable panel.
+  (reorder / timebox by dragging). _Not_ a resizable/movable panel.
 - **Flexible** = **switchable views**, **spans beyond today**, **editable in place**. The current
-  fixed day-grid becomes *one* view, not the only one.
+  fixed day-grid becomes _one_ view, not the only one.
 
 Backend reality (already planner-shaped):
 
@@ -26,7 +26,7 @@ Backend reality (already planner-shaped):
 - CRUD at `/v1/daily-plan` (`apps/api/src/routes/daily-plan.ts`): list-by-date, add, patch
   (status/sort/timebox), delete. Task mutations at `/v1/orgs/:orgId/tasks/:id` (+ `/state`).
 - Gaps: **no multi-day range read**, **no atomic reschedule** (delete + re-add), **no DnD library**.
-- No separate "events" table — calendar items *are* timeboxed tasks (Google events import as tasks).
+- No separate "events" table — calendar items _are_ timeboxed tasks (Google events import as tasks).
 - `hub/today` is cross-org/global, so a global agenda is feasible from existing data.
 
 ## Slice roadmap
@@ -73,7 +73,7 @@ content rendering or touching the backend.
      the single view. (Agenda-list / untimed-task rendering is Slice 3.)
 3. **Proper panel chrome (retire the floating toggle).** The shell rail gets:
    - a **header**: the `asideLabel` ("Agenda") as a title, plus a **collapse** control (a labeled
-     icon button — obvious function, lives *in* the panel so it costs no horizontal space when open);
+     icon button — obvious function, lives _in_ the panel so it costs no horizontal space when open);
    - a **reopen tab** at the right edge shown **only when collapsed** (so it costs nothing when open),
      using the page-supplied glyph so its purpose is obvious;
    - **remove the seam-handle** added earlier (vertically-centered chevron — read as random and stole
@@ -91,12 +91,14 @@ Multi-day, day navigation, view switching, any editing/mutations, drag-and-drop,
 ### Files
 
 **New**
+
 - `apps/web/src/components/agenda/agenda.tsx` — reusable `<Agenda>` (day view; reuses `CalendarPane`).
 - `apps/web/src/components/agenda/use-agenda.ts` — `useAgenda(date)` data hook (wraps the `hub/today`
   query; shares cache with Today's Next up).
 - `apps/web/src/components/agenda/agenda-rail.tsx` — effect-only global registrar.
 
 **Modified**
+
 - `apps/web/src/components/app-shell-frame.tsx` — render `<AgendaRail/>` inside `AppShell` (global).
 - `packages/ui/src/components/shell/AppShell.tsx` — replace the seam-handle with in-panel header
   (title + collapse) and an edge reopen-tab; keep the animated rail + mobile Sheet/trigger.

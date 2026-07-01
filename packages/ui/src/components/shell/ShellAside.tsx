@@ -65,7 +65,7 @@ export function ShellAside({ panel, collapsed, onToggle }: ShellAsideProps): Rea
         id={SHELL_ASIDE_ID}
         aria-label={panel.label}
         inert={open ? undefined : true}
-        className="h-full w-[22rem] min-h-0"
+        className="h-full min-h-0 w-[22rem]"
       >
         <Row
           as="header"

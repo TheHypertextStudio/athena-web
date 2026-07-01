@@ -44,7 +44,7 @@ describe('EntityListRow', () => {
     expect(row).toHaveAttribute('data-active', '');
     expect(row).toHaveAttribute('data-selected', '');
     expect(row).toHaveAttribute('aria-pressed', 'true');
-    expect(row).toHaveClass('bg-surface-container-highest', 'row-x');
+    expect(row).toHaveClass('bg-secondary-container', 'row-x');
   });
 
   it('renders the leading, subtitle, meta, and trailing slots', () => {
@@ -92,7 +92,7 @@ describe('EntityListRow', () => {
     expect(link).toHaveAttribute('aria-current', 'true');
     expect(link).toHaveAttribute('data-active', '');
     expect(link).toHaveAttribute('data-selected', '');
-    expect(link).toHaveClass('bg-surface-container-highest');
+    expect(link).toHaveClass('bg-secondary-container');
   });
 
   it('uses an explicit aria-label over the title text', () => {

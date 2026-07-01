@@ -71,8 +71,8 @@ export function docketVitest(options: DocketVitestOptions = {}) {
       // otherwise-passing tests (e.g. crypto/pglite-heavy ones) purely from CPU
       // starvation. Generous timeouts keep the full-suite run reliably green
       // without affecting the happy path.
-      testTimeout: 30_000,
-      hookTimeout: 30_000,
+      testTimeout: 120_000,
+      hookTimeout: 120_000,
       // Coverage is gated (with all:true so untested files count). Default 90% gives
       // headroom so we don't write brittle wiring/tautology tests to chase the last
       // few lines; the trust-spine packages pass coverageThreshold:100. Either bar is

@@ -78,7 +78,9 @@ export default function NextUp({
             const title = pick.kind === 'block' ? taskTitle(pick.block.taskId) : pick.task.title;
             const lead = pick.kind === 'block' ? formatClock(pick.block.startsAt) : 'Due today';
             return (
-              <li key={`${pick.kind}-${taskId}-${pick.kind === 'block' ? pick.block.startsAt : ''}`}>
+              <li
+                key={`${pick.kind}-${taskId}-${pick.kind === 'block' ? pick.block.startsAt : ''}`}
+              >
                 <Link
                   href={`/orgs/${orgId}/tasks/${taskId}`}
                   className="border-outline-variant bg-surface-container-low hover:bg-surface-container focus-visible:ring-ring flex items-center gap-4 rounded-xl border px-4 py-3.5 transition-colors focus-visible:ring-2 focus-visible:outline-none"

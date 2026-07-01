@@ -16,11 +16,7 @@
 import { HubTaskItem, OrganizationId, TaskId } from '@docket/types';
 import { describe, expect, it } from 'vitest';
 
-import {
-  type CalendarBlock,
-  NEXT_UP_LIMIT,
-  selectNextUp,
-} from '@/components/today/next-up-select';
+import { type CalendarBlock, NEXT_UP_LIMIT, selectNextUp } from '@/components/today/next-up-select';
 
 /** Reference "now" all fixtures are positioned around. */
 const NOW = new Date('2026-06-29T12:00:00.000Z');

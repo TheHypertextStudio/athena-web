@@ -18,7 +18,8 @@ import { useTodayData } from './use-today-data';
  * page), so the Today page itself just renders its masthead + capture + the "Next up" peek.
  */
 export default function TodayPage(): JSX.Element {
-  const { data, loading, error, refetch, taskTitle, orgName, heading, activeOrgId } = useTodayData();
+  const { data, loading, error, refetch, taskTitle, orgName, heading, activeOrgId } =
+    useTodayData();
 
   return (
     <div className="mx-auto flex h-full w-full max-w-4xl flex-col gap-10 px-6 py-10 @2xl:px-10 @2xl:py-14 @4xl:px-12">

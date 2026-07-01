@@ -32,7 +32,10 @@ export function fetchEnrichedInitiatives(
   client: typeof api = api,
 ): () => Promise<RpcResponse<readonly InitiativeCatalogRow[]>> {
   return async () => {
-    const listRes = await client.v1.orgs[':orgId'].initiatives.$get({ param: { orgId }, query: {} });
+    const listRes = await client.v1.orgs[':orgId'].initiatives.$get({
+      param: { orgId },
+      query: {},
+    });
     if (!listRes.ok) {
       return {
         ok: false,

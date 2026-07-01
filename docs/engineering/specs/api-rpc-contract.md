@@ -41,9 +41,7 @@ import { Hono } from 'hono';
 
 // (1) The PUBLIC product API under /v1 — consumed by apps/web.
 const app = new Hono<AppEnv>().basePath('/v1');
-const routes = app
-  .route('/orgs', orgs)
-  .route('/hub', hub); // cross-org Hub surfaces
+const routes = app.route('/orgs', orgs).route('/hub', hub); // cross-org Hub surfaces
 export type AppType = typeof routes; // ← THE public contract
 
 // (2) The INTERNAL staff back-office under /admin — consumed ONLY by apps/admin.

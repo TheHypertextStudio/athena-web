@@ -13,7 +13,8 @@
  *
  * It deliberately mirrors {@link ListRow}'s MD3 surface treatment — the hairline
  * `border-outline-variant` divider, `hover:bg-surface-container-high`, the
- * `bg-surface-container-highest` active/selected tone, and the inset `focus-visible` ring —
+ * `bg-surface-container-highest` active tone, the `bg-secondary-container` selected tone, and
+ * the inset `focus-visible` ring —
  * so a virtualized {@link ListView} of tasks and a plain list of entities read as the same
  * component family. Density follows the shared row rhythm (`min-h-9`, `px-3`, `py-1.5`, `gap-2`).
  *
@@ -124,8 +125,8 @@ const ROW_INTERACTIVE = cn(
  * Composes the leading / title / subtitle / meta / trailing slots into one dense, keyboard-
  * operable row. Renders a `<button>` by default, an `<a>` when `href` is set, or a fully
  * custom element via `render` (e.g. a Next.js `Link`); pass `interactive={false}` for an inert
- * presentational `<div>` row. Selection and the active (keyboard-focused) state both adopt the
- * MD3 `bg-surface-container-highest` tone, matching {@link ListRow}.
+ * presentational `<div>` row. Selection adopts the MD3 `bg-secondary-container` tone while the
+ * active (keyboard-focused) state uses `bg-surface-container-highest`, matching {@link ListRow}.
  *
  * @example
  * ```tsx

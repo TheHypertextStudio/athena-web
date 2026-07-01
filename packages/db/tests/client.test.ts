@@ -67,7 +67,7 @@ describe('db client driver selection', () => {
     }
     // Generous timeout: on-disk PGlite init does real filesystem + WASM work that can run
     // slow under full-suite parallel CPU contention (it is fast in isolation).
-  }, 30_000);
+  }, 120_000);
 
   it('binds function members to the real client (Proxy bind branch)', async () => {
     process.env['DATABASE_URL'] = 'pglite://memory';

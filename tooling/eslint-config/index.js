@@ -19,14 +19,7 @@ export const baseConfig = tseslint.config(
   {
     languageOptions: {
       parserOptions: {
-        projectService: {
-          allowDefaultProject: [
-            'e2e/*.mjs',
-            'e2e/helpers/*.mjs',
-            'apps/web/e2e/*.mjs',
-            'apps/web/e2e/helpers/*.mjs',
-          ],
-        },
+        projectService: true,
         tsconfigRootDir: process.cwd(),
       },
     },
@@ -61,8 +54,8 @@ export const baseConfig = tseslint.config(
       '**/*.test.tsx',
       '**/*.spec.ts',
       '**/*.spec.tsx',
-      '**/*.spec.mjs',
-      '**/e2e/**/*.mjs',
+      // e2e helper glue (CDP sessions, in-page `evaluate`) is legitimately `any`-adjacent.
+      '**/e2e/helpers/**/*.ts',
     ],
     rules: {
       '@typescript-eslint/no-non-null-assertion': 'off',
@@ -71,23 +64,6 @@ export const baseConfig = tseslint.config(
       '@typescript-eslint/no-unsafe-argument': 'off',
       '@typescript-eslint/no-unsafe-call': 'off',
       '@typescript-eslint/no-unsafe-return': 'off',
-    },
-  },
-  {
-    // Playwright specs are `.mjs` and execute code in both Node and the browser page context.
-    files: ['**/*.spec.mjs', '**/e2e/**/*.mjs'],
-    languageOptions: {
-      globals: {
-        document: 'readonly',
-        fetch: 'readonly',
-        process: 'readonly',
-        window: 'readonly',
-      },
-    },
-    rules: {
-      '@typescript-eslint/dot-notation': 'off',
-      '@typescript-eslint/no-confusing-void-expression': 'off',
-      '@typescript-eslint/no-unnecessary-condition': 'off',
     },
   },
   {

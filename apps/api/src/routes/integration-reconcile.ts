@@ -140,7 +140,8 @@ interface StateKeys {
 
 /** Build the {@link StateKeys} for a team from its workflow-state list. */
 function resolveStateKeys(states: readonly { key: string; type: WorkflowStateType }[]): StateKeys {
-  const byType = (t: WorkflowStateType): string | undefined => states.find((s) => s.type === t)?.key;
+  const byType = (t: WorkflowStateType): string | undefined =>
+    states.find((s) => s.type === t)?.key;
   const openKey = byType('unstarted') ?? states[0]?.key ?? 'backlog';
   const completedKey = byType('completed') ?? states[states.length - 1]?.key ?? 'done';
   const canceledKey = byType('canceled') ?? completedKey;
@@ -268,7 +269,14 @@ export async function reconcileTasks(
 
   // Optionally push brand-new native tasks in the target team out to the provider.
   if (writable && row.writeBack && config.pushNativeTasks && config.defaultListId) {
-    tally.created = await pushNativeCreates(orgId, row, teamId, config.defaultListId, keys, writable);
+    tally.created = await pushNativeCreates(
+      orgId,
+      row,
+      teamId,
+      config.defaultListId,
+      keys,
+      writable,
+    );
   }
 
   return tally;
@@ -374,7 +382,11 @@ async function pushDelete(
   await writable.pushTask({
     connectionId: local.externalListId ?? local.id,
     provider: asProvider(provider),
-    op: { kind: 'delete', listId: local.externalListId ?? '@default', externalId: local.externalId },
+    op: {
+      kind: 'delete',
+      listId: local.externalListId ?? '@default',
+      externalId: local.externalId,
+    },
   });
   const now = new Date();
   await db

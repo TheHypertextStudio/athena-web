@@ -234,10 +234,15 @@ export default function ProjectDetailPage(): JSX.Element {
       ) : null}
 
       {tab === 'tasks' ? (
-        <div role="tabpanel" id="tabpanel-tasks" aria-labelledby="tab-tasks" className="flex flex-col gap-6">
+        <div
+          role="tabpanel"
+          id="tabpanel-tasks"
+          aria-labelledby="tab-tasks"
+          className="flex flex-col gap-6"
+        >
           <section className="flex flex-col gap-2">
             <h2 className="text-on-surface text-h3 font-medium">Dependency map</h2>
-            <div className="h-96 overflow-hidden rounded-xl border border-outline-variant">
+            <div className="border-outline-variant h-96 overflow-hidden rounded-xl border">
               <TaskGraphPanel
                 scope={{ orgId, projectId }}
                 density="compact"

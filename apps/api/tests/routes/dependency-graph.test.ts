@@ -60,11 +60,7 @@ async function seedTask(
 }
 
 /** GET the graph for a scope and return the parsed payload. */
-async function fetchGraph(
-  orgId: string,
-  actorId: string,
-  query = '',
-): Promise<GraphOut> {
+async function fetchGraph(orgId: string, actorId: string, query = ''): Promise<GraphOut> {
   const app = appWithActor(graph, orgId, ['view'], actorId);
   const res = await app.request(`/${query}`, { method: 'GET' });
   expect(res.status).toBe(200);

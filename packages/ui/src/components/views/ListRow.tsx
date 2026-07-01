@@ -65,7 +65,8 @@ export function ListCell({ children, className }: ListCellProps): React.JSX.Elem
  *
  * @remarks
  * Renders `role="row"` with selection/active styling driven by the MD3 surface tones
- * (`bg-surface-container-highest` for active/selected, `hover:bg-surface-container-high`).
+ * (`bg-secondary-container` for selected, `bg-surface-container-highest` for active-only,
+ * `hover:bg-surface-container-high`).
  * Activating the row (click or Enter handled by the row's `onKeyDown`)
  * calls `onActivate`. Keyboard *navigation between* rows is owned by `useListKeyboard` at
  * the {@link ListView} level; this row only handles its own activation.

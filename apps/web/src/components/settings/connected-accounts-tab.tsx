@@ -76,10 +76,12 @@ export function ConnectedAccountsTab({ orgId }: ConnectedAccountsTabProps): JSX.
     setError(null);
     setAddingProvider(provider);
     // Redirects to the provider's account chooser; on return this page remounts and refetches.
-    authClient.linkSocial({ provider, callbackURL: window.location.pathname }).catch((err: unknown) => {
-      setError(readError(err, 'Could not start linking that account.'));
-      setAddingProvider(null);
-    });
+    authClient
+      .linkSocial({ provider, callbackURL: window.location.pathname })
+      .catch((err: unknown) => {
+        setError(readError(err, 'Could not start linking that account.'));
+        setAddingProvider(null);
+      });
   }, []);
 
   const onRemove = useCallback(

@@ -36,7 +36,10 @@ export function AthenaPlan({ orgId, prompt }: AthenaPlanProps): JSX.Element {
     setBusy(true);
     setError(null);
     try {
-      const res = await api.v1.orgs[':orgId'].sessions.$post({ param: { orgId }, json: { prompt } });
+      const res = await api.v1.orgs[':orgId'].sessions.$post({
+        param: { orgId },
+        json: { prompt },
+      });
       if (!res.ok) {
         setError(await readProblem(res, 'Athena could not draft a plan.'));
         return;
@@ -57,7 +60,7 @@ export function AthenaPlan({ orgId, prompt }: AthenaPlanProps): JSX.Element {
           type="button"
           onClick={() => void ask()}
           disabled={busy}
-          className="bg-[var(--color-primary)] text-on-primary inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold disabled:opacity-50"
+          className="text-on-primary inline-flex items-center gap-2 rounded-lg bg-[var(--color-primary)] px-3 py-2 text-sm font-semibold disabled:opacity-50"
         >
           <Sparkles className="h-4 w-4" />
           {busy ? 'Drafting a plan…' : 'Ask Athena to draft a plan'}
@@ -78,7 +81,7 @@ function AthenaPlanStream({ orgId, sessionId }: { orgId: string; sessionId: stri
       <div className="flex items-center gap-2">
         <Sparkles className="h-4 w-4 text-[var(--color-primary)]" />
         <span className="text-on-surface text-sm font-semibold">Athena’s plan</span>
-        <span className="text-amber-700 border-amber-200 bg-amber-50 ml-auto rounded-full border px-2 py-0.5 text-xs">
+        <span className="ml-auto rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs text-amber-700">
           awaiting approval
         </span>
       </div>

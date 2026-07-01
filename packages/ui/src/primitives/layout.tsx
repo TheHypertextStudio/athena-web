@@ -64,21 +64,25 @@ const rowVariants = cva('flex min-w-0 flex-row', {
 
 /** Props for {@link Stack}. */
 export interface StackProps
-  extends React.HTMLAttributes<HTMLElement>,
-    VariantProps<typeof stackVariants> {
+  extends React.HTMLAttributes<HTMLElement>, VariantProps<typeof stackVariants> {
   /** The element to render (default `div`); use to keep semantics (`section`, `ul`, …). */
   readonly as?: React.ElementType;
 }
 
 /** A vertical flex container with a tokenized `gap`. */
-export function Stack({ as: Component = 'div', gap, align, className, ...props }: StackProps): React.JSX.Element {
+export function Stack({
+  as: Component = 'div',
+  gap,
+  align,
+  className,
+  ...props
+}: StackProps): React.JSX.Element {
   return <Component className={cn(stackVariants({ gap, align }), className)} {...props} />;
 }
 
 /** Props for {@link Row}. */
 export interface RowProps
-  extends React.HTMLAttributes<HTMLElement>,
-    VariantProps<typeof rowVariants> {
+  extends React.HTMLAttributes<HTMLElement>, VariantProps<typeof rowVariants> {
   /** The element to render (default `div`); use to keep semantics (`header`, `nav`, …). */
   readonly as?: React.ElementType;
 }

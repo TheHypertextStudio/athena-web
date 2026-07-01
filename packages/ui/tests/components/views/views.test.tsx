@@ -139,8 +139,8 @@ describe('ListRow', () => {
     expect(row).toHaveAttribute('data-active', '');
     expect(row).toHaveAttribute('aria-selected', 'true');
     expect(row).toHaveAttribute('tabindex', '0');
-    // active + selected both apply the MD3 `bg-surface-container-highest` selected tone.
-    expect(row).toHaveClass('bg-surface-container-highest', 'row-x');
+    // Selection takes the MD3 secondary tonal fill; active-only rows use the neutral surface tone.
+    expect(row).toHaveClass('bg-secondary-container', 'row-x');
   });
 
   it('applies the selected surface tone when active but not selected', () => {

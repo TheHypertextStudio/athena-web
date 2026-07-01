@@ -563,16 +563,15 @@ describe('TabBar', () => {
       expect(tab).toHaveClass('rounded-lg');
       expect(tab).not.toHaveClass('rounded-t-lg', 'self-stretch', 'bg-surface');
     }
-    // The active pill is lifted: a stepped-up container fill plus a ring + shadow, inked in
-    // on-surface; the inactive pill stays transparent and calm in the muted on-surface-variant.
+    // The active pill takes the selected secondary fill plus a shadow; the inactive pill stays
+    // transparent and calm in the muted on-surface-variant.
     expect(activeTab).toHaveClass(
-      'bg-surface-container-highest',
-      'ring-1',
+      'bg-secondary-container',
       'shadow-sm',
-      'text-on-surface',
+      'text-on-secondary-container',
     );
     expect(inactiveTab).toHaveClass('text-on-surface-variant');
-    expect(inactiveTab).not.toHaveClass('bg-surface-container-highest', 'ring-1', 'shadow-sm');
+    expect(inactiveTab).not.toHaveClass('bg-secondary-container', 'ring-1', 'shadow-sm');
   });
 
   it('gives each tab a fixed width with a flexing, truncating title and a right-pinned close', () => {

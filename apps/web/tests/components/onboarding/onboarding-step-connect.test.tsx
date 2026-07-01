@@ -120,14 +120,18 @@ describe('StepConnect (dev / mock mode)', () => {
     await waitFor(() => {
       expect(screen.getByText('Mirrored 2 items from Linear.')).toBeTruthy();
     });
-    expect(onMirroredTotalChange).toHaveBeenLastCalledWith(2);
+    await waitFor(() => {
+      expect(onMirroredTotalChange).toHaveBeenLastCalledWith(2);
+    });
 
     fireEvent.click(screen.getByRole('button', { name: 'Connect Google Calendar' }));
     await waitFor(() => {
       expect(screen.getByText('Mirrored 2 items from Google Calendar.')).toBeTruthy();
     });
     // Two sources at 2 items each ⇒ the upward total is the sum.
-    expect(onMirroredTotalChange).toHaveBeenLastCalledWith(4);
+    await waitFor(() => {
+      expect(onMirroredTotalChange).toHaveBeenLastCalledWith(4);
+    });
   });
 
   it('stays honest when a re-import mirrors nothing new', async () => {

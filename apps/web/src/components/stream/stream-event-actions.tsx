@@ -38,7 +38,11 @@ const BTN =
   'flex h-7 w-7 items-center justify-center rounded-md text-on-surface-variant hover:bg-surface-container-high disabled:opacity-40';
 
 /** The trailing action cluster for one stream row. */
-export function StreamEventActions({ row, actions, pending }: StreamEventActionsProps): JSX.Element {
+export function StreamEventActions({
+  row,
+  actions,
+  pending,
+}: StreamEventActionsProps): JSX.Element {
   const href = streamHref(row);
   const external = href?.startsWith('http') ?? false;
   return (

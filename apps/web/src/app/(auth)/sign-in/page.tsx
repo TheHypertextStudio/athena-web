@@ -60,10 +60,16 @@ export default function SignInPage(): JSX.Element {
         router.push(items.length > 0 ? HOME_DESTINATION : ONBOARDING_DESTINATION);
         return;
       }
+      if (res.status === 401) {
+        setError('Your session did not finish starting. Please sign in again.');
+        return;
+      }
+      setError('We could not load your workspaces. Please try signing in again.');
+      return;
     } catch {
-      // Fall through to onboarding: the session is valid, the org lookup just failed.
+      setError('We could not load your workspaces. Please try signing in again.');
+      return;
     }
-    router.push(ONBOARDING_DESTINATION);
   }, [router]);
 
   /**

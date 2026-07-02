@@ -1,11 +1,28 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-07-01
+> **Last Updated**: 2026-07-02
 
 ---
 
 ## Completed Tasks
+
+### [CALENDAR-003] Layered calendar product and engineering specs
+
+- **Completed**: 2026-07-02
+- **Summary**: Documented the next-generation calendar direction as a provider-neutral layered time
+  system. The documentation defines product behavior for external calendar events, Docket-native
+  blocks, event workspaces, many-to-many task links, provider write-back, sync conflict handling,
+  and the implementation roadmap for future agents.
+- **Files Changed**: `docs/core/specs/layered-calendar.md`,
+  `docs/engineering/specs/calendar-architecture.md`,
+  `docs/engineering/specs/calendar-sync.md`, `docs/engineering/specs/calendar-ui.md`,
+  `docs/engineering/plans/layered-calendar-implementation.md`, and `docs/WORKLOG.md`.
+- **Learnings**: The existing Google Calendar surface should be migrated rather than replaced. The
+  important model shift is from Google-specific agenda events to provider-neutral layers/items,
+  with org-scoped task links as the bridge into shared work.
+- **Gate**: Focused Prettier check for the touched docs passes, along with `pnpm typecheck`,
+  `pnpm lint`, `pnpm test`, and `pnpm build`. The Turbo gates completed through cache replay.
 
 ### [AGENDA-001] Add daily-plan edit actions to the agenda rail
 

@@ -1100,6 +1100,23 @@ Remaining: Playwright e2e flow films (needs browser install + a running api+web+
 
 ---
 
+## Fix: Sign-in Does Not Mask Missing Session as Onboarding — 2026-07-02
+
+Root cause: after a successful passkey ceremony, `apps/web/src/app/(auth)/sign-in/page.tsx`
+treated any failed `/v1/orgs` lookup as "no organizations yet" and routed to `/onboarding`.
+When the lookup failed with `401`, onboarding's first `POST /v1/orgs` then surfaced the confusing
+`Authentication required` problem even though the user had just completed sign-in.
+
+Change: `routeAfterSignIn` now routes to onboarding only when `/v1/orgs` succeeds with an empty
+list. A `401` stays on the sign-in screen with an explicit session-start failure, and other lookup
+failures stay on sign-in with a retryable workspace-load error.
+
+Validation: added `apps/web/tests/components/auth/sign-in-page.test.tsx` covering the valid
+empty-workspace onboarding path and the `401` session-not-started path. Targeted Vitest suite
+passes.
+
+---
+
 ## Unified Event Stream ("Pulse") — 2026-06-29
 
 Replaced the buried Inbox "Activity" tab with a **first-class, filterable, source-agnostic event stream** — Docket's answer to Linear Pulse — surfaced both cross-org (`/stream`, Home nav) and per-workspace (`/orgs/[orgId]/stream`, Workspace nav). The `observation` table is the canonical substrate; internal Docket events emit observations alongside their writes, and third-party webhooks (Linear, GitHub, Slack) land through the existing Observer → `inbound_event` → drain pipeline. Source is an attribution badge, never a separate layout; provider-specifics stay in the `payload` jsonb (no per-provider columns).

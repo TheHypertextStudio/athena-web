@@ -112,8 +112,10 @@ export interface IntegrationConnection {
   readonly account?: string;
   /** Reference to the stored OAuth credential. */
   readonly credentialsRef?: string;
-  /** External workspace identifier (for scoping imports). */
+  /** External workspace identifier (for scoping imports + webhook routing, e.g. Linear's org id). */
   readonly externalWorkspaceId?: string;
+  /** External workspace slug/url-key (e.g. Linear's `urlKey`), persisted alongside the id. */
+  readonly externalWorkspaceSlug?: string;
 }
 
 /** Organizer details cached from a Google Calendar event. */

@@ -117,8 +117,10 @@ export class MockConnector implements Connector {
    * {@inheritDoc Connector.connect}
    *
    * @remarks
-   * For `linear`, also stamps a fixed `externalWorkspaceId` so the webhook-routing and
-   * work-graph code paths have a deterministic organization id to key off offline.
+   * For `linear`, also stamps a fixed `externalWorkspaceId` (the webhook-routing key) and
+   * `externalWorkspaceSlug` (the `urlKey`) so the webhook-routing and work-graph code paths have a
+   * deterministic organization id + slug to key off offline, mirroring the real connector's
+   * `connect()` result shape.
    */
   async connect(input: ConnectInput): Promise<ConnectionResult> {
     return {
@@ -126,7 +128,9 @@ export class MockConnector implements Connector {
       provider: input.provider,
       status: 'connected',
       account: input.externalWorkspaceId ?? `${input.provider}-workspace`,
-      ...(input.provider === 'linear' ? { externalWorkspaceId: 'mock-linear-org' } : {}),
+      ...(input.provider === 'linear'
+        ? { externalWorkspaceId: 'mock-linear-org', externalWorkspaceSlug: 'mock-linear' }
+        : {}),
     };
   }
 

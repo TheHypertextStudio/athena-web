@@ -173,19 +173,25 @@ export function planWorkItemReconcile(
   }
   // Absence never destroys local work — a scoped/incremental pull most likely just filtered it.
   if (!remote) return 'noop';
-  if (remote.removed) return 'archive';
 
   const remoteMs = Date.parse(remote.updatedAt);
   const anchorMs = local.externalUpdatedAt?.getTime();
   const remoteNewer = anchorMs === undefined || remoteMs > anchorMs;
   const dirty = opts.writeBack && isDirty(local.updatedAt, local.externalUpdatedAt);
 
+  // A tombstone archives instead of pulling, but rides the SAME LWW/anchor skeleton as a live
+  // update — it only wins when it is genuinely newer than the anchor. An already-applied tombstone
+  // (`removed` with `remoteMs <= anchorMs`) is a no-op, so a second full sync doesn't rewrite the
+  // archived row; and a dirty local edit that post-dates the removal wins (LWW), never silently
+  // re-archived — the push phase drains it.
+  const pullAction: WorkItemPullAction = remote.removed ? 'archive' : 'pull';
+
   if (dirty) {
     if (!remoteNewer) return 'noop'; // local will push
     // Both sides changed since the last sync: the newer timestamp wins.
-    return local.updatedAt.getTime() >= remoteMs ? 'noop' : 'pull';
+    return local.updatedAt.getTime() >= remoteMs ? 'noop' : pullAction;
   }
-  return remoteNewer ? 'pull' : 'noop';
+  return remoteNewer ? pullAction : 'noop';
 }
 
 /* ────────────────────────────── field mapping ────────────────────────────── */
@@ -235,12 +241,23 @@ function toWorkflowStateType(stateType: ExternalStateType): WorkflowStateType {
   return stateType === 'triage' ? 'backlog' : stateType;
 }
 
-/** Resolve the Docket team state key for an external state type (first by type, else backlog-ish). */
+/**
+ * Resolve the Docket team state key for an external state type (first by type, else the team's
+ * first/backlog-ish state).
+ *
+ * @remarks
+ * Unreachable in the batch path (the orchestrator only maps items on teams whose states it
+ * preloaded), but the exported single-entity appliers can be driven with an unpreloaded
+ * `statesByTeam` — so an EMPTY state list throws a descriptive mapping error rather than silently
+ * inventing a `'backlog'` key that no team defines.
+ */
 function resolveStateKey(states: readonly WorkflowState[], stateType: ExternalStateType): string {
   const want = toWorkflowStateType(stateType);
   const byType = states.find((s) => s.type === want);
   if (byType) return byType.key;
-  return states[0]?.key ?? 'backlog';
+  const first = states[0];
+  if (first) return first.key;
+  throw new ConflictError('Team has no workflow states to map an external work item onto');
 }
 
 /** The canonical type of a Docket team state key (defaults to backlog for an unknown key). */
@@ -377,6 +394,13 @@ export async function applyProject(ctx: GraphApplyContext, ext: ExternalProject)
 
   const existing = ctx.existingProjectsByExternal.get(ext.externalId);
   if (!existing) {
+    // A tombstone for a project we never mirrored is a no-op — materializing an already-archived
+    // Linear project as a `canceled` row from nothing is noise (consistent with the work-item rule
+    // that removal never creates).
+    if (ext.removed) {
+      ctx.result.projects.skipped += 1;
+      return;
+    }
     const inserted = await db
       .insert(project)
       .values({
@@ -442,6 +466,12 @@ export async function applyCycle(ctx: GraphApplyContext, ext: ExternalCycle): Pr
 
   const existing = ctx.existingCyclesByExternal.get(ext.externalId);
   if (!existing) {
+    // A tombstone for a cycle we never mirrored is a no-op — don't materialize an already-archived
+    // Linear cycle from nothing (consistent with the work-item rule that removal never creates).
+    if (ext.removed) {
+      ctx.result.cycles.skipped += 1;
+      return;
+    }
     const inserted = await db
       .insert(cycle)
       .values({
@@ -610,7 +640,15 @@ async function applyItemFields(
     .where(eq(task.id, taskId));
 }
 
-/** Archive a linked task whose provider item was tombstoned (canceled state + stamp). */
+/**
+ * Archive a linked task whose provider item was tombstoned (canceled state + stamp).
+ *
+ * @remarks
+ * Resolves the team's canceled-type state (falling back to its last state), throwing a descriptive
+ * mapping error on an EMPTY state list rather than stamping a silent `'canceled'` literal no team
+ * defines. Unreachable in the batch path (states are preloaded), but the exported appliers can be
+ * driven with an unpreloaded `statesByTeam`.
+ */
 async function archiveLinkedItem(
   taskId: string,
   item: ExternalWorkItem,
@@ -618,7 +656,10 @@ async function archiveLinkedItem(
 ): Promise<void> {
   const anchor = new Date(item.updatedAt);
   const canceledKey =
-    states.find((s) => s.type === 'canceled')?.key ?? states[states.length - 1]?.key ?? 'canceled';
+    states.find((s) => s.type === 'canceled')?.key ?? states[states.length - 1]?.key;
+  if (canceledKey === undefined) {
+    throw new ConflictError('Team has no workflow states to archive a tombstoned work item into');
+  }
   await db
     .update(task)
     .set({
@@ -849,36 +890,92 @@ async function healLegacyReKeys(
 }
 
 /**
- * Link child tasks to their parents via the UUID map (only writing changed parents).
+ * Reconcile child→parent linkage against the snapshot: set changed parents AND clear ones removed
+ * at the provider (only writing rows that actually change).
  *
  * @remarks
  * The linkage write explicitly re-sets each row's OWN `updatedAt` (the anchor invariant): a
  * bare update would let Drizzle's `$onUpdate` stamp wall-clock now, forging
  * `updatedAt > externalUpdatedAt` on a just-inserted born-clean child — which the SAME run's
  * push phase would then read as dirty and spuriously push every freshly-imported sub-issue.
+ *
+ * Clearing: a snapshot item with NO `parentExternalId` whose local row still points at a parent
+ * that is another linked task of THIS integration means the parent link was removed at the
+ * provider (it was ours, set by a prior sync) — so we clear it, again preserving the anchor. A
+ * NATIVE/user-set parent (parent not one of this integration's linked tasks) is never disturbed,
+ * and a DIRTY row (local edit newer than the anchor) is left untouched so its newer local state
+ * wins LWW and the push phase can drain it — never silently reverted here.
  */
 async function linkParents(
   ctx: GraphApplyContext,
   items: readonly ExternalWorkItem[],
 ): Promise<void> {
-  const wanted = new Map<string, string>(); // childTaskId → parentTaskId
+  const wanted = new Map<string, string>(); // childTaskId → parentTaskId (desired link this run)
+  const clearCandidates = new Set<string>(); // childTaskId whose snapshot item has NO parent
   for (const item of items) {
-    if (!item.parentExternalId) continue;
     const childId = ctx.taskIdByExternal.get(item.externalId);
-    const parentId = ctx.taskIdByExternal.get(item.parentExternalId);
-    if (childId && parentId) wanted.set(childId, parentId);
+    if (!childId) continue;
+    if (item.parentExternalId) {
+      const parentId = ctx.taskIdByExternal.get(item.parentExternalId);
+      if (parentId) wanted.set(childId, parentId);
+    } else {
+      clearCandidates.add(childId);
+    }
   }
-  if (wanted.size === 0) return;
+  if (wanted.size === 0 && clearCandidates.size === 0) return;
+
+  const affectedIds = new Set<string>([...wanted.keys(), ...clearCandidates]);
   const current = await db
-    .select({ id: task.id, parentTaskId: task.parentTaskId, updatedAt: task.updatedAt })
+    .select({
+      id: task.id,
+      parentTaskId: task.parentTaskId,
+      updatedAt: task.updatedAt,
+      externalUpdatedAt: task.externalUpdatedAt,
+    })
     .from(task)
-    .where(inArray(task.id, [...wanted.keys()]));
+    .where(inArray(task.id, [...affectedIds]));
+
+  // Only a parent that is one of THIS integration's linked tasks was set by sync and is ours to
+  // clear — resolve that set once (batched) so a native/cross-integration parent is left alone.
+  const parentIdsToCheck = new Set<string>();
+  for (const row of current) {
+    if (clearCandidates.has(row.id) && row.parentTaskId) parentIdsToCheck.add(row.parentTaskId);
+  }
+  const ownLinkedParents = new Set<string>();
+  if (parentIdsToCheck.size > 0) {
+    const parents = await db
+      .select({ id: task.id })
+      .from(task)
+      .where(
+        and(
+          inArray(task.id, [...parentIdsToCheck]),
+          eq(task.sourceIntegrationId, ctx.integrationId),
+          eq(task.source, 'linked'),
+        ),
+      );
+    for (const p of parents) ownLinkedParents.add(p.id);
+  }
+
   for (const row of current) {
     const parentId = wanted.get(row.id);
-    if (parentId && row.parentTaskId !== parentId) {
+    if (parentId !== undefined) {
+      if (row.parentTaskId !== parentId) {
+        await db
+          .update(task)
+          .set({ parentTaskId: parentId, updatedAt: row.updatedAt })
+          .where(eq(task.id, row.id));
+      }
+      continue;
+    }
+    if (
+      clearCandidates.has(row.id) &&
+      row.parentTaskId !== null &&
+      ownLinkedParents.has(row.parentTaskId) &&
+      !isDirty(row.updatedAt, row.externalUpdatedAt)
+    ) {
       await db
         .update(task)
-        .set({ parentTaskId: parentId, updatedAt: row.updatedAt })
+        .set({ parentTaskId: null, updatedAt: row.updatedAt })
         .where(eq(task.id, row.id));
     }
   }

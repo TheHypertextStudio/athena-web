@@ -8,7 +8,7 @@
  * counter and timestamps anchor to an injectable `now` (defaulting to
  * {@link FIXED_NOW}). Exercises the import / read-only-mirror / link logic offline.
  */
-import { CONNECTOR_ITEMS, FIXED_NOW } from '../fixtures';
+import { CONNECTOR_ITEMS, FIXED_NOW, MAIL_THREAD_SUMMARIES } from '../fixtures';
 import type {
   ConnectInput,
   ConnectionResult,
@@ -19,18 +19,24 @@ import type {
   ImportedItem,
   LinkResourceInput,
   LinkResult,
-  FetchThreadInput,
   ListContainersInput,
-  MailAction,
-  MailActionInput,
-  MailActions,
-  MailThread,
   MirrorResult,
   MirrorStatusInput,
   ResourceRef,
   TaskPushOp,
   WritableConnector,
 } from '../ports/connector';
+import { WRITE_BACK_CAPABLE_PROVIDERS } from '../ports/connector';
+import type {
+  FetchThreadInput,
+  ListThreadsInput,
+  MailAction,
+  MailActionInput,
+  MailActions,
+  MailListPage,
+  MailThread,
+} from '../ports/mail';
+import { MAIL_CAPABLE_PROVIDERS } from '../ports/mail';
 
 /** One mailbox action recorded by {@link MockConnector} (record-only, for test assertions). */
 export interface RecordedMailAction {
@@ -136,11 +142,12 @@ export class MockConnector implements Connector {
    * {@inheritDoc Connector.asWritable}
    *
    * @remarks
-   * The mock is two-way for `gtasks` only (mirroring {@link RealConnector}); other providers
-   * are read-only and get `undefined`, so the sync engine's write path is exercised offline.
+   * Gated by the declarative {@link WRITE_BACK_CAPABLE_PROVIDERS} manifest (mirroring the
+   * real connectors' structural capability); non-write-back providers get `undefined`, so
+   * the sync engine's write path is exercised offline.
    */
   asWritable(): WritableConnector | undefined {
-    if (this.provider !== 'gtasks') return undefined;
+    if (!WRITE_BACK_CAPABLE_PROVIDERS.has(this.provider)) return undefined;
     return { pushTask: (input) => this.pushTask(input.op) };
   }
 
@@ -156,17 +163,39 @@ export class MockConnector implements Connector {
   }
 
   /**
+   * The cursor value that makes the mock's `listThreads` report an expired cursor, so the
+   * caller's full-repull fallback is exercisable offline.
+   */
+  static readonly EXPIRED_CURSOR = 'expired';
+
+  /**
    * {@inheritDoc Connector.asMailActor}
    *
    * @remarks
-   * Mail-capable for `gmail` only. The returned {@link MailActions} is record-only:
+   * Gated by the declarative {@link MAIL_CAPABLE_PROVIDERS} manifest (mirroring the real
+   * connectors' structural capability). The returned {@link MailActions} is deterministic
+   * and record-only: `listThreads` serves the provider's {@link MAIL_THREAD_SUMMARIES}
+   * fixtures (cursor {@link MockConnector.EXPIRED_CURSOR} → `cursorExpired`),
    * `applyMailAction` appends to {@link MockConnector.mailActionLog} (no I/O), and
    * `fetchThread` returns a deterministic single-message fixture thread so the email-
    * attachment rendering path is exercised offline.
    */
   asMailActor(): MailActions | undefined {
-    if (this.provider !== 'gmail') return undefined;
+    if (!MAIL_CAPABLE_PROVIDERS.has(this.provider)) return undefined;
     return {
+      listThreads: async (input: ListThreadsInput): Promise<MailListPage> => {
+        if (input.cursor === MockConnector.EXPIRED_CURSOR) return { kind: 'cursorExpired' };
+        const fixtures = MAIL_THREAD_SUMMARIES[this.provider];
+        if (!fixtures) {
+          // A mail-capable provider without listing fixtures is a fixture bug — loud, not [].
+          throw new Error(`No MAIL_THREAD_SUMMARIES fixtures for provider ${this.provider}`);
+        }
+        return {
+          kind: 'page',
+          threads: fixtures.slice(0, input.maxThreads),
+          nextCursor: 'mock-cursor-1',
+        };
+      },
       applyMailAction: async (input: MailActionInput): Promise<void> => {
         this.mailActionLog.push({ threadId: input.threadId, action: input.action });
       },
@@ -181,6 +210,8 @@ export class MockConnector implements Connector {
             subject: `Mock thread ${input.threadId}`,
             snippet: 'This is a deterministic mock email body.',
             sentAt: this.now,
+            rfc822MessageId: `<${input.threadId}-msg-1@mock.docket.local>`,
+            references: [],
             bodyHtml: '<p>This is a deterministic mock email body.</p>',
           },
         ],

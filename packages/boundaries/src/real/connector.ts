@@ -33,16 +33,21 @@ import type {
   LinkResourceInput,
   LinkResult,
   ListContainersInput,
-  MailActions,
   MirrorResult,
   MirrorStatusInput,
   ResourceRef,
   WritableConnector,
 } from '../ports/connector';
+import type { MailActions } from '../ports/mail';
 import { defaultHttpClient, type HttpClient } from './http';
 import { GitHubProviderClient } from './connector-github';
 import { LinearProviderClient } from './connector-linear';
-import { GoogleProviderClient } from './connector-google';
+import {
+  GoogleCalendarProviderClient,
+  GoogleDriveProviderClient,
+  GoogleTasksProviderClient,
+} from './connector-google';
+import { GmailProviderClient } from './connector-gmail';
 import { ProviderHttp } from './connector-http';
 import {
   isMailActionsProviderClient,
@@ -51,7 +56,14 @@ import {
 } from './connector-provider-client';
 export type { GoogleProduct } from './connector-google';
 export type { ConnectorProviderClient } from './connector-provider-client';
-export { GitHubProviderClient, LinearProviderClient, GoogleProviderClient };
+export {
+  GitHubProviderClient,
+  LinearProviderClient,
+  GoogleCalendarProviderClient,
+  GoogleDriveProviderClient,
+  GoogleTasksProviderClient,
+};
+export { GmailProviderClient } from './connector-gmail';
 
 /** Validated configuration for {@link RealConnector} (sourced from the connection credential + env). */
 export interface RealConnectorConfig {
@@ -77,6 +89,28 @@ export const PROVIDER_API_BASE: Readonly<Record<ConnectorProvider, string>> = {
 };
 
 /**
+ * The per-provider client factories — the single declarative registry of which concrete
+ * client fronts each provider.
+ *
+ * @remarks
+ * `Record<ConnectorProvider, …>` so adding a provider to the union forces an entry here
+ * (a compile error, not a runtime throw). Capability is carried by the client's shape:
+ * a provider is mail-capable iff its client implements `MailActionsProviderClient`,
+ * write-capable iff it implements `WritableConnectorProviderClient` — discovered by the
+ * structural guards, never by provider literals.
+ */
+export const PROVIDER_CLIENT_FACTORIES: Readonly<
+  Record<ConnectorProvider, (http: ProviderHttp) => ConnectorProviderClient>
+> = {
+  github: (http) => new GitHubProviderClient(http),
+  linear: (http) => new LinearProviderClient(http),
+  drive: (http) => new GoogleDriveProviderClient(http),
+  gmail: (http) => new GmailProviderClient(http),
+  calendar: (http) => new GoogleCalendarProviderClient(http),
+  gtasks: (http) => new GoogleTasksProviderClient(http),
+};
+
+/**
  * Build the concrete {@link ConnectorProviderClient} for a provider.
  *
  * @param config - The provider, token, and API base.
@@ -88,22 +122,7 @@ export function createProviderClient(
   http: HttpClient,
 ): ConnectorProviderClient {
   const providerHttp = new ProviderHttp(config.provider, config.apiBase, config.accessToken, http);
-  switch (config.provider) {
-    case 'github':
-      return new GitHubProviderClient(providerHttp);
-    case 'linear':
-      return new LinearProviderClient(providerHttp);
-    case 'drive':
-    case 'gmail':
-    case 'calendar':
-    case 'gtasks':
-      return new GoogleProviderClient(config.provider, providerHttp);
-    /* v8 ignore start -- unreachable exhaustiveness guard */
-    default: {
-      throw new Error(`Unknown connector provider: ${String(config.provider)}`);
-    }
-    /* v8 ignore stop */
-  }
+  return PROVIDER_CLIENT_FACTORIES[config.provider](providerHttp);
 }
 
 /**
@@ -188,13 +207,11 @@ export class RealConnector implements Connector {
    * {@inheritDoc Connector.asWritable}
    *
    * @remarks
-   * Two-way write-back is gated on BOTH the provider being `gtasks` AND the underlying client
-   * implementing `pushTask`: `GoogleProviderClient` is shared across Drive/Gmail/Calendar/Tasks,
-   * so the provider check keeps write-back exposed only for Google Tasks even though the others
-   * share the class.
+   * Structural discovery: the capability exists iff the provider's client implements the
+   * writable provider-client interface. Per-product clients mean no provider literal is
+   * needed — only `GoogleTasksProviderClient` implements `pushTask`.
    */
   asWritable(): WritableConnector | undefined {
-    if (this.provider !== 'gtasks') return undefined;
     const client = this.client;
     if (!isWritableProviderClient(client)) return undefined;
     return {
@@ -206,15 +223,15 @@ export class RealConnector implements Connector {
    * {@inheritDoc Connector.asMailActor}
    *
    * @remarks
-   * Gated on BOTH the provider being `gmail` AND the client implementing the mail methods —
-   * mirroring {@link RealConnector.asWritable}. `GoogleProviderClient` is shared across the
-   * Google products, so the provider check keeps mailbox actions exposed for Gmail only.
+   * Structural discovery, mirroring {@link RealConnector.asWritable}: the capability exists
+   * iff the provider's client implements `MailActionsProviderClient` (today
+   * `GmailProviderClient`).
    */
   asMailActor(): MailActions | undefined {
-    if (this.provider !== 'gmail') return undefined;
     const client = this.client;
     if (!isMailActionsProviderClient(client)) return undefined;
     return {
+      listThreads: (input) => client.listThreads(input),
       applyMailAction: (input) => client.applyMailAction(input),
       fetchThread: (input) => client.fetchThread(input),
     };
@@ -224,11 +241,10 @@ export class RealConnector implements Connector {
    * {@inheritDoc Connector.listContainers}
    *
    * @remarks
-   * Gated to `gtasks` (the only provider with a container concept) AND the client implementing
-   * `listContainers`, mirroring {@link RealConnector.asWritable}.
+   * Always delegates: the base provider-client contract has clients without a container
+   * concept return an empty array, so no provider gate is needed.
    */
   async listContainers(_input: ListContainersInput): Promise<ResourceRef[]> {
-    if (this.provider !== 'gtasks') return [];
     return this.client.listContainers();
   }
 }

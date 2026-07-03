@@ -4,7 +4,7 @@ import { auth } from '@docket/auth';
 import type { IdentityOut, IdentityProvider, IntegrationOut, TaskOut } from '@docket/types';
 import { type IntegrationDirectoryProvider } from '@docket/types';
 import type { ConnectorProvider, ObserverProvider } from '@docket/boundaries';
-import { selectAdapter } from '@docket/boundaries';
+import { WRITE_BACK_CAPABLE_PROVIDERS, selectAdapter } from '@docket/boundaries';
 import { and, eq, inArray } from 'drizzle-orm';
 import type { z } from 'zod';
 
@@ -31,11 +31,11 @@ export const CONNECTOR_PROVIDERS: readonly ConnectorProvider[] = [
  * Connectors that support two-way write-back and default to it on connect.
  *
  * @remarks
- * A write-back connector pushes local edits/completions/deletions of its `linked` tasks back
- * to the provider on each sync, in addition to the read-only mirror pull. Only Google Tasks
- * (`gtasks`) does today. Used to seed `integration.writeBack` when a caller doesn't specify it.
+ * Re-exports the boundary manifest (`WRITE_BACK_CAPABLE_PROVIDERS`) so capability
+ * membership has one source of truth. Used to seed `integration.writeBack` when a caller
+ * doesn't specify it.
  */
-export const WRITE_BACK_PROVIDERS: ReadonlySet<string> = new Set<string>(['gtasks']);
+export const WRITE_BACK_PROVIDERS: ReadonlySet<string> = WRITE_BACK_CAPABLE_PROVIDERS;
 
 /**
  * Every provider the connect wizard can offer: the {@link Connector} providers plus

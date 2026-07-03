@@ -1,63 +1,39 @@
+/**
+ * `@docket/boundaries/real` — the Google product connector clients (Drive / Calendar /
+ * Tasks) and the shared Google pagination helper.
+ *
+ * @remarks
+ * One client class per product, each implementing exactly the capabilities the product
+ * has: Drive and Calendar are read-only base clients; Google Tasks additionally
+ * implements the writable provider-client interface (task write-back + containers).
+ * Gmail lives in `./connector-gmail` and implements the mail interface. Capability is
+ * therefore **structural** — the connector discovers it via the `is*ProviderClient`
+ * guards — with no provider-literal gates anywhere. All request building and response
+ * mapping is pure and unit-tested through the injected client.
+ */
 import type {
   ConnectorProvider,
   ExternalWriteResult,
-  FetchThreadInput,
   ImportWorkInput,
   ImportedItem,
   LinkResourceInput,
-  MailAction,
-  MailActionInput,
-  MailMessage,
-  MailThread,
   MirrorResult,
   MirrorStatusInput,
   ResourceRef,
   TaskPushOp,
 } from '../ports/connector';
 import { ConnectorError } from '../ports/connector-error';
-import type {
-  MailActionsProviderClient,
-  WritableConnectorProviderClient,
-} from './connector-provider-client';
+import type { WritableConnectorProviderClient } from './connector-provider-client';
+import type { ConnectorProviderClient } from './connector-provider-client';
 import type { ProviderHttp } from './connector-http';
 import { MAX_IMPORT_PAGES, logConnectorTruncation } from './connector-log';
 
-/** The Google product a {@link GoogleProviderClient} targets. */
+/** The Google products served by the per-product clients in this module + `./connector-gmail`. */
 export type GoogleProduct = Extract<ConnectorProvider, 'drive' | 'gmail' | 'calendar' | 'gtasks'>;
 
 /** Drive `about` identity payload (the signed-in user's email/name). */
 interface DriveAbout {
   user?: { emailAddress?: string; displayName?: string };
-}
-/** Gmail profile identity payload. */
-interface GmailProfile {
-  emailAddress?: string;
-}
-/** Body for Gmail's `threads.modify` (label add/remove deltas). */
-interface GmailModifyBody {
-  addLabelIds?: string[];
-  removeLabelIds?: string[];
-}
-/** One Gmail message header (`From`, `To`, `Subject`, `Date`, …). */
-interface GmailHeader {
-  name: string;
-  value: string;
-}
-/** The header-bearing part of a Gmail message (metadata format). */
-interface GmailMessagePayload {
-  headers?: GmailHeader[];
-}
-/** One Gmail message resource within a thread (metadata format). */
-interface GmailMessageResource {
-  id: string;
-  snippet?: string;
-  internalDate?: string;
-  payload?: GmailMessagePayload;
-}
-/** A Gmail thread resource (`threads.get`). */
-interface GmailThreadResource {
-  id?: string;
-  messages?: GmailMessageResource[];
 }
 /** Google Tasks list-collection payload (used for identity + container enumeration). */
 interface TaskListsPayload {
@@ -70,110 +46,78 @@ interface CalendarPrimary {
 }
 
 /**
- * The Google connector client (Drive / Gmail / Calendar / Tasks REST, OAuth bearer).
+ * Page through a Google list endpoint via `nextPageToken`, collecting all items.
  *
  * @remarks
- * `resolveAccount` reads the product's identity endpoint; `importWork` lists the
- * product's primary collection and normalizes each into an {@link ImportedItem};
- * `mirrorStatus` sizes the same listing; `resolveExternalUrl` reconstructs the
- * canonical product URL. One {@link GoogleProviderClient} is parameterized by the
- * concrete product so the providers share the bearer-token transport and mapping.
+ * Shared by every Google product import (including Gmail's) so pagination, the
+ * {@link MAX_IMPORT_PAGES} safety bound, and the truncation warning are handled once. A
+ * truncated import logs a warning rather than silently returning a partial set that looks
+ * complete.
+ *
+ * @param http - The product's HTTP wrapper.
+ * @param product - The product, for the truncation log.
+ * @param resource - Label for the truncation log (e.g. `'files'`).
+ * @param opts - `buildUrl` builds the request path for a page token; `extract` pulls
+ *   `{ items, nextPageToken }` out of the (product-specific) response.
  */
-export class GoogleProviderClient
-  implements WritableConnectorProviderClient, MailActionsProviderClient
-{
-  /**
-   * @param product - Which Google product this client targets.
-   * @param http - The provider HTTP wrapper bound to the product's API base.
-   */
-  constructor(
-    private readonly product: GoogleProduct,
-    private readonly http: ProviderHttp,
-  ) {}
+export async function paginateGoogle<T>(
+  http: ProviderHttp,
+  product: GoogleProduct,
+  resource: string,
+  opts: {
+    buildUrl: (pageToken: string | undefined) => string;
+    extract: (json: unknown) => { items: readonly T[]; nextPageToken: string | undefined };
+  },
+): Promise<T[]> {
+  const all: T[] = [];
+  let pageToken: string | undefined;
+  let truncated = false;
+  for (let page = 0; page < MAX_IMPORT_PAGES; page++) {
+    const { items, nextPageToken } = opts.extract(await http.getJson(opts.buildUrl(pageToken)));
+    all.push(...items);
+    if (!nextPageToken) break;
+    pageToken = nextPageToken;
+    if (page === MAX_IMPORT_PAGES - 1) truncated = true;
+  }
+  if (truncated) {
+    logConnectorTruncation({
+      provider: product,
+      resource,
+      fetched: all.length,
+      maxPages: MAX_IMPORT_PAGES,
+    });
+  }
+  return all;
+}
+
+/**
+ * The Google Drive connector client (read-only documents surface).
+ */
+export class GoogleDriveProviderClient implements ConnectorProviderClient {
+  /** @param http - The provider HTTP wrapper bound to the Drive API base. */
+  constructor(private readonly http: ProviderHttp) {}
 
   /** {@inheritDoc ConnectorProviderClient.resolveAccount} */
   async resolveAccount(): Promise<string | undefined> {
-    if (this.product === 'drive') {
-      const json = await this.http.getJson<DriveAbout>('/about?fields=user');
-      return json.user?.emailAddress ?? json.user?.displayName;
-    }
-    if (this.product === 'gmail') {
-      const json = await this.http.getJson<GmailProfile>('/users/me/profile');
-      return json.emailAddress;
-    }
-    if (this.product === 'gtasks') {
-      // Validate the credential by listing task lists, but do NOT derive the account label from a
-      // resource (a task-list title). The app supplies the identity label — the account's email,
-      // from the linked Better Auth account — instead. Accounts ≠ resources.
-      await this.http.getJson<TaskListsPayload>('/users/@me/lists?maxResults=1');
-      return undefined;
-    }
-    const json = await this.http.getJson<CalendarPrimary>('/calendars/primary');
-    return json.id ?? json.summary;
+    const json = await this.http.getJson<DriveAbout>('/about?fields=user');
+    return json.user?.emailAddress ?? json.user?.displayName;
   }
 
-  /** {@inheritDoc ConnectorProviderClient.importWork} */
-  async importWork(input: ImportWorkInput, importedAt: string): Promise<ImportedItem[]> {
-    if (this.product === 'drive') return this.importDrive(importedAt);
-    if (this.product === 'gmail') return this.importGmail(importedAt);
-    if (this.product === 'gtasks') return this.importTasks(importedAt, input.listIds);
-    return this.importCalendar(importedAt);
-  }
-
-  /**
-   * Page through a Google list endpoint via `nextPageToken`, collecting all items.
-   *
-   * @remarks
-   * Shared by every product import so pagination, the {@link MAX_IMPORT_PAGES} safety bound,
-   * and the truncation warning are handled once. A truncated import logs a warning rather than
-   * silently returning a partial set that looks complete.
-   *
-   * @param resource - Label for the truncation log (e.g. `'files'`).
-   * @param buildUrl - Builds the request path for a given page token.
-   * @param extract - Pulls `{ items, nextPageToken }` out of the (provider-specific) response.
-   */
-  private async paginate<T>(
-    resource: string,
-    buildUrl: (pageToken: string | undefined) => string,
-    extract: (json: unknown) => { items: readonly T[]; nextPageToken: string | undefined },
-  ): Promise<T[]> {
-    const all: T[] = [];
-    let pageToken: string | undefined;
-    let truncated = false;
-    for (let page = 0; page < MAX_IMPORT_PAGES; page++) {
-      const { items, nextPageToken } = extract(await this.http.getJson(buildUrl(pageToken)));
-      all.push(...items);
-      if (!nextPageToken) break;
-      pageToken = nextPageToken;
-      if (page === MAX_IMPORT_PAGES - 1) truncated = true;
-    }
-    if (truncated) {
-      logConnectorTruncation({
-        provider: this.product,
-        resource,
-        fetched: all.length,
-        maxPages: MAX_IMPORT_PAGES,
-      });
-    }
-    return all;
-  }
-
-  /** List Drive files and map them onto document {@link ImportedItem}s. */
-  private async importDrive(importedAt: string): Promise<ImportedItem[]> {
+  /** {@inheritDoc ConnectorProviderClient.importWork} — Drive files as document items. */
+  async importWork(_input: ImportWorkInput, importedAt: string): Promise<ImportedItem[]> {
     interface DriveFile {
       id: string;
       name: string;
       webViewLink?: string;
     }
-    const all = await this.paginate<DriveFile>(
-      'files',
-      (pageToken) =>
+    const all = await paginateGoogle<DriveFile>(this.http, 'drive', 'files', {
+      buildUrl: (pageToken) =>
         `/files?fields=files(id,name,webViewLink),nextPageToken&pageSize=100${pageToken ? `&pageToken=${pageToken}` : ''}`,
-      (json) => {
+      extract: (json) => {
         const j = json as { files?: DriveFile[]; nextPageToken?: string };
         return { items: j.files ?? [], nextPageToken: j.nextPageToken };
       },
-    );
+    });
     return all.map((f) => ({
       id: f.id,
       kind: 'document' as const,
@@ -187,52 +131,55 @@ export class GoogleProviderClient
     }));
   }
 
-  /**
-   * List Gmail threads and map them onto message {@link ImportedItem}s.
-   *
-   * @remarks
-   * Uses `threads.list` (not `messages.list`) because it returns a `snippet`
-   * — the first ~100 chars of the latest message — which makes a readable title.
-   */
-  private async importGmail(importedAt: string): Promise<ImportedItem[]> {
-    interface GmailThread {
-      id: string;
-      snippet?: string;
-    }
-    const all = await this.paginate<GmailThread>(
-      'threads',
-      (pageToken) =>
-        `/users/me/threads?maxResults=100${pageToken ? `&pageToken=${pageToken}` : ''}`,
-      (json) => {
-        const j = json as { threads?: GmailThread[]; nextPageToken?: string };
-        return { items: j.threads ?? [], nextPageToken: j.nextPageToken };
-      },
+  /** {@inheritDoc ConnectorProviderClient.mirrorStatus} */
+  async mirrorStatus(input: MirrorStatusInput): Promise<MirrorResult> {
+    const items = await this.importWork(
+      { connectionId: input.connectionId, provider: 'drive' },
+      new Date(0).toISOString(),
     );
-    return all.map((t) => ({
-      id: t.id,
-      kind: 'message' as const,
-      title: t.snippet ? t.snippet.slice(0, 80) : `Thread ${t.id}`,
-      provenance: { provider: 'gmail' as const, externalId: t.id, importedAt },
-    }));
+    return { connectionId: input.connectionId, status: 'idle', itemCount: items.length };
   }
 
-  /** List Calendar events and map them onto event {@link ImportedItem}s. */
-  private async importCalendar(importedAt: string): Promise<ImportedItem[]> {
+  /** {@inheritDoc ConnectorProviderClient.resolveExternalUrl} */
+  async resolveExternalUrl(input: LinkResourceInput): Promise<string | undefined> {
+    return `https://drive.google.com/file/d/${input.externalId}`;
+  }
+
+  /** {@inheritDoc ConnectorProviderClient.listContainers} — Drive has no container concept. */
+  async listContainers(): Promise<ResourceRef[]> {
+    return [];
+  }
+}
+
+/**
+ * The Google Calendar connector client (read-only events surface).
+ */
+export class GoogleCalendarProviderClient implements ConnectorProviderClient {
+  /** @param http - The provider HTTP wrapper bound to the Calendar API base. */
+  constructor(private readonly http: ProviderHttp) {}
+
+  /** {@inheritDoc ConnectorProviderClient.resolveAccount} */
+  async resolveAccount(): Promise<string | undefined> {
+    const json = await this.http.getJson<CalendarPrimary>('/calendars/primary');
+    return json.id ?? json.summary;
+  }
+
+  /** {@inheritDoc ConnectorProviderClient.importWork} — primary-calendar events as event items. */
+  async importWork(_input: ImportWorkInput, importedAt: string): Promise<ImportedItem[]> {
     interface CalEvent {
       id: string;
       summary?: string;
       description?: string;
       htmlLink?: string;
     }
-    const all = await this.paginate<CalEvent>(
-      'events',
-      (pageToken) =>
+    const all = await paginateGoogle<CalEvent>(this.http, 'calendar', 'events', {
+      buildUrl: (pageToken) =>
         `/calendars/primary/events?maxResults=100${pageToken ? `&pageToken=${pageToken}` : ''}`,
-      (json) => {
+      extract: (json) => {
         const j = json as { items?: CalEvent[]; nextPageToken?: string };
         return { items: j.items ?? [], nextPageToken: j.nextPageToken };
       },
-    );
+    });
     return all.map((e) => ({
       id: e.id,
       kind: 'event' as const,
@@ -247,64 +194,87 @@ export class GoogleProviderClient
     }));
   }
 
+  /** {@inheritDoc ConnectorProviderClient.mirrorStatus} */
+  async mirrorStatus(input: MirrorStatusInput): Promise<MirrorResult> {
+    const items = await this.importWork(
+      { connectionId: input.connectionId, provider: 'calendar' },
+      new Date(0).toISOString(),
+    );
+    return { connectionId: input.connectionId, status: 'idle', itemCount: items.length };
+  }
+
+  /** {@inheritDoc ConnectorProviderClient.resolveExternalUrl} */
+  async resolveExternalUrl(input: LinkResourceInput): Promise<string | undefined> {
+    return `https://calendar.google.com/calendar/event?eid=${input.externalId}`;
+  }
+
+  /** {@inheritDoc ConnectorProviderClient.listContainers} — Calendar has no container concept. */
+  async listContainers(): Promise<ResourceRef[]> {
+    return [];
+  }
+}
+
+/**
+ * The Google Tasks connector client (two-way sync: import + write-back + containers).
+ */
+export class GoogleTasksProviderClient implements WritableConnectorProviderClient {
+  /** @param http - The provider HTTP wrapper bound to the Tasks API base. */
+  constructor(private readonly http: ProviderHttp) {}
+
+  /**
+   * {@inheritDoc ConnectorProviderClient.resolveAccount}
+   *
+   * @remarks
+   * Validates the credential by listing task lists, but does NOT derive the account label
+   * from a resource (a task-list title). The app supplies the identity label — the
+   * account's email, from the linked Better Auth account — instead. Accounts ≠ resources.
+   */
+  async resolveAccount(): Promise<string | undefined> {
+    await this.http.getJson<TaskListsPayload>('/users/@me/lists?maxResults=1');
+    return undefined;
+  }
+
   /**
    * Page through the user's Google Tasks lists (`/users/@me/lists`).
    *
    * @remarks
-   * Shared by {@link importTasks} (which then pulls each list's tasks) and
-   * {@link listContainers} (which surfaces them for the per-account "which lists to sync" UI).
+   * Shared by {@link GoogleTasksProviderClient.importWork} (which then pulls each list's
+   * tasks) and {@link GoogleTasksProviderClient.listContainers} (which surfaces them for
+   * the per-account "which lists to sync" UI).
    */
   private async fetchTaskLists(): Promise<{ id: string; title?: string }[]> {
-    return this.paginate<{ id: string; title?: string }>(
-      'tasklists',
-      (pageToken) => `/users/@me/lists?maxResults=100${pageToken ? `&pageToken=${pageToken}` : ''}`,
-      (json) => {
+    return paginateGoogle<{ id: string; title?: string }>(this.http, 'gtasks', 'tasklists', {
+      buildUrl: (pageToken) =>
+        `/users/@me/lists?maxResults=100${pageToken ? `&pageToken=${pageToken}` : ''}`,
+      extract: (json) => {
         const j = json as { items?: { id: string; title?: string }[]; nextPageToken?: string };
         return { items: j.items ?? [], nextPageToken: j.nextPageToken };
       },
-    );
+    });
   }
 
-  /**
-   * {@inheritDoc ConnectorProviderClient.listContainers}
-   *
-   * @remarks
-   * Only Google Tasks has a container concept; the other Google products throw so a misrouted
-   * call is loud, not a silently-empty list.
-   */
+  /** {@inheritDoc ConnectorProviderClient.listContainers} */
   async listContainers(): Promise<ResourceRef[]> {
-    if (this.product !== 'gtasks') {
-      throw new ConnectorError(`listContainers is not supported for ${this.product}`, {
-        provider: this.product,
-        kind: 'provider',
-      });
-    }
     const lists = await this.fetchTaskLists();
     return lists.map((l) => ({ id: l.id, title: l.title ?? l.id }));
   }
 
   /**
-   * List every Google Task across all of the user's task lists and map each onto a work
+   * List every Google Task across the user's task lists and map each onto a work
    * {@link ImportedItem} carrying the two-way sync anchors.
    *
    * @remarks
-   * Unlike the old one-way mirror (`@default` list, open tasks only), two-way sync pulls:
-   * - **all task lists** (`/users/@me/lists`), recording the owning `externalListId` so a
-   *   write-back can address the right `/lists/{listId}/tasks/{taskId}`;
-   * - **completed tasks** (`showCompleted=true&showHidden=true`) so a completion done in Google
-   *   propagates down rather than looking like a deletion;
-   * - **tombstones** (`showDeleted=true` → `deleted:true`) so a remote delete arrives as data
-   *   (`removed:true`) instead of as absence.
-   * Each item carries the provider's `updated` timestamp and `etag` as the last-write-wins
-   * anchors. {@link MAX_IMPORT_PAGES} bounds pagination per list.
+   * Two-way sync pulls: **all task lists** (recording the owning `externalListId` so a
+   * write-back can address the right `/lists/{listId}/tasks/{taskId}`); **completed tasks**
+   * (`showCompleted=true&showHidden=true`) so a completion done in Google propagates down
+   * rather than looking like a deletion; and **tombstones** (`showDeleted=true` →
+   * `removed:true`) so a remote delete arrives as data instead of as absence. Each item
+   * carries the provider's `updated` timestamp and `etag` as the last-write-wins anchors.
    */
-  private async importTasks(
-    importedAt: string,
-    listIds?: readonly string[],
-  ): Promise<ImportedItem[]> {
+  async importWork(input: ImportWorkInput, importedAt: string): Promise<ImportedItem[]> {
     const allLists = await this.fetchTaskLists();
     // Scope to the selected lists when the integration configured a subset; otherwise pull all.
-    const selected = listIds && listIds.length > 0 ? new Set(listIds) : undefined;
+    const selected = input.listIds && input.listIds.length > 0 ? new Set(input.listIds) : undefined;
     const lists = selected ? allLists.filter((l) => selected.has(l.id)) : allLists;
 
     interface GTask {
@@ -320,15 +290,14 @@ export class GoogleProviderClient
     }
     const items: ImportedItem[] = [];
     for (const list of lists) {
-      const tasks = await this.paginate<GTask>(
-        'tasks',
-        (pageToken) =>
+      const tasks = await paginateGoogle<GTask>(this.http, 'gtasks', 'tasks', {
+        buildUrl: (pageToken) =>
           `/lists/${list.id}/tasks?showCompleted=true&showHidden=true&showDeleted=true&maxResults=100${pageToken ? `&pageToken=${pageToken}` : ''}`,
-        (json) => {
+        extract: (json) => {
           const j = json as { items?: GTask[]; nextPageToken?: string };
           return { items: j.items ?? [], nextPageToken: j.nextPageToken };
         },
-      );
+      });
       for (const t of tasks) {
         items.push({
           id: t.id,
@@ -356,7 +325,7 @@ export class GoogleProviderClient
   /** {@inheritDoc ConnectorProviderClient.mirrorStatus} */
   async mirrorStatus(input: MirrorStatusInput): Promise<MirrorResult> {
     const items = await this.importWork(
-      { connectionId: input.connectionId, provider: this.product },
+      { connectionId: input.connectionId, provider: 'gtasks' },
       new Date(0).toISOString(),
     );
     return { connectionId: input.connectionId, status: 'idle', itemCount: items.length };
@@ -364,106 +333,17 @@ export class GoogleProviderClient
 
   /** {@inheritDoc ConnectorProviderClient.resolveExternalUrl} */
   async resolveExternalUrl(input: LinkResourceInput): Promise<string | undefined> {
-    if (this.product === 'drive') return `https://drive.google.com/file/d/${input.externalId}`;
-    if (this.product === 'gmail') return `https://mail.google.com/mail/#all/${input.externalId}`;
-    if (this.product === 'gtasks') return `https://tasks.google.com/task/${input.externalId}`;
-    return `https://calendar.google.com/calendar/event?eid=${input.externalId}`;
-  }
-
-  /** Assert this client targets Gmail, or throw a loud {@link ConnectorError}. */
-  private assertGmail(op: string): void {
-    if (this.product !== 'gmail') {
-      throw new ConnectorError(`${op} is not supported for ${this.product}`, {
-        provider: this.product,
-        kind: 'provider',
-      });
-    }
-  }
-
-  /**
-   * Map a {@link MailAction} onto Gmail's `threads.modify` label deltas, or the sentinel
-   * `'trash'` for the dedicated trash endpoint.
-   */
-  private gmailDelta(action: MailAction): GmailModifyBody | 'trash' {
-    switch (action.kind) {
-      case 'archive':
-        return { removeLabelIds: ['INBOX'] };
-      case 'markRead':
-        return { removeLabelIds: ['UNREAD'] };
-      case 'markUnread':
-        return { addLabelIds: ['UNREAD'] };
-      case 'applyLabel':
-        return { addLabelIds: [action.label] };
-      case 'removeLabel':
-        return { removeLabelIds: [action.label] };
-      case 'trash':
-        return 'trash';
-    }
-  }
-
-  /** {@inheritDoc MailActionsProviderClient.applyMailAction} */
-  async applyMailAction(input: MailActionInput): Promise<void> {
-    this.assertGmail('applyMailAction');
-    const delta = this.gmailDelta(input.action);
-    if (delta === 'trash') {
-      await this.http.postJson(`/users/me/threads/${input.threadId}/trash`, {});
-      return;
-    }
-    await this.http.postJson(`/users/me/threads/${input.threadId}/modify`, delta);
-  }
-
-  /** {@inheritDoc MailActionsProviderClient.fetchThread} */
-  async fetchThread(input: FetchThreadInput): Promise<MailThread> {
-    this.assertGmail('fetchThread');
-    const json = await this.http.getJson<GmailThreadResource>(
-      `/users/me/threads/${input.threadId}?format=metadata` +
-        `&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date`,
-    );
-    const messages = (json.messages ?? []).map((m) => this.toMailMessage(m));
-    return {
-      threadId: input.threadId,
-      subject: messages[0]?.subject ?? `Thread ${input.threadId}`,
-      messages,
-      externalUrl: `https://mail.google.com/mail/#all/${input.threadId}`,
-    };
-  }
-
-  /** Project one Gmail message resource into a render-ready {@link MailMessage}. */
-  private toMailMessage(m: GmailMessageResource): MailMessage {
-    const header = (name: string): string | undefined =>
-      m.payload?.headers?.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value;
-    const to = (header('To') ?? '')
-      .split(',')
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-    const sentAt = m.internalDate
-      ? new Date(Number(m.internalDate)).toISOString()
-      : (header('Date') ?? '');
-    return {
-      id: m.id,
-      from: header('From') ?? '',
-      to,
-      subject: header('Subject') ?? '',
-      snippet: m.snippet ?? '',
-      sentAt,
-    };
+    return `https://tasks.google.com/task/${input.externalId}`;
   }
 
   /**
    * {@inheritDoc WritableConnectorProviderClient.pushTask}
    *
    * @remarks
-   * Only Google Tasks (`gtasks`) supports write-back; the other Google products throw so a
-   * misrouted push is loud, not silent. `create`/`update` return the provider's post-write
-   * `updated`/`etag` (the new echo guard); `delete` returns `undefined` (a `204 No Content`).
+   * `create`/`update` return the provider's post-write `updated`/`etag` (the new echo
+   * guard); `delete` returns `undefined` (a `204 No Content`).
    */
   async pushTask(op: TaskPushOp): Promise<ExternalWriteResult | undefined> {
-    if (this.product !== 'gtasks') {
-      throw new ConnectorError(`pushTask is not supported for ${this.product}`, {
-        provider: this.product,
-        kind: 'provider',
-      });
-    }
     if (op.kind === 'delete') {
       await this.http.deleteVoid(`/lists/${op.listId}/tasks/${op.externalId}`);
       return;
@@ -485,10 +365,11 @@ export class GoogleProviderClient
    * Build the Google Tasks resource body for a create/update from the provider-agnostic op.
    *
    * @remarks
-   * Maps Docket fields onto the Tasks API: `notes` for the description, `due` (RFC3339) for the
-   * due date, and `status` (`completed`/`needsAction`) for completion — reopening also clears
-   * the `completed` timestamp. A `null` `notes`/`dueDate` is sent through to clear the field;
-   * note the Tasks API is finicky about clearing `due` (see the two-way sync plan's caveat).
+   * Maps Docket fields onto the Tasks API: `notes` for the description, `due` (RFC3339) for
+   * the due date, and `status` (`completed`/`needsAction`) for completion — reopening also
+   * clears the `completed` timestamp. A `null` `notes`/`dueDate` is sent through to clear
+   * the field; note the Tasks API is finicky about clearing `due` (see the two-way sync
+   * plan's caveat).
    */
   private toTaskResource(fields: {
     title?: string;
@@ -512,7 +393,7 @@ export class GoogleProviderClient
     const t = json as { id?: string; updated?: string; etag?: string };
     if (!t.id || !t.updated) {
       throw new ConnectorError('Google Tasks write returned no id/updated', {
-        provider: this.product,
+        provider: 'gtasks',
         kind: 'provider',
       });
     }

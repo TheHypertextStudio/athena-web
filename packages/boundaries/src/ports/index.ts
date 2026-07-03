@@ -34,15 +34,9 @@ export type {
   ImportWorkInput,
   ImportedItem,
   ItemProvenance,
-  FetchThreadInput,
   LinkResourceInput,
   LinkResult,
   ListContainersInput,
-  MailAction,
-  MailActionInput,
-  MailActions,
-  MailMessage,
-  MailThread,
   MirrorResult,
   MirrorStatusInput,
   PushTaskInput,
@@ -50,6 +44,19 @@ export type {
   TaskPushOp,
   WritableConnector,
 } from './connector';
+export { WRITE_BACK_CAPABLE_PROVIDERS } from './connector';
+export type {
+  FetchThreadInput,
+  ListThreadsInput,
+  MailAction,
+  MailActionInput,
+  MailActions,
+  MailListPage,
+  MailMessage,
+  MailThread,
+  MailThreadSummary,
+} from './mail';
+export { MAIL_CAPABLE_PROVIDERS } from './mail';
 export { ConnectorError, isConnectorError } from './connector-error';
 export type { TaskDraft, TaskDraftInput, TaskSynthesizer } from './task-synthesizer';
 export { TITLE_MAX, truncateTitle } from './task-synthesizer';

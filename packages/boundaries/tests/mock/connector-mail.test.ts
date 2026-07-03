@@ -45,3 +45,38 @@ describe('MockConnector mail-actions capability', () => {
     expect(thread.messages[0]?.from).toBeTruthy();
   });
 });
+
+describe('MockConnector listThreads', () => {
+  it('serves the deterministic fixture summaries, bounded by maxThreads', async () => {
+    const mail = new MockConnector({ provider: 'gmail' }).asMailActor();
+    if (!mail) throw new Error('expected a mail actor');
+
+    const page = await mail.listThreads({ connectionId: 'conn_1', maxThreads: 10 });
+    expect(page.kind).toBe('page');
+    if (page.kind !== 'page') return;
+    expect(page.nextCursor).toBe('mock-cursor-1');
+    expect(page.threads.map((t) => t.threadId)).toEqual([
+      'gmail-thread-actionable',
+      'gmail-thread-promo',
+    ]);
+    // The two fixtures exercise the funnel both ways: a person vs a no-reply promo sender.
+    expect(page.threads[0]?.from).toContain('ada@example.com');
+    expect(page.threads[1]?.from).toContain('no-reply@');
+    expect(page.threads[0]?.rfc822MessageId).toBeDefined();
+
+    const bounded = await mail.listThreads({ connectionId: 'conn_1', maxThreads: 1 });
+    if (bounded.kind !== 'page') throw new Error('expected a page');
+    expect(bounded.threads).toHaveLength(1);
+  });
+
+  it('reports cursorExpired for the sentinel cursor so the full-repull fallback is testable', async () => {
+    const mail = new MockConnector({ provider: 'gmail' }).asMailActor();
+    if (!mail) throw new Error('expected a mail actor');
+    const page = await mail.listThreads({
+      connectionId: 'conn_1',
+      cursor: MockConnector.EXPIRED_CURSOR,
+      maxThreads: 10,
+    });
+    expect(page).toEqual({ kind: 'cursorExpired' });
+  });
+});

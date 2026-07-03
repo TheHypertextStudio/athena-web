@@ -47,6 +47,7 @@ interface DirectoryRes {
     pattern: string;
     roles: string[];
     category: string;
+    syncable: boolean;
   }[];
 }
 interface SyncRunRes {
@@ -100,13 +101,29 @@ describe('integrations directory', () => {
     const dir = await body<DirectoryRes>(res);
 
     const providers = dir.providers.map((p) => p.provider).sort();
-    expect(providers).toEqual(['calendar', 'drive', 'github', 'gmail', 'gtasks', 'linear']);
+    expect(providers).toEqual([
+      'calendar',
+      'drive',
+      'github',
+      'gmail',
+      'gtasks',
+      'linear',
+      'slack',
+    ]);
 
     const github = dir.providers.find((p) => p.provider === 'github')!;
     expect(github.name).toBe('GitHub');
     expect(github.pattern).toBe('connector');
     expect(github.roles).toContain('code');
     expect(github.category).toBe('engineering');
+
+    // Slack is the observe-only entry: signal role, no Connector sync.
+    const slack = dir.providers.find((p) => p.provider === 'slack')!;
+    expect(slack.name).toBe('Slack');
+    expect(slack.pattern).toBe('connector');
+    expect(slack.roles).toEqual(['signal']);
+    expect(slack.syncable).toBe(false);
+    expect(github.syncable).toBe(true);
 
     // The three onboarding connect sources are all present with sensible directory entries.
     const gtasks = dir.providers.find((p) => p.provider === 'gtasks')!;

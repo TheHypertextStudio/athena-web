@@ -1,0 +1,43 @@
+# The shared Docket Slack app — create it at https://api.slack.com/apps → "Create New App" →
+# "From a manifest" (run `pnpm integrations` for a walkthrough that fills in your URLs).
+#
+# Pure user-token design: NO bot user and NO bot scopes. The product requirement is "messages
+# that mention ME, DM ME, or reply in threads I'M in", and only user-scope event subscriptions
+# deliver every message the authorizing user can see (a bot only sees channels it was invited
+# to, and no DMs). End users install it with one click ("Connect Slack" in Docket settings).
+#
+# Substitute <api-host> with the deployment's API origin (prod: docket-api.hypertext.studio;
+# dev tunnel: docket-dev.hypertext.studio). Slack allows ONE events request URL per app, so
+# prod and dev need separate apps from this same manifest. Slack verifies the request URL live
+# at save time (POST /internal/ingest/slack answers the url_verification challenge), so deploy
+# the API before creating/updating the app.
+#
+# token_rotation stays OFF: xoxp user tokens then never expire, so Docket needs no refresh
+# machinery; revocation surfaces via API errors (and a future tokens_revoked subscription).
+display_information:
+  name: Docket
+  description: Surfaces the Slack messages that concern you in your Docket Stream.
+  background_color: '#1a1a2e'
+oauth_config:
+  redirect_urls:
+    - https://<api-host>/internal/integrations/slack/callback
+  scopes:
+    user:
+      - channels:history # message.channels events — public channels the user is in
+      - groups:history # message.groups events — private channels the user is in
+      - im:history # message.im events — the user's DMs
+      - mpim:history # message.mpim events — the user's group DMs
+      - users:read # resolve display names for actor/participant enrichment
+settings:
+  event_subscriptions:
+    request_url: https://<api-host>/internal/ingest/slack
+    user_events:
+      - message.channels
+      - message.groups
+      - message.im
+      - message.mpim
+  interactivity:
+    is_enabled: false
+  org_deploy_enabled: false
+  socket_mode_enabled: false
+  token_rotation_enabled: false

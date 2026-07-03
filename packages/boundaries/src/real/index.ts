@@ -29,6 +29,11 @@ export {
 export { RealLinearObserver, type RealLinearObserverConfig } from './observer-linear';
 export { RealGitHubObserver, type RealGitHubObserverConfig } from './observer-github';
 export {
+  RealSlackObserver,
+  type RealSlackObserverConfig,
+  slackMentionedUserIds,
+} from './observer-slack';
+export {
   RealSummarizer,
   type RealSummarizerConfig,
   type MessageCreator,

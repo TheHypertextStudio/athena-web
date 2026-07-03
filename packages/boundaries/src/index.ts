@@ -15,3 +15,4 @@ export * from './mock/index';
 export * from './real/index';
 export * from './fixtures/index';
 export * from './select';
+export * from './json';

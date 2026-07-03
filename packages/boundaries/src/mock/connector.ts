@@ -90,13 +90,20 @@ export class MockConnector implements Connector {
     return `${prefix}_${this.counter.toString().padStart(6, '0')}`;
   }
 
-  /** {@inheritDoc Connector.connect} */
+  /**
+   * {@inheritDoc Connector.connect}
+   *
+   * @remarks
+   * For `linear`, also stamps a fixed `externalWorkspaceId` so the webhook-routing and
+   * work-graph code paths have a deterministic organization id to key off offline.
+   */
   async connect(input: ConnectInput): Promise<ConnectionResult> {
     return {
       connectionId: this.nextId('conn'),
       provider: input.provider,
       status: 'connected',
       account: input.externalWorkspaceId ?? `${input.provider}-workspace`,
+      ...(input.provider === 'linear' ? { externalWorkspaceId: 'mock-linear-org' } : {}),
     };
   }
 

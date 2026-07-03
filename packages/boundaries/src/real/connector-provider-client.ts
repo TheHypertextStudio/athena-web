@@ -15,6 +15,34 @@ import type {
   MailListPage,
   MailThread,
 } from '../ports/mail';
+import type {
+  ExternalWorkflowState,
+  PullWorkGraphInput,
+  WorkGraphSnapshot,
+  WorkItemPushOp,
+} from '../ports/work-graph';
+
+/** The account resolved by {@link ConnectorProviderClient.resolveAccount}. */
+export interface ResolvedAccount {
+  /** The account's display label (login, email, or name), when known. */
+  readonly label?: string;
+  /**
+   * The provider's external workspace/organization id, when known.
+   *
+   * @remarks
+   * For Linear, this is the organization id — the webhook routing key. See
+   * {@link import('../ports/connector').ConnectionResult.externalWorkspaceId}.
+   */
+  readonly externalWorkspaceId?: string;
+  /**
+   * The provider's external workspace/organization URL slug, when known.
+   *
+   * @remarks
+   * For Linear, this is the `urlKey`. See
+   * {@link import('../ports/connector').ConnectionResult.externalWorkspaceSlug}.
+   */
+  readonly externalWorkspaceSlug?: string;
+}
 
 /**
  * The provider-specific half of the connector: each method maps the port's
@@ -29,9 +57,10 @@ export interface ConnectorProviderClient {
   /**
    * Validate the OAuth credential by resolving the external account identity.
    *
-   * @returns the account's display label (login, email, or name), or `undefined` on failure.
+   * @returns the resolved account label plus any external workspace identifiers the
+   * provider exposes, or `undefined` on failure.
    */
-  resolveAccount(): Promise<string | undefined>;
+  resolveAccount(): Promise<ResolvedAccount | undefined>;
   /**
    * Import all work items from the provider, each carrying provenance metadata.
    *
@@ -132,4 +161,50 @@ export function isMailActionsProviderClient(
   client: ConnectorProviderClient,
 ): client is MailActionsProviderClient {
   return typeof (client as Partial<MailActionsProviderClient>).applyMailAction === 'function';
+}
+
+/**
+ * The work-graph-capable provider client (today only {@link LinearProviderClient}).
+ *
+ * @remarks
+ * Extends the read-only client with the rich pull/push surface. Kept as a separate
+ * interface so non-work-graph providers implement nothing extra; `RealConnector` narrows
+ * to it via {@link isWorkGraphProviderClient} and exposes it through
+ * {@link import('../ports/connector').Connector.asWorkGraph}.
+ */
+export interface WorkGraphProviderClient extends ConnectorProviderClient {
+  /**
+   * Pull the provider workspace's work graph, scoped to the selected teams.
+   *
+   * @param input - The selected teams and optional incremental cutoff.
+   * @throws {ConnectorError} On auth, throttle, or provider failure.
+   */
+  pullWorkGraph(input: PullWorkGraphInput): Promise<WorkGraphSnapshot>;
+  /**
+   * List the workflow states defined on a single team.
+   *
+   * @param externalTeamId - The team's external id.
+   * @throws {ConnectorError} On auth, throttle, or provider failure.
+   */
+  listTeamStates(externalTeamId: string): Promise<ExternalWorkflowState[]>;
+  /**
+   * Apply one field-level write to a work item.
+   *
+   * @param op - The create/update change to apply.
+   * @throws {ConnectorError} On auth, throttle, or provider failure.
+   */
+  pushWorkItem(op: WorkItemPushOp): Promise<ExternalWriteResult>;
+}
+
+/**
+ * Narrow a {@link ConnectorProviderClient} to a {@link WorkGraphProviderClient}.
+ *
+ * @remarks
+ * Feature-detects with `in` (not `typeof x === 'function'`) per the repo's structural
+ * capability-detection convention.
+ */
+export function isWorkGraphProviderClient(
+  client: ConnectorProviderClient,
+): client is WorkGraphProviderClient {
+  return 'pullWorkGraph' in client;
 }

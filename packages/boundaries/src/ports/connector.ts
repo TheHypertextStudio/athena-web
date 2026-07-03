@@ -11,6 +11,7 @@
  * §5). The mail capability's types live in `./mail`.
  */
 import type { MailActions } from './mail';
+import type { WorkGraphConnector } from './work-graph';
 
 /**
  * The external providers Docket can connect to.
@@ -52,6 +53,21 @@ export interface ConnectionResult {
   readonly status: 'connected' | 'error';
   /** External account/login label, when known. */
   readonly account?: string;
+  /**
+   * The provider's external workspace/organization id, when known.
+   *
+   * @remarks
+   * For Linear, this is the organization id — the webhook routing key that identifies which
+   * connection an inbound webhook belongs to.
+   */
+  readonly externalWorkspaceId?: string;
+  /**
+   * The provider's external workspace/organization URL slug, when known.
+   *
+   * @remarks
+   * For Linear, this is the `urlKey` — used to build canonical external URLs.
+   */
+  readonly externalWorkspaceSlug?: string;
 }
 
 /** Provenance attached to every imported item so its origin is auditable. */
@@ -329,6 +345,19 @@ export interface Connector {
    * {@link MailActions}; every other provider omits it or returns `undefined`.
    */
   asMailActor?(): MailActions | undefined;
+
+  /**
+   * Return this connector's work-graph capability, or `undefined` when the provider has no
+   * rich work-graph concept.
+   *
+   * @remarks
+   * The single typed seam for a rich pull of a provider workspace's
+   * users/labels/projects/cycles/work-items plus field-level push mutations, discovered
+   * exactly like {@link Connector.asWritable} and {@link Connector.asMailActor}. Only a
+   * work-graph-capable connector (today, Linear) returns a {@link WorkGraphConnector}; every
+   * other provider omits it or returns `undefined`.
+   */
+  asWorkGraph?(): WorkGraphConnector | undefined;
 
   /**
    * Enumerate the external containers (e.g. Google Tasks lists) this connection can sync from,

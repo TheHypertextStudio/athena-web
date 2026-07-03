@@ -57,6 +57,21 @@ export type {
   MailThreadSummary,
 } from './mail';
 export { MAIL_CAPABLE_PROVIDERS } from './mail';
+export type {
+  ExternalCycle,
+  ExternalLabel,
+  ExternalPriority,
+  ExternalProject,
+  ExternalStateType,
+  ExternalUser,
+  ExternalWorkItem,
+  ExternalWorkflowState,
+  PullWorkGraphInput,
+  WorkGraphConnector,
+  WorkGraphSnapshot,
+  WorkItemPushFields,
+  WorkItemPushOp,
+} from './work-graph';
 export { ConnectorError, isConnectorError } from './connector-error';
 export type { TaskDraft, TaskDraftInput, TaskSynthesizer } from './task-synthesizer';
 export { TITLE_MAX, truncateTitle } from './task-synthesizer';

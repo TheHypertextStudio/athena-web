@@ -277,6 +277,11 @@ export type {
   CalendarItemWritePatch,
 } from '@docket/types';
 
+// The durable transcript message shape is likewise owned by `@docket/types` — the
+// agent-turn boundary port speaks it and `agent_session_transcript.messages` persists
+// it, so the resumed conversation can never drift from what the runtime emitted.
+export type { TurnContentBlock, TurnMessage } from '@docket/types';
+
 /** A session Activity payload; `action` rows carry the proposed change. */
 export interface SessionActivityBody {
   /** Free text (thought/response/elicitation/error). */
@@ -289,6 +294,36 @@ export interface SessionActivityBody {
     readonly summary: string;
     /** Optional structured diff. */
     readonly diff?: unknown;
+    /**
+     * The persisted, executable tool call behind a gated action.
+     *
+     * @remarks
+     * What approval executes: the toolbox connection (`docket` or a remote alias),
+     * the raw tool name, its input, and the provider `tool_use` id so the result can
+     * be paired back into the transcript. Absent on legacy narration-only actions.
+     */
+    readonly toolCall?: {
+      /** Toolbox connection key (`docket`, or a remote integration alias). */
+      readonly connection: string;
+      /** The raw (un-namespaced) tool name on that connection. */
+      readonly tool: string;
+      /** The tool input as proposed (editable until approved). */
+      readonly input: unknown;
+      /** The provider `tool_use` block id this call answers. */
+      readonly toolUseId: string;
+    };
+    /** The execution result once applied (also fed back as the `tool_result`). */
+    readonly result?: {
+      /** Serialized result content. */
+      readonly content: string;
+      /** Whether execution failed. */
+      readonly isError: boolean;
+    };
+    /**
+     * How the gate treated this action: a `proposal` executes on approval; a
+     * `suggestion` (suggest-only policy) is recorded and never executes.
+     */
+    readonly mode?: 'proposal' | 'suggestion';
   };
   /** Additional fields. */
   readonly [key: string]: unknown;

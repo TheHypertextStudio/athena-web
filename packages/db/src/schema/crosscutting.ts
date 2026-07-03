@@ -449,6 +449,34 @@ export const integration = pgTable(
 );
 
 /**
+ * The org-held sealed credential behind one integration (1:1).
+ *
+ * @remarks
+ * Stores only AES-256-GCM ciphertext (sealed with `CREDENTIALS_ENCRYPTION_KEY`, an
+ * explicit env requirement — never a hidden default). This is what enforces the MCP
+ * security MUST of no token passthrough: agents reach remote services with the org's
+ * own stored credential, never a caller's token, and `integration.connection.
+ * credentialsRef` points here instead of ever holding a secret. Cascades with its
+ * integration.
+ */
+export const integrationCredential = pgTable(
+  'integration_credential',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    integrationId: text('integration_id')
+      .notNull()
+      .references(() => integration.id, { onDelete: 'cascade' }),
+    /** The sealed secret (`v1:gcm:<iv>:<tag>:<data>` envelope), never plaintext. */
+    ciphertext: text('ciphertext').notNull(),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('integration_credential_integration_uq').on(t.integrationId)],
+);
+
+/**
  * The durable, auditable record of one connector sync run (one `Connector.importWork` pass).
  *
  * @remarks

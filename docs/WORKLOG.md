@@ -899,6 +899,33 @@ generate` needs a `DATABASE_URL` only to satisfy config validation — a codegen
   (`prompt=consent`); both diverge from what a spec-faithful client expects. Note: older WORKLOG
   entries (MCP-UTIL-005, MCP-SAMPLING-006) reference `packages/mcp-server/**` and
   `apps/api/src/routes/mcp.ts` — those paths were superseded by `apps/api/src/mcp/**`.
+### [ATHENA-002] Schema: durable transcripts, proposal groups, session kind, org credentials
+
+- **Completed**: 2026-07-02
+- **Summary**: Slice 2 of the Athena build — the persistence the loop and the UX system stand on.
+  New `agent_session_transcript` (1 row/session, `TurnMessage[]` jsonb rewritten per turn in the
+  same transaction as activity rows) is the durability story: re-entry after a days-long approval
+  or a restart rebuilds the provider conversation purely from this row. `session_activity.
+proposal_group_id` (+ `(session_id, proposal_group_id)` index) is the batch-approval handle —
+  every proposal in one assistant turn shares a group so "create 40 tasks" reviews as one unit.
+  `agent_session.kind` (`chat`|`job`, default `job`) models one substrate/two framings: the
+  persistent conversational Athena thread and episodic delegated jobs are the same session
+  machinery. `integration_credential` (1:1 with `integration`, unique-indexed, cascade) holds
+  AES-256-GCM ciphertext only — the no-token-passthrough MCP security MUST becomes schema.
+  `SessionActivityBody.action` gains `toolCall` (connection/tool/input/toolUseId — what approval
+  executes), `result`, and `mode` (`proposal`|`suggestion`). The canonical `TurnMessage`/
+  `TurnContentBlock` Zod shapes moved to `@docket/types`; the boundaries port and the db `$type`
+  both import them (the event-substrate anti-drift pattern). Migration `0016_smart_black_knight`.
+- **Files Changed**: `packages/types/src/agent.ts`, `packages/db/src/{enums,types}.ts`,
+  `packages/db/src/schema/{agents,crosscutting}.ts`, `packages/db/drizzle/0016_*.sql`,
+  `packages/db/tests/athena-schema.test.ts` (new, 6 tests),
+  `packages/boundaries/src/ports/agent-turn.ts` (canonical-type re-export).
+- **Learnings**: Zod `z.unknown()` object fields infer as optional — harmless here since every
+  writer sets `input`, but worth knowing when a canonical schema replaces a hand-written
+  interface. Drizzle's generator handles pure additions without the TTY-rename dance.
+- **Gate**: types 211/211, db 46/46, boundaries 286/286; lint + `tsc --noEmit` clean on all
+  three; `@docket/api` typecheck clean against the new shapes.
+
 ### [ATHENA-001] Agent-turn boundaries port (slice 1 of the Athena agent build)
 
 - **Completed**: 2026-07-02

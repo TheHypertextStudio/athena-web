@@ -51,6 +51,8 @@ export const queryKeys = {
   activeSessions: () => ['me', 'active-sessions'] as const,
   orgs: () => ['me', 'orgs'] as const,
   portfolio: () => ['me', 'portfolio'] as const,
+  search: (scope: 'hub' | 'org', query: string, orgId?: string | null) =>
+    ['search', scope, orgId ?? 'all', query] as const,
   hubSearch: (query: string) => ['me', 'search', query] as const,
   today: (date: string) => ['me', 'today', date] as const,
   agenda: (date: string) => ['me', 'agenda', date] as const,

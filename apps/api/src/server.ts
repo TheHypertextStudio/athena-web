@@ -21,6 +21,7 @@ import type { AppEnv } from './context';
 import { startDevScheduler } from './dev-scheduler';
 import { env } from './env';
 import { onError } from './error';
+import { cimdAuthorizeMiddleware } from './mcp/cimd';
 import { authorizationServerMetadata, mcpHandler, protectedResourceMetadata } from './mcp/server';
 import { registerOpenapi } from './openapi';
 import cron from './routes/cron';
@@ -48,6 +49,11 @@ server.use(
   }),
 );
 server.use('*', sessionMiddleware);
+// CIMD preflight (mcp-surface.md §2.6): Better Auth resolves authorize clients by exact
+// `client_id`, so URL-form MCP client ids must be fetched/validated/upserted into the OAuth
+// application table BEFORE the authorize handler runs. Registered ahead of `/api/auth/*` so
+// it wraps only the MCP authorize route; non-URL client ids pass straight through.
+server.use('/api/auth/mcp/authorize', cimdAuthorizeMiddleware);
 server.on(['POST', 'GET'], '/api/auth/*', (c) => auth.handler(c.req.raw));
 // The MCP Streamable HTTP endpoint lives OUTSIDE the typed `AppType` routes (like
 // `/api/auth`): it carries its own Origin + session guard and is not part of the RPC

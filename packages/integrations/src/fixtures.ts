@@ -31,6 +31,26 @@ export const FIXED_NOW = '2026-01-01T00:00:00.000Z';
 /** A fixed clock factory for tests: always returns {@link FIXED_NOW}. */
 export const fixedClock = (): string => FIXED_NOW;
 
+/** One deterministic Sunsama backlog item served by the mock remote MCP server. */
+export interface SunsamaBacklogItem {
+  /** The Sunsama task id. */
+  readonly id: string;
+  /** The task title. */
+  readonly title: string;
+  /** Optional notes. */
+  readonly notes: string;
+}
+
+/**
+ * The Sunsama backlog the mock remote MCP server returns from `get_backlog_tasks` —
+ * the offline source for the firehose-import proving flow.
+ */
+export const SUNSAMA_BACKLOG: readonly SunsamaBacklogItem[] = [
+  { id: 'su-001', title: 'Send the contractor agreement', notes: 'Legal wants it this week.' },
+  { id: 'su-002', title: 'Book the venue for the offsite', notes: 'Compare the two quotes.' },
+  { id: 'su-003', title: 'Reply to the partnership email', notes: '' },
+];
+
 /** One deterministic imported item per provider, with provenance. */
 export const CONNECTOR_ITEMS: Readonly<Record<ConnectorProvider, readonly ImportedItem[]>> = {
   github: [

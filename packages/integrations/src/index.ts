@@ -13,6 +13,7 @@ export * from './github-app';
 export * from './http';
 export * from './json';
 export * from './mail';
+export * from './mcp-connector';
 export * from './mock-connector';
 export * from './mock-observer';
 export * from './observer';

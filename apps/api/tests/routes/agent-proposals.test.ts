@@ -6,7 +6,7 @@ import { asc, eq } from 'drizzle-orm';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type * as DbModule from '@docket/db';
-import type * as BoundariesModule from '@docket/boundaries';
+import type * as AgentRuntimeModule from '@docket/agent-runtime';
 import type { ProposalGroupOut } from '@docket/types';
 
 import type { ActorCtx, AppEnv } from '../../src/context';
@@ -27,7 +27,7 @@ const MIGRATIONS = resolve(import.meta.dirname, '../../../../packages/db/drizzle
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
-let boundaries!: typeof BoundariesModule;
+let agentRuntime!: typeof AgentRuntimeModule;
 let agentSessions!: typeof agentSessionsRouter;
 let ensureDefaultAgent!: typeof EnsureDefaultAgent;
 let getContainer!: typeof GetContainer;
@@ -36,7 +36,7 @@ beforeAll(async () => {
   schema = await import('@docket/db');
   db = schema.db;
   await migrate(db as never, { migrationsFolder: MIGRATIONS });
-  boundaries = await import('@docket/boundaries');
+  agentRuntime = await import('@docket/agent-runtime');
   agentSessions = (await import('../../src/routes/agent-sessions')).default;
   ({ ensureDefaultAgent } = await import('../../src/lib/default-agent'));
   ({ getContainer } = await import('../../src/container'));
@@ -96,15 +96,15 @@ function appFor(orgId: string, actorId: string) {
 }
 
 /** Route the container's turn runtime at a scripted mock for the duration of a test. */
-function scriptTurns(script: readonly BoundariesModule.ScriptedTurn[]): void {
-  const runtime = new boundaries.MockAgentTurnRuntime({ script });
+function scriptTurns(script: readonly AgentRuntimeModule.ScriptedTurn[]): void {
+  const runtime = new agentRuntime.MockAgentTurnRuntime({ script });
   vi.spyOn(getContainer().agentTurn, 'streamTurn').mockImplementation((input) =>
     runtime.streamTurn(input),
   );
 }
 
 /** A batched three-create import script (the firehose-onboarding shape). */
-function importScript(seed: Seed): readonly BoundariesModule.ScriptedTurn[] {
+function importScript(seed: Seed): readonly AgentRuntimeModule.ScriptedTurn[] {
   const create = (id: string, title: string) => ({
     type: 'tool_use' as const,
     id,

@@ -16,10 +16,18 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { TurnToolDef } from '@docket/agent-runtime';
+import { db, integration, integrationCredential } from '@docket/db';
+import type { RemoteMcpSession } from '@docket/integrations';
+import { and, eq } from 'drizzle-orm';
 
+import { getContainer } from '../container';
+import { unsealCredential } from '../lib/credentials';
 import { internalAgentContext } from '../mcp/internal-session';
 import { buildServer } from '../mcp/server';
 import type { ToolAnnotationHints } from './approval-policy';
+
+/** The toolbox connection key for Docket's own in-process tools. */
+export const DOCKET_CONNECTION = 'docket';
 
 /** The loop-owned elicitation tool name (never dispatched to the MCP server). */
 export const ASK_USER_TOOL = 'ask_user';
@@ -48,15 +56,25 @@ export interface ToolboxResult {
   readonly isError: boolean;
 }
 
+/** Where one model-facing tool name routes: a connection key + the raw name there. */
+export interface ResolvedTool {
+  /** `docket`, or a remote integration's alias. */
+  readonly connection: string;
+  /** The un-namespaced name on that connection. */
+  readonly rawName: string;
+}
+
 /** One connected toolbox: cached defs + annotations and a call dispatcher. */
 export interface Toolbox {
-  /** The tool definitions to surface to the model (Docket tools + `ask_user`). */
+  /** The tool definitions surfaced to the model (Docket + remote, + `ask_user`). */
   readonly tools: readonly TurnToolDef[];
-  /** The declared annotations per tool name (the policy engine's classification input). */
+  /** The declared annotations per model-facing tool name (the policy classifier input). */
   annotations(name: string): ToolAnnotationHints | undefined;
-  /** Call a Docket tool as the agent principal. */
+  /** Where a model-facing tool name routes (`docket` or a remote alias). */
+  resolve(name: string): ResolvedTool;
+  /** Call a tool by its model-facing (possibly namespaced) name. */
   callTool(name: string, input: unknown): Promise<ToolboxResult>;
-  /** Close the in-process transport pair. */
+  /** Close every underlying transport. */
   close(): Promise<void>;
 }
 
@@ -93,7 +111,9 @@ export async function openToolbox(orgId: string, agentId: string): Promise<Toolb
   const listed = await client.listTools();
   const annotationsByName = new Map<string, ToolAnnotationHints>();
   const defs: TurnToolDef[] = [];
+  const docketNames = new Set<string>();
   for (const tool of listed.tools) {
+    docketNames.add(tool.name);
     if (tool.annotations) {
       annotationsByName.set(tool.name, {
         ...(tool.annotations.readOnlyHint !== undefined
@@ -113,20 +133,99 @@ export async function openToolbox(orgId: string, agentId: string): Promise<Toolb
       inputSchema: tool.inputSchema,
     });
   }
+
+  // ── Remote connections: every connected org MCP integration joins the union, its
+  // tools namespaced `<alias>__<name>` (an alias can't contain `__`, so namespaced
+  // names never collide with Docket's). A server that fails to open is demoted to
+  // `error` on its row — never silently skipped as if healthy.
+  const remoteSessions = new Map<string, RemoteMcpSession>();
+  const remoteRows = await db
+    .select()
+    .from(integration)
+    .where(
+      and(
+        eq(integration.organizationId, orgId),
+        eq(integration.provider, 'mcp'),
+        eq(integration.status, 'connected'),
+      ),
+    );
+  for (const row of remoteRows) {
+    const config = row.config as unknown as { url: string; alias: string };
+    const credRows = await db
+      .select({ ciphertext: integrationCredential.ciphertext })
+      .from(integrationCredential)
+      .where(eq(integrationCredential.integrationId, row.id))
+      .limit(1);
+    try {
+      const bearerToken = credRows[0] ? unsealCredential(credRows[0].ciphertext) : undefined;
+      const session = await getContainer().mcpConnector.open({
+        url: config.url,
+        ...(bearerToken ? { bearerToken } : {}),
+      });
+      const tools = await session.listTools();
+      remoteSessions.set(config.alias, session);
+      for (const tool of tools) {
+        const namespaced = `${config.alias}__${tool.name}`;
+        if (tool.annotations) annotationsByName.set(namespaced, tool.annotations);
+        defs.push({
+          name: namespaced,
+          description: `[${config.alias}] ${tool.description}`,
+          inputSchema: tool.inputSchema,
+        });
+      }
+    } catch (cause) {
+      await db
+        .update(integration)
+        .set({
+          status: 'error',
+          lastError: cause instanceof Error ? cause.message : 'Connection failed',
+          lastErrorAt: new Date(),
+        })
+        .where(eq(integration.id, row.id));
+    }
+  }
+
   defs.push(ASK_USER_DEF);
+
+  const resolve = (name: string): ResolvedTool => {
+    if (docketNames.has(name) || name === ASK_USER_TOOL) {
+      return { connection: DOCKET_CONNECTION, rawName: name };
+    }
+    const sep = name.indexOf('__');
+    if (sep > 0) {
+      const alias = name.slice(0, sep);
+      if (remoteSessions.has(alias)) {
+        return { connection: alias, rawName: name.slice(sep + 2) };
+      }
+    }
+    // Unknown names route to Docket, whose server answers with a clear tool-not-found
+    // error the model can react to.
+    return { connection: DOCKET_CONNECTION, rawName: name };
+  };
 
   return {
     tools: defs,
     annotations: (name) => annotationsByName.get(name),
+    resolve,
     callTool: async (name, input) => {
+      const target = resolve(name);
+      if (target.connection !== DOCKET_CONNECTION) {
+        const session = remoteSessions.get(target.connection);
+        /* v8 ignore next -- @preserve defensive: resolve only names live connections */
+        if (!session) return { content: `Unknown connection: ${target.connection}`, isError: true };
+        return session.callTool(target.rawName, input);
+      }
       const result = (await client.callTool({
-        name,
+        name: target.rawName,
         arguments: (input ?? {}) as Record<string, unknown>,
       })) as CallToolResult;
       return { content: flattenContent(result), isError: result.isError === true };
     },
     close: async () => {
       await client.close();
+      for (const session of remoteSessions.values()) {
+        await session.close();
+      }
     },
   };
 }

@@ -40,7 +40,7 @@ import { decideActivity, decideProposalGroup } from '../routes/agent-session-app
 import type { SessionRow } from '../routes/agent-session-helpers';
 import { classifyTool, decideToolExecution } from './approval-policy';
 import { buildSystemPrompt } from './system-prompt';
-import { ASK_USER_TOOL, openToolbox, type ToolboxResult } from './toolbox';
+import { ASK_USER_TOOL, DOCKET_CONNECTION, openToolbox, type ToolboxResult } from './toolbox';
 import { loadTranscript, saveTranscript } from './transcript';
 
 /** Injectable dependencies for the loop (tests script the turn runtime). */
@@ -410,6 +410,7 @@ export async function driveSession(
             classifyTool(toolbox.annotations(use.name)),
           );
           if (decision === 'execute') continue; // executed (and recorded) below, post-commit
+          const target = toolbox.resolve(use.name);
           await tx.insert(sessionActivity).values({
             sessionId,
             organizationId: orgId,
@@ -421,8 +422,8 @@ export async function driveSession(
                 kind: use.name,
                 summary: summarizeToolCall(use.name, use.input),
                 toolCall: {
-                  connection: 'docket',
-                  tool: use.name,
+                  connection: target.connection,
+                  tool: target.rawName,
                   input: use.input,
                   toolUseId: use.id,
                 },
@@ -443,6 +444,7 @@ export async function driveSession(
         );
         if (decision !== 'execute') continue;
         const result = await toolbox.callTool(use.name, use.input);
+        const target = toolbox.resolve(use.name);
         const activityId = await insertActivity(
           orgId,
           sessionId,
@@ -452,8 +454,8 @@ export async function driveSession(
               kind: use.name,
               summary: summarizeToolCall(use.name, use.input),
               toolCall: {
-                connection: 'docket',
-                tool: use.name,
+                connection: target.connection,
+                tool: target.rawName,
                 input: use.input,
                 toolUseId: use.id,
               },
@@ -567,7 +569,9 @@ export async function executeApprovedActions(orgId: string, sessionId: string): 
       const call = action.body.action?.toolCall;
       let body = action.body;
       if (call && toolbox && action.body.action) {
-        const result = await toolbox.callTool(call.tool, call.input);
+        const name =
+          call.connection === DOCKET_CONNECTION ? call.tool : `${call.connection}__${call.tool}`;
+        const result = await toolbox.callTool(name, call.input);
         body = {
           ...action.body,
           action: {

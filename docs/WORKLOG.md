@@ -597,6 +597,33 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 - **Validation**: Validator rejects scopes absent from `COMMIT_SCOPES.txt` and accepts
   `refactor(integrations): ...`.
 
+### [ATHENA-008] Remote MCP integrations: the union toolbox (Milestone C complete)
+
+- **Completed**: 2026-07-02
+- **Summary**: Slice 7 — Athena's eyes into the user's existing world. New `mcpConnector`
+  integration port (real: MCP SDK Streamable-HTTP client with the org's bearer credential; mock:
+  fixture servers keyed by endpoint host, incl. a read-only Sunsama backlog server) selected
+  purely by `APP_MODE` — endpoint + credential are per-connection data, never env. New
+  `/v1/orgs/:orgId/integrations/mcp` routes: connect (live `tools/list` health check — status is
+  EARNED, `error`+`lastError` otherwise), list, re-verify, disconnect. Credentials seal
+  AES-256-GCM (`v1:gcm:` envelope) under the new `CREDENTIALS_ENCRYPTION_KEY` env into
+  `integration_credential` — the no-passthrough MUST end-to-end. `openToolbox` now UNIONS every
+  connected org MCP server: remote tools surface as `<alias>__<name>` (alias can't contain
+  `__` → collision-free), their declared annotations feed the fail-closed policy classifier,
+  `toolCall.connection` records where a call routes, and a server that fails to open demotes to
+  `error` on its row — never silently skipped. Proving test: connect mock Sunsama → session
+  reads `sunsama__get_backlog_tasks` immediately (remote READ under Ask-first) → batch-creates
+  the three items → approve → tasks land. **Milestone C complete.**
+- **Files Changed**: `packages/integrations/src/mcp-connector.ts` (new),
+  `packages/integrations/src/fixtures.ts` (SUNSAMA_BACKLOG), `packages/types/src/integration.ts`
+  (McpIntegrationCreate/Out), `packages/env` (CREDENTIALS_ENCRYPTION_KEY), `.env.example`,
+  `apps/api/src/lib/credentials.ts` (new), `src/routes/integrations-mcp.ts` (new, mounted),
+  `src/agent/{toolbox,loop}.ts` (union + connection routing),
+  `apps/api/tests/routes/integrations-mcp.test.ts` (new, 6),
+  `packages/integrations/tests/mcp-connector.test.ts` (new, 5).
+- **Gate**: integrations MCP connector 5/5 + lint; api integrations-mcp 6/6, agent suites 30/30, typecheck +
+  lint clean; env 36/36; types 211/211.
+
 ### [ATHENA-007] Athena entitlement gate (paid-plan feature, one choke point)
 
 - **Completed**: 2026-07-02

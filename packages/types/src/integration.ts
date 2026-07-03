@@ -598,3 +598,51 @@ export type ExternalActorPatch = z.infer<typeof ExternalActorPatch>;
  */
 export const LINEAR_WRITE_SCOPE_MESSAGE =
   'Reconnect Linear to grant write access — two-way sync needs the write scope.';
+
+/** Body for connecting a remote MCP server as an org integration. */
+export const McpIntegrationCreate = z
+  .object({
+    url: z
+      .url()
+      .describe('The remote MCP server URL (Streamable HTTP). Health-checked on connect.'),
+    label: z.string().min(1).max(80).describe('Human-readable display name (e.g. "Sunsama").'),
+    alias: z
+      .string()
+      .regex(/^[a-z][a-z0-9_]{1,20}$/)
+      .describe(
+        "The tool namespace: the agent sees this server's tools as `<alias>__<name>`. Lowercase alnum/underscore, 2–21 chars, unique per org. `__` cannot occur inside an alias, so namespaced names never collide with Docket tools.",
+      ),
+    bearerToken: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        'Bearer credential the org holds for this server; sealed (AES-256-GCM) at rest, never returned, never a caller token (no passthrough).',
+      ),
+  })
+  .meta({ id: 'McpIntegrationCreate', description: 'Connect a remote MCP server.' });
+/** Validated MCP-integration create body. */
+export type McpIntegrationCreate = z.infer<typeof McpIntegrationCreate>;
+
+/** A connected remote MCP server (never includes the credential). */
+export const McpIntegrationOut = z
+  .object({
+    id: IntegrationId.describe('The integration row id.'),
+    organizationId: OrganizationId.describe('The owning organization.'),
+    url: z.string().describe('The remote MCP server URL.'),
+    label: z.string().describe('Display name.'),
+    alias: z.string().describe('The tool namespace (`<alias>__<name>`).'),
+    status: IntegrationStatus.describe(
+      'Connection health: only a live `tools/list` promotes to `connected`.',
+    ),
+    toolCount: z
+      .number()
+      .int()
+      .nullable()
+      .describe('Tools advertised at the last successful check; null when never verified.'),
+    lastError: z.string().nullable().describe('Why the last check failed; null when healthy.'),
+    createdAt: z.string().describe('ISO-8601 timestamp the server was connected.'),
+  })
+  .meta({ id: 'McpIntegrationOut', description: 'A connected remote MCP server.' });
+/** MCP-integration representation value. */
+export type McpIntegrationOut = z.infer<typeof McpIntegrationOut>;

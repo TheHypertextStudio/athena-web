@@ -8,7 +8,7 @@ const getSession = vi.fn(async () => null);
 vi.mock('@docket/auth', () => ({ auth: { api: { getSession } } }));
 
 import type * as DbModule from '@docket/db';
-import type * as BoundariesModule from '@docket/boundaries';
+import type * as AgentRuntimeModule from '@docket/agent-runtime';
 
 import type { driveSession as DriveSession } from '../../src/agent/loop';
 import type { assertAgentSessionsEntitled as Assert } from '../../src/billing/entitlement';
@@ -26,7 +26,7 @@ const MIGRATIONS = resolve(import.meta.dirname, '../../../../packages/db/drizzle
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
-let boundaries!: typeof BoundariesModule;
+let agentRuntime!: typeof AgentRuntimeModule;
 let driveSession!: typeof DriveSession;
 let assertAgentSessionsEntitled!: typeof Assert;
 let ensureDefaultAgent!: typeof EnsureDefaultAgent;
@@ -35,7 +35,7 @@ beforeAll(async () => {
   schema = await import('@docket/db');
   db = schema.db;
   await migrate(db as never, { migrationsFolder: MIGRATIONS });
-  boundaries = await import('@docket/boundaries');
+  agentRuntime = await import('@docket/agent-runtime');
   ({ driveSession } = await import('../../src/agent/loop'));
   ({ assertAgentSessionsEntitled } = await import('../../src/billing/entitlement'));
   ({ ensureDefaultAgent } = await import('../../src/lib/default-agent'));
@@ -77,7 +77,7 @@ async function seedOrg(
   return { orgId: org!.id, sessionId: session!.id };
 }
 
-const TEXT_ONLY: readonly BoundariesModule.ScriptedTurn[] = [
+const TEXT_ONLY: readonly AgentRuntimeModule.ScriptedTurn[] = [
   {
     message: { role: 'assistant', content: [{ type: 'text', text: 'Done.' }] },
     stopReason: 'end_turn',
@@ -105,7 +105,7 @@ describe('the gate at driveSession first run', () => {
     const seed = await seedOrg('past_due');
     await expect(
       driveSession(seed.orgId, seed.sessionId, {
-        turnRuntime: new boundaries.MockAgentTurnRuntime({ script: TEXT_ONLY }),
+        turnRuntime: new agentRuntime.MockAgentTurnRuntime({ script: TEXT_ONLY }),
       }),
     ).rejects.toMatchObject({ status: 402, code: 'agent_plan_required' });
   });
@@ -123,7 +123,7 @@ describe('the gate at driveSession first run', () => {
       .where(eq(schema.organization.id, seed.orgId));
 
     const settled = await driveSession(seed.orgId, seed.sessionId, {
-      turnRuntime: new boundaries.MockAgentTurnRuntime({ script: TEXT_ONLY }),
+      turnRuntime: new agentRuntime.MockAgentTurnRuntime({ script: TEXT_ONLY }),
     });
     expect(settled.status).toBe('completed');
   });

@@ -597,6 +597,35 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 - **Validation**: Validator rejects scopes absent from `COMMIT_SCOPES.txt` and accepts
   `refactor(integrations): ...`.
 
+### [ATHENA-010] The chat front door + firehose onboarding (Milestone D complete)
+
+- **Completed**: 2026-07-03
+- **Summary**: Slices 10+11. **Chat**: `GET/POST /v1/orgs/:orgId/sessions/chat[/messages]` —
+  the org's ONE persistent `kind:'chat'` session, lazily created against the default agent; a
+  message lands as a visible `response` activity (`author:'user'`) AND the next user turn of
+  the durable transcript, then the same `driveSession` loop answers (terminal statuses just
+  mean idle; a new message re-opens the thread). Web: the Athena page
+  (`/orgs/:orgId/athena`) renders the thread conversationally — user bubbles right, Athena
+  left, tool work as quiet chips, thoughts omitted (the session work log carries them), and a
+  parked thread reviews its batches in-line via the ghost-grammar `ProposalGroupCard`. Athena
+  joins the sidebar nav (after Triage) + the command palette, and **⌘J/Ctrl+J summons the
+  thread from anywhere** in an org (registered beside the ⌘K listener). **Onboarding**: the
+  Today prompt box detects a zero-task workspace (typed query layer probe) and takes center
+  stage as "What's on your plate?" — paste-anything framing, Athena as the primary/Enter
+  action, capture demoted — so the firehose door leads exactly when it matters. Docs:
+  `docs/design/ghost-grammar.md` (the design language, rules 1–7), mvp-plan §8.6 build-status
+  note, athena-agent.md statuses flipped to shipped.
+- **Files Changed**: `apps/api/src/routes/agent-sessions.ts` (chat routes),
+  `apps/api/tests/routes/agent-chat.test.ts` (new, 2), `apps/web/src/app/(app)/orgs/[orgId]/
+athena/page.tsx` (new), `packages/ui/src/components/shell/{workspaces.ts,Sidebar.tsx}`,
+  `apps/web/src/components/{app-shell-utils.tsx,command-palette/*,today/today-prompt.tsx}`,
+  `docs/{design/ghost-grammar.md,core/mvp-plan.md,engineering/specs/athena-agent.md}`.
+- **NOT YET DONE (deferred, tracked)**: the ⌘J _overlay_ variant (today ⌘J navigates to the
+  thread page — same thread, full continuity — rather than floating an overlay above the
+  current view); live-browser screenshots of the Milestone D surfaces (worktree has no `.env`
+  and the dev PGlite is single-writer with the main checkout) — verify visually after merge.
+- **Gate**: api chat 2/2 + typecheck/lint; web 192/192 + typecheck/lint; ui typecheck.
+
 ### [ATHENA-009] Web review surface: batch proposal cards, ghosts in Today, trust dial, work-log polish
 
 - **Completed**: 2026-07-03

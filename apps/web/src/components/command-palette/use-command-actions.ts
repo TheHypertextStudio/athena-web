@@ -27,6 +27,7 @@ import type { PaletteItem, PaletteScope } from './types';
 const ORG_DESTINATIONS = [
   { key: 'my-work', label: 'My Work', icon: ListChecks, keywords: ['tasks', 'assigned'] },
   { key: 'triage', label: 'Triage', icon: Inbox, keywords: ['inbox', 'unsorted'] },
+  { key: 'athena', label: 'Athena', icon: Sparkles, keywords: ['chat', 'assistant', 'ask'] },
   { key: 'initiatives', label: 'Initiatives', icon: Target, keywords: ['goals'] },
   { key: 'programs', label: 'Programs', icon: FolderKanban, keywords: ['streams'] },
   { key: 'projects', label: 'Projects', icon: FolderKanban, keywords: [] },

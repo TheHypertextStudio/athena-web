@@ -29,6 +29,7 @@
 import * as React from 'react';
 
 import {
+  MessageSquare,
   Activity,
   Building,
   FolderKanban,
@@ -179,6 +180,7 @@ export function Sidebar({
   const workspaceRows: readonly NavRow<WorkspaceNavKey>[] = [
     { key: 'my-work', label: 'My Work', icon: Home },
     { key: 'triage', label: 'Triage', icon: Inbox },
+    { key: 'athena', label: 'Athena', icon: MessageSquare },
     { key: 'stream', label: 'Stream', icon: Activity },
     { key: 'initiatives', label: initiatives, icon: Target },
     { key: 'programs', label: programs, icon: Layers },

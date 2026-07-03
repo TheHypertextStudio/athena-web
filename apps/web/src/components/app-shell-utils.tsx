@@ -33,6 +33,7 @@ export function orgIdFromPath(pathname: string): string | null {
 export const NAV_SEGMENTS: readonly WorkspaceNavKey[] = [
   'my-work',
   'triage',
+  'athena',
   'stream',
   'initiatives',
   'programs',

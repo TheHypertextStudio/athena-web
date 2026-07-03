@@ -1,6 +1,6 @@
 # Athena Agent — Engineering Spec
 
-> **Status**: Milestone A shipped (foundations); Milestone B (the loop) next
+> **Status**: Milestones A–D shipped (loop, gate, remote MCP, review UX, chat, onboarding)
 > **Last Updated**: 2026-07-02
 > **Companions**: `mcp-surface.md` (the tool catalog + auth MUSTs), `activity-feed.md` (the
 > event substrate Athena consumes downstream), `permissions.md` §8 (agent authorization),
@@ -119,7 +119,7 @@ keyed by `agent.approvalPolicy`:
 
 Reads always execute — the dial gates mutation, not observation. No tool-name lists.
 
-## 6. The agentic loop (slice 5 — next)
+## 6. The agentic loop (slice 5 — shipped)
 
 `apps/api/src/agent/loop.ts` — `driveSession(orgId, sessionId)`, **re-entrant**: all state
 is in the DB, so first run, resume-on-approve, resume-on-reply, and restart recovery are one
@@ -141,7 +141,7 @@ Elicitations are a Docket-side `ask_user` tool (deterministic, no MCP surface ch
 Turn count bounded by explicit `AGENT_MAX_TURNS` env. SSE gains a DB-poll live tail
 (restart-safe; Last-Event-ID resume).
 
-## 7. Ghost projection (the UI contract; slices 5c/9)
+## 7. Ghost projection (slices 5c/9 — shipped; see docs/design/ghost-grammar.md)
 
 Pending proposals are **data the UI projects into real views**: a read endpoint groups
 still-`proposed` activities by `proposalGroupId` and shapes each `toolCall` into a ghost
@@ -150,7 +150,7 @@ stored `toolCall.input` before approval. Approval solidifies in place (stable
 `view-transition-name`; no view swaps). Ghosts are visible only to approvers. Non-spatial
 changes fall back to the session proposal card.
 
-## 8. Remote MCP connections (slice 7)
+## 8. Remote MCP connections (slice 7 — shipped)
 
 `mcpConnector` boundaries port (real: streamable-HTTP SDK client; mock: fixture registry
 incl. a Sunsama server). Org-level rows: `integration.provider = 'mcp'`, alias
@@ -159,7 +159,7 @@ report success when nothing happened"). The toolbox unions connections — Docke
 remote tools `<alias>__<name>` (collision-free by construction) — and remote tools without
 `readOnlyHint: true` classify as writes (fail closed).
 
-## 9. Entitlement (slice 6)
+## 9. Entitlement (slice 6 — shipped)
 
 `assertAgentSessionsEntitled(orgId)` at `driveSession` first-run — the single choke point
 covering REST, the `trigger_agent` MCP tool, and proactive sweeps. Entitled =

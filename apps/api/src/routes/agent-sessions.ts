@@ -37,8 +37,47 @@ import {
 import { createAndRunFromPrompt, runSession } from './agent-session-runner';
 import { replyToElicitation, resolveAction } from './agent-session-approval';
 import { approveAndResume, approveGroupAndResume, driveSession } from '../agent/loop';
+import { ensureDefaultAgent } from '../lib/default-agent';
 import { editProposalInput, listProposalGroups } from '../agent/proposals';
-import { loadTranscript } from '../agent/transcript';
+import { loadTranscript, saveTranscript } from '../agent/transcript';
+
+/**
+ * Get — or lazily create — the org's ONE persistent chat session (`kind: 'chat'`),
+ * bound to the default agent. The newest chat session wins so repeated calls converge.
+ */
+async function getOrCreateChatSession(
+  orgId: string,
+  actorId: string,
+): Promise<typeof agentSession.$inferSelect> {
+  const agent = await ensureDefaultAgent(orgId, actorId);
+  const existing = await db
+    .select()
+    .from(agentSession)
+    .where(
+      and(
+        eq(agentSession.organizationId, orgId),
+        eq(agentSession.agentId, agent.id),
+        eq(agentSession.kind, 'chat'),
+      ),
+    )
+    .orderBy(desc(agentSession.createdAt))
+    .limit(1);
+  if (existing[0]) return existing[0];
+  const [created] = await db
+    .insert(agentSession)
+    .values({
+      organizationId: orgId,
+      agentId: agent.id,
+      kind: 'chat',
+      trigger: 'delegation',
+      status: 'pending',
+      initiatorId: actorId,
+    })
+    .returning();
+  /* v8 ignore next -- @preserve defensive: insert always returns a row */
+  if (!created) throw new Error('chat session insert returned no row');
+  return created;
+}
 
 /** SSE live-tail poll cadence (DB-backed, restart-safe). */
 const STREAM_POLL_MS = 750;
@@ -94,6 +133,77 @@ Side effects: dispatches the agent against the runtime; each yielded activity (t
       const settled = await createAndRunFromPrompt(orgId, actorId, prompt, agentId);
       await enqueueSearchUpsert(orgId, 'agent_session', settled.id);
       return ok(c, AgentSessionOut, toSessionOut(settled));
+    },
+  )
+  .get(
+    '/chat',
+    apiDoc({
+      tag: 'Agents',
+      summary: "Get (or create) the org's Athena chat thread",
+      response: AgentSessionDetailOut,
+      description: `Return the organization's ONE persistent conversational session (\`kind: 'chat'\`) with its full activity stream — creating it (bound to the lazily-resolved default agent) on first use, so the chat door works with zero setup. The chat thread is the same session substrate as delegated jobs — same loop, transcript, toolbox, and approval gate — rendered conversationally; a job spawned from chat is just another session. Send messages via \`POST /chat/messages\`. A read (plus the idempotent lazy create); org membership suffices.`,
+    }),
+    async (c) => {
+      const { orgId, actorId } = c.get('actorCtx');
+      const session = await getOrCreateChatSession(orgId, actorId);
+      const activities = await db
+        .select()
+        .from(sessionActivity)
+        .where(eq(sessionActivity.sessionId, session.id))
+        .orderBy(asc(sessionActivity.createdAt));
+      return ok(c, AgentSessionDetailOut, {
+        ...toSessionOut(session),
+        activities: activities.map(toActivityOut),
+      });
+    },
+  )
+  .post(
+    '/chat/messages',
+    capabilityGuard('contribute'),
+    apiDoc({
+      tag: 'Agents',
+      summary: 'Send a message to the Athena chat thread',
+      capability: 'contribute',
+      response: AgentSessionDetailOut,
+      description: `Append a natural-language message to the org's chat thread and drive Athena's reply: the text lands as a visible \`response\` activity (author: user) AND as the next user turn of the durable transcript, then the loop runs — reads answer instantly, writes obey the same approval dial as any session (a proposed batch parks the thread \`awaiting_approval\` and reviews through the ghost system). Returns the settled thread with its full stream. Requires \`contribute\` (chatting IS contributing). This is the "one engine, many doors" door: the home prompt box and delegation drive the identical machinery.`,
+    }),
+    zJson(SessionReplyBody),
+    async (c) => {
+      const { orgId, actorId } = c.get('actorCtx');
+      const body = c.req.valid('json');
+      const session = await getOrCreateChatSession(orgId, actorId);
+
+      await db.insert(sessionActivity).values({
+        sessionId: session.id,
+        organizationId: orgId,
+        type: 'response',
+        body: { text: body.body, author: 'user' },
+      });
+      const messages = await loadTranscript(db, session.id);
+      await saveTranscript(db, session.id, orgId, [
+        ...messages,
+        { role: 'user', content: [{ type: 'text', text: body.body }] },
+      ]);
+      // A chat thread is never "done": terminal statuses just mean idle, so a new
+      // message re-opens it for the loop (pending stays pending — first run gates
+      // entitlement there).
+      if (session.status !== 'pending' && session.status !== 'running') {
+        await db
+          .update(agentSession)
+          .set({ status: 'running' })
+          .where(eq(agentSession.id, session.id));
+      }
+      const settled = await driveSession(orgId, session.id);
+
+      const activities = await db
+        .select()
+        .from(sessionActivity)
+        .where(eq(sessionActivity.sessionId, session.id))
+        .orderBy(asc(sessionActivity.createdAt));
+      return ok(c, AgentSessionDetailOut, {
+        ...toSessionOut(settled),
+        activities: activities.map(toActivityOut),
+      });
     },
   )
   .get(

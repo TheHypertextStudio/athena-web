@@ -40,7 +40,8 @@ import {
 import { buildObserver, toAppRuntimeEnv, type AppRuntimeEnv } from '../container';
 import { projectInboundDraft } from '../lib/automation/event';
 import { runAutomationsForEvent } from '../lib/automation/runtime';
-import { enqueueSearchIndexJob } from '../search/enqueue';
+import { enqueueSearchIndexJobs } from '../search/enqueue';
+import { eventSearchReindexTarget } from '../search/event-log';
 import { asObserverProvider } from './integration-provider';
 import { LEASE_STALE_MS } from './integration-sync';
 import { publishEvent } from './stream-helpers';
@@ -182,13 +183,15 @@ function toEntityRef(
   source: SourceSystemKind,
 ): EntityRef | null {
   if (!draftEntity) return null;
+  const maybeMapped = draftEntity as EventDraft['entity'] & { docketEntityId?: unknown };
   return {
     kind: draftEntity.kind,
     source,
     externalId: draftEntity.externalId,
     title: draftEntity.title ?? null,
     url: draftEntity.url ?? null,
-    docketEntityId: null,
+    docketEntityId:
+      typeof maybeMapped.docketEntityId === 'string' ? maybeMapped.docketEntityId : null,
   };
 }
 
@@ -297,7 +300,7 @@ async function processOne(ev: InboundEventRow, ctx: SweepCtx): Promise<number> {
             kind: entityRef.kind,
             source: entityRef.source,
             externalId: entityRef.externalId,
-            docketEntityId: null,
+            docketEntityId: entityRef.docketEntityId,
           }
         : null;
       const recipients = await routeAndWriteRecipients(
@@ -319,15 +322,30 @@ async function processOne(ev: InboundEventRow, ctx: SweepCtx): Promise<number> {
 
     if (result) {
       created += 1;
-      await enqueueSearchIndexJob({
-        organizationId: orgId,
-        userId,
-        sourceTable: 'event',
-        entityId: result.eventId,
-        operation: 'upsert',
-        reason: 'event_log',
-        sourceEventId: result.eventId,
-      });
+      const entityReindexTarget = eventSearchReindexTarget(entityRef);
+      await enqueueSearchIndexJobs([
+        {
+          organizationId: orgId,
+          userId,
+          sourceTable: 'event',
+          entityId: result.eventId,
+          operation: 'upsert',
+          reason: 'event_log',
+          sourceEventId: result.eventId,
+        },
+        ...(entityReindexTarget
+          ? [
+              {
+                organizationId: orgId,
+                sourceTable: entityReindexTarget.sourceTable,
+                entityId: entityReindexTarget.entityId,
+                operation: 'upsert' as const,
+                reason: 'event_log' as const,
+                sourceEventId: result.eventId,
+              },
+            ]
+          : []),
+      ]);
       const recipients = [...result.recipients].map(([uid, reason]) => ({ userId: uid, reason }));
       await publishEvent(result.eventId, recipients).catch(() => undefined);
       // Observer hook: external events trigger automation rules too. Never throws — an

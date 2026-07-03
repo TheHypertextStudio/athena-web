@@ -444,21 +444,28 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
   search enums, typed DTOs, projector registry, ranking/cursor query service, durable enqueue and
   backfill tooling. Hub search and org-scoped search now return shared `SearchOut.items`, and
   source writes/event-log writes enqueue index repair work instead of relying on direct table
-  scans. The command palette consumes semantic search rows, and authenticated `/search` surfaces
-  dense URL-shareable filters for workspace, family, kind, source, and date range.
+  scans. The search query path applies explicit visibility semantics for user-private,
+  org-member, grantable, and event-derived documents, uses weighted Postgres FTS with substring
+  fallback, boosts active workspace and caller-related results, applies palette-only family
+  diversity, preserves private-subject inheritance for comments/activity, and exposes
+  URL-shareable filters for workspace, family, kind, source, owner, assignee, label, status/health,
+  archive, and date range. The command palette and authenticated `/search` consume the same
+  semantic API.
 - **Files Changed**: `packages/db/src/{enums,schema/search,schema/index}.ts`,
   `packages/db/drizzle/0027_sharp_franklin_storm.sql`, `packages/types/src/{search,hub,index}.ts`,
-  `apps/api/src/search/**`, `apps/api/src/routes/{hub,orgs,search}.ts`, write-through route/MCP
-  surfaces under `apps/api/src/{routes,mcp,lib}`, `scripts/search-backfill.ts`,
+  `apps/api/src/search/**`, `apps/api/src/routes/{hub,orgs,search,event-emit,event-sync}.ts`,
+  write-through route/MCP surfaces under `apps/api/src/{routes,mcp,lib}`,
+  `scripts/search-backfill.ts`,
   `apps/web/src/{lib/search-route,components/search/**,components/command-palette/**}.ts*`,
   authenticated search pages under `apps/web/src/app/(app)`, focused API/web/db/types tests,
   `package.json`, and this worklog.
 - **Learnings**: Search needed to preserve entity semantics instead of flattening everything into a
-  legacy hit type. Event emission should enqueue the event document itself and let direct entity
-  writes own entity reindexing, avoiding duplicate or unsupported subject jobs. The full search page
-  works best as URL-backed information architecture: families are the broad mental model, kinds and
-  sources refine it, workspace filters stay explicit, and date filters translate to API datetime
-  bounds at the edge.
+  legacy hit type. Event emission should index the canonical event as activity and enqueue a
+  provenance-linked repair for mapped Docket subjects; direct entity writes and event-log repairs
+  are separate durable intents. The full search page works best as URL-backed information
+  architecture: families are the broad mental model, kinds and sources refine it, ownership/labels
+  and state filters expose workflow semantics, workspace filters stay explicit, and date filters
+  translate to API datetime bounds at the edge.
 - **Gate**: Historical focused/package validation included `@docket/types` typecheck and tests,
   `@docket/db` typecheck and focused search schema test, `@docket/api` typecheck plus focused
   search/route suite, and `@docket/web` typecheck and tests. This rebased closeout reruns the root

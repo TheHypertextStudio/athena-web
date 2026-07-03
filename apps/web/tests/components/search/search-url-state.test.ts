@@ -10,7 +10,7 @@ describe('search page URL state', () => {
   it('parses semantic filters while dropping invalid enum values', () => {
     const filters = parseSearchPageFilters(
       new URLSearchParams(
-        'q=launch&families=work,nope&kinds=task,ghost&sources=slack,bogus&orgIds=org_1,org_2&from=2026-07-01T12%3A00%3A00.000Z&to=2026-07-03',
+        'q=launch&families=work,nope&kinds=task,ghost&sources=slack,bogus&orgIds=org_1,org_2&ownerIds=owner_1&assigneeIds=actor_1&labelIds=label_1&statuses=active,todo&healths=at_risk&from=2026-07-01T12%3A00%3A00.000Z&to=2026-07-03',
       ),
     );
 
@@ -20,6 +20,11 @@ describe('search page URL state', () => {
       kinds: ['task'],
       sources: ['slack'],
       orgIds: ['org_1', 'org_2'],
+      ownerIds: ['owner_1'],
+      assigneeIds: ['actor_1'],
+      labelIds: ['label_1'],
+      statuses: ['active', 'todo'],
+      healths: ['at_risk'],
       fromDate: '2026-07-01',
       toDate: '2026-07-03',
     });
@@ -38,12 +43,17 @@ describe('search page URL state', () => {
       kinds: ['task', 'project'],
       sources: ['docket'],
       orgIds: ['org_1'],
+      ownerIds: ['owner_1'],
+      assigneeIds: ['actor_1'],
+      labelIds: ['label_1'],
+      statuses: ['active'],
+      healths: ['on_track'],
       fromDate: '2026-07-01',
       toDate: '',
     });
 
     expect(href).toBe(
-      '/search?q=ship&families=work&kinds=task%2Cproject&sources=docket&orgIds=org_1&from=2026-07-01',
+      '/search?q=ship&families=work&kinds=task%2Cproject&sources=docket&orgIds=org_1&ownerIds=owner_1&assigneeIds=actor_1&labelIds=label_1&statuses=active&healths=on_track&from=2026-07-01',
     );
   });
 

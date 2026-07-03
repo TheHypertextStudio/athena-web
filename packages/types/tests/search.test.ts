@@ -190,6 +190,8 @@ describe('search DTOs', () => {
       kinds: ['task', 'activity'],
       sources: ['docket', 'slack'],
       orgIds: [ORG_ID],
+      activeOrgId: ORG_ID,
+      surface: 'palette',
       from: '2026-07-01T00:00:00.000Z',
       to: '2026-07-03T23:59:59.000Z',
       includeArchived: false,
@@ -197,6 +199,8 @@ describe('search DTOs', () => {
 
     expect(query.limit).toBe(50);
     expect(query.families).toEqual(['work', 'activity']);
+    expect(query.activeOrgId).toBe(ORG_ID);
+    expect(query.surface).toBe('palette');
 
     const parsed = HubSearchOut.parse({ query: 'budget', items: [], facets: [] });
     expect(parsed.items).toEqual([]);

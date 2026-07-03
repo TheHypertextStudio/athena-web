@@ -163,6 +163,7 @@ export function useHubSearch({ query, scope, close }: HubSearchInput): HubSearch
   const trimmed = query.trim();
   const hasQuery = trimmed.length > 0;
   const orgFilter = scope === 'org' ? activeOrgId : null;
+  const rankingOrgId = activeOrgId ?? null;
 
   // Debounce the term before it enters the query key, so a keystroke burst issues one request for
   // the settled term rather than one per character.
@@ -180,14 +181,21 @@ export function useHubSearch({ query, scope, close }: HubSearchInput): HubSearch
 
   const searchQ = useApiQuery(
     apiQueryOptions(
-      queryKeys.search(scope, debounced, orgFilter),
+      queryKeys.search(scope, debounced, scope === 'hub' ? rankingOrgId : orgFilter),
       () =>
         orgFilter
           ? api.v1.orgs[':orgId'].search.$get({
               param: { orgId: orgFilter },
-              query: { q: debounced, limit: '20' },
+              query: { q: debounced, limit: '20', surface: 'palette' },
             })
-          : api.v1.hub.search.$get({ query: { q: debounced, limit: '20' } }),
+          : api.v1.hub.search.$get({
+              query: {
+                q: debounced,
+                limit: '20',
+                surface: 'palette',
+                ...(rankingOrgId ? { activeOrgId: rankingOrgId } : {}),
+              },
+            }),
       'Search failed.',
       { enabled: debouncedHasQuery && (scope === 'hub' || Boolean(orgFilter)) },
     ),

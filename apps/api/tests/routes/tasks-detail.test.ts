@@ -117,7 +117,12 @@ describe('tasks create (POST /)', () => {
           eq(schema.searchIndexJob.status, 'pending'),
         ),
       );
-    expect(upsertJobs).toHaveLength(1);
+    expect(upsertJobs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ reason: 'entity_write', sourceEventId: null }),
+        expect.objectContaining({ reason: 'event_log', sourceEventId: expect.any(String) }),
+      ]),
+    );
 
     const patched = await writer.request(`/${id}`, {
       method: 'PATCH',
@@ -137,7 +142,8 @@ describe('tasks create (POST /)', () => {
           eq(schema.searchIndexJob.status, 'pending'),
         ),
       );
-    expect(activeUpserts).toHaveLength(1);
+    expect(activeUpserts.filter((job) => job.reason === 'entity_write')).toHaveLength(1);
+    expect(activeUpserts.filter((job) => job.reason === 'event_log')).toHaveLength(1);
 
     const archived = await writer.request(`/${id}`, { method: 'DELETE' });
     expect(archived.status).toBe(200);

@@ -56,9 +56,17 @@ export async function listSearchSourceRows(
 }
 
 async function fetchSearchSourceRow(sourceTable: string, entityId: string) {
+  const schema = await import('@docket/db');
   const { db, table } = await resolveSourceTable(sourceTable);
   const rows = await db.select().from(table).where(eq(table.id, entityId)).limit(1);
-  return rows[0] ?? null;
+  const row = rows[0] ?? null;
+  if (!row) return null;
+  if (sourceTable !== 'task') return row;
+  const labelRows = await db
+    .select({ labelId: schema.taskLabel.labelId })
+    .from(schema.taskLabel)
+    .where(eq(schema.taskLabel.taskId, entityId));
+  return { ...row, labelIds: labelRows.map((labelRow) => labelRow.labelId) };
 }
 
 async function resolveSourceTable(sourceTable: string) {

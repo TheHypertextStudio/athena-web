@@ -66,6 +66,11 @@ export function SearchClient({ scope, orgId }: SearchClientProps): JSX.Element {
   const [kinds, setKinds] = useState<readonly SearchDocumentKind[]>(urlFilters.kinds);
   const [sources, setSources] = useState<readonly SourceSystemKind[]>(urlFilters.sources);
   const [orgIds, setOrgIds] = useState<readonly string[]>(urlFilters.orgIds);
+  const [ownerIds, setOwnerIds] = useState<readonly string[]>(urlFilters.ownerIds);
+  const [assigneeIds, setAssigneeIds] = useState<readonly string[]>(urlFilters.assigneeIds);
+  const [labelIds, setLabelIds] = useState<readonly string[]>(urlFilters.labelIds);
+  const [statuses, setStatuses] = useState<readonly string[]>(urlFilters.statuses);
+  const [healths, setHealths] = useState<readonly string[]>(urlFilters.healths);
   const [fromDate, setFromDate] = useState(urlFilters.fromDate);
   const [toDate, setToDate] = useState(urlFilters.toDate);
   const [accumulatedResults, setAccumulatedResults] = useState<readonly SearchResult[]>([]);
@@ -77,6 +82,11 @@ export function SearchClient({ scope, orgId }: SearchClientProps): JSX.Element {
     setKinds(urlFilters.kinds);
     setSources(urlFilters.sources);
     setOrgIds(urlFilters.orgIds);
+    setOwnerIds(urlFilters.ownerIds);
+    setAssigneeIds(urlFilters.assigneeIds);
+    setLabelIds(urlFilters.labelIds);
+    setStatuses(urlFilters.statuses);
+    setHealths(urlFilters.healths);
     setFromDate(urlFilters.fromDate);
     setToDate(urlFilters.toDate);
     setCursor(null);
@@ -90,10 +100,28 @@ export function SearchClient({ scope, orgId }: SearchClientProps): JSX.Element {
       kinds,
       sources,
       orgIds: effectiveOrgIds,
+      ownerIds,
+      assigneeIds,
+      labelIds,
+      statuses,
+      healths,
       fromDate,
       toDate,
     }),
-    [effectiveOrgIds, families, fromDate, kinds, query, sources, toDate],
+    [
+      assigneeIds,
+      effectiveOrgIds,
+      families,
+      fromDate,
+      healths,
+      kinds,
+      labelIds,
+      ownerIds,
+      query,
+      sources,
+      statuses,
+      toDate,
+    ],
   );
 
   const replaceFilters = useCallback(
@@ -113,6 +141,11 @@ export function SearchClient({ scope, orgId }: SearchClientProps): JSX.Element {
         kinds,
         sources,
         orgIds: effectiveOrgIds,
+        ownerIds,
+        assigneeIds,
+        labelIds,
+        statuses,
+        healths,
         fromDate,
         toDate,
         ...patch,
@@ -123,12 +156,31 @@ export function SearchClient({ scope, orgId }: SearchClientProps): JSX.Element {
       setKinds(next.kinds);
       setSources(next.sources);
       setOrgIds(next.orgIds);
+      setOwnerIds(next.ownerIds);
+      setAssigneeIds(next.assigneeIds);
+      setLabelIds(next.labelIds);
+      setStatuses(next.statuses);
+      setHealths(next.healths);
       setFromDate(next.fromDate);
       setToDate(next.toDate);
       setCursor(null);
       replaceFilters(next);
     },
-    [draft, effectiveOrgIds, families, fromDate, kinds, replaceFilters, sources, toDate],
+    [
+      assigneeIds,
+      draft,
+      effectiveOrgIds,
+      families,
+      fromDate,
+      healths,
+      kinds,
+      labelIds,
+      ownerIds,
+      replaceFilters,
+      sources,
+      statuses,
+      toDate,
+    ],
   );
 
   useEffect(() => {
@@ -189,6 +241,11 @@ export function SearchClient({ scope, orgId }: SearchClientProps): JSX.Element {
     kinds.length > 0 ||
     sources.length > 0 ||
     effectiveOrgIds.length > 0 ||
+    ownerIds.length > 0 ||
+    assigneeIds.length > 0 ||
+    labelIds.length > 0 ||
+    statuses.length > 0 ||
+    healths.length > 0 ||
     Boolean(fromDate || toDate);
 
   return (
@@ -211,6 +268,11 @@ export function SearchClient({ scope, orgId }: SearchClientProps): JSX.Element {
                   kinds: [],
                   sources: [],
                   orgIds: [],
+                  ownerIds: [],
+                  assigneeIds: [],
+                  labelIds: [],
+                  statuses: [],
+                  healths: [],
                   fromDate: '',
                   toDate: '',
                 });
@@ -297,6 +359,56 @@ export function SearchClient({ scope, orgId }: SearchClientProps): JSX.Element {
             labelFor={sourceLabel}
             onToggle={(value) => {
               commitFilters({ sources: toggleValue(sources, value as SourceSystemKind) });
+            }}
+          />
+
+          <FacetFilter
+            title="Owner"
+            values={data?.facets.find((facet) => facet.field === 'owner')?.values ?? []}
+            selected={ownerIds}
+            labelFor={identityFacetLabel}
+            onToggle={(value) => {
+              commitFilters({ ownerIds: toggleValue(ownerIds, value) });
+            }}
+          />
+
+          <FacetFilter
+            title="Assignee"
+            values={data?.facets.find((facet) => facet.field === 'assignee')?.values ?? []}
+            selected={assigneeIds}
+            labelFor={identityFacetLabel}
+            onToggle={(value) => {
+              commitFilters({ assigneeIds: toggleValue(assigneeIds, value) });
+            }}
+          />
+
+          <FacetFilter
+            title="Label"
+            values={data?.facets.find((facet) => facet.field === 'label')?.values ?? []}
+            selected={labelIds}
+            labelFor={identityFacetLabel}
+            onToggle={(value) => {
+              commitFilters({ labelIds: toggleValue(labelIds, value) });
+            }}
+          />
+
+          <FacetFilter
+            title="Status"
+            values={data?.facets.find((facet) => facet.field === 'status')?.values ?? []}
+            selected={statuses}
+            labelFor={sourceLabel}
+            onToggle={(value) => {
+              commitFilters({ statuses: toggleValue(statuses, value) });
+            }}
+          />
+
+          <FacetFilter
+            title="Health"
+            values={data?.facets.find((facet) => facet.field === 'health')?.values ?? []}
+            selected={healths}
+            labelFor={sourceLabel}
+            onToggle={(value) => {
+              commitFilters({ healths: toggleValue(healths, value) });
             }}
           />
 
@@ -555,4 +667,8 @@ function sourceLabel(source: string): string {
     .split('_')
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
+}
+
+function identityFacetLabel(value: string): string {
+  return value;
 }

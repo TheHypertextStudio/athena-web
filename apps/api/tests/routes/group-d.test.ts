@@ -896,7 +896,10 @@ describe('agent-sessions router (list/get + approve/reject conflict paths)', () 
     expect(res.status).toBe(200);
     expect((await body<{ status: string }>(res)).status).toBe('awaiting_approval');
 
-    // Replaying via SSE covers the stream branch + each activity event.
+    // Replaying via SSE covers the stream branch + each activity event. The stream
+    // live-tails non-terminal sessions, so cancel first to make the replay close
+    // (the tail behavior itself is covered in agent-proposals.test.ts).
+    await w.request(`/${sessionId}/cancel`, { method: 'POST', headers: J, body: '{}' });
     const stream = await w.request(`/${sessionId}/stream`, { method: 'GET' });
     expect(stream.status).toBe(200);
     const text = await stream.text();

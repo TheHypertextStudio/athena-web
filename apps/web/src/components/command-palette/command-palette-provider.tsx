@@ -11,6 +11,8 @@ import {
   useState,
 } from 'react';
 
+import { usePathname, useRouter } from 'next/navigation';
+
 import { CommandPalette } from './command-palette';
 
 /** The command-palette controls exposed to the app shell. */
@@ -40,6 +42,14 @@ function isPaletteShortcut(event: KeyboardEvent): boolean {
 }
 
 /**
+ * Whether a keydown event is the Athena shortcut (Cmd+J / Ctrl+J) — summon the org's
+ * chat thread from anywhere in the workspace.
+ */
+function isAthenaShortcut(event: KeyboardEvent): boolean {
+  return (event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === 'j';
+}
+
+/**
  * Provide the global command palette: open state, the Cmd/Ctrl+K listener, and the overlay.
  *
  * @remarks
@@ -62,18 +72,31 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }): J
     setOpen((o) => !o);
   }, []);
 
-  // The single global shortcut listener (Cmd/Ctrl+K toggles the palette).
+  const router = useRouter();
+  const pathname = usePathname();
+
+  // The global shortcut listener: Cmd/Ctrl+K toggles the palette; Cmd/Ctrl+J summons
+  // Athena — the org's ONE persistent chat thread — from anywhere in that org's pages.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (!isPaletteShortcut(event)) return;
-      event.preventDefault();
-      setOpen((o) => !o);
+      if (isPaletteShortcut(event)) {
+        event.preventDefault();
+        setOpen((o) => !o);
+        return;
+      }
+      if (isAthenaShortcut(event)) {
+        const match = /^\/orgs\/([^/]+)(?:\/|$)/.exec(pathname);
+        if (!match?.[1]) return;
+        event.preventDefault();
+        setOpen(false);
+        router.push(`/orgs/${match[1]}/athena`);
+      }
     };
     document.addEventListener('keydown', onKeyDown);
     return () => {
       document.removeEventListener('keydown', onKeyDown);
     };
-  }, []);
+  }, [router, pathname]);
 
   // Lock body scroll while the overlay is open.
   useEffect(() => {

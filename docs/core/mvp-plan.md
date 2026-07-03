@@ -302,6 +302,13 @@ These two detail screens sit at the most granular level, where planning meets th
 
 ### 8.6 Agents — sessions‑first
 
+> **Build status (2026-07-03)**: shipped end-to-end. The agentic loop (multi-turn tool use
+> over the same MCP catalog third-party agents get), the three-dial approval policy,
+> durable pause/resume transcripts, batch proposals with the ghost grammar
+> (`docs/design/ghost-grammar.md`), the SSE live tail, the Athena chat thread (⌘J), remote
+> MCP connections, the paid-plan gate, and the firehose-onboarding prompt are all live —
+> see `docs/engineering/specs/athena-agent.md`.
+
 This is where you go to watch the work happen. When you hand a job to an agent, what you really want isn't a folder of robot profiles to manage — it's a window into what is being done on your behalf right now, with the power to step in. So the Agents area isn't a roster of AI helpers; it's a living feed of sessions, where a session is one episode of an agent doing one job: drafting a batch of donor thank-you notes, reconciling next quarter's budget, rescheduling a week of meetings. You can filter the feed by what needs you most — what's running, what's paused waiting for your yes-or-no, what finished, what hit a snag. Open any session and you get a plain-English narration of the agent's thinking alongside a running list of exactly what it has changed, so there are no surprises buried in the result. The screen is split this way on purpose: the left side is the story (what it's doing and why, the questions it's asking), and the right side is the receipt (what's actually changed, who set it in motion, and the buttons to pause, take over, or cancel). Crucially, the agent can't quietly send those fourteen notes or move that money — it proposes, and the proposal waits for your tap. That same pending approval also surfaces in your cross-org Inbox and Today, so you're never forced to camp out on this screen to keep things moving. The point is calm visibility: the work is transparent, you stay in control, and the brand of the agent doing it barely matters.
 
 The "Agents" area is essentially a **live, filterable feed of Sessions** (running / awaiting‑approval / done / errored), each opening the Session view:

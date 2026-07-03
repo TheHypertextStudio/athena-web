@@ -48,6 +48,7 @@ export type HomeNavKey = 'today' | 'tasks' | 'inbox' | 'stream' | 'portfolio' | 
 export type WorkspaceNavKey =
   | 'my-work'
   | 'triage'
+  | 'athena'
   | 'stream'
   | 'initiatives'
   | 'programs'

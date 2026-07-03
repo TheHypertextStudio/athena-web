@@ -597,6 +597,21 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 - **Validation**: Validator rejects scopes absent from `COMMIT_SCOPES.txt` and accepts
   `refactor(integrations): ...`.
 
+### [ATHENA-004] Approval-policy engine (the three-dial trust model, as data)
+
+- **Completed**: 2026-07-02
+- **Summary**: Slice 4 — the pure decision core the loop consults per tool call:
+  `classifyTool` (MCP `tools/list` annotations → read/write classification, **failing closed** —
+  a tool that doesn't declare `readOnlyHint: true` is a gated write, so unannotated remote tools
+  can never slip past) × `POLICY_TABLE` (suggest / act_with_approval / autonomous) →
+  `execute` | `propose` | `record_only`. Reads always execute under every dial — the dial gates
+  mutation, not observation, which is what keeps an "Ask first" session feeling alive. No
+  tool-name lists anywhere; policy is a table, classification is the tool's own declared
+  metadata.
+- **Files Changed**: `apps/api/src/agent/approval-policy.ts` (new),
+  `apps/api/tests/agent/approval-policy.test.ts` (new, 13 tests incl. the full 3×2 matrix).
+- **Gate**: 13/13; api typecheck + lint clean.
+
 ### [ATHENA-003] Internal agent MCP principal + default-agent grants
 
 - **Completed**: 2026-07-02

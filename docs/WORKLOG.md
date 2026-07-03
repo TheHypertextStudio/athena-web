@@ -436,6 +436,34 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
   and `@docket/web`. Full root gate passed: `pnpm typecheck` (16/16 tasks), `pnpm lint` (16/16),
   `pnpm test` (15/15; API 107/107 files, 1060/1060 tests), and `pnpm build` (3/3).
 
+### [SEARCH-002] Workspace-wide semantic search implementation
+
+- **Completed**: 2026-07-03
+- **Summary**: Implemented the workspace-wide semantic search foundation. Postgres now owns a
+  durable `search_document` read model and `search_index_job` outbox, with Drizzle migration,
+  search enums, typed DTOs, projector registry, ranking/cursor query service, durable enqueue and
+  backfill tooling. Hub search and org-scoped search now return shared `SearchOut.items`, and
+  source writes/event-log writes enqueue index repair work instead of relying on direct table
+  scans. The command palette consumes semantic search rows, and authenticated `/search` surfaces
+  dense URL-shareable filters for workspace, family, kind, source, and date range.
+- **Files Changed**: `packages/db/src/{enums,schema/search,schema/index}.ts`,
+  `packages/db/drizzle/0027_sharp_franklin_storm.sql`, `packages/types/src/{search,hub,index}.ts`,
+  `apps/api/src/search/**`, `apps/api/src/routes/{hub,orgs,search}.ts`, write-through route/MCP
+  surfaces under `apps/api/src/{routes,mcp,lib}`, `scripts/search-backfill.ts`,
+  `apps/web/src/{lib/search-route,components/search/**,components/command-palette/**}.ts*`,
+  authenticated search pages under `apps/web/src/app/(app)`, focused API/web/db/types tests,
+  `package.json`, and this worklog.
+- **Learnings**: Search needed to preserve entity semantics instead of flattening everything into a
+  legacy hit type. Event emission should enqueue the event document itself and let direct entity
+  writes own entity reindexing, avoiding duplicate or unsupported subject jobs. The full search page
+  works best as URL-backed information architecture: families are the broad mental model, kinds and
+  sources refine it, workspace filters stay explicit, and date filters translate to API datetime
+  bounds at the edge.
+- **Gate**: Historical focused/package validation included `@docket/types` typecheck and tests,
+  `@docket/db` typecheck and focused search schema test, `@docket/api` typecheck plus focused
+  search/route suite, and `@docket/web` typecheck and tests. This rebased closeout reruns the root
+  gates after landing.
+
 ### [MCP-PROD-014] Prefer Vitest utilities over custom env plumbing
 
 - **Completed**: 2026-07-06

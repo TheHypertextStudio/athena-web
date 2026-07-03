@@ -40,6 +40,7 @@ import {
 import { buildObserver, toAppRuntimeEnv, type AppRuntimeEnv } from '../container';
 import { projectInboundDraft } from '../lib/automation/event';
 import { runAutomationsForEvent } from '../lib/automation/runtime';
+import { enqueueSearchIndexJob } from '../search/enqueue';
 import { asObserverProvider } from './integration-provider';
 import { LEASE_STALE_MS } from './integration-sync';
 import { publishEvent } from './stream-helpers';
@@ -318,6 +319,15 @@ async function processOne(ev: InboundEventRow, ctx: SweepCtx): Promise<number> {
 
     if (result) {
       created += 1;
+      await enqueueSearchIndexJob({
+        organizationId: orgId,
+        userId,
+        sourceTable: 'event',
+        entityId: result.eventId,
+        operation: 'upsert',
+        reason: 'event_log',
+        sourceEventId: result.eventId,
+      });
       const recipients = [...result.recipients].map(([uid, reason]) => ({ userId: uid, reason }));
       await publishEvent(result.eventId, recipients).catch(() => undefined);
       // Observer hook: external events trigger automation rules too. Never throws — an

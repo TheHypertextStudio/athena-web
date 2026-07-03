@@ -5,6 +5,7 @@ import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { NotFoundError } from '../error';
+import { enqueueSearchUpsert } from '../search/write-through';
 import type { McpContext } from './auth';
 import { jsonResult, runTool, scopedActor, authorize } from './result';
 import { assertRefInOrg, loadTask, resolveStateTransition } from './tools-shared';
@@ -85,6 +86,7 @@ export function registerTaskCrudTools(server: McpRegistrar, ctx: McpContext): vo
         const row = inserted[0];
         /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
         if (!row) throw new Error('task insert returned no row');
+        await enqueueSearchUpsert(input.orgId, 'task', row.id);
         return jsonResult({ id: row.id, state: row.state });
       }),
   );
@@ -151,6 +153,7 @@ export function registerTaskCrudTools(server: McpRegistrar, ctx: McpContext): vo
           .returning();
         const row = updated[0];
         if (!row) throw new NotFoundError('Task not found');
+        await enqueueSearchUpsert(input.orgId, 'task', row.id);
         return jsonResult({ id: row.id, state: row.state, priority: row.priority });
       }),
   );
@@ -209,6 +212,7 @@ export function registerTaskCrudTools(server: McpRegistrar, ctx: McpContext): vo
           .returning();
         const row = updated[0];
         if (!row) throw new NotFoundError('Task not found');
+        await enqueueSearchUpsert(input.orgId, 'task', row.id);
         return jsonResult({ id: row.id, teamId: row.teamId, projectId: row.projectId });
       }),
   );

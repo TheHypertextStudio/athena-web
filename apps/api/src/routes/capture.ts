@@ -24,6 +24,7 @@ import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
+import { enqueueSearchUpsert } from '../search/write-through';
 
 type TaskRow = typeof task.$inferSelect;
 
@@ -113,6 +114,7 @@ Errors: 404 (\`No team to capture into\`) when the org has no team to land in. R
     const row = inserted[0];
     /* v8 ignore next -- @preserve defensive: insert always returns a row */
     if (!row) throw new Error('capture task insert returned no row');
+    await enqueueSearchUpsert(orgId, 'task', row.id);
     return ok(c, TaskOut, toOut(row));
   },
 );

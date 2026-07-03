@@ -14,6 +14,7 @@
  */
 import { actor, agent, db } from '@docket/db';
 import { and, asc, eq } from 'drizzle-orm';
+import { enqueueSearchUpsert } from '../search/write-through';
 
 /** The display name of the lazily-provisioned default org agent ("Athena"). */
 export const DEFAULT_AGENT_NAME = 'Athena';
@@ -45,7 +46,7 @@ export async function ensureDefaultAgent(
   orgId: string,
   createdByActorId: string,
 ): Promise<DefaultAgent> {
-  return db.transaction(async (tx) => {
+  const resolved = await db.transaction(async (tx) => {
     const existing = await tx
       .select({ id: agent.id, displayName: actor.displayName })
       .from(agent)
@@ -78,4 +79,6 @@ export async function ensureDefaultAgent(
 
     return { id: agentRow.id, displayName: agentActor.displayName };
   });
+  await enqueueSearchUpsert(orgId, 'agent', resolved.id);
+  return resolved;
 }

@@ -6,16 +6,7 @@
  * an active human Actor in and aggregates across them. Read-only projections only — never
  * merges tenant data (fan-out queries per membership, each item carries its own org id).
  */
-import {
-  auditEvent,
-  db,
-  event,
-  eventRecipient,
-  notification,
-  program,
-  project,
-  task,
-} from '@docket/db';
+import { auditEvent, db, event, eventRecipient, notification } from '@docket/db';
 import {
   HubActivityOut,
   HubInboxOut,
@@ -26,7 +17,7 @@ import {
   StreamPageOut,
   StreamQuery,
 } from '@docket/types';
-import { and, asc, desc, eq, ilike, inArray, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, type SQL } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
@@ -42,8 +33,10 @@ import {
   encodeCursor,
 } from '../lib/view-filter-sql';
 import { zQuery } from '../lib/validate';
+import { SearchHttpQuery } from '../search/http';
+import { searchWorkspace } from '../search/query';
 
-import { callerOrgIds, toAuditEventOut, toNotificationOut, toSearchHit } from './hub-helpers';
+import { callerOrgIds, toAuditEventOut, toNotificationOut } from './hub-helpers';
 import { toStreamEventOut } from './stream-helpers';
 import { buildHubTodayPayload } from './hub-today';
 import { buildHubPortfolioPayload } from './hub-portfolio';
@@ -54,11 +47,6 @@ const portfolioQuery = z.object({
   to: z.iso.date().optional(),
   initiativeId: z.string().optional(),
 });
-const searchQuery = z.object({
-  q: z.string().min(1),
-  limit: z.coerce.number().int().min(1).max(50).default(20),
-});
-
 /** Hub router: cross-org `today`, `inbox`, `activity`, `portfolio`, and `search` surfaces. */
 const hubRouter = new Hono<AppEnv>()
   .get(
@@ -221,44 +209,21 @@ Built as a per-membership fan-out merged in application code: **tenant bands sta
       tag: 'Hub',
       summary: 'Search across orgs',
       response: HubSearchOut,
-      description: `Cross-org command-palette search: given a query \`q\` (min 1 char) and optional \`limit\` (1–50, default 20), return org-chipped, typed entity hits — Tasks, Projects, and Programs whose name/title matches — drawn from every org the caller belongs to. The handler resolves the caller's org ids, then runs three parallel case-insensitive \`ILIKE '%q%'\` lookups (task title, project name, program name) each \`inArray(organizationId, orgIds)\`-scoped, and merges the results, truncating to \`limit\`.
-
-Each hit carries its own \`organizationId\` chip and \`type\` so the palette can group and route across tenants — the result set is the union of per-org matches, never a cross-tenant join. A caller with no memberships gets \`{ query, results: [] }\`. Read-only; session-only, no capability. 401 when unauthenticated.`,
+      description: `Cross-org semantic search for the Hub command palette and search page. Results are read from the durable \`search_document\` projection, scoped to the caller's active memberships and user-private documents, and returned as typed \`SearchResult\` rows with route, family, kind, snippet, source, subject, and facet metadata.`,
     }),
-    zQuery(searchQuery),
+    zQuery(SearchHttpQuery),
     async (c) => {
       const session = c.get('session');
       if (!session?.user) throw new AuthError();
-      const { q, limit } = c.req.valid('query');
-      const orgIds = await callerOrgIds(session.user.id);
-      if (orgIds.length === 0) return ok(c, HubSearchOut, { query: q, results: [] });
-      const pattern = `%${q}%`;
-
-      const [taskRows, projectRows, programRows] = await Promise.all([
-        db
-          .select()
-          .from(task)
-          .where(and(inArray(task.organizationId, orgIds), ilike(task.title, pattern)))
-          .limit(limit),
-        db
-          .select()
-          .from(project)
-          .where(and(inArray(project.organizationId, orgIds), ilike(project.name, pattern)))
-          .limit(limit),
-        db
-          .select()
-          .from(program)
-          .where(and(inArray(program.organizationId, orgIds), ilike(program.name, pattern)))
-          .limit(limit),
-      ]);
-
-      const results: z.input<typeof HubSearchOut>['results'] = [
-        ...taskRows.map((t) => toSearchHit(t.organizationId, 'task', t.id, t.title)),
-        ...projectRows.map((p) => toSearchHit(p.organizationId, 'project', p.id, p.name)),
-        ...programRows.map((p) => toSearchHit(p.organizationId, 'program', p.id, p.name)),
-      ].slice(0, limit);
-
-      return ok(c, HubSearchOut, { query: q, results });
+      return ok(
+        c,
+        HubSearchOut,
+        await searchWorkspace({
+          scope: 'hub',
+          userId: session.user.id,
+          params: c.req.valid('query'),
+        }),
+      );
     },
   );
 

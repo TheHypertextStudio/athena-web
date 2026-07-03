@@ -27,6 +27,7 @@ import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
+import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
 
 type TeamRow = typeof team.$inferSelect;
 
@@ -124,6 +125,7 @@ Defaults applied when omitted: \`workflowStates\` seeds the canonical five-state
       const row = inserted[0];
       /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
       if (!row) throw new Error('team insert returned no row');
+      await enqueueSearchUpsert(orgId, 'team', row.id);
       return ok(c, TeamDetail, toOut(row));
     },
   )
@@ -195,6 +197,7 @@ Setting \`workflowStates\` **replaces the entire array** (it is not a merge). \`
       const updated = await db.update(team).set(patch).where(where).returning();
       const row = updated[0];
       if (!row) throw new NotFoundError('Team not found');
+      await enqueueSearchUpsert(orgId, 'team', row.id);
       return ok(c, TeamDetail, toOut(row));
     },
   )
@@ -224,6 +227,7 @@ After archival the team disappears from \`GET /\` and \`GET /:teamId\` (both fil
       if (!row) throw new NotFoundError('Team not found');
       /* v8 ignore next -- @preserve defensive: the just-set archivedAt is always present on the returned row */
       const archivedIso = (row.archivedAt ?? archivedAt).toISOString();
+      await enqueueSearchDelete(orgId, 'team', row.id);
       return ok(c, TeamDeleteResult, { id: row.id, archivedAt: archivedIso });
     },
   );

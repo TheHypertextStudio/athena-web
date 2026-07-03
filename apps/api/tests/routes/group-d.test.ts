@@ -512,9 +512,9 @@ describe('hub router', () => {
     expect(
       (await body<{ swimlanes: unknown[] }>(await app.request('/portfolio'))).swimlanes,
     ).toHaveLength(0);
-    expect(
-      (await body<{ results: unknown[] }>(await app.request('/search?q=x'))).results,
-    ).toHaveLength(0);
+    expect((await body<{ items: unknown[] }>(await app.request('/search?q=x'))).items).toHaveLength(
+      0,
+    );
     expect((await body<{ items: unknown[] }>(await app.request('/activity'))).items).toHaveLength(
       0,
     );
@@ -609,20 +609,45 @@ describe('hub router', () => {
     await db
       .insert(schema.notification)
       .values({ userId, organizationId: orgId, type: 'mention', body: { title: 'hi' } });
-    await db.insert(schema.project).values({
-      organizationId: orgId,
-      name: 'Searchable Project',
-      teamId,
-      status: 'active',
-      createdBy: humanActorId,
-    });
-    await db.insert(schema.task).values({
-      organizationId: orgId,
-      title: 'Searchable Task',
-      teamId,
-      state: 'todo',
-      createdBy: humanActorId,
-    });
+    const [project] = await db
+      .insert(schema.project)
+      .values({
+        organizationId: orgId,
+        name: 'Searchable Project',
+        teamId,
+        status: 'active',
+        createdBy: humanActorId,
+      })
+      .returning({ id: schema.project.id });
+    const [task] = await db
+      .insert(schema.task)
+      .values({
+        organizationId: orgId,
+        title: 'Searchable Task',
+        teamId,
+        state: 'todo',
+        createdBy: humanActorId,
+      })
+      .returning({ id: schema.task.id });
+    const { enqueueSearchIndexJobs } = await import('../../src/search/enqueue');
+    const { processSearchIndexJobs } = await import('../../src/search/process-jobs');
+    await enqueueSearchIndexJobs([
+      {
+        organizationId: orgId,
+        sourceTable: 'project',
+        entityId: project!.id,
+        operation: 'upsert',
+        reason: 'manual',
+      },
+      {
+        organizationId: orgId,
+        sourceTable: 'task',
+        entityId: task!.id,
+        operation: 'upsert',
+        reason: 'manual',
+      },
+    ]);
+    await processSearchIndexJobs({ limit: 100 });
 
     const app = appWithSession(hub, fakeSession(userId));
     expect(
@@ -632,11 +657,11 @@ describe('hub router', () => {
       await app.request('/portfolio'),
     );
     expect(portfolio.swimlanes.length).toBeGreaterThanOrEqual(1);
-    const search = await body<{ results: { type: string }[] }>(
+    const search = await body<{ items: { kind: string }[] }>(
       await app.request('/search?q=Searchable'),
     );
-    expect(search.results.some((r) => r.type === 'task')).toBe(true);
-    expect(search.results.some((r) => r.type === 'project')).toBe(true);
+    expect(search.items.some((r) => r.kind === 'task')).toBe(true);
+    expect(search.items.some((r) => r.kind === 'project')).toBe(true);
   });
 });
 

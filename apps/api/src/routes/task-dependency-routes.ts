@@ -19,6 +19,7 @@ import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
+import { enqueueSearchUpsert } from '../search/write-through';
 
 import {
   assertMilestoneInOrg,
@@ -109,6 +110,7 @@ The child inherits sensible defaults but can override them: \`state\` defaults t
       const row = inserted[0];
       /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
       if (!row) throw new Error('subtask insert returned no row');
+      await enqueueSearchUpsert(orgId, 'task', row.id);
       return ok(c, TaskOut, toOut(row));
     },
   )

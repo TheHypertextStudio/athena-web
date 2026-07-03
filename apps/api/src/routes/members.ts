@@ -32,6 +32,7 @@ import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
+import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
 
 import {
   acceptInvitation,
@@ -103,6 +104,7 @@ Errors: **404** when no invitation matches the token in this org (existence-hidi
       const session = c.get('session');
       if (!session?.user) throw new AuthError();
       const invitedActor = await acceptInvitation(orgId, c.req.valid('json').token, session);
+      await enqueueSearchUpsert(orgId, 'actor', invitedActor.id);
       return ok(c, MemberOut, toMemberOut(invitedActor));
     },
   )
@@ -164,6 +166,7 @@ Errors: **404** when no invitation matches the token in this org (existence-hidi
       const session = c.get('session');
       if (!session?.user) throw new AuthError();
       const invitedActor = await acceptInvitation(orgId, c.req.valid('param').token, session);
+      await enqueueSearchUpsert(orgId, 'actor', invitedActor.id);
       return ok(c, MemberOut, toMemberOut(invitedActor));
     },
   )
@@ -279,6 +282,7 @@ Returns the updated \`MemberOut\`. Note this endpoint does NOT change \`displayN
       const row = updated[0];
       /* v8 ignore next -- @preserve defensive: the target member was verified to exist above */
       if (!row) throw new NotFoundError('Member not found');
+      await enqueueSearchUpsert(orgId, 'actor', row.id);
       return ok(c, MemberOut, toMemberOut(row));
     },
   )
@@ -335,6 +339,7 @@ Side effects: deleting the Actor cascades per the database's referential rules t
       const row = deleted[0];
       /* v8 ignore next -- @preserve defensive: the target member was verified to exist above */
       if (!row) throw new NotFoundError('Member not found');
+      await enqueueSearchDelete(orgId, 'actor', row.id);
       return ok(c, MemberRemoveOut, { id: row.id, removed: true });
     },
   );

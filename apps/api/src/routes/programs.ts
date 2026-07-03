@@ -24,6 +24,7 @@ import { pageResult, seekAfter } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
+import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
 
 import { emitEvent } from './event-emit';
 
@@ -152,6 +153,7 @@ const programs = new Hono<AppEnv>()
         title: row.name,
         subject: { type: 'program', id: row.id, title: row.name },
       });
+      await enqueueSearchUpsert(orgId, 'program', row.id);
       return ok(c, ProgramOut, toOut(row));
     },
   )
@@ -236,6 +238,7 @@ const programs = new Hono<AppEnv>()
           detail: { schema: 'docket.state_change', fromState: null, toState: row.status },
         });
       }
+      await enqueueSearchUpsert(orgId, 'program', row.id);
       return ok(c, ProgramOut, toOut(row));
     },
   )
@@ -259,6 +262,7 @@ const programs = new Hono<AppEnv>()
         .returning();
       const row = deleted[0];
       if (!row) throw new NotFoundError('Program not found');
+      await enqueueSearchDelete(orgId, 'program', row.id);
       return ok(c, ProgramOut, toOut(row));
     },
   )

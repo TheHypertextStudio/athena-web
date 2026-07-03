@@ -29,6 +29,7 @@ import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
+import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
 import { emitEvent } from './event-emit';
 
 type CommentRow = typeof comment.$inferSelect;
@@ -204,6 +205,7 @@ Threading is single-level. Omit \`parentCommentId\` for a root comment; supply i
         summary: row.body,
         subject: { type: row.subjectType, id: row.subjectId },
       });
+      await enqueueSearchUpsert(orgId, 'comment', row.id);
       return ok(c, CommentOut, toOut(row));
     },
   )
@@ -253,6 +255,7 @@ Threading is single-level. Omit \`parentCommentId\` for a root comment; supply i
       const row = updated[0];
       /* v8 ignore next -- @preserve defensive: loadComment already proved the row exists */
       if (!row) throw new NotFoundError('Comment not found');
+      await enqueueSearchUpsert(orgId, 'comment', row.id);
       return ok(c, CommentOut, toOut(row));
     },
   )
@@ -294,6 +297,7 @@ Deleting a root comment must not orphan its replies into a dangling thread. \`pa
       });
       /* v8 ignore next -- @preserve defensive: loadComment already proved the row exists */
       if (!removed) throw new NotFoundError('Comment not found');
+      await enqueueSearchDelete(orgId, 'comment', removed.id);
       return ok(c, CommentRemoved, { id: removed.id, removed: true });
     },
   );

@@ -24,6 +24,7 @@ import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zForm, zJson, zParam } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
+import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
 import { loadTask } from './task-helpers';
 
 type AttachmentRow = typeof attachment.$inferSelect;
@@ -184,6 +185,8 @@ The \`kind\` determines the required fields, enforced at the schema edge: a \`ur
       const row = inserted[0];
       /* v8 ignore next -- @preserve defensive: insert always returns a row */
       if (!row) throw new Error('attachment insert returned no row');
+      await enqueueSearchUpsert(orgId, 'attachment', row.id);
+      await enqueueSearchUpsert(orgId, 'task', id);
       return ok(c, AttachmentOut, toOut(row));
     },
   )
@@ -325,6 +328,8 @@ The \`kind\` determines the required fields, enforced at the schema edge: a \`ur
           .blob.delete(row.blobKey)
           .catch(() => undefined);
       }
+      await enqueueSearchDelete(orgId, 'attachment', row.id);
+      await enqueueSearchUpsert(orgId, 'task', id);
       return ok(c, AttachmentRemoved, { id: row.id, removed: true });
     },
   );

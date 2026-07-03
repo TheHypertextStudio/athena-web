@@ -20,6 +20,7 @@ import { eq } from 'drizzle-orm';
 import { routeAndWriteRecipients } from '../consumers/routing';
 import { projectEmitInput } from '../lib/automation/event';
 import { runAutomationsForEvent } from '../lib/automation/runtime';
+import { enqueueSearchIndexJobs } from '../search/enqueue';
 import { publishEvent } from './stream-helpers';
 
 /** The Docket entity an internal event is about. */
@@ -159,6 +160,16 @@ async function emitInternal(
   });
 
   if (result) {
+    await enqueueSearchIndexJobs([
+      {
+        organizationId: input.organizationId,
+        sourceTable: 'event',
+        entityId: result.eventId,
+        operation: 'upsert',
+        reason: 'event_log',
+        sourceEventId: result.eventId,
+      },
+    ]);
     const recipients = [...result.recipients].map(([userId, reason]) => ({ userId, reason }));
     await publishEvent(result.eventId, recipients).catch(() => undefined);
     // Observer hook: run automation rules against the freshly committed event. Fires only on

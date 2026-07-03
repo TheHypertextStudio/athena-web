@@ -4,6 +4,7 @@ import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { NotFoundError } from '../error';
+import { enqueueSearchUpsert } from '../search/write-through';
 import type { McpContext } from './auth';
 import { jsonResult, runTool, scopedActor, authorize } from './result';
 import { assertRefInOrg, loadTask, resolveStateTransition } from './tools-shared';
@@ -48,6 +49,7 @@ export function registerTaskFieldTools(server: McpRegistrar, ctx: McpContext): v
           .returning();
         const row = updated[0];
         if (!row) throw new NotFoundError('Task not found');
+        await enqueueSearchUpsert(input.orgId, 'task', row.id);
         return jsonResult({ id: row.id, assigneeId: row.assigneeId });
       }),
   );
@@ -88,6 +90,7 @@ export function registerTaskFieldTools(server: McpRegistrar, ctx: McpContext): v
           .returning();
         const row = updated[0];
         if (!row) throw new NotFoundError('Task not found');
+        await enqueueSearchUpsert(input.orgId, 'task', row.id);
         return jsonResult({ id: row.id, delegateId: row.delegateId });
       }),
   );
@@ -133,6 +136,7 @@ export function registerTaskFieldTools(server: McpRegistrar, ctx: McpContext): v
         const next = updated[0];
         /* v8 ignore next -- @preserve defensive: loadTask above proved the row exists */
         if (!next) throw new NotFoundError('Task not found');
+        await enqueueSearchUpsert(input.orgId, 'task', next.id);
         return jsonResult({ id: next.id, state: next.state });
       }),
   );
@@ -180,6 +184,7 @@ export function registerTaskFieldTools(server: McpRegistrar, ctx: McpContext): v
         const row = inserted[0];
         /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
         if (!row) throw new Error('subtask insert returned no row');
+        await enqueueSearchUpsert(input.orgId, 'task', row.id);
         return jsonResult({ id: row.id, parentTaskId: row.parentTaskId });
       }),
   );

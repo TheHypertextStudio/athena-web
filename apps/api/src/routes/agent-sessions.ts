@@ -19,6 +19,7 @@ import { ok } from '../lib/ok';
 import { apiDoc, describeRoute } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
+import { enqueueSearchUpsert } from '../search/write-through';
 
 import {
   activityParam,
@@ -76,6 +77,7 @@ Side effects: dispatches the agent against the runtime; each yielded activity (t
       const { orgId, actorId } = c.get('actorCtx');
       const { prompt, agentId } = c.req.valid('json');
       const settled = await createAndRunFromPrompt(orgId, actorId, prompt, agentId);
+      await enqueueSearchUpsert(orgId, 'agent_session', settled.id);
       return ok(c, AgentSessionOut, toSessionOut(settled));
     },
   )
@@ -127,6 +129,7 @@ Behavior & side effects: derives the task brief (a linked task's title, else the
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const settled = await runSession(orgId, id);
+      await enqueueSearchUpsert(orgId, 'agent_session', settled.id);
       return ok(c, AgentSessionOut, toSessionOut(settled));
     },
   )
@@ -210,6 +213,7 @@ Requires \`assign\` — the approval gate is orthogonal to the \`contribute\` ba
         decision: 'approve',
         ...(body?.scope ? { scope: body.scope } : {}),
       });
+      await enqueueSearchUpsert(orgId, 'agent_session', id);
       return ok(c, SessionActivityOut, toActivityOut(updated));
     },
   )
@@ -237,6 +241,7 @@ Requires \`assign\`: vetoing an agent's proposed write is an authorization act, 
         decision: 'reject',
         ...(body?.scope ? { scope: body.scope } : {}),
       });
+      await enqueueSearchUpsert(orgId, 'agent_session', id);
       return ok(c, SessionActivityOut, toActivityOut(updated));
     },
   )
@@ -259,6 +264,7 @@ Side effect: when the session was parked in \`awaiting_input\` it is resumed to 
       const { id, activityId } = c.req.valid('param');
       const body = c.req.valid('json');
       const created = await replyToElicitation(orgId, id, activityId, body.body);
+      await enqueueSearchUpsert(orgId, 'agent_session', id);
       return ok(c, SessionActivityOut, toActivityOut(created));
     },
   )
@@ -277,6 +283,7 @@ Side effect: when the session was parked in \`awaiting_input\` it is resumed to 
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const updated = await transitionLifecycle(orgId, id, 'pause');
+      await enqueueSearchUpsert(orgId, 'agent_session', updated.id);
       return ok(c, AgentSessionOut, toSessionOut(updated));
     },
   )
@@ -295,6 +302,7 @@ Side effect: when the session was parked in \`awaiting_input\` it is resumed to 
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const updated = await transitionLifecycle(orgId, id, 'resume');
+      await enqueueSearchUpsert(orgId, 'agent_session', updated.id);
       return ok(c, AgentSessionOut, toSessionOut(updated));
     },
   )
@@ -313,6 +321,7 @@ Side effect: when the session was parked in \`awaiting_input\` it is resumed to 
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const updated = await transitionLifecycle(orgId, id, 'cancel');
+      await enqueueSearchUpsert(orgId, 'agent_session', updated.id);
       return ok(c, AgentSessionOut, toSessionOut(updated));
     },
   )
@@ -338,6 +347,7 @@ Requires \`assign\` — the same authorization bar as the activity-scoped route:
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const updated = await resolveAction(orgId, id, 'approved');
+      await enqueueSearchUpsert(orgId, 'agent_session', updated.id);
       return ok(c, AgentSessionOut, toSessionOut(updated));
     },
   )
@@ -360,6 +370,7 @@ Requires \`assign\` — rejecting a proposed write is likewise an authorization 
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const updated = await resolveAction(orgId, id, 'rejected');
+      await enqueueSearchUpsert(orgId, 'agent_session', updated.id);
       return ok(c, AgentSessionOut, toSessionOut(updated));
     },
   );

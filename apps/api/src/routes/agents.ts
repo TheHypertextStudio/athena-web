@@ -19,6 +19,7 @@ import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
+import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
 
 type AgentRow = typeof agent.$inferSelect;
 
@@ -126,6 +127,7 @@ The \`manage\` capability is required because registering an agent grants a new 
         return agentRow;
       });
 
+      await enqueueSearchUpsert(orgId, 'agent', created.id);
       return ok(c, AgentOut, toOut(created));
     },
   )
@@ -193,6 +195,7 @@ The \`manage\` capability is required because these settings govern how much aut
       const row = updated[0];
       /* v8 ignore next -- @preserve defensive: the agent was verified to exist above */
       if (!row) throw new NotFoundError('Agent not found');
+      await enqueueSearchUpsert(orgId, 'agent', row.id);
       return ok(c, AgentOut, toOut(row));
     },
   )
@@ -216,6 +219,7 @@ The \`manage\` capability is required because these settings govern how much aut
         .returning();
       const row = deleted[0];
       if (!row) throw new NotFoundError('Agent not found');
+      await enqueueSearchDelete(orgId, 'agent', row.id);
       return ok(c, AgentOut, toOut(row));
     },
   );

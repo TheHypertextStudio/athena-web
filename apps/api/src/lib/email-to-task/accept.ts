@@ -16,6 +16,7 @@ import { and, eq } from 'drizzle-orm';
 
 import { resolveLandingTarget } from '../task-landing';
 import { emitEvent } from '../../routes/event-emit';
+import { enqueueSearchUpsert } from '../../search/write-through';
 
 /** The selected `email_suggestion` row shape. */
 export type SuggestionRow = typeof emailSuggestion.$inferSelect;
@@ -34,7 +35,12 @@ export interface AcceptSuggestionInput {
 
 /** The outcome of one accept attempt — data, mapped to HTTP/no-op by each caller. */
 export type AcceptSuggestionResult =
-  | { readonly kind: 'accepted'; readonly taskRow: TaskRow; readonly suggestionRow: SuggestionRow }
+  | {
+      readonly kind: 'accepted';
+      readonly taskRow: TaskRow;
+      readonly suggestionRow: SuggestionRow;
+      readonly attachmentId: string;
+    }
   | { readonly kind: 'not_found' }
   | { readonly kind: 'already_resolved' }
   | { readonly kind: 'no_team' };
@@ -114,18 +120,24 @@ export async function acceptSuggestion(
 
     // Attach the source email back to the new task (the email rides along as context).
     const meta = suggestion.emailMeta as { subject?: string } | null;
-    await tx.insert(attachment).values({
-      organizationId: input.organizationId,
-      createdBy: input.actorId,
-      subjectType: 'task',
-      subjectId: taskRow.id,
-      kind: 'email',
-      title: meta?.subject ?? suggestion.title,
-      url: sourceUrlOf(suggestion),
-      sourceIntegrationId: suggestion.integrationId,
-      externalId: suggestion.externalThreadId,
-      metadata: suggestion.emailMeta,
-    });
+    const attachments = await tx
+      .insert(attachment)
+      .values({
+        organizationId: input.organizationId,
+        createdBy: input.actorId,
+        subjectType: 'task',
+        subjectId: taskRow.id,
+        kind: 'email',
+        title: meta?.subject ?? suggestion.title,
+        url: sourceUrlOf(suggestion),
+        sourceIntegrationId: suggestion.integrationId,
+        externalId: suggestion.externalThreadId,
+        metadata: suggestion.emailMeta,
+      })
+      .returning({ id: attachment.id });
+    const attachmentRow = attachments[0];
+    /* v8 ignore next -- @preserve defensive: insert always returns a row */
+    if (!attachmentRow) throw new Error('email attachment insert returned no row');
 
     const updated = await tx
       .update(emailSuggestion)
@@ -140,7 +152,7 @@ export async function acceptSuggestion(
     const suggestionRow = updated[0];
     /* v8 ignore next -- @preserve defensive: the select above proved the row exists */
     if (!suggestionRow) throw new Error('accept suggestion update returned no row');
-    return { taskRow, suggestionRow };
+    return { taskRow, suggestionRow, attachmentId: attachmentRow.id };
   });
 
   // Emit a creation event so automation rules can react to the accept.
@@ -151,6 +163,8 @@ export async function acceptSuggestion(
     title: created.taskRow.title,
     subject: { type: 'task', id: created.taskRow.id, title: created.taskRow.title },
   });
+  await enqueueSearchUpsert(input.organizationId, 'task', created.taskRow.id);
+  await enqueueSearchUpsert(input.organizationId, 'attachment', created.attachmentId);
 
   return { kind: 'accepted', ...created };
 }

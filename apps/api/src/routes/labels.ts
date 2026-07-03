@@ -13,6 +13,7 @@ import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
+import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
 
 type LabelRow = typeof label.$inferSelect;
 
@@ -73,6 +74,7 @@ const labels = new Hono<AppEnv>()
       const row = inserted[0];
       /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
       if (!row) throw new Error('label insert returned no row');
+      await enqueueSearchUpsert(orgId, 'label', row.id);
       return ok(c, LabelOut, toOut(row));
     },
   )
@@ -126,6 +128,7 @@ const labels = new Hono<AppEnv>()
         .returning();
       const row = updated[0];
       if (!row) throw new NotFoundError('Label not found');
+      await enqueueSearchUpsert(orgId, 'label', row.id);
       return ok(c, LabelOut, toOut(row));
     },
   )
@@ -149,6 +152,7 @@ const labels = new Hono<AppEnv>()
         .returning();
       const row = deleted[0];
       if (!row) throw new NotFoundError('Label not found');
+      await enqueueSearchDelete(orgId, 'label', row.id);
       return ok(c, LabelOut, toOut(row));
     },
   );

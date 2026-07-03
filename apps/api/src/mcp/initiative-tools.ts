@@ -12,6 +12,7 @@ import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { NotFoundError } from '../error';
+import { enqueueSearchUpsert } from '../search/write-through';
 import type { McpContext } from './auth';
 import { jsonResult, runTool, scopedActor, authorize } from './result';
 import { assertRefInOrg } from './tools-shared';
@@ -62,6 +63,7 @@ export function registerInitiativeTools(server: McpRegistrar, ctx: McpContext): 
         const row = inserted[0];
         /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
         if (!row) throw new Error('program insert returned no row');
+        await enqueueSearchUpsert(input.orgId, 'program', row.id);
         return jsonResult({ id: row.id, name: row.name });
       }),
   );
@@ -111,6 +113,7 @@ export function registerInitiativeTools(server: McpRegistrar, ctx: McpContext): 
         const row = inserted[0];
         /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
         if (!row) throw new Error('initiative insert returned no row');
+        await enqueueSearchUpsert(input.orgId, 'initiative', row.id);
         return jsonResult({ id: row.id, name: row.name });
       }),
   );

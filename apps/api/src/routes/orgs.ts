@@ -20,6 +20,7 @@ import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson } from '../lib/validate';
 import { orgContextMiddleware } from '../permissions/org-context-middleware';
+import { enqueueSearchUpsert } from '../search/write-through';
 import { SYSTEM_ROLES, resolveUniqueSlug, slugify, toOrgOut } from './org-helpers';
 import activity from './activity';
 import stream from './stream';
@@ -43,6 +44,7 @@ import projects from './projects';
 import projectRollup from './project-rollup';
 import roles from './roles';
 import savedViews from './saved-views';
+import search from './search';
 import tasks from './tasks';
 import teams from './teams';
 import updates from './updates';
@@ -251,6 +253,11 @@ Returns \`OrgCreateResult\` — the new org plus its seeded \`defaultTeam\` and 
         } satisfies z.input<typeof DefaultTeamOut>,
         ownerActorId: result.ownerActor.id,
       };
+      await Promise.all([
+        enqueueSearchUpsert(result.org.id, 'organization', result.org.id),
+        enqueueSearchUpsert(result.org.id, 'actor', result.ownerActor.id),
+        enqueueSearchUpsert(result.org.id, 'team', result.defaultTeam.id),
+      ]);
       return ok(c, OrgCreateResult, payload);
     },
   )
@@ -290,6 +297,7 @@ Related: \`GET /\` lists all orgs the caller belongs to; the nested routers unde
   .route('/:orgId/comments', comments)
   .route('/:orgId/updates', updates)
   .route('/:orgId/saved-views', savedViews)
+  .route('/:orgId/search', search)
   .route('/:orgId/members', members)
   .route('/:orgId/roles', roles)
   .route('/:orgId/grants', grants)

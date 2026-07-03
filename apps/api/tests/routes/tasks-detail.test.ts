@@ -5,7 +5,7 @@
  * Mirrors `routes-harness` (pglite + injected actor context). Dependency-edge
  * coverage lives in `task-dependencies.test.ts`.
  */
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
@@ -99,6 +99,61 @@ describe('tasks create (POST /)', () => {
       body: JSON.stringify({ title: 'T', teamId, state: 'not_a_real_state' }),
     });
     expect(res.status).toBe(422);
+  });
+
+  it('enqueues search indexing on create, update, and archive', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    const id = await createTask(writer, teamId, { title: 'Search indexed task' });
+
+    const upsertJobs = await db
+      .select()
+      .from(schema.searchIndexJob)
+      .where(
+        and(
+          eq(schema.searchIndexJob.sourceTable, 'task'),
+          eq(schema.searchIndexJob.entityId, id),
+          eq(schema.searchIndexJob.operation, 'upsert'),
+          eq(schema.searchIndexJob.status, 'pending'),
+        ),
+      );
+    expect(upsertJobs).toHaveLength(1);
+
+    const patched = await writer.request(`/${id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ title: 'Search indexed task updated' }),
+    });
+    expect(patched.status).toBe(200);
+
+    const activeUpserts = await db
+      .select()
+      .from(schema.searchIndexJob)
+      .where(
+        and(
+          eq(schema.searchIndexJob.sourceTable, 'task'),
+          eq(schema.searchIndexJob.entityId, id),
+          eq(schema.searchIndexJob.operation, 'upsert'),
+          eq(schema.searchIndexJob.status, 'pending'),
+        ),
+      );
+    expect(activeUpserts).toHaveLength(1);
+
+    const archived = await writer.request(`/${id}`, { method: 'DELETE' });
+    expect(archived.status).toBe(200);
+
+    const deleteJobs = await db
+      .select()
+      .from(schema.searchIndexJob)
+      .where(
+        and(
+          eq(schema.searchIndexJob.sourceTable, 'task'),
+          eq(schema.searchIndexJob.entityId, id),
+          eq(schema.searchIndexJob.operation, 'delete'),
+          eq(schema.searchIndexJob.status, 'pending'),
+        ),
+      );
+    expect(deleteJobs).toHaveLength(1);
   });
 });
 

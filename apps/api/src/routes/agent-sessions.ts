@@ -4,11 +4,14 @@ import {
   AgentSessionDetailOut,
   AgentSessionOut,
   pageOf,
+  ProposalEditBody,
+  ProposalGroupDecision,
+  ProposalGroupOut,
   SessionActivityOut,
   SessionFromPromptBody,
   SessionReplyBody,
 } from '@docket/types';
-import { and, asc, desc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, gt } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
@@ -33,8 +36,17 @@ import {
 } from './agent-session-helpers';
 import { createAndRunFromPrompt, runSession } from './agent-session-runner';
 import { replyToElicitation, resolveAction } from './agent-session-approval';
-import { approveAndResume, driveSession } from '../agent/loop';
+import { approveAndResume, approveGroupAndResume, driveSession } from '../agent/loop';
+import { editProposalInput, listProposalGroups } from '../agent/proposals';
 import { loadTranscript } from '../agent/transcript';
+
+/** SSE live-tail poll cadence (DB-backed, restart-safe). */
+const STREAM_POLL_MS = 750;
+/** SSE heartbeat cadence (keeps proxies from idling the connection out). */
+const STREAM_HEARTBEAT_MS = 15_000;
+
+/** Route params for the proposal-group routes. */
+const groupParam = z.object({ id: z.string(), groupId: z.string() });
 
 /** Agent-sessions router: list (status filter), read with stream, approve + reject. */
 const agentSessions = new Hono<AppEnv>()
@@ -160,15 +172,144 @@ Semantics: the org-scoped session must exist (404 \`Session not found\` otherwis
         .from(sessionActivity)
         .where(eq(sessionActivity.sessionId, id))
         .orderBy(asc(sessionActivity.createdAt));
+      // Live tail: after replaying history, poll the DB for new rows until the session
+      // settles terminally. DB-backed (not process-coupled), so the tail survives the
+      // loop and the SSE reader living in different processes/restarts. `Last-Event-ID`
+      // resumes after the last activity a reconnecting client saw (ULIDs sort by id).
+      const lastEventId = c.req.header('last-event-id');
+      const terminal = new Set(['completed', 'failed', 'canceled']);
       return streamSSE(c, async (stream) => {
+        let lastSeen = lastEventId ?? '';
         for (const activity of activities) {
+          if (lastSeen && activity.id <= lastSeen) continue;
           await stream.writeSSE({
             id: activity.id,
             event: activity.type,
             data: JSON.stringify(toActivityOut(activity)),
           });
+          lastSeen = activity.id;
+        }
+        let status = sessionRows[0]?.status ?? 'completed';
+        let sincePing = 0;
+        while (!terminal.has(status) && !stream.aborted) {
+          await new Promise((resolve) => setTimeout(resolve, STREAM_POLL_MS));
+          const fresh = await db
+            .select()
+            .from(sessionActivity)
+            .where(and(eq(sessionActivity.sessionId, id), gt(sessionActivity.id, lastSeen)))
+            .orderBy(asc(sessionActivity.id));
+          for (const activity of fresh) {
+            await stream.writeSSE({
+              id: activity.id,
+              event: activity.type,
+              data: JSON.stringify(toActivityOut(activity)),
+            });
+            lastSeen = activity.id;
+          }
+          sincePing += STREAM_POLL_MS;
+          if (sincePing >= STREAM_HEARTBEAT_MS) {
+            await stream.writeSSE({ event: 'ping', data: '{}' });
+            sincePing = 0;
+          }
+          const rows = await db
+            .select({ status: agentSession.status })
+            .from(agentSession)
+            .where(eq(agentSession.id, id))
+            .limit(1);
+          status = rows[0]?.status ?? 'completed';
         }
       });
+    },
+  )
+  .get(
+    '/:id/proposals',
+    apiDoc({
+      tag: 'Agents',
+      summary: 'List pending proposal groups',
+      response: z.array(ProposalGroupOut),
+      description: `List the session's still-\`proposed\` actions grouped by \`proposalGroupId\` (one batch per assistant turn), each member ghost-projected as {@link ProposalItemOut} — the read behind both the session proposal card ("review all N") and the workspace ghost rows. A \`create_task\` proposal carries a \`ghost\` task shape (title/team/project/dueDate) that views render as a translucent, editable row; proposals without a spatial home have \`ghost: null\` and review in the session card. Editing goes through \`PATCH /:id/activity/:activityId/proposal\`; deciding through the group approve/reject routes. Org-scoped 404 when the session is missing. A read; org membership suffices.`,
+    }),
+    zParam(idParam),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { id } = c.req.valid('param');
+      await loadSession(orgId, id);
+      const groups = await listProposalGroups(orgId, id);
+      return ok(c, z.array(ProposalGroupOut), groups);
+    },
+  )
+  .post(
+    '/:id/proposals/:groupId/approve',
+    capabilityGuard('assign'),
+    apiDoc({
+      tag: 'Agents',
+      summary: 'Approve a proposal group (batch)',
+      capability: 'assign',
+      response: AgentSessionOut,
+      description: `Approve every still-\`proposed\` action of one proposal group — or the subset named by \`activityIds\` ("approve selected") — in one transaction, then EXECUTE the approved tool calls as the agent's own Actor and resume the session so the agent hears the results. This is the batch gate behind "Approve all N" on an import: the group is one assistant turn's related creations. Per-action \`approved\` audit rows are written (approver recorded), execution stamps each action \`applied\` with its real result, and the returned {@link AgentSessionOut} reflects the session AFTER any resume (typically \`completed\` or paused on the next gate). Requires \`assign\` (the approval bar). 404 when the group has no proposed member.`,
+    }),
+    zParam(groupParam),
+    zJson(ProposalGroupDecision.optional()),
+    async (c) => {
+      const { orgId, actorId } = c.get('actorCtx');
+      const { id, groupId } = c.req.valid('param');
+      const body = c.req.valid('json');
+      const session = await approveGroupAndResume(
+        orgId,
+        actorId,
+        id,
+        groupId,
+        'approve',
+        body?.activityIds,
+      );
+      return ok(c, AgentSessionOut, toSessionOut(session));
+    },
+  )
+  .post(
+    '/:id/proposals/:groupId/reject',
+    capabilityGuard('assign'),
+    apiDoc({
+      tag: 'Agents',
+      summary: 'Reject a proposal group (batch)',
+      capability: 'assign',
+      response: AgentSessionOut,
+      description: `Reject every still-\`proposed\` action of one proposal group (or the \`activityIds\` subset) in one transaction. Nothing executes; per-action \`rejected\` audit rows are written, and — reject-and-continue — the session resumes so the agent hears each veto as an error result and adapts instead of being canceled. Returns the {@link AgentSessionOut} after any resume. Requires \`assign\`. 404 when the group has no proposed member.`,
+    }),
+    zParam(groupParam),
+    zJson(ProposalGroupDecision.optional()),
+    async (c) => {
+      const { orgId, actorId } = c.get('actorCtx');
+      const { id, groupId } = c.req.valid('param');
+      const body = c.req.valid('json');
+      const session = await approveGroupAndResume(
+        orgId,
+        actorId,
+        id,
+        groupId,
+        'reject',
+        body?.activityIds,
+      );
+      return ok(c, AgentSessionOut, toSessionOut(session));
+    },
+  )
+  .patch(
+    '/:id/activity/:activityId/proposal',
+    capabilityGuard('assign'),
+    apiDoc({
+      tag: 'Agents',
+      summary: "Edit a pending proposal's input",
+      capability: 'assign',
+      response: SessionActivityOut,
+      description: `Replace the stored \`toolCall.input\` of a still-\`proposed\` action — the write behind inline ghost editing (retitle/redate a translucent row before blessing it). Approval then executes the edited input verbatim. Only \`proposed\` actions with a stored tool call are editable (409 otherwise); org-scoped 404 for a missing activity. Requires \`assign\`: shaping what will be applied is part of the approval act.`,
+    }),
+    zParam(activityParam),
+    zJson(ProposalEditBody),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { id, activityId } = c.req.valid('param');
+      const body = c.req.valid('json');
+      const updated = await editProposalInput(orgId, id, activityId, body.input);
+      return ok(c, SessionActivityOut, toActivityOut(updated));
     },
   )
   .get(

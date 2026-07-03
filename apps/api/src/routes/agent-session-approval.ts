@@ -211,6 +211,106 @@ export async function decideActivity(
 }
 
 /**
+ * Decide on a whole proposal group (batch approval), optionally narrowed to a subset.
+ *
+ * @remarks
+ * The batch counterpart of {@link decideActivity}: every still-`proposed` action of
+ * the group (∩ `activityIds` when given) is decided in ONE transaction with the same
+ * per-action audit rows, and the session returns to `running` once no proposed action
+ * remains (reject-and-continue included). 404s when the group has no proposed member.
+ *
+ * @param orgId - The active organization id.
+ * @param approverActorId - The approver's actor id (recorded in the audit metadata).
+ * @param sessionId - The session that owns the group.
+ * @param proposalGroupId - The batch to decide.
+ * @param decision - `approve` or `reject`.
+ * @param activityIds - Optional subset ("approve selected"); omitted = the whole group.
+ * @returns the decided activity rows, oldest-first.
+ */
+export async function decideProposalGroup(
+  orgId: string,
+  approverActorId: string,
+  sessionId: string,
+  proposalGroupId: string,
+  decision: 'approve' | 'reject',
+  activityIds?: readonly string[],
+): Promise<ActivityRow[]> {
+  return db.transaction(async (tx) => {
+    const sessionRows = await tx
+      .select()
+      .from(agentSession)
+      .where(and(eq(agentSession.id, sessionId), eq(agentSession.organizationId, orgId)))
+      .limit(1);
+    const session = sessionRows[0];
+    if (!session) throw new NotFoundError('Session not found');
+
+    const agentRows = await tx
+      .select({ actorId: agent.actorId })
+      .from(agent)
+      .where(and(eq(agent.id, session.agentId), eq(agent.organizationId, orgId)))
+      .limit(1);
+    const agentActorId = agentRows[0]?.actorId ?? null;
+
+    const members = await tx
+      .select()
+      .from(sessionActivity)
+      .where(
+        and(
+          eq(sessionActivity.sessionId, sessionId),
+          eq(sessionActivity.type, 'action'),
+          eq(sessionActivity.approvalStatus, 'proposed'),
+          eq(sessionActivity.proposalGroupId, proposalGroupId),
+        ),
+      )
+      .orderBy(asc(sessionActivity.createdAt));
+    const wanted = activityIds ? new Set(activityIds) : null;
+    const targets = wanted ? members.filter((m) => wanted.has(m.id)) : members;
+    if (targets.length === 0) throw new NotFoundError('No proposed actions in the group');
+
+    const decided: ActivityRow[] = [];
+    for (const action of targets) {
+      await tx.insert(auditEvent).values({
+        organizationId: orgId,
+        actorId: agentActorId,
+        initiatorId: session.initiatorId,
+        subjectType: 'agent_session',
+        subjectId: sessionId,
+        type: decision === 'approve' ? 'approved' : 'rejected',
+        metadata: { activityId: action.id, approverActorId, proposalGroupId },
+      });
+      const [row] = await tx
+        .update(sessionActivity)
+        .set({ approvalStatus: decision === 'approve' ? 'approved' : 'rejected' })
+        .where(eq(sessionActivity.id, action.id))
+        .returning();
+      /* v8 ignore next -- @preserve defensive: update always returns a row */
+      if (!row) throw new Error('activity update returned no row');
+      decided.push(row);
+    }
+
+    const remaining = await tx
+      .select({ id: sessionActivity.id })
+      .from(sessionActivity)
+      .where(
+        and(
+          eq(sessionActivity.sessionId, sessionId),
+          eq(sessionActivity.type, 'action'),
+          eq(sessionActivity.approvalStatus, 'proposed'),
+        ),
+      )
+      .limit(1);
+    if (remaining.length === 0) {
+      await tx
+        .update(agentSession)
+        .set({ status: 'running' })
+        .where(and(eq(agentSession.id, sessionId), eq(agentSession.organizationId, orgId)));
+    }
+
+    return decided;
+  });
+}
+
+/**
  * Reply to an agent `elicitation` — append a human `response` and resume if waiting.
  *
  * @remarks

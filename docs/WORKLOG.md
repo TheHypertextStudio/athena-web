@@ -597,6 +597,34 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 - **Validation**: Validator rejects scopes absent from `COMMIT_SCOPES.txt` and accepts
   `refactor(integrations): ...`.
 
+### [ATHENA-006] Batch approvals, ghost projection, SSE live tail (Milestone B complete)
+
+- **Completed**: 2026-07-02
+- **Summary**: Slice 5c — the review surface's data layer. New `agent/proposals.ts`:
+  `GET /:id/proposals` groups still-`proposed` actions by `proposalGroupId` and projects each
+  stored `toolCall` into a surface-shaped ghost (`create_task` → an editable ghost task row:
+  title/team/project/dueDate; no spatial home → `ghost: null`, session-card fallback).
+  `PATCH /:id/activity/:activityId/proposal` replaces a pending proposal's `toolCall.input`
+  (inline ghost editing — approval then executes the edit verbatim; 409 once decided).
+  `POST /:id/proposals/:groupId/approve|reject` decide a whole batch or an `activityIds` subset
+  in one transaction (`decideProposalGroup`) then execute + resume (`approveGroupAndResume`).
+  `GET /:id/stream` gains a DB-polled **live tail**: after replay it follows new activity rows
+  until the session is terminal, with `Last-Event-ID` resume and heartbeats — restart-safe and
+  process-decoupled. Proving test walks the full import shape: prompt → one batched proposal →
+  ghosts listed → third ghost retitled → subset of 2 approved (2 tasks land, session stays
+  parked) → remainder approved (edited title lands) → completion; plus whole-group
+  reject-and-continue and SSE replay/resume. **Milestone B is complete.**
+- **Files Changed**: `apps/api/src/agent/proposals.ts` (new), `src/agent/loop.ts`
+  (`approveGroupAndResume`), `src/routes/agent-session-approval.ts` (`decideProposalGroup`),
+  `src/routes/agent-sessions.ts` (4 routes + live tail), `packages/types/src/agent.ts`
+  (`ProposalGroupOut`/`ProposalItemOut`/`GhostTaskOut`/`ProposalGroupDecision`/
+  `ProposalEditBody`), `apps/api/tests/routes/agent-proposals.test.ts` (new, 5 tests).
+- **Learnings**: The live tail hangs a plain `fetch().text()` on a non-terminal session — by
+  design (EventSource clients read incrementally); tests must settle the session first or read
+  with a bounded reader.
+- **Gate**: proposals 5/5, agent-flows 11/11, loop 9/9 + policy 13/13, mcp-internal 8/8, types
+  211/211; api typecheck + lint clean.
+
 ### [ATHENA-005] The agentic loop: driveSession, toolbox, approval-execute-resume
 
 - **Completed**: 2026-07-02

@@ -35,7 +35,7 @@ import { and, asc, eq, gt } from 'drizzle-orm';
 import { getContainer } from '../container';
 import { ConflictError, NotFoundError } from '../error';
 import { env } from '../env';
-import { decideActivity } from '../routes/agent-session-approval';
+import { decideActivity, decideProposalGroup } from '../routes/agent-session-approval';
 import type { SessionRow } from '../routes/agent-session-helpers';
 import { classifyTool, decideToolExecution } from './approval-policy';
 import { buildSystemPrompt } from './system-prompt';
@@ -583,6 +583,55 @@ export async function executeApprovedActions(orgId: string, sessionId: string): 
   } finally {
     if (toolbox) await toolbox.close();
   }
+}
+
+/**
+ * Decide a whole proposal group (optionally a subset), execute what was approved, and
+ * resume the loop when the session came back to `running`.
+ *
+ * @remarks
+ * The batch counterpart of {@link approveAndResume} — the "Approve all N" /
+ * "Approve selected" surface behind the ghost system's group review.
+ *
+ * @param orgId - The active organization id.
+ * @param approverActorId - The approver's actor id (audited).
+ * @param sessionId - The session that owns the group.
+ * @param proposalGroupId - The batch to decide.
+ * @param decision - Approve or reject the batch.
+ * @param activityIds - Optional subset; omitted decides the whole group.
+ * @param deps - Injectable turn runtime (tests script it).
+ * @returns the settled session row after any resume.
+ */
+export async function approveGroupAndResume(
+  orgId: string,
+  approverActorId: string,
+  sessionId: string,
+  proposalGroupId: string,
+  decision: 'approve' | 'reject',
+  activityIds?: readonly string[],
+  deps: LoopDeps = {},
+): Promise<SessionRow> {
+  await decideProposalGroup(
+    orgId,
+    approverActorId,
+    sessionId,
+    proposalGroupId,
+    decision,
+    activityIds,
+  );
+  await executeApprovedActions(orgId, sessionId);
+
+  const rows = await db
+    .select()
+    .from(agentSession)
+    .where(and(eq(agentSession.id, sessionId), eq(agentSession.organizationId, orgId)))
+    .limit(1);
+  /* v8 ignore next -- @preserve defensive: decideProposalGroup already 404'd unknown sessions */
+  if (!rows[0]) throw new NotFoundError('Session not found');
+  if (rows[0].status !== 'running') return rows[0];
+  const transcript = await loadTranscript(db, sessionId);
+  if (transcript.length === 0) return rows[0];
+  return driveSession(orgId, sessionId, deps);
 }
 
 /**

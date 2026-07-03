@@ -8,7 +8,13 @@
  * counter and timestamps anchor to an injectable `now` (defaulting to
  * {@link FIXED_NOW}). Exercises the import / read-only-mirror / link logic offline.
  */
-import { CONNECTOR_ITEMS, FIXED_NOW, MAIL_THREAD_SUMMARIES } from '../fixtures';
+import {
+  CONNECTOR_ITEMS,
+  FIXED_NOW,
+  LINEAR_TEAM_STATES,
+  LINEAR_WORK_GRAPH,
+  MAIL_THREAD_SUMMARIES,
+} from '../fixtures';
 import type {
   ConnectInput,
   ConnectionResult,
@@ -37,6 +43,13 @@ import type {
   MailThread,
 } from '../ports/mail';
 import { MAIL_CAPABLE_PROVIDERS } from '../ports/mail';
+import type {
+  ExternalWorkflowState,
+  PullWorkGraphInput,
+  WorkGraphConnector,
+  WorkGraphSnapshot,
+  WorkItemPushOp,
+} from '../ports/work-graph';
 
 /** One mailbox action recorded by {@link MockConnector} (record-only, for test assertions). */
 export interface RecordedMailAction {
@@ -76,6 +89,15 @@ export class MockConnector implements Connector {
    * intent offline (e.g. "completing a task with an email attachment archived its thread").
    */
   readonly mailActionLog: RecordedMailAction[] = [];
+
+  /**
+   * Record-only log of work-item write ops applied through {@link MockConnector.asWorkGraph}.
+   *
+   * @remarks
+   * The mock performs no I/O; it records every {@link WorkItemPushOp} here (in call order) so
+   * tests can assert reconciler intent offline, mirroring {@link MockConnector.mailActionLog}.
+   */
+  readonly workItemPushLog: WorkItemPushOp[] = [];
 
   /**
    * @param options - Optional fixed `now` and the bound provider for write-back gating.
@@ -224,6 +246,86 @@ export class MockConnector implements Connector {
         ],
         externalUrl: `https://mail.mock.docket.local/#all/${input.threadId}`,
       }),
+    };
+  }
+
+  /**
+   * {@inheritDoc Connector.asWorkGraph}
+   *
+   * @remarks
+   * Work-graph-capable for `linear` only (mirroring {@link MockConnector.asWritable} and
+   * {@link MockConnector.asMailActor}) — a CONCRETE method, not omitted, so
+   * `mock.asWorkGraph()` never throws for callers that skip the `?.`.
+   */
+  asWorkGraph(): WorkGraphConnector | undefined {
+    if (this.provider !== 'linear') return undefined;
+    return {
+      pullWorkGraph: (input) => this.pullWorkGraph(input),
+      listTeamStates: (externalTeamId) => this.listTeamStates(externalTeamId),
+      pushWorkItem: (op) => this.pushWorkItem(op),
+    };
+  }
+
+  /**
+   * Filter {@link LINEAR_WORK_GRAPH} by team scope and incremental cutoff, matching
+   * {@link import('../real/connector-linear').LinearProviderClient.pullWorkGraph}'s filter
+   * semantics exactly.
+   *
+   * @remarks
+   * `externalTeamIds` (when non-empty) scopes items/cycles by their own `externalTeamId` and
+   * projects by intersection of `externalTeamIds`; users/labels are never filtered by team.
+   * `updatedAfter` (when present) narrows ITEMS ONLY, by `updatedAt > updatedAfter` — the
+   * same incremental cutoff the real client applies only to its issues pull. Every returned
+   * array is a fresh copy so callers can't mutate the shared fixture.
+   */
+  private async pullWorkGraph(input: PullWorkGraphInput): Promise<WorkGraphSnapshot> {
+    const scoped = input.externalTeamIds.length > 0;
+    const selected = new Set(input.externalTeamIds);
+    const items = LINEAR_WORK_GRAPH.items.filter((item) => {
+      if (scoped && !selected.has(item.externalTeamId)) return false;
+      if (input.updatedAfter !== undefined && !(item.updatedAt > input.updatedAfter)) {
+        return false;
+      }
+      return true;
+    });
+    const cycles = LINEAR_WORK_GRAPH.cycles.filter(
+      (cycle) => !scoped || selected.has(cycle.externalTeamId),
+    );
+    const projects = LINEAR_WORK_GRAPH.projects.filter(
+      (project) => !scoped || project.externalTeamIds.some((id) => selected.has(id)),
+    );
+    return {
+      users: [...LINEAR_WORK_GRAPH.users],
+      labels: [...LINEAR_WORK_GRAPH.labels],
+      projects,
+      cycles,
+      items,
+    };
+  }
+
+  /**
+   * Return the fixture {@link LINEAR_TEAM_STATES} for a team, matching
+   * {@link import('../real/connector-linear').LinearProviderClient.listTeamStates}'s behavior
+   * for an unrecognized team: an empty array, never a throw.
+   */
+  private async listTeamStates(externalTeamId: string): Promise<ExternalWorkflowState[]> {
+    return [...(LINEAR_TEAM_STATES[externalTeamId] ?? [])];
+  }
+
+  /**
+   * Record one work-item write op and echo deterministic post-write sync anchors.
+   *
+   * @remarks
+   * Mirrors {@link MockConnector.pushTask}: the post-write timestamp comes from
+   * {@link MockConnector.nextStamp}, and a `create` is assigned a fresh id via
+   * {@link MockConnector.nextId} (an `update` echoes back its own `externalId`).
+   */
+  private async pushWorkItem(op: WorkItemPushOp): Promise<ExternalWriteResult> {
+    this.workItemPushLog.push({ ...op });
+    const stamp = this.nextStamp();
+    return {
+      externalId: op.kind === 'create' ? this.nextId('lin-issue-created') : op.externalId,
+      externalUpdatedAt: stamp,
     };
   }
 

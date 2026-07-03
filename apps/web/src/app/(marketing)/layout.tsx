@@ -38,8 +38,8 @@ export const metadata: Metadata = {
  *
  * @remarks
  * The `marketing` class re-assigns the semantic design tokens for this subtree (see
- * `marketing.css`), making these pages render light regardless of the `html.dark`
- * theme class. The fixed full-viewport backdrop keeps macOS rubber-band overscroll
+ * `marketing.css`), making these pages render light regardless of the browser color scheme.
+ * The fixed full-viewport backdrop keeps macOS rubber-band overscroll
  * cream instead of flashing the app's dark canvas.
  */
 export default function MarketingLayout({ children }: { children: ReactNode }) {

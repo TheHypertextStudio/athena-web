@@ -16,6 +16,25 @@ esac
 hooks_dir="$git_common_dir/docket-hooks"
 mkdir -p "$hooks_dir"
 
+cat > "$hooks_dir/use-repo-node.sh" <<'HOOK'
+#!/bin/sh
+set -eu
+
+repo_root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+
+if [ -s "$repo_root/.nvmrc" ]; then
+  nvm_dir="${NVM_DIR:-$HOME/.nvm}"
+  if [ -s "$nvm_dir/nvm.sh" ]; then
+    # shellcheck disable=SC1090
+    . "$nvm_dir/nvm.sh"
+    old_pwd=$(pwd)
+    cd "$repo_root"
+    nvm use --silent >/dev/null
+    cd "$old_pwd"
+  fi
+fi
+HOOK
+
 git config --local pull.ff only
 git config --local pull.rebase true
 git config --local branch.main.rebase true
@@ -25,6 +44,8 @@ git config --local core.hooksPath "$hooks_dir"
 cat > "$hooks_dir/pre-commit" <<'HOOK'
 #!/bin/sh
 set -eu
+
+. "$(dirname "$0")/use-repo-node.sh"
 
 if ! command -v pnpm >/dev/null 2>&1; then
   echo "pnpm is required to run pre-commit checks." >&2
@@ -37,6 +58,8 @@ HOOK
 cat > "$hooks_dir/commit-msg" <<'HOOK'
 #!/bin/sh
 set -eu
+
+. "$(dirname "$0")/use-repo-node.sh"
 
 exec node scripts/validate-commit-message.mjs "$1"
 HOOK
@@ -63,6 +86,7 @@ exit 0
 HOOK
 
 chmod +x \
+  "$hooks_dir/use-repo-node.sh" \
   "$hooks_dir/pre-commit" \
   "$hooks_dir/commit-msg" \
   "$hooks_dir/pre-merge-commit" \

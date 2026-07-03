@@ -366,11 +366,16 @@ _Resolved 105 open items across 7 areas._
 
 **Why.** data-model line 200 defines `WorkflowState.type` as the stable enum; `task.state` is a per-team text key, so styling MUST key off `type` to remain correct for custom workflow states. The spec's `todo`/`in-progress`/`done` names are the _default_ keys, not the type taxonomy — aligning token names to `type` prevents StatusIcon from breaking on a renamed/custom state.
 
-### §2.3 + cross-spec: theme persistence flow (next-themes vs Hub.preferences server action) and FOUC for theme/density/org-accent; plus deferred 'verify Better Auth' posture for any auth-coupled theme behavior.
+### §2.3 + cross-spec: theme application and FOUC posture.
 
-**Decision.** next-themes is the single source of truth for the _applied_ theme at runtime (it owns `class="dark"`, system detection, localStorage, and its OWN injected anti-FOUC script — per current next-themes docs, no hand-written theme script is needed; set `<html suppressHydrationWarning>`). Config: `attribute="class", defaultTheme="system", enableSystem, disableTransitionOnChange`. On theme change, ALSO fire a debounced `PATCH /hub/preferences { theme }` server action for cross-device persistence (best-effort; localStorage is the fast path, DB is the durable mirror — failure just toasts, never blocks). On app load, server reads `hub.preferences.theme` and passes it to next-themes via `defaultTheme` so a logged-in user's cross-device choice wins on first paint. Density and org-accent get a tiny inline `beforeInteractive` script (in each app's root layout) that reads `localStorage` (mirror of `hub.preferences.density`) and sets `data-density` on `<html>` + a placeholder org-accent, preventing their FOUC (next-themes only covers the theme class). There is NO Better-Auth coupling for theming — theme/density/accent are pure client+Hub-preferences concerns, so no Better Auth verification or shim is required for this area.
+**Decision.** Theme application follows the browser color scheme in CSS via
+`@media (prefers-color-scheme: dark)`. Do not use `next-themes`, root `.dark` synchronization,
+`localStorage.theme`, or inline theme scripts. Density and org-accent remain separate app-shell
+concerns.
 
-**Why.** Current next-themes docs confirm it injects its own FOUC-prevention script and supports `suppressHydrationWarning`, making the spec's separate 'small inline script prevents FOUC' redundant for theme — so we delegate theme FOUC to next-themes and only hand-write the script for density/accent which next-themes doesn't manage. Mirroring to `Hub.preferences` (not relying on it for first paint of theme) keeps instant local paint while still giving cross-device durability the spec asks for. Decoupling from Better Auth removes any deferred-verification risk for this area.
+**Why.** Components consume CSS variables; a JavaScript theme provider is unnecessary for system
+color-scheme support and creates avoidable hydration/script complexity. CSS-native browser
+detection keeps the styling contract simple and removes theme/auth coupling entirely.
 
 ### GAP — a `PATCH`/`PUT` endpoint to persist `Hub.preferences` (theme, density, rail order, collapse, view state) is referenced by the design system but absent from the api-rpc-contract.
 
@@ -378,11 +383,14 @@ _Resolved 105 open items across 7 areas._
 
 **Why.** The design system repeatedly says state 'persists to Hub.preferences' but the api-contract mounts `/hub` only for aggregation reads. A single authenticated PATCH on the caller's own hub is the minimal, capability-free surface consistent with the contract's pattern (cross-org Hub routes require 'no per-resource capability beyond authenticated'). Deep-partial keeps every persistence call cheap and avoids clobbering sibling preferences.
 
-### §8: 'verify with automated contrast tests in CI on the token file' — mechanism unspecified.
+### §8: accessibility verification posture for styling.
 
-**Decision.** A unit test in `@docket/ui` (`src/styles/__tests__/contrast.test.ts`, run by Vitest in the normal `pnpm test`/CI lane) parses `globals.css`, resolves each documented token pair, converts OKLCH→sRGB with `culori`, computes WCAG 2.x contrast ratio, and asserts every required pair ≥4.5:1 (text) / ≥3:1 (large text & UI/graphical state indicators) in BOTH `:root` and `.dark`. The normative pair list lives beside the test: every `*-foreground` on its `*` and on its `*-subtle` (health on/at/off/no-update, destructive, primary, secondary, muted, accent, agent), plus `foreground` on `background`/`card`/`surface-1..3`, and `rail-foreground` on `rail`. `culori` is added as a devDependency of `@docket/ui`. Failure fails CI.
+**Decision.** Do not add low-level tests that parse CSS token files. Accessibility and contrast
+should be checked through component-level semantics and visual/e2e review of actual rendered
+surfaces.
 
-**Why.** The spec mandates the check 'on the token file' in CI; pinning culori + a parsed-CSS Vitest test makes it deterministic, runs in the existing test lane (no new infra, consistent with env-var-only/no-extra-services), and is greenfield-clean. OKLCH→sRGB via culori is the standard correct conversion. Splitting text vs UI thresholds follows WCAG 2.2 (1.4.3 text 4.5:1, 1.4.11 non-text/UI 3:1) which the spec's own non-color-cue requirement complements.
+**Why.** Token parser tests are brittle and overfit implementation details. The useful contract is
+what users see and interact with, not whether a CSS file matches a hand-maintained parser.
 
 ### Component naming conflict: the slice (build-sequence §2.4) introduces `TaskListView`, `TaskRow`, `OrgRail`, `OrgSidebar`; the design-system inventory names them `ListView`, `ListRow`, `GlobalRail`, `ContextSidebar`.
 

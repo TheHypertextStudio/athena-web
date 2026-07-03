@@ -1,0 +1,630 @@
+/**
+ * `@docket/api` — the Athena agentic loop.
+ *
+ * @remarks
+ * {@link driveSession} is **re-entrant**: every piece of state it needs lives in the
+ * database (the `agent_session_transcript`, the `session_activity` rows, the session
+ * status), so the first run, resume-after-approval (possibly days later),
+ * resume-after-reply, and restart recovery are all the same code path. Each entry
+ * starts by **reconciling** the transcript's trailing assistant message: any
+ * `tool_use` without a paired result is answered from DB state (an applied action's
+ * result, a rejection, an elicitation's human reply) — or, when the answer doesn't
+ * exist yet, the session settles (`awaiting_approval` / `awaiting_input`) and the
+ * loop stops. Only a fully-answered conversation runs another provider turn.
+ *
+ * Tool dispatch is governed by the pure {@link decideToolExecution} policy engine;
+ * execution goes through the in-process MCP {@link Toolbox} as the agent's own actor,
+ * so the scope layer and grant cascade bind every call.
+ */
+import {
+  actor,
+  agent,
+  agentSession,
+  auditEvent,
+  db,
+  genId,
+  organization,
+  sessionActivity,
+  task,
+} from '@docket/db';
+import type { SessionActivityBody } from '@docket/db';
+import type { AgentTurnRuntime, TurnMessage } from '@docket/agent-runtime';
+import type { SessionApprovalDecision, TurnContentBlock } from '@docket/types';
+import { and, asc, eq, gt } from 'drizzle-orm';
+
+import { getContainer } from '../container';
+import { ConflictError, NotFoundError } from '../error';
+import { env } from '../env';
+import { decideActivity } from '../routes/agent-session-approval';
+import type { SessionRow } from '../routes/agent-session-helpers';
+import { classifyTool, decideToolExecution } from './approval-policy';
+import { buildSystemPrompt } from './system-prompt';
+import { ASK_USER_TOOL, openToolbox, type ToolboxResult } from './toolbox';
+import { loadTranscript, saveTranscript } from './transcript';
+
+/** Injectable dependencies for the loop (tests script the turn runtime). */
+export interface LoopDeps {
+  /** The provider turn runtime; defaults to the container's `agentTurn` port. */
+  readonly turnRuntime?: AgentTurnRuntime;
+}
+
+/** A `tool_use` block extracted from an assistant message. */
+interface ToolUse {
+  readonly id: string;
+  readonly name: string;
+  readonly input: unknown;
+}
+
+/** Extract the tool_use blocks of a message. */
+function toolUsesOf(message: TurnMessage): ToolUse[] {
+  return message.content.flatMap((b) =>
+    b.type === 'tool_use' ? [{ id: b.id, name: b.name, input: b.input }] : [],
+  );
+}
+
+/** Build a human-readable one-line summary for a tool call (the UI's action headline). */
+function summarizeToolCall(name: string, input: unknown): string {
+  const obj = input && typeof input === 'object' ? (input as Record<string, unknown>) : {};
+  const title = typeof obj['title'] === 'string' ? obj['title'] : undefined;
+  return title ? `${name}: "${title}"` : name;
+}
+
+/** Settle a session's status (single writer for status/endedAt consistency). */
+async function settleSession(
+  orgId: string,
+  sessionId: string,
+  status: 'running' | 'awaiting_input' | 'awaiting_approval' | 'completed' | 'failed',
+): Promise<SessionRow> {
+  const terminal = status === 'completed' || status === 'failed';
+  const [row] = await db
+    .update(agentSession)
+    .set({ status, ...(terminal ? { endedAt: new Date() } : {}) })
+    .where(and(eq(agentSession.id, sessionId), eq(agentSession.organizationId, orgId)))
+    .returning();
+  /* v8 ignore next -- @preserve defensive: update always returns a row */
+  if (!row) throw new Error('session update returned no row');
+  return row;
+}
+
+/** Insert one activity row and return it. */
+async function insertActivity(
+  orgId: string,
+  sessionId: string,
+  type: 'thought' | 'response' | 'elicitation' | 'error' | 'action',
+  body: SessionActivityBody,
+  extras: { approvalStatus?: 'proposed' | 'applied'; proposalGroupId?: string } = {},
+): Promise<string> {
+  const [row] = await db
+    .insert(sessionActivity)
+    .values({ sessionId, organizationId: orgId, type, body, ...extras })
+    .returning({ id: sessionActivity.id });
+  /* v8 ignore next -- @preserve defensive: insert always returns a row */
+  if (!row) throw new Error('activity insert returned no row');
+  return row.id;
+}
+
+/** Write the audit row for one agent-executed tool call. */
+async function auditExecution(
+  orgId: string,
+  sessionId: string,
+  agentActorId: string | null,
+  initiatorId: string | null,
+  activityId: string,
+  tool: string,
+): Promise<void> {
+  await db.insert(auditEvent).values({
+    organizationId: orgId,
+    actorId: agentActorId,
+    initiatorId,
+    subjectType: 'agent_session',
+    subjectId: sessionId,
+    type: 'updated',
+    metadata: { activityId, tool },
+  });
+}
+
+/** The reconciliation outcome for one unanswered tool_use. */
+type Reconciled =
+  | { readonly kind: 'result'; readonly result: ToolboxResult }
+  | { readonly kind: 'await_approval' }
+  | { readonly kind: 'await_input' };
+
+/**
+ * Answer one unanswered `tool_use` from DB state, or report what it is waiting on.
+ */
+async function reconcileToolUse(sessionId: string, use: ToolUse): Promise<Reconciled> {
+  if (use.name === ASK_USER_TOOL) {
+    const prompts = await db
+      .select({ id: sessionActivity.id, createdAt: sessionActivity.createdAt })
+      .from(sessionActivity)
+      .where(and(eq(sessionActivity.sessionId, sessionId), eq(sessionActivity.type, 'elicitation')))
+      .orderBy(asc(sessionActivity.createdAt));
+    const prompt = (
+      await Promise.all(
+        prompts.map(async (p) => {
+          const rows = await db
+            .select({ body: sessionActivity.body })
+            .from(sessionActivity)
+            .where(eq(sessionActivity.id, p.id));
+          return { ...p, toolUseId: rows[0]?.body['toolUseId'] };
+        }),
+      )
+    ).find((p) => p.toolUseId === use.id);
+    if (!prompt) return { kind: 'await_input' };
+    const replies = await db
+      .select({ body: sessionActivity.body })
+      .from(sessionActivity)
+      .where(
+        and(
+          eq(sessionActivity.sessionId, sessionId),
+          eq(sessionActivity.type, 'response'),
+          gt(sessionActivity.createdAt, prompt.createdAt),
+        ),
+      )
+      .orderBy(asc(sessionActivity.createdAt))
+      .limit(1);
+    const reply = replies[0]?.body.text;
+    if (!reply) return { kind: 'await_input' };
+    return { kind: 'result', result: { content: reply, isError: false } };
+  }
+
+  const actions = await db
+    .select({ body: sessionActivity.body, approvalStatus: sessionActivity.approvalStatus })
+    .from(sessionActivity)
+    .where(and(eq(sessionActivity.sessionId, sessionId), eq(sessionActivity.type, 'action')));
+  const action = actions.find((a) => a.body.action?.toolCall?.toolUseId === use.id);
+  /* v8 ignore next 2 -- @preserve defensive: every tool_use gets an action row in the same turn */
+  if (!action) return { kind: 'result', result: { content: 'Result unavailable.', isError: true } };
+
+  if (action.approvalStatus === 'applied') {
+    const result = action.body.action?.result;
+    return {
+      kind: 'result',
+      result: { content: result?.content ?? 'Applied.', isError: result?.isError ?? false },
+    };
+  }
+  if (action.approvalStatus === 'rejected') {
+    return {
+      kind: 'result',
+      result: {
+        content: 'Rejected by the approver. Adapt your plan; do not retry the same change.',
+        isError: true,
+      },
+    };
+  }
+  if (action.body.action?.mode === 'suggestion') {
+    return {
+      kind: 'result',
+      result: {
+        content: 'Recorded as a suggestion for human review; NOT executed. Continue.',
+        isError: false,
+      },
+    };
+  }
+  // A proposal still awaiting a decision (or an `approved` row whose execution is in
+  // flight) parks the session.
+  return { kind: 'await_approval' };
+}
+
+/**
+ * Drive one agent session forward until it settles.
+ *
+ * @remarks
+ * Re-entrant (see module remarks). Callable when the session is `pending` (first run)
+ * or `running` (resumed by an approval/reply); any other state conflicts.
+ *
+ * @param orgId - The active organization id.
+ * @param sessionId - The session to drive.
+ * @param deps - Injectable turn runtime (tests script it).
+ * @returns the settled session row.
+ * @throws {NotFoundError} When the session or its agent is not found in the org.
+ * @throws {ConflictError} When the session is not in a runnable state.
+ */
+export async function driveSession(
+  orgId: string,
+  sessionId: string,
+  deps: LoopDeps = {},
+): Promise<SessionRow> {
+  const sessionRows = await db
+    .select()
+    .from(agentSession)
+    .where(and(eq(agentSession.id, sessionId), eq(agentSession.organizationId, orgId)))
+    .limit(1);
+  const session = sessionRows[0];
+  if (!session) throw new NotFoundError('Session not found');
+  if (session.status !== 'pending' && session.status !== 'running') {
+    throw new ConflictError('Session is not in a runnable state');
+  }
+
+  const agentRows = await db
+    .select({
+      approvalPolicy: agent.approvalPolicy,
+      guidance: agent.guidance,
+      displayName: actor.displayName,
+      actorId: actor.id,
+    })
+    .from(agent)
+    .innerJoin(actor, eq(agent.actorId, actor.id))
+    .where(and(eq(agent.id, session.agentId), eq(agent.organizationId, orgId)))
+    .limit(1);
+  const agentRow = agentRows[0];
+  if (!agentRow) throw new NotFoundError('Agent not found');
+
+  const orgRows = await db
+    .select({ name: organization.name })
+    .from(organization)
+    .where(eq(organization.id, orgId))
+    .limit(1);
+  const orgName = orgRows[0]?.name ?? orgId;
+
+  const maxTurns = env.AGENT_MAX_TURNS;
+  if (maxTurns === undefined) {
+    throw new ConflictError('AGENT_MAX_TURNS is not configured; refusing to run agent sessions');
+  }
+
+  await db
+    .update(agentSession)
+    .set({ status: 'running', startedAt: session.startedAt ?? new Date() })
+    .where(and(eq(agentSession.id, sessionId), eq(agentSession.organizationId, orgId)));
+
+  const turnRuntime = deps.turnRuntime ?? getContainer().agentTurn;
+  const toolbox = await openToolbox(orgId, session.agentId);
+  try {
+    let messages = await loadTranscript(db, sessionId);
+    if (messages.length === 0) {
+      messages = [
+        {
+          role: 'user',
+          content: [{ type: 'text', text: await deriveBrief(orgId, session.taskId, sessionId) }],
+        },
+      ];
+      await saveTranscript(db, sessionId, orgId, messages);
+    }
+
+    const system = buildSystemPrompt({
+      agentName: agentRow.displayName,
+      orgName,
+      approvalPolicy: agentRow.approvalPolicy,
+      guidance: agentRow.guidance,
+    });
+
+    for (;;) {
+      // ── Reconcile: answer the trailing assistant message's tool_uses from DB state.
+      const last = messages.at(-1);
+      if (last?.role === 'assistant') {
+        const uses = toolUsesOf(last);
+        if (uses.length > 0) {
+          const results: TurnContentBlock[] = [];
+          for (const use of uses) {
+            const outcome = await reconcileToolUse(sessionId, use);
+            if (outcome.kind === 'await_approval') {
+              return await settleSession(orgId, sessionId, 'awaiting_approval');
+            }
+            if (outcome.kind === 'await_input') {
+              return await settleSession(orgId, sessionId, 'awaiting_input');
+            }
+            results.push({
+              type: 'tool_result',
+              toolUseId: use.id,
+              content: outcome.result.content,
+              isError: outcome.result.isError,
+            });
+          }
+          messages = [...messages, { role: 'user', content: results }];
+          await saveTranscript(db, sessionId, orgId, messages);
+        } else {
+          // A trailing assistant message with no tool calls is a finished job.
+          return await settleSession(orgId, sessionId, await finalStatus(sessionId));
+        }
+      }
+
+      // ── Between turns: honor pause/cancel/takeover flips made while we worked.
+      const statusRows = await db
+        .select({ status: agentSession.status })
+        .from(agentSession)
+        .where(eq(agentSession.id, sessionId))
+        .limit(1);
+      if (statusRows[0]?.status !== 'running') {
+        const rows = await db
+          .select()
+          .from(agentSession)
+          .where(eq(agentSession.id, sessionId))
+          .limit(1);
+        /* v8 ignore next -- @preserve defensive: the session row exists */
+        if (!rows[0]) throw new Error('session vanished mid-run');
+        return rows[0];
+      }
+
+      // ── Turn budget (explicit config; no hidden default).
+      const assistantTurns = messages.filter((m) => m.role === 'assistant').length;
+      if (assistantTurns >= maxTurns) {
+        await insertActivity(orgId, sessionId, 'error', {
+          text: `Turn budget exhausted (${String(maxTurns)} turns); stopping the session.`,
+        });
+        return await settleSession(orgId, sessionId, 'failed');
+      }
+
+      // ── One provider turn.
+      let assistantMessage: TurnMessage | undefined;
+      let stopReason = 'end_turn';
+      for await (const event of turnRuntime.streamTurn({
+        system,
+        messages,
+        tools: toolbox.tools,
+      })) {
+        if (event.type === 'thinking') {
+          await insertActivity(orgId, sessionId, 'thought', { text: event.text });
+        } else if (event.type === 'text') {
+          await insertActivity(orgId, sessionId, 'response', { text: event.text });
+        } else if (event.type === 'turn_end') {
+          assistantMessage = event.message;
+          stopReason = event.stopReason;
+        }
+      }
+      /* v8 ignore next -- @preserve defensive: every turn ends with turn_end */
+      if (!assistantMessage) throw new Error('turn ended without a terminal message');
+
+      if (stopReason === 'refusal') {
+        await insertActivity(orgId, sessionId, 'error', {
+          text: 'The agent declined to complete this task (model refusal).',
+        });
+        return await settleSession(orgId, sessionId, 'failed');
+      }
+      if (stopReason === 'max_tokens') {
+        await insertActivity(orgId, sessionId, 'error', {
+          text: 'The turn exceeded the output limit before completing.',
+        });
+        return await settleSession(orgId, sessionId, 'failed');
+      }
+
+      messages = [...messages, assistantMessage];
+      const uses = toolUsesOf(assistantMessage);
+      const proposalGroupId = genId();
+
+      // Persist the transcript and the gated/elicitation rows atomically, so a crash
+      // between "model asked" and "rows exist" cannot strand an unanswerable tool_use.
+      await db.transaction(async (tx) => {
+        await saveTranscript(tx, sessionId, orgId, messages);
+        for (const use of uses) {
+          if (use.name === ASK_USER_TOOL) {
+            const input = use.input as { question?: string };
+            await tx.insert(sessionActivity).values({
+              sessionId,
+              organizationId: orgId,
+              type: 'elicitation',
+              body: { text: input.question ?? 'The agent needs your input.', toolUseId: use.id },
+            });
+            continue;
+          }
+          const decision = decideToolExecution(
+            agentRow.approvalPolicy,
+            classifyTool(toolbox.annotations(use.name)),
+          );
+          if (decision === 'execute') continue; // executed (and recorded) below, post-commit
+          await tx.insert(sessionActivity).values({
+            sessionId,
+            organizationId: orgId,
+            type: 'action',
+            approvalStatus: 'proposed',
+            proposalGroupId,
+            body: {
+              action: {
+                kind: use.name,
+                summary: summarizeToolCall(use.name, use.input),
+                toolCall: {
+                  connection: 'docket',
+                  tool: use.name,
+                  input: use.input,
+                  toolUseId: use.id,
+                },
+                mode: decision === 'record_only' ? 'suggestion' : 'proposal',
+              },
+            },
+          });
+        }
+      });
+
+      // Execute the immediately-runnable calls (reads everywhere; writes when
+      // autonomous), recording each as an applied action with its result + audit row.
+      for (const use of uses) {
+        if (use.name === ASK_USER_TOOL) continue;
+        const decision = decideToolExecution(
+          agentRow.approvalPolicy,
+          classifyTool(toolbox.annotations(use.name)),
+        );
+        if (decision !== 'execute') continue;
+        const result = await toolbox.callTool(use.name, use.input);
+        const activityId = await insertActivity(
+          orgId,
+          sessionId,
+          'action',
+          {
+            action: {
+              kind: use.name,
+              summary: summarizeToolCall(use.name, use.input),
+              toolCall: {
+                connection: 'docket',
+                tool: use.name,
+                input: use.input,
+                toolUseId: use.id,
+              },
+              result: { content: result.content, isError: result.isError },
+              mode: 'proposal',
+            },
+          },
+          { approvalStatus: 'applied' },
+        );
+        await auditExecution(
+          orgId,
+          sessionId,
+          agentRow.actorId,
+          session.initiatorId,
+          activityId,
+          use.name,
+        );
+      }
+      // The loop's next iteration reconciles: fully-answered turns continue; a pending
+      // proposal settles awaiting_approval; an ask_user settles awaiting_input.
+    }
+  } finally {
+    await toolbox.close();
+  }
+}
+
+/** Whether any still-proposed action remains (suggest-mode leftovers included). */
+async function finalStatus(sessionId: string): Promise<'completed' | 'awaiting_approval'> {
+  const remaining = await db
+    .select({ id: sessionActivity.id })
+    .from(sessionActivity)
+    .where(
+      and(
+        eq(sessionActivity.sessionId, sessionId),
+        eq(sessionActivity.type, 'action'),
+        eq(sessionActivity.approvalStatus, 'proposed'),
+      ),
+    )
+    .limit(1);
+  return remaining.length > 0 ? 'awaiting_approval' : 'completed';
+}
+
+/** Derive the runtime brief: linked task title → seeded prompt → session id. */
+async function deriveBrief(
+  orgId: string,
+  taskId: string | null,
+  sessionId: string,
+): Promise<string> {
+  if (taskId) {
+    const rows = await db
+      .select({ title: task.title })
+      .from(task)
+      .where(and(eq(task.id, taskId), eq(task.organizationId, orgId)))
+      .limit(1);
+    if (rows[0]) return rows[0].title;
+  }
+  const prompts = await db
+    .select({ body: sessionActivity.body })
+    .from(sessionActivity)
+    .where(and(eq(sessionActivity.sessionId, sessionId), eq(sessionActivity.type, 'response')))
+    .orderBy(asc(sessionActivity.createdAt))
+    .limit(1);
+  return prompts[0]?.body.text ?? sessionId;
+}
+
+/**
+ * Execute every `approved` action of a session: run its stored `toolCall` as the agent
+ * actor, stamp the row `applied` with the result, and audit it.
+ *
+ * @remarks
+ * Approved rows without a `toolCall` (legacy narration-only actions) are stamped
+ * `applied` directly. Executions run in activity order so a batch lands
+ * deterministically.
+ *
+ * @param orgId - The active organization id.
+ * @param sessionId - The session whose approved actions should execute.
+ */
+export async function executeApprovedActions(orgId: string, sessionId: string): Promise<void> {
+  const sessionRows = await db
+    .select({ agentId: agentSession.agentId, initiatorId: agentSession.initiatorId })
+    .from(agentSession)
+    .where(and(eq(agentSession.id, sessionId), eq(agentSession.organizationId, orgId)))
+    .limit(1);
+  const session = sessionRows[0];
+  if (!session) throw new NotFoundError('Session not found');
+
+  const approved = await db
+    .select()
+    .from(sessionActivity)
+    .where(
+      and(
+        eq(sessionActivity.sessionId, sessionId),
+        eq(sessionActivity.type, 'action'),
+        eq(sessionActivity.approvalStatus, 'approved'),
+      ),
+    )
+    .orderBy(asc(sessionActivity.createdAt));
+  if (approved.length === 0) return;
+
+  const agentRows = await db
+    .select({ actorId: agent.actorId })
+    .from(agent)
+    .where(eq(agent.id, session.agentId))
+    .limit(1);
+  const agentActorId = agentRows[0]?.actorId ?? null;
+
+  const withCalls = approved.filter((a) => a.body.action?.toolCall);
+  const toolbox = withCalls.length > 0 ? await openToolbox(orgId, session.agentId) : null;
+  try {
+    for (const action of approved) {
+      const call = action.body.action?.toolCall;
+      let body = action.body;
+      if (call && toolbox && action.body.action) {
+        const result = await toolbox.callTool(call.tool, call.input);
+        body = {
+          ...action.body,
+          action: {
+            ...action.body.action,
+            result: { content: result.content, isError: result.isError },
+          },
+        };
+      }
+      await db
+        .update(sessionActivity)
+        .set({ approvalStatus: 'applied', body })
+        .where(eq(sessionActivity.id, action.id));
+      await auditExecution(
+        orgId,
+        sessionId,
+        agentActorId,
+        session.initiatorId,
+        action.id,
+        call?.tool ?? action.body.action?.kind ?? 'action',
+      );
+    }
+  } finally {
+    if (toolbox) await toolbox.close();
+  }
+}
+
+/**
+ * Decide on a proposed action, execute whatever the decision unlocked, and resume the
+ * loop when the session came back to `running`.
+ *
+ * @remarks
+ * The composition the approval routes call: {@link decideActivity} (transactional
+ * status flips + audit) → {@link executeApprovedActions} (post-commit tool execution)
+ * → {@link driveSession} re-entry, whose reconcile step feeds the results — or the
+ * rejection — back to the model.
+ *
+ * @param orgId - The active organization id.
+ * @param approverActorId - The approver's actor id (audited).
+ * @param sessionId - The session that owns the activity.
+ * @param activityId - The proposed action being decided.
+ * @param decision - Approve/reject and its scope.
+ * @param deps - Injectable turn runtime (tests script it).
+ * @returns the settled session row after any resume.
+ */
+export async function approveAndResume(
+  orgId: string,
+  approverActorId: string,
+  sessionId: string,
+  activityId: string,
+  decision: SessionApprovalDecision,
+  deps: LoopDeps = {},
+): Promise<SessionRow> {
+  await decideActivity(orgId, approverActorId, sessionId, activityId, decision);
+  await executeApprovedActions(orgId, sessionId);
+
+  const rows = await db
+    .select()
+    .from(agentSession)
+    .where(and(eq(agentSession.id, sessionId), eq(agentSession.organizationId, orgId)))
+    .limit(1);
+  /* v8 ignore next -- @preserve defensive: decideActivity already 404'd unknown sessions */
+  if (!rows[0]) throw new NotFoundError('Session not found');
+  if (rows[0].status !== 'running') return rows[0];
+  // Only sessions the loop owns (a transcript exists) resume; a hand-created session
+  // with no conversation state has nothing to continue.
+  const transcript = await loadTranscript(db, sessionId);
+  if (transcript.length === 0) return rows[0];
+  return driveSession(orgId, sessionId, deps);
+}

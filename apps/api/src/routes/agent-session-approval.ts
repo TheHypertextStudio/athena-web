@@ -150,14 +150,18 @@ export async function decideActivity(
           type: 'approved',
           metadata: { activityId: action.id, approverActorId },
         });
-        const [applied] = await tx
+        // `approved` is the transient gate state: the post-commit executor
+        // (`executeApprovedActions`) runs the stored toolCall and advances it to
+        // `applied` with the real result. Legacy narration-only actions are applied
+        // there too, without execution.
+        const [approvedRow] = await tx
           .update(sessionActivity)
-          .set({ approvalStatus: 'applied' })
+          .set({ approvalStatus: 'approved' })
           .where(eq(sessionActivity.id, action.id))
           .returning();
         /* v8 ignore next -- @preserve defensive: update always returns a row */
-        if (!applied) throw new Error('activity update returned no row');
-        if (action.id === activityId) decidedTarget = applied;
+        if (!approvedRow) throw new Error('activity update returned no row');
+        if (action.id === activityId) decidedTarget = approvedRow;
       } else {
         await tx.insert(auditEvent).values({
           organizationId: orgId,
@@ -192,13 +196,13 @@ export async function decideActivity(
       .limit(1);
 
     if (remaining.length === 0) {
-      const nextStatus = decision.decision === 'approve' ? 'running' : 'canceled';
+      // Reject-and-continue: with a live loop, a rejection is FEEDBACK — the reconcile
+      // step feeds it to the model as an isError tool_result so the agent adapts. Only
+      // the session-level `/reject` shortcut ({@link resolveAction}) keeps cancel
+      // semantics.
       await tx
         .update(agentSession)
-        .set({
-          status: nextStatus,
-          ...(nextStatus === 'canceled' ? { endedAt: new Date() } : {}),
-        })
+        .set({ status: 'running' })
         .where(and(eq(agentSession.id, sessionId), eq(agentSession.organizationId, orgId)));
     }
 

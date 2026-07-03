@@ -29,9 +29,12 @@ import {
   toActivityOut,
   toSessionOut,
   transitionLifecycle,
+  loadActivity,
 } from './agent-session-helpers';
 import { createAndRunFromPrompt, runSession } from './agent-session-runner';
-import { decideActivity, replyToElicitation, resolveAction } from './agent-session-approval';
+import { replyToElicitation, resolveAction } from './agent-session-approval';
+import { approveAndResume, driveSession } from '../agent/loop';
+import { loadTranscript } from '../agent/transcript';
 
 /** Agent-sessions router: list (status filter), read with stream, approve + reject. */
 const agentSessions = new Hono<AppEnv>()
@@ -209,10 +212,11 @@ Requires \`assign\` — the approval gate is orthogonal to the \`contribute\` ba
       const { orgId, actorId } = c.get('actorCtx');
       const { id, activityId } = c.req.valid('param');
       const body = c.req.valid('json');
-      const updated = await decideActivity(orgId, actorId, id, activityId, {
+      await approveAndResume(orgId, actorId, id, activityId, {
         decision: 'approve',
         ...(body?.scope ? { scope: body.scope } : {}),
       });
+      const updated = await loadActivity(orgId, id, activityId);
       await enqueueSearchUpsert(orgId, 'agent_session', id);
       return ok(c, SessionActivityOut, toActivityOut(updated));
     },
@@ -237,10 +241,11 @@ Requires \`assign\`: vetoing an agent's proposed write is an authorization act, 
       const { orgId, actorId } = c.get('actorCtx');
       const { id, activityId } = c.req.valid('param');
       const body = c.req.valid('json');
-      const updated = await decideActivity(orgId, actorId, id, activityId, {
+      await approveAndResume(orgId, actorId, id, activityId, {
         decision: 'reject',
         ...(body?.scope ? { scope: body.scope } : {}),
       });
+      const updated = await loadActivity(orgId, id, activityId);
       await enqueueSearchUpsert(orgId, 'agent_session', id);
       return ok(c, SessionActivityOut, toActivityOut(updated));
     },
@@ -264,6 +269,17 @@ Side effect: when the session was parked in \`awaiting_input\` it is resumed to 
       const { id, activityId } = c.req.valid('param');
       const body = c.req.valid('json');
       const created = await replyToElicitation(orgId, id, activityId, body.body);
+      // Resume-on-user-message: when the reply un-parked the session and the loop owns
+      // it (a transcript exists), drive it forward — the reconcile step feeds the reply
+      // to the model as the ask_user tool result.
+      const replySession = await db
+        .select({ status: agentSession.status })
+        .from(agentSession)
+        .where(and(eq(agentSession.id, id), eq(agentSession.organizationId, orgId)))
+        .limit(1);
+      if (replySession[0]?.status === 'running' && (await loadTranscript(db, id)).length > 0) {
+        await driveSession(orgId, id);
+      }
       await enqueueSearchUpsert(orgId, 'agent_session', id);
       return ok(c, SessionActivityOut, toActivityOut(created));
     },

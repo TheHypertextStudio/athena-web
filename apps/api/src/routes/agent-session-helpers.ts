@@ -1,5 +1,4 @@
-import type { sessionActivity } from '@docket/db';
-import { agentSession, db } from '@docket/db';
+import { agentSession, db, sessionActivity } from '@docket/db';
 import type { AgentSessionDetailOut, AgentSessionOut } from '@docket/types';
 import { SessionStatus } from '@docket/types';
 import { and, eq } from 'drizzle-orm';
@@ -42,6 +41,33 @@ export function toActivityOut(
     approvalStatus: a.approvalStatus,
     createdAt: a.createdAt.toISOString(),
   };
+}
+
+/**
+ * Load one activity of an org-scoped session, or 404.
+ *
+ * @remarks
+ * Used by the approval routes to return the activity's FINAL state after the
+ * decide → execute → resume composition ran (the decide-time row is stale by then).
+ */
+export async function loadActivity(
+  orgId: string,
+  sessionId: string,
+  activityId: string,
+): Promise<ActivityRow> {
+  const rows = await db
+    .select()
+    .from(sessionActivity)
+    .where(
+      and(
+        eq(sessionActivity.id, activityId),
+        eq(sessionActivity.sessionId, sessionId),
+        eq(sessionActivity.organizationId, orgId),
+      ),
+    )
+    .limit(1);
+  if (!rows[0]) throw new NotFoundError('Activity not found');
+  return rows[0];
 }
 
 /** idParam is the reusable OpenAPI parameter schema for this API route route. */

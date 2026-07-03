@@ -9,10 +9,12 @@
  * calendars (dual-writing `calendar_list`/`calendar_layer`), then for each selected
  * layer take an exclusive lease, pull full-or-incremental changes, and apply them
  * (dual-writing `calendar_event`/`calendar_item`). This module contains NO
- * provider-specific logic, constants, or wire shapes — those live in adapter modules
- * (e.g. `calendar-google-adapter.ts`) that implement {@link CalendarProviderAdapter} and
- * the surrounding {@link CalendarProviderSyncModule}. A future Microsoft Graph or CalDAV
- * adapter plugs in without touching this file.
+ * provider-specific logic, constants, wire shapes, or imports — those live in adapter
+ * modules (e.g. `calendar-google-adapter.ts`) that implement
+ * {@link CalendarProviderAdapter} and the surrounding {@link CalendarProviderSyncModule},
+ * and the provider → module map is assembled outside the engine (see
+ * `calendar-sync-modules.ts`) and passed in via options. A future Microsoft Graph or
+ * CalDAV adapter plugs in without touching this file.
  *
  * There is no write outbox or push-notification handling yet (later phases) — this is
  * the inbound pull half only, matching {@link CalendarSyncResultOut}'s `writesApplied`/
@@ -36,12 +38,6 @@ import {
 } from '@docket/types';
 import { and, eq, isNull, lt, or } from 'drizzle-orm';
 import type { z } from 'zod';
-
-import {
-  createGoogleCalendarSyncModule,
-  type GoogleAccessTokenFetcher,
-  type GoogleFetchJson,
-} from './calendar-google-adapter';
 
 /** Credentials an adapter needs to call its provider. Resolved per-connection by the engine. */
 export interface CalendarProviderCredentials {
@@ -507,16 +503,13 @@ export interface SyncCalendarConnectionsOptions {
   readonly userId: string;
   /** Reference time for the run; defaults to `new Date()`. Threaded through for deterministic tests. */
   readonly now?: Date;
-  /** Injectable Google HTTP seam (tests only) — ignored when `adapters` is overridden. */
-  readonly fetchJson?: GoogleFetchJson;
-  /** Injectable Better Auth token fetcher (tests only) — ignored when `adapters` is overridden. */
-  readonly getAccessToken?: GoogleAccessTokenFetcher;
   /**
-   * Override the provider → sync-module map. Engine-neutrality tests pass a fake
-   * `CalendarProviderSyncModule` here to prove this file has no Google-isms; production
-   * callers omit it and get the default (Google-only, for now) map.
+   * The provider → sync-module map to run. Always assembled OUTSIDE the engine (the
+   * production map lives in `calendar-sync-modules.ts`, passed by the route) so this
+   * module never imports any adapter — that is what keeps the engine provider-free and
+   * lets neutrality tests drive it with a fake {@link CalendarProviderSyncModule}.
    */
-  readonly adapters?: Partial<Record<CalendarProvider, CalendarProviderSyncModule>>;
+  readonly adapters: Partial<Record<CalendarProvider, CalendarProviderSyncModule>>;
 }
 
 /**
@@ -539,12 +532,6 @@ export async function syncCalendarConnections(
   opts: SyncCalendarConnectionsOptions,
 ): Promise<z.input<typeof CalendarSyncResultOut>> {
   const now = opts.now ?? new Date();
-  const adapters: Partial<Record<CalendarProvider, CalendarProviderSyncModule>> = opts.adapters ?? {
-    google: createGoogleCalendarSyncModule({
-      fetchJson: opts.fetchJson,
-      getAccessToken: opts.getAccessToken,
-    }),
-  };
   const window = windowBounds(now);
 
   const counts = {
@@ -564,7 +551,7 @@ export async function syncCalendarConnections(
     conflicts: 0,
   };
 
-  for (const [providerKey, mod] of Object.entries(adapters)) {
+  for (const [providerKey, mod] of Object.entries(opts.adapters)) {
     const provider = CalendarProvider.parse(providerKey);
     const discovered = await mod.discoverConnections({ db, userId: opts.userId });
 

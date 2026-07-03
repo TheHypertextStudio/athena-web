@@ -65,6 +65,7 @@ import { zJson, zParam } from '../lib/validate';
 
 import { readCalendarSettings, requireUserId } from './calendar-shared';
 import { syncCalendarConnections } from './calendar-sync-engine';
+import { createDefaultCalendarSyncModules } from './calendar-sync-modules';
 import { toOut } from './task-helpers';
 
 const idParam = z.object({ id: z.string() });
@@ -272,7 +273,14 @@ const meCalendar = new Hono<AppEnv>()
     }),
     async (c) => {
       const userId = requireUserId(c);
-      return ok(c, CalendarSyncResultOut, await syncCalendarConnections(db, { userId }));
+      return ok(
+        c,
+        CalendarSyncResultOut,
+        await syncCalendarConnections(db, {
+          userId,
+          adapters: createDefaultCalendarSyncModules(),
+        }),
+      );
     },
   )
   .post(

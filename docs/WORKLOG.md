@@ -188,6 +188,40 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ---
 
+## Active Tasks
+
+### [CALENDAR-004] Layered calendar implementation
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-07-02
+- **Priority**: P0
+- **Description**: Implement the layered calendar suite end-to-end per
+  `docs/engineering/plans/layered-calendar-implementation.md` (Phases 1–10): provider-neutral
+  layer/item/task-link schema, read services with agenda compatibility, native blocks, task links,
+  provider sync engine with Google adapter, write-back outbox with conflict states, push hints +
+  scheduled sync, web data layer, calendar UI/workspace, e2e + docs.
+- **Subtasks**:
+  - [x] Phase 1 — schema and types
+  - [ ] Phase 2 — read service + compat routes
+  - [ ] Phase 3 — native blocks API
+  - [ ] Phase 4 — task links
+  - [ ] Phase 5 — provider sync engine
+  - [ ] Phase 6 — provider write-back
+  - [ ] Phase 7 — push hints + scheduled sync
+  - [ ] Phase 8 — web data layer
+  - [ ] Phase 9 — calendar UI + workspace
+  - [ ] Phase 10 — e2e, docs, rollout
+- **Blockers**: None
+- **Notes**: Working on branch `feature/layered-calendar` (worktree). Baseline: API suite 880/880
+  green; web suite has one intermittently flaky test on committed main (fails ~1/3 of full runs,
+  under identification), unrelated to calendar work. Design deviations from spec text recorded in
+  execution plan: webhook mounted at `/webhooks/calendar/:provider` outside the versioned `/v1`
+  contract; credential resolution and permission normalization live behind the provider adapter
+  boundary. Known merge hazard: migration number 0016 is also used by uncommitted WIP on main —
+  renumber at merge if needed.
+
+---
+
 ## Completed Tasks
 
 ### [LINEAR-SYNC-001] Deep Linear integration — Slice 1: two-way work-graph sync core

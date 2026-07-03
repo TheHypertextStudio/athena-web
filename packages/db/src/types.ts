@@ -160,6 +160,15 @@ export interface NotificationBody {
 // type and the DTO can never drift (the failure mode HubPreferences hit).
 export type { ActorRef, EntityRef, EventDetail, DigestStats } from '@docket/types';
 
+// The layered-calendar jsonb shapes (`calendar_connection.scope_state`,
+// `calendar_item.permissions`, `calendar_item.conflict`) are likewise owned by
+// `@docket/types` and re-exported rather than mirrored.
+export type {
+  CalendarScopeState,
+  CalendarItemPermission,
+  CalendarItemConflict,
+} from '@docket/types';
+
 /** A session Activity payload; `action` rows carry the proposed change. */
 export interface SessionActivityBody {
   /** Free text (thought/response/elicitation/error). */

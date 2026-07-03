@@ -1646,8 +1646,16 @@ describe('calendar DTOs', () => {
       eventsUpdated: 3,
       eventsDeleted: 1,
       errors: [],
+      layers: 4,
+      itemsCreated: 5,
+      itemsUpdated: 3,
+      itemsArchived: 1,
+      writesApplied: 0,
+      writesPending: 0,
+      conflicts: 0,
     });
     expect(parsed.eventsCreated + parsed.eventsUpdated).toBe(8);
+    expect(parsed.itemsCreated + parsed.itemsUpdated).toBe(8);
   });
 
   it('AttachmentCreate accepts a Google Calendar event attachment', () => {

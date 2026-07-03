@@ -258,6 +258,15 @@ export async function syncGoogleCalendars(
     eventsUpdated: 0,
     eventsDeleted: 0,
     errors: [] as string[],
+    // Layered-calendar counters: this sync path only maintains the legacy
+    // calendar_list/calendar_event tables, so it never touches layers/items/writes.
+    layers: 0,
+    itemsCreated: 0,
+    itemsUpdated: 0,
+    itemsArchived: 0,
+    writesApplied: 0,
+    writesPending: 0,
+    conflicts: 0,
   };
   const { timeMin, timeMax } = windowBounds();
 

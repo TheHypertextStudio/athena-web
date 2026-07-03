@@ -286,7 +286,7 @@ describe('native calendar block CRUD', () => {
     expect(res.status).toBe(422);
   });
 
-  it('PATCH explicitly rejects a provider_event item', async () => {
+  it('PATCH a provider_event item with no connection is denied for missing write scope (write-back is covered in calendar-write-back.test.ts)', async () => {
     const schema = await getDb();
     const userId = await seedUserWithHub(schema.db, schema, 'BlockUser');
     const layer = one(
@@ -325,7 +325,10 @@ describe('native calendar block CRUD', () => {
       headers: jsonHeaders(),
       body: JSON.stringify({ title: 'Renamed' }),
     });
-    expect(res.status).toBe(422);
+    // No connection => resolveItemPermissions denies with 'provider_scope' => 403, not 422.
+    expect(res.status).toBe(403);
+    const body = await json<{ code: string }>(res);
+    expect(body.code).toBe('forbidden');
   });
 
   it('isolates ownership: another user gets 404 on GET/PATCH/DELETE', async () => {

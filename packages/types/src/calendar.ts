@@ -575,6 +575,36 @@ export const CalendarItemUpdate = z
 /** Validated calendar-item-update body. */
 export type CalendarItemUpdate = z.infer<typeof CalendarItemUpdate>;
 
+/**
+ * The typed shape of a provider-bound write queued in the `calendar_item_write` outbox.
+ *
+ * @remarks
+ * Mirrors {@link CalendarItemUpdate}'s field semantics (an empty string clears
+ * `description`/`location`) but drops its refine — an outbox row always carries at least
+ * one field by construction, and is written by the write service, never validated
+ * directly from a request body. Every field is optional and plain (never
+ * `.nullable().optional()`): a shape-switching time patch always carries BOTH fields of
+ * its active shape (never a lone field), which is what lets adapters build a
+ * shape-consistent `start`/`end` object without re-deriving the item's prior shape.
+ */
+export const CalendarItemWritePatch = z
+  .object({
+    title: z.string().optional().describe('New title.'),
+    description: z.string().optional().describe("New description; '' clears it."),
+    location: z.string().optional().describe("New location; '' clears it."),
+    timezone: z.string().optional().describe('New timezone id for a timed shape.'),
+    startsAt: z.string().optional().describe('New timed start timestamp (ISO 8601).'),
+    endsAt: z.string().optional().describe('New timed end timestamp (ISO 8601).'),
+    allDayStartDate: DateString.optional().describe('New all-day start date.'),
+    allDayEndDate: DateString.optional().describe('New all-day exclusive end date.'),
+  })
+  .meta({
+    id: 'CalendarItemWritePatch',
+    description: 'The typed shape of a provider-bound write queued in the outbox.',
+  });
+/** Calendar-item write-patch value. */
+export type CalendarItemWritePatch = z.infer<typeof CalendarItemWritePatch>;
+
 /** Body for updating a calendar layer's visibility or (for native layers) display settings. */
 export const CalendarLayerUpdate = z
   .object({

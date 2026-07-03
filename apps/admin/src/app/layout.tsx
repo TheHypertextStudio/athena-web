@@ -38,11 +38,10 @@ const mono = IBM_Plex_Mono({
  *
  * @remarks
  * Imports the design-token stylesheet (`@docket/ui` globals, re-exported by
- * `./globals.css`) and mounts the global client {@link Providers} (theme, impersonation)
+ * `./globals.css`) and mounts the global client {@link Providers} (impersonation)
  * around every route. The per-section layouts decide whether to render the operator shell:
  * the `(admin)` route group wraps its pages in `AdminShell`, while `/sign-in` stays bare.
- * `suppressHydrationWarning` on `<html>` is required by `next-themes`, which sets the theme
- * class on the client before hydration.
+ * Browser color-scheme handling is pure CSS in `@docket/ui` tokens.
  *
  * The tree is wrapped in MUI's {@link AppRouterCacheProvider}, which collects Emotion's
  * runtime styles during SSR and flushes them into `<head>` instead of emitting a

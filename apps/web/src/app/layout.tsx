@@ -38,9 +38,8 @@ const mono = IBM_Plex_Mono({
  *
  * @remarks
  * Imports the design-token stylesheet (`@docket/ui` globals, re-exported by
- * `./globals.css`) and mounts the global client {@link Providers} (theme, active context,
- * vocabulary) around every route. `suppressHydrationWarning` on `<html>` is required by
- * `next-themes`, which sets the theme class on the client before hydration.
+ * `./globals.css`) and mounts the global client {@link Providers} (active context, vocabulary)
+ * around every route. Browser color-scheme handling is pure CSS in `@docket/ui` tokens.
  *
  * The tree is wrapped in MUI's {@link AppRouterCacheProvider}, which collects Emotion's
  * runtime styles during SSR and flushes them into `<head>` instead of emitting a

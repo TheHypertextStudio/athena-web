@@ -15,11 +15,9 @@
 @source '../vocabulary';
 @source '../lib';
 
-@custom-variant dark (&:is(.dark *));
-
 /*
- * Docket design tokens (OKLCH). The neutral base is contrast-tuned (see the Vitest
- * contrast test). Work-state tokens are keyed by WorkflowState.type
+ * Docket design tokens (OKLCH). The neutral base is contrast-tuned. Work-state tokens are
+ * keyed by WorkflowState.type
  * (backlog/unstarted/started/completed/canceled), NOT the free-form state key.
  */
 :root {
@@ -104,70 +102,72 @@
   --dur-slow: 240ms;
 }
 
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  /* Dark indigo: MD3 dark primary is a lighter, less-saturated tone with dark on-primary. */
-  --primary: oklch(0.8 0.11 264);
-  --primary-foreground: oklch(0.25 0.07 264);
-  --primary-container: oklch(0.34 0.07 264);
-  --on-primary-container: oklch(0.9 0.05 264);
-  --secondary: oklch(0.27 0.012 264);
-  --secondary-foreground: oklch(0.985 0 0);
-  --secondary-container: oklch(0.33 0.05 264);
-  --on-secondary-container: oklch(0.9 0.04 264);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.75 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.7 0.19 22);
-  --destructive-foreground: oklch(0.145 0 0);
-  --error: var(--destructive);
-  --on-error: var(--destructive-foreground);
-  --error-container: oklch(0.33 0.08 27);
-  --on-error-container: oklch(0.92 0.05 27);
-  --inverse-surface: oklch(0.92 0.004 264);
-  --inverse-on-surface: oklch(0.25 0.005 264);
-  --inverse-primary: oklch(0.5 0.21 264);
-  --scrim: oklch(0 0 0);
-  --border: oklch(0.32 0 0);
-  --input: oklch(0.32 0 0);
-  --ring: oklch(0.8 0.11 264);
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: oklch(0.145 0 0);
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.205 0 0);
+    --card-foreground: oklch(0.985 0 0);
+    --popover: oklch(0.205 0 0);
+    --popover-foreground: oklch(0.985 0 0);
+    /* Dark indigo: MD3 dark primary is a lighter, less-saturated tone with dark on-primary. */
+    --primary: oklch(0.8 0.11 264);
+    --primary-foreground: oklch(0.25 0.07 264);
+    --primary-container: oklch(0.34 0.07 264);
+    --on-primary-container: oklch(0.9 0.05 264);
+    --secondary: oklch(0.27 0.012 264);
+    --secondary-foreground: oklch(0.985 0 0);
+    --secondary-container: oklch(0.33 0.05 264);
+    --on-secondary-container: oklch(0.9 0.04 264);
+    --muted: oklch(0.269 0 0);
+    --muted-foreground: oklch(0.75 0 0);
+    --accent: oklch(0.269 0 0);
+    --accent-foreground: oklch(0.985 0 0);
+    --destructive: oklch(0.7 0.19 22);
+    --destructive-foreground: oklch(0.145 0 0);
+    --error: var(--destructive);
+    --on-error: var(--destructive-foreground);
+    --error-container: oklch(0.33 0.08 27);
+    --on-error-container: oklch(0.92 0.05 27);
+    --inverse-surface: oklch(0.92 0.004 264);
+    --inverse-on-surface: oklch(0.25 0.005 264);
+    --inverse-primary: oklch(0.5 0.21 264);
+    --scrim: oklch(0 0 0);
+    --border: oklch(0.32 0 0);
+    --input: oklch(0.32 0 0);
+    --ring: oklch(0.8 0.11 264);
 
-  --state-backlog: oklch(0.72 0 0);
-  --state-unstarted: oklch(0.75 0.06 250);
-  --state-started: oklch(0.78 0.13 250);
-  --state-completed: oklch(0.78 0.14 150);
-  --state-canceled: oklch(0.72 0.03 25);
+    --state-backlog: oklch(0.72 0 0);
+    --state-unstarted: oklch(0.75 0.06 250);
+    --state-started: oklch(0.78 0.13 250);
+    --state-completed: oklch(0.78 0.14 150);
+    --state-canceled: oklch(0.72 0.03 25);
 
-  /*
-   * MD3 tonal surface system (dark).
-   *
-   * The canvas is `--surface-container` — a dark cool-tinted neutral. Following MD3, elevation in
-   * dark mode reads as LIGHTER, so the floating rounded panels (sidebar + main content + active
-   * tab) take `--surface` which is set ABOVE the canvas tone: the canvas sits at 0.23 and the
-   * panels brighten to 0.265, so the lifted layers read as elevated rather than recessed. The
-   * container ramp is monotonic by lightness — lowest/low step DOWN below the canvas (recessed
-   * wells) and high/highest step UP above the panels (hover states, popovers, nested cards):
-   * 0.175 → 0.205 → 0.23 (canvas) → 0.265 (panels) → 0.305 → 0.34. An indigo tint (hue 264,
-   * matching --primary) rises in chroma with elevation for MD3 elevation-tint; lightness is
-   * unchanged so the monotonic-ramp + elevation tests still hold.
-   */
-  --surface: oklch(0.265 0.012 264);
-  --surface-container-lowest: oklch(0.175 0.008 264);
-  --surface-container-low: oklch(0.205 0.01 264);
-  --surface-container: oklch(0.23 0.012 264);
-  --surface-container-high: oklch(0.305 0.018 264);
-  --surface-container-highest: oklch(0.34 0.022 264);
-  --surface-variant: oklch(0.36 0.024 264);
-  --on-surface: oklch(0.945 0.006 264);
-  --on-surface-variant: oklch(0.78 0.01 264);
-  --outline: oklch(0.6 0.012 264);
-  --outline-variant: oklch(0.36 0.014 264);
+    /*
+     * MD3 tonal surface system (dark).
+     *
+     * The canvas is `--surface-container` — a dark cool-tinted neutral. Following MD3, elevation
+     * in dark mode reads as LIGHTER, so the floating rounded panels (sidebar + main content +
+     * active tab) take `--surface` which is set ABOVE the canvas tone: the canvas sits at 0.23 and
+     * the panels brighten to 0.265, so the lifted layers read as elevated rather than recessed.
+     * The container ramp is monotonic by lightness — lowest/low step DOWN below the canvas
+     * (recessed wells) and high/highest step UP above the panels (hover states, popovers, nested
+     * cards): 0.175 → 0.205 → 0.23 (canvas) → 0.265 (panels) → 0.305 → 0.34. An indigo tint (hue
+     * 264, matching --primary) rises in chroma with elevation for MD3 elevation-tint; lightness is
+     * unchanged so the monotonic-ramp + elevation tests still hold.
+     */
+    --surface: oklch(0.265 0.012 264);
+    --surface-container-lowest: oklch(0.175 0.008 264);
+    --surface-container-low: oklch(0.205 0.01 264);
+    --surface-container: oklch(0.23 0.012 264);
+    --surface-container-high: oklch(0.305 0.018 264);
+    --surface-container-highest: oklch(0.34 0.022 264);
+    --surface-variant: oklch(0.36 0.024 264);
+    --on-surface: oklch(0.945 0.006 264);
+    --on-surface-variant: oklch(0.78 0.01 264);
+    --outline: oklch(0.6 0.012 264);
+    --outline-variant: oklch(0.36 0.014 264);
+  }
 }
 
 @theme inline {

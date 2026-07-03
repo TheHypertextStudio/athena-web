@@ -6,7 +6,7 @@
  * during client render do not execute. The provider stack must keep theme setup script-free.
  */
 import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/query', () => ({
   createQueryClient: () => ({
@@ -18,20 +18,6 @@ vi.mock('@/lib/query', () => ({
 }));
 
 import { Providers } from '../../src/components/providers';
-
-beforeEach(() => {
-  Object.defineProperty(window, 'matchMedia', {
-    configurable: true,
-    value: vi.fn(() => ({
-      addEventListener: vi.fn(),
-      addListener: vi.fn(),
-      matches: false,
-      media: '(prefers-color-scheme: dark)',
-      removeEventListener: vi.fn(),
-      removeListener: vi.fn(),
-    })),
-  });
-});
 
 afterEach(cleanup);
 

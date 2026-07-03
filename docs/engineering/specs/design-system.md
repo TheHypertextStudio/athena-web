@@ -40,7 +40,7 @@ Two product rules touch every component and are implemented once, centrally:
 
 ## 1. Design Tokens
 
-All tokens are **CSS custom properties in OKLCH**, defined under `:root` / `.dark`, then **mapped to Tailwind utilities via `@theme inline`** (the shadcn v4 pattern). This is the single mechanism — no JS token object, no `tailwind.config`.
+All tokens are **CSS custom properties in OKLCH**, defined under `:root` plus a browser `@media (prefers-color-scheme: dark)` override, then **mapped to Tailwind utilities via `@theme inline`** (the shadcn v4 pattern). This is the single mechanism — no JS token object, no `tailwind.config`, no JS theme synchronizer.
 
 File: `@docket/ui/src/styles/globals.css` (imported by every app's own `globals.css`).
 
@@ -48,8 +48,7 @@ File: `@docket/ui/src/styles/globals.css` (imported by every app's own `globals.
 @import 'tailwindcss';
 @import 'tw-animate-css';
 
-/* dark is a class on <html>, toggled by next-themes; no media-query auto */
-@custom-variant dark (&:is(.dark *));
+/* dark mode follows the browser color scheme; no JS theme provider */
 
 /* ---------------------------------------------------------------- *
  * 1. PRIMITIVE + SEMANTIC SURFACE TOKENS (light)
@@ -143,45 +142,47 @@ File: `@docket/ui/src/styles/globals.css` (imported by every app's own `globals.
 /* ---------------------------------------------------------------- *
  * 2. DARK THEME OVERRIDES
  * ---------------------------------------------------------------- */
-.dark {
-  --background: oklch(0.165 0 0);
-  --foreground: oklch(0.95 0 0);
-  --card: oklch(0.195 0 0);
-  --card-foreground: oklch(0.95 0 0);
-  --popover: oklch(0.195 0 0);
-  --popover-foreground: oklch(0.95 0 0);
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: oklch(0.165 0 0);
+    --foreground: oklch(0.95 0 0);
+    --card: oklch(0.195 0 0);
+    --card-foreground: oklch(0.95 0 0);
+    --popover: oklch(0.195 0 0);
+    --popover-foreground: oklch(0.95 0 0);
 
-  --surface-1: oklch(0.195 0 0);
-  --surface-2: oklch(0.225 0 0);
-  --surface-3: oklch(0.26 0 0);
-  --rail: oklch(0.13 0 0); /* rail darker than bg in dark mode */
-  --rail-foreground: oklch(0.85 0 0);
+    --surface-1: oklch(0.195 0 0);
+    --surface-2: oklch(0.225 0 0);
+    --surface-3: oklch(0.26 0 0);
+    --rail: oklch(0.13 0 0); /* rail darker than bg in dark mode */
+    --rail-foreground: oklch(0.85 0 0);
 
-  --primary: oklch(0.62 0.2 264);
-  --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.26 0 0);
-  --secondary-foreground: oklch(0.95 0 0);
-  --muted: oklch(0.26 0 0);
-  --muted-foreground: oklch(0.7 0 0);
-  --accent: oklch(0.26 0 0);
-  --accent-foreground: oklch(0.95 0 0);
-  --destructive: oklch(0.62 0.21 27);
-  --destructive-foreground: oklch(0.99 0 0);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 14%);
-  --ring: oklch(0.62 0.2 264);
+    --primary: oklch(0.62 0.2 264);
+    --primary-foreground: oklch(0.99 0 0);
+    --secondary: oklch(0.26 0 0);
+    --secondary-foreground: oklch(0.95 0 0);
+    --muted: oklch(0.26 0 0);
+    --muted-foreground: oklch(0.7 0 0);
+    --accent: oklch(0.26 0 0);
+    --accent-foreground: oklch(0.95 0 0);
+    --destructive: oklch(0.62 0.21 27);
+    --destructive-foreground: oklch(0.99 0 0);
+    --border: oklch(1 0 0 / 10%);
+    --input: oklch(1 0 0 / 14%);
+    --ring: oklch(0.62 0.2 264);
 
-  --health-on-track: oklch(0.7 0.16 150);
-  --health-on-track-subtle: oklch(0.3 0.06 150);
-  --health-at-risk: oklch(0.8 0.15 85);
-  --health-at-risk-subtle: oklch(0.32 0.07 85);
-  --health-off-track: oklch(0.68 0.2 27);
-  --health-off-track-subtle: oklch(0.3 0.08 27);
-  --health-no-update: oklch(0.55 0 0);
-  --health-no-update-subtle: oklch(0.26 0 0);
+    --health-on-track: oklch(0.7 0.16 150);
+    --health-on-track-subtle: oklch(0.3 0.06 150);
+    --health-at-risk: oklch(0.8 0.15 85);
+    --health-at-risk-subtle: oklch(0.32 0.07 85);
+    --health-off-track: oklch(0.68 0.2 27);
+    --health-off-track-subtle: oklch(0.3 0.08 27);
+    --health-no-update: oklch(0.55 0 0);
+    --health-no-update-subtle: oklch(0.26 0 0);
 
-  --agent: oklch(0.68 0.17 295);
-  --session-awaiting: oklch(0.8 0.15 85);
+    --agent: oklch(0.68 0.17 295);
+    --session-awaiting: oklch(0.8 0.15 85);
+  }
 }
 
 /* ---------------------------------------------------------------- *
@@ -415,11 +416,11 @@ Rules: **no decorative motion.** Group collapse animates height/opacity; Cmd+K f
 
 ### 2.3 Theme provider (dark/light)
 
-Use `next-themes` (`attribute="class"`, `defaultTheme="system"`, `enableSystem`, `disableTransitionOnChange`). Wrap each app root. Theme preference persists to `Hub.preferences.theme` on change (server action) **and** localStorage for instant paint; a small inline script prevents FOUC. `data-density` and `data-org-accent` are applied by `AppShell`, not the theme provider.
+Dark mode follows the browser with `@media (prefers-color-scheme: dark)`. Do not add a JS theme provider, inline theme script, or `localStorage.theme` synchronization. `data-density` and `data-org-accent` are applied by `AppShell`.
 
 ### 2.4 Dependencies (`@docket/ui/package.json`)
 
-`tailwindcss@^4`, `tw-animate-css`, `class-variance-authority`, `clsx`, `tailwind-merge` (the `cn()` util), `lucide-react`, `next-themes`, `@radix-ui/*` (transitively via shadcn primitives), `cmdk` (Cmd+K), `sonner` (toasts), `vaul` (mobile drawers), `@dnd-kit/*` (List reorder/kanban drag), `react-arborist` **or** custom virtualized tree for the List (see §5.1), `@tanstack/react-virtual` (row virtualization). Pin exact versions; no `tailwindcss-animate` (deprecated).
+`tailwindcss@^4`, `tw-animate-css`, `class-variance-authority`, `clsx`, `tailwind-merge` (the `cn()` util), `lucide-react`, `@radix-ui/*` (transitively via shadcn primitives), `cmdk` (Cmd+K), `sonner` (toasts), `vaul` (mobile drawers), `@dnd-kit/*` (List reorder/kanban drag), `react-arborist` **or** custom virtualized tree for the List (see §5.1), `@tanstack/react-virtual` (row virtualization). Pin exact versions; no `tailwindcss-animate` (deprecated).
 
 ---
 
@@ -607,7 +608,7 @@ All chords are discoverable via `KeyHint` in menus/tooltips. No key conflicts wi
 
 ## 8. Accessibility (WCAG 2.2 AA)
 
-- **Color:** every semantic state carries a **non‑color cue** (icon shape + text label) — health, state, priority, session status. Token pairs guarantee ≥4.5:1 text contrast (`*-foreground` on `*-subtle`); verify with automated contrast tests in CI on the token file.
+- **Color:** every semantic state carries a **non‑color cue** (icon shape + text label) — health, state, priority, session status. Token pairs target ≥4.5:1 text contrast (`*-foreground` on `*-subtle`); verify at the component or journey level instead of parser-testing CSS token files.
 - **Focus:** visible `ring-ring` (2px) on all interactive elements; never remove outline without replacement. Focus is trapped in `Dialog`/`Sheet`/`CommandPalette` and restored on close (Radix handles).
 - **Keyboard:** 100% of actions reachable without a pointer (List, palette, approvals, timeline reschedule has a keyboard alternative). Roving tabindex in List/rail.
 - **Semantics/ARIA:** Radix primitives provide roles; custom `ListView` uses `role="grid"`/`row`/`gridcell` with `aria-selected`, `aria-expanded` on group headers, `aria-live="polite"` for the session activity stream and optimistic updates, `aria-busy` during loads. `SessionActivityItem` announces new agent messages politely.
@@ -626,4 +627,4 @@ All chords are discoverable via `KeyHint` in menus/tooltips. No key conflicts wi
 5. `ListView` family + `useListKeyboard` (§5.1) — unblocks most screens.
 6. `DetailPage` + `PropertiesPanel` (§5.2); `CommandPalette` (§5.4); `useGlobalHotkeys` (§7).
 7. `SessionView` + approval components (§5.5); `DailyPlan` cockpit (§5.6); `TimelineView`/`PortfolioRoadmap` (§5.3).
-8. A11y + contrast tests; Playwright film‑run styling (reduced motion, 1280×800) per eng plan §6.
+8. A11y checks and journey-level visual review; Playwright film-run styling (reduced motion, 1280x800) per eng plan §6.

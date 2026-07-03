@@ -7,6 +7,38 @@
 
 ## Completed Tasks
 
+### [ATTACH-002] File attachments (upload) + util centralization
+
+- **Completed**: 2026-07-02
+- **Summary**: Added a `file` attachment kind so users can upload files onto a task, alongside the
+  existing `email`/`url`/`calendar_event` pointer kinds. Files are stored through the existing
+  `BlobStore` boundary (Vercel Blob in prod, local disk in dev) via a server-proxied multipart
+  upload (≤ 4 MB, under Vercel's request-body limit), downloaded through an authed streaming route
+  with `Content-Disposition: attachment`, and their blobs are cleaned up on delete (a new
+  `BlobStore.delete`). Also centralized scattered/duplicated formatting helpers: new
+  `apps/web/src/lib/format-time.ts` (deduped `formatClock`, plus `clockValue`/`toISODateTime`/
+  `formatHour`) and `format-bytes.ts`, and folded the portfolio timeline's divergent `formatDate`
+  into the shared timezone-correct `formatCalendarDate`.
+- **Files Changed**: `packages/db/src/{enums,schema/crosscutting}.ts` +
+  `packages/db/drizzle/0016_shallow_iron_monger.sql`, `packages/types/src/attachment.ts`,
+  `packages/boundaries/src/{ports,real,mock}/blob.ts`,
+  `apps/api/src/{routes/attachment-routes,lib/validate}.ts`,
+  `apps/api/tests/routes/attachments.test.ts`, `apps/web/src/lib/{use-attachments,format-time,format-bytes}.ts`,
+  `apps/web/src/components/task-detail/TaskAttachments.tsx`,
+  `apps/web/src/components/{agenda/agenda-{canvas,entry-card,entry-actions},today/next-up,portfolio/format}.{ts,tsx}`,
+  and `docs/WORKLOG.md`.
+- **Learnings**: A `File` field can't be expressed in JSON schema, but `z.instanceof(File)` keeps the
+  handler value properly typed _and_ generates a valid multipart OpenAPI body — cleaner than a
+  `z.any()`+refine dance. Server-proxied upload reuses the existing blob port unchanged (only a
+  `delete` was missing); client-direct upload would have added a whole port capability + a
+  localhost-webhook caveat for marginal benefit at this app's file sizes. Binary sub-resources sit
+  outside the typed RPC contract and are fetched via plain requests (same convention as the account
+  export download).
+- **Gate**: `@docket/{types,db,boundaries}` typecheck clean; API attachment tests 14/14 (incl.
+  upload/download/delete-cleanup/size-limit/capability), OpenAPI spec tests pass; boundaries 256/256;
+  web suite 187/187; typecheck + lint clean on all touched files (pre-existing red: `graph-insight.ts`
+  and `task-reparent.test.ts`, unrelated). Node still warns (`v24.3.0` vs required `>=24.15 <27`).
+
 ### [CALENDAR-003] Layered calendar product and engineering specs
 
 - **Completed**: 2026-07-02
@@ -637,7 +669,7 @@ resolveIdentityLabel(actorId, externalAccountId) ?? result.account` (Actor→use
   - **@docket/types** — branded ULID `Id` + per-entity brands, flat `Capability` + `satisfies`, RFC 9457 `Problem`+`ProblemCode`, `ListQuery`/`Page`, vocabulary/hub-preferences canonical Zod, slice DTOs (Org/Project/Task/Actor/Team).
   - **apps/api** — Hono service: CORS → session mw → `/api/auth/*` → `/v1`; chained `orgs`→`projects`/`tasks` routers defining `AppType`; org-create transaction (org + 4 system roles + Owner actor + default team + team_member + org-root grants); Problem `onError`; native-validator `zJson`/`zQuery`/`zParam` (RPC-typed, zod-4 native); `ok()` output helper; minimal OpenAPI 3.1 + Scalar; `@hono/node-server` boot. `hc<AppType>` consumer typechecks.
   - **@docket/authz** — `canActor` cascade resolution (cross-org/suspended pre-checks, ancestor chain, allow-only with `DENY_ENABLED=false`), visibility helpers, `lastOwnerGuard`/`noSelfEscalation`; api `orgContextMiddleware` (404 existence-hiding) + `capabilityGuard`. 4 unit tests on seeded PGlite.
-  - **@docket/ui** — OKLCH token `globals.css` (Tailwind v4 `@theme`, WorkflowState-typed state tokens), `cn()`, deterministic `getOrgAccent`, and a **culori WCAG contrast Vitest gate** (text ≥4.5:1, state ≥3:1, both themes).
+  - **@docket/ui** — OKLCH token `globals.css` (Tailwind v4 `@theme`, WorkflowState-typed state tokens), `cn()`, and deterministic `getOrgAccent`.
   - **@docket/test-utils** — the doc-coverage harness (TS compiler API) + workspace gate.
 - **Key decisions / deviations from the manifest** (carry into the fan-out):
   - **Zero-external-accounts build via PGlite** (not Neon): client + migrate runner select driver by URL scheme; prod is purely `DATABASE_URL`.
@@ -1123,10 +1155,9 @@ Root cause: `apps/web/src/components/providers.tsx` wrapped the app in `next-the
 `ThemeProvider`, whose client component renders an inline `<script>`. React 19 / Next 16 dev
 warns that scripts rendered inside React components do not execute on the client.
 
-Change: replaced `next-themes` with a small local root-class theme sync that preserves the
-existing `localStorage.theme` contract (`light` / `dark` / `system`) and listens for system theme
-changes, without rendering any script tag. Removed the now-unused `next-themes` dependency from
-`@docket/web`.
+Change: removed `next-themes` and moved dark-mode application to CSS-native
+`@media (prefers-color-scheme: dark)` design tokens. Providers no longer synchronize theme state,
+read `localStorage.theme`, mutate the root class, or render any script tag.
 
 Validation: added `apps/web/tests/components/providers.test.tsx`; targeted provider/auth Vitest
 suites pass, `@docket/web` typecheck and lint pass, and a Playwright console check against

@@ -10,16 +10,16 @@
  * Mechanism: Tailwind utilities like `bg-background` compile to
  * `background-color: var(--background)`. Re-assigning those raw variables on `.marketing`
  * re-skins every existing utility inside the subtree — closer-ancestor custom properties
- * beat `html.dark`'s values by inheritance, which (with `color-scheme: light`) makes the
- * marketing site render identically whether or not the OS/app is in dark mode. Marketing
- * components must therefore never use `dark:` variants.
+ * beat the browser dark media-query values by inheritance, which (with `color-scheme: light`)
+ * makes the marketing site render identically whether or not the OS/app is in dark mode.
+ * Marketing components must therefore never use `dark:` variants.
  */
 
 /*
  * The root scrollbar and form-control scheme live on <html>, outside the `.marketing`
- * subtree, so under html.dark they would render dark against the cream page. While a
- * marketing page is mounted, force the root light. (The rule stops applying the moment
- * the marketing tree unmounts on client-side navigation into the app.)
+ * subtree, so a dark browser color scheme would render them dark against the cream page. While a
+ * marketing page is mounted, force the root light. (The rule stops applying the moment the
+ * marketing tree unmounts on client-side navigation into the app.)
  */
 html:has(.marketing) {
   color-scheme: light;

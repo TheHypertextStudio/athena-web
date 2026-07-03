@@ -37,12 +37,35 @@ import type {
 /** Reject requests whose signed timestamp is older than this (Slack's replay window). */
 const SLACK_REPLAY_WINDOW_S = 300;
 
+/**
+ * Slack renders user mentions as `<@U123>` (or `<@U123|label>`) in raw message text; user ids
+ * start with `U` or `W` (Enterprise Grid). Captured ids become draft participants so the drain
+ * can resolve "does this message mention a connected user" without re-parsing text.
+ */
+const SLACK_MENTION_RE = /<@([UW][A-Z0-9]+)(?:\|[^>]*)?>/g;
+
+/**
+ * Message subtypes that are pure channel noise (edits, deletes, join/leave/topic churn, bot
+ * chatter) — normalized to nothing. `thread_broadcast` and `file_share` are real user messages
+ * and intentionally NOT listed.
+ */
+const SKIPPED_MESSAGE_SUBTYPES: ReadonlySet<string> = new Set([
+  'message_changed',
+  'message_deleted',
+  'channel_join',
+  'channel_leave',
+  'channel_topic',
+  'bot_message',
+]);
+
 /** The per-event context the Slack detail-builders inspect. */
 interface SlackDetailContext {
   /** The inner Slack event `type` (`message`, `app_mention`, …). */
   readonly eventType: string | undefined;
   /** The channel the event happened in, when present. */
   readonly channelId: string | undefined;
+  /** The Slack conversation type (`im`/`mpim`/`channel`/`group`), when present. */
+  readonly channelType: string | null;
   /** The parent thread timestamp, or `null` for a top-level message. */
   readonly threadTs: string | null;
   /** The message text (empty string when the event carries none). */
@@ -60,6 +83,7 @@ const buildSlackMessageDetail: DetailBuilder<SlackDetailContext> = (ctx) => {
     channelId: ctx.channelId,
     threadTs: ctx.threadTs,
     text: ctx.text,
+    channelType: ctx.channelType,
   };
 };
 
@@ -134,24 +158,34 @@ export class RealSlackObserver implements Observer {
     // No inner event (e.g. the url_verification handshake) — genuinely nothing to record.
     if (!ev) return [];
     const evType = str(ev, 'type');
+    // Channel-noise subtypes (edits/deletes/join/leave/topic) and bot chatter carry nothing the
+    // feed should record — drop them here so they never reach the drain as drafts.
+    const subtype = str(ev, 'subtype');
+    if (subtype && SKIPPED_MESSAGE_SUBTYPES.has(subtype)) return [];
+    if (str(ev, 'bot_id')) return [];
     const mappedKind = this.kindFor(evType);
     // Slack is fundamentally a messaging surface, so an unmapped event still records as a
     // `message`-kind row (with a `generic` detail) rather than being dropped.
     const kind: EventKind = mappedKind ?? 'message';
     const channelId = str(ev, 'channel');
+    const channelType = str(ev, 'channel_type') ?? null;
     const userId = str(ev, 'user');
     const actor: EventActorRef | undefined = userId ? { externalId: userId } : undefined;
     const text = str(ev, 'text') ?? '';
     const threadTs = str(ev, 'thread_ts') ?? null;
+    const participants = this.mentionedUserIds(text).map(
+      (externalId): EventActorRef => ({ externalId }),
+    );
     const entity: EventEntityRef | undefined = channelId
       ? { kind: 'thread', externalId: channelId }
       : undefined;
     const dedupeKey =
       (body ? this.route(body)?.externalEventId : undefined) ?? `slack:${event.receivedAt}`;
-    const title = this.titleFor(mappedKind, evType);
+    const title = this.titleFor(mappedKind, evType, channelType);
     const detail: EventDetail = runDetailBuilders(SLACK_DETAIL_BUILDERS, {
       eventType: evType,
       channelId,
+      channelType,
       threadTs,
       text,
       title,
@@ -164,10 +198,21 @@ export class RealSlackObserver implements Observer {
         ...(text ? { summary: text } : {}),
         ...(actor ? { actor } : {}),
         ...(entity ? { entity } : {}),
+        ...(participants.length ? { participants } : {}),
         dedupeKey,
         detail,
       },
     ];
+  }
+
+  /** The distinct Slack user ids `<@U…>`-mentioned in a message text, in order of appearance. */
+  private mentionedUserIds(text: string): string[] {
+    const seen = new Set<string>();
+    for (const match of text.matchAll(SLACK_MENTION_RE)) {
+      const id = match[1];
+      if (id) seen.add(id);
+    }
+    return [...seen];
   }
 
   /** Map a Slack event type to a canonical event kind, or null when it has no specific kind. */
@@ -185,8 +230,14 @@ export class RealSlackObserver implements Observer {
   }
 
   /** The display title for a Slack event (degrades to the raw type for unmapped events). */
-  private titleFor(kind: EventKind | null, evType: string | undefined): string {
+  private titleFor(
+    kind: EventKind | null,
+    evType: string | undefined,
+    channelType: string | null,
+  ): string {
     if (kind === 'mention') return 'Mentioned you in Slack';
+    if (kind === 'message' && channelType === 'im') return 'Slack direct message';
+    if (kind === 'message' && channelType === 'mpim') return 'Slack group message';
     if (kind) return `New Slack ${kind}`;
     return `Slack event: ${evType ?? 'unknown'}`;
   }

@@ -19,6 +19,7 @@ import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
+import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
 
 type MilestoneRow = typeof milestone.$inferSelect;
 
@@ -93,6 +94,7 @@ const milestones = new Hono<AppEnv>()
       const row = inserted[0];
       /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
       if (!row) throw new Error('milestone insert returned no row');
+      await enqueueSearchUpsert(orgId, 'milestone', row.id);
       return ok(c, MilestoneOut, toOut(row));
     },
   )
@@ -147,6 +149,7 @@ const milestones = new Hono<AppEnv>()
         .returning();
       const row = updated[0];
       if (!row) throw new NotFoundError('Milestone not found');
+      await enqueueSearchUpsert(orgId, 'milestone', row.id);
       return ok(c, MilestoneOut, toOut(row));
     },
   )
@@ -170,6 +173,7 @@ const milestones = new Hono<AppEnv>()
         .returning();
       const row = deleted[0];
       if (!row) throw new NotFoundError('Milestone not found');
+      await enqueueSearchDelete(orgId, 'milestone', row.id);
       return ok(c, MilestoneOut, toOut(row));
     },
   );

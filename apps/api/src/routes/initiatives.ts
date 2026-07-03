@@ -33,6 +33,7 @@ import { pageResult, seekAfter } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
+import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
 
 import {
   assertOwnerInOrg,
@@ -117,6 +118,7 @@ const initiatives = new Hono<AppEnv>()
         title: row.name,
         subject: { type: 'initiative', id: row.id, title: row.name },
       });
+      await enqueueSearchUpsert(orgId, 'initiative', row.id);
       return ok(c, InitiativeOut, toOut(row));
     },
   )
@@ -181,6 +183,7 @@ const initiatives = new Hono<AppEnv>()
           detail: { schema: 'docket.state_change', fromState: null, toState: row.status },
         });
       }
+      await enqueueSearchUpsert(orgId, 'initiative', row.id);
       return ok(c, InitiativeOut, toOut(row));
     },
   )
@@ -204,6 +207,7 @@ const initiatives = new Hono<AppEnv>()
         .returning();
       const row = deleted[0];
       if (!row) throw new NotFoundError('Initiative not found');
+      await enqueueSearchDelete(orgId, 'initiative', row.id);
       return ok(c, InitiativeOut, toOut(row));
     },
   )

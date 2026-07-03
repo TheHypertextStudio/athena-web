@@ -5,6 +5,7 @@ import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { NotFoundError, ValidationError } from '../error';
+import { enqueueSearchUpsert } from '../search/write-through';
 import type { McpContext } from './auth';
 import { jsonResult, runTool, scopedActor, authorize } from './result';
 import { subjectTable } from './tools-shared';
@@ -91,6 +92,7 @@ export function registerContentTools(server: McpRegistrar, ctx: McpContext): voi
         const row = inserted[0];
         /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
         if (!row) throw new Error('comment insert returned no row');
+        await enqueueSearchUpsert(input.orgId, 'comment', row.id);
         return jsonResult({ id: row.id, subjectType: row.subjectType, subjectId: row.subjectId });
       }),
   );
@@ -150,6 +152,8 @@ export function registerContentTools(server: McpRegistrar, ctx: McpContext): voi
           }
           return created;
         });
+        await enqueueSearchUpsert(input.orgId, 'update', row.id);
+        await enqueueSearchUpsert(input.orgId, row.subjectType, row.subjectId);
         return jsonResult({ id: row.id, subjectType: row.subjectType, subjectId: row.subjectId });
       }),
   );
@@ -241,6 +245,7 @@ export function registerContentTools(server: McpRegistrar, ctx: McpContext): voi
         const row = inserted[0];
         /* v8 ignore next -- @preserve defensive: linked task insert returned no row */
         if (!row) throw new Error('linked task insert returned no row');
+        await enqueueSearchUpsert(input.orgId, 'task', row.id);
         return jsonResult({ id: row.id, alreadyLinked: false });
       }),
   );

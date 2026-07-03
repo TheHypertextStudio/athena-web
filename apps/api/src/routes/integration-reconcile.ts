@@ -27,6 +27,7 @@ import type { ImportedItem } from '@docket/integrations';
 import type { WritableConnector } from '@docket/integrations';
 
 import { ConflictError } from '../error';
+import { enqueueSearchUpsert } from '../search/write-through';
 
 import { type IntegrationRow } from './integration-provider';
 
@@ -254,15 +255,19 @@ export async function reconcileTasks(
       tally.inserted += 1;
     } else if (action.kind === 'pull' && local && remote) {
       await applyPull(local.id, remote, keys);
+      await enqueueSearchUpsert(orgId, 'task', local.id);
       tally.pulled += 1;
     } else if (action.kind === 'push' && local && writable) {
       await pushUpdate(row, local, writable);
+      await enqueueSearchUpsert(orgId, 'task', local.id);
       tally.pushed += 1;
     } else if (action.kind === 'pushDelete' && local && writable) {
       await pushDelete(local, writable, row.provider);
+      await enqueueSearchUpsert(orgId, 'task', local.id);
       tally.deleted += 1;
     } else if (action.kind === 'archive' && local && remote) {
       await archiveLocal(local.id, remote, keys);
+      await enqueueSearchUpsert(orgId, 'task', local.id);
       tally.archived += 1;
     }
   }
@@ -295,26 +300,32 @@ async function insertLinked(
   const anchor = item.provenance.externalUpdatedAt
     ? new Date(item.provenance.externalUpdatedAt)
     : null;
-  await db.insert(task).values({
-    organizationId: orgId,
-    title: item.title,
-    description: item.body ?? null,
-    teamId,
-    state: item.completed ? keys.completedKey : keys.openKey,
-    ...(item.completed ? { completedAt: anchor ?? new Date() } : {}),
-    ...(assigneeId !== null ? { assigneeId } : {}),
-    ...(item.dueDate ? { dueDate: new Date(item.dueDate) } : {}),
-    source: 'linked',
-    sourceIntegrationId: integrationId,
-    externalId: item.provenance.externalId,
-    externalUrl: item.provenance.externalUrl ?? null,
-    sourceSyncMode: 'mirror',
-    externalListId: item.provenance.externalListId ?? null,
-    externalEtag: item.provenance.externalEtag ?? null,
-    // Echo guard: stamp updatedAt == externalUpdatedAt so the task is born clean.
-    ...(anchor ? { externalUpdatedAt: anchor, updatedAt: anchor } : {}),
-    createdBy: actorId,
-  });
+  const inserted = await db
+    .insert(task)
+    .values({
+      organizationId: orgId,
+      title: item.title,
+      description: item.body ?? null,
+      teamId,
+      state: item.completed ? keys.completedKey : keys.openKey,
+      ...(item.completed ? { completedAt: anchor ?? new Date() } : {}),
+      ...(assigneeId !== null ? { assigneeId } : {}),
+      ...(item.dueDate ? { dueDate: new Date(item.dueDate) } : {}),
+      source: 'linked',
+      sourceIntegrationId: integrationId,
+      externalId: item.provenance.externalId,
+      externalUrl: item.provenance.externalUrl ?? null,
+      sourceSyncMode: 'mirror',
+      externalListId: item.provenance.externalListId ?? null,
+      externalEtag: item.provenance.externalEtag ?? null,
+      // Echo guard: stamp updatedAt == externalUpdatedAt so the task is born clean.
+      ...(anchor ? { externalUpdatedAt: anchor, updatedAt: anchor } : {}),
+      createdBy: actorId,
+    })
+    .returning({ id: task.id });
+  const row = inserted[0];
+  if (!row) throw new Error('linked task insert returned no row');
+  await enqueueSearchUpsert(orgId, 'task', row.id);
 }
 
 /** Apply a newer remote's fields onto a local linked task and restamp the anchors. */
@@ -461,6 +472,7 @@ async function pushNativeCreates(
         updatedAt: anchor,
       })
       .where(eq(task.id, t.id));
+    await enqueueSearchUpsert(orgId, 'task', t.id);
     created += 1;
   }
   return created;

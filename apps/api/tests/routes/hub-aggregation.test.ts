@@ -607,49 +607,78 @@ describe('hub /portfolio (org swimlanes → program lanes → project bars)', ()
 });
 
 describe('hub /search (cross-org typed hits)', () => {
-  it('returns org-chipped task/project/program hits and honors the limit', async () => {
+  function searchRoute(orgId: string, kind: string, id: string) {
+    return {
+      type: 'entity',
+      organizationId: orgId,
+      entityKind: kind,
+      entityId: id,
+      href: `/orgs/${orgId}/search?id=${id}`,
+    };
+  }
+
+  it('returns org-chipped semantic hits and honors the limit', async () => {
     const { userId } = await seedUserWithHub();
     const org = await seedBaseOrg(db, schema);
     await joinOrg(userId, org.orgId);
 
-    await db.insert(schema.task).values({
-      organizationId: org.orgId,
-      title: 'Zephyr Task',
-      teamId: org.teamId,
-      state: 'todo',
-      createdBy: org.humanActorId,
-    });
-    await db.insert(schema.project).values({
-      organizationId: org.orgId,
-      name: 'Zephyr Project',
-      teamId: org.teamId,
-      status: 'active',
-      createdBy: org.humanActorId,
-    });
-    await db.insert(schema.program).values({
-      organizationId: org.orgId,
-      name: 'Zephyr Program',
-      status: 'active',
-      createdBy: org.humanActorId,
-    });
+    await db.insert(schema.searchDocument).values([
+      {
+        id: `task:${org.orgId}:zephyr_task`,
+        organizationId: org.orgId,
+        kind: 'task',
+        family: 'work',
+        sourceTable: 'task',
+        entityId: 'zephyr_task',
+        title: 'Zephyr Task',
+        facet: {},
+        route: searchRoute(org.orgId, 'task', 'zephyr_task'),
+        visibility: { mode: 'org_members' },
+        baseRank: 100,
+      },
+      {
+        id: `project:${org.orgId}:zephyr_project`,
+        organizationId: org.orgId,
+        kind: 'project',
+        family: 'work',
+        sourceTable: 'project',
+        entityId: 'zephyr_project',
+        title: 'Zephyr Project',
+        facet: {},
+        route: searchRoute(org.orgId, 'project', 'zephyr_project'),
+        visibility: { mode: 'org_members' },
+        baseRank: 95,
+      },
+      {
+        id: `program:${org.orgId}:zephyr_program`,
+        organizationId: org.orgId,
+        kind: 'program',
+        family: 'work',
+        sourceTable: 'program',
+        entityId: 'zephyr_program',
+        title: 'Zephyr Program',
+        facet: {},
+        route: searchRoute(org.orgId, 'program', 'zephyr_program'),
+        visibility: { mode: 'org_members' },
+        baseRank: 88,
+      },
+    ]);
 
     const app = appWithSession(hub, fakeSession(userId));
     const search = await body<{
       query: string;
-      results: { organizationId: string; type: string; id: string; title: string }[];
+      items: { organizationId: string; kind: string; id: string; title: string }[];
     }>(await app.request('/search?q=Zephyr'));
     expect(search.query).toBe('Zephyr');
-    const types = new Set(search.results.map((r) => r.type));
+    const types = new Set(search.items.map((r) => r.kind));
     expect(types.has('task')).toBe(true);
     expect(types.has('project')).toBe(true);
     expect(types.has('program')).toBe(true);
-    expect(search.results.every((r) => r.organizationId === org.orgId)).toBe(true);
+    expect(search.items.every((r) => r.organizationId === org.orgId)).toBe(true);
 
     // A tiny limit caps the merged result set.
-    const limited = await body<{ results: unknown[] }>(
-      await app.request('/search?q=Zephyr&limit=1'),
-    );
-    expect(limited.results).toHaveLength(1);
+    const limited = await body<{ items: unknown[] }>(await app.request('/search?q=Zephyr&limit=1'));
+    expect(limited.items).toHaveLength(1);
   });
 
   it('tenant isolation: never matches entities in a non-member org', async () => {
@@ -657,16 +686,21 @@ describe('hub /search (cross-org typed hits)', () => {
     const mine = await seedBaseOrg(db, schema);
     const foreign = await seedBaseOrg(db, schema);
     await joinOrg(userId, mine.orgId);
-    await db.insert(schema.task).values({
+    await db.insert(schema.searchDocument).values({
+      id: `task:${foreign.orgId}:quasar_secret`,
       organizationId: foreign.orgId,
+      kind: 'task',
+      family: 'work',
+      sourceTable: 'task',
+      entityId: 'quasar_secret',
       title: 'Quasar Secret',
-      teamId: foreign.teamId,
-      state: 'todo',
-      createdBy: foreign.humanActorId,
+      facet: {},
+      route: searchRoute(foreign.orgId, 'task', 'quasar_secret'),
+      visibility: { mode: 'org_members' },
     });
     const app = appWithSession(hub, fakeSession(userId));
-    const search = await body<{ results: unknown[] }>(await app.request('/search?q=Quasar'));
-    expect(search.results).toHaveLength(0);
+    const search = await body<{ items: unknown[] }>(await app.request('/search?q=Quasar'));
+    expect(search.items).toHaveLength(0);
   });
 
   it('rejects an empty query (422)', async () => {
@@ -679,15 +713,20 @@ describe('hub /search (cross-org typed hits)', () => {
     const { userId } = await seedUserWithHub();
     const org = await seedBaseOrg(db, schema);
     await joinOrg(userId, org.orgId, 'suspended');
-    await db.insert(schema.task).values({
+    await db.insert(schema.searchDocument).values({
+      id: `task:${org.orgId}:nebula_item`,
       organizationId: org.orgId,
+      kind: 'task',
+      family: 'work',
+      sourceTable: 'task',
+      entityId: 'nebula_item',
       title: 'Nebula Item',
-      teamId: org.teamId,
-      state: 'todo',
-      createdBy: org.humanActorId,
+      facet: {},
+      route: searchRoute(org.orgId, 'task', 'nebula_item'),
+      visibility: { mode: 'org_members' },
     });
     const app = appWithSession(hub, fakeSession(userId));
-    const search = await body<{ results: unknown[] }>(await app.request('/search?q=Nebula'));
-    expect(search.results).toHaveLength(0);
+    const search = await body<{ items: unknown[] }>(await app.request('/search?q=Nebula'));
+    expect(search.items).toHaveLength(0);
   });
 });

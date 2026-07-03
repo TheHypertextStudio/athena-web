@@ -27,6 +27,7 @@ import { z } from 'zod';
 import { setTaskState } from '../task-state';
 import { acceptSuggestion } from '../email-to-task/accept';
 import { emitEvent } from '../../routes/event-emit';
+import { enqueueSearchUpsert } from '../../search/write-through';
 import type { ActionContext } from './engine';
 import type { AutomationEvent } from './event';
 import { createRegistry, type Registry } from './registry';
@@ -101,6 +102,7 @@ function mailHandler(type: string, build: MailActionBuilder, deps: HandlerDeps) 
           .update(attachment)
           .set({ lastEmailStateAction: type, lastEmailStateActionAt: event.occurredAt })
           .where(eq(attachment.id, att.id));
+        await enqueueSearchUpsert(event.organizationId, 'attachment', att.id);
       }
     },
   };

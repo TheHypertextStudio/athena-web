@@ -3,6 +3,7 @@ import type { ImportedItem } from '@docket/integrations';
 import { and, asc, eq } from 'drizzle-orm';
 
 import { ConflictError } from '../error';
+import { enqueueSearchUpsert } from '../search/write-through';
 
 import { type IntegrationRow, toTaskOut } from './integration-provider';
 
@@ -119,6 +120,7 @@ export async function importItems(
     const taskRow = inserted[0];
     /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
     if (!taskRow) throw new Error('linked task insert returned no row');
+    await enqueueSearchUpsert(orgId, 'task', taskRow.id);
     created.push(toTaskOut(taskRow));
   }
   return created;

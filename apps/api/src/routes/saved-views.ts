@@ -13,6 +13,7 @@ import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
+import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
 
 type SavedViewRow = typeof savedView.$inferSelect;
 
@@ -80,6 +81,7 @@ const savedViews = new Hono<AppEnv>()
       const row = inserted[0];
       /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
       if (!row) throw new Error('saved_view insert returned no row');
+      await enqueueSearchUpsert(orgId, 'saved_view', row.id);
       return ok(c, SavedViewOut, toOut(row));
     },
   )
@@ -136,6 +138,7 @@ const savedViews = new Hono<AppEnv>()
         .returning();
       const row = updated[0];
       if (!row) throw new NotFoundError('Saved view not found');
+      await enqueueSearchUpsert(orgId, 'saved_view', row.id);
       return ok(c, SavedViewOut, toOut(row));
     },
   )
@@ -159,6 +162,7 @@ const savedViews = new Hono<AppEnv>()
         .returning();
       const row = deleted[0];
       if (!row) throw new NotFoundError('Saved view not found');
+      await enqueueSearchDelete(orgId, 'saved_view', row.id);
       return ok(c, SavedViewOut, toOut(row));
     },
   );

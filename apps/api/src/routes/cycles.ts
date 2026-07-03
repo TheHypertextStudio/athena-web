@@ -26,6 +26,7 @@ import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
+import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
 
 import { pageResult, seekAfter } from '../lib/list-cursor';
 import {
@@ -170,6 +171,7 @@ const cycles = new Hono<AppEnv>()
       const row = inserted[0];
       /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
       if (!row) throw new Error('cycle insert returned no row');
+      await enqueueSearchUpsert(orgId, 'cycle', row.id);
       return ok(c, CycleOut, toOut(row));
     },
   )
@@ -223,6 +225,7 @@ const cycles = new Hono<AppEnv>()
         .returning();
       const row = updated[0];
       if (!row) throw new NotFoundError('Cycle not found');
+      await enqueueSearchUpsert(orgId, 'cycle', row.id);
       return ok(c, CycleOut, toOut(row));
     },
   )
@@ -246,6 +249,7 @@ const cycles = new Hono<AppEnv>()
         .returning();
       const row = deleted[0];
       if (!row) throw new NotFoundError('Cycle not found');
+      await enqueueSearchDelete(orgId, 'cycle', row.id);
       return ok(c, CycleOut, toOut(row));
     },
   )
@@ -326,6 +330,7 @@ const cycles = new Hono<AppEnv>()
       let keptCount = 0;
       let movedCount = 0;
       let triagedCount = 0;
+      const changedTaskIds: string[] = [];
 
       await db.transaction(async (tx) => {
         for (const decision of carryover) {
@@ -393,6 +398,7 @@ const cycles = new Hono<AppEnv>()
               .update(task)
               .set({ cycleId: decision.targetCycleId })
               .where(and(eq(task.id, decision.taskId), eq(task.organizationId, orgId)));
+            changedTaskIds.push(decision.taskId);
             movedCount += 1;
             continue;
           }
@@ -402,6 +408,7 @@ const cycles = new Hono<AppEnv>()
             .update(task)
             .set({ cycleId: null })
             .where(and(eq(task.id, decision.taskId), eq(task.organizationId, orgId)));
+          changedTaskIds.push(decision.taskId);
           triagedCount += 1;
         }
 
@@ -411,6 +418,8 @@ const cycles = new Hono<AppEnv>()
           .where(and(eq(cycle.id, id), eq(cycle.organizationId, orgId)));
       });
 
+      await enqueueSearchUpsert(orgId, 'cycle', id);
+      await Promise.all(changedTaskIds.map((taskId) => enqueueSearchUpsert(orgId, 'task', taskId)));
       return ok(c, CycleClosed, { closed: true, keptCount, movedCount, triagedCount });
     },
   );

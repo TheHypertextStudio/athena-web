@@ -24,6 +24,7 @@ import { apiDoc } from '../lib/openapi-route';
 import { serializableTx } from '../lib/serializable-tx';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
+import { enqueueSearchIndexJob } from '../search/enqueue';
 
 import { emitEvent } from './event-emit';
 import {
@@ -38,6 +39,20 @@ import {
 } from './task-helpers';
 import { attachmentRoutes } from './attachment-routes';
 import { taskDependencyRoutes } from './task-dependency-routes';
+
+async function enqueueTaskSearchIndex(
+  organizationId: string,
+  entityId: string,
+  operation: 'upsert' | 'delete' = 'upsert',
+): Promise<void> {
+  await enqueueSearchIndexJob({
+    organizationId,
+    sourceTable: 'task',
+    entityId,
+    operation,
+    reason: 'entity_write',
+  });
+}
 
 /** Tasks router: lifecycle (create/list/detail/update/archive/state) + subtasks + dependencies. */
 const tasks = new Hono<AppEnv>()
@@ -130,6 +145,7 @@ Side effects: emits a \`created\` observation onto the org's activity stream, an
           subject,
         });
       }
+      await enqueueTaskSearchIndex(orgId, row.id);
       return ok(c, TaskOut, toOut(row));
     },
   )
@@ -340,6 +356,7 @@ Changing \`state\` runs the team's workflow-state transition: the key is validat
           subject,
         });
       }
+      await enqueueTaskSearchIndex(orgId, row.id);
       return ok(c, TaskOut, toOut(row));
     },
   )
@@ -367,6 +384,7 @@ The write only matches a currently-active task in the caller's org (\`archivedAt
         .returning();
       const row = updated[0];
       if (!row) throw new NotFoundError('Task not found');
+      await enqueueTaskSearchIndex(orgId, row.id, 'delete');
       return ok(c, TaskArchived, {
         id: row.id,
         /* v8 ignore next -- @preserve defensive: archivedAt was just set above */

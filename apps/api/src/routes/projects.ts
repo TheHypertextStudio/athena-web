@@ -21,6 +21,7 @@ import { pageResult, seekAfter } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
 import { capabilityGuard } from '../permissions/capability-guard';
 import { zJson, zParam, zQuery } from '../lib/validate';
+import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
 import { emitEvent } from './event-emit';
 
 type ProjectRow = typeof project.$inferSelect;
@@ -218,6 +219,7 @@ const projects = new Hono<AppEnv>()
         title: row.name,
         subject: { type: 'project', id: row.id, title: row.name },
       });
+      await enqueueSearchUpsert(orgId, 'project', row.id);
       return ok(c, ProjectOut, toOut(row));
     },
   )
@@ -334,6 +336,7 @@ const projects = new Hono<AppEnv>()
           detail: { schema: 'docket.state_change', fromState: null, toState: row.status },
         });
       }
+      await enqueueSearchUpsert(orgId, 'project', row.id);
       return ok(c, ProjectOut, toOut(row));
     },
   )
@@ -357,6 +360,7 @@ const projects = new Hono<AppEnv>()
         .returning();
       const row = deleted[0];
       if (!row) throw new NotFoundError('Project not found');
+      await enqueueSearchDelete(orgId, 'project', row.id);
       return ok(c, ProjectOut, toOut(row));
     },
   )

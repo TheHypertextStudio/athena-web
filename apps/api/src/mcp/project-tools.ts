@@ -4,6 +4,7 @@ import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { NotFoundError } from '../error';
+import { enqueueSearchUpsert } from '../search/write-through';
 import type { McpContext } from './auth';
 import { jsonResult, runTool, scopedActor, authorize } from './result';
 import { assertRefInOrg } from './tools-shared';
@@ -56,6 +57,7 @@ export function registerProjectTools(server: McpRegistrar, ctx: McpContext): voi
         const row = inserted[0];
         /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
         if (!row) throw new Error('project insert returned no row');
+        await enqueueSearchUpsert(input.orgId, 'project', row.id);
         return jsonResult({ id: row.id, name: row.name });
       }),
   );
@@ -123,6 +125,7 @@ export function registerProjectTools(server: McpRegistrar, ctx: McpContext): voi
           .returning();
         const row = updated[0];
         if (!row) throw new NotFoundError('Project not found');
+        await enqueueSearchUpsert(input.orgId, 'project', row.id);
         return jsonResult({ id: row.id, name: row.name, status: row.status });
       }),
   );

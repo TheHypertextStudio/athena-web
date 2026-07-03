@@ -5,6 +5,7 @@ import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { NotFoundError } from '../error';
+import { enqueueSearchUpsert } from '../search/write-through';
 import type { McpContext } from './auth';
 import { jsonResult, runTool, scopedActor, authorize } from './result';
 import { createTaskToolHandler } from './task-tools';
@@ -86,6 +87,7 @@ export function registerSessionTools(server: McpRegistrar, ctx: McpContext): voi
         }
         return created;
       });
+      await enqueueSearchUpsert(input.orgId, 'agent_session', row.id);
       return jsonResult({ id: row.id, status: row.status });
     });
 
@@ -146,6 +148,7 @@ export function registerSessionTools(server: McpRegistrar, ctx: McpContext): voi
           input.activityId,
           input.body,
         );
+        await enqueueSearchUpsert(input.orgId, 'agent_session', input.sessionId);
         return jsonResult({ sessionId: input.sessionId, status });
       }),
   );
@@ -175,6 +178,7 @@ export function registerSessionTools(server: McpRegistrar, ctx: McpContext): voi
           orgId: input.orgId,
         });
         const row = await resolveSessionAction(input.orgId, input.sessionId, 'approved');
+        await enqueueSearchUpsert(input.orgId, 'agent_session', row.id);
         return jsonResult({ id: row.id, status: row.status });
       }),
   );
@@ -202,6 +206,7 @@ export function registerSessionTools(server: McpRegistrar, ctx: McpContext): voi
           orgId: input.orgId,
         });
         const row = await resolveSessionAction(input.orgId, input.sessionId, 'rejected');
+        await enqueueSearchUpsert(input.orgId, 'agent_session', row.id);
         return jsonResult({ id: row.id, status: row.status });
       }),
   );
@@ -229,6 +234,7 @@ export function registerSessionTools(server: McpRegistrar, ctx: McpContext): voi
           orgId: input.orgId,
         });
         const row = await cancelSession(input.orgId, input.sessionId);
+        await enqueueSearchUpsert(input.orgId, 'agent_session', row.id);
         return jsonResult({ id: row.id, status: row.status });
       }),
   );

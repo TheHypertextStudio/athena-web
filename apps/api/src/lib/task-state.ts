@@ -15,6 +15,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 
 import { resolveStateTransition } from '../routes/task-helpers';
 import { emitEvent } from '../routes/event-emit';
+import { enqueueSearchUpsert } from '../search/write-through';
 
 /** The selected `task` row shape. */
 export type TaskRow = typeof task.$inferSelect;
@@ -80,5 +81,6 @@ export async function setTaskState(input: SetTaskStateInput): Promise<TaskRow | 
     subject: { type: 'task', id: next.id, title: next.title },
     detail: { schema: 'docket.state_change', fromState: row.state, toState: next.state },
   });
+  await enqueueSearchUpsert(input.organizationId, 'task', next.id);
   return next;
 }

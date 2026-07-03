@@ -14,6 +14,7 @@ import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
+import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
 import { emitEvent } from './event-emit';
 
 type UpdateRow = typeof update.$inferSelect;
@@ -213,6 +214,8 @@ Key side effect: when the post includes a \`health\`, the same transaction write
           ? { detail: { schema: 'docket.state_change', fromState: null, toState: row.health } }
           : {}),
       });
+      await enqueueSearchUpsert(orgId, 'update', row.id);
+      await enqueueSearchUpsert(orgId, row.subjectType, row.subjectId);
       return ok(c, UpdateOut, toOut(row));
     },
   )
@@ -262,6 +265,8 @@ Because the latest update drives the subject's current health, deletion is not a
         await recomputeSubjectHealth(tx, orgId, existing.subjectType, existing.subjectId);
       });
 
+      await enqueueSearchDelete(orgId, 'update', id);
+      await enqueueSearchUpsert(orgId, existing.subjectType, existing.subjectId);
       return ok(c, UpdateRemoved, { id, removed: true });
     },
   );

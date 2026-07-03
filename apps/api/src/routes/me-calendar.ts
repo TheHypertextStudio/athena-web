@@ -11,6 +11,7 @@ import {
   attachment,
   calendarConnection,
   calendarEvent,
+  calendarLayer,
   calendarList,
   db,
   task,
@@ -18,6 +19,9 @@ import {
 } from '@docket/db';
 import {
   CalendarEventCreateTask,
+  CalendarLayerOut,
+  CalendarLayersOut,
+  CalendarLayerUpdate,
   CalendarSettingsOut,
   CalendarListUpdate,
   CalendarSyncResultOut,
@@ -27,8 +31,10 @@ import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
+import { readCalendarLayers } from '../calendar/calendar-read';
+import { toCalendarLayerOut } from '../calendar/calendar-serializers';
 import type { AppEnv } from '../context';
-import { NotFoundError } from '../error';
+import { NotFoundError, ValidationError } from '../error';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
@@ -38,6 +44,22 @@ import { syncGoogleCalendars } from './google-calendar-sync';
 import { toOut } from './task-helpers';
 
 const idParam = z.object({ id: z.string() });
+
+/**
+ * Extract the `selected`/`visibleByDefault` fields common to both the legacy
+ * `CalendarListUpdate` and the layered `CalendarLayerUpdate` bodies, for dual-writing
+ * visibility changes across `calendar_list`/`calendar_layer` during the migration
+ * window (their rows share ids per the Task 1 backfill).
+ */
+function toVisibilityPatch(body: {
+  selected?: boolean;
+  visibleByDefault?: boolean;
+}): Partial<{ selected: boolean; visibleByDefault: boolean }> {
+  const patch: Partial<{ selected: boolean; visibleByDefault: boolean }> = {};
+  if (body.selected !== undefined) patch.selected = body.selected;
+  if (body.visibleByDefault !== undefined) patch.visibleByDefault = body.visibleByDefault;
+  return patch;
+}
 
 async function resolveTaskTarget(
   userId: string,
@@ -102,18 +124,104 @@ const meCalendar = new Hono<AppEnv>()
       const userId = requireUserId(c);
       const { id } = c.req.valid('param');
       const body = c.req.valid('json');
+      const visibilityPatch = toVisibilityPatch(body);
       const updated = await db
         .update(calendarList)
-        .set({
-          ...(body.selected !== undefined ? { selected: body.selected } : {}),
-          ...(body.visibleByDefault !== undefined
-            ? { visibleByDefault: body.visibleByDefault }
-            : {}),
-        })
+        .set(visibilityPatch)
         .where(and(eq(calendarList.id, id), eq(calendarList.userId, userId)))
         .returning({ id: calendarList.id });
       if (!updated[0]) throw new NotFoundError('Calendar not found');
+
+      // Dual-write: `calendar_layer` ids reuse `calendar_list` ids from the Task 1
+      // backfill, so mirror this visibility change onto `calendar_layer` (when a row
+      // with this id exists) to keep the new layered-calendar reads coherent with this
+      // legacy settings route during the migration window.
+      await db
+        .update(calendarLayer)
+        .set(visibilityPatch)
+        .where(and(eq(calendarLayer.id, id), eq(calendarLayer.userId, userId)));
+
       return ok(c, CalendarSettingsOut, await readCalendarSettings(userId));
+    },
+  )
+  .get(
+    '/layers',
+    apiDoc({
+      tag: 'Me',
+      summary: 'List calendar layers',
+      response: CalendarLayersOut,
+      description:
+        'List every calendar layer for the signed-in user — provider calendars, Docket-native blocks, task timeboxes, and availability — selected or not. Unlike the legacy calendar list, this includes non-provider layers.',
+    }),
+    async (c) =>
+      ok(c, CalendarLayersOut, { items: await readCalendarLayers(db, requireUserId(c)) }),
+  )
+  .patch(
+    '/layers/:id',
+    apiDoc({
+      tag: 'Me',
+      summary: 'Update a calendar layer',
+      response: CalendarLayerOut,
+      description:
+        "Update a calendar layer's visibility (selected/visibleByDefault) for any owned layer. `title`/`color` are honored only for Docket-native layers (native blocks or availability with no backing connection) — a provider-backed layer rejects those fields.",
+    }),
+    zParam(idParam),
+    zJson(CalendarLayerUpdate),
+    async (c) => {
+      const userId = requireUserId(c);
+      const { id } = c.req.valid('param');
+      const body = c.req.valid('json');
+
+      const existingRows = await db
+        .select()
+        .from(calendarLayer)
+        .where(and(eq(calendarLayer.id, id), eq(calendarLayer.userId, userId)))
+        .limit(1);
+      const existing = existingRows[0];
+      if (!existing) throw new NotFoundError('Calendar layer not found');
+
+      const isNativeLayer =
+        (existing.sourceKind === 'native_blocks' || existing.sourceKind === 'availability') &&
+        existing.connectionId === null;
+      if ((body.title !== undefined || body.color !== undefined) && !isNativeLayer) {
+        throw new ValidationError(
+          new z.ZodError([
+            {
+              code: 'custom',
+              path: ['title'],
+              message: 'title/color are only editable for Docket-native calendar layers',
+              input: body,
+            },
+          ]),
+        );
+      }
+
+      const patch: Partial<typeof calendarLayer.$inferInsert> = { ...toVisibilityPatch(body) };
+      if (body.title !== undefined) patch.title = body.title;
+      if (body.color !== undefined) patch.color = body.color;
+
+      const updatedRows = await db
+        .update(calendarLayer)
+        .set(patch)
+        .where(and(eq(calendarLayer.id, id), eq(calendarLayer.userId, userId)))
+        .returning();
+      const updated = updatedRows[0];
+      if (!updated) throw new NotFoundError('Calendar layer not found');
+
+      // Dual-write: a provider-backed layer's id reuses its originating `calendar_list`
+      // row's id (Task 1 backfill), so mirror the visibility change onto `calendar_list`
+      // (when a row with this id exists) to keep the legacy settings surface coherent
+      // during the migration window. Native layers never collide with a `calendar_list`
+      // id, so this is a safe no-op for them.
+      const listVisibilityPatch = toVisibilityPatch(body);
+      if (Object.keys(listVisibilityPatch).length > 0) {
+        await db
+          .update(calendarList)
+          .set(listVisibilityPatch)
+          .where(and(eq(calendarList.id, id), eq(calendarList.userId, userId)));
+      }
+
+      return ok(c, CalendarLayerOut, toCalendarLayerOut(updated));
     },
   )
   .post(

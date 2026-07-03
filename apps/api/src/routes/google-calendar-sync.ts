@@ -7,7 +7,15 @@
  * events for agenda reads and task attachment provenance.
  */
 import { auth } from '@docket/auth';
-import { account, calendarConnection, calendarEvent, calendarList, db } from '@docket/db';
+import {
+  account,
+  calendarConnection,
+  calendarEvent,
+  calendarItem,
+  calendarLayer,
+  calendarList,
+  db,
+} from '@docket/db';
 import type { CalendarSyncResultOut } from '@docket/types';
 import { and, eq } from 'drizzle-orm';
 import type { z } from 'zod';
@@ -131,6 +139,56 @@ async function upsertConnection(input: {
   return row.id;
 }
 
+/**
+ * Dual-write the `calendar_layer` mirror of one synced Google calendar.
+ *
+ * @remarks
+ * `layerId` is the owning `calendar_list` row's id — layers reuse their originating
+ * `calendar_list` row's id (per the Task 1 backfill), so this looks up existence by
+ * that shared id rather than the layer's own `(connectionId, externalLayerId)` unique
+ * constraint. `selected`/`visibleByDefault` are never touched here: they are user
+ * preferences, preserved on conflict exactly like the `calendar_list` upsert preserves
+ * them, and owned by the `/me/calendar` visibility routes instead.
+ */
+async function upsertCalendarLayer(input: {
+  userId: string;
+  connectionId: string;
+  layerId: string;
+  externalCalendarId: string;
+  item: GoogleCalendarListItem;
+}): Promise<void> {
+  const values = {
+    title: input.item.summary ?? input.externalCalendarId,
+    description: input.item.description ?? null,
+    timezone: input.item.timeZone ?? null,
+    color: input.item.backgroundColor ?? null,
+    accessRole: input.item.accessRole ?? null,
+    primary: input.item.primary ?? false,
+    lastSyncedAt: new Date(),
+    lastError: null,
+  };
+  const existing = await db
+    .select({ id: calendarLayer.id })
+    .from(calendarLayer)
+    .where(eq(calendarLayer.id, input.layerId))
+    .limit(1);
+  if (existing[0]) {
+    await db.update(calendarLayer).set(values).where(eq(calendarLayer.id, input.layerId));
+    return;
+  }
+  await db.insert(calendarLayer).values({
+    id: input.layerId,
+    userId: input.userId,
+    connectionId: input.connectionId,
+    provider: 'google',
+    sourceKind: 'provider_calendar',
+    externalLayerId: input.externalCalendarId,
+    ...values,
+    selected: true,
+    visibleByDefault: true,
+  });
+}
+
 async function upsertCalendar(input: {
   userId: string;
   connectionId: string;
@@ -158,24 +216,99 @@ async function upsertCalendar(input: {
     lastSyncedAt: new Date(),
     lastError: null,
   };
+  let row: { id: string; selected: boolean };
   if (existing[0]) {
     await db.update(calendarList).set(values).where(eq(calendarList.id, existing[0].id));
-    return existing[0];
+    row = existing[0];
+  } else {
+    const inserted = await db
+      .insert(calendarList)
+      .values({
+        userId: input.userId,
+        connectionId: input.connectionId,
+        externalCalendarId,
+        ...values,
+        selected: true,
+        visibleByDefault: true,
+      })
+      .returning({ id: calendarList.id, selected: calendarList.selected });
+    const insertedRow = inserted[0];
+    if (!insertedRow) throw new Error('calendar list insert returned no row');
+    row = insertedRow;
   }
-  const inserted = await db
-    .insert(calendarList)
-    .values({
-      userId: input.userId,
-      connectionId: input.connectionId,
-      externalCalendarId,
-      ...values,
-      selected: true,
-      visibleByDefault: true,
-    })
-    .returning({ id: calendarList.id, selected: calendarList.selected });
-  const row = inserted[0];
-  if (!row) throw new Error('calendar list insert returned no row');
+
+  await upsertCalendarLayer({
+    userId: input.userId,
+    connectionId: input.connectionId,
+    layerId: row.id,
+    externalCalendarId,
+    item: input.item,
+  });
+
   return row;
+}
+
+/**
+ * Dual-write the `calendar_item` mirror of one synced Google event.
+ *
+ * @remarks
+ * `itemId` is the owning `calendar_event` row's id — items reuse their originating
+ * `calendar_event` row's id (per the Task 1 backfill). Existence is checked by that
+ * shared id (not the item's own `(layerId, externalEventId)` unique constraint), so an
+ * event that was synced before this dual-write existed (and so has no mirror yet) gets
+ * one created here instead of silently staying invisible to the new read service.
+ */
+async function upsertCalendarItem(input: {
+  userId: string;
+  itemId: string;
+  layerId: string;
+  connectionId: string;
+  externalCalendarId: string;
+  externalEventId: string;
+  event: GoogleCalendarEventResource;
+}): Promise<void> {
+  const values = {
+    layerId: input.layerId,
+    connectionId: input.connectionId,
+    kind: 'provider_event',
+    provider: 'google',
+    externalCalendarId: input.externalCalendarId,
+    externalEventId: input.externalEventId,
+    recurringEventId: input.event.recurringEventId ?? null,
+    status: input.event.status ?? 'confirmed',
+    title: input.event.summary ?? '(no title)',
+    description: input.event.description ?? null,
+    location: input.event.location ?? null,
+    htmlLink: input.event.htmlLink ?? null,
+    startsAt: input.event.start?.dateTime ? new Date(input.event.start.dateTime) : null,
+    endsAt: input.event.end?.dateTime ? new Date(input.event.end.dateTime) : null,
+    allDayStartDate: input.event.start?.date ?? null,
+    allDayEndDate: input.event.end?.date ?? null,
+    organizer: input.event.organizer ?? null,
+    attendees: input.event.attendees ?? [],
+    updatedExternalAt: input.event.updated ? new Date(input.event.updated) : null,
+    externalEtag: input.event.etag ?? null,
+    syncState: 'clean',
+    archivedAt: null,
+  };
+  const existing = await db
+    .select({ id: calendarItem.id })
+    .from(calendarItem)
+    .where(eq(calendarItem.id, input.itemId))
+    .limit(1);
+  if (existing[0]) {
+    await db.update(calendarItem).set(values).where(eq(calendarItem.id, input.itemId));
+    return;
+  }
+  await db.insert(calendarItem).values({ id: input.itemId, userId: input.userId, ...values });
+}
+
+/** Archive the `calendar_item` mirror of a cancelled `calendar_event` row, when one exists. */
+async function archiveCalendarItem(itemId: string): Promise<void> {
+  await db
+    .update(calendarItem)
+    .set({ archivedAt: new Date(), status: 'cancelled' })
+    .where(eq(calendarItem.id, itemId));
 }
 
 async function upsertEvent(input: {
@@ -204,6 +337,7 @@ async function upsertEvent(input: {
         .update(calendarEvent)
         .set({ archivedAt: new Date(), status: 'cancelled' })
         .where(eq(calendarEvent.id, existing[0].id));
+      await archiveCalendarItem(existing[0].id);
       return 'deleted';
     }
     return 'skipped';
@@ -227,19 +361,41 @@ async function upsertEvent(input: {
     archivedAt: null,
   };
 
+  let eventId: string;
+  let outcome: 'created' | 'updated';
   if (existing[0]) {
     await db.update(calendarEvent).set(values).where(eq(calendarEvent.id, existing[0].id));
-    return 'updated';
+    eventId = existing[0].id;
+    outcome = 'updated';
+  } else {
+    const inserted = await db
+      .insert(calendarEvent)
+      .values({
+        userId: input.userId,
+        connectionId: input.connectionId,
+        calendarId: input.calendarId,
+        externalCalendarId: input.externalCalendarId,
+        externalEventId,
+        ...values,
+      })
+      .returning({ id: calendarEvent.id });
+    const row = inserted[0];
+    if (!row) throw new Error('calendar event insert returned no row');
+    eventId = row.id;
+    outcome = 'created';
   }
-  await db.insert(calendarEvent).values({
+
+  await upsertCalendarItem({
     userId: input.userId,
+    itemId: eventId,
+    layerId: input.calendarId,
     connectionId: input.connectionId,
-    calendarId: input.calendarId,
     externalCalendarId: input.externalCalendarId,
     externalEventId,
-    ...values,
+    event: input.event,
   });
-  return 'created';
+
+  return outcome;
 }
 
 /** Sync linked Google Calendar accounts/calendars/events for one user. */
@@ -258,8 +414,10 @@ export async function syncGoogleCalendars(
     eventsUpdated: 0,
     eventsDeleted: 0,
     errors: [] as string[],
-    // Layered-calendar counters: this sync path only maintains the legacy
-    // calendar_list/calendar_event tables, so it never touches layers/items/writes.
+    // Layered-calendar counters: `upsertCalendar`/`upsertEvent` dual-write
+    // `calendar_layer`/`calendar_item` alongside the legacy tables, one-for-one with
+    // `calendars`/`eventsCreated`/`eventsUpdated`/`eventsDeleted` above. There is no
+    // write outbox yet, so `writesApplied`/`writesPending`/`conflicts` stay at 0.
     layers: 0,
     itemsCreated: 0,
     itemsUpdated: 0,
@@ -293,6 +451,7 @@ export async function syncGoogleCalendars(
       for (const item of list.items ?? []) {
         const cal = await upsertCalendar({ userId, connectionId, item });
         counts.calendars += 1;
+        counts.layers += 1;
         if (!cal.selected || !item.id) continue;
         const params = new URLSearchParams({
           singleEvents: 'true',
@@ -313,9 +472,16 @@ export async function syncGoogleCalendars(
             externalCalendarId: item.id,
             event,
           });
-          if (outcome === 'created') counts.eventsCreated += 1;
-          else if (outcome === 'updated') counts.eventsUpdated += 1;
-          else if (outcome === 'deleted') counts.eventsDeleted += 1;
+          if (outcome === 'created') {
+            counts.eventsCreated += 1;
+            counts.itemsCreated += 1;
+          } else if (outcome === 'updated') {
+            counts.eventsUpdated += 1;
+            counts.itemsUpdated += 1;
+          } else if (outcome === 'deleted') {
+            counts.eventsDeleted += 1;
+            counts.itemsArchived += 1;
+          }
         }
       }
     } catch (err) {

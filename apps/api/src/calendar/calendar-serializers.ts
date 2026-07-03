@@ -8,13 +8,15 @@
  * kept in sync by dual-writes during the migration window (see `google-calendar-sync.ts`
  * and the `me-calendar.ts` layer-visibility routes).
  */
-import type { calendarItem, calendarLayer } from '@docket/db';
+import type { calendarItem, calendarItemTaskLink, calendarLayer } from '@docket/db';
 import {
   CalendarItemKind,
   type CalendarItemLinkedTaskOut,
   CalendarItemStatus,
   CalendarItemSyncState,
   type CalendarItemOut,
+  CalendarItemTaskRole,
+  type CalendarItemTaskLinkOut,
   CalendarLayerSourceKind,
   type CalendarLayerOut,
   CalendarProvider,
@@ -25,6 +27,7 @@ import { defaultItemPermissionsForKind } from './calendar-permissions';
 
 type CalendarLayerRow = typeof calendarLayer.$inferSelect;
 type CalendarItemRow = typeof calendarItem.$inferSelect;
+type CalendarItemTaskLinkRow = typeof calendarItemTaskLink.$inferSelect;
 
 /**
  * Serialize one calendar layer row.
@@ -105,5 +108,21 @@ export function toCalendarItemOut(
     linkedTasks: [...options.linkedTasks],
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+/** Serialize one calendar item ↔ task link row. */
+export function toCalendarItemTaskLinkOut(
+  row: CalendarItemTaskLinkRow,
+): z.input<typeof CalendarItemTaskLinkOut> {
+  return {
+    calendarItemId: row.calendarItemId,
+    taskId: row.taskId,
+    organizationId: row.organizationId,
+    role: CalendarItemTaskRole.parse(row.role),
+    sort: row.sort,
+    note: row.note,
+    createdBy: row.createdBy,
+    createdAt: row.createdAt.toISOString(),
   };
 }

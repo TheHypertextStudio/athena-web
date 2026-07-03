@@ -11,6 +11,8 @@ import {
   attachment,
   calendarConnection,
   calendarEvent,
+  calendarItem,
+  calendarItemTaskLink,
   calendarLayer,
   calendarList,
   db,
@@ -22,6 +24,9 @@ import {
   CalendarItemCreate,
   CalendarItemOut,
   CalendarItemsRangeOut,
+  CalendarItemTaskLinkCreate,
+  CalendarItemTaskLinkOut,
+  CalendarItemTaskLinkResultOut,
   CalendarItemUpdate,
   CalendarLayerOut,
   CalendarLayersOut,
@@ -41,7 +46,12 @@ import {
   readCalendarLayers,
   readItemDetail,
 } from '../calendar/calendar-read';
-import { toCalendarItemOut, toCalendarLayerOut } from '../calendar/calendar-serializers';
+import {
+  toCalendarItemOut,
+  toCalendarItemTaskLinkOut,
+  toCalendarLayerOut,
+} from '../calendar/calendar-serializers';
+import { detachTaskFromItem, linkTaskToItem } from '../calendar/calendar-task-links';
 import {
   createNativeBlock,
   deleteNativeBlock,
@@ -58,6 +68,7 @@ import { syncGoogleCalendars } from './google-calendar-sync';
 import { toOut } from './task-helpers';
 
 const idParam = z.object({ id: z.string() });
+const itemTaskParam = z.object({ id: z.string(), taskId: z.string() });
 
 /**
  * Split a comma-separated query param into trimmed, non-empty parts, or `undefined` when
@@ -327,6 +338,35 @@ const meCalendar = new Hono<AppEnv>()
         },
       });
 
+      // Layered-calendar dual-write: `calendar_item` reuses `calendar_event`'s id from the
+      // Task 1 backfill / Task 2 sync, so a `calendar_item` row should exist for any synced
+      // event. If it is genuinely absent (pre-dual-write stale legacy data), skip the link
+      // silently — the attachment above remains the source of truth for legacy rows.
+      const itemRows = await db
+        .select({
+          id: calendarItem.id,
+          title: calendarItem.title,
+          startsAt: calendarItem.startsAt,
+          endsAt: calendarItem.endsAt,
+        })
+        .from(calendarItem)
+        .where(eq(calendarItem.id, id))
+        .limit(1);
+      const itemRow = itemRows[0];
+      if (itemRow !== undefined) {
+        await db.insert(calendarItemTaskLink).values({
+          calendarItemId: itemRow.id,
+          taskId: created.id,
+          organizationId: target.organizationId,
+          createdBy: target.actorId,
+          role: 'related',
+          sort: 0,
+          itemTitleSnapshot: itemRow.title,
+          itemStartsAtSnapshot: itemRow.startsAt,
+          itemEndsAtSnapshot: itemRow.endsAt,
+        });
+      }
+
       return ok(c, TaskOut, toOut(created));
     },
   )
@@ -429,6 +469,49 @@ const meCalendar = new Hono<AppEnv>()
       const { id } = c.req.valid('param');
       const deleted = await deleteNativeBlock(db, { userId, itemId: id });
       return ok(c, CalendarItemOut, toCalendarItemOut(deleted, { linkedTasks: [] }));
+    },
+  )
+  .post(
+    '/items/:id/tasks',
+    apiDoc({
+      tag: 'Me',
+      summary: 'Link a task to a calendar item',
+      response: CalendarItemTaskLinkResultOut,
+      description:
+        "Link an existing task to a calendar item (`mode: 'link'`), or create a new task and link it (`mode: 'create'`). The calendar item must be owned by the caller, and the caller must have an actor holding the `contribute` capability in the target org. `mode: 'link'` 404s when the task does not exist in that org or is not visible to the caller (existence-hiding), and 409s when the task is already linked to this item. `mode: 'create'` resolves the target team the same way the legacy `POST /events/:id/create-task` route does, deriving the title from the item's title when omitted.",
+    }),
+    zParam(idParam),
+    zJson(CalendarItemTaskLinkCreate),
+    async (c) => {
+      const userId = requireUserId(c);
+      const { id } = c.req.valid('param');
+      const body = c.req.valid('json');
+      const { link, task: linkedTask } = await linkTaskToItem(db, {
+        userId,
+        itemId: id,
+        input: body,
+      });
+      return ok(c, CalendarItemTaskLinkResultOut, {
+        link: toCalendarItemTaskLinkOut(link),
+        task: toOut(linkedTask),
+      });
+    },
+  )
+  .delete(
+    '/items/:id/tasks/:taskId',
+    apiDoc({
+      tag: 'Me',
+      summary: 'Detach a task from a calendar item',
+      response: CalendarItemTaskLinkOut,
+      description:
+        "Remove the link between a calendar item and a task, returning the deleted link as a tombstone. The task itself is never deleted. 404 when the item is not owned by the caller or no such link exists; 403 when the caller's actor in the link's org lacks `contribute`.",
+    }),
+    zParam(itemTaskParam),
+    async (c) => {
+      const userId = requireUserId(c);
+      const { id, taskId } = c.req.valid('param');
+      const deleted = await detachTaskFromItem(db, { userId, itemId: id, taskId });
+      return ok(c, CalendarItemTaskLinkOut, toCalendarItemTaskLinkOut(deleted));
     },
   );
 

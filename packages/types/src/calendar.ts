@@ -20,6 +20,7 @@ import {
   TaskId,
   TeamId,
 } from './primitives';
+import { TaskOut } from './task';
 
 /** Calendar providers supported by the layered-calendar domain. */
 export const CalendarProvider = z.enum(['docket', 'google', 'microsoft', 'caldav']);
@@ -664,6 +665,19 @@ export const CalendarItemTaskLinkCreate = z
   });
 /** Validated calendar-item task-link-create body. */
 export type CalendarItemTaskLinkCreate = z.infer<typeof CalendarItemTaskLinkCreate>;
+
+/** Result of linking a task to a calendar item — the link row plus the (possibly newly created) task. */
+export const CalendarItemTaskLinkResultOut = z
+  .object({
+    link: CalendarItemTaskLinkOut.describe('The created calendar-item/task link.'),
+    task: TaskOut.describe("The linked task — newly created for `mode: 'create'`."),
+  })
+  .meta({
+    id: 'CalendarItemTaskLinkResultOut',
+    description: 'Result of linking a task to a calendar item.',
+  });
+/** Calendar-item task-link result value. */
+export type CalendarItemTaskLinkResultOut = z.infer<typeof CalendarItemTaskLinkResultOut>;
 
 /** Result of syncing linked calendar accounts/layers/items. */
 export const CalendarSyncResultOut = z

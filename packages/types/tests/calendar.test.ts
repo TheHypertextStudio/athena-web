@@ -5,6 +5,7 @@ import {
   CalendarItemCreate,
   CalendarItemOut,
   CalendarItemTaskLinkCreate,
+  CalendarItemTaskLinkResultOut,
   CalendarItemUpdate,
   CalendarLayerOut,
   CalendarRangeQuery,
@@ -304,5 +305,40 @@ describe('CalendarItemTaskLinkCreate', () => {
     expect(
       CalendarItemTaskLinkCreate.safeParse({ mode: 'delete', organizationId: ORG_ID }).success,
     ).toBe(false);
+  });
+});
+
+describe('CalendarItemTaskLinkResultOut', () => {
+  it('parses a link + task pair', () => {
+    const parsed = CalendarItemTaskLinkResultOut.parse({
+      link: {
+        calendarItemId: ITEM_ID,
+        taskId: TASK_ID,
+        organizationId: ORG_ID,
+        role: 'related',
+        sort: 0,
+        note: null,
+        createdBy: '01BX5ZZKBKACTAV9WEVGEMMVS3',
+        createdAt: '2026-07-01T00:00:00.000Z',
+      },
+      task: {
+        id: TASK_ID,
+        organizationId: ORG_ID,
+        title: 'Follow up',
+        teamId: '01BX5ZZKBKACTAV9WEVGEMMVS4',
+        state: 'backlog',
+        priority: 'none',
+        provenance: {
+          source: 'native',
+          sourceIntegrationId: null,
+          externalId: null,
+          externalUrl: null,
+          syncMode: null,
+        },
+        createdAt: '2026-07-01T00:00:00.000Z',
+      },
+    });
+    expect(parsed.link.taskId).toBe(TASK_ID);
+    expect(parsed.task.title).toBe('Follow up');
   });
 });

@@ -12,6 +12,7 @@ import {
   CONNECTOR_ITEMS,
   FIXED_NOW,
   LINEAR_TEAM_STATES,
+  LINEAR_TEAMS,
   LINEAR_WORK_GRAPH,
   MAIL_THREAD_SUMMARIES,
 } from '../fixtures';
@@ -304,12 +305,13 @@ export class MockConnector implements Connector {
   }
 
   /**
-   * Return the fixture {@link LINEAR_TEAM_STATES} for a team, matching
-   * {@link import('../real/connector-linear').LinearProviderClient.listTeamStates}'s behavior
-   * for an unrecognized team: an empty array, never a throw.
+   * Return the fixture {@link LINEAR_TEAM_STATES} for a team, sorted by `position` to match
+   * {@link import('../real/connector-linear').LinearProviderClient.listTeamStates}'s ordering —
+   * so the two can't silently diverge if the fixture is ever edited out of position order. Also
+   * matches that method's behavior for an unrecognized team: an empty array, never a throw.
    */
   private async listTeamStates(externalTeamId: string): Promise<ExternalWorkflowState[]> {
-    return [...(LINEAR_TEAM_STATES[externalTeamId] ?? [])];
+    return [...(LINEAR_TEAM_STATES[externalTeamId] ?? [])].sort((a, b) => a.position - b.position);
   }
 
   /**
@@ -334,9 +336,13 @@ export class MockConnector implements Connector {
    *
    * @remarks
    * Returns two fixture Google Tasks lists for `gtasks` so the per-account "which lists to sync"
-   * config UI has selectable data offline; every other provider has no containers.
+   * config UI has selectable data offline, and the two {@link LINEAR_TEAMS} for `linear` so team
+   * selection has selectable data offline too, matching {@link
+   * import('../real/connector-linear').LinearProviderClient.listContainers}'s team-container
+   * shape. Every other provider has no containers.
    */
   async listContainers(input: ListContainersInput): Promise<ResourceRef[]> {
+    if (input.provider === 'linear') return [...LINEAR_TEAMS];
     if (input.provider !== 'gtasks') return [];
     return [
       { id: '@default', title: 'My Tasks' },

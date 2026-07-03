@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { afterAll, describe, expect, it, vi } from 'vitest';
 
-import { FIXED_NOW } from '../../src/fixtures';
+import { FIXED_NOW, LINEAR_TEAMS } from '../../src/fixtures';
 import type { SessionActionBody, SessionActivity } from '../../src/ports/agent-runtime';
 import { InMemoryBillingGateway } from '../../src/mock/billing';
 import { MockAgentRuntime } from '../../src/mock/agent-runtime';
@@ -229,6 +229,12 @@ describe('MockConnector', () => {
     const lists = await c.listContainers({ connectionId: 'conn_1', provider: 'gtasks' });
     expect(lists.map((l) => l.id)).toContain('@default');
     expect(await c.listContainers({ connectionId: 'conn_1', provider: 'drive' })).toEqual([]);
+  });
+
+  it('enumerates the fixture Linear teams for linear', async () => {
+    const c = new MockConnector({ provider: 'linear' });
+    const teams = await c.listContainers({ connectionId: 'conn_1', provider: 'linear' });
+    expect(teams).toEqual(LINEAR_TEAMS);
   });
 });
 

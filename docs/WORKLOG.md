@@ -7,6 +7,37 @@
 
 ## Completed Tasks
 
+### [MCP-PROD-009] Production MCP access: OAuth activation, consent gate, Codex + docs, OAuth e2e
+
+- **Completed**: 2026-07-02
+- **Summary**: Closed every blocker between the built MCP server and a coding agent connecting to
+  `https://docket-api.hypertext.studio/mcp`. (1) deploy.yml now derives
+  `MCP_ISSUER_URL`/`MCP_RESOURCE_URL`/`OIDC_LOGIN_PAGE_URL`/`MCP_ALLOWED_ORIGINS` from the
+  `API_URL`/`WEB_URL` repo vars, mounting the Better Auth `mcp()` AS in prod. (2) Wired the
+  previously-unmounted `cimdAuthorizeMiddleware` ahead of `/api/auth/mcp/authorize`. (3) Live e2e
+  exposed three AS breaks unit tests (mocked Better Auth) never saw: the Drizzle adapter lacked the
+  `oauthApplication`/`oauthAccessToken`/`oauthConsent` models (DCR + token issuance 500'd); the RS
+  discovery 307 pointed at `<issuer>/.well-known/openid-configuration`, which Better Auth 1.6.14
+  never serves (real doc lives at `<issuer>/api/auth/.well-known/oauth-authorization-server`); and
+  `mcp()` authorize skips the consent screen unless `prompt=consent` — added `mcpConsentGuard` to
+  reinstate consent-once-per-scope-set. (4) Codex entry in the settings client catalog + standalone
+  guide `docs/engineering/mcp-access.md`. (5) Implemented the §MCP-17 flows as
+  `apps/web/e2e/mcp-{connect,session}.spec.ts` (full DCR→consent→PKCE→Bearer→step-up chain against
+  the real stack; session flow polls instead of subscribing, per the stateless transport) and added
+  the missing CI `e2e` job (portless + pnpm dev + Playwright). `.env.local` dev defaults now enable
+  the MCP AS locally. Spec `mcp-surface.md` updated: open issues resolved, prompts drift reconciled.
+- **Files Changed**: `.github/workflows/{deploy,ci}.yml`, `apps/api/src/server.ts`,
+  `apps/api/src/mcp/{cimd,server,consent-guard}.ts`, `packages/auth/src/auth-builder.ts`,
+  `apps/web/src/components/settings/mcp-clients.ts`, `apps/web/e2e/{helpers/mcp.ts,mcp-connect.spec.ts,mcp-session.spec.ts}`,
+  `docs/engineering/{mcp-access.md,deployment.md,specs/mcp-surface.md}`, `.env.example`, `.env.local`,
+  plus new tests `apps/api/tests/mcp/mcp-consent-guard.test.ts` and extended `mcp-cimd`/`mcp-scope` tests.
+- **Learnings**: A mocked-auth test suite can be green while the real AS is unusable — the OAuth
+  boundary needs at least one unmocked end-to-end path. Better Auth mounts its discovery document
+  under its base path, not the RFC 8414 root, and its MCP authorize treats consent as opt-in
+  (`prompt=consent`); both diverge from what a spec-faithful client expects. Note: older WORKLOG
+  entries (MCP-UTIL-005, MCP-SAMPLING-006) reference `packages/mcp-server/**` and
+  `apps/api/src/routes/mcp.ts` — those paths were superseded by `apps/api/src/mcp/**`.
+
 ### [ATTACH-002] File attachments (upload) + util centralization
 
 - **Completed**: 2026-07-02

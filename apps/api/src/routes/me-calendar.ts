@@ -19,9 +19,14 @@ import {
 } from '@docket/db';
 import {
   CalendarEventCreateTask,
+  CalendarItemCreate,
+  CalendarItemOut,
+  CalendarItemsRangeOut,
+  CalendarItemUpdate,
   CalendarLayerOut,
   CalendarLayersOut,
   CalendarLayerUpdate,
+  CalendarRangeQuery,
   CalendarSettingsOut,
   CalendarListUpdate,
   CalendarSyncResultOut,
@@ -31,8 +36,17 @@ import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
-import { readCalendarLayers } from '../calendar/calendar-read';
-import { toCalendarLayerOut } from '../calendar/calendar-serializers';
+import {
+  readCalendarItemsInRange,
+  readCalendarLayers,
+  readItemDetail,
+} from '../calendar/calendar-read';
+import { toCalendarItemOut, toCalendarLayerOut } from '../calendar/calendar-serializers';
+import {
+  createNativeBlock,
+  deleteNativeBlock,
+  updateNativeBlock,
+} from '../calendar/calendar-write';
 import type { AppEnv } from '../context';
 import { NotFoundError, ValidationError } from '../error';
 import { ok } from '../lib/ok';
@@ -44,6 +58,18 @@ import { syncGoogleCalendars } from './google-calendar-sync';
 import { toOut } from './task-helpers';
 
 const idParam = z.object({ id: z.string() });
+
+/**
+ * Split a comma-separated query param into trimmed, non-empty parts, or `undefined` when
+ * absent — the same CSV convention `agenda.ts` uses for `calendarIds`/`connectionIds`.
+ */
+function splitCsv(value: string | undefined): string[] | undefined {
+  if (!value) return undefined;
+  return value
+    .split(',')
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+}
 
 /**
  * Extract the `selected`/`visibleByDefault` fields common to both the legacy
@@ -302,6 +328,107 @@ const meCalendar = new Hono<AppEnv>()
       });
 
       return ok(c, TaskOut, toOut(created));
+    },
+  )
+  .post(
+    '/items',
+    apiDoc({
+      tag: 'Me',
+      summary: 'Create a native calendar block',
+      response: CalendarItemOut,
+      description:
+        "Create a Docket-native calendar block (focus, travel, do-not-schedule, holds) with no provider account required. `layerId` targets one of the caller's own native-block layers; omitted, the block is filed on the caller's default native-blocks layer, created lazily on first use.",
+    }),
+    zJson(CalendarItemCreate),
+    async (c) => {
+      const userId = requireUserId(c);
+      const body = c.req.valid('json');
+      const created = await createNativeBlock(db, { userId, input: body });
+      return ok(c, CalendarItemOut, toCalendarItemOut(created, { linkedTasks: [] }));
+    },
+  )
+  .get(
+    '/items',
+    apiDoc({
+      tag: 'Me',
+      summary: 'List calendar items in a range',
+      response: CalendarItemsRangeOut,
+      description:
+        "List every calendar item overlapping `[start, end)` across the caller's selected layers, plus the layers that selection touches. `layerIds`/`kinds` are comma-separated optional filters, matching the `/v1/agenda` CSV convention.",
+    }),
+    async (c) => {
+      const userId = requireUserId(c);
+      const query = CalendarRangeQuery.parse({
+        start: c.req.query('start'),
+        end: c.req.query('end'),
+        layerIds: splitCsv(c.req.query('layerIds')),
+        kinds: splitCsv(c.req.query('kinds')),
+      });
+      const result = await readCalendarItemsInRange(db, {
+        userId,
+        start: new Date(query.start),
+        end: new Date(query.end),
+        layerIds: query.layerIds,
+        kinds: query.kinds,
+      });
+      return ok(c, CalendarItemsRangeOut, result);
+    },
+  )
+  .get(
+    '/items/:id',
+    apiDoc({
+      tag: 'Me',
+      summary: 'Get a calendar item',
+      response: CalendarItemOut,
+      description:
+        "Get one calendar item with its resolved edit/delete permissions and viewer-filtered linked tasks. Resolves even when the item's layer is currently deselected (a deep link should still work). 404 when the item does not exist or is not owned by the caller.",
+    }),
+    zParam(idParam),
+    async (c) => {
+      const userId = requireUserId(c);
+      const { id } = c.req.valid('param');
+      const detail = await readItemDetail(db, { userId, itemId: id });
+      if (detail === null) throw new NotFoundError('Calendar item not found');
+      return ok(c, CalendarItemOut, detail);
+    },
+  )
+  .patch(
+    '/items/:id',
+    apiDoc({
+      tag: 'Me',
+      summary: 'Update a native calendar block',
+      response: CalendarItemOut,
+      description:
+        "Patch a Docket-native calendar block's core fields (title, description, location, timezone, time bounds). Only `native_block` items are supported here — a `provider_event` item returns 422 (provider-event patching arrives with the write outbox in a later phase). An empty string for `description`/`location` clears the field. Changing the time shape (timed <-> all-day) requires the complete new shape's fields. 404 when the item does not exist or is not owned by the caller.",
+    }),
+    zParam(idParam),
+    zJson(CalendarItemUpdate),
+    async (c) => {
+      const userId = requireUserId(c);
+      const { id } = c.req.valid('param');
+      const body = c.req.valid('json');
+      await updateNativeBlock(db, { userId, itemId: id, patch: body });
+      const detail = await readItemDetail(db, { userId, itemId: id });
+      /* v8 ignore next -- @preserve defensive: the update above verified the item exists */
+      if (detail === null) throw new NotFoundError('Calendar item not found');
+      return ok(c, CalendarItemOut, detail);
+    },
+  )
+  .delete(
+    '/items/:id',
+    apiDoc({
+      tag: 'Me',
+      summary: 'Delete a native calendar block',
+      response: CalendarItemOut,
+      description:
+        'Hard-delete a Docket-native calendar block and return its deleted representation as a tombstone. Native blocks have no provider tombstone semantics (unlike a future `provider_event` delete, which will reconcile with the provider); task links to the item are removed by cascade. Only `native_block` items are supported here. 404 when the item does not exist or is not owned by the caller.',
+    }),
+    zParam(idParam),
+    async (c) => {
+      const userId = requireUserId(c);
+      const { id } = c.req.valid('param');
+      const deleted = await deleteNativeBlock(db, { userId, itemId: id });
+      return ok(c, CalendarItemOut, toCalendarItemOut(deleted, { linkedTasks: [] }));
     },
   );
 

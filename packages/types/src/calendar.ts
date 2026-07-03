@@ -453,6 +453,23 @@ export const CalendarRangeQuery = z
 /** Calendar-range-query value. */
 export type CalendarRangeQuery = z.infer<typeof CalendarRangeQuery>;
 
+/** Result of a {@link CalendarRangeQuery}: items across the window plus their layers. */
+export const CalendarItemsRangeOut = z
+  .object({
+    layers: z
+      .array(CalendarLayerOut)
+      .describe(
+        'The selected layers touched by this range (same set `readCalendarLayers` would filter to).',
+      ),
+    items: z.array(CalendarItemOut).describe('Calendar items overlapping the queried range.'),
+  })
+  .meta({
+    id: 'CalendarItemsRangeOut',
+    description: 'Calendar items overlapping a queried range, plus the layers they belong to.',
+  });
+/** Calendar-items-range value. */
+export type CalendarItemsRangeOut = z.infer<typeof CalendarItemsRangeOut>;
+
 /** Body for creating a Docket-native calendar block. */
 export const CalendarItemCreate = z
   .object({

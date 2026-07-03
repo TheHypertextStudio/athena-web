@@ -202,8 +202,8 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
   scheduled sync, web data layer, calendar UI/workspace, e2e + docs.
 - **Subtasks**:
   - [x] Phase 1 — schema and types
-  - [ ] Phase 2 — read service + compat routes
-  - [ ] Phase 3 — native blocks API
+  - [x] Phase 2 — read service + compat routes
+  - [x] Phase 3 — native blocks API
   - [ ] Phase 4 — task links
   - [ ] Phase 5 — provider sync engine
   - [ ] Phase 6 — provider write-back

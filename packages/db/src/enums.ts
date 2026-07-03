@@ -78,6 +78,8 @@ export const integrationStatus = pgEnum('integration_status', [
 
 /** What triggered an Agent Session. */
 export const sessionTrigger = pgEnum('session_trigger', ['assignment', 'delegation', 'mention']);
+/** The two framings of one session substrate: conversational thread vs. episodic job. */
+export const sessionKind = pgEnum('session_kind', ['chat', 'job']);
 /** Agent Session lifecycle status. */
 export const sessionStatus = pgEnum('session_status', [
   'pending',

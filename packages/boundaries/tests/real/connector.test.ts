@@ -461,6 +461,20 @@ describe('RealConnector — Linear (GraphQL)', () => {
   });
 });
 
+describe('RealConnector — asWorkGraph capability seam', () => {
+  it('returns undefined for a non-linear provider (gated on provider before the guard)', () => {
+    const { http } = fakeHttp([]);
+    const connector = new RealConnector({ provider: 'github', accessToken: 'tok' }, http);
+    expect(connector.asWorkGraph()).toBeUndefined();
+  });
+
+  it('returns undefined for linear today — LinearProviderClient does not yet implement the work-graph methods (Task 3)', () => {
+    const { http } = fakeHttp([]);
+    const connector = new RealConnector({ provider: 'linear', accessToken: 'tok' }, http);
+    expect(connector.asWorkGraph()).toBeUndefined();
+  });
+});
+
 describe('RealConnector — Google (Drive / Gmail / Calendar REST)', () => {
   it('Drive: resolves the account email, defaults the API base, and imports files', async () => {
     const { http, calls } = fakeHttp([
@@ -711,6 +725,19 @@ describe('RealConnector — Google (Drive / Gmail / Calendar REST)', () => {
       { id: '@default', title: 'My Tasks' },
       { id: 'work', title: 'Work' },
     ]);
+  });
+
+  it('Drive: listContainers resolves to [] (no container concept) instead of throwing', async () => {
+    // RealConnector.listContainers delegates unconditionally — it no longer gates on
+    // `provider === 'gtasks'` before calling through. GoogleProviderClient.listContainers must
+    // therefore handle every non-gtasks Google product structurally, matching GitHub/Linear,
+    // rather than throwing a ConnectorError.
+    const { http, calls } = fakeHttp([]);
+    const connector = new RealConnector({ provider: 'drive', accessToken: 'tok' }, http);
+    await expect(
+      connector.listContainers({ connectionId: 'c1', provider: 'drive' }),
+    ).resolves.toEqual([]);
+    expect(calls).toHaveLength(0);
   });
 
   it('Tasks: connects without deriving an account label, and resolves the task url', async () => {

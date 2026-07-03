@@ -12,15 +12,22 @@ export function jsonRead(uri: URL, dto: unknown): ReadResourceResult {
   };
 }
 
-/** The orgs (id/name/slug) the caller is a human Actor in. */
+/** The orgs (id/name/slug) the caller belongs to: a user's memberships, or an agent's one org. */
 export async function callerOrgs(
   ctx: McpContext,
 ): Promise<{ id: string; name: string; slug: string }[]> {
+  if (ctx.principal.kind === 'agent') {
+    const rows = await db
+      .select({ org: organization })
+      .from(organization)
+      .where(eq(organization.id, ctx.principal.orgId));
+    return rows.map((r) => ({ id: r.org.id, name: r.org.name, slug: r.org.slug }));
+  }
   const rows = await db
     .select({ org: organization })
     .from(actor)
     .innerJoin(organization, eq(actor.organizationId, organization.id))
-    .where(and(eq(actor.userId, ctx.userId), eq(actor.kind, 'human')));
+    .where(and(eq(actor.userId, ctx.principal.userId), eq(actor.kind, 'human')));
   return rows.map((r) => ({ id: r.org.id, name: r.org.name, slug: r.org.slug }));
 }
 
@@ -54,14 +61,22 @@ export async function completeId(
 ): Promise<string[]> {
   const orgId = args?.['org'];
   if (!orgId) return [];
-  const member = await db
-    .select({ id: actor.id })
-    .from(actor)
-    .where(
-      and(eq(actor.userId, ctx.userId), eq(actor.organizationId, orgId), eq(actor.kind, 'human')),
-    )
-    .limit(1);
-  if (!member[0]) return [];
+  if (ctx.principal.kind === 'agent') {
+    if (ctx.principal.orgId !== orgId) return [];
+  } else {
+    const member = await db
+      .select({ id: actor.id })
+      .from(actor)
+      .where(
+        and(
+          eq(actor.userId, ctx.principal.userId),
+          eq(actor.organizationId, orgId),
+          eq(actor.kind, 'human'),
+        ),
+      )
+      .limit(1);
+    if (!member[0]) return [];
+  }
   const rows = await db
     .select({ id: task.id })
     .from(task)
@@ -82,7 +97,7 @@ export function firstVar(value: string | string[] | undefined): string | undefin
 
 /**
  * Register the four static Hub resources on `server`: orgs list, hub-today,
- * hub-inbox, and hub-portfolio. All are gated by `ctx.userId` (token sub only;
+ * hub-inbox, and hub-portfolio. All are gated by the caller principal (token sub only;
  * no per-org actor resolution needed for cross-org personal surfaces).
  */
 export function registerStaticResources(server: McpRegistrar, ctx: McpContext): void {

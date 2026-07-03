@@ -122,7 +122,10 @@ async function connect(
   email: string,
   scopes: readonly string[],
 ): Promise<Client> {
-  const ctx: McpContext = { userId: orgUserId, userName: 'Ada', userEmail: email, scopes };
+  const ctx: McpContext = {
+    principal: { kind: 'user', userId: orgUserId, userName: 'Ada', userEmail: email },
+    scopes,
+  };
   const server = new McpServer(
     { name: 'test', version: '0.0.0' },
     { capabilities: { tools: { listChanged: true }, resources: { subscribe: true } } },
@@ -275,8 +278,12 @@ describe('resolveMcpContext — Bearer (OAuth RS) path', () => {
     });
     getSession.mockResolvedValueOnce({ user: { id: 'u-bearer', name: 'Grace', email: 'g@e.com' } });
     const ctx = await authMod.resolveMcpContext(bearer('tok-1'));
-    expect(ctx.userId).toBe('u-bearer');
-    expect(ctx.userName).toBe('Grace');
+    expect(ctx.principal).toEqual({
+      kind: 'user',
+      userId: 'u-bearer',
+      userName: 'Grace',
+      userEmail: 'g@e.com',
+    });
     expect(ctx.scopes).toEqual(['work:read', 'work:write']);
     expect(getMcpSession).toHaveBeenCalledOnce();
   });
@@ -303,8 +310,8 @@ describe('resolveMcpContext — Bearer (OAuth RS) path', () => {
     });
     getSession.mockResolvedValueOnce(null);
     const ctx = await authMod.resolveMcpContext(bearer('tok-2'));
-    expect(ctx.userName).toBeNull();
-    expect(ctx.userEmail).toBe('');
+    expect(ctx.principal.kind === 'user' ? ctx.principal.userName : 'x').toBeNull();
+    expect(ctx.principal.kind === 'user' ? ctx.principal.userEmail : 'x').toBe('');
     expect(ctx.scopes).toEqual(['work:read']);
   });
 });

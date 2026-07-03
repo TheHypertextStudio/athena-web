@@ -180,7 +180,12 @@ Requires \`manage\` — wiring an external data source into the org is an admini
     }),
     async (c) => {
       const providers: z.input<typeof IntegrationDirectoryOut>['providers'] =
-        DIRECTORY_PROVIDERS.map((provider) => ({ provider, ...PROVIDER_DIRECTORY[provider] }));
+        DIRECTORY_PROVIDERS.map((provider) => ({
+          provider,
+          // Observe-only sources (Slack) push events inbound and expose no Connector sync.
+          syncable: asConnectorProvider(provider) !== null,
+          ...PROVIDER_DIRECTORY[provider],
+        }));
       return ok(c, IntegrationDirectoryOut, { providers });
     },
   )

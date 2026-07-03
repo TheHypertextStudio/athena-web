@@ -6,6 +6,7 @@ import {
   Layers,
   type LucideIcon,
   Mail,
+  MessageSquare,
   Sparkles,
   TaskAlt,
 } from '@docket/ui/icons';
@@ -18,7 +19,16 @@ export const PROVIDER_ICON: Record<string, LucideIcon> = {
   gmail: Mail,
   calendar: Calendar,
   gtasks: TaskAlt,
+  slack: MessageSquare,
 };
+
+/**
+ * Providers whose connect ceremony is a full-page redirect to `GET /:id/connect-url` (a signed
+ * provider consent/install URL that calls back to `/internal/integrations/<provider>/callback`)
+ * rather than a Better Auth social-link. The callback returns to settings with
+ * `?<provider>=connected|error`.
+ */
+export const REDIRECT_CONNECT_PROVIDERS: ReadonlySet<string> = new Set(['slack']);
 
 /** providerIcon returns the icon component for an integration provider. */
 export function providerIcon(provider: string): LucideIcon {

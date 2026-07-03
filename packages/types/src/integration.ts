@@ -268,6 +268,11 @@ export const IntegrationDirectoryProvider = z
     category: z
       .string()
       .describe("A grouping label for the connect wizard (e.g. the provider's product category)."),
+    syncable: z
+      .boolean()
+      .describe(
+        'Whether the provider supports import/sync through the Connector port. Observe-only signal sources (e.g. Slack) are `false` — they push events inbound and expose no sync.',
+      ),
   })
   .meta({
     id: 'IntegrationDirectoryProvider',

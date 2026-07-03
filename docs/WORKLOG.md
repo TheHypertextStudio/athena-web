@@ -597,6 +597,20 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 - **Validation**: Validator rejects scopes absent from `COMMIT_SCOPES.txt` and accepts
   `refactor(integrations): ...`.
 
+### [ATHENA-011] Milestone D checkpoint: full gate green; merge queued behind concurrent session
+
+- **Completed**: 2026-07-03
+- **Summary**: Final validation across the workspace: types 211, db 46, env 36, boundaries 266,
+  web 192, api 936 (after settling the group-d SSE replay test for the live tail), build 3/3,
+  typecheck 11/11, lint clean per package. All 11 plan slices across milestones A–D are
+  committed on `worktree-feat-agent-turn-port` (12 commits, rebased onto main@bc581e0).
+- **Closeout note**: During the branch-resolution closeout this branch's migration was rebased
+  after the current search migration as `0028_smart_black_knight` instead of the stale `0016`.
+- **Deferred (documented, not silent)**: live screenshots of the Milestone D surfaces (the
+  worktree has no `.env` bootstrap and dev PGlite is single-writer with the main checkout) —
+  run a visual pass + `/design-review` after merge; the ⌘J overlay variant (⌘J currently
+  navigates to the persistent thread).
+
 ### [ATHENA-010] The chat front door + firehose onboarding (Milestone D complete)
 
 - **Completed**: 2026-07-03

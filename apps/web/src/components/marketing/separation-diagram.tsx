@@ -12,7 +12,7 @@ const ORGS: readonly DiagramOrg[] = [
     glyph: 'N',
     name: 'Northwind',
     kind: 'Startup',
-    facts: ['Its own team', 'Projects & cycles', 'GitHub · Linear'],
+    facts: ['Its own team', 'Projects & cycles', 'GitHub · Linear · Slack'],
   },
   {
     glyph: 'R',

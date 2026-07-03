@@ -23,9 +23,17 @@ import { Hono } from 'hono';
 
 import { githubAppConfigFromEnv, verifyInstallState, webAppOrigin } from '../lib/github-app';
 
-/** Build the redirect back to the web app's integration settings with a status flag. */
-function settingsRedirect(status: 'connected' | 'error'): string {
-  return `${webAppOrigin()}/settings/integrations?github=${status}`;
+/**
+ * Build the redirect back to the org's Connections settings page with a status flag.
+ *
+ * @remarks
+ * Settings are org-scoped (`/orgs/:orgId/settings/connections` is where `IntegrationsTab`
+ * lives); with no org recoverable from the state the redirect falls back to the web root.
+ */
+function settingsRedirect(orgId: string | null, status: 'connected' | 'error'): string {
+  const base = webAppOrigin();
+  if (!orgId) return `${base}/?github=${status}`;
+  return `${base}/orgs/${orgId}/settings/connections?github=${status}`;
 }
 
 /** The GitHub App connect callback edge. */
@@ -37,11 +45,11 @@ const integrationsGithub = new Hono().get('/callback', async (c) => {
   // started the flow (and is the CSRF guard). No valid state → bounce to settings as an error.
   const decoded = state ? verifyInstallState(state) : null;
   if (!decoded || !installationId) {
-    return c.redirect(settingsRedirect('error'));
+    return c.redirect(settingsRedirect(decoded?.orgId ?? null, 'error'));
   }
 
   const config = githubAppConfigFromEnv();
-  if (!config) return c.redirect(settingsRedirect('error'));
+  if (!config) return c.redirect(settingsRedirect(decoded.orgId, 'error'));
 
   // The integration must still exist under the org the state claims (existence-hiding upsert guard).
   const [row] = await db
@@ -55,7 +63,7 @@ const integrationsGithub = new Hono().get('/callback', async (c) => {
       ),
     )
     .limit(1);
-  if (!row) return c.redirect(settingsRedirect('error'));
+  if (!row) return c.redirect(settingsRedirect(decoded.orgId, 'error'));
 
   try {
     // Validate the installation for real (and label it) before recording it: mint a token and
@@ -78,7 +86,7 @@ const integrationsGithub = new Hono().get('/callback', async (c) => {
       })
       .where(eq(integration.id, row.id));
 
-    return c.redirect(settingsRedirect('connected'));
+    return c.redirect(settingsRedirect(decoded.orgId, 'connected'));
   } catch (err) {
     const message =
       err instanceof Error ? err.message : 'GitHub installation could not be verified';
@@ -86,7 +94,7 @@ const integrationsGithub = new Hono().get('/callback', async (c) => {
       .update(integration)
       .set({ status: 'error', lastError: message, lastErrorAt: new Date() })
       .where(eq(integration.id, row.id));
-    return c.redirect(settingsRedirect('error'));
+    return c.redirect(settingsRedirect(decoded.orgId, 'error'));
   }
 });
 

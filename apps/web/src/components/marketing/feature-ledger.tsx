@@ -26,16 +26,22 @@ const FEATURES: readonly Feature[] = [
   {
     number: '04',
     title: 'Bring the tools you already use',
-    body: 'Connect Google, Linear, GitHub, and more per organization. Docket coordinates on top of what each team already runs.',
+    body: 'Connect Google, Linear, GitHub, Slack, and more per organization. Docket coordinates on top of what each team already runs.',
   },
   {
     number: '05',
+    title: 'Never miss a message that matters',
+    body: 'Connect Slack once and every @mention, direct message, and reply in your threads lands in your Stream — filtered to what actually concerns you, linked back to the conversation.',
+    detail: 'mentioned you in #launch-planning · Slack',
+  },
+  {
+    number: '06',
     title: 'Work alongside agents',
     body: 'Hand a task to Athena — or your own agent — watch every step, and approve anything before it lands. You stay in control.',
     detail: 'step 3 of 5 · awaiting your approval',
   },
   {
-    number: '06',
+    number: '07',
     title: 'Keep everyone accountable',
     body: 'Status, health, and updates roll up across every venture into one clear picture you can share with the people who care.',
   },

@@ -342,6 +342,15 @@ export const SyncTrigger = z
 /** Sync-trigger value. */
 export type SyncTrigger = z.infer<typeof SyncTrigger>;
 
+/** What a sync run pulled: the task mirror or the email-to-task ingest. */
+export const SyncRunPurpose = z
+  .enum(['task_sync', 'email_ingest'])
+  .describe(
+    'What the run pulled: `task_sync` (the connector task mirror / two-way sync) or `email_ingest` (the email-to-task suggestion sweep). Both purposes run on the same leased spine and share this history.',
+  );
+/** Sync-run-purpose value. */
+export type SyncRunPurpose = z.infer<typeof SyncRunPurpose>;
+
 /**
  * The durable record of one connector sync run.
  *
@@ -355,6 +364,7 @@ export const SyncRunOut = z
     integrationId: IntegrationId.describe('The integration this run belongs to.'),
     status: SyncRunStatus.describe('Outcome of the run (running/succeeded/failed).'),
     trigger: SyncTrigger.describe('What started the run (manual/scheduled).'),
+    purpose: SyncRunPurpose.describe('What the run pulled (task mirror / email ingest).'),
     processed: z
       .number()
       .int()

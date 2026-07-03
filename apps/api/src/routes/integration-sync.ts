@@ -10,9 +10,15 @@
  * "never report success when nothing happened" invariant on the server side.
  */
 import { actor, db, integration, notification, syncRun } from '@docket/db';
-import { ConnectorConfig, type SyncRunOut, type SyncTrigger } from '@docket/types';
-import { type ImportedItem, isConnectorError } from '@docket/boundaries';
-import { and, eq, inArray, isNotNull, isNull, lt, or } from 'drizzle-orm';
+import {
+  ConnectorConfig,
+  type SyncRunOut,
+  type SyncRunPurpose,
+  type SyncTrigger,
+} from '@docket/types';
+import type { ConnectorProvider } from '@docket/boundaries';
+import { MAIL_CAPABLE_PROVIDERS, type ImportedItem, isConnectorError } from '@docket/boundaries';
+import { and, eq, inArray, isNotNull, isNull, lt, notInArray, or } from 'drizzle-orm';
 import type { z } from 'zod';
 
 import {
@@ -42,6 +48,7 @@ export function toSyncRunOut(run: SyncRunRow): z.input<typeof SyncRunOut> {
     integrationId: run.integrationId,
     status: run.status,
     trigger: run.trigger,
+    purpose: run.purpose,
     processed: run.processed,
     total: run.total,
     error: run.error,
@@ -168,17 +175,46 @@ async function notifyOwner(
   });
 }
 
+/** What a {@link LeasedSyncExecutor} runs with: the claimed row, resolved token, and clock. */
+export interface LeasedSyncContext {
+  readonly row: IntegrationRow;
+  readonly provider: ConnectorProvider;
+  readonly token: string;
+  readonly now: Date;
+}
+
 /**
- * Run one connector sync for an integration: claim the lease, pull work, materialize it, and
- * record the outcome truthfully on both the run and the integration.
+ * One purpose's pull, run under the spine's lease with a resolved token.
+ *
+ * @remarks
+ * Throwing is the failure channel: a thrown {@link import('@docket/boundaries').ConnectorError}
+ * with `kind: 'auth'` records the run as a reauth failure (status flip + owner notification);
+ * anything else records a plain failure. Returning records success with the given tallies.
+ */
+export type LeasedSyncExecutor = (
+  ctx: LeasedSyncContext,
+) => Promise<{ readonly processed: number; readonly total: number }>;
+
+/**
+ * The shared leased-sync spine: claim the integration's lease, persist a purposed
+ * {@link syncRun} row, resolve the provider + OAuth token, run the executor, and record the
+ * outcome truthfully on both the run and the integration (including the needs-reauth owner
+ * notification on a previously-healthy connection).
+ *
+ * @remarks
+ * Both sync purposes run on this one spine — the task mirror ({@link runSync}) and the
+ * email-to-task ingest — so leases, run history, honest status, and reauth surfacing are
+ * implemented exactly once. See `docs/engineering/specs/integration-sync.md`.
  *
  * @param row - The integration to sync (its `status` is read to decide whether to notify).
- * @param opts - The funding actor and the trigger.
+ * @param opts - The funding actor, the trigger, and the run's purpose.
+ * @param execute - The purpose-specific pull.
  * @returns the finished {@link SyncRunRow}, or `null` if another run already holds the lease.
  */
-export async function runSync(
+export async function runLeasedSync(
   row: IntegrationRow,
-  opts: RunSyncOptions,
+  opts: RunSyncOptions & { readonly purpose: SyncRunPurpose },
+  execute: LeasedSyncExecutor,
 ): Promise<SyncRunRow | null> {
   const now = new Date();
   if (!(await claimLease(row.id, now))) return null;
@@ -190,6 +226,7 @@ export async function runSync(
       integrationId: row.id,
       status: 'running',
       trigger: opts.trigger,
+      purpose: opts.purpose,
     })
     .returning();
   /* v8 ignore next -- @preserve defensive: insert always returns a row */
@@ -208,17 +245,33 @@ export async function runSync(
     return finishFailure(run, row, tokenResult.message, { needsReauth: true, now });
   }
 
-  let teamId: string;
   try {
-    teamId = await resolveImportTeam(row.organizationId, row);
+    const { processed, total } = await execute({ row, provider, token: tokenResult.token, now });
+    return await finishSuccess(run, row, processed, total, now);
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Could not resolve a team for import';
-    return finishFailure(run, row, message, { needsReauth: false, now });
+    const needsReauth = isConnectorError(err) && err.kind === 'auth';
+    const message = err instanceof Error ? err.message : 'Connector error';
+    return finishFailure(run, row, message, { needsReauth, now });
   }
+}
 
-  try {
+/**
+ * Run one connector task-mirror sync for an integration on the shared leased spine: pull
+ * work, materialize it, and record the outcome.
+ *
+ * @param row - The integration to sync.
+ * @param opts - The funding actor and the trigger.
+ * @returns the finished {@link SyncRunRow}, or `null` if another run already holds the lease.
+ */
+export async function runSync(
+  row: IntegrationRow,
+  opts: RunSyncOptions,
+): Promise<SyncRunRow | null> {
+  return runLeasedSync(row, { ...opts, purpose: 'task_sync' }, async ({ provider, token }) => {
+    // Thrown here (no team resolvable) → the spine records a plain failure with the message.
+    const teamId = await resolveImportTeam(row.organizationId, row);
     const config = ConnectorConfig.safeParse(row.config).data ?? {};
-    const connector = connectorFor(provider, tokenResult.token);
+    const connector = connectorFor(provider, token);
     const items: ImportedItem[] = await connector.importWork({
       connectionId: row.id,
       provider,
@@ -233,12 +286,8 @@ export async function runSync(
     });
     const processed =
       tally.inserted + tally.pulled + tally.pushed + tally.deleted + tally.archived + tally.created;
-    return await finishSuccess(run, row, processed, items.length, now);
-  } catch (err) {
-    const needsReauth = isConnectorError(err) && err.kind === 'auth';
-    const message = err instanceof Error ? err.message : 'Connector error';
-    return finishFailure(run, row, message, { needsReauth, now });
-  }
+    return { processed, total: items.length };
+  });
 }
 
 /** The number of due integrations one scheduler invocation will process. */
@@ -276,6 +325,10 @@ export async function sweepConnectorSync(now: Date): Promise<SweepResult> {
         eq(integration.syncMode, 'mirror'),
         isNotNull(integration.syncCadenceMinutes),
         inArray(integration.status, ['connected', 'error']),
+        // Mail providers are ingested by the email-to-task sweep (purpose `email_ingest`),
+        // not task-mirrored: a mailbox is not a task list, and double-pulling it here would
+        // race the ingest sweep for the same lease.
+        notInArray(integration.provider, [...MAIL_CAPABLE_PROVIDERS]),
       ),
     );
 

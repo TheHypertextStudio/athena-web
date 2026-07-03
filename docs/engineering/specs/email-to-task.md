@@ -4,15 +4,22 @@
 > email **attached as context**. The task is the real object; the email is an attachment — the
 > first instance of a general, MIME-agnostic attachment abstraction.
 >
-> **Status**: shipped end-to-end. Backend (data model, attachment + suggestions APIs, Gmail
-> mail-actions adapter, automation engine fully wired, funnel + Athena synthesis + scheduled
-> ingest sweep + seed-on-opt-in) and web UI (task-detail attachments, triage suggestions lane,
-> automations settings) — all committed. The synthesizer is a `TaskSynthesizer` boundary port:
-> the **real Anthropic-backed adapter** (action-oriented rewording) when `ANTHROPIC_API_KEY` is
-> set, else a deterministic mock — so the pipeline runs/tests offline. Backend covered by ~70
-> tests; UI compiles + lints against the RPC types. Verified headlessly to the same bar as the
-> rest of the boundary layer (mocks tested, real adapters typechecked). Live model output and
-> the rendered UI still warrant a visual/end-to-end pass with real accounts.
+> **Status (corrected 2026-07-02, productization M1–M4)**: pipeline live end-to-end in code;
+> operational wiring in progress. What's true now: the ingest runs as the `email_ingest`
+> purpose on the shared leased sync spine (`integration-sync.md`) with **incremental,
+> cursor-based listing** (Gmail `historyId`; see `mail-providers.md`) and **real RFC 5322
+> identity** (genuine sender into the funnel, `Message-ID` cross-provider dedup,
+> provider-captured thread URLs — the app layer never fabricates provider links); the
+> automation engine is **wired app-wide** into both event write paths (`automations.md`
+> supersedes §7 below); a `needs_reauth` token failure flips the integration and notifies the
+> owner; suggestion source threads are served live via `GET /email-suggestions/:id/thread`.
+> Earlier revisions of this block over-claimed: before M1 the automation engine had no
+> production caller (the observation→Event refactor dropped its hook), the sweep was never
+> scheduled, `emailToTask` config had no write surface, and the funnel never saw a sender.
+> Still open (M5–M7): scheduler job + enablement UI + typed config, edit-then-accept +
+> thread-preview UI, generic (non-mail) automation actions, suggestion lifecycle/expiry, and
+> synthesizer due-date enrichment. §6/§7/§13 below describe intent; where they conflict with
+> `automations.md` / `mail-providers.md` / `integration-sync.md`, the newer specs win.
 > **Source of truth for intent**: `docs/_archive/core/overview.md` §"Semantics-Aware Data
 > Attachments"; this spec supersedes it for the engineering contract.
 

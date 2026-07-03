@@ -9,13 +9,16 @@
  * `created` observation so the automation engine can react (e.g. archive the thread on accept).
  * See `docs/engineering/specs/email-to-task.md` §6.
  */
-import { attachment, db, emailSuggestion, task } from '@docket/db';
+import { attachment, db, emailSuggestion, integration, task } from '@docket/db';
 import {
+  EmailSuggestionMeta,
   EmailSuggestionOut,
+  EmailThreadOut,
   SuggestionAcceptBody,
   SuggestionDismissed,
   pageOf,
 } from '@docket/types';
+import type { MailThread } from '@docket/boundaries';
 import { and, asc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
@@ -27,14 +30,60 @@ import { ok } from '../lib/ok';
 import { zJson, zParam } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 import { emitEvent } from './event-emit';
+import { asConnectorProvider, connectorFor, resolveConnectorToken } from './integration-provider';
 
 type SuggestionRow = typeof emailSuggestion.$inferSelect;
 
 const idParam = z.object({ id: z.string() });
 
-/** The Gmail thread URL for a thread id. */
-function threadUrl(threadId: string): string {
-  return `https://mail.google.com/mail/#all/${threadId}`;
+/**
+ * The suggestion's provider-captured thread URL, from its ingest-time meta snapshot.
+ *
+ * @remarks
+ * Ingest always stamps `externalUrl` (and migration 0016 backfilled legacy rows), so an
+ * absent URL is a data-integrity bug — loud, never papered over with a fabricated provider
+ * URL (the app layer doesn't know provider URL shapes; see `mail-providers.md` §3).
+ */
+function sourceUrlOf(suggestion: SuggestionRow): string {
+  const meta = EmailSuggestionMeta.safeParse(suggestion.emailMeta);
+  const url = meta.success ? meta.data.externalUrl : undefined;
+  if (url === undefined) {
+    throw new Error(
+      `email_suggestion ${suggestion.id} has no emailMeta.externalUrl (expected from ingest/backfill)`,
+    );
+  }
+  return url;
+}
+
+/** Project a fetched {@link MailThread} into its wire {@link EmailThreadOut} shape. */
+function toThreadOut(thread: MailThread): z.input<typeof EmailThreadOut> {
+  return {
+    threadId: thread.threadId,
+    subject: thread.subject,
+    externalUrl: thread.externalUrl,
+    messages: thread.messages.map((m) => ({
+      id: m.id,
+      from: m.from,
+      to: [...m.to],
+      subject: m.subject,
+      snippet: m.snippet,
+      sentAt: m.sentAt,
+      rfc822MessageId: m.rfc822MessageId ?? null,
+      bodyHtml: m.bodyHtml ?? null,
+    })),
+  };
+}
+
+/** Load an org-scoped suggestion in any status, or throw. */
+async function loadAny(orgId: string, id: string): Promise<SuggestionRow> {
+  const rows = await db
+    .select()
+    .from(emailSuggestion)
+    .where(and(eq(emailSuggestion.id, id), eq(emailSuggestion.organizationId, orgId)))
+    .limit(1);
+  const row = rows[0];
+  if (!row) throw new NotFoundError('Suggestion not found');
+  return row;
 }
 
 /** Project a suggestion row into its wire {@link EmailSuggestionOut} shape. */
@@ -71,7 +120,7 @@ async function loadPending(orgId: string, id: string): Promise<SuggestionRow> {
   return row;
 }
 
-/** Email-suggestions router: list pending + accept (materialize task) + dismiss. */
+/** Email-suggestions router: list pending + thread preview + accept (materialize) + dismiss. */
 const emailSuggestions = new Hono<AppEnv>()
   .get('/', async (c) => {
     const { orgId } = c.get('actorCtx');
@@ -81,6 +130,37 @@ const emailSuggestions = new Hono<AppEnv>()
       .where(and(eq(emailSuggestion.organizationId, orgId), eq(emailSuggestion.status, 'pending')))
       .orderBy(asc(emailSuggestion.createdAt));
     return ok(c, pageOf(EmailSuggestionOut), { items: rows.map(toOut) });
+  })
+  .get('/:id/thread', zParam(idParam), async (c) => {
+    // The triage preview: fetch the suggestion's source thread live from the mail provider
+    // (bodies are read-on-demand and never persisted — the stored snapshot is emailMeta only).
+    const { orgId } = c.get('actorCtx');
+    const { id } = c.req.valid('param');
+    const suggestion = await loadAny(orgId, id);
+
+    const integrations = await db
+      .select()
+      .from(integration)
+      .where(
+        and(eq(integration.id, suggestion.integrationId), eq(integration.organizationId, orgId)),
+      )
+      .limit(1);
+    const integ = integrations[0];
+    if (!integ) throw new NotFoundError('Source integration not found');
+    const provider = asConnectorProvider(integ.provider);
+    if (!provider || !integ.createdBy) throw new NotFoundError('Source integration not usable');
+
+    const token = await resolveConnectorToken(integ.createdBy, provider, integ.externalAccountId);
+    // 409: the grant expired — the client surfaces a reconnect prompt, not a hard failure.
+    if (!token.ok) throw new ConflictError(token.message);
+    const mail = connectorFor(provider, token.token).asMailActor?.();
+    if (!mail) throw new ConflictError(`${provider} has no mail capability`);
+
+    const thread = await mail.fetchThread({
+      connectionId: integ.id,
+      threadId: suggestion.externalThreadId,
+    });
+    return ok(c, EmailThreadOut, toThreadOut(thread));
   })
   .post(
     '/:id/accept',
@@ -132,7 +212,7 @@ const emailSuggestions = new Hono<AppEnv>()
           subjectId: taskRow.id,
           kind: 'email',
           title: meta?.subject ?? suggestion.title,
-          url: threadUrl(suggestion.externalThreadId),
+          url: sourceUrlOf(suggestion),
           sourceIntegrationId: suggestion.integrationId,
           externalId: suggestion.externalThreadId,
           metadata: suggestion.emailMeta,

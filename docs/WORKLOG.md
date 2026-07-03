@@ -1117,6 +1117,29 @@ passes.
 
 ---
 
+## Fix: Remove Client-Rendered Theme Script Warning — 2026-07-02
+
+Root cause: `apps/web/src/components/providers.tsx` wrapped the app in `next-themes`
+`ThemeProvider`, whose client component renders an inline `<script>`. React 19 / Next 16 dev
+warns that scripts rendered inside React components do not execute on the client.
+
+Change: replaced `next-themes` with a small local root-class theme sync that preserves the
+existing `localStorage.theme` contract (`light` / `dark` / `system`) and listens for system theme
+changes, without rendering any script tag. Removed the now-unused `next-themes` dependency from
+`@docket/web`.
+
+Validation: added `apps/web/tests/components/providers.test.tsx`; targeted provider/auth Vitest
+suites pass, `@docket/web` typecheck and lint pass, and a Playwright console check against
+`https://docket.localhost/sign-in` reports zero console errors and zero script-tag warnings.
+During the Node 26 switch, normalized `pnpm-lock.yaml` so `pnpm install --frozen-lockfile` passes
+under pnpm 11.9 again. The invalid ESLint peer resolution came from root and
+`tooling/eslint-config` using literal, incompatible toolchain ranges, so the shared
+TypeScript/test/bundler/lint stack now resolves through the pnpm catalog. Added
+`packages/test-utils/tests/dependency-catalog.test.ts` to prevent those versions drifting back into
+package-local literals.
+
+---
+
 ## Unified Event Stream ("Pulse") — 2026-06-29
 
 Replaced the buried Inbox "Activity" tab with a **first-class, filterable, source-agnostic event stream** — Docket's answer to Linear Pulse — surfaced both cross-org (`/stream`, Home nav) and per-workspace (`/orgs/[orgId]/stream`, Workspace nav). The `observation` table is the canonical substrate; internal Docket events emit observations alongside their writes, and third-party webhooks (Linear, GitHub, Slack) land through the existing Observer → `inbound_event` → drain pipeline. Source is an attribution badge, never a separate layout; provider-specifics stay in the `payload` jsonb (no per-provider columns).

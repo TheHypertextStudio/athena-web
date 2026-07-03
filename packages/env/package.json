@@ -30,6 +30,6 @@
   "devDependencies": {
     "@docket/eslint-config": "workspace:*",
     "@docket/tsconfig": "workspace:*",
-    "@types/node": "25.9.2"
+    "@types/node": "catalog:"
   }
 }

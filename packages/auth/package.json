@@ -33,8 +33,8 @@
     "@docket/eslint-config": "workspace:*",
     "@docket/tsconfig": "workspace:*",
     "@electric-sql/pglite": "catalog:",
-    "@types/node": "25.9.2",
-    "vite": "^8.0.16",
-    "vitest": "^4.1.8"
+    "@types/node": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
   }
 }

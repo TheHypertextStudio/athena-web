@@ -104,6 +104,7 @@ export function searchResultToPaletteItem(
     org: hit.organizationId
       ? { id: hit.organizationId, name: input.orgName(hit.organizationId) }
       : undefined,
+    source: hit.source ? sourceLabel(hit.source.system) : undefined,
     run: () => {
       input.close();
       if (!href) return;
@@ -116,6 +117,14 @@ export function searchResultToPaletteItem(
 function resultHint(hit: SearchResult): string | undefined {
   if (hit.subject?.title) return `${SEARCH_KIND_LABEL[hit.subject.kind]}: ${hit.subject.title}`;
   return hit.summary ?? hit.snippet ?? undefined;
+}
+
+function sourceLabel(source: string): string {
+  if (source === 'github') return 'GitHub';
+  return source
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
 }
 
 /** The reactive state of a cross-org search request. */

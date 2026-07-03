@@ -47,6 +47,8 @@ export interface PaletteItem {
    * navigation). Omitted for Hub-global navigation/actions.
    */
   org?: { id: string; name: string };
+  /** Source/provider label for integration-backed search hits. */
+  source?: string;
   /** The search-hit entity kind, for result rows (drives the trailing kind label). */
   hitType?: SearchDocumentKind;
   /** Invoked when the row is selected; the palette closes immediately after. */

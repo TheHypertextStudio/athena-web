@@ -83,6 +83,31 @@ describe('searchResultToPaletteItem', () => {
     expect(item.hint).toBe('Project: Billing');
   });
 
+  it('preserves source attribution for integration-backed results', () => {
+    const item = searchResultToPaletteItem(
+      result({
+        kind: 'activity',
+        family: 'activity',
+        title: 'Issue moved',
+        source: {
+          system: 'github',
+          externalUrl: 'https://github.com/acme/app/issues/1',
+          eventId: 'event_1',
+        },
+        route: {
+          type: 'activity',
+          organizationId: ORG,
+          eventId: 'event_1',
+          href: `/orgs/${ORG}/stream?eventId=event_1`,
+          externalUrl: 'https://github.com/acme/app/issues/1',
+        },
+      }),
+      { close: vi.fn(), orgName: () => 'Acme', navigate: vi.fn() },
+    );
+
+    expect(item.source).toBe('GitHub');
+  });
+
   it('can navigate external activity results without Next router', () => {
     const navigateExternal = vi.fn();
     const item = searchResultToPaletteItem(

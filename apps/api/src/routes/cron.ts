@@ -23,6 +23,7 @@ import { sweepCalendarSync } from './calendar-sync-sweep';
 import { sweepConnectorSync } from './integration-sync';
 import { sweepInboundEvents } from './event-sync';
 import { sweepDailyDigests } from './daily-digest';
+import { processSearchIndexJobs } from '../search/process-jobs';
 
 /** Extract the presented cron secret from `Authorization: Bearer …` or `x-cron-secret`. */
 function presentedSecret(
@@ -72,6 +73,14 @@ const cron = new Hono()
   .post('/process-events', async (c) => {
     if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
     const result = await sweepInboundEvents(new Date());
+    return c.json({ swept: true, ...result });
+  })
+  // Search-index drain: process durable projection jobs produced by entity writes, event-log
+  // routing, backfills, and repairs. The worker claims pending rows with status transitions, so a
+  // scheduler retry cannot double-apply a projection.
+  .post('/search-index', async (c) => {
+    if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
+    const result = await processSearchIndexJobs({ limit: 50 });
     return c.json({ swept: true, ...result });
   })
   // Daily-digest sweep: generate + email each opted-in user's end-of-day summary once their

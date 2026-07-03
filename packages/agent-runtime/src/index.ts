@@ -82,6 +82,22 @@ export type {
 } from './summarizer';
 export type { TaskDraft, TaskDraftInput, TaskSynthesizer } from './task-synthesizer';
 export { TITLE_MAX, truncateTitle } from './task-synthesizer';
+export {
+  MockAgentTurnRuntime,
+  SCRIPTED_TURNS,
+  SUNSAMA_IMPORT_TURNS,
+} from './agent-turn';
+export type {
+  AgentTurnRuntime,
+  MockAgentTurnRuntimeOptions,
+  ScriptedTurn,
+  TurnContentBlock,
+  TurnEvent,
+  TurnInput,
+  TurnMessage,
+  TurnStopReason,
+  TurnToolDef,
+} from './agent-turn';
 export { MockAgentRuntime } from './mock-agent-runtime';
 export type { MockAgentRuntimeOptions } from './mock-agent-runtime';
 export { MockSummarizer } from './mock-summarizer';
@@ -97,3 +113,15 @@ export { RealSummarizer } from './real-summarizer';
 export type { RealSummarizerConfig } from './real-summarizer';
 export { RealTaskSynthesizer } from './real-task-synthesizer';
 export type { RealTaskSynthesizerConfig } from './real-task-synthesizer';
+export {
+  DEFAULT_TURN_MAX_TOKENS,
+  DEFAULT_TURN_MODEL,
+  RealAgentTurnRuntime,
+  buildTurnRequest,
+  defaultTurnStreamer,
+  parseToolInput,
+  toStopReason,
+  translateTurnEvents,
+  wrapTurnError,
+} from './real-agent-turn';
+export type { RealAgentTurnRuntimeConfig, TurnStreamer } from './real-agent-turn';

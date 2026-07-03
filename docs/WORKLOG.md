@@ -899,6 +899,34 @@ generate` needs a `DATABASE_URL` only to satisfy config validation — a codegen
   (`prompt=consent`); both diverge from what a spec-faithful client expects. Note: older WORKLOG
   entries (MCP-UTIL-005, MCP-SAMPLING-006) reference `packages/mcp-server/**` and
   `apps/api/src/routes/mcp.ts` — those paths were superseded by `apps/api/src/mcp/**`.
+### [ATHENA-001] Agent-turn boundaries port (slice 1 of the Athena agent build)
+
+- **Completed**: 2026-07-02
+- **Summary**: First slice of the approved Athena-agent plan (chief-of-staff assistant; one agentic
+  engine behind every door). Added the `AgentTurnRuntime` boundaries port — **one provider turn**
+  in (`system` + full `messages` + MCP-shaped `tools`), streamed `TurnEvent`s out (`thinking` /
+  `text` / `tool_use` / `turn_end`) — so the agentic loop, tool dispatch, approval gating, and
+  durable pause/resume can live host-side in `apps/api` as real, mock-turn-testable business
+  logic (the old `AgentRuntime` port mocked the whole session, leaving the loop untested; it is
+  deleted in slice 5 when `runSession` swaps over). `turn_end` carries the fully assembled
+  assistant message with thinking-block `signature`s, so the host appends it verbatim to the
+  durable transcript and can resume losslessly days later / after a restart. Real adapter drives
+  the Anthropic Messages API (`claude-opus-4-8`, adaptive thinking); mock replays scripted turns
+  selected by the assistant-message count (resume-safe determinism) and throws if a loop runs
+  past its script. Fixtures include `SUNSAMA_IMPORT_TURNS` (read source → batch creates in one
+  turn → summarize) so the firehose-onboarding proving flow runs fully offline. New `agentTurn`
+  container key follows the existing `ANTHROPIC_API_KEY` + `APP_MODE` selection rule.
+- **Files Changed**: `packages/boundaries/src/ports/agent-turn.ts` (new),
+  `src/real/agent-turn{,-translate}.ts` (new), `src/mock/agent-turn.ts` (new),
+  `src/fixtures/index.ts` (`SCRIPTED_TURNS`, `SUNSAMA_IMPORT_TURNS`), `src/select.ts` +
+  `src/{ports,real,mock}/index.ts` barrels, `tests/{real,mock}/agent-turn.test.ts` (new, 29
+  tests), `tests/select.test.ts`, `tests/real/connector-github-app.test.ts` (pre-existing lint).
+- **Learnings**: Making `turn_end` carry the complete assembled message (instead of the host
+  reassembling from streamed events) is what keeps events and transcript from ever disagreeing —
+  the mock derives its event stream _from_ the scripted message for the same reason. Indexing
+  mock turns by assistant-message count makes pause/resume replay a non-event: the persisted
+  transcript itself is the cursor.
+- **Gate**: boundaries 286/286 tests, `tsc --noEmit` clean, `eslint .` clean.
 
 ### [AUTO-001] Wire automations into the canonical Event substrate (M1 of productization)
 

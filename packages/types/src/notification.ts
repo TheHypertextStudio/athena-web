@@ -23,9 +23,10 @@ export const NotificationType = z
     'agent_session',
     'connector_sync_failed',
     'connector_needs_reauth',
+    'automation',
   ])
   .describe(
-    'The kind of event a notification represents, which drives its icon, grouping, and inline actions. Values: `mention` (the caller was @-mentioned), `assignment` (a task was assigned to them), `approval_request` (an action awaits their approval — the actionable queue counted by `pendingApprovals`), `status_change` (a watched item changed state), `comment` (a new comment on a followed thread), `invitation` (an org/team invite), `agent_session` (an AI agent session update), `connector_sync_failed` (an integration sync errored), `connector_needs_reauth` (a linked integration must be re-authorized).',
+    'The kind of event a notification represents, which drives its icon, grouping, and inline actions. Values: `mention` (the caller was @-mentioned), `assignment` (a task was assigned to them), `approval_request` (an action awaits their approval — the actionable queue counted by `pendingApprovals`), `status_change` (a watched item changed state), `comment` (a new comment on a followed thread), `invitation` (an org/team invite), `agent_session` (an AI agent session update), `connector_sync_failed` (an integration sync errored), `connector_needs_reauth` (a linked integration must be re-authorized), `automation` (sent by the `notification.send` action of a user-authored automation rule).',
   );
 /** Notification-type value. */
 export type NotificationType = z.infer<typeof NotificationType>;

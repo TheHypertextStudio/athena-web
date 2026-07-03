@@ -9,9 +9,8 @@
  * `created` observation so the automation engine can react (e.g. archive the thread on accept).
  * See `docs/engineering/specs/email-to-task.md` §6.
  */
-import { attachment, db, emailSuggestion, integration, task } from '@docket/db';
+import { db, emailSuggestion, integration } from '@docket/db';
 import {
-  EmailSuggestionMeta,
   EmailSuggestionOut,
   EmailThreadOut,
   SuggestionAcceptBody,
@@ -25,35 +24,15 @@ import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { ConflictError, NotFoundError } from '../error';
-import { resolveLandingTarget } from '../lib/task-landing';
+import { acceptSuggestion } from '../lib/email-to-task/accept';
 import { ok } from '../lib/ok';
 import { zJson, zParam } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
-import { emitEvent } from './event-emit';
 import { asConnectorProvider, connectorFor, resolveConnectorToken } from './integration-provider';
 
 type SuggestionRow = typeof emailSuggestion.$inferSelect;
 
 const idParam = z.object({ id: z.string() });
-
-/**
- * The suggestion's provider-captured thread URL, from its ingest-time meta snapshot.
- *
- * @remarks
- * Ingest always stamps `externalUrl` (and migration 0016 backfilled legacy rows), so an
- * absent URL is a data-integrity bug — loud, never papered over with a fabricated provider
- * URL (the app layer doesn't know provider URL shapes; see `mail-providers.md` §3).
- */
-function sourceUrlOf(suggestion: SuggestionRow): string {
-  const meta = EmailSuggestionMeta.safeParse(suggestion.emailMeta);
-  const url = meta.success ? meta.data.externalUrl : undefined;
-  if (url === undefined) {
-    throw new Error(
-      `email_suggestion ${suggestion.id} has no emailMeta.externalUrl (expected from ingest/backfill)`,
-    );
-  }
-  return url;
-}
 
 /** Project a fetched {@link MailThread} into its wire {@link EmailThreadOut} shape. */
 function toThreadOut(thread: MailThread): z.input<typeof EmailThreadOut> {
@@ -171,74 +150,20 @@ const emailSuggestions = new Hono<AppEnv>()
       const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const overrides = c.req.valid('json');
-      const suggestion = await loadPending(orgId, id);
 
-      // Land the materialized task exactly like quick-capture (shared resolver): oldest active
-      // team, its first workflow state, caller as assignee, current cycle when one covers today.
-      const landing = await resolveLandingTarget(orgId, actorId);
-      if (!landing) throw new NotFoundError('No team to accept into');
-
-      const dueDate = overrides.dueDate
-        ? new Date(overrides.dueDate)
-        : (suggestion.dueDate ?? undefined);
-
-      const created = await db.transaction(async (tx) => {
-        const inserted = await tx
-          .insert(task)
-          .values({
-            organizationId: orgId,
-            title: overrides.title ?? suggestion.title,
-            description: overrides.description ?? suggestion.description,
-            teamId: landing.teamId,
-            state: landing.state,
-            priority: overrides.priority ?? suggestion.priority,
-            assigneeId: landing.assigneeId,
-            cycleId: landing.cycleId,
-            dueDate,
-            source: 'native',
-            createdBy: actorId,
-          })
-          .returning();
-        const taskRow = inserted[0];
-        /* v8 ignore next -- @preserve defensive: insert always returns a row */
-        if (!taskRow) throw new Error('accept task insert returned no row');
-
-        // Attach the source email back to the new task (the email rides along as context).
-        const meta = suggestion.emailMeta as { subject?: string } | null;
-        await tx.insert(attachment).values({
-          organizationId: orgId,
-          createdBy: actorId,
-          subjectType: 'task',
-          subjectId: taskRow.id,
-          kind: 'email',
-          title: meta?.subject ?? suggestion.title,
-          url: sourceUrlOf(suggestion),
-          sourceIntegrationId: suggestion.integrationId,
-          externalId: suggestion.externalThreadId,
-          metadata: suggestion.emailMeta,
-        });
-
-        const updated = await tx
-          .update(emailSuggestion)
-          .set({ status: 'accepted', createdTaskId: taskRow.id })
-          .where(and(eq(emailSuggestion.id, id), eq(emailSuggestion.organizationId, orgId)))
-          .returning();
-        const suggestionRow = updated[0];
-        /* v8 ignore next -- @preserve defensive: loadPending proved the row exists */
-        if (!suggestionRow) throw new NotFoundError('Suggestion not found');
-        return { taskRow, suggestionRow };
-      });
-
-      // Emit a creation event so automation rules can react to the accept.
-      await emitEvent({
+      // Shared with the suggestion.autoAccept automation action — one materialization path.
+      const result = await acceptSuggestion({
         organizationId: orgId,
-        kind: 'created',
+        suggestionId: id,
         actorId,
-        title: created.taskRow.title,
-        subject: { type: 'task', id: created.taskRow.id, title: created.taskRow.title },
+        overrides,
       });
+      if (result.kind === 'not_found') throw new NotFoundError('Suggestion not found');
+      if (result.kind === 'already_resolved')
+        throw new ConflictError('Suggestion already resolved');
+      if (result.kind === 'no_team') throw new NotFoundError('No team to accept into');
 
-      return ok(c, EmailSuggestionOut, toOut(created.suggestionRow));
+      return ok(c, EmailSuggestionOut, toOut(result.suggestionRow));
     },
   )
   .post('/:id/dismiss', capabilityGuard('contribute'), zParam(idParam), async (c) => {

@@ -124,6 +124,24 @@ export const ConnectorConfig = z
       .describe(
         'Opt-in: also push `native` Docket tasks in the target team OUT to the provider as new external tasks. Default off, to avoid surprising bulk creation.',
       ),
+    emailToTask: z
+      .object({
+        enabled: z
+          .boolean()
+          .describe('Whether the email-to-task ingest sweeps this mailbox. Strictly opt-in.'),
+        threshold: z
+          .number()
+          .int()
+          .min(0)
+          .max(100)
+          .describe(
+            'The funnel pass score (0–100) a thread must reach to be synthesized into a suggestion. Explicit by design — enabling always sets it; there is no hidden default.',
+          ),
+      })
+      .optional()
+      .describe(
+        'Email-to-task ingest config (mail-capable connectors only). Absent = the feature is off for this integration; when present, BOTH fields are required — see `docs/engineering/specs/email-to-task.md`.',
+      ),
   })
   .meta({
     id: 'ConnectorConfig',

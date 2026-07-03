@@ -4,7 +4,7 @@
  * @remarks
  * Rules are data (`on → when → then`); shipped defaults arrive as editable `isSeed` rows.
  * This v1 lists rules with an enable/disable toggle and delete; authoring the predicate/action
- * graph is a later surface. See `docs/engineering/specs/email-to-task.md` §7/§9.
+ * graph is a later surface. See `docs/engineering/specs/automations.md`.
  */
 'use client';
 
@@ -83,16 +83,17 @@ export default function AutomationsTab({
   return (
     <div className="flex flex-col gap-3">
       <p className="text-muted-foreground text-sm">
-        Rules run when something happens (an email suggestion appears, a task completes) and take
-        actions like dismissing a suggestion or archiving the source email. Defaults are seeded for
-        you to edit.
+        Rules run when something happens anywhere in Docket — a task completes, an issue arrives
+        from a connected tool, an email suggestion appears — and take actions like setting a status,
+        assigning, notifying, archiving the source email, or dismissing a suggestion. Defaults are
+        seeded for you to edit.
       </p>
 
       {isPending ? (
         <p className="text-muted-foreground text-sm">Loading rules…</p>
       ) : rules.length === 0 ? (
         <p className="text-muted-foreground text-sm">
-          No automation rules yet. They appear once email-to-task is enabled for a connected
+          No automation rules yet. Defaults appear once email-to-task is enabled for a connected
           mailbox.
         </p>
       ) : (

@@ -41,6 +41,7 @@ const NOTIFICATION_KIND: Record<NotificationType, NotificationKindMeta> = {
   invitation: { icon: Users, label: 'Invitation' },
   connector_sync_failed: { icon: XCircle, label: 'Sync failed' },
   connector_needs_reauth: { icon: Cable, label: 'Reconnect needed' },
+  automation: { icon: Sparkles, label: 'Automation' },
 };
 
 /**

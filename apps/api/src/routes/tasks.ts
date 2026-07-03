@@ -18,6 +18,7 @@ import type { z } from 'zod';
 import type { AppEnv } from '../context';
 import { CapabilityError, CycleError, NotFoundError, ValidationError } from '../error';
 import { ok } from '../lib/ok';
+import { setTaskState } from '../lib/task-state';
 import { pageResult, seekAfter } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
 import { serializableTx } from '../lib/serializable-tx';
@@ -391,29 +392,9 @@ The transition is resolved server-side: entering a terminal state derives \`comp
       const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const { state } = c.req.valid('json');
-      const row = await loadTask(orgId, id);
-      const transition = await resolveStateTransition(orgId, row.teamId, state);
-      const updated = await db
-        .update(task)
-        .set({
-          state: transition.state,
-          completedAt: transition.completedAt,
-          canceledAt: transition.canceledAt,
-        })
-        .where(and(eq(task.id, id), eq(task.organizationId, orgId), isNull(task.archivedAt)))
-        .returning();
-      const next = updated[0];
-      /* v8 ignore next -- @preserve defensive: loadTask above proved the row exists + is active */
+      // Shared with the task.setStatus automation action — one transition implementation.
+      const next = await setTaskState({ organizationId: orgId, taskId: id, state, actorId });
       if (!next) throw new NotFoundError('Task not found');
-
-      await emitEvent({
-        organizationId: orgId,
-        kind: transition.completedAt ? 'completed' : 'status_change',
-        actorId,
-        title: next.title,
-        subject: { type: 'task', id: next.id, title: next.title },
-        detail: { schema: 'docket.state_change', fromState: null, toState: next.state },
-      });
       return ok(c, TaskOut, toOut(next));
     },
   )

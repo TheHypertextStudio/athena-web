@@ -1,7 +1,7 @@
 # Automations
 
-> **Status**: Engine + wiring shipped (M1 of the email-to-task productization). Generic
-> action handlers land in M5; a visual rule builder is a later milestone.
+> **Status**: Engine + wiring shipped (M1); generic action handlers, enablement, and rule
+> seeding-on-toggle shipped (M5). A visual rule builder is a later milestone.
 > **Last Updated**: 2026-07-02
 > **Owners**: Platform
 > **Supersedes**: `email-to-task.md` §7, which described the engine when it was email-only.
@@ -122,8 +122,18 @@ subject type or invalid params — rules can never throw domain errors.
 | `mail.applyLabel` / `mail.removeLabel` | `{ label: string }` | `task`             | Provider label/category on the source thread; no-op without `label`.                               | ledger                                                       |
 | `suggestion.dismiss`                   | `{}`                | `email_suggestion` | Sets the firing suggestion `pending → dismissed`.                                                  | status guard (`pending` only)                                |
 
-**Planned for M5** (see the productization plan): `task.setStatus`, `task.assign`,
-`task.setPriority`, `task.applyLabel`, `notification.send`, `suggestion.autoAccept`.
+| `task.setStatus` | `{ state: string }` | `task` | Moves the task to the workflow state via the shared transition lib (`lib/task-state.ts` — the same implementation as `POST /tasks/:id/status`; terminal states derive `completedAt`/`canceledAt`). Unknown state key → logged no-op. | shared lib; emitted event doesn't cascade (depth-1 cap) |
+| `task.assign` | `{ assigneeId: string }` | `task` | Assigns to an **org** actor (cross-tenant ids are refused); emits `assignment`. | org-scope check |
+| `task.setPriority` | `{ priority: Priority }` | `task` | Sets priority; params validated against the `Priority` enum. | last-write-wins |
+| `task.applyLabel` | `{ labelId: string }` | `task` | Attaches an **org** label via the task-label join. | join PK + `onConflictDoNothing` |
+| `notification.send` | `{ to: 'actor'\|'taskAssignee', title, summary? }` | any (task for `taskAssignee`) | Writes an `automation`-type inbox notification to the resolved user; links to the task when the subject is one. Agent actors (no user) → no-op. | inbox row per firing |
+| `suggestion.autoAccept` | `{}` | `email_suggestion` | Materializes the pending suggestion through the shared accept lib (`lib/email-to-task/accept.ts` — the same path as the accept route: landing, email attachment, event). Non-pending → logged no-op. | `pending`-status guard |
+
+All mutating handlers reuse the **shared lib mutations** (`setTaskState`, `acceptSuggestion`)
+so route behavior and automation behavior cannot diverge; events they emit are recorded and
+fanned out but never trigger another rule pass (§5's depth-1 cap). `comment.create` remains
+deliberately unimplemented — no shipped rule needs it, and polymorphic comment creation
+(mention parsing, subject fan-out) adds surface without a driver.
 
 ### Shipped default rules (seeded, editable data — `rules-store.ts`)
 

@@ -19,7 +19,7 @@
  * accounts. See `docs/engineering/specs/{email-to-task,integration-sync,mail-providers}.md`.
  */
 import { db, integration } from '@docket/db';
-import { IntegrationSyncState } from '@docket/types';
+import { ConnectorConfig, IntegrationSyncState } from '@docket/types';
 import { MAIL_CAPABLE_PROVIDERS, type MailActions, type MailListPage } from '@docket/boundaries';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 
@@ -28,12 +28,6 @@ import { seedDefaultAutomationRules } from '../automation/rules-store';
 import { connectorFor } from '../../routes/integration-provider';
 import { type LeasedSyncContext, runLeasedSync } from '../../routes/integration-sync';
 import { type CandidateThread, persistSuggestions } from './synthesize';
-
-/** Per-integration email-to-task config (lives on `integration.config.emailToTask`). */
-interface EmailToTaskConfig {
-  readonly enabled?: boolean;
-  readonly threshold?: number;
-}
 
 /** The most threads one integration ingests per sweep (cursoring keeps warm sweeps tiny). */
 const MAX_INGEST_THREADS = 100;
@@ -147,9 +141,17 @@ export async function sweepEmailSuggestions(_now: Date): Promise<EmailSweepResul
   let created = 0;
 
   for (const row of rows) {
-    const cfg = (row.config as { emailToTask?: EmailToTaskConfig } | null)?.emailToTask;
-    // Opt-in + explicit threshold required — no hidden default, no scanning of un-enabled mailboxes.
-    if (!cfg?.enabled || typeof cfg.threshold !== 'number') continue;
+    // Shared typed config (the same schema the settings PATCH validates against). Opt-in +
+    // explicit threshold required — no hidden default, no scanning of un-enabled mailboxes.
+    const parsed = ConnectorConfig.safeParse(row.config);
+    if (!parsed.success) {
+      console.warn('[email-to-task] invalid integration config; skipping', {
+        integrationId: row.id,
+      });
+      continue;
+    }
+    const cfg = parsed.data.emailToTask;
+    if (!cfg?.enabled) continue;
     const threshold = cfg.threshold;
     const actorId = row.createdBy;
     if (!actorId) continue;

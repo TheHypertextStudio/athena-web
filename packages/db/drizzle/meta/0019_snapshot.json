@@ -1,6 +1,6 @@
 {
-  "id": "6cc417ab-6a10-4de3-a343-ca4d37ef0959",
-  "prevId": "7f1f9954-2d80-4e68-be3e-d587a5d52dc1",
+  "id": "6a3f2d71-0c73-4592-a489-a906c7f87ddc",
+  "prevId": "d20f90ee-7567-46bd-ac53-1540a467c87b",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -604,59 +604,6 @@
           "onUpdate": "no action"
         }
       },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.rate_limit": {
-      "name": "rate_limit",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "key": {
-          "name": "key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "count": {
-          "name": "count",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "last_request": {
-          "name": "last_request",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "rate_limit_key_idx": {
-          "name": "rate_limit_key_idx",
-          "columns": [
-            {
-              "expression": "key",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -1978,30 +1925,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "blob_key": {
-          "name": "blob_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "file_name": {
-          "name": "file_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "mime_type": {
-          "name": "mime_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "byte_size": {
-          "name": "byte_size",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
         "last_email_state_action": {
           "name": "last_email_state_action",
           "type": "text",
@@ -2722,6 +2645,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "rfc822_message_id": {
+          "name": "rfc822_message_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "status": {
           "name": "status",
           "type": "email_suggestion_status",
@@ -2782,6 +2711,27 @@
             }
           ],
           "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "email_suggestion_org_message_id_idx": {
+          "name": "email_suggestion_org_message_id_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "rfc822_message_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -3193,6 +3143,13 @@
           "primaryKey": false,
           "notNull": false,
           "default": 60
+        },
+        "sync_state": {
+          "name": "sync_state",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
         }
       },
       "indexes": {
@@ -3793,6 +3750,14 @@
           "typeSchema": "public",
           "primaryKey": false,
           "notNull": true
+        },
+        "purpose": {
+          "name": "purpose",
+          "type": "sync_run_purpose",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'task_sync'"
         },
         "processed": {
           "name": "processed",
@@ -7991,157 +7956,6 @@
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
-    },
-    "public.thread_participation": {
-      "name": "thread_participation",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "provider": {
-          "name": "provider",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "external_workspace_id": {
-          "name": "external_workspace_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "channel_id": {
-          "name": "channel_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "thread_ts": {
-          "name": "thread_ts",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "external_user_id": {
-          "name": "external_user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "last_seen_at": {
-          "name": "last_seen_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "thread_participation_identity_uq": {
-          "name": "thread_participation_identity_uq",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "provider",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "external_workspace_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "channel_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "thread_ts",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "external_user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "thread_participation_lookup_idx": {
-          "name": "thread_participation_lookup_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "external_workspace_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "channel_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "thread_ts",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "thread_participation_organization_id_organization_id_fk": {
-          "name": "thread_participation_organization_id_organization_id_fk",
-          "tableFrom": "thread_participation",
-          "tableTo": "organization",
-          "columnsFrom": ["organization_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
     }
   },
   "enums": {
@@ -8178,7 +7992,7 @@
     "public.attachment_kind": {
       "name": "attachment_kind",
       "schema": "public",
-      "values": ["email", "url", "calendar_event", "file"]
+      "values": ["email", "url", "calendar_event"]
     },
     "public.attachment_subject_type": {
       "name": "attachment_subject_type",
@@ -8359,7 +8173,8 @@
         "invitation",
         "agent_session",
         "connector_sync_failed",
-        "connector_needs_reauth"
+        "connector_needs_reauth",
+        "automation"
       ]
     },
     "public.org_lifecycle_state": {
@@ -8413,7 +8228,7 @@
     "public.source_system": {
       "name": "source_system",
       "schema": "public",
-      "values": ["docket", "linear", "github", "slack", "discord", "google_calendar", "gmail"]
+      "values": ["docket", "linear", "github", "slack", "google_calendar", "gmail", "outlook"]
     },
     "public.staff_role": {
       "name": "staff_role",
@@ -8434,6 +8249,11 @@
       "name": "sync_mode",
       "schema": "public",
       "values": ["import", "mirror"]
+    },
+    "public.sync_run_purpose": {
+      "name": "sync_run_purpose",
+      "schema": "public",
+      "values": ["task_sync", "email_ingest"]
     },
     "public.sync_run_status": {
       "name": "sync_run_status",

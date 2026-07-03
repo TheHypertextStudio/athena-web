@@ -181,6 +181,11 @@ describe('integrations sync', () => {
   });
 
   it('is idempotent: a second sync processes nothing already materialized', async () => {
+    // Linear is work-graph-capable (T6b wires `runSync` onto the T6a reconciler), so it now
+    // syncs against the full 7-item LINEAR_WORK_GRAPH fixture (not the flat 2-item
+    // CONNECTOR_ITEMS.linear the plain importWork path used) — 6 of its 7 work items
+    // materialize on the first pass (the 7th is a tombstone with no prior local row, a no-op
+    // per the reconciler's "absence/removal never destroys what was never seen" rule).
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
     const id = await seedIntegration(orgId, humanActorId, 'linear');
     const w = appWithActor(integrations, orgId, ['manage'], humanActorId);
@@ -188,12 +193,15 @@ describe('integrations sync', () => {
     const first = await body<SyncRunRes>(
       await w.request(`/${id}/sync`, { method: 'POST', headers: J }),
     );
-    expect(first.processed).toBe(2); // the linear fixture yields two issues
+    expect(first.total).toBe(7);
+    expect(first.processed).toBe(6);
 
     const second = await body<SyncRunRes>(
       await w.request(`/${id}/sync`, { method: 'POST', headers: J }),
     );
-    expect(second.total).toBe(2);
+    // A manual sync always forces a full re-walk (see `integration-sync-graph.test.ts`), so the
+    // second run's `total` is still the full 7 — but nothing CHANGED, so `processed` is 0.
+    expect(second.total).toBe(7);
     expect(second.processed).toBe(0); // already imported, nothing new
     expect(second.status).toBe('succeeded');
     expect(second.id).not.toBe(first.id);

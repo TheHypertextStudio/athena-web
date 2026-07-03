@@ -1,4 +1,4 @@
-import { cycle, db, task, team } from '@docket/db';
+import { cycle, db, integration, task, team } from '@docket/db';
 import type { CycleOut } from '@docket/types';
 import { type CycleStats, type TaskOut } from '@docket/types';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
@@ -101,12 +101,44 @@ export function deriveStatus(slot: CycleWindowSlot, now: Date): CycleRow['status
 }
 
 /**
+ * Whether a team currently has any provider-mirrored cycle from an ACTIVE integration.
+ *
+ * @remarks
+ * "Active" means `connected` or `error` (a broken-but-still-owned connection) — deliberately
+ * NOT `disconnected`: once an integration is severed the team is no longer provider-owned and
+ * should revert to native auto-roll rather than staying frozen forever. Used by
+ * {@link ensureCycleWindow} to defer cadence entirely to the provider for a mirrored team: a
+ * native insert would otherwise collide with (or interleave nonsensically among) the
+ * `(teamId, number)` sequence Linear's own cycle numbers already occupy.
+ */
+async function hasActiveLinkedCycle(orgId: string, teamId: string): Promise<boolean> {
+  const rows = await db
+    .select({ id: cycle.id })
+    .from(cycle)
+    .innerJoin(integration, eq(cycle.sourceIntegrationId, integration.id))
+    .where(
+      and(
+        eq(cycle.organizationId, orgId),
+        eq(cycle.teamId, teamId),
+        eq(cycle.source, 'linked'),
+        inArray(integration.status, ['connected', 'error']),
+      ),
+    )
+    .limit(1);
+  return rows.length > 0;
+}
+
+/**
  * Lazily ensure the rolling window of auto-rolled cycles exists for a team, then return
  * the team's cycles ordered by `number`.
  *
  * @remarks
  * Idempotent: keyed on the stable epoch-anchored cycle `number`; `onConflictDoNothing`
  * tolerates concurrent writers. Manual cycles outside the computed window are untouched.
+ * GUARD: a team with any linked cycle from an ACTIVE integration (see
+ * {@link hasActiveLinkedCycle}) defers cadence entirely to the provider — no native slots are
+ * generated for it, and the team's existing (mirrored + any manual) cycles are simply returned
+ * as-is. This prevents native auto-roll from colliding with the provider's own cycle numbering.
  *
  * @param orgId - The tenant.
  * @param teamId - The team whose window to ensure.
@@ -121,33 +153,35 @@ export async function ensureCycleWindow(
   actorId: string | null,
   now: Date,
 ): Promise<CycleRow[]> {
-  const slots: CycleWindowSlot[] = rollingWindow(now, cadenceWeeks);
+  if (!(await hasActiveLinkedCycle(orgId, teamId))) {
+    const slots: CycleWindowSlot[] = rollingWindow(now, cadenceWeeks);
 
-  const existing = await db
-    .select()
-    .from(cycle)
-    .where(and(eq(cycle.teamId, teamId), eq(cycle.organizationId, orgId)));
-  const existingNumbers = new Set(existing.map((c) => c.number));
+    const existing = await db
+      .select()
+      .from(cycle)
+      .where(and(eq(cycle.teamId, teamId), eq(cycle.organizationId, orgId)));
+    const existingNumbers = new Set(existing.map((c) => c.number));
 
-  const toInsert = slots
-    .filter((s) => !existingNumbers.has(s.number))
-    .map((s) => ({
-      organizationId: orgId,
-      teamId,
-      number: s.number,
-      startsAt: s.startsAt,
-      endsAt: s.endsAt,
-      status: deriveStatus(s, now),
-      createdBy: actorId,
-    }));
+    const toInsert = slots
+      .filter((s) => !existingNumbers.has(s.number))
+      .map((s) => ({
+        organizationId: orgId,
+        teamId,
+        number: s.number,
+        startsAt: s.startsAt,
+        endsAt: s.endsAt,
+        status: deriveStatus(s, now),
+        createdBy: actorId,
+      }));
 
-  if (toInsert.length > 0) {
-    await db
-      .insert(cycle)
-      .values(toInsert)
-      .onConflictDoNothing({
-        target: [cycle.teamId, cycle.number],
-      });
+    if (toInsert.length > 0) {
+      await db
+        .insert(cycle)
+        .values(toInsert)
+        .onConflictDoNothing({
+          target: [cycle.teamId, cycle.number],
+        });
+    }
   }
 
   return db

@@ -30,6 +30,7 @@ import {
 } from './integration-provider';
 import { resolveImportTeam } from './integration-import';
 import { reconcileTasks } from './integration-reconcile';
+import { reconcileWorkGraph } from './integration-reconcile-graph';
 
 /** The selected `sync_run` row shape. */
 export type SyncRunRow = typeof syncRun.$inferSelect;
@@ -40,6 +41,54 @@ export type SyncRunRow = typeof syncRun.$inferSelect;
  * the observation drain so both lease windows stay in lockstep.
  */
 export const LEASE_STALE_MS = 15 * 60 * 1000;
+
+/**
+ * A work-graph pull older than this always re-walks the full remote graph rather than an
+ * incremental delta — bounding how stale an incremental-only mirror can silently become (a
+ * long-running incremental chain would otherwise never re-verify entities the provider's delta
+ * feed missed).
+ */
+const FULL_SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The overlap multiplier applied to an integration's cadence for the incremental pull's
+ * `updatedAfter` cutoff (see {@link lookbackISO}) — widening the window beyond exactly one
+ * cadence so an item that changed right at the edge of the previous sweep (a race between the
+ * provider's write and our read) is never missed by the next one.
+ */
+const LOOKBACK_CADENCE_MULTIPLIER = 2;
+
+/**
+ * The external team ids a work-graph pull should be scoped to, derived from the integration's
+ * `config`.
+ *
+ * @remarks
+ * A lightweight extraction of the SAME precedence `buildTeamResolver` (T6a,
+ * `integration-reconcile-graph.ts`) applies for routing — `teamMappings` (when non-empty) is
+ * authoritative, else `listIds` — without duplicating its resolution logic (that module owns
+ * external-team → Docket-team routing; this only narrows what the PULL itself fetches). Absent
+ * config narrows to nothing configured, so the pull is unscoped (every team).
+ */
+function mappedExternalTeamIds(config: ConnectorConfig): readonly string[] {
+  if (config.teamMappings && config.teamMappings.length > 0) {
+    return config.teamMappings.map((m) => m.externalTeamId);
+  }
+  return config.listIds ?? [];
+}
+
+/**
+ * The incremental work-graph pull's `updatedAfter` cutoff: `lastSyncedAt` minus a
+ * {@link LOOKBACK_CADENCE_MULTIPLIER}x-cadence overlap window.
+ *
+ * @param lastSyncedAt - The integration's last successful sync (the caller has already proven
+ *   this is non-null — a null `lastSyncedAt` is treated as a full sync, never passed here).
+ * @param cadenceMinutes - The integration's background re-sync cadence; null/unset treated as 0
+ *   (no overlap beyond `lastSyncedAt` itself).
+ */
+function lookbackISO(lastSyncedAt: Date, cadenceMinutes: number | null): string {
+  const cadenceMs = (cadenceMinutes ?? 0) * 60_000;
+  return new Date(lastSyncedAt.getTime() - LOOKBACK_CADENCE_MULTIPLIER * cadenceMs).toISOString();
+}
 
 /** Serialize a {@link SyncRunRow} to its {@link SyncRunOut} representation. */
 export function toSyncRunOut(run: SyncRunRow): z.input<typeof SyncRunOut> {
@@ -85,13 +134,20 @@ async function claimLease(integrationId: string, now: Date): Promise<boolean> {
   return claimed.length > 0;
 }
 
-/** Finish a run as succeeded: stamp the run + promote the integration to a healthy state. */
+/**
+ * Finish a run as succeeded: stamp the run + promote the integration to a healthy state.
+ *
+ * @param opts.stampFullSync - When `true`, also advances `lastFullSyncedAt` to `now` (a
+ *   work-graph full pull just completed) — omitted/`false` leaves it untouched, exactly as an
+ *   incremental pull or the flat-import path (which has no full/incremental distinction) should.
+ */
 async function finishSuccess(
   run: SyncRunRow,
   row: IntegrationRow,
   processed: number,
   total: number,
   now: Date,
+  opts?: { readonly stampFullSync?: boolean },
 ): Promise<SyncRunRow> {
   await db
     .update(integration)
@@ -102,6 +158,7 @@ async function finishSuccess(
       lastError: null,
       lastErrorAt: null,
       syncStartedAt: null,
+      ...(opts?.stampFullSync ? { lastFullSyncedAt: now } : {}),
     })
     .where(eq(integration.id, row.id));
   const [updated] = await db
@@ -272,6 +329,50 @@ export async function runSync(
     const teamId = await resolveImportTeam(row.organizationId, row);
     const config = ConnectorConfig.safeParse(row.config).data ?? {};
     const connector = connectorFor(provider, token);
+
+    // Work-graph-capable connectors (Linear) branch onto the rich reconciler (T6a); every other
+    // connector keeps the flat import + reconcile path below UNCHANGED.
+    const graph = connector.asWorkGraph?.();
+    if (graph) {
+      const lastSyncedAt = row.lastSyncedAt;
+      // Full vs incremental: no full sync yet, the last full sync is stale, or a manual trigger
+      // (a user hitting "Sync now" always wants the complete, authoritative picture) all force a
+      // full re-walk. A null `lastSyncedAt` is its own explicit branch (never a fallback
+      // default) because it can only happen alongside a null `lastFullSyncedAt` anyway.
+      const full =
+        row.lastFullSyncedAt === null ||
+        lastSyncedAt === null ||
+        now.getTime() - row.lastFullSyncedAt.getTime() > FULL_SYNC_INTERVAL_MS ||
+        opts.trigger === 'manual';
+
+      // `!full` here PROVES `lastSyncedAt !== null` (it's one of `full`'s disjuncts above) —
+      // TypeScript's aliased-condition narrowing carries that through, so `lastSyncedAt` is
+      // already typed `Date` (not `Date | null`) in this branch; no redundant re-check needed.
+      const snapshot = await graph.pullWorkGraph({
+        externalTeamIds: mappedExternalTeamIds(config),
+        ...(!full ? { updatedAfter: lookbackISO(lastSyncedAt, row.syncCadenceMinutes) } : {}),
+      });
+      const tally = await reconcileWorkGraph({
+        orgId: row.organizationId,
+        actorId: opts.actorId,
+        row,
+        snapshot,
+        connector: graph,
+        now,
+      });
+      // Honest processed/total, mirroring the flat path's semantics below: `total` is the pulled
+      // WORK ITEMS (the graph's direct analogue of `items.length`), and `processed` is what
+      // actually changed among them (created/pulled/tombstoned/pushed). Labels/projects/cycles
+      // are supporting substrate materialized as a side effect of reconciling those items, not
+      // "items" this run's progress is reported against — T6a's reconciler tallies them
+      // separately (see `GET /:id/runs` for full per-kind detail if ever surfaced).
+      const processed =
+        tally.tasks.created + tally.tasks.updated + tally.tasks.removed + tally.tasks.pushed;
+      return await finishSuccess(run, row, processed, snapshot.items.length, now, {
+        stampFullSync: full,
+      });
+    }
+
     const items: ImportedItem[] = await connector.importWork({
       connectionId: row.id,
       provider,

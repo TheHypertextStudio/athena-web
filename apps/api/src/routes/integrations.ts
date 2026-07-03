@@ -30,10 +30,12 @@ import { capabilityGuard } from '../permissions/capability-guard';
 
 import {
   DIRECTORY_PROVIDERS,
+  LINEAR_WRITE_SCOPE_MESSAGE,
   PROVIDER_DIRECTORY,
   WRITE_BACK_PROVIDERS,
   asConnectorProvider,
   connectorFor,
+  hasLinearWriteScope,
   type IntegrationRow,
   resolveConnectorToken,
   resolveIdentityLabel,
@@ -277,16 +279,27 @@ Requires \`manage\` — it touches live provider credentials and configures sync
       summary: 'Update an integration',
       capability: 'manage',
       response: IntegrationOut,
-      description: `Update an integration's mutable settings — \`roles\`, \`connection\` metadata, connector \`config\` (target team/project, \`listIds\`, \`defaultListId\`, \`pushNativeTasks\`, and — on mail-capable connectors — \`emailToTask: { enabled, threshold }\`, the strictly-opt-in email-to-task ingest switch validated against {@link ConnectorConfig}), \`syncMode\`, and \`writeBack\` — returning the refreshed {@link IntegrationOut}. A partial update: only present fields are written. \`status\` is intentionally **not** accepted — connection health is *earned* through the connect/verify and sync paths, never declared by a client, so this route can never fabricate \`connected\`. Enabling \`emailToTask\` also seeds the org's default automation rules once (idempotent), so the dismiss-promotions / archive-on-complete defaults exist the moment the feature turns on. A missing/cross-tenant id 404s. Requires \`manage\`. Related: \`POST /:id/verify\` (re-validate after changing the connection), \`GET /:id/lists\` (to discover valid \`config.listIds\`).`,
+      description: `Update an integration's mutable settings — \`roles\`, \`connection\` metadata, connector \`config\` (target team/project, \`listIds\`, \`defaultListId\`, \`pushNativeTasks\`, and — on mail-capable connectors — \`emailToTask: { enabled, threshold }\`, the strictly-opt-in email-to-task ingest switch validated against {@link ConnectorConfig}), \`syncMode\`, and \`writeBack\` — returning the refreshed {@link IntegrationOut}. A partial update: only present fields are written. \`status\` is intentionally **not** accepted — connection health is *earned* through the connect/verify and sync paths, never declared by a client, so this route can never fabricate \`connected\`. Enabling \`emailToTask\` also seeds the org's default automation rules once (idempotent), so the dismiss-promotions / archive-on-complete defaults exist the moment the feature turns on. Flipping \`writeBack: true\` on a Linear integration additionally requires the actor's linked Linear identity to carry the \`write\` OAuth scope — lacking it rejects with 409 (reconnect message); a read-only (\`writeBack: false\`) update never checks scope. A missing/cross-tenant id 404s. Requires \`manage\`. Related: \`POST /:id/verify\` (re-validate after changing the connection), \`GET /:id/lists\` (to discover valid \`config.listIds\`).`,
     }),
     zParam(idParam),
     zJson(IntegrationUpdate),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const body = c.req.valid('json');
 
-      await loadIntegration(orgId, id);
+      const existing = await loadIntegration(orgId, id);
+      // Flipping write-back ON for Linear is gated on the actor's linked identity actually
+      // carrying the `write` scope (see `POST /:id/verify` for the same check at connect time).
+      // A read-only update (writeBack absent or false) never consults scope — no nagging.
+      if (
+        body.writeBack === true &&
+        existing.provider === 'linear' &&
+        !(await hasLinearWriteScope(actorId))
+      ) {
+        throw new ConflictError(LINEAR_WRITE_SCOPE_MESSAGE);
+      }
+
       const row = await setIntegration(id, {
         ...(body.roles !== undefined ? { roles: body.roles } : {}),
         ...(body.connection !== undefined ? { connection: body.connection } : {}),
@@ -339,7 +352,7 @@ Requires \`manage\` — it touches live provider credentials and configures sync
       response: IntegrationOut,
       description: `Verify an integration's credential against the live provider and return the **truthful** {@link IntegrationOut} reflecting the result. This is the ONLY place that promotes an integration to \`connected\` at connect time: a real \`connect()\` call must actually resolve the external account here. The connection is labeled by the linked **identity** (the account's email, resolved from its id token), not by a resource.
 
-Crucially, a failure is recorded, not thrown away: if the credential can't be resolved or the provider check doesn't succeed, the integration is set to \`status='error'\` with a real \`lastError\`/\`lastErrorAt\`, and that error state is returned as **200** (the honest current state) rather than an HTTP error — so the UI can show exactly why the connection is broken. A provider that doesn't support connection checks yields 409 (\`Integration provider does not support connection checks\`); a missing/cross-tenant id 404s.
+Crucially, a failure is recorded, not thrown away: if the credential can't be resolved or the provider check doesn't succeed, the integration is set to \`status='error'\` with a real \`lastError\`/\`lastErrorAt\`, and that error state is returned as **200** (the honest current state) rather than an HTTP error — so the UI can show exactly why the connection is broken. A provider that doesn't support connection checks yields 409 (\`Integration provider does not support connection checks\`); a missing/cross-tenant id 404s. For Linear, a successful connect persists the provider's \`externalWorkspaceId\`/\`externalWorkspaceSlug\` onto \`connection\` (the webhook-routing key), and a \`writeBack\` Linear integration whose actor identity lacks the OAuth \`write\` scope is recorded as \`error\` with a reconnect message BEFORE the live connect call, never silently downgraded to read-only.
 
 Requires \`manage\` — it exercises live credentials and mutates health. Side effect: writes \`status\`/\`lastError\`/connection label. Related: \`POST /\` (which leaves the integration \`pending\` for this route to verify), \`POST /:id/sync\` & \`POST /:id/import\` (which also prove health on success).`,
     }),
@@ -352,6 +365,20 @@ Requires \`manage\` — it exercises live credentials and mutates health. Side e
       const provider = asConnectorProvider(row.provider);
       if (!provider)
         throw new ConflictError('Integration provider does not support connection checks');
+
+      // A Linear integration with write-back ON needs the actor's linked identity to actually
+      // carry the `write` scope — this is checked BEFORE the live connect call (a distinct,
+      // honest failure mode from a broken credential) and recorded as `error` via the same
+      // truthful 200 pattern below, never silently ignored or left dangling as a fabricated
+      // `connected`.
+      if (provider === 'linear' && row.writeBack && !(await hasLinearWriteScope(actorId))) {
+        const updated = await setIntegration(id, {
+          status: 'error',
+          lastError: LINEAR_WRITE_SCOPE_MESSAGE,
+          lastErrorAt: new Date(),
+        });
+        return ok(c, IntegrationOut, toOut(updated));
+      }
 
       // The ONLY place that promotes an integration to `connected` at connect time: a credential
       // must actually resolve the external account here. Failures are recorded as `error` with a
@@ -387,6 +414,16 @@ Requires \`manage\` — it exercises live credentials and mutates health. Side e
           connection: {
             ...row.connection,
             ...(account !== undefined ? { account } : {}),
+            // Persist the provider workspace id/slug (e.g. Linear's org id + urlKey) so
+            // `ingest.ts`'s `connection->>'externalWorkspaceId'` webhook routing has something
+            // real to match against — previously only ever set on `connect()`'s input, never
+            // written back from its result.
+            ...(result.externalWorkspaceId !== undefined
+              ? { externalWorkspaceId: result.externalWorkspaceId }
+              : {}),
+            ...(result.externalWorkspaceSlug !== undefined
+              ? { externalWorkspaceSlug: result.externalWorkspaceSlug }
+              : {}),
           },
         });
         return ok(c, IntegrationOut, toOut(updated));

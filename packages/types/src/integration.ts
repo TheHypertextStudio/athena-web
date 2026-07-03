@@ -74,7 +74,13 @@ export const IntegrationConnection = z
       .string()
       .optional()
       .describe(
-        'The provider-side workspace/organization the integration is scoped to, when the provider is multi-workspace.',
+        "The provider-side workspace/organization the integration is scoped to, when the provider is multi-workspace. For Linear, this is the webhook-routing key (`connection->>'externalWorkspaceId'`); persisted at `POST /:id/verify` time.",
+      ),
+    externalWorkspaceSlug: z
+      .string()
+      .optional()
+      .describe(
+        'The provider-side workspace URL slug, when known (for Linear, its `urlKey`) — used to build canonical external URLs. Persisted at `POST /:id/verify` time alongside `externalWorkspaceId`.',
       ),
   })
   .meta({ id: 'IntegrationConnection', description: "An integration's connection metadata." });

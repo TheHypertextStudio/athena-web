@@ -597,6 +597,22 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 - **Validation**: Validator rejects scopes absent from `COMMIT_SCOPES.txt` and accepts
   `refactor(integrations): ...`.
 
+### [ATHENA-007] Athena entitlement gate (paid-plan feature, one choke point)
+
+- **Completed**: 2026-07-02
+- **Summary**: Slice 6 — Athena is a paid feature; the gate is
+  `assertAgentSessionsEntitled(orgId)` reading `organization.lifecycleState` (the durable truth
+  the Stripe webhooks maintain — no live billing call). Entitled = `trialing` (the trial IS the
+  funnel) or `active`; anything else throws the new typed `AgentPlanRequiredError` (402,
+  ProblemCode `agent_plan_required`) the web can render as a targeted upsell. Enforced at ONE
+  choke point — `driveSession`'s FIRST run (`startedAt === null`) — which covers every door
+  (REST sessions, `trigger_agent` MCP tool, proactive sweep). Resumes are deliberately exempt:
+  an approval arriving after a plan lapse still lands work the user already reviewed.
+- **Files Changed**: `apps/api/src/billing/entitlement.ts` (new), `src/error.ts`,
+  `packages/types/src/errors.ts` (ProblemCode), `src/agent/loop.ts` (first-run hook),
+  `apps/api/tests/agent/entitlement.test.ts` (new, 3 tests).
+- **Gate**: entitlement 3/3; agent/session suites 38/38; typecheck + lint clean.
+
 ### [ATHENA-006] Batch approvals, ghost projection, SSE live tail (Milestone B complete)
 
 - **Completed**: 2026-07-02

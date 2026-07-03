@@ -27,6 +27,7 @@ export const ProblemCode = z
     'deletion_blocked',
     'card_required',
     'billing_frozen',
+    'agent_plan_required',
     'internal',
   ])
   .describe(

@@ -124,6 +124,13 @@ export class BillingFrozenError extends ApiError {
   }
 }
 
+/** 402 — Athena sessions require an entitled plan (`trialing`/`active`). */
+export class AgentPlanRequiredError extends ApiError {
+  constructor(message = 'Athena requires an active plan') {
+    super(402, 'agent_plan_required', message);
+  }
+}
+
 /**
  * 422 — request body/params failed validation. Accepts either a {@link ZodError} (raw zod
  * failures bubbling to {@link onError}) or the Standard-Schema issue list that

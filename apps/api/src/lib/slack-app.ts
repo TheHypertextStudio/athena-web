@@ -16,6 +16,8 @@
  * to deterministic fixtures so the end-to-end flow runs with zero Slack account, per the
  * boundaries discipline ("flipping to prod is purely supplying env values").
  */
+import { isRealValue } from '@docket/env';
+
 import { env } from '../env';
 import { signConnectState, verifyConnectState } from './oauth-state';
 
@@ -60,9 +62,17 @@ function mockMode(): boolean {
   return env.APP_MODE === 'local' || env.APP_MODE === 'test';
 }
 
-/** Whether the shared Slack app's OAuth credentials are configured. */
+/**
+ * Whether the shared Slack app's OAuth credentials are configured (real-shaped values).
+ *
+ * @remarks
+ * Deliberately NOT auto-true in local/test: `/v1/config` advertises only real availability
+ * (the same {@link isRealValue} rule as `configuredSocialProviders`). Local-mock connectability
+ * is the client's `isMockMode` affordance, and the connect flow itself still short-circuits to
+ * fixtures in mock mode regardless of this.
+ */
 export function slackConfigured(): boolean {
-  return mockMode() || Boolean(env.SLACK_CLIENT_ID && env.SLACK_CLIENT_SECRET);
+  return isRealValue(env.SLACK_CLIENT_ID) && isRealValue(env.SLACK_CLIENT_SECRET);
 }
 
 /** The exact redirect URI registered on the Slack app (must match authorize + access calls). */
@@ -173,17 +183,19 @@ export async function exchangeSlackCode(code: string, userId: string): Promise<S
   });
   const data = (await res.json()) as SlackAccessResponse;
   if (!data.ok) throw new Error(`Slack token exchange failed: ${data.error ?? 'unknown error'}`);
-  const teamId = data.team?.id;
-  const slackUserId = data.authed_user?.id;
-  const accessToken = data.authed_user?.access_token;
+  const team = data.team;
+  const authedUser = data.authed_user;
+  const teamId = team?.id;
+  const slackUserId = authedUser?.id;
+  const accessToken = authedUser?.access_token;
   if (!teamId || !slackUserId || !accessToken) {
     throw new Error('Slack token exchange returned no user grant');
   }
   return {
     teamId,
-    teamName: data.team?.name ?? teamId,
+    teamName: team.name ?? teamId,
     slackUserId,
     accessToken,
-    scope: data.authed_user?.scope ?? '',
+    scope: authedUser.scope ?? '',
   };
 }

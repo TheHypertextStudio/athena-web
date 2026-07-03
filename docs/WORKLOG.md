@@ -69,6 +69,37 @@
   upload/download/delete-cleanup/size-limit/capability), OpenAPI spec tests pass; boundaries 256/256;
   web suite 187/187; typecheck + lint clean on all touched files (pre-existing red: `graph-insight.ts`
   and `task-reparent.test.ts`, unrelated). Node still warns (`v24.3.0` vs required `>=24.15 <27`).
+### [SLACK-001] End-user Slack integration — mentions, DMs & threads in the Stream
+
+- **Completed**: 2026-07-02
+- **Summary**: Made Slack fully end-user connectable and personally relevant. A user clicks
+  "Connect Slack" (Settings → Connections), consents to the shared Docket Slack app's
+  **user-token** OAuth (bot tokens structurally cannot see the user's DMs or un-invited
+  channels), and from then on messages that @mention them, DM them, or reply in threads they
+  participated in land in their personal Stream — with the same events in the org firehose.
+  Ingest fans one workspace delivery out per connected org; the drain classifies each message
+  against the org's connected Slack identities and creates **no canonical event** when a message
+  concerns nobody (noise control — raw payloads stay in the `inbound_event` WAL). Thread
+  participation is remembered in the new provider-generic `thread_participation` table. Local
+  dev runs the entire flow against mocks (`T-MOCK`/`U-MOCK` fixtures) with zero Slack account.
+- **Files Changed**: `packages/db/src/schema/event.ts` (+ migration 0016),
+  `packages/types/src/{event,integration}.ts`, `packages/env/src/slices.ts`, `.env.example`,
+  `packages/boundaries/src/real/observer-slack.ts` (+ barrel exports),
+  `apps/api/src/lib/{oauth-state,slack-app,github-app}.ts`,
+  `apps/api/src/routes/{integrations-slack,integrations,integration-provider,config,ingest,event-sync}.ts`,
+  `apps/api/src/consumers/{slack-relevance,routing}.ts`, `apps/api/src/server.ts`,
+  `apps/web/src/components/settings/{integrations-tab,integration-provider-card,integrations-config,identity-providers}.ts(x)`,
+  `apps/web/src/lib/public-config.ts`, `scripts/{tunnel,integration-providers}.ts`,
+  `infra/slack/docket-app-manifest.yaml`, `docs/engineering/specs/slack-integration.md`,
+  plus test suites in `packages/boundaries/tests` and `apps/api/tests`.
+- **Learnings**: Slack's `app_mention` only covers mentions of the _bot_ — user relevance must be
+  derived from raw `message.*` events under user scopes. Routing facts are read from the raw
+  payload (not the normalized detail) so the mock observer drives the identical drain path in
+  local/test. The dev tunnel's ingress only routed `^/(api|v1)` to the API, so `/internal/*`
+  callbacks/webhooks silently fell through to the web app — fixed for all providers. Cloud Run
+  scale-to-zero vs Slack's 3s ACK deadline means `docket-api` should run `min-instances=1`
+  (Slack disables delivery at >5% failures/60min). See
+  `docs/engineering/specs/slack-integration.md` for the full design + follow-ups.
 
 ### [CALENDAR-003] Layered calendar product and engineering specs
 

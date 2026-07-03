@@ -8,7 +8,7 @@
  *
  * Ingress is SPLIT by path:
  *
- * - `/(api|v1)/*` → **straight to the local API port** (`http://127.0.0.1:<apiPort>`), preserving the
+ * - `/(api|v1|internal)/*` → **straight to the local API port** (`http://127.0.0.1:<apiPort>`), preserving the
  *   public `Host`. This is load-bearing for OAuth: portless rewrites the upstream `Host` to its
  *   loopback address (the real host survives only in `X-Forwarded-Host`), and Next's rewrite then
  *   re-derives its own forwarded host from that loopback — so going through portless makes Better
@@ -51,9 +51,10 @@ export function cloudflaredConfigYaml({
     `tunnel: ${tunnel}`,
     `credentials-file: ${credentialsFile}`,
     `ingress:`,
-    `  # API + auth callbacks + webhooks: straight to the API, Host preserved (see module docstring).`,
+    `  # API + auth callbacks + webhooks (/internal/ingest, /internal/integrations, cron):`,
+    `  # straight to the API, Host preserved (see module docstring).`,
     `  - hostname: ${hostname}`,
-    `    path: ^/(api|v1)/.*`,
+    `    path: ^/(api|v1|internal)/.*`,
     `    service: http://127.0.0.1:${String(apiPort)}`,
     `  # Everything else: the Next web app via portless (routes by name, local-CA cert).`,
     `  - hostname: ${hostname}`,
@@ -116,16 +117,20 @@ export function launchAgentPlist({
 `;
 }
 
-/** The OAuth callback + GitHub-firehose URLs to register once the tunnel `hostname` is live. */
+/** The OAuth callback + provider webhook URLs to register once the tunnel `hostname` is live. */
 export function tunnelRegistrationUrls(hostname: string): {
   googleRedirectUri: string;
   googleOrigin: string;
   githubWebhook: string;
+  slackRedirectUri: string;
+  slackEventsUrl: string;
 } {
   const origin = `https://${hostname}`;
   return {
     googleRedirectUri: `${origin}/api/auth/callback/google`,
     googleOrigin: origin,
     githubWebhook: `${origin}/internal/ingest/github`,
+    slackRedirectUri: `${origin}/internal/integrations/slack/callback`,
+    slackEventsUrl: `${origin}/internal/ingest/slack`,
   };
 }

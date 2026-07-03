@@ -148,6 +148,44 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [MAIL-003] Email ingest on the leased sync spine: cursors, real senders, honest failures (M4)
+
+- **Completed**: 2026-07-02
+- **Summary**: Killed the second pull path. `runSync` was refactored into a generic
+  `runLeasedSync(row, {actorId, trigger, purpose}, executor)` spine (lease claim, purposed
+  `sync_run` row, token resolution, honest success/failure recording, once-per-transition
+  owner notification) with the task mirror as the `task_sync` executor — byte-equivalent
+  behavior, 50 existing sync tests untouched. The email sweep became the `email_ingest`
+  executor: selects mail-capable providers via the manifest (no `'gmail'` literal), lists via
+  the mail capability's cursored `listThreads` (cursor in `integration.sync_state`, advanced
+  only under the lease; `cursorExpired` → exactly one full re-pull), and feeds the funnel
+  **real senders** — the no-reply heuristic works for the first time, verified by the promo
+  fixture being dropped at threshold 50. Token failures now flip the integration to `error` +
+  notify the owner instead of a silent `continue`. Synthesis persists `rfc822MessageId` + full
+  meta (receivedAt, provider-captured `externalUrl`) and dedups cross-provider by Message-ID
+  before the paid model runs. The app-layer `threadUrl()` Gmail fabrication is deleted —
+  accept reads the stored provider URL (loud error if absent; migration 0016 backfilled
+  legacy rows). New `GET /email-suggestions/:id/thread` — the first `fetchThread` consumer —
+  serves the live source thread for the triage preview (409 on needs-reauth). Mail providers
+  are excluded from the task-mirror sweep (a mailbox is not a task list; the two purposes
+  would otherwise race for one lease). `SyncRunOut` gains `purpose`.
+- **Files Changed**: `apps/api/src/routes/{integration-sync,email-suggestions}.ts`,
+  `apps/api/src/lib/email-to-task/{sweep,synthesize}.ts`,
+  `packages/types/src/{integration,email-suggestion}.ts`,
+  `apps/api/tests/routes/{email-sweep,email-synthesize,email-suggestions}.test.ts`,
+  `docs/engineering/specs/{integration-sync(new),email-to-task}.md`, `docs/WORKLOG.md`.
+- **Learnings**: The executor-on-a-spine shape made the reauth fix free — the email path
+  inherited `finishFailure`'s status flip + notification by construction rather than by a
+  parallel implementation. Modeling cursor expiry in the return type (not exceptions) made
+  the one-retry recovery a two-line policy at the call site instead of typed-error plumbing.
+  The spec's status block had drifted badly from reality ("fully wired" while the engine had
+  zero callers); it now names what's true, what over-claimed, and which newer specs win.
+- **Gate**: api/types typecheck clean; focused suites green (email sweep/synthesize/
+  suggestions/backfill 22, integration sync/provider/reconcile 50); full API suite + lints +
+  api-dist rebuild + web typecheck in the milestone gate run.
+
+---
+
 ### [MAIL-002] Migration 0016: sync cursors, run purposes, Message-ID identity (M3 of productization)
 
 - **Completed**: 2026-07-02

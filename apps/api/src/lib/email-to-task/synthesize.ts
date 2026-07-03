@@ -16,9 +16,16 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { emitEvent } from '../../routes/event-emit';
 import { classifyTaskWorthiness, type ThreadSignal } from './funnel';
 
-/** A thread to consider, with its external id and snapshot signal. */
+/** A thread to consider: the funnel signal plus its provider + RFC 5322 identity. */
 export interface CandidateThread extends ThreadSignal {
+  /** Provider-native thread id (Gmail `threadId`; Graph `conversationId`). */
   readonly threadId: string;
+  /** Receipt time of the latest message (RFC3339), when the listing carried one. */
+  readonly receivedAt?: string;
+  /** RFC 5322 Message-ID of the latest message — the cross-provider dedup key. */
+  readonly rfc822MessageId?: string;
+  /** Canonical open-in-provider URL, captured from the provider at listing time. */
+  readonly externalUrl: string;
 }
 
 /** Input to {@link persistSuggestions}. */
@@ -57,7 +64,7 @@ export async function persistSuggestions(
     .filter((candidate) => candidate.verdict.worthy);
   if (worthy.length === 0) return { created: 0, suggestionIds: [] };
 
-  // Pre-dedup: skip synthesis for threads already suggested (sweeps re-pull recent threads,
+  // Pre-dedup 1: skip synthesis for threads already suggested (sweeps re-pull recent threads,
   // so without this the model would re-run on every recurring thread and the result be discarded).
   const alreadySuggested = await db
     .select({ threadId: emailSuggestion.externalThreadId })
@@ -73,9 +80,32 @@ export async function persistSuggestions(
     );
   const seen = new Set(alreadySuggested.map((row) => row.threadId));
 
+  // Pre-dedup 2 (cross-provider): the same email seen through two mail providers carries the
+  // same RFC 5322 Message-ID even though the provider thread ids differ — skip those too.
+  const candidateMessageIds = worthy.flatMap((candidate) =>
+    candidate.thread.rfc822MessageId !== undefined ? [candidate.thread.rfc822MessageId] : [],
+  );
+  const seenMessageIds = new Set(
+    candidateMessageIds.length > 0
+      ? (
+          await db
+            .select({ messageId: emailSuggestion.rfc822MessageId })
+            .from(emailSuggestion)
+            .where(
+              and(
+                eq(emailSuggestion.organizationId, input.organizationId),
+                inArray(emailSuggestion.rfc822MessageId, candidateMessageIds),
+              ),
+            )
+        ).flatMap((row) => (row.messageId !== null ? [row.messageId] : []))
+      : [],
+  );
+
   const suggestionIds: string[] = [];
   for (const { thread, verdict } of worthy) {
     if (seen.has(thread.threadId)) continue;
+    if (thread.rfc822MessageId !== undefined && seenMessageIds.has(thread.rfc822MessageId))
+      continue;
     const draft = await input.synthesizer.synthesize({
       subject: thread.subject,
       snippet: thread.snippet,
@@ -93,7 +123,17 @@ export async function persistSuggestions(
         description: draft.description ?? null,
         priority: draft.priority,
         confidence: verdict.score,
-        emailMeta: { subject: thread.subject, sender: thread.sender, snippet: thread.snippet },
+        rfc822MessageId: thread.rfc822MessageId ?? null,
+        emailMeta: {
+          subject: thread.subject,
+          sender: thread.sender,
+          snippet: thread.snippet,
+          ...(thread.receivedAt !== undefined ? { receivedAt: thread.receivedAt } : {}),
+          ...(thread.rfc822MessageId !== undefined
+            ? { rfc822MessageId: thread.rfc822MessageId }
+            : {}),
+          externalUrl: thread.externalUrl,
+        },
       })
       .onConflictDoNothing({
         target: [emailSuggestion.organizationId, emailSuggestion.externalThreadId],

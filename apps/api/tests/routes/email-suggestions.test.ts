@@ -56,6 +56,7 @@ async function seedSuggestion(overrides: Partial<typeof schema.emailSuggestion.$
           subject: 'Software Engineering Interview',
           sender: 'recruiter@google.com',
           snippet: 'pick a slot',
+          externalUrl: 'https://mail.mock.docket.local/#all/thread_seed',
         },
         createdBy: humanActorId,
         ...overrides,
@@ -109,6 +110,26 @@ describe('email-suggestions router', () => {
     expect(att).toHaveLength(1);
     expect(att[0]?.externalId).toBe(suggestion.externalThreadId);
     expect(att[0]?.sourceIntegrationId).toBe(suggestion.integrationId);
+    // The attachment URL is the provider-captured one from the ingest snapshot — never fabricated.
+    expect(att[0]?.url).toBe('https://mail.mock.docket.local/#all/thread_seed');
+  });
+
+  it('GET /:id/thread serves the live source thread through the mail connector', async () => {
+    const { orgId, humanActorId, suggestion } = await seedSuggestion();
+    const w = appWithActor(router, orgId, ['contribute'], humanActorId);
+
+    const res = await w.request(`/${suggestion.id}/thread`);
+    expect(res.status).toBe(200);
+    const thread = await body<{
+      threadId: string;
+      subject: string;
+      externalUrl: string;
+      messages: { from: string; bodyHtml: string | null }[];
+    }>(res);
+    expect(thread.threadId).toBe(suggestion.externalThreadId);
+    expect(thread.messages.length).toBeGreaterThanOrEqual(1);
+    // The mock connector serves a deterministic render-ready thread (body is live, not stored).
+    expect(thread.messages[0]?.bodyHtml).toContain('deterministic mock email body');
   });
 
   it('accept honors title/priority overrides', async () => {

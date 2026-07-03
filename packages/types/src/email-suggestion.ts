@@ -33,6 +33,46 @@ export const EmailSuggestionMeta = z
 /** Email-snapshot value. */
 export type EmailSuggestionMeta = z.infer<typeof EmailSuggestionMeta>;
 
+/** One message of a fetched source-email thread (render-ready; bodies never persisted). */
+export const EmailThreadMessageOut = z
+  .object({
+    id: z.string().describe("The message's external id."),
+    from: z.string().describe('The sender (display form).'),
+    to: z.array(z.string()).describe('Recipients.'),
+    subject: z.string().describe('Subject line.'),
+    snippet: z.string().describe('Short preview snippet.'),
+    sentAt: z.string().describe('When the message was sent (RFC3339).'),
+    rfc822MessageId: z
+      .string()
+      .nullable()
+      .describe('RFC 5322 Message-ID, when the provider surfaces it.'),
+    bodyHtml: z
+      .string()
+      .nullable()
+      .describe('The rendered body when the provider returned one — served live, never stored.'),
+  })
+  .meta({ id: 'EmailThreadMessageOut', description: 'One message of a source-email thread.' });
+/** Email-thread-message value. */
+export type EmailThreadMessageOut = z.infer<typeof EmailThreadMessageOut>;
+
+/**
+ * A suggestion's source-email thread, fetched on demand for the triage preview.
+ *
+ * @remarks
+ * Served straight from the mail provider via the connector's `fetchThread` — nothing here
+ * is persisted (the stored snapshot is {@link EmailSuggestionMeta}).
+ */
+export const EmailThreadOut = z
+  .object({
+    threadId: z.string().describe('The provider-native thread id.'),
+    subject: z.string().describe('The thread subject.'),
+    externalUrl: z.string().describe('Canonical open-in-provider URL.'),
+    messages: z.array(EmailThreadMessageOut).describe('The messages, oldest first.'),
+  })
+  .meta({ id: 'EmailThreadOut', description: "A suggestion's source-email thread." });
+/** Email-thread value. */
+export type EmailThreadOut = z.infer<typeof EmailThreadOut>;
+
 /** Full email-suggestion representation returned by reads. */
 export const EmailSuggestionOut = z
   .object({

@@ -44,21 +44,30 @@ export function toExternalActorOut(row: ExternalActorRow): z.input<typeof Extern
  * - Upserts rows keyed `(integrationId, externalId)`: `email`/`displayName`/`avatarUrl`
  *   are refreshed from the provider on EVERY call, regardless of match state — the
  *   provider is the source of truth for those fields. `organizationId` is set on insert.
- * - Email matching: candidates are this org's Actors backed by a Better Auth `user`
- *   (`actor.userId → user.id`), matched `lower(externalUser.email) = lower(user.email)`.
- * - Precedence (binding), resolved in-memory against the EXISTING rows fetched up front
- *   (one extra select, batched — not an N+1 per user), then written in a single upsert:
+ * - Email matching: candidates are this org's ACTIVE Actors backed by a Better Auth
+ *   `user` (`actor.userId → user.id`), matched `lower(externalUser.email) =
+ *   lower(user.email)`. Suspended actors are excluded — suspension is access revocation
+ *   (the same convention as hub membership resolution), so automatic matching never
+ *   targets a suspended member, and a previously email-matched row unmatches on the next
+ *   sync after its actor is suspended. A MANUAL link to a suspended actor is untouched
+ *   (manual precedence below governs).
+ * - Precedence (binding), enforced INSIDE the single batched upsert via `CASE`
+ *   expressions comparing the conflicting row's pre-existing `matched_by` against
+ *   `excluded.*` — atomic per row in Postgres, so a manual PATCH landing concurrently
+ *   with a sync can never be clobbered (correctness does not depend on any prior read):
  *   - `matchedBy: 'manual'` rows are NEVER modified by email matching — neither
  *     re-matched nor unmatched — even if emails now disagree. A human's explicit link
  *     always wins.
  *   - `matchedBy: 'email'` rows are re-evaluated every call: if the email no longer
- *     matches any member it becomes unmatched (`actorId: null, matchedBy: null`); if it
- *     now matches a different member, it updates.
+ *     matches any active member it becomes unmatched (`actorId: null, matchedBy: null`);
+ *     if it now matches a different member, it updates.
  *   - Unmatched rows (`matchedBy: null`, including rows not seen before) are (re)evaluated
  *     every call.
  * - Provider users no longer present in `users` are left in place — never deleted, since
  *   task history may still reference them as an assignee. Inactive users (`active:
- *   false`) still upsert; they remain valid historical assignees.
+ *   false`) still upsert; they remain valid historical assignees. Duplicate `externalId`s
+ *   within one batch are deduped last-wins (Postgres rejects updating the same row twice
+ *   in one `ON CONFLICT` statement).
  *
  * @param orgId - The owning organization.
  * @param integrationId - The integration these users were pulled from.
@@ -76,47 +85,28 @@ export async function syncExternalActors(
   const resultMap = new Map<string, string | null>();
   if (users.length === 0) return resultMap;
 
-  // Candidate members: this org's Actors backed by a Better Auth user, keyed by lowercased
-  // email. `user.email` is globally unique (`user_email_uq`), so this map is collision-free.
+  // Candidate members: this org's ACTIVE Actors backed by a Better Auth user, keyed by
+  // lowercased email. Suspended actors are excluded — suspension revokes access, so email
+  // matching must never (re)target them. `user.email` is globally unique (`user_email_uq`),
+  // so this map is collision-free.
   const candidates = await db
     .select({ actorId: actor.id, email: user.email })
     .from(actor)
     .innerJoin(user, eq(actor.userId, user.id))
-    .where(eq(actor.organizationId, orgId));
+    .where(and(eq(actor.organizationId, orgId), eq(actor.status, 'active')));
   const candidateByEmail = new Map<string, string>();
   for (const candidate of candidates) {
     candidateByEmail.set(candidate.email.toLowerCase(), candidate.actorId);
   }
 
-  // Existing rows for this integration, keyed by externalId, so manual precedence can be
-  // resolved in-memory (one batched select — not an N+1 per provider user).
-  const existingRows = await db
-    .select({
-      externalId: externalActor.externalId,
-      actorId: externalActor.actorId,
-      matchedBy: externalActor.matchedBy,
-    })
-    .from(externalActor)
-    .where(eq(externalActor.integrationId, integrationId));
-  const existingByExternalId = new Map(existingRows.map((row) => [row.externalId, row]));
-
-  const values = users.map((u) => {
+  // The fresh email-match proposal per provider user, deduped last-wins by externalId
+  // (Postgres rejects updating the same row twice within one ON CONFLICT statement).
+  // Whether a proposal LANDS is decided by the CASE expressions in the upsert below.
+  const valueByExternalId = new Map<string, typeof externalActor.$inferInsert>();
+  for (const u of users) {
     const email = u.email ?? null;
-    const existing = existingByExternalId.get(u.externalId);
-
-    let matchedActorId: string | null;
-    let matchedBy: 'email' | 'manual' | null;
-    if (existing?.matchedBy === 'manual') {
-      // A human's explicit link is never touched by email matching, no matter what the
-      // provider now reports.
-      matchedActorId = existing.actorId;
-      matchedBy = 'manual';
-    } else {
-      matchedActorId = email ? (candidateByEmail.get(email.toLowerCase()) ?? null) : null;
-      matchedBy = matchedActorId ? 'email' : null;
-    }
-
-    return {
+    const matchedActorId = email ? (candidateByEmail.get(email.toLowerCase()) ?? null) : null;
+    valueByExternalId.set(u.externalId, {
       organizationId: orgId,
       integrationId,
       externalId: u.externalId,
@@ -124,24 +114,28 @@ export async function syncExternalActors(
       displayName: u.displayName,
       avatarUrl: u.avatarUrl ?? null,
       actorId: matchedActorId,
-      matchedBy,
-    };
-  });
+      matchedBy: matchedActorId ? 'email' : null,
+    });
+  }
 
-  // A single batched upsert. `email`/`displayName`/`avatarUrl`/`actorId`/`matchedBy` all take
-  // the freshly-computed (`excluded`) value — the manual-precedence decision was already made
-  // above, so this upsert only needs to WRITE it, not re-derive it.
+  // A single batched upsert carrying the precedence rule IN the statement: the target-table
+  // reference (`external_actor.*`) is the conflicting row's pre-existing value and
+  // `excluded.*` is the fresh proposal, evaluated atomically per row — so a `manual` row
+  // keeps its own actorId/matchedBy no matter what this sync proposes, and a concurrent
+  // manual PATCH can never be clobbered by a read-then-write gap (there is no read).
+  // Provider-sourced fields (email/displayName/avatarUrl) refresh unconditionally.
+  // `.returning()` yields the POST-upsert row, so manual rows report their preserved match.
   const upserted = await db
     .insert(externalActor)
-    .values(values)
+    .values([...valueByExternalId.values()])
     .onConflictDoUpdate({
       target: [externalActor.integrationId, externalActor.externalId],
       set: {
         email: sql`excluded.email`,
         displayName: sql`excluded.display_name`,
         avatarUrl: sql`excluded.avatar_url`,
-        actorId: sql`excluded.actor_id`,
-        matchedBy: sql`excluded.matched_by`,
+        actorId: sql`case when ${externalActor.matchedBy} = 'manual' then ${externalActor.actorId} else excluded.actor_id end`,
+        matchedBy: sql`case when ${externalActor.matchedBy} = 'manual' then ${externalActor.matchedBy} else excluded.matched_by end`,
         updatedAt: new Date(),
       },
     })

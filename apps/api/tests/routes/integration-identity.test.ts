@@ -186,6 +186,63 @@ describe('syncExternalActors', () => {
     expect(row.matchedBy).toBeNull();
   });
 
+  it('never auto-matches a suspended member, even on an exact email match', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const id = await seedIntegration(orgId, humanActorId);
+    // A member whose actor is suspended: access is revoked, so email matching must skip them.
+    const [u] = await db
+      .insert(schema.user)
+      .values({ name: 'Suspended', email: 'suspended@example.com' })
+      .returning({ id: schema.user.id });
+    await addMember(db, schema, orgId, u!.id, 'member', 'suspended');
+
+    const map = await syncExternalActors(orgId, id, [
+      extUser({ externalId: 'ext-susp-1', displayName: 'Susp', email: 'suspended@example.com' }),
+    ]);
+    expect(map.get('ext-susp-1')).toBeNull();
+    const row = await loadRow(id);
+    expect(row.actorId).toBeNull();
+    expect(row.matchedBy).toBeNull();
+  });
+
+  it('an email-matched row unmatches on the next sync after its actor is suspended', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const id = await seedIntegration(orgId, humanActorId);
+    const { actorId: memberActorId } = await seedMemberWithEmail(orgId, 'later-susp@example.com');
+
+    const first = await syncExternalActors(orgId, id, [
+      extUser({ externalId: 'ext-susp-2', displayName: 'Later', email: 'later-susp@example.com' }),
+    ]);
+    expect(first.get('ext-susp-2')).toBe(memberActorId);
+
+    // Suspending the actor drops it from the candidate set, so the match honestly dissolves.
+    await db
+      .update(schema.actor)
+      .set({ status: 'suspended' })
+      .where(eq(schema.actor.id, memberActorId));
+
+    const second = await syncExternalActors(orgId, id, [
+      extUser({ externalId: 'ext-susp-2', displayName: 'Later', email: 'later-susp@example.com' }),
+    ]);
+    expect(second.get('ext-susp-2')).toBeNull();
+    const row = await loadRow(id);
+    expect(row.actorId).toBeNull();
+    expect(row.matchedBy).toBeNull();
+  });
+
+  it('dedupes duplicate externalIds within one batch (last-wins) instead of erroring', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const id = await seedIntegration(orgId, humanActorId);
+
+    const map = await syncExternalActors(orgId, id, [
+      extUser({ externalId: 'ext-dup', displayName: 'First' }),
+      extUser({ externalId: 'ext-dup', displayName: 'Second' }),
+    ]);
+    expect(map.size).toBe(1);
+    const row = await loadRow(id);
+    expect(row.displayName).toBe('Second');
+  });
+
   it('refreshes displayName/email/avatarUrl on every sync regardless of match state', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
     const id = await seedIntegration(orgId, humanActorId);

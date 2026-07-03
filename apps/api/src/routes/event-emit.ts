@@ -21,6 +21,7 @@ import { routeAndWriteRecipients } from '../consumers/routing';
 import { projectEmitInput } from '../lib/automation/event';
 import { runAutomationsForEvent } from '../lib/automation/runtime';
 import { enqueueSearchIndexJobs } from '../search/enqueue';
+import { eventSearchReindexTarget } from '../search/event-log';
 import { publishEvent } from './stream-helpers';
 
 /** The Docket entity an internal event is about. */
@@ -160,6 +161,16 @@ async function emitInternal(
   });
 
   if (result) {
+    const entityReindexTarget = eventSearchReindexTarget(
+      entityKind
+        ? {
+            kind: entityKind,
+            source: 'docket',
+            externalId: input.subject.id,
+            docketEntityId: input.subject.id,
+          }
+        : null,
+    );
     await enqueueSearchIndexJobs([
       {
         organizationId: input.organizationId,
@@ -169,6 +180,18 @@ async function emitInternal(
         reason: 'event_log',
         sourceEventId: result.eventId,
       },
+      ...(entityReindexTarget
+        ? [
+            {
+              organizationId: input.organizationId,
+              sourceTable: entityReindexTarget.sourceTable,
+              entityId: entityReindexTarget.entityId,
+              operation: 'upsert' as const,
+              reason: 'event_log' as const,
+              sourceEventId: result.eventId,
+            },
+          ]
+        : []),
     ]);
     const recipients = [...result.recipients].map(([userId, reason]) => ({ userId, reason }));
     await publishEvent(result.eventId, recipients).catch(() => undefined);

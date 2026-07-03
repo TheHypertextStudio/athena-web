@@ -31,7 +31,13 @@ const searchRouter = new Hono<AppEnv>().get(
     return ok(
       c,
       SearchOut,
-      await searchWorkspace({ scope: 'org', userId: session.user.id, orgId, params }),
+      await searchWorkspace({
+        scope: 'org',
+        userId: session.user.id,
+        orgId,
+        activeOrgId: orgId,
+        params,
+      }),
     );
   },
 );

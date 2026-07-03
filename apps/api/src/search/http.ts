@@ -20,15 +20,8 @@ function csvEnum<T extends z.ZodEnum>(schema: T) {
     });
 }
 
-/** HTTP query params accepted by Hub and org-scoped search endpoints. */
-export const SearchHttpQuery = z.object({
-  q: z.string().trim().min(1),
-  limit: z.coerce.number().int().min(1).max(100).default(20),
-  cursor: z.string().optional(),
-  families: csvEnum(SearchDocumentFamily),
-  kinds: csvEnum(SearchDocumentKind),
-  sources: csvEnum(SourceSystemKind),
-  orgIds: z
+function csvStringList() {
+  return z
     .string()
     .optional()
     .transform((value) =>
@@ -38,7 +31,25 @@ export const SearchHttpQuery = z.object({
             .map((part) => part.trim())
             .filter(Boolean)
         : [],
-    ),
+    );
+}
+
+/** HTTP query params accepted by Hub and org-scoped search endpoints. */
+export const SearchHttpQuery = z.object({
+  q: z.string().trim().min(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  cursor: z.string().optional(),
+  families: csvEnum(SearchDocumentFamily),
+  kinds: csvEnum(SearchDocumentKind),
+  sources: csvEnum(SourceSystemKind),
+  orgIds: csvStringList(),
+  ownerIds: csvStringList(),
+  assigneeIds: csvStringList(),
+  labelIds: csvStringList(),
+  statuses: csvStringList(),
+  healths: csvStringList(),
+  activeOrgId: z.string().optional(),
+  surface: z.enum(['page', 'palette']).default('page'),
   from: z.iso.datetime().optional(),
   to: z.iso.datetime().optional(),
   includeArchived: z

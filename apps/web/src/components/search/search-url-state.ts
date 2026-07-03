@@ -48,6 +48,11 @@ export interface SearchPageFilters {
   kinds: readonly SearchDocumentKind[];
   sources: readonly SourceSystemKind[];
   orgIds: readonly string[];
+  ownerIds: readonly string[];
+  assigneeIds: readonly string[];
+  labelIds: readonly string[];
+  statuses: readonly string[];
+  healths: readonly string[];
   fromDate: string;
   toDate: string;
 }
@@ -61,6 +66,11 @@ export interface SearchHttpQueryParams {
   kinds?: string;
   sources?: string;
   orgIds?: string;
+  ownerIds?: string;
+  assigneeIds?: string;
+  labelIds?: string;
+  statuses?: string;
+  healths?: string;
   from?: string;
   to?: string;
 }
@@ -75,6 +85,11 @@ export function parseSearchPageFilters(params: SearchParamReader): SearchPageFil
     kinds: kinds.length > 0 ? kinds : legacyKind,
     sources: enumList<SourceSystemKind>(params.get('sources'), SOURCE_SET),
     orgIds: csvList(params.get('orgIds')),
+    ownerIds: csvList(params.get('ownerIds')),
+    assigneeIds: csvList(params.get('assigneeIds')),
+    labelIds: csvList(params.get('labelIds')),
+    statuses: csvList(params.get('statuses')),
+    healths: csvList(params.get('healths')),
     fromDate: dateOnly(params.get('from')),
     toDate: dateOnly(params.get('to')),
   };
@@ -92,6 +107,11 @@ export function searchPageHref(
   setCsvParam(params, 'kinds', filters.kinds);
   setCsvParam(params, 'sources', filters.sources);
   setCsvParam(params, 'orgIds', filters.orgIds);
+  setCsvParam(params, 'ownerIds', filters.ownerIds);
+  setCsvParam(params, 'assigneeIds', filters.assigneeIds);
+  setCsvParam(params, 'labelIds', filters.labelIds);
+  setCsvParam(params, 'statuses', filters.statuses);
+  setCsvParam(params, 'healths', filters.healths);
   setParam(params, 'from', filters.fromDate);
   setParam(params, 'to', filters.toDate);
   params.delete('cursor');
@@ -115,6 +135,11 @@ export function searchPageFiltersToHttpQuery(
     ...(filters.kinds.length > 0 ? { kinds: filters.kinds.join(',') } : {}),
     ...(filters.sources.length > 0 ? { sources: filters.sources.join(',') } : {}),
     ...(filters.orgIds.length > 0 ? { orgIds: filters.orgIds.join(',') } : {}),
+    ...(filters.ownerIds.length > 0 ? { ownerIds: filters.ownerIds.join(',') } : {}),
+    ...(filters.assigneeIds.length > 0 ? { assigneeIds: filters.assigneeIds.join(',') } : {}),
+    ...(filters.labelIds.length > 0 ? { labelIds: filters.labelIds.join(',') } : {}),
+    ...(filters.statuses.length > 0 ? { statuses: filters.statuses.join(',') } : {}),
+    ...(filters.healths.length > 0 ? { healths: filters.healths.join(',') } : {}),
     ...(filters.fromDate ? { from: localDateToIso(filters.fromDate, 'start') } : {}),
     ...(filters.toDate ? { to: localDateToIso(filters.toDate, 'end') } : {}),
   };

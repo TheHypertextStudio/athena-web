@@ -215,13 +215,15 @@ Built as a per-membership fan-out merged in application code: **tenant bands sta
     async (c) => {
       const session = c.get('session');
       if (!session?.user) throw new AuthError();
+      const params = c.req.valid('query');
       return ok(
         c,
         HubSearchOut,
         await searchWorkspace({
           scope: 'hub',
           userId: session.user.id,
-          params: c.req.valid('query'),
+          activeOrgId: params.activeOrgId ?? null,
+          params,
         }),
       );
     },

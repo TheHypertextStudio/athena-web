@@ -15,6 +15,8 @@ import {
 interface NamedWorkRow extends OrgScopedRow {
   name: string;
   description?: string | null;
+  ownerId?: string | null;
+  leadId?: string | null;
   status?: string | null;
   health?: string | null;
   visibility?: string | null;
@@ -25,9 +27,12 @@ interface TaskRow extends OrgScopedRow {
   description?: string | null;
   state: string;
   priority?: string | null;
+  assigneeId?: string | null;
+  delegateId?: string | null;
   teamId: string;
   projectId?: string | null;
   programId?: string | null;
+  labelIds?: readonly string[];
   visibility?: string | null;
 }
 
@@ -75,7 +80,7 @@ function namedWorkDocument(row: NamedWorkRow, kind: SearchDocumentKind): SearchD
   return workDocument(row, kind, row.name, {
     summary: row.description,
     body: row.description,
-    facet: { status: row.status, health: row.health },
+    facet: { ownerId: row.ownerId, leadId: row.leadId, status: row.status, health: row.health },
     visibility: row.visibility,
   });
 }
@@ -87,9 +92,12 @@ export const taskSearchProjector = preloadedProjector<TaskRow>('task', (row) => 
     facet: {
       state: row.state,
       priority: row.priority,
+      assigneeId: row.assigneeId,
+      delegateId: row.delegateId,
       teamId: row.teamId,
       projectId: row.projectId,
       programId: row.programId,
+      labelIds: row.labelIds ?? [],
     },
     visibility: row.visibility,
   }),

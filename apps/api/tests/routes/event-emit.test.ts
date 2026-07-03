@@ -86,6 +86,32 @@ describe('emitEvent', () => {
 
     const recips = await recipients(evs[0]!.id);
     expect(recips).toEqual([{ userId: assignee.userId, reason: 'owned' }]);
+
+    const searchJobs = await db
+      .select({
+        sourceTable: schema.searchIndexJob.sourceTable,
+        entityId: schema.searchIndexJob.entityId,
+        reason: schema.searchIndexJob.reason,
+        sourceEventId: schema.searchIndexJob.sourceEventId,
+      })
+      .from(schema.searchIndexJob)
+      .where(eq(schema.searchIndexJob.sourceEventId, evs[0]!.id));
+    expect(searchJobs).toEqual(
+      expect.arrayContaining([
+        {
+          sourceTable: 'event',
+          entityId: evs[0]!.id,
+          reason: 'event_log',
+          sourceEventId: evs[0]!.id,
+        },
+        {
+          sourceTable: 'task',
+          entityId: taskId,
+          reason: 'event_log',
+          sourceEventId: evs[0]!.id,
+        },
+      ]),
+    );
   });
 
   it('is idempotent on the same (subject, kind, occurredAt)', async () => {

@@ -1,7 +1,7 @@
 import { inArray } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 
-import { getDb, addMember, seedOrg, seedUserWithHub } from '../routes/harness.test';
+import { getDb, addMember, one, seedOrg, seedUserWithHub } from '../routes/harness.test';
 
 import { searchWorkspace } from '../../src/search/query';
 
@@ -16,6 +16,246 @@ function entityRoute(organizationId: string, entityKind: string, entityId: strin
 }
 
 describe('search query service', () => {
+  it('inherits grantable subject visibility for work and content documents', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const userId = await seedUserWithHub(db, schema, 'SearchGrantableUser');
+    const orgId = await seedOrg(db, schema);
+    const actorId = await addMember(db, schema, orgId, userId);
+    const teamId = one(
+      await db
+        .insert(schema.team)
+        .values({
+          organizationId: orgId,
+          name: 'Search Team',
+          key: `S${Math.random().toString(36).slice(2, 8)}`,
+        })
+        .returning({ id: schema.team.id }),
+    ).id;
+    const publicTaskId = one(
+      await db
+        .insert(schema.task)
+        .values({
+          organizationId: orgId,
+          title: 'Obsidian public subject',
+          teamId,
+          state: 'todo',
+          visibility: 'public',
+        })
+        .returning({ id: schema.task.id }),
+    ).id;
+    const privateTaskId = one(
+      await db
+        .insert(schema.task)
+        .values({
+          organizationId: orgId,
+          title: 'Obsidian private subject',
+          teamId,
+          state: 'todo',
+          visibility: 'private',
+        })
+        .returning({ id: schema.task.id }),
+    ).id;
+
+    await db.insert(schema.searchDocument).values([
+      {
+        id: `comment:${orgId}:obsidian_public_comment`,
+        organizationId: orgId,
+        kind: 'comment',
+        family: 'content',
+        sourceTable: 'comment',
+        entityId: 'obsidian_public_comment',
+        subjectKind: 'task',
+        subjectId: publicTaskId,
+        title: 'Obsidian public comment',
+        summary: 'Visible comment on a public task',
+        body: 'Obsidian public comment body',
+        facet: { subjectKind: 'task', subjectId: publicTaskId },
+        route: {
+          type: 'content',
+          organizationId: orgId,
+          subjectKind: 'task',
+          subjectId: publicTaskId,
+          contentKind: 'comment',
+          contentId: 'obsidian_public_comment',
+          href: `/orgs/${orgId}/tasks/${publicTaskId}?commentId=obsidian_public_comment`,
+        },
+        visibility: { mode: 'grantable', subjectKind: 'task', subjectId: publicTaskId },
+        baseRank: 90,
+      },
+      {
+        id: `task:${orgId}:obsidian_private_task`,
+        organizationId: orgId,
+        kind: 'task',
+        family: 'work',
+        sourceTable: 'task',
+        entityId: privateTaskId,
+        title: 'Obsidian private task',
+        summary: 'Private task hit',
+        body: 'Private task body',
+        facet: { teamId },
+        route: entityRoute(orgId, 'task', privateTaskId),
+        visibility: { mode: 'grantable', subjectKind: 'task', subjectId: privateTaskId },
+        baseRank: 100,
+      },
+      {
+        id: `comment:${orgId}:obsidian_private_comment`,
+        organizationId: orgId,
+        kind: 'comment',
+        family: 'content',
+        sourceTable: 'comment',
+        entityId: 'obsidian_private_comment',
+        subjectKind: 'task',
+        subjectId: privateTaskId,
+        title: 'Obsidian private comment',
+        summary: 'Secret comment on a private task',
+        body: 'Obsidian private comment body',
+        facet: { subjectKind: 'task', subjectId: privateTaskId },
+        route: {
+          type: 'content',
+          organizationId: orgId,
+          subjectKind: 'task',
+          subjectId: privateTaskId,
+          contentKind: 'comment',
+          contentId: 'obsidian_private_comment',
+          href: `/orgs/${orgId}/tasks/${privateTaskId}?commentId=obsidian_private_comment`,
+        },
+        visibility: { mode: 'grantable', subjectKind: 'task', subjectId: privateTaskId },
+        baseRank: 90,
+      },
+    ]);
+
+    const beforeGrant = await searchWorkspace({
+      scope: 'hub',
+      userId,
+      params: { q: 'obsidian', limit: 10 },
+    });
+    expect(beforeGrant.items.map((item) => item.id)).toEqual([
+      `comment:${orgId}:obsidian_public_comment`,
+    ]);
+
+    await db.insert(schema.grant).values({
+      organizationId: orgId,
+      subjectKind: 'actor',
+      subjectId: actorId,
+      resourceKind: 'task',
+      resourceId: privateTaskId,
+      capabilities: ['view'],
+      effect: 'allow',
+    });
+
+    const afterGrant = await searchWorkspace({
+      scope: 'hub',
+      userId,
+      params: { q: 'obsidian', limit: 10 },
+    });
+    expect(afterGrant.items.map((item) => item.id)).toEqual(
+      expect.arrayContaining([
+        `comment:${orgId}:obsidian_public_comment`,
+        `task:${orgId}:obsidian_private_task`,
+        `comment:${orgId}:obsidian_private_comment`,
+      ]),
+    );
+  });
+
+  it('does not leak activity about a private subject unless the event concerns the caller', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const userId = await seedUserWithHub(db, schema, 'SearchPrivateActivityUser');
+    const orgId = await seedOrg(db, schema);
+    const actorId = await addMember(db, schema, orgId, userId);
+    const teamId = one(
+      await db
+        .insert(schema.team)
+        .values({
+          organizationId: orgId,
+          name: 'Activity Search',
+          key: `A${Math.random().toString(36).slice(2, 8)}`,
+        })
+        .returning({ id: schema.team.id }),
+    ).id;
+    const privateTaskId = one(
+      await db
+        .insert(schema.task)
+        .values({
+          organizationId: orgId,
+          title: 'Quartz private subject',
+          teamId,
+          state: 'todo',
+          visibility: 'private',
+        })
+        .returning({ id: schema.task.id }),
+    ).id;
+    const eventId = `event_quartz_${Math.random().toString(36).slice(2, 10)}`;
+    const occurredAt = new Date('2026-07-03T09:00:00.000Z');
+    await db.insert(schema.event).values({
+      id: eventId,
+      organizationId: orgId,
+      createdBy: actorId,
+      sourceSystem: 'docket',
+      kind: 'comment',
+      occurredAt,
+      title: 'Quartz private activity',
+      summary: 'A private task was discussed',
+      entity: {
+        kind: 'work_item',
+        source: 'docket',
+        externalId: privateTaskId,
+        title: 'Quartz private subject',
+        url: null,
+        docketEntityId: privateTaskId,
+      },
+      entityKind: 'work_item',
+      dedupeKey: `test:${eventId}`,
+    });
+    await db.insert(schema.searchDocument).values({
+      id: `activity:${orgId}:${eventId}`,
+      organizationId: orgId,
+      kind: 'activity',
+      family: 'activity',
+      sourceTable: 'event',
+      entityId: eventId,
+      subjectKind: 'task',
+      subjectId: privateTaskId,
+      sourceSystem: 'docket',
+      title: 'Quartz private activity',
+      summary: 'A private task was discussed',
+      body: 'Quartz private task activity body',
+      facet: { eventKind: 'comment', entityKind: 'work_item' },
+      route: {
+        type: 'activity',
+        organizationId: orgId,
+        eventId,
+        href: `/orgs/${orgId}/stream?eventId=${eventId}`,
+      },
+      visibility: { mode: 'event', subjectKind: 'task', subjectId: privateTaskId },
+      baseRank: 80,
+      occurredAt,
+    });
+
+    const beforeRecipient = await searchWorkspace({
+      scope: 'hub',
+      userId,
+      params: { q: 'quartz', limit: 10 },
+    });
+    expect(beforeRecipient.items).toHaveLength(0);
+
+    await db.insert(schema.eventRecipient).values({
+      eventId,
+      userId,
+      organizationId: orgId,
+      occurredAt,
+      reason: 'mention',
+    });
+
+    const afterRecipient = await searchWorkspace({
+      scope: 'hub',
+      userId,
+      params: { q: 'quartz', limit: 10 },
+    });
+    expect(afterRecipient.items.map((item) => item.id)).toEqual([`activity:${orgId}:${eventId}`]);
+  });
+
   it('returns only caller-visible org and user-private documents with snippets', async () => {
     const schema = await getDb();
     const { db } = schema;
@@ -23,6 +263,24 @@ describe('search query service', () => {
     const orgA = await seedOrg(db, schema);
     const orgB = await seedOrg(db, schema);
     await addMember(db, schema, orgA, userId);
+    const teamA = one(
+      await db
+        .insert(schema.team)
+        .values({
+          organizationId: orgA,
+          name: 'Zeppelin Search',
+          key: `Z${Math.random().toString(36).slice(2, 8)}`,
+        })
+        .returning({ id: schema.team.id }),
+    ).id;
+    await db.insert(schema.task).values({
+      id: 'zeppelin_task',
+      organizationId: orgA,
+      title: 'Zeppelin budget task',
+      teamId: teamA,
+      state: 'todo',
+      visibility: 'public',
+    });
 
     await db.insert(schema.searchDocument).values([
       {
@@ -260,5 +518,255 @@ describe('search query service', () => {
         [...orgScoped.items, ...withArchived.items].map((item) => item.id),
       ),
     );
+  });
+
+  it('boosts active workspaces and caller relationships without bypassing search semantics', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const userId = await seedUserWithHub(db, schema, 'SearchRankingUser');
+    const orgA = await seedOrg(db, schema);
+    const orgB = await seedOrg(db, schema);
+    const actorA = await addMember(db, schema, orgA, userId);
+    await addMember(db, schema, orgB, userId);
+
+    await db.insert(schema.searchDocument).values([
+      {
+        id: `task:${orgA}:astra_related`,
+        organizationId: orgA,
+        kind: 'task',
+        family: 'work',
+        sourceTable: 'task',
+        entityId: 'astra_related',
+        title: 'Astra launch',
+        facet: { assigneeId: actorA },
+        route: entityRoute(orgA, 'task', 'astra_related'),
+        visibility: { mode: 'org_members' },
+        baseRank: 100,
+      },
+      {
+        id: `task:${orgB}:astra_neutral`,
+        organizationId: orgB,
+        kind: 'task',
+        family: 'work',
+        sourceTable: 'task',
+        entityId: 'astra_neutral',
+        title: 'Astra launch',
+        facet: {},
+        route: entityRoute(orgB, 'task', 'astra_neutral'),
+        visibility: { mode: 'org_members' },
+        baseRank: 100,
+      },
+      {
+        id: `task:${orgA}:solstice_alpha`,
+        organizationId: orgA,
+        kind: 'task',
+        family: 'work',
+        sourceTable: 'task',
+        entityId: 'solstice_alpha',
+        title: 'Solstice launch',
+        facet: {},
+        route: entityRoute(orgA, 'task', 'solstice_alpha'),
+        visibility: { mode: 'org_members' },
+        baseRank: 100,
+      },
+      {
+        id: `task:${orgB}:solstice_beta`,
+        organizationId: orgB,
+        kind: 'task',
+        family: 'work',
+        sourceTable: 'task',
+        entityId: 'solstice_beta',
+        title: 'Solstice launch',
+        facet: {},
+        route: entityRoute(orgB, 'task', 'solstice_beta'),
+        visibility: { mode: 'org_members' },
+        baseRank: 100,
+      },
+    ]);
+
+    const relationshipBoosted = await searchWorkspace({
+      scope: 'hub',
+      userId,
+      params: { q: 'astra', limit: 10 },
+    });
+    expect(relationshipBoosted.items[0]?.id).toBe(`task:${orgA}:astra_related`);
+
+    const activeBoosted = await searchWorkspace({
+      scope: 'hub',
+      userId,
+      activeOrgId: orgB,
+      params: { q: 'solstice', limit: 10 },
+    });
+    expect(activeBoosted.items.slice(0, 2).map((item) => item.id)).toEqual([
+      `task:${orgB}:solstice_beta`,
+      `task:${orgA}:solstice_alpha`,
+    ]);
+  });
+
+  it('caps command palette results so one semantic family cannot monopolize the first page', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const userId = await seedUserWithHub(db, schema, 'SearchPaletteDiversityUser');
+    const orgId = await seedOrg(db, schema);
+    await addMember(db, schema, orgId, userId);
+
+    await db.insert(schema.searchDocument).values([
+      ...Array.from({ length: 8 }, (_, index) => ({
+        id: `task:${orgId}:palette_delta_${index}`,
+        organizationId: orgId,
+        kind: 'task' as const,
+        family: 'work' as const,
+        sourceTable: 'task',
+        entityId: `palette_delta_${index}`,
+        title: `Palette Delta work ${index}`,
+        facet: {},
+        route: entityRoute(orgId, 'task', `palette_delta_${index}`),
+        visibility: { mode: 'org_members' },
+        baseRank: 200 - index,
+      })),
+      ...Array.from({ length: 2 }, (_, index) => ({
+        id: `member:${orgId}:palette_delta_${index}`,
+        organizationId: orgId,
+        kind: 'member' as const,
+        family: 'people' as const,
+        sourceTable: 'actor',
+        entityId: `palette_delta_member_${index}`,
+        title: `Palette Delta person ${index}`,
+        facet: {},
+        route: entityRoute(orgId, 'member', `palette_delta_member_${index}`),
+        visibility: { mode: 'org_members' },
+        baseRank: 10 - index,
+      })),
+    ]);
+
+    const fullPage = await searchWorkspace({
+      scope: 'hub',
+      userId,
+      params: { q: 'palette delta', limit: 6, surface: 'page' },
+    });
+    expect(fullPage.items.map((item) => item.family)).toEqual([
+      'work',
+      'work',
+      'work',
+      'work',
+      'work',
+      'work',
+    ]);
+
+    const palette = await searchWorkspace({
+      scope: 'hub',
+      userId,
+      params: { q: 'palette delta', limit: 6, surface: 'palette' },
+    });
+    expect(palette.items.filter((item) => item.family === 'people')).toHaveLength(2);
+    expect(palette.items.filter((item) => item.family === 'work')).toHaveLength(4);
+  });
+
+  it('filters by owner, assignee, label, status, and health facets', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const userId = await seedUserWithHub(db, schema, 'SearchFacetUser');
+    const orgId = await seedOrg(db, schema);
+    await addMember(db, schema, orgId, userId);
+
+    await db.insert(schema.searchDocument).values([
+      {
+        id: `project:${orgId}:faceted_project`,
+        organizationId: orgId,
+        kind: 'project',
+        family: 'work',
+        sourceTable: 'project',
+        entityId: 'faceted_project',
+        title: 'Faceted alpha',
+        facet: { leadId: 'owner_a', status: 'active', health: 'at_risk' },
+        route: entityRoute(orgId, 'project', 'faceted_project'),
+        visibility: { mode: 'org_members' },
+        baseRank: 100,
+      },
+      {
+        id: `task:${orgId}:faceted_task`,
+        organizationId: orgId,
+        kind: 'task',
+        family: 'work',
+        sourceTable: 'task',
+        entityId: 'faceted_task',
+        title: 'Faceted beta',
+        facet: { assigneeId: 'actor_b', labelIds: ['label_x'], state: 'todo' },
+        route: entityRoute(orgId, 'task', 'faceted_task'),
+        visibility: { mode: 'org_members' },
+        baseRank: 99,
+      },
+    ]);
+
+    const base = { scope: 'hub' as const, userId };
+    await expect(
+      searchWorkspace({
+        ...base,
+        params: { q: 'faceted', limit: 10, ownerIds: ['owner_a'] },
+      }).then((result) => result.items.map((item) => item.id)),
+    ).resolves.toEqual([`project:${orgId}:faceted_project`]);
+    await expect(
+      searchWorkspace({
+        ...base,
+        params: { q: 'faceted', limit: 10, assigneeIds: ['actor_b'] },
+      }).then((result) => result.items.map((item) => item.id)),
+    ).resolves.toEqual([`task:${orgId}:faceted_task`]);
+    await expect(
+      searchWorkspace({
+        ...base,
+        params: { q: 'faceted', limit: 10, labelIds: ['label_x'] },
+      }).then((result) => result.items.map((item) => item.id)),
+    ).resolves.toEqual([`task:${orgId}:faceted_task`]);
+    await expect(
+      searchWorkspace({
+        ...base,
+        params: { q: 'faceted', limit: 10, statuses: ['active'] },
+      }).then((result) => result.items.map((item) => item.id)),
+    ).resolves.toEqual([`project:${orgId}:faceted_project`]);
+    await expect(
+      searchWorkspace({
+        ...base,
+        params: { q: 'faceted', limit: 10, statuses: ['todo'] },
+      }).then((result) => result.items.map((item) => item.id)),
+    ).resolves.toEqual([`task:${orgId}:faceted_task`]);
+    await expect(
+      searchWorkspace({
+        ...base,
+        params: { q: 'faceted', limit: 10, healths: ['at_risk'] },
+      }).then((result) => result.items.map((item) => item.id)),
+    ).resolves.toEqual([`project:${orgId}:faceted_project`]);
+  });
+
+  it('matches multi-term queries across weighted title, summary, and body text', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const userId = await seedUserWithHub(db, schema, 'SearchFtsUser');
+    const orgId = await seedOrg(db, schema);
+    await addMember(db, schema, orgId, userId);
+
+    await db.insert(schema.searchDocument).values({
+      id: `task:${orgId}:fts_budget_task`,
+      organizationId: orgId,
+      kind: 'task',
+      family: 'work',
+      sourceTable: 'task',
+      entityId: 'fts_budget_task',
+      title: 'Budget review',
+      summary: 'Quarterly planning',
+      body: 'Finance worksheet and allocation notes',
+      facet: {},
+      route: entityRoute(orgId, 'task', 'fts_budget_task'),
+      visibility: { mode: 'org_members' },
+      baseRank: 100,
+    });
+
+    const result = await searchWorkspace({
+      scope: 'hub',
+      userId,
+      params: { q: 'budget finance', limit: 10 },
+    });
+
+    expect(result.items.map((item) => item.id)).toEqual([`task:${orgId}:fts_budget_task`]);
+    expect(result.items[0]?.matchedFields).toEqual(expect.arrayContaining(['title', 'body']));
   });
 });

@@ -22,6 +22,7 @@ import { startDevScheduler } from './dev-scheduler';
 import { env } from './env';
 import { onError } from './error';
 import { cimdAuthorizeMiddleware } from './mcp/cimd';
+import { mcpConsentGuard } from './mcp/consent-guard';
 import { authorizationServerMetadata, mcpHandler, protectedResourceMetadata } from './mcp/server';
 import { registerOpenapi } from './openapi';
 import cron from './routes/cron';
@@ -54,6 +55,10 @@ server.use('*', sessionMiddleware);
 // application table BEFORE the authorize handler runs. Registered ahead of `/api/auth/*` so
 // it wraps only the MCP authorize route; non-URL client ids pass straight through.
 server.use('/api/auth/mcp/authorize', cimdAuthorizeMiddleware);
+// Consent gate (mcp-surface.md §2.2): Better Auth's mcp() authorize only shows the consent
+// page when the client sends `prompt=consent`; this guard 302s consent-less authorize
+// requests back with it set unless a stored oauth_consent already covers the scopes.
+server.use('/api/auth/mcp/authorize', mcpConsentGuard);
 server.on(['POST', 'GET'], '/api/auth/*', (c) => auth.handler(c.req.raw));
 // The MCP Streamable HTTP endpoint lives OUTSIDE the typed `AppType` routes (like
 // `/api/auth`): it carries its own Origin + session guard and is not part of the RPC

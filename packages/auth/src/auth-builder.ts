@@ -4,6 +4,9 @@ import {
   db,
   genId,
   hub,
+  oauthAccessToken,
+  oauthApplication,
+  oauthConsent,
   passkey as passkeyTable,
   session,
   twoFactor as twoFactorTable,
@@ -294,6 +297,11 @@ export function buildAuthOptions(e: AuthEnv): BetterAuthOptions {
         verification,
         passkey: passkeyTable,
         twoFactor: twoFactorTable,
+        // The mcp()/oidcProvider OAuth AS models — without these, dynamic client
+        // registration and token issuance 500 at the adapter layer.
+        oauthApplication,
+        oauthAccessToken,
+        oauthConsent,
       },
     }),
     advanced: {

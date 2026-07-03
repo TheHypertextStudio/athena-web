@@ -19,11 +19,12 @@ const SYSTEMS: Record<string, { readonly label: string; readonly color: string }
   github: { label: 'GitHub', color: '#1f2328' },
   google_calendar: { label: 'Google Calendar', color: '#9a948c' },
   gmail: { label: 'Gmail', color: '#9a948c' },
+  outlook: { label: 'Outlook', color: '#5c7fb8' },
 };
 
 /** Props for {@link ProviderBadge}. */
 export interface ProviderBadgeProps {
-  /** The source system (`docket` | `linear` | `slack` | `discord` | `github` | `google_calendar` | `gmail`). */
+  /** The source system (`docket` | `linear` | `slack` | `discord` | `github` | `google_calendar` | `gmail` | `outlook`). */
   readonly system: SourceSystemKind;
 }
 

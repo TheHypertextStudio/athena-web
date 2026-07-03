@@ -23,6 +23,7 @@ const SYSTEM_OPTIONS: readonly FieldOption[] = [
   { value: 'discord', label: 'Discord', hint: 'discord' },
   { value: 'google_calendar', label: 'Google Calendar', hint: 'google_calendar' },
   { value: 'gmail', label: 'Gmail', hint: 'gmail' },
+  { value: 'outlook', label: 'Outlook', hint: 'outlook' },
 ];
 
 /** Canonical kinds, shown in the Kind filter. */

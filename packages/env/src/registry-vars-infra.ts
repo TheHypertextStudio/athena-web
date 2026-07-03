@@ -159,6 +159,15 @@ export const INFRA_VARS: readonly VarSpec[] = [
     where: 'Gmail REST API base override. Absent ⇒ https://gmail.googleapis.com/gmail/v1',
   },
   {
+    name: 'MICROSOFT_GRAPH_API_BASE',
+    slice: 'connector',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: connectorServer.MICROSOFT_GRAPH_API_BASE,
+    where: 'Microsoft Graph API base override. Absent ⇒ https://graph.microsoft.com/v1.0',
+  },
+  {
     name: 'GOOGLE_CALENDAR_API_BASE',
     slice: 'connector',
     scope: 'server',

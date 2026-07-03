@@ -18,8 +18,17 @@ import type { MailActions } from './mail';
  * @remarks
  * `gtasks` is Google Tasks (the user's personal to-dos), distinct from `calendar`
  * (Google Calendar events) and the Google document/mail surfaces (`drive`/`gmail`).
+ * `outlook` is Microsoft Outlook mail via the Graph API (dormant until the Microsoft
+ * OAuth credentials are configured — `/v1/config` hides unconfigured providers).
  */
-export type ConnectorProvider = 'github' | 'drive' | 'linear' | 'gmail' | 'calendar' | 'gtasks';
+export type ConnectorProvider =
+  | 'github'
+  | 'drive'
+  | 'linear'
+  | 'gmail'
+  | 'calendar'
+  | 'gtasks'
+  | 'outlook';
 
 /** Input to establish a connection to a provider for an org scope. */
 export interface ConnectInput {

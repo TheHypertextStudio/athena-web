@@ -67,6 +67,9 @@ export interface AuthEnv {
   readonly APPLE_TEAM_ID?: string | undefined;
   readonly APPLE_KEY_ID?: string | undefined;
   readonly APPLE_PRIVATE_KEY?: string | undefined;
+  readonly MICROSOFT_CLIENT_ID?: string | undefined;
+  readonly MICROSOFT_CLIENT_SECRET?: string | undefined;
+  readonly MICROSOFT_TENANT_ID?: string | undefined;
   readonly OAUTH_PROXY_SECRET?: string | undefined;
   readonly OAUTH_PROXY_PRODUCTION_URL?: string | undefined;
   readonly OIDC_LOGIN_PAGE_URL?: string | undefined;
@@ -173,7 +176,7 @@ export async function resolvePasskeyUser(
 }
 
 /** A social provider a user can sign in / link an account with. */
-export type SocialProvider = 'google' | 'github' | 'linear' | 'apple' | 'discord';
+export type SocialProvider = 'google' | 'github' | 'linear' | 'apple' | 'discord' | 'microsoft';
 
 /**
  * The four durable Apple credentials when ALL are real-shaped, else `undefined`.
@@ -230,6 +233,8 @@ export function configuredSocialProviders(e: AuthEnv): SocialProvider[] {
   if (isRealValue(e.DISCORD_CLIENT_ID) && isRealValue(e.DISCORD_CLIENT_SECRET))
     providers.push('discord');
   if (resolveAppleCredentials(e) !== undefined) providers.push('apple');
+  if (isRealValue(e.MICROSOFT_CLIENT_ID) && isRealValue(e.MICROSOFT_CLIENT_SECRET))
+    providers.push('microsoft');
   return providers;
 }
 
@@ -343,6 +348,28 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
     socialProviders.apple = {
       clientId: appleCreds.clientId,
       clientSecret: generateAppleClientSecret(appleCreds),
+    };
+  }
+
+  if (isRealValue(e.MICROSOFT_CLIENT_ID) && isRealValue(e.MICROSOFT_CLIENT_SECRET)) {
+    socialProviders.microsoft = {
+      clientId: e.MICROSOFT_CLIENT_ID,
+      clientSecret: e.MICROSOFT_CLIENT_SECRET,
+      // `common` serves both personal and work/school accounts; a single-tenant deployment
+      // narrows it via MICROSOFT_TENANT_ID. Set explicitly — no silent fallback beyond the
+      // documented multi-tenant endpoint.
+      tenantId: e.MICROSOFT_TENANT_ID ?? 'common',
+      // `offline_access` returns a refresh token so the background email ingest runs while
+      // nobody is signed in; `Mail.ReadWrite` covers listing, reading, and mailbox actions
+      // (archive/move/read-state/categories) for the Outlook connector.
+      scope: [
+        'openid',
+        'email',
+        'profile',
+        'offline_access',
+        'https://graph.microsoft.com/Mail.ReadWrite',
+      ],
+      prompt: 'select_account',
     };
   }
 

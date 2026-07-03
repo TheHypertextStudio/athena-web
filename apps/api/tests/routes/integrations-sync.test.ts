@@ -108,6 +108,7 @@ describe('integrations directory', () => {
       'gmail',
       'gtasks',
       'linear',
+      'outlook',
       'slack',
     ]);
 

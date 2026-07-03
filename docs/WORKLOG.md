@@ -148,6 +148,44 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [MAIL-004] Outlook/Graph connector skeleton — dormant, env-gated (M6)
+
+- **Completed**: 2026-07-03
+- **Summary**: Outlook is now a first-class mail provider in every layer except live
+  credentials. `ConnectorProvider` += `outlook`, and the compiler walked every
+  `Record<ConnectorProvider, …>` site: Graph API base, client factory, connect-wizard
+  directory entry, fixtures (import items + two mail-thread summaries: actionable-from-person
+  - no-reply promo). New `real/connector-microsoft.ts` `MicrosoftProviderClient` implements
+    the mail capability against Microsoft Graph: `listThreads` via the inbox delta query
+    (conversationId grouping, latest-message-wins, `deltaLink` cursor, 410 Gone ⇒
+    `cursorExpired`, absolute Graph links replayed relative to the API base), mailbox actions
+    with the documented thread→messages fan-out (archive/trash = folder moves, read state =
+    `isRead` PATCH, labels = duplicate-free `categories` read-modify-write), and `fetchThread`
+    mapping `internetMessageHeaders` → In-Reply-To/References. Auth seam: `microsoft` Better
+    Auth social provider (env-gated like the others; `offline_access + Mail.ReadWrite` scopes,
+    tenant `common` unless `MICROSOFT_TENANT_ID`), `socialProviderId('outlook') → 'microsoft'`,
+    `IdentityProvider` += microsoft, env plumbing (`MICROSOFT_CLIENT_ID/SECRET/TENANT_ID`,
+    `MICROSOFT_GRAPH_API_BASE`) through slices/registry/container/.env.example. Web: directory
+    icon, identity catalog entry, stream badge/filter, and the attachment card's "Open in
+    Gmail" literal is now provider-neutral "Open email". Everything is dormant until the
+    Microsoft credentials exist — `/v1/config` hides unconfigured providers — so go-live is
+    env values + a smoke test.
+- **Files Changed**: `packages/boundaries/src/{ports/{connector,mail},real/{connector,connector-microsoft(new)},fixtures/index,select}.ts`,
+  `packages/boundaries/tests/real/connector-microsoft.test.ts` (new),
+  `packages/{auth/src/auth-builder,types/src/identity,env/src/{slices,registry-vars-core,registry-vars-infra}}.ts`,
+  `apps/api/src/{routes/{integration-provider,config},container}.ts`, `.env.example`,
+  `apps/web/src/components/{settings/{integrations-config,identity-providers},stream/{provider-badge,stream-catalog},task-detail/TaskAttachments}.{ts,tsx}`,
+  `docs/engineering/specs/mail-providers.md`, `docs/WORKLOG.md`.
+- **Learnings**: The M2 capability architecture paid out exactly as designed — the Outlook
+  client is one file + one manifest entry + compiler-forced Record fills; zero app-layer
+  changes (sweep, routes, automations untouched). Graph's delta protocol returns absolute
+  URLs as cursors; replaying them requires relativizing against the configured API base or
+  the mock/e2e override would silently call the real Graph.
+- **Gate**: boundaries 283 tests green (9 new Graph tests: delta grouping, deltaLink
+  replay/pagination, 410 ⇒ cursorExpired, per-verb fan-out bodies, categories RMW, header
+  mapping); manifest⇔structure tripwire covers outlook automatically; auth/api/web/env
+  typecheck clean; full api + web suites + lints in the milestone gate.
+
 ### [AUTO-002] Generic automation actions + email-to-task enablement & triage UX (M5)
 
 - **Completed**: 2026-07-03

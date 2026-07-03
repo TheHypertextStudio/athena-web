@@ -109,6 +109,13 @@ export async function persistSuggestions(
       actorId: input.actorId,
       title: draft.title,
       subject: { type: 'email_suggestion', id: row.id, title: draft.title },
+      // The funnel verdict rides along so pipeline rules can match on it
+      // (e.g. dismiss-promotions matches `detail.category === 'promotions'`).
+      detail: {
+        schema: 'docket.email_suggestion',
+        category: verdict.category ?? null,
+        confidence: verdict.score,
+      },
     });
   }
 

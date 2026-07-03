@@ -7,7 +7,7 @@
  * import('@docket/types').ActionSpec} by looking its `type` up here. Adding a new action is
  * registering a handler — the engine is never edited. Handlers close over whatever services
  * they need (db, connector) at registration time, so {@link ActionContext} stays minimal.
- * See `docs/engineering/specs/email-to-task.md` §7.
+ * See `docs/engineering/specs/automations.md`.
  */
 import type { ActionContext } from './engine';
 

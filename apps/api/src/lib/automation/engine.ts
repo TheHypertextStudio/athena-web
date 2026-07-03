@@ -7,7 +7,7 @@
  * Interpreter satisfies, then dispatches each `then` Command to its registered handler
  * (Strategy). The event is an observation projected to a plain record; rules and the registry
  * are injected. An action with no registered handler is a logged no-op, never a throw. See
- * `docs/engineering/specs/email-to-task.md` §7.
+ * `docs/engineering/specs/automations.md`.
  */
 import type { AutomationEventMatch, AutomationRule } from '@docket/types';
 
@@ -35,12 +35,16 @@ export interface DispatchedAction {
  *
  * @remarks
  * Each present field must equal the event's; an absent field is a wildcard. An empty `on`
- * (no fields) therefore matches every event.
+ * (no fields) therefore matches every event. `kind`/`subjectType` address internal Docket
+ * events; `source`/`entityKind` additionally address external events (which carry no Docket
+ * subject type) by origin and canonical kind.
  */
 export function matches(on: AutomationEventMatch, event: unknown): boolean {
   const record = (event ?? {}) as Record<string, unknown>;
   if (on.kind !== undefined && record['kind'] !== on.kind) return false;
   if (on.subjectType !== undefined && record['subjectType'] !== on.subjectType) return false;
+  if (on.source !== undefined && record['source'] !== on.source) return false;
+  if (on.entityKind !== undefined && record['entityKind'] !== on.entityKind) return false;
   return true;
 }
 

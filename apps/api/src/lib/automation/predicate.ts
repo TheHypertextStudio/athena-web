@@ -6,7 +6,7 @@
  * Composite {@link Predicate} grammar). It evaluates a declarative condition — *data*, loaded
  * from the `automation_rule` table — against an event object (an observation projected to a
  * plain record). It performs no I/O and never throws on missing data: a path that does not
- * resolve simply compares as `undefined`. See `docs/engineering/specs/email-to-task.md` §7.
+ * resolve simply compares as `undefined`. See `docs/engineering/specs/automations.md`.
  */
 import type { Predicate, PredicateValue } from '@docket/types';
 

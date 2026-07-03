@@ -5,7 +5,7 @@
  * @remarks
  * Rules live in the `automation_rule` table as `eventMatch`/`condition`/`actions`; the engine
  * consumes them as {@link EngineRule} (`on`/`when`/`then`). Defaults ship as `isSeed` rows —
- * data, not code branches — so a user can edit or delete them. See the email-to-task spec §7.
+ * data, not code branches — so a user can edit or delete them. See `docs/engineering/specs/automations.md`.
  */
 import { automationRule, db } from '@docket/db';
 import type { ActionSpec, AutomationEventMatch, Predicate } from '@docket/types';
@@ -66,7 +66,7 @@ export const DEFAULT_RULES: readonly DefaultRule[] = [
   {
     name: 'Dismiss promotional email suggestions',
     on: { kind: 'created', subjectType: 'email_suggestion' },
-    when: { op: 'eq', path: 'payload.category', value: 'promotions' },
+    when: { op: 'eq', path: 'detail.category', value: 'promotions' },
     then: [{ type: 'suggestion.dismiss', params: {} }],
   },
 ];

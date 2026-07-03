@@ -2,29 +2,22 @@
  * `@docket/api` — automation action handlers (the Strategy registry's strategies).
  *
  * @remarks
- * Each handler reacts to the firing observation ({@link AutomationEvent}, carried on
+ * Each handler reacts to the firing event ({@link AutomationEvent}, carried on
  * `ctx.event`) using injected services. `mail.*` mutate the source email of a task's email
  * attachment via the injected {@link MailApplier} and stamp the attachment's action ledger
  * (idempotency Decorator — a thread is not re-acted on for the same action). `suggestion.*`
- * act on the `email_suggestion` row named in the event payload. See the email-to-task spec §7.
+ * act on the `email_suggestion` subject the event fired on. See
+ * `docs/engineering/specs/automations.md`.
  */
 import { attachment, db, emailSuggestion } from '@docket/db';
 import type { MailAction } from '@docket/boundaries';
 import { and, eq } from 'drizzle-orm';
 
 import type { ActionContext } from './engine';
+import type { AutomationEvent } from './event';
 import { createRegistry, type Registry } from './registry';
 
-/** The structured observation an automation reacts to (an observation projected to a record). */
-export interface AutomationEvent {
-  readonly organizationId: string;
-  readonly kind: string;
-  readonly subjectType?: string;
-  readonly subjectId?: string;
-  readonly payload: Record<string, unknown>;
-  /** Marker so the firing time is stable/injectable (never `Date.now()` inside handlers). */
-  readonly occurredAt: Date;
-}
+export type { AutomationEvent } from './event';
 
 /** Applies one mailbox action to a thread of a given integration (wraps the connector). */
 export type MailApplier = (input: {
@@ -126,19 +119,18 @@ export function buildAutomationRegistry(deps: HandlerDeps): Registry {
 
   for (const m of MAIL_ACTIONS) registry.register(mailHandler(m.type, m.build, deps));
 
-  // suggestion.dismiss — discard the suggestion named in the event payload.
+  // suggestion.dismiss — discard the email_suggestion subject the event fired on.
   registry.register({
     type: 'suggestion.dismiss',
     run: async (ctx: ActionContext): Promise<void> => {
       const event = eventOf(ctx);
-      const suggestionId = event.payload['suggestionId'];
-      if (typeof suggestionId !== 'string') return;
+      if (event.subjectType !== 'email_suggestion' || !event.subjectId) return;
       await db
         .update(emailSuggestion)
         .set({ status: 'dismissed' })
         .where(
           and(
-            eq(emailSuggestion.id, suggestionId),
+            eq(emailSuggestion.id, event.subjectId),
             eq(emailSuggestion.organizationId, event.organizationId),
             eq(emailSuggestion.status, 'pending'),
           ),

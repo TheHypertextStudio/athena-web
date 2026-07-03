@@ -65,11 +65,21 @@ export const ActionSpec = z
 /** Action command value. */
 export type ActionSpec = z.infer<typeof ActionSpec>;
 
-/** The event-match (`on`): which observations a rule reacts to. Empty fields match anything. */
+/**
+ * The event-match (`on`): which events a rule reacts to. Absent fields match anything.
+ *
+ * @remarks
+ * `kind`/`subjectType` address internal Docket events by their emit vocabulary
+ * (`completed` × `task`). `source`/`entityKind` address events by origin and canonical kind —
+ * the only handles external events (Linear, GitHub, Slack) carry, since they have no Docket
+ * subject type ("any `work_item` completed from any source").
+ */
 export const AutomationEventMatch = z
   .object({
     kind: z.string().min(1).optional(),
     subjectType: z.string().min(1).optional(),
+    source: z.string().min(1).optional(),
+    entityKind: z.string().min(1).optional(),
   })
   .meta({ id: 'AutomationEventMatch', description: 'Event match for an automation rule.' });
 /** Event-match value. */

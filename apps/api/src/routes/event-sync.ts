@@ -39,6 +39,8 @@ import {
   slackMessageFacts,
 } from '../consumers/slack-relevance';
 import { toBoundaryEnv } from '../container';
+import { projectInboundDraft } from '../lib/automation/event';
+import { runAutomationsForEvent } from '../lib/automation/runtime';
 import { asObserverProvider } from './integration-provider';
 import { LEASE_STALE_MS } from './integration-sync';
 import { publishEvent } from './stream-helpers';
@@ -356,6 +358,20 @@ async function processOne(ev: InboundEventRow, ctx: SweepCtx): Promise<number> {
       created += 1;
       const recipients = [...result.recipients].map(([uid, reason]) => ({ userId: uid, reason }));
       await publishEvent(result.eventId, recipients).catch(() => undefined);
+      // Observer hook: external events trigger automation rules too. Never throws — an
+      // automation failure must not fail the drain row (it still transitions to processed).
+      await runAutomationsForEvent(
+        projectInboundDraft({
+          organizationId: orgId,
+          kind: kind.data,
+          source,
+          entityKind,
+          docketEntityId: entityRef?.docketEntityId ?? null,
+          title: draft.title,
+          detail: draft.detail ?? null,
+          occurredAt,
+        }),
+      );
     }
   }
 

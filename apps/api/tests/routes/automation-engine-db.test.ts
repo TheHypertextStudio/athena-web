@@ -5,7 +5,7 @@ import type * as DbModule from '@docket/db';
 
 import { getDb, one, seedBaseOrg } from './harness.test';
 import { buildAutomationRegistry, type MailApplier } from '../../src/lib/automation/handlers';
-import { runAutomationsForObservation } from '../../src/lib/automation/runtime';
+import { runAutomationsForEvent } from '../../src/lib/automation/runtime';
 import { loadEnabledRules, seedDefaultAutomationRules } from '../../src/lib/automation/rules-store';
 
 let schema!: typeof DbModule;
@@ -96,13 +96,14 @@ describe('automation engine over DB rules', () => {
     const mailApplier: MailApplier = async (i) => void recorded.push(i);
     const registry = buildAutomationRegistry({ mailApplier });
 
-    await runAutomationsForObservation(
+    await runAutomationsForEvent(
       {
         organizationId: orgId,
         kind: 'completed',
+        source: 'docket',
         subjectType: 'task',
         subjectId: taskId,
-        payload: {},
+        detail: {},
         occurredAt: new Date(0),
       },
       registry,
@@ -130,13 +131,14 @@ describe('automation engine over DB rules', () => {
 
     const recorded: RecordedMail[] = [];
     const registry = buildAutomationRegistry({ mailApplier: async (i) => void recorded.push(i) });
-    await runAutomationsForObservation(
+    await runAutomationsForEvent(
       {
         organizationId: orgId,
         kind: 'completed',
+        source: 'docket',
         subjectType: 'task',
         subjectId: taskId,
-        payload: {},
+        detail: {},
         occurredAt: new Date(0),
       },
       registry,
@@ -158,13 +160,14 @@ describe('automation engine over DB rules', () => {
 
     const recorded: RecordedMail[] = [];
     const registry = buildAutomationRegistry({ mailApplier: async (i) => void recorded.push(i) });
-    await runAutomationsForObservation(
+    await runAutomationsForEvent(
       {
         organizationId: orgId,
         kind: 'completed',
+        source: 'docket',
         subjectType: 'task',
         subjectId: taskId,
-        payload: {},
+        detail: {},
         occurredAt: new Date(0),
       },
       registry,

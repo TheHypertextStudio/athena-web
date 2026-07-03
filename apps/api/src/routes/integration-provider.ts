@@ -75,7 +75,7 @@ export const PROVIDER_DIRECTORY: Readonly<
     roles: ['code', 'work'],
     category: 'engineering',
   },
-  linear: { name: 'Linear', pattern: 'migration', roles: ['work'], category: 'project-management' },
+  linear: { name: 'Linear', pattern: 'connector', roles: ['work'], category: 'project-management' },
   drive: { name: 'Google Drive', pattern: 'connector', roles: ['context'], category: 'documents' },
   gmail: { name: 'Gmail', pattern: 'connector', roles: ['signal'], category: 'communication' },
   calendar: {

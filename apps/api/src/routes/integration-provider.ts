@@ -34,7 +34,9 @@ export const CONNECTOR_PROVIDERS: readonly ConnectorProvider[] = [
  * @remarks
  * Re-exports the boundary manifest (`WRITE_BACK_CAPABLE_PROVIDERS`) so capability
  * membership has one source of truth. Used to seed `integration.writeBack` when a caller
- * doesn't specify it.
+ * doesn't specify it. Linear is write-CAPABLE (see {@link hasLinearWriteScope}) but
+ * intentionally absent from the manifest until its OAuth `write` scope ships — a UI
+ * connect (which sends no `writeBack`) must default read-only and verify clean.
  */
 export const WRITE_BACK_PROVIDERS: ReadonlySet<string> = WRITE_BACK_CAPABLE_PROVIDERS;
 
@@ -288,6 +290,45 @@ export async function linkedIdentities(userId: string): Promise<IdentityOut[]> {
       linkedAt: row.createdAt.toISOString(),
     };
   });
+}
+
+/**
+ * The user-facing reason a Linear write-back integration is blocked on scope.
+ *
+ * @remarks
+ * Shared verbatim between `POST /:id/verify` (which records it as `lastError` when a
+ * `writeBack` integration's identity lacks `write`) and `PATCH /:id` (which throws it as a 409
+ * when a caller tries to flip `writeBack` on without that scope) — the two enforcement points
+ * speak with one voice.
+ */
+export const LINEAR_WRITE_SCOPE_MESSAGE =
+  'Reconnect Linear to grant write access — two-way sync needs the write scope.';
+
+/**
+ * Whether the actor's linked Linear identity carries the `write` OAuth scope.
+ *
+ * @remarks
+ * Two-way sync (`integration.writeBack`) needs more than Better Auth's current Linear scope
+ * config (`['read']` this slice — the upgrade to read/write/admin ships with Slice 3): this
+ * reads whatever scope the actor's linked `linear` `account` row ACTUALLY carries, via
+ * {@link linkedIdentities}, and is honest either way — a real `write` grant passes, a
+ * `read`-only (or absent) one fails. Deliberately carries NO `APP_MODE` short-circuit (unlike
+ * {@link resolveConnectorToken}): in `test`/`local` it reads whatever identity fixtures a test
+ * seeded, exactly as in production, so route tests can exercise both the granted and ungranted
+ * outcome by seeding a scope string rather than relying on a bypass.
+ *
+ * @param actorId - The actor whose linked Linear identity to check.
+ */
+export async function hasLinearWriteScope(actorId: string): Promise<boolean> {
+  const rows = await db
+    .select({ userId: actor.userId })
+    .from(actor)
+    .where(eq(actor.id, actorId))
+    .limit(1);
+  const userId = rows[0]?.userId;
+  if (!userId) return false;
+  const linear = (await linkedIdentities(userId)).find((i) => i.provider === 'linear');
+  return linear?.scopes.includes('write') ?? false;
 }
 
 /**

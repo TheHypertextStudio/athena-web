@@ -248,6 +248,84 @@ describe('cycle auto-roll (GET /current)', () => {
   });
 });
 
+/** Seed a `linear` integration row with the given status; returns its id. */
+async function makeIntegration(orgId: string, status: 'connected' | 'error' | 'disconnected') {
+  const [row] = await db
+    .insert(schema.integration)
+    .values({ organizationId: orgId, provider: 'linear', pattern: 'connector', status })
+    .returning({ id: schema.integration.id });
+  return row!.id;
+}
+
+/** Seed one `linked` (mirrored) cycle for a team, sourced from the given integration. */
+async function makeLinkedCycle(orgId: string, teamId: string, integrationId: string, number = 1) {
+  await db.insert(schema.cycle).values({
+    organizationId: orgId,
+    teamId,
+    number,
+    source: 'linked',
+    sourceIntegrationId: integrationId,
+    externalId: `lin-cycle-${teamId}-${number}`,
+    startsAt: new Date('2026-01-01T00:00:00.000Z'),
+    endsAt: new Date('2026-01-08T00:00:00.000Z'),
+    status: 'active',
+  });
+}
+
+describe('cycle auto-roll defers to an active linked (mirrored) provider', () => {
+  it('a team with a linked cycle from an ACTIVE integration never gets a native auto-rolled cycle', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const integrationId = await makeIntegration(orgId, 'connected');
+    await makeLinkedCycle(orgId, teamId, integrationId);
+
+    const writer = appWithActor(cycles, orgId, ['view'], humanActorId);
+    const body = await json<WindowDto>(await writer.request(`/current?teamId=${teamId}`));
+
+    // Only the seeded linked cycle exists — the native roll inserted nothing.
+    expect(body.cycles).toHaveLength(1);
+    expect(await countCycles(orgId, teamId)).toBe(1);
+  });
+
+  it('an `error` integration ALSO defers cadence (not just `connected`)', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const integrationId = await makeIntegration(orgId, 'error');
+    await makeLinkedCycle(orgId, teamId, integrationId);
+
+    const writer = appWithActor(cycles, orgId, ['view'], humanActorId);
+    const body = await json<WindowDto>(await writer.request(`/current?teamId=${teamId}`));
+    expect(body.cycles).toHaveLength(1);
+    expect(await countCycles(orgId, teamId)).toBe(1);
+  });
+
+  it('a DISCONNECTED integration does NOT defer cadence — the team reverts to native auto-roll', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const integrationId = await makeIntegration(orgId, 'disconnected');
+    await makeLinkedCycle(orgId, teamId, integrationId);
+
+    const writer = appWithActor(cycles, orgId, ['view'], humanActorId);
+    const body = await json<WindowDto>(await writer.request(`/current?teamId=${teamId}`));
+
+    // The native window rolled normally alongside the (now-orphaned) linked cycle.
+    expect(body.cycles.length).toBeGreaterThan(1);
+  });
+
+  it('a sibling team in the same org with no linked cycles is unaffected and still rolls', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const otherTeamId = await makeTeam(orgId, 1);
+    const integrationId = await makeIntegration(orgId, 'connected');
+    await makeLinkedCycle(orgId, teamId, integrationId);
+
+    const writer = appWithActor(cycles, orgId, ['view'], humanActorId);
+    const linkedWindow = await json<WindowDto>(await writer.request(`/current?teamId=${teamId}`));
+    expect(linkedWindow.cycles).toHaveLength(1);
+
+    const otherWindow = await json<WindowDto>(
+      await writer.request(`/current?teamId=${otherTeamId}`),
+    );
+    expect(otherWindow.cycles.length).toBeGreaterThan(1);
+  });
+});
+
 describe('cycle list surfaces isCurrent', () => {
   it('flags the date-current cycle in the GET / list', async () => {
     const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);

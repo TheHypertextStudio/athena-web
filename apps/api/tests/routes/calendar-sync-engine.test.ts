@@ -19,8 +19,21 @@ import {
   type DiscoveredCalendarConnection,
   type ProviderItemSnapshot,
 } from '../../src/routes/calendar-sync-engine';
+import { createDefaultCalendarSyncModules } from '../../src/routes/calendar-sync-modules';
 
 const NOW = new Date('2026-07-02T12:00:00.000Z');
+
+/**
+ * Assemble the production Google module map with injected test seams — exactly what the
+ * route does, minus the seams. Adapter-path tests go through this so they exercise the
+ * real `calendar-sync-modules.ts` assembly rather than hand-building the map.
+ */
+function googleAdapters(
+  fetchJson: GoogleFetchJson,
+  getAccessToken: GoogleAccessTokenFetcher,
+): ReturnType<typeof createDefaultCalendarSyncModules> {
+  return createDefaultCalendarSyncModules({ fetchJson, getAccessToken });
+}
 
 /** Encode a fake (unsigned) OIDC id_token carrying the given display claims. */
 function makeIdToken(claims: Record<string, unknown>): string {
@@ -160,8 +173,7 @@ describe('calendar sync engine — Google adapter (fake fetchJson)', () => {
     const result = await syncCalendarConnections(schema.db, {
       userId,
       now: NOW,
-      fetchJson,
-      getAccessToken,
+      adapters: googleAdapters(fetchJson, getAccessToken),
     });
 
     expect(result.connections).toBe(1);
@@ -292,8 +304,7 @@ describe('calendar sync engine — Google adapter (fake fetchJson)', () => {
     await syncCalendarConnections(schema.db, {
       userId,
       now: NOW,
-      fetchJson: fullFetch,
-      getAccessToken,
+      adapters: googleAdapters(fullFetch, getAccessToken),
     });
 
     // Round 2: incremental — evt-1 updated, evt-2 cancelled.
@@ -322,8 +333,7 @@ describe('calendar sync engine — Google adapter (fake fetchJson)', () => {
     const result = await syncCalendarConnections(schema.db, {
       userId,
       now: new Date(NOW.getTime() + 1000),
-      fetchJson: incrementalFetch,
-      getAccessToken,
+      adapters: googleAdapters(incrementalFetch, getAccessToken),
     });
 
     expect(result.itemsUpdated).toBe(1);
@@ -416,8 +426,7 @@ describe('calendar sync engine — Google adapter (fake fetchJson)', () => {
     await syncCalendarConnections(schema.db, {
       userId,
       now: NOW,
-      fetchJson: seedFetch,
-      getAccessToken,
+      adapters: googleAdapters(seedFetch, getAccessToken),
     });
 
     // Round 2: cal-a's stored token is stale server-side (410); cal-b syncs normally.
@@ -458,8 +467,7 @@ describe('calendar sync engine — Google adapter (fake fetchJson)', () => {
     await syncCalendarConnections(schema.db, {
       userId,
       now: new Date(NOW.getTime() + 1000),
-      fetchJson: round2Fetch,
-      getAccessToken,
+      adapters: googleAdapters(round2Fetch, getAccessToken),
     });
 
     // cal-a: one failed incremental attempt + one full re-pull. cal-b: exactly one call.
@@ -490,8 +498,7 @@ describe('calendar sync engine — Google adapter (fake fetchJson)', () => {
     const round1 = await syncCalendarConnections(schema.db, {
       userId,
       now: NOW,
-      fetchJson: noEventsFetch,
-      getAccessToken: bothOkToken,
+      adapters: googleAdapters(noEventsFetch, bothOkToken),
     });
     expect(round1.connections).toBe(2);
 
@@ -503,8 +510,7 @@ describe('calendar sync engine — Google adapter (fake fetchJson)', () => {
     const round2 = await syncCalendarConnections(schema.db, {
       userId,
       now: new Date(NOW.getTime() + 1000),
-      fetchJson: noEventsFetch,
-      getAccessToken: oneFailsToken,
+      adapters: googleAdapters(noEventsFetch, oneFailsToken),
     });
 
     expect(round2.connections).toBe(1);

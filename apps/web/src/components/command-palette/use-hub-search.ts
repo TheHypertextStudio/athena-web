@@ -1,12 +1,31 @@
 'use client';
 
-import { CheckCircle2, FolderKanban, type LucideIcon, Layers } from '@docket/ui/icons';
+import type { SearchDocumentKind, SearchResult } from '@docket/types';
+import {
+  Activity,
+  Building,
+  Calendar,
+  CheckCircle2,
+  FolderKanban,
+  GanttChart,
+  Layers,
+  Link,
+  ListView,
+  MessageSquare,
+  Sparkles,
+  Tag,
+  Target,
+  type LucideIcon,
+  User,
+  Users,
+} from '@docket/ui/icons';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 import { api } from '@/lib/api';
 import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
+import { hrefForSearchResult, isExternalSearchHref } from '@/lib/search-route';
 
 import type { PaletteItem, PaletteScope } from './types';
 
@@ -14,26 +33,89 @@ import type { PaletteItem, PaletteScope } from './types';
 const DEBOUNCE_MS = 180;
 
 /** The glyph for each search-hit entity kind. */
-const HIT_ICON: Record<PaletteItem['hitType'] & string, LucideIcon> = {
+export const SEARCH_KIND_ICON: Record<SearchDocumentKind, LucideIcon> = {
+  organization: Building,
+  team: Users,
+  member: User,
+  agent: Sparkles,
+  agent_session: Sparkles,
   task: CheckCircle2,
   project: FolderKanban,
   program: Layers,
+  initiative: Target,
+  milestone: GanttChart,
+  cycle: Calendar,
+  label: Tag,
+  saved_view: ListView,
+  comment: MessageSquare,
+  update: Activity,
+  attachment: Link,
+  calendar_event: Calendar,
+  activity: Activity,
 };
 
-/** Build the canonical deep-link for a search hit (mirrors the Today plan-row routing). */
-function hitHref(
-  organizationId: string,
-  type: NonNullable<PaletteItem['hitType']>,
-  id: string,
-): string {
-  switch (type) {
-    case 'task':
-      return `/orgs/${organizationId}/my-work`;
-    case 'project':
-      return `/orgs/${organizationId}/projects/${id}`;
-    case 'program':
-      return `/orgs/${organizationId}/programs/${id}`;
-  }
+/** Human labels for semantic search kinds. */
+export const SEARCH_KIND_LABEL: Record<SearchDocumentKind, string> = {
+  organization: 'Workspace',
+  team: 'Team',
+  member: 'Member',
+  agent: 'Agent',
+  agent_session: 'Agent session',
+  task: 'Task',
+  project: 'Project',
+  program: 'Program',
+  initiative: 'Initiative',
+  milestone: 'Milestone',
+  cycle: 'Cycle',
+  label: 'Label',
+  saved_view: 'Saved view',
+  comment: 'Comment',
+  update: 'Update',
+  attachment: 'Attachment',
+  calendar_event: 'Calendar event',
+  activity: 'Activity',
+};
+
+interface SearchResultToPaletteItemInput {
+  close: () => void;
+  orgName: (orgId: string) => string;
+  navigate: (href: string) => void;
+  navigateExternal?: (href: string) => void;
+}
+
+/** Normalize one semantic search result into a command-palette row. */
+export function searchResultToPaletteItem(
+  hit: SearchResult,
+  input: SearchResultToPaletteItemInput,
+): PaletteItem {
+  const href = hrefForSearchResult(hit);
+  const navigateExternal =
+    input.navigateExternal ??
+    ((target) => {
+      window.location.assign(target);
+    });
+  return {
+    id: `hit:${hit.id}`,
+    section: 'results',
+    label: hit.title,
+    hint: resultHint(hit),
+    icon: SEARCH_KIND_ICON[hit.kind],
+    hitType: hit.kind,
+    org: hit.organizationId
+      ? { id: hit.organizationId, name: input.orgName(hit.organizationId) }
+      : undefined,
+    run: () => {
+      input.close();
+      if (!href) return;
+      if (isExternalSearchHref(href)) navigateExternal(href);
+      else input.navigate(href);
+    },
+  };
+}
+
+function resultHint(hit: SearchResult): string | undefined {
+  if (hit.subject?.title) return `${SEARCH_KIND_LABEL[hit.subject.kind]}: ${hit.subject.title}`;
+  return hit.summary ?? hit.snippet ?? undefined;
 }
 
 /** The reactive state of a cross-org search request. */
@@ -63,14 +145,13 @@ interface HubSearchInput {
  *
  * @remarks
  * Reads `api.v1.hub.search` — which fans out across every org the caller belongs to and
- * returns org-chipped, typed hits (tasks/projects/programs) — and normalizes each hit into a
+ * returns org-chipped semantic hits — and normalizes each hit into a
  * selectable {@link PaletteItem} whose `run` deep-links into the originating org. The query
  * string is debounced before it enters the {@link queryKeys.hubSearch} key, so the dynamic-data
  * layer ({@link useApiQuery}) handles the request lifecycle: it is keyed (so a repeated query is
  * served from cache), deduped, and inherently race-safe (a superseded query's result lands under
  * its own key and is never shown). The query is gated on a non-empty term (`enabled`), and in the
- * `org` scope the results are narrowed to the bound org client-side so the palette honors the
- * Hub-global vs org-local toggle without a second endpoint.
+ * `org` scope the request goes through the org route instead of filtering Hub results client-side.
  *
  * @param input - The query, scope, and the palette `close` callback.
  * @returns the reactive {@link HubSearchState}.
@@ -99,40 +180,35 @@ export function useHubSearch({ query, scope, close }: HubSearchInput): HubSearch
 
   const searchQ = useApiQuery(
     apiQueryOptions(
-      queryKeys.hubSearch(debounced),
-      () => api.v1.hub.search.$get({ query: { q: debounced, limit: '20' } }),
+      queryKeys.search(scope, debounced, orgFilter),
+      () =>
+        orgFilter
+          ? api.v1.orgs[':orgId'].search.$get({
+              param: { orgId: orgFilter },
+              query: { q: debounced, limit: '20' },
+            })
+          : api.v1.hub.search.$get({ query: { q: debounced, limit: '20' } }),
       'Search failed.',
-      { enabled: debouncedHasQuery },
+      { enabled: debouncedHasQuery && (scope === 'hub' || Boolean(orgFilter)) },
     ),
   );
 
   const toResultItem = useCallback(
-    (hit: {
-      organizationId: string;
-      type: NonNullable<PaletteItem['hitType']>;
-      id: string;
-      title: string;
-    }): PaletteItem => ({
-      id: `hit:${hit.type}:${hit.id}`,
-      section: 'results',
-      label: hit.title,
-      icon: HIT_ICON[hit.type],
-      hitType: hit.type,
-      org: { id: hit.organizationId, name: orgName(hit.organizationId) },
-      run: () => {
-        close();
-        router.push(hitHref(hit.organizationId, hit.type, hit.id));
-      },
-    }),
-    [orgName, close, router],
+    (hit: SearchResult): PaletteItem =>
+      searchResultToPaletteItem(hit, {
+        close,
+        orgName,
+        navigate: (href) => {
+          router.push(href);
+        },
+      }),
+    [close, orgName, router],
   );
 
   const results = useMemo<readonly PaletteItem[]>(() => {
     if (!hasQuery) return [];
-    const hits = searchQ.data?.results ?? [];
-    const scoped = orgFilter ? hits.filter((h) => h.organizationId === orgFilter) : hits;
-    return scoped.map(toResultItem);
-  }, [hasQuery, orgFilter, searchQ.data, toResultItem]);
+    return (searchQ.data?.items ?? []).map(toResultItem);
+  }, [hasQuery, searchQ.data, toResultItem]);
 
   // While the user is mid-burst (raw term not yet debounced) or the keyed request is in flight,
   // the result pane shows its loading skeleton; the error mirrors the search request's failure.

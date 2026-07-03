@@ -7,13 +7,7 @@ import type { JSX } from 'react';
 import { OrgChip } from '@/components/org-chip';
 
 import type { PaletteItem } from './types';
-
-/** Human labels for each search-hit entity kind, shown as the trailing kind tag. */
-const HIT_TYPE_LABEL: Record<NonNullable<PaletteItem['hitType']>, string> = {
-  task: 'Task',
-  project: 'Project',
-  program: 'Program',
-};
+import { SEARCH_KIND_LABEL } from './use-hub-search';
 
 /** Props for {@link PaletteRow}. */
 export interface PaletteRowProps {
@@ -69,7 +63,7 @@ export function PaletteRow({
 
       {item.hitType ? (
         <span className="text-on-surface-variant border-outline-variant shrink-0 rounded border px-1.5 py-0.5 text-xs font-medium">
-          {HIT_TYPE_LABEL[item.hitType]}
+          {SEARCH_KIND_LABEL[item.hitType]}
         </span>
       ) : item.hint ? (
         <span className="text-on-surface-variant shrink-0 text-xs">{item.hint}</span>

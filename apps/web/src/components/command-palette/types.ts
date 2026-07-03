@@ -1,4 +1,4 @@
-import type { HubSearchHitType } from '@docket/types';
+import type { SearchDocumentKind } from '@docket/types';
 import type { LucideIcon } from '@docket/ui/icons';
 
 /**
@@ -48,7 +48,7 @@ export interface PaletteItem {
    */
   org?: { id: string; name: string };
   /** The search-hit entity kind, for result rows (drives the trailing kind label). */
-  hitType?: HubSearchHitType;
+  hitType?: SearchDocumentKind;
   /** Invoked when the row is selected; the palette closes immediately after. */
   run: () => void;
 }

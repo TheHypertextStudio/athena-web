@@ -1,6 +1,6 @@
 /** `@docket/api` — task dependency-graph router (mounted at `/v1/orgs/:orgId/graph`). */
 import { db, task, taskDependency } from '@docket/db';
-import { GraphOut, type TaskGraphNode } from '@docket/types';
+import { dependencyEdgeId, GraphOut, subtaskEdgeId, type TaskGraphNode } from '@docket/types';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
@@ -52,6 +52,11 @@ function toGraphNode(t: TaskRow): z.input<typeof TaskGraphNode> {
     projectId: t.projectId,
     assigneeId: t.assigneeId,
     parentTaskId: t.parentTaskId,
+    startDate: t.startDate?.toISOString() ?? null,
+    dueDate: t.dueDate?.toISOString() ?? null,
+    estimate: t.estimate,
+    milestoneId: t.milestoneId,
+    cycleId: t.cycleId,
   };
 }
 
@@ -118,7 +123,7 @@ Edges are pre-pruned to the viewable set so there are no dangling endpoints: a \
         );
       for (const d of depRows) {
         edges.push({
-          id: `dep:${d.blocking}:${d.blocked}`,
+          id: dependencyEdgeId(d.blocking, d.blocked),
           source: d.blocking,
           target: d.blocked,
           kind: 'dependency',
@@ -130,7 +135,7 @@ Edges are pre-pruned to the viewable set so there are no dangling endpoints: a \
     for (const t of viewable) {
       if (t.parentTaskId !== null && ids.has(t.parentTaskId)) {
         edges.push({
-          id: `sub:${t.parentTaskId}:${t.id}`,
+          id: subtaskEdgeId(t.parentTaskId, t.id),
           source: t.parentTaskId,
           target: t.id,
           kind: 'subtask',

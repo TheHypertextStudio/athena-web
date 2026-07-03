@@ -12,6 +12,7 @@
 import type { JSX } from 'react';
 
 import TaskGraphPanel from '@/components/canvas/task-graph-panel';
+import { useGraphUrlState } from '@/components/canvas/use-graph-url-state';
 import type { TaskGraphScope } from '@/components/canvas/use-task-graph';
 
 /** Props for {@link GraphClient}. */
@@ -20,15 +21,24 @@ export interface GraphClientProps {
   scope: TaskGraphScope;
 }
 
-/** The focused, filterable, editable dependency canvas. */
+/** The focused, filterable, editable dependency canvas (filter + layout persist to the URL). */
 export default function GraphClient({ scope }: GraphClientProps): JSX.Element {
+  const { filter, direction, setFilter, setDirection } = useGraphUrlState();
   return (
     <div className="flex h-full min-h-0 w-full flex-col">
       <header className="flex items-center gap-3 px-4 pt-3 @2xl:px-6">
         <h1 className="text-on-surface text-h2 font-semibold">Dependency graph</h1>
       </header>
       <div className="min-h-0 flex-1">
-        <TaskGraphPanel scope={scope} density="full" showToolbar />
+        <TaskGraphPanel
+          scope={scope}
+          density="full"
+          showToolbar
+          filter={filter}
+          onFilterChange={setFilter}
+          direction={direction}
+          onDirectionChange={setDirection}
+        />
       </div>
     </div>
   );

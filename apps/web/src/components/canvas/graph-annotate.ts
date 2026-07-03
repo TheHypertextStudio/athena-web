@@ -10,6 +10,8 @@
  */
 import { stateTypeOf } from '@/lib/work-state';
 
+import { pushTo } from './graph-adjacency';
+
 /** The minimal node shape {@link annotateGraph} reads (a structural superset of `TaskGraphNode`). */
 export interface AnnotateNode {
   /** The task id. */
@@ -84,9 +86,7 @@ export function annotateGraph(graph: AnnotateInput): GraphAnnotations {
     if (e.kind !== 'dependency') continue;
     const blockerState = stateById.get(e.source);
     if (blockerState === undefined) continue;
-    const list = blockersByTarget.get(e.target) ?? [];
-    list.push(blockerState);
-    blockersByTarget.set(e.target, list);
+    pushTo(blockersByTarget, e.target, blockerState);
   }
 
   const nodeFlags = new Map<string, NodeFlags>();

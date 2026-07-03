@@ -16,10 +16,11 @@ import { Hono } from 'hono';
 import type { z } from 'zod';
 
 import type { AppEnv } from '../context';
-import { CapabilityError, NotFoundError } from '../error';
+import { CapabilityError, CycleError, NotFoundError, ValidationError } from '../error';
 import { ok } from '../lib/ok';
 import { pageResult, seekAfter } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
+import { serializableTx } from '../lib/serializable-tx';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 
@@ -32,6 +33,7 @@ import {
   resolveStateTransition,
   toOut,
   toRef,
+  wouldCreateSubtaskCycle,
 } from './task-helpers';
 import { attachmentRoutes } from './attachment-routes';
 import { taskDependencyRoutes } from './task-dependency-routes';
@@ -225,7 +227,7 @@ A cross-org or unknown id 404s (existence-hiding: another tenant's task is indis
       response: TaskOut,
       description: `Partially update a task's editable fields; only fields present in the body change, and an empty body is a valid no-op that returns the task unchanged (the storage layer rejects an empty \`SET\`, so the handler short-circuits). Base mutation requires \`contribute\`.
 
-Reassigning (\`assigneeId\`) or delegating (\`delegateId\`) additionally requires the \`assign\` capability — \`contribute\` alone cannot move work onto another actor; without \`assign\` those two fields 403. Reparenting is NOT done here (there is no \`parentTaskId\` on the update body). Every referenced id (\`assigneeId\`, \`delegateId\`, \`projectId\`, \`programId\`, \`cycleId\`, \`milestoneId\`) must live in the caller's org or the request 404s (existence-hiding tenant isolation).
+Reassigning (\`assigneeId\`) or delegating (\`delegateId\`) additionally requires the \`assign\` capability — \`contribute\` alone cannot move work onto another actor; without \`assign\` those two fields 403. Reparenting is RESTful: set \`parentTaskId\` to nest the task under another (its subtask) or null to detach to top-level; a task cannot be its own parent (422) or its own descendant (409 \`dependency_cycle\`), and the acyclic check + write run in one SERIALIZABLE transaction. Every referenced id (\`assigneeId\`, \`delegateId\`, \`projectId\`, \`programId\`, \`parentTaskId\`, \`cycleId\`, \`milestoneId\`) must live in the caller's org or the request 404s (existence-hiding tenant isolation).
 
 Changing \`state\` runs the team's workflow-state transition: the key is validated against the team's \`workflow_states\`, and \`completedAt\`/\`canceledAt\` are derived (set when entering a terminal state, cleared when leaving one) — the timestamps are never client-supplied. Side effects: a state change emits a \`completed\` observation when it lands terminal, otherwise a \`status_change\`; setting an assignee emits an \`assignment\` observation. A missing/archived task 404s. Returns the updated {@link TaskOut}. To change only state, the dedicated \`POST /:id/state\` exists.`,
     }),
@@ -251,6 +253,18 @@ Changing \`state\` runs the team's workflow-state transition: the key is validat
       await assertRefInOrg(cycle, orgId, body.cycleId, 'Cycle not found');
       await assertMilestoneInOrg(orgId, body.milestoneId);
 
+      // Reparent (RESTful: `parentTaskId` is a property of the task). Validate the new parent is a
+      // real in-org task and not the task itself; the acyclic guard runs in the write tx below.
+      const newParentId = body.parentTaskId ?? null;
+      if (newParentId !== null) {
+        if (newParentId === id) {
+          throw new ValidationError([
+            { message: 'A task cannot be its own parent', path: ['parentTaskId'] },
+          ]);
+        }
+        await loadTask(orgId, newParentId);
+      }
+
       // resolveStateTransition validates + derives timestamps; bypassing it would corrupt progress.
       const statePatch =
         body.state !== undefined
@@ -272,6 +286,7 @@ Changing \`state\` runs the team's workflow-state transition: the key is validat
         ...(body.delegateId !== undefined ? { delegateId: body.delegateId } : {}),
         ...(body.projectId !== undefined ? { projectId: body.projectId } : {}),
         ...(body.programId !== undefined ? { programId: body.programId } : {}),
+        ...(body.parentTaskId !== undefined ? { parentTaskId: body.parentTaskId } : {}),
         ...(body.milestoneId !== undefined ? { milestoneId: body.milestoneId } : {}),
         ...(body.cycleId !== undefined ? { cycleId: body.cycleId } : {}),
         ...(body.estimate !== undefined ? { estimate: body.estimate } : {}),
@@ -289,12 +304,18 @@ Changing \`state\` runs the team's workflow-state transition: the key is validat
         return ok(c, TaskOut, toOut(await loadTask(orgId, id)));
       }
 
-      const updated = await db
-        .update(task)
-        .set(patch)
-        .where(and(eq(task.id, id), eq(task.organizationId, orgId), isNull(task.archivedAt)))
-        .returning();
-      const row = updated[0];
+      const where = and(eq(task.id, id), eq(task.organizationId, orgId), isNull(task.archivedAt));
+      // Reparenting to a non-null parent: check the acyclic invariant + write atomically under
+      // SERIALIZABLE so two concurrent reparents can't each pass and commit a subtask loop.
+      const row =
+        newParentId !== null
+          ? await serializableTx(async (tx) => {
+              if (await wouldCreateSubtaskCycle(tx, orgId, id, newParentId)) {
+                throw new CycleError('Reparenting would create a subtask cycle');
+              }
+              return (await tx.update(task).set(patch).where(where).returning())[0];
+            })
+          : (await db.update(task).set(patch).where(where).returning())[0];
       if (!row) throw new NotFoundError('Task not found');
 
       // Stream: a state transition (completed when it landed terminal) and/or a reassignment.

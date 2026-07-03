@@ -216,6 +216,11 @@ export const TaskUpdate = z
       .describe(
         'Re-point to this program, or null to detach. Must be a program in the caller’s org.',
       ),
+    parentTaskId: TaskId.nullable()
+      .optional()
+      .describe(
+        'Reparent under this task (its subtask), or null to detach to top-level. Must be a task in the caller’s org; a task cannot become its own descendant (409 on a cycle) or its own parent (422). Omit to leave unchanged.',
+      ),
     milestoneId: MilestoneId.nullable()
       .optional()
       .describe('Re-target this milestone, or null to clear. Must belong to the caller’s org.'),
@@ -464,6 +469,23 @@ export const TaskGraphNode = z
     parentTaskId: TaskId.nullable().describe(
       'Parent task id, or null for a top-level task. Drives `subtask` edges. Always present.',
     ),
+    startDate: z
+      .string()
+      .nullable()
+      .describe('ISO start date, or null. For schedule-aware layout/overlays. Always present.'),
+    dueDate: z
+      .string()
+      .nullable()
+      .describe('ISO due date, or null. Drives overdue/at-risk styling. Always present.'),
+    estimate: z
+      .number()
+      .int()
+      .nullable()
+      .describe('Effort points, or null. Weights the critical-path computation. Always present.'),
+    milestoneId: MilestoneId.nullable().describe(
+      'Milestone id, or null. For milestone swimlanes. Always present.',
+    ),
+    cycleId: CycleId.nullable().describe('Cycle id, or null. For cycle swimlanes. Always present.'),
   })
   .meta({ id: 'TaskGraphNode', description: 'A task node in the dependency graph.' });
 /** Dependency-graph node value. */
@@ -498,6 +520,22 @@ export const TaskGraphEdge = z
   .meta({ id: 'TaskGraphEdge', description: 'A directed dependency or subtask edge.' });
 /** Dependency-graph edge value. */
 export type TaskGraphEdge = z.infer<typeof TaskGraphEdge>;
+
+/**
+ * The synthetic id of a dependency edge (`dep:<blocking>:<blocked>`).
+ *
+ * @remarks
+ * The one definition of the `dep:`/`sub:` id grammar, shared by the graph endpoint (which
+ * produces edges) and the web optimistic cache (which fabricates them) so the two never drift.
+ */
+export function dependencyEdgeId(blockingTaskId: string, blockedTaskId: string): string {
+  return `dep:${blockingTaskId}:${blockedTaskId}`;
+}
+
+/** The synthetic id of a subtask edge (`sub:<parent>:<child>`). */
+export function subtaskEdgeId(parentTaskId: string, childTaskId: string): string {
+  return `sub:${parentTaskId}:${childTaskId}`;
+}
 
 /**
  * The whole dependency graph for a scope: every viewable node plus the edges among them.

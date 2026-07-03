@@ -663,6 +663,7 @@ function toggleValue<T extends string>(values: readonly T[], value: T): T[] {
 }
 
 function sourceLabel(source: string): string {
+  if (source === 'github') return 'GitHub';
   return source
     .split('_')
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))

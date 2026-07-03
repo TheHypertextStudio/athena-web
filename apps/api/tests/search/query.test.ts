@@ -603,6 +603,131 @@ describe('search query service', () => {
     ]);
   });
 
+  it('uses weighted full-text rank as part of the final score', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const userId = await seedUserWithHub(db, schema, 'SearchFtsRankUser');
+    const orgId = await seedOrg(db, schema);
+    await addMember(db, schema, orgId, userId);
+    await db.insert(schema.searchDocument).values({
+      id: `task:${orgId}:rank_exact`,
+      organizationId: orgId,
+      kind: 'task',
+      family: 'work',
+      sourceTable: 'task',
+      entityId: 'rank_exact',
+      title: 'Nebula budget',
+      facet: {},
+      route: entityRoute(orgId, 'task', 'rank_exact'),
+      visibility: { mode: 'org_members' },
+      baseRank: 100,
+      sourceUpdatedAt: new Date('2026-07-03T10:00:00.000Z'),
+    });
+
+    const result = await searchWorkspace({
+      scope: 'hub',
+      userId,
+      params: { q: 'nebula budget', limit: 1 },
+    });
+
+    expect(result.items[0]?.id).toBe(`task:${orgId}:rank_exact`);
+    expect(result.items[0]!.score).toBeGreaterThan(210);
+  });
+
+  it('boosts canonical activity rows when the caller is an event recipient', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const userId = await seedUserWithHub(db, schema, 'SearchRecipientBoostUser');
+    const orgId = await seedOrg(db, schema);
+    const actorId = await addMember(db, schema, orgId, userId);
+    const occurredAt = new Date('2026-07-03T10:00:00.000Z');
+
+    await db.insert(schema.event).values([
+      {
+        id: 'recipient_alpha',
+        organizationId: orgId,
+        createdBy: actorId,
+        sourceSystem: 'slack',
+        kind: 'mention',
+        occurredAt,
+        title: 'Recipient comet mention',
+        entityKind: 'message',
+        dedupeKey: 'test:recipient_alpha',
+      },
+      {
+        id: 'recipient_zulu',
+        organizationId: orgId,
+        createdBy: actorId,
+        sourceSystem: 'slack',
+        kind: 'mention',
+        occurredAt,
+        title: 'Recipient comet mention',
+        entityKind: 'message',
+        dedupeKey: 'test:recipient_zulu',
+      },
+    ]);
+    await db.insert(schema.searchDocument).values([
+      {
+        id: `activity:${orgId}:recipient_alpha`,
+        organizationId: orgId,
+        kind: 'activity',
+        family: 'activity',
+        sourceTable: 'event',
+        entityId: 'recipient_alpha',
+        sourceSystem: 'slack',
+        title: 'Recipient comet mention',
+        facet: {},
+        route: {
+          type: 'activity',
+          organizationId: orgId,
+          eventId: 'recipient_alpha',
+          href: `/orgs/${orgId}/stream?eventId=recipient_alpha`,
+        },
+        visibility: { mode: 'event' },
+        baseRank: 100,
+        occurredAt,
+      },
+      {
+        id: `activity:${orgId}:recipient_zulu`,
+        organizationId: orgId,
+        kind: 'activity',
+        family: 'activity',
+        sourceTable: 'event',
+        entityId: 'recipient_zulu',
+        sourceSystem: 'slack',
+        title: 'Recipient comet mention',
+        facet: {},
+        route: {
+          type: 'activity',
+          organizationId: orgId,
+          eventId: 'recipient_zulu',
+          href: `/orgs/${orgId}/stream?eventId=recipient_zulu`,
+        },
+        visibility: { mode: 'event' },
+        baseRank: 100,
+        occurredAt,
+      },
+    ]);
+    await db.insert(schema.eventRecipient).values({
+      eventId: 'recipient_zulu',
+      userId,
+      organizationId: orgId,
+      occurredAt,
+      reason: 'mention',
+    });
+
+    const result = await searchWorkspace({
+      scope: 'hub',
+      userId,
+      params: { q: 'recipient comet', limit: 2 },
+    });
+
+    expect(result.items.map((item) => item.id)).toEqual([
+      `activity:${orgId}:recipient_zulu`,
+      `activity:${orgId}:recipient_alpha`,
+    ]);
+  });
+
   it('caps command palette results so one semantic family cannot monopolize the first page', async () => {
     const schema = await getDb();
     const { db } = schema;
@@ -660,6 +785,46 @@ describe('search query service', () => {
     });
     expect(palette.items.filter((item) => item.family === 'people')).toHaveLength(2);
     expect(palette.items.filter((item) => item.family === 'work')).toHaveLength(4);
+  });
+
+  it('hard-caps command palette requests at fifty while allowing page requests up to one hundred', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const userId = await seedUserWithHub(db, schema, 'SearchPaletteLimitUser');
+    const orgId = await seedOrg(db, schema);
+    await addMember(db, schema, orgId, userId);
+
+    await db.insert(schema.searchDocument).values(
+      Array.from({ length: 60 }, (_, index) => ({
+        id: `task:${orgId}:palette_capstar_${index.toString().padStart(2, '0')}`,
+        organizationId: orgId,
+        kind: 'task' as const,
+        family: 'work' as const,
+        sourceTable: 'task',
+        entityId: `palette_capstar_${index.toString().padStart(2, '0')}`,
+        title: `Palette Capstar ${index}`,
+        facet: {},
+        route: entityRoute(orgId, 'task', `palette_capstar_${index.toString().padStart(2, '0')}`),
+        visibility: { mode: 'org_members' },
+        baseRank: 100,
+      })),
+    );
+
+    const palette = await searchWorkspace({
+      scope: 'hub',
+      userId,
+      params: { q: 'palette capstar', limit: 100, surface: 'palette' },
+    });
+    expect(palette.items).toHaveLength(50);
+    expect(palette.nextCursor).toEqual(expect.any(String));
+
+    const page = await searchWorkspace({
+      scope: 'hub',
+      userId,
+      params: { q: 'palette capstar', limit: 100, surface: 'page' },
+    });
+    expect(page.items).toHaveLength(60);
+    expect(page.nextCursor).toBeUndefined();
   });
 
   it('filters by owner, assignee, label, status, and health facets', async () => {

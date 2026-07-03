@@ -61,6 +61,12 @@ export function PaletteRow({
 
       {item.org ? <OrgChip orgId={item.org.id} name={item.org.name} /> : null}
 
+      {item.source ? (
+        <span className="text-on-surface-variant bg-surface-container shrink-0 rounded px-1.5 py-0.5 text-xs font-medium">
+          {item.source}
+        </span>
+      ) : null}
+
       {item.hitType ? (
         <span className="text-on-surface-variant border-outline-variant shrink-0 rounded border px-1.5 py-0.5 text-xs font-medium">
           {SEARCH_KIND_LABEL[item.hitType]}

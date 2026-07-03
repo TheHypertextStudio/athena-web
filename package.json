@@ -38,6 +38,8 @@
     "db:studio": "dotenv -e .env.local -- turbo run db:studio --filter=@docket/db",
     "db:auth:generate": "dotenv -e .env.local -- turbo run db:auth:generate --filter=@docket/db",
     "search:backfill": "dotenv -e .env.local -- tsx scripts/search-backfill.ts",
+    "search:repair": "dotenv -e .env.local -- tsx scripts/search-backfill.ts --repair",
+    "search:process": "dotenv -e .env.local -- tsx scripts/search-process-jobs.ts",
     "prepare": "sh scripts/install-git-guardrails.sh && (git update-index --skip-worktree .env.local 2>/dev/null || true)"
   },
   "devDependencies": {

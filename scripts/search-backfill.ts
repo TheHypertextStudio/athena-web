@@ -6,11 +6,19 @@
  * can process those jobs independently; this script is intentionally enqueue-only so a
  * repair run is safe to repeat.
  */
-import { backfillSearchIndex } from '../apps/api/src/search/backfill';
+import { backfillSearchIndex, repairSearchIndex } from '../apps/api/src/search/backfill';
 
-const sourceTables = process.argv.slice(2);
-const result = await backfillSearchIndex({
-  sourceTables: sourceTables.length > 0 ? sourceTables : undefined,
-});
+const args = process.argv.slice(2);
+const repair = args.includes('--repair');
+const sourceTables = args.filter((arg) => arg !== '--repair');
+const result = repair
+  ? await repairSearchIndex({
+      sourceTables: sourceTables.length > 0 ? sourceTables : undefined,
+    })
+  : await backfillSearchIndex({
+      sourceTables: sourceTables.length > 0 ? sourceTables : undefined,
+    });
 
-console.log(`search backfill enqueued ${result.enqueued} jobs from ${result.scanned} scanned rows`);
+console.log(
+  `search ${repair ? 'repair' : 'backfill'} enqueued ${result.enqueued} jobs from ${result.scanned} scanned rows`,
+);

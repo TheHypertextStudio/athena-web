@@ -82,7 +82,8 @@ const CAPABILITY_RANK = {
 /** Run permission-filtered semantic workspace search. */
 export async function searchWorkspace(input: SearchWorkspaceInput): Promise<SearchOut> {
   const query = input.params.q.trim();
-  const limit = Math.min(Math.max(input.params.limit ?? 20, 1), 100);
+  const maxLimit = input.params.surface === 'palette' ? 50 : 100;
+  const limit = Math.min(Math.max(input.params.limit ?? 20, 1), maxLimit);
   if (query.length === 0) return { query, items: [], facets: [] };
 
   const callerAccess = await resolveCallerOrgAccess(input.userId);
@@ -102,7 +103,7 @@ export async function searchWorkspace(input: SearchWorkspaceInput): Promise<Sear
     query,
     includeArchived: input.params.includeArchived ?? false,
   });
-  const visibleRows = await filterVisibleRows(candidateRows, {
+  const visible = await filterVisibleRows(candidateRows, {
     userId: input.userId,
     accessByOrg: callerAccessByOrg,
   });
@@ -110,7 +111,7 @@ export async function searchWorkspace(input: SearchWorkspaceInput): Promise<Sear
   const fromTime = input.params.from ? new Date(input.params.from).getTime() : null;
   const toTime = input.params.to ? new Date(input.params.to).getTime() : null;
   const cursor = decodeCursor(input.params.cursor);
-  const scored = visibleRows
+  const scored = visible.rows
     .filter((row) => filterRow(row, input.params, fromTime, toTime))
     .map((row) =>
       scoreRow(row, query, {
@@ -119,6 +120,7 @@ export async function searchWorkspace(input: SearchWorkspaceInput): Promise<Sear
         callerActorId: row.organizationId
           ? (callerAccessByOrg.get(row.organizationId)?.actorId ?? null)
           : null,
+        activityRecipient: visible.recipientEventIds.has(row.entityId),
       }),
     )
     .filter((row): row is ScoredRow => row !== null)
@@ -200,8 +202,11 @@ async function loadCandidateRows(input: {
     ),
   ];
   if (!input.includeArchived) conditions.push(isNull(schema.searchDocument.archivedAt));
-  return schema.db
-    .select()
+  const rows = await schema.db
+    .select({
+      document: schema.searchDocument,
+      textRank: sql<number>`ts_rank_cd(${textVector}, ${tsQuery})`,
+    })
     .from(schema.searchDocument)
     .where(and(...conditions))
     .orderBy(
@@ -210,6 +215,7 @@ async function loadCandidateRows(input: {
       desc(schema.searchDocument.updatedAt),
     )
     .limit(500);
+  return rows.map((row) => ({ ...row.document, textRank: row.textRank || 0 }));
 }
 
 function searchTextVector(table: typeof searchDocument) {
@@ -223,7 +229,7 @@ function searchTextVector(table: typeof searchDocument) {
 async function filterVisibleRows(
   rows: readonly SearchDocumentRow[],
   caller: { userId: string; accessByOrg: ReadonlyMap<string, CallerOrgAccess> },
-): Promise<SearchDocumentRow[]> {
+): Promise<{ rows: SearchDocumentRow[]; recipientEventIds: ReadonlySet<string> }> {
   const subjectRefs = new Map<string, SubjectRef>();
   const eventIds: string[] = [];
 
@@ -237,7 +243,7 @@ async function filterVisibleRows(
   const subjectAccess = await resolveSubjectAccess([...subjectRefs.values()], caller.accessByOrg);
   const recipientEventIds = await loadRecipientEventIds(caller.userId, eventIds);
 
-  return rows.filter((row) => {
+  const visibleRows = rows.filter((row) => {
     const visibility = readVisibility(row.visibility);
     switch (visibility.mode) {
       case 'user_private':
@@ -257,6 +263,7 @@ async function filterVisibleRows(
       }
     }
   });
+  return { rows: visibleRows, recipientEventIds };
 }
 
 function readVisibility(value: unknown): SearchVisibility {
@@ -692,7 +699,12 @@ function filterRow(
 function scoreRow(
   row: SearchDocumentRow,
   query: string,
-  context: { activeOrgId: string | null; userId: string; callerActorId: string | null },
+  context: {
+    activeOrgId: string | null;
+    userId: string;
+    callerActorId: string | null;
+    activityRecipient: boolean;
+  },
 ): ScoredRow | null {
   const queryLower = query.toLowerCase();
   const terms = queryTerms(queryLower);
@@ -700,7 +712,7 @@ function scoreRow(
   const summary = row.summary?.toLowerCase() ?? '';
   const body = row.body?.toLowerCase() ?? '';
   const matchedFields: ScoredRow['matchedFields'] = [];
-  let score = row.baseRank;
+  let score = row.baseRank + row.textRank * 100;
 
   if (title === queryLower) {
     score += 90;
@@ -751,9 +763,10 @@ function scoreRow(
 
 function relationshipBoost(
   row: SearchDocumentRow,
-  context: { userId: string; callerActorId: string | null },
+  context: { userId: string; callerActorId: string | null; activityRecipient: boolean },
 ): number {
   let boost = row.userId === context.userId ? 8 : 0;
+  if (context.activityRecipient) boost += 10;
   if (!context.callerActorId) return boost;
   const facet = facetRecord(row.facet);
   if (

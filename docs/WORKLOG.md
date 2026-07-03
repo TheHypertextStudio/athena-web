@@ -597,6 +597,31 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 - **Validation**: Validator rejects scopes absent from `COMMIT_SCOPES.txt` and accepts
   `refactor(integrations): ...`.
 
+### [ATHENA-009] Web review surface: batch proposal cards, ghosts in Today, trust dial, work-log polish
+
+- **Completed**: 2026-07-03
+- **Summary**: Slices 8+9 (session-side). `use-session-detail` gains the proposal layer
+  (`proposals`, `decideGroup`, `editProposal` over the new group routes). New
+  `ProposalGroupCard`: one card per assistant-turn batch — checkbox per member, inline title
+  editing (PATCHes the stored tool input; approval executes what is shown), Approve all /
+  Approve selected / Reject all; ghost rows render the ghost grammar (translucent, dashed
+  accent, `proposed` badge) with stable per-activity `view-transition-name`s so approval can
+  morph ghost → real row in place. New `GhostProposals` lane on Today: every awaiting-approval
+  session's batches surface as ghost rows with one-tap Approve N + a Review-in-session link;
+  the lane renders nothing when there's nothing to review (quiet by design). New `TrustDial`
+  (Suggest only / Ask first / On her own, human-worded, optimistic PATCH) on the Agents page
+  above the sessions feed. Work-log polish in `activity-item`: applied actions collapse to one
+  quiet chip line (proposals stay the only loud element) and long thoughts fold to a single
+  expandable italic line.
+- **Files Changed**: `apps/web/src/lib/use-session-detail.ts`,
+  `components/agents/{proposal-group-card,trust-dial}.tsx` (new), `activity-item.tsx`,
+  `components/today/ghost-proposals.tsx` (new), `app/(app)/today/page.tsx`,
+  `app/(app)/orgs/[orgId]/{agents,sessions/[sessionId]}/page.tsx`.
+- **NOT YET DONE**: live browser screenshots of the new surfaces (the worktree has no `.env`
+  bootstrap and the dev PGlite is single-writer with the main checkout's dev server) — flagged
+  for the Milestone D checkpoint rather than silently skipped.
+- **Gate**: web 192/192, typecheck + lint clean (api dist rebuilt first per convention).
+
 ### [ATHENA-008] Remote MCP integrations: the union toolbox (Milestone C complete)
 
 - **Completed**: 2026-07-02

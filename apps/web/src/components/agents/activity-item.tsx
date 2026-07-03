@@ -111,7 +111,7 @@ export function ActivityItem({
             {text || 'The agent reported an error.'}
           </p>
         ) : activity.type === 'thought' ? (
-          <p className="text-on-surface-variant text-body leading-relaxed italic">{text}</p>
+          <ThoughtBody text={text} />
         ) : action ? (
           <ActionBody
             activityId={activity.id}
@@ -161,6 +161,20 @@ function ActionBody({
 }): JSX.Element {
   const isProposed = approvalStatus === 'proposed';
   const [showDiff, setShowDiff] = useState(false);
+
+  // An applied action is history, not a decision — render it as one quiet chip line
+  // (“Searched tasks · done”) so proposals stay the stream's only loud element.
+  if (approvalStatus === 'applied') {
+    return (
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="border-outline-variant bg-surface-container text-on-surface-variant inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs">
+          <code className="shrink-0">{kind}</code>
+          <span className="truncate">{summary === kind ? 'done' : summary}</span>
+        </span>
+        <ApprovalStatusBadge status={approvalStatus} />
+      </div>
+    );
+  }
   const diffText =
     diff === undefined || diff === null
       ? null
@@ -281,5 +295,31 @@ function ReplyBox({
         </Button>
       </div>
     </form>
+  );
+}
+
+/** A thought: quiet italic reasoning; long ones fold to a single expandable line. */
+function ThoughtBody({ text }: { text: string }): JSX.Element {
+  const [expanded, setExpanded] = useState(false);
+  const long = text.length > 160;
+  if (!long) {
+    return <p className="text-on-surface-variant text-body leading-relaxed italic">{text}</p>;
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        setExpanded((open) => !open);
+      }}
+      aria-expanded={expanded}
+      className={cn(
+        'text-on-surface-variant text-body min-w-0 text-left leading-relaxed italic',
+        'focus-visible:ring-ring rounded outline-none focus-visible:ring-1',
+        expanded ? '' : 'truncate',
+      )}
+      title={expanded ? 'Collapse' : 'Expand the full reasoning'}
+    >
+      {text}
+    </button>
   );
 }

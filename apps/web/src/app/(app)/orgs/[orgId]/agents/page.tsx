@@ -17,7 +17,7 @@
  * than an opaque id. Sessions awaiting approval are surfaced as the feed's emphasis. Data is
  * fetched at runtime, so the production build needs no running server.
  */
-import type { AgentOut, AgentSessionOut, MemberOut, TaskOut } from '@docket/types';
+import type { AgentOut, AgentSessionOut, ApprovalPolicy, MemberOut, TaskOut } from '@docket/types';
 import { EmptyState } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Sparkles } from '@docket/ui/icons';
@@ -34,6 +34,7 @@ import {
   statusesForFilter,
 } from '@/components/agents/session-filter';
 import { SessionRow, type SessionRowData } from '@/components/agents/session-row';
+import { TrustDial } from '@/components/agents/trust-dial';
 
 /**
  * The Agents (sessions) feed page.
@@ -52,6 +53,8 @@ export default function AgentsFeedPage(): JSX.Element {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [filter, setFilter] = useState<SessionFilter>('all');
+  const [dialPendingId, setDialPendingId] = useState<string | null>(null);
+  const [dialError, setDialError] = useState<string | null>(null);
 
   /** Load the sessions feed and the slices needed to name + describe each row. */
   const load = useCallback(async (): Promise<void> => {
@@ -84,6 +87,34 @@ export default function AgentsFeedPage(): JSX.Element {
   }, [load]);
 
   const directory = useMemo(() => buildActorDirectory(members, agents), [members, agents]);
+
+  /** Commit a trust-dial change for one agent (optimistic; reverts on failure). */
+  const updatePolicy = useCallback(
+    async (agentId: string, approvalPolicy: ApprovalPolicy): Promise<void> => {
+      setDialError(null);
+      setDialPendingId(agentId);
+      const before = agents;
+      setAgents((current) =>
+        current.map((agent) => (agent.id === agentId ? { ...agent, approvalPolicy } : agent)),
+      );
+      try {
+        const res = await api.v1.orgs[':orgId'].agents[':id'].$patch({
+          param: { orgId, id: agentId },
+          json: { approvalPolicy },
+        });
+        if (!res.ok) {
+          setAgents(before);
+          setDialError(await readProblem(res, 'Could not change the trust level.'));
+        }
+      } catch (caught) {
+        setAgents(before);
+        setDialError(readError(caught, 'Something went wrong changing the trust level.'));
+      } finally {
+        setDialPendingId(null);
+      }
+    },
+    [orgId, agents],
+  );
 
   const taskTitleById = useMemo(() => new Map(tasks.map((task) => [task.id, task.title])), [tasks]);
 
@@ -160,6 +191,40 @@ export default function AgentsFeedPage(): JSX.Element {
           A live feed of what your agents are working on — watch the work happen.
         </p>
       </header>
+
+      {!loading && agents.length > 0 ? (
+        <section
+          aria-label="Registered agents"
+          className="border-outline-variant flex flex-col gap-4 rounded-lg border p-4"
+        >
+          {dialError ? (
+            <p role="alert" className="text-destructive text-body">
+              {dialError}
+            </p>
+          ) : null}
+          {agents.map((agent) => {
+            const actor = directory.resolve(agent.actorId);
+            return (
+              <div key={agent.id} className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex min-w-0 flex-col">
+                  <span className="text-on-surface text-body font-medium">{actor.name}</span>
+                  <span className="text-on-surface-variant text-xs">
+                    Acts as its own teammate; every change is attributed and audited.
+                  </span>
+                </div>
+                <TrustDial
+                  value={agent.approvalPolicy}
+                  canManage
+                  pending={dialPendingId === agent.id}
+                  onChange={(value) => {
+                    void updatePolicy(agent.id, value);
+                  }}
+                />
+              </div>
+            );
+          })}
+        </section>
+      ) : null}
 
       <div className="flex items-center justify-between gap-3">
         <SessionFilterMenu value={filter} counts={counts} onChange={setFilter} />

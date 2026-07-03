@@ -10,6 +10,7 @@ import { type JSX } from 'react';
 
 import { OrgChip } from '@/components/org-chip';
 import { ActivityItem } from '@/components/agents/activity-item';
+import { ProposalGroupCard } from '@/components/agents/proposal-group-card';
 import { SessionStatusPill } from '@/components/agents/session-status';
 import { SessionSidebar } from '@/components/agents/session-sidebar';
 import { useSessionDetail } from '@/lib/use-session-detail';
@@ -38,6 +39,9 @@ export default function SessionViewPage(): JSX.Element {
     reject,
     reply,
     transition,
+    proposals,
+    decideGroup,
+    editProposal,
   } = useSessionDetail(orgId, sessionId);
 
   if (loading) {
@@ -116,6 +120,20 @@ export default function SessionViewPage(): JSX.Element {
 
       <div className="grid grid-cols-1 gap-6 @4xl:grid-cols-[minmax(0,1fr)_18rem]">
         <section aria-labelledby="activity-heading" className="flex min-w-0 flex-col gap-3">
+          {proposals.map((group) => (
+            <ProposalGroupCard
+              key={group.proposalGroupId}
+              group={group}
+              canAct={canAct}
+              pending={controlPending}
+              onDecide={(groupId, decision, activityIds) => {
+                void decideGroup(groupId, decision, activityIds);
+              }}
+              onEdit={(activityId, input) => {
+                void editProposal(activityId, input);
+              }}
+            />
+          ))}
           <h2 id="activity-heading" className="text-on-surface-variant text-xs font-medium">
             Activity
           </h2>

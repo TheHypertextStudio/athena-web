@@ -1,4 +1,4 @@
-import type { AgentOut, AgentSessionDetailOut, MemberOut } from '@docket/types';
+import type { AgentOut, AgentSessionDetailOut, MemberOut, ProposalGroupOut } from '@docket/types';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { buildActorDirectory, type ActorDirectory } from '@/components/agents/actor-directory';
@@ -9,6 +9,8 @@ import { readError, readProblem } from './problem';
 /** SessionDetailState describes the use session detail data contract shared by the hook or component. */
 export interface SessionDetailState {
   session: AgentSessionDetailOut | null;
+  /** Pending proposal groups (one per assistant turn), ghost-projected for review. */
+  proposals: readonly ProposalGroupOut[];
   orgName: string | null;
   taskTitle: string | null;
   loading: boolean;
@@ -26,6 +28,14 @@ export interface SessionDetailState {
   reject: (activityId: string) => Promise<void>;
   reply: (activityId: string, body: string) => Promise<void>;
   transition: (action: 'pause' | 'resume' | 'cancel') => Promise<void>;
+  /** Decide a whole proposal group (or the checked subset). */
+  decideGroup: (
+    groupId: string,
+    decision: 'approve' | 'reject',
+    activityIds?: readonly string[],
+  ) => Promise<void>;
+  /** Replace a pending proposal's tool input (inline ghost editing). */
+  editProposal: (activityId: string, input: Record<string, unknown>) => Promise<void>;
 }
 
 /** useSessionDetail coordinates use session detail state, loading, and mutations for its screen. */
@@ -40,6 +50,7 @@ export function useSessionDetail(orgId: string, sessionId: string): SessionDetai
   const [actionError, setActionError] = useState<string | null>(null);
   const [pendingActivityId, setPendingActivityId] = useState<string | null>(null);
   const [controlPending, setControlPending] = useState(false);
+  const [proposals, setProposals] = useState<readonly ProposalGroupOut[]>([]);
 
   const load = useCallback(async (): Promise<void> => {
     setLoading(true);
@@ -54,6 +65,11 @@ export function useSessionDetail(orgId: string, sessionId: string): SessionDetai
       }
       const detail = await sessionRes.json();
       setSession(detail);
+
+      const proposalsRes = await api.v1.orgs[':orgId'].sessions[':id'].proposals.$get({
+        param: { orgId, id: sessionId },
+      });
+      if (proposalsRes.ok) setProposals(await proposalsRes.json());
 
       const [membersRes, agentsRes, orgRes] = await Promise.all([
         api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
@@ -247,8 +263,69 @@ export function useSessionDetail(orgId: string, sessionId: string): SessionDetai
     [orgId, sessionId, load],
   );
 
+  const decideGroup = useCallback(
+    async (
+      groupId: string,
+      decision: 'approve' | 'reject',
+      activityIds?: readonly string[],
+    ): Promise<void> => {
+      setActionError(null);
+      setControlPending(true);
+      try {
+        const param = { orgId, id: sessionId, groupId };
+        const json = activityIds ? { activityIds: [...activityIds] } : {};
+        const res =
+          decision === 'approve'
+            ? await api.v1.orgs[':orgId'].sessions[':id'].proposals[':groupId'].approve.$post({
+                param,
+                json,
+              })
+            : await api.v1.orgs[':orgId'].sessions[':id'].proposals[':groupId'].reject.$post({
+                param,
+                json,
+              });
+        if (!res.ok) {
+          setActionError(await readProblem(res, `Could not ${decision} the batch.`));
+          return;
+        }
+        await load();
+      } catch (caught) {
+        setActionError(readError(caught, `Something went wrong trying to ${decision} the batch.`));
+      } finally {
+        setControlPending(false);
+      }
+    },
+    [orgId, sessionId, load],
+  );
+
+  const editProposal = useCallback(
+    async (activityId: string, input: Record<string, unknown>): Promise<void> => {
+      setActionError(null);
+      setPendingActivityId(activityId);
+      try {
+        const res = await api.v1.orgs[':orgId'].sessions[':id'].activity[
+          ':activityId'
+        ].proposal.$patch({ param: { orgId, id: sessionId, activityId }, json: { input } });
+        if (!res.ok) {
+          setActionError(await readProblem(res, 'Could not save the edit.'));
+          return;
+        }
+        const proposalsRes = await api.v1.orgs[':orgId'].sessions[':id'].proposals.$get({
+          param: { orgId, id: sessionId },
+        });
+        if (proposalsRes.ok) setProposals(await proposalsRes.json());
+      } catch (caught) {
+        setActionError(readError(caught, 'Something went wrong saving the edit.'));
+      } finally {
+        setPendingActivityId(null);
+      }
+    },
+    [orgId, sessionId],
+  );
+
   return {
     session,
+    proposals,
     orgName,
     taskTitle,
     loading,
@@ -266,5 +343,7 @@ export function useSessionDetail(orgId: string, sessionId: string): SessionDetai
     reject,
     reply,
     transition,
+    decideGroup,
+    editProposal,
   };
 }

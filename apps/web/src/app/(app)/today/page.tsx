@@ -3,6 +3,7 @@
 import { Button, Skeleton, Stack } from '@docket/ui/primitives';
 import { type JSX } from 'react';
 
+import { GhostProposals } from '@/components/today/ghost-proposals';
 import NextUp from '@/components/today/next-up';
 import { TodayPrompt } from '@/components/today/today-prompt';
 import { useNow } from '@/lib/use-now';
@@ -58,6 +59,8 @@ export default function TodayPage(): JSX.Element {
         orgLabel={activeOrgId ? orgName(activeOrgId) : 'your space'}
         onCaptured={refetch}
       />
+
+      <GhostProposals orgId={activeOrgId} onApplied={refetch} />
 
       {error ? (
         <div

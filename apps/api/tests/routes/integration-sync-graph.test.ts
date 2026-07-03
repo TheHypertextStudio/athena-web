@@ -13,18 +13,28 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type * as DbModule from '@docket/db';
 
 import type * as IntegrationSyncModule from '../../src/routes/integration-sync';
+import type * as IntegrationProviderModule from '../../src/routes/integration-provider';
 import { appWithActor, getDb, one, seedBaseOrg } from './harness.test';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
 let integrations!: unknown;
 let runSync!: typeof IntegrationSyncModule.runSync;
+/**
+ * The scope-block message, loaded from the route module (never re-hardcoded) so the test can't
+ * silently drift from the single source of truth the verify/PATCH enforcement points speak with.
+ * Imported dynamically in {@link beforeAll} — a static top-level import would pull `@docket/auth`
+ * in at collection time, before the harness configures env, and fail env validation.
+ */
+let WRITE_SCOPE_MESSAGE!: typeof IntegrationProviderModule.LINEAR_WRITE_SCOPE_MESSAGE;
 
 beforeAll(async () => {
   schema = await getDb();
   db = schema.db;
   integrations = (await import('../../src/routes/integrations')).default;
   runSync = (await import('../../src/routes/integration-sync')).runSync;
+  WRITE_SCOPE_MESSAGE = (await import('../../src/routes/integration-provider'))
+    .LINEAR_WRITE_SCOPE_MESSAGE;
 });
 
 const J = { 'content-type': 'application/json' };
@@ -34,9 +44,6 @@ async function jsonBody<T>(res: Response): Promise<T> {
 }
 
 type IntegrationRow = typeof schema.integration.$inferSelect;
-
-const WRITE_SCOPE_MESSAGE =
-  'Reconnect Linear to grant write access — two-way sync needs the write scope.';
 
 /** Seed a bare `linear` connector integration — no `config.teamMappings` (legacy fallback). */
 async function seedLinearIntegration(
@@ -173,7 +180,7 @@ describe('runSync — work-graph branch (Linear)', () => {
 });
 
 describe('verify persists the provider workspace id (Linear webhook routing key)', () => {
-  it('POST /:id/verify writes connection.externalWorkspaceId from the connect result', async () => {
+  it('POST /:id/verify writes connection.externalWorkspaceId + slug from the connect result', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
     const row = await seedLinearIntegration(orgId, humanActorId);
     const w = appWithActor(integrations, orgId, ['manage'], humanActorId);
@@ -183,10 +190,38 @@ describe('verify persists the provider workspace id (Linear webhook routing key)
     const verified = await jsonBody<IntegrationStateRes>(res);
     expect(verified.status).toBe('connected');
     expect(verified.connection.externalWorkspaceId).toBe('mock-linear-org');
+    expect(verified.connection.externalWorkspaceSlug).toBe('mock-linear');
 
     // Durable — not just echoed in the response.
     const persisted = await reload(row.id);
     expect(persisted.connection.externalWorkspaceId).toBe('mock-linear-org');
+    expect(persisted.connection.externalWorkspaceSlug).toBe('mock-linear');
+  });
+
+  it('a UI-shaped connect (no writeBack in the body) verifies clean read-only', async () => {
+    // The web connect flow sends no `writeBack`; Better Auth's Linear scope is read-only this
+    // slice. A Linear integration must therefore default writeBack FALSE at create and verify
+    // straight to `connected` — never dead-on-arrival in `error` with an unsatisfiable
+    // "reconnect for write" message (the IMPORTANT-1 merge blocker).
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const w = appWithActor(integrations, orgId, ['manage'], humanActorId);
+
+    const created = await w.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ provider: 'linear', pattern: 'connector', roles: ['work'] }),
+    });
+    expect(created.status).toBe(200);
+    const createdRow = await jsonBody<IntegrationStateRes>(created);
+    // Default-seeded read-only (write-back is opted into later via PATCH, scope-gated).
+    expect(createdRow.writeBack).toBe(false);
+    expect(createdRow.status).toBe('pending');
+
+    const res = await w.request(`/${createdRow.id}/verify`, { method: 'POST', headers: J });
+    expect(res.status).toBe(200);
+    const verified = await jsonBody<IntegrationStateRes>(res);
+    expect(verified.status).toBe('connected');
+    expect(verified.lastError).toBeNull();
   });
 });
 

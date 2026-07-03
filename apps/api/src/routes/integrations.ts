@@ -121,8 +121,11 @@ Requires \`manage\` — wiring an external data source into the org is an admini
       // Health is NEVER taken from the body: a new or reconnected integration starts `pending`
       // and clears any prior error, and is only promoted to `connected` once `POST /:id/verify`
       // (or a successful sync) actually validates the credential.
-      // Default two-way write-back ON for connectors that support it (gtasks) unless the caller
-      // says otherwise, so connecting Google Tasks is two-way out of the box.
+      // Default two-way write-back ON only for connectors in WRITE_BACK_PROVIDERS (currently just
+      // gtasks) unless the caller says otherwise, so connecting Google Tasks is two-way out of the
+      // box. Linear is intentionally NOT default-seeded on: it is write-capable but its `write`
+      // OAuth scope doesn't ship until Slice 3, so a UI connect (which sends no writeBack) lands
+      // read-only and verifies clean, and write-back is opted into later via PATCH (scope-gated).
       const writeBack = body.writeBack ?? WRITE_BACK_PROVIDERS.has(body.provider);
       const fields = {
         ...(body.roles !== undefined ? { roles: body.roles } : {}),

@@ -29,14 +29,21 @@ export const CONNECTOR_PROVIDERS: readonly ConnectorProvider[] = [
 ];
 
 /**
- * Connectors that support two-way write-back and default to it on connect.
+ * Connectors whose `integration.writeBack` DEFAULTS ON at connect when the caller doesn't specify.
  *
  * @remarks
  * Re-exports the boundary manifest (`WRITE_BACK_CAPABLE_PROVIDERS`) so capability
- * membership has one source of truth. Used to seed `integration.writeBack` when a caller
- * doesn't specify it. Linear is write-CAPABLE (see {@link hasLinearWriteScope}) but
- * intentionally absent from the manifest until its OAuth `write` scope ships — a UI
- * connect (which sends no `writeBack`) must default read-only and verify clean.
+ * membership has one source of truth: only Google Tasks (`gtasks`) defaults on here — it needs
+ * no extra OAuth scope, so a UI connect verifies two-way out of the box. Linear is deliberately
+ * EXCLUDED this slice — it is write-*capable*, but exercising write-back requires the actor's
+ * linked identity to carry the `write` OAuth scope (see {@link hasLinearWriteScope}), which
+ * Better Auth's Linear config does not grant until Slice 3. Default-seeding `writeBack` on for
+ * Linear would make every UI-created integration verify straight into `error` with an
+ * unsatisfiable reconnect message, so Linear connects read-only by default and write-back is
+ * opted into later via `PATCH /:id` (which enforces the scope). The scope enforcement at
+ * verify/PATCH keys off the row's ACTUAL `writeBack` flag and an explicit `provider === 'linear'`
+ * check, NOT this set — so Linear's absence here does not weaken enforcement, it only changes
+ * the connect-time default.
  */
 export const WRITE_BACK_PROVIDERS: ReadonlySet<string> = WRITE_BACK_CAPABLE_PROVIDERS;
 

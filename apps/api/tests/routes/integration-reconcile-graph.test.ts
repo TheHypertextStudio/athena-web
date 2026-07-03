@@ -569,6 +569,188 @@ describe('reconcileWorkGraph', () => {
     expect(canceledProject.id).toBeTruthy();
   });
 
+  it('a second full sync after a tombstone was applied does not re-archive (removed tally 0)', async () => {
+    const { orgId, teamId, humanActorId, row } = await scaffold();
+    // First full sync: issue-7 is a tombstone with no local row → skipped, never materialized.
+    const first = await pull();
+    await reconcileWorkGraph({
+      orgId,
+      actorId: humanActorId,
+      row,
+      snapshot: first.snapshot,
+      connector: first.connector,
+      now: NOW,
+    });
+
+    // Seed a live local row for the tombstoned issue-7 with a stale anchor so the removal is newer.
+    await db.insert(schema.task).values({
+      organizationId: orgId,
+      title: 'Spike',
+      teamId,
+      state: 'todo',
+      source: 'linked',
+      sourceIntegrationId: row.id,
+      externalId: 'lin-issue-7',
+      sourceSyncMode: 'mirror',
+      externalUpdatedAt: new Date('2020-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2020-01-01T00:00:00.000Z'),
+      createdBy: humanActorId,
+    });
+
+    // Second full sync: the tombstone is genuinely newer than the anchor → archive exactly once.
+    const second = await pull();
+    const archiveRes = await reconcileWorkGraph({
+      orgId,
+      actorId: humanActorId,
+      row,
+      snapshot: second.snapshot,
+      connector: second.connector,
+      now: NOW,
+    });
+    expect(archiveRes.tasks.removed).toBe(1);
+    const archivedFirst = await taskByExternal(row.id, 'lin-issue-7');
+    expect(archivedFirst?.archivedAt).not.toBeNull();
+    // The archive stamped the anchor forward to the tombstone's own updatedAt (2026-01-25).
+    expect(archivedFirst?.externalUpdatedAt?.toISOString()).toBe('2026-01-25T00:00:00.000Z');
+
+    // Third full sync: the tombstone is no longer newer than the anchor → NOOP, no re-archive,
+    // the row is left byte-for-byte untouched (no churn on every subsequent sync).
+    const third = await pull();
+    const againRes = await reconcileWorkGraph({
+      orgId,
+      actorId: humanActorId,
+      row,
+      snapshot: third.snapshot,
+      connector: third.connector,
+      now: NOW,
+    });
+    expect(againRes.tasks.removed).toBe(0);
+    const archivedAgain = await taskByExternal(row.id, 'lin-issue-7');
+    expect(archivedAgain?.updatedAt.getTime()).toBe(archivedFirst?.updatedAt.getTime());
+    expect(archivedAgain?.archivedAt?.getTime()).toBe(archivedFirst?.archivedAt?.getTime());
+  });
+
+  it('a tombstoned project/cycle with no local row is a noop (never materialized as canceled)', async () => {
+    const { orgId, humanActorId, row } = await scaffold();
+    const base = await pull();
+    // Mark the active project + cycle removed, with NO prior sync → they have no local row.
+    const snapshot: WorkGraphSnapshot = {
+      ...base.snapshot,
+      projects: base.snapshot.projects.map((p) =>
+        p.externalId === 'lin-project-active' ? { ...p, removed: true } : p,
+      ),
+      cycles: base.snapshot.cycles.map((c) =>
+        c.externalId === 'lin-cycle-active' ? { ...c, removed: true } : c,
+      ),
+    };
+    const result = await reconcileWorkGraph({
+      orgId,
+      actorId: humanActorId,
+      row,
+      snapshot,
+      connector: base.connector,
+      now: NOW,
+    });
+
+    // The removed project/cycle we never mirrored is skipped, not inserted from nothing...
+    expect(await projectByExternal(row.id, 'lin-project-active')).toHaveLength(0);
+    expect(await cycleByExternal(row.id, 'lin-cycle-active')).toHaveLength(0);
+    // ...while the live sibling still materializes normally.
+    expect(result.projects.created).toBe(1);
+    expect(result.cycles.created).toBe(1);
+    expect(result.projects.skipped).toBeGreaterThanOrEqual(1);
+    expect(result.cycles.skipped).toBeGreaterThanOrEqual(1);
+    expect(one(await projectByExternal(row.id, 'lin-project-done')).id).toBeTruthy();
+  });
+
+  it('clears a parent link removed at the provider, preserving the anchor', async () => {
+    const { orgId, humanActorId, row } = await scaffold();
+    const first = await pull();
+    await reconcileWorkGraph({
+      orgId,
+      actorId: humanActorId,
+      row,
+      snapshot: first.snapshot,
+      connector: first.connector,
+      now: NOW,
+    });
+
+    const parent = await taskByExternal(row.id, 'lin-issue-3');
+    const child = await taskByExternal(row.id, 'lin-issue-4');
+    expect(child?.parentTaskId).toBe(parent?.id); // the first sync established the link
+
+    // Second snapshot: issue-4 no longer reports a parent (unlinked at Linear).
+    const base = await pull();
+    const snapshot: WorkGraphSnapshot = {
+      ...base.snapshot,
+      items: base.snapshot.items.map((i) => {
+        if (i.externalId !== 'lin-issue-4') return i;
+        const unlinked = { ...i };
+        delete unlinked.parentExternalId;
+        return unlinked;
+      }),
+    };
+    await reconcileWorkGraph({
+      orgId,
+      actorId: humanActorId,
+      row,
+      snapshot,
+      connector: base.connector,
+      now: NOW,
+    });
+
+    const cleared = await taskByExternal(row.id, 'lin-issue-4');
+    expect(cleared?.parentTaskId).toBeNull(); // the removed sync-set parent link is cleared
+    // Anchor preserved: the clear re-set updatedAt to the row's own value, not wall-clock now, so
+    // the row stays clean and the push phase never sees a phantom-dirty flag.
+    expect(cleared?.externalUpdatedAt).not.toBeNull();
+    expect(cleared?.updatedAt.getTime()).toBe(cleared?.externalUpdatedAt?.getTime());
+  });
+
+  it('does not clear a parent link on a dirty child (its newer local edit wins LWW)', async () => {
+    const { orgId, humanActorId, row } = await scaffold(true);
+    const first = await pull();
+    await reconcileWorkGraph({
+      orgId,
+      actorId: humanActorId,
+      row,
+      snapshot: first.snapshot,
+      connector: first.connector,
+      now: NOW,
+    });
+
+    const parent = await taskByExternal(row.id, 'lin-issue-3');
+    const child = await taskByExternal(row.id, 'lin-issue-4');
+    // Dirty the child locally (edited well after its anchor).
+    await db
+      .update(schema.task)
+      .set({ title: 'LOCAL EDIT', updatedAt: new Date('2030-01-01T00:00:00.000Z') })
+      .where(eq(schema.task.id, child!.id));
+
+    const base = await pull();
+    const snapshot: WorkGraphSnapshot = {
+      ...base.snapshot,
+      items: base.snapshot.items.map((i) => {
+        if (i.externalId !== 'lin-issue-4') return i;
+        const unlinked = { ...i };
+        delete unlinked.parentExternalId;
+        return unlinked;
+      }),
+    };
+    await reconcileWorkGraph({
+      orgId,
+      actorId: humanActorId,
+      row,
+      snapshot,
+      connector: base.connector,
+      now: NOW,
+    });
+
+    // A dirty child keeps its parent link — the removal is left for push/LWW, never silently reverted.
+    const stillLinked = await taskByExternal(row.id, 'lin-issue-4');
+    expect(stillLinked?.parentTaskId).toBe(parent?.id);
+  });
+
   it('pushes a dirty task with the right state/priority/assignee omission, then no-ops', async () => {
     const { orgId, humanActorId, row } = await scaffold(true);
     const first = await pull();

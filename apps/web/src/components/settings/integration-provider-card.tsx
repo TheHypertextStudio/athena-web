@@ -73,6 +73,8 @@ function ExistingControls(props: {
   busy: boolean;
   syncing: boolean;
   disconnecting: boolean;
+  /** Whether the provider supports manual sync (observe-only signal sources do not). */
+  syncable: boolean;
   onReconnect: () => void;
   onSync: () => void;
   onDisconnect: () => void;
@@ -93,7 +95,7 @@ function ExistingControls(props: {
           {reconnectLabel(existing.status, busy)}
         </IntegrationActionButton>
       ) : null}
-      {canManage && isConnected && existing.pattern !== 'migration' ? (
+      {canManage && isConnected && existing.pattern !== 'migration' && props.syncable ? (
         <IntegrationActionButton tone="muted" disabled={syncing} onClick={props.onSync}>
           {syncing ? 'Syncing…' : 'Sync'}
         </IntegrationActionButton>
@@ -192,6 +194,7 @@ export function IntegrationProviderCard({
             busy={busy}
             syncing={syncing}
             disconnecting={disconnecting}
+            syncable={provider.syncable}
             onReconnect={onReconnect}
             onSync={onSync}
             onDisconnect={onDisconnect}

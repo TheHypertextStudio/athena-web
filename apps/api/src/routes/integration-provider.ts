@@ -56,7 +56,7 @@ export const DIRECTORY_PROVIDERS: readonly (ConnectorProvider | 'slack')[] = [
  * import/sync endpoints correctly 409.
  */
 export const PROVIDER_DIRECTORY: Readonly<
-  Record<ConnectorProvider | 'slack', Omit<IntegrationDirectoryProvider, 'provider'>>
+  Record<ConnectorProvider | 'slack', Omit<IntegrationDirectoryProvider, 'provider' | 'syncable'>>
 > = {
   slack: { name: 'Slack', pattern: 'connector', roles: ['signal'], category: 'communication' },
   github: {

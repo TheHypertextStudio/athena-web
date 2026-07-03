@@ -38,7 +38,11 @@ import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from 
 import { DisconnectConfirmDialog } from './disconnect-confirm-dialog';
 import { GtasksAccountsSection } from './gtasks-accounts-section';
 import { IntegrationProviderCard } from './integration-provider-card';
-import { categoryLabel, socialProviderForConnector } from './integrations-config';
+import {
+  REDIRECT_CONNECT_PROVIDERS,
+  categoryLabel,
+  socialProviderForConnector,
+} from './integrations-config';
 
 /** The provider rendered as its own multi-account identity surface (Connections only). */
 const MULTI_ACCOUNT_PROVIDER = 'gtasks';
@@ -152,6 +156,18 @@ export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabPr
    */
   const finishConnection = useCallback(
     async (id: string, provider: string): Promise<void> => {
+      // Redirect-connect providers (Slack): fetch the signed consent URL and navigate there.
+      // The provider redirects back to settings with `?<provider>=connected|error` (works in
+      // local mock mode too — the server short-circuits the consent to its callback).
+      if (REDIRECT_CONNECT_PROVIDERS.has(provider)) {
+        const { url } = await unwrap(
+          () =>
+            api.v1.orgs[':orgId'].integrations[':id']['connect-url'].$get({ param: { orgId, id } }),
+          'Could not start the provider connect flow.',
+        );
+        window.location.assign(url);
+        return; // the browser navigates to the provider's consent screen
+      }
       if (connectorOAuthConfigured(config, provider)) {
         await authClient.linkSocial({
           provider: socialProviderForConnector(provider),
@@ -236,6 +252,24 @@ export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabPr
       },
     });
   }, [verifyReturnId, router]);
+
+  // Redirect-connect return: the provider callback lands back with `?<provider>=connected|error`.
+  // The server already recorded the outcome (status/lastError on the integration) — refresh and
+  // strip the flag; an error also surfaces an inline nudge on the provider's card.
+  const redirectProvider =
+    [...REDIRECT_CONNECT_PROVIDERS].find((provider) => {
+      const status = searchParams.get(provider);
+      return status === 'connected' || status === 'error';
+    }) ?? null;
+  const redirectStatus = redirectProvider ? searchParams.get(redirectProvider) : null;
+  useEffect(() => {
+    if (!redirectProvider || !redirectStatus) return;
+    void refreshIntegrations();
+    if (redirectStatus === 'error') {
+      setActionError(redirectProvider, 'The connection was not completed.');
+    }
+    router.replace(window.location.pathname);
+  }, [redirectProvider, redirectStatus, router, refreshIntegrations, setActionError]);
 
   const sync = useApiMutation({
     mutationFn: (id: string) =>

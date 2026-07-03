@@ -16,7 +16,6 @@ import {
   Google,
   Layers,
   type LucideIcon,
-  MessageSquare,
   Target,
   Workflow,
 } from '@docket/ui/icons';
@@ -50,7 +49,8 @@ export const IDENTITY_PROVIDER_CATALOG: readonly IdentityProviderEntry[] = [
   { kind: 'live', id: 'google', name: 'Google', icon: Google },
   { kind: 'live', id: 'github', name: 'GitHub', icon: Github },
   { kind: 'live', id: 'linear', name: 'Linear', icon: Layers },
-  { kind: 'coming-soon', id: 'slack', name: 'Slack', icon: MessageSquare },
+  // Slack is intentionally absent: it is an org *integration* (Settings → Connections), not a
+  // sign-in identity — listing it here as an account would conflate the two.
   { kind: 'coming-soon', id: 'jira', name: 'Jira', icon: Workflow },
   { kind: 'coming-soon', id: 'asana', name: 'Asana', icon: Target },
   { kind: 'coming-soon', id: 'apple-calendar', name: 'Apple Calendar', icon: Calendar },

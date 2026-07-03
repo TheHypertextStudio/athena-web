@@ -5,7 +5,7 @@
  * Serializers for the provider-agnostic `calendar_layer`/`calendar_item` tables. The
  * legacy `calendar_connection`/`calendar_list`/`calendar_event` serializers stay in
  * `./routes/calendar-shared.ts` (not duplicated here) — those tables and this pair are
- * kept in sync by dual-writes during the migration window (see `google-calendar-sync.ts`
+ * kept in sync by dual-writes during the migration window (see `calendar-sync-engine.ts`
  * and the `me-calendar.ts` layer-visibility routes).
  */
 import type { calendarItem, calendarItemTaskLink, calendarLayer } from '@docket/db';

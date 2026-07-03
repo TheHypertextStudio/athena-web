@@ -169,6 +169,13 @@
       "when": 1783042564900,
       "tag": "0023_conscious_hulk",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1783061801936,
+      "tag": "0017_curly_landau",
+      "breakpoints": true
     }
   ]
 }

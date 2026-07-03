@@ -191,6 +191,11 @@ export const calendarLayer = pgTable(
     visibleByDefault: boolean('visible_by_default').notNull().default(true),
     editableCore: boolean('editable_core').notNull().default(false),
     syncToken: text('sync_token'),
+    // Atomic per-layer sync lease (see `calendar-sync-engine.ts`'s `claimLayerLease`): set to
+    // `now + LEASE_TTL` while a sync run owns this layer, cleared (NULL) on release — including
+    // on error, via try/finally — so a crashed run's lease expires naturally instead of wedging
+    // the layer forever.
+    syncLeaseExpiresAt: timestamp('sync_lease_expires_at'),
     watchChannelId: text('watch_channel_id'),
     watchResourceId: text('watch_resource_id'),
     watchToken: text('watch_token'),

@@ -1,0 +1,1 @@
+ALTER TABLE "calendar_layer" ADD COLUMN "sync_lease_expires_at" timestamp;

@@ -10,8 +10,17 @@
  */
 import type { BillingEventType, SubscriptionStatus } from '../ports/billing';
 import type { SessionActivity } from '../ports/agent-runtime';
-import type { ConnectorProvider, ImportedItem } from '../ports/connector';
+import type { ConnectorProvider, ImportedItem, ResourceRef } from '../ports/connector';
 import type { MailThreadSummary } from '../ports/mail';
+import type {
+  ExternalCycle,
+  ExternalLabel,
+  ExternalProject,
+  ExternalUser,
+  ExternalWorkItem,
+  ExternalWorkflowState,
+  WorkGraphSnapshot,
+} from '../ports/work-graph';
 
 /**
  * The fixed "now" the deterministic fixtures and mock adapters anchor to.
@@ -204,6 +213,267 @@ export const CONNECTOR_ITEMS: Readonly<Record<ConnectorProvider, readonly Import
         externalListId: 'mock-list-work',
       },
     },
+  ],
+};
+
+/**
+ * The two mock Linear teams {@link LINEAR_WORK_GRAPH} and {@link LINEAR_TEAM_STATES} are
+ * scoped against.
+ *
+ * @remarks
+ * Matches the container shape the real Linear client's `listContainers` returns (`id` +
+ * `title` per {@link ResourceRef}) — every {@link LINEAR_WORK_GRAPH} item/project/cycle's
+ * `externalTeamId`(s) resolve to one of these two ids.
+ */
+export const LINEAR_TEAMS: readonly ResourceRef[] = [
+  { id: 'lin-team-eng', title: 'Engineering' },
+  { id: 'lin-team-ops', title: 'Ops' },
+];
+
+/**
+ * Each {@link LINEAR_TEAMS} team's workflow states, covering every
+ * {@link import('../ports/work-graph').ExternalStateType}.
+ *
+ * @remarks
+ * Keyed by team external id; an id absent from this map has no defined states (mirrors the
+ * real client's `listTeamStates`, which returns an empty array for an unrecognized or
+ * stateless team rather than throwing).
+ */
+export const LINEAR_TEAM_STATES: Readonly<Record<string, readonly ExternalWorkflowState[]>> = {
+  'lin-team-eng': [
+    { externalId: 'lin-state-eng-backlog', name: 'Backlog', type: 'backlog', position: 1 },
+    { externalId: 'lin-state-eng-todo', name: 'Todo', type: 'unstarted', position: 2 },
+    { externalId: 'lin-state-eng-progress', name: 'In Progress', type: 'started', position: 3 },
+    { externalId: 'lin-state-eng-done', name: 'Done', type: 'completed', position: 4 },
+    { externalId: 'lin-state-eng-canceled', name: 'Canceled', type: 'canceled', position: 5 },
+  ],
+  'lin-team-ops': [
+    { externalId: 'lin-state-ops-backlog', name: 'Backlog', type: 'backlog', position: 1 },
+    { externalId: 'lin-state-ops-todo', name: 'Todo', type: 'unstarted', position: 2 },
+    { externalId: 'lin-state-ops-progress', name: 'In Progress', type: 'started', position: 3 },
+    { externalId: 'lin-state-ops-done', name: 'Done', type: 'completed', position: 4 },
+    { externalId: 'lin-state-ops-canceled', name: 'Canceled', type: 'canceled', position: 5 },
+  ],
+};
+
+/** The matched mock Linear user — its `email` is the one downstream member-matching tests key off. */
+const LINEAR_USER_MEMBER: ExternalUser = {
+  externalId: 'lin-user-member',
+  displayName: 'Sam Member',
+  email: 'member@example.com',
+  active: true,
+};
+
+/** An unmatched mock Linear user — no `email`, so member-matching never resolves it. */
+const LINEAR_USER_EXTERNAL: ExternalUser = {
+  externalId: 'lin-user-external',
+  displayName: 'External Contributor',
+  active: true,
+};
+
+/** A workspace-level label (no `externalTeamId`). */
+const LINEAR_LABEL_BUG: ExternalLabel = {
+  externalId: 'lin-label-bug',
+  name: 'Bug',
+  color: '#e05d44',
+};
+
+/** A second workspace-level label. */
+const LINEAR_LABEL_CHORE: ExternalLabel = {
+  externalId: 'lin-label-chore',
+  name: 'Chore',
+  color: '#4287f5',
+};
+
+/** A team-scoped label, owned by the `lin-team-eng` team. */
+const LINEAR_LABEL_ENG_DESIGN: ExternalLabel = {
+  externalId: 'lin-label-eng-design',
+  name: 'Needs Design',
+  color: '#a742f5',
+  externalTeamId: 'lin-team-eng',
+};
+
+/** An active project, led by the matched user, shared across both teams. */
+const LINEAR_PROJECT_ACTIVE: ExternalProject = {
+  externalId: 'lin-project-active',
+  name: 'Platform Revamp',
+  state: 'started',
+  leadExternalId: 'lin-user-member',
+  startDate: '2026-01-01',
+  targetDate: '2026-06-01',
+  url: 'https://linear.app/docket/project/platform-revamp',
+  updatedAt: '2026-01-05T00:00:00.000Z',
+  externalTeamIds: ['lin-team-eng', 'lin-team-ops'],
+};
+
+/** A completed project, scoped to `lin-team-eng` only. */
+const LINEAR_PROJECT_DONE: ExternalProject = {
+  externalId: 'lin-project-done',
+  name: 'Legacy Migration',
+  state: 'completed',
+  url: 'https://linear.app/docket/project/legacy-migration',
+  updatedAt: '2025-12-01T00:00:00.000Z',
+  externalTeamIds: ['lin-team-eng'],
+};
+
+/** An active cycle on `lin-team-eng` whose window straddles {@link FIXED_NOW}. */
+const LINEAR_CYCLE_ACTIVE: ExternalCycle = {
+  externalId: 'lin-cycle-active',
+  externalTeamId: 'lin-team-eng',
+  number: 5,
+  name: 'Cycle 5',
+  startsAt: '2025-12-25T00:00:00.000Z',
+  endsAt: '2026-01-08T00:00:00.000Z',
+  updatedAt: '2025-12-25T00:00:00.000Z',
+};
+
+/** A completed cycle on `lin-team-ops`. */
+const LINEAR_CYCLE_DONE: ExternalCycle = {
+  externalId: 'lin-cycle-done',
+  externalTeamId: 'lin-team-ops',
+  number: 4,
+  name: 'Cycle 4',
+  startsAt: '2025-11-01T00:00:00.000Z',
+  endsAt: '2025-11-14T00:00:00.000Z',
+  completedAt: '2025-11-14T00:00:00.000Z',
+  updatedAt: '2025-11-14T00:00:00.000Z',
+};
+
+/** Assigned to the matched user, urgent, labeled, project + cycle linked. */
+const LINEAR_ISSUE_1: ExternalWorkItem = {
+  externalId: 'lin-issue-1',
+  identifier: 'ENG-1',
+  title: 'Design the sync reconciler',
+  stateType: 'started',
+  stateName: 'In Progress',
+  priority: 'urgent',
+  assigneeExternalId: 'lin-user-member',
+  labelExternalIds: ['lin-label-bug'],
+  projectExternalId: 'lin-project-active',
+  cycleExternalId: 'lin-cycle-active',
+  externalTeamId: 'lin-team-eng',
+  url: 'https://linear.app/docket/issue/ENG-1',
+  updatedAt: '2025-12-01T00:00:00.000Z',
+};
+
+/** Unassigned, high priority, two labels (one workspace, one team-scoped). */
+const LINEAR_ISSUE_2: ExternalWorkItem = {
+  externalId: 'lin-issue-2',
+  identifier: 'ENG-2',
+  title: 'Audit label mapping edge cases',
+  stateType: 'unstarted',
+  stateName: 'Todo',
+  priority: 'high',
+  labelExternalIds: ['lin-label-chore', 'lin-label-eng-design'],
+  externalTeamId: 'lin-team-eng',
+  url: 'https://linear.app/docket/issue/ENG-2',
+  updatedAt: '2025-12-15T00:00:00.000Z',
+};
+
+/** The parent half of the fixture's one parent/child pair; assigned to the unmatched user. */
+const LINEAR_ISSUE_3: ExternalWorkItem = {
+  externalId: 'lin-issue-3',
+  identifier: 'ENG-3',
+  title: 'Parent: rework onboarding checklist',
+  stateType: 'backlog',
+  stateName: 'Backlog',
+  priority: 'medium',
+  assigneeExternalId: 'lin-user-external',
+  labelExternalIds: [],
+  externalTeamId: 'lin-team-eng',
+  url: 'https://linear.app/docket/issue/ENG-3',
+  updatedAt: '2026-01-01T00:00:00.000Z',
+};
+
+/** The child half of the fixture's one parent/child pair. */
+const LINEAR_ISSUE_4: ExternalWorkItem = {
+  externalId: 'lin-issue-4',
+  identifier: 'ENG-4',
+  title: 'Child: write onboarding copy',
+  stateType: 'started',
+  stateName: 'In Progress',
+  priority: 'low',
+  labelExternalIds: [],
+  parentExternalId: 'lin-issue-3',
+  externalTeamId: 'lin-team-eng',
+  url: 'https://linear.app/docket/issue/ENG-4',
+  updatedAt: '2026-01-10T00:00:00.000Z',
+};
+
+/** Completed, no priority, carries an estimate + a due date, project + cycle linked. */
+const LINEAR_ISSUE_5: ExternalWorkItem = {
+  externalId: 'lin-issue-5',
+  identifier: 'OPS-1',
+  title: 'Ship the mirror rollout runbook',
+  stateType: 'completed',
+  stateName: 'Done',
+  priority: 'none',
+  labelExternalIds: [],
+  projectExternalId: 'lin-project-done',
+  cycleExternalId: 'lin-cycle-done',
+  externalTeamId: 'lin-team-ops',
+  estimate: 3,
+  dueDate: '2026-02-01',
+  url: 'https://linear.app/docket/issue/OPS-1',
+  updatedAt: '2026-01-15T00:00:00.000Z',
+};
+
+/** The fixture's one canceled issue (`canceledAt` set alongside `stateType: 'canceled'`). */
+const LINEAR_ISSUE_6: ExternalWorkItem = {
+  externalId: 'lin-issue-6',
+  identifier: 'OPS-2',
+  title: 'Retire the legacy webhook relay',
+  stateType: 'canceled',
+  stateName: 'Canceled',
+  priority: 'urgent',
+  labelExternalIds: [],
+  canceledAt: '2026-01-20T00:00:00.000Z',
+  externalTeamId: 'lin-team-ops',
+  url: 'https://linear.app/docket/issue/OPS-2',
+  updatedAt: '2026-01-20T00:00:00.000Z',
+};
+
+/** The fixture's one tombstone (`removed: true`) — archived at the provider, not live content. */
+const LINEAR_ISSUE_7: ExternalWorkItem = {
+  externalId: 'lin-issue-7',
+  identifier: 'ENG-5',
+  title: 'Archived spike: evaluate GraphQL subscriptions',
+  stateType: 'unstarted',
+  stateName: 'Todo',
+  priority: 'high',
+  labelExternalIds: [],
+  externalTeamId: 'lin-team-eng',
+  url: 'https://linear.app/docket/issue/ENG-5',
+  updatedAt: '2026-01-25T00:00:00.000Z',
+  removed: true,
+};
+
+/**
+ * The full mock Linear work graph: 2 users, 3 labels, 2 projects, 2 cycles, 7 work items.
+ *
+ * @remarks
+ * Deterministic and fixed — no `Date.now()`/`new Date()` at module scope. Exercises every
+ * mapping branch the real client's issue/project/cycle mapping can produce: an assigned and
+ * several unassigned items, all five {@link import('../ports/work-graph').ExternalPriority}
+ * values, attached labels, project+cycle linkage, a parent/child pair, a tombstone, an
+ * estimate+due-date item, and a canceled item.
+ * {@link import('../mock/connector').MockConnector.pullWorkGraph} filters this snapshot by
+ * team and by `updatedAfter`; downstream reconciler tests assert exact counts against it, so
+ * any edit here is a fixture-contract change.
+ */
+export const LINEAR_WORK_GRAPH: WorkGraphSnapshot = {
+  users: [LINEAR_USER_MEMBER, LINEAR_USER_EXTERNAL],
+  labels: [LINEAR_LABEL_BUG, LINEAR_LABEL_CHORE, LINEAR_LABEL_ENG_DESIGN],
+  projects: [LINEAR_PROJECT_ACTIVE, LINEAR_PROJECT_DONE],
+  cycles: [LINEAR_CYCLE_ACTIVE, LINEAR_CYCLE_DONE],
+  items: [
+    LINEAR_ISSUE_1,
+    LINEAR_ISSUE_2,
+    LINEAR_ISSUE_3,
+    LINEAR_ISSUE_4,
+    LINEAR_ISSUE_5,
+    LINEAR_ISSUE_6,
+    LINEAR_ISSUE_7,
   ],
 };
 

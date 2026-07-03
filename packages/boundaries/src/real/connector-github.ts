@@ -7,7 +7,7 @@ import type {
   ResourceRef,
 } from '../ports/connector';
 import { ConnectorError } from '../ports/connector-error';
-import type { ConnectorProviderClient } from './connector-provider-client';
+import type { ConnectorProviderClient, ResolvedAccount } from './connector-provider-client';
 import type { ProviderHttp } from './connector-http';
 import { MAX_IMPORT_PAGES, logConnectorTruncation } from './connector-log';
 
@@ -49,9 +49,10 @@ export class GitHubProviderClient implements ConnectorProviderClient {
   constructor(private readonly http: ProviderHttp) {}
 
   /** {@inheritDoc ConnectorProviderClient.resolveAccount} */
-  async resolveAccount(): Promise<string | undefined> {
+  async resolveAccount(): Promise<ResolvedAccount | undefined> {
     const json = await this.http.getJson<GitHubUser>('/user');
-    return json.login ?? json.name;
+    const label = json.login ?? json.name;
+    return label !== undefined ? { label } : undefined;
   }
 
   /** Map a raw GitHub issue onto an {@link ImportedItem}. */

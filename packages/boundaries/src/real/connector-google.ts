@@ -23,8 +23,11 @@ import type {
   TaskPushOp,
 } from '../ports/connector';
 import { ConnectorError } from '../ports/connector-error';
-import type { WritableConnectorProviderClient } from './connector-provider-client';
-import type { ConnectorProviderClient } from './connector-provider-client';
+import type {
+  ConnectorProviderClient,
+  ResolvedAccount,
+  WritableConnectorProviderClient,
+} from './connector-provider-client';
 import type { ProviderHttp } from './connector-http';
 import { MAX_IMPORT_PAGES, logConnectorTruncation } from './connector-log';
 
@@ -98,9 +101,10 @@ export class GoogleDriveProviderClient implements ConnectorProviderClient {
   constructor(private readonly http: ProviderHttp) {}
 
   /** {@inheritDoc ConnectorProviderClient.resolveAccount} */
-  async resolveAccount(): Promise<string | undefined> {
+  async resolveAccount(): Promise<ResolvedAccount | undefined> {
     const json = await this.http.getJson<DriveAbout>('/about?fields=user');
-    return json.user?.emailAddress ?? json.user?.displayName;
+    const label = json.user?.emailAddress ?? json.user?.displayName;
+    return label !== undefined ? { label } : undefined;
   }
 
   /** {@inheritDoc ConnectorProviderClient.importWork} — Drive files as document items. */
@@ -159,9 +163,10 @@ export class GoogleCalendarProviderClient implements ConnectorProviderClient {
   constructor(private readonly http: ProviderHttp) {}
 
   /** {@inheritDoc ConnectorProviderClient.resolveAccount} */
-  async resolveAccount(): Promise<string | undefined> {
+  async resolveAccount(): Promise<ResolvedAccount | undefined> {
     const json = await this.http.getJson<CalendarPrimary>('/calendars/primary');
-    return json.id ?? json.summary;
+    const label = json.id ?? json.summary;
+    return label !== undefined ? { label } : undefined;
   }
 
   /** {@inheritDoc ConnectorProviderClient.importWork} — primary-calendar events as event items. */
@@ -229,7 +234,7 @@ export class GoogleTasksProviderClient implements WritableConnectorProviderClien
    * from a resource (a task-list title). The app supplies the identity label — the
    * account's email, from the linked Better Auth account — instead. Accounts ≠ resources.
    */
-  async resolveAccount(): Promise<string | undefined> {
+  async resolveAccount(): Promise<ResolvedAccount | undefined> {
     await this.http.getJson<TaskListsPayload>('/users/@me/lists?maxResults=1');
     return undefined;
   }

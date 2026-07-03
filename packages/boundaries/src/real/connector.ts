@@ -39,6 +39,7 @@ import type {
   WritableConnector,
 } from '../ports/connector';
 import type { MailActions } from '../ports/mail';
+import type { WorkGraphConnector } from '../ports/work-graph';
 import { defaultHttpClient, type HttpClient } from './http';
 import { GitHubProviderClient } from './connector-github';
 import { LinearProviderClient } from './connector-linear';
@@ -53,10 +54,11 @@ import { ProviderHttp } from './connector-http';
 import {
   isMailActionsProviderClient,
   isWritableProviderClient,
+  isWorkGraphProviderClient,
   type ConnectorProviderClient,
 } from './connector-provider-client';
 export type { GoogleProduct } from './connector-google';
-export type { ConnectorProviderClient } from './connector-provider-client';
+export type { ConnectorProviderClient, ResolvedAccount } from './connector-provider-client';
 export {
   GitHubProviderClient,
   LinearProviderClient,
@@ -168,12 +170,18 @@ export class RealConnector implements Connector {
    * account (valid token, no display name) is still `connected`: the credential worked.
    */
   async connect(input: ConnectInput): Promise<ConnectionResult> {
-    const account = await this.client.resolveAccount();
+    const resolved = await this.client.resolveAccount();
     return {
       connectionId: `${input.provider}:${input.referenceId}`,
       provider: input.provider,
       status: 'connected',
-      ...(account !== undefined ? { account } : {}),
+      ...(resolved?.label !== undefined ? { account: resolved.label } : {}),
+      ...(resolved?.externalWorkspaceId !== undefined
+        ? { externalWorkspaceId: resolved.externalWorkspaceId }
+        : {}),
+      ...(resolved?.externalWorkspaceSlug !== undefined
+        ? { externalWorkspaceSlug: resolved.externalWorkspaceSlug }
+        : {}),
     };
   }
 
@@ -238,6 +246,24 @@ export class RealConnector implements Connector {
       listThreads: (input) => client.listThreads(input),
       applyMailAction: (input) => client.applyMailAction(input),
       fetchThread: (input) => client.fetchThread(input),
+    };
+  }
+
+  /**
+   * {@inheritDoc Connector.asWorkGraph}
+   *
+   * @remarks
+   * Gated on BOTH the provider being `linear` AND the client implementing the work-graph
+   * methods — mirroring {@link RealConnector.asWritable} and {@link RealConnector.asMailActor}.
+   */
+  asWorkGraph(): WorkGraphConnector | undefined {
+    if (this.provider !== 'linear') return undefined;
+    const client = this.client;
+    if (!isWorkGraphProviderClient(client)) return undefined;
+    return {
+      pullWorkGraph: (input) => client.pullWorkGraph(input),
+      listTeamStates: (externalTeamId) => client.listTeamStates(externalTeamId),
+      pushWorkItem: (op) => client.pushWorkItem(op),
     };
   }
 

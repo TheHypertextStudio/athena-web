@@ -7,7 +7,7 @@ import type {
   ResourceRef,
 } from '../ports/connector';
 import { ConnectorError } from '../ports/connector-error';
-import type { ConnectorProviderClient } from './connector-provider-client';
+import type { ConnectorProviderClient, ResolvedAccount } from './connector-provider-client';
 import type { ProviderHttp } from './connector-http';
 import { MAX_IMPORT_PAGES, logConnectorTruncation } from './connector-log';
 
@@ -74,12 +74,20 @@ export class LinearProviderClient implements ConnectorProviderClient {
     return json.data;
   }
 
-  /** {@inheritDoc ConnectorProviderClient.resolveAccount} */
-  async resolveAccount(): Promise<string | undefined> {
+  /**
+   * {@inheritDoc ConnectorProviderClient.resolveAccount}
+   *
+   * @remarks
+   * Wraps the existing `viewer` label only — resolving the organization's
+   * `externalWorkspaceId`/`externalWorkspaceSlug` (the webhook routing key and URL slug) is
+   * Task 3's rich GraphQL client, not this seam.
+   */
+  async resolveAccount(): Promise<ResolvedAccount | undefined> {
     const data = await this.query<{ viewer?: { name?: string; email?: string } }>(
       LinearProviderClient.VIEWER_QUERY,
     );
-    return data.viewer?.name ?? data.viewer?.email;
+    const label = data.viewer?.name ?? data.viewer?.email;
+    return label !== undefined ? { label } : undefined;
   }
 
   /** Map a raw Linear issue node onto an {@link ImportedItem}. */

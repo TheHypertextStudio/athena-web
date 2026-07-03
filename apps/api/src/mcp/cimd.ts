@@ -403,38 +403,49 @@ function isUrlFormClientId(clientId: string | null): clientId is string {
 }
 
 /**
- * Hono middleware that resolves URL-form MCP `client_id` values before Better Auth.
+ * Build the Hono middleware that resolves URL-form MCP `client_id` values before Better Auth.
+ *
+ * @param deps - Optional DNS/fetch dependencies for tests.
+ * @returns the authorize-route middleware; non-URL client ids pass straight through.
+ *
+ * @see {@link cimdAuthorizeMiddleware} for the production instance.
+ */
+export function createCimdAuthorizeMiddleware(deps: CimdDeps = defaultDeps) {
+  return async function cimdAuthorize(c: Context, next: Next): Promise<Response | undefined> {
+    const clientId = c.req.query('client_id') ?? null;
+    if (!isUrlFormClientId(clientId)) {
+      await next();
+      return undefined;
+    }
+
+    try {
+      const client = await resolveCimdClient(clientId, deps);
+      await upsertCimdClient(client);
+      await next();
+      return undefined;
+    } catch (err) {
+      const cimdErr =
+        err instanceof CimdError
+          ? err
+          : new CimdError('invalid_client', 'client_id metadata document could not be resolved');
+      return c.json(
+        {
+          error: cimdErr.code,
+          error_description: cimdErr.message,
+          issuer: configuredIssuer(c),
+        },
+        cimdErr.status,
+      );
+    }
+  };
+}
+
+/**
+ * The production CIMD preflight, mounted ahead of `/api/auth/mcp/authorize` so URL-form
+ * client ids are registered in the OAuth application table before Better Auth's exact
+ * `client_id` lookup runs.
  *
  * @param c - The authorize request context.
  * @param next - The next Hono handler, normally `auth.handler`.
  */
-export async function cimdAuthorizeMiddleware(
-  c: Context,
-  next: Next,
-): Promise<Response | undefined> {
-  const clientId = c.req.query('client_id') ?? null;
-  if (!isUrlFormClientId(clientId)) {
-    await next();
-    return undefined;
-  }
-
-  try {
-    const client = await resolveCimdClient(clientId);
-    await upsertCimdClient(client);
-    await next();
-    return undefined;
-  } catch (err) {
-    const cimdErr =
-      err instanceof CimdError
-        ? err
-        : new CimdError('invalid_client', 'client_id metadata document could not be resolved');
-    return c.json(
-      {
-        error: cimdErr.code,
-        error_description: cimdErr.message,
-        issuer: configuredIssuer(c),
-      },
-      cimdErr.status,
-    );
-  }
-}
+export const cimdAuthorizeMiddleware = createCimdAuthorizeMiddleware();

@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { db, oauthApplication } from '@docket/db';
 import { eq } from 'drizzle-orm';
 import { migrate } from 'drizzle-orm/pglite/migrator';
+import { Hono } from 'hono';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type { CimdDeps } from '../../src/mcp/cimd';
@@ -146,6 +147,63 @@ describe('CIMD client metadata validation', () => {
       cimd: true,
       cimdDocumentUrl: 'https://allowed.example/client.json',
     });
+  });
+});
+
+describe('CIMD authorize preflight middleware', () => {
+  /** Mounts the middleware exactly like server.ts does, in front of a stub authorize handler. */
+  function authorizeApp(d?: CimdDeps): { app: Hono; downstream: ReturnType<typeof vi.fn> } {
+    const downstream = vi.fn((c: { text: (s: string) => Response }) => c.text('authorize'));
+    const app = new Hono();
+    app.use('/api/auth/mcp/authorize', cimd.createCimdAuthorizeMiddleware(d));
+    app.get('/api/auth/mcp/authorize', (c) => downstream(c));
+    return { app, downstream };
+  }
+
+  it('registers a URL-form client_id and continues to the authorize handler', async () => {
+    const clientId = 'https://allowed.example/preflight-client.json';
+    const { app, downstream } = authorizeApp(
+      deps({
+        client_id: clientId,
+        client_name: 'Preflight Client',
+        redirect_uris: ['https://allowed.example/callback'],
+        token_endpoint_auth_method: 'none',
+      }),
+    );
+
+    const res = await app.request(
+      `/api/auth/mcp/authorize?client_id=${encodeURIComponent(clientId)}&response_type=code`,
+    );
+
+    expect(res.status).toBe(200);
+    expect(downstream).toHaveBeenCalledTimes(1);
+    const rows = await db
+      .select({ type: oauthApplication.type })
+      .from(oauthApplication)
+      .where(eq(oauthApplication.clientId, clientId));
+    expect(rows).toEqual([{ type: 'public' }]);
+  });
+
+  it('rejects an untrusted URL-form client_id with an OAuth error before Better Auth', async () => {
+    const clientId = 'https://outside.example/client.json';
+    const { app, downstream } = authorizeApp();
+
+    const res = await app.request(
+      `/api/auth/mcp/authorize?client_id=${encodeURIComponent(clientId)}&response_type=code`,
+    );
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: 'invalid_client' });
+    expect(downstream).not.toHaveBeenCalled();
+  });
+
+  it('passes opaque client_id values straight through untouched', async () => {
+    const { app, downstream } = authorizeApp();
+
+    const res = await app.request('/api/auth/mcp/authorize?client_id=abc123&response_type=code');
+
+    expect(res.status).toBe(200);
+    expect(downstream).toHaveBeenCalledTimes(1);
   });
 });
 

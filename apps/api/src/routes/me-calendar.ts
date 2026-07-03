@@ -64,7 +64,7 @@ import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
 
 import { readCalendarSettings, requireUserId } from './calendar-shared';
-import { syncGoogleCalendars } from './google-calendar-sync';
+import { syncCalendarConnections } from './calendar-sync-engine';
 import { toOut } from './task-helpers';
 
 const idParam = z.object({ id: z.string() });
@@ -268,11 +268,11 @@ const meCalendar = new Hono<AppEnv>()
       summary: 'Sync Google Calendar',
       response: CalendarSyncResultOut,
       description:
-        'Run a first-party Google Calendar sync. The scheduler and OAuth-backed fetcher use the same accounting shape.',
+        'Run a first-party calendar sync across every linked provider account (currently Google) via the provider-neutral sync engine.',
     }),
     async (c) => {
       const userId = requireUserId(c);
-      return ok(c, CalendarSyncResultOut, await syncGoogleCalendars(userId));
+      return ok(c, CalendarSyncResultOut, await syncCalendarConnections(db, { userId }));
     },
   )
   .post(

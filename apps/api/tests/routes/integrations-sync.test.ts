@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
@@ -140,11 +140,14 @@ describe('integrations directory', () => {
     const linear = dir.providers.find((p) => p.provider === 'linear')!;
     expect(linear.name).toBe('Linear');
     expect(linear.roles).toContain('work');
-
-    // Migration vs connector patterns are both represented (decided up front).
+    // Slice 2: Linear graduated from the one-time `migration` (Import) pattern to a live
+    // `connector` on the Connections surface — see PROVIDER_DIRECTORY.linear. Every directory
+    // provider is `connector` now (Linear was the only `migration` entry); `migration` remains a
+    // valid `IntegrationPattern` enum value a client can still request explicitly on `POST /`
+    // (see the CRUD test), it's just no longer any provider's *directory-recommended* pattern.
+    expect(linear.pattern).toBe('connector');
     const patterns = new Set(dir.providers.map((p) => p.pattern));
-    expect(patterns.has('migration')).toBe(true);
-    expect(patterns.has('connector')).toBe(true);
+    expect(patterns).toEqual(new Set(['connector']));
   });
 });
 
@@ -780,5 +783,187 @@ describe('PATCH /:id emailToTask enablement', () => {
       .from(schema.automationRule)
       .where(eq(schema.automationRule.organizationId, orgId));
     expect(again.length).toBe(rules.length);
+  });
+});
+
+/** Shape returned for a freshly-created integration, including the fields the Connections
+ * surface cares about (pattern/syncMode/writeBack), not just the {@link IntegrationRes} subset
+ * the CRUD tests destructure. */
+interface ConnectRes {
+  id: string;
+  pattern: string;
+  syncMode: string;
+  writeBack: boolean;
+}
+
+/** Shape of a patched integration's `config`, for the teamMappings assertions below. */
+interface ConfigRes {
+  config: { teamMappings?: { externalTeamId: string; teamId: string }[] };
+}
+
+describe('Slice 2: Linear on the Connections surface (directory pattern flip)', () => {
+  it('the 0022 data migration backfills existing linear rows from migration to connector pattern', async () => {
+    // Simulate a row that predates the flip (created back when PROVIDER_DIRECTORY.linear was
+    // still `migration`) — the enum itself still accepts either value, only the *directory's
+    // recommendation* changed, so a raw insert with the legacy pattern is still valid.
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const [legacy] = await db
+      .insert(schema.integration)
+      .values({
+        organizationId: orgId,
+        provider: 'linear',
+        pattern: 'migration',
+        roles: ['work'],
+        createdBy: humanActorId,
+      })
+      .returning({ id: schema.integration.id, pattern: schema.integration.pattern });
+    expect(legacy!.pattern).toBe('migration');
+
+    // Re-run the exact backfill statement from
+    // packages/db/drizzle/0022_flip_linear_connector_pattern.sql directly against this row
+    // (the full migration chain already ran it once, harmlessly, when the test DB was
+    // provisioned — this proves the statement itself correctly flips a legacy row and is
+    // idempotent to re-apply).
+    await db.execute(
+      sql`UPDATE "integration" SET "pattern" = 'connector' WHERE "provider" = 'linear'`,
+    );
+
+    const [after] = await db
+      .select({ pattern: schema.integration.pattern })
+      .from(schema.integration)
+      .where(eq(schema.integration.id, legacy!.id));
+    expect(after!.pattern).toBe('connector');
+  });
+
+  it('directory-driven create: pattern connector, syncMode mirror (DB default), writeBack false; verify → connected', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const w = appWithActor(integrations, orgId, ['manage'], humanActorId);
+
+    // The Connections surface creates with the directory's recommended pattern and sends no
+    // syncMode/writeBack, relying on server defaults — no client-side migration→mirror mapping.
+    const created = await body<ConnectRes>(
+      await w.request('/', {
+        method: 'POST',
+        headers: J,
+        body: JSON.stringify({ provider: 'linear', pattern: 'connector', roles: ['work'] }),
+      }),
+    );
+    expect(created.pattern).toBe('connector');
+    // Falls out of the `integration.sync_mode` column's DB default ('mirror'), not a
+    // pattern→syncMode branch in the create route — confirmed here rather than assumed.
+    expect(created.syncMode).toBe('mirror');
+    // Linear is deliberately excluded from WRITE_BACK_PROVIDERS this slice (its `write` OAuth
+    // scope doesn't ship until Slice 3), so a directory-driven create still lands read-only.
+    expect(created.writeBack).toBe(false);
+
+    const verified = await body<IntegrationStateRes>(
+      await w.request(`/${created.id}/verify`, { method: 'POST', headers: J }),
+    );
+    expect(verified.status).toBe('connected');
+    expect(verified.lastError).toBeNull();
+  });
+});
+
+describe('PATCH config.teamMappings validation', () => {
+  it('accepts a valid mapping (each teamId in-org, externalTeamId unique)', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const [teamB] = await db
+      .insert(schema.team)
+      .values({
+        organizationId: orgId,
+        name: 'Team B',
+        key: `TB${Math.random().toString(36).slice(2, 6)}`,
+      })
+      .returning({ id: schema.team.id });
+    const id = await seedIntegration(orgId, humanActorId, 'linear');
+    const w = appWithActor(integrations, orgId, ['manage'], humanActorId);
+
+    const res = await w.request(`/${id}`, {
+      method: 'PATCH',
+      headers: J,
+      body: JSON.stringify({
+        config: {
+          teamMappings: [
+            { externalTeamId: 'ext-1', teamId },
+            { externalTeamId: 'ext-2', teamId: teamB!.id },
+          ],
+        },
+      }),
+    });
+    expect(res.status).toBe(200);
+    const patched = await body<ConfigRes>(res);
+    expect(patched.config.teamMappings).toHaveLength(2);
+  });
+
+  it('rejects a teamMappings entry whose teamId is not a team in the org (422)', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const id = await seedIntegration(orgId, humanActorId, 'linear');
+    const w = appWithActor(integrations, orgId, ['manage'], humanActorId);
+
+    const res = await w.request(`/${id}`, {
+      method: 'PATCH',
+      headers: J,
+      body: JSON.stringify({
+        config: { teamMappings: [{ externalTeamId: 'ext-1', teamId: 'not-a-real-team' }] },
+      }),
+    });
+    expect(res.status).toBe(422);
+  });
+
+  it('rejects a teamId belonging to another org (tenant isolation)', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const other = await seedBaseOrg(db, schema);
+    const id = await seedIntegration(orgId, humanActorId, 'linear');
+    const w = appWithActor(integrations, orgId, ['manage'], humanActorId);
+
+    const res = await w.request(`/${id}`, {
+      method: 'PATCH',
+      headers: J,
+      body: JSON.stringify({
+        config: { teamMappings: [{ externalTeamId: 'ext-1', teamId: other.teamId }] },
+      }),
+    });
+    expect(res.status).toBe(422);
+  });
+
+  it('rejects duplicate externalTeamId entries within the array (422)', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const [teamB] = await db
+      .insert(schema.team)
+      .values({
+        organizationId: orgId,
+        name: 'Team B',
+        key: `TB${Math.random().toString(36).slice(2, 6)}`,
+      })
+      .returning({ id: schema.team.id });
+    const id = await seedIntegration(orgId, humanActorId, 'linear');
+    const w = appWithActor(integrations, orgId, ['manage'], humanActorId);
+
+    const res = await w.request(`/${id}`, {
+      method: 'PATCH',
+      headers: J,
+      body: JSON.stringify({
+        config: {
+          teamMappings: [
+            { externalTeamId: 'dup', teamId },
+            { externalTeamId: 'dup', teamId: teamB!.id },
+          ],
+        },
+      }),
+    });
+    expect(res.status).toBe(422);
+  });
+
+  it('a config PATCH with no teamMappings key is unaffected (no-op validation)', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const id = await seedIntegration(orgId, humanActorId, 'linear');
+    const w = appWithActor(integrations, orgId, ['manage'], humanActorId);
+
+    const res = await w.request(`/${id}`, {
+      method: 'PATCH',
+      headers: J,
+      body: JSON.stringify({ config: { listIds: ['list-1'] } }),
+    });
+    expect(res.status).toBe(200);
   });
 });

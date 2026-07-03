@@ -155,6 +155,13 @@
       "when": 1783193846302,
       "tag": "0021_sparkling_sister_grimm",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1783195165334,
+      "tag": "0022_flip_linear_connector_pattern",
+      "breakpoints": true
     }
   ]
 }

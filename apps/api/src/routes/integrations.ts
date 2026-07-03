@@ -1,5 +1,5 @@
 /** `@docket/api` — integrations router (mounted at `/v1/orgs/:orgId/integrations`). */
-import { actor, db, externalActor, integration, syncRun } from '@docket/db';
+import { actor, db, externalActor, integration, syncRun, team } from '@docket/db';
 import {
   ConnectorConfig,
   ConnectorResourceListOut,
@@ -14,12 +14,12 @@ import {
   TaskOut,
 } from '@docket/types';
 import type { ImportedItem } from '@docket/boundaries';
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AppEnv } from '../context';
-import { ConflictError, NotFoundError } from '../error';
+import { ConflictError, NotFoundError, ValidationError } from '../error';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
@@ -79,6 +79,72 @@ async function loadIntegration(orgId: string, id: string): Promise<IntegrationRo
   return row;
 }
 
+/**
+ * Validate a `config.teamMappings` array before it is persisted (create or update).
+ *
+ * @remarks
+ * `config` is stored as freeform jsonb, but the routing table the config UI writes here has
+ * two invariants a bad write would silently break at sync time rather than at the point of the
+ * mistake: every `teamId` must be a real team in the caller's org (a stray id would mean synced
+ * work vanishes into a team that doesn't exist), and every `externalTeamId` must appear at most
+ * once (a duplicate would non-deterministically double- or mis-route that external team's work,
+ * since {@link ConnectorConfig}'s `teamMappings` is looked up by `externalTeamId`). A no-op when
+ * `config` is absent or carries no `teamMappings` key; a shape failure (not the array
+ * `ConnectorConfig.teamMappings` describes) also 422s rather than being silently dropped.
+ *
+ * @param orgId - The caller's organization, teams are scoped to it.
+ * @param config - The raw `config` object from the request body, or `undefined` when the
+ *   caller didn't touch `config` at all.
+ */
+async function validateTeamMappings(
+  orgId: string,
+  config: Record<string, unknown> | undefined,
+): Promise<void> {
+  if (config === undefined || !('teamMappings' in config)) return;
+
+  const parsed = ConnectorConfig.shape.teamMappings.safeParse(config['teamMappings']);
+  if (!parsed.success) throw new ValidationError(parsed.error);
+  const mappings = parsed.data ?? [];
+  if (mappings.length === 0) return;
+
+  const seenExternalIds = new Set<string>();
+  for (const mapping of mappings) {
+    if (seenExternalIds.has(mapping.externalTeamId)) {
+      throw new ValidationError(
+        new z.ZodError([
+          {
+            code: 'custom',
+            path: ['config', 'teamMappings'],
+            message: `Duplicate externalTeamId '${mapping.externalTeamId}' in teamMappings`,
+            input: mapping.externalTeamId,
+          },
+        ]),
+      );
+    }
+    seenExternalIds.add(mapping.externalTeamId);
+  }
+
+  const teamIds = [...new Set(mappings.map((m) => m.teamId))];
+  const rows = await db
+    .select({ id: team.id })
+    .from(team)
+    .where(and(inArray(team.id, teamIds), eq(team.organizationId, orgId)));
+  const found = new Set(rows.map((r) => r.id));
+  const missing = teamIds.filter((id) => !found.has(id));
+  if (missing.length > 0) {
+    throw new ValidationError(
+      new z.ZodError([
+        {
+          code: 'custom',
+          path: ['config', 'teamMappings'],
+          message: `Unknown team id(s) in teamMappings: ${missing.join(', ')}`,
+          input: missing,
+        },
+      ]),
+    );
+  }
+}
+
 /** Integrations router: org-scoped CRUD over external migrations + connectors. */
 const integrations = new Hono<AppEnv>()
   .get(
@@ -113,6 +179,7 @@ Requires \`manage\` — wiring an external data source into the org is an admini
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
       const body = c.req.valid('json');
+      await validateTeamMappings(orgId, body.config);
 
       // Connecting a provider is idempotent per (org, provider): reconnecting reuses the
       // existing integration (refreshing fields) to keep the integration id — and so each
@@ -282,7 +349,7 @@ Requires \`manage\` — it touches live provider credentials and configures sync
       summary: 'Update an integration',
       capability: 'manage',
       response: IntegrationOut,
-      description: `Update an integration's mutable settings — \`roles\`, \`connection\` metadata, connector \`config\` (target team/project, \`listIds\`, \`defaultListId\`, \`pushNativeTasks\`, and — on mail-capable connectors — \`emailToTask: { enabled, threshold }\`, the strictly-opt-in email-to-task ingest switch validated against {@link ConnectorConfig}), \`syncMode\`, and \`writeBack\` — returning the refreshed {@link IntegrationOut}. A partial update: only present fields are written. \`status\` is intentionally **not** accepted — connection health is *earned* through the connect/verify and sync paths, never declared by a client, so this route can never fabricate \`connected\`. Enabling \`emailToTask\` also seeds the org's default automation rules once (idempotent), so the dismiss-promotions / archive-on-complete defaults exist the moment the feature turns on. Flipping \`writeBack: true\` on a Linear integration additionally requires the actor's linked Linear identity to carry the \`write\` OAuth scope — lacking it rejects with 409 (reconnect message); a read-only (\`writeBack: false\`) update never checks scope. A missing/cross-tenant id 404s. Requires \`manage\`. Related: \`POST /:id/verify\` (re-validate after changing the connection), \`GET /:id/lists\` (to discover valid \`config.listIds\`).`,
+      description: `Update an integration's mutable settings — \`roles\`, \`connection\` metadata, connector \`config\` (target team/project, \`listIds\`, \`defaultListId\`, \`pushNativeTasks\`, work-graph connectors' \`teamMappings\`, and — on mail-capable connectors — \`emailToTask: { enabled, threshold }\`, the strictly-opt-in email-to-task ingest switch validated against {@link ConnectorConfig}), \`syncMode\`, and \`writeBack\` — returning the refreshed {@link IntegrationOut}. A partial update: only present fields are written. \`status\` is intentionally **not** accepted — connection health is *earned* through the connect/verify and sync paths, never declared by a client, so this route can never fabricate \`connected\`. Enabling \`emailToTask\` also seeds the org's default automation rules once (idempotent), so the dismiss-promotions / archive-on-complete defaults exist the moment the feature turns on. Flipping \`writeBack: true\` on a Linear integration additionally requires the actor's linked Linear identity to carry the \`write\` OAuth scope — lacking it rejects with 409 (reconnect message); a read-only (\`writeBack: false\`) update never checks scope. When \`config.teamMappings\` is present it is validated: every \`teamId\` must be a real team in the caller's org and every \`externalTeamId\` must be unique within the array — either failure 422s (\`validation_error\`) rather than persisting a mapping that would silently misroute at sync time. A missing/cross-tenant id 404s. Requires \`manage\`. Related: \`POST /:id/verify\` (re-validate after changing the connection), \`GET /:id/lists\` (to discover valid \`config.listIds\`).`,
     }),
     zParam(idParam),
     zJson(IntegrationUpdate),
@@ -290,6 +357,7 @@ Requires \`manage\` — it touches live provider credentials and configures sync
       const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const body = c.req.valid('json');
+      await validateTeamMappings(orgId, body.config);
 
       const existing = await loadIntegration(orgId, id);
       // Flipping write-back ON for Linear is gated on the actor's linked identity actually

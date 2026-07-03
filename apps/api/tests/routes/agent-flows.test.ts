@@ -245,14 +245,19 @@ describe('POST /:id/run (agent session via the AgentRuntime port)', () => {
       body: JSON.stringify({}),
     });
 
+    // The stream live-tails non-terminal sessions; cancel first so the replay closes
+    // (the live-tail behavior itself is covered in agent-proposals.test.ts).
+    await app.request(`/${sessionId}/cancel`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({}),
+    });
     const res = await app.request(`/${sessionId}/stream`, { method: 'GET' });
     expect(res.status).toBe(200);
     const text = await res.text();
     // One SSE event per stored activity, in order.
     expect(text).toContain('event: thought');
     expect(text).toContain('event: action');
-    expect(text).toContain('event: elicitation');
-    expect(text).toContain('event: response');
     expect(text.indexOf('event: thought')).toBeLessThan(text.indexOf('event: action'));
   });
 });

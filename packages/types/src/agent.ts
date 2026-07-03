@@ -422,6 +422,89 @@ export const SessionApprovalDecision = z
 export type SessionApprovalDecision = z.infer<typeof SessionApprovalDecision>;
 
 /**
+ * Body for deciding on a whole proposal group (batch approval).
+ *
+ * @remarks
+ * A group is every gated action one assistant turn proposed together ("create these
+ * 40 tasks"). `activityIds` narrows the decision to a subset ("approve selected");
+ * omitted means the whole group.
+ */
+export const ProposalGroupDecision = z
+  .object({
+    activityIds: z
+      .array(SessionActivityId)
+      .optional()
+      .describe(
+        'Narrow the decision to these still-`proposed` activities of the group; omitted decides the entire group.',
+      ),
+  })
+  .meta({ id: 'ProposalGroupDecision', description: 'A batch decision on a proposal group.' });
+/** Validated proposal-group decision body. */
+export type ProposalGroupDecision = z.infer<typeof ProposalGroupDecision>;
+
+/**
+ * The ghost projection of one proposed `create_task` — what workspace views render as
+ * a translucent, editable task row before approval.
+ */
+export const GhostTaskOut = z
+  .object({
+    title: z.string().describe('The proposed task title (editable until approved).'),
+    teamId: z.string().nullable().describe('The proposed team, when the input names one.'),
+    projectId: z.string().nullable().describe('The proposed project, when the input names one.'),
+    dueDate: z.string().nullable().describe('The proposed due date (ISO date), when set.'),
+  })
+  .meta({ id: 'GhostTaskOut', description: 'The ghost-task projection of a proposal.' });
+/** Ghost-task projection value. */
+export type GhostTaskOut = z.infer<typeof GhostTaskOut>;
+
+/** One pending proposal, projected for review surfaces (session card + workspace ghosts). */
+export const ProposalItemOut = z
+  .object({
+    activityId: SessionActivityId.describe('The gated `action` activity this proposal lives on.'),
+    sessionId: AgentSessionId.describe('The owning session.'),
+    proposalGroupId: z.string().describe('The batch this proposal belongs to (one per turn).'),
+    tool: z.string().describe('The raw tool the proposal would execute (e.g. `create_task`).'),
+    summary: z.string().describe('The human-readable one-line headline.'),
+    input: z
+      .record(z.string(), z.unknown())
+      .describe('The proposed tool input — editable until approved (the ghost-edit target).'),
+    mode: z
+      .enum(['proposal', 'suggestion'])
+      .describe(
+        '`proposal` pauses the session until decided; `suggestion` (suggest-only dial) was recorded without pausing.',
+      ),
+    ghost: GhostTaskOut.nullable().describe(
+      'The workspace ghost projection when the proposal has a spatial home (a `create_task`); null falls back to the session proposal card.',
+    ),
+    createdAt: z.string().describe('ISO-8601 creation instant (group order).'),
+  })
+  .meta({ id: 'ProposalItemOut', description: 'A pending agent proposal, projected for review.' });
+/** Proposal-item projection value. */
+export type ProposalItemOut = z.infer<typeof ProposalItemOut>;
+
+/** A pending proposal group: one assistant turn's batch, reviewable as a unit. */
+export const ProposalGroupOut = z
+  .object({
+    proposalGroupId: z.string().describe('The group id every member shares.'),
+    sessionId: AgentSessionId.describe('The owning session.'),
+    items: z.array(ProposalItemOut).describe('The still-`proposed` members, oldest-first.'),
+  })
+  .meta({ id: 'ProposalGroupOut', description: 'A pending agent proposal group.' });
+/** Proposal-group projection value. */
+export type ProposalGroupOut = z.infer<typeof ProposalGroupOut>;
+
+/** Body for editing a pending proposal's tool input (inline ghost editing). */
+export const ProposalEditBody = z
+  .object({
+    input: z
+      .record(z.string(), z.unknown())
+      .describe('The replacement tool input; the proposal must still be `proposed`.'),
+  })
+  .meta({ id: 'ProposalEditBody', description: "Edit a pending proposal's input." });
+/** Validated proposal-edit body. */
+export type ProposalEditBody = z.infer<typeof ProposalEditBody>;
+
+/**
  * Body for replying to an agent's `elicitation` activity (steers / answers the agent).
  *
  * @remarks

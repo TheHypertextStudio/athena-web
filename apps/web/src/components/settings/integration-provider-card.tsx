@@ -29,6 +29,12 @@ interface IntegrationProviderCardProps {
   /** Transient error from a connect/verify/disconnect action (persistent sync/connection errors
    * come from the server via `existing.lastError`). */
   actionError: string | null;
+  /** Whether this provider has an inline config panel (adds the "Configure" toggle). */
+  configurable: boolean;
+  /** Whether the config panel is currently expanded. */
+  configOpen: boolean;
+  /** The config panel content, rendered inline when `configOpen` (built by the caller). */
+  configPanel: JSX.Element | null;
   /** Connect this provider on the current surface (pattern is fixed by the surface). */
   onConnect: () => void;
   /** Finish (pending) or repair (error) a connection — validates the credential, launching the
@@ -36,6 +42,8 @@ interface IntegrationProviderCardProps {
   onReconnect: () => void;
   onSync: () => void;
   onDisconnect: () => void;
+  /** Toggle the inline config panel open/closed. */
+  onToggleConfig: () => void;
 }
 
 /**
@@ -75,11 +83,14 @@ function ExistingControls(props: {
   disconnecting: boolean;
   /** Whether the provider supports manual sync (observe-only signal sources do not). */
   syncable: boolean;
+  configurable: boolean;
+  configOpen: boolean;
   onReconnect: () => void;
   onSync: () => void;
   onDisconnect: () => void;
+  onToggleConfig: () => void;
 }): JSX.Element {
-  const { existing, canManage, busy, syncing, disconnecting } = props;
+  const { existing, canManage, busy, syncing, disconnecting, configurable, configOpen } = props;
   const isConnected = existing.status === 'connected';
   const needsConnect =
     existing.status === 'pending' ||
@@ -98,6 +109,15 @@ function ExistingControls(props: {
       {canManage && isConnected && existing.pattern !== 'migration' && props.syncable ? (
         <IntegrationActionButton tone="muted" disabled={syncing} onClick={props.onSync}>
           {syncing ? 'Syncing…' : 'Sync'}
+        </IntegrationActionButton>
+      ) : null}
+      {canManage && configurable ? (
+        <IntegrationActionButton
+          tone="primary"
+          aria-expanded={configOpen}
+          onClick={props.onToggleConfig}
+        >
+          {configOpen ? 'Close' : 'Configure'}
         </IntegrationActionButton>
       ) : null}
       {canManage ? (
@@ -165,10 +185,14 @@ export function IntegrationProviderCard({
   disconnecting,
   syncFeedback,
   actionError,
+  configurable,
+  configOpen,
+  configPanel,
   onConnect,
   onReconnect,
   onSync,
   onDisconnect,
+  onToggleConfig,
 }: IntegrationProviderCardProps): JSX.Element {
   const ProviderIcon = providerIcon(provider.provider);
   const reauthError = existing?.status === 'error' ? existing.lastError : null;
@@ -195,9 +219,12 @@ export function IntegrationProviderCard({
             syncing={syncing}
             disconnecting={disconnecting}
             syncable={provider.syncable}
+            configurable={configurable}
+            configOpen={configOpen}
             onReconnect={onReconnect}
             onSync={onSync}
             onDisconnect={onDisconnect}
+            onToggleConfig={onToggleConfig}
           />
         ) : (
           <ConnectAffordance
@@ -227,6 +254,8 @@ export function IntegrationProviderCard({
       {existing && actionError ? <CardNote tone="error">{actionError}</CardNote> : null}
 
       {showSyncFeedback && syncFeedback ? <CardNote tone="muted">{syncFeedback}</CardNote> : null}
+
+      {configOpen ? configPanel : null}
     </li>
   );
 }

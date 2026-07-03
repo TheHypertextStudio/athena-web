@@ -37,11 +37,13 @@ import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from 
 
 import { DisconnectConfirmDialog } from './disconnect-confirm-dialog';
 import { GtasksAccountsSection } from './gtasks-accounts-section';
+import { IntegrationConfigPanel } from './integration-config-panel';
 import { MailIngestSection } from './mail-ingest-section';
 import { IntegrationProviderCard } from './integration-provider-card';
 import {
   REDIRECT_CONNECT_PROVIDERS,
   categoryLabel,
+  hasInlineConfigPanel,
   socialProviderForConnector,
 } from './integrations-config';
 
@@ -107,6 +109,8 @@ export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabPr
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
   const [syncFeedback, setSyncFeedback] = useState<Record<string, string | null>>({});
   const [actionErrors, setActionErrors] = useState<Record<string, string | null>>({});
+  // Which integration's inline config panel (Configure toggle on the generic card) is expanded.
+  const [openConfigId, setOpenConfigId] = useState<string | null>(null);
   const [confirmDisconnect, setConfirmDisconnect] = useState<{
     id: string;
     providerName: string;
@@ -446,6 +450,8 @@ export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabPr
               if (provider.provider === MULTI_ACCOUNT_PROVIDER) return null;
               if (provider.provider === FIRST_PARTY_CALENDAR_PROVIDER) return null;
               const existing = byProvider.get(provider.provider)?.[0];
+              const configurable = hasInlineConfigPanel(provider.provider);
+              const configOpen = existing ? openConfigId === existing.id : false;
               return (
                 <IntegrationProviderCard
                   key={provider.provider}
@@ -460,6 +466,20 @@ export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabPr
                   disconnecting={existing ? disconnectingId === existing.id : false}
                   syncFeedback={existing ? (syncFeedback[existing.id] ?? null) : null}
                   actionError={actionErrors[provider.provider] ?? null}
+                  configurable={configurable}
+                  configOpen={configOpen}
+                  configPanel={
+                    existing && configurable ? (
+                      <IntegrationConfigPanel
+                        orgId={orgId}
+                        integration={existing}
+                        teams={teams}
+                        onReauthorize={() => {
+                          void runReconnect(existing);
+                        }}
+                      />
+                    ) : null
+                  }
                   onConnect={() => {
                     void runConnect(provider.provider, provider.roles);
                   }}
@@ -477,6 +497,11 @@ export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabPr
                   onDisconnect={() => {
                     if (existing) {
                       setConfirmDisconnect({ id: existing.id, providerName: provider.name });
+                    }
+                  }}
+                  onToggleConfig={() => {
+                    if (existing) {
+                      setOpenConfigId((cur) => (cur === existing.id ? null : existing.id));
                     }
                   }}
                 />

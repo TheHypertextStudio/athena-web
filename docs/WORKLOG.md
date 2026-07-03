@@ -167,6 +167,51 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [LINEAR-SYNC-001] Deep Linear integration — Slice 1: two-way work-graph sync core
+
+- **Completed**: 2026-07-02
+- **Summary**: The sync core for making Linear a full first-party integration (approved plan:
+  two-way sync, Issues→tasks / Projects→projects / Cycles→cycles with full field fidelity).
+  (1) Schema: task-style mirror provenance on `project`/`cycle`/`label`, new `external_actor`
+  identity-mapping table, `integration.lastFullSyncedAt`. (2) Boundaries: new
+  `WorkGraph` capability seam on the Connector port (`asWorkGraph()` — pull users/labels/projects/
+  cycles/items + `pushWorkItem`), `ResolvedAccount` now carries `externalWorkspaceId`/`Slug`,
+  `listContainers` delegates unconditionally (fixed a latent throw in the Google client).
+  (3) Real Linear client: full-field GraphQL pull with variables (no string interpolation),
+  team/state/user/label/project/cycle/issue queries, `issueUpdate`/`issueCreate` mutations,
+  issue UUIDs as external ids. (4) Mock parity: deterministic `LINEAR_WORK_GRAPH` fixtures with
+  real-client filter semantics; the whole flow runs offline. (5) Identity: `syncExternalActors`
+  email-matches Linear users to active org members with manual-match precedence enforced
+  atomically (CASE-on-conflict upsert); GET/PATCH `/:id/external-actors` endpoints.
+  (6) Reconciler `integration-reconcile-graph.ts`: ordered upserts, LWW via the
+  `updatedAt`/`externalUpdatedAt` anchor (echo-suppression discipline), legacy identifier→UUID
+  re-key healing, anchor-guarded tombstone archival, parent/label join diffing, per-run-cached
+  push of dirty tasks; single-entity appliers exported for the Slice-3b webhook applier.
+  (7) Sync wiring: `runSync` branches to full/incremental graph pulls (24h full backstop,
+  2× cadence lookback), verify persists `externalWorkspaceId`/`Slug` (unblocks webhook routing),
+  cycle auto-roll skips teams with provider-owned cycles, write-back scope enforcement (verify
+  error + PATCH 409, read-only never nags). Linear connect stays read-only by default until
+  Slice 3's OAuth scope upgrade.
+- **Files Changed**: `packages/db/src/schema/{work,crosscutting}.ts` + a migration,
+  `packages/db/src/{enums,types}.ts`, `packages/boundaries/src/ports/{work-graph,connector}.ts`,
+  `packages/boundaries/src/real/{connector,connector-linear,connector-google,connector-provider-client}.ts`,
+  `packages/boundaries/src/{mock/connector,fixtures/index}.ts`, `packages/types/src/integration.ts`,
+  `apps/api/src/routes/{integration-identity,integration-reconcile-graph}.ts` (new),
+  `apps/api/src/routes/{integration-sync,integration-provider,integrations,cycle-helpers}.ts`,
+  plus ~10 test files (929 api + 335 boundaries tests green pre-rebase; re-verified post-rebase).
+- **Learnings**: Drizzle's `$onUpdate` wall-clock stamp silently forges the LWW dirty flag on any
+  bare `db.update()` in a sync path — every provider-sourced write must explicitly set
+  `updatedAt`. Manual identity precedence can only be guaranteed inside the upsert statement
+  itself (CASE-on-conflict), not by read-then-write. Registering a provider in
+  `WRITE_BACK_PROVIDERS` before its OAuth scope ships bricks the connect flow — capability
+  defaults must trail scope availability.
+- **Remaining follow-ups** (for later slices): push sends the full field set (no field-level
+  diff) and can strip provider-side labels that sync skipped; `GraphApplyContext` result-map
+  preloading contract needs doc hardening before Slice 3b; locally-set parent links between two
+  linked tasks are provider-owned and will be cleared once the row goes clean (note for Slice 3);
+  guard-idiom unification (`in` vs `typeof`) in connector-provider-client.ts; 2 pre-existing lint
+  failures in connector-github-app.test.ts predate this work.
+
 ### [MAIL-005] Suggestion lifecycle, due-date synthesis, sweep observability (M7)
 
 - **Completed**: 2026-07-03

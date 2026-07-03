@@ -9,7 +9,7 @@
  */
 import { z } from 'zod';
 
-import { IntegrationId, OrganizationId } from './primitives';
+import { ActorId, IntegrationId, OrganizationId } from './primitives';
 
 /** Integration pattern: replace (migration) vs complement (connector). */
 export const IntegrationPattern = z
@@ -472,3 +472,86 @@ export const IntegrationOut = z
   .meta({ id: 'IntegrationOut', description: 'An external integration.' });
 /** Integration representation value. */
 export type IntegrationOut = z.infer<typeof IntegrationOut>;
+
+/**
+ * How an `external_actor` identity-mapping row was resolved to a Docket Actor.
+ *
+ * @remarks
+ * `email` rows are re-evaluated on every sync (the mapping tracks the provider's/member's
+ * current email); `manual` rows were explicitly set by an admin via `PATCH` and are NEVER
+ * touched by the sync engine's email matching again — a human's link always wins.
+ */
+export const ExternalActorMatchedBy = z
+  .enum(['email', 'manual'])
+  .describe(
+    'How this mapping was resolved: `email` (the sync engine matched by email against an org member; may be re-evaluated — and change or unmatch — on a future sync) or `manual` (an admin explicitly linked it via `PATCH …/external-actors/:externalActorId`; never overwritten by re-matching).',
+  );
+/** External-actor match-source value. */
+export type ExternalActorMatchedBy = z.infer<typeof ExternalActorMatchedBy>;
+
+/**
+ * A provider-side user (e.g. a Linear member) mapped to a Docket Actor, one row per
+ * `(integration, externalId)`.
+ *
+ * @remarks
+ * `actorId: null` is an explicit, queryable UNMATCHED state — never a fallback assignment.
+ * `email`/`displayName`/`avatarUrl` are refreshed from the provider on every sync regardless
+ * of match state, since the provider is the source of truth for those fields.
+ */
+export const ExternalActorOut = z
+  .object({
+    id: z.string().describe('The external-actor mapping row id.'),
+    externalId: z
+      .string()
+      .describe("The provider's native user id (e.g. a Linear user UUID) — stable across syncs."),
+    email: z
+      .string()
+      .nullable()
+      .describe(
+        "The provider user's email as of the last sync, refreshed every time; null when the provider does not expose one for this user.",
+      ),
+    displayName: z
+      .string()
+      .describe("The provider user's display name as of the last sync, refreshed every time."),
+    avatarUrl: z
+      .string()
+      .nullable()
+      .describe('URL to the avatar image, refreshed every sync; null when unavailable.'),
+    actorId: ActorId.nullable().describe(
+      'The matched Docket Actor, or null — an explicit, queryable UNMATCHED state (never a fallback assignment). A push for a Docket assignee absent from the reverse of this mapping simply omits the assignee field.',
+    ),
+    matchedBy: ExternalActorMatchedBy.nullable().describe(
+      'How `actorId` was resolved (`email`/`manual`), or null when unmatched.',
+    ),
+    createdAt: z.string().describe('ISO-8601 timestamp the mapping row was first created.'),
+    updatedAt: z
+      .string()
+      .describe('ISO-8601 timestamp the mapping was last refreshed and/or re-matched.'),
+  })
+  .meta({
+    id: 'ExternalActorOut',
+    description: 'A provider-user → Docket-Actor identity mapping.',
+  });
+/** External-actor mapping representation value. */
+export type ExternalActorOut = z.infer<typeof ExternalActorOut>;
+
+/**
+ * Body for manually linking or unlinking an `external_actor` mapping.
+ *
+ * @remarks
+ * `actorId` is a required key (never omitted) so the intent is always explicit: a string
+ * links (and marks `matchedBy: 'manual'`, immune to future email re-matching), `null` unlinks
+ * (and clears `matchedBy` too, so a later sync may re-match it by email).
+ */
+export const ExternalActorPatch = z
+  .object({
+    actorId: ActorId.nullable().describe(
+      "Set to a Docket Actor id to link manually — the actor MUST belong to the caller's org (404 `Actor not found` otherwise); the row is marked `matchedBy: 'manual'` and survives future email re-syncs untouched. Set to `null` to unlink — this also clears `matchedBy`, so the next email sync may re-match the row.",
+    ),
+  })
+  .meta({
+    id: 'ExternalActorPatch',
+    description: 'Manually link or unlink an external-actor identity mapping.',
+  });
+/** Validated external-actor patch body. */
+export type ExternalActorPatch = z.infer<typeof ExternalActorPatch>;

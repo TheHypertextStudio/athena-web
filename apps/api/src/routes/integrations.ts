@@ -1,8 +1,10 @@
 /** `@docket/api` — integrations router (mounted at `/v1/orgs/:orgId/integrations`). */
-import { db, integration, syncRun } from '@docket/db';
+import { actor, db, externalActor, integration, syncRun } from '@docket/db';
 import {
   ConnectorConfig,
   ConnectorResourceListOut,
+  ExternalActorOut,
+  ExternalActorPatch,
   IntegrationCreate,
   IntegrationDirectoryOut,
   IntegrationOut,
@@ -40,6 +42,8 @@ import {
 } from './integration-provider';
 import { runSync, toSyncRunOut } from './integration-sync';
 import { importItems, resolveImportTeam } from './integration-import';
+import { toExternalActorOut } from './integration-identity';
+import { assertRefInOrg } from './task-helpers';
 
 /** `assignToImporter` lands new linked tasks under My Work's "Assigned to me". */
 const ImportBody = z.object({
@@ -47,6 +51,8 @@ const ImportBody = z.object({
 });
 
 const idParam = z.object({ id: z.string() });
+/** Path params for a single external-actor mapping nested under an integration. */
+const externalActorParam = z.object({ id: z.string(), externalActorId: z.string() });
 
 /** Update an integration's mutable health/sync fields, returning the fresh row. */
 async function setIntegration(
@@ -535,6 +541,67 @@ Only valid for a GitHub or Slack integration row (else 409 \`A connect URL is on
         return c.json({ url });
       }
       throw new ConflictError('A connect URL is only available for GitHub or Slack integrations');
+    },
+  )
+  .get(
+    '/:id/external-actors',
+    capabilityGuard('manage'),
+    apiDoc({
+      tag: 'Integrations',
+      summary: 'List external actor identity mappings',
+      capability: 'manage',
+      response: pageOf(ExternalActorOut),
+      description: `List every \`external_actor\` identity mapping for this integration — one row per provider-side user (e.g. a Linear member) the sync engine has ever seen, as a page of {@link ExternalActorOut}. Includes matched AND unmatched rows: an unmatched row (\`actorId: null\`) is an explicit, queryable state, never hidden or fabricated. \`matchedBy\` distinguishes an automatic \`email\` match (re-evaluated on every sync) from a \`manual\` link (set via \`PATCH /:id/external-actors/:externalActorId\`, immune to re-matching). A missing/cross-tenant integration id 404s (\`Integration not found\`).
+
+Requires \`manage\` — reviewing/curating identity mappings is an administrative task, the same bar as the other integration-configuration routes. Related: \`PATCH /:id/external-actors/:externalActorId\` (manually link/unlink one row).`,
+    }),
+    zParam(idParam),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { id } = c.req.valid('param');
+      await loadIntegration(orgId, id);
+      const rows = await db
+        .select()
+        .from(externalActor)
+        .where(and(eq(externalActor.integrationId, id), eq(externalActor.organizationId, orgId)));
+      return ok(c, pageOf(ExternalActorOut), { items: rows.map(toExternalActorOut) });
+    },
+  )
+  .patch(
+    '/:id/external-actors/:externalActorId',
+    capabilityGuard('manage'),
+    apiDoc({
+      tag: 'Integrations',
+      summary: 'Manually link or unlink an external actor mapping',
+      capability: 'manage',
+      response: ExternalActorOut,
+      description: `Manually override one \`external_actor\` identity mapping, returning the updated {@link ExternalActorOut}. Setting \`actorId\` to a Docket Actor id (which MUST belong to the caller's org — 404 \`Actor not found\` otherwise) links the mapping and marks it \`matchedBy: 'manual'\`: from that point on, \`POST /:id/sync\`'s email matching NEVER touches this row again, even if the provider user's email later disagrees or disappears — a human's explicit link always wins. Setting \`actorId\` to \`null\` unlinks it AND clears \`matchedBy\` back to \`null\` (an explicit manual unlink, not a re-match) — so the row returns to normal automatic matching and the next sync's email pass may re-match it.
+
+The integration must exist in the caller's org (404 \`Integration not found\`); the mapping row must belong to that integration (404 \`External actor not found\` otherwise — existence-hiding, same as a cross-tenant integration id). Requires \`manage\`. Related: \`GET /:id/external-actors\` (review current mappings), \`POST /:id/sync\` (where automatic email matching runs).`,
+    }),
+    zParam(externalActorParam),
+    zJson(ExternalActorPatch),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { id, externalActorId } = c.req.valid('param');
+      const body = c.req.valid('json');
+      await loadIntegration(orgId, id);
+      await assertRefInOrg(actor, orgId, body.actorId, 'Actor not found');
+
+      const updated = await db
+        .update(externalActor)
+        .set({ actorId: body.actorId, matchedBy: body.actorId ? 'manual' : null })
+        .where(
+          and(
+            eq(externalActor.id, externalActorId),
+            eq(externalActor.integrationId, id),
+            eq(externalActor.organizationId, orgId),
+          ),
+        )
+        .returning();
+      const row = updated[0];
+      if (!row) throw new NotFoundError('External actor not found');
+      return ok(c, ExternalActorOut, toExternalActorOut(row));
     },
   );
 

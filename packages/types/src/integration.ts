@@ -91,6 +91,13 @@ export type IntegrationConnection = z.infer<typeof IntegrationConnection>;
  * - `defaultListId` — the external list a pushed native task is created in.
  * - `pushNativeTasks` — opt-in: also push `native` Docket tasks in the target team out to the
  *   provider as new external tasks (default off, to avoid surprising bulk creation).
+ * - `teamMappings` — for work-graph connectors (Linear), the explicit per-external-team →
+ *   Docket-team routing table. Its presence is the source of truth for which external teams
+ *   are synced: an external team absent from the table is NOT synced (no fallback). When it
+ *   is absent entirely, the reconciler falls back to the narrow legacy interpretation —
+ *   `listIds` selects the external teams to sync and `teamId` (or `resolveImportTeam`) is the
+ *   single Docket team all of them land in. The two are never blended: a non-empty
+ *   `teamMappings` takes full precedence over `listIds`/`teamId` for team routing.
  */
 export const ConnectorConfig = z
   .object({
@@ -141,6 +148,19 @@ export const ConnectorConfig = z
       .optional()
       .describe(
         'Email-to-task ingest config (mail-capable connectors only). Absent = the feature is off for this integration; when present, BOTH fields are required — see `docs/engineering/specs/email-to-task.md`.',
+      ),
+    teamMappings: z
+      .array(
+        z.object({
+          externalTeamId: z
+            .string()
+            .describe('The provider team id (e.g. a Linear team id) whose work is mirrored.'),
+          teamId: z.string().describe('The Docket team that team’s mirrored work lands in.'),
+        }),
+      )
+      .optional()
+      .describe(
+        'Work-graph connectors only: the explicit per-external-team → Docket-team routing table. An external team absent from this table is NOT synced (no fallback). When omitted entirely, the reconciler falls back to `listIds` (which external teams) + `teamId`/`resolveImportTeam` (the single landing team). A non-empty table takes full precedence over `listIds`/`teamId` for routing.',
       ),
   })
   .meta({

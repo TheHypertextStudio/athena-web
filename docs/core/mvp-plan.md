@@ -182,8 +182,9 @@ Each organization connects **its own** toolstack (a startup's GitHub + Linear + 
 - **Federation is the on‑ramp.** You start by importing/mirroring from the tools a team already uses, so Docket is useful on day one; over time it becomes the home.
 - **Two ways to connect a tool:**
   - **Migration** (e.g. Linear, Jira, Asana): Docket _takes over_ — it imports the work in and becomes the source of truth; the old tool is retired.
-  - **Connector** (e.g. GitHub, Drive, Gmail, Calendar): Docket _complements_ — it persistently links context/signal/code; the external tool stays authoritative.
+  - **Connector** (e.g. GitHub, Drive, Gmail, Calendar, Slack): Docket _complements_ — it persistently links context/signal/code; the external tool stays authoritative.
 - **What integrations contribute:** **Work** → tasks; **Context** → linked docs; **Signal** (email/chat) → things that can become tasks/updates; **Time** (calendar) → deadlines; **Code** (pull requests/commits — the one explicitly software‑specific role) → links on a task.
+- **Signal, concretely (shipped: Slack):** connect your Slack with one consent, and the messages that concern _you_ — @mentions, DMs, replies in threads you're part of — land in your personal Stream next to everything else, each linking back to the conversation. Docket deliberately does not mirror whole channels: only what concerns someone in the org becomes an event (see `docs/engineering/specs/slack-integration.md`).
 - **MVP depth:** one‑time/transitional **import** for migration tools; **read‑only mirror** for connectors. Two‑way sync is a deliberate later step.
 
 Linked work carries its **provenance** (where it came from, with a live link), so the unified views always show one clean picture, labeled by source.

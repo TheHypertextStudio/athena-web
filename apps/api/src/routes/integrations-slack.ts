@@ -25,9 +25,18 @@ import { Hono } from 'hono';
 import { webAppOrigin } from '../lib/github-app';
 import { exchangeSlackCode, verifySlackConnectState } from '../lib/slack-app';
 
-/** Build the redirect back to the web app's integration settings with a status flag. */
-function settingsRedirect(status: 'connected' | 'error'): string {
-  return `${webAppOrigin()}/settings/integrations?slack=${status}`;
+/**
+ * Build the redirect back to the org's Connections settings page with a status flag.
+ *
+ * @remarks
+ * Settings are org-scoped (`/orgs/:orgId/settings/connections` is where `IntegrationsTab`
+ * reads the `?slack=` return param); with no org recoverable from the state the redirect
+ * falls back to the web root, which routes a signed-in user home.
+ */
+function settingsRedirect(orgId: string | null, status: 'connected' | 'error'): string {
+  const base = webAppOrigin();
+  if (!orgId) return `${base}/?slack=${status}`;
+  return `${base}/orgs/${orgId}/settings/connections?slack=${status}`;
 }
 
 /** The Slack OAuth connect callback edge. */
@@ -38,7 +47,7 @@ const integrationsSlack = new Hono().get('/callback', async (c) => {
   // A tamper-proof state is required: it binds this grant to the org/integration/user that
   // started the flow (and is the CSRF guard). No valid state → bounce to settings as an error.
   const decoded = state ? verifySlackConnectState(state) : null;
-  if (!decoded) return c.redirect(settingsRedirect('error'));
+  if (!decoded) return c.redirect(settingsRedirect(null, 'error'));
 
   // The integration must still exist under the org the state claims (existence-hiding guard).
   const [row] = await db
@@ -52,7 +61,7 @@ const integrationsSlack = new Hono().get('/callback', async (c) => {
       ),
     )
     .limit(1);
-  if (!row) return c.redirect(settingsRedirect('error'));
+  if (!row) return c.redirect(settingsRedirect(decoded.orgId, 'error'));
 
   // The user clicked Cancel on Slack's consent screen (`?error=access_denied`) or no code came
   // back — a clean decline, recorded truthfully rather than treated as an exchange failure.
@@ -65,7 +74,7 @@ const integrationsSlack = new Hono().get('/callback', async (c) => {
         lastErrorAt: new Date(),
       })
       .where(eq(integration.id, row.id));
-    return c.redirect(settingsRedirect('error'));
+    return c.redirect(settingsRedirect(decoded.orgId, 'error'));
   }
 
   try {
@@ -115,16 +124,17 @@ const integrationsSlack = new Hono().get('/callback', async (c) => {
       })
       .where(eq(integration.id, row.id));
 
-    return c.redirect(settingsRedirect('connected'));
+    return c.redirect(settingsRedirect(decoded.orgId, 'connected'));
   } catch (err) {
     // The partial unique (org, provider, externalAccountId) surfaces "this Slack account is
     // already connected in this org" here — recorded truthfully like any exchange failure.
-    const message = err instanceof Error ? err.message : 'Slack authorization could not be completed';
+    const message =
+      err instanceof Error ? err.message : 'Slack authorization could not be completed';
     await db
       .update(integration)
       .set({ status: 'error', lastError: message, lastErrorAt: new Date() })
       .where(eq(integration.id, row.id));
-    return c.redirect(settingsRedirect('error'));
+    return c.redirect(settingsRedirect(decoded.orgId, 'error'));
   }
 });
 

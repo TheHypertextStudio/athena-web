@@ -16,6 +16,11 @@ Docket deploys three services to GCP Cloud Run (scale-to-zero) backed by Neon Po
 
 All services: `--min-instances=0` (scale to zero), `--max-instances=10`, `--memory=512Mi`.
 
+> **Exception once Slack is activated:** run `docket-api` with `--min-instances=1`. Slack's
+> Events API requires a 200 within 3 seconds and disables an app's deliveries at >5% failures
+> over 60 minutes — a scale-to-zero cold start regularly blows that deadline. (See
+> `docs/engineering/specs/slack-integration.md`.)
+
 ---
 
 ## One-time bootstrap
@@ -243,6 +248,30 @@ gcloud run services update docket-api --region=us-central1 --project=athena-serv
 > scopes (see `buildAuthOptions`); Linear's app must grant the `read` scope or every connector
 > call 400s. Existing users who linked before a scope change must re-consent — they surface as
 > `error` / needs-reauth, never a silent skip.
+
+### Slack (signal integration — not a Better Auth provider)
+
+Slack does **not** go through Better Auth: its OAuth callback is
+`${API_URL}/internal/integrations/slack/callback` (not `/api/auth/callback/slack`), and it needs
+**three** secrets, not two — the signing secret additionally verifies the inbound Events API HMAC
+on `POST /internal/ingest/slack`.
+
+**To activate:** create the shared Slack app from `infra/slack/docket-app-manifest.yaml`
+(https://api.slack.com/apps → "Create New App" → "From a manifest"; `pnpm integrations` walks
+through it with the real URLs substituted). Deploy `docket-api` **first** — Slack live-verifies
+the events request URL when the manifest is saved. Enable public distribution so arbitrary
+customer workspaces can authorize it. Then set the secrets and redeploy:
+
+| Env var                | Where it comes from                            |
+| ---------------------- | ---------------------------------------------- |
+| `SLACK_CLIENT_ID`      | Slack app → Basic Information → Client ID      |
+| `SLACK_CLIENT_SECRET`  | Slack app → Basic Information → Client Secret  |
+| `SLACK_SIGNING_SECRET` | Slack app → Basic Information → Signing Secret |
+
+Slack requires one events request URL per app, so dev (tunnel host) and prod need **separate
+apps** created from the same manifest. Remember the `docket-api` `--min-instances=1` exception
+above; also consider tightening the event-drain cron cadence (personal-feed freshness is bounded
+by it).
 
 ### Scheduled jobs (Cloud Scheduler)
 

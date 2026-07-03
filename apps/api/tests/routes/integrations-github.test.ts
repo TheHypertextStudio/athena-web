@@ -20,10 +20,10 @@ beforeAll(async () => {
 
 /** The callback always bounces back to the web app's integration settings with a status flag. */
 describe('GET /internal/integrations/github/callback', () => {
-  it('redirects to settings with ?github=error when no state is present', async () => {
+  it('redirects to the web root with ?github=error when no state is present', async () => {
     const res = await app.request('/callback');
     expect(res.status).toBe(302);
-    expect(res.headers.get('location')).toContain('/settings/integrations?github=error');
+    expect(res.headers.get('location')).toContain('/?github=error');
   });
 
   it('redirects with an error for a tampered/garbage state', async () => {

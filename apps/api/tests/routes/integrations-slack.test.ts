@@ -49,10 +49,10 @@ async function seedPendingSlack(): Promise<{
 }
 
 describe('GET /internal/integrations/slack/callback', () => {
-  it('redirects to settings with ?slack=error when no state is present', async () => {
+  it('redirects to the web root with ?slack=error when no state is present', async () => {
     const res = await app.request('/callback?code=mock');
     expect(res.status).toBe(302);
-    expect(res.headers.get('location')).toContain('/settings/integrations?slack=error');
+    expect(res.headers.get('location')).toContain('/?slack=error');
   });
 
   it('redirects with an error for a tampered/garbage state', async () => {
@@ -101,14 +101,14 @@ describe('GET /internal/integrations/slack/callback', () => {
     const state = signSlackConnectState({ integrationId, orgId, userId });
     const res = await app.request(`/callback?code=mock&state=${encodeURIComponent(state)}`);
     expect(res.status).toBe(302);
-    expect(res.headers.get('location')).toContain('slack=connected');
+    // The return lands on the org's Connections settings page, where the ?slack= flag is read.
+    expect(res.headers.get('location')).toContain(
+      `/orgs/${orgId}/settings/connections?slack=connected`,
+    );
 
     const slackUserId = `U-MOCK-${userId.slice(0, 12)}`;
     const row = one(
-      await db
-        .select()
-        .from(schema.integration)
-        .where(eq(schema.integration.id, integrationId)),
+      await db.select().from(schema.integration).where(eq(schema.integration.id, integrationId)),
     );
     expect(row.status).toBe('connected');
     expect(row.externalAccountId).toBe(slackUserId);

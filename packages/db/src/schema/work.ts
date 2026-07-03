@@ -80,10 +80,22 @@ export const project = pgTable(
       .array()
       .notNull()
       .default(sql`'{}'`),
+    // Provenance (single inline triple): native vs mirrored-from-an-integration. Pull-only
+    // mirror (no `externalEtag`/`externalListId`/`lastPushedAt` — see task's two-way variant).
+    source: provenanceSource('source').notNull().default('native'),
+    sourceIntegrationId: text('source_integration_id').references(() => integration.id, {
+      onDelete: 'set null',
+    }),
+    externalId: text('external_id'),
+    externalUrl: text('external_url'),
+    externalUpdatedAt: timestamp('external_updated_at'),
   },
   (t) => [
     index('project_org_idx').on(t.organizationId),
     index('project_ancestor_path_gin').using('gin', t.ancestorPath),
+    uniqueIndex('project_source_uq')
+      .on(t.sourceIntegrationId, t.externalId)
+      .where(sql`${t.source} = 'linked'`),
   ],
 );
 
@@ -115,10 +127,22 @@ export const cycle = pgTable(
     startsAt: timestamp('starts_at').notNull(),
     endsAt: timestamp('ends_at').notNull(),
     status: cycleStatus('status').notNull().default('upcoming'),
+    // Provenance (single inline triple): native vs mirrored-from-an-integration. Pull-only
+    // mirror (no `externalEtag`/`externalListId`/`lastPushedAt` — see task's two-way variant).
+    source: provenanceSource('source').notNull().default('native'),
+    sourceIntegrationId: text('source_integration_id').references(() => integration.id, {
+      onDelete: 'set null',
+    }),
+    externalId: text('external_id'),
+    externalUrl: text('external_url'),
+    externalUpdatedAt: timestamp('external_updated_at'),
   },
   (t) => [
     index('cycle_team_idx').on(t.teamId),
     uniqueIndex('cycle_team_number_uq').on(t.teamId, t.number),
+    uniqueIndex('cycle_source_uq')
+      .on(t.sourceIntegrationId, t.externalId)
+      .where(sql`${t.source} = 'linked'`),
   ],
 );
 

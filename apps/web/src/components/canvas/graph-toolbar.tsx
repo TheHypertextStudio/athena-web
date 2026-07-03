@@ -17,6 +17,8 @@ import {
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
   Input,
@@ -51,6 +53,30 @@ export interface GraphFilter {
 
 /** Sentinel value for the "unassigned" assignee filter. */
 export const UNASSIGNED = '__none__';
+
+/** The axis the canvas can group tasks into swimlanes by. */
+export type GroupBy = 'none' | 'project' | 'team' | 'milestone';
+
+/** Display labels for each {@link GroupBy} option. */
+const GROUP_BY_LABELS: Record<GroupBy, string> = {
+  none: 'No grouping',
+  project: 'Project',
+  team: 'Team',
+  milestone: 'Milestone',
+};
+const GROUP_BY_ORDER: readonly GroupBy[] = ['none', 'project', 'team', 'milestone'];
+
+/** Priority filter options (fixed ordering — hoisted so they aren't rebuilt per render). */
+const PRIORITY_OPTIONS: readonly FilterOption[] = PRIORITY_ORDER.map((p) => ({
+  value: p,
+  label: PRIORITY_LABEL[p],
+}));
+
+/** Canonical state-type filter options (fixed ordering). */
+const STATE_OPTIONS: readonly FilterOption[] = STATE_GROUP_ORDER.map((t) => ({
+  value: t,
+  label: STATE_GROUP_LABEL[t],
+}));
 
 /** An empty filter (everything visible). */
 export const EMPTY_FILTER: GraphFilter = {
@@ -136,8 +162,24 @@ export interface GraphToolbarProps {
   direction: LayoutDirection;
   /** Emit a new layout direction. */
   onDirectionChange: (direction: LayoutDirection) => void;
+  /** Current grouping axis. */
+  groupBy: GroupBy;
+  /** Emit a new grouping axis. */
+  onGroupByChange: (groupBy: GroupBy) => void;
+  /** Whether critical-path highlighting is on. */
+  showCritical: boolean;
+  /** Toggle critical-path highlighting. */
+  onToggleCritical: () => void;
+  /** Whether the ready-queue panel is shown. */
+  showReady: boolean;
+  /** Toggle the ready-queue panel. */
+  onToggleReady: () => void;
+  /** Neighborhood depth control (only shown when `onDepthChange` is provided). */
+  depth?: number;
+  /** Change the neighborhood depth (1–5); absent outside the neighborhood scope. */
+  onDepthChange?: (depth: number) => void;
   /** Live counts for the status line. */
-  counts: { tasks: number; deps: number; blocked: number };
+  counts: { tasks: number; deps: number; blocked: number; ready: number };
 }
 
 /** The focused-view filter + layout toolbar. */
@@ -148,17 +190,16 @@ export default function GraphToolbar({
   assigneeOptions,
   direction,
   onDirectionChange,
+  groupBy,
+  onGroupByChange,
+  showCritical,
+  onToggleCritical,
+  showReady,
+  onToggleReady,
+  depth,
+  onDepthChange,
   counts,
 }: GraphToolbarProps): React.JSX.Element {
-  const priorityOptions: FilterOption[] = PRIORITY_ORDER.map((p) => ({
-    value: p,
-    label: PRIORITY_LABEL[p],
-  }));
-  const stateOptions: FilterOption[] = STATE_GROUP_ORDER.map((t) => ({
-    value: t,
-    label: STATE_GROUP_LABEL[t],
-  }));
-
   return (
     <div className="flex flex-wrap items-center gap-2">
       <Input
@@ -188,7 +229,7 @@ export default function GraphToolbar({
       />
       <MultiSelect
         label="Priority"
-        options={priorityOptions}
+        options={PRIORITY_OPTIONS}
         selected={filter.priorities}
         onToggle={(v) => {
           onChange({ ...filter, priorities: toggle(filter.priorities, v) });
@@ -196,12 +237,61 @@ export default function GraphToolbar({
       />
       <MultiSelect
         label="State"
-        options={stateOptions}
+        options={STATE_OPTIONS}
         selected={filter.stateTypes}
         onToggle={(v) => {
           onChange({ ...filter, stateTypes: toggle(filter.stateTypes, v) });
         }}
       />
+
+      <Button
+        type="button"
+        size="sm"
+        variant={showCritical ? 'default' : 'outline'}
+        onClick={onToggleCritical}
+        aria-pressed={showCritical}
+      >
+        Critical path
+      </Button>
+      <Button
+        type="button"
+        size="sm"
+        variant={showReady ? 'default' : 'outline'}
+        onClick={onToggleReady}
+        aria-pressed={showReady}
+      >
+        Ready ({counts.ready})
+      </Button>
+
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            size="sm"
+            variant={groupBy === 'none' ? 'outline' : 'default'}
+            className="gap-1"
+          >
+            Group: {GROUP_BY_LABELS[groupBy]}
+            <ChevronDown className="size-3.5" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start">
+          <DropdownMenuLabel>Group by</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuRadioGroup
+            value={groupBy}
+            onValueChange={(v) => {
+              onGroupByChange(v as GroupBy);
+            }}
+          >
+            {GROUP_BY_ORDER.map((g) => (
+              <DropdownMenuRadioItem key={g} value={g}>
+                {GROUP_BY_LABELS[g]}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       <Button
         type="button"
@@ -215,6 +305,34 @@ export default function GraphToolbar({
       >
         {direction === 'LR' ? 'Horizontal' : 'Vertical'}
       </Button>
+
+      {onDepthChange !== undefined && depth !== undefined ? (
+        <div className="border-outline-variant flex items-center gap-1 rounded-md border px-1">
+          <button
+            type="button"
+            aria-label="Decrease depth"
+            disabled={depth <= 1}
+            onClick={() => {
+              onDepthChange(Math.max(1, depth - 1));
+            }}
+            className="text-on-surface-variant hover:text-on-surface px-1 disabled:opacity-40"
+          >
+            −
+          </button>
+          <span className="text-on-surface-variant text-xs">depth {depth}</span>
+          <button
+            type="button"
+            aria-label="Increase depth"
+            disabled={depth >= 5}
+            onClick={() => {
+              onDepthChange(Math.min(5, depth + 1));
+            }}
+            className="text-on-surface-variant hover:text-on-surface px-1 disabled:opacity-40"
+          >
+            +
+          </button>
+        </div>
+      ) : null}
 
       <span className="text-on-surface-variant ml-auto text-xs">
         {counts.tasks} tasks · {counts.deps} deps ·{' '}

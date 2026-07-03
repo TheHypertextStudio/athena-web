@@ -294,3 +294,34 @@ export async function wouldCreateCycle(
   `)) as unknown as { rows: unknown[] };
   return reach.rows.length > 0;
 }
+
+/**
+ * Whether reparenting `taskId` under `newParentId` would create a subtask cycle — i.e. `taskId`
+ * is already an ancestor of `newParentId` (making a task its own descendant).
+ *
+ * @remarks
+ * Walks UP the `parent_task_id` chain from `newParentId`; a hit on `taskId` means the move would
+ * close a loop. Runs inside the same SERIALIZABLE transaction as the write so two concurrent
+ * reparents can't each pass and commit an A→B / B→A loop. Self (`taskId === newParentId`) is
+ * rejected earlier as a validation error, not here.
+ *
+ * @param tx - The active SERIALIZABLE transaction (read + update must be atomic).
+ */
+export async function wouldCreateSubtaskCycle(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  orgId: string,
+  taskId: string,
+  newParentId: string,
+): Promise<boolean> {
+  const reach = (await tx.execute(sql`
+    WITH RECURSIVE ancestors AS (
+      SELECT parent_task_id AS p FROM task
+        WHERE id = ${newParentId} AND organization_id = ${orgId}
+      UNION
+      SELECT t.parent_task_id FROM task t
+        JOIN ancestors a ON t.id = a.p WHERE t.organization_id = ${orgId}
+    )
+    SELECT 1 AS hit FROM ancestors WHERE p = ${taskId} LIMIT 1
+  `)) as unknown as { rows: unknown[] };
+  return reach.rows.length > 0;
+}

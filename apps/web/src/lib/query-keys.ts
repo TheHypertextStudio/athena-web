@@ -21,6 +21,7 @@ export const queryKeys = {
   cycle: (orgId: string, cycleId: string) => ['org', orgId, 'cycles', cycleId] as const,
   teams: (orgId: string) => ['org', orgId, 'teams'] as const,
   team: (orgId: string, teamId: string) => ['org', orgId, 'teams', teamId] as const,
+  milestones: (orgId: string) => ['org', orgId, 'milestones'] as const,
   members: (orgId: string) => ['org', orgId, 'members'] as const,
   roles: (orgId: string) => ['org', orgId, 'roles'] as const,
   invitations: (orgId: string) => ['org', orgId, 'invitations'] as const,

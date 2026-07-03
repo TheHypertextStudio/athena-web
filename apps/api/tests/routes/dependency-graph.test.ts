@@ -93,6 +93,16 @@ describe('dependency graph — org scope', () => {
     expect(nodeIds.has(child)).toBe(true);
     expect(nodeIds.has(secret)).toBe(false); // private, no grant
 
+    // Each node carries the schedule/estimate/grouping fields (null by default).
+    const nodeA = out.nodes.find((n) => n.id === a);
+    expect(nodeA).toMatchObject({
+      startDate: null,
+      dueDate: null,
+      estimate: null,
+      milestoneId: null,
+      cycleId: null,
+    });
+
     // Dependency edge A→B is present; A→secret is pruned (endpoint not viewable).
     const dep = out.edges.filter((e) => e.kind === 'dependency');
     expect(dep).toEqual([expect.objectContaining({ source: a, target: b, kind: 'dependency' })]);

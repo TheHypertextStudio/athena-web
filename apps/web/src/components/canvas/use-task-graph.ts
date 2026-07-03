@@ -18,6 +18,7 @@ import { api } from '@/lib/api';
 import { apiQueryOptions, queryKeys, STALE, useLiveApiQuery } from '@/lib/query';
 
 import { annotateGraph, type EdgeTone } from './graph-annotate';
+import { computeInsights } from './graph-insight';
 import { type TaskGraphScope, taskGraphScopeKey } from './scope';
 import type { ResolvedAssignee, TaskNodeData } from './task-node';
 import type { CanvasDensity } from './use-dagre-layout';
@@ -71,6 +72,8 @@ function toFlow(
 ): { nodes: Node[]; edges: Edge[] } {
   if (!graph) return { nodes: [], edges: [] };
   const { nodeFlags, edgeTone } = annotateGraph(graph);
+  // `graph.nodes`/`graph.edges` are structural supersets of what the pure analysis reads.
+  const insights = computeInsights(graph.nodes, graph.edges);
 
   const nodes: Node[] = graph.nodes.map((n) => {
     const flags = nodeFlags.get(n.id) ?? { isBlocked: false, isReady: false };
@@ -84,10 +87,15 @@ function toFlow(
         priority: n.priority,
         projectId: n.projectId ?? null,
         projectName: options.resolveProjectName?.(n.projectId ?? null) ?? null,
+        teamId: n.teamId,
+        milestoneId: n.milestoneId ?? null,
         assigneeId: n.assigneeId ?? null,
         assignee: options.resolveAssignee?.(n.assigneeId ?? null) ?? null,
         isBlocked: flags.isBlocked,
         isReady: flags.isReady,
+        dueDate: n.dueDate ?? null,
+        onCriticalPath: insights.criticalNodeIds.has(n.id),
+        isBottleneck: insights.bottleneckIds.has(n.id),
         density,
         isRoot: n.id === rootTaskId,
       } satisfies TaskNodeData,
@@ -96,17 +104,22 @@ function toFlow(
 
   const edges: Edge[] = graph.edges.map((e) => {
     const tone = edgeTone.get(e.id) ?? 'neutral';
-    const stroke = TONE_STROKE[tone];
     const isSubtask = e.kind === 'subtask';
+    const critical = insights.criticalEdgeIds.has(e.id);
+    // Critical-path edges read bold in the primary accent; others follow their blocker-completion tone.
+    const stroke = critical ? 'var(--color-primary)' : TONE_STROKE[tone];
     return {
       id: e.id,
       source: e.source,
       target: e.target,
-      // The edge id encodes its kind (`dep:`/`sub:`); keep `kind` on data for delete-gating.
+      // The edge id encodes its kind (`dep:`/`sub:`); keep `kind` on data for delete/reparent gating.
       data: { kind: e.kind },
+      // Only subtask edges reparent by dragging; dependency edges are created/deleted, not reconnected.
+      reconnectable: isSubtask,
       markerEnd: { type: MarkerType.ArrowClosed, ...(stroke ? { color: stroke } : {}) },
       style: {
         ...(stroke ? { stroke } : {}),
+        ...(critical ? { strokeWidth: 2.5 } : {}),
         ...(isSubtask ? { strokeDasharray: '5 4', strokeOpacity: 0.7 } : {}),
       },
     };

@@ -611,6 +611,14 @@ describe('calendar sync engine — provider neutrality (fake adapter)', () => {
         pullCalls.push({ cursor: input.cursor });
         return pullImpl(input.cursor);
       },
+      // This describe block only proves the PULL half is provider-neutral; the write
+      // outbox has its own dedicated fake adapter in calendar-write-back.test.ts.
+      pushItem() {
+        throw new Error('fake adapter: pushItem not exercised by provider-neutrality tests');
+      },
+      deleteItem() {
+        throw new Error('fake adapter: deleteItem not exercised by provider-neutrality tests');
+      },
     };
     const discoverConnections: CalendarProviderSyncModule['discoverConnections'] = async () => [
       {

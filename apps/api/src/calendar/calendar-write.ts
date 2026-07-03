@@ -1,22 +1,46 @@
 /**
- * `@docket/api` — Docket-native calendar-block write service.
+ * `@docket/api` — the calendar-item write service.
  *
  * @remarks
- * Covers CRUD for `calendar_item` rows of kind `'native_block'` only (focus, travel,
- * do-not-schedule, holds — created directly in Docket, with no provider account).
- * `provider_event` writes (the provider write outbox) and task-link mutations are later
- * phases; this module never touches `calendar_item_write` and never sets `syncState` to
- * anything but `'clean'`.
+ * Covers CRUD for `calendar_item` rows: `native_block` (focus, travel, do-not-schedule,
+ * holds — created directly in Docket, no provider account) is a direct write with
+ * `syncState` always `'clean'`; `task_timebox`/`availability_block` are derived views and
+ * reject edits outright; `provider_event` is local-first — a PATCH/DELETE applies
+ * immediately to the local row, then enqueues a `calendar_item_write` outbox row (see
+ * `calendar-outbox.ts`) and attempts the provider push in the foreground. Task-link
+ * mutations live in `calendar-task-links.ts`.
  */
 import { and, asc, eq } from 'drizzle-orm';
 
-import { calendarItem, calendarLayer, type Database } from '@docket/db';
-import type { CalendarItemCreate, CalendarItemUpdate } from '@docket/types';
+import { calendarItem, calendarItemWrite, calendarLayer, type Database } from '@docket/db';
+import {
+  CalendarItemKind,
+  type CalendarItemCreate,
+  type CalendarItemPermission,
+  type CalendarItemUpdate,
+  type CalendarItemWritePatch,
+  type CalendarProvider,
+} from '@docket/types';
 
-import { NotFoundError, ValidationError } from '../error';
+import type { ApiError } from '../error';
+import {
+  CapabilityError,
+  ConflictError,
+  InsufficientScopeError,
+  NotFoundError,
+  ValidationError,
+} from '../error';
+import type { CalendarProviderSyncModule } from '../routes/calendar-sync-engine';
+
+import { attemptCalendarItemWrite } from './calendar-outbox';
+import { resolveItemPermissions } from './calendar-permissions';
+import { loadOwnedCalendarItem } from './calendar-read';
 
 type CalendarItemRow = typeof calendarItem.$inferSelect;
 type CalendarLayerRow = typeof calendarLayer.$inferSelect;
+
+/** The provider → sync-module map an outbox-touching write optionally attempts through. */
+type SyncModules = Partial<Record<CalendarProvider, CalendarProviderSyncModule>>;
 
 /** Select a user's native-blocks layer(s), earliest first. */
 function selectNativeLayers(db: Database, userId: string) {
@@ -182,29 +206,62 @@ export async function createNativeBlock(
   return row;
 }
 
-/** Load a native block owned by `userId`, or throw the appropriate typed error. */
-async function requireOwnedNativeBlock(
-  db: Database,
-  userId: string,
-  itemId: string,
-): Promise<CalendarItemRow> {
-  const rows = await db
-    .select()
-    .from(calendarItem)
-    .where(and(eq(calendarItem.id, itemId), eq(calendarItem.userId, userId)))
-    .limit(1);
-  const row = rows[0];
-  if (row === undefined) throw new NotFoundError('Calendar item not found');
-  if (row.kind !== 'native_block') {
-    throw new ValidationError([
-      {
-        path: ['id'],
-        message:
-          'This calendar item is not a Docket-native block; provider-event edits are not supported yet',
-      },
-    ]);
+/** Reject a PATCH/DELETE against a derived-view kind (`task_timebox`/`availability_block`). */
+function rejectDerivedKind(kind: CalendarItemKind, action: 'edits' | 'deletion'): never {
+  throw new ValidationError([
+    {
+      path: ['id'],
+      message: `'${kind}' items are a derived view and do not support ${action} via this route`,
+    },
+  ]);
+}
+
+/**
+ * Map a resolved-permission read-only reason to its typed problem.
+ *
+ * @remarks
+ * An explicit, exhaustive switch (per this task's binding rules) — a reason added to
+ * {@link CalendarItemPermission} later without a case here is a compile error, not a
+ * silently-allowed fallthrough.
+ */
+function problemForReadOnlyReason(reason: CalendarItemPermission['readOnlyReason']): ApiError {
+  switch (reason) {
+    case 'provider_scope':
+      return new InsufficientScopeError(
+        'calendar.write',
+        "This Google account hasn't granted calendar write access — reconnect with write permission to edit this event",
+      );
+    case 'conflict':
+      return new ConflictError('Resolve the conflict before editing this event');
+    case 'layer_access_role':
+      return new CapabilityError('This calendar is not editable for your account role');
+    case 'event_capability':
+      return new CapabilityError('This event does not allow edits by the connected account');
+    case 'recurrence_unsupported':
+      return new CapabilityError('Recurring event edits are not supported yet');
+    case 'kind':
+      return new CapabilityError('This calendar item kind is not editable');
+    case null:
+      /* v8 ignore next -- @preserve defensive: canEditCore/canDelete false implies a non-null reason */
+      return new CapabilityError('This calendar item is read-only');
   }
-  return row;
+}
+
+/** Build the outbox-stored patch from a validated update body + its resolved time-shape fields. */
+function toWritePatch(
+  patch: CalendarItemUpdate,
+  timePatch: TimeShapePatch,
+): CalendarItemWritePatch {
+  const out: CalendarItemWritePatch = {};
+  if (patch.title !== undefined) out.title = patch.title;
+  if (patch.description !== undefined) out.description = patch.description;
+  if (patch.location !== undefined) out.location = patch.location;
+  if (patch.timezone !== undefined) out.timezone = patch.timezone;
+  if (timePatch.startsAt) out.startsAt = timePatch.startsAt.toISOString();
+  if (timePatch.endsAt) out.endsAt = timePatch.endsAt.toISOString();
+  if (timePatch.allDayStartDate) out.allDayStartDate = timePatch.allDayStartDate;
+  if (timePatch.allDayEndDate) out.allDayEndDate = timePatch.allDayEndDate;
+  return out;
 }
 
 /**
@@ -335,29 +392,19 @@ function resolveTimeShapePatch(item: CalendarItemRow, patch: CalendarItemUpdate)
 }
 
 /**
- * Patch a Docket-native calendar block's core fields.
+ * Apply a validated patch to an already-loaded, already-owned `native_block` row.
  *
  * @remarks
- * Rejects `provider_event` (and any non-`native_block`) items explicitly — provider-event
- * patching arrives with the write outbox in a later phase. Empty-string `description`/
- * `location` clear the field to `NULL` per the DTO contract. See
- * {@link resolveTimeShapePatch} for the time-shape switching rules.
+ * Empty-string `description`/`location` clear the field to `NULL` per the DTO contract.
+ * See {@link resolveTimeShapePatch} for the time-shape switching rules.
  *
- * @param db - The database client.
- * @param input.userId - The owning Docket user id.
- * @param input.itemId - The calendar item id to patch.
- * @param input.patch - The validated update body.
- * @throws {NotFoundError} When the item does not exist or is not owned by `userId`.
- * @throws {ValidationError} When the item is not a `native_block`, or the resulting time
- *   shape is invalid.
+ * @throws {ValidationError} When the resulting time shape is invalid.
  */
-export async function updateNativeBlock(
+async function applyNativeBlockPatch(
   db: Database,
-  input: { userId: string; itemId: string; patch: CalendarItemUpdate },
+  existing: CalendarItemRow,
+  patch: CalendarItemUpdate,
 ): Promise<CalendarItemRow> {
-  const { userId, itemId, patch } = input;
-  const existing = await requireOwnedNativeBlock(db, userId, itemId);
-
   const timePatch = resolveTimeShapePatch(existing, patch);
 
   const patchValues: Partial<typeof calendarItem.$inferInsert> = { ...timePatch };
@@ -373,43 +420,206 @@ export async function updateNativeBlock(
   const updated = await db
     .update(calendarItem)
     .set(patchValues)
-    .where(and(eq(calendarItem.id, itemId), eq(calendarItem.userId, userId)))
+    .where(eq(calendarItem.id, existing.id))
     .returning();
   const row = updated[0];
-  /* v8 ignore next -- @preserve defensive: existence was verified above */
+  /* v8 ignore next -- @preserve defensive: existence was verified by the caller */
   if (row === undefined) throw new NotFoundError('Calendar item not found');
   return row;
 }
 
 /**
- * Hard-delete a Docket-native calendar block.
+ * Hard-delete an already-loaded, already-owned `native_block` row.
  *
  * @remarks
- * Native blocks have no provider tombstone semantics (unlike `provider_event`, which will
- * eventually soft-archive to reconcile with the provider), so this is a real `DELETE`.
+ * Native blocks have no provider tombstone semantics (unlike `provider_event`, which
+ * soft-archives to reconcile with the provider), so this is a real `DELETE`.
  * `calendar_item_task_link` rows referencing the item cascade via its FK
  * (`ON DELETE CASCADE`) — no explicit cleanup needed here.
+ */
+async function hardDeleteCalendarItem(
+  db: Database,
+  existing: CalendarItemRow,
+): Promise<CalendarItemRow> {
+  const deleted = await db.delete(calendarItem).where(eq(calendarItem.id, existing.id)).returning();
+  const row = deleted[0];
+  /* v8 ignore next -- @preserve defensive: existence was verified by the caller */
+  if (row === undefined) throw new NotFoundError('Calendar item not found');
+  return row;
+}
+
+/**
+ * Patch a calendar item's core fields — the single entry point PATCH `/items/:id` calls,
+ * dispatching by kind.
+ *
+ * @remarks
+ * `native_block` applies directly (`syncState` stays `'clean'`). `task_timebox`/
+ * `availability_block` are derived views and reject edits. `provider_event` is
+ * local-first: {@link resolveItemPermissions} gates the edit, the patch applies to the
+ * local row immediately (`syncState` -> `'push_pending'`), a `calendar_item_write`
+ * outbox row is enqueued, and — when `syncModules` is supplied — one foreground push
+ * attempt runs before this returns, so most edits are already `'clean'` by the time the
+ * caller re-reads the item.
+ *
+ * @param db - The database client.
+ * @param input.userId - The owning Docket user id.
+ * @param input.itemId - The calendar item id to patch.
+ * @param input.patch - The validated update body.
+ * @param input.syncModules - The provider → sync-module map for the foreground push
+ *   attempt; omit only in contexts that intentionally skip it (e.g. isolated unit tests).
+ * @throws {NotFoundError} When the item does not exist or is not owned by `userId`.
+ * @throws {ValidationError} When the item kind rejects edits, or the resulting time shape is invalid.
+ * @throws {InsufficientScopeError} When a `provider_event` edit needs calendar write scope the connection lacks.
+ * @throws {ConflictError} When a `provider_event` item has an unresolved conflict.
+ * @throws {CapabilityError} When a `provider_event` edit is denied for another read-only reason.
+ */
+export async function updateCalendarItem(
+  db: Database,
+  input: { userId: string; itemId: string; patch: CalendarItemUpdate; syncModules?: SyncModules },
+): Promise<CalendarItemRow> {
+  const { userId, itemId, patch } = input;
+  const loaded = await loadOwnedCalendarItem(db, userId, itemId);
+  const kind = CalendarItemKind.parse(loaded.item.kind);
+
+  if (kind === 'native_block') return applyNativeBlockPatch(db, loaded.item, patch);
+  if (kind === 'task_timebox' || kind === 'availability_block') rejectDerivedKind(kind, 'edits');
+
+  // kind === 'provider_event'
+  const permissions = resolveItemPermissions(loaded);
+  if (!permissions.canEditCore) throw problemForReadOnlyReason(permissions.readOnlyReason);
+
+  const connection = loaded.connection;
+  /* v8 ignore next -- @preserve defensive: canEditCore true for provider_event requires a connection */
+  if (connection === null) throw new Error('provider_event item missing its connection');
+
+  const timePatch = resolveTimeShapePatch(loaded.item, patch);
+  const patchValues: Partial<typeof calendarItem.$inferInsert> = {
+    ...timePatch,
+    syncState: 'push_pending',
+  };
+  if (patch.title !== undefined) patchValues.title = patch.title;
+  if (patch.description !== undefined) {
+    patchValues.description = patch.description === '' ? null : patch.description;
+  }
+  if (patch.location !== undefined) {
+    patchValues.location = patch.location === '' ? null : patch.location;
+  }
+  if (patch.timezone !== undefined) patchValues.timezone = patch.timezone;
+
+  const updatedRows = await db
+    .update(calendarItem)
+    .set(patchValues)
+    .where(eq(calendarItem.id, itemId))
+    .returning();
+  const updated = updatedRows[0];
+  /* v8 ignore next -- @preserve defensive: existence was verified above */
+  if (updated === undefined) throw new NotFoundError('Calendar item not found');
+
+  const insertedWrite = await db
+    .insert(calendarItemWrite)
+    .values({
+      userId,
+      calendarItemId: itemId,
+      connectionId: connection.id,
+      provider: connection.provider,
+      operation: 'update',
+      patch: toWritePatch(patch, timePatch),
+      baseExternalEtag: loaded.item.externalEtag,
+      baseUpdatedExternalAt: loaded.item.updatedExternalAt,
+      status: 'pending',
+      attempts: 0,
+    })
+    .returning({ id: calendarItemWrite.id });
+  const write = insertedWrite[0];
+  /* v8 ignore next -- @preserve defensive: insert always returns a row */
+  if (write === undefined) throw new Error('calendar item write insert returned no row');
+
+  if (input.syncModules !== undefined) {
+    await attemptCalendarItemWrite(db, write.id, input.syncModules);
+  }
+
+  return updated;
+}
+
+/**
+ * Delete (or, for `provider_event`, queue the archival of) a calendar item — the single
+ * entry point DELETE `/items/:id` calls, dispatching by kind.
+ *
+ * @remarks
+ * `native_block` hard-deletes immediately. `task_timebox`/`availability_block` are
+ * derived views and reject deletion. `provider_event` is local-first but NOT
+ * locally archived up front (unlike a hard delete, an archive that later turns out to be
+ * a conflict would hide the item from the user while the provider still has it): a
+ * `calendar_item_write` `'delete'` outbox row is enqueued and attempted in the
+ * foreground; only an `'applied'` outcome archives the item (see `calendar-outbox.ts`'s
+ * `persistApplied`). Any other outcome leaves the item visible with `syncState`
+ * reflecting it (`'push_pending'`/`'conflict'`/`'provider_error'`).
  *
  * @param db - The database client.
  * @param input.userId - The owning Docket user id.
  * @param input.itemId - The calendar item id to delete.
+ * @param input.syncModules - The provider → sync-module map for the foreground push attempt.
  * @throws {NotFoundError} When the item does not exist or is not owned by `userId`.
- * @throws {ValidationError} When the item is not a `native_block`.
- * @returns the deleted row.
+ * @throws {ValidationError} When the item kind rejects deletion.
+ * @throws {InsufficientScopeError} When a `provider_event` delete needs calendar write scope the connection lacks.
+ * @throws {ConflictError} When a `provider_event` item has an unresolved conflict.
+ * @throws {CapabilityError} When a `provider_event` delete is denied for another read-only reason.
+ * @returns the item row after the operation — hard-deleted (native) or the fresh (possibly archived) row (provider).
  */
-export async function deleteNativeBlock(
+export async function deleteCalendarItem(
   db: Database,
-  input: { userId: string; itemId: string },
+  input: { userId: string; itemId: string; syncModules?: SyncModules },
 ): Promise<CalendarItemRow> {
   const { userId, itemId } = input;
-  await requireOwnedNativeBlock(db, userId, itemId);
+  const loaded = await loadOwnedCalendarItem(db, userId, itemId);
+  const kind = CalendarItemKind.parse(loaded.item.kind);
 
-  const deleted = await db
-    .delete(calendarItem)
-    .where(and(eq(calendarItem.id, itemId), eq(calendarItem.userId, userId)))
-    .returning();
-  const row = deleted[0];
-  /* v8 ignore next -- @preserve defensive: existence was verified above */
-  if (row === undefined) throw new NotFoundError('Calendar item not found');
-  return row;
+  if (kind === 'native_block') return hardDeleteCalendarItem(db, loaded.item);
+  if (kind === 'task_timebox' || kind === 'availability_block') rejectDerivedKind(kind, 'deletion');
+
+  // kind === 'provider_event'
+  const permissions = resolveItemPermissions(loaded);
+  if (!permissions.canDelete) throw problemForReadOnlyReason(permissions.readOnlyReason);
+
+  const connection = loaded.connection;
+  /* v8 ignore next -- @preserve defensive: canDelete true for provider_event requires a connection */
+  if (connection === null) throw new Error('provider_event item missing its connection');
+
+  const insertedWrite = await db
+    .insert(calendarItemWrite)
+    .values({
+      userId,
+      calendarItemId: itemId,
+      connectionId: connection.id,
+      provider: connection.provider,
+      operation: 'delete',
+      patch: {},
+      baseExternalEtag: loaded.item.externalEtag,
+      baseUpdatedExternalAt: loaded.item.updatedExternalAt,
+      status: 'pending',
+      attempts: 0,
+    })
+    .returning({ id: calendarItemWrite.id });
+  const write = insertedWrite[0];
+  /* v8 ignore next -- @preserve defensive: insert always returns a row */
+  if (write === undefined) throw new Error('calendar item write insert returned no row');
+
+  await db
+    .update(calendarItem)
+    .set({ syncState: 'push_pending' })
+    .where(eq(calendarItem.id, itemId));
+
+  if (input.syncModules !== undefined) {
+    await attemptCalendarItemWrite(db, write.id, input.syncModules);
+  }
+
+  const freshRows = await db
+    .select()
+    .from(calendarItem)
+    .where(eq(calendarItem.id, itemId))
+    .limit(1);
+  const fresh = freshRows[0];
+  /* v8 ignore next -- @preserve defensive: the row cannot vanish between the update above and this read */
+  if (fresh === undefined) throw new NotFoundError('Calendar item not found');
+  return fresh;
 }

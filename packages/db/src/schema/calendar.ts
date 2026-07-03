@@ -37,6 +37,7 @@ import type {
   CalendarEventOrganizer,
   CalendarItemConflict,
   CalendarItemPermission,
+  CalendarItemWritePatch,
   CalendarScopeState,
 } from '../types';
 import { user } from './auth';
@@ -333,7 +334,7 @@ export const calendarItemWrite = pgTable(
       .references(() => calendarConnection.id, { onDelete: 'cascade' }),
     provider: text('provider').notNull(),
     operation: text('operation').notNull(),
-    patch: jsonb('patch').$type<Record<string, unknown>>().notNull(),
+    patch: jsonb('patch').$type<CalendarItemWritePatch>().notNull(),
     baseExternalEtag: text('base_external_etag'),
     baseUpdatedExternalAt: timestamp('base_updated_external_at'),
     status: text('status').notNull().default('pending'),

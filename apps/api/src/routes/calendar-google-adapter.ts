@@ -14,6 +14,7 @@ import type {
   CalendarEventAttendee,
   CalendarEventOrganizer,
   CalendarItemPermission,
+  CalendarItemWritePatch,
   CalendarScopeState,
 } from '@docket/types';
 import { and, eq } from 'drizzle-orm';
@@ -22,10 +23,14 @@ import { decodeIdTokenClaims } from '../lib/id-token';
 
 import {
   CalendarReauthRequiredError,
+  type CalendarDeleteInput,
+  type CalendarDeleteResult,
   type CalendarProviderAdapter,
   type CalendarProviderCredentials,
   type CalendarProviderSyncModule,
   type CalendarPullResult,
+  type CalendarPushInput,
+  type CalendarPushResult,
   type DiscoveredCalendarConnection,
   type ProviderItemSnapshot,
   type ProviderLayerSnapshot,
@@ -56,15 +61,47 @@ export class GoogleCalendarApiError extends Error {
   }
 }
 
-/** Injectable Google Calendar HTTP seam: fetch one URL as JSON with a bearer token. */
-export type GoogleFetchJson = <T>(url: string, accessToken: string) => Promise<T>;
+/**
+ * Optional request shape for a non-GET {@link GoogleFetchJson} call: `pushItem`/
+ * `deleteItem` reuse the exact same seam `listLayers`/`pullChanges` use (one HTTP
+ * implementation, real or fake) rather than a parallel seam type.
+ */
+export interface GoogleFetchJsonInit {
+  readonly method?: 'PATCH' | 'DELETE';
+  /** Extra headers, e.g. `If-Match` for optimistic-concurrency writes. */
+  readonly headers?: Record<string, string>;
+  /** JSON-serialized as the request body when present. */
+  readonly body?: unknown;
+}
 
-async function defaultFetchJson<T>(url: string, accessToken: string): Promise<T> {
-  const res = await fetch(url, { headers: { authorization: `Bearer ${accessToken}` } });
+/** Injectable Google Calendar HTTP seam: fetch one URL as JSON with a bearer token. */
+export type GoogleFetchJson = <T>(
+  url: string,
+  accessToken: string,
+  init?: GoogleFetchJsonInit,
+) => Promise<T>;
+
+async function defaultFetchJson<T>(
+  url: string,
+  accessToken: string,
+  init?: GoogleFetchJsonInit,
+): Promise<T> {
+  const res = await fetch(url, {
+    method: init?.method ?? 'GET',
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      ...(init?.body !== undefined ? { 'content-type': 'application/json' } : {}),
+      ...(init?.headers ?? {}),
+    },
+    ...(init?.body !== undefined ? { body: JSON.stringify(init.body) } : {}),
+  });
   if (!res.ok) {
     throw new GoogleCalendarApiError(res.status, `Google Calendar request failed (${res.status})`);
   }
-  return (await res.json()) as T;
+  // DELETE (and a 204 PATCH, if Google ever sends one) has no body to parse.
+  if (res.status === 204) return undefined as T;
+  const text = await res.text();
+  return (text.length > 0 ? JSON.parse(text) : undefined) as T;
 }
 
 /** Fetches a (possibly refreshed) OAuth access token for one linked Google account. */
@@ -291,6 +328,125 @@ async function incrementalPull(args: {
   }
 }
 
+/** Build one Google event PATCH body from a {@link CalendarItemWritePatch}. */
+function toEventPatchBody(patch: CalendarItemWritePatch): Record<string, unknown> {
+  const body: Record<string, unknown> = {};
+  if (patch.title !== undefined) body['summary'] = patch.title;
+  if (patch.description !== undefined) body['description'] = patch.description;
+  if (patch.location !== undefined) body['location'] = patch.location;
+  // Whichever shape the patch carries, it always carries BOTH fields of that shape (see
+  // `CalendarItemWritePatch`'s remarks) — so `start`/`end` are always built together,
+  // giving Google a shape-consistent object even across a timed<->all-day switch.
+  if (patch.startsAt !== undefined || patch.endsAt !== undefined) {
+    const timeZone = patch.timezone !== undefined ? { timeZone: patch.timezone } : {};
+    body['start'] = { dateTime: patch.startsAt, ...timeZone };
+    body['end'] = { dateTime: patch.endsAt, ...timeZone };
+  } else if (patch.allDayStartDate !== undefined || patch.allDayEndDate !== undefined) {
+    body['start'] = { date: patch.allDayStartDate };
+    body['end'] = { date: patch.allDayEndDate };
+  }
+  return body;
+}
+
+/** `If-Match` header set, or empty when there is no anchor to send. */
+function ifMatchHeaders(baseEtag: string | null): Record<string, string> {
+  return baseEtag !== null ? { 'If-Match': baseEtag } : {};
+}
+
+/**
+ * Map a thrown push/delete error to its {@link CalendarPushResult}/{@link CalendarDeleteResult}
+ * outcome. Handles every status the adapter contract names EXCEPT 412, which the callers
+ * intercept first (it needs a follow-up GET, not just an outcome literal).
+ */
+function mapPushError(err: unknown): {
+  outcome: 'reauth' | 'permanent' | 'retryable';
+  message: string;
+} {
+  if (err instanceof GoogleCalendarApiError) {
+    if (err.status === 401) return { outcome: 'reauth', message: err.message };
+    if (err.status === 403 || err.status === 404 || err.status === 400) {
+      return { outcome: 'permanent', message: err.message };
+    }
+    // 429/5xx, and any other unlisted status, are treated as transient — retry rather
+    // than silently giving up on an ambiguous code.
+    return { outcome: 'retryable', message: err.message };
+  }
+  const message = err instanceof Error ? err.message : 'Calendar push failed';
+  return { outcome: 'retryable', message };
+}
+
+/** GET the current event for a 412 conflict's `current` snapshot; any failure -> `null`. */
+async function fetchConflictSnapshot(
+  fetchJson: GoogleFetchJson,
+  url: string,
+  accessToken: string,
+): Promise<ProviderItemSnapshot | null> {
+  try {
+    const event = await fetchJson<GoogleCalendarEventResource>(url, accessToken);
+    return toItemSnapshot(event, true);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Push a local patch to one Google event: `PATCH .../events/{id}` with `If-Match`.
+ *
+ * @remarks
+ * The returned snapshot's `permissions` uses `layerEditableCore: true` — a push only
+ * happens after the write service already confirmed the item was editable, and the
+ * outbox executor never persists this snapshot's `permissions` field (only
+ * `externalEtag`/`updatedExternalAt`), so the value here is a documented placeholder,
+ * not a claim about the viewer's actual access.
+ */
+async function pushItem(
+  fetchJson: GoogleFetchJson,
+  input: CalendarPushInput,
+): Promise<CalendarPushResult> {
+  const url = `${GOOGLE_CALENDAR_BASE}/calendars/${encodeURIComponent(input.externalLayerId)}/events/${encodeURIComponent(input.externalEventId)}`;
+  try {
+    const event = await fetchJson<GoogleCalendarEventResource>(url, input.credentials.accessToken, {
+      method: 'PATCH',
+      headers: ifMatchHeaders(input.baseEtag),
+      body: toEventPatchBody(input.patch),
+    });
+    const snapshot = toItemSnapshot(event, true);
+    /* v8 ignore next -- @preserve defensive: a successful PATCH response always echoes the event id */
+    if (snapshot === null) throw new Error('Google event PATCH response missing an id');
+    return { outcome: 'applied', item: snapshot };
+  } catch (err) {
+    if (err instanceof GoogleCalendarApiError && err.status === 412) {
+      const current = await fetchConflictSnapshot(fetchJson, url, input.credentials.accessToken);
+      return { outcome: 'conflict', current };
+    }
+    return mapPushError(err);
+  }
+}
+
+/** Delete one Google event: `DELETE .../events/{id}` with `If-Match`; `410` counts as already-applied. */
+async function deleteItem(
+  fetchJson: GoogleFetchJson,
+  input: CalendarDeleteInput,
+): Promise<CalendarDeleteResult> {
+  const url = `${GOOGLE_CALENDAR_BASE}/calendars/${encodeURIComponent(input.externalLayerId)}/events/${encodeURIComponent(input.externalEventId)}`;
+  try {
+    await fetchJson<unknown>(url, input.credentials.accessToken, {
+      method: 'DELETE',
+      headers: ifMatchHeaders(input.baseEtag),
+    });
+    return { outcome: 'applied' };
+  } catch (err) {
+    if (err instanceof GoogleCalendarApiError && err.status === 410) {
+      return { outcome: 'applied' };
+    }
+    if (err instanceof GoogleCalendarApiError && err.status === 412) {
+      const current = await fetchConflictSnapshot(fetchJson, url, input.credentials.accessToken);
+      return { outcome: 'conflict', current };
+    }
+    return mapPushError(err);
+  }
+}
+
 /** Build the {@link CalendarProviderAdapter} half of the Google sync module. */
 export function createGoogleCalendarAdapter(
   fetchJson: GoogleFetchJson = defaultFetchJson,
@@ -337,6 +493,8 @@ export function createGoogleCalendarAdapter(
         layerEditableCore,
       });
     },
+    pushItem: (input) => pushItem(fetchJson, input),
+    deleteItem: (input) => deleteItem(fetchJson, input),
   };
 }
 

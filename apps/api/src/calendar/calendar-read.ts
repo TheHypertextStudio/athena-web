@@ -27,9 +27,14 @@ import {
 import { and, asc, eq, gt, inArray, isNotNull, isNull, lt, or, sql } from 'drizzle-orm';
 import type { z } from 'zod';
 
+import { NotFoundError } from '../error';
 import { buildTaskViewFilter, type ViewableTaskParts } from '../routes/task-helpers';
 
-import { resolveItemPermissions } from './calendar-permissions';
+import {
+  type CalendarConnectionRow,
+  type CalendarLayerRow,
+  resolveItemPermissions,
+} from './calendar-permissions';
 import { toCalendarItemOut, toCalendarLayerOut } from './calendar-serializers';
 
 type CalendarItemRow = typeof calendarItem.$inferSelect;
@@ -220,6 +225,42 @@ export async function readCalendarLayers(
     .where(eq(calendarLayer.userId, userId))
     .orderBy(asc(calendarLayer.title));
   return rows.map(toCalendarLayerOut);
+}
+
+/**
+ * Load one active calendar item (with its owning layer and, when provider-bound, its
+ * connection) owned by `userId` — the shared ownership+join query the write service
+ * (`calendar-write.ts`) and the outbox (`calendar-outbox.ts`) both need before they can
+ * resolve {@link resolveItemPermissions} or dispatch a provider push. The ONE
+ * implementation of this join, per this task's binding rules.
+ *
+ * @throws {NotFoundError} When the item does not exist, is archived, or is not owned by `userId`.
+ */
+export async function loadOwnedCalendarItem(
+  db: Database,
+  userId: string,
+  itemId: string,
+): Promise<{
+  item: CalendarItemRow;
+  layer: CalendarLayerRow;
+  connection: CalendarConnectionRow | null;
+}> {
+  const rows = await db
+    .select({ item: calendarItem, layer: calendarLayer, connection: calendarConnection })
+    .from(calendarItem)
+    .innerJoin(calendarLayer, eq(calendarLayer.id, calendarItem.layerId))
+    .leftJoin(calendarConnection, eq(calendarConnection.id, calendarItem.connectionId))
+    .where(
+      and(
+        eq(calendarItem.id, itemId),
+        eq(calendarItem.userId, userId),
+        isNull(calendarItem.archivedAt),
+      ),
+    )
+    .limit(1);
+  const row = rows[0];
+  if (row === undefined) throw new NotFoundError('Calendar item not found');
+  return row;
 }
 
 /**

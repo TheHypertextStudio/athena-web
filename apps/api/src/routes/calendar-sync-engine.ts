@@ -16,9 +16,11 @@
  * `calendar-sync-modules.ts`) and passed in via options. A future Microsoft Graph or
  * CalDAV adapter plugs in without touching this file.
  *
- * There is no write outbox or push-notification handling yet (later phases) — this is
- * the inbound pull half only, matching {@link CalendarSyncResultOut}'s `writesApplied`/
- * `writesPending`/`conflicts` staying at 0.
+ * The write outbox (`../calendar/calendar-outbox.ts`) and its `pushItem`/`deleteItem`
+ * adapter contract (declared here, implemented per-provider) are the outbound half —
+ * push-notification subscriptions and cron draining are still a later phase. This module
+ * itself stays pull-only and provider-free: it declares the push/delete contract types
+ * so adapters and the outbox agree on a shape, but never calls them.
  */
 import {
   calendarConnection,
@@ -32,6 +34,7 @@ import {
   type CalendarEventAttendee,
   type CalendarEventOrganizer,
   type CalendarItemPermission,
+  type CalendarItemWritePatch,
   CalendarProvider,
   type CalendarScopeState,
   type CalendarSyncResultOut,
@@ -89,10 +92,60 @@ export interface CalendarPullResult {
   readonly full: boolean;
 }
 
+/** Input to {@link CalendarProviderAdapter.pushItem}: apply a local patch to one provider event. */
+export interface CalendarPushInput {
+  readonly credentials: CalendarProviderCredentials;
+  readonly externalLayerId: string;
+  readonly externalEventId: string;
+  readonly patch: CalendarItemWritePatch;
+  /** `If-Match` anchor for optimistic concurrency; `null` means unconditional (never sent by Google). */
+  readonly baseEtag: string | null;
+}
+
+/** Input to {@link CalendarProviderAdapter.deleteItem}: the same anchor, no patch. */
+export interface CalendarDeleteInput {
+  readonly credentials: CalendarProviderCredentials;
+  readonly externalLayerId: string;
+  readonly externalEventId: string;
+  readonly baseEtag: string | null;
+}
+
 /**
- * The provider-neutral pull contract every adapter implements. `pushItem`/`deleteItem`/
- * `watch` are NOT part of this contract yet — the write outbox and push-notification
- * subscriptions are later phases; adding stub methods now would violate the no-stubs rule.
+ * The outcome of one {@link CalendarProviderAdapter.pushItem} call.
+ *
+ * @remarks
+ * Every outcome the outbox executor (`calendar-outbox.ts`) must persist against, with no
+ * catch-all: `applied` (the provider accepted the write; `item` is the fresh snapshot to
+ * stamp locally), `conflict` (the anchor was stale — `current` is a best-effort fresh
+ * snapshot, `null` when even the follow-up read failed), `retryable` (transient; back off
+ * and retry), `permanent` (will never succeed unmodified; stop retrying), `reauth` (the
+ * credential itself is invalid; needs user re-authorization before any retry can help).
+ */
+export type CalendarPushResult =
+  | { readonly outcome: 'applied'; readonly item: ProviderItemSnapshot }
+  | { readonly outcome: 'conflict'; readonly current: ProviderItemSnapshot | null }
+  | { readonly outcome: 'retryable'; readonly message: string }
+  | { readonly outcome: 'permanent'; readonly message: string }
+  | { readonly outcome: 'reauth'; readonly message: string };
+
+/**
+ * The outcome of one {@link CalendarProviderAdapter.deleteItem} call.
+ *
+ * @remarks
+ * Identical to {@link CalendarPushResult} except `applied` carries no snapshot — a
+ * deleted event has nothing left to stamp beyond the archive itself.
+ */
+export type CalendarDeleteResult =
+  | { readonly outcome: 'applied' }
+  | { readonly outcome: 'conflict'; readonly current: ProviderItemSnapshot | null }
+  | { readonly outcome: 'retryable'; readonly message: string }
+  | { readonly outcome: 'permanent'; readonly message: string }
+  | { readonly outcome: 'reauth'; readonly message: string };
+
+/**
+ * The provider-neutral pull + push contract every adapter implements. Push-notification
+ * `watch` subscriptions are NOT part of this contract yet — that (plus cron draining of
+ * the outbox) is a later phase; adding a stub method now would violate the no-stubs rule.
  */
 export interface CalendarProviderAdapter {
   readonly provider: CalendarProvider;
@@ -115,6 +168,10 @@ export interface CalendarProviderAdapter {
      */
     readonly layerEditableCore: boolean;
   }): Promise<CalendarPullResult>;
+  /** Push a local patch to one provider event; see {@link CalendarPushResult} for outcomes. */
+  pushItem(input: CalendarPushInput): Promise<CalendarPushResult>;
+  /** Delete one provider event; see {@link CalendarDeleteResult} for outcomes. */
+  deleteItem(input: CalendarDeleteInput): Promise<CalendarDeleteResult>;
 }
 
 /** One discovered linked account for a provider, before credentials/scope are resolved. */
@@ -370,10 +427,34 @@ async function upsertProviderLayer(
 }
 
 /**
+ * Archive both the legacy `calendar_event` row and the layered `calendar_item` row
+ * (they share an id, per the Task 1 backfill) for one provider item — used both by an
+ * inbound cancelled/tombstone pull and by the write outbox's applied delete.
+ *
+ * @remarks
+ * Never touches `title` — cancelled/tombstone payloads may carry an empty title, and
+ * overwriting a known title with `''` on archive would be a regression. The ONE archive
+ * implementation both callers share, per this task's binding rules.
+ */
+export async function archiveProviderItem(db: Database, itemId: string, now: Date): Promise<void> {
+  await db
+    .update(calendarEvent)
+    .set({ archivedAt: now, status: 'cancelled' })
+    .where(eq(calendarEvent.id, itemId));
+  await db
+    .update(calendarItem)
+    .set({ archivedAt: now, status: 'cancelled' })
+    .where(eq(calendarItem.id, itemId));
+}
+
+/**
  * Dual-write one synced provider item: `calendar_event` (legacy) then `calendar_item`
  * (reusing the event row's id, per the Task 1 backfill). A cancelled snapshot archives
- * both rows WITHOUT touching `title` — cancelled/tombstone payloads may carry an empty
- * title, and overwriting a known title with '' on archive would be a regression.
+ * both rows via {@link archiveProviderItem}. A non-cancelled upsert always resets
+ * `conflict` to `null` and `syncState` to `'clean'` — the provider is the source of
+ * truth here, so an inbound sync overwriting an item's fields resolves any prior local
+ * write conflict on it (the ONLY other path that clears `conflict` is a successful
+ * outbox retry; see `calendar-outbox.ts`).
  */
 async function upsertProviderItem(
   db: Database,
@@ -401,14 +482,7 @@ async function upsertProviderItem(
 
   if (snapshot.cancelled) {
     if (!existing[0]) return 'skipped';
-    await db
-      .update(calendarEvent)
-      .set({ archivedAt: input.now, status: 'cancelled' })
-      .where(eq(calendarEvent.id, existing[0].id));
-    await db
-      .update(calendarItem)
-      .set({ archivedAt: input.now, status: 'cancelled' })
-      .where(eq(calendarItem.id, existing[0].id));
+    await archiveProviderItem(db, existing[0].id, input.now);
     return 'archived';
   }
 
@@ -482,6 +556,9 @@ async function upsertProviderItem(
     updatedExternalAt: snapshot.updatedExternalAt,
     externalEtag: snapshot.externalEtag,
     syncState: 'clean',
+    // The provider wins on inbound sync: any prior unresolved write conflict on this item
+    // is superseded by the fresh provider snapshot (see this function's remarks).
+    conflict: null,
     archivedAt: null,
   };
   const existingItem = await db
@@ -545,7 +622,9 @@ export async function syncCalendarConnections(
     itemsCreated: 0,
     itemsUpdated: 0,
     itemsArchived: 0,
-    // No write outbox / push-notification handling yet (later phases).
+    // This pull-only engine never touches the write outbox; the `/me/calendar/sync`
+    // route folds in real `writesApplied`/`writesPending`/`conflicts` counts by draining
+    // the outbox (`calendar-outbox.ts`) after this function returns.
     writesApplied: 0,
     writesPending: 0,
     conflicts: 0,

@@ -42,6 +42,11 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 
 import {
+  countCalendarWriteState,
+  drainDueCalendarItemWrites,
+  retryCalendarItemWrite,
+} from '../calendar/calendar-outbox';
+import {
   readCalendarItemsInRange,
   readCalendarLayers,
   readItemDetail,
@@ -54,8 +59,8 @@ import {
 import { detachTaskFromItem, linkTaskToItem } from '../calendar/calendar-task-links';
 import {
   createNativeBlock,
-  deleteNativeBlock,
-  updateNativeBlock,
+  deleteCalendarItem,
+  updateCalendarItem,
 } from '../calendar/calendar-write';
 import type { AppEnv } from '../context';
 import { NotFoundError, ValidationError } from '../error';
@@ -269,18 +274,21 @@ const meCalendar = new Hono<AppEnv>()
       summary: 'Sync Google Calendar',
       response: CalendarSyncResultOut,
       description:
-        'Run a first-party calendar sync across every linked provider account (currently Google) via the provider-neutral sync engine.',
+        'Run a first-party calendar sync across every linked provider account (currently Google) via the provider-neutral sync engine, then drain any provider-bound writes that are due for a backoff retry so a manual "Sync Now" also flushes the outbox.',
     }),
     async (c) => {
       const userId = requireUserId(c);
-      return ok(
-        c,
-        CalendarSyncResultOut,
-        await syncCalendarConnections(db, {
-          userId,
-          adapters: createDefaultCalendarSyncModules(),
-        }),
-      );
+      const syncModules = createDefaultCalendarSyncModules();
+      const pullResult = await syncCalendarConnections(db, { userId, adapters: syncModules });
+      const now = new Date();
+      const drainResult = await drainDueCalendarItemWrites(db, { now, syncModules });
+      const { writesPending, conflicts } = await countCalendarWriteState(db, userId);
+      return ok(c, CalendarSyncResultOut, {
+        ...pullResult,
+        writesApplied: drainResult.applied,
+        writesPending,
+        conflicts,
+      });
     },
   )
   .post(
@@ -444,10 +452,10 @@ const meCalendar = new Hono<AppEnv>()
     '/items/:id',
     apiDoc({
       tag: 'Me',
-      summary: 'Update a native calendar block',
+      summary: 'Update a calendar item',
       response: CalendarItemOut,
       description:
-        "Patch a Docket-native calendar block's core fields (title, description, location, timezone, time bounds). Only `native_block` items are supported here — a `provider_event` item returns 422 (provider-event patching arrives with the write outbox in a later phase). An empty string for `description`/`location` clears the field. Changing the time shape (timed <-> all-day) requires the complete new shape's fields. 404 when the item does not exist or is not owned by the caller.",
+        "Patch a calendar item's core fields (title, description, location, timezone, time bounds). `native_block` items apply directly; `provider_event` items apply locally and push to the provider (foreground attempt), returning a fresh `syncState`; `task_timebox`/`availability_block` items reject edits (422, derived views). An empty string for `description`/`location` clears the field. Changing the time shape (timed <-> all-day) requires the complete new shape's fields. 404 when the item does not exist or is not owned by the caller; 403 when a `provider_event` edit lacks the required scope/role/capability; 409 when the item has an unresolved conflict.",
     }),
     zParam(idParam),
     zJson(CalendarItemUpdate),
@@ -455,7 +463,12 @@ const meCalendar = new Hono<AppEnv>()
       const userId = requireUserId(c);
       const { id } = c.req.valid('param');
       const body = c.req.valid('json');
-      await updateNativeBlock(db, { userId, itemId: id, patch: body });
+      await updateCalendarItem(db, {
+        userId,
+        itemId: id,
+        patch: body,
+        syncModules: createDefaultCalendarSyncModules(),
+      });
       const detail = await readItemDetail(db, { userId, itemId: id });
       /* v8 ignore next -- @preserve defensive: the update above verified the item exists */
       if (detail === null) throw new NotFoundError('Calendar item not found');
@@ -466,17 +479,45 @@ const meCalendar = new Hono<AppEnv>()
     '/items/:id',
     apiDoc({
       tag: 'Me',
-      summary: 'Delete a native calendar block',
+      summary: 'Delete a calendar item',
       response: CalendarItemOut,
       description:
-        'Hard-delete a Docket-native calendar block and return its deleted representation as a tombstone. Native blocks have no provider tombstone semantics (unlike a future `provider_event` delete, which will reconcile with the provider); task links to the item are removed by cascade. Only `native_block` items are supported here. 404 when the item does not exist or is not owned by the caller.',
+        'Delete a calendar item and return its representation as a tombstone. `native_block` items hard-delete immediately (task links removed by cascade). `provider_event` items push a delete to the provider (foreground attempt) and only archive locally once the provider confirms it; other outcomes leave the item visible with an updated `syncState`. `task_timebox`/`availability_block` items reject deletion (422, derived views). 404 when the item does not exist or is not owned by the caller; 403 when a `provider_event` delete lacks the required scope/role/capability; 409 when the item has an unresolved conflict.',
     }),
     zParam(idParam),
     async (c) => {
       const userId = requireUserId(c);
       const { id } = c.req.valid('param');
-      const deleted = await deleteNativeBlock(db, { userId, itemId: id });
+      const deleted = await deleteCalendarItem(db, {
+        userId,
+        itemId: id,
+        syncModules: createDefaultCalendarSyncModules(),
+      });
       return ok(c, CalendarItemOut, toCalendarItemOut(deleted, { linkedTasks: [] }));
+    },
+  )
+  .post(
+    '/items/:id/retry-write',
+    apiDoc({
+      tag: 'Me',
+      summary: 'Retry a provider write with local changes',
+      response: CalendarItemOut,
+      description:
+        "Retry a `provider_event` item's failed or conflicted outbox write, keeping the local (pending) changes rather than discarding them. When the item is in `conflict`, re-anchors the write to the provider snapshot captured at conflict time and reattempts in the foreground; without a usable snapshot, the write is marked permanently failed with a clear error. 404 when the item does not exist, is not owned by the caller, or has no retryable write; 409 when the item is not in a retryable state.",
+    }),
+    zParam(idParam),
+    async (c) => {
+      const userId = requireUserId(c);
+      const { id } = c.req.valid('param');
+      await retryCalendarItemWrite(db, {
+        userId,
+        itemId: id,
+        syncModules: createDefaultCalendarSyncModules(),
+      });
+      const detail = await readItemDetail(db, { userId, itemId: id });
+      /* v8 ignore next -- @preserve defensive: the retry above verified the item exists */
+      if (detail === null) throw new NotFoundError('Calendar item not found');
+      return ok(c, CalendarItemOut, detail);
     },
   )
   .post(

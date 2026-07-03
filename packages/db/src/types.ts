@@ -167,6 +167,7 @@ export type {
   CalendarScopeState,
   CalendarItemPermission,
   CalendarItemConflict,
+  CalendarItemWritePatch,
 } from '@docket/types';
 
 /** A session Activity payload; `action` rows carry the proposed change. */

@@ -204,9 +204,9 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
   - [x] Phase 1 — schema and types
   - [x] Phase 2 — read service + compat routes
   - [x] Phase 3 — native blocks API
-  - [ ] Phase 4 — task links
-  - [ ] Phase 5 — provider sync engine
-  - [ ] Phase 6 — provider write-back
+  - [x] Phase 4 — task links
+  - [x] Phase 5 — provider sync engine
+  - [x] Phase 6 — provider write-back
   - [ ] Phase 7 — push hints + scheduled sync
   - [ ] Phase 8 — web data layer
   - [ ] Phase 9 — calendar UI + workspace
@@ -219,6 +219,15 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
   contract; credential resolution and permission normalization live behind the provider adapter
   boundary. Known merge hazard: migration number 0016 is also used by uncommitted WIP on main —
   renumber at merge if needed.
+  Phase 6 (provider write-back): local-first PATCH/DELETE on `provider_event` items now enqueue
+  a `calendar_item_write` outbox row and attempt the provider push in the foreground
+  (`calendar-outbox.ts`); Google adapter gained `pushItem`/`deleteItem` (PATCH/DELETE with
+  `If-Match`, mapping 2xx/412/401/403/404/400/429/5xx to applied/conflict/reauth/permanent/
+  retryable); conflicts preserve the local patch and clear only via a successful
+  `retryCalendarItemWrite` (re-anchored to the conflict snapshot's etag) or an inbound sync
+  overwrite; `POST /me/calendar/sync` now drains due writes and reports live
+  writesApplied/writesPending/conflicts. Native-block and derived-view (`task_timebox`/
+  `availability_block`) behavior is unchanged. Push notifications/cron draining remain Phase 7.
 
 ---
 

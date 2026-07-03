@@ -128,10 +128,13 @@ export function registerViewPlanTools(server: McpRegistrar, ctx: McpContext): vo
         // scope) before the ref task is verified to live there.
         await scopedActor(ctx, input.orgId, 'work:write');
 
+        // The daily plan is a personal (per-user Hub) surface; an agent principal has
+        // no Hub, so it cannot plan into one (existence-hiding NotFound).
+        if (ctx.principal.kind === 'agent') throw new NotFoundError('Hub not found');
         const hubRows = await db
           .select({ id: hub.id })
           .from(hub)
-          .where(eq(hub.userId, ctx.userId))
+          .where(eq(hub.userId, ctx.principal.userId))
           .limit(1);
         const hubRow = hubRows[0];
         if (!hubRow) throw new NotFoundError('Hub not found');

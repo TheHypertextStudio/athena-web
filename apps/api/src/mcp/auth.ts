@@ -19,8 +19,43 @@ import { AuthError, NotFoundError } from '../error';
 import { MCP_SCOPES } from './scope';
 
 /**
- * The authenticated MCP caller: the Better Auth user the request resolved to, plus the
- * verified OAuth scopes its token carries.
+ * Who an MCP call is executing as: an authenticated human user (cookie/Bearer paths)
+ * or an internal agent principal (Athena's in-process loop; see
+ * {@link import('./internal-session').internalAgentContext}).
+ *
+ * @remarks
+ * A discriminated union — not a `userId`-shaped bag with agent fields bolted on — so
+ * every identity-sensitive consumer (actor resolution, cursor signing, task-store
+ * ownership, prompt personalization, hub resources) must decide explicitly what an
+ * agent principal means for it. Agents never carry a Better Auth user.
+ */
+export type McpPrincipal =
+  | {
+      /** A human user resolved from a Better Auth session or access token. */
+      readonly kind: 'user';
+      /** The Better Auth user id behind the session. */
+      readonly userId: string;
+      /** The user's display name, when set. */
+      readonly userName: string | null;
+      /** The user's email. */
+      readonly userEmail: string;
+    }
+  | {
+      /** An org-registered agent acting through the in-process MCP server. */
+      readonly kind: 'agent';
+      /** The `agent` registration row id. */
+      readonly agentId: string;
+      /** The backing `agent`-kind Actor id — the identity it acts and is audited as. */
+      readonly agentActorId: string;
+      /** The one organization this principal exists in (agents are org-scoped). */
+      readonly orgId: string;
+      /** The agent Actor's display name (e.g. "Athena"). */
+      readonly displayName: string;
+    };
+
+/**
+ * The authenticated MCP caller: who is asking ({@link McpPrincipal}) plus the verified
+ * OAuth scopes the call carries.
  *
  * @remarks
  * Org membership is resolved lazily per call via {@link resolveActor}, because one
@@ -29,16 +64,13 @@ import { MCP_SCOPES } from './scope';
  * via {@link import('./scope').requireScope} BEFORE the per-org grant check.
  */
 export interface McpContext {
-  /** The Better Auth user id behind the session. */
-  readonly userId: string;
-  /** The user's display name, when set. */
-  readonly userName: string | null;
-  /** The user's email. */
-  readonly userEmail: string;
+  /** Who is asking. */
+  readonly principal: McpPrincipal;
   /**
-   * The verified OAuth scopes the caller's token carries (mcp-surface.md §2.2). A
-   * first-party cookie session carries the full set (it has already consented to the
-   * whole app); a Bearer access token carries only its granted, audience-bound scopes.
+   * The verified OAuth scopes the caller carries (mcp-surface.md §2.2). A first-party
+   * cookie session carries the full set (it has already consented to the whole app); a
+   * Bearer access token carries only its granted, audience-bound scopes; an internal
+   * agent principal carries the fixed agent-session set (never `connectors:link`).
    */
   readonly scopes: readonly string[];
 }
@@ -188,10 +220,13 @@ async function resolveBearerContext(headers: Headers, token: string): Promise<Mc
   const user = await auth.api.getSession({ headers });
   const name = user?.user.name ?? '';
   return {
-    userId: session.userId,
-    // An empty display name normalizes to null, exactly like the cookie path.
-    userName: name === '' ? null : name,
-    userEmail: user?.user.email ?? '',
+    principal: {
+      kind: 'user',
+      userId: session.userId,
+      // An empty display name normalizes to null, exactly like the cookie path.
+      userName: name === '' ? null : name,
+      userEmail: user?.user.email ?? '',
+    },
     scopes,
   };
 }
@@ -225,9 +260,12 @@ export async function resolveMcpContext(headers: Headers): Promise<McpContext> {
   if (!session?.user) throw new AuthError();
 
   return {
-    userId: session.user.id,
-    userName: session.user.name || null,
-    userEmail: session.user.email,
+    principal: {
+      kind: 'user',
+      userId: session.user.id,
+      userName: session.user.name || null,
+      userEmail: session.user.email,
+    },
     // A consented first-party session is granted the full scope set; the granular per-org
     // grant cascade remains the binding authorization layer for it.
     scopes: [...MCP_SCOPES],
@@ -235,13 +273,15 @@ export async function resolveMcpContext(headers: Headers): Promise<McpContext> {
 }
 
 /**
- * Resolve the caller's human Actor within `orgId` for capability checks.
+ * Resolve the caller's Actor within `orgId` for capability checks.
  *
  * @remarks
- * Loads the `(userId, orgId)` human actor exactly like {@link orgContextMiddleware};
- * a missing membership 404s (existence-hiding — a non-member must not learn the org
- * exists). The returned `actorId` is what every tool/resource passes to
- * {@link canActor} before reading or writing.
+ * User principals load their `(userId, orgId)` human actor exactly like
+ * {@link orgContextMiddleware}; agent principals resolve to their own agent Actor —
+ * but only within the one org they exist in. Either way a mismatch 404s
+ * (existence-hiding — a non-member must not learn the org exists). The returned
+ * `actorId` is what every tool/resource passes to {@link canActor} before reading or
+ * writing, so agents traverse the identical grant cascade humans do.
  *
  * @param ctx - The authenticated MCP caller.
  * @param orgId - The organization the caller is acting within.
@@ -249,11 +289,20 @@ export async function resolveMcpContext(headers: Headers): Promise<McpContext> {
  * @throws {NotFoundError} When the caller has no actor in the org.
  */
 export async function resolveActor(ctx: McpContext, orgId: string): Promise<McpActor> {
+  if (ctx.principal.kind === 'agent') {
+    if (ctx.principal.orgId !== orgId) throw new NotFoundError();
+    return { orgId, actorId: ctx.principal.agentActorId };
+  }
+
   const rows = await db
     .select({ id: actor.id })
     .from(actor)
     .where(
-      and(eq(actor.userId, ctx.userId), eq(actor.organizationId, orgId), eq(actor.kind, 'human')),
+      and(
+        eq(actor.userId, ctx.principal.userId),
+        eq(actor.organizationId, orgId),
+        eq(actor.kind, 'human'),
+      ),
     )
     .limit(1);
 

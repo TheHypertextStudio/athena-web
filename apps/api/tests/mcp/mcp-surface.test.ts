@@ -176,9 +176,7 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
   const cycleId = cy!.id;
 
   const ctx: McpContext = {
-    userId,
-    userName: 'Ada',
-    userEmail: email,
+    principal: { kind: 'user', userId, userName: 'Ada', userEmail: email },
     scopes: ['work:read', 'work:write', 'agents:run', 'connectors:link'],
   };
   return {
@@ -488,9 +486,12 @@ describe('MCP tool metadata and task execution', () => {
       }),
     );
     catalog.installListHandlers({
-      userId: 'task-owner',
-      userName: 'Ada',
-      userEmail: 'ada@example.com',
+      principal: {
+        kind: 'user',
+        userId: 'task-owner',
+        userName: 'Ada',
+        userEmail: 'ada@example.com',
+      },
       scopes: ['work:read'],
     });
     const [ct, st] = InMemoryTransport.createLinkedPair();
@@ -1333,9 +1334,7 @@ describe('hub resources', () => {
 
   it('returns empty hub surfaces for a user with no memberships', async () => {
     const ctx: McpContext = {
-      userId: MISSING,
-      userName: null,
-      userEmail: 'ghost@e.com',
+      principal: { kind: 'user', userId: MISSING, userName: null, userEmail: 'ghost@e.com' },
       scopes: ['work:read', 'work:write', 'agents:run', 'connectors:link'],
     };
     const client = await connect(ctx);
@@ -1426,7 +1425,16 @@ describe('prompts', () => {
 
   it('omits the caller name in the system prompt when unset', async () => {
     const s = await seedOrg(['view']);
-    const ctx: McpContext = { ...s.ctx, userName: null };
+    const ctx: McpContext = {
+      ...s.ctx,
+      principal: {
+        ...s.ctx.principal,
+        kind: 'user',
+        userId: s.userId,
+        userName: null,
+        userEmail: 'a@e.com',
+      },
+    };
     const client = await connect(ctx);
     const system = await client.getPrompt({ name: 'docket_system' });
     const sysText = (system.messages[0]!.content as { text: string }).text;

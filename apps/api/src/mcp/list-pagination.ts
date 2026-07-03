@@ -7,6 +7,7 @@ import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 
 import type { McpContext } from './auth';
+import { principalKey } from './principal';
 import { createCursorCodec } from './cursors';
 
 const CURSOR_VERSION = 1;
@@ -58,7 +59,10 @@ function signingSecret(): string {
 }
 
 function subjectFor(ctx: McpContext): string {
-  return createHmac('sha256', signingSecret()).update(ctx.userId).digest('base64url').slice(0, 32);
+  return createHmac('sha256', signingSecret())
+    .update(principalKey(ctx))
+    .digest('base64url')
+    .slice(0, 32);
 }
 
 function decodeCursor(

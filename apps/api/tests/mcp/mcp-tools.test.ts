@@ -146,9 +146,7 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
   const integrationId = intg!.id;
 
   const ctx: McpContext = {
-    userId,
-    userName: 'Ada',
-    userEmail: email,
+    principal: { kind: 'user', userId, userName: 'Ada', userEmail: email },
     scopes: ['work:read', 'work:write', 'agents:run', 'connectors:link'],
   };
   return {

@@ -42,7 +42,7 @@ const SERVER_INFO = { name: 'docket', version: '1.0.0' } as const;
  * @param ctx - The authenticated MCP caller.
  * @returns the configured {@link McpServer} with tools + resources registered.
  */
-function buildServer(ctx: McpContext): McpServer {
+export function buildServer(ctx: McpContext): McpServer {
   const tasksEnabled = env.MCP_TASKS_ENABLED;
   // Advertise the tool/resource/prompt/completion/logging capabilities Docket implements
   // (mcp-surface.md section 5). `resources.subscribe`/`listChanged` and `tools.listChanged`

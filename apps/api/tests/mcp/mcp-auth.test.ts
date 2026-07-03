@@ -74,9 +74,7 @@ describe('resolveMcpContext', () => {
     // A consented first-party cookie session is granted the full scope set (the per-org
     // grant cascade remains the binding layer for it).
     expect(ctx).toEqual({
-      userId: 'u1',
-      userName: null,
-      userEmail: 'u1@e.com',
+      principal: { kind: 'user', userId: 'u1', userName: null, userEmail: 'u1@e.com' },
       scopes: ['work:read', 'work:write', 'agents:run', 'connectors:link'],
     });
   });
@@ -86,7 +84,7 @@ describe('resolveMcpContext', () => {
       user: { id: 'u2', name: 'Ada', email: 'u2@e.com' },
     });
     const ctx = await authMod.resolveMcpContext(hdrs());
-    expect(ctx.userName).toBe('Ada');
+    expect(ctx.principal.kind === 'user' && ctx.principal.userName).toBe('Ada');
   });
 
   it('rejects a Bearer token when the RS is not configured for OAuth (no issuer/resource)', async () => {
@@ -116,7 +114,10 @@ describe('resolveActor', () => {
       .values({ organizationId: org!.id, kind: 'human', displayName: 'A', userId: u!.id })
       .returning({ id: schema.actor.id });
     const actor = await authMod.resolveActor(
-      { userId: u!.id, userName: 'A', userEmail: 'a@e.com', scopes: ['work:read'] },
+      {
+        principal: { kind: 'user', userId: u!.id, userName: 'A', userEmail: 'a@e.com' },
+        scopes: ['work:read'],
+      },
       org!.id,
     );
     expect(actor).toEqual({ orgId: org!.id, actorId: a!.id });
@@ -130,7 +131,10 @@ describe('resolveActor', () => {
       .returning({ id: schema.organization.id });
     await expect(
       authMod.resolveActor(
-        { userId: 'ghost', userName: null, userEmail: 'g@e.com', scopes: ['work:read'] },
+        {
+          principal: { kind: 'user', userId: 'ghost', userName: null, userEmail: 'g@e.com' },
+          scopes: ['work:read'],
+        },
         org!.id,
       ),
     ).rejects.toMatchObject({ status: 404 });

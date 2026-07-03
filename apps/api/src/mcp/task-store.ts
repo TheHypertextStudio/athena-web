@@ -6,12 +6,13 @@ import type { CreateTaskOptions } from '@modelcontextprotocol/sdk/experimental/t
 import type { Request, RequestId, Result, Task } from '@modelcontextprotocol/sdk/types.js';
 
 import type { McpContext } from './auth';
+import { principalKey } from './principal';
 
 const sharedStore = new InMemoryTaskStore();
 const taskOwners = new Map<string, string>();
 
 function ownerKey(ctx: McpContext): string {
-  return ctx.userId;
+  return principalKey(ctx);
 }
 
 function notFound(taskId: string): Error {

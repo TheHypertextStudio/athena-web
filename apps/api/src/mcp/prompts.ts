@@ -18,6 +18,7 @@ import type { GetPromptResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 
 import type { McpContext } from './auth';
+import { principalDisplayName } from './principal';
 
 /** The Docket system prompt: how an agent should operate over the Docket work model. */
 const SYSTEM_PROMPT = [
@@ -76,8 +77,8 @@ export function registerPrompts(server: McpRegistrar, ctx: McpContext): void {
     (): GetPromptResult =>
       textPrompt(
         'assistant',
-        ctx.userName
-          ? `${SYSTEM_PROMPT}\n\nYou are acting on behalf of ${ctx.userName}.`
+        principalDisplayName(ctx)
+          ? `${SYSTEM_PROMPT}\n\nYou are acting on behalf of ${principalDisplayName(ctx)}.`
           : SYSTEM_PROMPT,
         'The Docket-aware operating instructions for an agent session.',
       ),

@@ -128,9 +128,7 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
   const taskId = tk!.id;
 
   const ctx: McpContext = {
-    userId,
-    userName: 'Ada',
-    userEmail: email,
+    principal: { kind: 'user', userId, userName: 'Ada', userEmail: email },
     scopes: ['work:read', 'work:write', 'agents:run', 'connectors:link'],
   };
   return { userId, orgId, teamId, actorId, taskId, ctx };

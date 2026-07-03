@@ -597,6 +597,33 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 - **Validation**: Validator rejects scopes absent from `COMMIT_SCOPES.txt` and accepts
   `refactor(integrations): ...`.
 
+### [ATHENA-003] Internal agent MCP principal + default-agent grants
+
+- **Completed**: 2026-07-02
+- **Summary**: Slice 3 of the Athena build — the front door she walks through. `McpContext` is now
+  a **principal union** (`user` | `agent`) instead of a userId-shaped bag, so every
+  identity-sensitive consumer had to decide explicitly what an agent means for it: actor
+  resolution (agent → its own Actor, cross-org 404s), cursor HMACs + task-store ownership (keyed
+  by `principalKey`), prompt personalization (`principalDisplayName`), hub resources (agent → its
+  one org), and the personal daily plan (agents have no Hub → existence-hiding 404). New
+  `mcp/internal-session.ts` provides `internalAgentContext(orgId, agentId)` — the first-class,
+  no-OAuth way Athena's in-process loop gets a context — carrying fixed
+  `AGENT_SESSION_SCOPES` (`work:read`/`work:write`/`agents:run`, deliberately never
+  `connectors:link`). `buildServer` is exported so the loop connects to the IDENTICAL server the
+  `/mcp` endpoint serves (zero tool drift by construction). `ensureDefaultAgent` now seeds (and
+  heals, via `onConflictDoNothing` under the existing unique index) an org-wide
+  `view`+`contribute` actor-grant for Athena's Actor — without which every agent tool call 404s,
+  since agents hold no role and are authorized purely by explicit grants (permissions.md §8).
+- **Files Changed**: `apps/api/src/mcp/{auth,internal-session,principal,server,resource-statics,
+view-plan-tools,prompts,list-pagination,task-store}.ts`, `apps/api/src/lib/default-agent.ts`,
+  `apps/api/tests/mcp/mcp-internal.test.ts` (new, 8 tests), literal updates in 4 existing mcp
+  test suites.
+- **Learnings**: A value-import from `mcp/auth.ts` drags `src/env.ts` into a test's top-level
+  module graph _before_ the test can set `process.env` — pure identity helpers therefore live in
+  `mcp/principal.ts` (type-only import). Tool input validation runs before the handler, so a
+  scope-gate test must pass schema-valid args or it exercises the wrong layer.
+- **Gate**: mcp suites 60/60 + full api suite green; typecheck + lint clean.
+
 ### [LINEAR-SYNC-001] Deep Linear integration — Slice 1: two-way work-graph sync core
 
 - **Completed**: 2026-07-02
@@ -899,6 +926,7 @@ generate` needs a `DATABASE_URL` only to satisfy config validation — a codegen
   (`prompt=consent`); both diverge from what a spec-faithful client expects. Note: older WORKLOG
   entries (MCP-UTIL-005, MCP-SAMPLING-006) reference `packages/mcp-server/**` and
   `apps/api/src/routes/mcp.ts` — those paths were superseded by `apps/api/src/mcp/**`.
+
 ### [ATHENA-002] Schema: durable transcripts, proposal groups, session kind, org credentials
 
 - **Completed**: 2026-07-02

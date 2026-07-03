@@ -32,6 +32,7 @@ import type { AgentTurnRuntime, TurnMessage } from '@docket/agent-runtime';
 import type { SessionApprovalDecision, TurnContentBlock } from '@docket/types';
 import { and, asc, eq, gt } from 'drizzle-orm';
 
+import { assertAgentSessionsEntitled } from '../billing/entitlement';
 import { getContainer } from '../container';
 import { ConflictError, NotFoundError } from '../error';
 import { env } from '../env';
@@ -260,6 +261,14 @@ export async function driveSession(
   const maxTurns = env.AGENT_MAX_TURNS;
   if (maxTurns === undefined) {
     throw new ConflictError('AGENT_MAX_TURNS is not configured; refusing to run agent sessions');
+  }
+
+  // Paid-plan gate, only on a session's FIRST run: every door (REST, the trigger_agent
+  // MCP tool, the proactive sweep) funnels through here, and resumes of an
+  // already-started session are deliberately exempt so an approval arriving after a
+  // plan lapse still lands the work the user already reviewed.
+  if (session.startedAt === null) {
+    await assertAgentSessionsEntitled(orgId);
   }
 
   await db

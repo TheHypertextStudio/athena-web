@@ -707,10 +707,29 @@ export const CalendarSettingsOut = z
   .object({
     connections: z.array(CalendarConnectionOut).describe('Linked Google Calendar accounts.'),
     calendars: z.array(CalendarListOut).describe('Calendars across every linked account.'),
+    layers: z
+      .array(CalendarLayerOut)
+      .describe(
+        'Every calendar layer for the signed-in user (provider-backed and Docket-native), selected or not.',
+      ),
   })
   .meta({ id: 'CalendarSettingsOut', description: 'User-scoped Google Calendar settings.' });
 /** Calendar settings value. */
 export type CalendarSettingsOut = z.infer<typeof CalendarSettingsOut>;
+
+/** List of calendar layers for the signed-in user. */
+export const CalendarLayersOut = z
+  .object({
+    items: z
+      .array(CalendarLayerOut)
+      .describe('Every calendar layer for the signed-in user, selected or not.'),
+  })
+  .meta({
+    id: 'CalendarLayersOut',
+    description: 'List of calendar layers for the signed-in user.',
+  });
+/** Calendar-layers list value. */
+export type CalendarLayersOut = z.infer<typeof CalendarLayersOut>;
 
 /** Body for creating a task from one Google Calendar event. */
 export const CalendarEventCreateTask = z

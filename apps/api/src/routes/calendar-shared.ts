@@ -1,23 +1,25 @@
 import {
   calendarConnection,
-  calendarEvent,
   calendarList,
   dailyPlanItem,
   db,
   hub,
   task,
+  type calendarEvent,
 } from '@docket/db';
 import type {
   AgendaOut,
   CalendarConnectionOut,
   CalendarEventOut,
+  CalendarItemOut,
   CalendarListOut,
   CalendarSettingsOut,
 } from '@docket/types';
-import { and, asc, eq, gte, inArray, isNull, lt } from 'drizzle-orm';
+import { and, asc, eq, inArray } from 'drizzle-orm';
 import type { Context } from 'hono';
 import type { z } from 'zod';
 
+import { readCalendarItemsInRange, readCalendarLayers } from '../calendar/calendar-read';
 import type { AppEnv } from '../context';
 import { AuthError } from '../error';
 
@@ -106,7 +108,7 @@ export function toCalendarEventOut(row: CalendarEventRow): z.input<typeof Calend
 export async function readCalendarSettings(
   userId: string,
 ): Promise<z.input<typeof CalendarSettingsOut>> {
-  const [connections, calendars] = await Promise.all([
+  const [connections, calendars, layers] = await Promise.all([
     db
       .select()
       .from(calendarConnection)
@@ -117,6 +119,7 @@ export async function readCalendarSettings(
       .from(calendarList)
       .where(eq(calendarList.userId, userId))
       .orderBy(asc(calendarList.title)),
+    readCalendarLayers(db, userId),
   ]);
 
   const counts = new Map<string, { total: number; enabled: number }>();
@@ -132,6 +135,7 @@ export async function readCalendarSettings(
       toCalendarConnectionOut(conn, counts.get(conn.id) ?? { total: 0, enabled: 0 }),
     ),
     calendars: calendars.map(toCalendarListOut),
+    layers,
   };
 }
 
@@ -181,45 +185,11 @@ export async function buildAgendaPayload(
   const start = new Date(`${options.date}T00:00:00.000Z`);
   const end = new Date(start);
   end.setUTCDate(end.getUTCDate() + 1);
-  const filters = [
-    eq(calendarEvent.userId, userId),
-    isNull(calendarEvent.archivedAt),
-    eq(calendarList.selected, true),
-    gte(calendarEvent.startsAt, start),
-    lt(calendarEvent.startsAt, end),
-  ];
-  if (options.connectionIds && options.connectionIds.length > 0) {
-    filters.push(inArray(calendarEvent.connectionId, [...options.connectionIds]));
-  }
-  if (options.calendarIds && options.calendarIds.length > 0) {
-    filters.push(inArray(calendarEvent.calendarId, [...options.calendarIds]));
-  }
 
-  const calendarRows =
+  const eventEntries =
     options.includeGoogleCalendar === false
       ? []
-      : await db
-          .select({ event: calendarEvent, connection: calendarConnection, calendar: calendarList })
-          .from(calendarEvent)
-          .innerJoin(calendarConnection, eq(calendarConnection.id, calendarEvent.connectionId))
-          .innerJoin(calendarList, eq(calendarList.id, calendarEvent.calendarId))
-          .where(and(...filters));
-
-  const eventEntries = calendarRows.map((row) => ({
-    kind: 'google_calendar_event' as const,
-    event: toCalendarEventOut(row.event),
-    connection: {
-      id: row.connection.id,
-      accountEmail: row.connection.accountEmail,
-      accountName: row.connection.accountName,
-    },
-    calendar: {
-      id: row.calendar.id,
-      title: row.calendar.title,
-      color: row.calendar.color,
-      timezone: row.calendar.timezone,
-    },
-  }));
+      : await buildGoogleCalendarAgendaEntries(userId, start, end, options);
 
   const entries = [...taskEntries, ...eventEntries].sort((a, b) => {
     const aStart = a.kind === 'task_timebox' ? a.startsAt : (a.event.startsAt ?? '');
@@ -228,4 +198,133 @@ export async function buildAgendaPayload(
   });
 
   return { date: options.date, entries };
+}
+
+/**
+ * Build the `'google_calendar_event'` agenda entries for one day window.
+ *
+ * @remarks
+ * Sourced from the layered-calendar read service (`calendar_item` rows of kind
+ * `'provider_event'`) rather than the legacy `calendar_event` table directly, then mapped
+ * back to the agenda's existing embedded-event shape so the response contract does not
+ * change. `calendarIds` maps onto `layerIds` (a layer's id reuses its originating
+ * `calendar_list` row's id) and `connectionIds` is applied as a post-filter, since the
+ * read service intentionally does not take a connection-id parameter.
+ */
+async function buildGoogleCalendarAgendaEntries(
+  userId: string,
+  start: Date,
+  end: Date,
+  options: { connectionIds?: readonly string[]; calendarIds?: readonly string[] },
+): Promise<z.input<typeof AgendaOut>['entries']> {
+  const { layers, items } = await readCalendarItemsInRange(db, {
+    userId,
+    start,
+    end,
+    layerIds: options.calendarIds,
+    kinds: ['provider_event'],
+  });
+
+  const filteredItems =
+    options.connectionIds !== undefined && options.connectionIds.length > 0
+      ? items.filter(
+          (item) =>
+            item.connectionId !== null && options.connectionIds?.includes(item.connectionId),
+        )
+      : items;
+  if (filteredItems.length === 0) return [];
+
+  const connectionIds = [
+    ...new Set(
+      filteredItems.map((item) => item.connectionId).filter((id): id is string => id !== null),
+    ),
+  ];
+  const connectionRows =
+    connectionIds.length > 0
+      ? await db
+          .select()
+          .from(calendarConnection)
+          .where(
+            and(
+              eq(calendarConnection.userId, userId),
+              inArray(calendarConnection.id, connectionIds),
+            ),
+          )
+      : [];
+  const connectionById = new Map(connectionRows.map((row) => [row.id, row]));
+  const layerById = new Map(layers.map((layer) => [layer.id, layer]));
+
+  return filteredItems.map((item) => {
+    const layer = layerById.get(item.layerId);
+    if (!layer) {
+      throw new Error(
+        `agenda: provider_event calendar item ${item.id} references an unselected/unknown layer`,
+      );
+    }
+    const connection =
+      item.connectionId !== null ? connectionById.get(item.connectionId) : undefined;
+    if (!connection) {
+      throw new Error(
+        `agenda: provider_event calendar item ${item.id} has no resolvable connection`,
+      );
+    }
+    return {
+      kind: 'google_calendar_event' as const,
+      event: toLegacyCalendarEventOut(item),
+      connection: {
+        id: connection.id,
+        accountEmail: connection.accountEmail,
+        accountName: connection.accountName,
+      },
+      calendar: {
+        id: layer.id,
+        title: layer.title,
+        color: layer.color,
+        timezone: layer.timezone,
+      },
+    };
+  });
+}
+
+/**
+ * Map a layered-calendar `provider_event` item back to the legacy `CalendarEventOut`
+ * shape the agenda response still embeds.
+ *
+ * @throws {Error} When a required provider-bound field is missing — a `provider_event`
+ *   item without a connection/external ids is a data invariant violation, not a case to
+ *   silently paper over with a fallback.
+ */
+function toLegacyCalendarEventOut(
+  item: z.input<typeof CalendarItemOut>,
+): z.input<typeof CalendarEventOut> {
+  if (item.connectionId === null) {
+    throw new Error(`calendar item ${item.id} (provider_event) is missing its connectionId`);
+  }
+  if (item.externalCalendarId === null) {
+    throw new Error(`calendar item ${item.id} (provider_event) is missing its externalCalendarId`);
+  }
+  if (item.externalEventId === null) {
+    throw new Error(`calendar item ${item.id} (provider_event) is missing its externalEventId`);
+  }
+  return {
+    id: item.id,
+    connectionId: item.connectionId,
+    calendarId: item.layerId,
+    externalCalendarId: item.externalCalendarId,
+    externalEventId: item.externalEventId,
+    status: item.status,
+    title: item.title,
+    description: item.description,
+    location: item.location,
+    htmlLink: item.htmlLink,
+    startsAt: item.startsAt,
+    endsAt: item.endsAt,
+    allDayStartDate: item.allDayStartDate,
+    allDayEndDate: item.allDayEndDate,
+    organizer: item.organizer,
+    attendees: item.attendees,
+    updatedExternalAt: item.updatedExternalAt,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+  };
 }

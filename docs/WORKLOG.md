@@ -148,6 +148,38 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [MAIL-002] Migration 0016: sync cursors, run purposes, Message-ID identity (M3 of productization)
+
+- **Completed**: 2026-07-02
+- **Summary**: The additive schema pass that M4's sync unification and cross-provider dedup
+  stand on. One drizzle migration (`0016_rainy_magik`): (1) `integration.sync_state` jsonb
+  (notnull, `{}`) — per-purpose incremental-sync cursors, Zod-validated as
+  `IntegrationSyncState` in `@docket/types` (`{mail: {cursor, updatedAt}}`; Gmail `historyId`,
+  Graph `deltaLink`), written only under the sync lease; (2) `sync_run_purpose` enum
+  (`task_sync`|`email_ingest`) + `sync_run.purpose` so both sweeps share one auditable spine;
+  (3) `email_suggestion.rfc822_message_id` + non-unique `(org, message_id)` index — the RFC 5322
+  cross-provider dedup key; (4) a data backfill stamping `email_meta.externalUrl` with the
+  canonical Gmail deep link on legacy rows (merge-preserving, no-op on already-stamped rows) so
+  M4 can delete the app-layer `threadUrl()` fabrication outright; (5) `source_system` enum +
+  `'outlook'` (and the `SourceSystemKind` Zod twin) so M6 needs no migration. Migration
+  numbering note: the user's in-flight (uncommitted) work also claims 0016/0017 — whichever
+  lands second renumbers; main's journal ended at 0015 when this was generated.
+- **Files Changed**: `packages/db/src/{enums,schema/crosscutting}.ts`,
+  `packages/db/drizzle/0016_rainy_magik.sql` + `meta/{0016_snapshot,_journal}.json`,
+  `packages/types/src/{integration,event}.ts`,
+  `apps/api/tests/routes/email-suggestion-backfill.test.ts` (new), `docs/WORKLOG.md`.
+- **Learnings**: The PGlite test harness runs the real migration files
+  (`drizzle-orm/pglite/migrator` over `drizzle/`), so every DB-backed test validates the DDL +
+  backfill SQL execute; backfill _semantics_ need a separate post-migration re-run of the same
+  UPDATE against seeded rows, since migration-time tables are empty in tests. `drizzle-kit
+generate` needs a `DATABASE_URL` only to satisfy config validation — a codegen-only dummy
+  value is safe (generation never connects).
+- **Gate**: db + types typecheck/lint clean; backfill semantics test green (stamps legacy
+  gmail rows, preserves existing meta keys, leaves already-stamped rows untouched); full API
+  suite green post-migration.
+
+---
+
 ### [MAIL-001] Provider-agnostic mail capability + standards-based message model (M2 of productization)
 
 - **Completed**: 2026-07-02

@@ -394,6 +394,52 @@ export const idempotencyStatus = pgEnum('idempotency_status', ['in_progress', 'c
 /** Saved-view sharing scope (frozen addition). */
 export const viewScope = pgEnum('view_scope', ['personal', 'team', 'organization']);
 
+/** Broad information architecture family for one indexed search document. */
+export const searchDocumentFamily = pgEnum('search_document_family', [
+  'work',
+  'people',
+  'content',
+  'activity',
+]);
+/** Narrow semantic kind for one indexed search document. */
+export const searchDocumentKind = pgEnum('search_document_kind', [
+  'organization',
+  'team',
+  'member',
+  'agent',
+  'agent_session',
+  'task',
+  'project',
+  'program',
+  'initiative',
+  'milestone',
+  'cycle',
+  'label',
+  'saved_view',
+  'comment',
+  'update',
+  'attachment',
+  'calendar_event',
+  'activity',
+]);
+/** Index outbox operation for a source row. */
+export const searchIndexJobOperation = pgEnum('search_index_job_operation', ['upsert', 'delete']);
+/** Why an index outbox job was created. */
+export const searchIndexJobReason = pgEnum('search_index_job_reason', [
+  'entity_write',
+  'event_log',
+  'backfill',
+  'repair',
+  'manual',
+]);
+/** Durable lifecycle state for one index outbox job. */
+export const searchIndexJobStatus = pgEnum('search_index_job_status', [
+  'pending',
+  'processing',
+  'succeeded',
+  'failed',
+]);
+
 /* ──────────────────────────────────────────────────────────────────────────
  * Ambient Context Intelligence — observation pipeline + daily digest
  * ────────────────────────────────────────────────────────────────────────── */

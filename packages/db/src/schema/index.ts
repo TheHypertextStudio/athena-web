@@ -14,3 +14,4 @@ export * from './admin';
 export * from './infra';
 export * from './calendar';
 export * from './event';
+export * from './search';

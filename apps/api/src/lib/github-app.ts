@@ -13,14 +13,10 @@
  * access tokens lives in `@docket/boundaries` ({@link decodeAppPrivateKey} + `mintInstallationToken`);
  * this module only handles the browser-facing connect handshake.
  */
-import { createHmac, timingSafeEqual } from 'node:crypto';
-
 import { decodeAppPrivateKey, type GitHubAppConfig } from '@docket/boundaries';
 
 import { env } from '../env';
-
-/** How long a signed install `state` is valid (10 minutes — the user installs and returns at once). */
-const INSTALL_STATE_TTL_MS = 10 * 60_000;
+import { signConnectState, verifyConnectState } from './oauth-state';
 
 /** The org + integration an in-flight install is for, carried through GitHub in the `state` param. */
 export interface InstallState {
@@ -30,27 +26,16 @@ export interface InstallState {
   readonly orgId: string;
 }
 
-/** base64url-encode a UTF-8 string. */
-function b64url(input: string): string {
-  return Buffer.from(input, 'utf8').toString('base64url');
-}
-
-/** HMAC-SHA256 (base64url) of `data` keyed by the Better Auth secret. */
-function sign(data: string): string {
-  return createHmac('sha256', env.BETTER_AUTH_SECRET).update(data).digest('base64url');
-}
-
 /**
  * Sign an install `state` token: `payload.signature`, where payload carries the org/integration
- * and an absolute expiry.
+ * and an absolute expiry (envelope from {@link signConnectState}).
  *
  * @param state - The org + integration the install is for.
  * @param nowMs - Current time in ms (injected for testability; defaults to `Date.now()`).
  * @returns the opaque, tamper-proof state string to hand to GitHub.
  */
 export function signInstallState(state: InstallState, nowMs: number = Date.now()): string {
-  const payload = b64url(JSON.stringify({ ...state, exp: nowMs + INSTALL_STATE_TTL_MS }));
-  return `${payload}.${sign(payload)}`;
+  return signConnectState({ integrationId: state.integrationId, orgId: state.orgId }, nowMs);
 }
 
 /**
@@ -61,24 +46,11 @@ export function signInstallState(state: InstallState, nowMs: number = Date.now()
  * @returns the decoded {@link InstallState}, or `null` when the signature is bad or it expired.
  */
 export function verifyInstallState(token: string, nowMs: number = Date.now()): InstallState | null {
-  const [payload, signature] = token.split('.');
-  if (!payload || !signature) return null;
-  const expected = sign(payload);
-  const sigBuf = Buffer.from(signature, 'utf8');
-  const expBuf = Buffer.from(expected, 'utf8');
-  if (sigBuf.length !== expBuf.length || !timingSafeEqual(sigBuf, expBuf)) return null;
-  try {
-    const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as {
-      integrationId?: unknown;
-      orgId?: unknown;
-      exp?: unknown;
-    };
-    if (typeof decoded.exp !== 'number' || decoded.exp < nowMs) return null;
-    if (typeof decoded.integrationId !== 'string' || typeof decoded.orgId !== 'string') return null;
-    return { integrationId: decoded.integrationId, orgId: decoded.orgId };
-  } catch {
-    return null;
-  }
+  const decoded = verifyConnectState(token, nowMs);
+  if (!decoded) return null;
+  const { integrationId, orgId } = decoded;
+  if (typeof integrationId !== 'string' || typeof orgId !== 'string') return null;
+  return { integrationId, orgId };
 }
 
 /**

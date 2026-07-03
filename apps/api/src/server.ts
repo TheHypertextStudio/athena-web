@@ -30,6 +30,7 @@ import ingest from './routes/ingest';
 import { meAccountExportDownload } from './routes/me-account';
 import streamSse from './routes/stream-sse';
 import integrationsGithub from './routes/integrations-github';
+import integrationsSlack from './routes/integrations-slack';
 import webhooks from './routes/webhooks';
 
 const trustedOrigins =
@@ -77,6 +78,7 @@ server.get('/.well-known/oauth-authorization-server', authorizationServerMetadat
 server.route('/internal/billing', webhooks);
 server.route('/internal/ingest', ingest);
 server.route('/internal/integrations/github', integrationsGithub);
+server.route('/internal/integrations/slack', integrationsSlack);
 server.route('/internal/cron', cron);
 // User-facing non-RPC edges that stay on `/v1`: the SSE live stream, and the binary account
 // export download (GET registered before the typed app so its path matches; the typed app still

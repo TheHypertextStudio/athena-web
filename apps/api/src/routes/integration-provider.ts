@@ -38,15 +38,27 @@ export const CONNECTOR_PROVIDERS: readonly ConnectorProvider[] = [
 export const WRITE_BACK_PROVIDERS: ReadonlySet<string> = new Set<string>(['gtasks']);
 
 /**
- * The connect-wizard directory entry for each {@link ConnectorProvider}.
+ * Every provider the connect wizard can offer: the {@link Connector} providers plus
+ * observe-only sources (Slack), which connect for signal ingestion but expose no import/sync.
+ */
+export const DIRECTORY_PROVIDERS: readonly (ConnectorProvider | 'slack')[] = [
+  ...CONNECTOR_PROVIDERS,
+  'slack',
+];
+
+/**
+ * The connect-wizard directory entry for each connectable provider.
  *
  * @remarks
- * Keyed off the {@link Connector} port's provider union: a Migration pattern *replaces* a
- * tool, a Connector pattern *complements* one.
+ * Keyed off {@link DIRECTORY_PROVIDERS}: a Migration pattern *replaces* a tool, a Connector
+ * pattern *complements* one. Slack is observe-only — it contributes the `signal` role and
+ * routes inbound Events API traffic, and `asConnectorProvider('slack')` stays null so
+ * import/sync endpoints correctly 409.
  */
 export const PROVIDER_DIRECTORY: Readonly<
-  Record<ConnectorProvider, Omit<IntegrationDirectoryProvider, 'provider'>>
+  Record<ConnectorProvider | 'slack', Omit<IntegrationDirectoryProvider, 'provider'>>
 > = {
+  slack: { name: 'Slack', pattern: 'connector', roles: ['signal'], category: 'communication' },
   github: {
     name: 'GitHub',
     pattern: 'connector',

@@ -27,6 +27,7 @@ import {
   auditSubjectType,
   commentSubjectType,
   emailSuggestionStatus,
+  externalActorMatch,
   taskPriority,
   dailyPlanItemStatus,
   grantCapability,
@@ -228,6 +229,15 @@ export const integration = pgTable(
     lastSyncStatus: syncRunStatus('last_sync_status'),
     /** Timestamp of the last SUCCESSFUL sync (null = never succeeded). */
     lastSyncedAt: timestamp('last_synced_at'),
+    /**
+     * Timestamp of the last SUCCESSFUL **full** sync (null = never fully synced).
+     *
+     * @remarks
+     * Distinct from {@link integration.lastSyncedAt}, which advances on every successful
+     * sync (full or incremental). The graph reconciler consults this to decide whether the
+     * next pull can be incremental (cursor/delta) or must re-walk the whole remote graph.
+     */
+    lastFullSyncedAt: timestamp('last_full_synced_at'),
     /** Human-readable reason the connection/last-sync is unhealthy (null = healthy). */
     lastError: text('last_error'),
     /** When {@link integration.lastError} was recorded. */
@@ -291,7 +301,15 @@ export const syncRun = pgTable(
   (t) => [index('sync_run_integration_idx').on(t.integrationId, t.startedAt)],
 );
 
-/** A label; org-global when `teamId` is null, otherwise team-scoped (two partial uniques). */
+/**
+ * A label; org-global when `teamId` is null, otherwise team-scoped (two partial uniques).
+ *
+ * @remarks
+ * `sourceIntegrationId`/`externalId` are the mirror-provenance columns for labels pulled
+ * from an integration (e.g. Linear). Unlike `task`/`project`/`cycle`, there is no `source`
+ * enum here — presence of `externalId` is itself the linked/native discriminator, since a
+ * label has no other native-vs-linked lifecycle to distinguish.
+ */
 export const label = pgTable(
   'label',
   {
@@ -304,6 +322,10 @@ export const label = pgTable(
     group: text('group'),
     teamId: text('team_id').references(() => team.id, { onDelete: 'cascade' }),
     createdAt: timestamp('created_at').notNull().defaultNow(),
+    sourceIntegrationId: text('source_integration_id').references(() => integration.id, {
+      onDelete: 'set null',
+    }),
+    externalId: text('external_id'),
   },
   (t) => [
     uniqueIndex('label_org_name_global_uq')
@@ -312,6 +334,48 @@ export const label = pgTable(
     uniqueIndex('label_team_name_uq')
       .on(t.teamId, t.name)
       .where(sql`${t.teamId} is not null`),
+    uniqueIndex('label_source_uq')
+      .on(t.sourceIntegrationId, t.externalId)
+      .where(sql`${t.externalId} is not null`),
+  ],
+);
+
+/**
+ * The identity mapping from a provider-side user (e.g. a Linear member) to a Docket
+ * {@link actor}, one row per `(integration, externalId)`.
+ *
+ * @remarks
+ * Written entirely by the sync engine, never by a human — hence the manual id/timestamp
+ * columns (matching {@link syncRun}/{@link dailyPlanItem}) rather than {@link auditColumns},
+ * whose `createdBy` presumes a human author. `actorId` is nullable and NULL is an explicit,
+ * queryable "unmatched" state (never a fallback): the reconciler resolves it by `email`
+ * against an existing Actor, or a human resolves it via `manual` — see `matchedBy`.
+ */
+export const externalActor = pgTable(
+  'external_actor',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    integrationId: text('integration_id')
+      .notNull()
+      .references(() => integration.id, { onDelete: 'cascade' }),
+    externalId: text('external_id').notNull(),
+    email: text('email'),
+    displayName: text('display_name').notNull(),
+    avatarUrl: text('avatar_url'),
+    actorId: text('actor_id').references(() => actor.id, { onDelete: 'set null' }),
+    matchedBy: externalActorMatch('matched_by'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at')
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    index('external_actor_org_idx').on(t.organizationId),
+    uniqueIndex('external_actor_uq').on(t.integrationId, t.externalId),
   ],
 );
 

@@ -36,6 +36,8 @@ export const taskPriority = pgEnum('task_priority', ['none', 'urgent', 'high', '
 export const provenanceSource = pgEnum('provenance_source', ['native', 'linked']);
 /** Integration sync depth: one-time import vs read-only mirror. */
 export const syncMode = pgEnum('sync_mode', ['import', 'mirror']);
+/** How an {@link externalActor} row was resolved to a Docket `actor` (null = unmatched). */
+export const externalActorMatch = pgEnum('external_actor_match', ['email', 'manual']);
 /** Lifecycle status of one connector sync run (a single `importWork` pass). */
 export const syncRunStatus = pgEnum('sync_run_status', ['running', 'succeeded', 'failed']);
 /** What triggered a sync run: a user action or the background scheduler. */

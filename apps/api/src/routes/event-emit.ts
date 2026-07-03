@@ -13,10 +13,13 @@
  * mutation commits, so a failed emit never rolls back real work.
  */
 import { actor, db, event } from '@docket/db';
-import type { ActorRef, CanonicalEntityKind, EventDetail, EventKind } from '@docket/types';
+import { DOCKET_ENTITY_KIND } from '@docket/types';
+import type { ActorRef, EventDetail, EventKind } from '@docket/types';
 import { eq } from 'drizzle-orm';
 
 import { routeAndWriteRecipients } from '../consumers/routing';
+import { projectEmitInput } from '../lib/automation/event';
+import { runAutomationsForEvent } from '../lib/automation/runtime';
 import { publishEvent } from './stream-helpers';
 
 /** The Docket entity an internal event is about. */
@@ -50,15 +53,6 @@ export interface EmitEventInput {
   /** The primary "for" user (sets `event.userId` for the digest). */
   readonly forUserId?: string | null;
 }
-
-/** Map a Docket entity type to its canonical entity kind. */
-const DOCKET_ENTITY_KIND: Record<string, CanonicalEntityKind> = {
-  task: 'work_item',
-  project: 'project',
-  program: 'program',
-  initiative: 'initiative',
-  cycle: 'cycle',
-};
 
 /**
  * Append one internal (`docket`-source) event and fan it out to its recipients.
@@ -167,5 +161,8 @@ async function emitInternal(
   if (result) {
     const recipients = [...result.recipients].map(([userId, reason]) => ({ userId, reason }));
     await publishEvent(result.eventId, recipients).catch(() => undefined);
+    // Observer hook: run automation rules against the freshly committed event. Fires only on
+    // non-duplicate inserts; never throws (best-effort, depth-capped inside).
+    await runAutomationsForEvent(projectEmitInput(input, occurredAt));
   }
 }

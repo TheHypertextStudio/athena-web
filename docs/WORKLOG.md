@@ -178,6 +178,46 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
   (`prompt=consent`); both diverge from what a spec-faithful client expects. Note: older WORKLOG
   entries (MCP-UTIL-005, MCP-SAMPLING-006) reference `packages/mcp-server/**` and
   `apps/api/src/routes/mcp.ts` — those paths were superseded by `apps/api/src/mcp/**`.
+### [AUTO-001] Wire automations into the canonical Event substrate (M1 of productization)
+
+- **Completed**: 2026-07-02
+- **Summary**: Reconnected the automation engine — orphaned since the observation→Event refactor
+  (053dbf9) dropped its Observer hook — and generalized it across all data types. New canonical
+  engine-visible projection (`lib/automation/event.ts`: `AutomationEvent` + pure
+  `projectEmitInput`/`projectInboundDraft`), hooked post-commit into BOTH event write paths
+  (`event-emit.ts` for internal `docket` events, `event-sync.ts` so external Linear/GitHub/Slack
+  webhooks trigger rules too). Rules can now address external events: `on` gains optional
+  `source`/`entityKind` alongside `kind`/`subjectType`. The predicate contract moved from the
+  deleted `payload` to the typed `detail` pocket — new `docket.email_suggestion` EventDetail arm
+  (category + confidence) emitted by synthesis, and the dismiss-promotions seed rule rewritten to
+  `detail.category` (it matched nothing before). Re-entrancy is capped at depth 1 via
+  AsyncLocalStorage so a handler-emitted event can never cascade another rule pass.
+  `runAutomationsForObservation` → `runAutomationsForEvent`; `suggestion.dismiss` keys off the
+  event subject instead of a payload field; `DOCKET_ENTITY_KIND` promoted to `@docket/types` as
+  the shared subject→canonical-kind map. New canonical spec `docs/engineering/specs/automations.md`
+  (supersedes email-to-task §7): projection contract, matcher semantics, grammar, action catalog,
+  execution guarantees, add-a-trigger/add-an-action recipes.
+- **Files Changed**: `packages/types/src/{automation,event}.ts`,
+  `apps/api/src/lib/automation/{event(new),runtime,engine,handlers,rules-store,predicate,registry}.ts`,
+  `apps/api/src/routes/{event-emit,event-sync}.ts`, `apps/api/src/lib/email-to-task/synthesize.ts`,
+  `apps/api/tests/lib/automation/{engine,projection(new)}.test.ts`,
+  `apps/api/tests/routes/{automation-hooks(new),automation-engine-db}.test.ts`,
+  `docs/engineering/specs/automations.md` (new), `docs/WORKLOG.md`.
+- **Learnings**: (1) The projection functions must live in a dependency-free module — colocating
+  them with the runtime dragged `integration-provider → @docket/auth → packages/env` fail-fast
+  into pure unit tests at import time. `lib/automation/event.ts` is deliberately import-light so
+  the projection contract is testable in isolation. (2) The two hook call-sites are one-liners
+  behind the projections, preserving the spec's durable-drain seam: a future checkpointed
+  `consumers/` reactor replaces two lines, not the engine. (3) `AsyncLocalStorage<true>` +
+  registry-injectable `runAutomationsForEvent` made the cascade cap directly testable without
+  mocking timers or emit.
+- **Gate**: `@docket/{types,api}` typecheck clean; full API suite 82 files / 891 tests green
+  (baseline 880 + 11 new), run twice to rule out ordering flakes; `@docket/{types,api}` lint clean;
+  API build clean. Automations verified end-to-end: emit → match → predicate → handler
+  dismisses a promo suggestion; drained Linear webhook invokes the rule pass; duplicate emits
+  (dedupe key) fire exactly once; nested dispatch suppressed.
+
+---
 
 ### [MCP-PROD-010] Make MCP OAuth on-by-default, not env-gated
 

@@ -78,6 +78,22 @@ export const CanonicalEntityKind = z.enum([
 /** Canonical-entity-kind value. */
 export type CanonicalEntityKind = z.infer<typeof CanonicalEntityKind>;
 
+/**
+ * Map a Docket entity type (an internal emit `subject.type`) to its canonical entity kind.
+ *
+ * @remarks
+ * The single source of truth for the internal-subject → canonical-kind mapping, shared by the
+ * event emit Facade and the automation projection. Subject types without a canonical kind
+ * (e.g. `email_suggestion`) are deliberately absent — they carry no `EntityRef`.
+ */
+export const DOCKET_ENTITY_KIND: Readonly<Record<string, CanonicalEntityKind>> = {
+  task: 'work_item',
+  project: 'project',
+  program: 'program',
+  initiative: 'initiative',
+  cycle: 'cycle',
+};
+
 /** Typed source attribution — replaces the old free-text `provider` string. */
 export const SourceSystem = z
   .object({
@@ -177,6 +193,13 @@ export const EventDetail = z
       guildId: z.string().nullable(),
       /** The message body. */
       text: z.string(),
+    }),
+    z.object({
+      schema: z.literal('docket.email_suggestion'),
+      /** Funnel verdict category (`'promotions'`); null for an uncategorized thread. */
+      category: z.string().nullable(),
+      /** Funnel confidence score (0–100) the suggestion was created with. */
+      confidence: z.number().int(),
     }),
     z.object({
       schema: z.literal('generic'),

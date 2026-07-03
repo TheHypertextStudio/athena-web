@@ -34,6 +34,21 @@ describe('matches (event-match)', () => {
     expect(matches({}, event)).toBe(true); // empty match = any event
     expect(matches({ kind: 'task.completed', subjectType: 'project' }, event)).toBe(false);
   });
+
+  it('matches on source and entityKind (external-event addressing)', () => {
+    const external = { kind: 'completed', source: 'linear', entityKind: 'work_item' };
+    expect(matches({ source: 'linear' }, external)).toBe(true);
+    expect(matches({ source: 'github' }, external)).toBe(false);
+    expect(matches({ entityKind: 'work_item' }, external)).toBe(true);
+    expect(matches({ entityKind: 'project' }, external)).toBe(false);
+    expect(
+      matches({ kind: 'completed', source: 'linear', entityKind: 'work_item' }, external),
+    ).toBe(true);
+    // An event without the field never satisfies a present match field.
+    expect(matches({ entityKind: 'work_item' }, { kind: 'completed', source: 'docket' })).toBe(
+      false,
+    );
+  });
 });
 
 describe('runAutomations (registry + interpreter wiring)', () => {

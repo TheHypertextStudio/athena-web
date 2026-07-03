@@ -33,7 +33,7 @@
 
 - Use the official `@modelcontextprotocol/sdk` `StreamableHTTPServerTransport` mounted under a Hono route. Do **not** hand-roll SSE/session/resumability (engineering plan §4).
 - **One endpoint, `/mcp`**, supporting `POST` (JSON-RPC requests/notifications, may upgrade to SSE) and `GET` (server→client SSE stream). The deprecated HTTP+SSE (two-endpoint) transport is **forbidden**.
-- **Session mode:** stateful. The transport issues an `Mcp-Session-Id` on `initialize`; subsequent requests echo it. Back the session + event store with **Redis** (resumability via `Last-Event-ID`) so long agent runs survive reconnects. (Open issue: confirm hosting can hold SSE; stateless + Tasks is the fallback.)
+- **Session mode:** ~~stateful~~ **RESOLVED: shipped stateless.** The implementation uses `sessionIdGenerator: undefined` — one fresh server + transport per request, no `Mcp-Session-Id`, no Redis event store (`apps/api/src/mcp/server.ts`). Cross-request `resources/subscribe` notifications therefore cannot exist; long agent runs use the Tasks capability (behind `MCP_TASKS_ENABLED` + `MCP_SESSION_STORE_URL`) and clients poll resources. The original stateful+Redis design remains a possible future upgrade if resumable SSE becomes a requirement.
 - **Protocol version header:** the RS MUST honor `MCP-Protocol-Version: 2025-11-25` on every non-initialize request; reject unknown versions with HTTP 400 (SDK handles this).
 - **Origin validation (MUST, DNS-rebinding):** reject requests whose `Origin` is not in an allowlist (`https://app.docket.*`, `https://*.docket.*`, and configured client origins) before any auth work. Bind the listener to the platform host only.
 - **CORS:** registered **before** the Better Auth handler (engineering plan §2); expose `Authorization`, `WWW-Authenticate`, `Mcp-Session-Id`, `MCP-Protocol-Version`.
@@ -134,14 +134,16 @@ Per spec §"Client Registration Approaches", the priority order is pre-registrat
 - **Keeps DCR (`/register`, RFC 7591)** enabled as a MAY-level fallback for backwards compatibility (Better Auth `oidcProvider` provides it).
 - First-party clients (Athena planner, Docket web) are **pre-registered** with fixed `client_id`s.
 
-> **Open issue:** confirm Better Auth 1.6.14 natively emits `client_id_metadata_document_supported` and validates URL-form `client_id`s. If not, add a thin CIMD shim in the RS (net-new).
+> **RESOLVED:** Better Auth 1.6.14 does NOT validate URL-form `client_id`s — its authorize handler resolves clients by exact `client_id` lookup only. The thin CIMD shim exists (`apps/api/src/mcp/cimd.ts`: fetch + validate + SSRF/allowlist guard + upsert into `oauth_application`) and `cimdAuthorizeMiddleware` is mounted ahead of `/api/auth/mcp/authorize` in `apps/api/src/server.ts`.
+>
+> **Consent enforcement (net-new, discovered live):** Better Auth's `mcp()` authorize only routes through the consent page when the client sends `prompt=consent` — otherwise it silently mints a code for any registered client. `mcpConsentGuard` (`apps/api/src/mcp/consent-guard.ts`, mounted beside the CIMD preflight) 302s consent-less authorize requests back with `prompt=consent` unless a stored `oauth_consent` row already covers the requested scopes, restoring consent-once-per-scope-set semantics.
 
 ### 2.5 Token validation (RS, on every request — MUST)
 
 `withMcpAuth(auth, handler)` wraps `/mcp`; inside, `auth.api.getMcpSession({ headers })` returns `{ accessToken, userId, scopes, clientId }`. The RS additionally enforces:
 
 1. **Bearer present** in `Authorization` header (never query string). Missing/invalid → **401** with `WWW-Authenticate` (see §2.6).
-2. **Audience binding (RFC 8707):** the token's `aud` MUST equal the canonical RS URI `https://api.docket.app/mcp`. Reject mismatches → 401. (If the AS does not stamp `aud` from `resource`, fall back to issuer+client binding + explicit resource allowlist — open issue.)
+2. **Audience binding (RFC 8707):** the token's `aud` MUST equal the canonical RS URI (`MCP_RESOURCE_URL`). Reject mismatches → 401. (**RESOLVED:** Better Auth's `getMcpSession` resolves tokens bound to the configured `resource`; verified live by the `mcp-connect` e2e flow, which mints a real token and exercises the RS with it.)
 3. **Issuer:** token `iss` MUST equal the Docket AS issuer. **No token passthrough** — the RS MUST NOT accept tokens minted for GitHub/Drive/Linear, and MUST NOT forward the client's token downstream. Downstream connector calls use **separately-issued** Integration credentials (`Integration.connection.credentials_ref`, data-model §5).
 4. **Scope check** for the requested operation (§2.2 table). Insufficient scope at runtime → **403** with step-up `WWW-Authenticate` (§2.6).
 5. **Principal resolution:** map `sub`/`userId` → `User`. For org-scoped operations, resolve the human `Actor` for `(user_id, organization_id)`; if no membership row exists → 403. Then evaluate the `Grant` cascade. **Nothing is read from client-asserted org/user fields.**
@@ -673,7 +675,7 @@ On `initialize`, the RS advertises:
 ```
 
 - **`tools.listChanged: true`** — the available tool set is **principal- and org-aware**: a client whose token lacks `agents:run` does not see the agent tools; connectors not yet linked hide `link_external` for unsupported subjects. When grants/connectors change mid-session, the RS emits `notifications/tools/list_changed`.
-- **`prompts`:** NOT advertised in v1 (no server-defined prompt templates; deferred). Listed here explicitly so implementers don't add it speculatively.
+- **`prompts`:** advertised (`prompts.listChanged: true`) — the implementation registers workspace-context bootstrap prompts (`apps/api/src/mcp/prompts.ts`), superseding this spec's original "deferred in v1" stance.
 - **`completions: {}`** — implement `completion/complete` for: resource-template `{id}` vars (return matching entities the principal can see, by recent/active), `{org}` (the principal's org slugs), and tool enum args (e.g. `team`, `state` from the team's `workflow_states`, `provider`).
 - **`logging: {}`** — emit `notifications/message` at `info`/`warning`/`error`; never log tokens or credentials.
 - **`tasks`** — declare `tasks.requests.tools.call` so clients MAY augment `trigger_agent_session` / `run_view` calls as tasks. Tasks are **authorization-context-bound** (spec security): `tasks/get|result|cancel|list` MUST reject task IDs not owned by the requestor's token context. Adopt behind a feature flag (open issue: experimental churn).
@@ -685,11 +687,11 @@ On `initialize`, the RS advertises:
 ## 6. Build Checklist (this area)
 
 1. Mount `StreamableHTTPServerTransport` (stateful, Redis-backed) at `/mcp` in `apps/api`; wire `withMcpAuth(auth, …)`; register CORS + Origin allowlist **before** the handler.
-2. Serve PRM at `/.well-known/oauth-protected-resource` **and** `/.well-known/oauth-protected-resource/mcp`; serve AS metadata via `oAuthDiscoveryMetadata(auth)`; confirm `code_challenge_methods_supported:["S256"]` and `client_id_metadata_document_supported:true` appear.
+2. Serve PRM at `/.well-known/oauth-protected-resource` **and** `/.well-known/oauth-protected-resource/mcp`. AS metadata: Better Auth serves the live document at `<issuer>/api/auth/.well-known/oauth-authorization-server` (relative to its base path, NOT the RFC 8414 root); the RS-level `/.well-known/oauth-authorization-server` 307-redirects there. Confirm `code_challenge_methods_supported:["S256"]` and `client_id_metadata_document_supported:true` appear.
 3. Register the 4 scopes in `mcp().oidcConfig.scopes`; implement the token-validation middleware: bearer → `getMcpSession` → audience(`aud`==RS URI) → issuer → scope → principal(`sub`→User→Actor) → grant cascade. Emit the two `WWW-Authenticate` challenge forms.
 4. Author every tool's Zod input/output + annotations in `@docket/types`; register tools with `outputSchema` (JSON Schema 2020-12) and `structuredContent`+text results; gate each by scope (table §3.2) AND grant.
 5. Implement the `docket://` resource reader (Zod read DTOs), `resources/list`, `resources/templates/list`, `resources/read`, `resources/subscribe`, and the `updated`/`list_changed` notification fan-out from the service-layer event bus.
 6. Implement `completion/complete`, `logging`, `ping`/progress/cancel; gate `tasks` behind `MCP_TASKS_ENABLED`.
 7. Enforce **no downstream token passthrough**: connector resolution in `link_external`/`start_connector_link` uses `Integration.credentials_ref`, never the inbound token.
 8. Env contract (validated in `@docket/env`, dev mirrors prod): `MCP_CANONICAL_URL`, `MCP_ALLOWED_ORIGINS`, `MCP_SESSION_STORE_URL` (Redis), `MCP_TASKS_ENABLED`, plus the shared `BETTER_AUTH_URL`/secret/DB vars. The bootstrap script must print/guide setup for each and wire the real AS + Redis (no stubs).
-9. Playwright/integration: a `connect MCP client → discover PRM/AS → CIMD register → consent → call read tool → step-up to write` flow, plus a `trigger_agent_session → subscribe session resource → approve_action` flow, as declared flows in the e2e flow registry (engineering plan §6).
+9. Playwright/integration: **DONE** — `apps/web/e2e/mcp-connect.spec.ts` (discover PRM/AS → DCR register → consent → PKCE token → Bearer read → 403 step-up → write) and `apps/web/e2e/mcp-session.spec.ts` (`trigger_agent` → observe the approval gate on the session resource → `approve_action`; polling instead of subscribe, per the stateless transport). Both run in the CI `e2e` job.

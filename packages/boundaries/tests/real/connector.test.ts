@@ -311,7 +311,7 @@ describe('RealConnector — Linear (GraphQL)', () => {
     expect(result.account).toBe('only@x.dev');
   });
 
-  it('imports issues mapping identifier/url/description into provenance', async () => {
+  it('imports issues mapping the UUID/url/description into provenance', async () => {
     const { http, calls } = fakeHttp([
       new Response(
         JSON.stringify({
@@ -349,7 +349,7 @@ describe('RealConnector — Linear (GraphQL)', () => {
       body: 'Spec the landing surface.',
       provenance: {
         provider: 'linear',
-        externalId: 'DOC-7',
+        externalId: 'uuid-1',
         externalUrl: 'https://linear.app/docket/issue/DOC-7',
         importedAt: items[0]!.provenance.importedAt,
       },
@@ -429,8 +429,10 @@ describe('RealConnector — Linear (GraphQL)', () => {
     expect(items).toHaveLength(2);
     expect(items[0]?.title).toBe('Page 1');
     expect(items[1]?.title).toBe('Page 2');
-    // Second call must include the cursor.
-    expect(JSON.parse(bodyText(calls[1]!)).query).toContain('cursor1');
+    // Second call must pass the cursor as a GraphQL variable (never interpolated into the query).
+    const secondBody = JSON.parse(bodyText(calls[1]!));
+    expect(secondBody.variables.after).toBe('cursor1');
+    expect(secondBody.query).not.toContain('cursor1');
   });
 
   it('throws with provider context when the POST response is not valid JSON', async () => {
@@ -468,10 +470,14 @@ describe('RealConnector — asWorkGraph capability seam', () => {
     expect(connector.asWorkGraph()).toBeUndefined();
   });
 
-  it('returns undefined for linear today — LinearProviderClient does not yet implement the work-graph methods (Task 3)', () => {
+  it('returns a defined work-graph connector for linear (LinearProviderClient implements the methods)', () => {
     const { http } = fakeHttp([]);
     const connector = new RealConnector({ provider: 'linear', accessToken: 'tok' }, http);
-    expect(connector.asWorkGraph()).toBeUndefined();
+    const workGraph = connector.asWorkGraph();
+    expect(workGraph).toBeDefined();
+    expect(typeof workGraph?.pullWorkGraph).toBe('function');
+    expect(typeof workGraph?.listTeamStates).toBe('function');
+    expect(typeof workGraph?.pushWorkItem).toBe('function');
   });
 });
 

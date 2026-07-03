@@ -22,8 +22,10 @@ import { isRealValue } from '@docket/env';
 import {
   CapturePushSender,
   CaptureSmsSender,
+  MockMcpConnector,
   MockConnector,
   MockObserver,
+  RealMcpConnector,
   RealPushSender,
   RealConnector,
   RealDiscordObserver,
@@ -37,6 +39,7 @@ import {
 import type {
   Connector,
   ConnectorProvider,
+  McpConnector,
   Observer,
   ObserverProvider,
   PushSender,
@@ -91,6 +94,7 @@ export interface AppContainer {
   readonly summarizer: Summarizer;
   readonly taskSynthesizer: TaskSynthesizer;
   readonly mailer: Mailer;
+  readonly mcpConnector: McpConnector;
   readonly sms: SmsSender;
   readonly push: PushSender;
   readonly blob: BlobStore;
@@ -301,6 +305,7 @@ export function buildAppContainer(runtimeEnv: AppRuntimeEnv = toAppRuntimeEnv())
           apiKey: required('ANTHROPIC_API_KEY', runtimeEnv.ANTHROPIC_API_KEY),
         }),
     mailer: buildMailer(runtimeEnv),
+    mcpConnector: mock ? new MockMcpConnector() : new RealMcpConnector(),
     sms: buildSmsSender(runtimeEnv),
     push: buildPushSender(runtimeEnv),
     blob: mock

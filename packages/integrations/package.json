@@ -21,6 +21,7 @@
   "dependencies": {
     "@docket/env": "workspace:*",
     "@docket/types": "workspace:*",
+    "@modelcontextprotocol/sdk": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {

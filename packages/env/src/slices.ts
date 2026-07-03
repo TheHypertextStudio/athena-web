@@ -187,6 +187,9 @@ export const mcpServer = {
 /** Agent runtime (the built-in Athena runtime, backed by the Anthropic Messages API). */
 export const agentServer = {
   ANTHROPIC_API_KEY: z.string().optional(),
+  // Seals org-held remote-MCP credentials (AES-256-GCM). Base64, exactly 32 bytes when
+  // decoded; the connect route refuses to store a credential without it.
+  CREDENTIALS_ENCRYPTION_KEY: z.string().optional(),
   // The per-session turn budget for the agentic loop. Explicit (no hidden default in
   // code): the loop refuses to run without it, and every environment declares it.
   AGENT_MAX_TURNS: z.coerce.number().int().min(1).max(200).optional(),

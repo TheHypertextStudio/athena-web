@@ -157,6 +157,16 @@ export const SERVICE_VARS: readonly VarSpec[] = [
     sensitive: true,
   },
   {
+    name: 'CREDENTIALS_ENCRYPTION_KEY',
+    slice: 'agent',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: agentServer.CREDENTIALS_ENCRYPTION_KEY,
+    where: 'Base64 32-byte key sealing org-held remote-MCP credentials (AES-256-GCM)',
+    sensitive: true,
+  },
+  {
     name: 'AGENT_MAX_TURNS',
     slice: 'agent',
     scope: 'server',

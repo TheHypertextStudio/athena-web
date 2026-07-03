@@ -71,6 +71,13 @@ export interface RoutableEvent {
   readonly participantActorIds?: readonly string[];
   /** External fallback: the integration owner to notify when there are no Docket owners. */
   readonly ownerUserId?: string | null;
+  /**
+   * Pre-resolved external recipients (already Better Auth user ids, each with its reason) —
+   * supplied by provider-specific resolvers with their own identity mapping (e.g. Slack's
+   * connected-user mention/DM/thread classification in `slack-relevance.ts`). Merged with the
+   * same strongest-reason-wins rule as every other source.
+   */
+  readonly externalUserRecipients?: ReadonlyMap<string, StreamRelevance>;
 }
 
 /**
@@ -218,6 +225,9 @@ export async function resolveRecipients(
 
   // External integration-owner fallback (already a user id; the drain supplies it).
   if (event.ownerUserId) addUser(event.ownerUserId, reasonForExternal(event.kind));
+
+  // Pre-resolved external recipients (already user ids, each with its provider-derived reason).
+  for (const [userId, reason] of event.externalUserRecipients ?? []) addUser(userId, reason);
 
   // Explicit followers of this canonical entity (unmuted) — resolved straight to user ids.
   if (event.entity) {

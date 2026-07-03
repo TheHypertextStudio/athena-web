@@ -71,13 +71,18 @@ async function ingestWebhook(c: Context, provider: ObserverProvider): Promise<Re
   const routing = observer.route(payload);
   if (!routing) return c.json({ error: 'unrecognized payload' }, 400);
 
-  // Map the provider workspace/installation to the connected integration (→ org). An event for a
-  // workspace Docket doesn't have connected is acknowledged (200) but recorded unrouted, so a
-  // missing integration never 500s a third-party retry storm.
-  let organizationId: string | null = null;
-  let integrationId: string | null = null;
+  // Map the provider workspace/installation to the connected integration(s) (→ orgs). An event
+  // for a workspace Docket doesn't have connected is acknowledged (200) but recorded unrouted,
+  // so a missing integration never 500s a third-party retry storm.
+  //
+  // Slack is per-USER connectable, so one workspace may back several integrations (one per
+  // connecting user) across one or more orgs: the delivery fans out to ONE inbound row per org
+  // (the drain resolves per-user relevance from all of that org's connected users), with the
+  // org id suffixed onto the dedup key so retries stay per-org no-ops. Single-integration
+  // providers keep the provider's own event id verbatim.
+  const matches: { organizationId: string; integrationId: string; externalEventId: string }[] = [];
   if (routing.externalWorkspaceId) {
-    const [row] = await db
+    const rows = await db
       .select({ id: integration.id, organizationId: integration.organizationId })
       .from(integration)
       .where(
@@ -85,32 +90,52 @@ async function ingestWebhook(c: Context, provider: ObserverProvider): Promise<Re
           eq(integration.provider, provider),
           sql`${integration.connection}->>'externalWorkspaceId' = ${routing.externalWorkspaceId}`,
         ),
-      )
-      .limit(1);
-    if (row) {
-      organizationId = row.organizationId;
-      integrationId = row.id;
+      );
+    if (provider === 'slack') {
+      const byOrg = new Map<string, string>();
+      for (const row of rows) {
+        if (!byOrg.has(row.organizationId)) byOrg.set(row.organizationId, row.id);
+      }
+      for (const [organizationId, integrationId] of byOrg) {
+        matches.push({
+          organizationId,
+          integrationId,
+          externalEventId: `${routing.externalEventId}:${organizationId}`,
+        });
+      }
+    } else if (rows[0]) {
+      matches.push({
+        organizationId: rows[0].organizationId,
+        integrationId: rows[0].id,
+        externalEventId: routing.externalEventId,
+      });
     }
   }
 
-  // Write-ahead, then ACK. The unique (provider, external_event_id) index makes a retried
-  // delivery a no-op insert.
-  await db
-    .insert(inboundEvent)
-    .values({
-      organizationId,
-      integrationId,
-      provider,
-      externalEventId: routing.externalEventId,
-      eventType: routing.eventType,
-      payload: asPayload(payload),
-      signatureVerified: true,
-    })
-    .onConflictDoNothing({
-      target: [inboundEvent.provider, inboundEvent.externalEventId],
-    });
+  // Write-ahead (one row per routed org; one unrouted row when no org matched), then ACK. The
+  // unique (provider, external_event_id) index makes a retried delivery a no-op insert.
+  const targets =
+    matches.length > 0
+      ? matches
+      : [{ organizationId: null, integrationId: null, externalEventId: routing.externalEventId }];
+  for (const target of targets) {
+    await db
+      .insert(inboundEvent)
+      .values({
+        organizationId: target.organizationId,
+        integrationId: target.integrationId,
+        provider,
+        externalEventId: target.externalEventId,
+        eventType: routing.eventType,
+        payload: asPayload(payload),
+        signatureVerified: true,
+      })
+      .onConflictDoNothing({
+        target: [inboundEvent.provider, inboundEvent.externalEventId],
+      });
+  }
 
-  return c.json({ received: true, routed: integrationId !== null });
+  return c.json({ received: true, routed: matches.length > 0 });
 }
 
 /** The ingestion app: verify → write-ahead → 200, one provider edge per route. */

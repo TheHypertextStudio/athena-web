@@ -45,6 +45,22 @@ const SLACK_REPLAY_WINDOW_S = 300;
 const SLACK_MENTION_RE = /<@([UW][A-Z0-9]+)(?:\|[^>]*)?>/g;
 
 /**
+ * The distinct Slack user ids `<@U…>`-mentioned in a message text, in order of appearance.
+ *
+ * @remarks
+ * Exported (pure) so the API's Slack relevance resolver parses mentions identically to this
+ * observer — one regex, one interpretation, on both sides of the boundary.
+ */
+export function slackMentionedUserIds(text: string): string[] {
+  const seen = new Set<string>();
+  for (const match of text.matchAll(SLACK_MENTION_RE)) {
+    const id = match[1];
+    if (id) seen.add(id);
+  }
+  return [...seen];
+}
+
+/**
  * Message subtypes that are pure channel noise (edits, deletes, join/leave/topic churn, bot
  * chatter) — normalized to nothing. `thread_broadcast` and `file_share` are real user messages
  * and intentionally NOT listed.
@@ -173,7 +189,7 @@ export class RealSlackObserver implements Observer {
     const actor: EventActorRef | undefined = userId ? { externalId: userId } : undefined;
     const text = str(ev, 'text') ?? '';
     const threadTs = str(ev, 'thread_ts') ?? null;
-    const participants = this.mentionedUserIds(text).map(
+    const participants = slackMentionedUserIds(text).map(
       (externalId): EventActorRef => ({ externalId }),
     );
     const entity: EventEntityRef | undefined = channelId
@@ -203,16 +219,6 @@ export class RealSlackObserver implements Observer {
         detail,
       },
     ];
-  }
-
-  /** The distinct Slack user ids `<@U…>`-mentioned in a message text, in order of appearance. */
-  private mentionedUserIds(text: string): string[] {
-    const seen = new Set<string>();
-    for (const match of text.matchAll(SLACK_MENTION_RE)) {
-      const id = match[1];
-      if (id) seen.add(id);
-    }
-    return [...seen];
   }
 
   /** Map a Slack event type to a canonical event kind, or null when it has no specific kind. */

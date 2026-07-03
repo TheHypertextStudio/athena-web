@@ -37,6 +37,7 @@ import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from 
 
 import { DisconnectConfirmDialog } from './disconnect-confirm-dialog';
 import { GtasksAccountsSection } from './gtasks-accounts-section';
+import { MailIngestSection } from './mail-ingest-section';
 import { IntegrationProviderCard } from './integration-provider-card';
 import {
   REDIRECT_CONNECT_PROVIDERS,
@@ -405,6 +406,12 @@ export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabPr
           loading={integrationsQ.isPending}
         />
       ) : null}
+
+      <MailIngestSection
+        orgId={orgId}
+        canManage={canManage}
+        integrations={byProvider.get('gmail') ?? []}
+      />
 
       {calendarDirectory ? (
         <section aria-label="Google Calendar" className="flex flex-col gap-3">

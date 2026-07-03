@@ -1,6 +1,7 @@
 /** `@docket/api` — integrations router (mounted at `/v1/orgs/:orgId/integrations`). */
 import { db, integration, syncRun } from '@docket/db';
 import {
+  ConnectorConfig,
   ConnectorResourceListOut,
   IntegrationCreate,
   IntegrationDirectoryOut,
@@ -22,6 +23,7 @@ import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
 import { buildInstallUrl, signInstallState } from '../lib/github-app';
 import { buildSlackAuthorizeUrl, signSlackConnectState } from '../lib/slack-app';
+import { seedDefaultAutomationRules } from '../lib/automation/rules-store';
 import { capabilityGuard } from '../permissions/capability-guard';
 
 import {
@@ -269,7 +271,7 @@ Requires \`manage\` — it touches live provider credentials and configures sync
       summary: 'Update an integration',
       capability: 'manage',
       response: IntegrationOut,
-      description: `Update an integration's mutable settings — \`roles\`, \`connection\` metadata, connector \`config\` (target team/project, \`listIds\`, \`defaultListId\`, \`pushNativeTasks\`), \`syncMode\`, and \`writeBack\` — returning the refreshed {@link IntegrationOut}. A partial update: only present fields are written. \`status\` is intentionally **not** accepted — connection health is *earned* through the connect/verify and sync paths, never declared by a client, so this route can never fabricate \`connected\`. A missing/cross-tenant id 404s. Requires \`manage\`. Related: \`POST /:id/verify\` (re-validate after changing the connection), \`GET /:id/lists\` (to discover valid \`config.listIds\`).`,
+      description: `Update an integration's mutable settings — \`roles\`, \`connection\` metadata, connector \`config\` (target team/project, \`listIds\`, \`defaultListId\`, \`pushNativeTasks\`, and — on mail-capable connectors — \`emailToTask: { enabled, threshold }\`, the strictly-opt-in email-to-task ingest switch validated against {@link ConnectorConfig}), \`syncMode\`, and \`writeBack\` — returning the refreshed {@link IntegrationOut}. A partial update: only present fields are written. \`status\` is intentionally **not** accepted — connection health is *earned* through the connect/verify and sync paths, never declared by a client, so this route can never fabricate \`connected\`. Enabling \`emailToTask\` also seeds the org's default automation rules once (idempotent), so the dismiss-promotions / archive-on-complete defaults exist the moment the feature turns on. A missing/cross-tenant id 404s. Requires \`manage\`. Related: \`POST /:id/verify\` (re-validate after changing the connection), \`GET /:id/lists\` (to discover valid \`config.listIds\`).`,
     }),
     zParam(idParam),
     zJson(IntegrationUpdate),
@@ -286,6 +288,15 @@ Requires \`manage\` — it touches live provider credentials and configures sync
         ...(body.syncMode !== undefined ? { syncMode: body.syncMode } : {}),
         ...(body.writeBack !== undefined ? { writeBack: body.writeBack } : {}),
       });
+
+      // Enablement moment: seed the org's default automation rules as soon as email-to-task
+      // turns on (idempotent; the sweep-time call remains as a backstop) — decoupled from
+      // sweep timing so the rules are visible in settings immediately after the toggle.
+      const emailToTask = ConnectorConfig.safeParse(row.config).data?.emailToTask;
+      if (emailToTask?.enabled === true) {
+        const { actorId } = c.get('actorCtx');
+        await seedDefaultAutomationRules(orgId, actorId);
+      }
       return ok(c, IntegrationOut, toOut(row));
     },
   )

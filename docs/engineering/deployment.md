@@ -322,12 +322,17 @@ Cloud Run is scale-to-zero, so there is no in-process worker — scheduled work 
 **Cloud Scheduler** POSTing to a secret-guarded cron endpoint on the API. Each endpoint checks
 `CRON_SECRET` (sent as `Authorization: Bearer …` or `x-cron-secret`) and is idempotent.
 
-| Endpoint                        | Purpose                                                        | Suggested cadence |
-| ------------------------------- | -------------------------------------------------------------- | ----------------- |
-| `POST /v1/cron/lifecycle-sweep` | Advance orgs through the data-lifecycle deletion state machine | daily             |
-| `POST /v1/cron/sync-connectors` | Re-mirror every due connector integration (auto-sync)          | every 15 min      |
+| Endpoint (all under `/internal/cron/`) | Purpose                                                                                                                                             | Cadence (as provisioned) |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| `sync-connectors`                      | Re-mirror every due connector integration (`task_sync` purpose on the leased spine)                                                                 | every 15 min             |
+| `email-suggestions`                    | Email-to-task ingest: cursored mailbox pull → funnel → Athena synthesis → suggestions, for every opted-in mail integration (`email_ingest` purpose) | every 15 min             |
+| `process-events`                       | Drain inbound webhook events into canonical events (fires automation rules)                                                                         | every 2 min              |
+| `daily-digests`                        | Email each opted-in user's end-of-day summary at their local time                                                                                   | every 15 min             |
+| `lifecycle-sweep`                      | Advance orgs through the data-lifecycle deletion state machine (also expires/purges resolved email suggestions from M7)                             | daily 03:00              |
+| `account-deletion-sweep`               | Purge accounts past their 14-day grace window                                                                                                       | daily 03:30              |
+| `account-export-sweep`                 | Generate pending personal-data exports + email the link                                                                                             | every 10 min             |
 
-Both jobs are provisioned **as code** by `scripts/scheduler-setup.ts`, the single source of
+All seven jobs are provisioned **as code** by `scripts/scheduler-setup.ts`, the single source of
 truth. It runs automatically after every API deploy (the `Ensure Cloud Scheduler jobs` step in
 the `deploy-api` job) and can be run by hand. The script is idempotent — it `describe`s each job
 and `update`s or `create`s it — and reads the secret from `docket-cron-secret` (never logged).

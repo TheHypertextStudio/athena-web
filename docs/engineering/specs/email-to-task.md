@@ -16,8 +16,13 @@
 > Earlier revisions of this block over-claimed: before M1 the automation engine had no
 > production caller (the observation→Event refactor dropped its hook), the sweep was never
 > scheduled, `emailToTask` config had no write surface, and the funnel never saw a sender.
-> Still open (M5–M7): scheduler job + enablement UI + typed config, edit-then-accept +
-> thread-preview UI, generic (non-mail) automation actions, suggestion lifecycle/expiry, and
+> M5 (shipped): the scheduler job (`docket-email-suggestions`, every 15 min), typed
+> `emailToTask` config with a settings write surface (Settings → Connections → "Email to
+> task"; enabling seeds the default rules immediately), generic automation actions
+> (`task.setStatus`/`assign`/`setPriority`/`applyLabel`, `notification.send`,
+> `suggestion.autoAccept` — catalog in `automations.md` §4), and the triage UX
+> (edit-then-accept overrides, confidence badge, lazy live thread preview). Still open
+> (M6–M7): the Outlook connector skeleton, suggestion lifecycle/expiry, sweep counters, and
 > synthesizer due-date enrichment. §6/§7/§13 below describe intent; where they conflict with
 > `automations.md` / `mail-providers.md` / `integration-sync.md`, the newer specs win.
 > **Source of truth for intent**: `docs/_archive/core/overview.md` §"Semantics-Aware Data

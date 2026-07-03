@@ -739,3 +739,37 @@ describe('two-way Google Tasks sync', () => {
     expect(list.items.filter((i) => i.provider === 'gtasks')).toHaveLength(2);
   });
 });
+
+describe('PATCH /:id emailToTask enablement', () => {
+  it('seeds the default automation rules the moment email-to-task turns on (idempotent)', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const id = await seedIntegration(orgId, humanActorId, 'gmail');
+    const w = appWithActor(integrations, orgId, ['manage'], humanActorId);
+
+    const res = await w.request(`/${id}`, {
+      method: 'PATCH',
+      headers: J,
+      body: JSON.stringify({ config: { emailToTask: { enabled: true, threshold: 50 } } }),
+    });
+    expect(res.status).toBe(200);
+
+    const rules = await db
+      .select()
+      .from(schema.automationRule)
+      .where(eq(schema.automationRule.organizationId, orgId));
+    expect(rules.length).toBeGreaterThan(0);
+    expect(rules.every((r) => r.isSeed)).toBe(true);
+
+    // A second enable PATCH does not duplicate the seeds.
+    await w.request(`/${id}`, {
+      method: 'PATCH',
+      headers: J,
+      body: JSON.stringify({ config: { emailToTask: { enabled: true, threshold: 70 } } }),
+    });
+    const again = await db
+      .select()
+      .from(schema.automationRule)
+      .where(eq(schema.automationRule.organizationId, orgId));
+    expect(again.length).toBe(rules.length);
+  });
+});

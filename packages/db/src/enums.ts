@@ -190,6 +190,7 @@ export const notificationType = pgEnum('notification_type', [
   'agent_session',
   'connector_sync_failed',
   'connector_needs_reauth',
+  'automation',
 ]);
 /** Audit-feed subject kinds; `agent` is a first-class subject (frozen). */
 export const auditSubjectType = pgEnum('audit_subject_type', [

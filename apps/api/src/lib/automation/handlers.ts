@@ -9,10 +9,24 @@
  * act on the `email_suggestion` subject the event fired on. See
  * `docs/engineering/specs/automations.md`.
  */
-import { attachment, db, emailSuggestion } from '@docket/db';
+import {
+  actor,
+  attachment,
+  db,
+  emailSuggestion,
+  label,
+  notification,
+  task,
+  taskLabel,
+} from '@docket/db';
+import { Priority } from '@docket/types';
 import type { MailAction } from '@docket/boundaries';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
+import { z } from 'zod';
 
+import { setTaskState } from '../task-state';
+import { acceptSuggestion } from '../email-to-task/accept';
+import { emitEvent } from '../../routes/event-emit';
 import type { ActionContext } from './engine';
 import type { AutomationEvent } from './event';
 import { createRegistry, type Registry } from './registry';
@@ -108,16 +122,231 @@ const MAIL_ACTIONS: { readonly type: string; readonly build: MailActionBuilder }
   { type: 'mail.removeLabel', build: labelBuilder('removeLabel') },
 ];
 
+/** `task.setStatus` params. */
+const SetStatusParams = z.object({ state: z.string().min(1) });
+/** `task.assign` params. */
+const AssignParams = z.object({ assigneeId: z.string().min(1) });
+/** `task.setPriority` params. */
+const SetPriorityParams = z.object({ priority: Priority });
+/** `task.applyLabel` params. */
+const ApplyLabelParams = z.object({ labelId: z.string().min(1) });
+/** `notification.send` params. */
+const NotificationSendParams = z.object({
+  to: z.enum(['actor', 'taskAssignee']),
+  title: z.string().min(1),
+  summary: z.string().optional(),
+});
+
+/** Load the firing task subject (org-scoped, active), or `undefined` for a no-op. */
+async function taskOf(event: AutomationEvent): Promise<typeof task.$inferSelect | undefined> {
+  if (event.subjectType !== 'task' || !event.subjectId) return undefined;
+  const rows = await db
+    .select()
+    .from(task)
+    .where(
+      and(
+        eq(task.id, event.subjectId),
+        eq(task.organizationId, event.organizationId),
+        isNull(task.archivedAt),
+      ),
+    )
+    .limit(1);
+  return rows[0];
+}
+
+/** Resolve a Docket actor id to its Better Auth user id (notification target), org-scoped. */
+async function userIdOfActor(orgId: string, actorId: string): Promise<string | undefined> {
+  const rows = await db
+    .select({ userId: actor.userId })
+    .from(actor)
+    .where(and(eq(actor.id, actorId), eq(actor.organizationId, orgId)))
+    .limit(1);
+  return rows[0]?.userId ?? undefined;
+}
+
 /**
  * Build the action-handler registry.
  *
+ * @remarks
+ * Every handler validates its params with a colocated Zod schema and no-ops (returns
+ * without effect) on a wrong subject type or invalid params — a rule can misfire, never
+ * throw domain errors. Mutating handlers reuse the shared lib mutations (`setTaskState`,
+ * `acceptSuggestion`) so route and automation behavior can't diverge; events they emit are
+ * recorded but don't cascade (the runtime's depth-1 cap). See
+ * `docs/engineering/specs/automations.md` §4 for the catalog.
+ *
  * @param deps - Injected services (the mail applier).
- * @returns a registry with the `mail.*` and `suggestion.*` strategies registered.
+ * @returns a registry with the `mail.*`, `suggestion.*`, `task.*`, and `notification.*`
+ *   strategies registered.
  */
 export function buildAutomationRegistry(deps: HandlerDeps): Registry {
   const registry = createRegistry();
 
   for (const m of MAIL_ACTIONS) registry.register(mailHandler(m.type, m.build, deps));
+
+  // task.setStatus — move the firing task to a workflow state (shared transition lib).
+  registry.register({
+    type: 'task.setStatus',
+    run: async (ctx, params): Promise<void> => {
+      const event = eventOf(ctx);
+      const parsed = SetStatusParams.safeParse(params);
+      if (!parsed.success || event.subjectType !== 'task' || !event.subjectId) return;
+      try {
+        await setTaskState({
+          organizationId: event.organizationId,
+          taskId: event.subjectId,
+          state: parsed.data.state,
+          actorId: event.actorId ?? null,
+        });
+      } catch (error) {
+        // Unknown state key for the task's team — a rule-config problem, not a throw.
+        console.warn('[automation] task.setStatus skipped', {
+          taskId: event.subjectId,
+          state: parsed.data.state,
+          error,
+        });
+      }
+    },
+  });
+
+  // task.assign — assign the firing task to an org actor.
+  registry.register({
+    type: 'task.assign',
+    run: async (ctx, params): Promise<void> => {
+      const event = eventOf(ctx);
+      const parsed = AssignParams.safeParse(params);
+      if (!parsed.success) return;
+      const row = await taskOf(event);
+      if (!row) return;
+      const assignee = await db
+        .select({ id: actor.id })
+        .from(actor)
+        .where(
+          and(eq(actor.id, parsed.data.assigneeId), eq(actor.organizationId, event.organizationId)),
+        )
+        .limit(1);
+      if (!assignee[0]) return; // not an org actor — no-op, never cross-tenant
+      await db.update(task).set({ assigneeId: parsed.data.assigneeId }).where(eq(task.id, row.id));
+      await emitEvent({
+        organizationId: event.organizationId,
+        kind: 'assignment',
+        actorId: event.actorId ?? null,
+        title: row.title,
+        subject: { type: 'task', id: row.id, title: row.title },
+      });
+    },
+  });
+
+  // task.setPriority — set the firing task's priority.
+  registry.register({
+    type: 'task.setPriority',
+    run: async (ctx, params): Promise<void> => {
+      const event = eventOf(ctx);
+      const parsed = SetPriorityParams.safeParse(params);
+      if (!parsed.success) return;
+      const row = await taskOf(event);
+      if (!row) return;
+      await db.update(task).set({ priority: parsed.data.priority }).where(eq(task.id, row.id));
+    },
+  });
+
+  // task.applyLabel — attach an org label to the firing task (idempotent via the join PK).
+  registry.register({
+    type: 'task.applyLabel',
+    run: async (ctx, params): Promise<void> => {
+      const event = eventOf(ctx);
+      const parsed = ApplyLabelParams.safeParse(params);
+      if (!parsed.success) return;
+      const row = await taskOf(event);
+      if (!row) return;
+      const labelRow = await db
+        .select({ id: label.id })
+        .from(label)
+        .where(
+          and(eq(label.id, parsed.data.labelId), eq(label.organizationId, event.organizationId)),
+        )
+        .limit(1);
+      if (!labelRow[0]) return; // not an org label — no-op, never cross-tenant
+      await db
+        .insert(taskLabel)
+        .values({
+          taskId: row.id,
+          labelId: parsed.data.labelId,
+          organizationId: event.organizationId,
+        })
+        .onConflictDoNothing();
+    },
+  });
+
+  // notification.send — write an inbox notification to the acting user or the task assignee.
+  registry.register({
+    type: 'notification.send',
+    run: async (ctx, params): Promise<void> => {
+      const event = eventOf(ctx);
+      const parsed = NotificationSendParams.safeParse(params);
+      if (!parsed.success) return;
+      let targetActorId: string | undefined;
+      if (parsed.data.to === 'actor') {
+        targetActorId = event.actorId;
+      } else {
+        const row = await taskOf(event);
+        targetActorId = row?.assigneeId ?? undefined;
+      }
+      if (targetActorId === undefined) return;
+      const userId = await userIdOfActor(event.organizationId, targetActorId);
+      if (userId === undefined) return; // agent actors have no inbox
+      await db.insert(notification).values({
+        userId,
+        organizationId: event.organizationId,
+        type: 'automation',
+        body: {
+          title: parsed.data.title,
+          ...(parsed.data.summary !== undefined ? { summary: parsed.data.summary } : {}),
+          ...(event.subjectType === 'task' && event.subjectId
+            ? { url: `/orgs/${event.organizationId}/tasks/${event.subjectId}` }
+            : {}),
+        },
+      });
+    },
+  });
+
+  // suggestion.autoAccept — materialize the firing pending suggestion (shared accept lib).
+  registry.register({
+    type: 'suggestion.autoAccept',
+    run: async (ctx): Promise<void> => {
+      const event = eventOf(ctx);
+      if (event.subjectType !== 'email_suggestion' || !event.subjectId) return;
+      // The accepting actor: the event's actor, else the suggestion's creator (the
+      // integration owner) — the same identity the ingest sweep runs under.
+      let actorId = event.actorId;
+      if (actorId === undefined) {
+        const rows = await db
+          .select({ createdBy: emailSuggestion.createdBy })
+          .from(emailSuggestion)
+          .where(
+            and(
+              eq(emailSuggestion.id, event.subjectId),
+              eq(emailSuggestion.organizationId, event.organizationId),
+            ),
+          )
+          .limit(1);
+        actorId = rows[0]?.createdBy ?? undefined;
+      }
+      if (actorId === undefined) return;
+      const result = await acceptSuggestion({
+        organizationId: event.organizationId,
+        suggestionId: event.subjectId,
+        actorId,
+        overrides: {},
+      });
+      if (result.kind !== 'accepted') {
+        console.warn('[automation] suggestion.autoAccept skipped', {
+          suggestionId: event.subjectId,
+          outcome: result.kind,
+        });
+      }
+    },
+  });
 
   // suggestion.dismiss — discard the email_suggestion subject the event fired on.
   registry.register({

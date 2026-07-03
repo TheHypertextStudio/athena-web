@@ -63,11 +63,22 @@ export const defaultMailApplier: MailApplier = async ({ integrationId, threadId,
 };
 
 /**
- * The default action-handler registry, built once. Its only dependency is the module-constant
- * {@link defaultMailApplier}, so it's immutable for the process lifetime — no need to rebuild it
- * (a fresh Map + handler closures) on every event.
+ * The default action-handler registry, built once on first use.
+ *
+ * @remarks
+ * Lazy by necessity, not style: handlers reuse shared mutations that emit events
+ * (`task-state`, `accept`), and the emit facade calls back into this runtime — a module
+ * cycle that is safe at call time but would hit a temporal-dead-zone if the registry were
+ * constructed during module initialization. Immutable after first build (its only
+ * dependency is the module-constant {@link defaultMailApplier}).
  */
-const defaultRegistry = buildAutomationRegistry({ mailApplier: defaultMailApplier });
+let defaultRegistry: Registry | undefined;
+
+/** The lazily-built shared registry (see {@link defaultRegistry}). */
+function builtDefaultRegistry(): Registry {
+  defaultRegistry ??= buildAutomationRegistry({ mailApplier: defaultMailApplier });
+  return defaultRegistry;
+}
 
 /**
  * Marks execution that is already inside a rule's action dispatch. Events emitted from inside
@@ -96,7 +107,7 @@ export async function runAutomationsForEvent(
     const rules = await loadEnabledRules(event.organizationId);
     if (rules.length === 0) return;
     await automationDispatch.run(true, () =>
-      runAutomations(event, rules, registry ?? defaultRegistry),
+      runAutomations(event, rules, registry ?? builtDefaultRegistry()),
     );
   } catch (error) {
     // Automations are best-effort awareness side-effects; a failure must never roll back or

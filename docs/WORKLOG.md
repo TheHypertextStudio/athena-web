@@ -148,6 +148,48 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [AUTO-002] Generic automation actions + email-to-task enablement & triage UX (M5)
+
+- **Completed**: 2026-07-03
+- **Summary**: The automation action surface went app-wide and the email-to-task feature became
+  reachable by users. New generic handlers — `task.setStatus`, `task.assign`, `task.setPriority`,
+  `task.applyLabel`, `notification.send` (new `automation` notification type, migration
+  `0017_same_peter_parker`), `suggestion.autoAccept` — each param-validated (Zod) with loud
+  no-ops on wrong subjects/invalid params and hard org-scoping (cross-tenant actor/label ids
+  refused). Mutating handlers reuse NEW shared lib mutations extracted from the routes —
+  `lib/task-state.ts` `setTaskState` (also fixes `detail.fromState`, previously always null) and
+  `lib/email-to-task/accept.ts` `acceptSuggestion` (outcome union, mapped to HTTP by the route
+  and to no-ops by the handler) — so route and rule behavior cannot diverge. Enablement:
+  `ConnectorConfig.emailToTask {enabled, threshold(0-100)}` is the typed schema shared by the
+  sweep and the PATCH route; PATCH seeds the default rules the moment the toggle flips
+  (idempotent; sweep-time backstop kept); new Settings → Connections "Email to task" section
+  (`mail-ingest-section.tsx`) with visible numeric thresholds (Conservative 70 / Balanced 50 /
+  Eager 30) that preserves sibling config keys and removes the key on disable; the
+  `docket-email-suggestions` scheduler job (every 15 min) joins `scheduler-setup.ts` and the
+  deployment cron table now lists all seven jobs. Triage: edit-then-accept (submits only changed
+  fields as accept overrides), confidence badge, due-date line, and a lazy live thread preview
+  (no provider round-trip until expanded). Automations settings copy updated for app-wide rules.
+- **Files Changed**: `apps/api/src/lib/{task-state(new),email-to-task/accept(new)}.ts`,
+  `apps/api/src/lib/automation/{handlers,runtime}.ts` (lazy default registry — breaks the new
+  handlers→emit→runtime module cycle), `apps/api/src/lib/email-to-task/sweep.ts`,
+  `apps/api/src/routes/{tasks,email-suggestions,integrations}.ts`,
+  `packages/{db/src/enums,types/src/{notification,integration}}.ts`,
+  `packages/db/drizzle/0017_same_peter_parker.sql`, `scripts/scheduler-setup.ts`,
+  `apps/web/src/lib/{use-email-suggestions,query-keys}.ts`,
+  `apps/web/src/components/{settings/{mail-ingest-section(new),integrations-tab,automations-tab},triage/suggestions-lane,inbox/notification-meta}.tsx|ts`,
+  `apps/api/tests/routes/{automation-engine-db,integrations-sync}.test.ts`,
+  `apps/web/tests/components/{settings/mail-ingest-section,triage/suggestions-lane}.test.tsx`,
+  `docs/engineering/{specs/{automations,email-to-task}.md,deployment.md}`, `docs/WORKLOG.md`.
+- **Learnings**: Handlers that reuse route-level mutations create a module cycle
+  (handlers → emit → runtime → handlers); the fix is a lazily-built default registry, not
+  restructuring — the cycle is safe at call time, only module-init evaluation trips the TDZ.
+  Disabling a feature should REMOVE its config key, not write `enabled:false` — the absent-key
+  state is the documented "off" and keeps configs from accreting dead toggles.
+- **Gate**: api/types/db/web typecheck clean; handler tests 12/12 (incl. cross-tenant refusals,
+  unknown-state no-op, autoAccept materialization); PATCH-seeding route test; web component
+  tests 6/6 (override submission, sibling-key preservation, lazy thread fetch); full api + web
+  suites + lints in the milestone gate.
+
 ### [MAIL-003] Email ingest on the leased sync spine: cursors, real senders, honest failures (M4)
 
 - **Completed**: 2026-07-02

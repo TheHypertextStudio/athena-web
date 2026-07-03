@@ -88,6 +88,13 @@ const JOBS: readonly CronJob[] = [
     description:
       'Docket: account-export sweep (generate pending personal-data exports + email the link).',
   },
+  {
+    name: 'docket-email-suggestions',
+    path: '/internal/cron/email-suggestions',
+    schedule: '*/15 * * * *',
+    description:
+      'Docket: email-to-task ingest sweep (cursored mailbox pull -> funnel -> Athena synthesis -> suggestions for every opted-in mail integration).',
+  },
 ];
 
 // ── helpers ──────────────────────────────────────────────────────────────────

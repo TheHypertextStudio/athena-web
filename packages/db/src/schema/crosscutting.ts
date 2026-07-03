@@ -39,6 +39,7 @@ import {
   notificationType,
   resourceKind,
   syncMode,
+  syncRunPurpose,
   syncRunStatus,
   syncTrigger,
   updateSubjectType,
@@ -235,6 +236,13 @@ export const integration = pgTable(
     syncStartedAt: timestamp('sync_started_at'),
     /** Background re-sync cadence in minutes (null = manual-only, no auto-sync). */
     syncCadenceMinutes: integer('sync_cadence_minutes').default(60),
+    /**
+     * Per-purpose incremental-sync cursors (see `IntegrationSyncState` in `@docket/types`):
+     * `{ mail: { cursor, updatedAt } }` today. Opaque, provider-owned values (Gmail
+     * `historyId`; Microsoft Graph `deltaLink`), written only while the sync lease is held.
+     * `{}` = no cursor yet — the next pull is a full one.
+     */
+    syncState: jsonb('sync_state').$type<Record<string, unknown>>().notNull().default({}),
   },
   (t) => [
     index('integration_org_idx').on(t.organizationId),
@@ -269,6 +277,8 @@ export const syncRun = pgTable(
       .references(() => integration.id, { onDelete: 'cascade' }),
     status: syncRunStatus('status').notNull(),
     trigger: syncTrigger('trigger').notNull(),
+    /** What this run pulled: the task mirror or the email-to-task ingest. */
+    purpose: syncRunPurpose('purpose').notNull().default('task_sync'),
     /** Items materialized into Docket this run. */
     processed: integer('processed').notNull().default(0),
     /** Items returned by the connector this run. */
@@ -391,6 +401,13 @@ export const emailSuggestion = pgTable(
     suggestedProjectId: text('suggested_project_id'),
     suggestedProgramId: text('suggested_program_id'),
     confidence: integer('confidence'),
+    /**
+     * RFC 5322 Message-ID of the thread's latest message at ingest time — the
+     * cross-provider identity (the same email seen via Gmail and Outlook carries the same
+     * Message-ID even though the provider thread ids differ). Soft dedup key: checked
+     * before synthesis; deliberately NOT unique (absent for providers that omit it).
+     */
+    rfc822MessageId: text('rfc822_message_id'),
     status: emailSuggestionStatus('status').notNull().default('pending'),
     emailMeta: jsonb('email_meta'),
     createdTaskId: text('created_task_id'),
@@ -398,6 +415,7 @@ export const emailSuggestion = pgTable(
   (t) => [
     index('email_suggestion_org_status_idx').on(t.organizationId, t.status),
     uniqueIndex('email_suggestion_thread_uq').on(t.organizationId, t.externalThreadId),
+    index('email_suggestion_org_message_id_idx').on(t.organizationId, t.rfc822MessageId),
   ],
 );
 

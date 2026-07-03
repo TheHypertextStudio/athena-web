@@ -132,6 +132,33 @@ export const ConnectorConfig = z
 /** Validated connector-config value. */
 export type ConnectorConfig = z.infer<typeof ConnectorConfig>;
 
+/**
+ * Per-purpose incremental-sync cursors, stored in the integration's `sync_state` jsonb.
+ *
+ * @remarks
+ * Cursors are opaque, provider-owned resume tokens (Gmail `historyId`; Microsoft Graph
+ * `deltaLink`) — never parsed by the app, only echoed back to the connector's
+ * `listThreads`. Written exclusively while the sync lease is held, so concurrent sweeps
+ * cannot interleave cursor updates. An absent purpose key means no cursor yet: the next
+ * pull is a full one. See `docs/engineering/specs/mail-providers.md` §4.
+ */
+export const IntegrationSyncState = z
+  .object({
+    mail: z
+      .object({
+        cursor: z.string().describe('The provider-owned resume token from the last page.'),
+        updatedAt: z.string().describe('RFC3339 time the cursor was last advanced.'),
+      })
+      .optional()
+      .describe('The email-to-task ingest cursor (absent = next pull is a full one).'),
+  })
+  .meta({
+    id: 'IntegrationSyncState',
+    description: 'Per-purpose incremental-sync cursors for an integration.',
+  });
+/** Validated sync-state value. */
+export type IntegrationSyncState = z.infer<typeof IntegrationSyncState>;
+
 /** A selectable external container (e.g. a Google Tasks list) offered in the config UI. */
 export const ConnectorResourceRef = z
   .object({

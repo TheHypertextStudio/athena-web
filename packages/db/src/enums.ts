@@ -40,6 +40,13 @@ export const syncMode = pgEnum('sync_mode', ['import', 'mirror']);
 export const syncRunStatus = pgEnum('sync_run_status', ['running', 'succeeded', 'failed']);
 /** What triggered a sync run: a user action or the background scheduler. */
 export const syncTrigger = pgEnum('sync_trigger', ['manual', 'scheduled']);
+
+/**
+ * What a sync run pulled: the task-mirror pass (`task_sync`) or the email-to-task ingest
+ * (`email_ingest`). Both run on the same leased spine and write the same `sync_run`
+ * history; the purpose keeps their runs distinguishable in the UI and in scheduling logic.
+ */
+export const syncRunPurpose = pgEnum('sync_run_purpose', ['task_sync', 'email_ingest']);
 /** Integration pattern: replace (migration) vs complement (connector). */
 export const integrationPattern = pgEnum('integration_pattern', ['migration', 'connector']);
 /** What an integration contributes: work, context, signal, time, or code. */
@@ -318,6 +325,7 @@ export const sourceSystem = pgEnum('source_system', [
   'discord',
   'google_calendar',
   'gmail',
+  'outlook',
 ]);
 
 /**

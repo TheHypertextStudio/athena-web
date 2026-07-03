@@ -50,6 +50,7 @@ export const SourceSystemKind = z.enum([
   'discord',
   'google_calendar',
   'gmail',
+  'outlook',
 ]);
 /** Source-system value. */
 export type SourceSystemKind = z.infer<typeof SourceSystemKind>;

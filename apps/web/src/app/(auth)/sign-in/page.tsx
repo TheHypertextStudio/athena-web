@@ -24,6 +24,38 @@ const HOME_DESTINATION = '/today';
 /** Where a signed-in user with no organization is routed instead of the cockpit. */
 const ONBOARDING_DESTINATION = '/onboarding';
 
+/** How many times to retry the first authenticated read after Better Auth reports success. */
+const SESSION_SETTLE_ATTEMPTS = 4;
+
+/** Delay between session-cookie read attempts after a passkey ceremony succeeds. */
+const SESSION_SETTLE_DELAY_MS = 125;
+
+const SESSION_COOKIE_ERROR =
+  'Sign-in worked, but Docket could not read your session cookie. Please try again.';
+
+type OrgsResponse = Awaited<ReturnType<typeof api.v1.orgs.$get>>;
+
+/** Wait briefly for the browser/proxy cookie path to settle. */
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+/** Load orgs after sign-in, tolerating a short-lived missing-session read. */
+async function loadOrgsAfterSignIn(): Promise<OrgsResponse> {
+  let lastResponse: OrgsResponse | null = null;
+  for (let attempt = 0; attempt < SESSION_SETTLE_ATTEMPTS; attempt += 1) {
+    const response = await api.v1.orgs.$get();
+    if (response.status !== 401) return response;
+    lastResponse = response;
+    if (attempt < SESSION_SETTLE_ATTEMPTS - 1) {
+      await delay(SESSION_SETTLE_DELAY_MS);
+    }
+  }
+  return lastResponse ?? api.v1.orgs.$get();
+}
+
 /**
  * The passwordless, passkey-first sign-in screen.
  *
@@ -54,14 +86,14 @@ export default function SignInPage(): JSX.Element {
   /** Route into the cockpit, or onboarding when the user has no organization yet. */
   const routeAfterSignIn = useCallback(async (): Promise<void> => {
     try {
-      const res = await api.v1.orgs.$get();
+      const res = await loadOrgsAfterSignIn();
       if (res.ok) {
         const { items } = await res.json();
         router.push(items.length > 0 ? HOME_DESTINATION : ONBOARDING_DESTINATION);
         return;
       }
       if (res.status === 401) {
-        setError('Your session did not finish starting. Please sign in again.');
+        setError(SESSION_COOKIE_ERROR);
         return;
       }
       setError('We could not load your workspaces. Please try signing in again.');

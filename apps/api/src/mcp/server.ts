@@ -157,13 +157,14 @@ export function protectedResourceMetadata(c: Context): Response {
  * Serve the OAuth 2.0 Authorization Server metadata pointer (RFC 8414).
  *
  * @remarks
- * The single Docket AS is Better Auth mounted at `/api/auth`, whose `mcp()`/`oidcProvider`
- * plugin already serves the canonical discovery document (with `issuer`, the authorization/
- * token/registration endpoints, `code_challenge_methods_supported:["S256"]`, and the scope
- * set) at `<issuer>/.well-known/openid-configuration`. The RS-level
- * `/.well-known/oauth-authorization-server` route 307-redirects there so a client that
- * discovered the AS via the PRM `authorization_servers` entry lands on the live document
- * (mcp-surface.md §2.3) — without re-importing the heavy Better Auth plugin chain.
+ * The single Docket AS is Better Auth mounted at `/api/auth`, whose `mcp()` plugin serves
+ * the canonical discovery document (with `issuer`, the authorization/token/registration
+ * endpoints, and `code_challenge_methods_supported:["S256"]`) at
+ * `<issuer>/api/auth/.well-known/oauth-authorization-server` — relative to its base path,
+ * NOT at the RFC 8414 root location. The RS-level `/.well-known/oauth-authorization-server`
+ * route 307-redirects there so a client that discovered the AS via the PRM
+ * `authorization_servers` entry lands on the live document (mcp-surface.md §2.3) — without
+ * re-importing the heavy Better Auth plugin chain.
  *
  * @param c - The Hono context.
  * @returns a 307 redirect to the AS's OIDC discovery document.
@@ -172,7 +173,7 @@ export function authorizationServerMetadata(c: Context): Response {
   const resource = canonicalResourceUrl(c);
   const issuer = env.MCP_ISSUER_URL?.replace(/\/$/, '') ?? new URL(resource).origin;
   if (typeof c.redirect === 'function') {
-    return c.redirect(`${issuer}/.well-known/openid-configuration`, 307);
+    return c.redirect(`${issuer}/api/auth/.well-known/oauth-authorization-server`, 307);
   }
   return c.json({
     issuer,

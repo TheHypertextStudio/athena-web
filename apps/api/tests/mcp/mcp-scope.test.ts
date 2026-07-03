@@ -368,13 +368,15 @@ describe('discovery routes (PRM + AS metadata)', () => {
     );
   });
 
-  it('redirects AS metadata to the issuer OIDC discovery document', async () => {
+  it('redirects AS metadata to the live Better Auth discovery document', async () => {
     const res = await app().request('/.well-known/oauth-authorization-server', {
       redirect: 'manual',
     });
     expect(res.status).toBe(307);
+    // Better Auth's mcp() plugin serves the document relative to its /api/auth base path,
+    // not at the RFC 8414 root — the redirect must target the route that actually exists.
     expect(res.headers.get('location')).toBe(
-      'https://auth.docket.test/.well-known/openid-configuration',
+      'https://auth.docket.test/api/auth/.well-known/oauth-authorization-server',
     );
   });
 });

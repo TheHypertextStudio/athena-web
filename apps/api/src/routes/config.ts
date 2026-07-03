@@ -28,6 +28,7 @@ import { slackConfigured } from '../lib/slack-app';
  */
 const CONNECTORS_BY_PROVIDER: Partial<Record<SocialProvider, readonly string[]>> = {
   google: ['drive', 'gmail', 'calendar', 'gtasks'],
+  microsoft: ['outlook'],
   github: ['github'],
   linear: ['linear'],
   // `apple` (sign-in only) and `discord` (observe-only identity link) unlock no work connectors.

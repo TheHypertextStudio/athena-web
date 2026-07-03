@@ -48,6 +48,7 @@ import {
   GoogleTasksProviderClient,
 } from './connector-google';
 import { GmailProviderClient } from './connector-gmail';
+import { MicrosoftProviderClient } from './connector-microsoft';
 import { ProviderHttp } from './connector-http';
 import {
   isMailActionsProviderClient,
@@ -64,6 +65,7 @@ export {
   GoogleTasksProviderClient,
 };
 export { GmailProviderClient } from './connector-gmail';
+export { MicrosoftProviderClient } from './connector-microsoft';
 
 /** Validated configuration for {@link RealConnector} (sourced from the connection credential + env). */
 export interface RealConnectorConfig {
@@ -86,6 +88,7 @@ export const PROVIDER_API_BASE: Readonly<Record<ConnectorProvider, string>> = {
   gmail: 'https://gmail.googleapis.com/gmail/v1',
   calendar: 'https://www.googleapis.com/calendar/v3',
   gtasks: 'https://tasks.googleapis.com/tasks/v1',
+  outlook: 'https://graph.microsoft.com/v1.0',
 };
 
 /**
@@ -108,6 +111,7 @@ export const PROVIDER_CLIENT_FACTORIES: Readonly<
   gmail: (http) => new GmailProviderClient(http),
   calendar: (http) => new GoogleCalendarProviderClient(http),
   gtasks: (http) => new GoogleTasksProviderClient(http),
+  outlook: (http) => new MicrosoftProviderClient(http),
 };
 
 /**

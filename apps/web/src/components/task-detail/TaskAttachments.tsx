@@ -102,7 +102,7 @@ function AttachmentCard({
               className="text-primary truncate text-xs hover:underline"
             >
               {isEmail
-                ? 'Open in Gmail'
+                ? 'Open email'
                 : isCalendarEvent
                   ? 'Open in Google Calendar'
                   : attachment.url}

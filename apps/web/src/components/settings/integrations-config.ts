@@ -17,6 +17,7 @@ export const PROVIDER_ICON: Record<string, LucideIcon> = {
   linear: Layers,
   drive: Folder,
   gmail: Mail,
+  outlook: Mail,
   calendar: Calendar,
   gtasks: TaskAlt,
   slack: MessageSquare,
@@ -60,12 +61,15 @@ export const STATUS_LABEL: Record<
  *
  * @remarks
  * Mirrors the server's `socialProviderId`: all four Google products share the one `google`
- * grant; GitHub and Linear each have their own. Used to decide which provider's OAuth redirect
- * to launch when finishing/repairing a connection.
+ * grant; GitHub, Linear, and Microsoft (Outlook) each have their own. Used to decide which
+ * provider's OAuth redirect to launch when finishing/repairing a connection.
  */
-export function socialProviderForConnector(provider: string): 'google' | 'github' | 'linear' {
+export function socialProviderForConnector(
+  provider: string,
+): 'google' | 'github' | 'linear' | 'microsoft' {
   if (provider === 'github') return 'github';
   if (provider === 'linear') return 'linear';
+  if (provider === 'outlook') return 'microsoft';
   return 'google';
 }
 

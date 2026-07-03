@@ -90,6 +90,12 @@ export const authServer = {
   GITHUB_APP_WEBHOOK_SECRET: z.string().optional(),
   LINEAR_CLIENT_ID: z.string().optional(),
   LINEAR_CLIENT_SECRET: z.string().optional(),
+  /** Microsoft Entra app client id — Outlook sign-in/link + the Graph mail connector. */
+  MICROSOFT_CLIENT_ID: z.string().optional(),
+  /** Microsoft Entra app client secret. */
+  MICROSOFT_CLIENT_SECRET: z.string().optional(),
+  /** Entra tenant (`common` for multi-tenant; a tenant id to restrict to one directory). */
+  MICROSOFT_TENANT_ID: z.string().optional(),
   /** App-level Linear webhook signing secret — verifies inbound ambient-observation events. */
   LINEAR_WEBHOOK_SECRET: z.string().optional(),
   /**
@@ -237,4 +243,6 @@ export const connectorServer = {
   GOOGLE_CALENDAR_API_BASE: z.string().min(1).optional(),
   /** Google Tasks REST API base override. */
   GOOGLE_TASKS_API_BASE: z.string().min(1).optional(),
+  /** Microsoft Graph API base override. */
+  MICROSOFT_GRAPH_API_BASE: z.string().min(1).optional(),
 };

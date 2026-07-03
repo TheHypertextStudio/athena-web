@@ -1,8 +1,9 @@
 # Mail Providers
 
-> **Status**: Mail port + Gmail client shipped (M2 of the email-to-task productization).
-> Cursor storage + the sweep that consumes `listThreads` land in M3/M4; the Outlook/Graph
-> client lands in M6.
+> **Status**: Mail port + Gmail client shipped (M2); cursor storage + the consuming sweep
+> shipped (M3/M4); the Outlook/Graph client shipped **dormant** (M6) — fully implemented and
+> unit-tested against canned Graph JSON, hidden by `/v1/config` until `MICROSOFT_CLIENT_ID`/
+> `MICROSOFT_CLIENT_SECRET` are configured. Lighting up Outlook = env values + a smoke test.
 > **Last Updated**: 2026-07-02
 > **Owners**: Platform
 
@@ -87,8 +88,8 @@ sync lease is held (see `integration-sync.md`, M4).
 | `trash`                      | `POST /threads/{id}/trash`      | move to `deleteditems`                             |
 | `applyLabel` / `removeLabel` | add/remove the label id         | read-modify-write of `categories[]`                |
 
-Gmail acts on whole threads; Graph acts on messages, so the Graph client fans a thread
-action out over the conversation's messages (documented on the client when it lands).
+Gmail acts on whole threads; Graph acts on messages, so `MicrosoftProviderClient` fans a
+thread action out over the conversation's messages (see its module remarks).
 Rule-layer idempotency is the `attachment.lastEmailStateAction` ledger — providers don't
 need their own.
 

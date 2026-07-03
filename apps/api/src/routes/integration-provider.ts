@@ -25,6 +25,7 @@ export const CONNECTOR_PROVIDERS: readonly ConnectorProvider[] = [
   'gmail',
   'calendar',
   'gtasks',
+  'outlook',
 ];
 
 /**
@@ -80,6 +81,12 @@ export const PROVIDER_DIRECTORY: Readonly<
     roles: ['work'],
     category: 'project-management',
   },
+  outlook: {
+    name: 'Outlook',
+    pattern: 'connector',
+    roles: ['signal'],
+    category: 'communication',
+  },
 };
 
 /** Narrow a stored integration `provider` string to a {@link ConnectorProvider}. */
@@ -110,6 +117,7 @@ export function asObserverProvider(provider: string): ObserverProvider | null {
 export function socialProviderId(provider: ConnectorProvider): string {
   if (provider === 'github') return 'github';
   if (provider === 'linear') return 'linear';
+  if (provider === 'outlook') return 'microsoft';
   return 'google';
 }
 
@@ -231,7 +239,13 @@ export async function resolveConnectorToken(
 }
 
 /** The social providers a linked identity can belong to (mirrors Better Auth `socialProviders`). */
-const IDENTITY_PROVIDERS: readonly IdentityProvider[] = ['google', 'github', 'linear', 'discord'];
+const IDENTITY_PROVIDERS: readonly IdentityProvider[] = [
+  'google',
+  'github',
+  'linear',
+  'discord',
+  'microsoft',
+];
 
 /**
  * List the user's linked external identities across every supported provider (Google / GitHub /

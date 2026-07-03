@@ -29,6 +29,7 @@ import type { ConnectorProvider } from './connector';
  */
 export const MAIL_CAPABLE_PROVIDERS: ReadonlySet<ConnectorProvider> = new Set<ConnectorProvider>([
   'gmail',
+  'outlook',
 ]);
 
 /**

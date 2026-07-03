@@ -17,6 +17,7 @@ import type { AppEnv } from '../context';
 import { env } from '../env';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
+import { slackConfigured } from '../lib/slack-app';
 
 /**
  * The connector keys each configured social provider unlocks.
@@ -46,11 +47,16 @@ Carries nothing secret and requires no session. Related: the authenticated perso
   }),
   (c) => {
     const oauthProviders = configuredSocialProviders(env);
-    const connectors = oauthProviders.flatMap((p) => CONNECTORS_BY_PROVIDER[p]);
+    // Slack is not a social provider — its availability derives from the shared Slack app's
+    // own OAuth credentials (same derived-from-real-setup rule, different credential).
+    const connectors = [
+      ...oauthProviders.flatMap((p) => CONNECTORS_BY_PROVIDER[p]),
+      ...(slackConfigured() ? ['slack'] : []),
+    ];
     return ok(c, PublicConfigOut, {
       appMode: env.APP_MODE,
       oauthProviders,
-      connectors: [...connectors],
+      connectors,
       mcpUrl: env.MCP_RESOURCE_URL ?? null,
     });
   },

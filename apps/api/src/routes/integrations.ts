@@ -21,10 +21,11 @@ import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
 import { buildInstallUrl, signInstallState } from '../lib/github-app';
+import { buildSlackAuthorizeUrl, signSlackConnectState } from '../lib/slack-app';
 import { capabilityGuard } from '../permissions/capability-guard';
 
 import {
-  CONNECTOR_PROVIDERS,
+  DIRECTORY_PROVIDERS,
   PROVIDER_DIRECTORY,
   WRITE_BACK_PROVIDERS,
   asConnectorProvider,
@@ -179,7 +180,7 @@ Requires \`manage\` — wiring an external data source into the org is an admini
     }),
     async (c) => {
       const providers: z.input<typeof IntegrationDirectoryOut>['providers'] =
-        CONNECTOR_PROVIDERS.map((provider) => ({ provider, ...PROVIDER_DIRECTORY[provider] }));
+        DIRECTORY_PROVIDERS.map((provider) => ({ provider, ...PROVIDER_DIRECTORY[provider] }));
       return ok(c, IntegrationDirectoryOut, { providers });
     },
   )
@@ -478,32 +479,46 @@ Requires \`manage\` — triggering org-wide mirroring is an administrative actio
       return ok(c, SyncRunOut, toSyncRunOut(run));
     },
   )
-  // GitHub connect = installing the GitHub App. Returns the install URL (with a signed `state`
-  // binding this integration + org) the client sends the user to; the install redirects back to
-  // the non-RPC `/internal/integrations/github/callback`, which records the installation id.
+  // Redirect-style connects. GitHub = installing the GitHub App; Slack = the shared app's
+  // user-token OAuth consent. Both return a URL (with a signed `state` binding this integration
+  // + org) the client sends the user to; the provider redirects back to the matching non-RPC
+  // `/internal/integrations/<provider>/callback`, which records the grant.
   .get(
     '/:id/connect-url',
     capabilityGuard('manage'),
     apiDoc({
       tag: 'Integrations',
-      summary: 'Get a GitHub App install URL',
+      summary: 'Get a provider connect URL',
       capability: 'manage',
-      description: `Return the GitHub App **install URL** the client redirects the user to in order to connect a GitHub integration — connecting GitHub means installing the GitHub App, not an OAuth token exchange. The response is \`{ url }\` (a bare JSON object, not the standard envelope). The URL embeds a signed \`state\` that binds this integration id + org, so when the user finishes installation GitHub redirects to the non-RPC \`/internal/integrations/github/callback\`, which records the installation id against this integration.
+      description: `Return the **connect URL** the client redirects the user to in order to connect this integration — for GitHub that is the GitHub App install page, for Slack the shared Docket app's OAuth consent (user-token scopes). The response is \`{ url }\` (a bare JSON object, not the standard envelope). The URL embeds a signed \`state\` that binds this integration id + org (+ the connecting user for Slack), so when the user finishes the provider redirects to the non-RPC \`/internal/integrations/<provider>/callback\`, which records the installation/grant against this integration.
 
-Only valid for a GitHub integration row (else 409 \`A connect URL is only available for GitHub integrations\`), and only when the GitHub App is configured (else 409 \`The GitHub App is not configured (GITHUB_APP_SLUG is unset)\`); a missing/cross-tenant id 404s. Requires \`manage\`. Related: \`POST /\` (create the GitHub integration row first), \`POST /:id/sync\`.`,
+Only valid for a GitHub or Slack integration row (else 409 \`A connect URL is only available for GitHub or Slack integrations\`), and only when the provider app is configured (else 409 naming the missing env var); a missing/cross-tenant id 404s. Requires \`manage\`. Related: \`POST /\` (create the integration row first), \`POST /:id/sync\`.`,
     }),
     zParam(idParam),
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const row = await loadIntegration(orgId, id);
-      if (row.provider !== 'github') {
-        throw new ConflictError('A connect URL is only available for GitHub integrations');
+      if (row.provider === 'github') {
+        const url = buildInstallUrl(signInstallState({ integrationId: id, orgId }));
+        if (!url)
+          throw new ConflictError('The GitHub App is not configured (GITHUB_APP_SLUG is unset)');
+        return c.json({ url });
       }
-      const url = buildInstallUrl(signInstallState({ integrationId: id, orgId }));
-      if (!url)
-        throw new ConflictError('The GitHub App is not configured (GITHUB_APP_SLUG is unset)');
-      return c.json({ url });
+      if (row.provider === 'slack') {
+        // The Slack grant is a USER token, so the state also carries who is connecting — the
+        // browser callback has no session to recover it from.
+        const userId = c.get('session')?.user.id;
+        /* v8 ignore next -- @preserve defensive: /v1 routes are session-gated by requireAuth */
+        if (!userId) throw new ConflictError('A signed-in session is required to connect Slack');
+        const url = buildSlackAuthorizeUrl(
+          signSlackConnectState({ integrationId: id, orgId, userId }),
+        );
+        if (!url)
+          throw new ConflictError('The Slack app is not configured (SLACK_CLIENT_ID is unset)');
+        return c.json({ url });
+      }
+      throw new ConflictError('A connect URL is only available for GitHub or Slack integrations');
     },
   );
 

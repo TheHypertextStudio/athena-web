@@ -1132,6 +1132,23 @@ Remaining: Playwright e2e flow films (needs browser install + a running api+web+
 
 ---
 
+## Fix: Settle Passkey Session Before Sign-in Routing — 2026-07-03
+
+Root cause: after `authClient.signIn.passkey()` resolved successfully, the sign-in page immediately
+performed the `/v1/orgs` landing read. When the Better Auth cookie/proxy path lagged that first
+read, `/v1/orgs` returned `401` and the page showed the opaque "session did not finish starting"
+message even though the passkey ceremony itself had completed.
+
+Change: `routeAfterSignIn` now gives the first authenticated org lookup a short, bounded retry
+window before surfacing a session-cookie error. The final error copy now names the actual problem:
+Docket could not read the session cookie.
+
+Validation: added a regression case in `apps/web/tests/components/auth/sign-in-page.test.tsx` where
+the first post-passkey org lookup returns `401` and the next one succeeds. Targeted Vitest, ESLint,
+and `@docket/web` typecheck pass.
+
+---
+
 ## Fix: Sign-in Does Not Mask Missing Session as Onboarding — 2026-07-02
 
 Root cause: after a successful passkey ceremony, `apps/web/src/app/(auth)/sign-in/page.tsx`

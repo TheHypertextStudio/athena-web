@@ -73,6 +73,24 @@ describe('SignInPage', () => {
     });
   });
 
+  it('waits for the session cookie to become readable before routing', async () => {
+    signInPasskey.mockResolvedValue({ error: null });
+    orgsGet
+      .mockResolvedValueOnce(
+        jsonResponse(401, { code: 'unauthorized', detail: 'Authentication required' }),
+      )
+      .mockResolvedValueOnce(jsonResponse(200, { items: [] }));
+
+    render(<SignInPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in with a passkey' }));
+
+    await waitFor(() => {
+      expect(push).toHaveBeenCalledWith('/onboarding');
+    });
+    expect(orgsGet).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
   it('stays on sign-in when the post-passkey org lookup is unauthenticated', async () => {
     signInPasskey.mockResolvedValue({ error: null });
     orgsGet.mockResolvedValue(
@@ -84,7 +102,7 @@ describe('SignInPage', () => {
 
     await waitFor(() => {
       expect(screen.getByRole('alert').textContent).toBe(
-        'Your session did not finish starting. Please sign in again.',
+        'Sign-in worked, but Docket could not read your session cookie. Please try again.',
       );
     });
     expect(push).not.toHaveBeenCalled();

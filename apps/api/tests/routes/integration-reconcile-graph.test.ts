@@ -317,6 +317,33 @@ describe('reconcileWorkGraph', () => {
     expect(doneCycle.status).toBe('completed');
   });
 
+  it('a fresh backfill with writeBack on pushes nothing and children stay born-clean', async () => {
+    const { orgId, humanActorId, row } = await scaffold(true);
+    const { connector, snapshot, mock } = await pull();
+
+    const result = await reconcileWorkGraph({
+      orgId,
+      actorId: humanActorId,
+      row,
+      snapshot,
+      connector,
+      now: NOW,
+    });
+
+    // Every inserted row is born clean (updatedAt == externalUpdatedAt), so the same run's
+    // push phase finds nothing dirty — a backfill must never echo itself back to the provider.
+    expect(result.tasks.pushed).toBe(0);
+    expect(mock.workItemPushLog).toHaveLength(0);
+
+    // Direct row-state check on the pass-B parent-linked CHILD: the parentTaskId linkage write
+    // must not forge the dirty flag ($onUpdate would stamp wall-clock now without the explicit
+    // updatedAt re-set — the anchor invariant).
+    const child = await taskByExternal(row.id, 'lin-issue-4');
+    expect(child?.parentTaskId).not.toBeNull();
+    expect(child?.externalUpdatedAt).not.toBeNull();
+    expect(child?.updatedAt.getTime()).toBe(child?.externalUpdatedAt?.getTime());
+  });
+
   it('echo-guard: an immediate second reconcile writes nothing', async () => {
     const { orgId, humanActorId, row } = await scaffold();
     const first = await pull();
@@ -381,6 +408,55 @@ describe('reconcileWorkGraph', () => {
     // The old identifier key is gone.
     const stale = await db.select().from(schema.task).where(eq(schema.task.externalId, 'ENG-1'));
     expect(stale).toHaveLength(0);
+  });
+
+  it('re-keys an anchored legacy row without dirtying it (provider not newer → stays clean, unpushed)', async () => {
+    const { orgId, teamId, humanActorId, row } = await scaffold(true);
+    // A legacy identifier-keyed row that is CLEAN and whose anchor EQUALS the provider item's
+    // updatedAt (lin-issue-1 → 2025-12-01), so the pull pass must no-op after the re-key.
+    const anchor = new Date('2025-12-01T00:00:00.000Z');
+    const legacy = one(
+      await db
+        .insert(schema.task)
+        .values({
+          organizationId: orgId,
+          title: 'Legacy title',
+          teamId,
+          state: 'todo',
+          source: 'linked',
+          sourceIntegrationId: row.id,
+          externalId: 'ENG-1',
+          sourceSyncMode: 'mirror',
+          externalUpdatedAt: anchor,
+          updatedAt: anchor,
+          createdBy: humanActorId,
+        })
+        .returning({ id: schema.task.id }),
+    );
+
+    const { connector, snapshot, mock } = await pull();
+    const result = await reconcileWorkGraph({
+      orgId,
+      actorId: humanActorId,
+      row,
+      snapshot,
+      connector,
+      now: NOW,
+    });
+
+    // Re-keyed in place — and the re-key write preserved the row's own updatedAt (the anchor
+    // invariant): $onUpdate must not forge a phantom-dirty state the pull pass can't heal.
+    const healed = await taskByExternal(row.id, 'lin-issue-1');
+    expect(healed?.id).toBe(legacy.id);
+    expect(healed?.title).toBe('Legacy title'); // provider not newer → local content untouched
+    expect(healed?.updatedAt.getTime()).toBe(anchor.getTime());
+    expect(healed?.externalUpdatedAt?.getTime()).toBe(anchor.getTime());
+
+    // Clean means unpushed, this run and implicitly every future one.
+    expect(result.tasks.pushed).toBe(0);
+    expect(
+      mock.workItemPushLog.filter((op) => op.kind === 'update' && op.externalId === 'lin-issue-1'),
+    ).toHaveLength(0);
   });
 
   it('LWW: a newer provider overwrites a stale local; a dirty local is preserved read-only', async () => {

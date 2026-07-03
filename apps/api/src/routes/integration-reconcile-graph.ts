@@ -823,6 +823,12 @@ async function loadTeamStates(
  * provider UUID. When a snapshot item's UUID has no row but its identifier does, the identifier
  * row is re-keyed to the UUID (preserving all local state), so the item reconciles normally
  * afterward. Idempotent: on a later run the UUID row already exists and no re-key happens.
+ *
+ * The re-key explicitly re-sets the row's OWN `updatedAt` (the anchor invariant): a bare update
+ * would let Drizzle's `$onUpdate` stamp wall-clock now, forging `updatedAt > externalUpdatedAt`
+ * on a clean row — a phantom-dirty state the pull pass wouldn't heal (its in-memory row holds
+ * the pre-bump timestamp, so a not-newer provider item no-ops) and the push phase would then
+ * spuriously push forever.
  */
 async function healLegacyReKeys(
   ctx: GraphApplyContext,
@@ -833,13 +839,24 @@ async function healLegacyReKeys(
     if (byExternal.has(item.externalId)) continue;
     const legacy = byExternal.get(item.identifier);
     if (!legacy) continue;
-    await db.update(task).set({ externalId: item.externalId }).where(eq(task.id, legacy.id));
+    await db
+      .update(task)
+      .set({ externalId: item.externalId, updatedAt: legacy.updatedAt })
+      .where(eq(task.id, legacy.id));
     byExternal.delete(item.identifier);
     byExternal.set(item.externalId, { ...legacy, externalId: item.externalId });
   }
 }
 
-/** Link child tasks to their parents via the UUID map (only writing changed parents). */
+/**
+ * Link child tasks to their parents via the UUID map (only writing changed parents).
+ *
+ * @remarks
+ * The linkage write explicitly re-sets each row's OWN `updatedAt` (the anchor invariant): a
+ * bare update would let Drizzle's `$onUpdate` stamp wall-clock now, forging
+ * `updatedAt > externalUpdatedAt` on a just-inserted born-clean child — which the SAME run's
+ * push phase would then read as dirty and spuriously push every freshly-imported sub-issue.
+ */
 async function linkParents(
   ctx: GraphApplyContext,
   items: readonly ExternalWorkItem[],
@@ -853,13 +870,16 @@ async function linkParents(
   }
   if (wanted.size === 0) return;
   const current = await db
-    .select({ id: task.id, parentTaskId: task.parentTaskId })
+    .select({ id: task.id, parentTaskId: task.parentTaskId, updatedAt: task.updatedAt })
     .from(task)
     .where(inArray(task.id, [...wanted.keys()]));
   for (const row of current) {
     const parentId = wanted.get(row.id);
     if (parentId && row.parentTaskId !== parentId) {
-      await db.update(task).set({ parentTaskId: parentId }).where(eq(task.id, row.id));
+      await db
+        .update(task)
+        .set({ parentTaskId: parentId, updatedAt: row.updatedAt })
+        .where(eq(task.id, row.id));
     }
   }
 }

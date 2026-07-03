@@ -156,4 +156,13 @@ export const SERVICE_VARS: readonly VarSpec[] = [
     where: 'Anthropic API key for the built-in Athena runtime',
     sensitive: true,
   },
+  {
+    name: 'AGENT_MAX_TURNS',
+    slice: 'agent',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: agentServer.AGENT_MAX_TURNS,
+    where: 'Per-session turn budget for the Athena agentic loop (e.g. 24)',
+  },
 ] as const;

@@ -1,12 +1,19 @@
 import {
   MockAgentRuntime,
+  MockAgentTurnRuntime,
   MockSummarizer,
   MockTaskSynthesizer,
+  RealAgentTurnRuntime,
   RealProviderRuntime,
   RealSummarizer,
   RealTaskSynthesizer,
 } from '@docket/agent-runtime';
-import type { AgentRuntime, Summarizer, TaskSynthesizer } from '@docket/agent-runtime';
+import type {
+  AgentRuntime,
+  AgentTurnRuntime,
+  Summarizer,
+  TaskSynthesizer,
+} from '@docket/agent-runtime';
 import { InMemoryBillingGateway, RealStripeGateway } from '@docket/billing';
 import type { BillingGateway } from '@docket/billing';
 import { LocalDiskBlob, RealBlob } from '@docket/blob-store';
@@ -80,6 +87,7 @@ export interface AppRuntimeEnv {
 export interface AppContainer {
   readonly billing: BillingGateway;
   readonly agentRuntime: AgentRuntime;
+  readonly agentTurn: AgentTurnRuntime;
   readonly summarizer: Summarizer;
   readonly taskSynthesizer: TaskSynthesizer;
   readonly mailer: Mailer;
@@ -275,6 +283,11 @@ export function buildAppContainer(runtimeEnv: AppRuntimeEnv = toAppRuntimeEnv())
     agentRuntime: mock
       ? new MockAgentRuntime()
       : new RealProviderRuntime({
+          apiKey: required('ANTHROPIC_API_KEY', runtimeEnv.ANTHROPIC_API_KEY),
+        }),
+    agentTurn: mock
+      ? new MockAgentTurnRuntime()
+      : new RealAgentTurnRuntime({
           apiKey: required('ANTHROPIC_API_KEY', runtimeEnv.ANTHROPIC_API_KEY),
         }),
     summarizer: mock

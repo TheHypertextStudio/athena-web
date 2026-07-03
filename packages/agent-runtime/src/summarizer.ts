@@ -5,7 +5,7 @@
  * The typed edge for one-shot LLM text generation: it turns a day's worth of
  * {@link SummarizerObservation}s into the Markdown narrative of the daily digest (the
  * Sunsama-style "here's what you actually did today" email). Deliberately separate from
- * the {@link AgentRuntime} port — that one streams an approval-gated agent *session*
+ * the {@link AgentTurnRuntime} port — that one streams a single agent *turn*
  * (`thought → action → response`), the wrong shape for a single non-interactive
  * completion. The real adapter calls the Anthropic Messages API; the mock returns a
  * deterministic summary so the digest pipeline runs and is asserted with no API key.

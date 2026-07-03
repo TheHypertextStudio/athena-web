@@ -597,6 +597,41 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 - **Validation**: Validator rejects scopes absent from `COMMIT_SCOPES.txt` and accepts
   `refactor(integrations): ...`.
 
+### [ATHENA-005] The agentic loop: driveSession, toolbox, approval-execute-resume
+
+- **Completed**: 2026-07-02
+- **Summary**: Milestone B core — Athena can now genuinely work. `apps/api/src/agent/loop.ts`
+  replaces the single-turn `runSession` internals with the re-entrant `driveSession`: every
+  entry starts by **reconciling** the transcript's trailing assistant message (unanswered
+  `tool_use`s are answered from DB state — an applied action's result, a rejection, an
+  elicitation's human reply — or the session settles `awaiting_approval`/`awaiting_input` and
+  stops), so first run, resume-on-approve, resume-on-reply, and restart recovery are ONE code
+  path. Tools flow through the in-process MCP toolbox (`toolbox.ts` — the identical
+  `buildServer` the `/mcp` endpoint serves, connected over `InMemoryTransport` as the agent
+  principal) and are gated per call by the slice-4 policy engine. `ask_user` is a loop-owned
+  tool → deterministic elicitations. Turn transcripts + gated rows persist atomically; executed
+  calls audit as `updated` events. `decideActivity` changed: approve → transient `approved`
+  (the post-commit `executeApprovedActions` runs the stored `toolCall` and stamps `applied` +
+  result), and **reject-and-continue** — a rejection returns the session to `running` and the
+  reconcile step feeds the veto to the model as an `isError` tool_result (only the
+  session-level `/reject` shortcut still cancels). Routes compose via `approveAndResume`;
+  `/reply` now re-drives an un-parked session. Old `AgentRuntime` port + `SCRIPTED_SESSION` +
+  `toActivityBody` deleted end-to-end. New explicit `AGENT_MAX_TURNS` env (registry +
+  `.env.example`; the loop refuses to run without it — no hidden default).
+- **Files Changed**: `apps/api/src/agent/{loop,toolbox,transcript,system-prompt}.ts` (new),
+  `apps/api/src/routes/{agent-session-runner,agent-session-approval,agent-sessions,
+agent-session-helpers}.ts`, `packages/agent-runtime` one-turn runtime exports,
+  `packages/env/src/{slices,registry-vars-services}.ts`,
+  `.env.example`, `apps/api/tests/agent/loop.test.ts` (new, 9 tests incl. restart resilience),
+  20 test files gained `AGENT_MAX_TURNS`, expectation updates in 4 route suites.
+- **Learnings**: The reconcile-first shape means "resume" is never special-cased — the
+  transcript is the only cursor, and the mock's assistant-count turn indexing lines up with it
+  exactly. Executing tool calls AFTER the transcript+rows transaction (not inside) keeps the
+  in-process MCP writes out of the loop's transaction while guaranteeing a crash can't strand
+  an unanswerable tool_use.
+- **Gate**: loop 9/9; agent-flows/review/group-d/session-from-prompt 78/78; boundaries 261/261;
+  api typecheck clean.
+
 ### [ATHENA-004] Approval-policy engine (the three-dial trust model, as data)
 
 - **Completed**: 2026-07-02

@@ -1,28 +1,11 @@
-import { actor, agent, agentSession, db, sessionActivity, task } from '@docket/db';
-import type { SessionActivityBody } from '@docket/db';
-import type { SessionActionBody, SessionActivity } from '@docket/agent-runtime';
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { agent, agentSession, db, sessionActivity } from '@docket/db';
+import { and, eq, sql } from 'drizzle-orm';
 
-import { getContainer } from '../container';
-import { ConflictError, NotFoundError } from '../error';
+import { NotFoundError } from '../error';
+import { driveSession } from '../agent/loop';
 import { ensureDefaultAgent } from '../lib/default-agent';
 
 import type { SessionRow } from './agent-session-helpers';
-
-/** Map one streamed {@link SessionActivity} to a persisted {@link SessionActivityBody}. */
-export function toActivityBody(activity: SessionActivity): SessionActivityBody {
-  if (activity.type === 'action') {
-    const action = activity.body as SessionActionBody;
-    return {
-      action: {
-        kind: action.kind,
-        summary: action.summary,
-        ...(action.diff !== undefined ? { diff: action.diff } : {}),
-      },
-    };
-  }
-  return { text: typeof activity.body === 'string' ? activity.body : '' };
-}
 
 /**
  * Create a session bound to an agent from a freeform prompt, then run it.
@@ -142,101 +125,18 @@ export async function createSessionFromObservation(
 }
 
 /**
- * Run a hosted session against the container's {@link AgentRuntime}.
+ * Run a hosted session against the agentic loop.
  *
  * @remarks
- * Loads the session (org-scoped), then its linked task + agent to derive the runtime
- * `task` brief and `agent` slug, sets the session `running`, and consumes the
- * (finite, scripted under the mock) activity stream — persisting one
- * {@link sessionActivity} row per yielded {@link SessionActivity} and stamping
- * `approvalStatus='proposed'` on gated `action` activities. After the stream ends the
- * session settles to `awaiting_approval` when a proposed action remains unresolved,
- * else `completed` (with `endedAt`).
+ * Kept as the runner's exported name — the session routes, the `trigger_agent` MCP
+ * tool, and the proactive sweep all call it — but the implementation is now the
+ * re-entrant {@link driveSession}: transcript-backed multi-turn tool use over the
+ * in-process MCP toolbox, gated by the agent's approval dial.
  *
  * @param orgId - The active organization id.
  * @param sessionId - The session to run.
  * @returns the settled session row.
- * @throws {NotFoundError} When the session or its agent is not found in the org.
- * @throws {ConflictError} When the session is not in a runnable (`pending`/`running`) state.
  */
 export async function runSession(orgId: string, sessionId: string): Promise<SessionRow> {
-  const sessionRows = await db
-    .select()
-    .from(agentSession)
-    .where(and(eq(agentSession.id, sessionId), eq(agentSession.organizationId, orgId)))
-    .limit(1);
-  const session = sessionRows[0];
-  if (!session) throw new NotFoundError('Session not found');
-  if (session.status !== 'pending' && session.status !== 'running') {
-    throw new ConflictError('Session is not in a runnable state');
-  }
-
-  const agentRows = await db
-    .select({ displayName: actor.displayName })
-    .from(agent)
-    .innerJoin(actor, eq(agent.actorId, actor.id))
-    .where(and(eq(agent.id, session.agentId), eq(agent.organizationId, orgId)))
-    .limit(1);
-  const agentRow = agentRows[0];
-  if (!agentRow) throw new NotFoundError('Agent not found');
-
-  // Derive the brief the runtime works on: a linked task's title when the session is
-  // task-bound, else the freeform prompt the session was seeded with (a `response`
-  // activity authored at create time — the "ask Athena to plan" / trigger_agent prompt),
-  // else the session id as a last resort. This is how a freeform prompt reaches
-  // `startSession.task` with no schema brief column.
-  let taskBrief = sessionId;
-  if (session.taskId) {
-    const taskRows = await db
-      .select({ title: task.title })
-      .from(task)
-      .where(and(eq(task.id, session.taskId), eq(task.organizationId, orgId)))
-      .limit(1);
-    if (taskRows[0]) taskBrief = taskRows[0].title;
-  } else {
-    const promptRows = await db
-      .select({ body: sessionActivity.body })
-      .from(sessionActivity)
-      .where(and(eq(sessionActivity.sessionId, sessionId), eq(sessionActivity.type, 'response')))
-      .orderBy(asc(sessionActivity.createdAt))
-      .limit(1);
-    const promptText = promptRows[0]?.body.text;
-    if (promptText) taskBrief = promptText;
-  }
-
-  await db
-    .update(agentSession)
-    .set({ status: 'running', startedAt: session.startedAt ?? new Date() })
-    .where(and(eq(agentSession.id, sessionId), eq(agentSession.organizationId, orgId)));
-
-  let hasProposed = false;
-  const stream = getContainer().agentRuntime.startSession({
-    sessionId,
-    task: taskBrief,
-    agent: agentRow.displayName,
-  });
-  for await (const activity of stream) {
-    const isProposed = activity.type === 'action' && activity.approval === 'proposed';
-    if (isProposed) hasProposed = true;
-    await db.insert(sessionActivity).values({
-      sessionId,
-      organizationId: orgId,
-      type: activity.type,
-      body: toActivityBody(activity),
-      ...(isProposed ? { approvalStatus: 'proposed' as const } : {}),
-    });
-  }
-
-  const nextStatus = hasProposed ? 'awaiting_approval' : 'completed';
-  const [settled] = await db
-    .update(agentSession)
-    .set({
-      status: nextStatus,
-      ...(nextStatus === 'completed' ? { endedAt: new Date() } : {}),
-    })
-    .where(and(eq(agentSession.id, sessionId), eq(agentSession.organizationId, orgId)))
-    .returning();
-  /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
-  if (!settled) throw new Error('session update returned no row');
-  return settled;
+  return driveSession(orgId, sessionId);
 }

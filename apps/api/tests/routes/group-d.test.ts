@@ -911,21 +911,19 @@ describe('agent-sessions router (list/get + approve/reject conflict paths)', () 
     expect(res.status).toBe(200);
   });
 
-  it('run: a script with no proposed action settles the session to completed', async () => {
+  it('run: a turn with no tool calls settles the session to completed', async () => {
     const { orgId, sessionId } = await seedRunnable(true);
     const { getContainer } = await import('../../src/container');
-    // A script with NO proposed action (and an action without a diff + a non-string-body
-    // non-action) covers the `completed` settle branch + the toActivityBody else-paths.
+    // A single text-only turn covers the loop's completed settle branch.
     const spy = vi
-      .spyOn(getContainer().agentRuntime, 'startSession')
+      .spyOn(getContainer().agentTurn, 'streamTurn')
       .mockImplementation(async function* () {
-        yield { type: 'thought', body: 'thinking' } as never;
+        yield { type: 'text', text: 'All done.' } as never;
         yield {
-          type: 'action',
-          body: { kind: 'noop', summary: 'no gate' },
-          approval: 'auto',
+          type: 'turn_end',
+          stopReason: 'end_turn',
+          message: { role: 'assistant', content: [{ type: 'text', text: 'All done.' }] },
         } as never;
-        yield { type: 'response', body: { not: 'a string' } } as never;
       });
     const w = appWithActor(agentSessions, orgId, ['contribute']);
     const res = await w.request(`/${sessionId}/run`, { method: 'POST', headers: J, body: '{}' });

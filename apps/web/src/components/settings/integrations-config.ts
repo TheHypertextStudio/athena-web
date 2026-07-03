@@ -88,3 +88,87 @@ export function categoryLabel(category: string): string {
       .join(' ')
   );
 }
+
+/**
+ * Per-provider wording for the connector config panel (`IntegrationConfigPanel`).
+ *
+ * @remarks
+ * Generalizes what used to be Google-Tasks-only copy hardcoded into the panel, so adding a new
+ * connector's config UI is a data change here rather than a JSX branch there.
+ */
+export interface ConnectorCopy {
+  /** Singular noun for one external container this connector exposes (Linear "team", Google Tasks "list"). */
+  containerNoun: string;
+  /** Plural form, used in list/legend copy ("teams", "task lists"). */
+  containerNounPlural: string;
+  /** Sync-direction detail copy, tailored to what this connector actually mirrors. */
+  direction: {
+    importOnly: string;
+    twoWay: string;
+  };
+  /** A one-line "what this keeps in sync" blurb, in user terms (no provider jargon). */
+  connectBlurb: string;
+  /**
+   * Whether this connector's containers route many-to-one onto Docket teams via
+   * `config.teamMappings` (Linear: each external team picks its own Docket team) rather than a
+   * flat container checklist plus a single target team (Google Tasks: pick lists, land in one
+   * team). See `ConnectorConfig.teamMappings` in `@docket/types`.
+   */
+  usesTeamMapping: boolean;
+}
+
+/** Fallback copy for a connector with no dedicated entry below (kept generic, never provider-named). */
+const DEFAULT_CONNECTOR_COPY: ConnectorCopy = {
+  containerNoun: 'list',
+  containerNounPlural: 'lists',
+  direction: {
+    importOnly: 'Pull items into Docket. Local edits stay in Docket.',
+    twoWay: 'Edits, completions, and deletions sync in both directions (last edit wins).',
+  },
+  connectBlurb: 'Mirror this tool into Docket.',
+  usesTeamMapping: false,
+};
+
+/** CONNECTOR_COPY maps each connector provider to its config-panel wording. */
+export const CONNECTOR_COPY: Record<string, ConnectorCopy> = {
+  gtasks: {
+    containerNoun: 'task list',
+    containerNounPlural: 'task lists',
+    direction: {
+      importOnly: 'Pull Google Tasks into Docket. Local edits stay in Docket.',
+      twoWay: 'Edits, completions, and deletions sync in both directions (last edit wins).',
+    },
+    connectBlurb: 'Mirror your Google Tasks lists into Docket.',
+    usesTeamMapping: false,
+  },
+  linear: {
+    containerNoun: 'team',
+    containerNounPlural: 'teams',
+    direction: {
+      importOnly:
+        'Pull Linear issues, projects, and cycles into Docket. Local edits stay in Docket.',
+      twoWay: 'Edits, completions, and deletions sync in both directions (last edit wins).',
+    },
+    connectBlurb: 'Mirror Linear issues, projects, and cycles into Docket.',
+    usesTeamMapping: true,
+  },
+};
+
+/** connectorCopy returns the config-panel wording for a provider, falling back to generic copy. */
+export function connectorCopy(provider: string): ConnectorCopy {
+  return CONNECTOR_COPY[provider] ?? DEFAULT_CONNECTOR_COPY;
+}
+
+/**
+ * Which connector providers render their config panel inline on the Connections surface (a
+ * "Configure" toggle on the generic {@link IntegrationProviderCard} row).
+ *
+ * @remarks
+ * Google Tasks is excluded here even though it has a config panel — it renders its own dedicated
+ * multi-account section (`GtasksAccountsSection`) instead of the generic provider-card list, so
+ * wiring it through this flag would double-render its picker. Linear is the first (and so far
+ * only) provider whose config lives on the generic card.
+ */
+export function hasInlineConfigPanel(provider: string): boolean {
+  return provider === 'linear';
+}

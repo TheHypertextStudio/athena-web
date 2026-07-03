@@ -5,21 +5,42 @@
  *
  * @remarks
  * Renders the "how should this account sync" controls the user asked for, scoped to ONE linked
- * integration (one Google account): which task lists to sync, the sync direction (import-only vs
- * two-way write-back), and which Docket team mirrored work lands in. Reads the current values off
- * the integration's `config`/`writeBack`, fetches the provider's selectable lists from
- * `GET /:id/lists`, and persists changes through `PATCH /:id` — the same server truth the rest of
- * the tab renders from.
+ * integration: the sync direction (import-only vs two-way write-back), which external containers
+ * to sync, and where mirrored work lands. Reads the current values off the integration's
+ * `config`/`writeBack`, fetches the provider's selectable containers from `GET /:id/lists`, and
+ * persists changes through `PATCH /:id` — the same server truth the rest of the tab renders from.
+ *
+ * Wording (the container noun, direction blurbs) is generalized per provider through
+ * {@link connectorCopy} rather than hardcoded — see `integrations-config.ts`. Providers whose
+ * copy sets `usesTeamMapping` (Linear) get the {@link TeamMappingPicker} instead of the flat
+ * container checklist + single target team (Google Tasks), because their containers route
+ * many-to-one onto Docket teams via `config.teamMappings`.
+ *
+ * `PATCH /:id`'s `config` field is a WHOLESALE replace, not a merge — every save spreads the
+ * current `config` (from the `integration` prop, itself sourced from the query cache) so fields
+ * this panel doesn't manage (`defaultListId`, `pushNativeTasks`, …) survive the write.
  */
 import type { ConnectorConfig, IntegrationOut, TeamOut } from '@docket/types';
 import { cn } from '@docket/ui';
 import { Check } from '@docket/ui/icons';
 import { Button, Skeleton } from '@docket/ui/primitives';
+import { useQueryClient } from '@tanstack/react-query';
 import type { JSX } from 'react';
 import { useState } from 'react';
 
 import { api } from '@/lib/api';
-import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
+import {
+  apiQueryOptions,
+  optimisticPatch,
+  queryKeys,
+  unwrap,
+  useApiMutation,
+  useApiQuery,
+} from '@/lib/query';
+
+import { connectorCopy } from './integrations-config';
+import { IntegrationActionButton } from './integration-action-button';
+import TeamMappingPicker, { NOT_SYNCED } from './team-mapping-picker';
 
 /** Props for {@link IntegrationConfigPanel}. */
 export interface IntegrationConfigPanelProps {
@@ -27,52 +48,71 @@ export interface IntegrationConfigPanelProps {
   orgId: string;
   /** The integration (one linked account) being configured. */
   integration: IntegrationOut;
-  /** Teams in the org, for the "land mirrored work in" selector. */
+  /** Teams in the org, for the target-team selector(s). */
   teams: readonly TeamOut[];
+  /**
+   * Launch the provider's re-authorize flow (finish/repair the connection). Wired to the same
+   * `runReconnect` the card's own "Reconnect" button uses. Shown when flipping to two-way sync
+   * fails because the linked identity lacks write scope (Linear only, today).
+   */
+  onReauthorize?: () => void;
 }
 
-/** The two sync directions, mapped onto the `writeBack` flag (both stay `mirror` syncMode). */
-const DIRECTIONS = [
-  {
-    twoWay: false,
-    title: 'Import only',
-    detail: 'Pull Google Tasks into Docket. Local edits stay in Docket.',
-  },
-  {
-    twoWay: true,
-    title: 'Two-way',
-    detail: 'Edits, completions, and deletions sync in both directions (last edit wins).',
-  },
-] as const;
+/** The cached shape of the integrations list read (`GET /integrations`), for optimistic writes. */
+interface IntegrationsCache {
+  items: IntegrationOut[];
+}
 
-/** The per-account "which lists, which direction, which team" configuration form. */
+/** Capitalize the first letter of a lowercase copy string (for legend text). */
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/** Convert a `{ externalTeamId: teamId }` map into the `config.teamMappings` array, dropping "Not synced" entries. */
+function toTeamMappings(mapping: Record<string, string>): ConnectorConfig['teamMappings'] {
+  return Object.entries(mapping)
+    .filter(([, teamId]) => teamId !== NOT_SYNCED)
+    .map(([externalTeamId, teamId]) => ({ externalTeamId, teamId }));
+}
+
+/** The per-account "which containers, which direction, which team" configuration form. */
 export function IntegrationConfigPanel({
   orgId,
   integration,
   teams,
+  onReauthorize,
 }: IntegrationConfigPanelProps): JSX.Element {
+  const queryClient = useQueryClient();
+  const copy = connectorCopy(integration.provider);
   const cfg = integration.config as ConnectorConfig;
   const [twoWay, setTwoWay] = useState(integration.writeBack);
   const [teamId, setTeamId] = useState(cfg.teamId ?? '');
   // `allMode` (sync every list) is the default; an explicit subset is stored in `listIds`.
   const [allMode, setAllMode] = useState(!(cfg.listIds && cfg.listIds.length > 0));
   const [listIds, setListIds] = useState<string[]>(cfg.listIds ?? []);
+  // Work-graph connectors (Linear): external team id -> Docket team id; a missing entry is "Not synced".
+  const [teamMap, setTeamMap] = useState<Record<string, string>>(() =>
+    Object.fromEntries((cfg.teamMappings ?? []).map((m) => [m.externalTeamId, m.teamId])),
+  );
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Set only when a save attempting `writeBack: true` fails for a scope-gated provider (Linear) —
+  // renders the re-auth notice instead of (or alongside) the generic error line.
+  const [reauthNeeded, setReauthNeeded] = useState(false);
 
   const listsQ = useApiQuery(
     apiQueryOptions(
-      ['org', orgId, 'integrations', integration.id, 'lists'] as const,
+      queryKeys.integrationLists(orgId, integration.id),
       () =>
         api.v1.orgs[':orgId'].integrations[':id'].lists.$get({
           param: { orgId, id: integration.id },
         }),
-      'Could not load task lists.',
+      `Could not load ${copy.containerNounPlural}.`,
     ),
   );
   const lists = listsQ.data?.resources ?? [];
 
-  const save = useApiMutation<IntegrationOut, undefined>({
+  const save = useApiMutation<IntegrationOut, undefined, { rollback: () => void }>({
     mutationFn: () =>
       unwrap(
         () =>
@@ -80,26 +120,51 @@ export function IntegrationConfigPanel({
             param: { orgId, id: integration.id },
             json: {
               writeBack: twoWay,
-              // Preserve any keys this UI doesn't manage (e.g. defaultListId, pushNativeTasks).
-              config: {
-                ...cfg,
-                ...(teamId ? { teamId } : {}),
-                // "All lists" = absent listIds; an explicit subset stores the chosen ids.
-                listIds: allMode ? undefined : listIds,
-              },
+              // Wholesale-replace endpoint: spread the CURRENT config so unmanaged keys survive.
+              config: copy.usesTeamMapping
+                ? { ...cfg, teamMappings: toTeamMappings(teamMap) }
+                : {
+                    ...cfg,
+                    ...(teamId ? { teamId } : {}),
+                    // "All lists" = absent listIds; an explicit subset stores the chosen ids.
+                    listIds: allMode ? undefined : listIds,
+                  },
             },
           }),
         'Could not save settings.',
       ),
+    onMutate: () =>
+      optimisticPatch<IntegrationsCache>(queryClient, queryKeys.integrations(orgId), (prev) => ({
+        items: prev.items.map((i) =>
+          i.id === integration.id
+            ? {
+                ...i,
+                writeBack: twoWay,
+                config: copy.usesTeamMapping
+                  ? { ...cfg, teamMappings: toTeamMappings(teamMap) }
+                  : {
+                      ...cfg,
+                      ...(teamId ? { teamId } : {}),
+                      listIds: allMode ? undefined : listIds,
+                    },
+              }
+            : i,
+        ),
+      })),
     onSuccess: () => {
       setError(null);
+      setReauthNeeded(false);
       setSaved(true);
       setTimeout(() => {
         setSaved(false);
       }, 4000);
     },
-    onError: (e: { message: string }) => {
+    onError: (e: { message: string }, _vars, context) => {
+      context?.rollback();
       setError(e.message);
+      // The write-scope 409 is the only failure mode this PATCH has for a Linear integration
+      // attempting `writeBack: true` — see `hasLinearWriteScope` on the server.
+      setReauthNeeded(integration.provider === 'linear' && twoWay);
     },
     invalidateKeys: [queryKeys.integrations(orgId)],
   });
@@ -108,16 +173,28 @@ export function IntegrationConfigPanel({
     setListIds((prev) => (prev.includes(id) ? prev.filter((l) => l !== id) : [...prev, id]));
   };
 
+  const setTeamMapping = (externalTeamId: string, mappedTeamId: string): void => {
+    setTeamMap((prev) => ({ ...prev, [externalTeamId]: mappedTeamId }));
+  };
+
   // A subset that selects nothing would sync nothing — block the save until at least one is chosen.
-  const emptySubset = !allMode && listIds.length === 0;
+  // Only applies to the flat-checklist providers; an all-"Not synced" team mapping is a valid state.
+  const emptySubset = !copy.usesTeamMapping && !allMode && listIds.length === 0;
 
   return (
     <div className="border-outline-variant bg-surface-container flex flex-col gap-5 border-t p-4">
+      <p className="text-on-surface-variant text-xs leading-snug">{copy.connectBlurb}</p>
+
       {/* Direction */}
       <fieldset className="flex flex-col gap-2">
         <legend className="text-on-surface-variant mb-1 text-xs font-medium">Sync direction</legend>
         <div className="grid gap-2 @2xl:grid-cols-2" role="radiogroup" aria-label="Sync direction">
-          {DIRECTIONS.map((d) => {
+          {(
+            [
+              { twoWay: false, title: 'Import only', detail: copy.direction.importOnly },
+              { twoWay: true, title: 'Two-way', detail: copy.direction.twoWay },
+            ] as const
+          ).map((d) => {
             const isSelected = twoWay === d.twoWay;
             return (
               <button
@@ -146,20 +223,32 @@ export function IntegrationConfigPanel({
         </div>
       </fieldset>
 
-      {/* Task lists */}
+      {/* Containers */}
       <fieldset className="flex flex-col gap-2">
         <legend className="text-on-surface-variant mb-1 text-xs font-medium">
-          Task lists to sync
+          {capitalize(copy.containerNounPlural)} to sync
         </legend>
-        {listsQ.isPending ? (
+        {copy.usesTeamMapping ? (
+          <TeamMappingPicker
+            externalTeams={lists}
+            loading={listsQ.isPending}
+            error={listsQ.isError ? listsQ.error.message : null}
+            orgTeams={teams}
+            containerNoun={copy.containerNoun}
+            mapping={teamMap}
+            onChange={setTeamMapping}
+          />
+        ) : listsQ.isPending ? (
           <Skeleton className="h-16 w-full rounded-lg" />
         ) : listsQ.isError ? (
           <p className="text-destructive text-xs">{listsQ.error.message}</p>
         ) : lists.length === 0 ? (
-          <p className="text-on-surface-variant text-xs">No task lists found for this account.</p>
+          <p className="text-on-surface-variant text-xs">
+            No {copy.containerNounPlural} found for this account.
+          </p>
         ) : (
           <div className="flex flex-col gap-1">
-            {/* The default: sync every list. Turning it off reveals an explicit per-list choice. */}
+            {/* The default: sync every container. Turning it off reveals an explicit per-item choice. */}
             <label className="hover:bg-surface-container-high flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5">
               <input
                 type="checkbox"
@@ -169,7 +258,9 @@ export function IntegrationConfigPanel({
                   setAllMode(e.target.checked);
                 }}
               />
-              <span className="text-on-surface text-body font-medium">Sync all lists</span>
+              <span className="text-on-surface text-body font-medium">
+                Sync all {copy.containerNounPlural}
+              </span>
             </label>
             {!allMode ? (
               <ul className="border-outline-variant ml-3 flex flex-col gap-1 border-l pl-3">
@@ -192,42 +283,65 @@ export function IntegrationConfigPanel({
             ) : null}
             {emptySubset ? (
               <p className="text-on-surface-variant px-2 text-xs">
-                Select at least one list, or turn “Sync all lists” back on.
+                Select at least one {copy.containerNoun}, or turn “Sync all{' '}
+                {copy.containerNounPlural}” back on.
               </p>
             ) : null}
           </div>
         )}
       </fieldset>
 
-      {/* Target team */}
-      <div className="flex flex-col gap-2">
-        <label
-          htmlFor={`team-${integration.id}`}
-          className="text-on-surface-variant text-xs font-medium"
-        >
-          Land mirrored work in
-        </label>
-        <select
-          id={`team-${integration.id}`}
-          value={teamId}
-          onChange={(e) => {
-            setTeamId(e.target.value);
-          }}
-          className="border-outline-variant bg-surface-container-low text-on-surface text-body focus-visible:ring-ring rounded-lg border px-3 py-2 outline-none focus-visible:ring-2"
-        >
-          <option value="">First team (default)</option>
-          {teams.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name}
-            </option>
-          ))}
-        </select>
-      </div>
+      {/* Target team — only for the flat-checklist providers; team-mapping providers pick a team
+          per external team above instead of one team for everything. */}
+      {!copy.usesTeamMapping ? (
+        <div className="flex flex-col gap-2">
+          <label
+            htmlFor={`team-${integration.id}`}
+            className="text-on-surface-variant text-xs font-medium"
+          >
+            Land mirrored work in
+          </label>
+          <select
+            id={`team-${integration.id}`}
+            value={teamId}
+            onChange={(e) => {
+              setTeamId(e.target.value);
+            }}
+            className="border-outline-variant bg-surface-container-low text-on-surface text-body focus-visible:ring-ring rounded-lg border px-3 py-2 outline-none focus-visible:ring-2"
+          >
+            <option value="">First team (default)</option>
+            {teams.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : null}
 
-      {error ? (
+      {error && !reauthNeeded ? (
         <p role="alert" className="text-destructive text-body">
           {error}
         </p>
+      ) : null}
+
+      {reauthNeeded ? (
+        <div
+          role="alert"
+          className="border-outline-variant bg-surface-container-low flex flex-col items-start gap-2 rounded-lg border p-3"
+        >
+          <p className="text-destructive text-body">
+            {error ?? 'Linear needs to grant Docket write access.'}
+          </p>
+          <p className="text-on-surface-variant text-xs">
+            Reconnect Linear and approve write access to turn on two-way sync.
+          </p>
+          {onReauthorize ? (
+            <IntegrationActionButton tone="primary" onClick={onReauthorize} className="px-0">
+              Re-authorize Linear
+            </IntegrationActionButton>
+          ) : null}
+        </div>
       ) : null}
 
       <div className="flex items-center gap-3">

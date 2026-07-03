@@ -165,6 +165,50 @@ describe('search index jobs', () => {
     expect(jobs).toHaveLength(1);
   });
 
+  it('returns a resume cursor for paged source-table backfills', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const prefix = `000_paged_${Math.random().toString(36).slice(2, 8)}`;
+    const rows = await db
+      .insert(schema.task)
+      .values(
+        [`${prefix}_alpha`, `${prefix}_beta`].map((id) => ({
+          id,
+          organizationId: orgId,
+          teamId,
+          title: `Paged ${id}`,
+          description: 'Paged backfill body',
+          state: 'todo' as const,
+          visibility: 'public' as const,
+        })),
+      )
+      .returning({ id: schema.task.id });
+
+    const first = await backfillSearchIndex({ sourceTables: ['task'], limit: 1 });
+    expect(first.scanned).toBe(1);
+    expect(first.enqueued).toBe(1);
+    expect(first.nextCursor).toEqual(expect.any(String));
+
+    const second = await backfillSearchIndex({
+      sourceTables: ['task'],
+      limit: 1,
+      cursor: first.nextCursor,
+    });
+    expect(second.scanned).toBe(1);
+    expect(second.enqueued).toBe(1);
+
+    const jobs = await db
+      .select({
+        entityId: schema.searchIndexJob.entityId,
+      })
+      .from(schema.searchIndexJob)
+      .where(eq(schema.searchIndexJob.reason, 'backfill'));
+    expect(jobs.map((job) => job.entityId)).toEqual(
+      expect.arrayContaining(rows.map((row) => row.id)),
+    );
+  });
+
   it('repair-enqueues source rows whose search document is missing or stale', async () => {
     const schema = await getDb();
     const { db } = schema;

@@ -28,11 +28,15 @@ const DEFAULT_SOURCE_TABLES = [
 export interface BackfillSearchIndexOptions {
   sourceTables?: readonly string[];
   limit?: number;
+  /** Opaque resume cursor returned by a previous paged scan. */
+  cursor?: string;
 }
 
 export interface BackfillSearchIndexResult {
   scanned: number;
   enqueued: number;
+  /** Opaque cursor for the next source-table page, omitted when the scan is exhausted. */
+  nextCursor?: string;
 }
 
 /** Options for a freshness-aware workspace-search repair sweep. */
@@ -57,11 +61,17 @@ export async function backfillSearchIndex(
 ): Promise<BackfillSearchIndexResult> {
   const sourceTables = options.sourceTables ?? DEFAULT_SOURCE_TABLES;
   const limit = options.limit ?? 500;
+  const cursor = decodeSourceScanCursor(options.cursor);
+  const startIndex = Math.min(cursor?.sourceTableIndex ?? 0, sourceTables.length);
   let scanned = 0;
   let enqueued = 0;
+  let nextCursor: string | undefined;
 
-  for (const sourceTable of sourceTables) {
-    const rows = await listSearchSourceRows(sourceTable, limit);
+  for (let index = startIndex; index < sourceTables.length; index += 1) {
+    const sourceTable = sourceTables[index];
+    if (!sourceTable) break;
+    const afterId = index === cursor?.sourceTableIndex ? cursor.rowId : null;
+    const rows = await listSearchSourceRows(sourceTable, limit, afterId);
     scanned += rows.length;
     for (const row of rows) {
       if (!isRowWithId(row)) continue;
@@ -75,9 +85,14 @@ export async function backfillSearchIndex(
       });
       enqueued += 1;
     }
+    const lastRow = [...rows].reverse().find(isRowWithId);
+    if (rows.length >= limit && lastRow) {
+      nextCursor = encodeSourceScanCursor({ sourceTableIndex: index, rowId: lastRow.id });
+      break;
+    }
   }
 
-  return { scanned, enqueued };
+  return { scanned, enqueued, ...(nextCursor ? { nextCursor } : {}) };
 }
 
 /**
@@ -217,6 +232,35 @@ function isRowWithId(row: unknown): row is {
 function sourceFreshness(row: { createdAt?: unknown; updatedAt?: unknown; occurredAt?: unknown }) {
   for (const value of [row.updatedAt, row.occurredAt, row.createdAt]) {
     if (value instanceof Date) return value;
+  }
+  return null;
+}
+
+interface SourceScanCursor {
+  sourceTableIndex: number;
+  rowId: string;
+}
+
+function encodeSourceScanCursor(cursor: SourceScanCursor): string {
+  return Buffer.from(JSON.stringify(cursor), 'utf8').toString('base64url');
+}
+
+function decodeSourceScanCursor(value: string | undefined): SourceScanCursor | null {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(
+      Buffer.from(value, 'base64url').toString('utf8'),
+    ) as Partial<SourceScanCursor>;
+    if (
+      typeof parsed.sourceTableIndex === 'number' &&
+      Number.isInteger(parsed.sourceTableIndex) &&
+      parsed.sourceTableIndex >= 0 &&
+      typeof parsed.rowId === 'string'
+    ) {
+      return { sourceTableIndex: parsed.sourceTableIndex, rowId: parsed.rowId };
+    }
+  } catch {
+    return null;
   }
   return null;
 }

@@ -453,8 +453,9 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
   semantic API. A follow-up hardening pass made the final score include weighted FTS rank,
   enforced the command-palette server cap at 50 while preserving page requests up to 100, carried
   event-recipient relevance into ranking, added freshness-aware repair for stale source rows and
-  newer canonical events, exposed the search-index processor through cron and a local script, and
-  preserved provider/source attribution in compact palette rows.
+  newer canonical events, exposed the search-index processor through cron and a local script, made
+  backfill source scans cursor-pageable, and preserved provider/source attribution in compact
+  palette rows.
 - **Files Changed**: `packages/db/src/{enums,schema/search,schema/index}.ts`,
   `packages/db/drizzle/0027_sharp_franklin_storm.sql`, `packages/types/src/{search,hub,index}.ts`,
   `apps/api/src/search/**`, `apps/api/src/routes/{hub,orgs,search,event-emit,event-sync}.ts`,

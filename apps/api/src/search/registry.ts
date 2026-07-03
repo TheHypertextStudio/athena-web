@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { asc, eq, gt } from 'drizzle-orm';
 
 import { activitySearchProjectors } from './projectors/activity';
 import { calendarSearchProjectors } from './projectors/calendar';
@@ -50,9 +50,14 @@ export async function projectSearchDocumentFromSource(
 export async function listSearchSourceRows(
   sourceTable: string,
   limit: number,
+  afterId?: string | null,
 ): Promise<readonly unknown[]> {
   const { db, table } = await resolveSourceTable(sourceTable);
-  return db.select().from(table).limit(limit);
+  const query = db.select().from(table);
+  if (afterId) {
+    return query.where(gt(table.id, afterId)).orderBy(asc(table.id)).limit(limit);
+  }
+  return query.orderBy(asc(table.id)).limit(limit);
 }
 
 async function fetchSearchSourceRow(sourceTable: string, entityId: string) {

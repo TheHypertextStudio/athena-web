@@ -13,10 +13,10 @@
     "index.js"
   ],
   "dependencies": {
-    "@eslint/js": "^10.0.1",
-    "typescript-eslint": "^8.60.1"
+    "@eslint/js": "catalog:",
+    "typescript-eslint": "catalog:"
   },
   "peerDependencies": {
-    "eslint": "^9.17.0"
+    "eslint": "catalog:"
   }
 }

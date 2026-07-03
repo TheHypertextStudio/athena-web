@@ -4,8 +4,7 @@ import { ContextProvider } from '@docket/ui/components';
 import { VocabularyProvider } from '@docket/ui/hooks';
 import { TooltipProvider } from '@docket/ui/primitives';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { ThemeProvider } from 'next-themes';
-import { type JSX, type ReactNode, useState } from 'react';
+import { type JSX, type ReactNode, useEffect, useState } from 'react';
 
 import { createQueryClient } from '@/lib/query';
 
@@ -15,14 +14,58 @@ export interface ProvidersProps {
   children: ReactNode;
 }
 
+type ThemePreference = 'light' | 'dark' | 'system';
+
+/** The localStorage key historically used by `next-themes`, kept for compatibility. */
+const THEME_STORAGE_KEY = 'theme';
+
+/** The media query that resolves a `system` preference into the active class. */
+const DARK_MODE_QUERY = '(prefers-color-scheme: dark)';
+
+/** Read the persisted theme preference, falling back to `system` when unset or invalid. */
+function readThemePreference(): ThemePreference {
+  try {
+    const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+    return stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'system';
+  } catch {
+    return 'system';
+  }
+}
+
+/** Apply the resolved theme class and color-scheme to the document element. */
+function applyThemeClass(preference: ThemePreference, systemDark: boolean): void {
+  const resolved = preference === 'system' ? (systemDark ? 'dark' : 'light') : preference;
+  document.documentElement.classList.toggle('dark', resolved === 'dark');
+  document.documentElement.style.colorScheme = resolved;
+}
+
+/**
+ * Keep the root `dark` class in sync without rendering an inline script from a Client Component.
+ */
+function useThemeClass(): void {
+  useEffect(() => {
+    const media = window.matchMedia(DARK_MODE_QUERY);
+    const sync = (): void => {
+      applyThemeClass(readThemePreference(), media.matches);
+    };
+    sync();
+    media.addEventListener('change', sync);
+    window.addEventListener('storage', sync);
+    return () => {
+      media.removeEventListener('change', sync);
+      window.removeEventListener('storage', sync);
+    };
+  }, []);
+}
+
 /**
  * The composed client-side providers for the Docket product app.
  *
  * @remarks
  * Wraps the tree (outermost to innermost) in:
  *
- * 1. `next-themes` {@link ThemeProvider} — dark/light theming via the `class` attribute,
- *    matching the design-token stylesheet from `@docket/ui`.
+ * 1. A local root-class theme sync — dark/light theming via the `class` attribute, matching the
+ *    design-token stylesheet from `@docket/ui`, without rendering a client-side `<script>`.
  * 2. The `@docket/ui` `ContextProvider` — the active org/Hub context, density, and accent.
  * 3. The `@docket/ui` `VocabularyProvider` — entity-noun skinning (defaults to the Hub's
  *    startup preset until an org skin is bound deeper in the tree).
@@ -40,15 +83,14 @@ export interface ProvidersProps {
  */
 export function Providers({ children }: ProvidersProps): JSX.Element {
   const [queryClient] = useState(createQueryClient);
+  useThemeClass();
   return (
-    <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-      <ContextProvider>
-        <VocabularyProvider>
-          <TooltipProvider delayDuration={400}>
-            <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-          </TooltipProvider>
-        </VocabularyProvider>
-      </ContextProvider>
-    </ThemeProvider>
+    <ContextProvider>
+      <VocabularyProvider>
+        <TooltipProvider delayDuration={400}>
+          <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+        </TooltipProvider>
+      </VocabularyProvider>
+    </ContextProvider>
   );
 }

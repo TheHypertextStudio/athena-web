@@ -53,8 +53,8 @@
     "@dotenvx/dotenvx": "^1.75.1",
     "@standard-schema/spec": "^1.0.0",
     "@electric-sql/pglite": "catalog:",
-    "@types/node": "25.9.2",
-    "vite": "^8.0.16",
-    "vitest": "^4.1.8"
+    "@types/node": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
   }
 }

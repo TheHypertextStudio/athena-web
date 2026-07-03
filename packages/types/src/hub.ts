@@ -16,6 +16,7 @@ import { AuditEventOut } from './activity';
 import { Priority } from './capability';
 import { NotificationOut } from './notification';
 import { ActorId, MilestoneId, OrganizationId, ProgramId, ProjectId, TaskId } from './primitives';
+import { SearchDocumentKind, SearchOut } from './search';
 
 /**
  * An organization "chip" — the minimal org identity stamped onto every aggregated Hub
@@ -315,11 +316,9 @@ export const HubPortfolioOut = z
 export type HubPortfolioOut = z.infer<typeof HubPortfolioOut>;
 
 /** The entity kinds the cross-org Hub search can return. */
-export const HubSearchHitType = z
-  .enum(['task', 'project', 'program'])
-  .describe(
-    'The entity kind of a Hub search hit: `task`, `project`, or `program`. Determines which icon and route the palette uses.',
-  );
+export const HubSearchHitType = SearchDocumentKind.describe(
+  'The semantic kind of a Hub search result. Prefer SearchResult.kind for new code.',
+);
 /** Hub-search-hit-type value. */
 export type HubSearchHitType = z.infer<typeof HubSearchHitType>;
 
@@ -343,20 +342,10 @@ export const HubSearchHit = z
 /** Hub-search-hit value. */
 export type HubSearchHit = z.infer<typeof HubSearchHit>;
 
-/** The Hub `search` surface: cross-org, org-chipped, typed entity hits for a query. */
-export const HubSearchOut = z
-  .object({
-    query: z
-      .string()
-      .describe(
-        'The search query that was run (echoed back so the client can match responses to inputs).',
-      ),
-    results: z
-      .array(HubSearchHit)
-      .describe(
-        "The org-chipped, typed entity hits matching the query across the caller's orgs, truncated to the requested `limit`. Empty when nothing matched or the caller has no memberships.",
-      ),
-  })
-  .meta({ id: 'HubSearchOut', description: 'Cross-org Hub search results.' });
+/** The Hub `search` surface: cross-org, semantic workspace search results. */
+export const HubSearchOut = SearchOut.meta({
+  id: 'HubSearchOut',
+  description: 'Cross-org semantic Hub search results.',
+});
 /** Hub-search value. */
 export type HubSearchOut = z.infer<typeof HubSearchOut>;

@@ -1782,21 +1782,67 @@ describe('hub DTOs', () => {
     expect(parsed.swimlanes[0]?.programs[0]?.projects[0]?.milestones).toHaveLength(1);
   });
 
-  it('HubSearchOut parses + rejects a bad hit type', () => {
+  it('HubSearchOut parses semantic results + rejects a bad kind', () => {
     const parsed = HubSearchOut.parse({
       query: 'q',
-      results: [
-        { organizationId: ID2, type: 'task', id: ID, title: 'T' },
-        { organizationId: ID2, type: 'project', id: ID, title: 'P' },
-        { organizationId: ID2, type: 'program', id: ID, title: 'Prog' },
+      items: [
+        {
+          id: `task:${ID2}:${ID}`,
+          organizationId: ID2,
+          userId: null,
+          kind: 'task',
+          family: 'work',
+          title: 'T',
+          summary: null,
+          snippet: null,
+          matchedFields: ['title'],
+          route: {
+            type: 'entity',
+            organizationId: ID2,
+            entityKind: 'task',
+            entityId: ID,
+            href: `/orgs/${ID2}/my-work`,
+          },
+          subject: null,
+          source: { system: 'docket', externalUrl: null, eventId: null },
+          facets: {},
+          actions: [],
+          score: 100,
+        },
       ],
+      facets: [],
     });
     expect(parsed.query).toBe('q');
-    expect(parsed.results).toHaveLength(3);
+    expect(parsed.items).toHaveLength(1);
     expect(
       HubSearchOut.safeParse({
         query: 'q',
-        results: [{ organizationId: ID2, type: 'nonsense', id: ID, title: 'T' }],
+        items: [
+          {
+            id: 'bad',
+            organizationId: ID2,
+            userId: null,
+            kind: 'nonsense',
+            family: 'work',
+            title: 'T',
+            summary: null,
+            snippet: null,
+            matchedFields: [],
+            route: {
+              type: 'entity',
+              organizationId: ID2,
+              entityKind: 'task',
+              entityId: ID,
+              href: `/orgs/${ID2}/my-work`,
+            },
+            subject: null,
+            source: null,
+            facets: {},
+            actions: [],
+            score: 1,
+          },
+        ],
+        facets: [],
       }).success,
     ).toBe(false);
   });

@@ -89,6 +89,13 @@ export const authServer = {
   /** Slack app signing secret — verifies inbound Slack Events API requests (`v0=` HMAC). */
   SLACK_SIGNING_SECRET: z.string().optional(),
   /**
+   * Slack app OAuth client id — powers the "Connect Slack" user-token flow (`oauth.v2.authorize`).
+   * The shared hosted app's credentials; absent ⇒ Slack connect is unavailable (409 on connect-url).
+   */
+  SLACK_CLIENT_ID: z.string().optional(),
+  /** Slack app OAuth client secret — paired with {@link authServer.SLACK_CLIENT_ID} for `oauth.v2.access`. */
+  SLACK_CLIENT_SECRET: z.string().optional(),
+  /**
    * Shared secret for Better Auth's `oAuthProxy` plugin — lets preview/branch deployments run the
    * social-OAuth flow through production (whose callback URL is the only one registered with the
    * provider) instead of needing their own unpredictable redirect URI registered. Must be the SAME

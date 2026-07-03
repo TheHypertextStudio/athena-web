@@ -248,6 +248,53 @@ export const dailyDigest = pgTable(
 );
 
 /**
+ * Provider-side thread participation memory — "which external users have posted in which
+ * thread" — powering the `participant` relevance for replies in threads a connected user
+ * is part of.
+ *
+ * @remarks
+ * Deliberately keyed on *external* identities (`provider` + workspace + external user id),
+ * not Docket users: participation is a fact about the source system, recorded even for
+ * messages that never become canonical {@link event} rows (noise control skips irrelevant
+ * messages, so the `event` table cannot answer this question). Provider-generic so a future
+ * Teams/Discord observer reuses it. One row per (thread, user), upserted on `lastSeenAt`.
+ */
+export const threadParticipation = pgTable(
+  'thread_participation',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    provider: text('provider').notNull(),
+    /** The provider workspace/team the thread lives in (e.g. Slack `team_id`). */
+    externalWorkspaceId: text('external_workspace_id').notNull(),
+    channelId: text('channel_id').notNull(),
+    /** The thread root's provider timestamp/id — a top-level message registers under its own. */
+    threadTs: text('thread_ts').notNull(),
+    /** The participating user's provider-native id (e.g. Slack `U…`). */
+    externalUserId: text('external_user_id').notNull(),
+    lastSeenAt: timestamp('last_seen_at').notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('thread_participation_identity_uq').on(
+      t.organizationId,
+      t.provider,
+      t.externalWorkspaceId,
+      t.channelId,
+      t.threadTs,
+      t.externalUserId,
+    ),
+    index('thread_participation_lookup_idx').on(
+      t.organizationId,
+      t.externalWorkspaceId,
+      t.channelId,
+      t.threadTs,
+    ),
+  ],
+);
+
+/**
  * An external event subscription — the stateful counterpart to the stateless ingestion
  * edge. Tracks how Docket is registered to receive a provider's events.
  *

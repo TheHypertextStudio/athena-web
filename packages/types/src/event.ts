@@ -162,6 +162,11 @@ export const EventDetail = z
       channelId: z.string(),
       threadTs: z.string().nullable(),
       text: z.string(),
+      /**
+       * Slack conversation type (`im` | `mpim` | `channel` | `group`) — drives DM relevance
+       * routing. Defaulted so rows stored before this field existed still parse.
+       */
+      channelType: z.string().nullable().default(null),
     }),
     z.object({
       schema: z.literal('generic'),

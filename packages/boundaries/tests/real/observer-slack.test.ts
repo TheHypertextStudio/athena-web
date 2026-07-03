@@ -105,7 +105,109 @@ describe('RealSlackObserver.normalize', () => {
       channelId: 'C5',
       threadTs: '1699999999.000050',
       text: 'hey @docket',
+      channelType: null,
     });
+  });
+
+  it('extracts <@U…> user mentions (incl. label form) into participants, deduplicated', () => {
+    const drafts = observer.normalize({
+      eventType: 'message',
+      payload: {
+        team_id: 'T1',
+        event_id: 'Ev2',
+        event: {
+          type: 'message',
+          user: 'U1',
+          channel: 'C5',
+          channel_type: 'channel',
+          text: 'ping <@U2> and <@W3|wanda> — also <@U2> again',
+          ts: '1700000000.000100',
+        },
+      },
+      receivedAt: RECEIVED_AT,
+    });
+    expect(drafts).toHaveLength(1);
+    expect(drafts[0]?.participants?.map((p) => p.externalId)).toEqual(['U2', 'W3']);
+    expect(drafts[0]?.detail).toMatchObject({ schema: 'slack.message', channelType: 'channel' });
+  });
+
+  it('emits no participants when the text has no user mentions', () => {
+    const [obs] = observer.normalize({
+      eventType: 'message',
+      payload: {
+        event: { type: 'message', user: 'U1', channel: 'C5', text: 'no mentions here' },
+      },
+      receivedAt: RECEIVED_AT,
+    });
+    expect(obs?.participants ?? []).toEqual([]);
+  });
+
+  it('titles a direct message by its channel_type and carries it on the detail', () => {
+    const [obs] = observer.normalize({
+      eventType: 'message',
+      payload: {
+        event: {
+          type: 'message',
+          user: 'U1',
+          channel: 'D8',
+          channel_type: 'im',
+          text: 'psst',
+          ts: '1700000000.000100',
+        },
+      },
+      receivedAt: RECEIVED_AT,
+    });
+    expect(obs?.title).toBe('Slack direct message');
+    expect(obs?.detail).toMatchObject({ schema: 'slack.message', channelType: 'im' });
+  });
+
+  it.each([
+    'message_changed',
+    'message_deleted',
+    'channel_join',
+    'channel_leave',
+    'channel_topic',
+    'bot_message',
+  ])('skips the noisy %s subtype entirely', (subtype) => {
+    expect(
+      observer.normalize({
+        eventType: 'message',
+        payload: { event: { type: 'message', subtype, user: 'U1', channel: 'C5', text: 'x' } },
+        receivedAt: RECEIVED_AT,
+      }),
+    ).toEqual([]);
+  });
+
+  it('skips bot-authored messages (bot_id present)', () => {
+    expect(
+      observer.normalize({
+        eventType: 'message',
+        payload: {
+          event: { type: 'message', bot_id: 'B7', channel: 'C5', text: 'beep', ts: '1.2' },
+        },
+        receivedAt: RECEIVED_AT,
+      }),
+    ).toEqual([]);
+  });
+
+  it('still records a thread_broadcast reply (not a skipped subtype)', () => {
+    const drafts = observer.normalize({
+      eventType: 'message',
+      payload: {
+        event: {
+          type: 'message',
+          subtype: 'thread_broadcast',
+          user: 'U1',
+          channel: 'C5',
+          text: 'fyi',
+          thread_ts: '1699999999.000050',
+          ts: '1700000000.000100',
+        },
+      },
+      receivedAt: RECEIVED_AT,
+    });
+    expect(drafts).toHaveLength(1);
+    expect(drafts[0]?.detail).toMatchObject({ threadTs: '1699999999.000050' });
   });
 
   it('maps an unhandled event type to a degraded message-kind generic draft', () => {

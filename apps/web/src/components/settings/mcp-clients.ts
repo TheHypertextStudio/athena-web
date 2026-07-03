@@ -90,6 +90,20 @@ export const MCP_CLIENTS: McpClient[] = [
     ],
   },
   {
+    id: 'codex',
+    name: 'Codex',
+    kind: 'config',
+    // Codex configures remote (streamable HTTP) MCP servers in TOML; OAuth is a separate
+    // `codex mcp login <name>` step. See https://developers.openai.com/codex/mcp
+    snippet: (url) => `[mcp_servers.docket]\nurl = "${url}"`,
+    paths: {
+      mac: '~/.codex/config.toml',
+      linux: '~/.codex/config.toml',
+      windows: '%USERPROFILE%\\.codex\\config.toml',
+    },
+    note: 'After saving, run `codex mcp login docket` to authorize in your browser. You can scope the server per-project with .codex/config.toml in a trusted repo instead.',
+  },
+  {
     id: 'windsurf',
     name: 'Windsurf',
     kind: 'config',

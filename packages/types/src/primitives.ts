@@ -179,6 +179,18 @@ export const CalendarListId = id<'CalendarListId'>().describe(
 export const CalendarEventId = id<'CalendarEventId'>().describe(
   'ULID id of a CalendarEvent — one cached Google Calendar event visible to agenda contexts.',
 );
+/** Branded `CalendarLayer` id (one renderable stream of calendar items). */
+export const CalendarLayerId = id<'CalendarLayerId'>().describe(
+  'ULID id of a CalendarLayer — one renderable stream of calendar items.',
+);
+/** Branded `CalendarItem` id (one visible time object on a layer). */
+export const CalendarItemId = id<'CalendarItemId'>().describe(
+  'ULID id of a CalendarItem — one visible time object on a layer.',
+);
+/** Branded `CalendarItemWrite` id (one provider-bound outbox write). */
+export const CalendarItemWriteId = id<'CalendarItemWriteId'>().describe(
+  'ULID id of a CalendarItemWrite — one provider-bound outbox write.',
+);
 
 /** An ISO date (`YYYY-MM-DD`) string. */
 export const DateString = z.iso

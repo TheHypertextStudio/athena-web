@@ -11,6 +11,7 @@
 import type { BillingEventType, SubscriptionStatus } from '../ports/billing';
 import type { SessionActivity } from '../ports/agent-runtime';
 import type { ConnectorProvider, ImportedItem } from '../ports/connector';
+import type { MailThreadSummary } from '../ports/mail';
 
 /**
  * The fixed "now" the deterministic fixtures and mock adapters anchor to.
@@ -202,6 +203,42 @@ export interface BillingLifecycleStep {
   /** Hours from the gateway's `now` that the current period ends after this step. */
   readonly periodEndOffsetHours: number;
 }
+
+/**
+ * Deterministic mailbox thread summaries served by the mock connector's `listThreads`,
+ * keyed by mail-capable provider.
+ *
+ * @remarks
+ * Two fixtures per provider, chosen to exercise the email-to-task funnel both ways
+ * offline: one actionable thread from a real person (passes), and one promotional
+ * thread from a no-reply sender (floored + tagged `promotions`, so the seeded
+ * dismiss-promotions automation fires). Timestamps anchor to {@link FIXED_NOW}; the
+ * RFC 5322 `Message-ID`s are stable for cross-provider dedup tests.
+ */
+export const MAIL_THREAD_SUMMARIES: Readonly<
+  Partial<Record<ConnectorProvider, readonly MailThreadSummary[]>>
+> = {
+  gmail: [
+    {
+      threadId: 'gmail-thread-actionable',
+      subject: 'Can you review the vendor contract?',
+      snippet: 'Can you review the vendor contract before Friday? Legal needs a confirm.',
+      from: 'Ada Lovelace <ada@example.com>',
+      receivedAt: FIXED_NOW,
+      rfc822MessageId: '<actionable-0001@example.com>',
+      externalUrl: 'https://mail.mock.docket.local/#all/gmail-thread-actionable',
+    },
+    {
+      threadId: 'gmail-thread-promo',
+      subject: '50% off everything this weekend',
+      snippet: 'Huge sale — 50% off sitewide. Unsubscribe at any time.',
+      from: 'Deals <no-reply@shop.example.com>',
+      receivedAt: FIXED_NOW,
+      rfc822MessageId: '<promo-0001@shop.example.com>',
+      externalUrl: 'https://mail.mock.docket.local/#all/gmail-thread-promo',
+    },
+  ],
+};
 
 /**
  * The canonical billing lifecycle: `trialing → active → past_due → canceled`.

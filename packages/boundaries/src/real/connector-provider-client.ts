@@ -1,24 +1,29 @@
 import type {
   ExternalWriteResult,
-  FetchThreadInput,
   ImportWorkInput,
   ImportedItem,
   LinkResourceInput,
-  MailActionInput,
-  MailThread,
   MirrorResult,
   MirrorStatusInput,
   ResourceRef,
   TaskPushOp,
 } from '../ports/connector';
+import type {
+  FetchThreadInput,
+  ListThreadsInput,
+  MailActionInput,
+  MailListPage,
+  MailThread,
+} from '../ports/mail';
 
 /**
  * The provider-specific half of the connector: each method maps the port's
  * provider-agnostic request onto one provider API call and normalizes the response.
  *
  * @remarks
- * Implemented once per provider ({@link GitHubProviderClient}, {@link LinearProviderClient},
- * {@link GoogleProviderClient}); {@link RealConnector} dispatches to the right one.
+ * Implemented once per provider/product ({@link GitHubProviderClient},
+ * {@link LinearProviderClient}, the per-product Google clients, `GmailProviderClient`);
+ * {@link RealConnector} dispatches to the right one via the factory registry.
  */
 export interface ConnectorProviderClient {
   /**
@@ -58,14 +63,15 @@ export interface ConnectorProviderClient {
 }
 
 /**
- * The write-capable provider client (today only {@link GoogleProviderClient} for Google Tasks).
+ * The write-capable provider client (today `GoogleTasksProviderClient`).
  *
  * @remarks
  * Extends the read-only {@link ConnectorProviderClient} with a single `pushTask` that applies
  * one {@link TaskPushOp} to the provider. Kept as a *separate* interface so the read-only
  * providers (GitHub/Linear/Drive/Gmail/Calendar) implement nothing extra; `RealConnector`
- * narrows to it for `gtasks` via {@link isWritableProviderClient} and exposes it through
- * {@link Connector.asWritable}.
+ * narrows via {@link isWritableProviderClient} — purely structural — and exposes it through
+ * {@link Connector.asWritable}. Membership must agree with the `WRITE_BACK_CAPABLE_PROVIDERS`
+ * manifest (a boundary test enforces it).
  */
 export interface WritableConnectorProviderClient extends ConnectorProviderClient {
   /**
@@ -86,15 +92,25 @@ export function isWritableProviderClient(
 }
 
 /**
- * The mail-capable provider client (today only {@link GoogleProviderClient} for Gmail).
+ * The mail-capable provider client (today `GmailProviderClient`; Outlook/Graph next).
  *
  * @remarks
- * Extends the read-only client with mailbox mutation + on-demand thread fetch. Kept as a
- * separate interface so non-mail providers implement nothing extra; `RealConnector` narrows
- * to it for `gmail` via {@link isMailActionsProviderClient} and exposes it through
- * {@link import('../ports/connector').Connector.asMailActor}.
+ * Extends the read-only client with incremental thread listing, mailbox mutation, and
+ * on-demand thread fetch. Kept as a separate interface so non-mail providers implement
+ * nothing extra; `RealConnector` narrows via {@link isMailActionsProviderClient} — purely
+ * structural, no provider literals — and exposes it through
+ * {@link import('../ports/connector').Connector.asMailActor}. Membership must agree with
+ * the `MAIL_CAPABLE_PROVIDERS` manifest (a boundary test enforces it).
  */
 export interface MailActionsProviderClient extends ConnectorProviderClient {
+  /**
+   * List mailbox threads as ingest summaries, incrementally when a cursor is supplied.
+   *
+   * @param input - The connection, optional resume cursor, and page bound.
+   * @returns a page + next cursor, or `cursorExpired` on a stale cursor.
+   * @throws {ConnectorError} On auth, throttle, or provider failure.
+   */
+  listThreads(input: ListThreadsInput): Promise<MailListPage>;
   /**
    * Apply one mailbox action to a thread.
    *

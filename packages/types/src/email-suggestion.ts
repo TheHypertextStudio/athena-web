@@ -23,6 +23,10 @@ export const EmailSuggestionMeta = z
     subject: z.string(),
     snippet: z.string(),
     receivedAt: z.string(),
+    /** RFC 5322 Message-ID of the thread's latest message (cross-provider identity). */
+    rfc822MessageId: z.string(),
+    /** Canonical open-in-provider URL captured at ingest time (never fabricated later). */
+    externalUrl: z.string(),
   })
   .partial()
   .meta({ id: 'EmailSuggestionMeta', description: 'Snapshot of the source email.' });

@@ -148,6 +148,48 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [MAIL-001] Provider-agnostic mail capability + standards-based message model (M2 of productization)
+
+- **Completed**: 2026-07-02
+- **Summary**: Killed the provider-literal capability gates and gave the mail surface a real
+  port. New `packages/boundaries/src/ports/mail.ts`: `MailActions` gains cursor-based
+  incremental `listThreads` returning `MailThreadSummary` rows with genuine RFC 5322 identity
+  (`from`, `rfc822MessageId`, `receivedAt`, provider-captured `externalUrl`); cursor expiry is
+  modeled in the return type (`{kind:'page'|'cursorExpired'}` — Gmail stale `historyId` 404,
+  Graph delta 410 later) with a documented one-retry full-repull fallback. `MailMessage` carries
+  `Message-ID`/`In-Reply-To`/`References`. The shared `GoogleProviderClient` split into
+  per-product clients (`GmailProviderClient` in new `connector-gmail.ts` implementing
+  `MailActionsProviderClient`; Drive/Calendar base-only; `GoogleTasksProviderClient` writable) so
+  capability discovery is purely structural (`is*ProviderClient` guards) — `asWritable`/
+  `asMailActor`/`listContainers` have no provider checks. Provider→client construction is the
+  compile-enforced `PROVIDER_CLIENT_FACTORIES` registry. Declarative manifests
+  (`MAIL_CAPABLE_PROVIDERS`, `WRITE_BACK_CAPABLE_PROVIDERS`) drive the mock's gates and
+  app-layer selection, kept honest by a manifest⇔structure tripwire test; app-layer
+  `WRITE_BACK_PROVIDERS` now re-exports the manifest. Mock serves deterministic
+  `MAIL_THREAD_SUMMARIES` fixtures (actionable-from-person + promo-from-no-reply, so the funnel
+  and dismiss-promotions rule run offline) with an `EXPIRED_CURSOR` sentinel.
+  `EmailSuggestionMeta` gains `rfc822MessageId`/`externalUrl`. New spec
+  `docs/engineering/specs/mail-providers.md` (capability model, identity semantics, cursor
+  protocol, verb mapping table, add-a-provider checklist).
+- **Files Changed**: `packages/boundaries/src/ports/{mail(new),connector,index}.ts`,
+  `packages/boundaries/src/real/{connector,connector-google,connector-gmail(new),connector-provider-client}.ts`,
+  `packages/boundaries/src/{mock/connector,fixtures/index}.ts`,
+  `packages/boundaries/tests/real/{connector-gmail(new),capability-manifest(new)}.test.ts`
+  (old connector-google-mail test folded in), `packages/boundaries/tests/mock/connector-mail.test.ts`,
+  `packages/types/src/email-suggestion.ts`, `apps/api/src/routes/integration-provider.ts`,
+  `docs/engineering/specs/mail-providers.md` (new), `docs/WORKLOG.md`.
+- **Learnings**: The structural-guard-plus-manifest pair beats either alone: guards keep the
+  real path literal-free, the manifest gives the mock and app layer a declarative source of
+  truth, and a tripwire test replaces discipline. Splitting the shared Google client was the
+  precondition — one class serving four products is exactly why the literal gates existed.
+- **Gate**: boundaries typecheck + lint clean, suite 20 files / 274 tests green (was 256);
+  types + api typecheck/lint clean; full API suite green (unchanged behavior — sweep still on
+  `importWork` until M4). Gmail `listThreads` verified against canned payloads: cold pull
+  anchors cursor to profile `historyId`, warm pull dedupes threads across history records,
+  404 ⇒ `cursorExpired`, 500 still throws.
+
+---
+
 ### [MCP-PROD-009] Production MCP access: OAuth activation, consent gate, Codex + docs, OAuth e2e
 
 - **Completed**: 2026-07-02
@@ -178,6 +220,7 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
   (`prompt=consent`); both diverge from what a spec-faithful client expects. Note: older WORKLOG
   entries (MCP-UTIL-005, MCP-SAMPLING-006) reference `packages/mcp-server/**` and
   `apps/api/src/routes/mcp.ts` — those paths were superseded by `apps/api/src/mcp/**`.
+
 ### [AUTO-001] Wire automations into the canonical Event substrate (M1 of productization)
 
 - **Completed**: 2026-07-02

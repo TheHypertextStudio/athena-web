@@ -8,6 +8,8 @@
  * endpoints, wire shapes, OAuth scope URLs, the `orderBy`-suppresses-`nextSyncToken`
  * quirk — lives here so the engine stays provider-free.
  */
+import { randomBytes, randomUUID } from 'node:crypto';
+
 import { auth } from '@docket/auth';
 import { account, type Database } from '@docket/db';
 import type {
@@ -31,6 +33,8 @@ import {
   type CalendarPullResult,
   type CalendarPushInput,
   type CalendarPushResult,
+  type CalendarWatchInput,
+  type CalendarWatchResult,
   type DiscoveredCalendarConnection,
   type ProviderItemSnapshot,
   type ProviderLayerSnapshot,
@@ -63,11 +67,11 @@ export class GoogleCalendarApiError extends Error {
 
 /**
  * Optional request shape for a non-GET {@link GoogleFetchJson} call: `pushItem`/
- * `deleteItem` reuse the exact same seam `listLayers`/`pullChanges` use (one HTTP
- * implementation, real or fake) rather than a parallel seam type.
+ * `deleteItem`/`startWatch`/`stopWatch` reuse the exact same seam `listLayers`/
+ * `pullChanges` use (one HTTP implementation, real or fake) rather than a parallel seam type.
  */
 export interface GoogleFetchJsonInit {
-  readonly method?: 'PATCH' | 'DELETE';
+  readonly method?: 'POST' | 'PATCH' | 'DELETE';
   /** Extra headers, e.g. `If-Match` for optimistic-concurrency writes. */
   readonly headers?: Record<string, string>;
   /** JSON-serialized as the request body when present. */
@@ -447,6 +451,54 @@ async function deleteItem(
   }
 }
 
+/** Google's `channels.watch` response shape (fields this adapter reads). */
+interface GoogleWatchResponse {
+  resourceId?: string;
+  expiration?: string;
+}
+
+/**
+ * Subscribe one Google calendar to push notifications: `POST
+ * .../calendars/{id}/events/watch` with a fresh random `id` (channel id) and `token`,
+ * `address: callbackUrl`, `type: 'web_hook'`. Google echoes back `resourceId` and
+ * `expiration` (unix ms, as a string).
+ */
+async function startWatch(
+  fetchJson: GoogleFetchJson,
+  input: CalendarWatchInput,
+): Promise<CalendarWatchResult> {
+  const channelId = randomUUID();
+  const token = randomBytes(24).toString('base64url');
+  const response = await fetchJson<GoogleWatchResponse>(
+    `${GOOGLE_CALENDAR_BASE}/calendars/${encodeURIComponent(input.externalLayerId)}/events/watch`,
+    input.credentials.accessToken,
+    {
+      method: 'POST',
+      body: { id: channelId, token, address: input.callbackUrl, type: 'web_hook' },
+    },
+  );
+  if (!response.resourceId || !response.expiration) {
+    throw new Error('Google watch response missing resourceId/expiration');
+  }
+  return {
+    channelId,
+    resourceId: response.resourceId,
+    token,
+    expiresAt: new Date(Number(response.expiration)),
+  };
+}
+
+/** Unsubscribe a Google watch channel: `POST /channels/stop`. */
+async function stopWatch(
+  fetchJson: GoogleFetchJson,
+  input: { credentials: CalendarProviderCredentials; channelId: string; resourceId: string },
+): Promise<void> {
+  await fetchJson<unknown>(`${GOOGLE_CALENDAR_BASE}/channels/stop`, input.credentials.accessToken, {
+    method: 'POST',
+    body: { id: input.channelId, resourceId: input.resourceId },
+  });
+}
+
 /** Build the {@link CalendarProviderAdapter} half of the Google sync module. */
 export function createGoogleCalendarAdapter(
   fetchJson: GoogleFetchJson = defaultFetchJson,
@@ -495,6 +547,8 @@ export function createGoogleCalendarAdapter(
     },
     pushItem: (input) => pushItem(fetchJson, input),
     deleteItem: (input) => deleteItem(fetchJson, input),
+    startWatch: (input) => startWatch(fetchJson, input),
+    stopWatch: (input) => stopWatch(fetchJson, input),
   };
 }
 
@@ -608,4 +662,53 @@ export function createGoogleCalendarSyncModule(input?: {
     resolveCredentials: createGoogleCredentialResolver(input?.getAccessToken),
     captureScopeState: captureGoogleScopeState,
   };
+}
+
+/** The `X-Goog-*` push-notification headers `validateGoogleWebhookHeaders` needs. */
+export interface GoogleWebhookHeaders {
+  readonly channelToken: string | undefined;
+  readonly resourceId: string | undefined;
+  readonly resourceState: string | undefined;
+}
+
+/** The channel-owning layer fields `validateGoogleWebhookHeaders` checks the headers against. */
+export interface GoogleWebhookChannelLayer {
+  readonly watchToken: string | null;
+  readonly watchResourceId: string | null;
+}
+
+/**
+ * `'invalid'` (mismatched/missing token or resource id — the caller 404s without
+ * distinguishing which part failed), `'sync'` (Google's initial channel-confirmation
+ * ping — no event data, no sync to trigger), or `'notify'` (a real change notification —
+ * the caller triggers a sync for this layer).
+ */
+export type GoogleWebhookOutcome = 'invalid' | 'sync' | 'notify';
+
+/**
+ * Validate one Google Calendar push-notification request's headers against the layer its
+ * `X-Goog-Channel-Id` resolved to (the route owns that DB lookup; this function only
+ * checks the headers, so it never touches the database itself).
+ *
+ * @remarks
+ * Google's push body carries no event data — only these headers matter, and the request
+ * body is never read for this. `channelToken`/`resourceId` are compared with `!==`
+ * (constant-time comparison is unnecessary here: both are opaque server-generated values
+ * Google echoes back, not secrets an attacker profits from timing against — the actual
+ * secret, `watchToken`, is never guessable from a timing side-channel of one string
+ * compare, and Google's own delivery is not adversarial).
+ */
+export function validateGoogleWebhookHeaders(
+  headers: GoogleWebhookHeaders,
+  layer: GoogleWebhookChannelLayer,
+): GoogleWebhookOutcome {
+  if (
+    layer.watchToken === null ||
+    layer.watchResourceId === null ||
+    headers.channelToken !== layer.watchToken ||
+    headers.resourceId !== layer.watchResourceId
+  ) {
+    return 'invalid';
+  }
+  return headers.resourceState === 'sync' ? 'sync' : 'notify';
 }

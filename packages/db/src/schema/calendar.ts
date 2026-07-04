@@ -201,6 +201,10 @@ export const calendarLayer = pgTable(
     watchResourceId: text('watch_resource_id'),
     watchToken: text('watch_token'),
     watchExpiresAt: timestamp('watch_expires_at'),
+    // `NULL` = "never registered a push-notification watch for this layer" — distinct from
+    // "registered, but `watchExpiresAt` says it needs renewal" (both drive
+    // `registerOrRenewWatches`'s due check in `calendar-sync-engine.ts`).
+    watchRegisteredAt: timestamp('watch_registered_at'),
     lastSyncedAt: timestamp('last_synced_at'),
     lastError: text('last_error'),
     createdAt: timestamp('created_at').notNull().defaultNow(),

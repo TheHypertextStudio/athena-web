@@ -61,6 +61,14 @@ export const authServer = {
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
   /**
+   * Public HTTPS callback URL Docket registers with Google Calendar push-notification
+   * `watch` subscriptions (`POST {this}` receives `X-Goog-*` headers at
+   * `/webhooks/calendar/google`, e.g. `https://api.docket.app/webhooks/calendar/google`).
+   * Explicit, no default: absent ⇒ `registerOrRenewWatches` no-ops entirely (push hints are
+   * disabled, but the scheduled sweep still polls every layer, so sync keeps working).
+   */
+  GOOGLE_CALENDAR_WEBHOOK_URL: z.string().optional(),
+  /**
    * GitHub App numeric id — the JWT `iss` used to mint short-lived installation access tokens
    * (the firehose/mirror data plane). The single GitHub App is the ONLY GitHub credential:
    * it powers sign-in (user-to-server OAuth), the issue/PR connector, and the webhook firehose

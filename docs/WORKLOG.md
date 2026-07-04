@@ -207,7 +207,7 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
   - [x] Phase 4 — task links
   - [x] Phase 5 — provider sync engine
   - [x] Phase 6 — provider write-back
-  - [ ] Phase 7 — push hints + scheduled sync
+  - [x] Phase 7 — push hints + scheduled sync
   - [ ] Phase 8 — web data layer
   - [ ] Phase 9 — calendar UI + workspace
   - [ ] Phase 10 — e2e, docs, rollout
@@ -228,6 +228,24 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
   overwrite; `POST /me/calendar/sync` now drains due writes and reports live
   writesApplied/writesPending/conflicts. Native-block and derived-view (`task_timebox`/
   `availability_block`) behavior is unchanged. Push notifications/cron draining remain Phase 7.
+  Phase 7 (push hints + scheduled sync): added migration 0018 (`calendarLayer.watchRegisteredAt`);
+  `CalendarProviderAdapter` gained OPTIONAL `startWatch`/`stopWatch` (Google implements both via
+  `channels.watch`/`channels.stop`; CalDAV-shaped adapters simply omit them, checked via
+  `typeof adapter.startWatch === 'function'`, never assumed); the per-layer sync body of
+  `syncCalendarConnections` was extracted into a single shared `runLayerSync`, now also driving a
+  new bounded `syncSingleLayer(db, { userId, layerId, adapters, now })` a webhook hint calls
+  directly (no full connection discovery); `registerOrRenewWatches` registers/renews a watch per
+  selected layer, gated on an explicit `GOOGLE_CALENDAR_WEBHOOK_URL` env var (no hidden default —
+  unset ⇒ zero-tally no-op) via `calendar-sync-sweep.ts`'s `callbackUrlFor`. New
+  `POST /webhooks/calendar/:provider` (mounted in `server.ts`, outside `/v1`/OpenAPI, per the
+  approved design) validates Google's `X-Goog-*` headers against the channel's stored
+  token/resource id (`validateGoogleWebhookHeaders`, mismatch/unknown channel → 404 without
+  revealing which check failed) and triggers `syncSingleLayer` for real notifications (the
+  `sync` confirmation ping no-ops). New `sweepCalendarSync` (wired as
+  `POST /internal/cron/sync-calendars`, `*/10 * * * *` in `scripts/scheduler-setup.ts`, and into
+  `dev-scheduler.ts`'s local tick) runs the full pull + outbox drain + watch registration per
+  connected user. Regression: full calendar-\* suite green (88/88 across the 8 files named in the
+  task brief's gate).
 
 ---
 

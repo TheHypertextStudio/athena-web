@@ -54,6 +54,18 @@ export const queryKeys = {
   agenda: (date: string) => ['me', 'agenda', date] as const,
   dailyPlan: (date: string) => ['me', 'daily-plan', date] as const,
   calendarSettings: () => ['me', 'calendar-settings'] as const,
+  calendarLayers: () => ['me', 'calendar-layers'] as const,
+  // Range-scoped, not nested under a shared list key — a range read is fetched fresh per
+  // window rather than growing one unbounded cache entry, so `[start, end]` are part of the
+  // key itself (same convention as `streamMe`/`streamOrg` carrying their filter params).
+  calendarItems: (startISO: string, endISO: string) =>
+    ['me', 'calendar-items', startISO, endISO] as const,
+  // Deliberately NOT nested under `calendarItems(...)` — an item detail's key doesn't extend
+  // any particular range key (an item can appear in many ranges), so range invalidation and
+  // item-detail invalidation are independent; pass both explicitly where a write affects both
+  // (mirrors how `agenda`/`dailyPlan` are separate sibling keys coordinated by their mutation
+  // layer rather than one nested under the other).
+  calendarItem: (itemId: string) => ['me', 'calendar-items', 'detail', itemId] as const,
   // Notification count is keyed UNDER the list so invalidating `notifications()` (a prefix
   // match) refreshes both the list and the pending-approval count in one call.
   notifications: () => ['me', 'notifications'] as const,

@@ -162,6 +162,16 @@ export const CORE_VARS: readonly VarSpec[] = [
     sensitive: true,
   },
   {
+    name: 'GOOGLE_CALENDAR_WEBHOOK_URL',
+    slice: 'auth',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: authServer.GOOGLE_CALENDAR_WEBHOOK_URL,
+    where:
+      'Public HTTPS URL for POST /webhooks/calendar/google (absent ⇒ push hints disabled, scheduled sweep still polls)',
+  },
+  {
     name: 'GITHUB_APP_ID',
     slice: 'auth',
     scope: 'server',

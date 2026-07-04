@@ -19,6 +19,7 @@ import { env } from '../env';
 import { sweepLifecycle } from '../billing/lifecycle';
 import { sweepEmailSuggestions } from '../lib/email-to-task/sweep';
 import { sweepEmailSuggestionLifecycle } from '../lib/email-to-task/lifecycle';
+import { sweepCalendarSync } from './calendar-sync-sweep';
 import { sweepConnectorSync } from './integration-sync';
 import { sweepInboundEvents } from './event-sync';
 import { sweepDailyDigests } from './daily-digest';
@@ -97,6 +98,15 @@ const cron = new Hono()
     if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
     const now = new Date().toISOString();
     const result = await sweepAccountExports(db, now);
+    return c.json({ swept: true, ...result });
+  })
+  // Calendar sweep: incrementally re-syncs every connected user's calendars, drains their due
+  // provider-write outbox, and registers/renews push-notification watches so push hints keep
+  // working. Idempotent + lease-guarded per layer (see `calendar-sync-engine.ts`), so a
+  // concurrent manual "Sync Now" and this sweep never double-sync the same layer.
+  .post('/sync-calendars', async (c) => {
+    if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
+    const result = await sweepCalendarSync(new Date());
     return c.json({ swept: true, ...result });
   });
 

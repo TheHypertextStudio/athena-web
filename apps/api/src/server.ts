@@ -25,6 +25,7 @@ import { cimdAuthorizeMiddleware } from './mcp/cimd';
 import { mcpConsentGuard } from './mcp/consent-guard';
 import { authorizationServerMetadata, mcpHandler, protectedResourceMetadata } from './mcp/server';
 import { registerOpenapi } from './openapi';
+import calendarWebhook from './routes/calendar-webhook';
 import cron from './routes/cron';
 import ingest from './routes/ingest';
 import { meAccountExportDownload } from './routes/me-account';
@@ -80,6 +81,11 @@ server.route('/internal/ingest', ingest);
 server.route('/internal/integrations/github', integrationsGithub);
 server.route('/internal/integrations/slack', integrationsSlack);
 server.route('/internal/cron', cron);
+// Provider push-notification webhooks: NOT under `/internal` (Docket registers this exact URL
+// directly with each provider, e.g. Google's `channels.watch`, rather than calling it itself),
+// but still outside `/v1`/OpenAPI — a machine edge like the ones above, self-authed per provider
+// (Google: the channel/token/resource-id headers, never the request body).
+server.route('/webhooks/calendar', calendarWebhook);
 // User-facing non-RPC edges that stay on `/v1`: the SSE live stream, and the binary account
 // export download (GET registered before the typed app so its path matches; the typed app still
 // owns POST /v1/me/account/exports).

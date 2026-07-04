@@ -95,6 +95,13 @@ const JOBS: readonly CronJob[] = [
     description:
       'Docket: email-to-task ingest sweep (cursored mailbox pull -> funnel -> Athena synthesis -> suggestions for every opted-in mail integration).',
   },
+  {
+    name: 'docket-sync-calendars',
+    path: '/internal/cron/sync-calendars',
+    schedule: '*/10 * * * *',
+    description:
+      'Docket: calendar sweep (re-syncs every connected user, drains the write outbox, renews push-notification watches).',
+  },
 ];
 
 // ── helpers ──────────────────────────────────────────────────────────────────

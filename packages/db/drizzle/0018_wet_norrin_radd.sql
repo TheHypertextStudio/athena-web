@@ -1,0 +1,1 @@
+ALTER TABLE "calendar_layer" ADD COLUMN "watch_registered_at" timestamp;

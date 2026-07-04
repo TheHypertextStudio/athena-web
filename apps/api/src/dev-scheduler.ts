@@ -3,15 +3,17 @@
  *
  * @remarks
  * In production the cron sweeps are driven by GCP Cloud Scheduler (`scripts/scheduler-setup.ts`),
- * which does not exist locally — so during `pnpm dev` the export/deletion sweeps would never run
- * and an export would sit `pending` forever. This runs the **same** sweep functions on a short
- * interval, in the API process (sharing the single PGlite writer), so the local flow completes
- * responsively. It is started from `server.ts` ONLY when `APP_MODE === 'local'`; prod is untouched.
+ * which does not exist locally — so during `pnpm dev` the export/deletion/calendar sweeps would
+ * never run and an export (or a calendar sync) would sit stale forever. This runs the **same**
+ * sweep functions on a short interval, in the API process (sharing the single PGlite writer), so
+ * the local flow completes responsively. It is started from `server.ts` ONLY when
+ * `APP_MODE === 'local'`; prod is untouched.
  */
 import { db } from '@docket/db';
 
 import { sweepAccountExports } from './account/export';
 import { sweepAccountDeletions } from './account/lifecycle';
+import { sweepCalendarSync } from './routes/calendar-sync-sweep';
 
 /** How often the dev scheduler runs the account sweeps (short, so exports feel responsive). */
 const TICK_MS = 3000;
@@ -20,9 +22,10 @@ const TICK_MS = 3000;
 export function startDevScheduler(): void {
   const tick = async (): Promise<void> => {
     try {
-      const now = new Date().toISOString();
-      await sweepAccountExports(db, now);
-      await sweepAccountDeletions(db, now);
+      const now = new Date();
+      await sweepAccountExports(db, now.toISOString());
+      await sweepAccountDeletions(db, now.toISOString());
+      await sweepCalendarSync(now);
     } catch (err) {
       console.error('[dev-cron] sweep failed:', err);
     }

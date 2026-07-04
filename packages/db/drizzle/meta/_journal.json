@@ -176,6 +176,13 @@
       "when": 1783061801936,
       "tag": "0017_curly_landau",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1783203998080,
+      "tag": "0018_wet_norrin_radd",
+      "breakpoints": true
     }
   ]
 }

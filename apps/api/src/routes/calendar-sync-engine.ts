@@ -17,10 +17,19 @@
  * CalDAV adapter plugs in without touching this file.
  *
  * The write outbox (`../calendar/calendar-outbox.ts`) and its `pushItem`/`deleteItem`
- * adapter contract (declared here, implemented per-provider) are the outbound half —
- * push-notification subscriptions and cron draining are still a later phase. This module
- * itself stays pull-only and provider-free: it declares the push/delete contract types
- * so adapters and the outbox agree on a shape, but never calls them.
+ * adapter contract (declared here, implemented per-provider) are the outbound half; this
+ * module stays pull-only and provider-free for those — it declares the push/delete
+ * contract types so adapters and the outbox agree on a shape, but never calls them.
+ *
+ * Push-notification `watch` subscriptions (Google Calendar's `channels.watch`) are
+ * modeled as sync HINTS, not a replacement for polling: {@link registerOrRenewWatches}
+ * registers/renews a channel per selected layer (config-gated on a registered callback
+ * URL; no-ops cleanly when unset), and {@link syncSingleLayer} — the SAME per-layer sync
+ * logic {@link syncCalendarConnections} uses internally, extracted to `runLayerSync` — is
+ * the bounded, single-layer sync a webhook route triggers when a hint arrives. Both paths
+ * (scheduled full sweep and push-triggered single-layer sync) end up pulling
+ * incrementally via the stored `syncToken`, so a hint never does more work than a normal
+ * incremental poll would.
  */
 import {
   calendarConnection,
@@ -142,10 +151,29 @@ export type CalendarDeleteResult =
   | { readonly outcome: 'permanent'; readonly message: string }
   | { readonly outcome: 'reauth'; readonly message: string };
 
+/** Input to {@link CalendarProviderAdapter.startWatch}: subscribe one layer to push notifications. */
+export interface CalendarWatchInput {
+  readonly credentials: CalendarProviderCredentials;
+  readonly externalLayerId: string;
+  /** The public HTTPS URL the provider will POST push-notification pings to. */
+  readonly callbackUrl: string;
+}
+
+/** The result of a successful {@link CalendarProviderAdapter.startWatch} call, persisted on the layer. */
+export interface CalendarWatchResult {
+  readonly channelId: string;
+  readonly resourceId: string;
+  readonly token: string;
+  readonly expiresAt: Date;
+}
+
 /**
- * The provider-neutral pull + push contract every adapter implements. Push-notification
- * `watch` subscriptions are NOT part of this contract yet — that (plus cron draining of
- * the outbox) is a later phase; adding a stub method now would violate the no-stubs rule.
+ * The provider-neutral pull + push contract every adapter implements.
+ *
+ * @remarks
+ * `startWatch`/`stopWatch` are OPTIONAL — CalDAV (and any future poll-only provider) has
+ * no push-notification concept, so callers must check `typeof adapter.startWatch ===
+ * 'function'` before calling it, never assume it is present.
  */
 export interface CalendarProviderAdapter {
   readonly provider: CalendarProvider;
@@ -172,6 +200,20 @@ export interface CalendarProviderAdapter {
   pushItem(input: CalendarPushInput): Promise<CalendarPushResult>;
   /** Delete one provider event; see {@link CalendarDeleteResult} for outcomes. */
   deleteItem(input: CalendarDeleteInput): Promise<CalendarDeleteResult>;
+  /**
+   * Subscribe one layer to provider push notifications. Absent when the provider has no
+   * push model. Declared as a property (not method-shorthand) type so callers can safely
+   * extract it into a local (`const startWatch = adapter.startWatch`) after the
+   * `typeof … === 'function'` guard without an `@typescript-eslint/unbound-method` lint
+   * error — none of these methods read `this`, so there is nothing to unbind.
+   */
+  startWatch?: (input: CalendarWatchInput) => Promise<CalendarWatchResult>;
+  /** Unsubscribe a previously-registered watch channel. Absent when the provider has no push model. */
+  stopWatch?: (input: {
+    readonly credentials: CalendarProviderCredentials;
+    readonly channelId: string;
+    readonly resourceId: string;
+  }) => Promise<void>;
 }
 
 /** One discovered linked account for a provider, before credentials/scope are resolved. */
@@ -575,6 +617,98 @@ async function upsertProviderItem(
   return outcome;
 }
 
+/** Identifies one layer to sync, independent of which caller (full sweep or a single hint) got here. */
+interface LayerSyncTarget {
+  readonly id: string;
+  readonly externalLayerId: string;
+  readonly syncToken: string | null;
+}
+
+/** The item-level tally of one {@link runLayerSync} attempt. */
+interface LayerSyncTally {
+  readonly created: number;
+  readonly updated: number;
+  readonly archived: number;
+  readonly errors: readonly string[];
+}
+
+/**
+ * Claim one layer's sync lease, pull + apply its changes, persist the new cursor, and
+ * release the lease in a `finally` — the ONE per-layer sync implementation shared by the
+ * full connection sweep ({@link syncCalendarConnections}) and a single-layer push-hint
+ * sync ({@link syncSingleLayer}), per this module's "no duplicate implementations" rule.
+ *
+ * @returns `null` when another run already holds the layer's lease (skipped, not an
+ *   error); otherwise the item-level tally for this attempt.
+ */
+async function runLayerSync(
+  db: Database,
+  input: {
+    readonly userId: string;
+    readonly connectionId: string;
+    readonly provider: CalendarProvider;
+    readonly adapter: CalendarProviderAdapter;
+    readonly credentials: CalendarProviderCredentials;
+    readonly target: LayerSyncTarget;
+    readonly editableCore: boolean;
+    readonly now: Date;
+  },
+): Promise<LayerSyncTally | null> {
+  const claimed = await claimLayerLease(db, input.target.id, input.now);
+  if (!claimed) return null;
+
+  const window = windowBounds(input.now);
+  const tally = { created: 0, updated: 0, archived: 0, errors: [] as string[] };
+  try {
+    let pull = await input.adapter.pullChanges({
+      credentials: input.credentials,
+      externalLayerId: input.target.externalLayerId,
+      cursor: input.target.syncToken,
+      window,
+      layerEditableCore: input.editableCore,
+    });
+    if (pull.cursorInvalid) {
+      pull = await input.adapter.pullChanges({
+        credentials: input.credentials,
+        externalLayerId: input.target.externalLayerId,
+        cursor: null,
+        window,
+        layerEditableCore: input.editableCore,
+      });
+    }
+
+    for (const itemSnapshot of pull.items) {
+      const outcome = await upsertProviderItem(db, {
+        userId: input.userId,
+        connectionId: input.connectionId,
+        layerId: input.target.id,
+        externalCalendarId: input.target.externalLayerId,
+        provider: input.provider,
+        snapshot: itemSnapshot,
+        now: input.now,
+      });
+      if (outcome === 'created') tally.created += 1;
+      else if (outcome === 'updated') tally.updated += 1;
+      else if (outcome === 'archived') tally.archived += 1;
+    }
+
+    await db
+      .update(calendarLayer)
+      .set({ syncToken: pull.nextCursor, lastSyncedAt: input.now, lastError: null })
+      .where(eq(calendarLayer.id, input.target.id));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Calendar layer sync failed';
+    await db
+      .update(calendarLayer)
+      .set({ lastError: message })
+      .where(eq(calendarLayer.id, input.target.id));
+    tally.errors.push(`${input.target.externalLayerId}: ${message}`);
+  } finally {
+    await releaseLayerLease(db, input.target.id);
+  }
+  return tally;
+}
+
 /** Options for {@link syncCalendarConnections}. */
 export interface SyncCalendarConnectionsOptions {
   readonly userId: string;
@@ -609,7 +743,6 @@ export async function syncCalendarConnections(
   opts: SyncCalendarConnectionsOptions,
 ): Promise<z.input<typeof CalendarSyncResultOut>> {
   const now = opts.now ?? new Date();
-  const window = windowBounds(now);
 
   const counts = {
     connections: 0,
@@ -669,63 +802,28 @@ export async function syncCalendarConnections(
           counts.layers += 1;
           if (!layerRow.selected) continue;
 
-          const claimed = await claimLayerLease(db, layerRow.id, now);
-          if (!claimed) continue;
-
-          try {
-            let pull = await mod.adapter.pullChanges({
-              credentials,
+          const result = await runLayerSync(db, {
+            userId: opts.userId,
+            connectionId,
+            provider,
+            adapter: mod.adapter,
+            credentials,
+            target: {
+              id: layerRow.id,
               externalLayerId: snapshot.externalLayerId,
-              cursor: layerRow.syncToken,
-              window,
-              layerEditableCore: snapshot.editableCore,
-            });
-            if (pull.cursorInvalid) {
-              pull = await mod.adapter.pullChanges({
-                credentials,
-                externalLayerId: snapshot.externalLayerId,
-                cursor: null,
-                window,
-                layerEditableCore: snapshot.editableCore,
-              });
-            }
-
-            for (const itemSnapshot of pull.items) {
-              const outcome = await upsertProviderItem(db, {
-                userId: opts.userId,
-                connectionId,
-                layerId: layerRow.id,
-                externalCalendarId: snapshot.externalLayerId,
-                provider,
-                snapshot: itemSnapshot,
-                now,
-              });
-              if (outcome === 'created') {
-                counts.eventsCreated += 1;
-                counts.itemsCreated += 1;
-              } else if (outcome === 'updated') {
-                counts.eventsUpdated += 1;
-                counts.itemsUpdated += 1;
-              } else if (outcome === 'archived') {
-                counts.eventsDeleted += 1;
-                counts.itemsArchived += 1;
-              }
-            }
-
-            await db
-              .update(calendarLayer)
-              .set({ syncToken: pull.nextCursor, lastSyncedAt: now, lastError: null })
-              .where(eq(calendarLayer.id, layerRow.id));
-          } catch (err) {
-            const message = err instanceof Error ? err.message : 'Calendar layer sync failed';
-            await db
-              .update(calendarLayer)
-              .set({ lastError: message })
-              .where(eq(calendarLayer.id, layerRow.id));
-            counts.errors.push(`${snapshot.externalLayerId}: ${message}`);
-          } finally {
-            await releaseLayerLease(db, layerRow.id);
-          }
+              syncToken: layerRow.syncToken,
+            },
+            editableCore: snapshot.editableCore,
+            now,
+          });
+          if (result === null) continue; // lease held elsewhere — skip silently
+          counts.eventsCreated += result.created;
+          counts.itemsCreated += result.created;
+          counts.eventsUpdated += result.updated;
+          counts.itemsUpdated += result.updated;
+          counts.eventsDeleted += result.archived;
+          counts.itemsArchived += result.archived;
+          counts.errors.push(...result.errors);
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Calendar sync failed';
@@ -742,4 +840,196 @@ export async function syncCalendarConnections(
   }
 
   return counts;
+}
+
+/** Options for {@link syncSingleLayer}. */
+export interface SyncSingleLayerOptions {
+  readonly userId: string;
+  readonly layerId: string;
+  /** Same provider → sync-module map {@link syncCalendarConnections} takes. */
+  readonly adapters: Partial<Record<CalendarProvider, CalendarProviderSyncModule>>;
+  /** Reference time; defaults to `new Date()`. Threaded through for deterministic tests. */
+  readonly now?: Date;
+}
+
+/** The item-level tally of one {@link syncSingleLayer} attempt. */
+export interface SyncSingleLayerResult {
+  readonly created: number;
+  readonly updated: number;
+  readonly archived: number;
+}
+
+const NOOP_LAYER_SYNC_RESULT: SyncSingleLayerResult = { created: 0, updated: 0, archived: 0 };
+
+/**
+ * Sync ONE provider-backed layer, bypassing full connection discovery — the bounded,
+ * fast path a push-notification hint (`calendar-webhook.ts`) or a targeted re-sync
+ * triggers, sharing {@link runLayerSync} with the full sweep so there is exactly one
+ * per-layer sync implementation.
+ *
+ * @remarks
+ * A no-op (zero tally, never throws) when: the layer does not exist, is not owned by
+ * `userId`, is not provider-backed (no `connectionId`/`externalLayerId` — native blocks,
+ * task timeboxes, availability), has no registered sync module for its provider, the
+ * linked account can no longer be found, or credential resolution fails (needs reauth) —
+ * every one of these is "nothing safe to do right now", not a caller error, so a webhook
+ * handler can call this unconditionally and always return 200.
+ */
+export async function syncSingleLayer(
+  db: Database,
+  opts: SyncSingleLayerOptions,
+): Promise<SyncSingleLayerResult> {
+  const now = opts.now ?? new Date();
+
+  const rows = await db
+    .select({ layer: calendarLayer, connection: calendarConnection })
+    .from(calendarLayer)
+    .innerJoin(calendarConnection, eq(calendarConnection.id, calendarLayer.connectionId))
+    .where(and(eq(calendarLayer.id, opts.layerId), eq(calendarLayer.userId, opts.userId)))
+    .limit(1);
+  const row = rows[0];
+  if (row === undefined) return NOOP_LAYER_SYNC_RESULT;
+  if (row.layer.externalLayerId === null) return NOOP_LAYER_SYNC_RESULT;
+
+  const provider = CalendarProvider.parse(row.layer.provider);
+  const mod = opts.adapters[provider];
+  if (mod === undefined) return NOOP_LAYER_SYNC_RESULT;
+
+  const discovered = await mod.discoverConnections({ db, userId: opts.userId });
+  const match = discovered.find((d) => d.externalAccountId === row.connection.externalAccountId);
+  if (match === undefined) return NOOP_LAYER_SYNC_RESULT;
+
+  let credentials: CalendarProviderCredentials;
+  try {
+    credentials = await mod.resolveCredentials(match);
+  } catch {
+    return NOOP_LAYER_SYNC_RESULT;
+  }
+
+  const result = await runLayerSync(db, {
+    userId: opts.userId,
+    connectionId: row.connection.id,
+    provider,
+    adapter: mod.adapter,
+    credentials,
+    target: {
+      id: row.layer.id,
+      externalLayerId: row.layer.externalLayerId,
+      syncToken: row.layer.syncToken,
+    },
+    editableCore: row.layer.editableCore,
+    now,
+  });
+  if (result === null) return NOOP_LAYER_SYNC_RESULT; // a full sweep already holds this layer's lease
+
+  return { created: result.created, updated: result.updated, archived: result.archived };
+}
+
+/** A layer's watch renews when it expires within this long — padding for scheduler jitter. */
+const WATCH_RENEWAL_WINDOW_MS = 30 * 60 * 1000;
+
+/** Options for {@link registerOrRenewWatches}. */
+export interface RegisterOrRenewWatchesOptions {
+  readonly userId: string;
+  readonly now: Date;
+  /** Same provider → sync-module map {@link syncCalendarConnections} takes. */
+  readonly adapters: Partial<Record<CalendarProvider, CalendarProviderSyncModule>>;
+  /**
+   * Resolve the registered push-notification callback URL for one provider, or `null`/
+   * empty when unconfigured. Reading env belongs to the caller (`calendar-sync-sweep.ts`),
+   * not this provider-free engine — see this module's file doc.
+   */
+  readonly callbackUrlFor: (provider: CalendarProvider) => string | null;
+}
+
+/** The tally of one {@link registerOrRenewWatches} pass. */
+export interface WatchRegistrationTally {
+  /** Watch channels newly registered or renewed (Google `startWatch` calls that succeeded). */
+  readonly registered: number;
+}
+
+/**
+ * Register or renew a push-notification watch channel for every SELECTED layer whose
+ * adapter supports push, across every provider with a registered
+ * {@link CalendarProviderSyncModule}.
+ *
+ * @remarks
+ * Per provider: skipped entirely (no adapter calls, zero tally) when the adapter has no
+ * `startWatch` (checked via `typeof === 'function'`, never assumed) OR
+ * `callbackUrlFor(provider)` returns an empty/absent URL — the explicit, no-hidden-default
+ * config gate for push hints. Per connection: a credential-resolution failure (needs
+ * reauth) skips that connection's layers entirely, touching nothing. Per layer: a watch is
+ * (re)registered when it was never registered, has no expiry, or expires within
+ * {@link WATCH_RENEWAL_WINDOW_MS}; a layer with a fresh watch is left untouched (zero
+ * adapter calls for it).
+ */
+export async function registerOrRenewWatches(
+  db: Database,
+  opts: RegisterOrRenewWatchesOptions,
+): Promise<WatchRegistrationTally> {
+  let registered = 0;
+
+  for (const [providerKey, mod] of Object.entries(opts.adapters)) {
+    const provider = CalendarProvider.parse(providerKey);
+    const startWatch = mod.adapter.startWatch;
+    if (typeof startWatch !== 'function') continue;
+
+    const callbackUrl = opts.callbackUrlFor(provider);
+    if (!callbackUrl) continue;
+
+    const discovered = await mod.discoverConnections({ db, userId: opts.userId });
+    for (const connection of discovered) {
+      const connectionId = await findConnectionId(db, {
+        userId: opts.userId,
+        provider,
+        externalAccountId: connection.externalAccountId,
+      });
+      if (connectionId === null) continue; // never synced yet — no layers to register
+
+      let credentials: CalendarProviderCredentials;
+      try {
+        credentials = await mod.resolveCredentials(connection);
+      } catch {
+        continue; // needs reauth — do not touch this connection's layers
+      }
+
+      const layers = await db
+        .select({
+          id: calendarLayer.id,
+          externalLayerId: calendarLayer.externalLayerId,
+          watchExpiresAt: calendarLayer.watchExpiresAt,
+          watchRegisteredAt: calendarLayer.watchRegisteredAt,
+        })
+        .from(calendarLayer)
+        .where(and(eq(calendarLayer.connectionId, connectionId), eq(calendarLayer.selected, true)));
+
+      for (const layer of layers) {
+        if (layer.externalLayerId === null) continue;
+        const dueForRegistration =
+          layer.watchRegisteredAt === null ||
+          layer.watchExpiresAt === null ||
+          layer.watchExpiresAt.getTime() - opts.now.getTime() <= WATCH_RENEWAL_WINDOW_MS;
+        if (!dueForRegistration) continue;
+
+        const watch = await startWatch({
+          credentials,
+          externalLayerId: layer.externalLayerId,
+          callbackUrl,
+        });
+        await db
+          .update(calendarLayer)
+          .set({
+            watchChannelId: watch.channelId,
+            watchResourceId: watch.resourceId,
+            watchToken: watch.token,
+            watchExpiresAt: watch.expiresAt,
+            watchRegisteredAt: opts.now,
+          })
+          .where(eq(calendarLayer.id, layer.id));
+        registered += 1;
+      }
+    }
+  }
+
+  return { registered };
 }

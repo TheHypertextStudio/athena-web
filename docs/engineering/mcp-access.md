@@ -107,6 +107,6 @@ The authoritative surface contract is [`specs/mcp-surface.md`](specs/mcp-surface
 
 **Settings → Authorized apps** lists every client you have consented to, with per-client revoke (deletes the consent and its access tokens). Access tokens also expire on their own after 15 minutes; refresh tokens after 30 days.
 
-## Self-hosting: enabling the server
+## Self-hosting: the server is on by default
 
-The OAuth AS/RS only activates when all of `MCP_ISSUER_URL`, `MCP_RESOURCE_URL`, and `OIDC_LOGIN_PAGE_URL` are set (plus `MCP_ALLOWED_ORIGINS` for browser clients). Unset, `/mcp` accepts only first-party cookie sessions and rejects Bearer tokens. See [deployment.md](deployment.md) and `.env.example` for the exact values.
+The OAuth AS/RS is core functionality — it is **always on**, in every deploy, with no MCP-specific configuration required. Its URLs derive from the base config every deploy already sets: `MCP_ISSUER_URL` from `API_URL`, `MCP_RESOURCE_URL` from `${API_URL}/mcp`, and `OIDC_LOGIN_PAGE_URL` from `${WEB_URL}/sign-in`. Set one of those three only to override its derivation (e.g. a non-standard sign-in route). `MCP_ALLOWED_ORIGINS` is a distinct security allowlist (browser Origins permitted to hit `/mcp`) and is always set explicitly per environment — see [deployment.md](deployment.md) and `.env.example`.

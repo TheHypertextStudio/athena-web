@@ -179,6 +179,31 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
   entries (MCP-UTIL-005, MCP-SAMPLING-006) reference `packages/mcp-server/**` and
   `apps/api/src/routes/mcp.ts` — those paths were superseded by `apps/api/src/mcp/**`.
 
+### [MCP-PROD-010] Make MCP OAuth on-by-default, not env-gated
+
+- **Completed**: 2026-07-04
+- **Summary**: MCP-PROD-009 shipped the four AS URLs as deploy-supplied env vars
+  (`MCP_ISSUER_URL`/`MCP_RESOURCE_URL`/`MCP_ALLOWED_ORIGINS`/`OIDC_LOGIN_PAGE_URL`), which meant a
+  default prod deploy without them left the MCP server half-dead — core functionality must not be
+  behind optional config. Reworked `packages/env/src/api.ts` so the three _mechanically derivable_
+  URLs (`MCP_ISSUER_URL ⇐ API_URL`, `MCP_RESOURCE_URL ⇐ ${API_URL}/mcp`, `OIDC_LOGIN_PAGE_URL ⇐
+${WEB_URL}/sign-in`) default automatically from the (now required) `API_URL`/`WEB_URL` — the
+  registry already documented these as the intended defaults; they were simply never implemented.
+  `MCP_ALLOWED_ORIGINS` stays fully explicit: it's the `/mcp` DNS-rebinding security allowlist, a
+  distinct semantic from any other origin list, so it is never derived. `WEB_URL` joins the shared
+  server env slice (required); `deploy.yml` now sets only `WEB_URL` + the explicit
+  `MCP_ALLOWED_ORIGINS` allowlist instead of all four MCP vars. A live-env test in `packages/env`
+  proves the derivation (and that an explicit value overrides it); `packages/auth`'s baseline
+  plugin-list test updated since the real `env` now always mounts `mcp()`.
+- **Files Changed**: `packages/env/src/{api,slices,registry-vars-core,registry-vars-services}.ts`,
+  `packages/env/tests/env.test.ts`, `packages/auth/tests/auth.test.ts`, `.github/workflows/deploy.yml`,
+  `.env.example`, `.env.local`, `scripts/bootstrap.ts`, `docs/engineering/{deployment.md,mcp-access.md}`.
+- **Learnings**: "Optional env var with a documented default" is not the same as "the default is
+  implemented" — the registry's `where:` strings had said "defaults to API_URL" since the original
+  design spec, but nothing ever computed that default until this pass. When a var is genuinely
+  security-relevant (an allowlist) rather than mechanically derivable (a URL built from another
+  URL), don't derive it just for symmetry — keep it explicit and say why in the same commit.
+
 ### [ATTACH-002] File attachments (upload) + util centralization
 
 ### [AUTH-PASSKEY-002] Passkey sign-in and sign-up recovery hardening

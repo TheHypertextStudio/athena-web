@@ -474,9 +474,7 @@ export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabPr
                         orgId={orgId}
                         integration={existing}
                         teams={teams}
-                        onReauthorize={() => {
-                          void runReconnect(existing);
-                        }}
+                        onReauthorize={() => runReconnect(existing)}
                       />
                     ) : null
                   }

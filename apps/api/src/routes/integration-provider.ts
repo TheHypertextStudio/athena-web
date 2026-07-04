@@ -303,13 +303,12 @@ export async function linkedIdentities(userId: string): Promise<IdentityOut[]> {
  * The user-facing reason a Linear write-back integration is blocked on scope.
  *
  * @remarks
- * Shared verbatim between `POST /:id/verify` (which records it as `lastError` when a
- * `writeBack` integration's identity lacks `write`) and `PATCH /:id` (which throws it as a 409
- * when a caller tries to flip `writeBack` on without that scope) — the two enforcement points
- * speak with one voice.
+ * Re-exported (not redefined) from `@docket/types` — that package has no server-only runtime
+ * deps, so `apps/web`'s `IntegrationConfigPanel` can import the same constant directly instead
+ * of duplicating the string, while this module and `./integrations` keep importing it from here
+ * unchanged. See the constant's own doc for the full remarks on where each side consumes it.
  */
-export const LINEAR_WRITE_SCOPE_MESSAGE =
-  'Reconnect Linear to grant write access — two-way sync needs the write scope.';
+export { LINEAR_WRITE_SCOPE_MESSAGE } from '@docket/types';
 
 /**
  * Whether the actor's linked Linear identity carries the `write` OAuth scope.

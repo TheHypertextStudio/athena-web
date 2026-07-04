@@ -29,6 +29,16 @@ describe('connectorCopy', () => {
     expect(linear.containerNoun).not.toBe(gtasks.containerNoun);
   });
 
+  it('keeps gtasks\' "sync all"/"select at least one" checklist copy in its original bare wording', () => {
+    // The checklist has always read "Sync all lists" / "Select at least one list…" — bare, not
+    // "task list(s)" like the legend/empty-state captions — so `checklistNoun`/`checklistNounPlural`
+    // must stay the historical bare noun even though `containerNoun`/`containerNounPlural` (used
+    // elsewhere on the same panel) are the fuller "task list(s)".
+    const gtasks = connectorCopy('gtasks');
+    expect(gtasks.checklistNoun).toBe('list');
+    expect(gtasks.checklistNounPlural).toBe('lists');
+  });
+
   it('gives linear a user-terms blurb naming what it mirrors, without provider jargon like "issues API"', () => {
     const linear = connectorCopy('linear');
     expect(linear.connectBlurb).toBe('Mirror Linear issues, projects, and cycles into Docket.');

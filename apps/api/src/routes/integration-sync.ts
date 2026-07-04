@@ -248,9 +248,12 @@ export interface LeasedSyncContext {
  * with `kind: 'auth'` records the run as a reauth failure (status flip + owner notification);
  * anything else records a plain failure. Returning records success with the given tallies.
  */
-export type LeasedSyncExecutor = (
-  ctx: LeasedSyncContext,
-) => Promise<{ readonly processed: number; readonly total: number }>;
+export type LeasedSyncExecutor = (ctx: LeasedSyncContext) => Promise<{
+  readonly processed: number;
+  readonly total: number;
+  /** Forwarded to {@link finishSuccess}'s `stampFullSync` — a work-graph full pull just completed. */
+  readonly stampFullSync?: boolean;
+}>;
 
 /**
  * The shared leased-sync spine: claim the integration's lease, persist a purposed
@@ -303,8 +306,13 @@ export async function runLeasedSync(
   }
 
   try {
-    const { processed, total } = await execute({ row, provider, token: tokenResult.token, now });
-    return await finishSuccess(run, row, processed, total, now);
+    const { processed, total, stampFullSync } = await execute({
+      row,
+      provider,
+      token: tokenResult.token,
+      now,
+    });
+    return await finishSuccess(run, row, processed, total, now, { stampFullSync });
   } catch (err) {
     const needsReauth = isConnectorError(err) && err.kind === 'auth';
     const message = err instanceof Error ? err.message : 'Connector error';
@@ -324,7 +332,7 @@ export async function runSync(
   row: IntegrationRow,
   opts: RunSyncOptions,
 ): Promise<SyncRunRow | null> {
-  return runLeasedSync(row, { ...opts, purpose: 'task_sync' }, async ({ provider, token }) => {
+  return runLeasedSync(row, { ...opts, purpose: 'task_sync' }, async ({ provider, token, now }) => {
     // Thrown here (no team resolvable) → the spine records a plain failure with the message.
     const teamId = await resolveImportTeam(row.organizationId, row);
     const config = ConnectorConfig.safeParse(row.config).data ?? {};
@@ -368,9 +376,7 @@ export async function runSync(
       // separately (see `GET /:id/runs` for full per-kind detail if ever surfaced).
       const processed =
         tally.tasks.created + tally.tasks.updated + tally.tasks.removed + tally.tasks.pushed;
-      return await finishSuccess(run, row, processed, snapshot.items.length, now, {
-        stampFullSync: full,
-      });
+      return { processed, total: snapshot.items.length, stampFullSync: full };
     }
 
     const items: ImportedItem[] = await connector.importWork({

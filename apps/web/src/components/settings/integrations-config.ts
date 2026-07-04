@@ -101,6 +101,20 @@ export interface ConnectorCopy {
   containerNoun: string;
   /** Plural form, used in list/legend copy ("teams", "task lists"). */
   containerNounPlural: string;
+  /**
+   * Singular noun for the "sync all"/"select at least one" checklist copy specifically.
+   *
+   * @remarks
+   * Deliberately a SEPARATE field from {@link containerNoun}, not the same value reused: Google
+   * Tasks' checklist has always read "Sync all lists" / "Select at least one list…" in the bare,
+   * unqualified form, even though its other captions ("Task lists to sync", "No task lists
+   * found…") use the fuller "task list(s)". Collapsing both onto one noun would either change
+   * this checklist's wording (a regression) or the other captions' (an unrelated wording change)
+   * — so the checklist gets its own noun per provider instead of the JSX special-casing gtasks.
+   */
+  checklistNoun: string;
+  /** Plural form of {@link checklistNoun}. */
+  checklistNounPlural: string;
   /** Sync-direction detail copy, tailored to what this connector actually mirrors. */
   direction: {
     importOnly: string;
@@ -121,6 +135,8 @@ export interface ConnectorCopy {
 const DEFAULT_CONNECTOR_COPY: ConnectorCopy = {
   containerNoun: 'list',
   containerNounPlural: 'lists',
+  checklistNoun: 'list',
+  checklistNounPlural: 'lists',
   direction: {
     importOnly: 'Pull items into Docket. Local edits stay in Docket.',
     twoWay: 'Edits, completions, and deletions sync in both directions (last edit wins).',
@@ -134,6 +150,9 @@ export const CONNECTOR_COPY: Record<string, ConnectorCopy> = {
   gtasks: {
     containerNoun: 'task list',
     containerNounPlural: 'task lists',
+    // Bare "list(s)", not "task list(s)" — the checklist's original wording, preserved verbatim.
+    checklistNoun: 'list',
+    checklistNounPlural: 'lists',
     direction: {
       importOnly: 'Pull Google Tasks into Docket. Local edits stay in Docket.',
       twoWay: 'Edits, completions, and deletions sync in both directions (last edit wins).',
@@ -144,6 +163,10 @@ export const CONNECTOR_COPY: Record<string, ConnectorCopy> = {
   linear: {
     containerNoun: 'team',
     containerNounPlural: 'teams',
+    // Unused today (linear.usesTeamMapping routes it to the team-mapping picker instead of the
+    // flat checklist), kept equal to containerNoun so it is never an accidental mismatch.
+    checklistNoun: 'team',
+    checklistNounPlural: 'teams',
     direction: {
       importOnly:
         'Pull Linear issues, projects, and cycles into Docket. Local edits stay in Docket.',

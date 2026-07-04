@@ -12,6 +12,7 @@
  *
  * @see `docs/engineering/specs/data-layer.md` for the full standard.
  */
+import type { Problem } from '@docket/types';
 import {
   infiniteQueryOptions,
   MutationCache,
@@ -22,7 +23,7 @@ import {
   type UseQueryOptions,
 } from '@tanstack/react-query';
 
-import { readError, readProblem } from '@/lib/problem';
+import { readError, readProblemDetails } from '@/lib/problem';
 
 /**
  * Thrown by {@link unwrap} when the API rejects a request with `401 Unauthorized` — i.e. the session
@@ -121,20 +122,52 @@ export interface RpcResponse<T> {
 }
 
 /**
+ * The error {@link unwrap} throws for a non-OK API response.
+ *
+ * @remarks
+ * An `Error` subclass (so it satisfies TanStack's `DefaultError` and every existing
+ * `error.message` read keeps working unchanged) that additionally carries the HTTP `status` and,
+ * when the body parsed as a {@link Problem}, its machine-readable `code`. A caller can
+ * `instanceof`-narrow to this type to distinguish ONE specific failure (e.g. the Linear
+ * write-scope 409 on `PATCH /integrations/:id`) from any other failure on the same endpoint (e.g.
+ * a 422 from an unrelated validation error) — the message string alone can't do that, since two
+ * different failures can produce unrelated messages that both need distinct handling, or (less
+ * commonly) similar-looking ones that don't.
+ *
+ * @see `IntegrationConfigPanel`'s two-way re-auth notice for the motivating use.
+ */
+export class ApiRequestError extends Error {
+  /** The response's HTTP status code. */
+  readonly status: number;
+  /** The closed problem code, when the body parsed as a {@link Problem}. */
+  readonly code?: Problem['code'];
+
+  constructor(details: { message: string; status: number; code?: Problem['code'] }) {
+    super(details.message);
+    this.name = 'ApiRequestError';
+    this.status = details.status;
+    this.code = details.code;
+  }
+}
+
+/**
  * Await a Hono RPC call and return its parsed body, throwing a readable error on failure.
  *
  * @remarks
  * The bridge between the Hono RPC convention (a `Response` whose `.ok` is checked, with errors
  * emitted as `application/problem+json`) and TanStack Query's throw-to-signal-error convention.
- * On a non-OK response it throws an `Error` whose message is the server's problem `detail`/`title`
- * (via {@link readProblem}); the thrown value flows into the hook's `error` state. A rejection from
- * the call itself (network failure) is re-thrown with a readable message via {@link readError}.
+ * On a non-OK response it throws an {@link ApiRequestError} whose message is the server's problem
+ * `detail`/`title` (via {@link readProblemDetails}) and whose `status`/`code` a caller may narrow
+ * on; the thrown value flows into the hook's `error` state. A rejection from the call itself
+ * (network failure) is re-thrown as a plain `Error` with a readable message via {@link readError}
+ * — there is no HTTP response to carry a `status`/`code` in that case.
  *
  * @typeParam T - The parsed response body type, inferred from the Hono client call.
  * @param call - A thunk performing exactly one Hono RPC call.
  * @param fallbackMessage - The message to surface when the server sends no problem detail.
  * @returns the parsed response body.
- * @throws {Error} when the response is non-OK or the request rejects.
+ * @throws {ApiRequestError} when the response is non-OK.
+ * @throws {Error} when the request itself rejects (network failure).
  */
 export async function unwrap<T>(
   call: () => Promise<RpcResponse<T>>,
@@ -148,7 +181,8 @@ export async function unwrap<T>(
   }
   if (!response.ok) {
     if (response.status === 401) throw new SessionExpiredError();
-    throw new Error(await readProblem(response as unknown as Response, fallbackMessage));
+    const details = await readProblemDetails(response as unknown as Response, fallbackMessage);
+    throw new ApiRequestError(details);
   }
   return response.json();
 }

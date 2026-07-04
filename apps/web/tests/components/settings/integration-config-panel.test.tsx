@@ -50,9 +50,12 @@ vi.mock('../../../src/lib/api', () => ({
 
 import { IntegrationConfigPanel } from '../../../src/components/settings/integration-config-panel';
 
-/** A `Response`-like stub whose `ok`/`json()` the panel reads. */
-function jsonResponse(ok: boolean, body: unknown): Response {
-  return { ok, json: async () => body } as Response;
+/**
+ * A `Response`-like stub whose `ok`/`status`/`json()` the panel (via `unwrap`/`ApiRequestError`)
+ * reads. `status` defaults to a plausible value for `ok` when the test doesn't care which one.
+ */
+function jsonResponse(ok: boolean, body: unknown, status = ok ? 200 : 400): Response {
+  return { ok, status, json: async () => body } as Response;
 }
 
 /** The `json` body of a mocked RPC spy's Nth call (default: first). */
@@ -114,7 +117,9 @@ function renderPanel(
   integration: IntegrationOut,
   overrides: Partial<Parameters<typeof IntegrationConfigPanel>[0]> = {},
 ) {
-  const onReauthorize = vi.fn();
+  // Resolves (like the real `runReconnect`) so the panel's `.then()` re-auth-notice clear has
+  // something to chain onto; individual tests override this when they need to observe the clear.
+  const onReauthorize = vi.fn(() => Promise.resolve());
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -234,9 +239,11 @@ describe('IntegrationConfigPanel — two-way write-scope re-auth', () => {
 
   it('shows the re-auth notice and a working "Re-authorize Linear" button on a 409 write-scope conflict', async () => {
     integrationPatch.mockResolvedValue(
-      jsonResponse(false, {
-        detail: 'Reconnect Linear to grant write access — two-way sync needs the write scope.',
-      }),
+      jsonResponse(
+        false,
+        { detail: 'Reconnect Linear to grant write access — two-way sync needs the write scope.' },
+        409,
+      ),
     );
     const { onReauthorize } = renderPanel(linearIntegration());
 
@@ -253,10 +260,81 @@ describe('IntegrationConfigPanel — two-way write-scope re-auth', () => {
 
     const reauthButton = screen.getByRole('button', { name: 'Re-authorize Linear' });
     fireEvent.click(reauthButton);
-    expect(onReauthorize).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(onReauthorize).toHaveBeenCalledTimes(1);
+    });
 
     // The PATCH really did attempt writeBack: true (this is what triggers server-side scope gating).
     const body = nthJson(integrationPatch);
     expect(body['writeBack']).toBe(true);
+  });
+
+  it('does NOT show the re-auth notice when a two-way save fails with an unrelated 422 (e.g. a stale team mapping)', async () => {
+    // `validateTeamMappings` runs BEFORE the write-scope check in the same PATCH handler, so a
+    // two-way attempt can 422 for a reason that has nothing to do with OAuth scope — this must
+    // fall through to the generic error line, not send the user to "Reconnect Linear".
+    integrationPatch.mockResolvedValue(
+      jsonResponse(
+        false,
+        { detail: 'Unknown team id(s) in teamMappings: some-stale-id', code: 'validation_error' },
+        422,
+      ),
+    );
+    renderPanel(linearIntegration());
+
+    await waitFor(() => {
+      expect(listsGet).toHaveBeenCalled();
+    });
+
+    // Flip to Two-way, then save — same trigger as the 409 test above, different server outcome.
+    fireEvent.click(screen.getByRole('radio', { name: /Two-way/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save settings' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain('Unknown team id(s)');
+    expect(screen.queryByRole('button', { name: 'Re-authorize Linear' })).toBeNull();
+  });
+
+  it('clears the stale re-auth notice once a "Re-authorize Linear" reconnect attempt resolves', async () => {
+    // The panel stays mounted through the local/mock-verify reconnect flow (no OAuth redirect),
+    // so an integration that was already healthy before the failed `writeBack: true` attempt
+    // reconnects to the SAME `status`/`lastError` it already had — nothing to diff in `integration`
+    // itself. The notice must instead clear off the reconnect attempt completing, not off a prop
+    // change that may never happen.
+    integrationPatch.mockResolvedValue(
+      jsonResponse(
+        false,
+        { detail: 'Reconnect Linear to grant write access — two-way sync needs the write scope.' },
+        409,
+      ),
+    );
+    let resolveReauthorize!: () => void;
+    const onReauthorize = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveReauthorize = resolve;
+        }),
+    );
+    renderPanel(linearIntegration(), { onReauthorize });
+
+    await waitFor(() => {
+      expect(listsGet).toHaveBeenCalled();
+    });
+
+    fireEvent.click(screen.getByRole('radio', { name: /Two-way/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save settings' }));
+    const reauthButton = await screen.findByRole('button', { name: 'Re-authorize Linear' });
+
+    fireEvent.click(reauthButton);
+    await waitFor(() => {
+      expect(onReauthorize).toHaveBeenCalledTimes(1);
+    });
+    // Still showing — the reconnect attempt hasn't resolved yet.
+    expect(screen.getByRole('button', { name: 'Re-authorize Linear' })).toBeTruthy();
+
+    resolveReauthorize();
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'Re-authorize Linear' })).toBeNull();
+    });
   });
 });

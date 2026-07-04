@@ -20,7 +20,12 @@
  * current `config` (from the `integration` prop, itself sourced from the query cache) so fields
  * this panel doesn't manage (`defaultListId`, `pushNativeTasks`, …) survive the write.
  */
-import type { ConnectorConfig, IntegrationOut, TeamOut } from '@docket/types';
+import {
+  LINEAR_WRITE_SCOPE_MESSAGE,
+  type ConnectorConfig,
+  type IntegrationOut,
+  type TeamOut,
+} from '@docket/types';
 import { cn } from '@docket/ui';
 import { Check } from '@docket/ui/icons';
 import { Button, Skeleton } from '@docket/ui/primitives';
@@ -30,6 +35,7 @@ import { useState } from 'react';
 
 import { api } from '@/lib/api';
 import {
+  ApiRequestError,
   apiQueryOptions,
   optimisticPatch,
   queryKeys,
@@ -54,8 +60,15 @@ export interface IntegrationConfigPanelProps {
    * Launch the provider's re-authorize flow (finish/repair the connection). Wired to the same
    * `runReconnect` the card's own "Reconnect" button uses. Shown when flipping to two-way sync
    * fails because the linked identity lacks write scope (Linear only, today).
+   *
+   * @remarks
+   * Returns the reconnect attempt's promise (rather than firing it and forgetting) so this panel
+   * can clear its own re-auth notice once the attempt completes — see the "Re-authorize Linear"
+   * button below. In the local/mock-verify flow this component stays mounted through the whole
+   * reconnect (no OAuth redirect), so without this the notice would otherwise sit there telling
+   * the user to do something they just did.
    */
-  onReauthorize?: () => void;
+  onReauthorize?: () => Promise<void>;
 }
 
 /** The cached shape of the integrations list read (`GET /integrations`), for optimistic writes. */
@@ -159,15 +172,43 @@ export function IntegrationConfigPanel({
         setSaved(false);
       }, 4000);
     },
-    onError: (e: { message: string }, _vars, context) => {
+    onError: (e: Error, _vars, context) => {
       context?.rollback();
       setError(e.message);
-      // The write-scope 409 is the only failure mode this PATCH has for a Linear integration
-      // attempting `writeBack: true` — see `hasLinearWriteScope` on the server.
-      setReauthNeeded(integration.provider === 'linear' && twoWay);
+      // Only the write-scope 409 (see `hasLinearWriteScope`/`LINEAR_WRITE_SCOPE_MESSAGE` on the
+      // server) should show the re-auth notice — this PATCH's OTHER failure mode, a 422 from
+      // `validateTeamMappings` running earlier in the same handler, is unrelated (e.g. a stale
+      // team mapping) and must fall through to the generic error line instead. Match on both the
+      // HTTP status AND the shared message constant (not a re-hardcoded string) rather than just
+      // "any error while attempting two-way", which fired the notice for every failure reason.
+      const isWriteScopeConflict =
+        e instanceof ApiRequestError &&
+        e.status === 409 &&
+        e.message.includes(LINEAR_WRITE_SCOPE_MESSAGE);
+      setReauthNeeded(integration.provider === 'linear' && twoWay && isWriteScopeConflict);
     },
     invalidateKeys: [queryKeys.integrations(orgId)],
   });
+
+  /**
+   * Clear the re-auth notice once a reconnect attempt (from the button below) completes.
+   *
+   * @remarks
+   * The notice reflects a REJECTED save attempt, not the integration's own server state, so it
+   * can't be derived from props — it has to be cleared explicitly. `integration`'s own fields are
+   * NOT a reliable signal here: an integration that was already healthy before the failed
+   * `writeBack: true` attempt (the common case — only the OAuth *scope* was missing, not the
+   * connection) reconnects to the exact same `status`/`lastError` it already had, so a
+   * prop-diffing effect would never fire. Reconnecting also doesn't unmount this panel in the
+   * local/mock-verify flow (`finishConnection` only redirects when the provider needs live OAuth),
+   * so without this the notice would sit there telling the user to do something they just did.
+   */
+  const reauthorize = (): void => {
+    if (!onReauthorize) return;
+    void onReauthorize().then(() => {
+      setReauthNeeded(false);
+    });
+  };
 
   const toggleList = (id: string): void => {
     setListIds((prev) => (prev.includes(id) ? prev.filter((l) => l !== id) : [...prev, id]));
@@ -259,7 +300,7 @@ export function IntegrationConfigPanel({
                 }}
               />
               <span className="text-on-surface text-body font-medium">
-                Sync all {copy.containerNounPlural}
+                Sync all {copy.checklistNounPlural}
               </span>
             </label>
             {!allMode ? (
@@ -283,8 +324,8 @@ export function IntegrationConfigPanel({
             ) : null}
             {emptySubset ? (
               <p className="text-on-surface-variant px-2 text-xs">
-                Select at least one {copy.containerNoun}, or turn “Sync all{' '}
-                {copy.containerNounPlural}” back on.
+                Select at least one {copy.checklistNoun}, or turn “Sync all{' '}
+                {copy.checklistNounPlural}” back on.
               </p>
             ) : null}
           </div>
@@ -337,7 +378,7 @@ export function IntegrationConfigPanel({
             Reconnect Linear and approve write access to turn on two-way sync.
           </p>
           {onReauthorize ? (
-            <IntegrationActionButton tone="primary" onClick={onReauthorize} className="px-0">
+            <IntegrationActionButton tone="primary" onClick={reauthorize} className="px-0">
               Re-authorize Linear
             </IntegrationActionButton>
           ) : null}

@@ -117,6 +117,40 @@ describe('persistSuggestions', () => {
     expect(rows).toHaveLength(1);
   });
 
+  it('persists the synthesizer dueDate when the email states one (mock ISO-date rule)', async () => {
+    const { orgId, humanActorId, integrationId } = await seedOrgWithGmail();
+    const result = await persistSuggestions({
+      organizationId: orgId,
+      integrationId,
+      threads: [
+        {
+          threadId: 't-dated',
+          subject: 'Can you file the report?',
+          snippet: 'Please file the quarterly report by 2026-07-15 at the latest.',
+          sender: 'cfo@example.com',
+          externalUrl: 'https://mail.mock.docket.local/#all/t-dated',
+        },
+      ],
+      threshold: 50,
+      actorId: humanActorId,
+      synthesizer,
+    });
+    expect(result.created).toBe(1);
+    expect(result.synthCalls).toBe(1);
+    const row = one(
+      await db
+        .select()
+        .from(schema.emailSuggestion)
+        .where(
+          and(
+            eq(schema.emailSuggestion.organizationId, orgId),
+            eq(schema.emailSuggestion.externalThreadId, 't-dated'),
+          ),
+        ),
+    );
+    expect(row.dueDate?.toISOString()).toBe('2026-07-15T00:00:00.000Z');
+  });
+
   it('is idempotent — re-running the same threads creates nothing new', async () => {
     const { orgId, humanActorId, integrationId } = await seedOrgWithGmail();
     await persistSuggestions({
@@ -136,6 +170,9 @@ describe('persistSuggestions', () => {
       synthesizer,
     });
     expect(second.created).toBe(0);
+    // The counters make the skip visible: funnel passed, but nothing reached the paid model.
+    expect(second.skippedExisting).toBe(1);
+    expect(second.synthCalls).toBe(0);
     const rows = await db
       .select()
       .from(schema.emailSuggestion)

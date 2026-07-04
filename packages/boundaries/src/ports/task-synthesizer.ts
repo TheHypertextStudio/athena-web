@@ -41,6 +41,12 @@ export interface TaskDraft {
   readonly description?: string;
   /** The inferred priority (the shared task {@link Priority}). */
   readonly priority: Priority;
+  /**
+   * A due date (ISO `YYYY-MM-DD`) — ONLY when the email states one explicitly (a deadline,
+   * a meeting date, "by Friday" with a resolvable date). Never inferred from vibes; absent
+   * means the email named no date.
+   */
+  readonly dueDate?: string;
 }
 
 /** The task-synthesizer port: one email thread → one action-oriented task draft. */

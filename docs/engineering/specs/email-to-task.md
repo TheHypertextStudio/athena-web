@@ -21,9 +21,15 @@
 > task"; enabling seeds the default rules immediately), generic automation actions
 > (`task.setStatus`/`assign`/`setPriority`/`applyLabel`, `notification.send`,
 > `suggestion.autoAccept` — catalog in `automations.md` §4), and the triage UX
-> (edit-then-accept overrides, confidence badge, lazy live thread preview). Still open
-> (M6–M7): the Outlook connector skeleton, suggestion lifecycle/expiry, sweep counters, and
-> synthesizer due-date enrichment. §6/§7/§13 below describe intent; where they conflict with
+> (edit-then-accept overrides, confidence badge, lazy live thread preview). M6 (shipped): the
+> Outlook/Graph connector, dormant until Microsoft credentials exist (`mail-providers.md`).
+> M7 (shipped): suggestion lifecycle (pending > 30 days → `expired`; resolved rows purged
+> after 90 — policy constants in `lib/email-to-task/lifecycle.ts`, run by the daily
+> lifecycle cron), synthesizer due-date enrichment (explicit dates only, never inferred),
+> and per-sweep structured counters (threads pulled / funnel passed / paid model calls /
+> created / failed). Deferred with rationale: `suggestedProjectId`/`suggestedProgramId`
+> synthesis routing (needs an org-context retrieval design; accept-time landing doesn't
+> consume them yet) and a visual automation rule builder. §6/§7/§13 below describe intent; where they conflict with
 > `automations.md` / `mail-providers.md` / `integration-sync.md`, the newer specs win.
 > **Source of truth for intent**: `docs/_archive/core/overview.md` §"Semantics-Aware Data
 > Attachments"; this spec supersedes it for the engineering contract.

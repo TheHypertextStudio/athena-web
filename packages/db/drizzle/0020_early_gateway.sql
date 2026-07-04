@@ -1,0 +1,1 @@
+ALTER TYPE "public"."email_suggestion_status" ADD VALUE 'expired';

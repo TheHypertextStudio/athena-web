@@ -148,6 +148,41 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [MAIL-005] Suggestion lifecycle, due-date synthesis, sweep observability (M7)
+
+- **Completed**: 2026-07-03
+- **Summary**: The final productization pass. (1) **Lifecycle**: `email_suggestion_status`
+  gains `expired` (migration `0018_early_gateway`); new
+  `lib/email-to-task/lifecycle.ts` expires pending suggestions older than 30 days and
+  hard-deletes resolved rows (accepted/dismissed/expired) after 90 — named policy constants,
+  strict-older-than boundaries, idempotent — wired into the existing daily `lifecycle-sweep`
+  cron (no new job; the ingest snapshot purges with the row, honoring minimal retention).
+  (2) **Due dates**: `TaskDraft.dueDate` (ISO date) — the real synthesizer's prompt asks for
+  a date ONLY when the email states one explicitly (validated against a literal ISO shape,
+  never a guess); the mock emits one iff the snippet contains a literal ISO date, keeping
+  offline tests exact; synthesis persists it so triage cards and accept inherit real due
+  dates. (3) **Observability**: `persistSuggestions` returns
+  `{considered, passedFunnel, skippedExisting, synthCalls}` and the sweep aggregates
+  `{integrations, threadsPulled, funnelPassed, synthCalls, created, failed}` — one structured
+  log line per sweep (the pipeline's health + cost signal) and the same counters in the cron
+  response; the automation mail applier logs skipped actions (needs-reauth / no capability)
+  instead of silently doing nothing.
+- **Files Changed**: `packages/db/src/enums.ts` + `drizzle/0018_early_gateway.sql`,
+  `packages/types/src/email-suggestion.ts`,
+  `packages/boundaries/src/{ports,real,mock}/task-synthesizer.ts`,
+  `apps/api/src/lib/email-to-task/{lifecycle(new),sweep,synthesize}.ts`,
+  `apps/api/src/lib/automation/runtime.ts`, `apps/api/src/routes/cron.ts`,
+  `apps/api/tests/routes/{email-suggestion-lifecycle(new),email-synthesize}.test.ts`,
+  `docs/engineering/specs/email-to-task.md`, `docs/WORKLOG.md`.
+- **Learnings**: Counting `synthCalls` separately from `created` makes the pipeline's cost
+  legible in one log line — dedup effectiveness is (funnelPassed − synthCalls), and a spike
+  in synthCalls with flat created flags model-output problems. Boundary tests with an
+  injected `now` (exactly-at vs strictly-older-than the expiry line) caught the off-by-one a
+  vibes-level test would have missed.
+- **Gate**: api typecheck + lint clean; lifecycle boundary test (exact 30/90-day edges,
+  idempotent re-run), due-date flow test (mock ISO rule → persisted timestamp), counter
+  assertions in the dedup test; full API suite in the milestone gate.
+
 ### [MAIL-004] Outlook/Graph connector skeleton — dormant, env-gated (M6)
 
 - **Completed**: 2026-07-03

@@ -178,6 +178,7 @@ export const emailSuggestionStatus = pgEnum('email_suggestion_status', [
   'pending',
   'accepted',
   'dismissed',
+  'expired',
 ]);
 /** Notification kinds surfaced in the cross-org Hub inbox. */
 export const notificationType = pgEnum('notification_type', [

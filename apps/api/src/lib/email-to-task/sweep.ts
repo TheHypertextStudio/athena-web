@@ -32,12 +32,20 @@ import { type CandidateThread, persistSuggestions } from './synthesize';
 /** The most threads one integration ingests per sweep (cursoring keeps warm sweeps tiny). */
 const MAX_INGEST_THREADS = 100;
 
-/** The outcome of one ingest sweep. */
+/** The outcome of one ingest sweep — the structured counters logged (and returned) per run. */
 export interface EmailSweepResult {
   /** How many integrations were opted-in and attempted (leased or lease-skipped). */
   readonly integrations: number;
-  /** How many new suggestions were created across them. */
+  /** Threads pulled across all listings. */
+  readonly threadsPulled: number;
+  /** Threads the funnel passed. */
+  readonly funnelPassed: number;
+  /** Paid model invocations (post-dedup) — the cost signal. */
+  readonly synthCalls: number;
+  /** New suggestions created. */
   readonly created: number;
+  /** Runs that finished failed (token/reauth or provider errors; details on the sync_run). */
+  readonly failed: number;
 }
 
 /**
@@ -72,6 +80,7 @@ async function ingestOne(
   ctx: LeasedSyncContext,
   threshold: number,
   actorId: string,
+  stats: MutableSweepStats,
 ): Promise<{ processed: number; total: number }> {
   const mail = connectorFor(ctx.provider, ctx.token).asMailActor?.();
   // The sweep selected by the mail manifest, so a missing capability is a wiring bug — loud.
@@ -106,6 +115,9 @@ async function ingestOne(
     actorId,
     synthesizer: getContainer().taskSynthesizer,
   });
+  stats.threadsPulled += result.considered;
+  stats.funnelPassed += result.passedFunnel;
+  stats.synthCalls += result.synthCalls;
 
   // Advance the cursor under the lease (an empty cursor means the provider had no anchor —
   // keep full-pull semantics rather than storing garbage).
@@ -118,6 +130,13 @@ async function ingestOne(
   }
 
   return { processed: result.created, total: page.threads.length };
+}
+
+/** The per-sweep counter accumulator the executor writes into (under its lease). */
+interface MutableSweepStats {
+  threadsPulled: number;
+  funnelPassed: number;
+  synthCalls: number;
 }
 
 /**
@@ -139,6 +158,8 @@ export async function sweepEmailSuggestions(_now: Date): Promise<EmailSweepResul
 
   let attempted = 0;
   let created = 0;
+  let failed = 0;
+  const stats: MutableSweepStats = { threadsPulled: 0, funnelPassed: 0, synthCalls: 0 };
 
   for (const row of rows) {
     // Shared typed config (the same schema the settings PATCH validates against). Opt-in +
@@ -164,10 +185,23 @@ export async function sweepEmailSuggestions(_now: Date): Promise<EmailSweepResul
     const run = await runLeasedSync(
       row,
       { actorId, trigger: 'scheduled', purpose: 'email_ingest' },
-      (ctx) => ingestOne(ctx, threshold, actorId),
+      (ctx) => ingestOne(ctx, threshold, actorId, stats),
     );
     if (run?.status === 'succeeded') created += run.processed;
+    if (run?.status === 'failed') failed += 1;
   }
 
-  return { integrations: attempted, created };
+  const result: EmailSweepResult = {
+    integrations: attempted,
+    threadsPulled: stats.threadsPulled,
+    funnelPassed: stats.funnelPassed,
+    synthCalls: stats.synthCalls,
+    created,
+    failed,
+  };
+  // One structured line per sweep: the pipeline's health + cost signal in the logs.
+  console.info(
+    JSON.stringify({ level: 'info', source: 'email-to-task', event: 'sweep', ...result }),
+  );
+  return result;
 }

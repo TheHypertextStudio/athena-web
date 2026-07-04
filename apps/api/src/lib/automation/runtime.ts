@@ -56,9 +56,20 @@ export const defaultMailApplier: MailApplier = async ({ integrationId, threadId,
   if (!row?.createdBy) return;
   const provider = row.provider as ConnectorProvider;
   const token = await resolveConnectorToken(row.createdBy, provider, row.account);
-  if (!token.ok) return;
+  if (!token.ok) {
+    // The grant is broken — the sync spine surfaces it to the owner; here we only make the
+    // skipped rule action visible instead of silently doing nothing.
+    console.warn('[automation] mail action skipped: needs reauth', { integrationId, threadId });
+    return;
+  }
   const mail = connectorFor(provider, token.token).asMailActor?.();
-  if (!mail) return;
+  if (!mail) {
+    console.warn('[automation] mail action skipped: provider has no mail capability', {
+      integrationId,
+      provider,
+    });
+    return;
+  }
   await mail.applyMailAction({ connectionId: integrationId, provider, threadId, action });
 };
 

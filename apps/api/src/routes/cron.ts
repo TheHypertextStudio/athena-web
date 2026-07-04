@@ -18,6 +18,7 @@ import { sweepAccountExports } from '../account/export';
 import { env } from '../env';
 import { sweepLifecycle } from '../billing/lifecycle';
 import { sweepEmailSuggestions } from '../lib/email-to-task/sweep';
+import { sweepEmailSuggestionLifecycle } from '../lib/email-to-task/lifecycle';
 import { sweepConnectorSync } from './integration-sync';
 import { sweepInboundEvents } from './event-sync';
 import { sweepDailyDigests } from './daily-digest';
@@ -42,9 +43,11 @@ function authorized(c: { req: { header: (name: string) => string | undefined } }
 const cron = new Hono()
   .post('/lifecycle-sweep', async (c) => {
     if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
-    const now = new Date().toISOString();
-    const result = await sweepLifecycle(db, now);
-    return c.json({ swept: true, ...result });
+    const now = new Date();
+    const result = await sweepLifecycle(db, now.toISOString());
+    // Suggestion expiry/retention rides the same daily tick (transient proposals, not records).
+    const suggestions = await sweepEmailSuggestionLifecycle(now);
+    return c.json({ swept: true, ...result, suggestions });
   })
   // Background connector mirroring: re-syncs every due `mirror` integration so connectors
   // stay current without a manual click. Idempotent + lease-guarded (see {@link runSync}), so

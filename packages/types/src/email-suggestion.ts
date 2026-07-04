@@ -12,7 +12,7 @@ import { Priority } from './capability';
 import { EmailSuggestionId, IntegrationId, OrganizationId, TaskId } from './primitives';
 
 /** Lifecycle status of an email suggestion. */
-export const EmailSuggestionStatus = z.enum(['pending', 'accepted', 'dismissed']);
+export const EmailSuggestionStatus = z.enum(['pending', 'accepted', 'dismissed', 'expired']);
 /** Email-suggestion status value. */
 export type EmailSuggestionStatus = z.infer<typeof EmailSuggestionStatus>;
 

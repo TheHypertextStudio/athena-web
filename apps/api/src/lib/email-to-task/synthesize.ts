@@ -40,10 +40,18 @@ export interface PersistSuggestionsInput {
   readonly synthesizer: TaskSynthesizer;
 }
 
-/** The outcome of one synthesis run. */
+/** The outcome of one synthesis run (counters feed the sweep's structured log). */
 export interface PersistSuggestionsResult {
   readonly created: number;
   readonly suggestionIds: readonly string[];
+  /** Threads handed to the funnel this run. */
+  readonly considered: number;
+  /** Threads the funnel passed (score ≥ threshold). */
+  readonly passedFunnel: number;
+  /** Funnel-passing threads skipped as already suggested (thread-id or Message-ID dedup). */
+  readonly skippedExisting: number;
+  /** Paid model invocations this run (after all dedup). */
+  readonly synthCalls: number;
 }
 
 /**
@@ -62,7 +70,16 @@ export async function persistSuggestions(
   const worthy = input.threads
     .map((thread) => ({ thread, verdict: classifyTaskWorthiness(thread, input.threshold) }))
     .filter((candidate) => candidate.verdict.worthy);
-  if (worthy.length === 0) return { created: 0, suggestionIds: [] };
+  if (worthy.length === 0) {
+    return {
+      created: 0,
+      suggestionIds: [],
+      considered: input.threads.length,
+      passedFunnel: 0,
+      skippedExisting: 0,
+      synthCalls: 0,
+    };
+  }
 
   // Pre-dedup 1: skip synthesis for threads already suggested (sweeps re-pull recent threads,
   // so without this the model would re-run on every recurring thread and the result be discarded).
@@ -102,10 +119,17 @@ export async function persistSuggestions(
   );
 
   const suggestionIds: string[] = [];
+  let skippedExisting = 0;
+  let synthCalls = 0;
   for (const { thread, verdict } of worthy) {
-    if (seen.has(thread.threadId)) continue;
-    if (thread.rfc822MessageId !== undefined && seenMessageIds.has(thread.rfc822MessageId))
+    if (
+      seen.has(thread.threadId) ||
+      (thread.rfc822MessageId !== undefined && seenMessageIds.has(thread.rfc822MessageId))
+    ) {
+      skippedExisting += 1;
       continue;
+    }
+    synthCalls += 1;
     const draft = await input.synthesizer.synthesize({
       subject: thread.subject,
       snippet: thread.snippet,
@@ -122,6 +146,7 @@ export async function persistSuggestions(
         title: draft.title,
         description: draft.description ?? null,
         priority: draft.priority,
+        dueDate: draft.dueDate !== undefined ? new Date(`${draft.dueDate}T00:00:00.000Z`) : null,
         confidence: verdict.score,
         rfc822MessageId: thread.rfc822MessageId ?? null,
         emailMeta: {
@@ -159,5 +184,12 @@ export async function persistSuggestions(
     });
   }
 
-  return { created: suggestionIds.length, suggestionIds };
+  return {
+    created: suggestionIds.length,
+    suggestionIds,
+    considered: input.threads.length,
+    passedFunnel: worthy.length,
+    skippedExisting,
+    synthCalls,
+  };
 }

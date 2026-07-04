@@ -1,6 +1,6 @@
 {
-  "id": "d20f90ee-7567-46bd-ac53-1540a467c87b",
-  "prevId": "59547a8d-28f8-4536-b9eb-acc849c6f85e",
+  "id": "8dc313f4-27ec-4b72-81cc-f5217d9d0c70",
+  "prevId": "6a3f2d71-0c73-4592-a489-a906c7f87ddc",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -8082,7 +8082,7 @@
     "public.email_suggestion_status": {
       "name": "email_suggestion_status",
       "schema": "public",
-      "values": ["pending", "accepted", "dismissed"]
+      "values": ["pending", "accepted", "dismissed", "expired"]
     },
     "public.event_kind": {
       "name": "event_kind",
@@ -8173,7 +8173,8 @@
         "invitation",
         "agent_session",
         "connector_sync_failed",
-        "connector_needs_reauth"
+        "connector_needs_reauth",
+        "automation"
       ]
     },
     "public.org_lifecycle_state": {

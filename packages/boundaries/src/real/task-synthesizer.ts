@@ -31,9 +31,13 @@ export interface RealTaskSynthesizerConfig extends AnthropicClientConfig {
 const SYSTEM_PROMPT = [
   'You convert an email thread into a single, action-oriented task for the recipient.',
   'The title must state what the recipient should DO (start with a verb), not echo the subject.',
-  'Reply with ONLY a JSON object: {"title": string, "description": string, "priority": "none"|"urgent"|"high"|"medium"|"low"}.',
+  'Reply with ONLY a JSON object: {"title": string, "description": string, "priority": "none"|"urgent"|"high"|"medium"|"low", "dueDate": "YYYY-MM-DD" | null}.',
   'Keep the title under 120 characters; the description one short sentence on why it matters.',
+  'Set dueDate ONLY when the email states an explicit date or deadline; otherwise null — never guess.',
 ].join(' ');
+
+/** Accept only a literal ISO date the model echoed from the email (never a guess/format drift). */
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /** The valid priorities, for validating the model's output. */
 const PRIORITIES: readonly Priority[] = ['none', 'urgent', 'high', 'medium', 'low'];
@@ -63,7 +67,16 @@ function parseDraft(text: string): TaskDraft | null {
       typeof parsed['description'] === 'string' && parsed['description'].trim().length > 0
         ? parsed['description'].trim()
         : undefined;
-    return { title, priority, ...(description ? { description } : {}) };
+    const dueDate =
+      typeof parsed['dueDate'] === 'string' && ISO_DATE.test(parsed['dueDate'])
+        ? parsed['dueDate']
+        : undefined;
+    return {
+      title,
+      priority,
+      ...(description ? { description } : {}),
+      ...(dueDate ? { dueDate } : {}),
+    };
   } catch {
     return null;
   }

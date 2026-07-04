@@ -141,6 +141,13 @@
       "when": 1783066533480,
       "tag": "0019_same_peter_parker",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1783069053320,
+      "tag": "0020_early_gateway",
+      "breakpoints": true
     }
   ]
 }

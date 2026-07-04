@@ -15,6 +15,7 @@ import { Calendar, Search } from '@docket/ui/icons';
 import { usePathname, useRouter } from 'next/navigation';
 import { type JSX, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 
+import AccountMenu from '@/components/account-menu';
 import { ActiveOrgContext, useActiveOrg } from '@/components/active-org';
 import Agenda from '@/components/agenda/agenda';
 import { CommandPaletteProvider, useCommandPalette } from '@/components/command-palette';
@@ -211,6 +212,7 @@ function AppShellInner({
       onSelectWorkspace={onSelectWorkspace}
       onOpenSearch={openPalette}
       personalWorkspace={resolvedOrgIsPersonal}
+      footer={<AccountMenu />}
     />
   );
 

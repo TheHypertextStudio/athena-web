@@ -15,6 +15,7 @@ const SYSTEMS: Record<string, { readonly label: string; readonly color: string }
   docket: { label: 'Docket', color: '#7a5cff' },
   linear: { label: 'Linear', color: '#5e6ad2' },
   slack: { label: 'Slack', color: '#611f69' },
+  discord: { label: 'Discord', color: '#5865f2' },
   github: { label: 'GitHub', color: '#1f2328' },
   google_calendar: { label: 'Google Calendar', color: '#9a948c' },
   gmail: { label: 'Gmail', color: '#9a948c' },
@@ -22,7 +23,7 @@ const SYSTEMS: Record<string, { readonly label: string; readonly color: string }
 
 /** Props for {@link ProviderBadge}. */
 export interface ProviderBadgeProps {
-  /** The source system (`docket` | `linear` | `slack` | `github` | `google_calendar` | `gmail`). */
+  /** The source system (`docket` | `linear` | `slack` | `discord` | `github` | `google_calendar` | `gmail`). */
   readonly system: SourceSystemKind;
 }
 

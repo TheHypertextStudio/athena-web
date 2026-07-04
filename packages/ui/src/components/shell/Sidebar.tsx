@@ -87,6 +87,11 @@ export interface SidebarProps {
    * existing consumers are unaffected.
    */
   readonly personalWorkspace?: boolean;
+  /**
+   * Optional content pinned to the bottom of the sidebar, below the nav (e.g. the account menu with
+   * sign-out). Separated from the scrolling nav by `mt-auto` so it stays at the foot of the rail.
+   */
+  readonly footer?: React.ReactNode;
 }
 
 /** A resolved nav row descriptor (label is already vocabulary-resolved). */
@@ -131,6 +136,7 @@ export function Sidebar({
   onSelectWorkspace,
   onOpenSearch,
   personalWorkspace = false,
+  footer,
 }: SidebarProps): React.JSX.Element {
   const { activeOrgId } = useContextState();
   const dismissDrawer = useShellDrawer();
@@ -235,6 +241,8 @@ export function Sidebar({
       ) : (
         <WorkspaceEmpty />
       )}
+
+      {footer ? <div className="mt-auto pt-2">{footer}</div> : null}
     </aside>
   );
 }

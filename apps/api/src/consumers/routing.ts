@@ -69,6 +69,14 @@ export interface RoutableEvent {
   readonly actorId?: string | null;
   /** Extra Docket Actor ids involved (e.g. @-mentions) → mention/participant recipients. */
   readonly participantActorIds?: readonly string[];
+  /**
+   * Already-resolved Better Auth user ids for external participants (e.g. Discord users the drain
+   * mapped from a mentioned snowflake via their linked identity). Routed with the same
+   * mention/participant reason as {@link RoutableEvent.participantActorIds}, but skip the actor→user
+   * resolution because they are already user ids. This is what makes an external mention surface for
+   * the person actually named, not just the integration owner.
+   */
+  readonly participantUserIds?: readonly string[];
   /** External fallback: the integration owner to notify when there are no Docket owners. */
   readonly ownerUserId?: string | null;
   /**
@@ -222,6 +230,13 @@ export async function resolveRecipients(
     if (!existing || RELEVANCE_RANK[reason] < RELEVANCE_RANK[existing]) byUser.set(userId, reason);
   };
   for (const [actorId, reason] of byActor) addUser(userByActor.get(actorId) ?? null, reason);
+
+  // External participants already resolved to user ids (e.g. mentioned Discord users mapped from
+  // their linked identity) — mention when the event is a mention, else participant. This is what
+  // routes an external mention to the person named, not just the integration owner.
+  const externalParticipantReason: StreamRelevance =
+    event.kind === 'mention' ? 'mention' : 'participant';
+  for (const userId of event.participantUserIds ?? []) addUser(userId, externalParticipantReason);
 
   // External integration-owner fallback (already a user id; the drain supplies it).
   if (event.ownerUserId) addUser(event.ownerUserId, reasonForExternal(event.kind));

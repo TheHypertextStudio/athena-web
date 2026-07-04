@@ -5,8 +5,9 @@
  * An attachment is a typed reference from a subject (a task, for now) to an external or
  * stored resource. `url` attachments are dumb pointers (a pasted link + fetched
  * title/favicon); `email` attachments are integration-backed pointers (the content stays in
- * Gmail); `calendar_event` attachments point at cached first-party Google Calendar context.
- * The conceptual model lives in `docs/engineering/specs/email-to-task.md`.
+ * Gmail); `calendar_event` attachments point at cached first-party Google Calendar context;
+ * `file` attachments are uploaded files whose bytes live in blob storage (downloaded through the
+ * API). The conceptual model lives in `docs/engineering/specs/email-to-task.md`.
  */
 import { z } from 'zod';
 
@@ -18,9 +19,17 @@ export const AttachmentSubjectType = z.enum(['task']);
 export type AttachmentSubjectType = z.infer<typeof AttachmentSubjectType>;
 
 /** The kind of resource an Attachment references. */
-export const AttachmentKind = z.enum(['email', 'url', 'calendar_event']);
+export const AttachmentKind = z.enum(['email', 'url', 'calendar_event', 'file']);
 /** Attachment kind value. */
 export type AttachmentKind = z.infer<typeof AttachmentKind>;
+
+/**
+ * The kinds an attachment can be *created* as through the JSON create endpoint. `file` is excluded:
+ * file bytes are uploaded via the dedicated multipart upload route, never created from a JSON body.
+ */
+export const AttachmentPointerKind = z.enum(['email', 'url', 'calendar_event']);
+/** Attachment pointer-kind value. */
+export type AttachmentPointerKind = z.infer<typeof AttachmentPointerKind>;
 
 /**
  * Body for creating an Attachment on a task. The subject (`task` + the task id) comes from
@@ -33,8 +42,8 @@ export type AttachmentKind = z.infer<typeof AttachmentKind>;
  */
 export const AttachmentCreate = z
   .object({
-    kind: AttachmentKind.describe(
-      "Resource kind: 'url' (a dumb link pointer), 'email' (an integration-backed Gmail-thread pointer), or 'calendar_event' (a first-party Google Calendar event pointer). Determines which other fields are required.",
+    kind: AttachmentPointerKind.describe(
+      "Resource kind: 'url' (a dumb link pointer), 'email' (an integration-backed Gmail-thread pointer), or 'calendar_event' (a first-party Google Calendar event pointer). File uploads use the dedicated upload route, not this endpoint. Determines which other fields are required.",
     ),
     title: z
       .string()
@@ -98,7 +107,7 @@ export const AttachmentOut = z
       "Kind of subject the attachment hangs off (only 'task' in v1).",
     ),
     subjectId: z.string().describe('Id of the subject (the host task) the attachment belongs to.'),
-    kind: AttachmentKind.describe("Resource kind: 'url', 'email', or 'calendar_event'."),
+    kind: AttachmentKind.describe("Resource kind: 'url', 'email', 'calendar_event', or 'file'."),
     title: z.string().describe('Human label for the attachment.'),
     url: z
       .string()
@@ -116,6 +125,21 @@ export const AttachmentOut = z
       .record(z.string(), z.unknown())
       .nullable()
       .describe('Free-form JSON bag of kind-specific extras; null when none.'),
+    fileName: z
+      .string()
+      .nullable()
+      .describe('Original filename of a `file` attachment; null for other kinds.'),
+    mimeType: z
+      .string()
+      .nullable()
+      .describe(
+        'MIME type of a `file` attachment (drives content-typed download); null otherwise.',
+      ),
+    byteSize: z
+      .number()
+      .int()
+      .nullable()
+      .describe('Size in bytes of a `file` attachment; null for other kinds.'),
     createdAt: z.string().describe('Creation timestamp (ISO 8601); attachments list oldest-first.'),
   })
   .meta({ id: 'AttachmentOut', description: 'An attachment on a subject.' });

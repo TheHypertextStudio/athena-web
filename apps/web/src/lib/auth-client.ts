@@ -41,9 +41,11 @@ const AUTH_BASE_URL = `${resolveAuthOrigin()}/api/auth`;
  * - `authClient.signIn.passkey({ autoFill })` — authenticate with an existing passkey
  *   (Face ID / Touch ID / security key), optionally as a conditional-UI autofill prompt.
  * - `authClient.passkey.addPasskey({ name, context })` — register a passkey. During
- *   passwordless sign-UP there is no prior session, so the new account's identity rides in
- *   as the server-signed `context` token (see `/passkey-intent`), which the server's
- *   `registration.resolveUser` verifies before find-or-creating the user.
+ *   passwordless sign-UP there is no prior session; the caller first proves inbox ownership via
+ *   the `signup-challenge` endpoints (`/sign-up/request-code` → `/sign-up/verify-code`), and the
+ *   single-use `intent` that returns rides in as the `context` token, which the server's
+ *   `registration.resolveUser` consumes before creating the user (so a passkey can only ever bind
+ *   to a verified email).
  *
  * Secondary OAuth (Google / GitHub / Linear) is reached via `authClient.signIn.social(...)`
  * and is rendered only when the corresponding provider is configured (env-gated).

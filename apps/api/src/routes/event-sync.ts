@@ -18,7 +18,7 @@
  * Kept behind one function so a `/v1/cron/process-events` tick and any future Cloud Tasks
  * push share identical, idempotent behavior. `now` is always passed in (never module scope).
  */
-import { actor, db, event, inboundEvent, integration } from '@docket/db';
+import { account, actor, db, event, inboundEvent, integration } from '@docket/db';
 import { selectAdapter } from '@docket/boundaries';
 import type { BoundaryEnv, EventDraft, Observer, ObserverProvider } from '@docket/boundaries';
 import type {
@@ -29,7 +29,7 @@ import type {
   StreamRelevance,
 } from '@docket/types';
 import { EventKind } from '@docket/types';
-import { and, eq, lt, or } from 'drizzle-orm';
+import { and, eq, inArray, lt, or } from 'drizzle-orm';
 
 import { routeAndWriteRecipients, type RoutableEntity } from '../consumers/routing';
 import {
@@ -61,6 +61,7 @@ const PROVIDER_SOURCE_SYSTEM: Partial<Record<ObserverProvider, SourceSystemKind>
   github: 'github',
   linear: 'linear',
   slack: 'slack',
+  discord: 'discord',
   gmail: 'gmail',
   calendar: 'google_calendar',
 };
@@ -150,6 +151,53 @@ async function ownerUserId(ctx: SweepCtx, integrationId: string): Promise<string
   const userId = row?.userId ?? null;
   ctx.owners.set(integrationId, userId);
   return userId;
+}
+
+/**
+ * The Better Auth `providerId` whose linked `account` rows map an external actor id (the provider's
+ * user snowflake/sub) to a Docket user — for the sources whose users can link an identity via OAuth.
+ *
+ * @remarks
+ * The mention-attribution seam: a mentioned external user surfaces the mention for the Docket user
+ * who linked that identity, not just the integration owner. Sources with no linkable identity
+ * (`slack` — observe-only, no OAuth; `docket` — internal) yield null, so mentions there fall back
+ * to the integration-owner path. The Google products share one `google` grant.
+ */
+function identityProviderForSource(source: SourceSystemKind): string | null {
+  switch (source) {
+    case 'discord':
+    case 'github':
+    case 'linear':
+      return source;
+    case 'gmail':
+    case 'google_calendar':
+      return 'google';
+    default:
+      return null;
+  }
+}
+
+/**
+ * Resolve an event's external participants (mentioned users, by their native id) to the Docket
+ * users who have linked that identity — the mention-attribution seam. Returns already-resolved
+ * Better Auth user ids for {@link routeAndWriteRecipients}; empty when the source has no linkable
+ * identity or none of the participants are linked.
+ *
+ * @param source - The event's canonical source system.
+ * @param participants - The normalized participants (external actor refs) from the draft.
+ */
+async function resolveParticipantUserIds(
+  source: SourceSystemKind,
+  participants: EventDraft['participants'],
+): Promise<string[]> {
+  const providerId = identityProviderForSource(source);
+  if (!providerId || !participants || participants.length === 0) return [];
+  const externalIds = participants.map((p) => p.externalId);
+  const rows = await db
+    .select({ userId: account.userId })
+    .from(account)
+    .where(and(eq(account.providerId, providerId), inArray(account.accountId, externalIds)));
+  return [...new Set(rows.map((r) => r.userId))];
 }
 
 /** Lift a draft actor into a canonical {@link ActorRef} stamped with the resolved source. */
@@ -242,6 +290,9 @@ async function processOne(ev: InboundEventRow, ctx: SweepCtx): Promise<number> {
     const occurredAt = new Date(draft.occurredAt);
     const entityKind: CanonicalEntityKind | null = draft.entity?.kind ?? null;
     const entityRef = toEntityRef(draft.entity, source);
+    // Resolve mentioned external users → linked Docket users, so the mention routes to whoever was
+    // actually named (the integration-owner fallback below still applies for unlinked participants).
+    const participantUserIds = await resolveParticipantUserIds(source, draft.participants);
 
     // Insert + fan-out in one transaction (the routing Strategy writes the recipient rows).
     const result = await db.transaction(async (tx) => {
@@ -293,6 +344,7 @@ async function processOne(ev: InboundEventRow, ctx: SweepCtx): Promise<number> {
           // Slack events carry real per-user relevance; the owner fallback is only for
           // providers without an identity mapping.
           ownerUserId: slackRecipients ? null : userId,
+          participantUserIds,
           ...(slackRecipients ? { externalUserRecipients: slackRecipients } : {}),
         },
         occurredAt,

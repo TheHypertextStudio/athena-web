@@ -47,6 +47,7 @@ export const SourceSystemKind = z.enum([
   'linear',
   'github',
   'slack',
+  'discord',
   'google_calendar',
   'gmail',
 ]);
@@ -167,6 +168,15 @@ export const EventDetail = z
        * routing. Defaulted so rows stored before this field existed still parse.
        */
       channelType: z.string().nullable().default(null),
+    }),
+    z.object({
+      schema: z.literal('discord.message'),
+      /** The Discord channel the message was posted in (a `thread` entity in canonical terms). */
+      channelId: z.string(),
+      /** The guild the channel belongs to, or `null` for a direct message. */
+      guildId: z.string().nullable(),
+      /** The message body. */
+      text: z.string(),
     }),
     z.object({
       schema: z.literal('generic'),

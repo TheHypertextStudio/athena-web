@@ -28,6 +28,13 @@ export function zQuery<T extends z.ZodType>(schema: T) {
   });
 }
 
+/** Validate the multipart/form-data body against `schema`; throws {@link ValidationError} on failure. */
+export function zForm<T extends z.ZodType>(schema: T) {
+  return validator('form', schema, (result) => {
+    if (!result.success) throw new ValidationError(result.error);
+  });
+}
+
 /** Validate the path params against `schema`; throws {@link ValidationError} on failure. */
 export function zParam<T extends z.ZodType>(schema: T) {
   return validator('param', schema, (result) => {

@@ -14,6 +14,21 @@ import { z } from 'zod';
 import { IdentityProvider } from './identity';
 
 /**
+ * A social provider the sign-in / connect screens can offer.
+ *
+ * @remarks
+ * A superset of {@link IdentityProvider}: it adds `apple`, which is a **sign-in-only** provider
+ * (it links no connector identity, so it is not an `IdentityProvider`) but must still be reported
+ * so the sign-in page can render its button. `discord` is here too (it is both a linkable identity
+ * and, in principle, a sign-in provider). Mirrors `@docket/auth`'s `configuredSocialProviders`.
+ */
+export const SignInProvider = z
+  .enum([...IdentityProvider.options, 'apple'])
+  .describe('A social provider the sign-in/connect UI can offer (the identities plus `apple`).');
+/** Sign-in-provider value. */
+export type SignInProvider = z.infer<typeof SignInProvider>;
+
+/**
  * The public client configuration derived from the server's real environment.
  *
  * @remarks
@@ -34,9 +49,9 @@ export const PublicConfigOut = z
       .meta({ example: 'production' }),
     /** The social providers whose OAuth credentials are configured server-side. */
     oauthProviders: z
-      .array(IdentityProvider)
+      .array(SignInProvider)
       .describe(
-        'The social providers a user can sign in with / link an identity from, derived from real server credentials: a provider appears here iff its OAuth client id + secret are configured. The sign-in page renders exactly these buttons. One of `google` | `github` | `linear`.',
+        'The social providers a user can sign in with / link an identity from, derived from real server credentials: a provider appears here iff its OAuth client id + secret are configured. The sign-in page renders exactly these buttons. One of `google` | `github` | `linear` | `discord` | `apple` (apple is sign-in only, not a linkable identity).',
       )
       .meta({ example: ['google', 'github'] }),
     /** The connector keys unlocked by the configured providers (e.g. `gtasks`, `github`). */

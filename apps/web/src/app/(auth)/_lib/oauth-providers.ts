@@ -13,7 +13,7 @@
 /** A secondary OAuth provider the sign-in/up screens can offer. */
 export interface OAuthProvider {
   /** The Better Auth provider id (the `socialProviders` key), e.g. `'google'`. */
-  readonly id: 'google' | 'github' | 'linear';
+  readonly id: 'google' | 'github' | 'linear' | 'apple';
   /** The button label, e.g. `'Continue with Google'`. */
   readonly label: string;
 }
@@ -23,10 +23,20 @@ const OAUTH_PROVIDER_LABEL: Record<OAuthProvider['id'], string> = {
   google: 'Continue with Google',
   github: 'Continue with GitHub',
   linear: 'Continue with Linear',
+  // Apple's Human Interface Guidelines prescribe this exact wording for the button.
+  apple: 'Sign in with Apple',
 };
 
-/** The fixed display order of the OAuth providers. */
-const OAUTH_PROVIDER_ORDER: readonly OAuthProvider['id'][] = ['google', 'github', 'linear'];
+/**
+ * The fixed display order of the OAuth providers. Apple is listed first: Apple's guidelines ask
+ * for its button to be shown at least as prominently as other sign-in options.
+ */
+const OAUTH_PROVIDER_ORDER: readonly OAuthProvider['id'][] = [
+  'apple',
+  'google',
+  'github',
+  'linear',
+];
 
 /**
  * Turn the server-reported set of configured provider ids into ordered, labelled options.

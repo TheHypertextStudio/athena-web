@@ -47,6 +47,7 @@ function validApiEnv(): Record<string, string> {
   return {
     APP_MODE: 'test',
     API_URL: 'http://localhost:4000',
+    WEB_URL: 'http://localhost:3000',
     PORT: '4000',
     DATABASE_URL: 'pglite://.data/docket',
     BETTER_AUTH_SECRET: 'x'.repeat(32),

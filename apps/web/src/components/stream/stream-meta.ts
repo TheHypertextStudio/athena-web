@@ -141,6 +141,31 @@ export function streamHref(row: StreamEventRow): string | null {
   return row.entityUrl ?? row.externalUrl;
 }
 
+/**
+ * The short "why you're seeing this" label for a personal-feed relevance reason, or `null` when
+ * there is none (the org firehose carries no relevance, so no chip renders).
+ *
+ * @remarks
+ * Surfaces the `event_recipient.reason` the router assigned — e.g. a Discord/Slack mention resolved
+ * to this user reads "Mentioned you", so the feed answers "why is this here" at a glance.
+ */
+export function relevanceLabel(relevance: StreamRelevance | null): string | null {
+  switch (relevance) {
+    case 'mention':
+      return 'Mentioned you';
+    case 'assignment':
+      return 'Assigned to you';
+    case 'owned':
+      return 'Your item';
+    case 'followed':
+      return 'Following';
+    case 'participant':
+      return "You're involved";
+    default:
+      return null;
+  }
+}
+
 /** Glyph + tone descriptor for a kind (the row resolves `icon` to a real component). */
 export interface KindGlyph {
   readonly icon: string;

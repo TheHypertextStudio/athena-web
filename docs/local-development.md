@@ -170,6 +170,17 @@ Only **two** things are left to you (bootstrap prints both):
 To anchor the shared OAuth proxy for OTHER devs, this same tunnel is the anchor: register it once in
 Google, run an always-on instance behind it, and hand teammates `OAUTH_PROXY_*` (the section above).
 
+**Sign in with Apple.** Apple's OAuth is web-only here and shows up automatically on the sign-in/up
+screens once configured. Unlike the other providers it needs **four** vars, all-or-nothing —
+`APPLE_CLIENT_ID` (the **Services ID**, e.g. `com.docket.web`), `APPLE_TEAM_ID`, `APPLE_KEY_ID`, and
+`APPLE_PRIVATE_KEY` (the downloaded `.p8` PKCS#8 PEM; store it with escaped `\n` on one `.env` line —
+`@docket/auth` normalizes it back before signing). There is no `APPLE_CLIENT_SECRET`: the secret is a
+short-lived ES256 JWT minted from the `.p8` at server boot (`generateAppleClientSecret`), so it never
+silently expires — a restart re-mints it. Apple **rejects `localhost` and non-HTTPS**, so you can only
+exercise it over the HTTPS tunnel above (or a preview deploy), never on plain `.localhost`. In the
+Apple Developer console the Services ID's return URL must be `https://<host>/api/auth/callback/apple`;
+`https://appleid.apple.com` is added to `trustedOrigins` for you (Apple posts the callback from there).
+
 ### Webhooks
 
 - **GitHub firehose** — handled by the **shared dev GitHub App** → the shared anchor's

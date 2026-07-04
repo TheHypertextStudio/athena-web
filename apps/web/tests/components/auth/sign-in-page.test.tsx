@@ -102,9 +102,33 @@ describe('SignInPage', () => {
 
     await waitFor(() => {
       expect(screen.getByRole('alert').textContent).toBe(
-        'Sign-in worked, but Docket could not read your session cookie. Please try again.',
+        'We could not finish signing you in. Please try again.',
       );
     });
     expect(push).not.toHaveBeenCalled();
+  });
+
+  it('lets the user retry after a session recovery failure', async () => {
+    signInPasskey.mockResolvedValue({ error: null });
+    orgsGet.mockResolvedValue(
+      jsonResponse(401, { code: 'unauthorized', detail: 'Authentication required' }),
+    );
+
+    render(<SignInPage />);
+    const button = screen.getByRole('button', { name: 'Sign in with a passkey' });
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert').textContent).toBe(
+        'We could not finish signing you in. Please try again.',
+      );
+    });
+    expect(button.hasAttribute('disabled')).toBe(false);
+
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(signInPasskey).toHaveBeenCalledTimes(2);
+    });
   });
 });

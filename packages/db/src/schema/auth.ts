@@ -17,6 +17,7 @@
  * are 26-char ULIDs (Better Auth `advanced.database.generateId` shares {@link genId}).
  */
 import {
+  bigint,
   boolean,
   index,
   integer,
@@ -280,4 +281,25 @@ export const oauthConsent = pgTable(
     index('oauth_consent_client_id_idx').on(t.clientId),
     index('oauth_consent_user_id_idx').on(t.userId),
   ],
+);
+
+/**
+ * Better Auth's request rate-limit counter (one row per limiter key).
+ *
+ * @remarks
+ * Backs `rateLimit.storage: 'database'` in `@docket/auth` so the auth rate limits (global +
+ * the per-path `customRules` on sign-in / sign-up / consent / recovery) hold across serverless
+ * instances rather than living in each instance's memory. Better Auth's rate-limiter reads/writes
+ * this model by its `key` field; `lastRequest` is an epoch-ms bigint. The plugin manages all
+ * rows — Docket never writes here directly.
+ */
+export const rateLimit = pgTable(
+  'rate_limit',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    key: text('key'),
+    count: integer('count'),
+    lastRequest: bigint('last_request', { mode: 'number' }),
+  },
+  (t) => [index('rate_limit_key_idx').on(t.key)],
 );

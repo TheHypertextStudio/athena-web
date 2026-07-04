@@ -20,8 +20,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   apiQueryOptions,
+  createQueryClient,
   type RpcResponse,
   queryKeys,
+  SessionExpiredError,
   useApiMutation,
   useApiQuery,
 } from '../../src/lib/query';
@@ -106,6 +108,80 @@ describe('useApiQuery', () => {
     });
     expect(result.current.error?.message).toBe('You lack access to this project.');
     expect(result.current.data).toBeUndefined();
+  });
+
+  it('throws a SessionExpiredError on a 401 so the global handler can redirect', async () => {
+    const { wrapper } = makeWrapper();
+
+    const { result } = renderHook(
+      () =>
+        useApiQuery(
+          apiQueryOptions<ProjectShape>(
+            queryKeys.project('org_1', 'p1'),
+            () =>
+              Promise.resolve({ ok: false, status: 401, json: () => Promise.resolve({} as never) }),
+            'Could not load the project.',
+          ),
+        ),
+      { wrapper },
+    );
+
+    await waitFor(() => {
+      expect(result.current.isError).toBe(true);
+    });
+    expect(result.current.error).toBeInstanceOf(SessionExpiredError);
+  });
+});
+
+describe('createQueryClient session-expiry wiring', () => {
+  it('invokes the injected onError with a SessionExpiredError when a query 401s', async () => {
+    const onError = vi.fn();
+    const client = createQueryClient({ onError });
+    const wrapper = ({ children }: { children: ReactNode }): JSX.Element => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+
+    const { result } = renderHook(
+      () =>
+        useApiQuery(
+          apiQueryOptions<ProjectShape>(
+            queryKeys.project('org_1', 'p1'),
+            () =>
+              Promise.resolve({ ok: false, status: 401, json: () => Promise.resolve({} as never) }),
+            'Could not load the project.',
+          ),
+        ),
+      { wrapper },
+    );
+
+    await waitFor(() => {
+      expect(result.current.isError).toBe(true);
+    });
+    expect(onError).toHaveBeenCalled();
+    expect(onError.mock.calls[0]?.[0]).toBeInstanceOf(SessionExpiredError);
+    client.clear();
+  });
+
+  it('does not retry a 401 (fails fast for the redirect)', async () => {
+    const client = createQueryClient();
+    const call = vi.fn(() =>
+      Promise.resolve({ ok: false, status: 401, json: () => Promise.resolve({} as never) }),
+    );
+    const wrapper = ({ children }: { children: ReactNode }): JSX.Element => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+
+    const { result } = renderHook(
+      () =>
+        useApiQuery(apiQueryOptions<ProjectShape>(queryKeys.project('org_1', 'p1'), call, 'nope')),
+      { wrapper },
+    );
+
+    await waitFor(() => {
+      expect(result.current.isError).toBe(true);
+    });
+    expect(call).toHaveBeenCalledTimes(1); // no retry
+    client.clear();
   });
 });
 

@@ -35,6 +35,7 @@ import { RealConnector } from './real/connector';
 import { RealLinearObserver } from './real/observer-linear';
 import { RealGitHubObserver } from './real/observer-github';
 import { RealSlackObserver } from './real/observer-slack';
+import { RealDiscordObserver } from './real/observer-discord';
 import { RealSummarizer } from './real/summarizer';
 import { SmtpMailer, smtpConfigFromEnv } from './real/mailer';
 import { RealBlob } from './real/blob';
@@ -65,6 +66,12 @@ export interface BoundaryEnv {
   readonly GITHUB_APP_WEBHOOK_SECRET?: string;
   /** Slack app signing secret — selects {@link RealSlackObserver} when real-shaped. */
   readonly SLACK_SIGNING_SECRET?: string;
+  /**
+   * Discord app public key (raw 32-byte Ed25519 key, hex) — selects {@link RealDiscordObserver}
+   * when real-shaped. Verifies both Discord-direct webhooks and the Gateway relay's forwarded
+   * messages that reach the Ed25519 edge.
+   */
+  readonly DISCORD_PUBLIC_KEY?: string;
   /** SMTP relay host — selects {@link SmtpMailer} when present with {@link BoundaryEnv.MAIL_FROM}. */
   readonly SMTP_HOST?: string;
   /** SMTP port (string form; 587 STARTTLS, 465 implicit TLS, 1025 Mailpit). */
@@ -159,6 +166,8 @@ function observerSecret(provider: ObserverProvider, env: BoundaryEnv): string | 
       return env.GITHUB_APP_WEBHOOK_SECRET;
     case 'slack':
       return env.SLACK_SIGNING_SECRET;
+    case 'discord':
+      return env.DISCORD_PUBLIC_KEY;
     default:
       return undefined;
   }
@@ -180,6 +189,8 @@ const OBSERVER_FACTORIES: Partial<Record<ObserverProvider, ObserverFactory>> = {
   linear: (signingSecret) => new RealLinearObserver({ signingSecret }),
   github: (signingSecret) => new RealGitHubObserver({ signingSecret }),
   slack: (signingSecret) => new RealSlackObserver({ signingSecret }),
+  // Discord's "secret" is the app's Ed25519 public key (`DISCORD_PUBLIC_KEY`), not a shared secret.
+  discord: (publicKey) => new RealDiscordObserver({ publicKey }),
 };
 
 /** Whether `APP_MODE` forces the mock adapters (`local`/`test`). */
@@ -366,6 +377,25 @@ export interface BoundaryContainer {
   readonly mailer: Mailer;
   /** The selected blob store. */
   readonly blob: BlobStore;
+}
+
+/**
+ * Resolve the {@link Mailer} port on its own, without building the whole container.
+ *
+ * @remarks
+ * The same env-driven selection {@link buildContainer} uses for `mailer` (SMTP relay when
+ * `SMTP_HOST` + `MAIL_FROM` are real-shaped and `APP_MODE ∉ {local,test}`, else the capture
+ * mock). Exposed as a standalone factory so `@docket/auth` — which sends verification /
+ * change-email mail from inside the Better Auth instance and has no access to the API's
+ * container — can build a mailer from its own env slice through the one selection path.
+ *
+ * @param env - The boundary-relevant env slice (only the `SMTP_*` / `MAIL_FROM` / `APP_MODE`
+ * fields are consulted for this port).
+ * @param options - Optional adapter options (unused by the mailer today; kept for symmetry).
+ * @returns the selected {@link Mailer} adapter.
+ */
+export function buildMailer(env: BoundaryEnv, options: SelectOptions = {}): Mailer {
+  return selectAdapter('mailer', env, options);
 }
 
 /**

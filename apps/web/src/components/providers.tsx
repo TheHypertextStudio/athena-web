@@ -6,12 +6,33 @@ import { TooltipProvider } from '@docket/ui/primitives';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { type JSX, type ReactNode, useState } from 'react';
 
-import { createQueryClient } from '@/lib/query';
+import { authClient } from '@/lib/auth-client';
+import { createQueryClient, SessionExpiredError } from '@/lib/query';
 
 /** Props for {@link Providers}. */
 export interface ProvidersProps {
   /** The application subtree wrapped by every global client provider. */
   children: ReactNode;
+}
+
+/** Guards against firing the sign-out/redirect more than once when several reads 401 together. */
+let handlingSessionExpiry = false;
+
+/**
+ * Handle a mid-session 401: sign out and send the user to `/sign-in`, preserving where they were as
+ * `?next=` so they land back there after re-authenticating. A full-page navigation (not the router)
+ * is deliberate — it clears all in-memory state on session loss. Runs at most once.
+ */
+async function handleSessionExpired(): Promise<void> {
+  if (handlingSessionExpiry) return;
+  handlingSessionExpiry = true;
+  const next = `${window.location.pathname}${window.location.search}`;
+  try {
+    await authClient.signOut();
+  } catch {
+    // Already invalid server-side — proceed to the sign-in redirect regardless.
+  }
+  window.location.href = `/sign-in?next=${encodeURIComponent(next)}`;
 }
 
 /**
@@ -36,7 +57,13 @@ export interface ProvidersProps {
  * — the App Router client-component pattern for TanStack Query.
  */
 export function Providers({ children }: ProvidersProps): JSX.Element {
-  const [queryClient] = useState(createQueryClient);
+  const [queryClient] = useState(() =>
+    createQueryClient({
+      onError: (error) => {
+        if (error instanceof SessionExpiredError) void handleSessionExpired();
+      },
+    }),
+  );
   return (
     <ContextProvider>
       <VocabularyProvider>

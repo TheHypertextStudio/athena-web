@@ -96,7 +96,8 @@ export const SERVICE_VARS: readonly VarSpec[] = [
     targets: ['api'],
     required: false,
     zod: mcpServer.MCP_ALLOWED_ORIGINS,
-    where: 'CSV of allowed Origins for the /mcp endpoint (DNS-rebinding guard)',
+    where:
+      'CSV of allowed browser Origins for /mcp (DNS-rebinding guard) — a security allowlist, never derived',
   },
   {
     name: 'OIDC_LOGIN_PAGE_URL',
@@ -105,7 +106,7 @@ export const SERVICE_VARS: readonly VarSpec[] = [
     targets: ['api'],
     required: false,
     zod: mcpServer.OIDC_LOGIN_PAGE_URL,
-    where: 'Login page URL the OIDC provider redirects to',
+    where: 'Login page URL the OIDC provider redirects to (defaults to ${WEB_URL}/sign-in)',
   },
   {
     name: 'MCP_TASKS_ENABLED',

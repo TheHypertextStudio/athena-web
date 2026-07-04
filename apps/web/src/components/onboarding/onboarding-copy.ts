@@ -41,6 +41,13 @@ export function stepCopy(step: OnboardingStep): {
         subtitle:
           'Connect a tool to fill your workspace with your real tasks and deadlines. Connect as many as you like — or skip and start fresh.',
       };
+    case 'passkey':
+      return {
+        eyebrow: 'Secure your account',
+        title: 'Add a passkey to sign in faster',
+        subtitle:
+          'Skip passwords for good — use Face ID, Touch ID, or a security key to sign in. It only takes a moment, and you can always add one later.',
+      };
   }
 }
 
@@ -59,6 +66,9 @@ export function primaryLabel(
   pending: boolean,
   mirroredTotal: number,
 ): string {
+  if (step === 'passkey') {
+    return pending ? 'Adding your passkey…' : 'Add a passkey';
+  }
   if (isConnectStep) {
     return mirroredTotal > 0 ? 'Enter your workspace' : 'Continue without connecting';
   }

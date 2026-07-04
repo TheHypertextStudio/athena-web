@@ -16,10 +16,12 @@
 import { Calendar, CheckCircle2, Circle } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import Link from 'next/link';
-import { type JSX } from 'react';
+import { type JSX, useRef } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 import { OrgChip } from '@/components/org-chip';
+import { formatClock } from '@/lib/format-time';
+import { prefersReducedMotion } from '@/lib/motion';
 
 import AgendaEntryActions from './agenda-entry-actions';
 import {
@@ -31,11 +33,6 @@ import {
 
 /** How the card lays out: a compact list `row`, or a fill-height timeline `block`. */
 export type AgendaEntryLayout = 'row' | 'block';
-
-/** Local clock label, e.g. `9:30 AM`. */
-function formatClock(iso: string): string {
-  return new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-}
 
 /** Props for {@link AgendaEntryCard}. */
 export interface AgendaEntryCardProps {
@@ -52,7 +49,21 @@ export default function AgendaEntryCard({
 }: AgendaEntryCardProps): JSX.Element {
   const { orgName } = useActiveOrg();
   const { toggleDone } = useAgenda();
+  const checkRef = useRef<HTMLButtonElement>(null);
   const block = layout === 'block';
+
+  /** Toggle done, and on *completing* a task give the check a quick satisfying pop (Web Animations). */
+  function onToggle(): void {
+    const marking = !entry.done;
+    toggleDone(entry);
+    const el = checkRef.current;
+    if (marking && el && 'animate' in el && !prefersReducedMotion()) {
+      el.animate(
+        [{ transform: 'scale(1)' }, { transform: 'scale(1.4)' }, { transform: 'scale(1)' }],
+        { duration: 280, easing: 'cubic-bezier(0.2, 0, 0, 1)' },
+      );
+    }
+  }
   const time = isTimeboxed(entry)
     ? block
       ? `${formatClock(entry.startsAt)} – ${formatClock(entry.endsAt)}`
@@ -101,19 +112,18 @@ export default function AgendaEntryCard({
     <div
       style={{ viewTransitionName: agendaEntryTransitionName(entry.id) }}
       className={cn(
-        'border-outline-variant bg-surface-container-low hover:bg-surface-container flex h-full w-full items-start gap-2 overflow-hidden rounded-lg border px-2.5 py-2 transition-[opacity,background-color]',
+        'border-outline-variant bg-surface-container-low hover:bg-surface-container hover:border-outline flex h-full w-full items-start gap-2 overflow-hidden rounded-lg border px-2.5 py-2 transition-[opacity,background-color,border-color,box-shadow,transform] duration-(--dur-base) ease-(--ease-out) hover:shadow-sm motion-safe:hover:-translate-y-px',
         entry.done && 'opacity-60',
       )}
     >
       {entry.planItemId ? (
         <button
+          ref={checkRef}
           type="button"
           aria-pressed={entry.done}
           aria-label={entry.done ? 'Mark not done' : 'Mark done'}
-          onClick={() => {
-            toggleDone(entry);
-          }}
-          className="text-on-surface-variant hover:text-on-surface focus-visible:ring-ring mt-0.5 shrink-0 rounded-full transition-colors focus-visible:ring-2 focus-visible:outline-none [&_svg]:size-4"
+          onClick={onToggle}
+          className="text-on-surface-variant hover:text-on-surface focus-visible:ring-ring mt-0.5 shrink-0 rounded-full transition-[color,transform] duration-(--dur-fast) hover:scale-110 focus-visible:ring-2 focus-visible:outline-none active:scale-90 [&_svg]:size-4"
         >
           {entry.done ? <CheckCircle2 className="text-primary" /> : <Circle />}
         </button>

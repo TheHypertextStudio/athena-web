@@ -273,6 +273,48 @@ apps** created from the same manifest. Remember the `docket-api` `--min-instance
 above; also consider tightening the event-drain cron cadence (personal-feed freshness is bounded
 by it).
 
+#### Sign in with Apple (web) — differs from the three above
+
+Apple is a fourth social provider (sign-in only, web-only). It does **not** follow the id+secret
+pattern, and — unlike the six vars above — **its secrets are not yet created in Secret Manager nor
+referenced in `deploy.yml`**, so wiring it is a two-part operator task (create secrets **and** add
+the `deploy.yml` lines), not just "replace a placeholder".
+
+Two things make Apple different:
+
+- **No static client secret.** Apple's `client_secret` is a short-lived ES256 JWT the API **mints at
+  boot** from the `.p8` key (`generateAppleClientSecret`), so there is no `APPLE_CLIENT_SECRET` to
+  store. You supply four **durable** vars instead — `APPLE_CLIENT_ID` (the **Services ID**, e.g.
+  `com.docket.web`), `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` (the downloaded `.p8`) —
+  and the provider mounts only when **all four** are real (`isRealValue`).
+- **HTTPS-only + form_post callback.** Apple rejects `localhost`/non-HTTPS and posts the callback
+  from `appleid.apple.com`; `buildAuthOptions` adds that origin to `trustedOrigins` automatically
+  when Apple is configured, so no extra origin var is needed.
+
+Register in the **Apple Developer** console (App ID with "Sign in with Apple" → a **Services ID** →
+a **Sign in with Apple key** `.p8` + your **Team ID**), with return URL
+`https://docket-api.hypertext.studio/api/auth/callback/apple`. Then wire the four vars:
+
+```bash
+# 1) Create the four Secret Manager secrets (seed real values, or 'placeholder' to stay dormant):
+printf '%s' 'com.docket.web'  | gcloud secrets create docket-apple-client-id   --project=athena-services --replication-policy=automatic --data-file=-
+printf '%s' '<TEAM_ID>'       | gcloud secrets create docket-apple-team-id     --project=athena-services --replication-policy=automatic --data-file=-
+printf '%s' '<KEY_ID>'        | gcloud secrets create docket-apple-key-id      --project=athena-services --replication-policy=automatic --data-file=-
+# The .p8 is multiline; store it verbatim (a file), NOT one line — Cloud Run injects it as-is:
+gcloud secrets create docket-apple-private-key --project=athena-services --replication-policy=automatic --data-file=AuthKey_XXXX.p8
+
+# 2) Add these four lines to the `secrets:` block of the `deploy-api` job in .github/workflows/deploy.yml:
+#      APPLE_CLIENT_ID=docket-apple-client-id:latest
+#      APPLE_TEAM_ID=docket-apple-team-id:latest
+#      APPLE_KEY_ID=docket-apple-key-id:latest
+#      APPLE_PRIVATE_KEY=docket-apple-private-key:latest
+# 3) Push to main (or re-run the deploy workflow) so Cloud Run mounts them.
+```
+
+> Adding the `deploy.yml` lines **before** the secrets exist breaks the deploy (Cloud Run cannot
+> mount a missing secret) — create the secrets first. Apple returns the user's email only on the
+> first authorization; Better Auth persists it then.
+
 ### Scheduled jobs (Cloud Scheduler)
 
 Cloud Run is scale-to-zero, so there is no in-process worker — scheduled work is driven by

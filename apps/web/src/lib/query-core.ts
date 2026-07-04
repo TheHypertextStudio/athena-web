@@ -14,6 +14,8 @@
  */
 import {
   infiniteQueryOptions,
+  MutationCache,
+  QueryCache,
   QueryClient,
   type QueryKey,
   queryOptions,
@@ -21,6 +23,22 @@ import {
 } from '@tanstack/react-query';
 
 import { readError, readProblem } from '@/lib/problem';
+
+/**
+ * Thrown by {@link unwrap} when the API rejects a request with `401 Unauthorized` — i.e. the session
+ * expired or was revoked mid-use.
+ *
+ * @remarks
+ * A distinct type (not a bare `Error`) so a global handler can tell "your session ended, sign in
+ * again" apart from ordinary request failures and drive the sign-out + redirect exactly once,
+ * rather than surfacing a generic inline "could not load" on whatever surface made the call.
+ */
+export class SessionExpiredError extends Error {
+  constructor(message = 'Your session has expired. Please sign in again.') {
+    super(message);
+    this.name = 'SessionExpiredError';
+  }
+}
 
 /**
  * Staleness tiers (ms). Every query picks one based on how fast its data changes, rather than a
@@ -54,16 +72,30 @@ const DEFAULT_GC_TIME_MS = 5 * 60_000;
  * keeping data live, `refetchOnWindowFocus` pulls fresh data when the user returns to the tab
  * (replacing manual "Refresh" buttons), and a single `retry` smooths a transient network blip.
  *
+ * An optional `onError` (injected by the client providers) is invoked for every failed query AND
+ * mutation, so a {@link SessionExpiredError} from any read/write drives a single global sign-out +
+ * redirect. It is intentionally a parameter (not baked in) so the server-safe core stays free of
+ * browser/router coupling — the SSR client passes nothing.
+ *
+ * @param handlers - Optional global cache handlers (`onError`), wired by the client providers.
  * @returns a configured {@link QueryClient}.
  */
-export function createQueryClient(): QueryClient {
+export function createQueryClient(handlers?: { onError?: (error: unknown) => void }): QueryClient {
+  const onError = handlers?.onError;
   return new QueryClient({
+    ...(onError
+      ? {
+          queryCache: new QueryCache({ onError }),
+          mutationCache: new MutationCache({ onError }),
+        }
+      : {}),
     defaultOptions: {
       queries: {
         staleTime: STALE.standard,
         gcTime: DEFAULT_GC_TIME_MS,
         refetchOnWindowFocus: true,
-        retry: 1,
+        // A 401 (session expired) is not worth retrying — fail fast so the global handler redirects.
+        retry: (failureCount, error) => !(error instanceof SessionExpiredError) && failureCount < 1,
       },
     },
   });
@@ -115,6 +147,7 @@ export async function unwrap<T>(
     throw new Error(readError(caught, fallbackMessage), { cause: caught });
   }
   if (!response.ok) {
+    if (response.status === 401) throw new SessionExpiredError();
     throw new Error(await readProblem(response as unknown as Response, fallbackMessage));
   }
   return response.json();

@@ -15,7 +15,7 @@
  * construction, 404 to null, error wrapping) stays unit-covered.
  * No business logic lives here — only the storage edge (`boundaries.md` §8).
  */
-import { put as vercelBlobPut, type PutBlobResult } from '@vercel/blob';
+import { del as vercelBlobDel, put as vercelBlobPut, type PutBlobResult } from '@vercel/blob';
 
 import type { BlobPutResult, BlobStore } from '../ports/blob';
 import { defaultHttpClient, type HttpClient } from './http';
@@ -49,12 +49,20 @@ export type BlobUploadFn = (
   },
 ) => Promise<PutBlobResult>;
 
-/** Optional injectable seams for {@link RealBlob} (HTTP transport + SDK upload fn). */
+/**
+ * The `@vercel/blob` `del`-shaped delete function, narrowed to the arguments {@link RealBlob} uses.
+ * Injectable so the delete dispatch is unit-testable without hitting the live Blob service.
+ */
+export type BlobDeleteFn = (url: string, options: { readonly token: string }) => Promise<void>;
+
+/** Optional injectable seams for {@link RealBlob} (HTTP transport + SDK upload/delete fns). */
 export interface RealBlobDeps {
   /** HTTP transport used by {@link RealBlob.get} (defaults to the platform `fetch`). */
   readonly http?: HttpClient;
   /** The Vercel Blob upload function (defaults to the real `@vercel/blob` `put`). */
   readonly upload?: BlobUploadFn;
+  /** The Vercel Blob delete function (defaults to the real `@vercel/blob` `del`). */
+  readonly delete?: BlobDeleteFn;
 }
 
 /** The SDK `put` body type, derived from the SDK signature (it is not re-exported by name). */
@@ -66,6 +74,11 @@ type VercelBlobPutBody = Parameters<typeof vercelBlobPut>[1];
    single cast at this boundary line bridges that gap (not an `any`). */
 const defaultUpload: BlobUploadFn = (pathname, body, options) =>
   vercelBlobPut(pathname, body as unknown as VercelBlobPutBody, options);
+/* v8 ignore stop */
+
+/* v8 ignore start -- IO boundary default: binds the real `@vercel/blob` `del`, which can only run
+   against the live Blob service. Unit tests inject {@link RealBlobDeps.delete}. */
+const defaultDelete: BlobDeleteFn = (url, options) => vercelBlobDel(url, options);
 /* v8 ignore stop */
 
 /** Strip leading slashes so a key joins cleanly onto the store base URL. */
@@ -87,6 +100,7 @@ export class RealBlob implements BlobStore {
   private readonly base: string;
   private readonly http: HttpClient;
   private readonly upload: BlobUploadFn;
+  private readonly del: BlobDeleteFn;
 
   /**
    * @param config - Validated base URL + token from env.
@@ -100,6 +114,7 @@ export class RealBlob implements BlobStore {
     const resolved: RealBlobDeps = typeof deps === 'function' ? { http: deps } : deps;
     this.http = resolved.http ?? defaultHttpClient;
     this.upload = resolved.upload ?? defaultUpload;
+    this.del = resolved.delete ?? defaultDelete;
   }
 
   /** {@inheritDoc BlobStore.put} */
@@ -136,5 +151,14 @@ export class RealBlob implements BlobStore {
   /** {@inheritDoc BlobStore.url} */
   url(key: string): string {
     return `${this.base}/${normalizeKey(key)}`;
+  }
+
+  /** {@inheritDoc BlobStore.delete} */
+  async delete(key: string): Promise<void> {
+    try {
+      await this.del(this.url(key), { token: this.token });
+    } catch (cause) {
+      throw new Error(`RealBlob delete failed for key "${key}"`, { cause });
+    }
   }
 }

@@ -87,8 +87,12 @@ export function asConnectorProvider(provider: string): ConnectorProvider | null 
   return CONNECTOR_PROVIDERS.find((p) => p === provider) ?? null;
 }
 
-/** Every {@link ObserverProvider} — the connectors plus observe-only sources (Slack). */
-export const OBSERVER_PROVIDERS: readonly ObserverProvider[] = [...CONNECTOR_PROVIDERS, 'slack'];
+/** Every {@link ObserverProvider} — the connectors plus observe-only sources (Slack, Discord). */
+export const OBSERVER_PROVIDERS: readonly ObserverProvider[] = [
+  ...CONNECTOR_PROVIDERS,
+  'slack',
+  'discord',
+];
 
 /** Narrow a stored integration/event `provider` string to an {@link ObserverProvider}. */
 export function asObserverProvider(provider: string): ObserverProvider | null {
@@ -227,7 +231,7 @@ export async function resolveConnectorToken(
 }
 
 /** The social providers a linked identity can belong to (mirrors Better Auth `socialProviders`). */
-const IDENTITY_PROVIDERS: readonly IdentityProvider[] = ['google', 'github', 'linear'];
+const IDENTITY_PROVIDERS: readonly IdentityProvider[] = ['google', 'github', 'linear', 'discord'];
 
 /**
  * List the user's linked external identities across every supported provider (Google / GitHub /

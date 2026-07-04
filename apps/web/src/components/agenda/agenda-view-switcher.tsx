@@ -55,7 +55,7 @@ function ViewSegment({ view, active, onSelect, label, children }: ViewSegmentPro
       onClick={() => {
         onSelect(view);
       }}
-      className="size-7 shadow-none"
+      className="size-7 shadow-none transition-transform duration-(--dur-fast) active:scale-90"
     >
       {children}
     </Button>

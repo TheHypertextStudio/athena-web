@@ -83,17 +83,26 @@ Touches only leaves: (1) an observer **Adapter** under `packages/boundaries/src/
 detail-builder chain ending in `generic`; (2) one new arm on the `EventDetail` union + the new
 `system` string in `ObserverProvider`/`source_system`; (3) a mapping from the tool's native
 object types onto the closed `EntityRef.kind` taxonomy inside that adapter. External-only
-entities are covered by `routing.ts`'s default (no-owner) rule — no changes to the feed,
-pagination, or the assistant.
+entities are covered by `routing.ts`'s default (no-owner) rule — **zero core changes** to
+consumers, routing, the feed, pagination, or the assistant.
 
-One carve-out for **signal sources with their own identity space** (Slack today): "who does this
-concern" cannot come from Docket entity ownership, so such a tool additionally ships a relevance
-consumer (e.g. `apps/api/src/consumers/slack-relevance.ts`) that maps provider identities to
-Docket users and feeds a pre-resolved `userId → reason` map into routing via the
-`RoutableEvent.externalUserRecipients` input. `routing.ts` stays the single relevance authority
-(strongest-reason-wins merge) — the tool adds a leaf consumer plus that one declared input, not
-edits to routing's rules. Signal sources also apply **noise control**: a message that concerns
-nobody is deliberately NOT normalized into a canonical `event` (the inbox row is marked
-`skipped`; the raw payload stays in `inbound_event` for re-normalization). The "degraded rather
-than dropped" rule in the model table applies to _unmapped shapes_, not to messages nobody in
-the org has a reason to see. See `docs/engineering/specs/slack-integration.md`.
+Three exceptions worth naming. One carve-out for **signal sources with their own identity space**
+(Slack today): "who does this concern" cannot come from Docket entity ownership, so such a tool
+additionally ships a relevance consumer (e.g. `apps/api/src/consumers/slack-relevance.ts`) that
+maps provider identities to Docket users and feeds a pre-resolved `userId → reason` map into
+routing via the `RoutableEvent.externalUserRecipients` input. `routing.ts` stays the single
+relevance authority (strongest-reason-wins merge) — the tool adds a leaf consumer plus that one
+declared input, not edits to routing's rules. Signal sources also apply **noise control**: a
+message that concerns nobody is deliberately NOT normalized into a canonical `event` (the inbox
+row is marked `skipped`; the raw payload stays in `inbound_event` for re-normalization). The
+"degraded rather than dropped" rule in the model table applies to _unmapped shapes_, not to
+messages nobody in the org has a reason to see. See
+`docs/engineering/specs/slack-integration.md`.
+
+The other two are both worked out in [`discord-observation.md`](./discord-observation.md): a
+source that only delivers over a **persistent socket** (Discord's Gateway) is observed through a
+quarantined, logic-free **relay** that POSTs to the token-routed ingest edge — the substrate stays
+serverless and never learns the transport. And routing an event to the person _actually named_
+(not just the integration owner) is the **mention-attribution seam**: `RoutableEvent.participantUserIds`
+resolved from a source's linked identities (Better Auth `account`) — provider-neutral infra that any
+observer emitting mentioned `participants` gets for free (Discord is its first consumer today).

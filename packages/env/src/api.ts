@@ -20,8 +20,7 @@ import {
   stripeServer,
 } from './slices';
 
-/** The validated, fail-fast server environment for the Hono API. */
-export const env = createEnv({
+const rawEnv = createEnv({
   server: {
     ...sharedServer,
     ...dbServer,
@@ -36,6 +35,41 @@ export const env = createEnv({
   emptyStringAsUndefined: true,
   skipValidation: Boolean(process.env['SKIP_ENV_VALIDATION']),
 });
+
+const stripSlash = (url: string): string => url.replace(/\/$/, '');
+
+/**
+ * The validated, fail-fast server environment for the Hono API, with the MCP OAuth
+ * URLs resolved to their documented defaults.
+ *
+ * @remarks
+ * The MCP authorization/resource server is core functionality and MUST be on in every
+ * deploy — never gated behind deploy-specific env. The three *mechanically derivable*
+ * URLs therefore default from the required base config (the registry documents each):
+ *
+ * - `MCP_ISSUER_URL`      ⇒ `API_URL` (the AS and RS share the API origin)
+ * - `MCP_RESOURCE_URL`    ⇒ `${API_URL}/mcp` (the one canonical RS route)
+ * - `OIDC_LOGIN_PAGE_URL` ⇒ `${WEB_URL}/sign-in` (the product sign-in route)
+ *
+ * Setting a var overrides its derivation (e.g. a non-standard sign-in route).
+ * `MCP_ALLOWED_ORIGINS` is deliberately NOT derived: it is the /mcp DNS-rebinding
+ * security allowlist, a distinct semantic from any other origin list — it stays
+ * explicit per environment. The conditional spreads keep `SKIP_ENV_VALIDATION` runs
+ * (tests) faithful: absent base config derives nothing, so unconfigured-branch tests
+ * still exercise those paths.
+ */
+export const env: typeof rawEnv = {
+  ...rawEnv,
+  ...(rawEnv.API_URL
+    ? {
+        MCP_ISSUER_URL: rawEnv.MCP_ISSUER_URL ?? stripSlash(rawEnv.API_URL),
+        MCP_RESOURCE_URL: rawEnv.MCP_RESOURCE_URL ?? `${stripSlash(rawEnv.API_URL)}/mcp`,
+      }
+    : {}),
+  ...(rawEnv.WEB_URL
+    ? { OIDC_LOGIN_PAGE_URL: rawEnv.OIDC_LOGIN_PAGE_URL ?? `${stripSlash(rawEnv.WEB_URL)}/sign-in` }
+    : {}),
+};
 
 /**
  * Cross-field invariants that a per-var schema cannot express. Runs at module load
@@ -63,6 +97,12 @@ function assertCrossFieldRules(e: typeof env): void {
   // prod; half-configured would silently disable the proxy or fail the OAuth flow at runtime.
   if (Boolean(e.OAUTH_PROXY_SECRET) !== Boolean(e.OAUTH_PROXY_PRODUCTION_URL)) {
     fail('OAUTH_PROXY_SECRET and OAUTH_PROXY_PRODUCTION_URL must be set together.');
+  }
+
+  // The Discord OAuth pair powers "Connect Discord"; half-configured would mount a provider that
+  // 400s at the token exchange. (The Ed25519 ingest key, DISCORD_PUBLIC_KEY, is independent.)
+  if (Boolean(e.DISCORD_CLIENT_ID) !== Boolean(e.DISCORD_CLIENT_SECRET)) {
+    fail('DISCORD_CLIENT_ID and DISCORD_CLIENT_SECRET must be set together.');
   }
 
   if (e.MCP_TASKS_ENABLED && !e.MCP_SESSION_STORE_URL) {

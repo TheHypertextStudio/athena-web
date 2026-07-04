@@ -30,8 +30,25 @@ const SESSION_SETTLE_ATTEMPTS = 4;
 /** Delay between session-cookie read attempts after a passkey ceremony succeeds. */
 const SESSION_SETTLE_DELAY_MS = 125;
 
-const SESSION_COOKIE_ERROR =
-  'Sign-in worked, but Docket could not read your session cookie. Please try again.';
+const SESSION_COOKIE_ERROR = 'We could not finish signing you in. Please try again.';
+
+/**
+ * The safe `?next=` return-to path, or `null`.
+ *
+ * @remarks
+ * A mid-session expiry redirect (see `providers.tsx`) sends the user to `/sign-in?next=<where they
+ * were>`; honoring it lands them back on that surface after re-authenticating instead of always
+ * dumping them at {@link HOME_DESTINATION}. Only a **same-origin absolute path** is accepted — it
+ * must start with a single `/` (a leading `//` or `/\` is a protocol-relative URL that could send
+ * the user off-site, and anything else is not a path) — so this can never become an open redirect.
+ */
+function safeNextPath(): string | null {
+  if (typeof window === 'undefined') return null;
+  const next = new URLSearchParams(window.location.search).get('next');
+  if (!next || !next.startsWith('/') || next.startsWith('//') || next.startsWith('/\\'))
+    return null;
+  return next;
+}
 
 type OrgsResponse = Awaited<ReturnType<typeof api.v1.orgs.$get>>;
 
@@ -89,7 +106,12 @@ export default function SignInPage(): JSX.Element {
       const res = await loadOrgsAfterSignIn();
       if (res.ok) {
         const { items } = await res.json();
-        router.push(items.length > 0 ? HOME_DESTINATION : ONBOARDING_DESTINATION);
+        if (items.length === 0) {
+          router.push(ONBOARDING_DESTINATION);
+          return;
+        }
+        // Honor a safe return-to from a session-expiry redirect; otherwise land in the cockpit.
+        router.push(safeNextPath() ?? HOME_DESTINATION);
         return;
       }
       if (res.status === 401) {

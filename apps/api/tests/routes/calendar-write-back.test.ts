@@ -529,6 +529,7 @@ describe('calendar write-back — retryable / attempt exhaustion', () => {
     });
     const later = new Date(before + 120_000);
     const tally = await drainDueCalendarItemWrites(schema.db, {
+      userId,
       now: later,
       syncModules: syncModulesFor(successFetch),
     });
@@ -566,6 +567,73 @@ describe('calendar write-back — retryable / attempt exhaustion', () => {
     expect(finalWrite.attempts).toBe(MAX_WRITE_ATTEMPTS);
     const row = await loadItemRow(schema, fixture.itemId);
     expect(row.syncState).toBe('provider_error');
+  });
+
+  it("only drains the calling user's due writes, leaving another user's pending write untouched", async () => {
+    const schema = await getDb();
+    const ownerId = await seedUserWithHub(schema.db, schema, 'DrainOwner');
+    const otherId = await seedUserWithHub(schema.db, schema, 'DrainOther');
+    const ownerFixture = await seedProviderEventItem(schema, { userId: ownerId });
+    const otherFixture = await seedProviderEventItem(schema, { userId: otherId });
+
+    const failFetch = buildGoogleFetchJson([], {
+      eventPatch: () => {
+        throw new GoogleCalendarApiError(503, 'Service unavailable');
+      },
+    });
+    const failSyncModules = syncModulesFor(failFetch);
+
+    // Enqueue a due write for both users without an automatic foreground attempt.
+    await updateCalendarItem(schema.db, {
+      userId: ownerId,
+      itemId: ownerFixture.itemId,
+      patch: { title: 'owner edit' },
+    });
+    await updateCalendarItem(schema.db, {
+      userId: otherId,
+      itemId: otherFixture.itemId,
+      patch: { title: 'other edit' },
+    });
+
+    const successFetch = buildGoogleFetchJson([], {
+      eventPatch: () => ({
+        id: 'evt-1',
+        status: 'confirmed',
+        summary: 'owner edit',
+        start: { dateTime: '2026-07-01T10:00:00.000Z' },
+        end: { dateTime: '2026-07-01T11:00:00.000Z' },
+        updated: '2026-07-02T13:00:00.000Z',
+        etag: 'etag-owner-drained',
+      }),
+    });
+
+    // Draining scoped to `ownerId` must apply only the owner's write and must not
+    // touch `otherId`'s pending write, even though both are due.
+    const tally = await drainDueCalendarItemWrites(schema.db, {
+      userId: ownerId,
+      now: NOW,
+      syncModules: syncModulesFor(successFetch),
+    });
+    expect(tally.applied).toBe(1);
+    expect(tally.failed).toBe(0);
+
+    const ownerWrite = await loadLatestWrite(schema, ownerFixture.itemId);
+    expect(ownerWrite.status).toBe('applied');
+
+    const otherWrite = await loadLatestWrite(schema, otherFixture.itemId);
+    expect(otherWrite.status).toBe('pending');
+    expect(otherWrite.attempts).toBe(0);
+
+    // Sanity: the other user's write genuinely was due and drainable — attempting it
+    // directly still fails against the injected 503 fetch, proving it was skipped by
+    // the userId scope above rather than by some unrelated due-time mismatch.
+    const otherOutcome = await attemptCalendarItemWrite(
+      schema.db,
+      otherWrite.id,
+      failSyncModules,
+      NOW,
+    );
+    expect(otherOutcome).toBe('retried');
   });
 });
 

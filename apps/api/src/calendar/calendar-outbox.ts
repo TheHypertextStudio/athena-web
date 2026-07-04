@@ -355,17 +355,23 @@ export interface CalendarWriteDrainTally {
 }
 
 /**
- * Drain every outbox write that is due for a (re)attempt: `status = 'pending'` and
- * (`nextAttemptAt IS NULL` — never attempted — or its backoff has elapsed), oldest
- * first, up to `limit`.
+ * Drain every outbox write **owned by `userId`** that is due for a (re)attempt:
+ * `status = 'pending'` and (`nextAttemptAt IS NULL` — never attempted — or its backoff
+ * has elapsed), oldest first, up to `limit`.
  *
  * @remarks
  * Called from `POST /me/calendar/sync` after the inbound pull so a user-initiated "Sync
- * Now" also flushes backed-off writes; periodic cron draining is a later phase.
+ * Now" also flushes that same user's backed-off writes; periodic cron draining (which
+ * may legitimately span all users) is a later phase and should either call this
+ * per-user or grow its own explicitly-unscoped variant rather than widening this one.
+ * Every other field on `CalendarSyncResultOut` is scoped to the calling user via
+ * `userId` — `writesApplied` must not become the one field that leaks another user's
+ * outbox activity into this response.
  */
 export async function drainDueCalendarItemWrites(
   db: Database,
   opts: {
+    readonly userId: string;
     readonly now: Date;
     readonly syncModules: Partial<Record<CalendarProvider, CalendarProviderSyncModule>>;
     readonly limit?: number;
@@ -377,6 +383,7 @@ export async function drainDueCalendarItemWrites(
     .from(calendarItemWrite)
     .where(
       and(
+        eq(calendarItemWrite.userId, opts.userId),
         eq(calendarItemWrite.status, 'pending'),
         or(isNull(calendarItemWrite.nextAttemptAt), lte(calendarItemWrite.nextAttemptAt, opts.now)),
       ),

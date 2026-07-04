@@ -43,7 +43,7 @@ import type {
   MailThreadSummary,
 } from '../ports/mail';
 import { isConnectorError } from '../ports/connector-error';
-import type { MailActionsProviderClient } from './connector-provider-client';
+import type { MailActionsProviderClient, ResolvedAccount } from './connector-provider-client';
 import type { ProviderHttp } from './connector-http';
 
 /** Graph `/me` identity payload. */
@@ -104,9 +104,10 @@ export class MicrosoftProviderClient implements MailActionsProviderClient {
   constructor(private readonly http: ProviderHttp) {}
 
   /** {@inheritDoc ConnectorProviderClient.resolveAccount} */
-  async resolveAccount(): Promise<string | undefined> {
+  async resolveAccount(): Promise<ResolvedAccount | undefined> {
     const me = await this.http.getJson<GraphMe>('/me');
-    return me.mail ?? me.userPrincipalName;
+    const label = me.mail ?? me.userPrincipalName;
+    return label !== undefined ? { label } : undefined;
   }
 
   /**

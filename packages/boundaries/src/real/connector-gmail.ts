@@ -38,7 +38,7 @@ import type {
   MailThreadSummary,
 } from '../ports/mail';
 import { isConnectorError } from '../ports/connector-error';
-import type { MailActionsProviderClient } from './connector-provider-client';
+import type { MailActionsProviderClient, ResolvedAccount } from './connector-provider-client';
 import type { ProviderHttp } from './connector-http';
 import { paginateGoogle } from './connector-google';
 
@@ -114,9 +114,9 @@ export class GmailProviderClient implements MailActionsProviderClient {
   constructor(private readonly http: ProviderHttp) {}
 
   /** {@inheritDoc ConnectorProviderClient.resolveAccount} */
-  async resolveAccount(): Promise<string | undefined> {
+  async resolveAccount(): Promise<ResolvedAccount | undefined> {
     const json = await this.http.getJson<GmailProfile>('/users/me/profile');
-    return json.emailAddress;
+    return json.emailAddress !== undefined ? { label: json.emailAddress } : undefined;
   }
 
   /**

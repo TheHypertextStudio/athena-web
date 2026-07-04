@@ -515,6 +515,7 @@ NODE_ENV=development
 # API
 PORT=3001
 API_URL=https://api.docket.localhost
+WEB_URL=https://docket.localhost
 
 # Database — local Docker Postgres (pnpm db:up)
 DATABASE_URL=postgres://docket:docket@localhost:5433/docket

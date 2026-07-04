@@ -166,7 +166,8 @@ Runtime env vars are split between Secret Manager (sensitive) and Cloud Run env 
 
 **From Cloud Run env vars** (set at deploy time from GitHub `vars.*`):
 
-`NODE_ENV`, `APP_MODE`, `API_URL`, `BETTER_AUTH_URL`, `BETTER_AUTH_TRUSTED_ORIGINS`, `BETTER_AUTH_ALLOWED_HOSTS` (optional — host allowlist that switches Better Auth to a dynamic per-request base URL for previews/multi-domain; unset ⇒ static `BETTER_AUTH_URL`), `BETTER_AUTH_PASSKEY_RP_ID`, `BETTER_AUTH_PASSKEY_RP_NAME`, `BILLING_ENABLED`, `MCP_ISSUER_URL` (`= API_URL`), `MCP_RESOURCE_URL` (`= API_URL/mcp` — the canonical RS URI access tokens are audience-bound to), `MCP_ALLOWED_ORIGINS` (`= WEB_URL` + the Claude web origins; browser-less MCP clients send no `Origin` and pass the guard), `OIDC_LOGIN_PAGE_URL` (`= WEB_URL/sign-in` — setting this together with `MCP_RESOURCE_URL` mounts the Better Auth `mcp()` OAuth AS, enabling `/api/auth/mcp/{authorize,token,register}` and Bearer auth on `/mcp`), `MCP_TASKS_ENABLED`, `MCP_CIMD_STRICT`
+`NODE_ENV`, `APP_MODE`, `API_URL`, `WEB_URL`, `BETTER_AUTH_URL`, `BETTER_AUTH_TRUSTED_ORIGINS`, `BETTER_AUTH_ALLOWED_HOSTS` (optional — host allowlist that switches Better Auth to a dynamic per-request base URL for previews/multi-domain; unset ⇒ static `BETTER_AUTH_URL`), `BETTER_AUTH_PASSKEY_RP_ID`, `BETTER_AUTH_PASSKEY_RP_NAME`, `BILLING_ENABLED`, `MCP_ALLOWED_ORIGINS` (a security allowlist — browser Origins allowed to hit `/mcp`, set explicitly per environment; never derived), `MCP_TASKS_ENABLED`, `MCP_CIMD_STRICT`.
+The MCP OAuth authorization server is **on by default in every deploy** — it needs no MCP-specific vars. `MCP_ISSUER_URL`, `MCP_RESOURCE_URL`, and `OIDC_LOGIN_PAGE_URL` derive mechanically from `API_URL`/`WEB_URL` (`packages/env/src/api.ts`); set one only to override its derivation (e.g. a non-standard sign-in route).
 
 ### Next.js services (web, admin)
 

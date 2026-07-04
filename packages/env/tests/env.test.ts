@@ -382,4 +382,37 @@ describe('api composition', () => {
       );
     });
   });
+
+  describe('MCP OAuth URLs derive from API_URL/WEB_URL by default', () => {
+    it('derives issuer, resource, and login page from API_URL/WEB_URL alone', async () => {
+      stubEnv({
+        ...validApiEnv(),
+        API_URL: 'https://docket-api.hypertext.studio/',
+        WEB_URL: 'https://docket.hypertext.studio/',
+      });
+      const mod = await import('../src/api');
+      expect(mod.env.MCP_ISSUER_URL).toBe('https://docket-api.hypertext.studio');
+      expect(mod.env.MCP_RESOURCE_URL).toBe('https://docket-api.hypertext.studio/mcp');
+      expect(mod.env.OIDC_LOGIN_PAGE_URL).toBe('https://docket.hypertext.studio/sign-in');
+    });
+
+    it('lets an explicit value override its derivation', async () => {
+      stubEnv({
+        ...validApiEnv(),
+        MCP_ISSUER_URL: 'https://custom-issuer.example.com',
+        OIDC_LOGIN_PAGE_URL: 'https://custom.example.com/login',
+      });
+      const mod = await import('../src/api');
+      expect(mod.env.MCP_ISSUER_URL).toBe('https://custom-issuer.example.com');
+      expect(mod.env.OIDC_LOGIN_PAGE_URL).toBe('https://custom.example.com/login');
+      // The un-overridden URL still derives.
+      expect(mod.env.MCP_RESOURCE_URL).toBe(`${validApiEnv()['API_URL']}/mcp`);
+    });
+
+    it('never derives MCP_ALLOWED_ORIGINS (it is a security allowlist, set explicitly)', async () => {
+      stubEnv(validApiEnv());
+      const mod = await import('../src/api');
+      expect(mod.env.MCP_ALLOWED_ORIGINS).toBeUndefined();
+    });
+  });
 });

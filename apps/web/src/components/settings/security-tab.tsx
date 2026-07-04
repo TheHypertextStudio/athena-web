@@ -1,14 +1,15 @@
 'use client';
 
 /**
- * `settings` — the Security tab: passkeys and account recovery codes.
+ * `settings` — the Security tab: passkeys, email, active sessions, and account recovery codes.
  *
  * @remarks
- * Composes two independent cards, each owning its own data and loading/error state so one failing
- * does not blank the other: {@link PasskeysSection} (list / add / rename / remove the passkeys that
- * sign the user in) followed by {@link RecoveryCodesSection} (the backup way back into a
- * passwordless account). Passkeys come first because they are the primary credential; recovery
- * codes are the fallback. Errors render inline as `role="alert"` banners (there is no toast system).
+ * Composes four independent cards, each owning its own data and loading/error state so one
+ * failing does not blank the others: {@link PasskeysSection} (list / add / rename / remove the
+ * passkeys that sign the user in), {@link ChangeEmailSection} (request an email change),
+ * {@link SessionsSection} (the device list — active logins, a different concept from a passkey),
+ * and {@link RecoveryCodesSection} (the backup way back into a passwordless account). Errors
+ * render inline as `role="alert"` banners (there is no toast system).
  */
 import type { RecoveryCodesStatusOut } from '@docket/types';
 import { Button, Skeleton } from '@docket/ui/primitives';
@@ -18,15 +19,19 @@ import { api } from '@/lib/api';
 import { formatCalendarDate } from '@/lib/format-date';
 import { STALE, apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 
+import { ChangeEmailSection } from './change-email-section';
 import { PasskeysSection } from './passkeys-section';
 import type { RecoveryCodesMode } from './recovery-codes-dialog';
 import { RecoveryCodesDialog } from './recovery-codes-dialog';
+import { SessionsSection } from './sessions-section';
 
-/** The Security settings tab — manage passkeys, then generate / regenerate recovery codes. */
+/** The Security settings tab — manage passkeys, email, active sessions, then recovery codes. */
 export function SecurityTab(): JSX.Element {
   return (
     <div className="flex flex-col gap-6">
       <PasskeysSection />
+      <ChangeEmailSection />
+      <SessionsSection />
       <RecoveryCodesSection />
     </div>
   );

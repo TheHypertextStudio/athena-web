@@ -9,7 +9,7 @@
 
 ### [AUTH-SEC-001] Auth security & UX audit remediation
 
-- **Status**: IN_PROGRESS (M0 foundations landed & green; M1 critical ATO fix next)
+- **Status**: DONE (M0–M5 all landed & green)
 - **Started**: 2026-07-02
 - **Priority**: P0
 - **Description**: Remediate all findings from the auth audit — the critical passkey
@@ -45,12 +45,31 @@
         (new `step-passkey.tsx`) appended to either fork only when `listUserPasskeys` returns empty; the
         connect exit routes through it (both primary and Skip) so the nudge isn't lost, and `addPasskey`
         runs the session-bound ceremony then enters the workspace.
-  - [ ] M5 (see plan).
-- **Notes**: M0–M4 gate green — `@docket/boundaries` 268, `@docket/auth` 46, `@docket/db` 40,
-  `@docket/ui` 255, `@docket/api` 906, `@docket/web` 200 tests; typecheck + lint clean on all
-  touched packages. (Pre-existing web-lint errors in untracked WIP `src/lib/use-now.ts` are the
-  user's concurrent edits, outside this work.) ATO closed at the root; DECISIONS.md →
-  "auth-security" records it.
+  - [x] M5: **active sessions** — new `/v1/me/sessions` resource (`me-sessions.ts`, direct
+        `session`-table reads/deletes mirroring Better Auth's own `/revoke-session` internals, so
+        it's testable with the fake-session harness) + `SessionsSection` device list (revoke one,
+        "Sign out other devices"; the current session can't self-revoke — 409 `current_session`).
+        **Change-email** — `user.changeEmail` + `emailVerification.sendVerificationEmail` wired
+        into `buildAuthOptions` (confirmation goes to the OLD address, never the new one);
+        `ChangeEmailSection` in Security tab; a one-time `?email-changed=1` banner on the security
+        page. **Security-notification email** — recovery-code regeneration now emails the account
+        holder (`recoveryCodesRegeneratedEmail`, fired from `me-recovery.ts`); "new passkey added"
+        and "account recovered" notices are an explicit, documented gap (no clean Better-Auth
+        plugin-lifecycle hook found without unverified guessing — see DECISIONS.md). **Consent
+        metadata (LOW-6)** — new `GET /v1/oauth/clients/:clientId/metadata` returns the
+        server-validated CIMD name/icon already persisted on `oauthApplication`; the consent page
+        (`/oauth/authorize`) no longer fetches the attacker-controlled `client_id` URL itself.
+- **Notes**: M0–M5 gate green — `@docket/boundaries` 279, `@docket/auth` 49, `@docket/db` 40,
+  `@docket/types` clean, `@docket/api` 977, `@docket/web` 211 tests; typecheck + lint clean on all
+  touched packages (api lint clean in full). ATO closed at the root; DECISIONS.md →
+  "auth-security" records it, including the M5 architecture calls and the deferred passkey/
+  recovery notification gap.
+- **Incident note**: mid-session, a concurrent process (Discord/Slack/Apple-sign-in integration
+  work landing in the same primary checkout) rewrote/rebased this branch's history underneath this
+  work more than once — files vanished and reappeared, a migration number collided (resolved into
+  one clean `0017_woozy_aaron_stack.sql`), and an in-flight Apple-sign-in WIP diff had to be
+  stashed before a `wip/discord-integration` → `main` rebase could proceed. All auth-security work
+  survived; verified end-to-end afterward via the full typecheck/lint/test gate above.
 
 ### [SEARCH-001] Workspace-wide semantic search foundation
 

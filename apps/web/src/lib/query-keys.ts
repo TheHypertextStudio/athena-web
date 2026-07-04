@@ -46,6 +46,7 @@ export const queryKeys = {
   publicConfig: () => ['public-config'] as const,
   account: () => ['me', 'account'] as const,
   recoveryCodes: () => ['me', 'recovery-codes'] as const,
+  activeSessions: () => ['me', 'active-sessions'] as const,
   orgs: () => ['me', 'orgs'] as const,
   portfolio: () => ['me', 'portfolio'] as const,
   hubSearch: (query: string) => ['me', 'search', query] as const,

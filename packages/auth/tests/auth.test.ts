@@ -635,6 +635,30 @@ describe('buildAuthOptions env-gating', () => {
     expect(rules['/mcp/token']).toEqual({ window: 60, max: 30 });
   });
 
+  it('configures change-email to send the confirmation to the CURRENT address, not the new one', async () => {
+    const { buildAuthOptions } = await import('../src/index');
+    const opts = buildAuthOptions(baseEnv, MAILER_DEPS);
+    expect(opts.user?.changeEmail?.enabled).toBe(true);
+    // Better Auth also requires `emailVerification.sendVerificationEmail` configured as a gate,
+    // even though every Docket user is created emailVerified — see the comment in auth-builder.
+    expect(typeof opts.emailVerification?.sendVerificationEmail).toBe('function');
+
+    const sendConfirmation = opts.user?.changeEmail?.sendChangeEmailConfirmation as (
+      data: { user: { email: string; name: string }; newEmail: string; url: string; token: string },
+      request?: Request,
+    ) => Promise<void>;
+    await sendConfirmation({
+      user: { email: 'old@example.com', name: 'Ada' },
+      newEmail: 'new@example.com',
+      url: 'https://api.docket.localhost/api/auth/verify-email?token=abc',
+      token: 'abc',
+    });
+
+    expect(sentEmails).toHaveLength(1);
+    expect(sentEmails[0]?.to).toBe('old@example.com');
+    expect(sentEmails[0]?.html).toContain('new@example.com');
+  });
+
   it('configures twoFactor backup-codes-only for passwordless account recovery', async () => {
     // The recovery-codes feature rides the twoFactor plugin, but used backup-codes-only: passkey
     // users must be able to enable/manage codes without a password (`allowPasswordless`), there is

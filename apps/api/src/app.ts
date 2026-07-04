@@ -27,7 +27,9 @@ import meAccount from './routes/me-account';
 import meCalendar from './routes/me-calendar';
 import meIdentities from './routes/me-identities';
 import meRecovery from './routes/me-recovery';
+import meSessions from './routes/me-sessions';
 import notifications from './routes/notifications';
+import oauthClients from './routes/oauth-clients';
 import orgs from './routes/orgs';
 import { requireAuth } from './permissions/require-auth';
 
@@ -56,7 +58,9 @@ const routes = app
   .route('/me/calendar', meCalendar)
   .route('/me/identities', meIdentities)
   .route('/me/account', meAccount)
-  .route('/me/recovery-codes', meRecovery);
+  .route('/me/recovery-codes', meRecovery)
+  .route('/me/sessions', meSessions)
+  .route('/oauth/clients', oauthClients);
 
 /** The public Hono RPC contract consumed by the web app via `hc<AppType>`. */
 export type AppType = typeof routes;

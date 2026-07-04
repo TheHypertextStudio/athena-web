@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { verificationCodeEmail } from '../src/emails';
+import { changeEmailConfirmationEmail, verificationCodeEmail } from '../src/emails';
 
 describe('verificationCodeEmail', () => {
   it('carries the code in the subject and both bodies', () => {
@@ -27,5 +27,28 @@ describe('verificationCodeEmail', () => {
     const email = verificationCodeEmail({ name: 'Ada', code: '482913' });
     expect(email.text).toContain('ignore this email');
     expect(email.text).toContain('expires in 10 minutes');
+  });
+});
+
+describe('changeEmailConfirmationEmail', () => {
+  it('carries the new address and confirmation url in both bodies', () => {
+    const email = changeEmailConfirmationEmail({
+      name: 'Ada',
+      newEmail: 'ada+new@example.com',
+      url: 'https://api.docket.localhost/api/auth/verify-email?token=abc',
+    });
+    expect(email.text).toContain('ada+new@example.com');
+    expect(email.text).toContain('https://api.docket.localhost/api/auth/verify-email?token=abc');
+    expect(email.html).toContain('ada+new@example.com');
+    expect(email.html).toContain('https://api.docket.localhost/api/auth/verify-email?token=abc');
+  });
+
+  it('states the anti-abuse reassurance', () => {
+    const email = changeEmailConfirmationEmail({
+      name: 'Ada',
+      newEmail: 'new@example.com',
+      url: 'https://x.test/verify',
+    });
+    expect(email.text).toContain('ignore this email');
   });
 });

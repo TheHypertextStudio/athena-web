@@ -612,6 +612,15 @@
 - **build:** Export a shared createAuthClient factory ({ baseURL, plugins:[passkeyClient(), ...] }) from @docket/auth/client. Web uses same-origin '/api/auth' baseURL in browser; admin (separate Vercel project, no rewrite) uses NEXT_PUBLIC_API_URL + '/api/auth' with credentials. Surface signIn.passkey(), addPasskey({name,context}) (consuming PAB-AUTH-03 intent), social signIn for Google/GitHub, Linear genericOAuth connect. Type-only, framework-coupled per app.
 - **accept:** `pnpm --filter @docket/web typecheck` and `pnpm --filter @docket/admin typecheck` pass; the auth client exposes authClient.signIn.passkey and authClient.passkey.addPasskey with typed args; admin client targets the absolute API origin.
 
+> **Superseded-by-shipped note (MCP tickets below):** these were written pre-implementation and are
+> preserved as-authored. What actually shipped: `MCP_ISSUER_URL`/`MCP_RESOURCE_URL`/
+> `OIDC_LOGIN_PAGE_URL` derive automatically from the required `API_URL`/`WEB_URL` (no manual
+> per-var setup, and `OIDC_LOGIN_PAGE_URL` defaults to `${WEB_URL}/sign-in`, not
+> `${NEXT_PUBLIC_WEB_URL}/oauth/consent`); `MCP_SESSION_STORE_URL` DOES exist (gated behind
+> `MCP_TASKS_ENABLED`), contrary to the "remove from v1" line below. See
+> `docs/engineering/specs/mcp-surface.md`, `docs/engineering/specs/env-and-bootstrap.md` §1.5, and
+> `docs/WORKLOG.md` (`MCP-PROD-009`, `MCP-PROD-010`) for the authoritative as-shipped model.
+
 ### `PAB-MCP-01` — MCP env contract: add MCP*TASKS_ENABLED + MCP_CIMD_TRUST_ALLOWLIST/STRICT, rename MCP_CANONICAL_URL->MCP_RESOURCE_URL *(P6 · parallel)\_
 
 - **files:** `packages/env/src/mcp.ts`, `packages/env/src/registry.ts`
@@ -724,6 +733,11 @@
 - **accept:** `pnpm --filter @docket/authz test --coverage` and `pnpm --filter @docket/api test` pass with @docket/authz line coverage >=80%; no it.skip/describe.skip present; the integration suite asserts a guest list returns 0 rows pre-grant and only the granted subtree post-grant.
 
 ## mcp (41 tickets)
+
+> **Superseded-by-shipped note:** see the note above `PAB-MCP-01` earlier in this file — it applies
+> to every env-contract reference in this section too (`MCP_ISSUER_URL`/`MCP_RESOURCE_URL`/
+> `OIDC_LOGIN_PAGE_URL` are on-by-default derivations, not manually-set vars; `MCP_SESSION_STORE_URL`
+> shipped rather than being removed).
 
 ### `MCP-00-env` — MCP env-var slice in @docket/env (issuer/resource/origins/CIMD/tasks flag) _(P6 · parallel)_
 
@@ -1238,6 +1252,11 @@
 - **accept:** `pnpm --filter @docket/admin build` succeeds, RPC AppType resolves no `any`. Manual/Playwright (staff session): a non-staff user is 403'd; a support user sees reads but billing-write is gated to finance/superadmin and audit to superadmin; the lifecycle pipeline shows each org's stage and a hold stops the clock; impersonation shows a warning banner, requires a reason, and writes an OperatorAuditEvent.
 
 ## testing-infra-bootstrap (18 tickets)
+
+> **Superseded-by-shipped note:** see the note above `PAB-MCP-01` in the permissions-auth-billing
+> section — the MCP-env-derivation tickets below (the bootstrap `deriveDomains` step) describe the
+> pre-implementation plan; `OIDC_LOGIN_PAGE_URL` actually derives `${WEB_URL}/sign-in`, and the
+> derivation runs at API-boot time (`packages/env/src/api.ts`), not as a one-time bootstrap write.
 
 ### `BOOT-01-var-registry` — Typed VAR*REGISTRY single-source-of-truth for env + bootstrap *(P1 · sequential)\_
 

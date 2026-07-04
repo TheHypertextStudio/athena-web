@@ -430,6 +430,12 @@ what users see and interact with, not whether a CSS file matches a hand-maintain
 
 ## env-and-bootstrap
 
+> **Superseded-by-shipped note:** the entries below are the pre-implementation planning record —
+> preserved as-authored, not edited to match final state. Where shipped reality diverges (e.g.
+> `OIDC_LOGIN_PAGE_URL`'s default route, or `WEB_URL` existing as a var these entries never
+> anticipated), treat `docs/engineering/specs/env-and-bootstrap.md` §1.5,
+> `docs/engineering/specs/mcp-surface.md`, and `docs/WORKLOG.md` (`MCP-PROD-010`) as authoritative.
+
 ### §0/§1.1: 'Auth/MCP/OIDC owner = apps/api (Hono)... (Engineering §2 recommends Hono; see open issue if Next is chosen instead.)' — confirm the mount owner so API_URL/BETTER_AUTH_URL semantics are pinned.
 
 **Decision.** apps/api (Hono) is the SOLE owner of /api/auth/_, /mcp, and the OIDC/MCP discovery endpoints. API_URL == BETTER_AUTH_URL == MCP_ISSUER_URL is the single immutable identity. The Next-as-mount option is REJECTED and removed from the contract — no env var ever points auth/MCP at a Next app. To keep auth cookies first-party (per RECONCILIATION line 22), apps/web ALSO rewrites /api/_ → API_URL via next.config rewrites, so the browser sees same-origin; this is a rewrite, NOT a change of owner. NEXT_PUBLIC_API_URL still holds the canonical api origin (used by createAuthClient/hc client init); the rewrite is an additive transport optimization, not a second source of truth. CORS+credentials remains the documented fallback if web and api must be split across origins.
@@ -503,6 +509,10 @@ what users see and interact with, not whether a CSS file matches a hand-maintain
 **Why.** §3.10 already mandates a single typed prompt registry kept in lockstep with the validator; promoting it to the authoring source for BOTH the createEnv slices and the bootstrap prompts (rather than two parallel arrays) is the only way to guarantee zero drift as the contract grows — which it must, given the new vars these decisions introduce. This keeps §4.2 (same validation everywhere) literally true because dev, CI, prod boot, and bootstrap all derive from one TS object, and satisfies the AGENTS.md reusable-tooling rule (one abstraction, used many places).
 
 ## mcp-surface
+
+> **Superseded-by-shipped note:** see the note at the top of `## env-and-bootstrap` above — the
+> same applies here. `docs/engineering/specs/mcp-surface.md` and `docs/WORKLOG.md` (`MCP-PROD-009`,
+> `MCP-PROD-010`) are the authoritative record of what actually shipped.
 
 ### §1.1 Open issue: 'confirm hosting can hold SSE; stateless + Tasks is the fallback.' Plus the session-store conflict — mcp-surface proposes a Redis-backed event store with Last-Event-ID resumability.
 

@@ -10,7 +10,13 @@
  * push-notification watches ({@link registerOrRenewWatches}) so push hints keep working
  * going forward. Idempotent and safe to retry: every per-layer lease inside
  * `syncCalendarConnections` already serializes against a concurrent manual sync, so a
- * layer held by another run is simply skipped for this pass, not an error.
+ * layer held by another run is simply skipped for this pass, not an error. Every step
+ * inside the per-user loop already isolates its own per-item failures internally
+ * (`syncCalendarConnections` per connection, `drainDueCalendarItemWrites` per write,
+ * `registerOrRenewWatches` per layer) and tallies them into `errors` instead of throwing —
+ * but the loop body itself is additionally wrapped in a per-user `try`/`catch` as a second
+ * line of defense, so an unexpected throw from any step still can't abort the whole sweep
+ * pass for every user later in `rows`.
  */
 import { calendarConnection, db } from '@docket/db';
 import type { CalendarProvider } from '@docket/types';
@@ -64,25 +70,35 @@ export async function sweepCalendarSync(now: Date): Promise<CalendarSyncSweepTal
   const errors: string[] = [];
 
   for (const row of rows) {
-    const pullResult = await syncCalendarConnections(db, { userId: row.userId, now, adapters });
-    errors.push(...pullResult.errors);
+    try {
+      const pullResult = await syncCalendarConnections(db, { userId: row.userId, now, adapters });
+      errors.push(...pullResult.errors);
 
-    const drainResult = await drainDueCalendarItemWrites(db, {
-      userId: row.userId,
-      now,
-      syncModules: adapters,
-    });
-    writesApplied += drainResult.applied;
+      const drainResult = await drainDueCalendarItemWrites(db, {
+        userId: row.userId,
+        now,
+        syncModules: adapters,
+      });
+      writesApplied += drainResult.applied;
 
-    const watchResult = await registerOrRenewWatches(db, {
-      userId: row.userId,
-      now,
-      adapters,
-      callbackUrlFor,
-    });
-    watchesRegistered += watchResult.registered;
+      const watchResult = await registerOrRenewWatches(db, {
+        userId: row.userId,
+        now,
+        adapters,
+        callbackUrlFor,
+      });
+      watchesRegistered += watchResult.registered;
+      errors.push(...watchResult.errors);
 
-    usersProcessed += 1;
+      usersProcessed += 1;
+    } catch (err) {
+      // Defense in depth: every step above already isolates its own per-item failures
+      // internally (see this function's remarks), so reaching here means an unexpected
+      // throw slipped past all of them. Tally it and keep going — one user's failure must
+      // never stall the sweep for every user later in `rows`.
+      const message = err instanceof Error ? err.message : 'Calendar sweep step failed';
+      errors.push(`${row.userId}: ${message}`);
+    }
   }
 
   return { usersProcessed, writesApplied, watchesRegistered, errors };

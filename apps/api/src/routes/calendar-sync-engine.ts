@@ -946,6 +946,12 @@ export interface RegisterOrRenewWatchesOptions {
 export interface WatchRegistrationTally {
   /** Watch channels newly registered or renewed (Google `startWatch` calls that succeeded). */
   readonly registered: number;
+  /**
+   * Per-layer watch registration failures (network error, timeout, 429/5xx, or a
+   * malformed adapter response), tallied but never thrown — see the per-layer `try`/`catch`
+   * below.
+   */
+  readonly errors: readonly string[];
 }
 
 /**
@@ -961,13 +967,20 @@ export interface WatchRegistrationTally {
  * reauth) skips that connection's layers entirely, touching nothing. Per layer: a watch is
  * (re)registered when it was never registered, has no expiry, or expires within
  * {@link WATCH_RENEWAL_WINDOW_MS}; a layer with a fresh watch is left untouched (zero
- * adapter calls for it).
+ * adapter calls for it). `startWatch` is a real network call to the provider, so it (and the
+ * row update that persists its result) is wrapped in its own `try`/`catch` — mirroring
+ * `runLayerSync`'s and `syncCalendarConnections`'s per-item isolation — so one layer's
+ * transient failure (timeout, 429, 5xx, or a malformed adapter response) is tallied into
+ * {@link WatchRegistrationTally.errors} and never aborts the rest of this connection's
+ * layers, this user's other providers, or (via `sweepCalendarSync`) every later user in the
+ * sweep batch.
  */
 export async function registerOrRenewWatches(
   db: Database,
   opts: RegisterOrRenewWatchesOptions,
 ): Promise<WatchRegistrationTally> {
   let registered = 0;
+  const errors: string[] = [];
 
   for (const [providerKey, mod] of Object.entries(opts.adapters)) {
     const provider = CalendarProvider.parse(providerKey);
@@ -1011,25 +1024,30 @@ export async function registerOrRenewWatches(
           layer.watchExpiresAt.getTime() - opts.now.getTime() <= WATCH_RENEWAL_WINDOW_MS;
         if (!dueForRegistration) continue;
 
-        const watch = await startWatch({
-          credentials,
-          externalLayerId: layer.externalLayerId,
-          callbackUrl,
-        });
-        await db
-          .update(calendarLayer)
-          .set({
-            watchChannelId: watch.channelId,
-            watchResourceId: watch.resourceId,
-            watchToken: watch.token,
-            watchExpiresAt: watch.expiresAt,
-            watchRegisteredAt: opts.now,
-          })
-          .where(eq(calendarLayer.id, layer.id));
-        registered += 1;
+        try {
+          const watch = await startWatch({
+            credentials,
+            externalLayerId: layer.externalLayerId,
+            callbackUrl,
+          });
+          await db
+            .update(calendarLayer)
+            .set({
+              watchChannelId: watch.channelId,
+              watchResourceId: watch.resourceId,
+              watchToken: watch.token,
+              watchExpiresAt: watch.expiresAt,
+              watchRegisteredAt: opts.now,
+            })
+            .where(eq(calendarLayer.id, layer.id));
+          registered += 1;
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Watch registration failed';
+          errors.push(`${layer.externalLayerId}: ${message}`);
+        }
       }
     }
   }
 
-  return { registered };
+  return { registered, errors };
 }

@@ -17,7 +17,7 @@ import { ActorAvatar } from './actor-avatar';
 import { ProviderBadge } from './provider-badge';
 import { StreamEventActions, type StreamRowActions } from './stream-event-actions';
 import { StreamEventDetail } from './stream-event-detail';
-import { kindGlyph, streamDescription, type StreamEventRow } from './stream-meta';
+import { kindGlyph, relevanceLabel, streamDescription, type StreamEventRow } from './stream-meta';
 
 /** Props for {@link StreamRow}. */
 export interface StreamRowProps {
@@ -44,6 +44,7 @@ export function StreamRow({
   onSelect,
 }: StreamRowProps): JSX.Element {
   const glyph = kindGlyph(row.kind);
+  const relevance = relevanceLabel(row.relevance);
   return (
     <div className="group hover:bg-surface-container/40 relative flex items-start gap-3 rounded-lg px-3 py-3">
       <ActorAvatar
@@ -56,6 +57,11 @@ export function StreamRow({
         <p className="text-on-surface/90 text-body leading-snug">{streamDescription(row)}</p>
         <StreamEventDetail row={row} />
         <div className="text-on-surface-variant mt-1.5 flex flex-wrap items-center gap-2 text-xs">
+          {relevance ? (
+            <span className="bg-primary-container/50 text-on-primary-container inline-flex items-center rounded-md px-1.5 py-0.5 font-medium">
+              {relevance}
+            </span>
+          ) : null}
           <ProviderBadge system={row.system} />
           {scope === 'me' ? (
             <OrgChip orgId={row.organizationId} name={orgName ?? 'Workspace'} />

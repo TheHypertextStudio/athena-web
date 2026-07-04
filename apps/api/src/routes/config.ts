@@ -26,10 +26,11 @@ import { slackConfigured } from '../lib/slack-app';
  * One Google grant funds every Google product connector; GitHub/Linear fund their own. Mirrors the
  * connector → social mapping (`socialProviderId`) in the other direction.
  */
-const CONNECTORS_BY_PROVIDER: Record<SocialProvider, readonly string[]> = {
+const CONNECTORS_BY_PROVIDER: Partial<Record<SocialProvider, readonly string[]>> = {
   google: ['drive', 'gmail', 'calendar', 'gtasks'],
   github: ['github'],
   linear: ['linear'],
+  // `apple` (sign-in only) and `discord` (observe-only identity link) unlock no work connectors.
 };
 
 const config = new Hono<AppEnv>().get(
@@ -50,7 +51,7 @@ Carries nothing secret and requires no session. Related: the authenticated perso
     // Slack is not a social provider — its availability derives from the shared Slack app's
     // own OAuth credentials (same derived-from-real-setup rule, different credential).
     const connectors = [
-      ...oauthProviders.flatMap((p) => CONNECTORS_BY_PROVIDER[p]),
+      ...oauthProviders.flatMap((p) => CONNECTORS_BY_PROVIDER[p] ?? []),
       ...(slackConfigured() ? ['slack'] : []),
     ];
     return ok(c, PublicConfigOut, {

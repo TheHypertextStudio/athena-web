@@ -26,7 +26,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { queryKeys } from '../../../src/lib/query-keys';
 
 // Hoisted so the mock factories (which Vitest lifts above imports) can reference them.
-const { push, orgPost } = vi.hoisted(() => ({ push: vi.fn(), orgPost: vi.fn() }));
+const { push, orgPost, listUserPasskeys, addPasskey } = vi.hoisted(() => ({
+  push: vi.fn(),
+  orgPost: vi.fn(),
+  listUserPasskeys: vi.fn(),
+  addPasskey: vi.fn(),
+}));
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push }),
@@ -34,6 +39,7 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('../../../src/lib/auth-client', () => ({
   useSession: () => ({ data: { user: { id: 'u1', name: 'Ada Lovelace' } } }),
+  passkey: { listUserPasskeys, addPasskey },
 }));
 
 vi.mock('../../../src/lib/api', () => ({
@@ -66,6 +72,11 @@ function renderPage(ui: ReactElement): ReturnType<typeof render> {
 beforeEach(() => {
   push.mockReset();
   orgPost.mockReset();
+  addPasskey.mockReset();
+  // Default: the account already has a passkey, so the optional passkey beat stays off and connect
+  // remains the terminal step (the contract the fork tests below assert).
+  listUserPasskeys.mockReset();
+  listUserPasskeys.mockResolvedValue({ data: [{ id: 'pk_1' }], error: null });
 });
 
 afterEach(() => {
@@ -156,5 +167,63 @@ describe('OnboardingPage — team fork', () => {
     // The primary action enters the workspace.
     fireEvent.click(screen.getByRole('button', { name: 'Continue without connecting' }));
     expect(push).toHaveBeenCalledWith('/today');
+  });
+});
+
+describe('OnboardingPage — passkey enrollment (social sign-up)', () => {
+  it('offers a passkey beat after connect when the account has none, then enrols and enters', async () => {
+    // A social sign-up: no passkey yet, so the optional enrollment beat is appended.
+    listUserPasskeys.mockResolvedValue({ data: [], error: null });
+    addPasskey.mockResolvedValue({ data: { id: 'pk_new' }, error: null });
+    orgPost.mockResolvedValue(
+      jsonResponse(true, { organization: { id: 'org_personal', name: "Ada's space" } }),
+    );
+    renderPage(<OnboardingPage />);
+
+    fireEvent.click(screen.getByText('Just me'));
+    fireEvent.click(screen.getByRole('button', { name: 'Create your space' }));
+
+    // On the connect step, leaving it now advances to the passkey beat instead of navigating.
+    await waitFor(() => {
+      expect(screen.getByText('Google Tasks')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Skip for now' }));
+
+    // The passkey step appears; enrolling runs the add ceremony, then enters the workspace.
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Add a passkey' })).toBeTruthy();
+    });
+    expect(push).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Add a passkey' }));
+
+    await waitFor(() => {
+      expect(addPasskey).toHaveBeenCalledTimes(1);
+    });
+    expect(push).toHaveBeenCalledWith('/today');
+  });
+
+  it('lets the user skip the passkey beat straight into the workspace', async () => {
+    listUserPasskeys.mockResolvedValue({ data: [], error: null });
+    orgPost.mockResolvedValue(
+      jsonResponse(true, { organization: { id: 'org_personal', name: "Ada's space" } }),
+    );
+    renderPage(<OnboardingPage />);
+
+    fireEvent.click(screen.getByText('Just me'));
+    fireEvent.click(screen.getByRole('button', { name: 'Create your space' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Google Tasks')).toBeTruthy();
+    });
+    // Skip the tool connection → passkey beat.
+    fireEvent.click(screen.getByRole('button', { name: 'Skip for now' }));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Add a passkey' })).toBeTruthy();
+    });
+
+    // Skip the passkey beat → straight into the workspace, no add ceremony.
+    fireEvent.click(screen.getByRole('button', { name: 'Skip for now' }));
+    expect(push).toHaveBeenCalledWith('/today');
+    expect(addPasskey).not.toHaveBeenCalled();
   });
 });

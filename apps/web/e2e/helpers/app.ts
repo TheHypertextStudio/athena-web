@@ -57,45 +57,60 @@ async function pollCompiled(page: Page, path: string, init: ApiInit = {}): Promi
  */
 async function warmUpAuth(page: Page): Promise<void> {
   const post: ApiInit = { method: 'POST', body: {} };
-  // The independent passkey routes compile in parallel; minting a signed intent context (which warms
-  // its own route) runs alongside them.
-  const [context] = await Promise.all([
-    apiFetch(page, '/passkey-intent', {
+  // The independent passkey + sign-up-challenge routes compile in parallel.
+  await Promise.all([
+    apiFetch(page, '/api/auth/sign-up/request-code', {
       method: 'POST',
       body: { name: 'warm', email: `warm-${Date.now()}@example.com` },
-    })
-      .then((r) => (r.body as { context?: string } | null)?.context ?? 'bogus')
-      .catch(() => 'bogus'),
+    }).catch(() => null),
+    pollCompiled(page, '/api/auth/sign-up/verify-code', post),
     pollCompiled(page, '/api/auth/passkey/generate-authenticate-options'),
     pollCompiled(page, '/api/auth/passkey/verify-authentication', post),
     pollCompiled(page, '/api/auth/passkey/verify-registration', post),
+    pollCompiled(page, '/api/auth/passkey/generate-register-options', post),
   ]);
-  // generate-register-options needs the signed context, so warm it once that's minted.
-  const params = new URLSearchParams({ name: 'warm', context });
-  await pollCompiled(page, `/api/auth/passkey/generate-register-options?${params.toString()}`);
 }
 
 /**
  * Sign up via the real passkey sign-up ceremony; resolves once onboarding is reached.
  *
  * @remarks
- * Warms the passkey routes first, then runs the ceremony — retrying the whole thing (same throwaway
- * email; a failed ceremony creates no user) past a transient cold-route "temporarily unavailable".
- * The sign-up form is controlled, so it re-fills until React has hydrated and the submit enables.
+ * Two-step verify-before-passkey flow: (1) enter name + email and request a one-time code; the dev
+ * stack echoes the code in the `/sign-up/request-code` response (`APP_MODE=local`), which we read
+ * off the intercepted response, (2) enter the code and run the passkey ceremony. Warms the routes
+ * first and retries in place past a transient cold-route error. A failed attempt may have already
+ * created the account, so on retry the "Use a different email" reset returns to a clean step 1.
  */
 export async function signUp(page: Page, { name, email }: TestUser): Promise<void> {
-  await page.goto('/sign-up', { waitUntil: 'networkidle' });
+  await page.goto('/sign-up', { waitUntil: 'domcontentloaded' });
   await warmUpAuth(page);
 
-  const createBtn = page.getByRole('button', { name: 'Create account' });
+  const continueButton = page.getByRole('button', { name: 'Continue with email' });
+  const verifyButton = page.getByRole('button', { name: 'Verify and create account' });
+
   for (let attempt = 0; attempt < 4; attempt++) {
-    if (attempt > 0) await page.goto('/sign-up', { waitUntil: 'networkidle' });
+    // Step 1: name + email → request a code, capturing the dev-echoed code from the response.
     await expect(async () => {
       await page.fill('#name', name);
       await page.fill('#email', email);
-      expect(await createBtn.isEnabled()).toBe(true);
+      expect(await continueButton.isEnabled()).toBe(true);
     }).toPass({ timeout: TIMEOUTS.ui });
-    await createBtn.click();
+
+    const codeResponse = page.waitForResponse(
+      (r) => r.url().includes('/api/auth/sign-up/request-code') && r.request().method() === 'POST',
+      { timeout: TIMEOUTS.ceremony },
+    );
+    await continueButton.click();
+    const devCode = await codeResponse
+      .then((r) => r.json())
+      .then((b: { devCode?: string }) => b.devCode)
+      .catch(() => undefined);
+
+    // Step 2: enter the code and complete the passkey ceremony.
+    if (devCode) {
+      await page.fill('#code', devCode);
+      await verifyButton.click();
+    }
 
     const reached = await Promise.race([
       page.waitForURL('**/onboarding**', { timeout: TIMEOUTS.ceremony }).then(() => true),
@@ -108,6 +123,11 @@ export async function signUp(page: Page, { name, email }: TestUser): Promise<voi
         .catch(() => null),
     ]);
     if (reached === true) return;
+    // Reset to a clean step 1 before retrying (a prior attempt may have consumed the code).
+    await page
+      .getByRole('button', { name: 'Use a different email' })
+      .click()
+      .catch(() => undefined);
     await page.waitForTimeout(1500); // let the dev route settle, then retry
   }
   throw new Error('sign-up never reached onboarding after retries');

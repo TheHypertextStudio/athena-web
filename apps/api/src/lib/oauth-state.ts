@@ -69,7 +69,8 @@ export function verifyConnectState(
       unknown
     >;
     if (typeof decoded['exp'] !== 'number' || decoded['exp'] < nowMs) return null;
-    const { exp: _exp, ...rest } = decoded;
+    const rest = { ...decoded };
+    delete rest['exp'];
     return rest;
   } catch {
     return null;

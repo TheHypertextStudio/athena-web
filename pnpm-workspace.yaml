@@ -1,6 +1,7 @@
 packages:
   - 'apps/*'
   - 'packages/*'
+  - 'services/*'
   - 'tooling/*'
 
 # Force a single @types/node (matching the Node 26 default runtime) across the whole

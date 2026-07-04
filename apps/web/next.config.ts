@@ -27,6 +27,27 @@ function authAllowedDevOrigins(): string[] {
 }
 
 /**
+ * Baseline security response headers applied to every route.
+ *
+ * @remarks
+ * `Content-Security-Policy: frame-ancestors 'none'` (plus the legacy `X-Frame-Options: DENY`) is the
+ * anti-clickjacking control — it stops the OAuth consent page (`/oauth/authorize`) and every other
+ * surface from being framed, closing the UI-redress attack. Only the framing directive is set here;
+ * a full content CSP (`script-src`/`style-src`) is a deliberate follow-up (Next's inline styles
+ * need a nonce pipeline first) and would be introduced in report-only mode. HSTS is honored only
+ * over HTTPS (ignored on localhost). `publickey-credentials-*` are intentionally NOT restricted so
+ * passkeys keep working.
+ */
+const securityHeaders = [
+  { key: 'Content-Security-Policy', value: "frame-ancestors 'none'" },
+  { key: 'X-Frame-Options', value: 'DENY' },
+  { key: 'X-Content-Type-Options', value: 'nosniff' },
+  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+  { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains' },
+  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+];
+
+/**
  * Next.js config for the Docket product app.
  *
  * @remarks
@@ -46,6 +67,9 @@ const nextConfig: NextConfig = {
   // Portless serves dev over https://web.docket.localhost; allow its HMR/devtools resources
   // so hot-reload works (Next 16 blocks cross-origin dev resources by default).
   allowedDevOrigins: ['web.docket.localhost', '*.docket.localhost', ...authAllowedDevOrigins()],
+  async headers() {
+    return [{ source: '/:path*', headers: securityHeaders }];
+  },
   async rewrites() {
     return [
       { source: '/v1/:path*', destination: `${API_ORIGIN}/v1/:path*` },

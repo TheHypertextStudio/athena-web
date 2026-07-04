@@ -1,7 +1,148 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-07-02
+> **Last Updated**: 2026-07-03
+
+---
+
+## Active Tasks
+
+### [AUTH-SEC-001] Auth security & UX audit remediation
+
+- **Status**: IN_PROGRESS (M0 foundations landed & green; M1 critical ATO fix next)
+- **Started**: 2026-07-02
+- **Priority**: P0
+- **Description**: Remediate all findings from the auth audit — the critical passkey
+  pre-registration account-takeover, the `emailVerified:true`-without-verification linking risk,
+  missing rate limiting, absent security headers, and the P1/P2 UX gaps (session-expiry UX, passkey
+  management, sign-out, active sessions, change-email). Root fix: **verify-before-passkey** — signup
+  proves inbox ownership before the WebAuthn ceremony binds a credential, no usernames introduced.
+- **Approach**: Six milestones (M0 foundations → M1 close ATO → M2 rate limits/headers → M3
+  session-expiry UX → M4 passkey management → M5 remaining surfaces). Plan:
+  `~/.claude/plans/how-complete-is-our-witty-simon.md`.
+- **Subtasks**:
+  - [x] M0: `buildMailer(env)` factory in `@docket/boundaries`; pure auth-email builders
+        (`packages/auth/src/emails.ts`); explicit session config (`expiresIn` 30d / `updateAge` 1d /
+        `freshAge` 300s) in `buildAuthOptions` — closes the no-hidden-defaults gap.
+  - [x] M1: `signupChallenge()` plugin (`/sign-up/request-code` + `/sign-up/verify-code`, anti-enum,
+        rate-limited); `resolvePasskeyUser` requires a single-use verified intent + rejects existing
+        credentialed accounts; HMAC passkey-intent route + module DELETED; two-step web sign-up
+        (verify-before-passkey); e2e helper updated (dev-gated code echo); ATO-closure integration tests.
+  - [x] M2: global Better Auth `rateLimit` (`storage:'database'` via new `rate_limit` table +
+        migration `0018`; per-path `customRules` on sign-in/consent/token/verify); security headers
+        (`frame-ancestors 'none'` + `X-Frame-Options`/HSTS/`nosniff`/Referrer-Policy/Permissions-Policy)
+        on web + admin `next.config.ts`.
+  - [x] M3: mid-session 401 → `SessionExpiredError` in `unwrap`, global sign-out + `/sign-in?next=`
+        redirect wired via injected `createQueryClient({ onError })` in `providers.tsx` (401 not
+        retried); sign-in honors a validated same-origin `?next=`; `use-reauth` gives no-passkey users a
+        clear "add a passkey" message instead of a cryptic failure; visible **AccountMenu** (sign-out)
+        pinned to the sidebar foot via a new `footer` slot on the design-system `Sidebar`.
+  - [x] M4: **passkey management** in Settings → Security (new `passkeys-section.tsx`: list via
+        `passkey.listUserPasskeys`, add from the authenticated session via `passkey.addPasskey`, rename
+        via `updatePasskey`, remove via `deletePasskey` with a louder confirm when it is the account's
+        only credential); `SecurityTab` split so passkeys + recovery-codes cards each own their loading
+        state. **Onboarding passkey enrollment** for social sign-ups: a skippable `passkey` beat
+        (new `step-passkey.tsx`) appended to either fork only when `listUserPasskeys` returns empty; the
+        connect exit routes through it (both primary and Skip) so the nudge isn't lost, and `addPasskey`
+        runs the session-bound ceremony then enters the workspace.
+  - [ ] M5 (see plan).
+- **Notes**: M0–M4 gate green — `@docket/boundaries` 268, `@docket/auth` 46, `@docket/db` 40,
+  `@docket/ui` 255, `@docket/api` 906, `@docket/web` 200 tests; typecheck + lint clean on all
+  touched packages. (Pre-existing web-lint errors in untracked WIP `src/lib/use-now.ts` are the
+  user's concurrent edits, outside this work.) ATO closed at the root; DECISIONS.md →
+  "auth-security" records it.
+
+### [SEARCH-001] Workspace-wide semantic search foundation
+
+- **Status**: REVIEW (design spec written; implementation plan pending user review)
+- **Started**: 2026-07-03
+- **Priority**: P1
+- **Description**: Build workspace-wide search as a durable, event-log-aware read model rather than
+  extending the current task/project/program `ILIKE` endpoint. Search must preserve the semantics of
+  work objects, people/agents, content/context, and canonical activity events while enforcing the
+  same tenant and visibility boundaries as the source entities.
+- **Approach**: Use a Postgres-owned `search_document` projection plus a durable
+  `search_index_job` outbox. Entity projectors preserve typed result kinds, IA family, route,
+  subject, facets, snippets, ranking signals, and query-time visibility metadata. The canonical
+  `event` log becomes both searchable `activity` content and an indexing signal for related
+  objects; direct entity-write enqueueing remains the correctness path so search is not dependent on
+  best-effort event emission.
+- **Subtasks**:
+  - [x] Product/data architecture spec (`docs/superpowers/specs/2026-07-03-workspace-search-design.md`)
+  - [ ] Implementation plan with TDD tasks
+  - [ ] Phase 1 foundation and palette parity
+  - [ ] Phase 2 full entity coverage and inherited visibility tests
+  - [ ] Phase 3 faceted `/search` page
+- **Notes**: The design keeps `/v1/hub/search` as the command-palette-compatible entry point,
+  adds an org-scoped search endpoint, and leaves a future mirror seam for external/vector search
+  after the internal read model is stable.
+
+### [DISCORD-001] Discord mentions in the activity firehose
+
+- **Status**: REVIEW (Phase 1 + Phase 2 code + tests + docs landed; gate green on all touched
+  packages; pending commit)
+- **Started**: 2026-07-02
+- **Priority**: P2
+- **Description**: Let a Docket user see everywhere they're @-mentioned on Discord in the personal
+  Stream, mirroring how Slack mentions already surface. The design confronts Discord's transport
+  limitation head-on and fixes a latent gap in external-mention routing.
+- **Approach**: Discord joins the canonical Event substrate as an observe-only provider (like
+  Slack), with two Discord-specific additions. (1) **Transport**: ordinary message mentions are
+  only available over a persistent Gateway WebSocket (`MESSAGE_CONTENT` intent), which the
+  serverless+cron platform can't host — so the socket is quarantined in a separate always-on
+  `services/discord-relay` sidecar that POSTs to a token-routed ingest edge; Docket's brain stays
+  serverless and transport-agnostic. (2) **Attribution seam**: today the drain routes external
+  mentions only to the integration owner — we add `participantUserIds` to routing and resolve
+  mentioned external ids → Docket users via Better Auth account linking, so mentions surface for
+  the person actually named. The seam is provider-neutral infra (Discord is its first/only consumer
+  today — Slack has no OAuth link and Linear's observer emits no participants), verified through the
+  mock observer's `participants` fixture with no live Discord infra. Delivered in two phases: Phase 1
+  (serverless HTTP seam, Ed25519 observer, identity linking, attribution, firehose UI) and Phase 2
+  (the Gateway relay).
+- **Subtasks**:
+  - [x] Architecture spec (`docs/engineering/specs/discord-observation.md`)
+  - [x] Frozen decisions (Gateway-relay transport; mention-attribution seam) in `DECISIONS.md`
+  - [x] Phase 1A — Discord provider leaves (types, enum+migration `0017`, Ed25519 observer, ingest, select)
+  - [x] Phase 1B — per-user OAuth "Connect Discord" (Better Auth `identify` + live catalog entry)
+  - [x] Phase 1C — attribution seam (`participantUserIds` in `routing.ts` + drain account resolution)
+  - [x] Phase 1D — firehose UI ("Mentioned you" chip; Discord badge + Source filter; Kind=Mention view)
+  - [x] Phase 2 — `services/discord-relay` + token-routed `/internal/ingest/discord/:token`
+- **Notes**: The whole ingest → drain → `event_recipient` → personal-feed pipeline already existed;
+  the firehose renders mentions once recipient rows are written. `RealSlackObserver` was the direct
+  template; the only structural difference is Ed25519 signature verification (public key) vs HMAC.
+  The mentions view is the existing Kind=Mention toolbar filter (a `relevance` catalog filter would
+  break the org firehose, which has no `event_recipient` join); the new chip surfaces the reason.
+- **Files changed**: `packages/types/src/{event,identity,public-config}.ts` (add `discord`
+  source/`SourceSystemKind`, `discord.message` `EventDetail`, `discord` `IdentityProvider`, new
+  `SignInProvider` superset for `oauthProviders`); `packages/db/src/enums.ts` + migration
+  `0017_fat_malice.sql` (`source_system += 'discord'`); `packages/boundaries/src/{ports/observer,
+real/observer-discord,mock/observer,select}.ts` (Ed25519 `RealDiscordObserver` + registry + mock
+  fixture); `packages/env/src/{slices,registry-vars-core,api}.ts` (`DISCORD_PUBLIC_KEY` +
+  OAuth pair + cross-field rule); `packages/auth/src/auth-builder.ts` (Discord social provider,
+  `identify` scope); `apps/api/src/{routes/ingest,routes/event-sync,consumers/routing,routes/config,
+routes/integration-provider}.ts` (`/discord` + `/discord/:token` edges, drain source map +
+  attribution resolution, `participantUserIds` routing); `apps/web/src/components/{stream/*,settings/
+identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source option, "Mentioned
+  you" chip, live catalog entry); new `services/discord-relay/` worker; `.env.example`; docs
+  (`discord-observation.md`, `DECISIONS.md`, `activity-feed.md`, this log).
+- **Gate**: typecheck green — `@docket/{types,env,auth,boundaries,db,ui,api,discord-relay}` (web
+  typecheck has one PRE-EXISTING, unrelated error in the attachments WIP `use-attachments.ts:80`,
+  untouched here). Lint clean on every touched package (cleared 2 pre-existing `.toString()` lint
+  errors in `connector-github-app.test.ts` blocking a green boundaries run). Tests: boundaries
+  265/265 (incl. `observer-discord` 9), types 211, auth 43 (incl. Discord mount), discord-relay
+  10/10, api `ingest-discord` 4 + `ingest-discord-token` 3 + `event-sync-attribution` 2 +
+  `event-sync`/`config`/`me-identities`/`integration-provider` green. `@docket/api` dist rebuilt so
+  web RPC types pick up `discord`.
+- **Learnings**: Discord's only per-user-mention transport is the Gateway socket, which the
+  serverless core can't hold — the fix is a transport-agnostic ingest edge + a quarantined relay,
+  reusing the existing `event_subscription.ingestToken` seam so no new routing pattern is invented.
+  The attribution seam (`participantUserIds`) is real substance, not just "add an adapter": external
+  mentions previously reached only the integration owner. Reusing Better Auth `account` linking (its
+  `accountId` IS the provider snowflake) avoids a parallel identity table. Surfacing this exposed a
+  latent `oauthProviders` type gap (it carried `apple`, a sign-in-only provider absent from
+  `IdentityProvider`) — fixed with the `SignInProvider` superset.
+  The mentions view is the existing Kind=Mention toolbar filter (a `relevance` catalog filter would
+  break the org firehose, which has no `event_recipient` join); the new chip surfaces the reason.
 
 ---
 
@@ -40,6 +181,62 @@
 
 ### [ATTACH-002] File attachments (upload) + util centralization
 
+### [AUTH-PASSKEY-002] Passkey sign-in and sign-up recovery hardening
+
+- **Completed**: 2026-07-03
+- **Summary**: Hardened the passkey auth path after the browser flow exposed a bad recovery edge:
+  sign-up registration can succeed while the immediate session-start sign-in fails. The sign-up page
+  now treats passkey registration and session start as separate states, locks the registered identity,
+  and lets the user click "Finish sign in" without re-registering the passkey. The returning sign-in
+  error copy is now user-facing rather than cookie jargon, and the button remains retryable after a
+  failed session-read recovery.
+- **Files Changed**: `apps/web/src/app/(auth)/sign-up/page.tsx`,
+  `apps/web/src/app/(auth)/sign-in/page.tsx`, `apps/web/e2e/helpers/app.ts`,
+  `apps/web/e2e/sign-in.spec.ts`, and
+  `apps/web/tests/components/auth/{sign-up-page,sign-in-page}.test.tsx`.
+- **Learnings**: The real e2e path must be the auth gate. Component tests caught the local state
+  behavior, but Playwright caught cold dev route/proxy behavior and proved the final cookie-backed
+  `/v1/orgs` read after passkey sign-in.
+- **Gate**: Focused auth component tests 5/5; `pnpm --filter @docket/web exec playwright test
+e2e/sign-in.spec.ts` passes; focused ESLint on touched auth/e2e files passes; `@docket/web`
+  typecheck passes. The local Node runtime still warns because it is `v24.3.0` and the repo requires
+  `>=24.15 <27`.
+
+### [AUTH-APPLE-001] Sign in with Apple (web)
+
+- **Completed**: 2026-07-02
+- **Summary**: Added Apple as a fourth web OAuth provider alongside Google/GitHub/Linear, reusing the
+  existing env-gated, `/v1/config`-derived provider machinery so availability is decided server-side
+  and the client never drifts. Apple differs in two ways, both handled: (1) its `client_secret` is a
+  short-lived ES256 JWT — not a static string — so we store the four **durable** credentials
+  (Services ID, Team ID, Key ID, `.p8`) and mint a fresh 180-day JWT at server boot
+  (`generateAppleClientSecret`, synchronous via Node `crypto.sign` `ieee-p1363`, no `jose` dep), which
+  removes the silent-6-month-expiry footgun a pre-generated secret would carry; (2) Apple posts its
+  callback (form_post) from `appleid.apple.com`, so that origin is auto-added to `trustedOrigins` only
+  when Apple is configured. The button is Apple-HIG brand-compliant (its own black/white treatment via
+  `on-surface`/`surface` tokens so it flips correctly in light/dark, with the Apple logo), unlike the
+  plain outline buttons the other providers use. Web-only — no native iOS ID-token flow.
+- **Files Changed**: `packages/auth/src/apple-secret.ts` (new), `packages/auth/src/auth-builder.ts`,
+  `packages/auth/src/index.ts`, `packages/env/src/{slices,registry-vars-core}.ts`,
+  `apps/web/src/app/(auth)/_lib/oauth-providers.ts`,
+  `apps/web/src/app/(auth)/_components/oauth-buttons.tsx`,
+  `packages/auth/tests/{apple-secret.test.ts (new),auth.test.ts}`, `docs/local-development.md`,
+  `docs/engineering/deployment.md`, `docs/engineering/specs/env-and-bootstrap.md`,
+  and `docs/WORKLOG.md`.
+- **Operator wiring gap (called out in the docs)**: the code is complete, but Apple's four prod vars
+  are **not yet** in Secret Manager or `.github/workflows/deploy.yml` (unlike the other six provider
+  vars, which are seeded `placeholder` + injected). `deployment.md` documents the create-secrets +
+  add-`deploy.yml`-lines steps; adding the lines before the secrets exist would break the deploy.
+- **Learnings**: `crypto.sign(..., { dsaEncoding: 'ieee-p1363' })` emits the fixed-length r‖s
+  signature JOSE/ES256 needs directly, so the secret can be minted synchronously _inside_ the pure
+  `buildAuthOptions` — no `jose`, no async, no change to the module import graph. Returning the typed
+  credentials object from `resolveAppleCredentials` (rather than a boolean) narrows the four env vars
+  to `string` for the caller, so the provider wiring needs no non-null assertions. Availability is
+  all-or-nothing across the four `APPLE_*` vars, unlike the single id+secret pair of the others.
+- **Gate**: `@docket/{auth,env}` typecheck + lint clean; auth suite 42/42 (incl. new
+  Apple-secret signing/verification and provider-gating/trusted-origin tests); `@docket/web`
+  typecheck clean and the two touched web files lint clean.
+
 - **Completed**: 2026-07-02
 - **Summary**: Added a `file` attachment kind so users can upload files onto a task, alongside the
   existing `email`/`url`/`calendar_event` pointer kinds. Files are stored through the existing
@@ -69,6 +266,7 @@
   upload/download/delete-cleanup/size-limit/capability), OpenAPI spec tests pass; boundaries 256/256;
   web suite 187/187; typecheck + lint clean on all touched files (pre-existing red: `graph-insight.ts`
   and `task-reparent.test.ts`, unrelated). Node still warns (`v24.3.0` vs required `>=24.15 <27`).
+
 ### [SLACK-001] End-user Slack integration — mentions, DMs & threads in the Stream
 
 - **Completed**: 2026-07-02
@@ -1202,12 +1400,13 @@ read, `/v1/orgs` returned `401` and the page showed the opaque "session did not 
 message even though the passkey ceremony itself had completed.
 
 Change: `routeAfterSignIn` now gives the first authenticated org lookup a short, bounded retry
-window before surfacing a session-cookie error. The final error copy now names the actual problem:
-Docket could not read the session cookie.
+window before surfacing a retryable sign-in error. The final error copy is user-facing recovery
+language instead of cookie/session jargon.
 
-Validation: added a regression case in `apps/web/tests/components/auth/sign-in-page.test.tsx` where
-the first post-passkey org lookup returns `401` and the next one succeeds. Targeted Vitest, ESLint,
-and `@docket/web` typecheck pass.
+Validation: added regression coverage in `apps/web/tests/components/auth/sign-in-page.test.tsx` for
+both a transient `401` that recovers and a persistent failure that leaves the passkey button ready
+for another attempt. Targeted Vitest and ESLint pass; full `@docket/web` typecheck is currently
+blocked by unrelated dirty canvas work.
 
 ---
 

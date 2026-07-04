@@ -155,9 +155,10 @@ export const attachmentSubjectType = pgEnum('attachment_subject_type', ['task'])
  * `email` is an integration-backed pointer (content stays in Gmail; we hold metadata + a
  * snapshot snippet and fetch on demand). `url` is a dumb pointer (a pasted link + fetched
  * title/favicon). `calendar_event` is a first-party Google Calendar event pointer used when
- * a user creates a task from an event.
+ * a user creates a task from an event. `file` is an uploaded file whose bytes live in blob
+ * storage (`blob_key`) with `file_name`/`mime_type`/`byte_size` metadata on the row.
  */
-export const attachmentKind = pgEnum('attachment_kind', ['email', 'url', 'calendar_event']);
+export const attachmentKind = pgEnum('attachment_kind', ['email', 'url', 'calendar_event', 'file']);
 /**
  * Lifecycle of an Athena-synthesized task suggestion drawn from an email.
  *
@@ -314,6 +315,7 @@ export const sourceSystem = pgEnum('source_system', [
   'linear',
   'github',
   'slack',
+  'discord',
   'google_calendar',
   'gmail',
 ]);

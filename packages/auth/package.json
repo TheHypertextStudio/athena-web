@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "license": "UNLICENSED",
-  "description": "Docket authentication — the Better Auth configuration and the passkey-intent signer.",
+  "description": "Docket authentication — the Better Auth configuration and passwordless sign-up challenge.",
   "exports": {
     ".": "./src/index.ts"
   },
@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@better-auth/passkey": "catalog:",
+    "@docket/boundaries": "workspace:*",
     "@docket/db": "workspace:*",
     "@docket/env": "workspace:*",
     "@docket/types": "workspace:*",

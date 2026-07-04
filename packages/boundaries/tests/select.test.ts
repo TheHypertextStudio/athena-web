@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildContainer, selectAdapter, type BoundaryEnv } from '../src/select';
+import { buildContainer, buildMailer, selectAdapter, type BoundaryEnv } from '../src/select';
 import { InMemoryBillingGateway } from '../src/mock/billing';
 import { MockAgentRuntime } from '../src/mock/agent-runtime';
 import { MockConnector } from '../src/mock/connector';
@@ -245,5 +245,28 @@ describe('buildContainer', () => {
     const conn = await container.connector.connect({ provider: 'linear', referenceId: 'org_1' });
     expect(conn.provider).toBe('linear');
     expect(conn.status).toBe('connected');
+  });
+});
+
+describe('buildMailer', () => {
+  it('returns the capture mock when SMTP is unconfigured', () => {
+    expect(buildMailer({ APP_MODE: 'production' })).toBeInstanceOf(CaptureMailer);
+  });
+
+  it('returns the capture mock under APP_MODE=test even with a real relay', () => {
+    expect(
+      buildMailer({ APP_MODE: 'test', SMTP_HOST: 'smtp.example.com', MAIL_FROM: 'no@docket.dev' }),
+    ).toBeInstanceOf(CaptureMailer);
+  });
+
+  it('returns the SMTP mailer in production when the relay + from-address are real-shaped', () => {
+    expect(
+      buildMailer({
+        APP_MODE: 'production',
+        SMTP_HOST: 'smtp.example.com',
+        SMTP_PORT: '587',
+        MAIL_FROM: 'noreply@docket.dev',
+      }),
+    ).toBeInstanceOf(SmtpMailer);
   });
 });

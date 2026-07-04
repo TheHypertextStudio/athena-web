@@ -46,4 +46,11 @@ export interface BlobStore {
    * @returns the URL the blob is addressable at.
    */
   url(key: string): string;
+
+  /**
+   * Delete the blob stored under a key. Idempotent — a no-op when no blob exists.
+   *
+   * @param key - The storage key to remove.
+   */
+  delete(key: string): Promise<void>;
 }

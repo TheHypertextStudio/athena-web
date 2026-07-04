@@ -30,21 +30,12 @@ import {
 } from '@docket/ui/primitives';
 import { type JSX, useState } from 'react';
 
+import { clockValue, toISODateTime } from '@/lib/format-time';
+
 import { type AgendaEntry, isTimeboxed, shiftISODate, useAgenda } from './agenda-context';
 
 /** Which popover editor is open (the actions that need input), or `null` when none is. */
 type EntryEditor = 'timebox' | 'move' | null;
-
-/** Local `HH:mm` clock value (24h) for an ISO instant, for an `<input type="time">`. */
-function clockValue(iso: string): string {
-  const d = new Date(iso);
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-}
-
-/** Combine a `YYYY-MM-DD` day and a `HH:mm` clock into an ISO instant (parsed as local time). */
-function toISODateTime(date: string, clock: string): string {
-  return new Date(`${date}T${clock}:00`).toISOString();
-}
 
 /** Props for {@link AgendaEntryActions}. */
 export interface AgendaEntryActionsProps {

@@ -16,7 +16,7 @@ import { ActorAvatar } from './actor-avatar';
 import { AthenaPlan } from './athena-plan';
 import { ProviderBadge } from './provider-badge';
 import { StreamEventActions, type StreamRowActions } from './stream-event-actions';
-import { kindGlyph, streamDescription, type StreamEventRow } from './stream-meta';
+import { kindGlyph, relevanceLabel, streamDescription, type StreamEventRow } from './stream-meta';
 
 /** Build the agent brief from an event for the drafted-plan panel. */
 function planPrompt(row: StreamEventRow): string {
@@ -47,6 +47,7 @@ export function EventDrawer({
 }: EventDrawerProps): JSX.Element | null {
   if (!row) return null;
   const glyph = kindGlyph(row.kind);
+  const relevance = relevanceLabel(row.relevance);
   return (
     <div className="fixed inset-0 z-40" role="dialog" aria-modal="true">
       <button
@@ -61,6 +62,11 @@ export function EventDrawer({
           <span className="text-on-surface-variant text-xs capitalize">
             {row.kind.replace(/_/g, ' ')}
           </span>
+          {relevance ? (
+            <span className="bg-primary-container/50 text-on-primary-container inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-medium">
+              {relevance}
+            </span>
+          ) : null}
           <button
             type="button"
             onClick={onClose}

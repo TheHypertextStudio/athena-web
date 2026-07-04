@@ -330,7 +330,9 @@ export const comment = pgTable(
  * `metadata` + a snapshot snippet and fetch the thread on demand via the already-granted
  * read scope), while a `url` attachment is a dumb pointer (the pasted link + fetched
  * title/favicon). The partial-unique `(sourceIntegrationId, externalId)` index dedupes
- * email attachments so one Gmail thread attaches at most once. `lastEmailStateAction*` is
+ * email attachments so one Gmail thread attaches at most once. A `file` attachment is an
+ * uploaded file whose bytes live in blob storage under `blobKey`, with `fileName`/`mimeType`/
+ * `byteSize` on the row for display and content-typed download. `lastEmailStateAction*` is
  * the write-back action ledger (mirroring the task provenance `lastPushedAt`) that keeps
  * lifecycle automations idempotent — see `docs/engineering/specs/email-to-task.md`.
  */
@@ -348,6 +350,11 @@ export const attachment = pgTable(
     }),
     externalId: text('external_id'),
     metadata: jsonb('metadata'),
+    // `file` kind: bytes in blob storage under `blobKey`, with display/download metadata.
+    blobKey: text('blob_key'),
+    fileName: text('file_name'),
+    mimeType: text('mime_type'),
+    byteSize: integer('byte_size'),
     lastEmailStateAction: text('last_email_state_action'),
     lastEmailStateActionAt: timestamp('last_email_state_action_at'),
   },

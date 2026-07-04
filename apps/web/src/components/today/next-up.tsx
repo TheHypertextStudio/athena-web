@@ -14,19 +14,16 @@
  * unit-tested against fixed timestamps without rendering.
  */
 import type { HubTaskItem } from '@docket/types';
+import { ArrowRight } from '@docket/ui/icons';
 import { Stack } from '@docket/ui/primitives';
 import { type JSX } from 'react';
 
 import Link from 'next/link';
 
 import { OrgChip } from '@/components/org-chip';
+import { formatClock } from '@/lib/format-time';
 
 import { type CalendarBlock, selectNextUp } from './next-up-select';
-
-/** Format an ISO timestamp as a local `h:mm AM/PM` clock label, e.g. `9:30 AM`. */
-function formatClock(iso: string): string {
-  return new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-}
 
 /** Props for {@link NextUp}. */
 export interface NextUpProps {
@@ -71,7 +68,7 @@ export default function NextUp({
         </Stack>
       ) : (
         <Stack as="ul" gap={2}>
-          {picks.map((pick) => {
+          {picks.map((pick, i) => {
             const orgId =
               pick.kind === 'block' ? pick.block.organizationId : pick.task.organizationId;
             const taskId = pick.kind === 'block' ? pick.block.taskId : pick.task.id;
@@ -80,10 +77,14 @@ export default function NextUp({
             return (
               <li
                 key={`${pick.kind}-${taskId}-${pick.kind === 'block' ? pick.block.startsAt : ''}`}
+                // Staggered reveal: each row eases up in turn (fill-mode-both holds it hidden
+                // through its delay so it never flashes in early).
+                className="motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-1 motion-safe:fill-mode-both motion-safe:duration-500"
+                style={{ animationDelay: `${String(i * 70)}ms` }}
               >
                 <Link
                   href={`/orgs/${orgId}/tasks/${taskId}`}
-                  className="border-outline-variant bg-surface-container-low hover:bg-surface-container focus-visible:ring-ring flex items-center gap-4 rounded-xl border px-4 py-3.5 transition-colors focus-visible:ring-2 focus-visible:outline-none"
+                  className="group border-outline-variant bg-surface-container-low hover:bg-surface-container hover:border-outline focus-visible:ring-ring flex items-center gap-4 rounded-xl border px-4 py-3.5 transition-[background-color,border-color,box-shadow,transform] duration-(--dur-base) ease-(--ease-out) hover:shadow-sm focus-visible:ring-2 focus-visible:outline-none active:scale-[0.99] motion-safe:hover:-translate-y-px"
                 >
                   <span className="text-on-surface-variant min-w-[5.5rem] shrink-0 text-sm tabular-nums">
                     {lead}
@@ -92,6 +93,7 @@ export default function NextUp({
                     {title}
                   </span>
                   <OrgChip orgId={orgId} name={orgName(orgId)} />
+                  <ArrowRight className="text-on-surface-variant size-4 shrink-0 -translate-x-1 opacity-0 transition-[opacity,transform] duration-(--dur-base) ease-(--ease-out) group-hover:translate-x-0 group-hover:opacity-100" />
                 </Link>
               </li>
             );

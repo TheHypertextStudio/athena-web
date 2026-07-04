@@ -20,6 +20,7 @@ const SYSTEM_OPTIONS: readonly FieldOption[] = [
   { value: 'linear', label: 'Linear', hint: 'linear' },
   { value: 'github', label: 'GitHub', hint: 'github' },
   { value: 'slack', label: 'Slack', hint: 'slack' },
+  { value: 'discord', label: 'Discord', hint: 'discord' },
   { value: 'google_calendar', label: 'Google Calendar', hint: 'google_calendar' },
   { value: 'gmail', label: 'Gmail', hint: 'gmail' },
 ];

@@ -1,0 +1,23 @@
+{
+  "name": "@docket/discord-relay",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "description": "Discord Gateway relay — the one always-on process. Holds the Gateway WebSocket, expands @role/reply/DM mentions into concrete user ids, and forwards them to Docket's token-routed ingest edge. No business logic; Docket's inbox is the ledger.",
+  "main": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "start": "node src/index.ts",
+    "clean": "rm -rf .turbo *.tsbuildinfo",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "devDependencies": {
+    "@docket/eslint-config": "workspace:*",
+    "@docket/tsconfig": "workspace:*",
+    "@types/node": "catalog:"
+  }
+}

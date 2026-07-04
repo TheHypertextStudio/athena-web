@@ -25,6 +25,23 @@ function authAllowedDevOrigins(): string[] {
 }
 
 /**
+ * Baseline security response headers applied to every route (mirrors the product app).
+ *
+ * @remarks
+ * `frame-ancestors 'none'` + `X-Frame-Options: DENY` stop the admin console from being framed
+ * (clickjacking). Framing is the only directive set; a full content CSP is a deliberate follow-up.
+ * HSTS is honored only over HTTPS.
+ */
+const securityHeaders = [
+  { key: 'Content-Security-Policy', value: "frame-ancestors 'none'" },
+  { key: 'X-Frame-Options', value: 'DENY' },
+  { key: 'X-Content-Type-Options', value: 'nosniff' },
+  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+  { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains' },
+  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+];
+
+/**
  * Next.js config for the Docket service-admin console.
  *
  * @remarks
@@ -46,6 +63,9 @@ const nextConfig: NextConfig = {
   // Portless serves dev over https://admin.docket.localhost; allow its HMR/devtools
   // resources so hot-reload works (Next 16 blocks cross-origin dev resources by default).
   allowedDevOrigins: ['admin.docket.localhost', '*.docket.localhost', ...authAllowedDevOrigins()],
+  async headers() {
+    return [{ source: '/:path*', headers: securityHeaders }];
+  },
   async rewrites() {
     return [
       { source: '/admin/:path*', destination: `${API_ORIGIN}/admin/:path*` },

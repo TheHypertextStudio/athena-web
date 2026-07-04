@@ -33,6 +33,12 @@ export const sharedServer = {
   /** Forces the mock adapters when `local`/`test`, even if real keys are present (boundaries.md). */
   APP_MODE: z.enum(['local', 'test', 'production']),
   API_URL: z.string().min(1),
+  /**
+   * Public origin of the product web app (sign-in + OAuth consent pages). The MCP
+   * OAuth defaults derive from it (`OIDC_LOGIN_PAGE_URL = ${WEB_URL}/sign-in`), so the
+   * authorization server is on in every deploy without MCP-specific configuration.
+   */
+  WEB_URL: z.string().min(1),
   PORT: z.coerce.number().int().positive(),
 };
 
@@ -86,6 +92,25 @@ export const authServer = {
   LINEAR_CLIENT_SECRET: z.string().optional(),
   /** App-level Linear webhook signing secret — verifies inbound ambient-observation events. */
   LINEAR_WEBHOOK_SECRET: z.string().optional(),
+  /**
+   * Apple **Services ID** (e.g. `com.docket.web`) — the OAuth `client_id` for "Sign in with Apple"
+   * and the `sub` of the client-secret JWT. Unlike the other providers, Apple's client secret is
+   * not a static string: it is a short-lived ES256 JWT minted at boot from the four `APPLE_*` vars
+   * below (see `@docket/auth`'s `generateAppleClientSecret`). The provider is on iff ALL FOUR are
+   * real-shaped — absent ⇒ provider hidden. Web-only (no native iOS ID-token flow).
+   */
+  APPLE_CLIENT_ID: z.string().optional(),
+  /** Apple 10-char Team ID — the `iss` of the client-secret JWT. Paired all-or-nothing with the other `APPLE_*` vars. */
+  APPLE_TEAM_ID: z.string().optional(),
+  /** Apple Sign-in key id (the `.p8` key's Key ID) — the `kid` JWT header. */
+  APPLE_KEY_ID: z.string().optional(),
+  /**
+   * Apple Sign-in private key, the `.p8` **PKCS#8 PEM**. Multiline — store with escaped `\n`
+   * (or on one line); `@docket/auth` normalizes the `\n` back to real newlines before signing.
+   * Signs the ES256 client-secret JWT. Lenient here (`optional`); the auth builder decides
+   * real-vs-hidden via {@link isRealValue} over all four `APPLE_*` vars.
+   */
+  APPLE_PRIVATE_KEY: z.string().optional(),
   /** Slack app signing secret — verifies inbound Slack Events API requests (`v0=` HMAC). */
   SLACK_SIGNING_SECRET: z.string().optional(),
   /**
@@ -95,6 +120,16 @@ export const authServer = {
   SLACK_CLIENT_ID: z.string().optional(),
   /** Slack app OAuth client secret — paired with {@link authServer.SLACK_CLIENT_ID} for `oauth.v2.access`. */
   SLACK_CLIENT_SECRET: z.string().optional(),
+  /**
+   * Discord app **public key** (raw 32-byte Ed25519 key, hex) — verifies inbound Discord-signed
+   * requests at `POST /internal/ingest/discord` (`X-Signature-Ed25519` over `timestamp + body`).
+   * Absent/placeholder ⇒ the Discord observer falls back to the mock.
+   */
+  DISCORD_PUBLIC_KEY: z.string().optional(),
+  /** Discord OAuth2 application client id — powers "Connect Discord" account linking (`identify`). */
+  DISCORD_CLIENT_ID: z.string().optional(),
+  /** Discord OAuth2 application client secret — paired all-or-nothing with {@link DISCORD_CLIENT_ID}. */
+  DISCORD_CLIENT_SECRET: z.string().optional(),
   /**
    * Shared secret for Better Auth's `oAuthProxy` plugin — lets preview/branch deployments run the
    * social-OAuth flow through production (whose callback URL is the only one registered with the

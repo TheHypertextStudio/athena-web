@@ -4,8 +4,9 @@
  * @remarks
  * The Connected accounts page is a **discover-and-manage** directory: every supported provider is
  * always shown, so the page reads as a catalog rather than a one-button display. Entries are either
- * `live` (a real Better Auth social provider — google/github/linear — whose actual connectability in
- * this deployment is decided by `usePublicConfig().oauthProviders`) or `coming-soon` (a roadmap
+ * `live` (a real Better Auth social provider — google/github/linear/discord — whose actual
+ * connectability in this deployment is decided by `usePublicConfig().oauthProviders`) or
+ * `coming-soon` (a roadmap
  * provider rendered as a disabled entry). Linkable availability is NEVER read from the environment
  * here — that lives in `@/lib/public-config`; this file is the pure display catalog (id, name, icon).
  */
@@ -16,6 +17,7 @@ import {
   Google,
   Layers,
   type LucideIcon,
+  MessagesSquare,
   Target,
   Workflow,
 } from '@docket/ui/icons';
@@ -49,6 +51,7 @@ export const IDENTITY_PROVIDER_CATALOG: readonly IdentityProviderEntry[] = [
   { kind: 'live', id: 'google', name: 'Google', icon: Google },
   { kind: 'live', id: 'github', name: 'GitHub', icon: Github },
   { kind: 'live', id: 'linear', name: 'Linear', icon: Layers },
+  { kind: 'live', id: 'discord', name: 'Discord', icon: MessagesSquare },
   // Slack is intentionally absent: it is an org *integration* (Settings → Connections), not a
   // sign-in identity — listing it here as an account would conflate the two.
   { kind: 'coming-soon', id: 'jira', name: 'Jira', icon: Workflow },

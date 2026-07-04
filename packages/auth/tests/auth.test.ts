@@ -1,8 +1,9 @@
-import { createHmac } from 'node:crypto';
+import { generateKeyPairSync } from 'node:crypto';
 import { resolve } from 'node:path';
 
+import type { Mailer, OutboundMessage } from '@docket/boundaries';
 import { migrate } from 'drizzle-orm/pglite/migrator';
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Env MUST be set before importing `../src/index` (which pulls in `@docket/env/api` and the
 // Better Auth config at module load). Every required var is set explicitly — the env
@@ -11,6 +12,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 // required (the plugin is always mounted) and used as the WebAuthn relying-party identity.
 process.env['APP_MODE'] = 'test';
 process.env['API_URL'] = 'http://localhost:4000';
+process.env['WEB_URL'] = 'http://localhost:3000';
 process.env['PORT'] = '4000';
 process.env['DATABASE_URL'] = 'pglite://memory';
 process.env['BETTER_AUTH_SECRET'] = 'test-secret-at-least-32-characters-long';
@@ -25,83 +27,64 @@ process.env['MCP_CIMD_STRICT'] = 'true';
 
 const SECRET = 'test-secret-at-least-32-characters-long';
 
-/** Recompute the package's `payload.signature` shape for a hand-crafted payload. */
-function forgeToken(payload: unknown): string {
-  const payloadB64 = Buffer.from(JSON.stringify(payload)).toString('base64url');
-  const sig = createHmac('sha256', SECRET).update(payloadB64).digest().toString('base64url');
-  return `${payloadB64}.${sig}`;
-}
+/** The verified-intent identifier prefix (kept in sync with `src/signup-intent.ts`). */
+const INTENT_PREFIX = 'signup-intent:';
 
-describe('passkey intent', () => {
-  it('round-trips a signed intent (sign → verify happy path)', async () => {
-    const { signPasskeyIntent, verifyPasskeyIntent } = await import('../src/index');
+/** A capturing {@link Mailer}: records every send so tests can read the emitted code. */
+const sentEmails: OutboundMessage[] = [];
+const captureMailer: Mailer = {
+  send: async (message) => {
+    sentEmails.push(message);
+  },
+};
+/** The dependency bundle every `buildAuthOptions` test call passes. */
+const MAILER_DEPS = { mailer: captureMailer } as const;
 
-    const token = signPasskeyIntent({ name: 'Ada', email: 'ada@example.com' });
-    const intent = verifyPasskeyIntent(token);
-    expect(intent.name).toBe('Ada');
-    expect(intent.email).toBe('ada@example.com');
-    expect(typeof intent.nonce).toBe('string');
-    expect(typeof intent.exp).toBe('number');
-  });
-
-  it('rejects a malformed token (missing signature segment)', async () => {
-    const { verifyPasskeyIntent } = await import('../src/index');
-    expect(() => verifyPasskeyIntent('only-one-segment')).toThrow('malformed token');
-    expect(() => verifyPasskeyIntent('')).toThrow('malformed token');
-  });
-
-  it('rejects a tampered signature of equal length', async () => {
-    const { signPasskeyIntent, verifyPasskeyIntent } = await import('../src/index');
-    const token = signPasskeyIntent({ name: 'Ada', email: 'ada@example.com' });
-    const [payloadB64] = token.split('.');
-    // Swap in a valid signature computed over a *different* payload: it is still a
-    // 43-char base64url SHA-256 digest (equal length) but mismatched (hits timingSafeEqual).
-    const wrongSig = forgeToken({ tampered: true }).split('.')[1]!;
-    expect(() => verifyPasskeyIntent(`${payloadB64}.${wrongSig}`)).toThrow('invalid signature');
-  });
-
-  it('rejects a signature of differing length', async () => {
-    const { signPasskeyIntent, verifyPasskeyIntent } = await import('../src/index');
-    const token = signPasskeyIntent({ name: 'Ada', email: 'ada@example.com' });
-    const [payloadB64] = token.split('.');
-    expect(() => verifyPasskeyIntent(`${payloadB64}.short`)).toThrow('invalid signature');
-  });
-
-  it('rejects an expired token (valid signature, past exp)', async () => {
-    const { verifyPasskeyIntent } = await import('../src/index');
-    const token = forgeToken({
-      name: 'Ada',
-      email: 'ada@example.com',
-      nonce: 'n',
-      exp: Date.now() - 1000,
-    });
-    expect(() => verifyPasskeyIntent(token)).toThrow('expired');
-  });
-
-  it('rejects a non-numeric exp (valid signature)', async () => {
-    const { verifyPasskeyIntent } = await import('../src/index');
-    const token = forgeToken({ name: 'Ada', email: 'ada@example.com', nonce: 'n', exp: 'soon' });
-    expect(() => verifyPasskeyIntent(token)).toThrow('expired');
-  });
+beforeEach(() => {
+  sentEmails.length = 0;
 });
 
-describe('resolvePasskeyUser (passwordless sign-up resolver)', () => {
+describe('resolvePasskeyUser (verified-intent sign-up resolver)', () => {
+  const FUTURE = new Date(Date.now() + 60_000);
+
   /**
-   * A tiny in-memory stand-in for Better Auth's internal-adapter slice. Records every
-   * `createUser` call so the test can assert the new-user branch fires (and the hub-birth
-   * hook would run, since the live wiring routes creation through this same method).
+   * An in-memory stand-in for the adapter slice {@link resolvePasskeyUser} needs. Seeds one
+   * verified-intent row (identifier → `{name,email}`) and optional existing users; records
+   * `createUser` calls and which intent identifiers were consumed.
    */
-  function fakeAdapter(seed?: { id: string; name: string; email: string }) {
-    const users = new Map<string, { id: string; name: string; email: string }>();
-    if (seed) users.set(seed.email, seed);
+  function fakeAdapter(opts?: {
+    intents?: Record<string, { value: { name: string; email: string }; expiresAt?: Date }>;
+    users?: { id: string; name: string; email: string; accounts?: string[]; passkeys?: number }[];
+  }) {
+    const intents = new Map(
+      Object.entries(opts?.intents ?? {}).map(([id, r]) => [
+        id,
+        { value: JSON.stringify(r.value), expiresAt: r.expiresAt ?? FUTURE },
+      ]),
+    );
+    const users = new Map((opts?.users ?? []).map((u) => [u.email, u]));
     const created: { name: string; email: string; emailVerified: boolean }[] = [];
+    const consumed: string[] = [];
     return {
       created,
+      consumed,
       adapter: {
+        findVerificationValue: async (id: string) => intents.get(id) ?? null,
+        deleteVerificationByIdentifier: async (id: string) => {
+          consumed.push(id);
+          intents.delete(id);
+        },
         findUserByEmail: async (email: string) => {
           const u = users.get(email);
-          return u ? { user: { id: u.id, name: u.name } } : null;
+          return u
+            ? {
+                user: { id: u.id, name: u.name },
+                accounts: (u.accounts ?? []).map((providerId) => ({ providerId })),
+              }
+            : null;
         },
+        countPasskeys: async (userId: string) =>
+          [...users.values()].find((u) => u.id === userId)?.passkeys ?? 0,
         createUser: async (data: { name: string; email: string; emailVerified: boolean }) => {
           created.push(data);
           const u = { id: `user_${created.length}`, name: data.name, email: data.email };
@@ -112,45 +95,84 @@ describe('resolvePasskeyUser (passwordless sign-up resolver)', () => {
     };
   }
 
-  it('throws when no registration context is supplied', async () => {
+  it('rejects an absent or non-intent-prefixed context (cannot smuggle another identifier)', async () => {
     const { resolvePasskeyUser } = await import('../src/index');
     const { adapter } = fakeAdapter();
     await expect(resolvePasskeyUser(adapter, null)).rejects.toThrow('context is required');
-    await expect(resolvePasskeyUser(adapter, undefined)).rejects.toThrow('context is required');
-    await expect(resolvePasskeyUser(adapter, '')).rejects.toThrow('context is required');
+    await expect(resolvePasskeyUser(adapter, 'signup-code:victim@example.com')).rejects.toThrow(
+      'invalid registration context',
+    );
   });
 
-  it('propagates intent-verification failure (tampered/expired token)', async () => {
+  it('rejects a missing or expired intent', async () => {
     const { resolvePasskeyUser } = await import('../src/index');
-    const { adapter } = fakeAdapter();
-    await expect(resolvePasskeyUser(adapter, 'not-a-valid-token')).rejects.toThrow('malformed');
-  });
+    const missing = fakeAdapter();
+    await expect(resolvePasskeyUser(missing.adapter, `${INTENT_PREFIX}nope`)).rejects.toThrow(
+      'invalid or expired',
+    );
 
-  it('creates a new user (new email) — fires the create path exactly once', async () => {
-    const { resolvePasskeyUser, signPasskeyIntent } = await import('../src/index');
-    const { adapter, created } = fakeAdapter();
-    const token = signPasskeyIntent({ name: 'Grace', email: 'new@example.com' });
-
-    const resolved = await resolvePasskeyUser(adapter, token);
-
-    expect(resolved.name).toBe('Grace');
-    expect(resolved.id).toBe('user_1');
-    expect(created).toEqual([{ name: 'Grace', email: 'new@example.com', emailVerified: true }]);
-  });
-
-  it('reuses an existing user (same email) without creating a duplicate', async () => {
-    const { resolvePasskeyUser, signPasskeyIntent } = await import('../src/index');
-    const { adapter, created } = fakeAdapter({
-      id: 'existing-1',
-      name: 'Existing',
-      email: 'dup@example.com',
+    const expired = fakeAdapter({
+      intents: {
+        [`${INTENT_PREFIX}old`]: {
+          value: { name: 'Ada', email: 'ada@example.com' },
+          expiresAt: new Date(Date.now() - 1000),
+        },
+      },
     });
-    const token = signPasskeyIntent({ name: 'Ignored', email: 'dup@example.com' });
+    await expect(resolvePasskeyUser(expired.adapter, `${INTENT_PREFIX}old`)).rejects.toThrow(
+      'invalid or expired',
+    );
+    expect(expired.consumed).toContain(`${INTENT_PREFIX}old`); // expired intent is cleaned up
+  });
 
-    const resolved = await resolvePasskeyUser(adapter, token);
+  it('creates a new user for a proven email and consumes the intent (single use)', async () => {
+    const { resolvePasskeyUser } = await import('../src/index');
+    const id = `${INTENT_PREFIX}abc`;
+    const { adapter, created, consumed } = fakeAdapter({
+      intents: { [id]: { value: { name: 'Grace', email: 'new@example.com' } } },
+    });
 
-    expect(resolved).toEqual({ id: 'existing-1', name: 'Existing' });
-    expect(created).toEqual([]); // no createUser call → no second hub
+    const resolved = await resolvePasskeyUser(adapter, id);
+
+    expect(resolved).toEqual({ id: 'user_1', name: 'Grace' });
+    expect(created).toEqual([{ name: 'Grace', email: 'new@example.com', emailVerified: true }]);
+    expect(consumed).toContain(id); // intent consumed → cannot be replayed
+  });
+
+  it('REJECTS attaching to an existing account that has a passkey (closes ATO)', async () => {
+    const { resolvePasskeyUser } = await import('../src/index');
+    const id = `${INTENT_PREFIX}atk`;
+    const { adapter, created } = fakeAdapter({
+      intents: { [id]: { value: { name: 'Mallory', email: 'victim@example.com' } } },
+      users: [{ id: 'victim-1', name: 'Victim', email: 'victim@example.com', passkeys: 1 }],
+    });
+
+    await expect(resolvePasskeyUser(adapter, id)).rejects.toThrow('already exists');
+    expect(created).toEqual([]); // no credential grafted onto the victim
+  });
+
+  it('REJECTS attaching to an existing account that has a linked social account', async () => {
+    const { resolvePasskeyUser } = await import('../src/index');
+    const id = `${INTENT_PREFIX}soc`;
+    const { adapter } = fakeAdapter({
+      intents: { [id]: { value: { name: 'Mallory', email: 'g@example.com' } } },
+      users: [{ id: 'g-1', name: 'Googler', email: 'g@example.com', accounts: ['google'] }],
+    });
+    await expect(resolvePasskeyUser(adapter, id)).rejects.toThrow('already exists');
+  });
+
+  it('RESUMES an abandoned sign-up (existing user with no credential yet)', async () => {
+    const { resolvePasskeyUser } = await import('../src/index');
+    const id = `${INTENT_PREFIX}resume`;
+    const { adapter, created } = fakeAdapter({
+      intents: { [id]: { value: { name: 'Ada', email: 'ada@example.com' } } },
+      users: [{ id: 'ada-1', name: 'Ada', email: 'ada@example.com', passkeys: 0 }],
+    });
+
+    const resolved = await resolvePasskeyUser(adapter, id);
+
+    expect(resolved).toEqual({ id: 'ada-1', name: 'Ada' });
+    expect(created).toEqual([]); // resumed, not duplicated
   });
 });
 
@@ -188,17 +210,36 @@ describe('auth config', () => {
   });
 
   it('births a 1:1 hub on passwordless passkey sign-up (resolvePasskeyUser → create hook)', async () => {
-    // Passwordless sign-up runs `resolvePasskeyUser` against the LIVE internal adapter; it
-    // creates the user via the adapter, which fires `databaseHooks.user.create.after` →
-    // the 1:1 hub birth. This is the same code path the passkey plugin invokes during the
-    // pre-session WebAuthn registration ceremony.
-    const { auth, resolvePasskeyUser, signPasskeyIntent } = await import('../src/index');
-    const { db, hub, user } = await import('@docket/db');
+    // Passwordless sign-up runs `resolvePasskeyUser` against the LIVE internal adapter after a
+    // verified-intent has been minted; it creates the user via the adapter, which fires
+    // `databaseHooks.user.create.after` → the 1:1 hub birth. This is the same code path the passkey
+    // plugin invokes during the pre-session WebAuthn registration ceremony.
+    const { auth, resolvePasskeyUser } = await import('../src/index');
+    const { db, hub, passkey, user } = await import('@docket/db');
     const { eq } = await import('drizzle-orm');
 
     const ctx = await auth.$context;
-    const token = signPasskeyIntent({ name: 'Grace', email: 'grace@example.com' });
-    const resolved = await resolvePasskeyUser(ctx.internalAdapter, token);
+    // Mint the verified-intent row the way `/sign-up/verify-code` would.
+    const intentId = `${INTENT_PREFIX}${Math.random().toString(36).slice(2)}`;
+    await ctx.internalAdapter.createVerificationValue({
+      identifier: intentId,
+      value: JSON.stringify({ name: 'Grace', email: 'grace@example.com' }),
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+
+    const resolved = await resolvePasskeyUser(
+      {
+        findVerificationValue: (id) => ctx.internalAdapter.findVerificationValue(id),
+        deleteVerificationByIdentifier: (id) =>
+          ctx.internalAdapter.deleteVerificationByIdentifier(id),
+        findUserByEmail: (email, options) => ctx.internalAdapter.findUserByEmail(email, options),
+        createUser: (data) => ctx.internalAdapter.createUser(data),
+        countPasskeys: async (userId) =>
+          (await db.select({ id: passkey.id }).from(passkey).where(eq(passkey.userId, userId)))
+            .length,
+      },
+      intentId,
+    );
 
     const users = await db.select().from(user).where(eq(user.email, 'grace@example.com'));
     expect(users).toHaveLength(1);
@@ -207,6 +248,22 @@ describe('auth config', () => {
 
     const hubs = await db.select().from(hub).where(eq(hub.userId, resolved.id));
     expect(hubs).toHaveLength(1);
+
+    // The intent is single-use: it was consumed, so a replay resolves to nothing.
+    await expect(resolvePasskeyUserReplay(intentId)).rejects.toThrow('invalid or expired');
+    async function resolvePasskeyUserReplay(id: string) {
+      return resolvePasskeyUser(
+        {
+          findVerificationValue: (vid) => ctx.internalAdapter.findVerificationValue(vid),
+          deleteVerificationByIdentifier: (vid) =>
+            ctx.internalAdapter.deleteVerificationByIdentifier(vid),
+          findUserByEmail: (email, options) => ctx.internalAdapter.findUserByEmail(email, options),
+          createUser: (data) => ctx.internalAdapter.createUser(data),
+          countPasskeys: async () => 0,
+        },
+        id,
+      );
+    }
   });
 
   it('getRecoveryCodeStatus: null when no codes, count + generatedAt when present', async () => {
@@ -276,6 +333,133 @@ describe('auth config', () => {
     expect(replay.status).not.toBe(200);
   });
 
+  /**
+   * Build a live auth instance whose mailer is the capturing test mailer, so the emitted sign-up
+   * code can be read out of `sentEmails`. Shares the migrated `@docket/db`, so verification rows and
+   * users land in the same database `resolvePasskeyUser` reads.
+   */
+  async function testAuthWithCapture() {
+    const { buildAuthOptions } = await import('../src/index');
+    const { betterAuth } = await import('better-auth');
+    const instance = betterAuth(
+      buildAuthOptions(
+        {
+          BETTER_AUTH_SECRET: SECRET,
+          BETTER_AUTH_URL: 'http://localhost:4000',
+          BETTER_AUTH_PASSKEY_RP_ID: 'localhost',
+          BETTER_AUTH_PASSKEY_RP_NAME: 'Docket',
+          BETTER_AUTH_TRUSTED_ORIGINS: 'http://localhost:4000',
+        },
+        MAILER_DEPS,
+      ),
+    );
+    const post = (path: string, body: unknown): Promise<Response> =>
+      instance.handler(
+        new Request(`http://localhost:4000/api/auth${path}`, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            origin: 'http://localhost:4000',
+          },
+          body: JSON.stringify(body),
+        }),
+      );
+    return { instance, post };
+  }
+
+  /** Build the live-adapter slice `resolvePasskeyUser` needs (internal adapter + a db-backed count). */
+  async function liveResolveAdapter(
+    instance: Awaited<ReturnType<typeof testAuthWithCapture>>['instance'],
+  ) {
+    const ctx = await instance.$context;
+    const { db, passkey } = await import('@docket/db');
+    const { eq } = await import('drizzle-orm');
+    return {
+      findVerificationValue: (id: string) => ctx.internalAdapter.findVerificationValue(id),
+      deleteVerificationByIdentifier: (id: string) =>
+        ctx.internalAdapter.deleteVerificationByIdentifier(id),
+      findUserByEmail: (email: string, options?: { includeAccounts: boolean }) =>
+        ctx.internalAdapter.findUserByEmail(email, options),
+      createUser: (data: { name: string; email: string; emailVerified: boolean }) =>
+        ctx.internalAdapter.createUser(data),
+      countPasskeys: async (userId: string) =>
+        (await db.select({ id: passkey.id }).from(passkey).where(eq(passkey.userId, userId)))
+          .length,
+    };
+  }
+
+  it('sign-up challenge: request-code emails a code, wrong code fails, right code mints a single-use intent that creates the account', async () => {
+    const { resolvePasskeyUser } = await import('../src/index');
+    const { db, user } = await import('@docket/db');
+    const { eq } = await import('drizzle-orm');
+    const { instance, post } = await testAuthWithCapture();
+
+    const email = 'newbie@example.com';
+    const requested = await post('/sign-up/request-code', { name: 'Newbie', email });
+    expect(requested.status).toBe(200);
+    expect(sentEmails).toHaveLength(1);
+    expect(sentEmails[0]!.to).toBe(email);
+    const code = /\b(\d{6})\b/.exec(sentEmails[0]!.text ?? '')?.[1];
+    expect(code).toBeDefined();
+
+    // A wrong code is rejected (use a definitely-different 6-digit value).
+    const wrong = String((Number(code) + 1) % 1_000_000).padStart(6, '0');
+    const badVerify = await post('/sign-up/verify-code', { email, code: wrong });
+    expect(badVerify.status).not.toBe(200);
+
+    // The correct code mints a verified-intent token.
+    const verified = await post('/sign-up/verify-code', { email, code });
+    expect(verified.status).toBe(200);
+    const { intent } = (await verified.json()) as { intent: string };
+    expect(intent.startsWith('signup-intent:')).toBe(true);
+
+    // The intent resolves to a freshly-created, verified user (+ its hub via the create hook).
+    const adapter = await liveResolveAdapter(instance);
+    const resolved = await resolvePasskeyUser(adapter, intent);
+    const users = await db.select().from(user).where(eq(user.email, email));
+    expect(users).toHaveLength(1);
+    expect(users[0]!.id).toBe(resolved.id);
+    expect(users[0]!.emailVerified).toBe(true);
+
+    // The intent is single-use: a replay is rejected (no second account).
+    await expect(resolvePasskeyUser(adapter, intent)).rejects.toThrow('invalid or expired');
+  });
+
+  it('sign-up challenge: even a fully-verified code cannot graft a passkey onto an existing account that has one (ATO closed end-to-end)', async () => {
+    const { resolvePasskeyUser } = await import('../src/index');
+    const { db, passkey, user } = await import('@docket/db');
+    const { instance, post } = await testAuthWithCapture();
+
+    // A pre-existing victim account WITH a passkey credential.
+    const email = 'victim-e2e@example.com';
+    const [victim] = await db
+      .insert(user)
+      .values({ name: 'Victim', email, emailVerified: true })
+      .returning();
+    await db.insert(passkey).values({
+      userId: victim!.id,
+      publicKey: 'pk',
+      credentialID: 'cred-e2e',
+      counter: 0,
+      deviceType: 'platform',
+      backedUp: true,
+    });
+
+    // The attacker completes the challenge (as if they controlled the inbox) and gets a real intent.
+    await post('/sign-up/request-code', { name: 'Mallory', email });
+    const code = /\b(\d{6})\b/.exec(sentEmails.at(-1)?.text ?? '')?.[1];
+    const verified = await post('/sign-up/verify-code', { email, code: code! });
+    const { intent } = (await verified.json()) as { intent: string };
+
+    // Registration still refuses to bind the new passkey to the victim's existing account.
+    const adapter = await liveResolveAdapter(instance);
+    await expect(resolvePasskeyUser(adapter, intent)).rejects.toThrow('already exists');
+
+    // The victim still has exactly their original single passkey — nothing grafted.
+    const creds = await db.select().from(passkey);
+    expect(creds.filter((c) => c.userId === victim!.id)).toHaveLength(1);
+  });
+
   it('generateRecoveryCodes: creates a set, enables 2FA, stamps generatedAt; regenerate replaces + advances', async () => {
     const { generateRecoveryCodes, getRecoveryCodeStatus } = await import('../src/index');
     const { db, twoFactor, user } = await import('@docket/db');
@@ -312,16 +496,23 @@ describe('auth config', () => {
     );
   });
 
-  it('mounts passkey + twoFactor + recoveryChallenge + nextCookies with placeholder env (passwordless baseline)', async () => {
-    // The live `auth` is built from the test env (optional gated vars unset) → every
-    // OPTIONAL gate is closed. This pins the zero-account local build to passkey + the
-    // always-on recovery-codes pair (twoFactor + recoveryChallenge) + nextCookies, with no
-    // social/oidc/mcp and no account-linking.
+  it('mounts passkey + twoFactor + recoveryChallenge + mcp + nextCookies with placeholder env (passwordless baseline)', async () => {
+    // The live `auth` is built from the test env (optional SOCIAL gates unset) → no social
+    // providers/account-linking. The MCP AS/RS is core functionality, not deploy-specific
+    // config (see `@docket/env/api`'s derivation doc): it auto-derives from API_URL + WEB_URL,
+    // both of which are always required, so `mcp` (which bundles oidcProvider) is always on.
     const { auth } = await import('../src/index');
     expect(auth.options.socialProviders).toBeUndefined();
     expect(auth.options.account).toBeUndefined();
     const ids = (auth.options.plugins ?? []).map((p) => p.id);
-    expect(ids).toEqual(['passkey', 'two-factor', 'recovery-challenge', 'next-cookies']);
+    expect(ids).toEqual([
+      'passkey',
+      'two-factor',
+      'recovery-challenge',
+      'signup-challenge',
+      'mcp',
+      'next-cookies',
+    ]);
   });
 
   // Runs LAST: it resets the module registry, which would orphan the migrated
@@ -351,15 +542,27 @@ describe('buildAuthOptions env-gating', () => {
     BETTER_AUTH_PASSKEY_RP_NAME: 'Docket',
   } as const;
 
+  /** The four durable Apple credentials, with a real throwaway P-256 key so the JWT actually signs. */
+  const APPLE_ENV = {
+    APPLE_CLIENT_ID: 'com.docket.web',
+    APPLE_TEAM_ID: 'ABCDE12345',
+    APPLE_KEY_ID: 'KEY1234567',
+    APPLE_PRIVATE_KEY: generateKeyPairSync('ec', { namedCurve: 'P-256' }).privateKey.export({
+      type: 'pkcs8',
+      format: 'pem',
+    }),
+  } as const;
+
   it('mounts passkey + twoFactor + recoveryChallenge + nextCookies when no optional gated vars are real (== baseline)', async () => {
     const { buildAuthOptions } = await import('../src/index');
-    const opts = buildAuthOptions(baseEnv);
+    const opts = buildAuthOptions(baseEnv, MAILER_DEPS);
     expect(opts.socialProviders).toBeUndefined();
     expect(opts.account).toBeUndefined();
     expect((opts.plugins ?? []).map((p) => p.id)).toEqual([
       'passkey',
       'two-factor',
       'recovery-challenge',
+      'signup-challenge',
       'next-cookies',
     ]);
     // Passwordless: no email/password sign-in.
@@ -368,7 +571,7 @@ describe('buildAuthOptions env-gating', () => {
 
   it('configures passkey for passwordless (pre-session) registration', async () => {
     const { buildAuthOptions } = await import('../src/index');
-    const opts = buildAuthOptions(baseEnv);
+    const opts = buildAuthOptions(baseEnv, MAILER_DEPS);
     const pk = (opts.plugins ?? []).find((p) => p.id === 'passkey');
     expect(pk).toBeDefined();
     // The plugin records its received options under `.options` — assert passkey-first config.
@@ -380,12 +583,12 @@ describe('buildAuthOptions env-gating', () => {
     expect(typeof registration?.['resolveUser']).toBe('function');
   });
 
-  it("passkey's resolveUser wiring forwards ctx.context.internalAdapter + context", async () => {
-    // Invoke the configured `resolveUser` arrow directly so its forwarding to
-    // `resolvePasskeyUser(ctx.context.internalAdapter, context)` is exercised end-to-end:
-    // a fresh email creates the user via the fake adapter and round-trips the resolved id.
-    const { buildAuthOptions, signPasskeyIntent } = await import('../src/index');
-    const opts = buildAuthOptions(baseEnv);
+  it("passkey's resolveUser wiring consumes the verified intent from ctx.context.internalAdapter", async () => {
+    // Invoke the configured `resolveUser` arrow directly so its forwarding into
+    // `resolvePasskeyUser` is exercised end-to-end: a proven-email intent resolved against the
+    // fake internal adapter creates the user and round-trips the resolved id.
+    const { buildAuthOptions } = await import('../src/index');
+    const opts = buildAuthOptions(baseEnv, MAILER_DEPS);
     const pk = (opts.plugins ?? []).find((p) => p.id === 'passkey');
     const registration = (pk as { options?: { registration?: unknown } }).options?.registration as {
       resolveUser: (args: {
@@ -394,8 +597,17 @@ describe('buildAuthOptions env-gating', () => {
       }) => Promise<{ id: string; name: string }>;
     };
 
+    const intentId = `${INTENT_PREFIX}wired`;
     const created: { name: string; email: string }[] = [];
     const internalAdapter = {
+      findVerificationValue: async (id: string) =>
+        id === intentId
+          ? {
+              value: JSON.stringify({ name: 'Wired', email: 'wired@example.com' }),
+              expiresAt: new Date(Date.now() + 60_000),
+            }
+          : null,
+      deleteVerificationByIdentifier: async () => undefined,
       findUserByEmail: async () => null,
       createUser: async (data: { name: string; email: string; emailVerified: boolean }) => {
         created.push({ name: data.name, email: data.email });
@@ -403,14 +615,24 @@ describe('buildAuthOptions env-gating', () => {
       },
     };
 
-    const token = signPasskeyIntent({ name: 'Wired', email: 'wired@example.com' });
     const resolved = await registration.resolveUser({
       ctx: { context: { internalAdapter } },
-      context: token,
+      context: intentId,
     });
 
     expect(resolved).toEqual({ id: 'wired-1', name: 'Wired' });
     expect(created).toEqual([{ name: 'Wired', email: 'wired@example.com' }]);
+  });
+
+  it('configures database-backed rate limiting with tightened rules on sensitive auth paths', async () => {
+    const { buildAuthOptions } = await import('../src/index');
+    const opts = buildAuthOptions(baseEnv, MAILER_DEPS);
+    expect(opts.rateLimit?.storage).toBe('database');
+    expect(opts.rateLimit?.max).toBeGreaterThan(0);
+    // Sensitive surfaces get their own tighter ceilings.
+    const rules = opts.rateLimit?.customRules ?? {};
+    expect(rules['/sign-in/passkey']).toEqual({ window: 60, max: 20 });
+    expect(rules['/mcp/token']).toEqual({ window: 60, max: 30 });
   });
 
   it('configures twoFactor backup-codes-only for passwordless account recovery', async () => {
@@ -419,7 +641,7 @@ describe('buildAuthOptions env-gating', () => {
     // no TOTP verify step (`skipVerificationOnEnable`), TOTP is disabled, and codes are encrypted
     // at rest. Also assert the recovery-challenge bridge is mounted alongside it.
     const { buildAuthOptions } = await import('../src/index');
-    const opts = buildAuthOptions(baseEnv);
+    const opts = buildAuthOptions(baseEnv, MAILER_DEPS);
     const tf = (opts.plugins ?? []).find((p) => p.id === 'two-factor');
     expect(tf).toBeDefined();
     const tfOptions = (tf as { options?: Record<string, unknown> }).options ?? {};
@@ -438,46 +660,56 @@ describe('buildAuthOptions env-gating', () => {
 
   it('ignores half-configured social pairs (id without secret)', async () => {
     const { buildAuthOptions } = await import('../src/index');
-    const opts = buildAuthOptions({
-      ...baseEnv,
-      GOOGLE_CLIENT_ID: 'goog-id',
-      // GOOGLE_CLIENT_SECRET missing → provider must NOT mount
-      GITHUB_APP_CLIENT_SECRET: 'gh-secret',
-      // GITHUB_APP_CLIENT_ID missing → provider must NOT mount
-    });
+    const opts = buildAuthOptions(
+      {
+        ...baseEnv,
+        GOOGLE_CLIENT_ID: 'goog-id',
+        // GOOGLE_CLIENT_SECRET missing → provider must NOT mount
+        GITHUB_APP_CLIENT_SECRET: 'gh-secret',
+        // GITHUB_APP_CLIENT_ID missing → provider must NOT mount
+      },
+      MAILER_DEPS,
+    );
     expect(opts.socialProviders).toBeUndefined();
     expect(opts.account).toBeUndefined();
   });
 
   it('treats placeholder-shaped values as not-real (isRealValue gate)', async () => {
     const { buildAuthOptions } = await import('../src/index');
-    const opts = buildAuthOptions({
-      ...baseEnv,
-      GOOGLE_CLIENT_ID: 'your-google-id',
-      GOOGLE_CLIENT_SECRET: 'changeme',
-      OIDC_LOGIN_PAGE_URL: '',
-    });
+    const opts = buildAuthOptions(
+      {
+        ...baseEnv,
+        GOOGLE_CLIENT_ID: 'your-google-id',
+        GOOGLE_CLIENT_SECRET: 'changeme',
+        OIDC_LOGIN_PAGE_URL: '',
+      },
+      MAILER_DEPS,
+    );
     expect(opts.socialProviders).toBeUndefined();
     // Still just the baseline: passkey + recovery-codes pair + nextCookies.
     expect((opts.plugins ?? []).map((p) => p.id)).toEqual([
       'passkey',
       'two-factor',
       'recovery-challenge',
+      'signup-challenge',
       'next-cookies',
     ]);
   });
 
   it('mounts Google + GitHub + Linear + account linking when all pairs are real', async () => {
     const { buildAuthOptions } = await import('../src/index');
-    const opts = buildAuthOptions({
-      ...baseEnv,
-      GOOGLE_CLIENT_ID: 'goog-id',
-      GOOGLE_CLIENT_SECRET: 'goog-secret',
-      GITHUB_APP_CLIENT_ID: 'gh-id',
-      GITHUB_APP_CLIENT_SECRET: 'gh-secret',
-      LINEAR_CLIENT_ID: 'lin-id',
-      LINEAR_CLIENT_SECRET: 'lin-secret',
-    });
+    const opts = buildAuthOptions(
+      {
+        ...baseEnv,
+        GOOGLE_CLIENT_ID: 'goog-id',
+        GOOGLE_CLIENT_SECRET: 'goog-secret',
+        GITHUB_APP_CLIENT_ID: 'gh-id',
+        GITHUB_APP_CLIENT_SECRET: 'gh-secret',
+        LINEAR_CLIENT_ID: 'lin-id',
+        LINEAR_CLIENT_SECRET: 'lin-secret',
+      },
+      MAILER_DEPS,
+    );
     expect(Object.keys(opts.socialProviders ?? {}).sort()).toEqual(['github', 'google', 'linear']);
     expect(opts.socialProviders?.google).toEqual({
       clientId: 'goog-id',
@@ -516,6 +748,56 @@ describe('buildAuthOptions env-gating', () => {
     ]);
   });
 
+  it('mounts Discord with the identify scope as a trusted linking provider when its pair is real', async () => {
+    const { buildAuthOptions } = await import('../src/index');
+    const opts = buildAuthOptions(
+      {
+        ...baseEnv,
+        DISCORD_CLIENT_ID: 'disc-id',
+        DISCORD_CLIENT_SECRET: 'disc-secret',
+      },
+      MAILER_DEPS,
+    );
+    expect(Object.keys(opts.socialProviders ?? {})).toEqual(['discord']);
+    expect(opts.socialProviders?.discord).toEqual({
+      clientId: 'disc-id',
+      clientSecret: 'disc-secret',
+      // Only `identify` — enough to map a mentioned snowflake to this user; no message/guild scopes.
+      scope: ['identify'],
+    });
+    expect(opts.account?.accountLinking?.trustedProviders).toEqual(['discord']);
+  });
+
+  it('mounts Apple (with a minted client-secret JWT) + adds appleid.apple.com to trustedOrigins when all four APPLE_* are real', async () => {
+    const { buildAuthOptions } = await import('../src/index');
+    const opts = buildAuthOptions({ ...baseEnv, ...APPLE_ENV }, MAILER_DEPS);
+    expect(Object.keys(opts.socialProviders ?? {})).toEqual(['apple']);
+    // `socialProviders.apple` is the config-object-or-thunk union — narrow to the object form by
+    // ruling out `undefined`/the thunk (no cast) before reading the minted credentials.
+    const apple = opts.socialProviders?.apple;
+    if (apple === undefined || typeof apple === 'function') {
+      throw new Error('expected an Apple provider config object');
+    }
+    // The client id is the Services ID; the secret is a freshly minted 3-segment ES256 JWT.
+    expect(apple.clientId).toBe('com.docket.web');
+    expect(apple.clientSecret?.split('.')).toHaveLength(3);
+    // Apple's form_post callback origin must be trusted (baseEnv sets no other trusted origins).
+    expect(opts.trustedOrigins).toEqual(['https://appleid.apple.com']);
+    // Apple is a trusted account-linking provider like the other social providers.
+    expect(opts.account?.accountLinking?.trustedProviders).toEqual(['apple']);
+  });
+
+  it('does NOT mount Apple (and does not add its origin) when any APPLE_* var is missing', async () => {
+    const { buildAuthOptions } = await import('../src/index');
+    // Missing the private key → provider off, appleid.apple.com NOT trusted.
+    const opts = buildAuthOptions(
+      { ...baseEnv, ...APPLE_ENV, APPLE_PRIVATE_KEY: undefined },
+      MAILER_DEPS,
+    );
+    expect(opts.socialProviders).toBeUndefined();
+    expect(opts.trustedOrigins).not.toContain('https://appleid.apple.com');
+  });
+
   describe('configuredSocialProviders (shared availability truth)', () => {
     it('is empty when no provider pair is real (matches the passkey-only baseline)', async () => {
       const { configuredSocialProviders } = await import('../src/index');
@@ -536,6 +818,16 @@ describe('buildAuthOptions env-gating', () => {
       expect(providers).toEqual(['google']);
     });
 
+    it('reports apple only when ALL FOUR durable APPLE_* vars are real (not a single pair)', async () => {
+      const { configuredSocialProviders } = await import('../src/index');
+      // All four present → apple is available.
+      expect(configuredSocialProviders({ ...baseEnv, ...APPLE_ENV })).toEqual(['apple']);
+      // Drop the key id → not available (unlike the other providers, apple needs all four).
+      expect(
+        configuredSocialProviders({ ...baseEnv, ...APPLE_ENV, APPLE_KEY_ID: undefined }),
+      ).toEqual([]);
+    });
+
     it('agrees with the providers buildAuthOptions actually mounts', async () => {
       const { configuredSocialProviders, buildAuthOptions } = await import('../src/index');
       const full = {
@@ -548,7 +840,7 @@ describe('buildAuthOptions env-gating', () => {
         LINEAR_CLIENT_SECRET: 'lin-secret',
       };
       expect(configuredSocialProviders(full).sort()).toEqual(
-        Object.keys(buildAuthOptions(full).socialProviders ?? {}).sort(),
+        Object.keys(buildAuthOptions(full, MAILER_DEPS).socialProviders ?? {}).sort(),
       );
     });
   });
@@ -559,10 +851,13 @@ describe('buildAuthOptions env-gating', () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     let opts!: ReturnType<typeof buildAuthOptions>;
     try {
-      opts = buildAuthOptions({
-        ...baseEnv,
-        OIDC_LOGIN_PAGE_URL: 'https://docket.example/sign-in',
-      });
+      opts = buildAuthOptions(
+        {
+          ...baseEnv,
+          OIDC_LOGIN_PAGE_URL: 'https://docket.example/sign-in',
+        },
+        MAILER_DEPS,
+      );
     } finally {
       warn.mockRestore();
       error.mockRestore();
@@ -573,6 +868,7 @@ describe('buildAuthOptions env-gating', () => {
       'passkey',
       'two-factor',
       'recovery-challenge',
+      'signup-challenge',
       'oidc-provider',
       'next-cookies',
     ]);
@@ -585,24 +881,37 @@ describe('buildAuthOptions env-gating', () => {
     // `mcp` internally bundles `oidcProvider`, so the standalone provider is NOT mounted
     // separately — passkey + mcp + nextCookies is the full set.
     const { buildAuthOptions } = await import('../src/index');
-    const opts = buildAuthOptions({
-      ...baseEnv,
-      OIDC_LOGIN_PAGE_URL: 'https://docket.example/sign-in',
-      MCP_RESOURCE_URL: 'https://docket.example/mcp',
-    });
+    const opts = buildAuthOptions(
+      {
+        ...baseEnv,
+        OIDC_LOGIN_PAGE_URL: 'https://docket.example/sign-in',
+        MCP_RESOURCE_URL: 'https://docket.example/mcp',
+      },
+      MAILER_DEPS,
+    );
     const ids = (opts.plugins ?? []).map((p) => p.id);
-    expect(ids).toEqual(['passkey', 'two-factor', 'recovery-challenge', 'mcp', 'next-cookies']);
+    expect(ids).toEqual([
+      'passkey',
+      'two-factor',
+      'recovery-challenge',
+      'signup-challenge',
+      'mcp',
+      'next-cookies',
+    ]);
     expect(ids).not.toContain('oidc-provider');
     expect(ids[ids.length - 1]).toBe('next-cookies');
   });
 
   it('mounts oAuthProxy (before nextCookies) only when both OAUTH_PROXY_* are real', async () => {
     const { buildAuthOptions } = await import('../src/index');
-    const opts = buildAuthOptions({
-      ...baseEnv,
-      OAUTH_PROXY_SECRET: 'oauth-proxy-shared-secret',
-      OAUTH_PROXY_PRODUCTION_URL: 'https://app.docket.example',
-    });
+    const opts = buildAuthOptions(
+      {
+        ...baseEnv,
+        OAUTH_PROXY_SECRET: 'oauth-proxy-shared-secret',
+        OAUTH_PROXY_PRODUCTION_URL: 'https://app.docket.example',
+      },
+      MAILER_DEPS,
+    );
     const ids = (opts.plugins ?? []).map((p) => p.id);
     expect(ids).toContain('oauth-proxy');
     expect(ids[ids.length - 1]).toBe('next-cookies');
@@ -611,26 +920,34 @@ describe('buildAuthOptions env-gating', () => {
   it('does NOT mount oAuthProxy when the pair is absent or half-configured', async () => {
     const { buildAuthOptions } = await import('../src/index');
     // Absent (the local placeholder env).
-    expect((buildAuthOptions(baseEnv).plugins ?? []).map((p) => p.id)).not.toContain('oauth-proxy');
+    expect((buildAuthOptions(baseEnv, MAILER_DEPS).plugins ?? []).map((p) => p.id)).not.toContain(
+      'oauth-proxy',
+    );
     // Secret without URL → not mounted (the contract also rejects this pair at env validation).
-    const half = buildAuthOptions({ ...baseEnv, OAUTH_PROXY_SECRET: 'only-the-secret' });
+    const half = buildAuthOptions(
+      { ...baseEnv, OAUTH_PROXY_SECRET: 'only-the-secret' },
+      MAILER_DEPS,
+    );
     expect((half.plugins ?? []).map((p) => p.id)).not.toContain('oauth-proxy');
   });
 
   it('uses a static baseURL string + no proxy-header trust when BETTER_AUTH_ALLOWED_HOSTS is unset', async () => {
     const { buildAuthOptions } = await import('../src/index');
-    const opts = buildAuthOptions(baseEnv);
+    const opts = buildAuthOptions(baseEnv, MAILER_DEPS);
     expect(opts.baseURL).toBe('http://localhost:3000');
     expect(opts.advanced?.trustedProxyHeaders).toBeUndefined();
   });
 
   it('switches to dynamic baseURL + proxy-header trust when BETTER_AUTH_ALLOWED_HOSTS is set', async () => {
     const { buildAuthOptions } = await import('../src/index');
-    const opts = buildAuthOptions({
-      ...baseEnv,
-      // Trimmed/empties-dropped CSV (reuses parseTrustedOrigins).
-      BETTER_AUTH_ALLOWED_HOSTS: 'usedocket.app, docket.hypertext.studio , *.vercel.app,',
-    });
+    const opts = buildAuthOptions(
+      {
+        ...baseEnv,
+        // Trimmed/empties-dropped CSV (reuses parseTrustedOrigins).
+        BETTER_AUTH_ALLOWED_HOSTS: 'usedocket.app, docket.hypertext.studio , *.vercel.app,',
+      },
+      MAILER_DEPS,
+    );
     expect(opts.baseURL).toEqual({
       allowedHosts: ['usedocket.app', 'docket.hypertext.studio', '*.vercel.app'],
       fallback: 'http://localhost:3000',

@@ -57,6 +57,7 @@ export { default as Mail } from '@mui/icons-material/Mail';
 export { default as Maximize } from '@mui/icons-material/OpenInFull';
 export { default as Menu } from '@mui/icons-material/Menu';
 export { default as MessageSquare } from '@mui/icons-material/ChatOutlined';
+export { default as MessagesSquare } from '@mui/icons-material/ForumOutlined';
 export { default as MoreHorizontal } from '@mui/icons-material/MoreHoriz';
 export { default as Plus } from '@mui/icons-material/Add';
 export { default as RefreshCw } from '@mui/icons-material/Refresh';

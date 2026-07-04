@@ -7,7 +7,7 @@
  * URLs. Keys are sanitized to stay inside the root. Used for local dev + tests so
  * export artifacts work with zero blob credentials (`boundaries.md` §8).
  */
-import { mkdirSync, readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { existsSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, normalize, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -42,7 +42,8 @@ function safeKey(key: string): string {
  *
  * @remarks
  * `put` creates parent directories as needed; `get` returns `null` for a missing
- * key; `url` resolves a `file://` URL without touching the disk.
+ * key; `url` resolves a `file://` URL without touching the disk; `delete` removes the
+ * file and is a no-op for a missing key.
  */
 export class LocalDiskBlob implements BlobStore {
   private readonly root: string;
@@ -76,5 +77,10 @@ export class LocalDiskBlob implements BlobStore {
   /** {@inheritDoc BlobStore.url} */
   url(key: string): string {
     return pathToFileURL(this.pathFor(key)).href;
+  }
+
+  /** {@inheritDoc BlobStore.delete} */
+  async delete(key: string): Promise<void> {
+    rmSync(this.pathFor(key), { force: true });
   }
 }

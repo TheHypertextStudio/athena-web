@@ -32,7 +32,12 @@ export interface MockObserverOptions {
 }
 
 /** The signature headers Docket's providers use; the mock accepts any one (local path). */
-const SIGNATURE_HEADERS = ['linear-signature', 'x-hub-signature-256', 'x-slack-signature'] as const;
+const SIGNATURE_HEADERS = [
+  'linear-signature',
+  'x-hub-signature-256',
+  'x-slack-signature',
+  'x-signature-ed25519',
+] as const;
 
 /** A deterministic, offline {@link Observer} backed by the request payload itself. */
 export class MockObserver implements Observer {
@@ -75,6 +80,15 @@ export class MockObserver implements Observer {
     const entity: EventEntityRef | undefined = externalId
       ? { kind: 'work_item', externalId, ...(fixtureTitle ? { title: fixtureTitle } : {}) }
       : undefined;
+    // Optional fixture `participants`: an array of external actor ids (or `{ externalId }`), so a
+    // test can drive the mention-attribution seam (mentioned users → recipients) deterministically.
+    const participants = Array.isArray(body['participants'])
+      ? (body['participants'] as unknown[]).flatMap((p) => {
+          if (typeof p === 'string') return [{ externalId: p }];
+          const id = str(asRecord(p), 'externalId');
+          return id ? [{ externalId: id }] : [];
+        })
+      : undefined;
     return [
       {
         kind,
@@ -82,6 +96,7 @@ export class MockObserver implements Observer {
         title,
         ...(summary ? { summary } : {}),
         ...(entity ? { entity } : {}),
+        ...(participants?.length ? { participants } : {}),
         dedupeKey,
         detail: genericDetail(title, summary),
       },

@@ -4,10 +4,11 @@
  * @remarks
  * The portfolio reasons about Project *spans* (`[startDate, targetDate]`) and discrete
  * Milestone checkpoints, so concrete calendar dates read far better than relative stamps.
- * These helpers format ISO dates to short, axis-friendly labels (locale-aware via `Intl`),
- * parse ISO dates to epoch millis for the layout math, and map the free lifecycle-status
- * strings the Hub DTOs carry onto display labels.
+ * These helpers format ISO dates to short, axis-friendly labels (via the shared, timezone-correct
+ * {@link formatCalendarDate}), parse ISO dates to epoch millis for the layout math, and map the
+ * free lifecycle-status strings the Hub DTOs carry onto display labels.
  */
+import { formatCalendarDate } from '@/lib/format-date';
 
 /** Project/Program lifecycle status → display label (the Hub carries free strings). */
 const STATUS_LABEL: Record<string, string> = {
@@ -37,20 +38,14 @@ export function toMillis(iso: string | null | undefined): number | null {
 }
 
 /**
- * Format an ISO date as a short, locale-aware calendar date.
+ * Format an ISO date as a short, locale-aware calendar date (delegates to the shared,
+ * timezone-correct {@link formatCalendarDate} so bare `YYYY-MM-DD` spans never shift a day).
  *
  * @param iso - The ISO date string, or null/undefined when unscheduled.
  * @returns a short date like `Jun 7, 2026`, or null when no date is set.
  */
 export function formatDate(iso: string | null | undefined): string | null {
-  const ms = toMillis(iso);
-  if (ms === null) return null;
-  return new Date(ms).toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    timeZone: 'UTC',
-  });
+  return formatCalendarDate(iso);
 }
 
 /**

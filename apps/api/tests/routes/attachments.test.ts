@@ -5,15 +5,20 @@ import type { AttachmentOut } from '@docket/types';
 
 import { appWithActor, getDb, one, seedBaseOrg } from './harness.test';
 import type { attachmentRoutes as attachmentRouter } from '../../src/routes/attachment-routes';
+import type * as ContainerModule from '../../src/container';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
 let attachments!: typeof attachmentRouter;
+// Imported dynamically (after the harness sets `SKIP_ENV_VALIDATION`) so loading the container
+// doesn't trip fail-fast env validation at module load.
+let getContainer!: typeof ContainerModule.getContainer;
 
 beforeAll(async () => {
   schema = await getDb();
   db = schema.db;
   attachments = (await import('../../src/routes/attachment-routes')).attachmentRoutes;
+  getContainer = (await import('../../src/container')).getContainer;
 });
 
 const MISSING = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
@@ -68,6 +73,29 @@ async function createUrl(
   });
 }
 
+/** Build an in-memory file of `size` bytes (filled with `0x61`) with the given name/type. */
+function fileOfSize(name: string, size: number, type = 'text/plain'): File {
+  return new File([new Uint8Array(size).fill(0x61)], name, { type });
+}
+
+/** POST a multipart file upload onto a task. */
+async function uploadFile(
+  app: ReturnType<typeof appWithActor>,
+  taskId: string,
+  file: File,
+  title?: string,
+) {
+  const form = new FormData();
+  form.set('file', file);
+  if (title !== undefined) form.set('title', title);
+  return app.request(`/${taskId}/attachments/upload`, { method: 'POST', body: form });
+}
+
+/** The deterministic blob key an uploaded attachment is stored under. */
+function blobKeyFor(orgId: string, attachmentId: string): string {
+  return `attachments/${orgId}/${attachmentId}`;
+}
+
 describe('attachment routes', () => {
   it('creates a url attachment on a task with subject derived from the route', async () => {
     const { orgId, humanActorId, taskId } = await seedOrgWithTask();
@@ -83,6 +111,9 @@ describe('attachment routes', () => {
     expect(created.organizationId).toBe(orgId);
     expect(created.sourceIntegrationId).toBeNull();
     expect(created.externalId).toBeNull();
+    expect(created.fileName).toBeNull();
+    expect(created.mimeType).toBeNull();
+    expect(created.byteSize).toBeNull();
   });
 
   it('lists attachments for a task, scoped to that task', async () => {
@@ -163,5 +194,76 @@ describe('attachment routes', () => {
     expect(
       (await wb.request(`/${a.taskId}/attachments/${created.id}`, { method: 'DELETE' })).status,
     ).toBe(404);
+  });
+
+  it('uploads a file: stores the bytes and records file metadata', async () => {
+    const { orgId, humanActorId, taskId } = await seedOrgWithTask();
+    const w = appWithActor(attachments, orgId, ['contribute'], humanActorId);
+
+    const res = await uploadFile(w, taskId, fileOfSize('notes.txt', 12));
+    expect(res.status).toBe(200);
+    const created = await body<AttachmentOut>(res);
+    expect(created.kind).toBe('file');
+    expect(created.subjectId).toBe(taskId);
+    expect(created.fileName).toBe('notes.txt');
+    expect(created.mimeType).toBe('text/plain');
+    expect(created.byteSize).toBe(12);
+    // Title defaults to the filename when omitted.
+    expect(created.title).toBe('notes.txt');
+    // The bytes are in the blob store under the deterministic key.
+    const stored = await getContainer().blob.get(blobKeyFor(orgId, created.id));
+    expect(stored?.length).toBe(12);
+  });
+
+  it('uses an explicit title over the filename when provided', async () => {
+    const { orgId, humanActorId, taskId } = await seedOrgWithTask();
+    const w = appWithActor(attachments, orgId, ['contribute'], humanActorId);
+    const created = await body<AttachmentOut>(
+      await uploadFile(w, taskId, fileOfSize('raw.bin', 4, 'application/octet-stream'), 'Design'),
+    );
+    expect(created.title).toBe('Design');
+  });
+
+  it('downloads a file attachment as raw bytes with a content-typed attachment disposition', async () => {
+    const { orgId, humanActorId, taskId } = await seedOrgWithTask();
+    const w = appWithActor(attachments, orgId, ['contribute'], humanActorId);
+    const created = await body<AttachmentOut>(
+      await uploadFile(w, taskId, fileOfSize('report.txt', 7)),
+    );
+
+    const dl = await w.request(`/${taskId}/attachments/${created.id}/download`);
+    expect(dl.status).toBe(200);
+    expect(dl.headers.get('content-type')).toBe('text/plain');
+    expect(dl.headers.get('content-disposition')).toContain("filename*=UTF-8''report.txt");
+    expect(new Uint8Array(await dl.arrayBuffer())).toHaveLength(7);
+  });
+
+  it('deletes a file attachment and cleans up its blob', async () => {
+    const { orgId, humanActorId, taskId } = await seedOrgWithTask();
+    const w = appWithActor(attachments, orgId, ['contribute'], humanActorId);
+    const created = await body<AttachmentOut>(
+      await uploadFile(w, taskId, fileOfSize('gone.txt', 5)),
+    );
+    const key = blobKeyFor(orgId, created.id);
+    expect(await getContainer().blob.get(key)).not.toBeNull();
+
+    const del = await w.request(`/${taskId}/attachments/${created.id}`, { method: 'DELETE' });
+    expect(del.status).toBe(200);
+    // The blob is removed, and the download route 404s now the row is gone.
+    expect(await getContainer().blob.get(key)).toBeNull();
+    expect((await w.request(`/${taskId}/attachments/${created.id}/download`)).status).toBe(404);
+  });
+
+  it('rejects an over-limit upload (422)', async () => {
+    const { orgId, humanActorId, taskId } = await seedOrgWithTask();
+    const w = appWithActor(attachments, orgId, ['contribute'], humanActorId);
+    const tooBig = fileOfSize('huge.bin', 4 * 1024 * 1024 + 1, 'application/octet-stream');
+    expect((await uploadFile(w, taskId, tooBig)).status).toBe(422);
+  });
+
+  it('requires `contribute` to upload (403 for a viewer)', async () => {
+    const { orgId, humanActorId, taskId } = await seedOrgWithTask();
+    const viewer = appWithActor(attachments, orgId, ['view'], humanActorId);
+    expect((await uploadFile(viewer, taskId, fileOfSize('x.txt', 3))).status).toBe(403);
   });
 });

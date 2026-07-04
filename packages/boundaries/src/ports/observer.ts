@@ -29,10 +29,10 @@ import type { ConnectorProvider } from './connector';
  *
  * @remarks
  * A superset of {@link ConnectorProvider}: every connector can also be observed, plus
- * **observe-only** sources that have no work-import connector (e.g. Slack). Keeping observer
- * providers as their own union avoids polluting `ConnectorProvider`'s exhaustive switches.
+ * **observe-only** sources that have no work-import connector (e.g. Slack, Discord). Keeping
+ * observer providers as their own union avoids polluting `ConnectorProvider`'s exhaustive switches.
  */
-export type ObserverProvider = ConnectorProvider | 'slack';
+export type ObserverProvider = ConnectorProvider | 'slack' | 'discord';
 
 /** Inbound webhook request headers, lower-cased keys (Hono header lookup is case-insensitive). */
 export type InboundHeaders = Record<string, string | undefined>;

@@ -13,8 +13,8 @@ import { ConnectorError } from '../../src/ports/connector-error';
 
 // A throwaway RSA keypair so the JWT signature can be verified against a real public key.
 const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
-const PEM = privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
-const PUBLIC_PEM = publicKey.export({ type: 'spki', format: 'pem' }).toString();
+const PEM = privateKey.export({ type: 'pkcs8', format: 'pem' });
+const PUBLIC_PEM = publicKey.export({ type: 'spki', format: 'pem' });
 const NOW_S = 1_750_000_000;
 const APP = { appId: '12345', privateKeyPem: PEM };
 

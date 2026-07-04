@@ -93,6 +93,17 @@ export const twoFactor = authClient.twoFactor;
 export const signOut = authClient.signOut;
 
 /**
+ * Request an account email change: `{ newEmail, callbackURL }`.
+ *
+ * @remarks
+ * A base Better Auth client method (no plugin). Sends a confirmation link to the CURRENT
+ * (old) address — never the new one — which the user must click to complete the swap; see
+ * `packages/auth/src/auth-builder.ts`'s `user.changeEmail.sendChangeEmailConfirmation`.
+ * Convenience re-export of {@link authClient.changeEmail}.
+ */
+export const changeEmail = authClient.changeEmail;
+
+/**
  * React hook returning the reactive session state (`{ data, isPending, error }`).
  *
  * @remarks Convenience re-export of {@link authClient.useSession}.

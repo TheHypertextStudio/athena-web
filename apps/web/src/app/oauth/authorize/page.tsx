@@ -12,6 +12,12 @@
  * - `client_id` — the OAuth client id (may be an HTTPS URL for CIMD clients).
  * - `scope` — space-separated list of Docket MCP scopes the client is requesting.
  *
+ * The client's display name/icon come from `GET /v1/oauth/clients/:clientId/metadata` — the
+ * **server-validated** row Better Auth's OAuth application table holds (for CIMD clients, the
+ * `client_name`/`logo_uri` the server itself fetched and validated during the authorize
+ * preflight; see `apps/api/src/mcp/cimd.ts`). This page never fetches the (attacker-controlled)
+ * `client_id` URL directly — that would render whatever an untrusted client chose to serve.
+ *
  * On **Approve**: POSTs to `/api/auth/oauth2/consent` with `{ accept: true, consent_code }`.
  * Better Auth stores the consent, exchanges the code for an authorization code, and returns
  * `{ redirectURI }` — the page then performs a client-side redirect to complete the flow.
@@ -33,6 +39,7 @@ import {
 import { useRouter, useSearchParams } from 'next/navigation';
 import { type JSX, Suspense, useCallback, useEffect, useState } from 'react';
 
+import { api } from '@/lib/api';
 import { useSession } from '@/lib/auth-client';
 
 /** Human-readable label + description for each Docket MCP scope. */
@@ -55,33 +62,22 @@ const SCOPE_LABELS: Record<string, { label: string; detail: string }> = {
   },
 };
 
-/** Metadata fetched from a CIMD client_id URL (best-effort). */
-interface ClientMetadata {
-  client_name?: string;
-  logo_uri?: string;
-}
-
-/** Attempt to fetch CIMD metadata from a URL-form client_id. Returns `null` on any failure. */
-async function fetchClientMetadata(clientId: string): Promise<ClientMetadata | null> {
+/** Fetch the server-validated display metadata for an OAuth client. Returns `null` on any failure. */
+async function fetchClientMetadata(
+  clientId: string,
+): Promise<{ name: string; icon: string | null } | null> {
   try {
-    if (!clientId.startsWith('https://')) return null;
-    const res = await fetch(clientId, { headers: { Accept: 'application/json' } });
+    const res = await api.v1.oauth.clients[':clientId'].metadata.$get({ param: { clientId } });
     if (!res.ok) return null;
-    const json: unknown = await res.json();
-    if (typeof json !== 'object' || json === null) return null;
-    const meta = json as Record<string, unknown>;
-    return {
-      client_name: typeof meta['client_name'] === 'string' ? meta['client_name'] : undefined,
-      logo_uri: typeof meta['logo_uri'] === 'string' ? meta['logo_uri'] : undefined,
-    };
+    return await res.json();
   } catch {
     return null;
   }
 }
 
-/** Derive a display name for the client: prefer CIMD `client_name`, fall back to the domain. */
-function clientDisplayName(clientId: string, metadata: ClientMetadata | null): string {
-  if (metadata?.client_name) return metadata.client_name;
+/** Derive a display name for the client: prefer the server's name, fall back to the domain. */
+function clientDisplayName(clientId: string, metadata: { name: string } | null): string {
+  if (metadata?.name) return metadata.name;
   try {
     return new URL(clientId).hostname;
   } catch {
@@ -104,7 +100,7 @@ function ConsentPage(): JSX.Element {
     .map((s) => s.trim())
     .filter(Boolean);
 
-  const [clientMeta, setClientMeta] = useState<ClientMetadata | null>(null);
+  const [clientMeta, setClientMeta] = useState<{ name: string; icon: string | null } | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

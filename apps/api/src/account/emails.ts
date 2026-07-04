@@ -1,10 +1,11 @@
 /**
- * `@docket/api` — transactional email templates for account end-of-life events.
+ * `@docket/api` — transactional email templates for account end-of-life and security events.
  *
  * @remarks
  * Pure builders returning `{ subject, html, text }` for the mailer port (no I/O). Each event
- * — deletion scheduled, deletion canceled, export ready — gets a plain, skimmable message
- * with both an HTML and a text part, matching the daily-digest mailer shape.
+ * — deletion scheduled, deletion canceled, export ready, recovery codes regenerated — gets a
+ * plain, skimmable message with both an HTML and a text part, matching the daily-digest mailer
+ * shape.
  */
 
 /** One rendered email: subject plus HTML and plain-text bodies. */
@@ -113,5 +114,26 @@ export function exportReadyEmail(params: {
       html: `Your Docket data export is ready: <a href="${params.downloadUrl}">Download your data</a>.`,
     },
     { text: `This link expires on ${when}.`, html: `This link expires on ${when}.` },
+  ]);
+}
+
+/**
+ * The "your recovery codes were regenerated" security notice.
+ *
+ * @remarks
+ * Regenerating invalidates the previous set, so this fires unconditionally whenever the
+ * (step-up-gated) `POST /me/recovery-codes` succeeds — a lost/stolen session that manages to
+ * step up is still visible to the real owner via this notice.
+ */
+export function recoveryCodesRegeneratedEmail(params: { name: string | null }): AccountEmail {
+  return buildEmail(params.name, 'Your Docket recovery codes were regenerated', [
+    {
+      text: 'Your Docket account recovery codes were just regenerated. Your previous codes no longer work.',
+      html: 'Your Docket account recovery codes were just regenerated. Your <strong>previous codes no longer work</strong>.',
+    },
+    {
+      text: "If this wasn't you, sign in and check Settings → Security — regenerating again invalidates whatever set an attacker might hold.",
+      html: "If this wasn't you, sign in and check <strong>Settings → Security</strong> — regenerating again invalidates whatever set an attacker might hold.",
+    },
   ]);
 }

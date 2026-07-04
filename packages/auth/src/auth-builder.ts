@@ -23,13 +23,14 @@ import { nextCookies } from 'better-auth/next-js';
 import { eq } from 'drizzle-orm';
 
 import { generateAppleClientSecret, type AppleClientSecretInput } from './apple-secret';
+import { changeEmailConfirmationEmail } from './emails';
 import { recoveryChallenge } from './recovery-challenge';
 import { signupChallenge } from './signup-challenge';
 import { INTENT_IDENTIFIER_PREFIX, type SignupIntent } from './signup-intent';
 
 /** The external dependencies {@link buildAuthOptions} injects into email-sending auth flows. */
 export interface AuthDeps {
-  /** The mailer the sign-up verification (and future change-email) flows send through. */
+  /** The mailer the sign-up verification and change-email flows send through. */
   readonly mailer: Mailer;
   /**
    * Non-production only: echo the sign-up code in the `/sign-up/request-code` response so e2e tests
@@ -547,6 +548,35 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
       expiresIn: SESSION_EXPIRES_IN_S,
       updateAge: SESSION_UPDATE_AGE_S,
       freshAge: SESSION_FRESH_AGE_S,
+    },
+    // Every Docket user is created with `emailVerified: true` (signup proves inbox ownership
+    // before an account ever exists — see `resolvePasskeyUser` above), so this callback is not
+    // expected to fire in normal operation. It is still required: Better Auth's `/change-email`
+    // handler gates on `emailVerification.sendVerificationEmail` being configured even on the
+    // already-verified path (see `user.changeEmail.sendChangeEmailConfirmation` below), and it is
+    // the correct fallback if a user's `emailVerified` were ever false.
+    emailVerification: {
+      sendVerificationEmail: async ({ user: target, url }) => {
+        await deps.mailer.send({
+          to: target.email,
+          ...changeEmailConfirmationEmail({ name: target.name, newEmail: target.email, url }),
+        });
+      },
+    },
+    user: {
+      changeEmail: {
+        enabled: true,
+        // Sent to the CURRENT (old) address, never the new one: confirming a change from the
+        // inbox being left is what stops an attacker who merely knows or guessed the new address
+        // from silently redirecting the account's identity. Clicking the link both verifies the
+        // new address and completes the swap (Better Auth's `/verify-email` endpoint).
+        sendChangeEmailConfirmation: async ({ user: current, newEmail, url }) => {
+          await deps.mailer.send({
+            to: current.email,
+            ...changeEmailConfirmationEmail({ name: current.name, newEmail, url }),
+          });
+        },
+      },
     },
     databaseHooks: {
       user: {

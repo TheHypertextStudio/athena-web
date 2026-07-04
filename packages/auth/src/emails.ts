@@ -70,3 +70,32 @@ export function verificationCodeEmail(params: { name: string | null; code: strin
     },
   ]);
 }
+
+/**
+ * The confirmation email sent to a user's CURRENT address when they request a change of email.
+ *
+ * @remarks
+ * Sent to the OLD address, not the new one — confirming a change from the inbox you're leaving
+ * is what stops an attacker who has merely guessed or observed the new address (e.g. a shared
+ * device) from silently redirecting the account's identity. Clicking the link both verifies the
+ * new address and completes the swap in one step (Better Auth's `/verify-email` endpoint).
+ *
+ * @param params - The recipient's name (or null), the requested new address, and the signed
+ * confirmation `url` Better Auth generated (`sendChangeEmailConfirmation`).
+ */
+export function changeEmailConfirmationEmail(params: {
+  name: string | null;
+  newEmail: string;
+  url: string;
+}): AuthEmail {
+  return buildEmail(params.name, 'Confirm your new Docket email address', [
+    {
+      text: `We received a request to change your Docket account's email to ${params.newEmail}. Confirm the change: ${params.url}`,
+      html: `We received a request to change your Docket account's email to <strong>${params.newEmail}</strong>. <a href="${params.url}">Confirm the change</a>.`,
+    },
+    {
+      text: "If you didn't request this, you can safely ignore this email — your address stays unchanged until the link above is used.",
+      html: "If you didn't request this, you can safely ignore this email — your address stays unchanged until the link above is used.",
+    },
+  ]);
+}

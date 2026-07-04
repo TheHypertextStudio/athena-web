@@ -18,6 +18,8 @@ import { RecoveryCodesOut, RecoveryCodesStatusOut } from '@docket/types';
 import { type Context, Hono } from 'hono';
 import type { z } from 'zod';
 
+import { recoveryCodesRegeneratedEmail } from '../account/emails';
+import { getContainer } from '../container';
 import type { AppEnv, AuthSession } from '../context';
 import { AuthError, ReauthRequiredError } from '../error';
 import { ok } from '../lib/ok';
@@ -82,12 +84,17 @@ const meRecovery = new Hono<AppEnv>()
       response: RecoveryCodesOut,
       description: `(Re)generate the caller's two-factor recovery codes and return the **plaintext codes exactly once**. This is the only response that ever carries the codes in the clear — they are displayed for the user to save and are never retrievable again (the status read returns only a count). **Side effect:** replaces any previous code set (invalidating old codes) and resets \`generatedAt\`.
 
-Like account deletion, this is a **high-risk action gated by step-up**: it requires a **freshly re-authenticated passkey session** (created within the last 5 minutes), so an unattended or hijacked session can't silently mint a new set. A stale session is rejected with **401 \`reauth_required\`** so the client re-verifies the passkey and retries. Session-only otherwise (no capability). Note: the locked-out recovery flow for users with *no* session lives on the Better Auth sign-in surface (\`/two-factor/recovery-challenge\` + \`verify-backup-code\`), not here. Related: \`GET /me/recovery-codes\`.`,
+Like account deletion, this is a **high-risk action gated by step-up**: it requires a **freshly re-authenticated passkey session** (created within the last 5 minutes), so an unattended or hijacked session can't silently mint a new set. A stale session is rejected with **401 \`reauth_required\`** so the client re-verifies the passkey and retries. Session-only otherwise (no capability). A security-notice email confirms the change to the account holder (regardless of who triggered it). Note: the locked-out recovery flow for users with *no* session lives on the Better Auth sign-in surface (\`/two-factor/recovery-challenge\` + \`verify-backup-code\`), not here. Related: \`GET /me/recovery-codes\`.`,
     }),
     async (c) => {
-      const session = requireSession(c);
-      requireFreshSession(session);
-      return ok(c, RecoveryCodesOut, { codes: await generateRecoveryCodes(session.user.id) });
+      const { user, session } = requireSession(c);
+      requireFreshSession({ user, session });
+      const codes = await generateRecoveryCodes(user.id);
+      await getContainer().mailer.send({
+        to: user.email,
+        ...recoveryCodesRegeneratedEmail({ name: user.name }),
+      });
+      return ok(c, RecoveryCodesOut, { codes });
     },
   );
 

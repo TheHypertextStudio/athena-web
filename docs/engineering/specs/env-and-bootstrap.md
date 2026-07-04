@@ -157,14 +157,21 @@ Billing subject = Organization (`referenceId = Organization.id`). Stripe SDK pin
 
 ### 1.5 MCP server / OIDC provider
 
-The OIDC issuer and MCP resource are derived from `API_URL`; they are surfaced as explicit env vars so the discovery documents (RFC 8414 AS metadata, RFC 9728 Protected Resource Metadata) and audience-binding (RFC 8707 `resource`) can be validated at boot and asserted in tests.
+The OIDC issuer and MCP resource are derived from `API_URL`/`WEB_URL` — they are surfaced as
+overridable env vars (not required-and-manual) so the discovery documents (RFC 8414 AS metadata,
+RFC 9728 Protected Resource Metadata) and audience-binding (RFC 8707 `resource`) can still be
+validated at boot and asserted in tests. **This is implemented, on-by-default**: unlike the rest of
+this spec (a design doc predating the build), the derivation itself lives in
+`packages/env/src/api.ts` and runs at process boot on every request path, not as a bootstrap-time
+write into `.env` — a deploy with only the required `API_URL`/`WEB_URL` set mounts the MCP OAuth
+server with no MCP-specific config at all.
 
-| Name                  | Apps | Scope  | D/P            | What it is                                                                                                                                  | Where to obtain                                 |
-| --------------------- | ---- | ------ | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| `MCP_ISSUER_URL`      | api  | server | D=P            | OIDC/OAuth 2.1 issuer (Authorization Server). **= `API_URL`** (single AS, Better Auth `oidcProvider()`).                                    | Derived from `API_URL` by bootstrap.            |
-| `MCP_RESOURCE_URL`    | api  | server | D=P            | Canonical MCP resource identifier for audience binding (`resource=` param; tokens whose `aud` ≠ this are rejected). **= `${API_URL}/mcp`**. | Derived from `API_URL`.                         |
-| `MCP_ALLOWED_ORIGINS` | api  | server | D=P            | Comma-separated `Origin` allowlist for DNS-rebinding protection on `/mcp` (the app origins + any first-party agent host).                   | Composed from §0 domains; bootstrap default.    |
-| `OIDC_LOGIN_PAGE_URL` | api  | server | D=P (optional) | Where `oidcProvider()` redirects for the consent/login UI (a route in `apps/web`). Defaults to `${NEXT_PUBLIC_WEB_URL}/oauth/consent`.      | Derived; override only if the consent UI moves. |
+| Name                  | Apps | Scope  | D/P            | What it is                                                                                                                                                                                 | Where to obtain                                       |
+| --------------------- | ---- | ------ | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------- |
+| `MCP_ISSUER_URL`      | api  | server | D=P (optional) | OIDC/OAuth 2.1 issuer (Authorization Server). **= `API_URL`** (single AS, Better Auth `mcp()`).                                                                                            | Derived from `API_URL` at boot; set only to override. |
+| `MCP_RESOURCE_URL`    | api  | server | D=P (optional) | Canonical MCP resource identifier for audience binding (`resource=` param; tokens whose `aud` ≠ this are rejected). **= `${API_URL}/mcp`**.                                                | Derived from `API_URL` at boot; set only to override. |
+| `MCP_ALLOWED_ORIGINS` | api  | server | D=P            | Comma-separated `Origin` allowlist for DNS-rebinding protection on `/mcp` (the app origins + any first-party agent host). **Never derived** — a security allowlist, always set explicitly. | Composed from §0 domains; set per environment.        |
+| `OIDC_LOGIN_PAGE_URL` | api  | server | D=P (optional) | Where `mcp()` redirects for the consent/login UI (a route in `apps/web`). **= `${WEB_URL}/sign-in`** (the consent screen itself lives at `/oauth/authorize`, reached after sign-in).       | Derived from `WEB_URL` at boot; set only to override. |
 
 > Downstream connector tokens (GitHub/Drive/Linear) are **separately issued** and **never** the client's MCP token (engineering §4 MUST). Those connector OAuth credentials reuse the §1.3 provider apps — no additional MCP-specific env beyond the above.
 

@@ -281,7 +281,7 @@ const meCalendar = new Hono<AppEnv>()
       const syncModules = createDefaultCalendarSyncModules();
       const pullResult = await syncCalendarConnections(db, { userId, adapters: syncModules });
       const now = new Date();
-      const drainResult = await drainDueCalendarItemWrites(db, { now, syncModules });
+      const drainResult = await drainDueCalendarItemWrites(db, { userId, now, syncModules });
       const { writesPending, conflicts } = await countCalendarWriteState(db, userId);
       return ok(c, CalendarSyncResultOut, {
         ...pullResult,

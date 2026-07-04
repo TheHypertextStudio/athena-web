@@ -297,6 +297,101 @@ describe('registerOrRenewWatches', () => {
     expect(tally.registered).toBe(0);
     expect(discoverCalls).toBe(0);
   });
+
+  it('tallies a startWatch failure as an error and keeps registering the remaining due layers', async () => {
+    const schema = await getDb();
+    const userId = await seedUserWithHub(schema.db, schema, 'WatchFailureUser');
+    const connectionId = await seedConnection(schema, {
+      userId,
+      externalAccountId: 'acct-watch-failure',
+    });
+    const failingId = await seedLayer(schema, {
+      userId,
+      connectionId,
+      externalLayerId: 'cal-fails',
+    });
+    const okId = await seedLayer(schema, {
+      userId,
+      connectionId,
+      externalLayerId: 'cal-ok',
+    });
+
+    const startWatchCalls: string[] = [];
+    const adapter: CalendarProviderAdapter = {
+      provider: 'google',
+      listLayers: async () => [],
+      pullChanges: async () => {
+        throw new Error('not exercised by watch-registration tests');
+      },
+      pushItem: () => {
+        throw new Error('not exercised');
+      },
+      deleteItem: () => {
+        throw new Error('not exercised');
+      },
+      startWatch: async (input) => {
+        startWatchCalls.push(input.externalLayerId);
+        if (input.externalLayerId === 'cal-fails') {
+          throw new Error('Google watch response missing resourceId/expiration');
+        }
+        const result: CalendarWatchResult = {
+          channelId: `chan-${input.externalLayerId}`,
+          resourceId: `res-${input.externalLayerId}`,
+          token: `tok-${input.externalLayerId}`,
+          expiresAt: new Date(NOW.getTime() + 7 * 24 * 60 * 60 * 1000),
+        };
+        return result;
+      },
+    };
+    const module: CalendarProviderSyncModule = {
+      adapter,
+      discoverConnections: async () => [
+        {
+          externalAccountId: 'acct-watch-failure',
+          accountEmail: null,
+          accountName: null,
+          accountPictureUrl: null,
+          raw: null,
+        },
+      ],
+      resolveCredentials: async () => ({ accessToken: 'fake-token' }),
+      captureScopeState: () => ({
+        grantedScopes: [],
+        calendarRead: true,
+        calendarWrite: true,
+        capturedAt: NOW.toISOString(),
+      }),
+    };
+
+    const tally = await registerOrRenewWatches(schema.db, {
+      userId,
+      now: NOW,
+      adapters: { google: module },
+      callbackUrlFor: () => 'https://api.docket.test/webhooks/calendar/google',
+    });
+
+    // Both layers were attempted — the failing one did not stop the loop from reaching
+    // the next layer.
+    expect(startWatchCalls.sort()).toEqual(['cal-fails', 'cal-ok']);
+    // Only the successful one counted toward `registered`; the failure is tallied, not thrown.
+    expect(tally.registered).toBe(1);
+    expect(tally.errors).toEqual([
+      'cal-fails: Google watch response missing resourceId/expiration',
+    ]);
+
+    const failingRow = one(
+      await schema.db
+        .select()
+        .from(schema.calendarLayer)
+        .where(eq(schema.calendarLayer.id, failingId)),
+    );
+    expect(failingRow.watchChannelId).toBeNull(); // never persisted — startWatch threw first
+
+    const okRow = one(
+      await schema.db.select().from(schema.calendarLayer).where(eq(schema.calendarLayer.id, okId)),
+    );
+    expect(okRow.watchChannelId).toBe('chan-cal-ok');
+  });
 });
 
 /**
@@ -463,5 +558,108 @@ describe('sweepCalendarSync', () => {
   it('leaves watchesRegistered at zero when GOOGLE_CALENDAR_WEBHOOK_URL is unset (the default test env)', async () => {
     const { callbackUrlFor } = await import('../../src/routes/calendar-sync-sweep');
     expect(callbackUrlFor('google')).toBeNull();
+  });
+
+  it('a thrown failure for one user (defense-in-depth per-user try/catch) does not abort the sweep for a later user', async () => {
+    const schema = await getDb();
+    const userA = await seedUserWithHub(schema.db, schema, 'SweepThrowUserA');
+    const userB = await seedUserWithHub(schema.db, schema, 'SweepThrowUserB');
+    await seedFullSyncFixture(schema, {
+      userId: userA,
+      externalAccountId: 'acct-throw-a',
+      externalLayerId: 'cal-throw-a',
+    });
+    const { layerId: layerB } = await seedFullSyncFixture(schema, {
+      userId: userB,
+      externalAccountId: 'acct-throw-b',
+      externalLayerId: 'cal-throw-b',
+    });
+
+    const pullCallsByLayer: string[] = [];
+    const adapter: CalendarProviderAdapter = {
+      provider: 'google',
+      async listLayers({ credentials }) {
+        const externalLayerId =
+          credentials.accessToken === 'acct-throw-a' ? 'cal-throw-a' : 'cal-throw-b';
+        return [
+          {
+            externalLayerId,
+            title: 'Layer',
+            description: null,
+            timezone: null,
+            color: null,
+            accessRole: 'owner',
+            primary: true,
+            editableCore: true,
+          },
+        ];
+      },
+      async pullChanges({ externalLayerId }) {
+        pullCallsByLayer.push(externalLayerId);
+        return {
+          items: [],
+          nextCursor: `tok-${externalLayerId}`,
+          cursorInvalid: false,
+          full: true,
+        };
+      },
+      pushItem: () => {
+        throw new Error('not exercised by this test');
+      },
+      deleteItem: () => {
+        throw new Error('not exercised by this test');
+      },
+    };
+    const module: CalendarProviderSyncModule = {
+      adapter,
+      async discoverConnections({ db, userId }) {
+        // Simulate an unexpected (non-credential, non-item-level) throw for user A only —
+        // this is the kind of failure none of `syncCalendarConnections`'s internal per-item
+        // guards catch (it happens before the per-connection `try`), so it is exactly what
+        // the sweep's per-user `try`/`catch` backstop exists for.
+        if (userId === userA) throw new Error('unexpected discovery failure for user A');
+        const rows = await db
+          .select({ externalAccountId: schema.calendarConnection.externalAccountId })
+          .from(schema.calendarConnection)
+          .where(
+            and(
+              eq(schema.calendarConnection.userId, userId),
+              eq(schema.calendarConnection.provider, 'google'),
+            ),
+          );
+        return rows.map((r) => ({
+          externalAccountId: r.externalAccountId,
+          accountEmail: null,
+          accountName: null,
+          accountPictureUrl: null,
+          raw: null,
+        }));
+      },
+      resolveCredentials: async (connection) => ({ accessToken: connection.externalAccountId }),
+      captureScopeState: () => ({
+        grantedScopes: [],
+        calendarRead: true,
+        calendarWrite: true,
+        capturedAt: NOW.toISOString(),
+      }),
+    };
+    state.module = module;
+
+    const { sweepCalendarSync } = await import('../../src/routes/calendar-sync-sweep');
+    const tally = await sweepCalendarSync(NOW);
+
+    // User A's failure is tallied as an error, not thrown out of the sweep.
+    expect(tally.errors.some((e) => e.includes('unexpected discovery failure for user A'))).toBe(
+      true,
+    );
+    // User B — later in iteration order — was still fully processed despite user A's throw.
+    expect(pullCallsByLayer).toContain('cal-throw-b');
+    const layerBRow = one(
+      await schema.db
+        .select()
+        .from(schema.calendarLayer)
+        .where(eq(schema.calendarLayer.id, layerB)),
+    );
+    expect(layerBRow.syncToken).toBe('tok-cal-throw-b');
   });
 });

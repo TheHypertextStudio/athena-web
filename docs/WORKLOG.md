@@ -186,10 +186,6 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
   The mentions view is the existing Kind=Mention toolbar filter (a `relevance` catalog filter would
   break the org firehose, which has no `event_recipient` join); the new chip surfaces the reason.
 
----
-
-## Active Tasks
-
 ### [CALENDAR-004] Layered calendar implementation
 
 - **Status**: IN_PROGRESS
@@ -208,8 +204,8 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
   - [x] Phase 5 — provider sync engine
   - [x] Phase 6 — provider write-back
   - [x] Phase 7 — push hints + scheduled sync
-  - [ ] Phase 8 — web data layer
-  - [ ] Phase 9 — calendar UI + workspace
+  - [x] Phase 8 — web data layer
+  - [x] Phase 9 — calendar UI + workspace (task-detail calendar-context slice deferred; see notes)
   - [ ] Phase 10 — e2e, docs, rollout
 - **Blockers**: None
 - **Notes**: Working on branch `feature/layered-calendar` (worktree). Baseline: API suite 880/880
@@ -246,6 +242,40 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
   `dev-scheduler.ts`'s local tick) runs the full pull + outbox drain + watch registration per
   connected user. Regression: full calendar-\* suite green (88/88 across the 8 files named in the
   task brief's gate).
+  Phase 9 (calendar UI + workspace): extended `AgendaEntry`/`toAgendaEntries` (agenda-context.tsx)
+  with an additive `'calendar_item'` source (carrying the full `CalendarItemOut` + layer color)
+  and a sibling `toAgendaEntryFromCalendarItem`/`calendarItemsToAgendaEntries` normalizer, without
+  touching the existing `'task'`/`'google_calendar_event'` contract; `agenda-entry-card.tsx` gained
+  a matching icon/label branch. New `components/calendar/`: `calendar-item-card.tsx` (layer-aware,
+  permission-gated card shared by the agenda seam, the day timeline, and the week grid),
+  `calendar-item-drawer.tsx` (the item workspace: header/sync-status/core-fields-form/linked-tasks-
+  by-role/provider-metadata, composed over `@docket/ui`'s `Sheet`; detach/delete mirror the
+  codebase's one existing two-step confirm pattern, `DisconnectConfirmDialog`'s `Dialog`),
+  `calendar-timeline.tsx` (day view: hour grid + `lane-layout.ts`'s pure overlap placement +
+  real pointer-drag move/resize, permission-gated), `calendar-week-grid.tsx` (week view: compact
+  7-column stacks, deliberately no drag), `calendar-layer-panel.tsx` (layer toggles, reused by both
+  the full view and settings), `create-block-form.tsx`, `datetime-input.ts`. New route
+  `/calendar` (`page.tsx` SSR-prefetches + `<HydrationBoundary>`, `calendar-client.tsx` owns
+  day/week nav + view-transitioned mode switch + the view-level sync/conflict banner) — not yet
+  wired into the shell's primary nav (URL-reachable only; out of this task's explicit scope).
+  `google-calendar-settings.tsx` gained per-account write-scope status + a layers subsection
+  (via the shared layer panel) + a Docket-native layers section, and switched to a default export
+  (bringing it into line with every other component file); fixed a latent `STATUS_LABEL` gap
+  missing `reauth_required` (pre-existing, caught by this pass's typecheck). Added the minimal
+  `CalendarConnectionOut.scopeState` field (nullable, not optional) + its serializer wiring, per the
+  brief's explicit check-first-then-add allowance — `@docket/api` dist rebuilt.
+  **Deferred as NEEDS_CONTEXT**: the task-detail calendar-context section — no backend read exists
+  for "calendar items linked to task X" (only the inverse, item→tasks); not built rather than
+  fabricated client-side aggregation. **Known, explicitly-scoped simplifications**: "Enable calendar
+  editing" renders a labeled, disabled "coming soon" button (no re-consent endpoint exists yet);
+  week view has no drag/resize; the drawer's provider-metadata line omits the linked account's
+  email (would need an extra connections fetch); `/calendar` isn't in the shell nav yet; Today's
+  "next up" was verified unaffected (it reads `Hub.today.calendar` directly, never touches
+  `AgendaEntry`) and left unchanged. Tests: `lane-layout.test.ts` (8 cases),
+  `calendar-item-card.test.tsx` (11), `calendar-item-drawer.test.tsx` (3),
+  `calendar-layer-panel.test.tsx` (2, incl. the structural "no layout jump" check), plus a new
+  `google-calendar-settings.test.tsx`. Full web suite green (35 files / 220 tests); `@docket/api`
+  (739) and `@docket/types` (236) suites green after the DTO addition.
 
 ---
 

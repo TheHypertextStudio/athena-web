@@ -3,7 +3,7 @@
 /** Nested Google Calendar configuration page. */
 import { use, type JSX } from 'react';
 
-import { GoogleCalendarSettings } from '@/components/settings/google-calendar-settings';
+import GoogleCalendarSettings from '@/components/settings/google-calendar-settings';
 import { SectionHeader } from '@/components/settings/section-header';
 
 /** Configure first-party Google Calendar accounts and visible calendars. */

@@ -186,97 +186,6 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
   The mentions view is the existing Kind=Mention toolbar filter (a `relevance` catalog filter would
   break the org firehose, which has no `event_recipient` join); the new chip surfaces the reason.
 
-### [CALENDAR-004] Layered calendar implementation
-
-- **Status**: IN_PROGRESS
-- **Started**: 2026-07-02
-- **Priority**: P0
-- **Description**: Implement the layered calendar suite end-to-end per
-  `docs/engineering/plans/layered-calendar-implementation.md` (Phases 1–10): provider-neutral
-  layer/item/task-link schema, read services with agenda compatibility, native blocks, task links,
-  provider sync engine with Google adapter, write-back outbox with conflict states, push hints +
-  scheduled sync, web data layer, calendar UI/workspace, e2e + docs.
-- **Subtasks**:
-  - [x] Phase 1 — schema and types
-  - [x] Phase 2 — read service + compat routes
-  - [x] Phase 3 — native blocks API
-  - [x] Phase 4 — task links
-  - [x] Phase 5 — provider sync engine
-  - [x] Phase 6 — provider write-back
-  - [x] Phase 7 — push hints + scheduled sync
-  - [x] Phase 8 — web data layer
-  - [x] Phase 9 — calendar UI + workspace (task-detail calendar-context slice deferred; see notes)
-  - [ ] Phase 10 — e2e, docs, rollout
-- **Blockers**: None
-- **Notes**: Working on branch `feature/layered-calendar` (worktree). Baseline: API suite 880/880
-  green; web suite has one intermittently flaky test on committed main (fails ~1/3 of full runs,
-  under identification), unrelated to calendar work. Design deviations from spec text recorded in
-  execution plan: webhook mounted at `/webhooks/calendar/:provider` outside the versioned `/v1`
-  contract; credential resolution and permission normalization live behind the provider adapter
-  boundary. Known merge hazard: migration number 0016 is also used by uncommitted WIP on main —
-  renumber at merge if needed.
-  Phase 6 (provider write-back): local-first PATCH/DELETE on `provider_event` items now enqueue
-  a `calendar_item_write` outbox row and attempt the provider push in the foreground
-  (`calendar-outbox.ts`); Google adapter gained `pushItem`/`deleteItem` (PATCH/DELETE with
-  `If-Match`, mapping 2xx/412/401/403/404/400/429/5xx to applied/conflict/reauth/permanent/
-  retryable); conflicts preserve the local patch and clear only via a successful
-  `retryCalendarItemWrite` (re-anchored to the conflict snapshot's etag) or an inbound sync
-  overwrite; `POST /me/calendar/sync` now drains due writes and reports live
-  writesApplied/writesPending/conflicts. Native-block and derived-view (`task_timebox`/
-  `availability_block`) behavior is unchanged. Push notifications/cron draining remain Phase 7.
-  Phase 7 (push hints + scheduled sync): added migration 0018 (`calendarLayer.watchRegisteredAt`);
-  `CalendarProviderAdapter` gained OPTIONAL `startWatch`/`stopWatch` (Google implements both via
-  `channels.watch`/`channels.stop`; CalDAV-shaped adapters simply omit them, checked via
-  `typeof adapter.startWatch === 'function'`, never assumed); the per-layer sync body of
-  `syncCalendarConnections` was extracted into a single shared `runLayerSync`, now also driving a
-  new bounded `syncSingleLayer(db, { userId, layerId, adapters, now })` a webhook hint calls
-  directly (no full connection discovery); `registerOrRenewWatches` registers/renews a watch per
-  selected layer, gated on an explicit `GOOGLE_CALENDAR_WEBHOOK_URL` env var (no hidden default —
-  unset ⇒ zero-tally no-op) via `calendar-sync-sweep.ts`'s `callbackUrlFor`. New
-  `POST /webhooks/calendar/:provider` (mounted in `server.ts`, outside `/v1`/OpenAPI, per the
-  approved design) validates Google's `X-Goog-*` headers against the channel's stored
-  token/resource id (`validateGoogleWebhookHeaders`, mismatch/unknown channel → 404 without
-  revealing which check failed) and triggers `syncSingleLayer` for real notifications (the
-  `sync` confirmation ping no-ops). New `sweepCalendarSync` (wired as
-  `POST /internal/cron/sync-calendars`, `*/10 * * * *` in `scripts/scheduler-setup.ts`, and into
-  `dev-scheduler.ts`'s local tick) runs the full pull + outbox drain + watch registration per
-  connected user. Regression: full calendar-\* suite green (88/88 across the 8 files named in the
-  task brief's gate).
-  Phase 9 (calendar UI + workspace): extended `AgendaEntry`/`toAgendaEntries` (agenda-context.tsx)
-  with an additive `'calendar_item'` source (carrying the full `CalendarItemOut` + layer color)
-  and a sibling `toAgendaEntryFromCalendarItem`/`calendarItemsToAgendaEntries` normalizer, without
-  touching the existing `'task'`/`'google_calendar_event'` contract; `agenda-entry-card.tsx` gained
-  a matching icon/label branch. New `components/calendar/`: `calendar-item-card.tsx` (layer-aware,
-  permission-gated card shared by the agenda seam, the day timeline, and the week grid),
-  `calendar-item-drawer.tsx` (the item workspace: header/sync-status/core-fields-form/linked-tasks-
-  by-role/provider-metadata, composed over `@docket/ui`'s `Sheet`; detach/delete mirror the
-  codebase's one existing two-step confirm pattern, `DisconnectConfirmDialog`'s `Dialog`),
-  `calendar-timeline.tsx` (day view: hour grid + `lane-layout.ts`'s pure overlap placement +
-  real pointer-drag move/resize, permission-gated), `calendar-week-grid.tsx` (week view: compact
-  7-column stacks, deliberately no drag), `calendar-layer-panel.tsx` (layer toggles, reused by both
-  the full view and settings), `create-block-form.tsx`, `datetime-input.ts`. New route
-  `/calendar` (`page.tsx` SSR-prefetches + `<HydrationBoundary>`, `calendar-client.tsx` owns
-  day/week nav + view-transitioned mode switch + the view-level sync/conflict banner) — not yet
-  wired into the shell's primary nav (URL-reachable only; out of this task's explicit scope).
-  `google-calendar-settings.tsx` gained per-account write-scope status + a layers subsection
-  (via the shared layer panel) + a Docket-native layers section, and switched to a default export
-  (bringing it into line with every other component file); fixed a latent `STATUS_LABEL` gap
-  missing `reauth_required` (pre-existing, caught by this pass's typecheck). Added the minimal
-  `CalendarConnectionOut.scopeState` field (nullable, not optional) + its serializer wiring, per the
-  brief's explicit check-first-then-add allowance — `@docket/api` dist rebuilt.
-  **Deferred as NEEDS_CONTEXT**: the task-detail calendar-context section — no backend read exists
-  for "calendar items linked to task X" (only the inverse, item→tasks); not built rather than
-  fabricated client-side aggregation. **Known, explicitly-scoped simplifications**: "Enable calendar
-  editing" renders a labeled, disabled "coming soon" button (no re-consent endpoint exists yet);
-  week view has no drag/resize; the drawer's provider-metadata line omits the linked account's
-  email (would need an extra connections fetch); `/calendar` isn't in the shell nav yet; Today's
-  "next up" was verified unaffected (it reads `Hub.today.calendar` directly, never touches
-  `AgendaEntry`) and left unchanged. Tests: `lane-layout.test.ts` (8 cases),
-  `calendar-item-card.test.tsx` (11), `calendar-item-drawer.test.tsx` (3),
-  `calendar-layer-panel.test.tsx` (2, incl. the structural "no layout jump" check), plus a new
-  `google-calendar-settings.test.tsx`. Full web suite green (35 files / 220 tests); `@docket/api`
-  (739) and `@docket/types` (236) suites green after the DTO addition.
-
 ---
 
 ## Completed Tasks
@@ -649,6 +558,86 @@ ${WEB_URL}/sign-in`) default automatically from the (now required) `API_URL`/`WE
   design spec, but nothing ever computed that default until this pass. When a var is genuinely
   security-relevant (an allowlist) rather than mechanically derivable (a URL built from another
   URL), don't derive it just for symmetry — keep it explicit and say why in the same commit.
+
+### [CALENDAR-004] Layered calendar implementation
+
+- **Completed**: 2026-07-05
+- **Duration**: 4 days (2026-07-02 – 2026-07-05), 10 sequenced task briefs
+- **Summary**: Implemented the layered calendar suite end-to-end per
+  `docs/engineering/plans/layered-calendar-implementation.md` (Phases 1–10). Approach:
+  provider-neutral layer/item/task-link schema first (migrating the existing Google-only
+  `calendarConnection`/`calendarList`/`calendarEvent` surface forward rather than discarding it),
+  then a read service with `/v1/agenda` compatibility, native Docket blocks with no provider
+  dependency, org-scoped task links on user-scoped items, a provider-neutral sync engine with a
+  Google adapter (full + incremental pull via `syncToken`, per-layer leases), provider write-back
+  (local-first patch → outbox → foreground push → one of five typed outcomes), push-notification
+  hints + a scheduled sweep, the web data layer (`calendar-data.ts`/`calendar-mutations.ts`
+  following the existing def-factory + optimistic-patch conventions), the full calendar UI
+  (`/calendar` day/week views, the item workspace drawer, layer toggle panel), and finally this
+  phase: 6 new Playwright specs (`e2e/layered-calendar.spec.ts`) plus the `google-calendar.spec.ts`
+  regression, and this documentation pass.
+- **Files Changed** (by module, not individual paths — see each phase's task report under
+  `.superpowers/sdd/task-{1..10}-report.md` on `feature/layered-calendar` for the full file lists):
+  `packages/db/src/schema/calendar.ts` (+ 2 migrations) and `packages/types/src/calendar.ts` (the
+  provider-neutral schema/DTOs); `apps/api/src/routes/calendar-*.ts` and
+  `apps/api/src/calendar/calendar-{read,write,outbox}.ts` (read/write services, sync engine, Google
+  adapter, webhook, scheduled sweep); `apps/web/src/components/calendar/*` and
+  `apps/web/src/app/(app)/calendar/*` (data layer + full calendar UI); targeted additions to
+  `apps/web/src/components/agenda/*` and `apps/web/src/components/settings/google-calendar-settings.tsx`
+  (additive, existing contracts unchanged); `apps/web/e2e/layered-calendar.spec.ts` (new); the four
+  spec docs under `docs/core/specs/` and `docs/engineering/specs/`; this file.
+- **Decisions made**: provider-neutrality was enforced at every layer, not just the schema —
+  credential resolution and permission normalization both live behind the adapter boundary
+  (`createDefaultCalendarSyncModules`/`CalendarItemPermission`), so the engine, outbox, and web
+  layer never branch on `provider === 'google'`. The webhook edge
+  (`POST /webhooks/calendar/:provider`) was deliberately kept outside the versioned `/v1` typed-RPC
+  contract and OpenAPI spec, since it is a public, header-validated provider callback, not a
+  session-scoped client route. Conflicts preserve local intent unconditionally (never a silent
+  provider-wins overwrite) and expose exactly two V1 recovery actions ("Open in provider" / "Retry
+  with local changes") rather than a full merge UI. Two originally-scoped V1 features — OAuth
+  re-consent for calendar write access, and a task-detail calendar-context section — were
+  deliberately left unbuilt rather than faked once their prerequisites (a re-consent backend flow;
+  a "calendar items linked to task X" read) turned out not to exist; both are recorded as explicit
+  follow-ups in `docs/core/specs/layered-calendar.md` and `docs/engineering/specs/calendar-ui.md`.
+- **Learnings** (pulled from the SDD ledger's per-task "Minor"/"Facts for later briefs" notes,
+  `.superpowers/sdd/progress.md`):
+  - The list-response convention across this domain is `{ items: [...] }`; read exports are
+    `readCalendarItemsInRange`/`readItemDetail`/`readCalendarLayers`; permissions resolve through
+    `resolveItemPermissions`; legacy compatibility mapping is `toLegacyCalendarEventOut` in
+    `calendar-shared.ts`; sync dual-writes both the new and legacy tables, including archiving both
+    on a cancelled tombstone.
+  - The provider adapter module map is assembled by `createDefaultCalendarSyncModules()`
+    (`calendar-sync-modules.ts`); the engine requires an explicit `adapters` map with no default,
+    which is what keeps the sync engine importable without a hard dependency on the Google adapter.
+  - Shared, single-implementation helpers worth knowing about before extending this domain:
+    `resolveTimeShapePatch` (native + provider paths), `archiveProviderItem` (inbound-cancel +
+    outbox-delete), `loadOwnedCalendarItem` (write service + outbox), and `runLayerSync` (the one
+    per-layer sync body both the full sweep and the webhook-triggered `syncSingleLayer` share).
+  - `pnpm --filter @docket/api test -- <files>`/`pnpm --filter @docket/web test -- <files>` do NOT
+    filter to the named files (they silently run the full suite regardless of args) — run vitest
+    directly from the package directory (`cd apps/api && pnpm vitest run <files>`) to actually scope
+    a run.
+  - A repo-local infra fact surfaced only in this final phase: this repo's dev proxy (`portless`)
+    namespaces per git worktree/branch (`<branch>.docket.localhost`, on a per-worktree port, not the
+    shared `:443` default), so a fresh worktree's `.env.local` (`API_URL`/`BETTER_AUTH_URL`/
+    `BETTER_AUTH_PASSKEY_RP_ID`) must point at that worktree's own branch-prefixed origin for the
+    passkey sign-up ceremony and the web↔API rewrite to work at all — the committed `.env.local`
+    defaults assume the single shared, unbranched proxy. Also: `/calendar` is a Server Component
+    that prefetches on the server, so `page.route(...)` mocks never see its _first_ paint — e2e
+    specs covering it need a real, mock-visible client refetch (a new query key, e.g. switching
+    Day→Week; or waiting past `staleTime` and dispatching `visibilitychange` when the key can't
+    change), not just registering the route before `page.goto`.
+- **Gate** (final validation for the full 10-phase feature, all green):
+  - `pnpm typecheck` — 11/11 packages clean.
+  - Per-package lint (`@docket/{types,db,api,web}`) — clean, 0 errors/warnings each.
+  - `pnpm test` (full monorepo, ran in one shot) — 10/10 turbo tasks successful:
+    `@docket/web` 35 files / 221 tests, `@docket/db` 4 files / 40 tests, `@docket/api` 88 files /
+    969 tests, all passed.
+  - `pnpm build` — `@docket/api`, `@docket/admin`, `@docket/web` build clean (others cached); `/calendar`
+    compiles as an expected dynamic (`ƒ`) route.
+  - `pnpm test:e2e` (Playwright, isolated dev stack) — the new
+    `e2e/layered-calendar.spec.ts` (6/6) plus the existing `e2e/google-calendar.spec.ts` regression
+    (1/1): **7/7 passed**.
 
 ### [ATTACH-002] File attachments (upload) + util centralization
 

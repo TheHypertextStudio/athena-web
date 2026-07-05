@@ -1,8 +1,9 @@
 # Layered Calendar UI Spec
 
-> **Status**: Draft ready for implementation
+> **Status**: Implemented (V1) — see "Deferred UI Affordances" for what shipped narrower than
+> this spec describes.
 > **Area**: Web app, agenda, settings, task detail
-> **Last Updated**: 2026-07-02
+> **Last Updated**: 2026-07-05
 
 ## Goal
 
@@ -233,3 +234,34 @@ Keep existing `calendar_event` attachments working during migration. New feature
 - Read-only events remain useful and linkable.
 - Layer toggles update the visible calendar without layout jumps.
 - Settings shows per-account/layer write-readiness clearly.
+
+## Deferred UI Affordances
+
+The following were explicitly scoped out of this pass, not silently dropped — each is a known,
+tracked follow-up rather than a gap in the acceptance criteria above:
+
+- **Task-detail calendar context** (the "Task Detail UI" section above) is not built. No backend
+  read exists for "calendar items linked to task X" — only the inverse (item → tasks). Task
+  detail's `TaskAttachments.tsx` is unchanged; building this honestly requires a new backend read
+  first (see `docs/engineering/specs/calendar-architecture.md`).
+- **"Enable calendar editing" re-consent action** renders as a labeled, disabled "coming soon"
+  button in Google Calendar settings — there is no backend re-consent endpoint yet (see
+  `docs/engineering/specs/calendar-sync.md`'s OAuth section).
+- **Week view has no drag/resize.** The day timeline (`calendar-timeline.tsx`) supports real
+  pointer-drag move/resize, snapped to 15 minutes; the week grid (`calendar-week-grid.tsx`) is
+  deliberately a read-only-by-gesture 7-column stack — every card still opens the item workspace,
+  whose inline core-fields form is the non-pointer edit path for both views.
+- **Linking an existing task is by pasted task id**, not a search/picker — no task-search/picker
+  component exists in the codebase yet. This is a real, validated call (`TaskId.safeParse`), not
+  fabricated data.
+- **`/calendar` is not wired into the app shell's primary navigation** (`HomeNavKey` in
+  `@docket/ui/components`) — it is reachable only by direct URL today.
+- **The item workspace's provider-metadata line omits the linked account's email** — showing it
+  would need an extra connections fetch the drawer doesn't currently make; layer title, provider,
+  and access role are shown instead.
+- **The agenda rail is not yet wired to the new `calendar_item` normalizer seam.** `AgendaEntry`
+  gained an additive `'calendar_item'` source and a `calendar-item-card.tsx`-matching render
+  branch, but `AgendaProvider` still sources only from the Hub `today`/`agenda` reads
+  (`agendaDef`/`planDef`), not `calendarItemsDef` — the seam is prepared and renders correctly
+  when exercised, but nothing in the live agenda rail's data source calls into it yet. The Today
+  page's "next up" reads `Hub.today.calendar` directly and is unaffected either way.

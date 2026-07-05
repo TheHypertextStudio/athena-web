@@ -1,8 +1,9 @@
 # Layered Calendar Architecture Spec
 
-> **Status**: Draft ready for implementation
+> **Status**: Implemented (V1) — schema, types, services, and web data layer below reflect what
+> shipped; corrections from the original draft are called out inline.
 > **Area**: API, DB, types, web data layer
-> **Last Updated**: 2026-07-02
+> **Last Updated**: 2026-07-05
 
 ## Current State
 
@@ -239,9 +240,16 @@ Session-scoped personal routes:
 
 Non-RPC external edge:
 
-- `POST /v1/webhooks/calendar/google`
-  - Receives Google channel notifications, validates channel token, records an inbound sync hint,
-    and returns quickly.
+- `POST /webhooks/calendar/:provider` (only `google` registered; others 404)
+  - **Correction from the original draft**: mounted at `/webhooks/calendar/:provider`, outside
+    the versioned `/v1` typed-RPC app and outside the OpenAPI spec — not
+    `/v1/webhooks/calendar/google` as first drafted. This is a deliberate, approved design
+    decision (recorded in the SDD execution plan): a provider push webhook is a public,
+    unauthenticated edge validated by provider-specific headers (Google's `X-Goog-Channel-Id` /
+    `X-Goog-Channel-Token` / `X-Goog-Resource-Id`), not a session-scoped or API-key-scoped typed
+    route, so it does not belong in the versioned client-facing contract. It looks up the layer
+    by channel id, validates the headers, no-ops on the `sync` confirmation ping, and otherwise
+    calls `syncSingleLayer` (a bounded, single-layer sync) and awaits it before returning 200.
 
 Compatibility route:
 
@@ -264,7 +272,24 @@ Implement as small units rather than expanding route files:
 - `calendar-sync-engine.ts`
   - Provider-neutral sync orchestration and lease handling.
 - `calendar-google-adapter.ts`
-  - Google API mapping and write methods.
+  - Google API mapping and write methods (`listLayers`, `pullChanges`, `pushItem`, `deleteItem`,
+    `startWatch`/`stopWatch`).
+
+**Corrections from the original draft, now implemented as designed (not just planned):**
+
+- **Credential resolution** lives entirely behind the provider adapter boundary. The sync
+  engine and outbox never reconstruct a provider-specific `raw` credential payload themselves —
+  every call site (the pull engine, `syncSingleLayer`, the outbox's `attemptCalendarItemWrite`)
+  resolves credentials through the same discover-then-resolve seam
+  (`createDefaultCalendarSyncModules`/`createGoogleCalendarSyncModule`), so a future
+  Microsoft/CalDAV adapter plugs in without the engine knowing provider-specific auth shapes.
+- **Permission normalization** is a real, adapter-emitted `CalendarItemPermission` (`canEditCore`,
+  `canDelete`, `readOnlyReason`) computed once per item and denormalized onto `calendarItem`,
+  not re-derived ad hoc by each reader. `calendar-write.ts`'s `problemForReadOnlyReason` is an
+  exhaustive switch over every `readOnlyReason` value (no `default` branch — a new reason added
+  later without a case is a compile error), mapping each to the correct problem code
+  (`InsufficientScopeError` for `provider_scope`, `ConflictError` for `conflict`,
+  `CapabilityError` otherwise).
 
 ## Data Layer Requirements
 

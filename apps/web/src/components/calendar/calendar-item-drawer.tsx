@@ -48,6 +48,7 @@ import { cn } from '@docket/ui/lib/utils';
 import { type JSX, type SubmitEventHandler, useState } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
+import { shiftISODate } from '@/components/agenda/agenda-context';
 import { formatCalendarDate } from '@/lib/format-date';
 import { useApiListQuery, useApiQuery } from '@/lib/query';
 
@@ -198,6 +199,23 @@ function localInputSeed(iso: string | null): string {
   return iso ? toLocalInputValue(iso) : '';
 }
 
+/**
+ * The `date` input seed value for an all-day *end* bound, or `''` if unset.
+ *
+ * @remarks
+ * `allDayEndDate` is stored exclusive (the day *after* the last included day), but a `date` input
+ * should show the last included day, so this shifts back one day for display;
+ * {@link fromAllDayEndSeed} reverses the shift before writing.
+ */
+function localAllDayEndSeed(date: string | null): string {
+  return date ? shiftISODate(date, -1) : '';
+}
+
+/** Convert a displayed (inclusive) all-day end date back to the wire's exclusive end date. */
+function fromAllDayEndSeed(date: string): string {
+  return shiftISODate(date, 1);
+}
+
 /** Props for {@link CoreFieldsForm}. */
 interface CoreFieldsFormProps {
   /** The calendar item whose core fields the form edits. */
@@ -215,24 +233,29 @@ function CoreFieldsForm({ item }: CoreFieldsFormProps): JSX.Element {
   const [location, setLocation] = useState(item.location ?? '');
   const [startsAt, setStartsAt] = useState(localInputSeed(item.startsAt));
   const [endsAt, setEndsAt] = useState(localInputSeed(item.endsAt));
+  const [allDayStart, setAllDayStart] = useState(item.allDayStartDate ?? '');
+  const [allDayEnd, setAllDayEnd] = useState(localAllDayEndSeed(item.allDayEndDate));
 
   const dirty =
     title !== item.title ||
     description !== (item.description ?? '') ||
     location !== (item.location ?? '') ||
-    (timed &&
-      (startsAt !== localInputSeed(item.startsAt) || endsAt !== localInputSeed(item.endsAt)));
+    (timed
+      ? startsAt !== localInputSeed(item.startsAt) || endsAt !== localInputSeed(item.endsAt)
+      : allDayStart !== (item.allDayStartDate ?? '') ||
+        allDayEnd !== localAllDayEndSeed(item.allDayEndDate));
 
   const submit: SubmitEventHandler<HTMLFormElement> = (event) => {
     event.preventDefault();
     if (!canEdit || !dirty || title.trim().length === 0) return;
+    if (!timed && (allDayStart.length === 0 || allDayEnd.length === 0)) return;
     update.mutate({
       title,
       description,
       location,
       ...(timed
         ? { startsAt: fromLocalInputValue(startsAt), endsAt: fromLocalInputValue(endsAt) }
-        : {}),
+        : { allDayStartDate: allDayStart, allDayEndDate: fromAllDayEndSeed(allDayEnd) }),
     });
   };
 
@@ -296,9 +319,30 @@ function CoreFieldsForm({ item }: CoreFieldsFormProps): JSX.Element {
           </label>
         </div>
       ) : (
-        <p className="text-on-surface-variant text-xs">
-          All-day items are edited from the full calendar view.
-        </p>
+        <div className="grid grid-cols-2 gap-2">
+          <label className="flex flex-col gap-1 text-xs font-medium">
+            <span className="text-on-surface-variant">Starts</span>
+            <Input
+              type="date"
+              value={allDayStart}
+              disabled={!canEdit}
+              onChange={(event) => {
+                setAllDayStart(event.target.value);
+              }}
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs font-medium">
+            <span className="text-on-surface-variant">Ends</span>
+            <Input
+              type="date"
+              value={allDayEnd}
+              disabled={!canEdit}
+              onChange={(event) => {
+                setAllDayEnd(event.target.value);
+              }}
+            />
+          </label>
+        </div>
       )}
       {canEdit ? (
         <div className="flex items-center gap-2">

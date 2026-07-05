@@ -26,11 +26,12 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import type { JSX, ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { itemGet, layersGet, itemTasksPost, retryWritePost } = vi.hoisted(() => ({
+const { itemGet, layersGet, itemTasksPost, retryWritePost, itemPatch } = vi.hoisted(() => ({
   itemGet: vi.fn(),
   layersGet: vi.fn(),
   itemTasksPost: vi.fn(),
   retryWritePost: vi.fn(),
+  itemPatch: vi.fn(),
 }));
 
 vi.mock('../../src/lib/api', () => ({
@@ -42,7 +43,7 @@ vi.mock('../../src/lib/api', () => ({
           items: {
             ':id': {
               $get: itemGet,
-              $patch: vi.fn(),
+              $patch: itemPatch,
               $delete: vi.fn(),
               'retry-write': { $post: retryWritePost },
               tasks: {
@@ -209,6 +210,7 @@ beforeEach(() => {
     }),
   );
   retryWritePost.mockReset().mockResolvedValue(okResponse(makeItem()));
+  itemPatch.mockReset().mockResolvedValue(okResponse(makeItem()));
 });
 
 afterEach(() => {
@@ -269,5 +271,50 @@ describe('CalendarItemDrawer', () => {
       expect(link).toHaveAttribute('href', 'https://calendar.google.com/event/1');
     }
     expect(screen.getByRole('button', { name: 'Retry with local changes' })).toBeInTheDocument();
+  });
+
+  it('edits an all-day item via date inputs, converting to the exclusive wire end date', async () => {
+    itemGet.mockResolvedValue(
+      okResponse(
+        makeItem({
+          startsAt: null,
+          endsAt: null,
+          allDayStartDate: '2026-07-10',
+          allDayEndDate: '2026-07-11',
+        }),
+      ),
+    );
+    renderDrawer(ITEM_ID);
+
+    await waitFor(() => {
+      expect(screen.getByText('Design review')).toBeInTheDocument();
+    });
+
+    // No stale "edited from the full calendar view" placeholder — real date inputs instead.
+    expect(
+      screen.queryByText('All-day items are edited from the full calendar view.'),
+    ).not.toBeInTheDocument();
+
+    const startInput = screen.getByLabelText('Starts');
+    expect(startInput).toHaveAttribute('type', 'date');
+    expect(startInput).toHaveValue('2026-07-10');
+    // The end input shows the last included day (inclusive), one day before the exclusive wire date.
+    expect(screen.getByLabelText('Ends')).toHaveValue('2026-07-10');
+
+    fireEvent.change(screen.getByLabelText('Ends'), { target: { value: '2026-07-12' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => {
+      expect(itemPatch).toHaveBeenCalledWith({
+        param: { id: ITEM_ID },
+        json: {
+          title: 'Design review',
+          description: '',
+          location: '',
+          allDayStartDate: '2026-07-10',
+          allDayEndDate: '2026-07-13',
+        },
+      });
+    });
   });
 });

@@ -81,6 +81,10 @@ export const CalendarConnectionOut = z
       .describe('Number of calendars selected for agenda visibility.'),
     lastSyncedAt: z.string().nullable().describe('Most recent successful sync timestamp.'),
     lastError: z.string().nullable().describe('Most recent sync/connectivity error, if any.'),
+    scopeState: CalendarScopeState.nullable().describe(
+      'Most recently captured OAuth scope snapshot for this connection; null if never captured ' +
+        '(e.g. a connection linked before scope capture existed).',
+    ),
     createdAt: z.string().describe('Connection creation timestamp.'),
     updatedAt: z.string().describe('Connection update timestamp.'),
   })

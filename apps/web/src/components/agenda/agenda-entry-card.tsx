@@ -13,7 +13,16 @@
  * The card carries the check-off control (when the entry is on the plan) as a sibling of the
  * navigating content, so neither nests inside the other.
  */
-import { Calendar, CheckCircle2, Circle } from '@docket/ui/icons';
+import type { CalendarItemKind } from '@docket/types';
+import {
+  Calendar,
+  CheckCircle2,
+  Circle,
+  Layers,
+  type LucideIcon,
+  Schedule,
+  TaskAlt,
+} from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import Link from 'next/link';
 import { type JSX, useRef } from 'react';
@@ -33,6 +42,23 @@ import {
 
 /** How the card lays out: a compact list `row`, or a fill-height timeline `block`. */
 export type AgendaEntryLayout = 'row' | 'block';
+
+/** The icon glyph for a layered-calendar item's kind, mirroring `calendar-item-card.tsx`'s mapping. */
+const CALENDAR_ITEM_KIND_ICON: Record<CalendarItemKind, LucideIcon> = {
+  provider_event: Calendar,
+  native_block: Layers,
+  task_timebox: TaskAlt,
+  availability_block: Schedule,
+};
+
+/** The compact context label for a layered-calendar item's kind. */
+const CALENDAR_ITEM_KIND_LABEL: Record<CalendarItemKind, string> = {
+  provider_event: 'Calendar',
+  native_block: 'Block',
+  task_timebox: 'Timebox',
+  availability_block: 'Availability',
+};
+
 
 /** Props for {@link AgendaEntryCard}. */
 export interface AgendaEntryCardProps {
@@ -81,6 +107,12 @@ export default function AgendaEntryCard({
   const contextLabel =
     entry.source === 'google_calendar_event'
       ? [entry.calendar?.title, entry.calendar?.accountEmail].filter(Boolean).join(' · ')
+      : entry.source === 'calendar_item' && entry.calendarItem
+        ? CALENDAR_ITEM_KIND_LABEL[entry.calendarItem.kind]
+        : null;
+  const CalendarItemIcon =
+    entry.source === 'calendar_item' && entry.calendarItem
+      ? CALENDAR_ITEM_KIND_ICON[entry.calendarItem.kind]
       : null;
   const content = block ? (
     <>
@@ -133,6 +165,13 @@ export default function AgendaEntryCard({
           className="text-on-surface-variant mt-0.5 shrink-0 rounded-full [&_svg]:size-4"
         >
           <Calendar style={{ color: entry.calendar?.color ?? undefined }} />
+        </span>
+      ) : CalendarItemIcon ? (
+        <span
+          aria-hidden="true"
+          className="text-on-surface-variant mt-0.5 shrink-0 rounded-full [&_svg]:size-4"
+        >
+          <CalendarItemIcon style={{ color: entry.layerColor ?? undefined }} />
         </span>
       ) : null}
       {isTask ? (

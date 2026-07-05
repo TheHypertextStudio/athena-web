@@ -10,7 +10,13 @@
  * model is the seam between source and views — when a later slice swaps the source to the
  * `/v1/daily-plan` CRUD, only {@link toAgendaEntries} and the query in {@link AgendaProvider} change.
  */
-import type { AgendaOut, DailyPlanItemOut, HubTodayOut } from '@docket/types';
+import type {
+  AgendaOut,
+  CalendarItemOut,
+  CalendarItemsRangeOut,
+  DailyPlanItemOut,
+  HubTodayOut,
+} from '@docket/types';
 import {
   createContext,
   type JSX,
@@ -42,12 +48,22 @@ export function shiftISODate(iso: string, deltaDays: number): string {
   return todayISODate(day);
 }
 
+/**
+ * Entry source. `'task'` and `'google_calendar_event'` come from the Hub `today`/`agenda`
+ * projections; `'calendar_item'` is the additive, provider-neutral member covering the full
+ * layered-calendar {@link CalendarItemOut.kind} set (`provider_event`, `native_block`,
+ * `task_timebox`, `availability_block`) via {@link toAgendaEntryFromCalendarItem} — added so the
+ * shared {@link AgendaEntryCard}/full calendar view can render layered items without a rename or a
+ * breaking change to the existing two sources.
+ */
+export type AgendaEntrySource = 'task' | 'google_calendar_event' | 'calendar_item';
+
 /** One planned thing or external event on the agenda for a day. */
 export interface AgendaEntry {
   /** Stable key for transitions and list rendering. */
   id: string;
   /** Entry source. */
-  source: 'task' | 'google_calendar_event';
+  source: AgendaEntrySource;
   /** The underlying task, present for Docket task entries. */
   taskId?: string;
   /** The org that owns the task (the agenda is cross-org); absent for external calendar events. */
@@ -68,6 +84,14 @@ export interface AgendaEntry {
   externalUrl?: string | null;
   /** Calendar/account context for external events. */
   calendar?: { title: string; color: string | null; accountEmail: string | null };
+  /**
+   * The full layered-calendar item, present for `source === 'calendar_item'` entries. Carries
+   * `kind`/`provider`/`permissions`/`syncState` through to the shared card and item workspace
+   * drawer without a second fetch.
+   */
+  calendarItem?: CalendarItemOut;
+  /** The owning layer's display color, present for `source === 'calendar_item'` entries. */
+  layerColor?: string | null;
 }
 
 /** A timeboxed entry — one that occupies a window and therefore renders on the timeline. */
@@ -150,6 +174,59 @@ export function toAgendaEntries(data: HubTodayOut | AgendaOut | null): AgendaEnt
       done: false,
     }));
   return [...planned, ...orphanBlocks];
+}
+
+/**
+ * Normalize one layered-calendar item into an {@link AgendaEntry} with `source: 'calendar_item'`.
+ *
+ * @remarks
+ * The provider-neutral counterpart to {@link toAgendaEntries}: it carries the item's `kind`,
+ * `provider`, `permissions`, and `syncState` through via {@link AgendaEntry.calendarItem} rather
+ * than flattening them, so the shared {@link AgendaEntryCard} (and the full calendar view's
+ * `CalendarItemCard`) can render every item kind (`provider_event`, `native_block`,
+ * `task_timebox`, `availability_block`) without a one-off branch per source. Kept as a sibling
+ * function of `toAgendaEntries` (rather than folded into it) so the Hub `today`/`agenda` seam's
+ * existing contract stays untouched — this is purely additive.
+ *
+ * @param item - The calendar item to normalize.
+ * @param sort - The item's position among its range (drives the same `sort` field the Hub-sourced
+ * entries use for stable, untimed ordering).
+ * @param layerColor - The owning layer's display color, when known.
+ */
+export function toAgendaEntryFromCalendarItem(
+  item: CalendarItemOut,
+  sort: number,
+  layerColor?: string | null,
+): AgendaEntry {
+  return {
+    id: item.id,
+    source: 'calendar_item',
+    title: item.title,
+    startsAt: item.startsAt ?? undefined,
+    endsAt: item.endsAt ?? undefined,
+    sort,
+    done: false,
+    externalUrl: item.htmlLink,
+    calendarItem: item,
+    layerColor: layerColor ?? null,
+  };
+}
+
+/**
+ * Normalize an entire calendar-items range read into {@link AgendaEntry} list, in range order.
+ *
+ * @remarks
+ * Resolves each item's layer color from the range's own `layers` array (the range read always
+ * returns the layers its items belong to), so callers don't need a second layers fetch just to
+ * color the entries.
+ *
+ * @param range - A calendar-items range read (`calendarItemsDef`'s resolved data).
+ */
+export function calendarItemsToAgendaEntries(range: CalendarItemsRangeOut): AgendaEntry[] {
+  const colorByLayer = new Map(range.layers.map((layer) => [layer.id, layer.color]));
+  return range.items.map((item, i) =>
+    toAgendaEntryFromCalendarItem(item, i, colorByLayer.get(item.layerId)),
+  );
 }
 
 /** The agenda's view modes. `list` is a chronological stream; `timeline` is the hour grid. */

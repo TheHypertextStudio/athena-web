@@ -54,6 +54,7 @@ export function toCalendarConnectionOut(
     calendarsEnabled: counts.enabled,
     lastSyncedAt: row.lastSyncedAt?.toISOString() ?? null,
     lastError: row.lastError,
+    scopeState: row.scopeState ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

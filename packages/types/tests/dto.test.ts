@@ -1509,6 +1509,7 @@ describe('calendar DTOs', () => {
       calendarsEnabled: 1,
       lastSyncedAt: '2026-06-30T09:00:00.000Z',
       lastError: null,
+      scopeState: null,
       createdAt: '2026-06-30T08:00:00.000Z',
       updatedAt: '2026-06-30T09:00:00.000Z',
     });

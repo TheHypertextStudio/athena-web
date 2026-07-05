@@ -1,14 +1,28 @@
 'use client';
 
-/** Dedicated nested settings UI for first-party Google Calendar. */
-import type { CalendarConnectionStatus } from '@docket/types';
+/**
+ * Dedicated nested settings UI for first-party Google Calendar.
+ *
+ * @remarks
+ * Two nested groupings, additive over the original connections→calendars settings (which keeps
+ * working unchanged): each linked account also shows its write-scope status (from
+ * {@link CalendarConnectionOut.scopeState}) and its layers (Task 8's `calendarLayersDef`/
+ * `useUpdateLayerVisibility`, rendered via the shared {@link CalendarLayerPanel} the full calendar
+ * view also uses), and any Docket-native layers (no linked account) get their own section below
+ * the connections. "Enable calendar editing" is a labeled, disabled placeholder — re-consent for
+ * calendar write access has no backend flow yet (see `docs/engineering/specs/calendar-ui.md`; this
+ * is a known, explicitly-scoped gap, not a fabricated call).
+ */
+import type { CalendarConnectionOut, CalendarConnectionStatus } from '@docket/types';
 import { Calendar, RefreshCw } from '@docket/ui/icons';
-import { Badge } from '@docket/ui/primitives';
+import { Badge, Button } from '@docket/ui/primitives';
 import NextLink from 'next/link';
 import type { JSX } from 'react';
 
+import CalendarLayerPanel from '@/components/calendar/calendar-layer-panel';
+import { calendarLayersDef, calendarSettingsDef } from '@/components/calendar/calendar-data';
 import { api } from '@/lib/api';
-import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
+import { queryKeys, unwrap, useApiListQuery, useApiMutation, useApiQuery } from '@/lib/query';
 
 import { relativeTime } from './format-time';
 
@@ -19,7 +33,24 @@ const STATUS_LABEL: Record<
   connected: { label: 'Connected', variant: 'secondary' },
   error: { label: 'Needs attention', variant: 'destructive' },
   disconnected: { label: 'Disconnected', variant: 'outline' },
+  reauth_required: { label: 'Needs reauthorization', variant: 'destructive' },
 };
+
+/** A write-scope badge's label + tone. */
+interface WriteScopeStatus {
+  /** The badge label. */
+  label: string;
+  /** The badge tone. */
+  variant: 'secondary' | 'outline';
+}
+
+/** The write-scope badge + re-consent affordance for one connection's `scopeState`. */
+function writeScopeStatus(connection: CalendarConnectionOut): WriteScopeStatus {
+  if (!connection.scopeState) return { label: 'Write access unknown', variant: 'outline' };
+  return connection.scopeState.calendarWrite
+    ? { label: 'Calendar editing enabled', variant: 'secondary' }
+    : { label: 'Calendar read-only', variant: 'outline' };
+}
 
 /** Props for {@link GoogleCalendarSettings}. */
 export interface GoogleCalendarSettingsProps {
@@ -43,14 +74,10 @@ function syncSummary(data: {
 }
 
 /** Render and mutate Google Calendar account/calendar visibility settings. */
-export function GoogleCalendarSettings({ orgId }: GoogleCalendarSettingsProps): JSX.Element {
-  const query = useApiQuery(
-    apiQueryOptions(
-      queryKeys.calendarSettings(),
-      () => api.v1.me.calendar.$get(),
-      'Could not load Google Calendar settings.',
-    ),
-  );
+export default function GoogleCalendarSettings({
+  orgId,
+}: GoogleCalendarSettingsProps): JSX.Element {
+  const query = useApiQuery(calendarSettingsDef());
 
   const updateCalendar = useApiMutation({
     mutationFn: (vars: { id: string; selected: boolean }) =>
@@ -71,6 +98,9 @@ export function GoogleCalendarSettings({ orgId }: GoogleCalendarSettingsProps): 
     invalidateKeys: [queryKeys.calendarSettings()],
   });
 
+  const layersQuery = useApiListQuery(calendarLayersDef());
+  const layers = layersQuery.data?.items ?? [];
+
   const data = query.data;
   const calendarsByConnection = new Map(
     (data?.connections ?? []).map((connection) => [
@@ -78,6 +108,13 @@ export function GoogleCalendarSettings({ orgId }: GoogleCalendarSettingsProps): 
       (data?.calendars ?? []).filter((calendar) => calendar.connectionId === connection.id),
     ]),
   );
+  const layersByConnection = new Map(
+    (data?.connections ?? []).map((connection) => [
+      connection.id,
+      layers.filter((layer) => layer.connectionId === connection.id),
+    ]),
+  );
+  const nativeLayers = layers.filter((layer) => layer.connectionId === null);
   const mutationDisabled = updateCalendar.isPending || sync.isPending;
   const syncFeedback = sync.data ? syncSummary(sync.data) : null;
 
@@ -174,6 +211,21 @@ export function GoogleCalendarSettings({ orgId }: GoogleCalendarSettingsProps): 
                 {connection.lastError}
               </p>
             ) : null}
+            <div className="border-outline-variant flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2.5">
+              <Badge variant={writeScopeStatus(connection).variant} className="font-normal">
+                {writeScopeStatus(connection).label}
+              </Badge>
+              {!connection.scopeState?.calendarWrite ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled
+                  title="Re-consent for calendar write access isn't available yet."
+                >
+                  Enable calendar editing (coming soon)
+                </Button>
+              ) : null}
+            </div>
             <ul className="divide-outline-variant divide-y">
               {calendars.map((calendar) => (
                 <li key={calendar.id} className="flex items-center justify-between gap-3 px-4 py-3">
@@ -203,9 +255,24 @@ export function GoogleCalendarSettings({ orgId }: GoogleCalendarSettingsProps): 
                 </li>
               ))}
             </ul>
+            {(layersByConnection.get(connection.id) ?? []).length > 0 ? (
+              <div className="border-outline-variant border-t px-4 py-3">
+                <h3 className="text-on-surface-variant mb-1.5 text-xs font-semibold tracking-wide uppercase">
+                  Layers
+                </h3>
+                <CalendarLayerPanel layers={layersByConnection.get(connection.id) ?? []} />
+              </div>
+            ) : null}
           </section>
         );
       })}
+
+      {nativeLayers.length > 0 ? (
+        <section className="border-outline-variant rounded-lg border p-4">
+          <h2 className="text-on-surface mb-2 text-sm font-medium">Docket-native</h2>
+          <CalendarLayerPanel layers={nativeLayers} />
+        </section>
+      ) : null}
     </div>
   );
 }

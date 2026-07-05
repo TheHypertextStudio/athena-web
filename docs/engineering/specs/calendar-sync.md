@@ -1,8 +1,10 @@
 # Calendar Sync And Provider Write-Back Spec
 
-> **Status**: Draft ready for implementation
+> **Status**: Implemented (V1) — inbound sync, outbound write-back, push hints, and scheduled
+> sync are all live for Google; see "Shipped Constants And Behavior" for the concrete numbers
+> and rules that landed.
 > **Area**: Connectors, calendar providers, sync, OAuth
-> **Last Updated**: 2026-07-02
+> **Last Updated**: 2026-07-05
 
 ## Goal
 
@@ -66,6 +68,13 @@ Implementation notes:
   calendar editing" action on Google Calendar settings.
 - `apps/web/src/components/settings/identity-providers.ts` must label read-only Calendar and
   editable Calendar distinctly.
+
+**Known follow-up (not built in V1)**: `auth-builder.ts` was intentionally left untouched — this
+product is not yet asking every Google linker for the write scope, and no incremental re-consent
+endpoint exists. `google-calendar-settings.tsx` shows a labeled, disabled "Enable calendar editing
+(coming soon)" button in its place. `CalendarConnectionOut.scopeState` (nullable, captured from
+the existing OAuth grant) is fully wired end-to-end today, so as soon as a re-consent flow lands,
+the write-back pipeline below needs no changes — only the scope-upgrade action itself is missing.
 
 ## Inbound Sync
 
@@ -187,6 +196,49 @@ Outbox writes need:
 - exponential or fixed backoff,
 - provider error classification,
 - no infinite tight retry loops.
+
+## Shipped Constants And Behavior
+
+The following are the concrete values and rules implemented in
+`apps/api/src/routes/calendar-sync-engine.ts` and `apps/api/src/calendar/calendar-outbox.ts`.
+
+- **Layer lease TTL**: `LEASE_TTL_MS = 5 * 60 * 1000` (5 minutes). A per-layer lease is claimed
+  via a conditional `UPDATE ... WHERE sync_lease_expires_at IS NULL OR < now RETURNING id`; an
+  already-leased layer is skipped silently (not an error) rather than blocking. The lease is
+  released in a `finally`, including on error.
+- **Outbox retry backoff**: `BASE_BACKOFF_MS = 60_000` (60s), `CAP_BACKOFF_MS = 3_600_000` (1h),
+  `MAX_WRITE_ATTEMPTS = 8`. Backoff is exponential doubling capped at the ceiling:
+  `Math.min(BASE_BACKOFF_MS * 2**(attempts-1), CAP_BACKOFF_MS)`. On the attempt that exhausts
+  `MAX_WRITE_ATTEMPTS`, the outbox row's `status` converts from `'pending'` to `'failed'` and the
+  item's `syncState` converts from `'push_pending'` to `'provider_error'` in the same persist call
+  (the `attempts` count is threaded through so it lands correctly on the exhausting attempt, not
+  one short).
+- **Retry-write re-anchoring rule** (`retryCalendarItemWrite`): when the caller retries a
+  conflicted or failed write with local changes, the retry re-anchors to
+  `conflict.providerSnapshot.externalEtag` when that snapshot is present (clears the conflict,
+  resets the write to `pending`/`attempts: 0`, reattempts in the foreground); when no usable
+  snapshot exists, the write is marked `'failed'` with a clear `lastError` and the call throws
+  `ConflictError` rather than guessing at a base to re-anchor to.
+- **Push/watch config-gate behavior**: watch registration/renewal
+  (`registerOrRenewWatches`/`callbackUrlFor`) is gated on the explicit `GOOGLE_CALENDAR_WEBHOOK_URL`
+  env var — unset means zero adapter calls and a zero-tally no-op (never a hidden default
+  callback URL), and the scheduled sweep still runs the full incremental pull regardless, so
+  polling-only environments keep working. Per connection, a reauth failure skips only that
+  connection's layers (tallied, not thrown); per selected layer, a watch is (re)registered when
+  never registered, expired, or expiring within 30 minutes, and left untouched otherwise. Each
+  layer's `startWatch` call and its follow-up column update are wrapped in a per-layer
+  `try`/`catch` so one layer's transient failure cannot abort registration for the rest of the
+  connection, the rest of the provider, or the caller — failures are tallied into
+  `WatchRegistrationTally.errors`, never thrown out of the sweep.
+- **Scheduled sweep isolation**: `sweepCalendarSync` wraps each user's full
+  pull + outbox drain + watch-registration pass in a per-user `try`/`catch` in addition to every
+  step's own internal per-item isolation, so one user's unexpected failure cannot abort the sweep
+  for users later in iteration order; it is tallied as `` `${userId}: ${message}` `` and the loop
+  continues. Wired as `POST /internal/cron/sync-calendars` (`*/10 * * * *` in
+  `scripts/scheduler-setup.ts`) and into the local dev scheduler's tick loop.
+- **Outbox drain is per-caller-scoped**: `drainDueCalendarItemWrites` takes a required `userId`
+  and filters the due-writes query to that user — `POST /me/calendar/sync` never drains or reports
+  on another user's pending writes, matching every other field on `CalendarSyncResultOut`.
 
 ## Native Blocks
 

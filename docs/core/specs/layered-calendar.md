@@ -1,8 +1,9 @@
 # Layered Calendar Product Spec
 
-> **Status**: Draft ready for implementation planning
+> **Status**: Shipped (V1) — see "Shipped State And Known Follow-Ups" below for what landed
+> differently than originally described here.
 > **Area**: Calendar, agenda, tasks, connected accounts
-> **Last Updated**: 2026-07-02
+> **Last Updated**: 2026-07-05
 
 ## Objective
 
@@ -165,6 +166,37 @@ Out of scope for V1:
 - A calendar item can link to many tasks, and a task can be linked to many calendar items.
 - Calendar views can filter/toggle layers without blanking or fetching through ad-hoc client code.
 - Task links never expose tasks the viewer cannot otherwise access.
+
+## Shipped State And Known Follow-Ups
+
+V1 shipped Tasks 1–10 of the implementation plan: provider-neutral layer/item/link schema, read
+services with agenda compatibility, native blocks, task links, a Google sync engine with
+write-back and conflict handling, push hints + scheduled sync, the web data layer, the full
+calendar view + item workspace, and this e2e/docs pass. Two items from this spec's original V1
+scope landed as explicit, tracked follow-ups rather than silently:
+
+- **OAuth re-consent for calendar write access is not built.** "Editable events... after
+  re-consent to a write calendar scope" (V1 Scope, above) assumed a re-consent flow would ship.
+  It did not: `packages/auth/src/auth-builder.ts` was intentionally left untouched (per
+  `docs/engineering/specs/calendar-sync.md`'s own conditional — "update... only when the product
+  is ready to ask every new Google linker for the write scope"), so there is no backend endpoint
+  that upgrades an existing read-only Google grant to a write scope. Google Calendar settings
+  shows a labeled, disabled "Enable calendar editing (coming soon)" button instead of a working
+  action. The write-back pipeline itself (outbox, conflict handling, push) is fully implemented
+  and works today for any connection whose `scopeState.calendarWrite` is already `true` — only
+  the _upgrade path_ for existing read-only connections is missing.
+- **Task detail does not show linked calendar items.** "Task detail: shows linked calendar items
+  as structured context, not only attachments" (UI Surfaces, above) needs a backend read for
+  "calendar items linked to task X"; only the inverse (`GET /items/:id/tasks`, item → tasks)
+  exists. Rather than fabricate this via client-side aggregation across unrelated endpoints, it
+  was left unbuilt. `TaskAttachments.tsx` is unchanged.
+
+Other known, deliberately-scoped simplifications (not gaps in the acceptance criteria, but worth
+tracking): the full calendar view (`/calendar`) is reachable only by direct URL, not yet wired
+into the app shell's primary navigation; the week view has no drag/resize (the day view does);
+linking an existing task to a calendar item is by pasted task id (no search/picker component
+exists in the codebase yet); the item workspace's provider-metadata line omits the linked
+account's email.
 
 ## Source Notes
 

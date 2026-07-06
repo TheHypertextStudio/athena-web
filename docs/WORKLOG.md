@@ -66,6 +66,16 @@
   destinations, missing verified contact points, locked security delivery, and explicit opt-outs.
   Final gate: notification service tests, inbox route tests, `pnpm typecheck`, `pnpm lint`,
   `pnpm test`, and `pnpm build` pass.
+- **Dispatcher milestone update (2026-07-06)**: Added reusable web projection helpers in
+  `@docket/notifications`, promoted `service_announcement` to a first-class inbox type, and added the
+  API dispatcher/web adapter that persists durable intents, recipient snapshots, per-channel delivery
+  rows, and the existing Hub inbox projection. The dispatcher now preserves unread-count behavior and
+  idempotency-key reuse for web sends. Focused verification: `@docket/notifications` tests,
+  `@docket/api` notification service + inbox tests, `@docket/db` notification schema test,
+  `pnpm typecheck`, `pnpm lint`, and `@docket/api` build pass. The broad `pnpm test` run was stopped
+  after 11m39s with only `@docket/api:test` still running; the broad `pnpm build` run was stopped in
+  the unrelated web Next.js build tail after API/admin had completed. Do not treat either broad gate as
+  green for this slice.
 
 ### [AUTH-SEC-001] Auth security & UX audit remediation
 

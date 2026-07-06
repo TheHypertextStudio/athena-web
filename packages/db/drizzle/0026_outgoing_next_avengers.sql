@@ -16,6 +16,7 @@ CREATE TYPE "public"."sync_run_purpose" AS ENUM('task_sync', 'email_ingest');-->
 ALTER TYPE "public"."attachment_kind" ADD VALUE 'file';--> statement-breakpoint
 ALTER TYPE "public"."email_suggestion_status" ADD VALUE 'expired';--> statement-breakpoint
 ALTER TYPE "public"."notification_type" ADD VALUE 'automation';--> statement-breakpoint
+ALTER TYPE "public"."notification_type" ADD VALUE 'service_announcement';--> statement-breakpoint
 ALTER TYPE "public"."source_system" ADD VALUE 'discord' BEFORE 'google_calendar';--> statement-breakpoint
 ALTER TYPE "public"."source_system" ADD VALUE 'outlook';--> statement-breakpoint
 CREATE TABLE "rate_limit" (

@@ -12,7 +12,7 @@ import type { z } from 'zod';
 
 import { ConflictError, NotFoundError } from '../../error';
 
-type ContactPointRow = typeof contactPoint.$inferSelect;
+export type ContactPointRow = typeof contactPoint.$inferSelect;
 
 const TEST_VERIFICATION_CODE = '000000';
 
@@ -22,7 +22,7 @@ export class NotificationContactPointService {
 
   /** Return caller-owned contact points, creating the account email contact point if needed. */
   async list(userId: string): Promise<{ items: z.input<typeof ContactPointOut>[] }> {
-    await this.ensureAccountEmail(userId);
+    await ensureAccountEmailContactPoint(this.db, userId);
     const rows = await this.db
       .select()
       .from(contactPoint)
@@ -37,7 +37,12 @@ export class NotificationContactPointService {
     input: z.input<typeof ContactPointCreate>,
   ): Promise<z.input<typeof ContactPointOut>> {
     const normalized = normalizeContactPointValue(input.type, input.value);
-    const existing = await this.findByNormalizedValue(userId, input.type, normalized);
+    const existing = await findContactPointByNormalizedValue(
+      this.db,
+      userId,
+      input.type,
+      normalized,
+    );
     if (existing) throw new ConflictError('Contact point already exists');
 
     const [created] = await this.db
@@ -116,34 +121,6 @@ export class NotificationContactPointService {
     return toContactPointOut(updated);
   }
 
-  private async ensureAccountEmail(userId: string): Promise<void> {
-    const [account] = await this.db
-      .select({ id: userTable.id, email: userTable.email })
-      .from(userTable)
-      .where(eq(userTable.id, userId))
-      .limit(1);
-    if (!account) throw new NotFoundError('User not found');
-
-    const normalized = normalizeContactPointValue('email', account.email);
-    const existing = await this.findByNormalizedValue(userId, 'email', normalized);
-    if (existing) return;
-
-    await this.db
-      .update(contactPoint)
-      .set({ primary: false })
-      .where(and(eq(contactPoint.userId, userId), eq(contactPoint.type, 'email')));
-    await this.db.insert(contactPoint).values({
-      userId,
-      type: 'email',
-      value: account.email,
-      valueNormalized: normalized,
-      valueMasked: maskContactPointValue('email', normalized),
-      status: 'active',
-      primary: true,
-      verifiedAt: new Date(),
-    });
-  }
-
   private async requireOwned(id: string, userId: string): Promise<ContactPointRow> {
     const [row] = await this.db
       .select()
@@ -168,25 +145,83 @@ export class NotificationContactPointService {
       .limit(1);
     return Boolean(row);
   }
+}
 
-  private async findByNormalizedValue(
-    userId: string,
-    type: ContactPointRow['type'],
-    valueNormalized: string,
-  ): Promise<ContactPointRow | undefined> {
-    const [row] = await this.db
-      .select()
-      .from(contactPoint)
-      .where(
-        and(
-          eq(contactPoint.userId, userId),
-          eq(contactPoint.type, type),
-          eq(contactPoint.valueNormalized, valueNormalized),
-        ),
-      )
-      .limit(1);
-    return row;
-  }
+/**
+ * Ensure the user's account email exists as a contact point.
+ *
+ * @remarks
+ * Routes that already have an authenticated account email can pass it directly; ordinary contact
+ * point reads fall back to the persisted user email. New rows are active and verified; existing
+ * rows are preserved so bounced/unsubscribed states still suppress delivery through the preference
+ * resolver.
+ */
+export async function ensureAccountEmailContactPoint(
+  db: Database,
+  userId: string,
+  email?: string,
+): Promise<ContactPointRow> {
+  const accountEmail = await resolveAccountEmail(db, userId, email);
+  const normalized = normalizeContactPointValue('email', accountEmail);
+  const existing = await findContactPointByNormalizedValue(db, userId, 'email', normalized);
+  if (existing) return existing;
+
+  await db
+    .update(contactPoint)
+    .set({ primary: false })
+    .where(and(eq(contactPoint.userId, userId), eq(contactPoint.type, 'email')));
+  const [created] = await db
+    .insert(contactPoint)
+    .values({
+      userId,
+      type: 'email',
+      value: accountEmail,
+      valueNormalized: normalized,
+      valueMasked: maskContactPointValue('email', normalized),
+      status: 'active',
+      primary: true,
+      verifiedAt: new Date(),
+    })
+    .returning();
+  if (!created) throw new Error('Failed to create account email contact point');
+  return created;
+}
+
+async function resolveAccountEmail(
+  db: Database,
+  userId: string,
+  email: string | undefined,
+): Promise<string> {
+  const trimmed = email?.trim();
+  if (trimmed) return trimmed;
+
+  const [account] = await db
+    .select({ id: userTable.id, email: userTable.email })
+    .from(userTable)
+    .where(eq(userTable.id, userId))
+    .limit(1);
+  if (!account) throw new NotFoundError('User not found');
+  return account.email;
+}
+
+async function findContactPointByNormalizedValue(
+  db: Database,
+  userId: string,
+  type: ContactPointRow['type'],
+  valueNormalized: string,
+): Promise<ContactPointRow | undefined> {
+  const [row] = await db
+    .select()
+    .from(contactPoint)
+    .where(
+      and(
+        eq(contactPoint.userId, userId),
+        eq(contactPoint.type, type),
+        eq(contactPoint.valueNormalized, valueNormalized),
+      ),
+    )
+    .limit(1);
+  return row;
 }
 
 function toContactPointOut(row: ContactPointRow): z.input<typeof ContactPointOut> {

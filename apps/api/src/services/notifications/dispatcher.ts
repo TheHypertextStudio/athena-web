@@ -16,6 +16,7 @@ import {
 import { eq } from 'drizzle-orm';
 
 import { expandNotificationAudience } from './audience';
+import { deliverEmailNotification } from './adapters/email';
 import { deliverWebNotification } from './adapters/web';
 import { resolveNotificationPreferences } from './preferences';
 
@@ -169,7 +170,7 @@ export async function dispatchPersistedNotificationIntent(
     }
 
     for (const decision of decisions) {
-      const delivery = await createDelivery(db, {
+      let delivery = await createDelivery(db, {
         intent,
         recipientId: recipient.id,
         decision,
@@ -190,6 +191,16 @@ export async function dispatchPersistedNotificationIntent(
             ...(options.webUrl ? { url: options.webUrl } : {}),
           }),
         );
+      }
+
+      if (decision.channel === 'email' && decision.decision === 'send') {
+        delivery = await deliverEmailNotification(db, {
+          deliveryId: delivery.id,
+          subject: intent.subject,
+          body: intent.body,
+          now,
+        });
+        deliveries[deliveries.length - 1] = delivery;
       }
     }
   }

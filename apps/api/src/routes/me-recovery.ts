@@ -14,16 +14,18 @@
  * (`/two-factor/recovery-challenge` + `verify-backup-code`).
  */
 import { generateRecoveryCodes, getRecoveryCodeStatus } from '@docket/auth';
+import { db } from '@docket/db';
 import { RecoveryCodesOut, RecoveryCodesStatusOut } from '@docket/types';
 import { type Context, Hono } from 'hono';
 import type { z } from 'zod';
 
 import { recoveryCodesRegeneratedEmail } from '../account/emails';
-import { getContainer } from '../container';
 import type { AppEnv, AuthSession } from '../context';
 import { AuthError, ReauthRequiredError } from '../error';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
+import { ensureAccountEmailContactPoint } from '../services/notifications/contact-point-service';
+import { dispatchNotificationIntent } from '../services/notifications/dispatcher';
 
 /** Seconds a session stays "fresh" for high-risk actions (generating recovery codes). */
 const FRESH_SESSION_MAX_AGE_S = 300;
@@ -90,9 +92,18 @@ Like account deletion, this is a **high-risk action gated by step-up**: it requi
       const { user, session } = requireSession(c);
       requireFreshSession({ user, session });
       const codes = await generateRecoveryCodes(user.id);
-      await getContainer().mailer.send({
-        to: user.email,
-        ...recoveryCodesRegeneratedEmail({ name: user.name }),
+      const email = recoveryCodesRegeneratedEmail({ name: user.name });
+      await ensureAccountEmailContactPoint(db, user.id, user.email);
+      await dispatchNotificationIntent(db, {
+        senderType: 'system',
+        category: 'security',
+        priority: 'high',
+        audience: { type: 'user', userId: user.id },
+        channels: ['web', 'email'],
+        subject: email.subject,
+        body: { html: email.html, text: email.text },
+        replyPolicy: 'none',
+        createdBy: 'system',
       });
       return ok(c, RecoveryCodesOut, { codes });
     },

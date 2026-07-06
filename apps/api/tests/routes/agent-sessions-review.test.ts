@@ -30,15 +30,6 @@ import { onError } from '../../src/error';
 import type agentSessionsRouter from '../../src/routes/agent-sessions';
 import { getMigratedDb } from '../support/db';
 
-// The shared `db` is constructed from process.env on first access, so the required
-// vars must be set BEFORE any module that touches them is imported.
-process.env['DATABASE_URL'] = 'pglite://memory://';
-process.env['APP_MODE'] = 'test';
-process.env['NODE_ENV'] = 'test';
-process.env['BETTER_AUTH_SECRET'] = 'test-secret-test-secret-test-secret-0123456789';
-process.env['CRON_SECRET'] = 'test-cron-secret';
-process.env['SKIP_ENV_VALIDATION'] = '1';
-
 let db!: typeof DbType;
 let organization!: typeof OrgTable;
 let team!: typeof TeamTable;

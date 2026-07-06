@@ -11,6 +11,8 @@ export interface DocketVitestOptions {
   react?: boolean;
   /** Extra setup files (relative to the package root). */
   setupFiles?: string[];
+  /** Custom environment variables assigned by Vitest before running tests. */
+  env?: Partial<NodeJS.ProcessEnv>;
   /**
    * Coverage threshold (% for statements/branches/functions/lines).
    *
@@ -63,6 +65,7 @@ export function docketVitest(options: DocketVitestOptions = {}) {
     environment = 'node',
     react: useReact = false,
     setupFiles = [],
+    env = {},
     coverageThreshold = 90,
     coverageExclude = [],
     coverageInclude = ['src/**/*.{ts,tsx}'],
@@ -77,6 +80,7 @@ export function docketVitest(options: DocketVitestOptions = {}) {
       globals: true,
       environment,
       setupFiles,
+      env,
       include: ['tests/**/*.{test,spec}.{ts,tsx}'],
       // Turbo runs every package's vitest concurrently, so the machine is heavily
       // oversubscribed during `pnpm test`. The default 5s timeout false-fails

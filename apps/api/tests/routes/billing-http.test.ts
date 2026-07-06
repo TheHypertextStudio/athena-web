@@ -9,16 +9,8 @@ import { onError } from '../../src/error';
 import type billingRouter from '../../src/routes/billing';
 import type cronRouter from '../../src/routes/cron';
 import type webhooksRouter from '../../src/routes/webhooks';
+import '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
-
-// The shared `db` and `env` are constructed from process.env on first access, so the
-// required vars must be set BEFORE any module that touches them is imported.
-process.env['DATABASE_URL'] = 'pglite://memory://';
-process.env['APP_MODE'] = 'test';
-process.env['NODE_ENV'] = 'test';
-process.env['BETTER_AUTH_SECRET'] = 'test-secret-test-secret-test-secret-0123456789';
-process.env['CRON_SECRET'] = 'test-cron-secret';
-process.env['SKIP_ENV_VALIDATION'] = '1';
 
 let db!: typeof DbType;
 let organization!: typeof OrgTable;

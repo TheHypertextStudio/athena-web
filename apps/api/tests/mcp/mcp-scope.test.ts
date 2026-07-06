@@ -4,17 +4,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { Hono } from 'hono';
 import { eq } from 'drizzle-orm';
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-
-// The Bearer path needs `getMcpSession` (present once mcp() is mounted); the cookie path
-// and the name/email lookup use `getSession`. Both are controllable per test.
-const getSession = vi.fn<
-  () => Promise<{ user: { id: string; name: string; email: string } } | null>
->(async () => null);
-const getMcpSession = vi.fn<
-  () => Promise<{ accessToken: string; userId: string; scopes: string } | null>
->(async () => null);
-vi.mock('@docket/auth', () => ({ auth: { api: { getSession, getMcpSession } } }));
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 import type { Capability } from '@docket/types';
@@ -25,17 +15,8 @@ import type { registerResources as RegisterResources } from '../../src/mcp/resou
 import type * as ScopeModule from '../../src/mcp/scope';
 import type * as ServerModule from '../../src/mcp/server';
 import type * as AuthModule from '../../src/mcp/auth';
+import { getMcpSession, getSession, resetAuthMocks } from '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
-
-process.env['DATABASE_URL'] = 'pglite://memory://';
-process.env['APP_MODE'] = 'test';
-process.env['NODE_ENV'] = 'test';
-process.env['BETTER_AUTH_SECRET'] = 'test-secret-test-secret-test-secret-0123456789';
-process.env['CRON_SECRET'] = 'test-cron-secret';
-process.env['SKIP_ENV_VALIDATION'] = '1';
-// The RS is configured for OAuth so the Bearer path + discovery routes are active.
-process.env['MCP_ISSUER_URL'] = 'https://auth.docket.test';
-process.env['MCP_RESOURCE_URL'] = 'https://api.docket.test/mcp';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -46,6 +27,9 @@ let serverMod!: typeof ServerModule;
 let authMod!: typeof AuthModule;
 
 beforeAll(async () => {
+  // Configure OAuth before importing MCP modules that read the API env slice.
+  process.env['MCP_ISSUER_URL'] = 'https://auth.docket.test';
+  process.env['MCP_RESOURCE_URL'] = 'https://api.docket.test/mcp';
   schema = await getMigratedDb();
   db = schema.db;
   registerTools = (await import('../../src/mcp/tools')).registerTools;
@@ -56,8 +40,7 @@ beforeAll(async () => {
 });
 
 afterEach(() => {
-  getSession.mockReset();
-  getMcpSession.mockReset();
+  resetAuthMocks();
 });
 
 interface Seed {

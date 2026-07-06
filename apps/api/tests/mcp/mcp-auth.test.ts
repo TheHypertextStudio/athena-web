@@ -1,25 +1,12 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
-const getSession = vi.fn<
-  () => Promise<{ user: { id: string; name: string; email: string } } | null>
->(async () => null);
-vi.mock('@docket/auth', () => ({ auth: { api: { getSession } } }));
-
 import type * as DbModule from '@docket/db';
 
 import { ApiError } from '../../src/error';
 import type * as AuthModule from '../../src/mcp/auth';
 import type * as ResultModule from '../../src/mcp/result';
+import { getSession, resetAuthMocks } from '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
-
-process.env['DATABASE_URL'] = 'pglite://memory://';
-process.env['APP_MODE'] = 'test';
-process.env['NODE_ENV'] = 'test';
-process.env['BETTER_AUTH_SECRET'] = 'test-secret-test-secret-test-secret-0123456789';
-process.env['CRON_SECRET'] = 'test-cron-secret';
-process.env['SKIP_ENV_VALIDATION'] = '1';
-// Configure an allowed origin BEFORE the env module is imported so the slice picks it up.
-process.env['MCP_ALLOWED_ORIGINS'] = 'https://app.docket.dev, https://admin.docket.dev';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -27,13 +14,17 @@ let authMod!: typeof AuthModule;
 let resultMod!: typeof ResultModule;
 
 beforeAll(async () => {
+  // Configure an allowed origin before importing modules that read the API env slice.
+  process.env['MCP_ALLOWED_ORIGINS'] = 'https://app.docket.dev, https://admin.docket.dev';
   schema = await getMigratedDb();
   db = schema.db;
   authMod = await import('../../src/mcp/auth');
   resultMod = await import('../../src/mcp/result');
 });
 
-afterEach(() => getSession.mockReset());
+afterEach(() => {
+  resetAuthMocks();
+});
 
 /** Build a Headers object carrying the given origin (or none). */
 function hdrs(origin?: string): Headers {
@@ -101,8 +92,6 @@ describe('resolveMcpContext', () => {
   it('rejects a Bearer token when the RS is not configured for OAuth (no issuer/resource)', async () => {
     // This RS deploy never advertised an issuer + canonical resource, so a Bearer token
     // cannot have been minted by *this* AS for *this* resource → 401 (mcp-surface.md §2.5).
-    delete process.env['MCP_ISSUER_URL'];
-    delete process.env['MCP_RESOURCE_URL'];
     const h = new Headers();
     h.set('authorization', 'Bearer some-token');
     await expect(authMod.resolveMcpContext(h)).rejects.toMatchObject({ status: 401 });
@@ -186,13 +175,11 @@ describe('isOriginAllowed in production', () => {
   it('rejects localhost when NODE_ENV is production', async () => {
     vi.resetModules();
     process.env['NODE_ENV'] = 'production';
-    vi.doMock('@docket/auth', () => ({ auth: { api: { getSession: vi.fn(async () => null) } } }));
     const fresh = await import('../../src/mcp/auth');
     expect(fresh.isOriginAllowed(hdrs('http://localhost:3000'))).toBe(false);
     // A configured origin is still allowed in production.
     expect(fresh.isOriginAllowed(hdrs('https://app.docket.dev'))).toBe(true);
     process.env['NODE_ENV'] = 'test';
-    vi.doUnmock('@docket/auth');
     vi.resetModules();
   });
 });

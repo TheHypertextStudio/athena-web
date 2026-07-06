@@ -4,16 +4,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { Hono } from 'hono';
 import { eq } from 'drizzle-orm';
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-
-// Stub Better Auth so the guard tests exercise the real Origin + session check WITHOUT
-// pulling the heavy `better-auth`/`better-call` ESM chain into the test module graph
-// (it fails to load under the test loader, exactly as the existing RPC tests avoid it
-// by injecting an ActorCtx instead). `getSession` resolving to null is the unauthenticated
-// path the guard must turn into a 401; the Origin check runs before it is ever called.
-vi.mock('@docket/auth', () => ({
-  auth: { api: { getSession: vi.fn(async () => null) } },
-}));
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import type {
   db as DbType,
@@ -31,17 +22,8 @@ import type { McpContext } from '../../src/mcp/auth';
 import type { registerTools as RegisterTools } from '../../src/mcp/tools';
 import type { registerResources as RegisterResources } from '../../src/mcp/resources';
 import type { mcpHandler as McpHandler } from '../../src/mcp/server';
+import '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
-
-// The shared `db`/`env`/`auth` are constructed from process.env on first access, so the
-// required vars must be set BEFORE any module that touches them is imported. `NODE_ENV`
-// is left at `test` (not production) so the Origin guard allows localhost.
-process.env['DATABASE_URL'] = 'pglite://memory://';
-process.env['APP_MODE'] = 'test';
-process.env['NODE_ENV'] = 'test';
-process.env['BETTER_AUTH_SECRET'] = 'test-secret-test-secret-test-secret-0123456789';
-process.env['CRON_SECRET'] = 'test-cron-secret';
-process.env['SKIP_ENV_VALIDATION'] = '1';
 
 let db!: typeof DbType;
 let organization!: typeof OrgTable;

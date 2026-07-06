@@ -4,11 +4,8 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { CallToolResultSchema, type CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { and, eq } from 'drizzle-orm';
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
-
-// Stub Better Auth so we never pull the heavy ESM chain; identity is injected via ctx.
-vi.mock('@docket/auth', () => ({ auth: { api: { getSession: vi.fn(async () => null) } } }));
 
 import type * as DbModule from '@docket/db';
 import type { Capability } from '@docket/types';
@@ -18,14 +15,8 @@ import { createMcpCatalog, registerOptionalTaskTool } from '../../src/mcp/catalo
 import type { registerTools as RegisterTools } from '../../src/mcp/tools';
 import type { registerResources as RegisterResources } from '../../src/mcp/resources';
 import type { registerPrompts as RegisterPrompts } from '../../src/mcp/prompts';
+import '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
-
-process.env['DATABASE_URL'] = 'pglite://memory://';
-process.env['APP_MODE'] = 'test';
-process.env['NODE_ENV'] = 'test';
-process.env['BETTER_AUTH_SECRET'] = 'test-secret-test-secret-test-secret-0123456789';
-process.env['CRON_SECRET'] = 'test-cron-secret';
-process.env['SKIP_ENV_VALIDATION'] = '1';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;

@@ -7,12 +7,8 @@ import type * as DbModule from '@docket/db';
 
 import type { ActorCtx, AppEnv, AuthSession } from '../../src/context';
 import { onError } from '../../src/error';
-import { configureApiTestEnv, getMigratedDb } from '../support/db';
-
-// The shared `db`/`env`/container build from process.env on first access, so the
-// required vars (APP_MODE=test forces the mock boundary adapters) MUST be set BEFORE
-// any module that touches them is imported.
-configureApiTestEnv();
+import '../support/auth-mock';
+import { getMigratedDb } from '../support/db';
 
 type Db = typeof DbModule.db;
 

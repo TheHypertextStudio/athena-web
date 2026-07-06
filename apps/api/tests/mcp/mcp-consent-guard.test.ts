@@ -6,13 +6,6 @@ import type { AppEnv } from '../../src/context';
 import type * as ConsentGuardModule from '../../src/mcp/consent-guard';
 import { getMigratedDb } from '../support/db';
 
-process.env['DATABASE_URL'] = 'pglite://memory://';
-process.env['APP_MODE'] = 'test';
-process.env['NODE_ENV'] = 'test';
-process.env['BETTER_AUTH_SECRET'] = 'test-secret-test-secret-test-secret-0123456789';
-process.env['CRON_SECRET'] = 'test-cron-secret';
-process.env['SKIP_ENV_VALIDATION'] = '1';
-
 let guard!: typeof ConsentGuardModule;
 
 beforeAll(async () => {

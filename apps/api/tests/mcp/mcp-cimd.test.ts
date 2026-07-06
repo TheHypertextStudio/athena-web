@@ -6,21 +6,15 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 import type { CimdDeps } from '../../src/mcp/cimd';
 import type * as CimdModule from '../../src/mcp/cimd';
 import type * as McpServerModule from '../../src/mcp/server';
+import '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
-
-process.env['DATABASE_URL'] = 'pglite://memory://';
-process.env['APP_MODE'] = 'test';
-process.env['NODE_ENV'] = 'test';
-process.env['BETTER_AUTH_SECRET'] = 'test-secret-test-secret-test-secret-0123456789';
-process.env['CRON_SECRET'] = 'test-cron-secret';
-process.env['SKIP_ENV_VALIDATION'] = '1';
-process.env['MCP_CIMD_STRICT'] = 'true';
-process.env['MCP_CIMD_TRUST_ALLOWLIST'] = 'allowed.example';
 
 let cimd!: typeof CimdModule;
 let serverMod!: typeof McpServerModule;
 
 beforeAll(async () => {
+  process.env['MCP_CIMD_STRICT'] = 'true';
+  process.env['MCP_CIMD_TRUST_ALLOWLIST'] = 'allowed.example';
   await getMigratedDb();
   cimd = await import('../../src/mcp/cimd');
   serverMod = await import('../../src/mcp/server');
@@ -205,8 +199,6 @@ describe('CIMD authorize preflight middleware', () => {
 
 describe('MCP authorization server metadata', () => {
   it('advertises CIMD support in the root AS metadata document', async () => {
-    process.env['MCP_ISSUER_URL'] = 'https://api.docket.test';
-    process.env['MCP_RESOURCE_URL'] = 'https://api.docket.test/mcp';
     const res = serverMod.authorizationServerMetadata({
       req: { url: 'https://api.docket.test/.well-known/oauth-authorization-server' },
       json: (body: unknown) => new Response(JSON.stringify(body)),

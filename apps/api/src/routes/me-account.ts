@@ -40,6 +40,7 @@ import {
 import { ok } from '../lib/ok';
 import { one } from '../lib/one';
 import { apiDoc, describeRoute } from '../lib/openapi-route';
+import { dispatchSystemUserNotification } from '../services/notifications/system';
 
 /** Like {@link ok} but with an explicit status (e.g. 201 Created, 202 Accepted). */
 function okWith<T extends z.ZodType>(
@@ -224,7 +225,15 @@ Computed by scanning the caller's Hub deletion fields, recomputing ownership blo
           name: user.name,
           deleteAfterAt: status.deleteAfterAt,
         });
-        await getContainer().mailer.send({ to: user.email, ...email });
+        await dispatchSystemUserNotification(db, {
+          userId: user.id,
+          email: user.email,
+          category: 'account',
+          priority: 'high',
+          channels: ['web', 'email'],
+          subject: email.subject,
+          body: { html: email.html, text: email.text },
+        });
       }
       return okWith(c, AccountStatusOut, status, 202);
     },
@@ -245,7 +254,15 @@ Only effective during the grace window, before the cron sweep has purged the acc
       await cancelAccountDeletion(db, user.id);
 
       const email = deletionCanceledEmail({ name: user.name });
-      await getContainer().mailer.send({ to: user.email, ...email });
+      await dispatchSystemUserNotification(db, {
+        userId: user.id,
+        email: user.email,
+        category: 'account',
+        priority: 'high',
+        channels: ['web', 'email'],
+        subject: email.subject,
+        body: { html: email.html, text: email.text },
+      });
 
       return ok(c, AccountStatusOut, await loadStatus(user.id));
     },

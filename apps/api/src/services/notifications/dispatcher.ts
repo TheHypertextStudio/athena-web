@@ -18,7 +18,7 @@ import { eq } from 'drizzle-orm';
 import { expandNotificationAudience } from './audience';
 import { deliverEmailNotification } from './adapters/email';
 import { deliverWebNotification } from './adapters/web';
-import { resolveNotificationPreferences } from './preferences';
+import { resolveNotificationPreferences, type NotificationPreferenceMode } from './preferences';
 
 type NotificationIntentRow = typeof notificationIntent.$inferSelect;
 type NotificationRecipientRow = typeof notificationRecipient.$inferSelect;
@@ -33,6 +33,8 @@ export interface DispatchNotificationIntentInput extends NotificationIntentCreat
   readonly now?: Date;
   /** Optional authenticated deep link for the web inbox projection. */
   readonly webUrl?: string;
+  /** Whether to apply user-managed category/channel toggles while resolving channels. */
+  readonly preferenceMode?: NotificationPreferenceMode;
 }
 
 /** Result of dispatching a notification intent through the currently implemented adapters. */
@@ -59,6 +61,8 @@ export interface DispatchPersistedNotificationIntentOptions {
   readonly webUrl?: string;
   /** True when returning a previously dispatched idempotent result. */
   readonly idempotent?: boolean;
+  /** Whether to apply user-managed category/channel toggles while resolving channels. */
+  readonly preferenceMode?: NotificationPreferenceMode;
 }
 
 /** Creates a durable notification intent, snapshots recipients, and attempts channel delivery. */
@@ -107,6 +111,7 @@ export async function dispatchNotificationIntent(
   return dispatchPersistedNotificationIntent(db, intent, {
     now,
     ...(input.webUrl ? { webUrl: input.webUrl } : {}),
+    ...(input.preferenceMode ? { preferenceMode: input.preferenceMode } : {}),
   });
 }
 
@@ -149,14 +154,18 @@ export async function dispatchPersistedNotificationIntent(
     if (!recipient) throw new Error('Failed to create notification recipient');
     recipients.push(recipient);
 
-    const decisions = await resolveNotificationPreferences(db, {
-      userId: recipient.userId,
-      organizationId: recipient.organizationId,
-      category: intent.category,
-      priority: intent.priority,
-      channels: intent.channels,
-      now,
-    });
+    const decisions = await resolveNotificationPreferences(
+      db,
+      {
+        userId: recipient.userId,
+        organizationId: recipient.organizationId,
+        category: intent.category,
+        priority: intent.priority,
+        channels: intent.channels,
+        now,
+      },
+      options.preferenceMode ?? 'respect_user_preferences',
+    );
     const suppressions = decisions.flatMap((decision) =>
       decision.suppression ? [decision.suppression] : [],
     );

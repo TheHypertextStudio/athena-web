@@ -16,10 +16,14 @@ import { eq } from 'drizzle-orm';
 
 type ContactPointRow = typeof contactPointTable.$inferSelect;
 
+/** How channel resolution treats user-managed notification preference toggles. */
+export type NotificationPreferenceMode = 'respect_user_preferences' | 'skip_user_preferences';
+
 /** Resolves channel preferences and destination health for one notification recipient. */
 export async function resolveNotificationPreferences(
   db: Database,
   input: NotificationPreferenceResolutionInput,
+  mode: NotificationPreferenceMode = 'respect_user_preferences',
 ): Promise<readonly NotificationChannelDecision[]> {
   const [preference] = await db
     .select()
@@ -45,6 +49,7 @@ export async function resolveNotificationPreferences(
         preference,
         contactPoints,
         quietHoursActive,
+        mode,
       }),
     ),
   );
@@ -56,31 +61,35 @@ function resolveChannel({
   preference,
   contactPoints,
   quietHoursActive,
+  mode,
 }: {
   readonly input: NotificationPreferenceResolutionInput;
   readonly channel: NotificationChannel;
   readonly preference: typeof notificationPreference.$inferSelect | undefined;
   readonly contactPoints: readonly ContactPointRow[];
   readonly quietHoursActive: boolean;
+  readonly mode: NotificationPreferenceMode;
 }): NotificationChannelDecision {
   if (!categoryAllowsChannel(input.category, channel)) {
     return suppressed(channel, null, 'category_disallows_channel');
   }
 
-  const preferenceAllows = notificationPreferenceAllowsChannel({
-    category: input.category,
-    channel,
-    organizationId: input.organizationId,
-    preferences: preference
-      ? { categories: preference.categories, organizations: preference.organizations }
-      : null,
-  });
+  const preferenceAllows =
+    mode === 'skip_user_preferences' ||
+    notificationPreferenceAllowsChannel({
+      category: input.category,
+      channel,
+      organizationId: input.organizationId,
+      preferences: preference
+        ? { categories: preference.categories, organizations: preference.organizations }
+        : null,
+    });
   if (!preferenceAllows) return suppressed(channel, null, 'user_disabled_channel');
 
   const destination = resolveDestination(channel, contactPoints);
   if (destination.decision) return destination.decision;
 
-  if (quietHoursActive && !canBypassQuietHours(input)) {
+  if (mode === 'respect_user_preferences' && quietHoursActive && !canBypassQuietHours(input)) {
     return {
       channel,
       decision: 'delay',

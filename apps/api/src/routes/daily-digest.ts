@@ -20,6 +20,7 @@ import type { SummarizerObservation } from '@docket/agent-runtime';
 import { and, asc, eq, gte, lte, sql } from 'drizzle-orm';
 
 import { getContainer } from '../container';
+import { dispatchSystemUserNotification } from '../services/notifications/system';
 
 /** The default local send time when a Hub enabled digests without choosing one. */
 const DEFAULT_SEND_AT = '18:00';
@@ -236,7 +237,7 @@ async function generateForUser(
       day: 'numeric',
     }).format(now);
 
-    const { summarizer, mailer } = getContainer();
+    const { summarizer } = getContainer();
     const { markdown } = await summarizer.summarize({
       dateLabel,
       ...(candidate.name ? { recipientName: candidate.name } : {}),
@@ -244,12 +245,23 @@ async function generateForUser(
     });
     const html = markdownToHtml(markdown);
 
-    await mailer.send({
-      to: candidate.email,
-      subject: `Your Docket digest — ${dateLabel}`,
-      html,
-      text: markdown,
+    const subject = `Your Docket digest — ${dateLabel}`;
+    const delivery = await dispatchSystemUserNotification(db, {
+      userId: candidate.userId,
+      email: candidate.email,
+      category: 'digest',
+      priority: 'normal',
+      channels: ['email'],
+      subject,
+      body: {
+        html,
+        text: markdown,
+      },
+      preferenceMode: 'skip_user_preferences',
     });
+    if (delivery.status !== 'sent') {
+      throw new Error('digest notification delivery failed');
+    }
 
     await db
       .update(dailyDigest)

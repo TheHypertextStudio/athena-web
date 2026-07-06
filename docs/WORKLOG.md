@@ -46,6 +46,11 @@
   operations (none found). Validation: `@docket/db` test/typecheck/lint pass; `@docket/notifications`
   test/typecheck/lint pass; `@docket/types` test/typecheck/lint pass;
   `@docket/api` notification inbox route suite passes.
+- **Policy milestone update (2026-07-06)**: Added pure notification creation policy in
+  `@docket/notifications` rather than `apps/api`: category/channel rules, safety-critical preference
+  locks, all-users sender restrictions, security/account sender restrictions, and staff-approval
+  detection for multi-recipient SMS sends. Validation: `@docket/notifications`
+  test/typecheck/lint pass.
 
 ### [AUTH-SEC-001] Auth security & UX audit remediation
 

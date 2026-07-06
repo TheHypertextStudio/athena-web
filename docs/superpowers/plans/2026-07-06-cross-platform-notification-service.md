@@ -216,7 +216,7 @@ git commit -m "feat(data): add notification service spine"
 
 **Files:**
 
-- Create: `apps/api/src/services/notifications/policy.ts`
+- Create: `packages/notifications/src/policy/*`
 - Create: `apps/api/src/services/notifications/audience.ts`
 - Create: `apps/api/src/services/notifications/preferences.ts`
 - Create: `apps/api/src/services/notifications/dispatcher.ts`
@@ -226,7 +226,7 @@ git commit -m "feat(data): add notification service spine"
 - Test: `apps/api/tests/services/notifications/preferences.test.ts`
 - Test: `apps/api/tests/services/notifications/dispatcher-web.test.ts`
 
-- [ ] **Step 1: Write RED policy tests**
+- [x] **Step 1: Write RED policy tests**
 
 Cover:
 
@@ -236,7 +236,7 @@ Cover:
 - Marketing never rides service-announcement consent.
 - Web channel is allowed for every non-marketing category.
 
-- [ ] **Step 2: Implement policy**
+- [x] **Step 2: Implement policy**
 
 Implement pure functions:
 

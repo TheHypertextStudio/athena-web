@@ -7,10 +7,7 @@
  * first workflow state. Exercised against the real Hono router + an injected actor
  * context (mirroring agent-flows.test.ts).
  */
-import { resolve } from 'node:path';
-
 import { Hono } from 'hono';
-import { migrate } from 'drizzle-orm/pglite/migrator';
 import { and, eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
@@ -26,6 +23,7 @@ import type {
 import type { ActorCtx, AppEnv } from '../../src/context';
 import { onError } from '../../src/error';
 import type captureRouter from '../../src/routes/capture';
+import { getMigratedDb } from '../support/db';
 
 process.env['DATABASE_URL'] = 'pglite://memory://';
 process.env['APP_MODE'] = 'test';
@@ -33,8 +31,6 @@ process.env['NODE_ENV'] = 'test';
 process.env['BETTER_AUTH_SECRET'] = 'test-secret-test-secret-test-secret-0123456789';
 process.env['CRON_SECRET'] = 'test-cron-secret';
 process.env['SKIP_ENV_VALIDATION'] = '1';
-
-const MIGRATIONS = resolve(import.meta.dirname, '../../../../packages/db/drizzle');
 
 let db!: typeof DbType;
 let organization!: typeof OrgTable;
@@ -58,14 +54,13 @@ function appFor(orgId: string, capabilities: readonly string[], actorId = 'actor
 }
 
 beforeAll(async () => {
-  const dbmod = await import('@docket/db');
+  const dbmod = await getMigratedDb();
   db = dbmod.db;
   organization = dbmod.organization;
   team = dbmod.team;
   actor = dbmod.actor;
   cycle = dbmod.cycle;
   task = dbmod.task;
-  await migrate(db as never, { migrationsFolder: MIGRATIONS });
   capture = (await import('../../src/routes/capture')).default;
 });
 

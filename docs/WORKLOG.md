@@ -189,6 +189,27 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [MCP-PROD-011] Remove test-hang sources without throttling concurrency
+
+- **Completed**: 2026-07-06
+- **Summary**: Fixed the production-launch test hang without adding Turbo/Vitest concurrency caps.
+  The root cause was repeated PGlite startup + full Drizzle migrator work inside concurrent test
+  suites, plus missing deterministic teardown for the lazy DB singleton. Added `closeDb()` to the
+  DB client/barrel, converted driver-selection and migration-runner unit tests away from real
+  PGlite startups, kept one real full-schema migration smoke in `db.test.ts`, and replaced API
+  test-suite migrator setup with a shared generated-SQL bootstrap helper. Authz and billing unit
+  suites now use minimal schemas for the tables they exercise instead of full repo migrations.
+- **Files Changed**: `packages/db/src/{client,index}.ts`,
+  `packages/db/tests/{client,db,migrate}.test.ts`, `packages/authz/tests/authz.test.ts`,
+  `apps/api/tests/support/db.ts`, `apps/api/tests/billing/{test-db,lifecycle,lifecycle-extra}.ts`,
+  and API MCP/route tests that now call the shared fast bootstrap helper.
+- **Learnings**: The hang was not fixed by serializing the runner; it was caused by expensive setup
+  work being duplicated across workers. Keeping concurrency normal is viable when tests avoid
+  redundant full migrations and close embedded database clients deterministically.
+- **Gate**: `pnpm --filter @docket/db test` passes in 2.59s; `pnpm --filter @docket/api test`
+  passes (47 files / 692 tests); unthrottled root `pnpm test` passes (11 tasks / 2m28s);
+  `pnpm typecheck`, `pnpm lint`, and `pnpm build` pass.
+
 ### [BOUNDARY-REFAC-001] Burninate `@docket/boundaries` into domain packages
 
 - **Completed**: 2026-07-07

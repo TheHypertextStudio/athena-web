@@ -9,10 +9,7 @@
  * default agent is materialized once (idempotent), the prompt is persisted as the
  * session's opening `response` activity, and the session runs through to the gate.
  */
-import { resolve } from 'node:path';
-
 import { Hono } from 'hono';
-import { migrate } from 'drizzle-orm/pglite/migrator';
 import { and, asc, eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
@@ -31,6 +28,7 @@ import { onError } from '../../src/error';
 import type { getContainer as GetContainer } from '../../src/container';
 import type agentSessionsRouter from '../../src/routes/agent-sessions';
 import type { ensureDefaultAgent as EnsureDefaultAgent } from '../../src/lib/default-agent';
+import { getMigratedDb } from '../support/db';
 
 process.env['DATABASE_URL'] = 'pglite://memory://';
 process.env['APP_MODE'] = 'test';
@@ -38,8 +36,6 @@ process.env['NODE_ENV'] = 'test';
 process.env['BETTER_AUTH_SECRET'] = 'test-secret-test-secret-test-secret-0123456789';
 process.env['CRON_SECRET'] = 'test-cron-secret';
 process.env['SKIP_ENV_VALIDATION'] = '1';
-
-const MIGRATIONS = resolve(import.meta.dirname, '../../../../packages/db/drizzle');
 
 let db!: typeof DbType;
 let organization!: typeof OrgTable;
@@ -67,7 +63,7 @@ function appFor(orgId: string, capabilities: readonly string[], actorId = 'actor
 }
 
 beforeAll(async () => {
-  const dbmod = await import('@docket/db');
+  const dbmod = await getMigratedDb();
   db = dbmod.db;
   organization = dbmod.organization;
   team = dbmod.team;
@@ -75,7 +71,6 @@ beforeAll(async () => {
   agent = dbmod.agent;
   agentSession = dbmod.agentSession;
   sessionActivity = dbmod.sessionActivity;
-  await migrate(db as never, { migrationsFolder: MIGRATIONS });
   agentSessions = (await import('../../src/routes/agent-sessions')).default;
   const helperMod = await import('../../src/lib/default-agent');
   ensureDefaultAgent = helperMod.ensureDefaultAgent;

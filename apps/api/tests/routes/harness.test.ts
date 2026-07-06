@@ -1,27 +1,18 @@
-import { resolve } from 'node:path';
-
 import { CaptureMailer } from '@docket/mail';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { migrate } from 'drizzle-orm/pglite/migrator';
 import { expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
 import type { ActorCtx, AppEnv, AuthSession } from '../../src/context';
 import { onError } from '../../src/error';
+import { configureApiTestEnv, getMigratedDb } from '../support/db';
 
 // The shared `db`/`env`/container build from process.env on first access, so the
 // required vars (APP_MODE=test forces the mock boundary adapters) MUST be set BEFORE
 // any module that touches them is imported.
-process.env['DATABASE_URL'] = 'pglite://memory://';
-process.env['APP_MODE'] = 'test';
-process.env['NODE_ENV'] = 'test';
-process.env['BETTER_AUTH_SECRET'] = 'test-secret-test-secret-test-secret-0123456789';
-process.env['CRON_SECRET'] = 'test-cron-secret';
-process.env['SKIP_ENV_VALIDATION'] = '1';
-
-const MIGRATIONS = resolve(import.meta.dirname, '../../../../packages/db/drizzle');
+configureApiTestEnv();
 
 type Db = typeof DbModule.db;
 
@@ -29,10 +20,7 @@ let dbmod: typeof DbModule | undefined;
 
 /** Load (once), migrate, and return the shared `@docket/db` module + in-memory PGlite. */
 export async function getDb(): Promise<typeof DbModule> {
-  if (!dbmod) {
-    dbmod = await import('@docket/db');
-    await migrate(dbmod.db as never, { migrationsFolder: MIGRATIONS });
-  }
+  dbmod ??= await getMigratedDb();
   return dbmod;
 }
 

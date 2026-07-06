@@ -1,14 +1,12 @@
-import { resolve } from 'node:path';
-
 import { db, oauthApplication } from '@docket/db';
 import { eq } from 'drizzle-orm';
-import { migrate } from 'drizzle-orm/pglite/migrator';
 import { Hono } from 'hono';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type { CimdDeps } from '../../src/mcp/cimd';
 import type * as CimdModule from '../../src/mcp/cimd';
 import type * as McpServerModule from '../../src/mcp/server';
+import { getMigratedDb } from '../support/db';
 
 process.env['DATABASE_URL'] = 'pglite://memory://';
 process.env['APP_MODE'] = 'test';
@@ -19,13 +17,11 @@ process.env['SKIP_ENV_VALIDATION'] = '1';
 process.env['MCP_CIMD_STRICT'] = 'true';
 process.env['MCP_CIMD_TRUST_ALLOWLIST'] = 'allowed.example';
 
-const MIGRATIONS = resolve(import.meta.dirname, '../../../../packages/db/drizzle');
-
 let cimd!: typeof CimdModule;
 let serverMod!: typeof McpServerModule;
 
 beforeAll(async () => {
-  await migrate(db as never, { migrationsFolder: MIGRATIONS });
+  await getMigratedDb();
   cimd = await import('../../src/mcp/cimd');
   serverMod = await import('../../src/mcp/server');
 });

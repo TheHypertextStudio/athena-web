@@ -1,5 +1,3 @@
-import { resolve } from 'node:path';
-
 import {
   actor,
   type Database,
@@ -13,8 +11,7 @@ import {
 } from '@docket/db';
 import { PGlite } from '@electric-sql/pglite';
 import { drizzle } from 'drizzle-orm/pglite';
-import { migrate } from 'drizzle-orm/pglite/migrator';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { ancestorChain, type ResourceRef } from '../src/ancestor-chain';
 import { canActor } from '../src/can-actor';
@@ -45,11 +42,195 @@ let projectExpiredId!: string;
 let projectFutureId!: string;
 let taskFullId!: string;
 let taskBareId!: string;
+let client: PGlite | undefined;
+
+async function bootstrapAuthzSchema(client: PGlite): Promise<void> {
+  await client.exec(`
+    create type actor_kind as enum ('human', 'agent', 'team');
+    create type actor_status as enum ('active', 'suspended');
+    create type org_lifecycle_state as enum (
+      'trialing',
+      'active',
+      'past_due',
+      'export_window',
+      'pending_deletion',
+      'deleted'
+    );
+    create type program_status as enum ('active', 'paused', 'archived');
+    create type project_status as enum ('planned', 'active', 'completed', 'canceled');
+    create type health as enum ('on_track', 'at_risk', 'off_track');
+    create type task_priority as enum ('none', 'urgent', 'high', 'medium', 'low');
+    create type provenance_source as enum ('native', 'linked');
+    create type sync_mode as enum ('import', 'mirror');
+    create type grant_capability as enum ('view', 'comment', 'contribute', 'assign', 'manage');
+    create type grant_subject_kind as enum ('actor', 'role');
+    create type resource_kind as enum (
+      'organization',
+      'team',
+      'initiative',
+      'program',
+      'project',
+      'cycle',
+      'task'
+    );
+    create type visibility as enum ('public', 'private');
+    create type grant_effect as enum ('allow', 'deny');
+
+    create table "organization" (
+      id text primary key,
+      name text not null,
+      slug text not null,
+      purpose text,
+      avatar text,
+      is_personal boolean not null default false,
+      vocabulary jsonb not null default '{}'::jsonb,
+      agent_guidance text,
+      approval_routing jsonb,
+      lifecycle_state org_lifecycle_state not null default 'trialing',
+      export_ready_at timestamp,
+      delete_after_at timestamp,
+      created_at timestamp not null default now(),
+      updated_at timestamp not null default now(),
+      archived_at timestamp
+    );
+
+    create table "role" (
+      id text primary key,
+      organization_id text not null,
+      key text not null,
+      name text not null,
+      is_system boolean not null default false,
+      capabilities jsonb not null default '[]'::jsonb,
+      base_capability grant_capability,
+      default_visibility visibility not null default 'public',
+      created_at timestamp not null default now(),
+      updated_at timestamp not null default now()
+    );
+
+    create table "actor" (
+      id text primary key,
+      organization_id text not null,
+      kind actor_kind not null,
+      display_name text not null,
+      avatar text,
+      status actor_status not null default 'active',
+      user_id text,
+      role_id text,
+      created_at timestamp not null default now(),
+      updated_at timestamp not null default now(),
+      archived_at timestamp
+    );
+
+    create table "team" (
+      id text primary key,
+      organization_id text not null,
+      name text not null,
+      key text not null,
+      description text,
+      workflow_states jsonb not null default '[]'::jsonb,
+      triage_enabled boolean not null default true,
+      cycle_cadence_weeks integer not null default 1,
+      agent_guidance text,
+      approval_routing jsonb,
+      visibility visibility not null default 'public',
+      ancestor_path text[] not null default '{}'::text[],
+      created_at timestamp not null default now(),
+      updated_at timestamp not null default now(),
+      archived_at timestamp
+    );
+
+    create table "program" (
+      id text primary key,
+      organization_id text not null,
+      created_by text,
+      created_at timestamp not null default now(),
+      updated_at timestamp not null default now(),
+      archived_at timestamp,
+      name text not null,
+      description text,
+      owner_id text,
+      status program_status not null default 'active',
+      health health,
+      visibility visibility not null default 'public',
+      ancestor_path text[] not null default '{}'::text[]
+    );
+
+    create table "project" (
+      id text primary key,
+      organization_id text not null,
+      created_by text,
+      created_at timestamp not null default now(),
+      updated_at timestamp not null default now(),
+      archived_at timestamp,
+      name text not null,
+      description text,
+      lead_id text,
+      program_id text,
+      team_id text,
+      status project_status not null default 'planned',
+      health health,
+      start_date timestamp,
+      target_date timestamp,
+      visibility visibility not null default 'public',
+      ancestor_path text[] not null default '{}'::text[]
+    );
+
+    create table "task" (
+      id text primary key,
+      organization_id text not null,
+      created_by text,
+      created_at timestamp not null default now(),
+      updated_at timestamp not null default now(),
+      archived_at timestamp,
+      title text not null,
+      description text,
+      team_id text not null,
+      state text not null,
+      priority task_priority not null default 'none',
+      assignee_id text,
+      delegate_id text,
+      project_id text,
+      program_id text,
+      milestone_id text,
+      cycle_id text,
+      parent_task_id text,
+      estimate integer,
+      estimate_minutes integer,
+      due_date timestamp,
+      source provenance_source not null default 'native',
+      source_integration_id text,
+      external_id text,
+      external_url text,
+      source_sync_mode sync_mode,
+      completed_at timestamp,
+      canceled_at timestamp,
+      visibility visibility not null default 'public',
+      ancestor_path text[] not null default '{}'::text[]
+    );
+
+    create table "grant" (
+      id text primary key,
+      organization_id text not null,
+      subject_kind grant_subject_kind not null,
+      subject_id text not null,
+      resource_kind resource_kind not null,
+      resource_id text not null,
+      capabilities jsonb not null,
+      effect grant_effect not null default 'allow',
+      cascades boolean not null default true,
+      visibility_override visibility,
+      expires_at timestamp,
+      visibility visibility not null default 'public',
+      created_by text,
+      created_at timestamp not null default now()
+    );
+  `);
+}
 
 beforeAll(async () => {
-  const client = new PGlite('memory://');
+  client = new PGlite('memory://');
   const d = drizzle(client);
-  await migrate(d, { migrationsFolder: resolve(import.meta.dirname, '../../db/drizzle') });
+  await bootstrapAuthzSchema(client);
   db = d as unknown as Database;
 
   const orgRows = await db.insert(organization).values({ name: 'Acme', slug: 'acme' }).returning();
@@ -198,6 +379,10 @@ beforeAll(async () => {
       effect: 'allow',
     },
   ]);
+});
+
+afterAll(async () => {
+  await client?.close();
 });
 
 function orgTarget(): ResourceRef {

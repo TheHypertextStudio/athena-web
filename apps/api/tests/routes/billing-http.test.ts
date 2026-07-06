@@ -1,7 +1,4 @@
-import { resolve } from 'node:path';
-
 import { Hono } from 'hono';
-import { migrate } from 'drizzle-orm/pglite/migrator';
 import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
@@ -12,6 +9,7 @@ import { onError } from '../../src/error';
 import type billingRouter from '../../src/routes/billing';
 import type cronRouter from '../../src/routes/cron';
 import type webhooksRouter from '../../src/routes/webhooks';
+import { getMigratedDb } from '../support/db';
 
 // The shared `db` and `env` are constructed from process.env on first access, so the
 // required vars must be set BEFORE any module that touches them is imported.
@@ -21,8 +19,6 @@ process.env['NODE_ENV'] = 'test';
 process.env['BETTER_AUTH_SECRET'] = 'test-secret-test-secret-test-secret-0123456789';
 process.env['CRON_SECRET'] = 'test-cron-secret';
 process.env['SKIP_ENV_VALIDATION'] = '1';
-
-const MIGRATIONS = resolve(import.meta.dirname, '../../../../packages/db/drizzle');
 
 let db!: typeof DbType;
 let organization!: typeof OrgTable;
@@ -44,11 +40,9 @@ function billingApp(orgId: string, capabilities: readonly string[]) {
 }
 
 beforeAll(async () => {
-  const dbmod = await import('@docket/db');
+  const dbmod = await getMigratedDb();
   db = dbmod.db;
   organization = dbmod.organization;
-  // Migrate the shared in-memory PGlite instance the handlers write through.
-  await migrate(db as never, { migrationsFolder: MIGRATIONS });
   webhooks = (await import('../../src/routes/webhooks')).default;
   cron = (await import('../../src/routes/cron')).default;
   billing = (await import('../../src/routes/billing')).default;

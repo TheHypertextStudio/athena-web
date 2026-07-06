@@ -1,6 +1,3 @@
-import { resolve } from 'node:path';
-
-import { migrate } from 'drizzle-orm/pglite/migrator';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 const getSession = vi.fn<
@@ -13,6 +10,7 @@ import type * as DbModule from '@docket/db';
 import { ApiError } from '../../src/error';
 import type * as AuthModule from '../../src/mcp/auth';
 import type * as ResultModule from '../../src/mcp/result';
+import { getMigratedDb } from '../support/db';
 
 process.env['DATABASE_URL'] = 'pglite://memory://';
 process.env['APP_MODE'] = 'test';
@@ -23,17 +21,14 @@ process.env['SKIP_ENV_VALIDATION'] = '1';
 // Configure an allowed origin BEFORE the env module is imported so the slice picks it up.
 process.env['MCP_ALLOWED_ORIGINS'] = 'https://app.docket.dev, https://admin.docket.dev';
 
-const MIGRATIONS = resolve(import.meta.dirname, '../../../../packages/db/drizzle');
-
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
 let authMod!: typeof AuthModule;
 let resultMod!: typeof ResultModule;
 
 beforeAll(async () => {
-  schema = await import('@docket/db');
+  schema = await getMigratedDb();
   db = schema.db;
-  await migrate(db as never, { migrationsFolder: MIGRATIONS });
   authMod = await import('../../src/mcp/auth');
   resultMod = await import('../../src/mcp/result');
 });

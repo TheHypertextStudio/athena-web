@@ -1,12 +1,9 @@
-import { resolve } from 'node:path';
-
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { Hono } from 'hono';
 import { eq } from 'drizzle-orm';
-import { migrate } from 'drizzle-orm/pglite/migrator';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 // The Bearer path needs `getMcpSession` (present once mcp() is mounted); the cookie path
@@ -28,6 +25,7 @@ import type { registerResources as RegisterResources } from '../../src/mcp/resou
 import type * as ScopeModule from '../../src/mcp/scope';
 import type * as ServerModule from '../../src/mcp/server';
 import type * as AuthModule from '../../src/mcp/auth';
+import { getMigratedDb } from '../support/db';
 
 process.env['DATABASE_URL'] = 'pglite://memory://';
 process.env['APP_MODE'] = 'test';
@@ -39,8 +37,6 @@ process.env['SKIP_ENV_VALIDATION'] = '1';
 process.env['MCP_ISSUER_URL'] = 'https://auth.docket.test';
 process.env['MCP_RESOURCE_URL'] = 'https://api.docket.test/mcp';
 
-const MIGRATIONS = resolve(import.meta.dirname, '../../../../packages/db/drizzle');
-
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
 let registerTools!: typeof RegisterTools;
@@ -50,9 +46,8 @@ let serverMod!: typeof ServerModule;
 let authMod!: typeof AuthModule;
 
 beforeAll(async () => {
-  schema = await import('@docket/db');
+  schema = await getMigratedDb();
   db = schema.db;
-  await migrate(db as never, { migrationsFolder: MIGRATIONS });
   registerTools = (await import('../../src/mcp/tools')).registerTools;
   registerResources = (await import('../../src/mcp/resources')).registerResources;
   scopeMod = await import('../../src/mcp/scope');

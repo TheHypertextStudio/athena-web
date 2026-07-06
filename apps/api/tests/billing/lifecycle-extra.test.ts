@@ -1,17 +1,15 @@
-import { resolve } from 'node:path';
-
 import type { BillingEvent } from '@docket/billing';
 import { type Database, organization } from '@docket/db';
-import { PGlite } from '@electric-sql/pglite';
+import type { PGlite } from '@electric-sql/pglite';
 import { eq } from 'drizzle-orm';
-import { drizzle } from 'drizzle-orm/pglite';
-import { migrate } from 'drizzle-orm/pglite/migrator';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { applyBillingEvent } from '../../src/billing/lifecycle';
+import { createBillingLifecycleDb } from './test-db';
 
 const NOW = '2026-01-01T00:00:00.000Z';
 let db!: Database;
+let client: PGlite | undefined;
 
 /** Insert an org in a state, returning its id. */
 async function makeOrg(
@@ -41,12 +39,13 @@ function evt(type: BillingEvent['type'], referenceId: string): BillingEvent {
 }
 
 beforeAll(async () => {
-  const client = new PGlite('memory://');
-  const d = drizzle(client);
-  await migrate(d, {
-    migrationsFolder: resolve(import.meta.dirname, '../../../../packages/db/drizzle'),
-  });
-  db = d as unknown as Database;
+  const fixture = await createBillingLifecycleDb();
+  db = fixture.db;
+  client = fixture.client;
+});
+
+afterAll(async () => {
+  await client?.close();
 });
 
 describe('applyBillingEvent — effectFor type fallback (events with no subscription snapshot)', () => {

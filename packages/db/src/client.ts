@@ -90,6 +90,7 @@ function createDb(): Database {
 
   if (url.startsWith('pglite:')) {
     const client = openPglite(url);
+    closeCached = () => client.close();
     return drizzlePglite(client, { schema: fullSchema }) as unknown as Database;
   }
 
@@ -99,11 +100,13 @@ function createDb(): Database {
   const pgUrl = url.startsWith('neon:') ? url.replace(/^neon:/, 'postgres:') : url;
   // `prepare:false` keeps the client compatible with Neon's pooled (pgbouncer) endpoint.
   const client = postgres(pgUrl, { prepare: false });
+  closeCached = () => client.end();
   return drizzlePostgres(client, { schema: fullSchema });
   /* v8 ignore stop */
 }
 
 let cached: Database | undefined;
+let closeCached: (() => Promise<void>) | undefined;
 
 /** Lazily construct (once) and return the driver-appropriate client. */
 function initDb(): Database {
@@ -125,3 +128,18 @@ export const db: Database = new Proxy({} as Database, {
     return typeof value === 'function' ? (value.bind(real) as unknown) : value;
   },
 });
+
+/**
+ * Close the lazily opened database client and clear the singleton.
+ *
+ * @remarks
+ * Production processes normally keep {@link db} open for their lifetime. Tests and
+ * short-lived scripts need a deterministic teardown path so embedded PGlite workers
+ * and postgres sockets cannot survive past the owning process/task.
+ */
+export async function closeDb(): Promise<void> {
+  const close = closeCached;
+  cached = undefined;
+  closeCached = undefined;
+  if (close) await close();
+}

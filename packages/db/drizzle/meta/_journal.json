@@ -171,17 +171,17 @@
       "breakpoints": true
     },
     {
-      "idx": 17,
+      "idx": 24,
       "version": "7",
       "when": 1783061801936,
-      "tag": "0017_curly_landau",
+      "tag": "0024_curly_landau",
       "breakpoints": true
     },
     {
-      "idx": 18,
+      "idx": 25,
       "version": "7",
       "when": 1783203998080,
-      "tag": "0018_wet_norrin_radd",
+      "tag": "0025_wet_norrin_radd",
       "breakpoints": true
     }
   ]

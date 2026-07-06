@@ -29,6 +29,11 @@
 - **Notes**: Spec written at
   `docs/superpowers/specs/2026-07-06-cross-platform-notification-service-design.md`. User review is
   needed before implementation planning.
+- **Implementation planning update (2026-07-06)**: Created the implementation worktree at
+  `.claude/worktrees/notification-service` on `feature/notification-service`; installed dependencies;
+  verified the baseline with `pnpm typecheck` and
+  `pnpm --filter @docket/api test tests/routes/notifications-inbox.test.ts`; wrote the full
+  milestone plan at `docs/superpowers/plans/2026-07-06-cross-platform-notification-service.md`.
 
 ### [AUTH-SEC-001] Auth security & UX audit remediation
 

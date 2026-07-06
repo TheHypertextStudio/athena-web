@@ -194,6 +194,7 @@ export const notificationType = pgEnum('notification_type', [
   'connector_sync_failed',
   'connector_needs_reauth',
   'automation',
+  'service_announcement',
 ]);
 
 /** Principal kind that created a notification service intent. */

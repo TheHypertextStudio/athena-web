@@ -263,7 +263,7 @@ Cover default web/email behavior, quiet-hours delay, no verified contact point, 
 
 Return channel decisions with explicit suppression reasons. Do not call providers here.
 
-- [ ] **Step 7: Write RED dispatcher web tests**
+- [x] **Step 7: Write RED dispatcher web tests**
 
 Create a system service announcement to one user with `channels: ["web"]`; assert:
 
@@ -274,11 +274,11 @@ Create a system service announcement to one user with `channels: ["web"]`; asser
 - unread count increments,
 - idempotency key prevents duplicate sends.
 
-- [ ] **Step 8: Implement dispatcher and web adapter**
+- [x] **Step 8: Implement dispatcher and web adapter**
 
 Dispatcher coordinates policy, audience, preference, delivery rows, and web adapter. Web adapter writes existing `notification` projection.
 
-- [ ] **Step 9: Verify and commit**
+- [x] **Step 9: Verify and commit**
 
 Run:
 
@@ -287,6 +287,19 @@ pnpm --filter @docket/api test tests/services/notifications
 pnpm --filter @docket/api test tests/routes/notifications-inbox.test.ts
 pnpm typecheck
 ```
+
+Additional focused gates run for the committed slice:
+
+```bash
+pnpm --filter @docket/notifications test
+pnpm --filter @docket/db test tests/notification-service-schema.test.ts
+pnpm lint
+pnpm --filter @docket/api build
+```
+
+Broad-gate note: `pnpm test` was stopped after 11m39s with only `@docket/api:test` still running
+(101 API test files, many PGlite-backed); `pnpm build` was stopped in the unrelated web Next.js
+build tail after API/admin had completed. Those broad gates are not recorded as green for this slice.
 
 Commit:
 

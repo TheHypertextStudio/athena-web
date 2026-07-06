@@ -1,3 +1,4 @@
+import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import {
@@ -54,6 +55,53 @@ describe('POST /me/recovery-codes', () => {
     const sent = outbox[outbox.length - 1]!;
     expect(sent.to).toBe('ivy@example.com');
     expect(sent.subject).toContain('regenerated');
+
+    const [intent] = await db
+      .select()
+      .from(schema.notificationIntent)
+      .where(eq(schema.notificationIntent.subject, sent.subject));
+    expect(intent).toMatchObject({
+      senderType: 'system',
+      category: 'security',
+      priority: 'high',
+      audience: { type: 'user', userId },
+      channels: ['web', 'email'],
+      status: 'sent',
+      createdBy: 'system',
+    });
+
+    const recipients = await db
+      .select()
+      .from(schema.notificationRecipient)
+      .where(eq(schema.notificationRecipient.notificationId, intent!.id));
+    expect(recipients).toMatchObject([{ userId, reason: 'explicit', suppressions: [] }]);
+
+    const deliveries = await db
+      .select()
+      .from(schema.notificationDelivery)
+      .where(eq(schema.notificationDelivery.notificationId, intent!.id));
+    expect(deliveries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ channel: 'web', status: 'sent' }),
+        expect.objectContaining({ channel: 'email', status: 'sent', destinationType: 'email' }),
+      ]),
+    );
+
+    const inboxRows = await db
+      .select()
+      .from(schema.notification)
+      .where(eq(schema.notification.intentId, intent!.id));
+    expect(inboxRows).toMatchObject([
+      {
+        userId,
+        type: 'status_change',
+        readAt: null,
+        body: {
+          title: sent.subject,
+          category: 'security',
+        },
+      },
+    ]);
   });
 
   it('rejects a stale (non-fresh) session with reauth_required', async () => {

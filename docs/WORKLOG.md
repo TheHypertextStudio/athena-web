@@ -94,6 +94,14 @@
   destinations visible to preference resolution. Focused verification: `@docket/api` preference/contact
   route tests plus preference resolver tests, `@docket/api` typecheck, touched-file ESLint,
   `@docket/api` build, and `@docket/notifications` typecheck/lint/test pass.
+- **Email milestone update (2026-07-06)**: Added the email notification adapter over the existing
+  `Mailer` port, with durable delivery status updates for sent, missing-contact, and failed sends.
+  The dispatcher now attempts email deliveries after preference/contact-point resolution while leaving
+  web inbox read state independent from email delivery state. Migrated recovery-code regeneration to
+  dispatch a `security` intent over web and email, preserving the existing email subject/body and
+  materializing the authenticated account email as a contact point before dispatch. Focused validation:
+  `@docket/api` email dispatcher tests and `me-recovery` route tests pass. Remaining Task 5 migrations:
+  account deletion, export-ready, and digest sends.
 
 ### [AUTH-SEC-001] Auth security & UX audit remediation
 

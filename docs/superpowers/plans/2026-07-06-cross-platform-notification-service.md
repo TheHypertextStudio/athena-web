@@ -440,17 +440,21 @@ git commit -m "feat(api): add notification preferences and contact points"
 - Test: `apps/api/tests/services/notifications/dispatcher-email.test.ts`
 - Extend: account/export/recovery/daily-digest route tests
 
-- [ ] **Step 1: Write RED email dispatcher tests**
+- [x] **Step 1: Write RED email dispatcher tests**
 
 Assert email delivery uses `CaptureMailer` in tests, records delivery state, suppresses bounced/no-email contact points, and does not mark web notification read when mail is delivered.
 
-- [ ] **Step 2: Implement email adapter**
+- [x] **Step 2: Implement email adapter**
 
 Use `getContainer().mailer.send({ to, subject, html, text })`. Update delivery status to `sent` after adapter success and `failed` with secret-free errors after adapter failure.
 
 - [ ] **Step 3: Move account/security/export/digest sends through notification intents**
 
 For each flow, preserve existing user-facing email body while adding intent/delivery records. Better Auth-internal flows may keep the direct mail send but should record notification intent/delivery state when the product can observe the event safely.
+
+Progress: recovery-code regeneration now dispatches a `security` notification intent through web
+and email while preserving the existing recovery-code email body. Account deletion, export-ready,
+and digest sends remain to migrate.
 
 - [ ] **Step 4: Verify and commit**
 

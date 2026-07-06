@@ -16,13 +16,12 @@ import {
 import type agentSessionsRouter from '../../src/routes/agent-sessions';
 import type dailyPlanRouter from '../../src/routes/daily-plan';
 import type hubRouter from '../../src/routes/hub';
-import type notificationsRouter from '../../src/routes/notifications';
 import type orgsRouter from '../../src/routes/orgs';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
 let orgs!: typeof orgsRouter;
-let notifications!: typeof notificationsRouter;
+let notifications!: unknown;
 let dailyPlan!: typeof dailyPlanRouter;
 let hub!: typeof hubRouter;
 let agentSessions!: typeof agentSessionsRouter;
@@ -31,7 +30,10 @@ beforeAll(async () => {
   schema = await getDb();
   db = schema.db;
   orgs = (await import('../../src/routes/orgs')).default;
-  notifications = (await import('../../src/routes/notifications')).default;
+  const { createNotificationRouteDependencies } =
+    await import('../../src/services/notifications/dependencies');
+  const { createNotificationsRoutes } = await import('../../src/routes/notifications');
+  notifications = createNotificationsRoutes(createNotificationRouteDependencies());
   dailyPlan = (await import('../../src/routes/daily-plan')).default;
   hub = (await import('../../src/routes/hub')).default;
   agentSessions = (await import('../../src/routes/agent-sessions')).default;

@@ -800,6 +800,15 @@ the schema later if it still feels beneficial.
 
 ### Services
 
+- `NotificationRouteFactories`
+  - Expose curried Hono route construction over injected notification use cases.
+  - Own only transport concerns: validation middleware, session extraction, response schemas, and
+    HTTP error mapping.
+  - Do not import concrete database tables, provider adapters, or dispatchers.
+- `NotificationRouteDependencies`
+  - Wires concrete application services at the API composition boundary.
+  - Keeps dependency direction flowing from routes to use-case interfaces, not from routes to
+    infrastructure.
 - `NotificationIntentService`
   - Validates create/update/send requests.
   - Enforces permissions and category policy.

@@ -8,12 +8,15 @@ import type notificationsRouter from '../../src/routes/notifications';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
-let notifications!: typeof notificationsRouter;
+let notifications!: unknown;
 
 beforeAll(async () => {
   schema = await getDb();
   db = schema.db;
-  notifications = (await import('../../src/routes/notifications')).default;
+  const { createNotificationRouteDependencies } =
+    await import('../../src/services/notifications/dependencies');
+  const { createNotificationsRoutes } = await import('../../src/routes/notifications');
+  notifications = createNotificationsRoutes(createNotificationRouteDependencies());
 });
 
 const MISSING = '01ARZ3NDEKTSV4RRFFQ69G5FAV';

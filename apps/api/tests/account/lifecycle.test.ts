@@ -154,6 +154,35 @@ describe('purgeUser', () => {
       dedupeKey: `d-${Math.random()}`,
     });
     await db.insert(schema.dailyDigest).values({ userId: u, digestDate: '2026-01-01' });
+    await db.insert(schema.contactPoint).values({
+      userId: u,
+      type: 'email',
+      value: 'victim@example.test',
+      valueNormalized: 'victim@example.test',
+      valueMasked: 'v***@example.test',
+      status: 'active',
+      verifiedAt: new Date(NOW),
+    });
+    await db.insert(schema.notificationPreference).values({ userId: u });
+    const intent = one(
+      await db
+        .insert(schema.notificationIntent)
+        .values({
+          senderType: 'system',
+          category: 'service_announcement',
+          audience: { type: 'user', userId: u },
+          channels: ['web'],
+          subject: 'Account purge coverage',
+          body: { text: 'Account purge coverage.' },
+          createdBy: 'system',
+        })
+        .returning({ id: schema.notificationIntent.id }),
+    );
+    await db.insert(schema.notificationRecipient).values({
+      notificationId: intent.id,
+      userId: u,
+      reason: 'explicit',
+    });
 
     await purgeUser(db, u);
 
@@ -173,6 +202,21 @@ describe('purgeUser', () => {
     expect(await db.select().from(schema.event).where(eq(schema.event.userId, u))).toHaveLength(0);
     expect(
       await db.select().from(schema.dailyDigest).where(eq(schema.dailyDigest.userId, u)),
+    ).toHaveLength(0);
+    expect(
+      await db.select().from(schema.contactPoint).where(eq(schema.contactPoint.userId, u)),
+    ).toHaveLength(0);
+    expect(
+      await db
+        .select()
+        .from(schema.notificationPreference)
+        .where(eq(schema.notificationPreference.userId, u)),
+    ).toHaveLength(0);
+    expect(
+      await db
+        .select()
+        .from(schema.notificationRecipient)
+        .where(eq(schema.notificationRecipient.userId, u)),
     ).toHaveLength(0);
     // Personal org purged; co-owned shared org survives.
     expect(

@@ -266,6 +266,9 @@ importers:
       '@docket/mail':
         specifier: workspace:*
         version: link:../../packages/mail
+      '@docket/notifications':
+        specifier: workspace:*
+        version: link:../../packages/notifications
       '@docket/types':
         specifier: workspace:*
         version: link:../../packages/types

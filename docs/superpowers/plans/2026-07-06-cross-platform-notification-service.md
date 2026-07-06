@@ -247,11 +247,11 @@ requiresApproval(input): ApprovalRequirement
 lockedPreference(category): boolean
 ```
 
-- [ ] **Step 3: Write RED audience tests**
+- [x] **Step 3: Write RED audience tests**
 
 Cover explicit user, users, organization active members, all users, and billing-admin segment expansion.
 
-- [ ] **Step 4: Implement audience resolver**
+- [x] **Step 4: Implement audience resolver**
 
 Resolve against Drizzle queries and return immutable recipient inputs with `reason`.
 

@@ -51,6 +51,14 @@
   locks, all-users sender restrictions, security/account sender restrictions, and staff-approval
   detection for multi-recipient SMS sends. Validation: `@docket/notifications`
   test/typecheck/lint pass.
+- **Audience milestone update (2026-07-06)**: Made audience expansion reusable at the notification
+  domain boundary: `@docket/notifications` now owns immutable recipient-input helpers, dedupe, and
+  the role catalog for billing-admin segments; `apps/api` owns only the Drizzle-backed resolver for
+  explicit users, organizations, all users, and operational segments. Validation: narrow
+  `@docket/notifications` audience tests and `@docket/api` audience service tests pass. Full-suite
+  validation exposed the new notification `user_id` tables in the account-purge drift guard; fixed
+  `purgeUser` coverage for contact points, preferences, and notification recipients. Final gate:
+  `pnpm typecheck`, `pnpm lint`, `pnpm test`, and `pnpm build` pass.
 
 ### [AUTH-SEC-001] Auth security & UX audit remediation
 

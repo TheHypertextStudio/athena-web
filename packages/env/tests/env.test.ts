@@ -121,6 +121,8 @@ describe('slices', () => {
     expect(sharedServer.APP_MODE.parse('production')).toBe('production');
     expect(() => sharedServer.API_URL.parse(undefined)).toThrow();
     expect(sharedServer.API_URL.parse('http://localhost:4000')).toBe('http://localhost:4000');
+    expect(() => sharedServer.WEB_URL.parse(undefined)).toThrow();
+    expect(sharedServer.WEB_URL.parse('http://localhost:3000')).toBe('http://localhost:3000');
     expect(() => sharedServer.PORT.parse(undefined)).toThrow();
     expect(sharedServer.PORT.parse('8080')).toBe(8080);
   });
@@ -268,6 +270,29 @@ describe('api composition', () => {
     expect(mod.env.NODE_ENV).toBe('development');
     expect(mod.env.BILLING_ENABLED).toBe(false);
     expect(mod.env.MCP_CIMD_STRICT).toBe(true);
+    expect(mod.env.MCP_ISSUER_URL).toBe('http://localhost:4000');
+    expect(mod.env.MCP_RESOURCE_URL).toBe('http://localhost:4000/mcp');
+    expect(mod.env.OIDC_LOGIN_PAGE_URL).toBe('http://localhost:3000/sign-in');
+  });
+
+  it('derives MCP OAuth URLs from API_URL and WEB_URL while preserving explicit overrides', async () => {
+    stubEnv({
+      ...validApiEnv(),
+      API_URL: 'https://api.example.com/',
+      WEB_URL: 'https://app.example.com/',
+      MCP_ISSUER_URL: 'https://issuer.example.com',
+      OIDC_LOGIN_PAGE_URL: 'https://login.example.com/start',
+    });
+    const mod = await import('../src/api');
+    expect(mod.env.MCP_ISSUER_URL).toBe('https://issuer.example.com');
+    expect(mod.env.MCP_RESOURCE_URL).toBe('https://api.example.com/mcp');
+    expect(mod.env.OIDC_LOGIN_PAGE_URL).toBe('https://login.example.com/start');
+  });
+
+  it('does not derive MCP_ALLOWED_ORIGINS from the base web URL', async () => {
+    stubEnv(validApiEnv());
+    const mod = await import('../src/api');
+    expect(mod.env.MCP_ALLOWED_ORIGINS).toBeUndefined();
   });
 
   it('throws fail-fast when a required var is missing', async () => {

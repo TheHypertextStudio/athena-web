@@ -125,6 +125,33 @@ function appName(env: Environment): string {
   return `Docket (${env})`;
 }
 
+/**
+ * Turn what the user provides for Apple's Sign-in key — a path to the downloaded `.p8`, or pasted
+ * PEM text — into the single-line, `\n`-escaped form `APPLE_PRIVATE_KEY` stores. Unlike GitHub's
+ * key (base64), Apple's is stored with literal `\n` escapes so `generateAppleClientSecret` can
+ * un-escape and parse it directly. An already-escaped value passes through unchanged (idempotent).
+ *
+ * @param raw - What the user typed: a file path, PEM text, or an existing escaped value.
+ * @returns the single-line, `\n`-escaped PEM (or the input unchanged when already escaped).
+ */
+function encodeApplePrivateKeyInput(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return trimmed;
+  // Pasted PEM text → escape its real newlines below.
+  if (trimmed.includes('-----BEGIN')) return trimmed.replace(/\r\n/g, '\n').replace(/\n/g, '\\n');
+  // Otherwise treat it as a path to the downloaded .p8 and read it.
+  try {
+    const path = trimmed.startsWith('~/')
+      ? resolve(process.env['HOME'] ?? '', trimmed.slice(2))
+      : trimmed;
+    const fromFile = readFileSync(path, 'utf8');
+    if (!fromFile.includes('-----BEGIN')) return trimmed; // not a key file → assume already escaped
+    return fromFile.trim().replace(/\r\n/g, '\n').replace(/\n/g, '\\n');
+  } catch {
+    return trimmed; // not a readable path and not PEM → assume already escaped
+  }
+}
+
 export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
   {
     title: 'Google Integration Set-up',
@@ -357,6 +384,41 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
       '5) Keep the app private (untick "Public") unless you intend multi-workspace installs → "Create".',
       '6) Copy the "Client ID" and "Client secret" shown, and paste below.',
     ],
+  },
+  {
+    title: 'Sign in with Apple Integration Set-up (optional)',
+    vars: ['APPLE_CLIENT_ID', 'APPLE_TEAM_ID', 'APPLE_KEY_ID', 'APPLE_PRIVATE_KEY'],
+    instructions: (_env, urls) => [
+      'Adds "Sign in with Apple" as a fourth sign-in option (web only). ~10 min. You need an Apple',
+      'Developer Program membership ($99/yr). Optional — leave every field blank to skip; Docket',
+      'runs fine without it, same as the other social providers.',
+      '',
+      'Apple rejects localhost/non-HTTPS redirect URIs, so — like Google — exercising this locally',
+      'for real needs the cloudflared tunnel + oAuthProxy setup from `pnpm bootstrap` (Phase 1).',
+      '',
+      '1) Open https://developer.apple.com/account/resources/identifiers/list and sign in.',
+      '2) Create an App ID (skip if Docket already has one): "+" → "App IDs" → "App" → choose a',
+      '   Bundle ID → under "Capabilities" tick "Sign in with Apple" → Continue → Register.',
+      '3) Create a Services ID: "+" → "Services IDs" → Description: "Docket" → Identifier, e.g.',
+      '   "com.yourteam.docket" (this becomes APPLE_CLIENT_ID below) → Continue → Register.',
+      '4) Open that Services ID → tick "Sign in with Apple" → "Configure":',
+      '     • Primary App ID: the App ID from step 2.',
+      '     • Domains and Subdomains: the bare domain of your web app (e.g. "app.docket.app").',
+      '     • Return URLs — browser-facing, so one per Docket frontend, exactly, no trailing slash:',
+      ...urls.webBases.map((web) => `         ${web}/api/auth/callback/apple`),
+      '   → Save → Continue → Save on the Services ID itself.',
+      '5) Copy the Services ID identifier from step 3 → that is APPLE_CLIENT_ID.',
+      '6) Note your Team ID — top-right of the Apple Developer site (or Account → Membership), a',
+      '   10-character code → that is APPLE_TEAM_ID.',
+      '7) Create a signing key: left sidebar "Keys" → "+" → Key Name: "Docket Sign in with Apple" →',
+      '   tick "Sign in with Apple" → "Configure" → select the App ID from step 2 → Save → Continue →',
+      '   Register → "Download". Apple shows the .p8 file ONCE — save it now, it cannot be re-downloaded.',
+      '8) Note the Key ID shown on that same page (10 characters) → that is APPLE_KEY_ID.',
+      '',
+      'Paste below: the Services ID identifier, the Team ID, the Key ID, and for the private key —',
+      'either the path to the downloaded .p8 file or the pasted key text (Docket formats it for you).',
+    ],
+    transform: { APPLE_PRIVATE_KEY: encodeApplePrivateKeyInput },
   },
   {
     title: 'Slack Integration Set-up',

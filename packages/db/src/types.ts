@@ -154,6 +154,113 @@ export interface NotificationBody {
   readonly [key: string]: unknown;
 }
 
+/** Delivery channels supported by the notification service. */
+export type NotificationServiceChannel = 'web' | 'email' | 'sms' | 'push';
+/** Notification-service categories that drive policy and preferences. */
+export type NotificationServiceCategory =
+  | 'security'
+  | 'account'
+  | 'service_announcement'
+  | 'workflow'
+  | 'digest'
+  | 'billing'
+  | 'marketing';
+/** Why a recipient was included in a notification intent. */
+export type NotificationRecipientReason =
+  | 'explicit'
+  | 'org_member'
+  | 'segment_match'
+  | 'owner'
+  | 'assignee';
+/** Why a delivery was suppressed or delayed. */
+export type NotificationSuppressionReason =
+  | 'user_disabled_channel'
+  | 'quiet_hours'
+  | 'no_verified_contact_point'
+  | 'contact_point_bounced'
+  | 'user_unsubscribed'
+  | 'category_disallows_channel'
+  | 'staff_approval_missing'
+  | 'duplicate_idempotency_key'
+  | 'legal_suppression';
+
+/** Audience selector persisted on a notification intent. */
+export type NotificationAudience =
+  | { readonly type: 'user'; readonly userId: string }
+  | { readonly type: 'users'; readonly userIds: readonly string[] }
+  | { readonly type: 'organization'; readonly organizationId: string }
+  | { readonly type: 'all_users' }
+  | {
+      readonly type: 'segment';
+      readonly segment:
+        | 'active_users'
+        | 'trial_users'
+        | 'billing_admins'
+        | 'users_with_bounced_email'
+        | 'users_without_verified_phone';
+    };
+
+/** Text/html content persisted on a notification intent. */
+export interface NotificationContent {
+  /** Plain text content for email/SMS/push fallbacks. */
+  readonly text?: string;
+  /** HTML content for email-capable destinations. */
+  readonly html?: string;
+  /** Additional channel-specific rendering metadata. */
+  readonly [key: string]: unknown;
+}
+
+/** Quiet-hours preference window. */
+export interface NotificationQuietHours {
+  /** Whether the quiet-hours window is active. */
+  readonly enabled: boolean;
+  /** Local start time in HH:MM. */
+  readonly start: string;
+  /** Local end time in HH:MM. */
+  readonly end: string;
+  /** Days where the quiet-hours window applies. */
+  readonly days: readonly ('mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun')[];
+  /** Whether urgent notifications can bypass quiet hours. */
+  readonly allowUrgent?: boolean;
+}
+
+/** Channel preferences for one notification category. */
+export interface NotificationChannelPreference {
+  readonly web?: boolean;
+  readonly email?: boolean;
+  readonly sms?: boolean;
+  readonly push?: boolean;
+  readonly locked?: boolean;
+}
+
+/** Preference map keyed by notification category. */
+export type NotificationCategoryPreferences = Record<string, NotificationChannelPreference>;
+/** Per-organization preference map keyed by organization id, then category. */
+export type NotificationOrganizationPreferences = Record<string, NotificationCategoryPreferences>;
+
+/** One suppression attached to a recipient or delivery decision. */
+export interface NotificationSuppression {
+  /** Suppression reason. */
+  readonly reason: NotificationSuppressionReason;
+  /** Channel affected by the suppression, when channel-specific. */
+  readonly channel?: NotificationServiceChannel;
+  /** Human-readable operational detail. */
+  readonly detail?: string;
+}
+
+/** Channel destination metadata. */
+export interface NotificationDestination {
+  /** Masked destination shown in operational views. */
+  readonly valueMasked?: string;
+  /** Contact point used for the delivery, when applicable. */
+  readonly contactPointId?: string;
+  /** Additional destination metadata. */
+  readonly [key: string]: unknown;
+}
+
+/** Secret-free provider payload metadata retained for audit/debugging. */
+export type NotificationProviderPayload = Record<string, unknown>;
+
 // The canonical event jsonb shapes (`event.actor`/`event.entity`/`event.detail`,
 // `daily_digest.stats`) are owned by `@docket/types` — the `event` substrate's contract.
 // We re-export them as the schema's `$type` shapes rather than re-mirroring, so the column

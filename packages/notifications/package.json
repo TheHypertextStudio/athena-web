@@ -7,7 +7,8 @@
   "description": "Docket notifications domain — schemas, policy, delivery orchestration, inbox state, and provider event handling.",
   "exports": {
     ".": "./src/index.ts",
-    "./schemas": "./src/schemas/index.ts"
+    "./schemas": "./src/schemas/index.ts",
+    "./testing": "./src/testing/index.ts"
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",

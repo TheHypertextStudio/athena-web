@@ -170,15 +170,15 @@ The initial create body must support:
 }
 ```
 
-- [ ] **Step 3: Add database enums and JSON shapes**
+- [x] **Step 3: Add database enums and JSON shapes**
 
 Add enum values that directly match the DTO literals so Drizzle row types align with Zod outputs.
 
-- [ ] **Step 4: Add database tables**
+- [x] **Step 4: Add database tables**
 
 Add the new notification service tables in `crosscutting.ts`. Keep existing `notification` unchanged in this task except for nullable intent/delivery linkage only if Drizzle can generate a clean migration.
 
-- [ ] **Step 5: Generate and inspect migration**
+- [x] **Step 5: Generate and inspect migration**
 
 Run:
 
@@ -188,7 +188,7 @@ pnpm db:generate
 
 Expected: one new migration file and updated Drizzle metadata. Inspect the SQL for destructive operations. No existing notification rows should be dropped or rewritten.
 
-- [ ] **Step 6: Verify**
+- [x] **Step 6: Verify**
 
 Run:
 
@@ -201,7 +201,7 @@ pnpm --filter @docket/db typecheck
 pnpm --filter @docket/api test tests/routes/notifications-inbox.test.ts
 ```
 
-- [ ] **Step 7: Document and commit**
+- [x] **Step 7: Document and commit**
 
 Update `docs/WORKLOG.md` under `[NOTIF-SPEC-001]` with the schema milestone. Commit:
 

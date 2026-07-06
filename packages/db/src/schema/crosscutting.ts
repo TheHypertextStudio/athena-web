@@ -25,6 +25,8 @@ import {
   attachmentSubjectType,
   auditEventType,
   auditSubjectType,
+  contactPointStatus,
+  contactPointType,
   commentSubjectType,
   emailSuggestionStatus,
   externalActorMatch,
@@ -37,6 +39,16 @@ import {
   integrationPattern,
   integrationRole,
   integrationStatus,
+  notificationCategory,
+  notificationChannel,
+  notificationDeliveryStatus,
+  notificationDestinationType,
+  notificationInboundEventKind,
+  notificationIntentStatus,
+  notificationPriority,
+  notificationRecipientReason,
+  notificationReplyPolicy,
+  notificationSenderType,
   notificationType,
   resourceKind,
   syncMode,
@@ -51,7 +63,15 @@ import { genId } from '../id';
 import type {
   GrantCapability,
   IntegrationConnection,
+  NotificationAudience,
   NotificationBody,
+  NotificationCategoryPreferences,
+  NotificationContent,
+  NotificationDestination,
+  NotificationOrganizationPreferences,
+  NotificationProviderPayload,
+  NotificationQuietHours,
+  NotificationSuppression,
   ViewFilter,
   ViewGrouping,
   ViewSort,
@@ -160,11 +180,174 @@ export const dailyPlanItem = pgTable(
   (t) => [index('daily_plan_item_hub_date_idx').on(t.hubId, t.date)],
 );
 
+/** Durable product intent for one cross-platform notification send. */
+export const notificationIntent = pgTable(
+  'notification_intent',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    senderType: notificationSenderType('sender_type').notNull(),
+    senderId: text('sender_id'),
+    organizationId: text('organization_id').references(() => organization.id, {
+      onDelete: 'set null',
+    }),
+    category: notificationCategory('category').notNull(),
+    priority: notificationPriority('priority').notNull().default('normal'),
+    audience: jsonb('audience').$type<NotificationAudience>().notNull(),
+    channels: notificationChannel('channels').array().notNull(),
+    subject: text('subject').notNull(),
+    body: jsonb('body').$type<NotificationContent>().notNull(),
+    replyPolicy: notificationReplyPolicy('reply_policy').notNull().default('none'),
+    status: notificationIntentStatus('status').notNull().default('draft'),
+    scheduledAt: timestamp('scheduled_at'),
+    idempotencyKey: text('idempotency_key'),
+    createdBy: text('created_by').notNull(),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at')
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    index('notification_intent_org_idx').on(t.organizationId, t.createdAt),
+    index('notification_intent_status_scheduled_idx').on(t.status, t.scheduledAt),
+    uniqueIndex('notification_intent_idempotency_uq')
+      .on(t.idempotencyKey)
+      .where(sql`${t.idempotencyKey} is not null`),
+  ],
+);
+
+/** Immutable recipient snapshot for one notification intent. */
+export const notificationRecipient = pgTable(
+  'notification_recipient',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    notificationId: text('notification_id')
+      .notNull()
+      .references(() => notificationIntent.id, { onDelete: 'cascade' }),
+    userId: text('user_id').notNull(),
+    organizationId: text('organization_id').references(() => organization.id, {
+      onDelete: 'set null',
+    }),
+    reason: notificationRecipientReason('reason').notNull(),
+    suppressions: jsonb('suppressions').$type<NotificationSuppression[]>().notNull().default([]),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    index('notification_recipient_user_idx').on(t.userId, t.createdAt),
+    uniqueIndex('notification_recipient_user_uq').on(t.notificationId, t.userId),
+  ],
+);
+
+/** One per-channel delivery attempt for a notification recipient. */
+export const notificationDelivery = pgTable(
+  'notification_delivery',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    notificationId: text('notification_id')
+      .notNull()
+      .references(() => notificationIntent.id, { onDelete: 'cascade' }),
+    recipientId: text('recipient_id')
+      .notNull()
+      .references(() => notificationRecipient.id, { onDelete: 'cascade' }),
+    channel: notificationChannel('channel').notNull(),
+    destinationType: notificationDestinationType('destination_type').notNull(),
+    destination: jsonb('destination').$type<NotificationDestination>().notNull().default({}),
+    status: notificationDeliveryStatus('status').notNull().default('queued'),
+    providerMessageId: text('provider_message_id'),
+    providerPayload: jsonb('provider_payload')
+      .$type<NotificationProviderPayload>()
+      .notNull()
+      .default({}),
+    errorCode: text('error_code'),
+    errorMessage: text('error_message'),
+    sentAt: timestamp('sent_at'),
+    deliveredAt: timestamp('delivered_at'),
+    readAt: timestamp('read_at'),
+    actedAt: timestamp('acted_at'),
+  },
+  (t) => [
+    index('notification_delivery_intent_idx').on(t.notificationId),
+    index('notification_delivery_recipient_idx').on(t.recipientId),
+    index('notification_delivery_status_idx').on(t.status),
+    uniqueIndex('notification_delivery_channel_uq').on(t.recipientId, t.channel),
+  ],
+);
+
+/** Per-user notification preferences, including org-scoped overrides. */
+export const notificationPreference = pgTable('notification_preference', {
+  userId: text('user_id').primaryKey(),
+  timezone: text('timezone').notNull().default('UTC'),
+  quietHours: jsonb('quiet_hours').$type<NotificationQuietHours>(),
+  categories: jsonb('categories').$type<NotificationCategoryPreferences>().notNull().default({}),
+  organizations: jsonb('organizations')
+    .$type<NotificationOrganizationPreferences>()
+    .notNull()
+    .default({}),
+  updatedAt: timestamp('updated_at')
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
+
+/** User-owned destination used by email, phone/SMS, and future push deliveries. */
+export const contactPoint = pgTable(
+  'contact_point',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    userId: text('user_id').notNull(),
+    type: contactPointType('type').notNull(),
+    value: text('value').notNull(),
+    valueNormalized: text('value_normalized').notNull(),
+    valueMasked: text('value_masked').notNull(),
+    status: contactPointStatus('status').notNull().default('pending'),
+    primary: boolean('primary').notNull().default(false),
+    verificationCodeHash: text('verification_code_hash'),
+    verifiedAt: timestamp('verified_at'),
+    disabledAt: timestamp('disabled_at'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at')
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    index('contact_point_user_idx').on(t.userId),
+    uniqueIndex('contact_point_user_value_uq').on(t.userId, t.type, t.valueNormalized),
+  ],
+);
+
+/** Normalized inbound provider callback or user reply event. */
+export const notificationInboundEvent = pgTable(
+  'notification_inbound_event',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    notificationId: text('notification_id').references(() => notificationIntent.id, {
+      onDelete: 'set null',
+    }),
+    deliveryId: text('delivery_id').references(() => notificationDelivery.id, {
+      onDelete: 'set null',
+    }),
+    channel: notificationChannel('channel').notNull(),
+    kind: notificationInboundEventKind('kind').notNull(),
+    from: text('from'),
+    payload: jsonb('payload').$type<NotificationProviderPayload>().notNull().default({}),
+    receivedAt: timestamp('received_at').notNull().defaultNow(),
+  },
+  (t) => [
+    index('notification_inbound_event_intent_idx').on(t.notificationId, t.receivedAt),
+    index('notification_inbound_event_delivery_idx').on(t.deliveryId, t.receivedAt),
+  ],
+);
+
 /** A cross-org notification surfaced in the Hub inbox; `userId` is the recipient. */
 export const notification = pgTable(
   'notification',
   {
     id: text('id').primaryKey().$defaultFn(genId),
+    intentId: text('intent_id').references(() => notificationIntent.id, { onDelete: 'set null' }),
+    deliveryId: text('delivery_id').references(() => notificationDelivery.id, {
+      onDelete: 'set null',
+    }),
     userId: text('user_id').notNull(),
     organizationId: text('organization_id').references(() => organization.id, {
       onDelete: 'cascade',

@@ -195,6 +195,111 @@ export const notificationType = pgEnum('notification_type', [
   'connector_needs_reauth',
   'automation',
 ]);
+
+/** Principal kind that created a notification service intent. */
+export const notificationSenderType = pgEnum('notification_sender_type', [
+  'system',
+  'staff',
+  'org',
+  'automation',
+]);
+/** Product notification category, used for policy and preferences. */
+export const notificationCategory = pgEnum('notification_category', [
+  'security',
+  'account',
+  'service_announcement',
+  'workflow',
+  'digest',
+  'billing',
+  'marketing',
+]);
+/** Delivery urgency lane. */
+export const notificationPriority = pgEnum('notification_priority', [
+  'low',
+  'normal',
+  'high',
+  'urgent',
+]);
+/** Cross-platform delivery channel. */
+export const notificationChannel = pgEnum('notification_channel', ['web', 'email', 'sms', 'push']);
+/** Durable notification intent lifecycle. */
+export const notificationIntentStatus = pgEnum('notification_intent_status', [
+  'draft',
+  'scheduled',
+  'queued',
+  'sending',
+  'sent',
+  'partially_failed',
+  'failed',
+  'canceled',
+]);
+/** Reply routing policy for inbound email/SMS replies. */
+export const notificationReplyPolicy = pgEnum('notification_reply_policy', [
+  'none',
+  'staff_inbox',
+  'org_admins',
+  'automation',
+]);
+/** Why a user belongs to a recipient snapshot. */
+export const notificationRecipientReason = pgEnum('notification_recipient_reason', [
+  'explicit',
+  'org_member',
+  'segment_match',
+  'owner',
+  'assignee',
+]);
+/** Why a channel delivery was suppressed or delayed. */
+export const notificationSuppressionReason = pgEnum('notification_suppression_reason', [
+  'user_disabled_channel',
+  'quiet_hours',
+  'no_verified_contact_point',
+  'contact_point_bounced',
+  'user_unsubscribed',
+  'category_disallows_channel',
+  'staff_approval_missing',
+  'duplicate_idempotency_key',
+  'legal_suppression',
+]);
+/** Channel-specific destination kind. */
+export const notificationDestinationType = pgEnum('notification_destination_type', [
+  'in_app',
+  'email',
+  'phone',
+  'push_token',
+]);
+/** Per-channel delivery lifecycle. */
+export const notificationDeliveryStatus = pgEnum('notification_delivery_status', [
+  'suppressed',
+  'queued',
+  'sent',
+  'delivered',
+  'read',
+  'acted',
+  'failed',
+  'bounced',
+  'complained',
+]);
+/** User-owned notification destination kind. */
+export const contactPointType = pgEnum('contact_point_type', ['email', 'phone', 'push_token']);
+/** User-owned notification destination state. */
+export const contactPointStatus = pgEnum('contact_point_status', [
+  'pending',
+  'active',
+  'disabled',
+  'bounced',
+  'unsubscribed',
+]);
+/** Normalized provider callback or user reply event kind. */
+export const notificationInboundEventKind = pgEnum('notification_inbound_event_kind', [
+  'delivered',
+  'opened',
+  'clicked',
+  'bounced',
+  'complained',
+  'replied',
+  'unsubscribed',
+  'action',
+]);
 /** Audit-feed subject kinds; `agent` is a first-class subject (frozen). */
 export const auditSubjectType = pgEnum('audit_subject_type', [
   'organization',

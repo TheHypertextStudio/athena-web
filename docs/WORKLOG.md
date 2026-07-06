@@ -59,6 +59,13 @@
   validation exposed the new notification `user_id` tables in the account-purge drift guard; fixed
   `purgeUser` coverage for contact points, preferences, and notification recipients. Final gate:
   `pnpm typecheck`, `pnpm lint`, `pnpm test`, and `pnpm build` pass.
+- **Preference milestone update (2026-07-06)**: Added reusable notification preference helpers in
+  `@docket/notifications` for category/channel defaults, locked-category behavior, organization
+  overrides, and timezone-aware quiet-hours checks. Added the API preference resolver for
+  per-recipient channel decisions, contact-point destination selection, quiet-hours delays, bounced
+  destinations, missing verified contact points, locked security delivery, and explicit opt-outs.
+  Final gate: notification service tests, inbox route tests, `pnpm typecheck`, `pnpm lint`,
+  `pnpm test`, and `pnpm build` pass.
 
 ### [AUTH-SEC-001] Auth security & UX audit remediation
 

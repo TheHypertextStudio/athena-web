@@ -255,11 +255,11 @@ Cover explicit user, users, organization active members, all users, and billing-
 
 Resolve against Drizzle queries and return immutable recipient inputs with `reason`.
 
-- [ ] **Step 5: Write RED preference tests**
+- [x] **Step 5: Write RED preference tests**
 
 Cover default web/email behavior, quiet-hours delay, no verified contact point, bounced contact point, locked security category, and explicit user opt-out.
 
-- [ ] **Step 6: Implement preference resolver**
+- [x] **Step 6: Implement preference resolver**
 
 Return channel decisions with explicit suppression reasons. Do not call providers here.
 

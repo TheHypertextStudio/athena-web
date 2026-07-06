@@ -801,14 +801,14 @@ the schema later if it still feels beneficial.
 ### Services
 
 - `NotificationRouteFactories`
-  - Expose curried Hono route construction over injected notification use cases.
+  - Expose Hono route constructors that receive notification services as direct positional
+    arguments.
   - Own only transport concerns: validation middleware, session extraction, response schemas, and
     HTTP error mapping.
   - Do not import concrete database tables, provider adapters, or dispatchers.
-- `NotificationRouteDependencies`
-  - Wires concrete application services at the API composition boundary.
-  - Keeps dependency direction flowing from routes to use-case interfaces, not from routes to
-    infrastructure.
+- `NotificationServices`
+  - Encapsulate concrete DB-backed inbox and intent behavior.
+  - Are constructed at API/test composition points and passed directly into route constructors.
 - `NotificationIntentService`
   - Validates create/update/send requests.
   - Enforces permissions and category policy.

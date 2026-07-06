@@ -30,10 +30,14 @@ beforeAll(async () => {
   schema = await getDb();
   db = schema.db;
   orgs = (await import('../../src/routes/orgs')).default;
-  const { createNotificationRouteDependencies } =
-    await import('../../src/services/notifications/dependencies');
+  const { NotificationInboxService } = await import('../../src/services/notifications/inbox');
+  const { NotificationIntentService } =
+    await import('../../src/services/notifications/intent-service');
   const { createNotificationsRoutes } = await import('../../src/routes/notifications');
-  notifications = createNotificationsRoutes(createNotificationRouteDependencies());
+  notifications = createNotificationsRoutes(
+    new NotificationInboxService(db),
+    new NotificationIntentService(db),
+  );
   dailyPlan = (await import('../../src/routes/daily-plan')).default;
   hub = (await import('../../src/routes/hub')).default;
   agentSessions = (await import('../../src/routes/agent-sessions')).default;

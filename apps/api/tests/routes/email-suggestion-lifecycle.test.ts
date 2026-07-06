@@ -81,6 +81,13 @@ describe('sweepEmailSuggestionLifecycle', () => {
       EXPIRE_PENDING_AFTER_DAYS + 1,
     );
     const recentAccepted = await seedSuggestionAt(orgId, integ.id, 't-acc', 'accepted', 30);
+    const edgeResolved = await seedSuggestionAt(
+      orgId,
+      integ.id,
+      't-edge-resolved',
+      'dismissed',
+      PURGE_RESOLVED_AFTER_DAYS, // exactly at the boundary: NOT purged (strictly older only)
+    );
     const ancientDismissed = await seedSuggestionAt(
       orgId,
       integ.id,
@@ -99,6 +106,7 @@ describe('sweepEmailSuggestionLifecycle', () => {
     expect((await byId(edgePending))?.status).toBe('pending');
     expect((await byId(stalePending))?.status).toBe('expired');
     expect((await byId(recentAccepted))?.status).toBe('accepted');
+    expect((await byId(edgeResolved))?.status).toBe('dismissed'); // still present, not purged
     expect(await byId(ancientDismissed)).toBeUndefined(); // hard-deleted
 
     // Idempotent: a second run finds nothing new.

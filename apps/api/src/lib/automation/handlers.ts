@@ -333,16 +333,25 @@ export function buildAutomationRegistry(deps: HandlerDeps): Registry {
         actorId = rows[0]?.createdBy ?? undefined;
       }
       if (actorId === undefined) return;
-      const result = await acceptSuggestion({
-        organizationId: event.organizationId,
-        suggestionId: event.subjectId,
-        actorId,
-        overrides: {},
-      });
-      if (result.kind !== 'accepted') {
-        console.warn('[automation] suggestion.autoAccept skipped', {
+      try {
+        const result = await acceptSuggestion({
+          organizationId: event.organizationId,
           suggestionId: event.subjectId,
-          outcome: result.kind,
+          actorId,
+          overrides: {},
+        });
+        if (result.kind !== 'accepted') {
+          console.warn('[automation] suggestion.autoAccept skipped', {
+            suggestionId: event.subjectId,
+            outcome: result.kind,
+          });
+        }
+      } catch (error) {
+        // A malformed suggestion row (e.g. missing externalUrl) is a data problem, not a reason
+        // to abort every other rule/action matching this event — mirrors task.setStatus above.
+        console.warn('[automation] suggestion.autoAccept failed', {
+          suggestionId: event.subjectId,
+          error,
         });
       }
     },

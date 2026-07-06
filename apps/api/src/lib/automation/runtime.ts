@@ -24,7 +24,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 
 import { db, integration } from '@docket/db';
 import type { ConnectorProvider } from '@docket/boundaries';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
 import { connectorFor, resolveConnectorToken } from '../../routes/integration-provider';
 import { runAutomations } from './engine';
@@ -40,9 +40,17 @@ import { loadEnabledRules } from './rules-store';
  * @remarks
  * Resolves the OAuth token via {@link resolveConnectorToken} (the `'mock'` sentinel in
  * local/test → the record-only mock connector). A non-mail connector or missing capability is
- * a silent no-op — the action simply doesn't happen.
+ * a silent no-op — the action simply doesn't happen. The integration lookup is scoped to the
+ * firing event's `organizationId` — an attachment whose `sourceIntegrationId` was made to point
+ * at another org's integration (a data-integrity bug elsewhere) must never let this org's
+ * automation rules mutate that org's mailbox.
  */
-export const defaultMailApplier: MailApplier = async ({ integrationId, threadId, action }) => {
+export const defaultMailApplier: MailApplier = async ({
+  organizationId,
+  integrationId,
+  threadId,
+  action,
+}) => {
   const rows = await db
     .select({
       provider: integration.provider,
@@ -50,10 +58,16 @@ export const defaultMailApplier: MailApplier = async ({ integrationId, threadId,
       account: integration.externalAccountId,
     })
     .from(integration)
-    .where(eq(integration.id, integrationId))
+    .where(and(eq(integration.id, integrationId), eq(integration.organizationId, organizationId)))
     .limit(1);
   const row = rows[0];
-  if (!row?.createdBy) return;
+  if (!row?.createdBy) {
+    console.warn('[automation] mail action skipped: integration not found in org', {
+      organizationId,
+      integrationId,
+    });
+    return;
+  }
   const provider = row.provider as ConnectorProvider;
   const token = await resolveConnectorToken(row.createdBy, provider, row.account);
   if (!token.ok) {

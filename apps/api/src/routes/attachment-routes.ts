@@ -11,7 +11,7 @@
  * tenant boundary for the whole router. Reads require org membership; mutations require
  * `contribute`, matching the tasks router.
  */
-import { attachment, db, genId } from '@docket/db';
+import { attachment, db, genId, integration } from '@docket/db';
 import { AttachmentCreate, AttachmentOut, AttachmentRemoved, pageOf } from '@docket/types';
 import { and, asc, eq, isNull } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -148,6 +148,23 @@ The \`kind\` determines the required fields, enforced at the schema edge: a \`ur
       const { id } = c.req.valid('param');
       const inputBody = c.req.valid('json');
       await loadTask(orgId, id);
+
+      // An `email` attachment's sourceIntegrationId is caller-supplied — without this check a
+      // task in this org could point at another org's integration, and a later mail.* automation
+      // action would resolve and mutate that org's real mailbox using its owner's OAuth grant.
+      if (inputBody.kind === 'email') {
+        const [integrationRow] = await db
+          .select({ id: integration.id })
+          .from(integration)
+          .where(
+            and(
+              eq(integration.id, inputBody.sourceIntegrationId ?? ''),
+              eq(integration.organizationId, orgId),
+            ),
+          )
+          .limit(1);
+        if (!integrationRow) throw new NotFoundError('Integration not found');
+      }
 
       const inserted = await db
         .insert(attachment)

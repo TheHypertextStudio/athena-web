@@ -1,11 +1,11 @@
 import { eq } from 'drizzle-orm';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
 import { getDb, one, seedBaseOrg } from './harness.test';
 import { buildAutomationRegistry, type MailApplier } from '../../src/lib/automation/handlers';
-import { runAutomationsForEvent } from '../../src/lib/automation/runtime';
+import { defaultMailApplier, runAutomationsForEvent } from '../../src/lib/automation/runtime';
 import { loadEnabledRules, seedDefaultAutomationRules } from '../../src/lib/automation/rules-store';
 
 let schema!: typeof DbModule;
@@ -186,6 +186,49 @@ describe('automation engine over DB rules', () => {
   });
 });
 
+describe('defaultMailApplier org-scoping (security)', () => {
+  it('no-ops and warns rather than acting on an integration owned by a different org', async () => {
+    const orgA = await seedTaskWithEmail();
+    const orgB = await seedTaskWithEmail();
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    await expect(
+      defaultMailApplier({
+        organizationId: orgA.orgId,
+        integrationId: orgB.integrationId, // belongs to a different org than organizationId
+        threadId: 'thread_xyz',
+        action: { kind: 'archive' },
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[automation] mail action skipped: integration not found in org',
+      { organizationId: orgA.orgId, integrationId: orgB.integrationId },
+    );
+    warnSpy.mockRestore();
+  });
+
+  it('proceeds without the not-found warning when the integration belongs to the firing org', async () => {
+    const { orgId, integrationId } = await seedTaskWithEmail();
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    await expect(
+      defaultMailApplier({
+        organizationId: orgId,
+        integrationId,
+        threadId: 'thread_xyz',
+        action: { kind: 'archive' },
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(warnSpy).not.toHaveBeenCalledWith(
+      '[automation] mail action skipped: integration not found in org',
+      expect.anything(),
+    );
+    warnSpy.mockRestore();
+  });
+});
+
 describe('generic action handlers (M5)', () => {
   /** Run one event through the real registry with a recording mail applier. */
   async function fire(
@@ -235,6 +278,48 @@ describe('generic action handlers (M5)', () => {
     expect(row.completedAt).not.toBeNull();
   });
 
+  it('the depth-1 cascade cap holds through the REAL production path: a handler-triggered emitEvent does not re-fire rules', async () => {
+    // Unlike the ALS-primitive test in runtime's own test file, this exercises the actual
+    // production chain: task.setStatus -> setTaskState -> the real emitEvent -> re-entrant
+    // runAutomationsForEvent. A regression here (e.g. the mutation becoming fire-and-forget,
+    // decoupled from the awaited automationDispatch.run scope) would let the internally-
+    // emitted 'completed' event trigger a second rule pass.
+    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const [u] = await db
+      .insert(schema.user)
+      .values({ name: 'Ada', email: `cascade-${Date.now().toString()}@example.com` })
+      .returning({ id: schema.user.id });
+    const actorRow = one(
+      await db
+        .insert(schema.actor)
+        .values({ organizationId: orgId, kind: 'human', displayName: 'Ada', userId: u!.id })
+        .returning({ id: schema.actor.id }),
+    );
+    const t = await seedTask(orgId, teamId, actorRow.id);
+
+    // Rule 1 fires on the initiating 'created' event and transitions the task to a terminal
+    // state — internally emitting 'completed' through the real emitEvent facade.
+    await addRule(orgId, { kind: 'created', subjectType: 'task' }, [
+      { type: 'task.setStatus', params: { state: 'done' } },
+    ]);
+    // Rule 2 would fire on that internally-emitted 'completed' event, IF the cascade cap didn't
+    // suppress it.
+    await addRule(orgId, { kind: 'completed', subjectType: 'task' }, [
+      { type: 'notification.send', params: { to: 'actor', title: 'Task completed' } },
+    ]);
+
+    await fire(orgId, { subjectType: 'task', subjectId: t.id, actorId: actorRow.id });
+
+    const row = one(await db.select().from(schema.task).where(eq(schema.task.id, t.id)));
+    expect(row.state).toBe('done'); // rule 1 ran
+
+    const notifications = await db
+      .select()
+      .from(schema.notification)
+      .where(eq(schema.notification.userId, u!.id));
+    expect(notifications).toHaveLength(0); // rule 2 was suppressed by the depth-1 cap
+  });
+
   it('task.setStatus with an unknown state key is a logged no-op, never a throw', async () => {
     const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
     const t = await seedTask(orgId, teamId, humanActorId);
@@ -273,8 +358,9 @@ describe('generic action handlers (M5)', () => {
     expect(row.priority).toBe('urgent');
   });
 
-  it('task.applyLabel attaches an org label idempotently', async () => {
+  it('task.applyLabel attaches an org label idempotently and refuses a cross-tenant one', async () => {
     const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const other = await seedBaseOrg(db, schema); // a different org's label
     const t = await seedTask(orgId, teamId, humanActorId);
     const labelRow = one(
       await db
@@ -282,7 +368,14 @@ describe('generic action handlers (M5)', () => {
         .values({ organizationId: orgId, name: 'automated', color: '#00aa55' })
         .returning({ id: schema.label.id }),
     );
+    const otherOrgLabel = one(
+      await db
+        .insert(schema.label)
+        .values({ organizationId: other.orgId, name: 'foreign', color: '#aa0055' })
+        .returning({ id: schema.label.id }),
+    );
     await addRule(orgId, { kind: 'created', subjectType: 'task' }, [
+      { type: 'task.applyLabel', params: { labelId: otherOrgLabel.id } }, // cross-tenant: no-op
       { type: 'task.applyLabel', params: { labelId: labelRow.id } },
     ]);
     await fire(orgId, { subjectType: 'task', subjectId: t.id });
@@ -384,5 +477,81 @@ describe('generic action handlers (M5)', () => {
     expect(att).toHaveLength(1);
     expect(att[0]?.kind).toBe('email');
     expect(att[0]?.url).toBe('https://mail.mock.docket.local/#all/auto-accept-thread');
+  });
+
+  it('a throwing suggestion.autoAccept does not abort a sibling rule matching the same event', async () => {
+    // Regression test: acceptSuggestion throws when emailMeta.externalUrl is missing (a
+    // data-integrity guard). Before the fix, that throw escaped the handler and aborted the
+    // engine's rule loop entirely, silently skipping every other rule for the same event.
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const [u] = await db
+      .insert(schema.user)
+      .values({ name: 'Ada', email: `ada-isolation-${Date.now().toString()}@example.com` })
+      .returning({ id: schema.user.id });
+    const actorRow = one(
+      await db
+        .insert(schema.actor)
+        .values({ organizationId: orgId, kind: 'human', displayName: 'Ada', userId: u!.id })
+        .returning({ id: schema.actor.id }),
+    );
+    const integ = one(
+      await db
+        .insert(schema.integration)
+        .values({
+          organizationId: orgId,
+          provider: 'gmail',
+          pattern: 'connector',
+          roles: ['signal'],
+          createdBy: humanActorId,
+        })
+        .returning({ id: schema.integration.id }),
+    );
+    const suggestion = one(
+      await db
+        .insert(schema.emailSuggestion)
+        .values({
+          organizationId: orgId,
+          createdBy: humanActorId,
+          integrationId: integ.id,
+          externalThreadId: 'broken-meta-thread',
+          title: 'Missing its externalUrl',
+          emailMeta: { subject: 'No url stamped' }, // no externalUrl -> acceptSuggestion throws
+        })
+        .returning(),
+    );
+
+    // Ordered so the throwing rule fires first — proves it doesn't poison the loop for the rule
+    // that comes after it.
+    await addRule(orgId, { kind: 'created', subjectType: 'email_suggestion' }, [
+      { type: 'suggestion.autoAccept', params: {} },
+    ]);
+    await addRule(orgId, { kind: 'created', subjectType: 'email_suggestion' }, [
+      { type: 'notification.send', params: { to: 'actor', title: 'A suggestion arrived' } },
+    ]);
+
+    await expect(
+      fire(orgId, {
+        subjectType: 'email_suggestion',
+        subjectId: suggestion.id,
+        actorId: actorRow.id,
+      }),
+    ).resolves.toBeUndefined();
+
+    // autoAccept failed — the suggestion is untouched, not accepted.
+    const updated = one(
+      await db
+        .select()
+        .from(schema.emailSuggestion)
+        .where(eq(schema.emailSuggestion.id, suggestion.id)),
+    );
+    expect(updated.status).toBe('pending');
+
+    // The sibling rule still ran despite the first rule's handler throwing internally.
+    const rows = await db
+      .select()
+      .from(schema.notification)
+      .where(eq(schema.notification.userId, u!.id));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.body).toMatchObject({ title: 'A suggestion arrived' });
   });
 });

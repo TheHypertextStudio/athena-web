@@ -78,6 +78,29 @@ adding a provider to the union is a compile error until every site is filled.
 Cursor **storage** is the integration's `sync_state` jsonb (M3), written only while the
 sync lease is held (see `integration-sync.md`, M4).
 
+### 4.1 Never advance a cursor past un-fetched data
+
+Both clients bound their **walk** by `maxThreads`, not just the returned list, and only
+persist a cursor that represents real forward progress:
+
+- **Gmail**: `historyId` on a `history.list` response is the mailbox's _current_ history
+  record, not a per-page resumption token. The client advances the cursor only once the
+  walk has fully drained (no `nextPageToken` left); if `maxThreads` caps the walk mid-page,
+  the cursor is left unchanged so the next sweep resumes the same `startHistoryId` window
+  (re-fetching a few already-seen threads is harmless — ingest dedups downstream) instead of
+  skipping the un-fetched, older history forever.
+- **Outlook/Graph**: the walk stops as soon as it has `maxThreads` distinct conversations,
+  even if more delta pages remain. The client always returns a real resumption cursor: the
+  page's `@odata.nextLink` when capped mid-walk (Graph's own pagination token — safe to
+  replay), or the terminal `@odata.deltaLink` once the walk genuinely drains. A backlog
+  spanning more delta pages than the per-call budget (`MAX_DELTA_PAGES`) also resumes from
+  the last page's `nextLink` rather than an empty cursor — the previous behavior silently
+  discarded the walk's progress and reprocessed the same window on every sweep, forever.
+
+Getting this wrong reads as a passing sync (no error, no `cursorExpired`) while quietly and
+permanently dropping mail — the cursor `MailListPage` returns must always be honest about
+what was actually consumed.
+
 ## 5. MailAction → provider mapping
 
 | Verb                         | Gmail (`threads.modify` deltas) | Outlook / Graph (M6)                               |

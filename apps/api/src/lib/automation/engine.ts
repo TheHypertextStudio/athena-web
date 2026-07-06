@@ -73,8 +73,18 @@ export async function runAutomations(
         dispatched.push({ type: action.type, ran: false });
         continue;
       }
-      await handler.run(context, action.params);
-      dispatched.push({ type: action.type, ran: true });
+      try {
+        await handler.run(context, action.params);
+        dispatched.push({ type: action.type, ran: true });
+      } catch (error) {
+        // One action's failure must never abort the rest of this rule's actions, or any other
+        // rule matching the same event — handlers are expected to no-op loudly on bad input,
+        // but this is the backstop for anything that still throws (a handler that forgot to
+        // guard itself, a transient DB error, etc.). Logged with rule/action context so a
+        // failure is attributable, not just a generic "something failed" upstream.
+        console.warn('[automation] action failed', { on: rule.on, type: action.type, error });
+        dispatched.push({ type: action.type, ran: false });
+      }
     }
   }
   return dispatched;

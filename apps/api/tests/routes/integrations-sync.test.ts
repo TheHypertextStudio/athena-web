@@ -300,6 +300,41 @@ describe('integrations sync', () => {
     expect(got.lastError).toMatch(/team/i);
   });
 
+  it('notifies the owner once per healthy->broken transition, not on every subsequent failure', async () => {
+    // Regression test for finishFailure's `row.status !== 'error'` guard: a persistently-broken
+    // integration hit by repeated cron/manual syncs must not spam a fresh notification each time.
+    const slug = `noteam-notify-${Math.random().toString(36).slice(2, 10)}`;
+    const [org] = await db
+      .insert(schema.organization)
+      .values({ name: slug, slug, lifecycleState: 'active' })
+      .returning({ id: schema.organization.id });
+    const orgId = org!.id;
+    const [u] = await db
+      .insert(schema.user)
+      .values({ name: 'A', email: `notify-owner-${Date.now().toString()}@example.com` })
+      .returning({ id: schema.user.id });
+    const [human] = await db
+      .insert(schema.actor)
+      .values({ organizationId: orgId, kind: 'human', displayName: 'A', userId: u!.id })
+      .returning({ id: schema.actor.id });
+    const id = await seedIntegration(orgId, human!.id, 'github');
+    const w = appWithActor(integrations, orgId, ['manage'], human!.id);
+
+    const first = await w.request(`/${id}/sync`, { method: 'POST', headers: J });
+    expect((await body<{ status: string }>(first)).status).toBe('failed');
+    const second = await w.request(`/${id}/sync`, { method: 'POST', headers: J });
+    expect((await body<{ status: string }>(second)).status).toBe('failed');
+
+    const rows = await db
+      .select()
+      .from(schema.notification)
+      .where(
+        and(eq(schema.notification.userId, u!.id), eq(schema.notification.organizationId, orgId)),
+      );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.type).toBe('connector_sync_failed');
+  });
+
   it('404 when the integration does not exist', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
     const w = appWithActor(integrations, orgId, ['manage'], humanActorId);

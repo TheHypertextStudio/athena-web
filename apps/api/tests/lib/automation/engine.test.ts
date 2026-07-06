@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { ActionSpec } from '@docket/types';
 
@@ -102,5 +102,50 @@ describe('runAutomations (registry + interpreter wiring)', () => {
       reg,
     );
     expect(out).toEqual([{ type: 'unknown.action', ran: false }]);
+  });
+
+  it('a handler that throws does not abort the rest of the actions/rules for this event', async () => {
+    // Backstop test: no individual handler should ever need its own try/catch for the engine
+    // to keep going — one throwing action must not poison every other action or rule matching
+    // the same event.
+    const log: { type: string; params: unknown }[] = [];
+    const reg = createRegistry();
+    reg.register({
+      type: 'throwing.action',
+      run: () => {
+        throw new Error('boom');
+      },
+    });
+    reg.register(recorder('mail.archive', log));
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    const out = await runAutomations(
+      event,
+      [
+        rule({
+          then: [
+            { type: 'throwing.action', params: {} },
+            { type: 'mail.archive', params: { foo: 1 } }, // same rule, after the throw
+          ],
+        }),
+        rule({ then: [{ type: 'mail.archive', params: { foo: 2 } }] }), // a second rule entirely
+      ],
+      reg,
+    );
+
+    expect(out).toEqual([
+      { type: 'throwing.action', ran: false },
+      { type: 'mail.archive', ran: true },
+      { type: 'mail.archive', ran: true },
+    ]);
+    expect(log).toEqual([
+      { type: 'mail.archive', params: { foo: 1 } },
+      { type: 'mail.archive', params: { foo: 2 } },
+    ]);
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[automation] action failed',
+      expect.objectContaining({ type: 'throwing.action' }),
+    );
+    warnSpy.mockRestore();
   });
 });

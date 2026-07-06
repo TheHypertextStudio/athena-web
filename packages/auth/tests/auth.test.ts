@@ -792,6 +792,31 @@ describe('buildAuthOptions env-gating', () => {
     expect(opts.account?.accountLinking?.trustedProviders).toEqual(['discord']);
   });
 
+  it('mounts Microsoft (Outlook) when its pair is real, defaulting tenantId to common', async () => {
+    const { buildAuthOptions, configuredSocialProviders } = await import('../src/index');
+    const env = {
+      ...baseEnv,
+      MICROSOFT_CLIENT_ID: 'ms-id',
+      MICROSOFT_CLIENT_SECRET: 'ms-secret',
+    };
+    // The gating truth `/v1/config` reads to decide whether `outlook` surfaces as a connector —
+    // a dropped or misspelled provider key here would silently keep Outlook dormant forever
+    // even once an operator configures real production credentials.
+    expect(configuredSocialProviders(env)).toEqual(['microsoft']);
+    const opts = buildAuthOptions(env, MAILER_DEPS);
+    expect(Object.keys(opts.socialProviders ?? {})).toEqual(['microsoft']);
+    expect(opts.socialProviders?.microsoft).toMatchObject({
+      clientId: 'ms-id',
+      clientSecret: 'ms-secret',
+      tenantId: 'common',
+    });
+  });
+
+  it('does not mount Microsoft when only one of the pair is real', async () => {
+    const { configuredSocialProviders } = await import('../src/index');
+    expect(configuredSocialProviders({ ...baseEnv, MICROSOFT_CLIENT_ID: 'ms-id' })).toEqual([]);
+  });
+
   it('mounts Apple (with a minted client-secret JWT) + adds appleid.apple.com to trustedOrigins when all four APPLE_* are real', async () => {
     const { buildAuthOptions } = await import('../src/index');
     const opts = buildAuthOptions({ ...baseEnv, ...APPLE_ENV }, MAILER_DEPS);

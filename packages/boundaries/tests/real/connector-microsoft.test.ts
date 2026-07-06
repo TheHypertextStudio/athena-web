@@ -141,6 +141,67 @@ describe('MicrosoftProviderClient listThreads (delta protocol)', () => {
     });
     expect(page).toEqual({ kind: 'cursorExpired' });
   });
+
+  it("bounds the walk itself by maxThreads: stops at the cap and resumes from that page's nextLink rather than draining to deltaLink and discarding the overflow", async () => {
+    const http = new RecordingHttp();
+    let page2Requested = false;
+    http.respond = (path) => {
+      if (path.startsWith("/me/mailFolders('inbox')/messages/delta")) {
+        return {
+          value: [graphMessage({ id: 'msg-1', conversationId: 'conv-1' })],
+          '@odata.nextLink':
+            "https://graph.microsoft.com/v1.0/me/mailFolders('inbox')/messages/delta?$skiptoken=page2",
+        };
+      }
+      if (path.startsWith("/me/mailFolders('inbox')/messages/delta?$skiptoken=page2")) {
+        page2Requested = true;
+        return {
+          value: [graphMessage({ id: 'msg-2', conversationId: 'conv-2' })],
+          '@odata.deltaLink':
+            "https://graph.microsoft.com/v1.0/me/mailFolders('inbox')/messages/delta?$deltatoken=def",
+        };
+      }
+      throw new Error(`unexpected path ${path}`);
+    };
+
+    const page = await client(http).listThreads({ connectionId: 'c', maxThreads: 1 });
+    expect(page.kind).toBe('page');
+    if (page.kind !== 'page') return;
+    // Capped after the first page — conv-2 (on page 2) is never fetched, so it can't be
+    // silently discarded by an end-of-walk truncation.
+    expect(page2Requested).toBe(false);
+    expect(page.threads.map((t) => t.threadId)).toEqual(['conv-1']);
+    // Resumes from THIS page's nextLink, not a deltaLink that would claim conv-2 is consumed.
+    expect(page.nextCursor).toContain('$skiptoken=page2');
+  });
+
+  it('resumes from the last nextLink (not an empty cursor) when MAX_DELTA_PAGES is exhausted before the walk drains', async () => {
+    const http = new RecordingHttp();
+    const totalPages = 10; // matches MAX_DELTA_PAGES
+    http.respond = (path) => {
+      const pageNum = path.includes('$skiptoken=p')
+        ? Number(/skiptoken=p(\d+)/.exec(path)?.[1])
+        : 0;
+      const next = pageNum + 1;
+      return {
+        value: [
+          graphMessage({ id: `msg-${String(pageNum)}`, conversationId: `conv-${String(pageNum)}` }),
+        ],
+        // Every page (including the last) hands back a nextLink — the backlog exceeds the
+        // page budget, so the walk never reaches a natural deltaLink.
+        '@odata.nextLink': `https://graph.microsoft.com/v1.0/me/mailFolders('inbox')/messages/delta?$skiptoken=p${String(next)}`,
+      };
+    };
+
+    const page = await client(http).listThreads({ connectionId: 'c', maxThreads: 1000 });
+    expect(page.kind).toBe('page');
+    if (page.kind !== 'page') return;
+    expect(page.threads).toHaveLength(totalPages);
+    // Never an empty cursor: the next sweep continues from the last page's nextLink instead of
+    // restarting the whole backlog walk from scratch every time.
+    expect(page.nextCursor).not.toBe('');
+    expect(page.nextCursor).toContain(`$skiptoken=p${String(totalPages)}`);
+  });
 });
 
 describe('MicrosoftProviderClient mail actions (thread → message fan-out)', () => {

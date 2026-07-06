@@ -21,6 +21,7 @@ import admin from './routes/admin';
 import agenda from './routes/agenda';
 import config from './routes/config';
 import connectedApps from './routes/connected-apps';
+import { createContactPointRoutes } from './routes/contact-points';
 import type { AppEnv } from './context';
 import dailyPlan from './routes/daily-plan';
 import hubRouter from './routes/hub';
@@ -30,12 +31,15 @@ import meIdentities from './routes/me-identities';
 import { createMeNotificationsRoutes } from './routes/me-notifications';
 import meRecovery from './routes/me-recovery';
 import meSessions from './routes/me-sessions';
+import { createNotificationPreferenceRoutes } from './routes/notification-preferences';
 import { createNotificationsRoutes } from './routes/notifications';
 import oauthClients from './routes/oauth-clients';
 import orgs from './routes/orgs';
 import { requireAuth } from './permissions/require-auth';
+import { NotificationContactPointService } from './services/notifications/contact-point-service';
 import { NotificationInboxService } from './services/notifications/inbox';
 import { NotificationIntentService } from './services/notifications/intent-service';
+import { NotificationPreferenceService } from './services/notifications/preference-service';
 
 /** The `/v1` app instance (shared with `server.ts` for mounting + non-RPC routes). */
 export const app = new Hono<AppEnv>().basePath('/v1');
@@ -51,6 +55,8 @@ app.use('*', requireAuth);
 
 const notificationInbox = new NotificationInboxService(db);
 const notificationIntents = new NotificationIntentService(db);
+const notificationPreferences = new NotificationPreferenceService(db);
+const notificationContactPoints = new NotificationContactPointService(db);
 
 /** The chained route tree; its type is the public RPC contract (consumed only via `typeof`). */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -65,6 +71,11 @@ const routes = app
   .route('/me/calendar', meCalendar)
   .route('/me/identities', meIdentities)
   .route('/me/notifications', createMeNotificationsRoutes(notificationInbox))
+  .route(
+    '/me/notification-preferences',
+    createNotificationPreferenceRoutes(notificationPreferences),
+  )
+  .route('/me/contact-points', createContactPointRoutes(notificationContactPoints))
   .route('/me/account', meAccount)
   .route('/me/recovery-codes', meRecovery)
   .route('/me/sessions', meSessions)

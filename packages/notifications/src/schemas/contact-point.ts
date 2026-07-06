@@ -9,6 +9,7 @@ export const ContactPointCreate = z
   .object({
     type: ContactPointType,
     value: z.string().trim().min(1),
+    purpose: z.enum(['sms_notifications', 'email_notifications', 'push_notifications']).optional(),
   })
   .meta({ id: 'ContactPointCreate', description: 'Create a notification contact point.' });
 /** Contact-point-create value. */

@@ -321,11 +321,11 @@ git commit -m "feat(api): add web notification dispatcher"
 - Test: `apps/api/tests/routes/notification-intents.test.ts`
 - Test: `apps/api/tests/routes/me-notifications.test.ts`
 
-- [ ] **Step 1: Write RED route tests for `/v1/notifications` intent endpoints**
+- [x] **Step 1: Write RED route tests for `/v1/notifications` intent endpoints**
 
 Cover create draft, create-and-send, get intent, recipients, deliveries, cancel queued intent, and test send authorization.
 
-- [ ] **Step 2: Implement intent routes**
+- [x] **Step 2: Implement intent routes**
 
 Mount:
 
@@ -339,15 +339,15 @@ POST /v1/notifications/:id/cancel
 POST /v1/notifications/:id/test
 ```
 
-- [ ] **Step 3: Write RED route tests for `/v1/me/notifications`**
+- [x] **Step 3: Write RED route tests for `/v1/me/notifications`**
 
 Cover aliases for list/count/read/read-all/act plus detail by id. Existing `/v1/notifications` inbox behavior must still pass for compatibility.
 
-- [ ] **Step 4: Implement `/v1/me/notifications` routes**
+- [x] **Step 4: Implement `/v1/me/notifications` routes**
 
 Reuse the existing inbox query/mutation helpers instead of duplicating owner-isolation logic.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run:
 
@@ -371,15 +371,18 @@ git commit -m "feat(api): expose notification intent routes"
 
 - Create: `apps/api/src/routes/notification-preferences.ts`
 - Create: `apps/api/src/routes/contact-points.ts`
+- Create: `apps/api/src/services/notifications/preference-service.ts`
+- Create: `apps/api/src/services/notifications/contact-point-service.ts`
 - Modify: `apps/api/src/app.ts`
+- Modify: `packages/notifications/src/schemas/contact-point.ts`
 - Test: `apps/api/tests/routes/notification-preferences.test.ts`
 - Test: `apps/api/tests/routes/contact-points.test.ts`
 
-- [ ] **Step 1: Write RED preference route tests**
+- [x] **Step 1: Write RED preference route tests**
 
 Cover default preferences, patch category/channel values, locked security explanation, quiet-hours update, and org-scoped workflow override.
 
-- [ ] **Step 2: Implement preference routes**
+- [x] **Step 2: Implement preference routes**
 
 Mount:
 
@@ -388,11 +391,11 @@ GET   /v1/me/notification-preferences
 PATCH /v1/me/notification-preferences
 ```
 
-- [ ] **Step 3: Write RED contact-point route tests**
+- [x] **Step 3: Write RED contact-point route tests**
 
 Cover primary account email projection, phone creation pending verification, wrong code rejection, verify success, make-primary, delete/disable, bounced state suppressing delivery.
 
-- [ ] **Step 4: Implement contact-point routes**
+- [x] **Step 4: Implement contact-point routes**
 
 Mount:
 
@@ -404,7 +407,7 @@ POST   /v1/me/contact-points/:id/make-primary
 DELETE /v1/me/contact-points/:id
 ```
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run:
 

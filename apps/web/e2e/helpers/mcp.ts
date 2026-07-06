@@ -75,8 +75,9 @@ export async function discover(request: APIRequestContext): Promise<Discovery> {
     code_challenge_methods_supported?: string[];
   };
   expect(meta.code_challenge_methods_supported).toContain('S256');
+  if (!issuer) throw new Error('PRM must name an authorization server');
   return {
-    issuer: issuer!,
+    issuer,
     authorizationEndpoint: meta.authorization_endpoint,
     tokenEndpoint: meta.token_endpoint,
     registrationEndpoint: meta.registration_endpoint,
@@ -141,7 +142,8 @@ export async function authorizeInBrowser(
   expect(redirected.searchParams.get('error')).toBeNull();
   const code = redirected.searchParams.get('code');
   expect(code, 'authorize redirect must carry a code').toBeTruthy();
-  return code!;
+  if (!code) throw new Error('authorize redirect must carry a code');
+  return code;
 }
 
 /** Exchange an authorization code for an access token (public client + PKCE). */
@@ -264,7 +266,10 @@ export async function mcpToolCall<T>(
     rpc.result?.isError,
     `${name} tool error: ${rpc.result?.content?.[0]?.text ?? ''}`,
   ).toBeFalsy();
-  return rpc.result!.structuredContent as T;
+  const structuredContent = rpc.result?.structuredContent;
+  expect(structuredContent, `${name} must return structuredContent`).toBeTruthy();
+  if (!structuredContent) throw new Error(`${name} must return structuredContent`);
+  return structuredContent;
 }
 
 /** A `resources/read` over {@link mcpCall}; returns the (JSON-parsed) first contents entry. */
@@ -279,5 +284,6 @@ export async function mcpReadResource<T>(
   expect(rpc.error, `resources/read ${uri} rpc error`).toBeUndefined();
   const text = rpc.result?.contents?.[0]?.text;
   expect(text, `resources/read ${uri} must return contents`).toBeTruthy();
-  return JSON.parse(text!) as T;
+  if (!text) throw new Error(`resources/read ${uri} must return contents`);
+  return JSON.parse(text) as T;
 }

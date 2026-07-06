@@ -39,6 +39,7 @@
     "@docket/env": "workspace:*",
     "@docket/integrations": "workspace:*",
     "@docket/mail": "workspace:*",
+    "@docket/notifications": "workspace:*",
     "@docket/types": "workspace:*",
     "@hono/node-server": "^2.0.4",
     "@hono/standard-validator": "catalog:",

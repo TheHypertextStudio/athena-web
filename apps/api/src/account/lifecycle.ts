@@ -13,11 +13,14 @@
 import type { Database } from '@docket/db';
 import {
   dailyDigest,
+  contactPoint,
   event,
   eventRecipient,
   hub,
   idempotencyKey,
   notification,
+  notificationPreference,
+  notificationRecipient,
   organization,
   streamSubscription,
   user,
@@ -32,11 +35,14 @@ import { analyzeAccountOwnership, findSoleOccupiedOrgIds } from './blockers';
  *
  * @remarks
  * Kept as one exported list so {@link purgeUser} and the schema-drift test stay in lockstep —
- * adding a seventh such table is a single edit here, and the test fails if the schema gains a
+ * adding another such table is a single edit here, and the test fails if the schema gains a
  * no-FK `user_id` table this list forgets.
  */
 export const USER_KEYED_NO_FK_TABLES = [
+  contactPoint,
   notification,
+  notificationPreference,
+  notificationRecipient,
   event,
   eventRecipient,
   streamSubscription,

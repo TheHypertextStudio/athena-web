@@ -18,17 +18,8 @@ import type { ActorCtx, AppEnv } from '../../src/context';
 import { onError } from '../../src/error';
 import type agentSessionsRouter from '../../src/routes/agent-sessions';
 import type integrationsRouter from '../../src/routes/integrations';
+import '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
-
-// The shared `db` and `env`/container are constructed from process.env on first access,
-// so the required vars (including APP_MODE=test, which forces the mock boundary
-// adapters) must be set BEFORE any module that touches them is imported.
-process.env['DATABASE_URL'] = 'pglite://memory://';
-process.env['APP_MODE'] = 'test';
-process.env['NODE_ENV'] = 'test';
-process.env['BETTER_AUTH_SECRET'] = 'test-secret-test-secret-test-secret-0123456789';
-process.env['CRON_SECRET'] = 'test-cron-secret';
-process.env['SKIP_ENV_VALIDATION'] = '1';
 
 let db!: typeof DbType;
 let organization!: typeof OrgTable;

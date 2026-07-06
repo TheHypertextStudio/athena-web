@@ -2,22 +2,11 @@ import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 // Mock the node server `serve` so importing `server.ts` does not bind a real port,
-// and stub Better Auth so the heavy ESM chain is not pulled into the test graph.
+// while the shared auth mock keeps the heavy ESM chain out of the test graph.
+import './support/auth-mock';
+
 const serve = vi.fn();
 vi.mock('@hono/node-server', () => ({ serve }));
-vi.mock('@docket/auth', () => ({
-  auth: {
-    api: { getSession: vi.fn(async () => null) },
-    handler: vi.fn(async () => new Response('ok')),
-  },
-}));
-
-process.env['DATABASE_URL'] = 'pglite://memory://';
-process.env['APP_MODE'] = 'test';
-process.env['NODE_ENV'] = 'test';
-process.env['BETTER_AUTH_SECRET'] = 'test-secret-test-secret-test-secret-0123456789';
-process.env['CRON_SECRET'] = 'test-cron-secret';
-process.env['SKIP_ENV_VALIDATION'] = '1';
 
 describe('env + index re-exports', () => {
   it('env is the validated API env object', async () => {
@@ -139,12 +128,6 @@ describe('server CORS trusted-origins parsing', () => {
     const freshServe = vi.fn();
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.doMock('@hono/node-server', () => ({ serve: freshServe }));
-    vi.doMock('@docket/auth', () => ({
-      auth: {
-        api: { getSession: vi.fn(async () => null) },
-        handler: vi.fn(async () => new Response('ok')),
-      },
-    }));
     try {
       const { server: fresh } = await import('../src/server');
       expect((await (fresh as unknown as Hono).request('/v1/health')).status).toBe(200);
@@ -152,7 +135,6 @@ describe('server CORS trusted-origins parsing', () => {
       log.mockRestore();
       delete process.env['BETTER_AUTH_TRUSTED_ORIGINS'];
       vi.doUnmock('@hono/node-server');
-      vi.doUnmock('@docket/auth');
     }
   });
 });

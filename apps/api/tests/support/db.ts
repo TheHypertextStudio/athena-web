@@ -2,35 +2,29 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import type * as DbModule from '@docket/db';
-import { sql } from 'drizzle-orm';
+import { PGlite } from '@electric-sql/pglite';
 
 const MIGRATIONS = resolve(import.meta.dirname, '../../../../packages/db/drizzle');
 
-let bootstrapStatements: readonly string[] | undefined;
+let bootstrapSql: string | undefined;
 let migratedDb: Promise<typeof DbModule> | undefined;
 
-/**
- * Set the environment contract required before the shared DB/env modules initialize.
- */
-export function configureApiTestEnv(): void {
-  process.env['DATABASE_URL'] = 'pglite://memory://';
-  process.env['APP_MODE'] = 'test';
-  process.env['NODE_ENV'] = 'test';
-  process.env['BETTER_AUTH_SECRET'] = 'test-secret-test-secret-test-secret-0123456789';
-  process.env['CRON_SECRET'] = 'test-cron-secret';
-  process.env['SKIP_ENV_VALIDATION'] = '1';
-}
-
-function loadBootstrapStatements(): readonly string[] {
-  bootstrapStatements ??= readdirSync(MIGRATIONS)
+/** Read the generated migration SQL once per worker. */
+function loadBootstrapSql(): string {
+  bootstrapSql ??= readdirSync(MIGRATIONS)
     .filter((file) => file.endsWith('.sql'))
     .sort()
-    .flatMap((file) =>
-      readFileSync(resolve(MIGRATIONS, file), 'utf8').split('--> statement-breakpoint'),
-    )
-    .map((statement) => statement.trim())
-    .filter(Boolean);
-  return bootstrapStatements;
+    .map((file) => readFileSync(resolve(MIGRATIONS, file), 'utf8'))
+    .join('\n');
+  return bootstrapSql;
+}
+
+function pgliteClient(db: typeof DbModule.db): Pick<PGlite, 'exec'> {
+  const client: unknown = Reflect.get(db, '$client');
+  if (!(client instanceof PGlite)) {
+    throw new Error('API tests require the PGlite test driver exposed by @docket/db.');
+  }
+  return client;
 }
 
 /**
@@ -42,15 +36,10 @@ function loadBootstrapStatements(): readonly string[] {
  * on every API route/MCP suite while preserving the exact schema SQL production uses.
  */
 export async function getMigratedDb(): Promise<typeof DbModule> {
-  configureApiTestEnv();
   migratedDb ??= (async () => {
     const dbmod = await import('@docket/db');
-    for (const statement of loadBootstrapStatements()) {
-      await dbmod.db.execute(sql.raw(statement));
-    }
+    await pgliteClient(dbmod.db).exec(loadBootstrapSql());
     return dbmod;
   })();
   return migratedDb;
 }
-
-configureApiTestEnv();

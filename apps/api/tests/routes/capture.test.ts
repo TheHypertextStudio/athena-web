@@ -25,13 +25,6 @@ import { onError } from '../../src/error';
 import type captureRouter from '../../src/routes/capture';
 import { getMigratedDb } from '../support/db';
 
-process.env['DATABASE_URL'] = 'pglite://memory://';
-process.env['APP_MODE'] = 'test';
-process.env['NODE_ENV'] = 'test';
-process.env['BETTER_AUTH_SECRET'] = 'test-secret-test-secret-test-secret-0123456789';
-process.env['CRON_SECRET'] = 'test-cron-secret';
-process.env['SKIP_ENV_VALIDATION'] = '1';
-
 let db!: typeof DbType;
 let organization!: typeof OrgTable;
 let team!: typeof TeamTable;

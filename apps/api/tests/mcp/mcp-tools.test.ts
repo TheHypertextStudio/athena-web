@@ -4,13 +4,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { Hono } from 'hono';
 import { eq } from 'drizzle-orm';
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-
-// Stub Better Auth so we control the session per test without the heavy ESM chain.
-const getSession = vi.fn<
-  () => Promise<{ user: { id: string; name: string; email: string } } | null>
->(async () => null);
-vi.mock('@docket/auth', () => ({ auth: { api: { getSession } } }));
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 import type { Capability } from '@docket/types';
@@ -19,14 +13,8 @@ import type { McpContext } from '../../src/mcp/auth';
 import type { registerTools as RegisterTools } from '../../src/mcp/tools';
 import type { registerResources as RegisterResources } from '../../src/mcp/resources';
 import type { mcpHandler as McpHandler } from '../../src/mcp/server';
+import { getSession, resetAuthMocks } from '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
-
-process.env['DATABASE_URL'] = 'pglite://memory://';
-process.env['APP_MODE'] = 'test';
-process.env['NODE_ENV'] = 'test';
-process.env['BETTER_AUTH_SECRET'] = 'test-secret-test-secret-test-secret-0123456789';
-process.env['CRON_SECRET'] = 'test-cron-secret';
-process.env['SKIP_ENV_VALIDATION'] = '1';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -202,7 +190,7 @@ async function connect(ctx: McpContext): Promise<Client> {
 
 afterEach(async () => {
   while (harnesses.length > 0) await harnesses.pop()!.close();
-  getSession.mockReset();
+  resetAuthMocks();
 });
 
 /** Parse the JSON text payload of a tool result into a keyed record. */

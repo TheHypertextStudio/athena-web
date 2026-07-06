@@ -189,6 +189,30 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [MCP-PROD-012] Centralize API test env and auth mocks
+
+- **Completed**: 2026-07-06
+- **Summary**: Moved the baseline API test environment out of per-suite `process.env` mutation and
+  into Vitest's native `test.env` config via the shared `docketVitest` preset. Centralized the
+  repeated `@docket/auth` test boundary in `apps/api/tests/support/auth-mock.ts`, then replaced
+  duplicated MCP/route-suite mock setup with imports from that helper. Suites that need
+  behavior-specific env (MCP origin/resource/CIMD options, production-mode checks, trusted-origin
+  parsing) still set only those variables near the test that owns the behavior. The shared API DB
+  bootstrap now applies the generated migration SQL through PGlite's raw multi-statement `exec()`
+  on the existing `@docket/db` singleton client, avoiding 255 prepared-statement round trips without
+  changing runner concurrency.
+- **Files Changed**: `tooling/vitest/preset.ts`, `apps/api/vite.config.ts`,
+  `apps/api/tests/support/{env,auth-mock,db}.ts`, and API MCP/route tests that previously duplicated
+  baseline env or Better Auth mocks.
+- **Learnings**: `setupFiles` are the wrong place to reimplement Vitest's environment API. Keeping
+  baseline env in `test.env` preserves Vitest's per-test-file lifecycle while keeping module mocks in
+  a focused test-support helper. Drizzle prepared execution rejects multi-statement migration batches;
+  PGlite's simple-query `exec()` is the correct layer for fast generated-SQL bootstrap.
+- **Gate**: `pnpm --filter @docket/api exec vitest run tests/routes/billing-http.test.ts --reporter=verbose`
+  passes (11 tests, 2.05s); `pnpm --filter @docket/api test` passes (47 files / 692 tests);
+  unthrottled root `pnpm test` passes (11 tasks / 1m38.944s); `pnpm typecheck`, `pnpm lint`, and
+  `pnpm build` pass.
+
 ### [MCP-PROD-011] Remove test-hang sources without throttling concurrency
 
 - **Completed**: 2026-07-06

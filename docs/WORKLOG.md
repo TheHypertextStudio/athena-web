@@ -85,6 +85,15 @@
   `@docket/api` build, Prettier check, and 76 focused notification/group route tests pass.
   Full-package lint/test remain intentionally bounded because concurrent local Vitest/ESLint worktrees
   were saturating the machine.
+- **Preferences/contact points milestone update (2026-07-06)**: Added `/v1/me/notification-preferences`
+  GET/PATCH and `/v1/me/contact-points` list/create/verify/make-primary/disable. Preference routes
+  materialize default category/channel settings, preserve locked security/account categories, merge
+  quiet-hours/timezone updates, and support org-scoped overrides. Contact-point routes materialize the
+  account email as a real active primary contact point, create pending phone/push/email destinations,
+  verify pending destinations with deterministic test codes, enforce owner isolation, and keep bounced
+  destinations visible to preference resolution. Focused verification: `@docket/api` preference/contact
+  route tests plus preference resolver tests, `@docket/api` typecheck, touched-file ESLint,
+  `@docket/api` build, and `@docket/notifications` typecheck/lint/test pass.
 
 ### [AUTH-SEC-001] Auth security & UX audit remediation
 

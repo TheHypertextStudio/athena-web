@@ -14,6 +14,7 @@
  * health, openapi, docs) live in `server.ts` OUTSIDE these `routes` consts so they don't
  * pollute the typed client contracts.
  */
+import { db } from '@docket/db';
 import { Hono } from 'hono';
 
 import admin from './routes/admin';
@@ -33,7 +34,8 @@ import { createNotificationsRoutes } from './routes/notifications';
 import oauthClients from './routes/oauth-clients';
 import orgs from './routes/orgs';
 import { requireAuth } from './permissions/require-auth';
-import { createNotificationRouteDependencies } from './services/notifications/dependencies';
+import { NotificationInboxService } from './services/notifications/inbox';
+import { NotificationIntentService } from './services/notifications/intent-service';
 
 /** The `/v1` app instance (shared with `server.ts` for mounting + non-RPC routes). */
 export const app = new Hono<AppEnv>().basePath('/v1');
@@ -47,21 +49,22 @@ export type AppInstance = typeof app;
 // chain (membership/capability authz still layer on top per-route).
 app.use('*', requireAuth);
 
-const notificationRouteDeps = createNotificationRouteDependencies();
+const notificationInbox = new NotificationInboxService(db);
+const notificationIntents = new NotificationIntentService(db);
 
 /** The chained route tree; its type is the public RPC contract (consumed only via `typeof`). */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const routes = app
   .route('/config', config)
   .route('/orgs', orgs)
-  .route('/notifications', createNotificationsRoutes(notificationRouteDeps))
+  .route('/notifications', createNotificationsRoutes(notificationInbox, notificationIntents))
   .route('/daily-plan', dailyPlan)
   .route('/agenda', agenda)
   .route('/hub', hubRouter)
   .route('/me/connected-apps', connectedApps)
   .route('/me/calendar', meCalendar)
   .route('/me/identities', meIdentities)
-  .route('/me/notifications', createMeNotificationsRoutes({ inbox: notificationRouteDeps.inbox }))
+  .route('/me/notifications', createMeNotificationsRoutes(notificationInbox))
   .route('/me/account', meAccount)
   .route('/me/recovery-codes', meRecovery)
   .route('/me/sessions', meSessions)

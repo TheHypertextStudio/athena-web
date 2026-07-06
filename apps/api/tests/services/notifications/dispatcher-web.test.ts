@@ -15,10 +15,14 @@ let notifications!: unknown;
 beforeAll(async () => {
   schema = await getDb();
   db = schema.db;
-  const { createNotificationRouteDependencies } =
-    await import('../../../src/services/notifications/dependencies');
+  const { NotificationInboxService } = await import('../../../src/services/notifications/inbox');
+  const { NotificationIntentService } =
+    await import('../../../src/services/notifications/intent-service');
   const { createNotificationsRoutes } = await import('../../../src/routes/notifications');
-  notifications = createNotificationsRoutes(createNotificationRouteDependencies());
+  notifications = createNotificationsRoutes(
+    new NotificationInboxService(db),
+    new NotificationIntentService(db),
+  );
 });
 
 async function body<T>(res: Response): Promise<T> {

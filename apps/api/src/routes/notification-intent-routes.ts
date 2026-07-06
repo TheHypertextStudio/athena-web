@@ -16,19 +16,13 @@ import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
 import {
   NotificationDispatchResultOut,
-  type NotificationIntentUseCases,
-} from '../services/notifications/intent-use-cases';
+  type NotificationIntentService,
+} from '../services/notifications/intent-service';
 
 const idParam = z.object({ id: z.string() });
 
-/** Dependencies consumed by the staff notification intent route factory. */
-export interface NotificationIntentRouteDependencies {
-  /** Staff notification intent use cases. */
-  readonly intents: NotificationIntentUseCases;
-}
-
 /** Build staff-owned routes for service-wide notification intents. */
-export function createNotificationIntentRoutes(deps: NotificationIntentRouteDependencies) {
+export function createNotificationIntentRoutes(intents: NotificationIntentService) {
   return new Hono<AppEnv>()
     .post(
       '/',
@@ -44,7 +38,7 @@ export function createNotificationIntentRoutes(deps: NotificationIntentRouteDepe
         return ok(
           c,
           NotificationIntentOut,
-          await deps.intents.create(requireUserId(c), c.req.valid('json')),
+          await intents.create(requireUserId(c), c.req.valid('json')),
         );
       },
     )
@@ -61,7 +55,7 @@ export function createNotificationIntentRoutes(deps: NotificationIntentRouteDepe
         return ok(
           c,
           pageOf(NotificationRecipientOut),
-          await deps.intents.listRecipients(requireUserId(c), c.req.valid('param').id),
+          await intents.listRecipients(requireUserId(c), c.req.valid('param').id),
         );
       },
     )
@@ -78,7 +72,7 @@ export function createNotificationIntentRoutes(deps: NotificationIntentRouteDepe
         return ok(
           c,
           pageOf(NotificationDeliveryOut),
-          await deps.intents.listDeliveries(requireUserId(c), c.req.valid('param').id),
+          await intents.listDeliveries(requireUserId(c), c.req.valid('param').id),
         );
       },
     )
@@ -95,7 +89,7 @@ export function createNotificationIntentRoutes(deps: NotificationIntentRouteDepe
         return ok(
           c,
           NotificationIntentOut,
-          await deps.intents.send(requireUserId(c), c.req.valid('param').id),
+          await intents.send(requireUserId(c), c.req.valid('param').id),
         );
       },
     )
@@ -112,7 +106,7 @@ export function createNotificationIntentRoutes(deps: NotificationIntentRouteDepe
         return ok(
           c,
           NotificationIntentOut,
-          await deps.intents.cancel(requireUserId(c), c.req.valid('param').id),
+          await intents.cancel(requireUserId(c), c.req.valid('param').id),
         );
       },
     )
@@ -130,7 +124,7 @@ export function createNotificationIntentRoutes(deps: NotificationIntentRouteDepe
         return ok(
           c,
           NotificationDispatchResultOut,
-          await deps.intents.testSend(requireUserId(c), c.req.valid('param').id),
+          await intents.testSend(requireUserId(c), c.req.valid('param').id),
         );
       },
     )
@@ -147,7 +141,7 @@ export function createNotificationIntentRoutes(deps: NotificationIntentRouteDepe
         return ok(
           c,
           NotificationIntentOut,
-          await deps.intents.get(requireUserId(c), c.req.valid('param').id),
+          await intents.get(requireUserId(c), c.req.valid('param').id),
         );
       },
     );

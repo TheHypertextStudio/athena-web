@@ -80,11 +80,11 @@
   (`POST /v1/notifications`, `GET /:id`, recipients, deliveries, send, cancel, test-send) and the
   long-term `/v1/me/notifications` inbox alias while keeping the legacy `/v1/notifications` inbox
   routes compatible. Refactored route files for DIP/SOC: route modules now expose curried factories
-  over injected notification use cases, and concrete Drizzle/dispatcher wiring lives in
-  `services/notifications/dependencies.ts` plus focused inbox/intent application services. Focused
-  verification: `@docket/api` typecheck, touched-file ESLint, `@docket/api` build, Prettier check,
-  and 76 focused notification/group route tests pass. Full-package lint/test remain intentionally
-  bounded because concurrent local Vitest/ESLint worktrees were saturating the machine.
+  over directly injected notification services, and concrete Drizzle-backed services are constructed
+  at API/test composition points. Focused verification: `@docket/api` typecheck, touched-file ESLint,
+  `@docket/api` build, Prettier check, and 76 focused notification/group route tests pass.
+  Full-package lint/test remain intentionally bounded because concurrent local Vitest/ESLint worktrees
+  were saturating the machine.
 
 ### [AUTH-SEC-001] Auth security & UX audit remediation
 

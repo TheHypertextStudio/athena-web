@@ -11,12 +11,9 @@ let meNotifications!: unknown;
 beforeAll(async () => {
   schema = await getDb();
   db = schema.db;
-  const { createNotificationRouteDependencies } =
-    await import('../../src/services/notifications/dependencies');
+  const { NotificationInboxService } = await import('../../src/services/notifications/inbox');
   const { createMeNotificationsRoutes } = await import('../../src/routes/me-notifications');
-  meNotifications = createMeNotificationsRoutes({
-    inbox: createNotificationRouteDependencies().inbox,
-  });
+  meNotifications = createMeNotificationsRoutes(new NotificationInboxService(db));
 });
 
 const J = { 'content-type': 'application/json' };

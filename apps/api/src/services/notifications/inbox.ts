@@ -13,61 +13,49 @@ export interface NotificationInboxFilters {
   readonly unreadOnly?: boolean;
 }
 
-/** Application-facing notification inbox operations. */
-export interface NotificationInboxUseCases {
+/** Database-backed notification inbox service. */
+export class NotificationInboxService {
+  constructor(private readonly db: Database) {}
+
   /** Return caller-owned notifications, newest first. */
-  readonly list: (
+  async list(
     userId: string,
     filters: NotificationInboxFilters,
-  ) => Promise<{ items: z.input<typeof NotificationOut>[] }>;
+  ): Promise<{ items: z.input<typeof NotificationOut>[] }> {
+    const rows = await listInboxNotifications(this.db, userId, filters);
+    return { items: rows.map(toNotificationOut) };
+  }
+
   /** Return unread and approval counts for the caller. */
-  readonly count: (userId: string) => Promise<{ unread: number; pendingApprovals: number }>;
+  count(userId: string): Promise<{ unread: number; pendingApprovals: number }> {
+    return countInboxNotifications(this.db, userId);
+  }
+
   /** Return one caller-owned notification, or null when missing/hidden. */
-  readonly get: (userId: string, id: string) => Promise<z.input<typeof NotificationOut> | null>;
+  async get(userId: string, id: string): Promise<z.input<typeof NotificationOut> | null> {
+    const row = await getInboxNotification(this.db, userId, id);
+    return row ? toNotificationOut(row) : null;
+  }
+
   /** Mark caller-owned unread notifications read. */
-  readonly readAll: (
+  async readAll(
     userId: string,
     filters: Pick<NotificationInboxFilters, 'organizationId' | 'type'>,
-  ) => Promise<{ updated: number }>;
-  /** Mark one caller-owned notification read. */
-  readonly markRead: (
-    userId: string,
-    id: string,
-  ) => Promise<z.input<typeof NotificationOut> | null>;
-  /** Apply one inline caller-owned notification action. */
-  readonly act: (
-    userId: string,
-    id: string,
-    action: string,
-  ) => Promise<z.input<typeof NotificationOut> | null>;
-}
+  ): Promise<{ updated: number }> {
+    return { updated: await markInboxNotificationsRead(this.db, userId, filters) };
+  }
 
-/** Build database-backed notification inbox use cases. */
-export function createNotificationInboxUseCases(db: Database): NotificationInboxUseCases {
-  return {
-    async list(userId, filters) {
-      const rows = await listInboxNotifications(db, userId, filters);
-      return { items: rows.map(toNotificationOut) };
-    },
-    count(userId) {
-      return countInboxNotifications(db, userId);
-    },
-    async get(userId, id) {
-      const row = await getInboxNotification(db, userId, id);
-      return row ? toNotificationOut(row) : null;
-    },
-    async readAll(userId, filters) {
-      return { updated: await markInboxNotificationsRead(db, userId, filters) };
-    },
-    async markRead(userId, id) {
-      const row = await markInboxNotificationRead(db, userId, id);
-      return row ? toNotificationOut(row) : null;
-    },
-    async act(userId, id) {
-      const row = await actOnInboxNotification(db, userId, id);
-      return row ? toNotificationOut(row) : null;
-    },
-  };
+  /** Mark one caller-owned notification read. */
+  async markRead(userId: string, id: string): Promise<z.input<typeof NotificationOut> | null> {
+    const row = await markInboxNotificationRead(this.db, userId, id);
+    return row ? toNotificationOut(row) : null;
+  }
+
+  /** Apply one inline caller-owned notification action. */
+  async act(userId: string, id: string): Promise<z.input<typeof NotificationOut> | null> {
+    const row = await actOnInboxNotification(this.db, userId, id);
+    return row ? toNotificationOut(row) : null;
+  }
 }
 
 /** Serialize one inbox row into the public notification DTO shape. */

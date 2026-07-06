@@ -7,9 +7,9 @@
 
 ## Active Tasks
 
-### [NOTIF-SPEC-001] Cross-platform notification service design
+### [NOTIF-SPEC-001] Cross-platform notification service
 
-- **Status**: REVIEW (design spec written; implementation plan pending user review)
+- **Status**: IN_PROGRESS
 - **Started**: 2026-07-06
 - **Priority**: P1
 - **Description**: Define the product, UX, REST API, delivery, inbound-event, and rollout shape
@@ -27,13 +27,17 @@
         future push, staff announcements, org-authored sends, and developer usage.
   - [x] Describe the REST API surface and implementation boundaries without starting code changes.
 - **Notes**: Spec written at
-  `docs/superpowers/specs/2026-07-06-cross-platform-notification-service-design.md`. User review is
-  needed before implementation planning.
+  `docs/superpowers/specs/2026-07-06-cross-platform-notification-service-design.md`.
 - **Implementation planning update (2026-07-06)**: Created the implementation worktree at
   `.claude/worktrees/notification-service` on `feature/notification-service`; installed dependencies;
   verified the baseline with `pnpm typecheck` and
   `pnpm --filter @docket/api test tests/routes/notifications-inbox.test.ts`; wrote the full
   milestone plan at `docs/superpowers/plans/2026-07-06-cross-platform-notification-service.md`.
+- **Implementation update (2026-07-06)**: Started the schema contract slice with TDD, then corrected
+  the package boundary per review: notification-domain schemas now live in new `@docket/notifications`
+  instead of adding another large surface to `@docket/types`. `@docket/types` remains limited to shared
+  primitives/current DTOs for this slice. Validation so far: `@docket/notifications` test/typecheck/lint
+  pass; `@docket/types` test/typecheck/lint pass.
 
 ### [AUTH-SEC-001] Auth security & UX audit remediation
 

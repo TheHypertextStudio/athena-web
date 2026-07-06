@@ -676,6 +676,25 @@ importers:
       '@types/nodemailer':
         specifier: 8.0.1
         version: 8.0.1
+
+  packages/notifications:
+    dependencies:
+      '@docket/types':
+        specifier: workspace:*
+        version: link:../types
+      zod:
+        specifier: 'catalog:'
+        version: 4.4.3
+    devDependencies:
+      '@docket/eslint-config':
+        specifier: workspace:*
+        version: link:../../tooling/eslint-config
+      '@docket/tsconfig':
+        specifier: workspace:*
+        version: link:../../tooling/tsconfig
+      '@types/node':
+        specifier: 26.1.0
+        version: 26.1.0
       vite:
         specifier: ^8.0.0
         version: 8.1.2(@types/node@26.1.0)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)

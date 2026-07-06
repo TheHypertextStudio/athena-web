@@ -7,6 +7,7 @@ import {
 } from '@docket/db';
 import {
   canCreateNotification,
+  NotificationAudience,
   NotificationIntentCreate,
   type NotificationChannelDecision,
   type NotificationDestinationType,
@@ -47,6 +48,16 @@ export interface DispatchNotificationResult {
   readonly deliveries: readonly NotificationDeliveryRow[];
   /** Web inbox projection rows created or loaded for the intent. */
   readonly webNotifications: readonly NotificationRow[];
+}
+
+/** Options for dispatching an already persisted notification intent. */
+export interface DispatchPersistedNotificationIntentOptions {
+  /** Instant used for persistence and preference decisions. */
+  readonly now?: Date;
+  /** Optional authenticated deep link for the web inbox projection. */
+  readonly webUrl?: string;
+  /** True when returning a previously dispatched idempotent result. */
+  readonly idempotent?: boolean;
 }
 
 /** Creates a durable notification intent, snapshots recipients, and attempts channel delivery. */
@@ -92,7 +103,33 @@ export async function dispatchNotificationIntent(
     .returning();
   if (!intent) throw new Error('Failed to create notification intent');
 
-  const recipientInputs = await expandNotificationAudience(db, parsed.audience);
+  return dispatchPersistedNotificationIntent(db, intent, {
+    now,
+    ...(input.webUrl ? { webUrl: input.webUrl } : {}),
+  });
+}
+
+/** Snapshots recipients and attempts channel delivery for an existing intent row. */
+export async function dispatchPersistedNotificationIntent(
+  db: Database,
+  intent: NotificationIntentRow,
+  options: DispatchPersistedNotificationIntentOptions = {},
+): Promise<DispatchNotificationResult> {
+  const now = options.now ?? new Date();
+
+  const existingRecipients = await db
+    .select({ id: notificationRecipient.id })
+    .from(notificationRecipient)
+    .where(eq(notificationRecipient.notificationId, intent.id))
+    .limit(1);
+  if (existingRecipients.length > 0) {
+    return loadDispatchResult(db, intent, options.idempotent ?? false);
+  }
+
+  const recipientInputs = await expandNotificationAudience(
+    db,
+    NotificationAudience.parse(intent.audience),
+  );
   const recipients: NotificationRecipientRow[] = [];
   const deliveries: NotificationDeliveryRow[] = [];
   const webNotifications: NotificationRow[] = [];
@@ -150,7 +187,7 @@ export async function dispatchNotificationIntent(
             category: intent.category,
             subject: intent.subject,
             body: intent.body,
-            ...(input.webUrl ? { url: input.webUrl } : {}),
+            ...(options.webUrl ? { url: options.webUrl } : {}),
           }),
         );
       }
@@ -166,7 +203,7 @@ export async function dispatchNotificationIntent(
   return {
     intentId: intent.id,
     status: updatedIntent?.status ?? finalStatusFor(deliveries),
-    idempotent: false,
+    idempotent: options.idempotent ?? false,
     recipients,
     deliveries,
     webNotifications,

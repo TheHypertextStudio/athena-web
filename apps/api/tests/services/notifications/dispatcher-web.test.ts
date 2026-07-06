@@ -2,7 +2,6 @@ import type * as DbModule from '@docket/db';
 import { and, eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import type notificationsRouter from '../../../src/routes/notifications';
 import {
   dispatchNotificationIntent,
   type DispatchNotificationIntentInput,
@@ -11,12 +10,15 @@ import { appWithSession, fakeSession, getDb, seedUserWithHub } from '../../route
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
-let notifications!: typeof notificationsRouter;
+let notifications!: unknown;
 
 beforeAll(async () => {
   schema = await getDb();
   db = schema.db;
-  notifications = (await import('../../../src/routes/notifications')).default;
+  const { createNotificationRouteDependencies } =
+    await import('../../../src/services/notifications/dependencies');
+  const { createNotificationsRoutes } = await import('../../../src/routes/notifications');
+  notifications = createNotificationsRoutes(createNotificationRouteDependencies());
 });
 
 async function body<T>(res: Response): Promise<T> {

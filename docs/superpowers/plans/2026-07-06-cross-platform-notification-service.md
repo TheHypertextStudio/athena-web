@@ -448,13 +448,15 @@ Assert email delivery uses `CaptureMailer` in tests, records delivery state, sup
 
 Use `getContainer().mailer.send({ to, subject, html, text })`. Update delivery status to `sent` after adapter success and `failed` with secret-free errors after adapter failure.
 
-- [ ] **Step 3: Move account/security/export/digest sends through notification intents**
+- [x] **Step 3: Move account/security/export/digest sends through notification intents**
 
 For each flow, preserve existing user-facing email body while adding intent/delivery records. Better Auth-internal flows may keep the direct mail send but should record notification intent/delivery state when the product can observe the event safely.
 
 Progress: recovery-code regeneration now dispatches a `security` notification intent through web
-and email while preserving the existing recovery-code email body. Account deletion, export-ready,
-and digest sends remain to migrate.
+and email while preserving the existing recovery-code email body. Account deletion/cancel,
+export-ready, and daily digest sends now dispatch notification intents and delivery rows while
+preserving their existing email bodies. Digest uses `skip_user_preferences` because the digest sweep
+already selects only users who opted into the digest feature.
 
 - [ ] **Step 4: Verify and commit**
 

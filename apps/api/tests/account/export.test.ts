@@ -59,6 +59,29 @@ describe('sweepAccountExports', () => {
     expect(row.blobKey).toContain(`exports/account/${userId}/`);
     expect(row.expiresAt).not.toBeNull();
     expect(outbox.some((m) => m.to === email && m.subject.includes('export'))).toBe(true);
+
+    const sent = outbox.find((m) => m.to === email && m.subject.includes('export'));
+    if (!sent) throw new Error('Expected export-ready email');
+    const intent = await notificationIntentForSubject(schema, sent.subject, userId);
+    expect(intent).toMatchObject({
+      senderType: 'system',
+      category: 'account',
+      priority: 'normal',
+      audience: { type: 'user', userId },
+      channels: ['web', 'email'],
+      status: 'sent',
+      createdBy: 'system',
+    });
+    const deliveries = await db
+      .select()
+      .from(schema.notificationDelivery)
+      .where(eq(schema.notificationDelivery.notificationId, intent.id));
+    expect(deliveries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ channel: 'web', status: 'sent' }),
+        expect.objectContaining({ channel: 'email', status: 'sent' }),
+      ]),
+    );
   });
 
   it('expires a ready export whose link TTL has elapsed', async () => {
@@ -88,3 +111,20 @@ describe('sweepAccountExports', () => {
     expect(row.status).toBe('expired');
   });
 });
+
+async function notificationIntentForSubject(
+  schema: Awaited<ReturnType<typeof getDb>>,
+  subject: string,
+  userId: string,
+) {
+  const intents = await schema.db
+    .select()
+    .from(schema.notificationIntent)
+    .where(eq(schema.notificationIntent.subject, subject));
+  const intent = intents.find((row) => {
+    const audience = row.audience as { readonly type?: string; readonly userId?: string };
+    return audience.type === 'user' && audience.userId === userId;
+  });
+  if (!intent) throw new Error(`Expected notification intent for ${subject}`);
+  return intent;
+}

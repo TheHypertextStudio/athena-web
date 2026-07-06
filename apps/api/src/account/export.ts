@@ -32,6 +32,7 @@ import { env } from '../env';
 import { collectWorkLayer } from '../lib/export-collect';
 import { one } from '../lib/one';
 import { linkedIdentities } from '../routes/integration-provider';
+import { dispatchSystemUserNotification } from '../services/notifications/system';
 
 import { type ExportDocument, buildExportArchive } from './archive';
 import { exportReadyEmail } from './emails';
@@ -149,7 +150,7 @@ export async function sweepAccountExports(
   now: string,
 ): Promise<AccountExportSweepResult> {
   const nowDate = new Date(now);
-  const { blob, mailer } = getContainer();
+  const { blob } = getContainer();
 
   // Expire ready artifacts whose link TTL has elapsed.
   const expiredRows = await db
@@ -189,7 +190,15 @@ export async function sweepAccountExports(
           downloadUrl: `${env.API_URL}/v1/me/account/exports/${job.id}/file`,
           expiresAt: expiresAt.toISOString(),
         });
-        await mailer.send({ to: userRow.email, ...email });
+        await dispatchSystemUserNotification(db, {
+          userId: job.userId,
+          email: userRow.email,
+          category: 'account',
+          priority: 'normal',
+          channels: ['web', 'email'],
+          subject: email.subject,
+          body: { html: email.html, text: email.text },
+        });
       }
       generated += 1;
     } catch (err) {

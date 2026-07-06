@@ -87,6 +87,25 @@ describe('sweepDailyDigests (the hero feature)', () => {
     expect(digest!.stats?.total).toBe(2);
 
     expect(outbox.some((m) => m.to === email && m.subject.includes('digest'))).toBe(true);
+    const sent = outbox.find((m) => m.to === email && m.subject.includes('digest'));
+    if (!sent) throw new Error('Expected digest email');
+    const intent = await notificationIntentForSubject(sent.subject, userId);
+    expect(intent).toMatchObject({
+      senderType: 'system',
+      category: 'digest',
+      priority: 'normal',
+      audience: { type: 'user', userId },
+      channels: ['email'],
+      status: 'sent',
+      createdBy: 'system',
+    });
+    const deliveries = await db
+      .select()
+      .from(schema.notificationDelivery)
+      .where(eq(schema.notificationDelivery.notificationId, intent.id));
+    expect(deliveries).toEqual([
+      expect.objectContaining({ channel: 'email', status: 'sent', destinationType: 'email' }),
+    ]);
   });
 
   it('records skipped_empty (and sends nothing) for a due user with no activity', async () => {
@@ -131,3 +150,16 @@ describe('sweepDailyDigests (the hero feature)', () => {
     expect(outbox.filter((m) => m.to === email).length).toBe(1);
   });
 });
+
+async function notificationIntentForSubject(subject: string, userId: string) {
+  const intents = await db
+    .select()
+    .from(schema.notificationIntent)
+    .where(eq(schema.notificationIntent.subject, subject));
+  const intent = intents.find((row) => {
+    const audience = row.audience as { readonly type?: string; readonly userId?: string };
+    return audience.type === 'user' && audience.userId === userId;
+  });
+  if (!intent) throw new Error(`Expected notification intent for ${subject}`);
+  return intent;
+}

@@ -99,9 +99,12 @@
   The dispatcher now attempts email deliveries after preference/contact-point resolution while leaving
   web inbox read state independent from email delivery state. Migrated recovery-code regeneration to
   dispatch a `security` intent over web and email, preserving the existing email subject/body and
-  materializing the authenticated account email as a contact point before dispatch. Focused validation:
-  `@docket/api` email dispatcher tests and `me-recovery` route tests pass. Remaining Task 5 migrations:
-  account deletion, export-ready, and digest sends.
+  materializing the authenticated account email as a contact point before dispatch. Account deletion
+  scheduling/cancelation and export-ready now dispatch `account` intents over web and email. Daily
+  digest sends dispatch `digest` email intents with `skip_user_preferences`, because the digest sweep
+  already selects only users who opted into the digest feature while still recording contact-point and
+  delivery health. Focused validation: `@docket/api` email dispatcher, account, export, digest, and
+  recovery route tests pass.
 
 ### [AUTH-SEC-001] Auth security & UX audit remediation
 

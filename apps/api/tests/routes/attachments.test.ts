@@ -196,6 +196,69 @@ describe('attachment routes', () => {
     ).toBe(404);
   });
 
+  it("creates an email attachment when sourceIntegrationId belongs to the caller's own org", async () => {
+    const { orgId, humanActorId, taskId } = await seedOrgWithTask();
+    const integrationRow = one(
+      await db
+        .insert(schema.integration)
+        .values({
+          organizationId: orgId,
+          provider: 'gmail',
+          pattern: 'connector',
+          roles: ['signal'],
+          createdBy: humanActorId,
+        })
+        .returning({ id: schema.integration.id }),
+    );
+    const w = appWithActor(attachments, orgId, ['contribute'], humanActorId);
+    const res = await w.request(`/${taskId}/attachments`, {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({
+        kind: 'email',
+        title: 'Interview thread',
+        sourceIntegrationId: integrationRow.id,
+        externalId: 'thread_xyz',
+      }),
+    });
+    expect(res.status).toBe(200);
+    const created = await body<AttachmentOut>(res);
+    expect(created.sourceIntegrationId).toBe(integrationRow.id);
+  });
+
+  it('404s an email attachment whose sourceIntegrationId belongs to a different org', async () => {
+    // Regression test: a caller must not be able to point a task's email attachment at another
+    // org's integration — that integration id later flows into automation mail actions, which
+    // would then act on the victim org's real mailbox using the victim's OAuth grant.
+    const victim = await seedOrgWithTask();
+    const victimIntegration = one(
+      await db
+        .insert(schema.integration)
+        .values({
+          organizationId: victim.orgId,
+          provider: 'gmail',
+          pattern: 'connector',
+          roles: ['signal'],
+          createdBy: victim.humanActorId,
+        })
+        .returning({ id: schema.integration.id }),
+    );
+
+    const attacker = await seedOrgWithTask();
+    const w = appWithActor(attachments, attacker.orgId, ['contribute'], attacker.humanActorId);
+    const res = await w.request(`/${attacker.taskId}/attachments`, {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({
+        kind: 'email',
+        title: 'Interview thread',
+        sourceIntegrationId: victimIntegration.id,
+        externalId: 'thread_xyz',
+      }),
+    });
+    expect(res.status).toBe(404);
+  });
+
   it('uploads a file: stores the bytes and records file metadata', async () => {
     const { orgId, humanActorId, taskId } = await seedOrgWithTask();
     const w = appWithActor(attachments, orgId, ['contribute'], humanActorId);

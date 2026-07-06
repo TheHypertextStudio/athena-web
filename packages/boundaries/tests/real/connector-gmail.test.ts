@@ -226,6 +226,70 @@ describe('GmailProviderClient listThreads', () => {
     expect(page.threads.map((t) => t.threadId)).toEqual(['t3', 't4']);
   });
 
+  it('incremental pull: does not advance the cursor when maxThreads caps the walk before it drains', async () => {
+    // Regression test: if the walk hits maxThreads while a history page is still pending
+    // (nextPageToken present), the historyId from the partial page must NOT become the next
+    // cursor — Gmail's historyId is the mailbox's *current* record, not a resumption token, so
+    // persisting it here would permanently skip the un-fetched, older history.
+    const http = new RecordingHttp();
+    let historyCalls = 0;
+    http.respond = (path) => {
+      if (path.startsWith('/users/me/history?')) {
+        historyCalls += 1;
+        expect(path).toContain('startHistoryId=h100');
+        return {
+          history: [{ messagesAdded: [{ message: { threadId: 't1' } }] }],
+          nextPageToken: 'p2',
+          historyId: 'h150',
+        };
+      }
+      if (path.startsWith('/users/me/threads/t1')) return threadJson('t1');
+      throw new Error(`unexpected path ${path}`);
+    };
+    const page = await gmailClient(http).listThreads({
+      connectionId: 'c',
+      cursor: 'h100',
+      maxThreads: 1,
+    });
+    expect(page.kind).toBe('page');
+    if (page.kind !== 'page') return;
+    // Capped after the first page — the second page (pageToken=p2) is never fetched.
+    expect(historyCalls).toBe(1);
+    expect(page.threads.map((t) => t.threadId)).toEqual(['t1']);
+    expect(page.nextCursor).toBe('h100'); // unchanged, not the partial page's 'h150'
+  });
+
+  it('incremental pull: advances the cursor once a multi-page walk fully drains', async () => {
+    const http = new RecordingHttp();
+    http.respond = (path) => {
+      if (path.startsWith('/users/me/history?')) {
+        if (path.includes('pageToken=p2')) {
+          return {
+            history: [{ messagesAdded: [{ message: { threadId: 't2' } }] }],
+            historyId: 'h200', // final page: no nextPageToken → fully drained
+          };
+        }
+        return {
+          history: [{ messagesAdded: [{ message: { threadId: 't1' } }] }],
+          nextPageToken: 'p2',
+          historyId: 'h150',
+        };
+      }
+      if (path.startsWith('/users/me/threads/t1')) return threadJson('t1');
+      if (path.startsWith('/users/me/threads/t2')) return threadJson('t2');
+      throw new Error(`unexpected path ${path}`);
+    };
+    const page = await gmailClient(http).listThreads({
+      connectionId: 'c',
+      cursor: 'h100',
+      maxThreads: 50, // high enough that the cap never truncates the walk
+    });
+    expect(page.kind).toBe('page');
+    if (page.kind !== 'page') return;
+    expect(page.threads.map((t) => t.threadId)).toEqual(['t1', 't2']);
+    expect(page.nextCursor).toBe('h200'); // the final (drained) page's historyId
+  });
+
   it('a stale history cursor (404) surfaces as cursorExpired, not a throw', async () => {
     const http = new RecordingHttp();
     http.respond = () => {

@@ -114,13 +114,13 @@ Registered in `buildAutomationRegistry` (`apps/api/src/lib/automation/handlers.t
 handler validates its params and **no-ops loudly** (returns without effect) on a wrong
 subject type or invalid params — rules can never throw domain errors.
 
-| Type                                   | Params              | Subject            | Behavior                                                                                           | Idempotency                                                  |
-| -------------------------------------- | ------------------- | ------------------ | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| `mail.archive`                         | `{}`                | `task`             | Archives the source email of the task's email attachment(s) via the integration's mail capability. | `attachment.lastEmailStateAction` ledger (last-action-wins). |
-| `mail.markRead` / `mail.markUnread`    | `{}`                | `task`             | Read-state on the source thread.                                                                   | ledger                                                       |
-| `mail.trash`                           | `{}`                | `task`             | Trashes the source thread.                                                                         | ledger                                                       |
-| `mail.applyLabel` / `mail.removeLabel` | `{ label: string }` | `task`             | Provider label/category on the source thread; no-op without `label`.                               | ledger                                                       |
-| `suggestion.dismiss`                   | `{}`                | `email_suggestion` | Sets the firing suggestion `pending → dismissed`.                                                  | status guard (`pending` only)                                |
+| Type                                   | Params              | Subject            | Behavior                                                                                                                                                                                                                                       | Idempotency                                                  |
+| -------------------------------------- | ------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `mail.archive`                         | `{}`                | `task`             | Archives the source email of the task's email attachment(s) via the integration's mail capability. **Org-scoped**: the resolved integration must belong to the firing event's org — never trusts the attachment's `sourceIntegrationId` alone. | `attachment.lastEmailStateAction` ledger (last-action-wins). |
+| `mail.markRead` / `mail.markUnread`    | `{}`                | `task`             | Read-state on the source thread.                                                                                                                                                                                                               | ledger                                                       |
+| `mail.trash`                           | `{}`                | `task`             | Trashes the source thread.                                                                                                                                                                                                                     | ledger                                                       |
+| `mail.applyLabel` / `mail.removeLabel` | `{ label: string }` | `task`             | Provider label/category on the source thread; no-op without `label`.                                                                                                                                                                           | ledger                                                       |
+| `suggestion.dismiss`                   | `{}`                | `email_suggestion` | Sets the firing suggestion `pending → dismissed`.                                                                                                                                                                                              | status guard (`pending` only)                                |
 
 | `task.setStatus` | `{ state: string }` | `task` | Moves the task to the workflow state via the shared transition lib (`lib/task-state.ts` — the same implementation as `POST /tasks/:id/status`; terminal states derive `completedAt`/`canceledAt`). Unknown state key → logged no-op. | shared lib; emitted event doesn't cascade (depth-1 cap) |
 | `task.assign` | `{ assigneeId: string }` | `task` | Assigns to an **org** actor (cross-tenant ids are refused); emits `assignment`. | org-scope check |
@@ -158,6 +158,12 @@ edit or delete.
   calls, so `on completed → task.setStatus(done)` can never self-loop.
 - **Mutating actions carry their own idempotency** (the mail ledger, status guards), so an
   occasional re-fire after a partial failure is safe.
+- **Per-action isolation.** The engine wraps every `handler.run()` call individually
+  (`engine.ts`); a thrown error is logged (`[automation] action failed`, tagged with the
+  rule's `on` and the action `type`) and recorded as `ran: false` — it never aborts the rest
+  of that rule's actions or any other rule matching the same event. Handlers should still
+  guard themselves and no-op loudly on expected bad input (the catalog above); this is the
+  backstop for anything that still throws.
 - **Durable-drain seam.** Both call sites are one-line calls behind the projection
   functions. Swapping to a checkpointed async consumer (`apps/api/src/consumers/`) that
   reads committed `event` rows — at-least-once, lease-guarded like the inbound-event drain —

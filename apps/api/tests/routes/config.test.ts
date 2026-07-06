@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { PublicConfigOut } from '@docket/types';
 
@@ -23,5 +23,30 @@ describe('GET /config', () => {
     expect(body.appMode).toBe('test');
     expect(body.oauthProviders).toEqual([]);
     expect(body.connectors).toEqual([]);
+  });
+
+  // Runs last: resets the module registry to pick up the mutated env, which would orphan any
+  // shared DB proxy other tests in this file depended on — this file has none.
+  it('surfaces outlook once MICROSOFT_CLIENT_ID/SECRET are configured (M6: dormant until env values exist)', async () => {
+    const prevId = process.env['MICROSOFT_CLIENT_ID'];
+    const prevSecret = process.env['MICROSOFT_CLIENT_SECRET'];
+    process.env['MICROSOFT_CLIENT_ID'] = 'ms-client-id-123';
+    process.env['MICROSOFT_CLIENT_SECRET'] = 'ms-client-secret-456';
+    vi.resetModules();
+    try {
+      const freshConfig = (await import('../../src/routes/config')).default;
+      const app = appWithSession(freshConfig, null);
+      const res = await app.request('/', { method: 'GET' });
+      expect(res.status).toBe(200);
+      const body = PublicConfigOut.parse(await res.json());
+      expect(body.oauthProviders).toContain('microsoft');
+      expect(body.connectors).toContain('outlook');
+    } finally {
+      if (prevId !== undefined) process.env['MICROSOFT_CLIENT_ID'] = prevId;
+      else delete process.env['MICROSOFT_CLIENT_ID'];
+      if (prevSecret !== undefined) process.env['MICROSOFT_CLIENT_SECRET'] = prevSecret;
+      else delete process.env['MICROSOFT_CLIENT_SECRET'];
+      vi.resetModules();
+    }
   });
 });

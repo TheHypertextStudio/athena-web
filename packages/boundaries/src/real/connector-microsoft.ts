@@ -160,7 +160,20 @@ export class MicrosoftProviderClient implements MailActionsProviderClient {
     return [];
   }
 
-  /** {@inheritDoc MailActions.listThreads} */
+  /**
+   * {@inheritDoc MailActions.listThreads}
+   *
+   * @remarks
+   * The walk is bounded by `input.maxThreads` (mirrors Gmail's cold-pull bound), not just the
+   * output list: once enough distinct conversations have been seen, the walk stops reading
+   * further pages rather than draining all the way to `@odata.deltaLink` and only then
+   * discarding the overflow — that would persist a cursor claiming the excess conversations
+   * were consumed, and Graph's delta protocol never re-offers them once past that point. The
+   * returned cursor is always real forward progress: the terminal `deltaLink` (fully drained),
+   * a mid-walk `nextLink` (capped by `maxThreads` or by `MAX_DELTA_PAGES`), or — if the walk
+   * made no progress at all — the page just requested, so the next sweep resumes exactly here
+   * instead of silently persisting nothing and reprocessing from the original cursor forever.
+   */
   async listThreads(input: ListThreadsInput): Promise<MailListPage> {
     const firstPath =
       input.cursor !== undefined
@@ -169,7 +182,7 @@ export class MicrosoftProviderClient implements MailActionsProviderClient {
 
     // Latest message per conversation wins (delta yields messages, not threads).
     const latestByConversation = new Map<string, GraphMessage>();
-    let deltaLink: string | undefined;
+    let resumeCursor: string | undefined;
     let path = firstPath;
     try {
       for (let page = 0; page < MAX_DELTA_PAGES; page++) {
@@ -183,8 +196,12 @@ export class MicrosoftProviderClient implements MailActionsProviderClient {
             latestByConversation.set(conversationId, m);
           }
         }
+        if (latestByConversation.size >= input.maxThreads) {
+          resumeCursor = json['@odata.deltaLink'] ?? json['@odata.nextLink'];
+          break;
+        }
         if (json['@odata.deltaLink']) {
-          deltaLink = json['@odata.deltaLink'];
+          resumeCursor = json['@odata.deltaLink'];
           break;
         }
         if (!json['@odata.nextLink']) break;
@@ -210,8 +227,7 @@ export class MicrosoftProviderClient implements MailActionsProviderClient {
         externalUrl: m.webLink ?? '',
       }));
 
-    // A missing deltaLink (walk truncated by MAX_DELTA_PAGES) keeps full-pull semantics.
-    return { kind: 'page', threads, nextCursor: deltaLink ?? '' };
+    return { kind: 'page', threads, nextCursor: resumeCursor ?? path };
   }
 
   /** List a conversation's message ids + categories (the thread→messages fan-out). */

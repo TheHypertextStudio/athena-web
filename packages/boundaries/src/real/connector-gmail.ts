@@ -201,10 +201,20 @@ export class GmailProviderClient implements MailActionsProviderClient {
   /**
    * Incremental pull: `history.list` from the stored cursor, yielding only threads with
    * newly-added messages. A 404 means the history id expired — surfaced as `cursorExpired`.
+   *
+   * @remarks
+   * Gmail's `historyId` on a `history.list` response is the mailbox's CURRENT history record,
+   * not a per-page resumption token — the API's own guidance is to persist it only once
+   * pagination is fully drained (no `nextPageToken`). Advancing the cursor from a page that
+   * still has more pages behind it would permanently skip the un-fetched, older history: the
+   * next incremental pull starts from "now" and those records are gone, not merely delayed.
+   * If `maxThreads` is hit before the walk drains, the cursor is left unchanged — the next
+   * sweep resumes this same walk from the same `startHistoryId` (re-fetching already-seen
+   * threads is redundant but harmless; ingest is dedup'd downstream).
    */
   private async listThreadsIncremental(cursor: string, maxThreads: number): Promise<MailListPage> {
     const threadIds = new Set<string>();
-    let nextCursor = cursor;
+    let historyId: string | undefined;
     let pageToken: string | undefined;
     try {
       do {
@@ -218,7 +228,7 @@ export class GmailProviderClient implements MailActionsProviderClient {
             if (threadId) threadIds.add(threadId);
           }
         }
-        if (j.historyId) nextCursor = j.historyId;
+        historyId = j.historyId ?? historyId;
         pageToken = j.nextPageToken;
       } while (pageToken && threadIds.size < maxThreads);
     } catch (error) {
@@ -226,6 +236,9 @@ export class GmailProviderClient implements MailActionsProviderClient {
       throw error;
     }
     const threads = await this.hydrateSummaries([...threadIds].slice(0, maxThreads));
+    // Fully drained (no pageToken left) is the only case it's safe to advance the cursor.
+    const exhausted = !pageToken;
+    const nextCursor = exhausted && historyId ? historyId : cursor;
     return { kind: 'page', threads, nextCursor };
   }
 

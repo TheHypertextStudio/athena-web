@@ -36,13 +36,13 @@
     "@docket/db": "workspace:*",
     "@docket/env": "workspace:*",
     "@docket/types": "workspace:*",
-    "@hono/node-server": "^2.0.4",
+    "@hono/node-server": "^2.0.8",
     "@modelcontextprotocol/sdk": "catalog:",
     "@scalar/hono-api-reference": "catalog:",
     "drizzle-orm": "catalog:",
     "hono": "catalog:",
     "hono-openapi": "catalog:",
-    "tsx": "^4.22.4",
+    "tsx": "^4.23.0",
     "zod": "catalog:"
   },
   "devDependencies": {
@@ -50,7 +50,7 @@
     "@docket/tsconfig": "workspace:*",
     "@electric-sql/pglite": "catalog:",
     "@types/node": "25.9.2",
-    "vite": "^8.0.16",
+    "vite": "^8.1.3",
     "vitest": "^4.1.8"
   }
 }

@@ -38,6 +38,14 @@
   instead of adding another large surface to `@docket/types`. `@docket/types` remains limited to shared
   primitives/current DTOs for this slice. Validation so far: `@docket/notifications` test/typecheck/lint
   pass; `@docket/types` test/typecheck/lint pass.
+- **Schema milestone update (2026-07-06)**: Added reusable notification-domain fixtures under
+  `@docket/notifications/testing` and DB schema fixtures under `packages/db/tests/fixtures/`. Added
+  notification-service enums, typed jsonb shapes, durable intent/recipient/delivery/preference/contact
+  point/inbound-event tables, and nullable `intent_id`/`delivery_id` projection links on the existing
+  inbox table. Generated `packages/db/drizzle/0023_large_gauntlet.sql`; inspected it for destructive
+  operations (none found). Validation: `@docket/db` test/typecheck/lint pass; `@docket/notifications`
+  test/typecheck/lint pass; `@docket/types` test/typecheck/lint pass;
+  `@docket/api` notification inbox route suite passes.
 
 ### [AUTH-SEC-001] Auth security & UX audit remediation
 

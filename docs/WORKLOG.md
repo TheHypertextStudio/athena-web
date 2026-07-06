@@ -1,11 +1,34 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-07-03
+> **Last Updated**: 2026-07-06
 
 ---
 
 ## Active Tasks
+
+### [NOTIF-SPEC-001] Cross-platform notification service design
+
+- **Status**: REVIEW (design spec written; implementation plan pending user review)
+- **Started**: 2026-07-06
+- **Priority**: P1
+- **Description**: Define the product, UX, REST API, delivery, inbound-event, and rollout shape
+  for a Slack-like cross-platform notification service that handles web, email, phone/SMS, and
+  future mobile push without reducing the system to a generic mailer wrapper.
+- **Approach**: Build from shipped Athena surfaces: the existing `Mailer` port, account/security/
+  export/digest email call sites, `/v1/notifications`, and automation notifications. Specify the
+  user experience first, then the API resources, data model, permissions, provider events, and
+  phased rollout.
+- **Subtasks**:
+  - [x] Capture intended behavior for notification intents, recipient snapshots, deliveries,
+        contact points, preferences, inbound events, quiet hours, suppression, and read/action
+        state.
+  - [x] Detail the user experience for the web inbox, preferences, contact points, email, SMS,
+        future push, staff announcements, org-authored sends, and developer usage.
+  - [x] Describe the REST API surface and implementation boundaries without starting code changes.
+- **Notes**: Spec written at
+  `docs/superpowers/specs/2026-07-06-cross-platform-notification-service-design.md`. User review is
+  needed before implementation planning.
 
 ### [AUTH-SEC-001] Auth security & UX audit remediation
 

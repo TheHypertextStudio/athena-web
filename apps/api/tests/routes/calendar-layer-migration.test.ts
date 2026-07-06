@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { getDb, one, seedBaseOrg, seedUserWithHub } from './harness.test';
 
 /**
- * The exact backfill INSERT statements appended to `drizzle/0016_conscious_hulk.sql`.
+ * The exact backfill INSERT statements appended to `drizzle/0023_conscious_hulk.sql`.
  * Migrations run once at `getDb()` time (before any fixture rows exist), so re-reading
  * the migration file's SQL here would be a no-op smoke test. Instead we inline the same
  * two statements and run them directly against seeded `calendar_list`/`calendar_event`

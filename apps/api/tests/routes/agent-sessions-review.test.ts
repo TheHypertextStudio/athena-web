@@ -9,10 +9,7 @@
  * conflicts, and invalid input. Runs against an in-memory pglite database with an
  * injected actor context (no Better Auth in the loop).
  */
-import { resolve } from 'node:path';
-
 import { Hono } from 'hono';
-import { migrate } from 'drizzle-orm/pglite/migrator';
 import { and, asc, eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
@@ -31,6 +28,7 @@ import type {
 import type { ActorCtx, AppEnv } from '../../src/context';
 import { onError } from '../../src/error';
 import type agentSessionsRouter from '../../src/routes/agent-sessions';
+import { getMigratedDb } from '../support/db';
 
 // The shared `db` is constructed from process.env on first access, so the required
 // vars must be set BEFORE any module that touches them is imported.
@@ -40,8 +38,6 @@ process.env['NODE_ENV'] = 'test';
 process.env['BETTER_AUTH_SECRET'] = 'test-secret-test-secret-test-secret-0123456789';
 process.env['CRON_SECRET'] = 'test-cron-secret';
 process.env['SKIP_ENV_VALIDATION'] = '1';
-
-const MIGRATIONS = resolve(import.meta.dirname, '../../../../packages/db/drizzle');
 
 let db!: typeof DbType;
 let organization!: typeof OrgTable;
@@ -77,7 +73,7 @@ function post(app: ReturnType<typeof appFor>, path: string, body: unknown = {}) 
 }
 
 beforeAll(async () => {
-  const dbmod = await import('@docket/db');
+  const dbmod = await getMigratedDb();
   db = dbmod.db;
   organization = dbmod.organization;
   team = dbmod.team;
@@ -87,7 +83,6 @@ beforeAll(async () => {
   agentSession = dbmod.agentSession;
   sessionActivity = dbmod.sessionActivity;
   auditEvent = dbmod.auditEvent;
-  await migrate(db as never, { migrationsFolder: MIGRATIONS });
   agentSessions = (await import('../../src/routes/agent-sessions')).default;
 });
 

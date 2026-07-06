@@ -1,12 +1,10 @@
-import { resolve } from 'node:path';
-
 import { db, genId, oauthApplication, oauthConsent, user } from '@docket/db';
-import { migrate } from 'drizzle-orm/pglite/migrator';
 import { Hono } from 'hono';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type { AppEnv } from '../../src/context';
 import type * as ConsentGuardModule from '../../src/mcp/consent-guard';
+import { getMigratedDb } from '../support/db';
 
 process.env['DATABASE_URL'] = 'pglite://memory://';
 process.env['APP_MODE'] = 'test';
@@ -15,12 +13,10 @@ process.env['BETTER_AUTH_SECRET'] = 'test-secret-test-secret-test-secret-0123456
 process.env['CRON_SECRET'] = 'test-cron-secret';
 process.env['SKIP_ENV_VALIDATION'] = '1';
 
-const MIGRATIONS = resolve(import.meta.dirname, '../../../../packages/db/drizzle');
-
 let guard!: typeof ConsentGuardModule;
 
 beforeAll(async () => {
-  await migrate(db as never, { migrationsFolder: MIGRATIONS });
+  await getMigratedDb();
   guard = await import('../../src/mcp/consent-guard');
 });
 

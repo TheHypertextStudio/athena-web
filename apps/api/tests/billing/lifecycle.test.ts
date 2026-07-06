@@ -1,12 +1,8 @@
-import { resolve } from 'node:path';
-
 import { InMemoryBillingGateway } from '@docket/billing';
 import { type Database, organization } from '@docket/db';
-import { PGlite } from '@electric-sql/pglite';
+import type { PGlite } from '@electric-sql/pglite';
 import { eq } from 'drizzle-orm';
-import { drizzle } from 'drizzle-orm/pglite';
-import { migrate } from 'drizzle-orm/pglite/migrator';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import {
   applyBillingEvent,
@@ -16,11 +12,13 @@ import {
   onTrialOrPaymentTerminal,
   sweepLifecycle,
 } from '../../src/billing/lifecycle';
+import { createBillingLifecycleDb } from './test-db';
 
 const NOW = '2026-01-01T00:00:00.000Z';
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 let db!: Database;
+let client: PGlite | undefined;
 
 /** Insert an org in a given lifecycle state and return its id. */
 async function makeOrg(
@@ -50,12 +48,13 @@ async function readOrg(id: string) {
 }
 
 beforeAll(async () => {
-  const client = new PGlite('memory://');
-  const d = drizzle(client);
-  await migrate(d, {
-    migrationsFolder: resolve(import.meta.dirname, '../../../../packages/db/drizzle'),
-  });
-  db = d as unknown as Database;
+  const fixture = await createBillingLifecycleDb();
+  db = fixture.db;
+  client = fixture.client;
+});
+
+afterAll(async () => {
+  await client?.close();
 });
 
 describe('onTrialOrPaymentTerminal', () => {

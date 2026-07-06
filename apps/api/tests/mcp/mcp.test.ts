@@ -1,11 +1,8 @@
-import { resolve } from 'node:path';
-
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { Hono } from 'hono';
-import { migrate } from 'drizzle-orm/pglite/migrator';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
@@ -34,6 +31,7 @@ import type { McpContext } from '../../src/mcp/auth';
 import type { registerTools as RegisterTools } from '../../src/mcp/tools';
 import type { registerResources as RegisterResources } from '../../src/mcp/resources';
 import type { mcpHandler as McpHandler } from '../../src/mcp/server';
+import { getMigratedDb } from '../support/db';
 
 // The shared `db`/`env`/`auth` are constructed from process.env on first access, so the
 // required vars must be set BEFORE any module that touches them is imported. `NODE_ENV`
@@ -44,8 +42,6 @@ process.env['NODE_ENV'] = 'test';
 process.env['BETTER_AUTH_SECRET'] = 'test-secret-test-secret-test-secret-0123456789';
 process.env['CRON_SECRET'] = 'test-cron-secret';
 process.env['SKIP_ENV_VALIDATION'] = '1';
-
-const MIGRATIONS = resolve(import.meta.dirname, '../../../../packages/db/drizzle');
 
 let db!: typeof DbType;
 let organization!: typeof OrgTable;
@@ -60,7 +56,7 @@ let registerResources!: typeof RegisterResources;
 let mcpHandler!: typeof McpHandler;
 
 beforeAll(async () => {
-  const dbmod = await import('@docket/db');
+  const dbmod = await getMigratedDb();
   db = dbmod.db;
   organization = dbmod.organization;
   team = dbmod.team;
@@ -69,8 +65,6 @@ beforeAll(async () => {
   grant = dbmod.grant;
   task = dbmod.task;
   user = dbmod.user;
-  // Migrate the shared in-memory PGlite instance the handlers + canActor read/write.
-  await migrate(db as never, { migrationsFolder: MIGRATIONS });
   registerTools = (await import('../../src/mcp/tools')).registerTools;
   registerResources = (await import('../../src/mcp/resources')).registerResources;
   mcpHandler = (await import('../../src/mcp/server')).mcpHandler;

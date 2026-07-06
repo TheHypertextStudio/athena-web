@@ -5,7 +5,7 @@ import { eq, sql } from 'drizzle-orm';
 import { getTableConfig, type PgTable } from 'drizzle-orm/pg-core';
 import { drizzle } from 'drizzle-orm/pglite';
 import { migrate } from 'drizzle-orm/pglite/migrator';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { genId } from '../src/id';
 import { fullSchema, type Database } from '../src/client';
@@ -85,36 +85,6 @@ describe('genId', () => {
     const a = genId();
     const b = genId();
     expect(a).not.toEqual(b);
-  });
-});
-
-describe('migrations', () => {
-  it('apply to a fresh in-process PGlite and create the core tables', async () => {
-    const client = new PGlite('memory://');
-    const db = drizzle(client);
-    await migrate(db, { migrationsFolder: resolve(import.meta.dirname, '../drizzle') });
-
-    const coreTables = [
-      'organization',
-      'actor',
-      'team',
-      'task',
-      'role',
-      'grant',
-      'calendar_connection',
-      'calendar_list',
-      'calendar_event',
-      'user',
-      'passkey',
-    ];
-    for (const table of coreTables) {
-      const res = (await db.execute(
-        sql`select to_regclass(${`public.${table}`}) as reg`,
-      )) as unknown as { rows: { reg: string | null }[] };
-      expect(res.rows[0]?.reg, `table ${table} should exist`).not.toBeNull();
-    }
-
-    await client.close();
   });
 });
 
@@ -245,11 +215,12 @@ describe('schema foreign-key references (covers every `.references(() => …)` c
 
 describe('schema inserts + updates (covers $defaultFn + $onUpdate callbacks)', () => {
   let db!: Database;
+  let client: PGlite | undefined;
   // Shared ids threaded through the FK graph.
   const ids: Record<string, string> = {};
 
   beforeAll(async () => {
-    const client = new PGlite('memory://');
+    client = new PGlite('memory://');
     const d = drizzle(client, { schema: fullSchema });
     await migrate(d, { migrationsFolder: resolve(import.meta.dirname, '../drizzle') });
     db = d as unknown as Database;
@@ -642,6 +613,29 @@ describe('schema inserts + updates (covers $defaultFn + $onUpdate callbacks)', (
       requestHash: 'h',
       expiresAt: new Date(Date.now() + 8.64e7),
     });
+  });
+
+  afterAll(async () => {
+    await client?.close();
+  });
+
+  it('applies migrations and creates the core tables', async () => {
+    const coreTables = [
+      'organization',
+      'actor',
+      'team',
+      'task',
+      'role',
+      'grant',
+      'user',
+      'passkey',
+    ];
+    for (const table of coreTables) {
+      const res = (await db.execute(
+        sql`select to_regclass(${`public.${table}`}) as reg`,
+      )) as unknown as { rows: { reg: string | null }[] };
+      expect(res.rows[0]?.reg, `table ${table} should exist`).not.toBeNull();
+    }
   });
 
   it('generated a ULID id for every inserted row', () => {

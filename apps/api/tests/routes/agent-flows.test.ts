@@ -1,7 +1,4 @@
-import { resolve } from 'node:path';
-
 import { Hono } from 'hono';
-import { migrate } from 'drizzle-orm/pglite/migrator';
 import { and, asc, eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
@@ -21,6 +18,7 @@ import type { ActorCtx, AppEnv } from '../../src/context';
 import { onError } from '../../src/error';
 import type agentSessionsRouter from '../../src/routes/agent-sessions';
 import type integrationsRouter from '../../src/routes/integrations';
+import { getMigratedDb } from '../support/db';
 
 // The shared `db` and `env`/container are constructed from process.env on first access,
 // so the required vars (including APP_MODE=test, which forces the mock boundary
@@ -31,8 +29,6 @@ process.env['NODE_ENV'] = 'test';
 process.env['BETTER_AUTH_SECRET'] = 'test-secret-test-secret-test-secret-0123456789';
 process.env['CRON_SECRET'] = 'test-cron-secret';
 process.env['SKIP_ENV_VALIDATION'] = '1';
-
-const MIGRATIONS = resolve(import.meta.dirname, '../../../../packages/db/drizzle');
 
 let db!: typeof DbType;
 let organization!: typeof OrgTable;
@@ -65,7 +61,7 @@ function appFor(
 }
 
 beforeAll(async () => {
-  const dbmod = await import('@docket/db');
+  const dbmod = await getMigratedDb();
   db = dbmod.db;
   organization = dbmod.organization;
   team = dbmod.team;
@@ -75,7 +71,6 @@ beforeAll(async () => {
   integration = dbmod.integration;
   agentSession = dbmod.agentSession;
   sessionActivity = dbmod.sessionActivity;
-  await migrate(db as never, { migrationsFolder: MIGRATIONS });
   agentSessions = (await import('../../src/routes/agent-sessions')).default;
   integrations = (await import('../../src/routes/integrations')).default;
 });

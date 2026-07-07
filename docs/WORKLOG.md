@@ -9,7 +9,7 @@
 
 ### [NOTIF-SPEC-001] Cross-platform notification service
 
-- **Status**: IN_PROGRESS
+- **Status**: DONE
 - **Started**: 2026-07-06
 - **Priority**: P1
 - **Description**: Define the product, UX, REST API, delivery, inbound-event, and rollout shape
@@ -208,8 +208,18 @@ false`, and touched-file ESLint pass. Browser E2E remains a later dev-stack gate
 --dir apps/web test:e2e sign-in.spec.ts` passed 1/1 in 1.7m; `APP_URL=http://localhost:3100
 API_URL=http://localhost:4100 PASSKEY_RP_ID=localhost pnpm --dir apps/web test:e2e
 notifications.spec.ts` passed 1/1 after selector tightening; `pnpm --dir apps/web exec tsc -p
-e2e/tsconfig.json --noEmit`, `pnpm --filter @docket/web lint`, and `pnpm exec prettier --check
-apps/web/e2e/notifications.spec.ts` passed.
+  e2e/tsconfig.json --noEmit`, `pnpm --filter @docket/web lint`, and `pnpm exec prettier --check
+  apps/web/e2e/notifications.spec.ts` passed.
+- **Completion audit (2026-07-07)**: Verified the implemented tree against the notification-service
+  spec checklist: schema symbols exist for intents, recipient snapshots, deliveries, preferences,
+  contact points, and inbound events; API mounts exist for `/v1/me/notifications`,
+  `/v1/me/notification-preferences`, `/v1/me/contact-points`, `/v1/notifications`,
+  `/admin/notifications`, and `/internal/notifications`; web/email/SMS/push adapters record
+  delivery state through shared delivery helpers; inbound services normalize provider events and
+  update delivery/contact-point health; staff and user UX files plus component/E2E tests are present;
+  operational docs exist in `docs/engineering/specs/notification-service.md` and
+  `docs/engineering/deployment.md`; and `git rev-list --merges --count origin/main..HEAD` returned
+  `0`.
 
 ### [AUTH-SEC-001] Auth security & UX audit remediation
 

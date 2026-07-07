@@ -150,4 +150,44 @@ describe('the Athena chat thread', () => {
     const userMsgs = afterTwo.activities.filter((a) => a.body['author'] === 'user');
     expect(userMsgs).toHaveLength(2);
   });
+
+  it('starts a fresh chat session without deleting the prior one', async () => {
+    const seed = await seedOrg();
+    const app = appFor(seed.orgId, seed.humanActorId);
+    const runtime = new boundaries.MockAgentTurnRuntime({
+      script: chatScript(['Got it.']),
+    });
+    vi.spyOn(getContainer().agentTurn, 'streamTurn').mockImplementation((input) =>
+      runtime.streamTurn(input),
+    );
+
+    const first = await app.request('/chat/messages', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ body: 'Remember this thread.' }),
+    });
+    const original = (await first.json()) as AgentSessionDetailOut;
+
+    const started = await app.request('/chat/new', { method: 'POST' });
+    expect(started.status).toBe(200);
+    const fresh = (await started.json()) as AgentSessionDetailOut;
+    expect(fresh.id).not.toBe(original.id);
+    expect(fresh.activities).toHaveLength(0);
+
+    // `GET /chat` now resumes the NEW session (newest wins) …
+    const chatRes = await app.request('/chat', { method: 'GET' });
+    const current = (await chatRes.json()) as AgentSessionDetailOut;
+    expect(current.id).toBe(fresh.id);
+
+    // … while the original session's history is still there, untouched.
+    const rows = await db
+      .select()
+      .from(schema.agentSession)
+      .where(eq(schema.agentSession.organizationId, seed.orgId));
+    expect(rows).toHaveLength(2);
+    const original2 = await app.request(`/${original.id}`, { method: 'GET' });
+    expect(original2.status).toBe(200);
+    const originalDetail = (await original2.json()) as AgentSessionDetailOut;
+    expect(originalDetail.activities.map((a) => a.body['text'])).toContain('Remember this thread.');
+  });
 });

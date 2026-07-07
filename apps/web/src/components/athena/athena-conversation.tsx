@@ -17,7 +17,7 @@
  */
 import type { AgentSessionDetailOut, SessionActivityOut } from '@docket/types';
 import { EmptyState } from '@docket/ui/components';
-import { Cable, Sparkles } from '@docket/ui/icons';
+import { Cable, Plus, Sparkles } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import {
   Button,
@@ -86,6 +86,25 @@ export default function AthenaConversation({
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end' });
   }, [thread?.activities.length]);
+
+  const newChat = useCallback(async (): Promise<void> => {
+    setError(null);
+    try {
+      const res = await api.v1.orgs[':orgId'].sessions.chat.new.$post({ param: { orgId } });
+      if (!res.ok) {
+        setError(await readProblem(res, 'Could not start a new chat.'));
+        return;
+      }
+      const data = await res.json();
+      // The prior conversation isn't deleted — it's just no longer "current" — so clear the
+      // visible thread the same way an approval clears its ghosts: as a transition, not a jump.
+      startViewTransition(() => {
+        setThread(data);
+      });
+    } catch (caught) {
+      setError(readError(caught, 'Something went wrong starting a new chat.'));
+    }
+  }, [orgId]);
 
   const send = useCallback(async (): Promise<void> => {
     const text = draft.trim();
@@ -185,6 +204,19 @@ export default function AthenaConversation({
       </form>
 
       <div className="flex items-center justify-end gap-1 pt-1">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="text-on-surface-variant gap-1.5"
+          disabled={!thread || thread.activities.length === 0}
+          onClick={() => {
+            void newChat();
+          }}
+        >
+          <Plus aria-hidden="true" className="size-3.5" />
+          New chat
+        </Button>
         <Button
           type="button"
           variant="ghost"

@@ -29,6 +29,7 @@ import {
   buildBaseCheckoutParams,
   mapStripeEvent,
   parseApiBase,
+  type StripeEventView,
   toSubscription,
 } from './stripe-mappers';
 
@@ -243,7 +244,7 @@ export class RealStripeGateway implements BillingGateway {
   }
 
   /** Thin instance wrapper over the pure {@link mapStripeEvent} function. */
-  mapStripeEvent(event: Stripe.Event): BillingEvent | null {
+  mapStripeEvent(event: StripeEventView): BillingEvent | null {
     return mapStripeEvent(event);
   }
 

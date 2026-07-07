@@ -234,7 +234,7 @@ function AppShellInner({
       type="button"
       aria-label="Search"
       onClick={openPalette}
-      className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-ring flex size-9 shrink-0 items-center justify-center rounded-lg transition-colors focus-visible:ring-2 focus-visible:outline-none"
+      className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-ring flex size-10 shrink-0 items-center justify-center rounded-lg transition-colors focus-visible:ring-2 focus-visible:outline-none"
     >
       <Search aria-hidden="true" className="size-5" />
     </button>
@@ -245,12 +245,12 @@ function AppShellInner({
       <AppShell
         sidebar={sidebar}
         tabBar={tabBar}
+        banner={<RecoveryNudgeBanner personalOrgId={personalOrgId} userId={userId} />}
         mobileBrand={mobileBrand}
         mobileActions={mobileActions}
         // The portable agenda rides along on every authenticated page as the shell's right rail.
         aside={{ node: <Agenda />, label: 'Agenda', icon: <Calendar aria-hidden="true" /> }}
       >
-        <RecoveryNudgeBanner personalOrgId={personalOrgId} userId={userId} />
         {children}
       </AppShell>
     </VocabularyProvider>

@@ -98,7 +98,7 @@ export function RecoveryNudgeBanner({
           type="button"
           aria-label="Dismiss"
           onClick={dismiss}
-          className="text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface focus-visible:ring-ring flex size-8 shrink-0 items-center justify-center rounded-lg transition-colors focus-visible:ring-2 focus-visible:outline-none"
+          className="text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface focus-visible:ring-ring flex size-10 shrink-0 items-center justify-center rounded-lg transition-colors focus-visible:ring-2 focus-visible:outline-none"
         >
           <X aria-hidden="true" className="size-4" />
         </button>

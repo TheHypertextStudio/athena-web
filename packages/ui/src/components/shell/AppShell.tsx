@@ -56,6 +56,19 @@ export interface AppShellProps {
   /** The optional multi-document {@link TabBar}, rendered above the content. */
   tabBar?: React.ReactNode;
   /**
+   * Optional shell-level banner (e.g. an account nudge), rendered between the tab bar and
+   * `<main>` — a sibling of the scrollable content, not part of it.
+   *
+   * @remarks
+   * A page can rely on `h-full` filling `<main>` exactly because `<main>` is the shell's ONE
+   * scroll container and nothing else shares its box. A banner rendered as page content (inside
+   * `children`) breaks that invariant: it adds its own height on top of a child's `h-full`,
+   * silently pushing anything anchored to the page's bottom (a composer, a sticky footer) out of
+   * the initial view. Passing it here keeps `<main>`'s `flex-1` sizing already net of the banner,
+   * so every page's `h-full` continues to mean "all of the space `<main>` actually has left."
+   */
+  banner?: React.ReactNode;
+  /**
    * Optional brand content for the **mobile top bar** (shown below `lg`), e.g. the active
    * workspace name/avatar. Rendered between the hamburger and the trailing actions; defaults to
    * the product name when omitted.
@@ -99,6 +112,7 @@ export interface AppShellProps {
 export function AppShell({
   sidebar,
   tabBar,
+  banner,
   mobileBrand,
   mobileActions,
   aside,
@@ -169,7 +183,7 @@ export function AppShell({
           onClick={() => {
             setDrawerOpen(true);
           }}
-          className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-ring flex size-9 shrink-0 items-center justify-center rounded-lg transition-colors focus-visible:ring-2 focus-visible:outline-none"
+          className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-ring flex size-10 shrink-0 items-center justify-center rounded-lg transition-colors focus-visible:ring-2 focus-visible:outline-none"
         >
           <Menu aria-hidden="true" className="size-5" />
         </button>
@@ -188,7 +202,7 @@ export function AppShell({
             onClick={() => {
               setMobileSheetOpen(true);
             }}
-            className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-ring flex size-9 shrink-0 items-center justify-center rounded-lg transition-colors focus-visible:ring-2 focus-visible:outline-none [&_svg]:size-5"
+            className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-ring flex size-10 shrink-0 items-center justify-center rounded-lg transition-colors focus-visible:ring-2 focus-visible:outline-none [&_svg]:size-5"
           >
             {aside.icon ?? <ChevronLeft aria-hidden="true" className="size-5" />}
           </button>
@@ -222,6 +236,7 @@ export function AppShell({
       */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col lg:gap-2">
         {tabBar}
+        {banner}
         <main
           id="main-content"
           tabIndex={-1}

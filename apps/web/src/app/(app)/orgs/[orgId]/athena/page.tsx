@@ -228,9 +228,18 @@ function ChatProposals({ orgId, sessionId, onSettled }: ChatProposalsProps): JSX
     orgId,
     sessionId,
   );
+  const groupRef = useRef<HTMLDivElement | null>(null);
+
+  // The proposal group loads via its own fetch, after the message list's initial render — the
+  // page's scroll-to-latest effect (keyed on activity count) has already fired by then, so
+  // without this the pending approval renders below the fold with nothing to draw the eye there.
+  useEffect(() => {
+    if (proposals.length > 0) groupRef.current?.scrollIntoView({ block: 'end' });
+  }, [proposals.length]);
+
   if (proposals.length === 0) return null;
   return (
-    <div className="flex flex-col gap-3">
+    <div ref={groupRef} className="flex flex-col gap-3">
       {proposals.map((group) => (
         <ProposalGroupCard
           key={group.proposalGroupId}

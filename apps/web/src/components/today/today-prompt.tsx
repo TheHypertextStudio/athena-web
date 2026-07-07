@@ -170,11 +170,11 @@ export function TodayPrompt({ orgId, orgLabel, onCaptured }: TodayPromptProps): 
           disabled={orgId === null}
           className="placeholder:text-on-surface-variant text-on-surface w-full resize-none bg-transparent text-base leading-relaxed outline-none disabled:opacity-50 @2xl:text-lg"
         />
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-on-surface-variant truncate text-sm">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+          <span className="text-on-surface-variant order-2 min-w-0 basis-full truncate text-sm @lg:order-1 @lg:basis-auto">
             into <span className="text-on-surface font-medium">{orgLabel}</span>
           </span>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="order-1 flex shrink-0 items-center gap-2 @lg:order-2">
             <Button
               type="button"
               variant={emptyWorkspace ? 'default' : 'ghost'}

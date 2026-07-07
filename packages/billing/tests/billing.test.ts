@@ -7,12 +7,14 @@ import {
   parseApiBase,
   RealStripeGateway,
   STRIPE_API_VERSION,
-  type StripeEventObjectView,
-  type StripeEventView,
-  type StripeSubscriptionView,
   toStatus,
   toSubscription,
 } from '../src/stripe';
+import type {
+  StripeEventObjectView,
+  StripeEventView,
+  StripeSubscriptionView,
+} from '../src/stripe-mappers';
 
 /**
  * An {@link HttpClient} that fails if ever called — the pure-logic tests never hit the

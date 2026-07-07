@@ -68,6 +68,11 @@ describe('personal workspace sections', () => {
     expect(personalKeys).toContain('import');
   });
 
+  it('exposes Notifications as an available caller-owned settings section', () => {
+    const notifications = settingsSections(true).find((s) => s.key === 'notifications');
+    expect(notifications?.status).toBe('available');
+  });
+
   it('exposes a Danger zone for deleting personal data', () => {
     const danger = settingsSections(true).find((s) => s.key === 'danger');
     expect(danger).toBeDefined();
@@ -109,6 +114,11 @@ describe('shared org sections (no regression)', () => {
       (g): readonly SettingsSection[] => g.sections,
     );
     expect(orgSections).toEqual(flattened);
+  });
+
+  it('exposes Notifications as an available shared-org settings section', () => {
+    const notifications = orgSections.find((s) => s.key === 'notifications');
+    expect(notifications?.status).toBe('available');
   });
 });
 

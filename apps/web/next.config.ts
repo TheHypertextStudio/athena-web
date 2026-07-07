@@ -51,8 +51,8 @@ const securityHeaders = [
  * Next.js config for the Docket product app.
  *
  * @remarks
- * Workspace packages (`@docket/ui`, `@docket/types`, `@docket/env`) ship raw TypeScript
- * and are transpiled by Next via `transpilePackages`.
+ * Workspace packages (`@docket/ui`, `@docket/types`, `@docket/env`, `@docket/notifications`) ship
+ * raw TypeScript and are transpiled by Next via `transpilePackages`.
  *
  * The {@link NextConfig.rewrites | rewrites} make the browser same-origin with the
  * Hono API: `/v1/*` (the typed RPC routers) and `/api/auth/*` (Better Auth) proxy to
@@ -63,7 +63,7 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   output: 'standalone',
   outputFileTracingRoot: path.join(import.meta.dirname, '../..'),
-  transpilePackages: ['@docket/ui', '@docket/types', '@docket/env'],
+  transpilePackages: ['@docket/ui', '@docket/types', '@docket/env', '@docket/notifications'],
   // Portless serves dev over https://web.docket.localhost; allow its HMR/devtools resources
   // so hot-reload works (Next 16 blocks cross-origin dev resources by default).
   allowedDevOrigins: ['web.docket.localhost', '*.docket.localhost', ...authAllowedDevOrigins()],

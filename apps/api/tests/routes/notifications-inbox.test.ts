@@ -3,7 +3,14 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
-import { appWithSession, fakeSession, getDb, seedBaseOrg } from '../support/routes-harness';
+import {
+  appWithSession,
+  fakeSession,
+  getDb,
+  one,
+  seedBaseOrg,
+  seedUserWithHub,
+} from '../support/routes-harness';
 import type notificationsRouter from '../../src/routes/notifications';
 
 let schema!: typeof DbModule;
@@ -143,6 +150,87 @@ describe('notifications router — list + unread filter', () => {
     const items = (await body<{ items: { body: { title: string } }[] }>(listed)).items;
     expect(items).toHaveLength(1);
     expect(items[0]!.body.title).toBe('mine');
+  });
+
+  it('includes sibling delivery channels so the inbox can show cross-platform hints', async () => {
+    const userId = await seedUserWithHub(db, schema, 'InboxDeliveryHints');
+    const app = appWithSession(notifications, fakeSession(userId));
+
+    const intent = one(
+      await db
+        .insert(schema.notificationIntent)
+        .values({
+          senderType: 'system',
+          category: 'service_announcement',
+          priority: 'normal',
+          audience: { type: 'user', userId },
+          channels: ['web', 'email'],
+          subject: 'Scheduled maintenance',
+          body: { text: 'Maintenance tonight.' },
+          replyPolicy: 'none',
+          status: 'sent',
+          createdBy: 'system',
+        })
+        .returning({ id: schema.notificationIntent.id }),
+    );
+    const recipient = one(
+      await db
+        .insert(schema.notificationRecipient)
+        .values({
+          notificationId: intent.id,
+          userId,
+          reason: 'explicit',
+          suppressions: [],
+        })
+        .returning({ id: schema.notificationRecipient.id }),
+    );
+    const webDelivery = one(
+      await db
+        .insert(schema.notificationDelivery)
+        .values({
+          notificationId: intent.id,
+          recipientId: recipient.id,
+          channel: 'web',
+          destinationType: 'in_app',
+          destination: { type: 'in_app' },
+          status: 'sent',
+        })
+        .returning({ id: schema.notificationDelivery.id }),
+    );
+    await db.insert(schema.notificationDelivery).values({
+      notificationId: intent.id,
+      recipientId: recipient.id,
+      channel: 'email',
+      destinationType: 'email',
+      destination: { type: 'email', valueMasked: 'a***@x.test' },
+      status: 'delivered',
+    });
+    await db.insert(schema.notification).values({
+      intentId: intent.id,
+      deliveryId: webDelivery.id,
+      userId,
+      type: 'service_announcement',
+      body: { title: 'Scheduled maintenance' },
+    });
+
+    const listed = await body<{
+      items: {
+        body: {
+          deliveryChannels?: {
+            channel: string;
+            status: string;
+            valueMasked?: string;
+          }[];
+        };
+      }[];
+    }>(await app.request('/'));
+
+    expect(listed.items[0]?.body.deliveryChannels).toEqual(
+      expect.arrayContaining([
+        { channel: 'web', status: 'sent' },
+        { channel: 'email', status: 'delivered', valueMasked: 'a***@x.test' },
+      ]),
+    );
   });
 });
 

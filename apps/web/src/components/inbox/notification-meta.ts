@@ -15,6 +15,7 @@ import {
   Cable,
   CheckCircle2,
   CircleDot,
+  MessageSquare,
   type LucideIcon,
   Sparkles,
   User,
@@ -42,6 +43,7 @@ const NOTIFICATION_KIND: Record<NotificationType, NotificationKindMeta> = {
   connector_sync_failed: { icon: XCircle, label: 'Sync failed' },
   connector_needs_reauth: { icon: Cable, label: 'Reconnect needed' },
   automation: { icon: Sparkles, label: 'Automation' },
+  service_announcement: { icon: MessageSquare, label: 'Service announcement' },
 };
 
 /**

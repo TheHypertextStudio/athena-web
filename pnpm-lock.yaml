@@ -339,6 +339,9 @@ importers:
       '@docket/env':
         specifier: workspace:*
         version: link:../../packages/env
+      '@docket/notifications':
+        specifier: workspace:*
+        version: link:../../packages/notifications
       '@docket/types':
         specifier: workspace:*
         version: link:../../packages/types

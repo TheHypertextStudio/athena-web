@@ -2,10 +2,12 @@
 
 import { CheckCircle2, Inbox as InboxIcon } from '@docket/ui/icons';
 import { Button, Skeleton } from '@docket/ui/primitives';
+import type { NotificationOut } from '@docket/types';
 import { type JSX } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 import { ActivityRow } from '@/components/inbox/activity-row';
+import { isApproval } from '@/components/inbox/notification-meta';
 import { NotificationRow } from '@/components/inbox/notification-row';
 import { SegmentedTabs } from '@/components/inbox/segmented-tabs';
 import { useInboxPage } from './use-inbox-page';
@@ -32,6 +34,10 @@ export default function InboxClient(): JSX.Element {
   } = useInboxPage();
 
   const panelId = (id: 'inbox' | 'activity'): string => `inbox-${id}-panel`;
+  const needsAction = orderedInbox.filter(
+    (notification) => isApproval(notification.type) && !notification.readAt,
+  );
+  const updates = orderedInbox.filter((notification) => !needsAction.includes(notification));
 
   return (
     <div className="mx-auto flex h-full w-full max-w-4xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
@@ -92,20 +98,24 @@ export default function InboxClient(): JSX.Element {
         {loading ? (
           <FeedSkeleton />
         ) : orderedInbox.length > 0 ? (
-          orderedInbox.map((notification) => (
-            <NotificationRow
-              key={notification.id}
-              notification={notification}
-              orgName={notification.organizationId ? orgName(notification.organizationId) : null}
-              onApprove={(id) => {
-                void onApprove(id);
-              }}
-              onMarkRead={(id) => {
-                void onMarkRead(id);
-              }}
-              pending={pendingIds.has(notification.id)}
+          <div className="flex flex-col gap-5">
+            <NotificationGroup
+              title="Needs action"
+              notifications={needsAction}
+              orgName={orgName}
+              onApprove={onApprove}
+              onMarkRead={onMarkRead}
+              pendingIds={pendingIds}
             />
-          ))
+            <NotificationGroup
+              title="Updates"
+              notifications={updates}
+              orgName={orgName}
+              onApprove={onApprove}
+              onMarkRead={onMarkRead}
+              pendingIds={pendingIds}
+            />
+          </div>
         ) : (
           <EmptyState
             title="Inbox zero"
@@ -133,6 +143,47 @@ export default function InboxClient(): JSX.Element {
         )}
       </section>
     </div>
+  );
+}
+
+/** Props for {@link NotificationGroup}. */
+interface NotificationGroupProps {
+  readonly title: string;
+  readonly notifications: readonly NotificationOut[];
+  readonly orgName: (orgId: string) => string;
+  readonly onApprove: (id: string) => Promise<void>;
+  readonly onMarkRead: (id: string) => Promise<void>;
+  readonly pendingIds: ReadonlySet<string>;
+}
+
+/** A titled inbox section for action-required rows and ordinary updates. */
+function NotificationGroup({
+  title,
+  notifications,
+  orgName,
+  onApprove,
+  onMarkRead,
+  pendingIds,
+}: NotificationGroupProps): JSX.Element | null {
+  if (notifications.length === 0) return null;
+  return (
+    <section aria-label={title} className="flex flex-col gap-1.5">
+      <h2 className="text-on-surface-variant px-1 text-xs font-semibold">{title}</h2>
+      {notifications.map((notification) => (
+        <NotificationRow
+          key={notification.id}
+          notification={notification}
+          orgName={notification.organizationId ? orgName(notification.organizationId) : null}
+          onApprove={(id) => {
+            void onApprove(id);
+          }}
+          onMarkRead={(id) => {
+            void onMarkRead(id);
+          }}
+          pending={pendingIds.has(notification.id)}
+        />
+      ))}
+    </section>
   );
 }
 

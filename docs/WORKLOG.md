@@ -213,6 +213,17 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
   composition root visible and prevents tests/fixtures from turning into accidental shared product
   architecture.
 
+### [DEVX-003] Commit scope allowlist extraction
+
+- **Completed**: 2026-07-07
+- **Summary**: Moved the scoped commit-message allowlist out of validator code and into
+  the repo-wide `COMMIT_SCOPES.txt` file. The validator now reads the file directly; scopes not listed there
+  fail the normal allowlist check.
+- **Files Changed**: `COMMIT_SCOPES.txt`, `scripts/validate-commit-message.mjs`,
+  `docs/contributing/workflow.md`, `docs/WORKLOG.md`.
+- **Validation**: Validator rejects scopes absent from `COMMIT_SCOPES.txt` and accepts
+  `refactor(integrations): ...`.
+
 ### [LINEAR-SYNC-001] Deep Linear integration — Slice 1: two-way work-graph sync core
 
 - **Completed**: 2026-07-02

@@ -218,25 +218,9 @@ git commit -m "changes"
 **Scopes:**
 
 Scopes are intentionally limited to product domains and high-level app features.
-Process scopes such as `ci`, `deploy`, `deps`, `pnpm`, `release`, and `build` are not valid
-scopes. For repo-wide maintenance, omit the scope.
-
-- `admin` - Service-admin console
-- `agents` - Athena and agent sessions
-- `api` - Backend API
-- `auth` - Authentication, sessions, and passkeys
-- `billing` - Billing, subscriptions, and lifecycle
-- `data` - Database schema, migrations, and persistence model
-- `design` - Product design rubric and visual system
-- `hub` - Cross-organization Hub surfaces
-- `integrations` - External connectors, imports, and sync
-- `marketing` - Public marketing pages and copy
-- `mcp` - MCP/OIDC resource server surface
-- `onboarding` - First-run and account setup flows
-- `permissions` - Roles, grants, and authorization
-- `ui` - Shared UI primitives and design-system implementation
-- `web` - Product web app
-- `work` - Core work objects such as tasks, projects, cycles, and planning
+The source of truth is the repo-wide `COMMIT_SCOPES.txt` file. Process scopes such as `ci`,
+`deploy`, `deps`, `pnpm`, `release`, and `build` are not valid scopes unless they are deliberately
+added to that file. For repo-wide maintenance, omit the scope.
 
 Examples:
 
@@ -246,7 +230,7 @@ git commit -m "fix(integrations): preserve connector OAuth state"
 git commit -m "chore: update repository maintenance docs"
 ```
 
-The `commit-msg` hook enforces this allowlist for any scoped commit.
+The `commit-msg` hook enforces the `COMMIT_SCOPES.txt` allowlist for any scoped commit.
 
 ### 4. Run Validations
 

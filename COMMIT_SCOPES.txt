@@ -1,0 +1,17 @@
+# One allowed Conventional Commit scope per line.
+admin
+agents
+api
+auth
+billing
+data
+design
+hub
+integrations
+marketing
+mcp
+onboarding
+permissions
+ui
+web
+work

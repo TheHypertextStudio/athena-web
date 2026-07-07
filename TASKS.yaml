@@ -387,7 +387,7 @@ tasks:
         status: backlog
       - id: discord-integration
         title: 'Discord integration'
-        status: backlog
+        status: done
     deliverables:
       - apps/api/src/integrations/
 

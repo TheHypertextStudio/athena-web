@@ -1,7 +1,8 @@
 # Discord Observation — mentions in the firehose, against a hostile transport
 
-> **Status**: designed; Phase 1 (serverless seam + attribution) ready to build, Phase 2 (Gateway
-> relay) scoped as a follow-up.
+> **Status**: implemented; Phase 1 serverless seam, identity attribution, firehose UI hooks, and
+> Phase 2 Gateway relay are in-tree. Live Discord test-guild smoke remains the deployment
+> acceptance check, not an implementation blocker.
 > **Extends**: [`activity-feed.md`](./activity-feed.md) — this is one more tool on the canonical
 > Event substrate, plus the two things Discord forces that Slack did not.
 > **Related decisions**: `DECISIONS.md` → "Discord message mentions require a Gateway relay" and

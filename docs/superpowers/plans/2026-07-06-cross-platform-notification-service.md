@@ -793,7 +793,7 @@ web inbox, and email capture contract end to end.
 
 Document SMTP, SMS provider seam, push provider seam, inbound webhook routes, quiet-hours behavior, and support/audit workflow.
 
-- [ ] **Step 3: Run meaningful milestone gates**
+- [x] **Step 3: Run meaningful milestone gates**
 
 Run:
 
@@ -807,8 +807,25 @@ pnpm test:e2e
 If `pnpm test:e2e` requires a running dev stack, start the documented local dev stack and record the exact URLs/commands used in `docs/WORKLOG.md`.
 
 Focused route smoke/admin validation, API typecheck, and touched-file ESLint passed on 2026-07-07.
-Full `pnpm test:e2e` remains a separate browser-dev-stack gate because this milestone's required
-email assertion is only observable inside the API process today.
+The staff-announcement email assertion remains route-level because the capture mailer is
+process-local, but the user-facing notification browser milestone is now covered by a real
+Playwright flow against an isolated branch dev stack:
+
+```bash
+pnpm exec dotenv -e .env.local -v APP_MODE=local -v DATABASE_URL=pglite://.data/docket-e2e-notifications-1783402329 -v DATABASE_URL_UNPOOLED=pglite://.data/docket-e2e-notifications-1783402329 -v API_URL=http://localhost:4100 -v WEB_URL=http://localhost:3100 -v BETTER_AUTH_URL=http://localhost:4100 -v BETTER_AUTH_TRUSTED_ORIGINS=http://localhost:3100,http://localhost:4100 -v BETTER_AUTH_ALLOWED_HOSTS=localhost -v BETTER_AUTH_PASSKEY_RP_ID=localhost -v NEXT_PUBLIC_API_URL=http://localhost:4100 -v NEXT_PUBLIC_APP_URL=http://localhost:3100 -- pnpm --filter @docket/db db:migrate
+pnpm exec dotenv -e .env.local -v APP_MODE=local -v DATABASE_URL=pglite://.data/docket-e2e-notifications-1783402329 -v DATABASE_URL_UNPOOLED=pglite://.data/docket-e2e-notifications-1783402329 -v API_URL=http://localhost:4100 -v WEB_URL=http://localhost:3100 -v PORT=4100 -v BETTER_AUTH_URL=http://localhost:4100 -v BETTER_AUTH_TRUSTED_ORIGINS=http://localhost:3100,http://localhost:4100 -v BETTER_AUTH_ALLOWED_HOSTS=localhost -v BETTER_AUTH_PASSKEY_RP_ID=localhost -v NEXT_PUBLIC_API_URL=http://localhost:4100 -v NEXT_PUBLIC_APP_URL=http://localhost:3100 -- pnpm --filter @docket/api start
+pnpm exec dotenv -e .env.local -v APP_MODE=local -v DATABASE_URL=pglite://.data/docket-e2e-notifications-1783402329 -v DATABASE_URL_UNPOOLED=pglite://.data/docket-e2e-notifications-1783402329 -v API_URL=http://localhost:4100 -v WEB_URL=http://localhost:3100 -v PORT=3100 -v BETTER_AUTH_URL=http://localhost:4100 -v BETTER_AUTH_TRUSTED_ORIGINS=http://localhost:3100,http://localhost:4100 -v BETTER_AUTH_ALLOWED_HOSTS=localhost -v BETTER_AUTH_PASSKEY_RP_ID=localhost -v NEXT_PUBLIC_API_URL=http://localhost:4100 -v NEXT_PUBLIC_APP_URL=http://localhost:3100 -- pnpm --dir apps/web exec next dev --hostname localhost --port 3100
+APP_URL=http://localhost:3100 API_URL=http://localhost:4100 PASSKEY_RP_ID=localhost pnpm --dir apps/web test:e2e sign-in.spec.ts
+APP_URL=http://localhost:3100 API_URL=http://localhost:4100 PASSKEY_RP_ID=localhost pnpm --dir apps/web test:e2e notifications.spec.ts
+pnpm --dir apps/web exec tsc -p e2e/tsconfig.json --noEmit
+pnpm --filter @docket/web lint
+pnpm exec prettier --check apps/web/e2e/notifications.spec.ts
+```
+
+Results: migration passed, API served on `http://localhost:4100`, web served on
+`http://localhost:3100`, sign-in E2E passed 1/1 in 1.7m, notification settings/contact-point E2E
+passed 1/1 after selector tightening, E2E TypeScript passed, web lint passed, and Prettier check
+passed.
 
 Additional full-gate progress on 2026-07-07:
 
@@ -822,16 +839,16 @@ Results: `pnpm typecheck` passed with 13 successful tasks, `pnpm lint` passed wi
 tasks, and the final `pnpm test` rerun passed with 13 successful tasks. The first root test run found
 a timing-sensitive web sign-in component test under full Turbo concurrency; the test was hardened to
 wait for the component's actual session-recovery retry contract, then verified with the failing file,
-the full web package suite, web typecheck/lint, and the root test rerun. `pnpm test:e2e` remains
-unchecked.
+the full web package suite, web typecheck/lint, and the root test rerun. The focused notification
+browser E2E gate now passes against the isolated branch stack.
 
-- [ ] **Step 4: Commit docs and E2E**
+- [x] **Step 4: Commit docs and E2E**
 
 Commit:
 
 ```bash
-git add docs apps/web .env.example scripts docs/WORKLOG.md
-git commit -m "test(web): cover notification announcement flow"
+git add apps/web/e2e/notifications.spec.ts docs/WORKLOG.md docs/superpowers/plans/2026-07-06-cross-platform-notification-service.md
+git commit -m "test(web): cover notification settings e2e"
 ```
 
 ---

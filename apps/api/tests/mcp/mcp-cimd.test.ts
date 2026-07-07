@@ -13,8 +13,8 @@ let cimd!: typeof CimdModule;
 let serverMod!: typeof McpServerModule;
 
 beforeAll(async () => {
-  process.env['MCP_CIMD_STRICT'] = 'true';
-  process.env['MCP_CIMD_TRUST_ALLOWLIST'] = 'allowed.example';
+  vi.stubEnv('MCP_CIMD_STRICT', 'true');
+  vi.stubEnv('MCP_CIMD_TRUST_ALLOWLIST', 'allowed.example');
   await getMigratedDb();
   cimd = await import('../../src/mcp/cimd');
   serverMod = await import('../../src/mcp/server');

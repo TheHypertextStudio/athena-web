@@ -189,6 +189,23 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [MCP-PROD-014] Prefer Vitest utilities over custom env plumbing
+
+- **Completed**: 2026-07-06
+- **Summary**: Removed remaining custom/manual env mutation patterns from tests in favor of
+  Vitest-owned APIs. The shared Vitest preset now enables `unstubEnvs`, auth baseline env lives in
+  package config, and DB/API/MCP/env tests use `vi.stubEnv()` directly instead of assigning or
+  deleting `process.env` or maintaining original-value restore helpers. Project-shaped helpers
+  remain only where Vitest has no equivalent.
+- **Files Changed**: `tooling/vitest/preset.ts`, `packages/auth/vite.config.ts`, auth/db/env tests,
+  API lib/infra/MCP tests, and the web onboarding env tests.
+- **Learnings**: Baseline env belongs in `test.env`; per-test behavior belongs in `vi.stubEnv`.
+  Expensive auth module cold-import work belongs in a lifecycle hook so assertions do not inherit
+  bootstrap timeouts.
+- **Gate**: `pnpm typecheck`, `pnpm lint`, `pnpm test`, and `pnpm build` pass. Focused
+  `@docket/{db,auth,env}` tests, API MCP/env tests, and web onboarding tests also pass; cleanup
+  scans find no direct test env mutation or custom env restore helpers.
+
 ### [MCP-PROD-013] Remove double casts and centralize reusable test helpers
 
 - **Completed**: 2026-07-06

@@ -15,7 +15,7 @@ let resultMod!: typeof ResultModule;
 
 beforeAll(async () => {
   // Configure an allowed origin before importing modules that read the API env slice.
-  process.env['MCP_ALLOWED_ORIGINS'] = 'https://app.docket.dev, https://admin.docket.dev';
+  vi.stubEnv('MCP_ALLOWED_ORIGINS', 'https://app.docket.dev, https://admin.docket.dev');
   schema = await getMigratedDb();
   db = schema.db;
   authMod = await import('../../src/mcp/auth');
@@ -174,12 +174,15 @@ describe('result helpers', () => {
 describe('isOriginAllowed in production', () => {
   it('rejects localhost when NODE_ENV is production', async () => {
     vi.resetModules();
-    process.env['NODE_ENV'] = 'production';
-    const fresh = await import('../../src/mcp/auth');
-    expect(fresh.isOriginAllowed(hdrs('http://localhost:3000'))).toBe(false);
-    // A configured origin is still allowed in production.
-    expect(fresh.isOriginAllowed(hdrs('https://app.docket.dev'))).toBe(true);
-    process.env['NODE_ENV'] = 'test';
-    vi.resetModules();
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('MCP_ALLOWED_ORIGINS', 'https://app.docket.dev, https://admin.docket.dev');
+    try {
+      const fresh = await import('../../src/mcp/auth');
+      expect(fresh.isOriginAllowed(hdrs('http://localhost:3000'))).toBe(false);
+      // A configured origin is still allowed in production.
+      expect(fresh.isOriginAllowed(hdrs('https://app.docket.dev'))).toBe(true);
+    } finally {
+      vi.resetModules();
+    }
   });
 });

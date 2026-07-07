@@ -4,7 +4,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { Hono } from 'hono';
 import { eq } from 'drizzle-orm';
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 import type { Capability } from '@docket/types';
@@ -28,8 +28,8 @@ let authMod!: typeof AuthModule;
 
 beforeAll(async () => {
   // Configure OAuth before importing MCP modules that read the API env slice.
-  process.env['MCP_ISSUER_URL'] = 'https://auth.docket.test';
-  process.env['MCP_RESOURCE_URL'] = 'https://api.docket.test/mcp';
+  vi.stubEnv('MCP_ISSUER_URL', 'https://auth.docket.test');
+  vi.stubEnv('MCP_RESOURCE_URL', 'https://api.docket.test/mcp');
   schema = await getMigratedDb();
   db = schema.db;
   registerTools = (await import('../../src/mcp/tools')).registerTools;

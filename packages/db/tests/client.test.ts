@@ -33,8 +33,6 @@ vi.mock('drizzle-orm/pglite', () => ({ drizzle: clientMocks.drizzlePglite }));
 vi.mock('drizzle-orm/postgres-js', () => ({ drizzle: clientMocks.drizzlePostgres }));
 vi.mock('postgres', () => ({ default: clientMocks.postgres }));
 
-const ORIGINAL_DATABASE_URL = process.env['DATABASE_URL'];
-
 /** Read an arbitrary (non-typed) member off the lazy `db` Proxy without `this`-binding lint. */
 function touch(db: unknown, prop: string): unknown {
   return (db as Record<string, unknown>)[prop];
@@ -79,13 +77,11 @@ beforeEach(() => {
 afterEach(async () => {
   const { closeDb } = await import('../src/client');
   await closeDb();
-  if (ORIGINAL_DATABASE_URL === undefined) delete process.env['DATABASE_URL'];
-  else process.env['DATABASE_URL'] = ORIGINAL_DATABASE_URL;
 });
 
 describe('db client driver selection', () => {
   it('throws a helpful error when DATABASE_URL is unset', async () => {
-    delete process.env['DATABASE_URL'];
+    vi.stubEnv('DATABASE_URL', undefined);
     const { db } = await import('../src/client');
     // First property access triggers lazy construction -> throws.
     expect(() => touch(db, 'select')).toThrow(/DATABASE_URL is not set/);
@@ -93,7 +89,7 @@ describe('db client driver selection', () => {
   });
 
   it('builds a pglite client for a pglite:// memory URL', async () => {
-    process.env['DATABASE_URL'] = 'pglite://memory';
+    vi.stubEnv('DATABASE_URL', 'pglite://memory');
     const { db } = await import('../src/client');
     // A pglite drizzle client exposes the query builder + relational `query`.
     expect(typeof touch(db, 'select')).toBe('function');
@@ -106,7 +102,7 @@ describe('db client driver selection', () => {
   });
 
   it('builds a pglite client for a bare pglite: URL (default memory)', async () => {
-    process.env['DATABASE_URL'] = 'pglite:';
+    vi.stubEnv('DATABASE_URL', 'pglite:');
     const { db } = await import('../src/client');
     expect(typeof touch(db, 'insert')).toBe('function');
     expect(clientMocks.PGlite).toHaveBeenCalledWith('memory://');
@@ -115,7 +111,7 @@ describe('db client driver selection', () => {
   it('builds a pglite client for an on-disk pglite path', async () => {
     // Point at an existing temp dir so the path branch can create its store there.
     const dir = mkdtempSync(join(tmpdir(), 'docket-client-'));
-    process.env['DATABASE_URL'] = `pglite://${dir}`;
+    vi.stubEnv('DATABASE_URL', `pglite://${dir}`);
     try {
       const { db } = await import('../src/client');
       expect(typeof touch(db, 'select')).toBe('function');
@@ -126,7 +122,7 @@ describe('db client driver selection', () => {
   });
 
   it('binds function members to the real client (Proxy bind branch)', async () => {
-    process.env['DATABASE_URL'] = 'pglite://memory';
+    vi.stubEnv('DATABASE_URL', 'pglite://memory');
     const { db } = await import('../src/client');
     const select = touch(db, 'select') as () => unknown;
     expect(typeof select).toBe('function');
@@ -135,7 +131,7 @@ describe('db client driver selection', () => {
   });
 
   it('closes and clears the cached pglite client', async () => {
-    process.env['DATABASE_URL'] = 'pglite://memory';
+    vi.stubEnv('DATABASE_URL', 'pglite://memory');
     const { closeDb, db } = await import('../src/client');
     expect(typeof touch(db, 'select')).toBe('function');
     const firstClient = clientMocks.pgliteClients[0]!;

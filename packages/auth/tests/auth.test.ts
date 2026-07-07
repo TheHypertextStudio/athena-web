@@ -5,26 +5,6 @@ import type { Mailer, OutboundMessage } from '@docket/mail';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Env MUST be set before importing `../src/index` (which pulls in `@docket/env/api` and the
-// Better Auth config at module load). Every required var is set explicitly — the env
-// contract has no hidden defaults. `pglite://memory` gives a fresh in-process Postgres;
-// `BETTER_AUTH_TRUSTED_ORIGINS` exercises the parse branch. The passkey RP vars are
-// required (the plugin is always mounted) and used as the WebAuthn relying-party identity.
-process.env['APP_MODE'] = 'test';
-process.env['API_URL'] = 'http://localhost:4000';
-process.env['WEB_URL'] = 'http://localhost:3000';
-process.env['PORT'] = '4000';
-process.env['DATABASE_URL'] = 'pglite://memory';
-process.env['BETTER_AUTH_SECRET'] = 'test-secret-at-least-32-characters-long';
-process.env['BETTER_AUTH_URL'] = 'http://localhost:4000';
-process.env['BETTER_AUTH_PASSKEY_RP_ID'] = 'localhost';
-process.env['BETTER_AUTH_PASSKEY_RP_NAME'] = 'Docket';
-process.env['BETTER_AUTH_TRUSTED_ORIGINS'] = 'http://a.example.com, http://b.example.com ,';
-process.env['CRON_SECRET'] = 'test-cron-secret';
-process.env['BILLING_ENABLED'] = 'false';
-process.env['MCP_TASKS_ENABLED'] = 'false';
-process.env['MCP_CIMD_STRICT'] = 'true';
-
 const SECRET = 'test-secret-at-least-32-characters-long';
 
 /** The verified-intent identifier prefix (kept in sync with `src/signup-intent.ts`). */
@@ -520,14 +500,12 @@ describe('auth config', () => {
   it('defaults trustedOrigins to [] when BETTER_AUTH_TRUSTED_ORIGINS is unset', async () => {
     // Re-import with the env var removed so the optional-chain (`?.`) / nullish
     // (`?? []`) fallback branch of `parseTrustedOrigins` is exercised on the live `auth`.
-    const prev = process.env['BETTER_AUTH_TRUSTED_ORIGINS'];
-    delete process.env['BETTER_AUTH_TRUSTED_ORIGINS'];
+    vi.stubEnv('BETTER_AUTH_TRUSTED_ORIGINS', undefined);
     vi.resetModules();
     try {
       const { auth } = await import('../src/index');
       expect(auth.options.trustedOrigins).toEqual([]);
     } finally {
-      if (prev !== undefined) process.env['BETTER_AUTH_TRUSTED_ORIGINS'] = prev;
       vi.resetModules();
     }
   });

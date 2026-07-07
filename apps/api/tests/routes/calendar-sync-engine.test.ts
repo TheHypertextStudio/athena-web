@@ -1,7 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 
-import { getDb, one, seedUserWithHub } from './harness.test';
+import { getDb, one, seedUserWithHub } from '../support/routes-harness';
 
 import {
   captureGoogleScopeState,

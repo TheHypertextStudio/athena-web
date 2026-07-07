@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { addMember, getDb, one, seedBaseOrg, seedUserWithHub } from './harness.test';
+import { addMember, getDb, one, seedBaseOrg, seedUserWithHub } from '../support/routes-harness';
 import {
   readCalendarItemsInRange,
   readCalendarLayers,

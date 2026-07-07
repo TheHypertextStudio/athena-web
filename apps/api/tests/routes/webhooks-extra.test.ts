@@ -3,7 +3,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type { BillingEvent, BillingGateway } from '@docket/billing';
 
-import { getDb, seedBaseOrg } from './harness.test';
+import { getDb, seedBaseOrg } from '../support/routes-harness';
 import * as container from '../../src/container';
 import type webhooksRouter from '../../src/routes/webhooks';
 

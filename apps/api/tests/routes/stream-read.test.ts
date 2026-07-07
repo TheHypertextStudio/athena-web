@@ -9,7 +9,7 @@ import type * as DbModule from '@docket/db';
 import type { EventKind, SourceSystemKind, StreamPageOut } from '@docket/types';
 import type { z } from 'zod';
 
-import { appWithActor, appWithSession, fakeSession, getDb, seedBaseOrg } from './harness.test';
+import { appWithActor, appWithSession, fakeSession, getDb, seedBaseOrg } from '../support/routes-harness';
 import type hubRouter from '../../src/routes/hub';
 import type streamRouter from '../../src/routes/stream';
 

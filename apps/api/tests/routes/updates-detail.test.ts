@@ -3,7 +3,7 @@
  * "latest update sets the subject's current health" write across all subject types.
  *
  * @remarks
- * Mirrors `harness.test.ts` (in-memory pglite + an injected actor context). Covers the
+ * Mirrors `routes-harness` (in-memory pglite + an injected actor context). Covers the
  * happy paths plus the edges: not-found, capability-denied, tenant-isolation, and
  * invalid input. The base list/post happy path is also exercised in `group-b.test.ts`;
  * this file owns the detail route and the per-subject health-propagation matrix.
@@ -13,7 +13,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
-import { appWithActor, getDb, seedBaseOrg } from './harness.test';
+import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
 import type updatesRouter from '../../src/routes/updates';
 
 let schema!: typeof DbModule;

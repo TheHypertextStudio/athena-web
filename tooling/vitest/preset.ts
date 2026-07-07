@@ -66,7 +66,7 @@ export function docketVitest(options: DocketVitestOptions = {}) {
     coverageExclude = [],
     coverageInclude = ['src/**/*.{ts,tsx}'],
     testTimeout = 30_000,
-    hookTimeout = 60_000,
+    hookTimeout = 180_000,
   } = options;
   return defineConfig({
     plugins: useReact ? [react()] : [],
@@ -76,11 +76,14 @@ export function docketVitest(options: DocketVitestOptions = {}) {
       setupFiles,
       env,
       unstubEnvs: true,
+      // Keep Vitest file parallelism, but avoid fork-worker startup starvation when
+      // Turbo is already running package tests concurrently.
+      pool: 'threads',
       include: ['tests/**/*.{test,spec}.{ts,tsx}'],
       // Turbo runs every package's vitest concurrently, so the machine is heavily
-      // oversubscribed during `pnpm test`. The default hook timeout false-fails
-      // otherwise-passing PGlite bootstrap hooks purely from CPU starvation, while
-      // per-test timeouts stay tighter so real hangs still surface quickly.
+      // oversubscribed during `pnpm test`. PGlite/route bootstrap hooks can spend
+      // real time waiting behind CPU-bound file workers, while per-test timeouts
+      // stay tighter so assertion-level hangs still surface quickly.
       testTimeout,
       hookTimeout,
       // Coverage is gated (with all:true so untested files count). Default 90% gives

@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
-import { appWithActor, getDb, seedBaseOrg } from './harness.test';
+import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
 import type programsRouter from '../../src/routes/programs';
 
 let schema!: typeof DbModule;

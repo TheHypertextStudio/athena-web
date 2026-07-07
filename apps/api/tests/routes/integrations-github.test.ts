@@ -2,14 +2,6 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as GithubApp from '../../src/lib/github-app';
 
-// Env contract validates at module load — set the minimum before importing the route + lib.
-process.env['APP_MODE'] = 'test';
-process.env['DATABASE_URL'] = 'pglite://memory://';
-process.env['BETTER_AUTH_SECRET'] = 'test-secret-test-secret-test-secret-0123456789';
-process.env['BETTER_AUTH_TRUSTED_ORIGINS'] = 'https://docket.localhost';
-process.env['CRON_SECRET'] = 'test-cron-secret';
-process.env['SKIP_ENV_VALIDATION'] = '1';
-
 let app!: { request: (path: string, init?: RequestInit) => Response | Promise<Response> };
 let signInstallState!: typeof GithubApp.signInstallState;
 

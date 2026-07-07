@@ -9,7 +9,7 @@ import {
   scheduleAccountDeletion,
   sweepAccountDeletions,
 } from '../../src/account/lifecycle';
-import { addMember, getDb, one, seedOrg, seedUserWithHub } from '../routes/harness.test';
+import { addMember, getDb, one, seedOrg, seedUserWithHub } from '../support/routes-harness';
 
 const NOW = '2026-01-01T00:00:00.000Z';
 const DAY_MS = 24 * 60 * 60 * 1000;

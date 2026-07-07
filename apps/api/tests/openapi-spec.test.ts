@@ -8,14 +8,6 @@
  */
 import { describe, expect, it } from 'vitest';
 
-// Match infra.test.ts: provide the fail-fast env before importing the app graph.
-process.env['DATABASE_URL'] = 'pglite://memory://';
-process.env['APP_MODE'] = 'test';
-process.env['NODE_ENV'] = 'test';
-process.env['BETTER_AUTH_SECRET'] = 'test-secret-test-secret-test-secret-0123456789';
-process.env['CRON_SECRET'] = 'test-cron-secret';
-process.env['SKIP_ENV_VALIDATION'] = '1';
-
 describe('openapi spec generation', () => {
   it('produces a populated, well-formed 3.1 document', async () => {
     const { generateSpecs } = await import('hono-openapi');

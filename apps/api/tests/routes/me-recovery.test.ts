@@ -7,7 +7,7 @@ import {
   fakeSession,
   getDb,
   seedUserWithHub,
-} from './harness.test';
+} from '../support/routes-harness';
 
 /** The migrated db module + the lazily-imported me-recovery router (both memoized). */
 async function setup() {

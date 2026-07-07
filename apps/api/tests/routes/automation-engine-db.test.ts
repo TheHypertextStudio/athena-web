@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
-import { getDb, one, seedBaseOrg } from './harness.test';
+import { getDb, one, seedBaseOrg } from '../support/routes-harness';
 import { buildAutomationRegistry, type MailApplier } from '../../src/lib/automation/handlers';
 import { defaultMailApplier, runAutomationsForEvent } from '../../src/lib/automation/runtime';
 import { loadEnabledRules, seedDefaultAutomationRules } from '../../src/lib/automation/rules-store';

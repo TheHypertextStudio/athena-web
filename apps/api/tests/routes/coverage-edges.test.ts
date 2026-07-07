@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
-import { appWithActor, getDb, seedBaseOrg } from './harness.test';
+import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -146,7 +146,7 @@ describe('daily-plan: null timeboxes on create + a minimal patch', () => {
       .returning({ id: schema.task.id });
 
     // appWithActor also injects a session; daily-plan reads the session for the user.
-    const { appWithSession, fakeSession } = await import('./harness.test');
+    const { appWithSession, fakeSession } = await import('../support/routes-harness');
     const app = appWithSession(r['daily-plan'], fakeSession(user!.id));
     void h;
 

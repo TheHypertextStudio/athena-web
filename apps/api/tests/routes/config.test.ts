@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { PublicConfigOut } from '@docket/types';
 
 import type configRouter from '../../src/routes/config';
-import { appWithSession } from './harness.test';
+import { appWithSession } from '../support/routes-harness';
 
 let config!: typeof configRouter;
 
@@ -25,13 +25,11 @@ describe('GET /config', () => {
     expect(body.connectors).toEqual([]);
   });
 
-  // Runs last: resets the module registry to pick up the mutated env, which would orphan any
+  // Runs last: resets the module registry to pick up the stubbed env, which would orphan any
   // shared DB proxy other tests in this file depended on — this file has none.
   it('surfaces outlook once MICROSOFT_CLIENT_ID/SECRET are configured (M6: dormant until env values exist)', async () => {
-    const prevId = process.env['MICROSOFT_CLIENT_ID'];
-    const prevSecret = process.env['MICROSOFT_CLIENT_SECRET'];
-    process.env['MICROSOFT_CLIENT_ID'] = 'ms-client-id-123';
-    process.env['MICROSOFT_CLIENT_SECRET'] = 'ms-client-secret-456';
+    vi.stubEnv('MICROSOFT_CLIENT_ID', 'ms-client-id-123');
+    vi.stubEnv('MICROSOFT_CLIENT_SECRET', 'ms-client-secret-456');
     vi.resetModules();
     try {
       const freshConfig = (await import('../../src/routes/config')).default;
@@ -42,10 +40,7 @@ describe('GET /config', () => {
       expect(body.oauthProviders).toContain('microsoft');
       expect(body.connectors).toContain('outlook');
     } finally {
-      if (prevId !== undefined) process.env['MICROSOFT_CLIENT_ID'] = prevId;
-      else delete process.env['MICROSOFT_CLIENT_ID'];
-      if (prevSecret !== undefined) process.env['MICROSOFT_CLIENT_SECRET'] = prevSecret;
-      else delete process.env['MICROSOFT_CLIENT_SECRET'];
+      vi.unstubAllEnvs();
       vi.resetModules();
     }
   });

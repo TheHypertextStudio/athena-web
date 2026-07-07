@@ -195,16 +195,19 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 - **Summary**: Removed remaining custom/manual env mutation patterns from tests in favor of
   Vitest-owned APIs. The shared Vitest preset now enables `unstubEnvs`, auth baseline env lives in
   package config, and DB/API/MCP/env tests use `vi.stubEnv()` directly instead of assigning or
-  deleting `process.env` or maintaining original-value restore helpers. Project-shaped helpers
-  remain only where Vitest has no equivalent.
+  deleting `process.env` or maintaining original-value restore helpers. The preset also uses
+  Vitest's thread pool with a wider hook bootstrap budget, keeping file/package concurrency while
+  avoiding fork-worker startup and PGlite route-bootstrap false failures under load. Project-shaped
+  helpers remain only where Vitest has no equivalent.
 - **Files Changed**: `tooling/vitest/preset.ts`, `packages/auth/vite.config.ts`, auth/db/env tests,
-  API lib/infra/MCP tests, and the web onboarding env tests.
+  API lib/infra/MCP tests, API route harness support, and the web onboarding env tests.
 - **Learnings**: Baseline env belongs in `test.env`; per-test behavior belongs in `vi.stubEnv`.
-  Expensive auth module cold-import work belongs in a lifecycle hook so assertions do not inherit
-  bootstrap timeouts.
+  Expensive auth module cold-import work should stay out of pure helper tests, and reusable API
+  route harness code belongs in `tests/support/`, not in a `.test.ts` module.
 - **Gate**: `pnpm typecheck`, `pnpm lint`, `pnpm test`, and `pnpm build` pass. Focused
-  `@docket/{db,auth,env}` tests, API MCP/env tests, and web onboarding tests also pass; cleanup
-  scans find no direct test env mutation or custom env restore helpers.
+  `@docket/{db,auth,env}` tests, full API and web package tests, API MCP/env tests, and web
+  onboarding tests also pass; cleanup scans find no direct test env mutation or custom env restore
+  helpers.
 
 ### [MCP-PROD-013] Remove double casts and centralize reusable test helpers
 
@@ -214,7 +217,7 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
   `apps/web/tests/support/`, picker-option test actions are shared, Stripe gateway tests reuse
   exported billing mapper view types, raw Drizzle result row counting is centralized in API source,
   and UI keyboard tests import the hook's real event type. The root test stability fix keeps normal
-  Turbo/Vitest concurrency; only the shared hook timeout moved to 60s so concurrent PGlite
+  Turbo/Vitest concurrency; only the shared hook timeout was widened so concurrent PGlite
   bootstraps are not reported as hung tests.
 - **Files Changed**: `apps/web/tests/support/{query,http,pickers}.ts*`,
   `apps/web/src/lib/{query,problem}.ts`, web fetch/query tests, API raw-result callers, DB/Authz

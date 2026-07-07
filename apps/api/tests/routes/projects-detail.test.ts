@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
-import { appWithActor, getDb, seedBaseOrg } from './harness.test';
+import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
 import type projectsRouter from '../../src/routes/projects';
 import type tasksRouter from '../../src/routes/tasks';
 

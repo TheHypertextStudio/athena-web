@@ -8,7 +8,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
-import { getDb, one, seedBaseOrg, seedUserWithHub } from './harness.test';
+import { getDb, one, seedBaseOrg, seedUserWithHub } from '../support/routes-harness';
 
 import type * as SlackApp from '../../src/lib/slack-app';
 

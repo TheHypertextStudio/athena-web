@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type { CalendarItemConflict, CalendarItemOut, CalendarItemPermission } from '@docket/types';
 
-import { getDb, one, appWithSession, fakeSession, seedUserWithHub } from './harness.test';
+import { getDb, one, appWithSession, fakeSession, seedUserWithHub } from '../support/routes-harness';
 
 import {
   attemptCalendarItemWrite,

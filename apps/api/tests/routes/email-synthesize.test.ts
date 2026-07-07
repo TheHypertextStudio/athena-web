@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
-import { getDb, one, seedBaseOrg } from './harness.test';
+import { getDb, one, seedBaseOrg } from '../support/routes-harness';
 import { persistSuggestions, type CandidateThread } from '../../src/lib/email-to-task/synthesize';
 
 const synthesizer = new MockTaskSynthesizer();

@@ -3,7 +3,7 @@
  * committed-task list, burn-up report, and close (carryover review).
  *
  * @remarks
- * Mirrors `harness.test.ts` (pglite + injected actor context). List/create/patch/
+ * Mirrors `routes-harness` (pglite + injected actor context). List/create/patch/
  * delete coverage lives in `group-a.test.ts`; this file covers the §8.5 detail,
  * burn-up, and carryover-close surfaces added in lane B.
  */
@@ -12,7 +12,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
-import { appWithActor, getDb, seedBaseOrg } from './harness.test';
+import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
 import type cyclesRouter from '../../src/routes/cycles';
 
 let schema!: typeof DbModule;

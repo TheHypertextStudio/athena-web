@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type * as DbModule from '@docket/db';
 import { eq } from 'drizzle-orm';
 
-import { appWithActor, getDb, seedBaseOrg } from './harness.test';
+import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
 import type billingRouter from '../../src/routes/billing';
 
 let schema!: typeof DbModule;

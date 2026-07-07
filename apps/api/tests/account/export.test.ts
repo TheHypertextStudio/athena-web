@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { captureOutbox, getDb, one, seedUserWithHub } from '../routes/harness.test';
+import { captureOutbox, getDb, one, seedUserWithHub } from '../support/routes-harness';
 
 const NOW = '2026-02-01T00:00:00.000Z';
 

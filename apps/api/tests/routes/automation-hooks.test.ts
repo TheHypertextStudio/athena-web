@@ -12,7 +12,7 @@ import type * as DbModule from '@docket/db';
 import type * as EmitModule from '../../src/routes/event-emit';
 import type * as DrainModule from '../../src/routes/event-sync';
 import type * as RuntimeModule from '../../src/lib/automation/runtime';
-import { getDb, one, seedBaseOrg } from './harness.test';
+import { getDb, one, seedBaseOrg } from '../support/routes-harness';
 
 const runSpy = vi.fn<(event: unknown) => void>();
 

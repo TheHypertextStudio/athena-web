@@ -15,7 +15,7 @@ import {
   one,
   seedBaseOrg,
   seedUserWithHub,
-} from './harness.test';
+} from '../support/routes-harness';
 
 let calendarRouter: unknown;
 

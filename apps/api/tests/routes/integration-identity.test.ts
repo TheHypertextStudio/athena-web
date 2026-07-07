@@ -5,7 +5,7 @@ import type * as DbModule from '@docket/db';
 import type { ExternalUser } from '@docket/integrations';
 
 import type * as IntegrationIdentityModule from '../../src/routes/integration-identity';
-import { addMember, appWithActor, getDb, seedBaseOrg } from './harness.test';
+import { addMember, appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;

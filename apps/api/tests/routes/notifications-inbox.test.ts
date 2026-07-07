@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
-import { appWithSession, fakeSession, getDb, seedBaseOrg } from './harness.test';
+import { appWithSession, fakeSession, getDb, seedBaseOrg } from '../support/routes-harness';
 import type notificationsRouter from '../../src/routes/notifications';
 
 let schema!: typeof DbModule;

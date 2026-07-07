@@ -487,19 +487,19 @@ git commit -m "feat(api): route transactional email through notifications"
 - Test: `apps/api/tests/services/notifications/inbound.test.ts`
 - Test: `apps/api/tests/routes/internal-notifications.test.ts`
 
-- [ ] **Step 1: Write RED inbound normalization tests**
+- [x] **Step 1: Write RED inbound normalization tests**
 
 Cover email delivered/bounced/complained/clicked/opened, SMS delivered/failed/replied/STOP/START/HELP, push invalid-token, and unknown correlation tokens.
 
-- [ ] **Step 2: Implement inbound service**
+- [x] **Step 2: Implement inbound service**
 
 Normalize provider payloads, record `notification_inbound_event`, update delivery status, update contact-point state, and attach replies to original notification when correlation exists.
 
-- [ ] **Step 3: Write RED internal route tests**
+- [x] **Step 3: Write RED internal route tests**
 
 Cover signature missing rejection, signature accepted path, public `/v1` exclusion, and idempotent duplicate provider event handling.
 
-- [ ] **Step 4: Implement internal callback routes**
+- [x] **Step 4: Implement internal callback routes**
 
 Mount:
 
@@ -510,6 +510,10 @@ POST /internal/notifications/events/push
 POST /internal/notifications/inbound/email
 POST /internal/notifications/inbound/sms
 ```
+
+Implemented with HMAC-signed internal routes mounted outside `/v1`. Provider retry idempotency is
+handled by normalized `providerEventId` stored in the inbound-event payload; add a dedicated DB
+column/unique index later if concurrent duplicate callbacks become a real provider concern.
 
 - [ ] **Step 5: Verify and commit**
 

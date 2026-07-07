@@ -28,6 +28,7 @@ import { registerOpenapi } from './openapi';
 import calendarWebhook from './routes/calendar-webhook';
 import cron from './routes/cron';
 import ingest from './routes/ingest';
+import internalNotifications from './routes/internal-notifications';
 import { meAccountExportDownload } from './routes/me-account';
 import streamSse from './routes/stream-sse';
 import integrationsGithub from './routes/integrations-github';
@@ -78,6 +79,7 @@ server.get('/.well-known/oauth-authorization-server', authorizationServerMetadat
 // session-gated by `requireAuth` (which only guards the `/v1` app).
 server.route('/internal/billing', webhooks);
 server.route('/internal/ingest', ingest);
+server.route('/internal/notifications', internalNotifications);
 server.route('/internal/integrations/github', integrationsGithub);
 server.route('/internal/integrations/slack', integrationsSlack);
 server.route('/internal/cron', cron);

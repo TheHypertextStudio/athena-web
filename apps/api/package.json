@@ -7,12 +7,12 @@
   "description": "Docket backend: authentication, the typed RPC API, billing and cron, and the MCP server.",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
+      "types": "./src/index.ts",
       "default": "./src/index.ts"
     }
   },
   "main": "./src/index.ts",
-  "types": "./dist/index.d.ts",
+  "types": "./src/index.ts",
   "portless": {
     "name": "api.docket",
     "script": "dev:app"

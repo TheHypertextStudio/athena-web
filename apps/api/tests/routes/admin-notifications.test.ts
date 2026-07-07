@@ -1,28 +1,24 @@
 import type * as DbModule from '@docket/db';
 import { eq } from 'drizzle-orm';
-import { Hono } from 'hono';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import type { AppEnv, AuthSession } from '../../src/context';
-import { onError } from '../../src/error';
-import { fakeSession, getDb, seedUserWithHub } from './harness.test';
-import type adminRouter from '../../src/routes/admin';
+import { appWithSession, fakeSession, getDb, seedUserWithHub } from './harness.test';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
-let admin!: typeof adminRouter;
+let admin!: unknown;
 
 beforeAll(async () => {
   schema = await getDb();
   db = schema.db;
-  admin = (await import('../../src/routes/admin')).default;
+  admin = (await import('../../src/app')).adminRouter;
 });
 
 describe('admin notification routes', () => {
   it('lists and gets notification intents for staff', async () => {
     const staff = await makeStaff('support');
     const intent = await seedIntent(staff.userId, 'Admin announcement list');
-    const app = adminApp(fakeSession(staff.userId));
+    const app = appWithSession(admin, fakeSession(staff.userId));
 
     const list = await app.request('/notifications?limit=20&offset=0');
     expect(list.status).toBe(200);
@@ -40,7 +36,7 @@ describe('admin notification routes', () => {
   it('approves draft notifications by queueing them and writing operator audit', async () => {
     const staff = await makeStaff('superadmin');
     const intent = await seedIntent(staff.userId, 'Approve this notification');
-    const app = adminApp(fakeSession(staff.userId));
+    const app = appWithSession(admin, fakeSession(staff.userId));
 
     const res = await app.request(`/notifications/${intent.id}/approve`, { method: 'POST' });
 
@@ -52,7 +48,7 @@ describe('admin notification routes', () => {
   it('rejects notifications by canceling them and writing operator audit', async () => {
     const staff = await makeStaff('support');
     const intent = await seedIntent(staff.userId, 'Reject this notification');
-    const app = adminApp(fakeSession(staff.userId));
+    const app = appWithSession(admin, fakeSession(staff.userId));
 
     const res = await app.request(`/notifications/${intent.id}/reject`, { method: 'POST' });
 
@@ -77,7 +73,7 @@ describe('admin notification routes', () => {
       kind: 'delivered',
       payload: { providerEventId: 'admin-inbound-monitor' },
     });
-    const app = adminApp(fakeSession(staff.userId));
+    const app = appWithSession(admin, fakeSession(staff.userId));
 
     const audit = await app.request(`/notifications/${intent.id}/audit`);
     expect(audit.status).toBe(200);
@@ -97,7 +93,7 @@ describe('admin notification routes', () => {
     const intent = await seedIntent(staff.userId, 'Estimate announcement', {
       channels: ['web', 'email'],
     });
-    const app = adminApp(fakeSession(staff.userId));
+    const app = appWithSession(admin, fakeSession(staff.userId));
 
     const res = await app.request(`/notifications/${intent.id}/estimate`);
 
@@ -129,7 +125,7 @@ describe('admin notification routes', () => {
       channels: ['web', 'email', 'sms', 'push'],
       replyPolicy: 'staff_inbox',
     });
-    const app = adminApp(fakeSession(staff.userId));
+    const app = appWithSession(admin, fakeSession(staff.userId));
 
     const res = await app.request(`/notifications/${intent.id}/preview`);
 
@@ -156,17 +152,6 @@ describe('admin notification routes', () => {
     });
   });
 });
-
-function adminApp(session: AuthSession) {
-  const app = new Hono<AppEnv>();
-  app.use('*', async (c, next) => {
-    if (session) c.set('session', session);
-    await next();
-  });
-  app.route('/', admin);
-  app.onError(onError);
-  return app;
-}
 
 let counter = 0;
 function uniq(): string {

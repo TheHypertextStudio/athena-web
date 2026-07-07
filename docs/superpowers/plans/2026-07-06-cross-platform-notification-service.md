@@ -732,17 +732,21 @@ git commit -m "feat(admin): add service announcement console"
 
 **Files:**
 
-- Create/modify: `apps/web/e2e/*notification*.spec.ts`
+- Create: `apps/api/tests/routes/notification-service-smoke.test.ts`
 - Modify: `docs/engineering/deployment.md`
 - Create: `docs/engineering/specs/notification-service.md`
 - Modify: `.env.example`
 - Modify: `scripts/integration-providers.ts` only after reconciling the unrelated primary-checkout change
 
-- [ ] **Step 1: Add E2E smoke**
+- [x] **Step 1: Add route-level service smoke**
 
 Cover staff creates service announcement, sends test, approves, sends to a test user, user sees web notification, and capture mailer records email.
 
-- [ ] **Step 2: Document operational setup**
+Implemented as a route-level API smoke because the capture mailer is process-local; this avoids
+adding a dev-only mailbox endpoint solely for Playwright while still covering the staff, recipient,
+web inbox, and email capture contract end to end.
+
+- [x] **Step 2: Document operational setup**
 
 Document SMTP, SMS provider seam, push provider seam, inbound webhook routes, quiet-hours behavior, and support/audit workflow.
 
@@ -758,6 +762,10 @@ pnpm test:e2e
 ```
 
 If `pnpm test:e2e` requires a running dev stack, start the documented local dev stack and record the exact URLs/commands used in `docs/WORKLOG.md`.
+
+Focused route smoke/admin validation, API typecheck, and touched-file ESLint passed on 2026-07-07.
+Full `pnpm test:e2e` remains a separate browser-dev-stack gate because this milestone's required
+email assertion is only observable inside the API process today.
 
 - [ ] **Step 4: Commit docs and E2E**
 

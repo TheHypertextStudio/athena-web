@@ -9,41 +9,25 @@
  * conflict, and invalid-input edges for every endpoint added in the gap-fill pass.
  */
 import { eq } from 'drizzle-orm';
-import { Hono } from 'hono';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
-import type { AppEnv, AuthSession } from '../../src/context';
-import { onError } from '../../src/error';
-import { fakeSession, getDb } from '../support/routes-harness';
-import type adminRouter from '../../src/routes/admin';
+import { appWithSession, fakeSession, getDb } from '../support/routes-harness';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
-let admin!: typeof adminRouter;
+let admin!: unknown;
 
 beforeAll(async () => {
   schema = await getDb();
   db = schema.db;
-  admin = (await import('../../src/routes/admin')).default;
+  admin = (await import('../../src/app')).adminRouter;
 });
 
 /** Parse a JSON response body as the given shape. */
 async function json<T>(res: Response): Promise<T> {
   return (await res.json()) as T;
-}
-
-/** Mount the admin router behind an injected session (so staffMiddleware resolves staff_user). */
-function adminApp(session: AuthSession) {
-  const app = new Hono<AppEnv>();
-  app.use('*', async (c, next) => {
-    if (session) c.set('session', session);
-    await next();
-  });
-  app.route('/', admin);
-  app.onError(onError);
-  return app;
 }
 
 let counter = 0;
@@ -120,10 +104,14 @@ async function auditCount(type: string, subjectId: string): Promise<number> {
 describe('staff management', () => {
   it('403s a support user and admits a superadmin on GET /staff', async () => {
     const support = await makeStaff('support');
-    expect((await adminApp(fakeSession(support.userId)).request('/staff')).status).toBe(403);
+    expect(
+      (await appWithSession(admin, fakeSession(support.userId)).request('/staff')).status,
+    ).toBe(403);
 
     const sup = await makeStaff('superadmin');
-    const res = await adminApp(fakeSession(sup.userId)).request('/staff?limit=100&offset=0');
+    const res = await appWithSession(admin, fakeSession(sup.userId)).request(
+      '/staff?limit=100&offset=0',
+    );
     expect(res.status).toBe(200);
     const body = await json<{
       items: { id: string; userId: string; role: string }[];
@@ -136,7 +124,7 @@ describe('staff management', () => {
   it('403s a finance user on POST /staff (superadmin-only)', async () => {
     const fin = await makeStaff('finance');
     const target = await makeUser('Promote');
-    const res = await adminApp(fakeSession(fin.userId)).request('/staff', {
+    const res = await appWithSession(admin, fakeSession(fin.userId)).request('/staff', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ userId: target, role: 'support' }),
@@ -147,7 +135,7 @@ describe('staff management', () => {
   it('grants a user a staff tier (audited) and the new staff appears in the list', async () => {
     const sup = await makeStaff('superadmin');
     const target = await makeUser('Promote');
-    const app = adminApp(fakeSession(sup.userId));
+    const app = appWithSession(admin, fakeSession(sup.userId));
 
     const created = await app.request('/staff', {
       method: 'POST',
@@ -164,7 +152,7 @@ describe('staff management', () => {
     expect(await auditCount('staff.granted', staff.id)).toBe(1);
 
     // The newly-granted operator can now reach the staff surface.
-    const asNew = await adminApp(fakeSession(target)).request('/staff');
+    const asNew = await appWithSession(admin, fakeSession(target)).request('/staff');
     // finance < superadmin → still 403 on the superadmin-only list (proves the grant took effect
     // as a *finance* tier, not a blanket super-grant).
     expect(asNew.status).toBe(403);
@@ -172,7 +160,7 @@ describe('staff management', () => {
 
   it('404s granting staff to an unknown user', async () => {
     const sup = await makeStaff('superadmin');
-    const res = await adminApp(fakeSession(sup.userId)).request('/staff', {
+    const res = await appWithSession(admin, fakeSession(sup.userId)).request('/staff', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ userId: 'ghost', role: 'support' }),
@@ -183,7 +171,7 @@ describe('staff management', () => {
   it('409s granting staff to a user who is already staff', async () => {
     const sup = await makeStaff('superadmin');
     const existing = await makeStaff('support');
-    const res = await adminApp(fakeSession(sup.userId)).request('/staff', {
+    const res = await appWithSession(admin, fakeSession(sup.userId)).request('/staff', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ userId: existing.userId, role: 'finance' }),
@@ -194,7 +182,7 @@ describe('staff management', () => {
   it('422s a bad role on POST /staff', async () => {
     const sup = await makeStaff('superadmin');
     const target = await makeUser('Promote');
-    const res = await adminApp(fakeSession(sup.userId)).request('/staff', {
+    const res = await appWithSession(admin, fakeSession(sup.userId)).request('/staff', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ userId: target, role: 'owner' }),
@@ -205,7 +193,7 @@ describe('staff management', () => {
   it('revokes a staff member (audited) and 404s revoking again', async () => {
     const sup = await makeStaff('superadmin');
     const victim = await makeStaff('support');
-    const app = adminApp(fakeSession(sup.userId));
+    const app = appWithSession(admin, fakeSession(sup.userId));
 
     const removed = await app.request(`/staff/${victim.staffUserId}`, { method: 'DELETE' });
     expect(removed.status).toBe(200);
@@ -227,16 +215,19 @@ describe('staff management', () => {
 
   it('409s a superadmin trying to revoke their own staff access', async () => {
     const sup = await makeStaff('superadmin');
-    const res = await adminApp(fakeSession(sup.userId)).request(`/staff/${sup.staffUserId}`, {
-      method: 'DELETE',
-    });
+    const res = await appWithSession(admin, fakeSession(sup.userId)).request(
+      `/staff/${sup.staffUserId}`,
+      {
+        method: 'DELETE',
+      },
+    );
     expect(res.status).toBe(409);
   });
 
   it('403s a support user on DELETE /staff/:id', async () => {
     const support = await makeStaff('support');
     const victim = await makeStaff('support');
-    const res = await adminApp(fakeSession(support.userId)).request(
+    const res = await appWithSession(admin, fakeSession(support.userId)).request(
       `/staff/${victim.staffUserId}`,
       {
         method: 'DELETE',
@@ -249,16 +240,20 @@ describe('staff management', () => {
 describe('audit feed (superadmin-only, filterable)', () => {
   it('403s a support user and admits a superadmin', async () => {
     const support = await makeStaff('support');
-    expect((await adminApp(fakeSession(support.userId)).request('/audit')).status).toBe(403);
+    expect(
+      (await appWithSession(admin, fakeSession(support.userId)).request('/audit')).status,
+    ).toBe(403);
 
     const sup = await makeStaff('superadmin');
-    expect((await adminApp(fakeSession(sup.userId)).request('/audit')).status).toBe(200);
+    expect((await appWithSession(admin, fakeSession(sup.userId)).request('/audit')).status).toBe(
+      200,
+    );
   });
 
   it('filters the feed by staffUserId and by type', async () => {
     const sup = await makeStaff('superadmin');
     const orgId = await makeOrg({ lifecycleState: 'export_window' });
-    const app = adminApp(fakeSession(sup.userId));
+    const app = appWithSession(admin, fakeSession(sup.userId));
 
     // Generate a distinctly-typed event attributed to this superadmin.
     const placed = await app.request(`/orgs/${orgId}/holds`, {
@@ -294,7 +289,7 @@ describe('audit feed (superadmin-only, filterable)', () => {
 describe('metrics queues (agent health, mvp-plan §8.9)', () => {
   it('reports stuck approvals, agent errors, volume, and active holds', async () => {
     const sup = await makeStaff('superadmin');
-    const app = adminApp(fakeSession(sup.userId));
+    const app = appWithSession(admin, fakeSession(sup.userId));
 
     // Seed agent sessions across statuses + an active hold.
     await makeAgentSession('awaiting_approval');
@@ -343,7 +338,7 @@ describe('metrics queues (agent health, mvp-plan §8.9)', () => {
 
   it('is open to any staff tier (support can read the home metrics)', async () => {
     const support = await makeStaff('support');
-    const res = await adminApp(fakeSession(support.userId)).request('/metrics');
+    const res = await appWithSession(admin, fakeSession(support.userId)).request('/metrics');
     expect(res.status).toBe(200);
   });
 });

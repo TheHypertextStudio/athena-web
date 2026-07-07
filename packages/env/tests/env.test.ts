@@ -436,11 +436,13 @@ describe('api composition', () => {
 
   describe('MCP OAuth URLs derive from API_URL/WEB_URL by default', () => {
     it('derives issuer, resource, and login page from API_URL/WEB_URL alone', async () => {
-      stubEnv({
+      for (const [key, value] of Object.entries({
         ...validApiEnv(),
         API_URL: 'https://docket-api.hypertext.studio/',
         WEB_URL: 'https://docket.hypertext.studio/',
-      });
+      })) {
+        vi.stubEnv(key, value);
+      }
       const mod = await import('../src/api');
       expect(mod.env.MCP_ISSUER_URL).toBe('https://docket-api.hypertext.studio');
       expect(mod.env.MCP_RESOURCE_URL).toBe('https://docket-api.hypertext.studio/mcp');
@@ -448,11 +450,13 @@ describe('api composition', () => {
     });
 
     it('lets an explicit value override its derivation', async () => {
-      stubEnv({
+      for (const [key, value] of Object.entries({
         ...validApiEnv(),
         MCP_ISSUER_URL: 'https://custom-issuer.example.com',
         OIDC_LOGIN_PAGE_URL: 'https://custom.example.com/login',
-      });
+      })) {
+        vi.stubEnv(key, value);
+      }
       const mod = await import('../src/api');
       expect(mod.env.MCP_ISSUER_URL).toBe('https://custom-issuer.example.com');
       expect(mod.env.OIDC_LOGIN_PAGE_URL).toBe('https://custom.example.com/login');
@@ -461,7 +465,9 @@ describe('api composition', () => {
     });
 
     it('never derives MCP_ALLOWED_ORIGINS (it is a security allowlist, set explicitly)', async () => {
-      stubEnv(validApiEnv());
+      for (const [key, value] of Object.entries(validApiEnv())) {
+        vi.stubEnv(key, value);
+      }
       const mod = await import('../src/api');
       expect(mod.env.MCP_ALLOWED_ORIGINS).toBeUndefined();
     });

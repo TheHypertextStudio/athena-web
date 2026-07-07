@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { enqueueSearchIndexJob } from '../../src/search/enqueue';
-import { getDb, one, seedBaseOrg } from './harness.test';
+import { getDb, one, seedBaseOrg } from '../support/routes-harness';
 
 const AUTH = { authorization: 'Bearer test-cron-secret' };
 

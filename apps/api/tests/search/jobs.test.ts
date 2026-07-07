@@ -1,7 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 
-import { getDb, one, seedBaseOrg } from '../routes/harness.test';
+import { getDb, one, seedBaseOrg } from '../support/routes-harness';
 
 import { backfillSearchIndex, repairSearchIndex } from '../../src/search/backfill';
 import { enqueueSearchIndexJob } from '../../src/search/enqueue';

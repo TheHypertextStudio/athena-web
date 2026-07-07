@@ -184,6 +184,17 @@ false`, and touched-file ESLint pass. Browser E2E remains a later dev-stack gate
   tests, and admin console 2 tests passed. The earlier package-test stall was diagnostic noise from
   concurrent/truncated Vitest output plus unrelated repo processes; no Vitest process from this
   notification worktree remained alive when checked.
+- **Full gate follow-up (2026-07-07)**: Ran the root verification gates for the notification
+  worktree. `pnpm typecheck` passed with 13 successful tasks; `pnpm lint` passed with 13 successful
+  tasks. The first `pnpm test` run exposed a timing-sensitive web sign-in component test: under full
+  Turbo concurrency, the post-passkey session-recovery assertion timed out before the component's
+  retry window finished. Hardened that test around the real retry contract with an explicit
+  `expectSessionRecoveryError` helper, then verified
+  `../../node_modules/.bin/vitest run tests/components/auth/sign-in-page.test.tsx`,
+  `../../node_modules/.bin/vitest run` from `apps/web`, `pnpm --filter @docket/web typecheck`,
+  `pnpm --filter @docket/web lint`, and a fresh `pnpm test`. The final root test gate passed with
+  13 successful tasks; `@docket/api` reported 111 files / 1102 tests and `@docket/web` reported 40
+  files / 237 tests. Browser E2E remains the next unchecked milestone gate.
 
 ### [AUTH-SEC-001] Auth security & UX audit remediation
 

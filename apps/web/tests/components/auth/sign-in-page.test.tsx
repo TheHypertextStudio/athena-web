@@ -50,6 +50,17 @@ function jsonResponse(status: number, body: unknown): Response {
   } as Response;
 }
 
+async function expectSessionRecoveryError(): Promise<void> {
+  await waitFor(
+    () => {
+      expect(screen.getByRole('alert').textContent).toBe(
+        'We could not finish signing you in. Please try again.',
+      );
+    },
+    { timeout: 5_000 },
+  );
+}
+
 beforeEach(() => {
   orgsGet.mockReset();
   push.mockReset();
@@ -100,11 +111,7 @@ describe('SignInPage', () => {
     render(<SignInPage />);
     fireEvent.click(screen.getByRole('button', { name: 'Sign in with a passkey' }));
 
-    await waitFor(() => {
-      expect(screen.getByRole('alert').textContent).toBe(
-        'We could not finish signing you in. Please try again.',
-      );
-    });
+    await expectSessionRecoveryError();
     expect(push).not.toHaveBeenCalled();
   });
 
@@ -118,11 +125,7 @@ describe('SignInPage', () => {
     const button = screen.getByRole('button', { name: 'Sign in with a passkey' });
     fireEvent.click(button);
 
-    await waitFor(() => {
-      expect(screen.getByRole('alert').textContent).toBe(
-        'We could not finish signing you in. Please try again.',
-      );
-    });
+    await expectSessionRecoveryError();
     expect(button.hasAttribute('disabled')).toBe(false);
 
     fireEvent.click(button);

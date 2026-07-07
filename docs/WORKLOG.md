@@ -7,6 +7,42 @@
 
 ## Active Tasks
 
+### [NOTIF-UX-001] End-user notification UX completion
+
+- **Status**: DONE
+- **Started**: 2026-07-07
+- **Completed**: 2026-07-07
+- **Priority**: P1
+- **Description**: Close the remaining end-user notification UX gaps after the service spine:
+  Slack-like inbox slices, question-first notification preferences, complete quiet-hours controls,
+  and safer contact-point management.
+- **Approach**: Keep the API stable and finish the user-facing surfaces with focused component tests
+  first. Reuse existing notification DTOs, fixtures, query hooks, and settings components rather
+  than introducing a second UX framework.
+- **Subtasks**:
+  - [x] Add Slack-like notification inbox tabs for all, unread, needs action, mentions/assignments,
+        announcements, and activity.
+  - [x] Rework notification preferences around end-user questions while preserving the advanced
+        matrix for power users.
+  - [x] Expand quiet-hours controls to days and urgent bypass.
+  - [x] Expand contact-point creation beyond phone and add confirmation before disabling
+        destinations.
+- **Files Changed**:
+  - `apps/web/src/app/(app)/inbox/*`
+  - `apps/web/src/components/settings/{contact-points-section,notification-preferences-section}.tsx`
+  - `apps/web/tests/components/{inbox,settings}/*notification*`
+  - `apps/api/tests/support/routes-harness.ts`
+  - `packages/db/drizzle/0026_outgoing_next_avengers.sql`
+- **Validation**:
+  - `pnpm typecheck` — 17/17 Turbo tasks passed.
+  - `pnpm lint` — 17/17 Turbo tasks passed.
+  - `pnpm test` — 17/17 Turbo tasks passed; API 119 files / 1112 tests and web 46 files / 281 tests.
+  - `pnpm build` — API, admin, and web build tasks passed.
+- **Learnings**: The end-user UX work exposed two integration seams worth keeping tight: route
+  composition must preserve Hono child schemas for the admin RPC client, and rebased Drizzle
+  migrations must be checked for stale-base duplicate enum/table creation before running broad API
+  tests.
+
 ### [NOTIF-SPEC-001] Cross-platform notification service
 
 - **Status**: DONE

@@ -57,6 +57,16 @@ const DEFAULT_QUIET_HOURS: NotificationQuietHours = {
   allowUrgent: true,
 };
 
+const QUIET_DAYS: readonly { key: NotificationQuietHours['days'][number]; label: string }[] = [
+  { key: 'mon', label: 'Monday' },
+  { key: 'tue', label: 'Tuesday' },
+  { key: 'wed', label: 'Wednesday' },
+  { key: 'thu', label: 'Thursday' },
+  { key: 'fri', label: 'Friday' },
+  { key: 'sat', label: 'Saturday' },
+  { key: 'sun', label: 'Sunday' },
+];
+
 /** Props for {@link NotificationPreferencesSection}. */
 export interface NotificationPreferencesSectionProps {
   /** The materialized caller preferences returned by the API. */
@@ -93,8 +103,63 @@ export function NotificationPreferencesSection({
     void onPatch({ categories: { [category]: { [channel]: next } } });
   };
 
+  const announcementPreference = {
+    ...defaultNotificationChannelPreference('service_announcement'),
+    ...preferences.categories['service_announcement'],
+  };
+
+  const toggleQuietDay = (day: NotificationQuietHours['days'][number], checked: boolean): void => {
+    setQuietHours((current) => {
+      const days = new Set(current.days);
+      if (checked) days.add(day);
+      else days.delete(day);
+      return {
+        ...current,
+        days: QUIET_DAYS.map((item) => item.key).filter((key) => days.has(key)),
+      };
+    });
+  };
+
   return (
     <section aria-label="Notification preferences" className="flex flex-col gap-6">
+      <section className="border-outline-variant rounded-lg border p-4">
+        <h3 className="text-on-surface text-body font-semibold">
+          How should Docket reach me for announcements?
+        </h3>
+        <div className="mt-3 grid gap-2 @2xl:grid-cols-2">
+          <label className="border-outline-variant flex items-center gap-3 rounded-md border px-3 py-2">
+            <input
+              type="checkbox"
+              className="accent-primary size-4 opacity-70"
+              checked
+              disabled
+              aria-label="Announcement web inbox"
+            />
+            <span className="text-body text-on-surface">Web inbox</span>
+          </label>
+          {CHANNELS.filter((channel) => channel.key !== 'web').map((channel) => (
+            <label
+              key={channel.key}
+              className="border-outline-variant flex items-center gap-3 rounded-md border px-3 py-2"
+            >
+              <input
+                type="checkbox"
+                className="accent-primary size-4"
+                checked={announcementPreference[channel.key] === true}
+                disabled={saving}
+                aria-label={`Announcement ${channel.key === 'sms' ? 'text message' : channel.label.toLowerCase()}`}
+                onChange={(event) => {
+                  patchChannel('service_announcement', channel.key, event.target.checked);
+                }}
+              />
+              <span className="text-body text-on-surface">
+                {channel.key === 'sms' ? 'Text message' : channel.label}
+              </span>
+            </label>
+          ))}
+        </div>
+      </section>
+
       <section className="border-outline-variant bg-surface-container-low rounded-lg border">
         <div className="border-outline-variant flex items-center gap-2 border-b px-4 py-3">
           <Schedule aria-hidden="true" className="text-on-surface-variant size-4" />
@@ -149,10 +214,45 @@ export function NotificationPreferencesSection({
             Save quiet hours
           </Button>
         </div>
+        <div className="border-outline-variant grid gap-3 border-t p-4">
+          <div className="flex flex-wrap gap-2">
+            {QUIET_DAYS.map((day) => (
+              <label
+                key={day.key}
+                className="border-outline-variant text-body flex items-center gap-2 rounded-md border px-3 py-2"
+              >
+                <input
+                  type="checkbox"
+                  className="accent-primary size-4"
+                  checked={quietHours.days.includes(day.key)}
+                  disabled={saving}
+                  aria-label={`Quiet on ${day.label}`}
+                  onChange={(event) => {
+                    toggleQuietDay(day.key, event.target.checked);
+                  }}
+                />
+                {day.label.slice(0, 3)}
+              </label>
+            ))}
+          </div>
+          <label className="text-on-surface text-body flex items-center gap-2">
+            <input
+              type="checkbox"
+              className="accent-primary size-4"
+              checked={quietHours.allowUrgent}
+              disabled={saving}
+              aria-label="Allow urgent notifications"
+              onChange={(event) => {
+                setQuietHours((current) => ({ ...current, allowUrgent: event.target.checked }));
+              }}
+            />
+            Allow urgent notifications
+          </label>
+        </div>
       </section>
 
       <section aria-label="Channel preferences" className="flex flex-col gap-3">
-        <h3 className="text-on-surface text-body font-semibold">Channels</h3>
+        <h3 className="text-on-surface text-body font-semibold">Advanced channel rules</h3>
         <div className="border-outline-variant overflow-x-auto rounded-lg border">
           <table className="min-w-full border-separate border-spacing-0 text-left">
             <thead>

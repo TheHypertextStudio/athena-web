@@ -6,7 +6,7 @@ import {
   dispatchNotificationIntent,
   type DispatchNotificationIntentInput,
 } from '../../../src/services/notifications/dispatcher';
-import { captureOutbox, getDb, one, seedUserWithHub } from '../../routes/harness.test';
+import { captureOutbox, getDb, one, seedUserWithHub } from '../../support/routes-harness';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;

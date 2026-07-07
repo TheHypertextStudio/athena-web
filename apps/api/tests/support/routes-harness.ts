@@ -146,6 +146,27 @@ export async function seedUserWithHub(
   return u.id;
 }
 
+/** Seed a staff operator user for admin-route and announcement tests. */
+export async function seedStaffUser(
+  db: Db,
+  schema: typeof DbModule,
+  role: NonNullable<(typeof DbModule.staffUser)['$inferInsert']['role']> = 'support',
+  label: string = role,
+): Promise<{ readonly userId: string; readonly staffUserId: string }> {
+  const userId = await seedUserWithHub(
+    db,
+    schema,
+    `Staff${label}-${Math.random().toString(36).slice(2)}`,
+  );
+  const staff = one(
+    await db
+      .insert(schema.staffUser)
+      .values({ userId, role })
+      .returning({ id: schema.staffUser.id }),
+  );
+  return { userId, staffUserId: staff.id };
+}
+
 /** Seed an organization (personal or shared); returns its id. */
 export async function seedOrg(
   db: Db,
@@ -199,6 +220,32 @@ export async function addMember(
       .returning({ id: schema.actor.id }),
   );
   return a.id;
+}
+
+/** Seed a verified notification contact point. */
+export async function seedContactPoint(
+  db: Db,
+  schema: typeof DbModule,
+  userId: string,
+  overrides: Partial<typeof DbModule.contactPoint.$inferInsert>,
+): Promise<{ readonly id: string }> {
+  const value = overrides.value ?? 'user@example.test';
+  return one(
+    await db
+      .insert(schema.contactPoint)
+      .values({
+        userId,
+        type: 'email',
+        value,
+        valueNormalized: value,
+        valueMasked: 'u***@example.test',
+        status: 'active',
+        primary: true,
+        verifiedAt: new Date('2026-07-07T17:00:00.000Z'),
+        ...overrides,
+      })
+      .returning({ id: schema.contactPoint.id }),
+  );
 }
 
 /** A fake session whose `createdAt` is `ageMs` in the past (for the freshness step-up gate). */

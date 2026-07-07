@@ -12,6 +12,7 @@ import type { z } from 'zod';
 
 import { ConflictError, NotFoundError } from '../../error';
 
+/** Persisted notification contact destination row. */
 export type ContactPointRow = typeof contactPoint.$inferSelect;
 
 const TEST_VERIFICATION_CODE = '000000';

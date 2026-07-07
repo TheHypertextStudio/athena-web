@@ -722,6 +722,8 @@ Staff routes should live under the existing admin surface.
 ```http
 GET  /admin/notifications
 GET  /admin/notifications/:id
+GET  /admin/notifications/:id/estimate
+GET  /admin/notifications/:id/preview
 POST /admin/notifications/:id/approve
 POST /admin/notifications/:id/reject
 GET  /admin/notifications/:id/audit

@@ -146,6 +146,14 @@
   was stopped after it exceeded prior successful gate times; the web build's TypeScript phase had
   already completed successfully after the `next.config.ts` change, and targeted ESLint on touched
   web files reported no errors.
+- **Admin safety API follow-up (2026-07-07)**: Added staff-facing
+  `/admin/notifications/:id/estimate` and `/admin/notifications/:id/preview` so the future
+  announcement console can show recipient counts, per-channel send/delay/suppression counts,
+  suppression reasons, approval gates, and web/email/SMS/push previews before a send. The service
+  reuses the existing audience resolver, preference resolver, and policy helpers; the route remains a
+  thin curried adapter over direct `AdminNotificationService` injection. Focused validation:
+  notification schema DTO tests, admin notification route tests, notification/API typechecks,
+  touched-file ESLint, and `git diff --check` pass.
 
 ### [AUTH-SEC-001] Auth security & UX audit remediation
 

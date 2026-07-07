@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ContactPointCreate,
   ContactPointOut,
+  NotificationAudienceEstimateOut,
   NotificationAudience,
   NotificationDeliveryOut,
   NotificationInboundEventOut,
@@ -10,6 +11,7 @@ import {
   NotificationIntentOut,
   NotificationPreferencePatch,
   NotificationPreferenceOut,
+  NotificationPreviewOut,
   NotificationRecipientOut,
 } from '../src';
 import {
@@ -81,5 +83,35 @@ describe('notification service DTOs', () => {
 
     const contactPoint = ContactPointOut.parse(makeContactPointOutFixture());
     expect(contactPoint.primary).toBe(true);
+  });
+
+  it('parses staff estimate and preview DTOs', () => {
+    const estimate = NotificationAudienceEstimateOut.parse({
+      recipientCount: 1,
+      channelCounts: {
+        web: { send: 1, delay: 0, suppress: 0 },
+        email: { send: 0, delay: 0, suppress: 1 },
+        sms: { send: 0, delay: 0, suppress: 0 },
+        push: { send: 0, delay: 0, suppress: 0 },
+      },
+      suppressions: [{ channel: 'email', reason: 'no_verified_contact_point', count: 1 }],
+      approvalRequired: false,
+      approvalReasons: [],
+    });
+    expect(estimate.suppressions[0]?.reason).toBe('no_verified_contact_point');
+
+    const preview = NotificationPreviewOut.parse({
+      subject: 'Scheduled maintenance',
+      replyPolicy: 'staff_inbox',
+      web: { title: 'Scheduled maintenance', body: 'Maintenance tonight.' },
+      email: {
+        subject: 'Scheduled maintenance',
+        text: 'Maintenance tonight.',
+        html: '<p>Maintenance tonight.</p>',
+      },
+      sms: { text: 'Docket: Scheduled maintenance. Maintenance tonight.' },
+      push: { title: 'Scheduled maintenance', body: 'Maintenance tonight.' },
+    });
+    expect(preview.sms?.text).toContain('Docket');
   });
 });

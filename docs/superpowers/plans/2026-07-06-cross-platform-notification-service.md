@@ -552,6 +552,8 @@ Expose:
 ```http
 GET  /admin/notifications
 GET  /admin/notifications/:id
+GET  /admin/notifications/:id/estimate
+GET  /admin/notifications/:id/preview
 POST /admin/notifications/:id/approve
 POST /admin/notifications/:id/reject
 GET  /admin/notifications/:id/audit
@@ -564,6 +566,11 @@ Implemented as a sub-router mounted from `admin.ts` with direct `NotificationInt
 database injection. Approve queues draft/scheduled intents and reject cancels not-yet-delivered
 intents with operator audit. A richer approval-required workflow still needs durable approval state
 columns before it can be represented honestly.
+
+Follow-up implementation added `estimate` and `preview` endpoints backed by the existing audience
+resolver, preference resolver, and policy helpers. Estimates report recipient counts, per-channel
+send/delay/suppression counts, suppression reasons, and the current approval gate; previews render
+the requested web/email/SMS/push channel content for the staff console.
 
 - [ ] **Step 3: Verify and commit**
 

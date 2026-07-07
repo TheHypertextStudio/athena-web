@@ -1,13 +1,25 @@
 import type { Database } from '@docket/db';
 import { notificationInboundEvent, notificationIntent, operatorAuditEvent } from '@docket/db';
-import type { NotificationInboundEventOut, NotificationIntentOut } from '@docket/notifications';
+import {
+  canCreateNotification,
+  NotificationAudience,
+  type NotificationAudienceEstimateOut,
+  type NotificationChannel,
+  type NotificationChannelDecision,
+  type NotificationInboundEventOut,
+  type NotificationIntentOut,
+  type NotificationPreviewOut,
+  type NotificationSuppressionReason,
+} from '@docket/notifications';
 import { and, desc, eq } from 'drizzle-orm';
 import type { z } from 'zod';
 
 import type { AdminAuditOut } from '../../admin-dto';
 import { ConflictError, NotFoundError } from '../../error';
+import { expandNotificationAudience } from './audience';
 import type { NotificationIntentService } from './intent-service';
 import { toNotificationIntentOut } from './intents';
+import { resolveNotificationPreferences } from './preferences';
 
 /** Staff-facing notification monitoring and approval service. */
 export class AdminNotificationService {
@@ -33,6 +45,77 @@ export class AdminNotificationService {
   /** Return one staff-visible notification intent. */
   async get(userId: string, id: string): Promise<z.input<typeof NotificationIntentOut>> {
     return this.intents.get(userId, id);
+  }
+
+  /** Estimate audience size, channel eligibility, suppressions, and approval gates before send. */
+  async estimate(
+    userId: string,
+    id: string,
+  ): Promise<z.input<typeof NotificationAudienceEstimateOut>> {
+    const intent = await this.intents.get(userId, id);
+    const recipients = await expandNotificationAudience(
+      this.database,
+      NotificationAudience.parse(intent.audience),
+    );
+    const channelCounts = emptyChannelCounts();
+    const suppressions = new Map<
+      string,
+      z.input<typeof NotificationAudienceEstimateOut>['suppressions'][number]
+    >();
+
+    for (const recipient of recipients) {
+      const decisions = await resolveNotificationPreferences(this.database, {
+        userId: recipient.userId,
+        organizationId: recipient.organizationId,
+        category: intent.category,
+        priority: intent.priority,
+        channels: intent.channels,
+      });
+
+      for (const decision of decisions) {
+        channelCounts[decision.channel][decision.decision] += 1;
+        recordSuppression(suppressions, decision);
+      }
+    }
+
+    const policy = canCreateNotification({
+      senderType: intent.senderType,
+      category: intent.category,
+      audience: intent.audience,
+      channels: intent.channels,
+    });
+
+    return {
+      recipientCount: recipients.length,
+      channelCounts,
+      suppressions: [...suppressions.values()].sort(compareSuppressions),
+      approvalRequired: policy.approval.required,
+      approvalReasons: [...policy.approval.reasons],
+    };
+  }
+
+  /** Render staff-facing previews for every requested channel on one intent. */
+  async preview(userId: string, id: string): Promise<z.input<typeof NotificationPreviewOut>> {
+    const intent = await this.intents.get(userId, id);
+    const text = bodyText(intent.body);
+    return {
+      subject: intent.subject,
+      replyPolicy: intent.replyPolicy,
+      ...(intent.channels.includes('web') ? { web: { title: intent.subject, body: text } } : {}),
+      ...(intent.channels.includes('email')
+        ? {
+            email: {
+              subject: intent.subject,
+              ...(intent.body.text ? { text: intent.body.text } : {}),
+              ...(intent.body.html ? { html: intent.body.html } : {}),
+            },
+          }
+        : {}),
+      ...(intent.channels.includes('sms')
+        ? { sms: { text: `Docket: ${intent.subject}. ${text}` } }
+        : {}),
+      ...(intent.channels.includes('push') ? { push: { title: intent.subject, body: text } } : {}),
+    };
   }
 
   /** Approve a draft or scheduled notification by moving it into the queued state. */
@@ -130,6 +213,58 @@ export class AdminNotificationService {
       metadata,
     });
   }
+}
+
+type ChannelCounts = z.input<typeof NotificationAudienceEstimateOut>['channelCounts'];
+type SuppressionEstimate = z.input<typeof NotificationAudienceEstimateOut>['suppressions'][number];
+
+function emptyChannelCounts(): ChannelCounts {
+  return {
+    web: { send: 0, delay: 0, suppress: 0 },
+    email: { send: 0, delay: 0, suppress: 0 },
+    sms: { send: 0, delay: 0, suppress: 0 },
+    push: { send: 0, delay: 0, suppress: 0 },
+  };
+}
+
+function recordSuppression(
+  suppressions: Map<string, SuppressionEstimate>,
+  decision: NotificationChannelDecision,
+): void {
+  if (!decision.suppression) return;
+  const channel = decision.suppression.channel ?? decision.channel;
+  const reason = decision.suppression.reason;
+  const key = suppressionKey(channel, reason);
+  const current = suppressions.get(key);
+  suppressions.set(key, {
+    channel,
+    reason,
+    count: (current?.count ?? 0) + 1,
+  });
+}
+
+function suppressionKey(
+  channel: NotificationChannel,
+  reason: NotificationSuppressionReason,
+): string {
+  return `${channel}:${reason}`;
+}
+
+function compareSuppressions(a: SuppressionEstimate, b: SuppressionEstimate): number {
+  const channel = (a.channel ?? '').localeCompare(b.channel ?? '');
+  if (channel !== 0) return channel;
+  return a.reason.localeCompare(b.reason);
+}
+
+function bodyText(body: { readonly text?: string; readonly html?: string }): string {
+  const text = body.text?.trim();
+  if (text !== undefined && text.length > 0) return text;
+  return (
+    body.html
+      ?.replace(/<[^>]*>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim() ?? ''
+  );
 }
 
 function toAdminAuditOut(

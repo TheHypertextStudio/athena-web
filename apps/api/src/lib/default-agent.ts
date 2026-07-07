@@ -9,8 +9,8 @@
  * or lazily materializes one — its agent Actor (`kind='agent'`) plus the `agent` row —
  * so {@link import('../routes/agent-sessions')} and the `trigger_agent` MCP tool can bind
  * a session to it on first use. The runtime that actually executes the session stays the
- * boundary {@link import('@docket/boundaries').AgentRuntime} (the mock under
- * `APP_MODE ∈ {local,test}`); this only guarantees a persistent org-scoped agent exists.
+ * {@link import('@docket/agent-runtime').AgentRuntime} selected by the API container;
+ * this only guarantees a persistent org-scoped agent exists.
  */
 import { actor, agent, db } from '@docket/db';
 import { and, asc, eq } from 'drizzle-orm';

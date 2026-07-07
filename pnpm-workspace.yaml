@@ -64,7 +64,7 @@ catalog:
   drizzle-kit: ^0.31.10
   '@neondatabase/serverless': ^1.1.0
   postgres: ^3.4.9
-  # Embedded Postgres for the zero-external-accounts build/tests (boundaries.md §1): the
+  # Embedded Postgres for the zero-external-accounts build/tests: the
   # Drizzle client selects its driver from the DATABASE_URL scheme (neon:/postgres:/pglite:);
   # PGlite runs Postgres in-process so migrations + tests need no Docker or service.
   '@electric-sql/pglite': ^0.5.1

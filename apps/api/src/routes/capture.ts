@@ -12,7 +12,7 @@
  * as a direct task create).
  */
 import { db, task } from '@docket/db';
-import { truncateTitle } from '@docket/boundaries';
+import { truncateTitle } from '@docket/agent-runtime';
 import { CaptureBody, TaskOut } from '@docket/types';
 import { Hono } from 'hono';
 import type { z } from 'zod';

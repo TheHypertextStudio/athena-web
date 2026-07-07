@@ -15,13 +15,13 @@
  * 3. `participant` — the message replies in a thread the user previously posted in, per the
  *    `thread_participation` memory ({@link recordSlackParticipation}).
  *
- * The observer (`packages/boundaries`) stays pure — it emits raw Slack facts (mentioned ids,
+ * The observer (`packages/integrations`) stays pure — it emits raw Slack facts (mentioned ids,
  * channel type, thread ts); everything here is the DB-aware half: the Slack-id → Docket-user
  * map from connected integrations, and the thread-participation lookup. The resolved map feeds
  * `RoutableEvent.externalUserRecipients`, keeping `routing.ts` the single relevance authority.
  */
 import { actor, db, integration, threadParticipation } from '@docket/db';
-import { asRecord, slackMentionedUserIds, str } from '@docket/boundaries';
+import { asRecord, slackMentionedUserIds, str } from '@docket/integrations';
 import type { StreamRelevance } from '@docket/types';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 

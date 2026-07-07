@@ -16,13 +16,12 @@
  * unique `(provider, external_event_id)` index.
  */
 import { db, eventSubscription, inboundEvent, integration } from '@docket/db';
-import { selectAdapter } from '@docket/boundaries';
-import type { ObserverProvider } from '@docket/boundaries';
+import type { ObserverProvider } from '@docket/integrations';
 import { and, eq, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 
-import { toBoundaryEnv } from '../container';
+import { buildObserver } from '../container';
 
 /** Narrow a routed payload to the record drizzle stores in the `payload` jsonb column. */
 function asPayload(value: unknown): Record<string, unknown> {
@@ -44,7 +43,7 @@ function asPayload(value: unknown): Record<string, unknown> {
 async function ingestWebhook(c: Context, provider: ObserverProvider): Promise<Response> {
   // Read the RAW bytes first: the signature is an HMAC over the exact request body.
   const rawBody = await c.req.text();
-  const observer = selectAdapter('observer', toBoundaryEnv(), { observerProvider: provider });
+  const observer = buildObserver(provider);
 
   // Authenticate before trusting any payload (the mock trusts the local path; see MockObserver).
   // Pass all headers through — the observer owns which signature header matters per provider.
@@ -186,7 +185,7 @@ async function ingestTokenWebhook(c: Context, provider: ObserverProvider): Promi
   }
 
   // The observer owns dedup id + event-type extraction; org routing came from the token, not here.
-  const observer = selectAdapter('observer', toBoundaryEnv(), { observerProvider: provider });
+  const observer = buildObserver(provider);
   const routing = observer.route(payload);
   if (!routing) return c.json({ error: 'unrecognized payload' }, 400);
 

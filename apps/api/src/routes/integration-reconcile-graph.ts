@@ -49,7 +49,7 @@ import type {
   WorkGraphConnector,
   WorkGraphSnapshot,
   WorkItemPushFields,
-} from '@docket/boundaries';
+} from '@docket/integrations';
 
 import { ConflictError } from '../error';
 

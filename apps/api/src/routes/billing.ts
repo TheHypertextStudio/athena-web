@@ -2,7 +2,7 @@
  * `@docket/api` — org-scoped billing + lifecycle router (mounted at `/v1/orgs/:orgId/billing`).
  *
  * @remarks
- * Subscription reads + checkout/portal opens go through the `@docket/boundaries`
+ * Subscription reads + checkout/portal opens go through the `@docket/integrations`
  * {@link BillingGateway} **port** (resolved from {@link getContainer}) — never the
  * Stripe SDK directly — so local/test runs use the deterministic
  * {@link InMemoryBillingGateway}. The org id (from the path's actor context) is the
@@ -212,7 +212,7 @@ const billing = new Hono<AppEnv>()
       tag: 'Billing',
       summary: 'Get the org subscription',
       response: SubscriptionOut,
-      description: `Return the organization's current subscription as {@link SubscriptionOut}, or \`null\` when the org has never subscribed. The read goes through the \`@docket/boundaries\` BillingGateway **port** (resolved from the container), never the Stripe SDK directly — so local/test runs serve deterministic in-memory state while production reads Stripe. The org id is the gateway \`referenceId\`. \`status\` is one of \`trialing\` | \`active\` | \`past_due\` | \`canceled\`, with \`currentPeriodEnd\` and an optional \`trialEnd\`. Open to any org member (a read). This reports the *provider* subscription; the Docket-side data-lifecycle state derived from it lives at \`GET /lifecycle\`. Related: \`POST /checkout\` (start a subscription), \`POST /portal\` (manage it).`,
+      description: `Return the organization's current subscription as {@link SubscriptionOut}, or \`null\` when the org has never subscribed. The read goes through the \`@docket/billing\` BillingGateway **port** (resolved from the container), never the Stripe SDK directly - so local/test runs serve deterministic in-memory state while production reads Stripe. The org id is the gateway \`referenceId\`. \`status\` is one of \`trialing\` | \`active\` | \`past_due\` | \`canceled\`, with \`currentPeriodEnd\` and an optional \`trialEnd\`. Open to any org member (a read). This reports the *provider* subscription; the Docket-side data-lifecycle state derived from it lives at \`GET /lifecycle\`. Related: \`POST /checkout\` (start a subscription), \`POST /portal\` (manage it).`,
     }),
     async (c) => {
       const { orgId } = c.get('actorCtx');

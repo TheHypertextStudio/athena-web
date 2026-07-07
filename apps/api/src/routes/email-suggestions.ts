@@ -17,7 +17,7 @@ import {
   SuggestionDismissed,
   pageOf,
 } from '@docket/types';
-import type { MailThread } from '@docket/boundaries';
+import type { MailThread } from '@docket/integrations';
 import { and, asc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';

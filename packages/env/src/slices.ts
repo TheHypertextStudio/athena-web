@@ -11,7 +11,7 @@
  * Validation is intentionally lenient on *format* (e.g. `DATABASE_URL` is
  * `min(1)`, not a strict URL) because the local zero-external-accounts build uses
  * a `pglite:`-scheme connection string and placeholder keys — the
- * `@docket/boundaries` resolver, not this package, decides real-vs-mock per port.
+ * app container, not this package, decides real-vs-test-double per integration.
  */
 import { z } from 'zod';
 
@@ -30,7 +30,7 @@ export const sharedServer = {
    * must NOT be set in `.env` files, so a default is the correct, non-hidden behavior.
    */
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-  /** Forces the mock adapters when `local`/`test`, even if real keys are present (boundaries.md). */
+  /** Forces local test doubles when `local`/`test`, even if real keys are present. */
   APP_MODE: z.enum(['local', 'test', 'production']),
   API_URL: z.string().min(1),
   /**
@@ -91,7 +91,7 @@ export const authServer = {
   /**
    * GitHub App private key, **base64-encoded PEM** (single line so it survives line-based `.env`
    * upserts). Signs the app JWT exchanged for 1h installation tokens. Lenient here; the
-   * `@docket/boundaries` resolver decodes + decides real-vs-mock.
+   * `@docket/integrations` resolver decodes + decides real-vs-mock.
    */
   GITHUB_APP_PRIVATE_KEY: z.string().optional(),
   /** GitHub App webhook signing secret — verifies inbound `X-Hub-Signature-256` firehose events. */
@@ -199,7 +199,7 @@ export const opsServer = {
   /**
    * SMTP relay host for transactional email (`SmtpMailer`). Local: Mailpit (`localhost`).
    * Absent/placeholder ⇒ the mock `CaptureMailer` is used. Lenient (`min(1)`, optional);
-   * the `@docket/boundaries` resolver, not this schema, decides real-vs-mock.
+   * the `@docket/integrations` resolver, not this schema, decides real-vs-mock.
    */
   SMTP_HOST: z.string().min(1).optional(),
   /** SMTP port (string form; coerced/validated by the adapter). 587 STARTTLS, 465 TLS, 1025 Mailpit. */
@@ -236,7 +236,7 @@ export const clientShared = {
  * variables only override the provider API base for self-hosted / non-public hosts
  * (e.g. GitHub Enterprise). Absent/placeholder ⇒ the provider's public API base is
  * used. Lenient (`min(1)`, optional) so the local zero-account build boots on blanks;
- * the `@docket/boundaries` resolver, not this schema, decides real-vs-mock.
+ * the `@docket/integrations` resolver, not this schema, decides real-vs-mock.
  */
 export const connectorServer = {
   /** GitHub REST API base override (e.g. `https://ghe.example.com/api/v3`). */

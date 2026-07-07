@@ -3,12 +3,12 @@ import type { integration, task } from '@docket/db';
 import { auth } from '@docket/auth';
 import type { IdentityOut, IdentityProvider, IntegrationOut, TaskOut } from '@docket/types';
 import { type IntegrationDirectoryProvider } from '@docket/types';
-import type { ConnectorProvider, ObserverProvider } from '@docket/boundaries';
-import { WRITE_BACK_CAPABLE_PROVIDERS, selectAdapter } from '@docket/boundaries';
+import type { ConnectorProvider, ObserverProvider } from '@docket/integrations';
+import { WRITE_BACK_CAPABLE_PROVIDERS } from '@docket/integrations';
 import { and, eq, inArray } from 'drizzle-orm';
 import type { z } from 'zod';
 
-import { toBoundaryEnv } from '../container';
+import { buildConnector } from '../container';
 import { env } from '../env';
 import { decodeIdTokenClaims } from '../lib/id-token';
 
@@ -226,7 +226,7 @@ export async function resolveLiveConnectorToken(
  *
  * @remarks
  * In `APP_MODE=local`/`test` a sentinel `'mock'` token is returned immediately (no DB round
- * trip, no real credentials), and {@link selectAdapter} forces the mock connector anyway.
+ * trip, no real credentials), and the API connector builder returns the mock connector anyway.
  * Otherwise this delegates to {@link resolveLiveConnectorToken}, which does the real Actor →
  * Better Auth `user` → access-token resolution (and refresh).
  *
@@ -369,13 +369,10 @@ export async function resolveIdentityLabel(
  *
  * @remarks
  * Never uses the cached process singleton — the token is per-user. In `APP_MODE=local`/`test`
- * the env-mode check in {@link selectAdapter} forces the mock connector.
+ * the env-mode check in {@link buildConnector} returns the mock connector.
  */
 export function connectorFor(provider: ConnectorProvider, accessToken: string) {
-  return selectAdapter('connector', toBoundaryEnv(), {
-    connectorProvider: provider,
-    connectorToken: accessToken,
-  });
+  return buildConnector(provider, accessToken);
 }
 
 /** Serialize an integration row to its {@link IntegrationOut} representation. */

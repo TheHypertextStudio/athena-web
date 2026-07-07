@@ -370,7 +370,7 @@ describe('POST /:id/import (connector import via the Connector port)', () => {
   });
 
   it('returns 409 with connector error message when importWork throws', async () => {
-    const { MockConnector } = await import('@docket/boundaries');
+    const { MockConnector } = await import('@docket/integrations');
     const spy = vi
       .spyOn(MockConnector.prototype, 'importWork')
       .mockRejectedValueOnce(new Error('upstream timeout'));
@@ -421,7 +421,7 @@ describe('POST /:id/sync (connector sync via the Connector port)', () => {
   });
 
   it('returns a failed SyncJob (200) when the connector throws instead of 500', async () => {
-    const { MockConnector } = await import('@docket/boundaries');
+    const { MockConnector } = await import('@docket/integrations');
     const spy = vi
       .spyOn(MockConnector.prototype, 'importWork')
       .mockRejectedValueOnce(new Error('network unreachable'));

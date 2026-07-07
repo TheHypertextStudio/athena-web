@@ -31,7 +31,7 @@ import { type BetterAuthPlugin } from 'better-auth';
 import { APIError, createAuthEndpoint } from 'better-auth/api';
 import * as z from 'zod';
 
-import type { Mailer } from '@docket/boundaries';
+import type { Mailer } from '@docket/mail';
 
 import { verificationCodeEmail } from './emails';
 import { INTENT_IDENTIFIER_PREFIX, SIGNUP_CODE_TTL_S } from './signup-intent';

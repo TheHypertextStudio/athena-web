@@ -12,7 +12,7 @@
  */
 import { actor, db, externalActor, user } from '@docket/db';
 import type { ExternalActorOut } from '@docket/types';
-import type { ExternalUser } from '@docket/boundaries';
+import type { ExternalUser } from '@docket/integrations';
 import { and, eq, isNotNull, sql } from 'drizzle-orm';
 import type { z } from 'zod';
 

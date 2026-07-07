@@ -23,8 +23,8 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { db, task, team } from '@docket/db';
 import type { WorkflowStateType } from '@docket/db';
 import { ConnectorConfig } from '@docket/types';
-import type { ImportedItem } from '@docket/boundaries';
-import type { WritableConnector } from '@docket/boundaries';
+import type { ImportedItem } from '@docket/integrations';
+import type { WritableConnector } from '@docket/integrations';
 
 import { ConflictError } from '../error';
 

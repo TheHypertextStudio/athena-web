@@ -23,7 +23,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 
 import { db, integration } from '@docket/db';
-import type { ConnectorProvider } from '@docket/boundaries';
+import type { ConnectorProvider } from '@docket/integrations';
 import { and, eq } from 'drizzle-orm';
 
 import { connectorFor, resolveConnectorToken } from '../../routes/integration-provider';

@@ -1,7 +1,7 @@
 # Slack Integration — User Mentions, DMs & Threads in the Stream
 
 > **Status**: Implemented (2026-07-02)
-> **Depends on**: `activity-feed.md` (the Event substrate), `boundaries.md` (ports + real/mock discipline)
+> **Depends on**: `activity-feed.md` (the Event substrate), API container + domain package composition
 
 ## Product story
 
@@ -64,7 +64,7 @@ Per connected user, strongest reason wins (merged through `routing.ts`'s single
 `RELEVANCE_RANK` via the new `RoutableEvent.externalUserRecipients` input):
 
 1. **`mention`** — message text contains `<@theirSlackId>` (shared regex
-   `slackMentionedUserIds` in `packages/boundaries`).
+   `slackMentionedUserIds` in `packages/integrations`).
 2. **`mention`** — the message is an `im`/`mpim` to them. Gated against DM leaks: with several
    connected users the recipient must appear in the payload's `authorizations[].user_id`, or be
    the sole connected non-author. (Full fix: `apps.event.authorizations.list`, follow-up.)

@@ -1,38 +1,82 @@
-/**
- * `@docket/api` — the boundary container, a lazy module singleton.
- *
- * @remarks
- * The API takes every external-I/O dependency (billing, agent runtime, connector,
- * mailer, blob) from one {@link BoundaryContainer} built by `@docket/boundaries`'
- * {@link buildContainer}. The container is resolved from the validated API `env`: the
- * resolver returns the real, env-driven adapter per port when that port's key is
- * present and real-shaped, otherwise the deterministic mock — and `APP_MODE ∈
- * {local,test}` forces the mocks (so placeholder Stripe keys + `APP_MODE=local`
- * yield the {@link InMemoryBillingGateway}).
- *
- * Construction is lazy and memoized via {@link getContainer} so importing this module
- * is side-effect-free; the first access builds (and caches) the container.
- */
-import { buildContainer } from '@docket/boundaries';
-import type { BoundaryContainer, BoundaryEnv } from '@docket/boundaries';
+import {
+  MockAgentRuntime,
+  MockSummarizer,
+  MockTaskSynthesizer,
+  RealProviderRuntime,
+  RealSummarizer,
+  RealTaskSynthesizer,
+} from '@docket/agent-runtime';
+import type { AgentRuntime, Summarizer, TaskSynthesizer } from '@docket/agent-runtime';
+import { InMemoryBillingGateway, RealStripeGateway } from '@docket/billing';
+import type { BillingGateway } from '@docket/billing';
+import { LocalDiskBlob, RealBlob } from '@docket/blob-store';
+import type { BlobStore } from '@docket/blob-store';
+import { isRealValue } from '@docket/env';
+import {
+  MockConnector,
+  MockObserver,
+  RealConnector,
+  RealDiscordObserver,
+  RealGitHubObserver,
+  RealLinearObserver,
+  RealSlackObserver,
+} from '@docket/integrations';
+import type { Connector, ConnectorProvider, Observer, ObserverProvider } from '@docket/integrations';
+import { CaptureMailer, SmtpMailer, smtpConfigFromEnv } from '@docket/mail';
+import type { Mailer } from '@docket/mail';
 
 import { env } from './env';
 
-/** The wired set of boundary adapters the API runs against (re-exported for handlers). */
-export type { BoundaryContainer } from '@docket/boundaries';
+export interface AppRuntimeEnv {
+  readonly APP_MODE?: 'local' | 'test' | 'production';
+  readonly STRIPE_SECRET_KEY?: string;
+  readonly STRIPE_WEBHOOK_SECRET?: string;
+  readonly STRIPE_PRICE_TEAM?: string;
+  readonly DOCKET_PRICE_LOOKUP_TEAM?: string;
+  readonly STRIPE_BILLING_PORTAL_CONFIG_ID?: string;
+  readonly ANTHROPIC_API_KEY?: string;
+  readonly LINEAR_WEBHOOK_SECRET?: string;
+  readonly GITHUB_APP_WEBHOOK_SECRET?: string;
+  readonly SLACK_SIGNING_SECRET?: string;
+  readonly DISCORD_PUBLIC_KEY?: string;
+  readonly SMTP_HOST?: string;
+  readonly SMTP_PORT?: string;
+  readonly SMTP_SECURE?: string;
+  readonly SMTP_USER?: string;
+  readonly SMTP_PASS?: string;
+  readonly MAIL_FROM?: string;
+  readonly BLOB_READ_WRITE_TOKEN?: string;
+  readonly EXPORT_BUCKET_URL?: string;
+  readonly GITHUB_API_BASE?: string;
+  readonly LINEAR_API_BASE?: string;
+  readonly GOOGLE_DRIVE_API_BASE?: string;
+  readonly GOOGLE_GMAIL_API_BASE?: string;
+  readonly GOOGLE_CALENDAR_API_BASE?: string;
+  readonly GOOGLE_TASKS_API_BASE?: string;
+  readonly MICROSOFT_GRAPH_API_BASE?: string;
+}
 
-/**
- * Map the validated API `env` onto the boundary-relevant {@link BoundaryEnv} slice.
- *
- * @remarks
- * Exported so the integrations router can pass the same env slice to per-request
- * {@link selectAdapter} calls (the connector port is instantiated per-connection,
- * not from the cached singleton).
- */
-export function toBoundaryEnv(): BoundaryEnv {
+export interface AppContainer {
+  readonly billing: BillingGateway;
+  readonly agentRuntime: AgentRuntime;
+  readonly summarizer: Summarizer;
+  readonly taskSynthesizer: TaskSynthesizer;
+  readonly mailer: Mailer;
+  readonly blob: BlobStore;
+}
+
+function localMode(runtimeEnv: AppRuntimeEnv): boolean {
+  return runtimeEnv.APP_MODE === 'local' || runtimeEnv.APP_MODE === 'test';
+}
+
+function required(name: string, value: string | undefined): string {
+  if (!isRealValue(value)) throw new Error(`Missing required production config: ${name}`);
+  return value;
+}
+
+export function toAppRuntimeEnv(): AppRuntimeEnv {
   return {
     APP_MODE: env.APP_MODE,
-    // billing (Stripe)
     ...(env.STRIPE_SECRET_KEY ? { STRIPE_SECRET_KEY: env.STRIPE_SECRET_KEY } : {}),
     ...(env.STRIPE_WEBHOOK_SECRET ? { STRIPE_WEBHOOK_SECRET: env.STRIPE_WEBHOOK_SECRET } : {}),
     ...(env.STRIPE_PRICE_TEAM ? { STRIPE_PRICE_TEAM: env.STRIPE_PRICE_TEAM } : {}),
@@ -42,52 +86,153 @@ export function toBoundaryEnv(): BoundaryEnv {
     ...(env.STRIPE_BILLING_PORTAL_CONFIG_ID
       ? { STRIPE_BILLING_PORTAL_CONFIG_ID: env.STRIPE_BILLING_PORTAL_CONFIG_ID }
       : {}),
-    // agent runtime + daily-digest summarizer (Anthropic-backed Athena)
     ...(env.ANTHROPIC_API_KEY ? { ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY } : {}),
-    // observer (ambient-intelligence ingestion; app-level Linear webhook secret)
     ...(env.LINEAR_WEBHOOK_SECRET ? { LINEAR_WEBHOOK_SECRET: env.LINEAR_WEBHOOK_SECRET } : {}),
     ...(env.GITHUB_APP_WEBHOOK_SECRET
       ? { GITHUB_APP_WEBHOOK_SECRET: env.GITHUB_APP_WEBHOOK_SECRET }
       : {}),
     ...(env.SLACK_SIGNING_SECRET ? { SLACK_SIGNING_SECRET: env.SLACK_SIGNING_SECRET } : {}),
     ...(env.DISCORD_PUBLIC_KEY ? { DISCORD_PUBLIC_KEY: env.DISCORD_PUBLIC_KEY } : {}),
-    // mailer (SMTP)
     ...(env.SMTP_HOST ? { SMTP_HOST: env.SMTP_HOST } : {}),
     ...(env.SMTP_PORT ? { SMTP_PORT: env.SMTP_PORT } : {}),
     ...(env.SMTP_SECURE ? { SMTP_SECURE: env.SMTP_SECURE } : {}),
     ...(env.SMTP_USER ? { SMTP_USER: env.SMTP_USER } : {}),
     ...(env.SMTP_PASS ? { SMTP_PASS: env.SMTP_PASS } : {}),
     ...(env.MAIL_FROM ? { MAIL_FROM: env.MAIL_FROM } : {}),
-    // blob (Vercel Blob)
     ...(env.BLOB_READ_WRITE_TOKEN ? { BLOB_READ_WRITE_TOKEN: env.BLOB_READ_WRITE_TOKEN } : {}),
     ...(env.EXPORT_BUCKET_URL ? { EXPORT_BUCKET_URL: env.EXPORT_BUCKET_URL } : {}),
-    // connector (per-provider API-base overrides; the OAuth token is per-connection)
     ...(env.GITHUB_API_BASE ? { GITHUB_API_BASE: env.GITHUB_API_BASE } : {}),
     ...(env.LINEAR_API_BASE ? { LINEAR_API_BASE: env.LINEAR_API_BASE } : {}),
     ...(env.GOOGLE_DRIVE_API_BASE ? { GOOGLE_DRIVE_API_BASE: env.GOOGLE_DRIVE_API_BASE } : {}),
     ...(env.GOOGLE_GMAIL_API_BASE ? { GOOGLE_GMAIL_API_BASE: env.GOOGLE_GMAIL_API_BASE } : {}),
-    ...(env.MICROSOFT_GRAPH_API_BASE
-      ? { MICROSOFT_GRAPH_API_BASE: env.MICROSOFT_GRAPH_API_BASE }
-      : {}),
     ...(env.GOOGLE_CALENDAR_API_BASE
       ? { GOOGLE_CALENDAR_API_BASE: env.GOOGLE_CALENDAR_API_BASE }
       : {}),
     ...(env.GOOGLE_TASKS_API_BASE ? { GOOGLE_TASKS_API_BASE: env.GOOGLE_TASKS_API_BASE } : {}),
+    ...(env.MICROSOFT_GRAPH_API_BASE
+      ? { MICROSOFT_GRAPH_API_BASE: env.MICROSOFT_GRAPH_API_BASE }
+      : {}),
   };
 }
 
-let cached: BoundaryContainer | undefined;
+function connectorApiBase(provider: ConnectorProvider, runtimeEnv: AppRuntimeEnv): string | undefined {
+  switch (provider) {
+    case 'github':
+      return runtimeEnv.GITHUB_API_BASE;
+    case 'linear':
+      return runtimeEnv.LINEAR_API_BASE;
+    case 'drive':
+      return runtimeEnv.GOOGLE_DRIVE_API_BASE;
+    case 'gmail':
+      return runtimeEnv.GOOGLE_GMAIL_API_BASE;
+    case 'calendar':
+      return runtimeEnv.GOOGLE_CALENDAR_API_BASE;
+    case 'gtasks':
+      return runtimeEnv.GOOGLE_TASKS_API_BASE;
+    case 'outlook':
+      return runtimeEnv.MICROSOFT_GRAPH_API_BASE;
+    default:
+      return undefined;
+  }
+}
 
-/**
- * Lazily build (once) and return the shared {@link BoundaryContainer}.
- *
- * @remarks
- * Memoized: the container is constructed on first call from the validated `env` and
- * cached for the process lifetime. Billing/agent/connector/mailer/blob handlers call
- * this rather than touching any provider SDK directly.
- *
- * @returns the process-wide boundary container.
- */
-export function getContainer(): BoundaryContainer {
-  return (cached ??= buildContainer(toBoundaryEnv()));
+export function buildConnector(
+  provider: ConnectorProvider,
+  token: string | undefined,
+  runtimeEnv: AppRuntimeEnv = toAppRuntimeEnv(),
+): Connector {
+  if (localMode(runtimeEnv)) return new MockConnector({ provider });
+  return new RealConnector({
+    provider,
+    accessToken: required(`${provider.toUpperCase()}_ACCESS_TOKEN`, token),
+    ...(connectorApiBase(provider, runtimeEnv)
+      ? { apiBase: connectorApiBase(provider, runtimeEnv) }
+      : {}),
+  });
+}
+
+export function buildObserver(
+  provider: ObserverProvider,
+  runtimeEnv: AppRuntimeEnv = toAppRuntimeEnv(),
+): Observer {
+  if (localMode(runtimeEnv)) return new MockObserver({ provider });
+  switch (provider) {
+    case 'linear':
+      return new RealLinearObserver({
+        signingSecret: required('LINEAR_WEBHOOK_SECRET', runtimeEnv.LINEAR_WEBHOOK_SECRET),
+      });
+    case 'github':
+      return new RealGitHubObserver({
+        signingSecret: required(
+          'GITHUB_APP_WEBHOOK_SECRET',
+          runtimeEnv.GITHUB_APP_WEBHOOK_SECRET,
+        ),
+      });
+    case 'slack':
+      return new RealSlackObserver({
+        signingSecret: required('SLACK_SIGNING_SECRET', runtimeEnv.SLACK_SIGNING_SECRET),
+      });
+    case 'discord':
+      return new RealDiscordObserver({
+        publicKey: required('DISCORD_PUBLIC_KEY', runtimeEnv.DISCORD_PUBLIC_KEY),
+      });
+    default:
+      throw new Error(`No production observer configured for provider ${provider}`);
+  }
+}
+
+function buildMailer(runtimeEnv: AppRuntimeEnv): Mailer {
+  if (localMode(runtimeEnv)) return new CaptureMailer();
+  const smtpConfig = smtpConfigFromEnv(runtimeEnv);
+  if (!smtpConfig) {
+    throw new Error('Missing required production SMTP config: SMTP_HOST and MAIL_FROM');
+  }
+  return new SmtpMailer(smtpConfig);
+}
+
+export function buildAppContainer(runtimeEnv: AppRuntimeEnv = toAppRuntimeEnv()): AppContainer {
+  const mock = localMode(runtimeEnv);
+  const priceKey = runtimeEnv.STRIPE_PRICE_TEAM ?? runtimeEnv.DOCKET_PRICE_LOOKUP_TEAM;
+  return {
+    billing: mock
+      ? new InMemoryBillingGateway()
+      : new RealStripeGateway({
+          secretKey: required('STRIPE_SECRET_KEY', runtimeEnv.STRIPE_SECRET_KEY),
+          ...(priceKey ? { priceKey } : {}),
+          ...(runtimeEnv.STRIPE_WEBHOOK_SECRET
+            ? { webhookSecret: runtimeEnv.STRIPE_WEBHOOK_SECRET }
+            : {}),
+          ...(runtimeEnv.STRIPE_BILLING_PORTAL_CONFIG_ID
+            ? { portalConfigId: runtimeEnv.STRIPE_BILLING_PORTAL_CONFIG_ID }
+            : {}),
+        }),
+    agentRuntime: mock
+      ? new MockAgentRuntime()
+      : new RealProviderRuntime({
+          apiKey: required('ANTHROPIC_API_KEY', runtimeEnv.ANTHROPIC_API_KEY),
+        }),
+    summarizer: mock
+      ? new MockSummarizer()
+      : new RealSummarizer({
+          apiKey: required('ANTHROPIC_API_KEY', runtimeEnv.ANTHROPIC_API_KEY),
+        }),
+    taskSynthesizer: mock
+      ? new MockTaskSynthesizer()
+      : new RealTaskSynthesizer({
+          apiKey: required('ANTHROPIC_API_KEY', runtimeEnv.ANTHROPIC_API_KEY),
+        }),
+    mailer: buildMailer(runtimeEnv),
+    blob: mock
+      ? new LocalDiskBlob()
+      : new RealBlob({
+          baseUrl: required('EXPORT_BUCKET_URL', runtimeEnv.EXPORT_BUCKET_URL),
+          token: required('BLOB_READ_WRITE_TOKEN', runtimeEnv.BLOB_READ_WRITE_TOKEN),
+        }),
+  };
+}
+
+let cached: AppContainer | undefined;
+
+export function getContainer(): AppContainer {
+  return (cached ??= buildAppContainer());
 }

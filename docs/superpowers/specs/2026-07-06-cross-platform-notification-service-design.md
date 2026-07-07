@@ -19,7 +19,7 @@ product, and give staff safe tools for service-wide announcements.
 
 Docket already has several pieces that this service should absorb rather than bypass:
 
-- `@docket/boundaries` exposes a `Mailer` port with SMTP and capture-mailer adapters.
+- `@docket/mail` exposes a `Mailer` port with SMTP and capture-mailer adapters.
 - `apps/api` sends account, security, export, and daily-digest emails through that port.
 - `/v1/notifications` exposes a cross-org web inbox backed by the existing `notification`
   table.

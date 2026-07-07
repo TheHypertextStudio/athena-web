@@ -19,8 +19,7 @@
  * push share identical, idempotent behavior. `now` is always passed in (never module scope).
  */
 import { account, actor, db, event, inboundEvent, integration } from '@docket/db';
-import { selectAdapter } from '@docket/boundaries';
-import type { BoundaryEnv, EventDraft, Observer, ObserverProvider } from '@docket/boundaries';
+import type { EventDraft, Observer, ObserverProvider } from '@docket/integrations';
 import type {
   ActorRef,
   CanonicalEntityKind,
@@ -38,7 +37,7 @@ import {
   resolveSlackRecipients,
   slackMessageFacts,
 } from '../consumers/slack-relevance';
-import { toBoundaryEnv } from '../container';
+import { buildObserver, toAppRuntimeEnv, type AppRuntimeEnv } from '../container';
 import { projectInboundDraft } from '../lib/automation/event';
 import { runAutomationsForEvent } from '../lib/automation/runtime';
 import { asObserverProvider } from './integration-provider';
@@ -104,7 +103,7 @@ async function claimEvent(id: string, now: Date, staleBefore: Date): Promise<boo
 /** Per-sweep caches so the observer adapter, boundary env, and owner lookups aren't rebuilt per event. */
 interface SweepCtx {
   readonly now: Date;
-  readonly env: BoundaryEnv;
+  readonly env: AppRuntimeEnv;
   readonly observers: Map<ObserverProvider, Observer>;
   readonly owners: Map<string, string | null>;
   /** Connected Slack identities per `(org, team)` — the many events of one workspace share it. */
@@ -130,7 +129,7 @@ async function slackUsersFor(
 function observerFor(ctx: SweepCtx, provider: ObserverProvider): Observer {
   let observer = ctx.observers.get(provider);
   if (!observer) {
-    observer = selectAdapter('observer', ctx.env, { observerProvider: provider });
+    observer = buildObserver(provider, ctx.env);
     ctx.observers.set(provider, observer);
   }
   return observer;
@@ -407,7 +406,7 @@ export async function sweepInboundEvents(now: Date): Promise<DrainResult> {
 
   const ctx: SweepCtx = {
     now,
-    env: toBoundaryEnv(),
+    env: toAppRuntimeEnv(),
     observers: new Map(),
     owners: new Map(),
     slackUsers: new Map(),

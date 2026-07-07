@@ -62,8 +62,8 @@ Ingestion (raw)        Internal emit
 
 | Seam                                           | Pattern                     | Where                                                                              |
 | ---------------------------------------------- | --------------------------- | ---------------------------------------------------------------------------------- |
-| Per-tool source translation                    | **Adapter**                 | `packages/boundaries/src/real/observer-*.ts` behind the `Observer` port            |
-| Picking the translator by `source.system`      | **Strategy (registry)**     | `packages/boundaries/src/select.ts` (`Record<system, factory>`)                    |
+| Per-tool source translation                    | **Adapter**                 | `packages/integrations/src/observer-*.ts` behind the `Observer` port               |
+| Picking the translator by `source.system`      | **Strategy (registry)**     | `apps/api/src/container.ts` chooses the observer for each provider                 |
 | `normalize`: typed detail builders → `generic` | **Chain of Responsibility** | inside each adapter's `normalize`                                                  |
 | Substrate → consumers on commit                | **Observer / pub-sub**      | `apps/api/src/lib/event-bus.ts`                                                    |
 | Per-entity-kind relevance routing              | **Strategy (registry)**     | `apps/api/src/consumers/routing.ts` (`OWNER_RULES` keyed on `CanonicalEntityKind`) |
@@ -79,7 +79,7 @@ never a class hierarchy when the variation is data-shaped.
 
 ## Adding a new tool (the scale payoff)
 
-Touches only leaves: (1) an observer **Adapter** under `packages/boundaries/src/real/` with its
+Touches only leaves: (1) an observer **Adapter** under `packages/integrations/src/` with its
 detail-builder chain ending in `generic`; (2) one new arm on the `EventDetail` union + the new
 `system` string in `ObserverProvider`/`source_system`; (3) a mapping from the tool's native
 object types onto the closed `EntityRef.kind` taxonomy inside that adapter. External-only

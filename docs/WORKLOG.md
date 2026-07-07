@@ -189,6 +189,30 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [BOUNDARY-REFAC-001] Burninate `@docket/boundaries` into domain packages
+
+- **Completed**: 2026-07-07
+- **Duration**: 1 day
+- **Summary**: Removed the catch-all `@docket/boundaries` package and split its ports,
+  real adapters, mocks, fixtures, and tests into focused domain packages:
+  `@docket/integrations`, `@docket/mail`, `@docket/billing`, `@docket/blob-store`, and
+  `@docket/agent-runtime`. The API now owns composition explicitly in
+  `apps/api/src/container.ts`, so provider selection lives at the app boundary instead of in a
+  generic resolver package.
+- **Files Changed**: Deleted `packages/boundaries` and `docs/engineering/boundaries.md`; added
+  package manifests, source, tests, and HTTP helpers under the five new packages; updated API/auth
+  imports and dependencies; refreshed docs/spec references away from the old boundaries module.
+- **Validation**: New package typechecks passed; new package tests passed (`@docket/integrations`
+  228, `@docket/mail` 22, `@docket/billing` 40, `@docket/blob-store` 11,
+  `@docket/agent-runtime` 30); new package lint passed; `@docket/auth` typecheck/lint/test passed;
+  `@docket/api` typecheck passed; focused API consumer suites passed (14 files, 157 tests). API
+  lint passed before the latest dependency bumps; reruns after the bumps hung silently and were
+  interrupted.
+- **Learnings**: The former module mixed provider integration, transactional mail, billing, blob
+  storage, and agent runtime concerns into one package. Keeping package names domain-owned makes the
+  composition root visible and prevents tests/fixtures from turning into accidental shared product
+  architecture.
+
 ### [LINEAR-SYNC-001] Deep Linear integration — Slice 1: two-way work-graph sync core
 
 - **Completed**: 2026-07-02

@@ -20,9 +20,9 @@
   },
   "dependencies": {
     "@better-auth/passkey": "catalog:",
-    "@docket/boundaries": "workspace:*",
     "@docket/db": "workspace:*",
     "@docket/env": "workspace:*",
+    "@docket/mail": "workspace:*",
     "@docket/types": "workspace:*",
     "@simplewebauthn/server": "catalog:",
     "better-auth": "catalog:",

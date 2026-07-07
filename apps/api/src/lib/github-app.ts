@@ -10,10 +10,10 @@
  * in a tamper-proof `state` parameter — an HMAC (keyed by `BETTER_AUTH_SECRET`) over the payload
  * and a short expiry. That both prevents an attacker from binding an installation to another org
  * and doubles as CSRF protection on the callback. The token machinery that mints installation
- * access tokens lives in `@docket/boundaries` ({@link decodeAppPrivateKey} + `mintInstallationToken`);
+ * access tokens lives in `@docket/integrations` ({@link decodeAppPrivateKey} + `mintInstallationToken`);
  * this module only handles the browser-facing connect handshake.
  */
-import { decodeAppPrivateKey, type GitHubAppConfig } from '@docket/boundaries';
+import { decodeAppPrivateKey, type GitHubAppConfig } from '@docket/integrations';
 
 import { env } from '../env';
 import { signConnectState, verifyConnectState } from './oauth-state';

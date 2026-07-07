@@ -16,8 +16,8 @@ import {
   type SyncRunPurpose,
   type SyncTrigger,
 } from '@docket/types';
-import type { ConnectorProvider } from '@docket/boundaries';
-import { MAIL_CAPABLE_PROVIDERS, type ImportedItem, isConnectorError } from '@docket/boundaries';
+import type { ConnectorProvider } from '@docket/integrations';
+import { MAIL_CAPABLE_PROVIDERS, type ImportedItem, isConnectorError } from '@docket/integrations';
 import { and, eq, inArray, isNotNull, isNull, lt, notInArray, or } from 'drizzle-orm';
 import type { z } from 'zod';
 
@@ -244,7 +244,7 @@ export interface LeasedSyncContext {
  * One purpose's pull, run under the spine's lease with a resolved token.
  *
  * @remarks
- * Throwing is the failure channel: a thrown {@link import('@docket/boundaries').ConnectorError}
+ * Throwing is the failure channel: a thrown {@link import('@docket/integrations').ConnectorError}
  * with `kind: 'auth'` records the run as a reauth failure (status flip + owner notification);
  * anything else records a plain failure. Returning records success with the given tallies.
  */

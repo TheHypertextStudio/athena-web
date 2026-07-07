@@ -1,7 +1,7 @@
 /**
  * `@docket/api` — the Slack ingestion edge: the url_verification handshake, a signed event
  * written to the write-ahead inbox, and a rejected signature. (Mock observer in test mode; the
- * Slack-specific verify/route/normalize logic is unit-tested in @docket/boundaries.)
+ * Slack-specific verify/route/normalize logic is unit-tested in @docket/integrations.)
  */
 import { and, eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';

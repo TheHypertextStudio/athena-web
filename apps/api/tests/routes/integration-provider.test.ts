@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type * as DbModule from '@docket/db';
-import type { ConnectorProvider } from '@docket/boundaries';
+import type { ConnectorProvider } from '@docket/integrations';
 
 import type * as ProviderModule from '../../src/routes/integration-provider';
 import { getDb, seedBaseOrg } from './harness.test';

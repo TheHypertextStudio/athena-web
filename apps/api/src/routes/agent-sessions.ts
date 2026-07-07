@@ -206,6 +206,35 @@ Side effects: dispatches the agent against the runtime; each yielded activity (t
       });
     },
   )
+  .post(
+    '/chat/new',
+    capabilityGuard('contribute'),
+    apiDoc({
+      tag: 'Agents',
+      summary: 'Start a new Athena chat thread',
+      capability: 'contribute',
+      response: AgentSessionDetailOut,
+      description: `Start a genuinely new conversational session (\`kind: 'chat'\`), leaving the prior chat session's history in place rather than deleting or reusing it. \`GET /chat\` and \`POST /chat/messages\` always resume the newest \`kind: 'chat'\` session, so once this returns, every other door onto "the" chat thread (the ⌘J panel, the standalone page) continues from the fresh session automatically. Older chat sessions remain queryable like any other session (\`GET /:id\`, or the Agents feed) — this only changes which one is "current"; there is deliberately no dedicated past-chat browser yet. Requires \`contribute\` (starting a thread IS contributing).`,
+    }),
+    async (c) => {
+      const { orgId, actorId } = c.get('actorCtx');
+      const agent = await ensureDefaultAgent(orgId, actorId);
+      const [created] = await db
+        .insert(agentSession)
+        .values({
+          organizationId: orgId,
+          agentId: agent.id,
+          kind: 'chat',
+          trigger: 'delegation',
+          status: 'pending',
+          initiatorId: actorId,
+        })
+        .returning();
+      /* v8 ignore next -- @preserve defensive: insert always returns a row */
+      if (!created) throw new Error('chat session insert returned no row');
+      return ok(c, AgentSessionDetailOut, { ...toSessionOut(created), activities: [] });
+    },
+  )
   .get(
     '/:id',
     apiDoc({

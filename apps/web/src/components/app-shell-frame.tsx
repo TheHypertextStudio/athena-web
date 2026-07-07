@@ -18,6 +18,7 @@ import { type JSX, type ReactNode, useCallback, useEffect, useMemo, useState } f
 import AccountMenu from '@/components/account-menu';
 import { ActiveOrgContext, useActiveOrg } from '@/components/active-org';
 import Agenda from '@/components/agenda/agenda';
+import { AthenaPanelProvider } from '@/components/athena/athena-panel-provider';
 import { CommandPaletteProvider, useCommandPalette } from '@/components/command-palette';
 import { RecoveryNudgeBanner } from '@/components/recovery-nudge-banner';
 import { OpenDocumentsProvider, useOpenDocuments } from '@/components/tabs';
@@ -242,17 +243,19 @@ function AppShellInner({
 
   return (
     <VocabularyProvider skin={skin}>
-      <AppShell
-        sidebar={sidebar}
-        tabBar={tabBar}
-        banner={<RecoveryNudgeBanner personalOrgId={personalOrgId} userId={userId} />}
-        mobileBrand={mobileBrand}
-        mobileActions={mobileActions}
-        // The portable agenda rides along on every authenticated page as the shell's right rail.
-        aside={{ node: <Agenda />, label: 'Agenda', icon: <Calendar aria-hidden="true" /> }}
-      >
-        {children}
-      </AppShell>
+      <AthenaPanelProvider orgId={resolvedOrgId}>
+        <AppShell
+          sidebar={sidebar}
+          tabBar={tabBar}
+          banner={<RecoveryNudgeBanner personalOrgId={personalOrgId} userId={userId} />}
+          mobileBrand={mobileBrand}
+          mobileActions={mobileActions}
+          // The portable agenda rides along on every authenticated page as the shell's right rail.
+          aside={{ node: <Agenda />, label: 'Agenda', icon: <Calendar aria-hidden="true" /> }}
+        >
+          {children}
+        </AppShell>
+      </AthenaPanelProvider>
     </VocabularyProvider>
   );
 }

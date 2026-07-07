@@ -189,6 +189,27 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [MCP-PROD-013] Remove double casts and centralize reusable test helpers
+
+- **Completed**: 2026-07-06
+- **Summary**: Removed the remaining repo-wide double-cast patterns and moved reusable test-only
+  helpers out of individual test files. Web response/query helpers now live under
+  `apps/web/tests/support/`, picker-option test actions are shared, Stripe gateway tests reuse
+  exported billing mapper view types, raw Drizzle result row counting is centralized in API source,
+  and UI keyboard tests import the hook's real event type. The root test stability fix keeps normal
+  Turbo/Vitest concurrency; only the shared hook timeout moved to 60s so concurrent PGlite
+  bootstraps are not reported as hung tests.
+- **Files Changed**: `apps/web/tests/support/{query,http,pickers}.ts*`,
+  `apps/web/src/lib/{query,problem}.ts`, web fetch/query tests, API raw-result callers, DB/Authz
+  PGlite tests, `packages/boundaries/src/real/billing*.ts`, billing/blob/select tests,
+  `packages/ui/src/hooks/useListKeyboard.tsx`, `tooling/vitest/preset.ts`, and related tests.
+- **Learnings**: Reusable test helpers belong in support files, not inside whichever test needed
+  them first. Use actual exported source types when a test is describing source behavior, and model
+  non-OK RPC responses as `unknown` at the boundary instead of papering over the shape with casts.
+- **Gate**: `pnpm --filter @docket/web typecheck`, `pnpm --filter @docket/web lint`, and the
+  focused shared-helper web test run pass; root `pnpm typecheck`, `pnpm lint`, `pnpm test`, and
+  `pnpm build` pass.
+
 ### [MCP-PROD-012] Centralize API test env and auth mocks
 
 - **Completed**: 2026-07-06

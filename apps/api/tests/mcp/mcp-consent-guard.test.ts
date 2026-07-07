@@ -2,7 +2,7 @@ import { db, genId, oauthApplication, oauthConsent, user } from '@docket/db';
 import { Hono } from 'hono';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
-import type { AppEnv } from '../../src/context';
+import type { AppEnv, AuthSession } from '../../src/context';
 import type * as ConsentGuardModule from '../../src/mcp/consent-guard';
 import { getMigratedDb } from '../support/db';
 
@@ -13,6 +13,29 @@ beforeAll(async () => {
   guard = await import('../../src/mcp/consent-guard');
 });
 
+/** Build the minimal Better Auth session shape this guard reads. */
+function sessionFor(userId: string): NonNullable<AuthSession> {
+  const now = new Date();
+  return {
+    session: {
+      id: `sess_${userId}`,
+      token: `tok_${userId}`,
+      userId,
+      expiresAt: new Date(now.getTime() + 3_600_000),
+      createdAt: now,
+      updatedAt: now,
+    },
+    user: {
+      id: userId,
+      name: 'Consent Tester',
+      email: `consent-${userId}@example.com`,
+      emailVerified: true,
+      createdAt: now,
+      updatedAt: now,
+    },
+  };
+}
+
 /** Mounts the guard exactly like server.ts, with a stubbed session + downstream handler. */
 function authorizeApp(sessionUserId: string | null): {
   app: Hono<AppEnv>;
@@ -21,12 +44,7 @@ function authorizeApp(sessionUserId: string | null): {
   const downstream = vi.fn((c: { text: (s: string) => Response }) => c.text('better-auth'));
   const app = new Hono<AppEnv>();
   app.use('*', async (c, next) => {
-    c.set(
-      'session',
-      sessionUserId
-        ? ({ user: { id: sessionUserId } } as unknown as AppEnv['Variables']['session'])
-        : null,
-    );
+    c.set('session', sessionUserId ? sessionFor(sessionUserId) : null);
     await next();
   });
   app.use('/api/auth/mcp/authorize', guard.mcpConsentGuard);

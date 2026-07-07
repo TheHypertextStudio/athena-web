@@ -8,10 +8,10 @@
  * the enum ordering all matter because the composers thread `option.value` straight into the
  * create DTOs.
  *
- * Fixtures are plain structural shapes cast to the DTO param types — the mappers read only a few
- * fields off each DTO, so a full branded/parsed value is unnecessary here.
+ * Fixtures parse through the shared DTO schemas so the tests exercise the same branded shapes the
+ * app receives from the API, without carrying local parallel DTO assertions.
  */
-import type {
+import {
   AgentOut,
   CycleOut,
   InitiativeOut,
@@ -34,62 +34,158 @@ import {
   projectOptions,
 } from '../../src/components/pickers/options';
 
-/** Build a member-shaped fixture (only the fields the mapper reads). */
+const IDS = {
+  org: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+  ada: '01ARZ3NDEKTSV4RRFFQ69G5FAW',
+  bot: '01ARZ3NDEKTSV4RRFFQ69G5FAX',
+  lonelyBot: '01ARZ3NDEKTSV4RRFFQ69G5FAY',
+  agent: '01ARZ3NDEKTSV4RRFFQ69G5FAZ',
+  project: '01ARZ3NDEKTSV4RRFFQ69G5FB0',
+  program: '01ARZ3NDEKTSV4RRFFQ69G5FB1',
+  initiative: '01ARZ3NDEKTSV4RRFFQ69G5FB2',
+  cycleNamed: '01ARZ3NDEKTSV4RRFFQ69G5FB3',
+  cycleUnnamed: '01ARZ3NDEKTSV4RRFFQ69G5FB4',
+  team: '01ARZ3NDEKTSV4RRFFQ69G5FB5',
+  label: '01ARZ3NDEKTSV4RRFFQ69G5FB6',
+} as const;
+
+const CREATED_AT = '2026-07-06T00:00:00.000Z';
+
+/** Build a member fixture through the shared DTO schema. */
 function member(actorId: string, displayName: string): MemberOut {
-  return { actorId, displayName, avatar: null } as unknown as MemberOut;
+  return MemberOut.parse({
+    actorId,
+    organizationId: IDS.org,
+    displayName,
+    avatar: null,
+    status: 'active',
+    roleId: null,
+    userId: null,
+    createdAt: CREATED_AT,
+  });
 }
 
-/** Build an agent-shaped fixture (only the `actorId` the mapper reads). */
+/** Build an agent fixture through the shared DTO schema. */
 function agent(actorId: string): AgentOut {
-  return { actorId } as unknown as AgentOut;
+  return AgentOut.parse({
+    id: IDS.agent,
+    organizationId: IDS.org,
+    actorId,
+    connection: null,
+    approvalPolicy: 'autonomous',
+    accountableOwnerId: null,
+    guidance: null,
+    approvalRouting: null,
+    createdAt: CREATED_AT,
+  });
 }
 
 describe('picker option mappers', () => {
   it('maps members to actor options keyed by actor id', () => {
-    const options = actorOptions([member('act_1', 'Ada Lovelace')]);
+    const options = actorOptions([member(IDS.ada, 'Ada Lovelace')]);
     expect(options).toHaveLength(1);
     const [option] = options;
-    expect(option).toMatchObject({ value: 'act_1', label: 'Ada Lovelace' });
+    expect(option).toMatchObject({ value: IDS.ada, label: 'Ada Lovelace' });
     expect(option?.icon).toBeDefined();
   });
 
   it('tags an actor as an agent when it appears in the agents list', () => {
-    const [option] = actorOptions([member('act_bot', 'Triage Bot')], [agent('act_bot')]);
+    const [option] = actorOptions([member(IDS.bot, 'Triage Bot')], [agent(IDS.bot)]);
     // The icon is an ActorAvatar; agent-ness is carried via its `kind` prop.
-    expect(option?.value).toBe('act_bot');
+    expect(option?.value).toBe(IDS.bot);
     const icon = option?.icon as { props?: { kind?: string } };
     expect(icon.props?.kind).toBe('agent');
   });
 
   it('includes an agent with no naming member row as a selectable "Agent" option', () => {
-    const options = actorOptions([], [agent('act_lonely')]);
-    expect(options).toEqual([expect.objectContaining({ value: 'act_lonely', label: 'Agent' })]);
+    const options = actorOptions([], [agent(IDS.lonelyBot)]);
+    expect(options).toEqual([expect.objectContaining({ value: IDS.lonelyBot, label: 'Agent' })]);
   });
 
   it('maps entity DTOs to {value:id, label:name} options', () => {
-    // The mappers read only id + name off each DTO, so partial shapes are sufficient.
-    const project = { id: 'proj_1', name: 'Apollo' } as unknown as ProjectOut;
-    const program = { id: 'prog_1', name: 'Platform' } as unknown as ProgramOut;
-    const initiative = { id: 'init_1', name: 'Q3' } as unknown as InitiativeOut;
-    expect(projectOptions([project])).toEqual([{ value: 'proj_1', label: 'Apollo' }]);
-    expect(programOptions([program])).toEqual([{ value: 'prog_1', label: 'Platform' }]);
-    expect(initiativeOptions([initiative])).toEqual([{ value: 'init_1', label: 'Q3' }]);
+    const project = ProjectOut.parse({
+      id: IDS.project,
+      organizationId: IDS.org,
+      name: 'Apollo',
+      description: null,
+      status: 'active',
+      health: null,
+      leadId: null,
+      teamId: null,
+      programId: null,
+      startDate: null,
+      targetDate: null,
+      createdAt: CREATED_AT,
+    });
+    const program = ProgramOut.parse({
+      id: IDS.program,
+      organizationId: IDS.org,
+      name: 'Platform',
+      description: null,
+      ownerId: null,
+      status: 'active',
+      health: null,
+      visibility: 'private',
+      createdAt: CREATED_AT,
+    });
+    const initiative = InitiativeOut.parse({
+      id: IDS.initiative,
+      organizationId: IDS.org,
+      name: 'Q3',
+      description: null,
+      ownerId: null,
+      status: 'active',
+      targetDate: null,
+      health: null,
+      createdAt: CREATED_AT,
+    });
+    expect(projectOptions([project])).toEqual([{ value: IDS.project, label: 'Apollo' }]);
+    expect(programOptions([program])).toEqual([{ value: IDS.program, label: 'Platform' }]);
+    expect(initiativeOptions([initiative])).toEqual([{ value: IDS.initiative, label: 'Q3' }]);
   });
 
   it('labels an unnamed cycle by its number with the cycle noun', () => {
-    const named = { id: 'cy_1', name: 'Launch', number: 4 } as unknown as CycleOut;
-    const unnamed = { id: 'cy_2', name: null, number: 7 } as unknown as CycleOut;
+    const named = CycleOut.parse({
+      id: IDS.cycleNamed,
+      organizationId: IDS.org,
+      teamId: IDS.team,
+      number: 4,
+      name: 'Launch',
+      startsAt: '2026-07-06',
+      endsAt: '2026-07-20',
+      status: 'active',
+      createdAt: CREATED_AT,
+    });
+    const unnamed = CycleOut.parse({
+      id: IDS.cycleUnnamed,
+      organizationId: IDS.org,
+      teamId: IDS.team,
+      number: 7,
+      name: null,
+      startsAt: '2026-07-20',
+      endsAt: '2026-08-03',
+      status: 'active',
+      createdAt: CREATED_AT,
+    });
     const options = cycleOptions([named, unnamed], 'Sprint');
     expect(options).toEqual([
-      { value: 'cy_1', label: 'Launch' },
-      { value: 'cy_2', label: 'Sprint 7' },
+      { value: IDS.cycleNamed, label: 'Launch' },
+      { value: IDS.cycleUnnamed, label: 'Sprint 7' },
     ]);
   });
 
   it('maps labels to options carrying their color swatch as the icon', () => {
-    const label = { id: 'lbl_1', name: 'Bug', color: '#ef4444' } as unknown as LabelOut;
+    const label = LabelOut.parse({
+      id: IDS.label,
+      organizationId: IDS.org,
+      name: 'Bug',
+      color: '#ef4444',
+      group: null,
+      teamId: null,
+      createdAt: CREATED_AT,
+    });
     const [option] = labelOptions([label]);
-    expect(option).toMatchObject({ value: 'lbl_1', label: 'Bug' });
+    expect(option).toMatchObject({ value: IDS.label, label: 'Bug' });
     expect(option?.icon).toBeDefined();
   });
 

@@ -28,6 +28,7 @@ import {
   type OnboardingProvider,
 } from '../../../src/components/onboarding/step-connect';
 import { queryKeys } from '../../../src/lib/query-keys';
+import { jsonResponse } from '../../support/http';
 
 afterEach(() => {
   cleanup();
@@ -49,11 +50,6 @@ function renderStep(config: PublicConfigOut, ui: ReactElement): ReturnType<typeo
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   client.setQueryData(queryKeys.publicConfig(), config);
   return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
-}
-
-/** A `Response`-like stub whose `ok`/`json()` the component reads. */
-function jsonResponse(ok: boolean, body: unknown): Response {
-  return { ok, json: async () => body } as Response;
 }
 
 /** A create-integration stub that returns a fixed integration id. */

@@ -13,10 +13,11 @@
  * through typed callbacks, so these assert real behavior without the live API.
  */
 import type { PickerOption } from '@docket/ui/components';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ProgramPropertiesPanel } from '../../../src/components/programs/properties-panel';
+import { choosePickerOption } from '../../support/pickers';
 
 afterEach(cleanup);
 
@@ -24,12 +25,6 @@ const MEMBER_OPTIONS: readonly PickerOption[] = [
   { value: 'actor_ada', label: 'Ada Lovelace' },
   { value: 'actor_grace', label: 'Grace Hopper' },
 ];
-
-/** Choose a picker option by its label text (clicks the option's inner button). */
-function chooseOption(label: RegExp | string): void {
-  const option = screen.getByRole('option', { name: label });
-  fireEvent.click(within(option).getByRole('button'));
-}
 
 function renderPanel(
   overrides: Partial<React.ComponentProps<typeof ProgramPropertiesPanel>> = {},
@@ -75,21 +70,21 @@ describe('program ProgramPropertiesPanel — interactive rows (directive A)', ()
   it('assigns the owner through the picker', () => {
     const { onOwnerChange } = renderPanel();
     fireEvent.click(screen.getByRole('button', { name: 'Owner — not set' }));
-    chooseOption(/Ada Lovelace/);
+    choosePickerOption(/Ada Lovelace/);
     expect(onOwnerChange).toHaveBeenCalledWith('actor_ada');
   });
 
   it('pauses the program through the status enum picker', () => {
     const { onStatusChange } = renderPanel({ status: 'active' });
     fireEvent.click(screen.getByRole('button', { name: 'Status — Active' }));
-    chooseOption(/Paused/);
+    choosePickerOption(/Paused/);
     expect(onStatusChange).toHaveBeenCalledWith('paused');
   });
 
   it('switches visibility to private through the enum picker', () => {
     const { onVisibilityChange } = renderPanel({ visibility: 'public' });
     fireEvent.click(screen.getByRole('button', { name: 'Visibility — Public' }));
-    chooseOption(/Private/);
+    choosePickerOption(/Private/);
     expect(onVisibilityChange).toHaveBeenCalledWith('private');
   });
 

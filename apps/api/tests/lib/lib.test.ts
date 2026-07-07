@@ -8,6 +8,11 @@ import { zJson, zParam, zQuery } from '../../src/lib/validate';
 
 const Schema = z.object({ name: z.string() });
 
+/** Runtime-bad payload shaped as unchecked JSON, modeling a contract drift boundary. */
+function contractDriftBody(): z.input<typeof Schema> {
+  return JSON.parse('{"name":123}');
+}
+
 describe('ok', () => {
   it('parses (validating) the body in non-production', async () => {
     process.env['NODE_ENV'] = 'test';
@@ -19,9 +24,7 @@ describe('ok', () => {
 
   it('throws on contract drift in non-production (schema.parse path)', async () => {
     process.env['NODE_ENV'] = 'test';
-    const app = new Hono()
-      .get('/', (c) => ok(c, Schema, { name: 123 as unknown as string }))
-      .onError(onError);
+    const app = new Hono().get('/', (c) => ok(c, Schema, contractDriftBody())).onError(onError);
     const res = await app.request('/');
     // The parse failure is a ZodError, mapped by onError to a 422 problem.
     expect(res.status).toBe(422);
@@ -32,7 +35,7 @@ describe('ok', () => {
     try {
       const app = new Hono().get('/', (c) =>
         // A value the schema would reject; production skips the parse and returns it raw.
-        ok(c, Schema, { name: 123 as unknown as string }),
+        ok(c, Schema, contractDriftBody()),
       );
       const res = await app.request('/');
       expect(res.status).toBe(200);

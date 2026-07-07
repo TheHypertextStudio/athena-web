@@ -6,6 +6,7 @@ import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { NotFoundError, ValidationError } from '../error';
+import { rawResultRowCount } from '../lib/raw-result';
 
 /** TaskRow is the selected database row shape consumed by these API route serializers. */
 export type TaskRow = typeof task.$inferSelect;
@@ -282,7 +283,7 @@ export async function wouldCreateCycle(
   blockingTaskId: string,
   blockedTaskId: string,
 ): Promise<boolean> {
-  const reach = (await tx.execute(sql`
+  const reach = await tx.execute(sql`
     WITH RECURSIVE reach AS (
       SELECT blocked_task_id AS n FROM task_dependency
         WHERE blocking_task_id = ${blockedTaskId} AND organization_id = ${orgId}
@@ -291,8 +292,8 @@ export async function wouldCreateCycle(
         JOIN reach r ON d.blocking_task_id = r.n WHERE d.organization_id = ${orgId}
     )
     SELECT 1 AS hit FROM reach WHERE n = ${blockingTaskId} LIMIT 1
-  `)) as unknown as { rows: unknown[] };
-  return reach.rows.length > 0;
+  `);
+  return rawResultRowCount(reach) > 0;
 }
 
 /**

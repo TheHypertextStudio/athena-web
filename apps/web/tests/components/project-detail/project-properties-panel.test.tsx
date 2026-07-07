@@ -24,10 +24,11 @@
  * button.
  */
 import type { PickerOption } from '@docket/ui/components';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { PropertiesPanel } from '../../../src/components/project-detail/properties-panel';
+import { choosePickerOption } from '../../support/pickers';
 
 afterEach(cleanup);
 
@@ -37,12 +38,6 @@ const MEMBER_OPTIONS: readonly PickerOption[] = [
 ];
 const PROGRAM_OPTIONS: readonly PickerOption[] = [{ value: 'prog_1', label: 'Platform' }];
 const INITIATIVE_OPTIONS: readonly PickerOption[] = [{ value: 'init_1', label: 'North Star' }];
-
-/** Choose a picker option by its label text (clicks the option's inner button). */
-function chooseOption(label: RegExp | string): void {
-  const option = screen.getByRole('option', { name: label });
-  fireEvent.click(within(option).getByRole('button'));
-}
 
 /** Render the panel with sensible defaults, overridable per test. */
 function renderPanel(overrides: Partial<React.ComponentProps<typeof PropertiesPanel>> = {}): {
@@ -110,7 +105,7 @@ describe('project PropertiesPanel — interactive rows (directive A)', () => {
     const { onLeadChange } = renderPanel();
 
     fireEvent.click(screen.getByRole('button', { name: 'Lead — not set' }));
-    chooseOption(/Grace Hopper/);
+    choosePickerOption(/Grace Hopper/);
 
     expect(onLeadChange).toHaveBeenCalledWith('actor_grace');
   });
@@ -119,7 +114,7 @@ describe('project PropertiesPanel — interactive rows (directive A)', () => {
     const { onStatusChange } = renderPanel({ status: 'planned' });
 
     fireEvent.click(screen.getByRole('button', { name: 'Status — Planned' }));
-    chooseOption(/Completed/);
+    choosePickerOption(/Completed/);
 
     expect(onStatusChange).toHaveBeenCalledWith('completed');
   });
@@ -137,7 +132,7 @@ describe('project PropertiesPanel — interactive rows (directive A)', () => {
     const { onProgramChange } = renderPanel();
 
     fireEvent.click(screen.getByRole('button', { name: 'Program — not set' }));
-    chooseOption(/Platform/);
+    choosePickerOption(/Platform/);
 
     expect(onProgramChange).toHaveBeenCalledWith('prog_1');
   });

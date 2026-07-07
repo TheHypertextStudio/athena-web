@@ -27,7 +27,7 @@ export function fetchProgramDetail(
       return {
         ok: false,
         status: detailRes.status,
-        json: () => detailRes.json() as unknown as Promise<ProgramDetailData>,
+        json: () => detailRes.json(),
       };
     }
     const program = await detailRes.json();

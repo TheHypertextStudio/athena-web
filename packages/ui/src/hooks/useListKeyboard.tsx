@@ -19,6 +19,14 @@
  */
 import * as React from 'react';
 
+/** The keyboard event fields {@link useListKeyboard} reads. */
+export interface ListKeyboardEvent {
+  /** The pressed key value. */
+  readonly key: string;
+  /** Prevent the browser's default key behavior when the hook handles it. */
+  preventDefault: () => void;
+}
+
 /** Options for {@link useListKeyboard}. */
 export interface UseListKeyboardOptions {
   /** Total number of navigable (flattened) rows. */
@@ -38,7 +46,7 @@ export interface UseListKeyboardResult {
   /** Imperatively set the active row index (clamped to valid range or `-1`). */
   setActiveIndex: (index: number) => void;
   /** The `onKeyDown` handler to spread onto the grid container. */
-  onKeyDown: (event: React.KeyboardEvent) => void;
+  onKeyDown: (event: ListKeyboardEvent) => void;
 }
 
 /** Clamp `index` to `[-1, rowCount - 1]`. */
@@ -83,7 +91,7 @@ export function useListKeyboard({
   }, [rowCount]);
 
   const onKeyDown = React.useCallback(
-    (event: React.KeyboardEvent) => {
+    (event: ListKeyboardEvent) => {
       switch (event.key) {
         case 'ArrowDown': {
           event.preventDefault();

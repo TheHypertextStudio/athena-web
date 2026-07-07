@@ -5,11 +5,11 @@ import { act, renderHook } from '@testing-library/react';
 import * as React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { useListKeyboard } from '../../src/hooks/useListKeyboard';
+import { type ListKeyboardEvent, useListKeyboard } from '../../src/hooks/useListKeyboard';
 import { useVocabulary, VocabularyProvider } from '../../src/hooks/useVocabulary';
 
 /** Minimal KeyboardEvent stand-in for the hook's handler (only `key` + `preventDefault`). */
-function keyEvent(key: string): { key: string; preventDefault: () => void } {
+function keyEvent(key: string): ListKeyboardEvent {
   return { key, preventDefault: vi.fn() };
 }
 
@@ -28,7 +28,7 @@ describe('useListKeyboard', () => {
     const onActiveChange = vi.fn();
     const { result } = renderHook(() => useListKeyboard({ rowCount: 3, onActiveChange }));
     act(() => {
-      result.current.onKeyDown(keyEvent('ArrowDown') as unknown as React.KeyboardEvent);
+      result.current.onKeyDown(keyEvent('ArrowDown'));
     });
     expect(result.current.activeIndex).toBe(0);
     expect(onActiveChange).toHaveBeenCalledWith(0);
@@ -37,11 +37,11 @@ describe('useListKeyboard', () => {
   it('ArrowDown advances and clamps at the last row', () => {
     const { result } = renderHook(() => useListKeyboard({ rowCount: 2, initialIndex: 0 }));
     act(() => {
-      result.current.onKeyDown(keyEvent('ArrowDown') as unknown as React.KeyboardEvent);
+      result.current.onKeyDown(keyEvent('ArrowDown'));
     });
     expect(result.current.activeIndex).toBe(1);
     act(() => {
-      result.current.onKeyDown(keyEvent('ArrowDown') as unknown as React.KeyboardEvent);
+      result.current.onKeyDown(keyEvent('ArrowDown'));
     });
     expect(result.current.activeIndex).toBe(1);
   });
@@ -50,7 +50,7 @@ describe('useListKeyboard', () => {
     const { result } = renderHook(() => useListKeyboard({ rowCount: 3 }));
     const press = (key: string): void => {
       act(() => {
-        result.current.onKeyDown(keyEvent(key) as unknown as React.KeyboardEvent);
+        result.current.onKeyDown(keyEvent(key));
       });
     };
     press('ArrowUp');
@@ -65,11 +65,11 @@ describe('useListKeyboard', () => {
   it('Home and End jump to the first and last rows', () => {
     const { result } = renderHook(() => useListKeyboard({ rowCount: 4 }));
     act(() => {
-      result.current.onKeyDown(keyEvent('End') as unknown as React.KeyboardEvent);
+      result.current.onKeyDown(keyEvent('End'));
     });
     expect(result.current.activeIndex).toBe(3);
     act(() => {
-      result.current.onKeyDown(keyEvent('Home') as unknown as React.KeyboardEvent);
+      result.current.onKeyDown(keyEvent('Home'));
     });
     expect(result.current.activeIndex).toBe(0);
   });
@@ -79,15 +79,15 @@ describe('useListKeyboard', () => {
     const { result } = renderHook(() => useListKeyboard({ rowCount: 3, onActivate }));
     // No active row yet -> Enter does nothing.
     act(() => {
-      result.current.onKeyDown(keyEvent('Enter') as unknown as React.KeyboardEvent);
+      result.current.onKeyDown(keyEvent('Enter'));
     });
     expect(onActivate).not.toHaveBeenCalled();
     // Select a row (separate act so the handler closure picks up the new index).
     act(() => {
-      result.current.onKeyDown(keyEvent('ArrowDown') as unknown as React.KeyboardEvent);
+      result.current.onKeyDown(keyEvent('ArrowDown'));
     });
     act(() => {
-      result.current.onKeyDown(keyEvent('Enter') as unknown as React.KeyboardEvent);
+      result.current.onKeyDown(keyEvent('Enter'));
     });
     expect(onActivate).toHaveBeenCalledWith(0);
   });
@@ -96,7 +96,7 @@ describe('useListKeyboard', () => {
     const { result } = renderHook(() => useListKeyboard({ rowCount: 2, initialIndex: 0 }));
     expect(() => {
       act(() => {
-        result.current.onKeyDown(keyEvent('Enter') as unknown as React.KeyboardEvent);
+        result.current.onKeyDown(keyEvent('Enter'));
       });
     }).not.toThrow();
   });
@@ -104,7 +104,7 @@ describe('useListKeyboard', () => {
   it('Escape clears the active row', () => {
     const { result } = renderHook(() => useListKeyboard({ rowCount: 3, initialIndex: 1 }));
     act(() => {
-      result.current.onKeyDown(keyEvent('Escape') as unknown as React.KeyboardEvent);
+      result.current.onKeyDown(keyEvent('Escape'));
     });
     expect(result.current.activeIndex).toBe(-1);
   });
@@ -112,7 +112,7 @@ describe('useListKeyboard', () => {
   it('ignores unrelated keys', () => {
     const { result } = renderHook(() => useListKeyboard({ rowCount: 3, initialIndex: 1 }));
     act(() => {
-      result.current.onKeyDown(keyEvent('Tab') as unknown as React.KeyboardEvent);
+      result.current.onKeyDown(keyEvent('Tab'));
     });
     expect(result.current.activeIndex).toBe(1);
   });

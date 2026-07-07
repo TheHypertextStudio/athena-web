@@ -45,7 +45,7 @@ export function fetchInitiativeDetail(
       return {
         ok: false,
         status: detailRes.status,
-        json: () => detailRes.json() as unknown as Promise<InitiativeDetailData>,
+        json: () => detailRes.json(),
       };
     }
     const detail = await detailRes.json();

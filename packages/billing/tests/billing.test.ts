@@ -1,4 +1,3 @@
-import type Stripe from 'stripe';
 import { describe, expect, it } from 'vitest';
 
 import type { HttpClient } from '../src/http';
@@ -8,6 +7,9 @@ import {
   parseApiBase,
   RealStripeGateway,
   STRIPE_API_VERSION,
+  type StripeEventObjectView,
+  type StripeEventView,
+  type StripeSubscriptionView,
   toStatus,
   toSubscription,
 } from '../src/stripe';
@@ -70,32 +72,33 @@ function stripeSub(over: {
   referenceId?: string | null;
   periodEnd?: number;
   trialEnd?: number | null;
-}): Stripe.Subscription {
-  const metadata = over.referenceId === null ? {} : { referenceId: over.referenceId ?? 'org_1' };
+}): StripeSubscriptionView {
+  const metadata: Record<string, string> =
+    over.referenceId === null ? {} : { referenceId: over.referenceId ?? 'org_1' };
   return {
     id: over.id ?? 'sub_1',
     object: 'subscription',
-    status: (over.status ?? 'active') as Stripe.Subscription.Status,
+    status: over.status ?? 'active',
     metadata,
     trial_end: over.trialEnd === undefined ? null : over.trialEnd,
     items: {
-      object: 'list',
-      data: [{ current_period_end: over.periodEnd ?? 1_700_000_000 } as Stripe.SubscriptionItem],
-      has_more: false,
-      url: '',
+      data: [{ current_period_end: over.periodEnd ?? 1_700_000_000 }],
     },
-  } as unknown as Stripe.Subscription;
+  };
 }
 
 /** Build a minimal Stripe `Event` wrapping the given object. */
-function stripeEvent(type: string, object: Record<string, unknown>, id = 'evt_1'): Stripe.Event {
+function stripeEvent(
+  type: string,
+  object: StripeSubscriptionView | StripeEventObjectView,
+  id = 'evt_1',
+): StripeEventView {
   return {
     id,
-    object: 'event',
     type,
     created: 1_700_000_000,
     data: { object },
-  } as unknown as Stripe.Event;
+  };
 }
 
 describe('toStatus', () => {
@@ -167,8 +170,13 @@ describe('toSubscription', () => {
   });
 
   it('uses the epoch when the subscription has no item period end', () => {
-    const raw = { id: 'sub_e', object: 'subscription', status: 'canceled', metadata: {} };
-    const sub = toSubscription(raw as unknown as Stripe.Subscription, 'org_2');
+    const raw: StripeSubscriptionView = {
+      id: 'sub_e',
+      object: 'subscription',
+      status: 'canceled',
+      metadata: {},
+    };
+    const sub = toSubscription(raw, 'org_2');
     expect(sub.referenceId).toBe('org_2');
     expect(sub.currentPeriodEnd).toBe(new Date(0).toISOString());
     expect(sub.status).toBe('canceled');

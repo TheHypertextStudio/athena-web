@@ -1,6 +1,9 @@
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
+import type { AppEnv } from '../src/context';
+import type { server as ApiServer } from '../src/server';
+
 // Mock the node server `serve` so importing `server.ts` does not bind a real port,
 // while the shared auth mock keeps the heavy ESM chain out of the test graph.
 import './support/auth-mock';
@@ -79,11 +82,11 @@ describe('container', () => {
 describe('session middleware', () => {
   it('resolves the session into c.var.session', async () => {
     const { sessionMiddleware } = await import('../src/auth/session-middleware');
-    const app = new Hono();
-    app.use('*', sessionMiddleware as never);
+    const app = new Hono<AppEnv>();
+    app.use('*', sessionMiddleware);
     app.get('/', (c) =>
       c.json({
-        hasSession: c.get('session' as never) !== null && c.get('session' as never) !== undefined,
+        hasSession: c.get('session') !== null,
       }),
     );
     const res = await app.request('/');
@@ -94,11 +97,11 @@ describe('session middleware', () => {
 });
 
 describe('server boot', () => {
-  let server: Hono;
+  let server: typeof ApiServer;
   let log: ReturnType<typeof vi.spyOn>;
   beforeAll(async () => {
     log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    server = (await import('../src/server')).server as unknown as Hono;
+    server = (await import('../src/server')).server;
   });
 
   afterAll(() => {
@@ -130,7 +133,7 @@ describe('server CORS trusted-origins parsing', () => {
     vi.doMock('@hono/node-server', () => ({ serve: freshServe }));
     try {
       const { server: fresh } = await import('../src/server');
-      expect((await (fresh as unknown as Hono).request('/v1/health')).status).toBe(200);
+      expect((await fresh.request('/v1/health')).status).toBe(200);
     } finally {
       log.mockRestore();
       delete process.env['BETTER_AUTH_TRUSTED_ORIGINS'];

@@ -1,21 +1,14 @@
-import type { Database } from '@docket/db';
-import { notificationInboundEvent, notificationIntent, operatorAuditEvent } from '@docket/db';
 import { NotificationInboundEventOut, NotificationIntentOut } from '@docket/notifications';
 import { AdminAuditPage } from '../admin-dto';
 import type { AppEnv } from '../context';
-import { ConflictError, NotFoundError } from '../error';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zParam, zQuery } from '../lib/validate';
 import { pageOf } from '@docket/types';
-import { and, desc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
-import type { NotificationIntentService } from '../services/notifications/intent-service';
-import { toNotificationIntentOut } from '../services/notifications/intents';
-
-import { audit, toAuditOut } from './admin-serializers';
+import type { AdminNotificationService } from '../services/notifications/admin-service';
 
 const idParam = z.object({ id: z.string() });
 const listQuery = z.object({
@@ -24,10 +17,7 @@ const listQuery = z.object({
 });
 
 /** Build staff notification monitoring and approval routes. */
-export function createAdminNotificationRoutes(
-  intents: NotificationIntentService,
-  database: Database,
-) {
+export function createAdminNotificationRoutes(notifications: AdminNotificationService) {
   return new Hono<AppEnv>()
     .get(
       '/',
@@ -40,15 +30,7 @@ export function createAdminNotificationRoutes(
       zQuery(listQuery),
       async (c) => {
         const { limit, offset } = c.req.valid('query');
-        const rows = await database
-          .select()
-          .from(notificationIntent)
-          .orderBy(desc(notificationIntent.createdAt))
-          .limit(limit)
-          .offset(offset);
-        return ok(c, pageOf(NotificationIntentOut), {
-          items: rows.map(toNotificationIntentOut),
-        });
+        return ok(c, pageOf(NotificationIntentOut), await notifications.list(limit, offset));
       },
     )
     .get(
@@ -62,7 +44,11 @@ export function createAdminNotificationRoutes(
       zParam(idParam),
       async (c) => {
         const { userId } = c.get('staffCtx');
-        return ok(c, NotificationIntentOut, await intents.get(userId, c.req.valid('param').id));
+        return ok(
+          c,
+          NotificationIntentOut,
+          await notifications.get(userId, c.req.valid('param').id),
+        );
       },
     )
     .post(
@@ -77,27 +63,11 @@ export function createAdminNotificationRoutes(
       zParam(idParam),
       async (c) => {
         const { staffUserId } = c.get('staffCtx');
-        const id = c.req.valid('param').id;
-        const [existing] = await database
-          .select()
-          .from(notificationIntent)
-          .where(eq(notificationIntent.id, id))
-          .limit(1);
-        if (!existing) throw new NotFoundError('Notification intent not found');
-        if (!['draft', 'scheduled'].includes(existing.status)) {
-          throw new ConflictError('Notification intent cannot be approved from its current state');
-        }
-        const [updated] = await database
-          .update(notificationIntent)
-          .set({ status: 'queued', updatedAt: new Date() })
-          .where(eq(notificationIntent.id, id))
-          .returning();
-        if (!updated) throw new NotFoundError('Notification intent not found');
-        await audit(database, staffUserId, 'notification.approved', 'notification', id, {
-          previousStatus: existing.status,
-          status: updated.status,
-        });
-        return ok(c, NotificationIntentOut, toNotificationIntentOut(updated));
+        return ok(
+          c,
+          NotificationIntentOut,
+          await notifications.approve(staffUserId, c.req.valid('param').id),
+        );
       },
     )
     .post(
@@ -112,12 +82,11 @@ export function createAdminNotificationRoutes(
       zParam(idParam),
       async (c) => {
         const { staffUserId, userId } = c.get('staffCtx');
-        const id = c.req.valid('param').id;
-        const rejected = await intents.cancel(userId, id);
-        await audit(database, staffUserId, 'notification.rejected', 'notification', id, {
-          status: rejected.status,
-        });
-        return ok(c, NotificationIntentOut, rejected);
+        return ok(
+          c,
+          NotificationIntentOut,
+          await notifications.reject(userId, staffUserId, c.req.valid('param').id),
+        );
       },
     )
     .get(
@@ -130,18 +99,11 @@ export function createAdminNotificationRoutes(
       }),
       zParam(idParam),
       async (c) => {
-        await intents.get(c.get('staffCtx').userId, c.req.valid('param').id);
-        const rows = await database
-          .select()
-          .from(operatorAuditEvent)
-          .where(
-            and(
-              eq(operatorAuditEvent.subjectType, 'notification'),
-              eq(operatorAuditEvent.subjectId, c.req.valid('param').id),
-            ),
-          )
-          .orderBy(desc(operatorAuditEvent.createdAt));
-        return ok(c, AdminAuditPage, { items: rows.map(toAuditOut) });
+        return ok(
+          c,
+          AdminAuditPage,
+          await notifications.listAudit(c.get('staffCtx').userId, c.req.valid('param').id),
+        );
       },
     )
     .get(
@@ -154,24 +116,11 @@ export function createAdminNotificationRoutes(
       }),
       zParam(idParam),
       async (c) => {
-        await intents.get(c.get('staffCtx').userId, c.req.valid('param').id);
-        const rows = await database
-          .select()
-          .from(notificationInboundEvent)
-          .where(eq(notificationInboundEvent.notificationId, c.req.valid('param').id))
-          .orderBy(desc(notificationInboundEvent.receivedAt));
-        return ok(c, pageOf(NotificationInboundEventOut), {
-          items: rows.map((row) => ({
-            id: row.id,
-            notificationId: row.notificationId,
-            deliveryId: row.deliveryId,
-            channel: row.channel,
-            kind: row.kind,
-            from: row.from,
-            payload: row.payload,
-            receivedAt: row.receivedAt.toISOString(),
-          })),
-        });
+        return ok(
+          c,
+          pageOf(NotificationInboundEventOut),
+          await notifications.listInboundEvents(c.get('staffCtx').userId, c.req.valid('param').id),
+        );
       },
     );
 }

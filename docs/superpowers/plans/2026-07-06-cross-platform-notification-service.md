@@ -541,11 +541,11 @@ git commit -m "feat(api): ingest notification provider events"
 - Modify: `apps/api/src/routes/admin.ts`
 - Test: `apps/api/tests/routes/admin-notifications.test.ts`
 
-- [ ] **Step 1: Write RED admin API tests**
+- [x] **Step 1: Write RED admin API tests**
 
 Cover draft list/detail, audience estimate, preview/test send, approval required for broad or urgent sends, approve/reject, schedule, cancel, delivery monitoring, audit, and inbound event listing.
 
-- [ ] **Step 2: Implement staff routes**
+- [x] **Step 2: Implement staff routes**
 
 Expose:
 
@@ -559,6 +559,11 @@ GET  /admin/notifications/:id/inbound-events
 ```
 
 Use existing staff middleware and operator audit event patterns.
+
+Implemented as a sub-router mounted from `admin.ts` with direct `NotificationIntentService` and
+database injection. Approve queues draft/scheduled intents and reject cancels not-yet-delivered
+intents with operator audit. A richer approval-required workflow still needs durable approval state
+columns before it can be represented honestly.
 
 - [ ] **Step 3: Verify and commit**
 

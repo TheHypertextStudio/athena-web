@@ -112,6 +112,13 @@
   HMAC signature over the raw body and stay outside the public `/v1` API. Provider retries are
   de-duplicated by normalized `providerEventId` in the stored payload; a dedicated unique DB key remains
   a future hardening option. Focused validation: inbound service and internal route tests pass.
+- **Admin notifications milestone update (2026-07-06)**: Added a staff-gated
+  `/admin/notifications` sub-router for listing/detailing notification intents, approving draft or
+  scheduled intents into `queued`, rejecting not-yet-delivered intents via cancelation, and reviewing
+  related operator audit plus inbound provider events. The route module is mounted from `admin.ts`
+  with direct service/database injection so the already-large admin router stays thin. Richer
+  approval-required state remains a schema-backed follow-up. Focused validation:
+  `@docket/api` admin notification route tests pass.
 
 ### [AUTH-SEC-001] Auth security & UX audit remediation
 

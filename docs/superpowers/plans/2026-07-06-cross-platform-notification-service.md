@@ -810,6 +810,21 @@ Focused route smoke/admin validation, API typecheck, and touched-file ESLint pas
 Full `pnpm test:e2e` remains a separate browser-dev-stack gate because this milestone's required
 email assertion is only observable inside the API process today.
 
+Additional full-gate progress on 2026-07-07:
+
+```bash
+pnpm typecheck
+pnpm lint
+pnpm test
+```
+
+Results: `pnpm typecheck` passed with 13 successful tasks, `pnpm lint` passed with 13 successful
+tasks, and the final `pnpm test` rerun passed with 13 successful tasks. The first root test run found
+a timing-sensitive web sign-in component test under full Turbo concurrency; the test was hardened to
+wait for the component's actual session-recovery retry contract, then verified with the failing file,
+the full web package suite, web typecheck/lint, and the root test rerun. `pnpm test:e2e` remains
+unchecked.
+
 - [ ] **Step 4: Commit docs and E2E**
 
 Commit:

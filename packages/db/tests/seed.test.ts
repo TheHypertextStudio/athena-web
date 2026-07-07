@@ -10,11 +10,11 @@
 import { resolve } from 'node:path';
 
 import { PGlite } from '@electric-sql/pglite';
-import { drizzle } from 'drizzle-orm/pglite';
+import { drizzle, type PgliteDatabase } from 'drizzle-orm/pglite';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { fullSchema, type Database } from '../src/client';
+import { fullSchema } from '../src/client';
 import { user } from '../src/schema';
 import {
   STAFF_ROLES,
@@ -26,13 +26,13 @@ import {
   roleForEmail,
 } from '../src/seed';
 
-let db!: Database;
+let db!: PgliteDatabase<typeof fullSchema>;
 
 beforeAll(async () => {
   const client = new PGlite('memory://');
   const d = drizzle(client, { schema: fullSchema });
   await migrate(d, { migrationsFolder: resolve(import.meta.dirname, '../drizzle') });
-  db = d as unknown as Database;
+  db = d;
   await db.insert(user).values({ name: 'Ada', email: 'ada@example.com' });
 });
 

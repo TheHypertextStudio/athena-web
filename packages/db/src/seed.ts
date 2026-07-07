@@ -14,8 +14,9 @@
  * testable and reusable.
  */
 import { eq } from 'drizzle-orm';
+import type { PgliteDatabase } from 'drizzle-orm/pglite';
 
-import type { Database } from './client';
+import type { Database, fullSchema } from './client';
 import { staffRole } from './enums';
 import { staffUser, user } from './schema';
 
@@ -133,6 +134,9 @@ export type GrantStaffResult =
     }
   | { status: 'no-user'; email: string };
 
+/** Drizzle database shape supported by the staff seed helper. */
+type StaffSeedDatabase = Database | PgliteDatabase<typeof fullSchema>;
+
 /**
  * Grant (or update) operator access for the account with the given email.
  *
@@ -154,7 +158,7 @@ export type GrantStaffResult =
  * ```
  */
 export async function grantStaffByEmail(
-  db: Database,
+  db: StaffSeedDatabase,
   { email, role }: GrantStaffOptions,
 ): Promise<GrantStaffResult> {
   // Better Auth stores emails normalized to lowercase, so lowercasing the input and a plain

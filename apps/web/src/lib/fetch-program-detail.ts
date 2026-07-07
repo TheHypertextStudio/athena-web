@@ -1,7 +1,7 @@
 import type { AgentOut, MemberOut, ProgramDetail, RoleOut } from '@docket/types';
 
 import { api } from './api';
-import type { RpcResponse } from './query';
+import { rpcErrorResponse, type RpcResponse } from './query';
 
 /** ProgramDetailData describes the fetch program detail data contract shared by the hook or component. */
 export interface ProgramDetailData {
@@ -24,11 +24,7 @@ export function fetchProgramDetail(
       api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
     ]);
     if (!detailRes.ok) {
-      return {
-        ok: false,
-        status: detailRes.status,
-        json: () => detailRes.json(),
-      };
+      return rpcErrorResponse<ProgramDetailData>(detailRes);
     }
     const program = await detailRes.json();
     const members = membersRes.ok ? (await membersRes.json()).items : [];

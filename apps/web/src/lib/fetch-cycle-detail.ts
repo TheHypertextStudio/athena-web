@@ -11,7 +11,7 @@ import type {
 
 import { type ActorDirectory, buildActorDirectory } from '@/components/agents/actor-directory';
 import { api } from './api';
-import { type RpcResponse, apiQueryOptions, queryKeys } from './query';
+import { type RpcResponse, apiQueryOptions, queryKeys, rpcErrorResponse } from './query';
 
 /** CycleDetailData describes the fetch cycle detail data contract shared by the hook or component. */
 export interface CycleDetailData {
@@ -75,11 +75,7 @@ export function fetchCycleDetail(
     ]);
 
     if (!cycleRes.ok) {
-      return {
-        ok: false,
-        status: cycleRes.status,
-        json: () => cycleRes.json(),
-      };
+      return rpcErrorResponse<CycleDetailData>(cycleRes);
     }
 
     const cycle = await cycleRes.json();

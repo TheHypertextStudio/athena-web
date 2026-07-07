@@ -122,6 +122,26 @@ export interface RpcResponse<T> {
 }
 
 /**
+ * Adapt a failed upstream RPC response to the success-typed {@link RpcResponse} shape.
+ *
+ * @remarks
+ * Composite fetchers promise the assembled success body (`T`) but still need to forward an
+ * upstream problem response when their primary read fails. `unwrap` reads the failed JSON only to
+ * extract problem details; it never treats that body as `T`. Keeping this adaptation here avoids
+ * scattering casts through every composite fetcher.
+ */
+export function rpcErrorResponse<T>(response: {
+  readonly status: number;
+  json(): Promise<unknown>;
+}): RpcResponse<T> {
+  return {
+    ok: false,
+    status: response.status,
+    json: async () => (await response.json()) as T,
+  };
+}
+
+/**
  * The error {@link unwrap} throws for a non-OK API response.
  *
  * @remarks

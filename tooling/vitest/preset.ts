@@ -38,6 +38,14 @@ export interface DocketVitestOptions {
    * stays a meaningful gate rather than a chase over wiring/UI code.
    */
   coverageInclude?: string[];
+  /** Maximum Vitest workers for packages with resource-heavy setup. */
+  maxWorkers?: number | `${number}%`;
+  /** Whether Vitest should run test files in parallel. */
+  fileParallelism?: boolean;
+  /** Per-test timeout in milliseconds. */
+  testTimeout?: number;
+  /** Per-hook timeout in milliseconds. */
+  hookTimeout?: number;
 }
 
 /**
@@ -58,6 +66,10 @@ export function docketVitest(options: DocketVitestOptions = {}) {
     coverageThreshold = 90,
     coverageExclude = [],
     coverageInclude = ['src/**/*.{ts,tsx}'],
+    maxWorkers,
+    fileParallelism,
+    testTimeout = 120_000,
+    hookTimeout = 120_000,
   } = options;
   return defineConfig({
     plugins: useReact ? [react()] : [],
@@ -71,8 +83,10 @@ export function docketVitest(options: DocketVitestOptions = {}) {
       // otherwise-passing tests (e.g. crypto/pglite-heavy ones) purely from CPU
       // starvation. Generous timeouts keep the full-suite run reliably green
       // without affecting the happy path.
-      testTimeout: 120_000,
-      hookTimeout: 120_000,
+      testTimeout,
+      hookTimeout,
+      maxWorkers,
+      fileParallelism,
       // Coverage is gated (with all:true so untested files count). Default 90% gives
       // headroom so we don't write brittle wiring/tautology tests to chase the last
       // few lines; the trust-spine packages pass coverageThreshold:100. Either bar is

@@ -572,7 +572,7 @@ resolver, preference resolver, and policy helpers. Estimates report recipient co
 send/delay/suppression counts, suppression reasons, and the current approval gate; previews render
 the requested web/email/SMS/push channel content for the staff console.
 
-- [ ] **Step 3: Verify and commit**
+- [x] **Step 3: Verify and commit**
 
 Run:
 
@@ -690,11 +690,11 @@ git commit -m "feat(web): add notification preferences experience"
 - Modify/Create: `apps/admin/src/*`
 - Test: admin component tests matching existing test structure
 
-- [ ] **Step 1: Write RED admin UX tests**
+- [x] **Step 1: Write RED admin UX tests**
 
 Cover compose, audience estimate, channel selection, preview, test send, approval, schedule/cancel, monitoring, and inbound replies.
 
-- [ ] **Step 2: Implement staff console**
+- [x] **Step 2: Implement staff console**
 
 Build the six-step flow from the spec:
 
@@ -704,6 +704,10 @@ Build the six-step flow from the spec:
 4. Preview.
 5. Review.
 6. Monitor.
+
+Implemented as `/notifications` in `apps/admin`, with a presentational console plus a typed page
+that calls `/v1/notifications` for draft/test/send/cancel and `/admin/notifications/*` for list,
+estimate, preview, approve, audit, and inbound monitoring.
 
 - [ ] **Step 3: Verify and commit**
 

@@ -22,6 +22,7 @@ const NAV: readonly NavItem[] = [
   { href: '/users', label: 'Users' },
   { href: '/orgs', label: 'Organizations' },
   { href: '/lifecycle', label: 'Lifecycle' },
+  { href: '/notifications', label: 'Notifications' },
   { href: '/audit', label: 'Audit log' },
 ];
 

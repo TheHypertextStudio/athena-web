@@ -17,6 +17,8 @@ import { eq } from 'drizzle-orm';
 
 import { expandNotificationAudience } from './audience';
 import { deliverEmailNotification } from './adapters/email';
+import { deliverPushNotification } from './adapters/push';
+import { deliverSmsNotification } from './adapters/sms';
 import { deliverWebNotification } from './adapters/web';
 import { resolveNotificationPreferences, type NotificationPreferenceMode } from './preferences';
 
@@ -204,6 +206,27 @@ export async function dispatchPersistedNotificationIntent(
 
       if (decision.channel === 'email' && decision.decision === 'send') {
         delivery = await deliverEmailNotification(db, {
+          deliveryId: delivery.id,
+          subject: intent.subject,
+          body: intent.body,
+          now,
+        });
+        deliveries[deliveries.length - 1] = delivery;
+      }
+
+      if (decision.channel === 'sms' && decision.decision === 'send') {
+        delivery = await deliverSmsNotification(db, {
+          deliveryId: delivery.id,
+          subject: intent.subject,
+          body: intent.body,
+          now,
+        });
+        deliveries[deliveries.length - 1] = delivery;
+      }
+
+      if (decision.channel === 'push' && decision.decision === 'send') {
+        delivery = await deliverPushNotification(db, {
+          notificationId: intent.id,
           deliveryId: delivery.id,
           subject: intent.subject,
           body: intent.body,

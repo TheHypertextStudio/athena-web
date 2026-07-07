@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { findVar, isRealValue, VAR_REGISTRY } from '../src/index';
+import { findVar, isRealValue, realEnvValue, VAR_REGISTRY } from '../src/index';
 import {
   agentServer,
   authServer,
@@ -195,6 +195,20 @@ describe('isRealValue', () => {
   it('treats a genuine credential as real', () => {
     expect(isRealValue('sk_live_realkey123')).toBe(true);
     expect(isRealValue('postgres://user:pass@host/db')).toBe(true);
+  });
+});
+
+describe('realEnvValue', () => {
+  it('returns the trimmed value when it is real-shaped', () => {
+    expect(realEnvValue('  sk_live_realkey123  ')).toBe('sk_live_realkey123');
+  });
+
+  it('returns undefined for absent, blank, and placeholder values', () => {
+    expect(realEnvValue(undefined)).toBeUndefined();
+    expect(realEnvValue(null)).toBeUndefined();
+    expect(realEnvValue('   ')).toBeUndefined();
+    expect(realEnvValue('placeholder')).toBeUndefined();
+    expect(realEnvValue('mock')).toBeUndefined();
   });
 });
 

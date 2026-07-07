@@ -17,6 +17,7 @@
  *
  * Secrets (provider key, SMTP password) are never logged.
  */
+import { realEnvValue } from '@docket/env';
 import nodemailer from 'nodemailer';
 
 import type { Mailer, OutboundMessage } from './index';
@@ -103,13 +104,6 @@ export interface SmtpEnv {
   readonly MAIL_FROM?: string;
 }
 
-/** A trimmed string, or `undefined` when the value is absent/blank. */
-function clean(value: string | undefined): string | undefined {
-  if (value === undefined) return undefined;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
-}
-
 /**
  * Parse the SMTP env slice into a validated {@link SmtpMailerConfig}, or `null` when
  * the minimum required values (`SMTP_HOST` + `MAIL_FROM`) are absent.
@@ -126,11 +120,11 @@ function clean(value: string | undefined): string | undefined {
  * @throws {Error} When `SMTP_PORT` is present but not a positive integer.
  */
 export function smtpConfigFromEnv(env: SmtpEnv): SmtpMailerConfig | null {
-  const host = clean(env.SMTP_HOST);
-  const from = clean(env.MAIL_FROM);
+  const host = realEnvValue(env.SMTP_HOST);
+  const from = realEnvValue(env.MAIL_FROM);
   if (!host || !from) return null;
 
-  const rawPort = clean(env.SMTP_PORT);
+  const rawPort = realEnvValue(env.SMTP_PORT);
   let port = 587;
   if (rawPort !== undefined) {
     const parsed = Number(rawPort);
@@ -140,11 +134,11 @@ export function smtpConfigFromEnv(env: SmtpEnv): SmtpMailerConfig | null {
     port = parsed;
   }
 
-  const rawSecure = clean(env.SMTP_SECURE)?.toLowerCase();
+  const rawSecure = realEnvValue(env.SMTP_SECURE)?.toLowerCase();
   const secure = rawSecure === undefined ? port === 465 : rawSecure === 'true';
 
-  const user = clean(env.SMTP_USER);
-  const pass = clean(env.SMTP_PASS);
+  const user = realEnvValue(env.SMTP_USER);
+  const pass = realEnvValue(env.SMTP_PASS);
 
   return {
     host,

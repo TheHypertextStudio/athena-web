@@ -161,6 +161,21 @@
   `NotificationAnnouncementConsole` plus a small draft serializer so the route owns API state while
   the UI remains testable. Focused validation: admin console Vitest coverage, admin typecheck,
   touched-file ESLint, and dotenv-wrapped admin build pass.
+- **Smoke/docs milestone update (2026-07-07)**: Added a route-level notification service smoke that
+  exercises the service-wide staff announcement journey end to end: staff creates a draft over
+  `/v1/notifications`, test-sends to self, approves through `/admin/notifications`, sends to a test
+  user, verifies the user's `/v1/me/notifications` web inbox row, and asserts `CaptureMailer`
+  recorded both staff-test and recipient email sends. The smoke reuses shared route fixtures for
+  staff users, contact points, sessions, and the capture outbox. Refactored the staff admin router
+  so `admin.ts` accepts the notification sub-router directly; `app.ts` is now the composition root
+  that constructs `AdminNotificationService` and exports the composed admin router for tests. Added
+  `docs/engineering/specs/notification-service.md`, documented notification provider deployment in
+  `docs/engineering/deployment.md`, and exposed SMS/push provider seams in `.env.example`. Focused
+  validation: `../../node_modules/.bin/vitest run tests/routes/admin.test.ts
+tests/routes/admin-staff.test.ts tests/routes/admin-notifications.test.ts
+tests/routes/notification-service-smoke.test.ts`, `../../node_modules/.bin/tsc --noEmit --pretty
+false`, and touched-file ESLint pass. Browser E2E remains a later dev-stack gate because capture
+  mailer assertions are process-local unless a test mailbox endpoint is added.
 
 ### [AUTH-SEC-001] Auth security & UX audit remediation
 

@@ -17,7 +17,6 @@
 import { db } from '@docket/db';
 import { Hono } from 'hono';
 
-import admin from './routes/admin';
 import agenda from './routes/agenda';
 import config from './routes/config';
 import connectedApps from './routes/connected-apps';
@@ -31,11 +30,14 @@ import meIdentities from './routes/me-identities';
 import { createMeNotificationsRoutes } from './routes/me-notifications';
 import meRecovery from './routes/me-recovery';
 import meSessions from './routes/me-sessions';
+import { createAdminRoutes } from './routes/admin';
+import { createAdminNotificationRoutes } from './routes/admin-notifications';
 import { createNotificationPreferenceRoutes } from './routes/notification-preferences';
 import { createNotificationsRoutes } from './routes/notifications';
 import oauthClients from './routes/oauth-clients';
 import orgs from './routes/orgs';
 import { requireAuth } from './permissions/require-auth';
+import { AdminNotificationService } from './services/notifications/admin-service';
 import { NotificationContactPointService } from './services/notifications/contact-point-service';
 import { NotificationInboxService } from './services/notifications/inbox';
 import { NotificationIntentService } from './services/notifications/intent-service';
@@ -94,9 +96,14 @@ export const adminApp = new Hono<AppEnv>();
 /** The type of the {@link adminApp} instance (used to type its own OpenAPI generator input). */
 export type AdminInstance = typeof adminApp;
 
+const adminNotifications = new AdminNotificationService(db, notificationIntents);
+
+/** The directly-composed staff router used by the root server and route-level tests. */
+export const adminRouter = createAdminRoutes(createAdminNotificationRoutes(adminNotifications));
+
 /** The chained admin route tree; its type is the admin RPC contract (`apps/admin` only). */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const adminRoutes = adminApp.route('/admin', admin);
+const adminRoutes = adminApp.route('/admin', adminRouter);
 
 /** The internal admin RPC contract consumed by `apps/admin` via `hc<AdminAppType>`. */
 export type AdminAppType = typeof adminRoutes;

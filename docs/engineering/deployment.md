@@ -169,6 +169,43 @@ Runtime env vars are split between Secret Manager (sensitive) and Cloud Run env 
 `NODE_ENV`, `APP_MODE`, `API_URL`, `WEB_URL`, `BETTER_AUTH_URL`, `BETTER_AUTH_TRUSTED_ORIGINS`, `BETTER_AUTH_ALLOWED_HOSTS` (optional — host allowlist that switches Better Auth to a dynamic per-request base URL for previews/multi-domain; unset ⇒ static `BETTER_AUTH_URL`), `BETTER_AUTH_PASSKEY_RP_ID`, `BETTER_AUTH_PASSKEY_RP_NAME`, `BILLING_ENABLED`, `MCP_ALLOWED_ORIGINS` (a security allowlist — browser Origins allowed to hit `/mcp`, set explicitly per environment; never derived), `MCP_TASKS_ENABLED`, `MCP_CIMD_STRICT`.
 The MCP OAuth authorization server is **on by default in every deploy** — it needs no MCP-specific vars. `MCP_ISSUER_URL`, `MCP_RESOURCE_URL`, and `OIDC_LOGIN_PAGE_URL` derive mechanically from `API_URL`/`WEB_URL` (`packages/env/src/api.ts`); set one only to override its derivation (e.g. a non-standard sign-in route).
 
+### Notification delivery providers
+
+The notification service always writes durable intents, recipient snapshots, delivery rows, web
+inbox rows, preferences, contact points, and inbound-event rows. External delivery adapters light
+up only when their provider env is real-shaped; blank, `mock`, `placeholder`, or `changeme` values
+select capture adapters.
+
+| Channel | Env vars                                                                       | Runtime behavior                                                                                |
+| ------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| Email   | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` | `SMTP_HOST` + `MAIL_FROM` select `SmtpMailer`; otherwise the in-memory `CaptureMailer` is used. |
+| SMS     | `SMS_ENDPOINT`, `SMS_API_KEY`, `SMS_FROM`                                      | All three select the HTTP SMS adapter; otherwise `CaptureSmsSender` is used.                    |
+| Push    | `PUSH_ENDPOINT`, `PUSH_API_KEY`, `PUSH_APP_ID`                                 | All three select the HTTP push adapter; otherwise `CapturePushSender` is used.                  |
+
+The default `.github/workflows/deploy.yml` does not yet inject these optional provider secrets into
+Cloud Run. To activate a provider in production, create Secret Manager entries for sensitive values
+(`SMTP_PASS`, `SMS_API_KEY`, `PUSH_API_KEY`), add non-sensitive values as GitHub variables or Cloud
+Run env vars, then add them to the `deploy-api` job's `env_vars:` / `secrets:` block.
+
+Provider callbacks land under `/internal/notifications/*`:
+
+| Route                                        | Purpose                                                               |
+| -------------------------------------------- | --------------------------------------------------------------------- |
+| `POST /internal/notifications/events/email`  | Email delivery, bounce, complaint, and unsubscribe events.            |
+| `POST /internal/notifications/events/sms`    | SMS delivery and STOP/START events.                                   |
+| `POST /internal/notifications/events/push`   | Push delivery and invalid-token events.                               |
+| `POST /internal/notifications/inbound/email` | Email replies correlated to the original notification where possible. |
+| `POST /internal/notifications/inbound/sms`   | SMS replies correlated to the original notification where possible.   |
+
+Callbacks must include `x-docket-signature`, an HMAC-SHA256 over the raw JSON body formatted either
+as raw hex or `sha256=<hex>`. The route currently defaults to `BETTER_AUTH_SECRET` as the signing
+secret; if a provider-specific secret is introduced later, wire it through
+`createInternalNotificationRoutes(secret)` and update this deployment section in the same change.
+
+Quiet hours and user category/channel preferences are enforced before external sends. Web delivery
+is always the canonical in-product record; email/SMS/push are sibling delivery rows whose status is
+visible to the staff notification monitor and compactly hinted in the user's inbox row.
+
 ### Next.js services (web, admin)
 
 `NEXT_PUBLIC_*` vars are **baked into the bundle at build time** via Docker `--build-arg`. They cannot be changed without rebuilding the image. Non-public runtime vars (e.g. `NODE_ENV`) are set as Cloud Run env vars and take effect without a rebuild.

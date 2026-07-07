@@ -1,39 +1,23 @@
 import { eq } from 'drizzle-orm';
-import { Hono } from 'hono';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
-import type { AppEnv, AuthSession } from '../../src/context';
-import { onError } from '../../src/error';
-import { fakeSession, getDb } from '../support/routes-harness';
-import type adminRouter from '../../src/routes/admin';
+import { appWithSession, fakeSession, getDb } from '../support/routes-harness';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
-let admin!: typeof adminRouter;
+let admin!: unknown;
 
 beforeAll(async () => {
   schema = await getDb();
   db = schema.db;
-  admin = (await import('../../src/routes/admin')).default;
+  admin = (await import('../../src/app')).adminRouter;
 });
 
 /** Parse a JSON response body as the given shape. */
 async function json<T>(res: Response): Promise<T> {
   return (await res.json()) as T;
-}
-
-/** Mount the admin router behind an injected session (so staffMiddleware resolves staff_user). */
-function adminApp(session: AuthSession) {
-  const app = new Hono<AppEnv>();
-  app.use('*', async (c, next) => {
-    if (session) c.set('session', session);
-    await next();
-  });
-  app.route('/', admin);
-  app.onError(onError);
-  return app;
 }
 
 let counter = 0;
@@ -105,21 +89,21 @@ async function auditCount(type: string, subjectId: string): Promise<number> {
 
 describe('staff guard', () => {
   it('401s when there is no session', async () => {
-    const app = adminApp(null);
+    const app = appWithSession(admin, null);
     const res = await app.request('/metrics', { method: 'GET' });
     expect(res.status).toBe(401);
   });
 
   it('403s an authenticated non-staff user', async () => {
     const userId = await makeUser('Civilian');
-    const app = adminApp(fakeSession(userId));
+    const app = appWithSession(admin, fakeSession(userId));
     const res = await app.request('/metrics', { method: 'GET' });
     expect(res.status).toBe(403);
   });
 
   it('admits a staff user', async () => {
     const { userId } = await makeStaff('support');
-    const app = adminApp(fakeSession(userId));
+    const app = appWithSession(admin, fakeSession(userId));
     const res = await app.request('/metrics', { method: 'GET' });
     expect(res.status).toBe(200);
   });
@@ -127,7 +111,7 @@ describe('staff guard', () => {
   it('403s a support user on a finance-only billing action', async () => {
     const { userId } = await makeStaff('support');
     const orgId = await makeOrg('export_window');
-    const app = adminApp(fakeSession(userId));
+    const app = appWithSession(admin, fakeSession(userId));
     const res = await app.request(`/orgs/${orgId}/reactivate`, { method: 'POST' });
     expect(res.status).toBe(403);
   });
@@ -139,14 +123,14 @@ describe('staff guard', () => {
     const sup = await makeStaff('superadmin');
     expect(
       (
-        await adminApp(fakeSession(fin.userId)).request(`/orgs/${orgA}/reactivate`, {
+        await appWithSession(admin, fakeSession(fin.userId)).request(`/orgs/${orgA}/reactivate`, {
           method: 'POST',
         })
       ).status,
     ).toBe(200);
     expect(
       (
-        await adminApp(fakeSession(sup.userId)).request(`/orgs/${orgB}/reactivate`, {
+        await appWithSession(admin, fakeSession(sup.userId)).request(`/orgs/${orgB}/reactivate`, {
           method: 'POST',
         })
       ).status,
@@ -161,7 +145,7 @@ describe('users', () => {
       .insert(schema.user)
       .values({ name: `Zephyrine ${uniq()}`, email: `zephyrine-${uniq()}@example.com` })
       .returning({ id: schema.user.id, email: schema.user.email });
-    const app = adminApp(fakeSession(userId));
+    const app = appWithSession(admin, fakeSession(userId));
 
     // Unfiltered list (no search branch) with pagination.
     const all = await app.request('/users?limit=5&offset=0', { method: 'GET' });
@@ -185,7 +169,7 @@ describe('users', () => {
       .values({ organizationId: orgId, kind: 'human', displayName: 'Member', userId: target })
       .returning({ id: schema.actor.id });
 
-    const app = adminApp(fakeSession(userId));
+    const app = appWithSession(admin, fakeSession(userId));
     const res = await app.request(`/users/${target}`, { method: 'GET' });
     expect(res.status).toBe(200);
     const body = await json<{ user: { id: string }; memberships: { organizationId: string }[] }>(
@@ -197,7 +181,7 @@ describe('users', () => {
 
   it('404s an unknown user id', async () => {
     const { userId } = await makeStaff('support');
-    const app = adminApp(fakeSession(userId));
+    const app = appWithSession(admin, fakeSession(userId));
     const res = await app.request('/users/does-not-exist', { method: 'GET' });
     expect(res.status).toBe(404);
   });
@@ -207,7 +191,7 @@ describe('orgs', () => {
   it('lists orgs unfiltered, by search, and by lifecycle state', async () => {
     const { userId } = await makeStaff('support');
     const pastDue = await makeOrg('past_due');
-    const app = adminApp(fakeSession(userId));
+    const app = appWithSession(admin, fakeSession(userId));
 
     const unfiltered = await app.request('/orgs?limit=100', { method: 'GET' });
     expect((await json<{ total: number }>(unfiltered)).total).toBeGreaterThan(0);
@@ -236,7 +220,7 @@ describe('orgs', () => {
       exportReadyAt: new Date('2026-01-01T00:00:00.000Z'),
       deleteAfterAt: new Date('2026-01-15T00:00:00.000Z'),
     });
-    const app = adminApp(fakeSession(userId));
+    const app = appWithSession(admin, fakeSession(userId));
 
     const res = await app.request(`/orgs/${ew}`, { method: 'GET' });
     expect(res.status).toBe(200);
@@ -253,7 +237,7 @@ describe('lifecycle board', () => {
     const { userId } = await makeStaff('support');
     const active = await makeOrg('active');
     const ew = await makeOrg('export_window');
-    const app = adminApp(fakeSession(userId));
+    const app = appWithSession(admin, fakeSession(userId));
 
     const res = await app.request('/lifecycle', { method: 'GET' });
     expect(res.status).toBe(200);
@@ -278,7 +262,7 @@ describe('lifecycle holds', () => {
   it('places a hold (audited), then releases it (audited)', async () => {
     const { userId } = await makeStaff('support');
     const orgId = await makeOrg('export_window');
-    const app = adminApp(fakeSession(userId));
+    const app = appWithSession(admin, fakeSession(userId));
 
     const placed = await app.request(`/orgs/${orgId}/holds`, {
       method: 'POST',
@@ -303,7 +287,7 @@ describe('lifecycle holds', () => {
 
   it('404s placing a hold on an unknown org', async () => {
     const { userId } = await makeStaff('support');
-    const app = adminApp(fakeSession(userId));
+    const app = appWithSession(admin, fakeSession(userId));
     const res = await app.request('/orgs/missing/holds', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -315,7 +299,7 @@ describe('lifecycle holds', () => {
   it('422s a hold with an empty reason', async () => {
     const { userId } = await makeStaff('support');
     const orgId = await makeOrg('active');
-    const app = adminApp(fakeSession(userId));
+    const app = appWithSession(admin, fakeSession(userId));
     const res = await app.request(`/orgs/${orgId}/holds`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -327,7 +311,7 @@ describe('lifecycle holds', () => {
   it('404s releasing a hold that does not exist', async () => {
     const { userId } = await makeStaff('finance');
     const orgId = await makeOrg('active');
-    const app = adminApp(fakeSession(userId));
+    const app = appWithSession(admin, fakeSession(userId));
     expect((await app.request(`/orgs/${orgId}/holds/nope`, { method: 'DELETE' })).status).toBe(404);
   });
 });
@@ -339,7 +323,7 @@ describe('billing actions', () => {
       exportReadyAt: new Date('2026-01-01T00:00:00.000Z'),
       deleteAfterAt: new Date('2026-01-15T00:00:00.000Z'),
     });
-    const app = adminApp(fakeSession(userId));
+    const app = appWithSession(admin, fakeSession(userId));
     const res = await app.request(`/orgs/${orgId}/extend-trial`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -360,7 +344,7 @@ describe('billing actions', () => {
   it('404s extend-trial on an unknown org and 422s a bad body', async () => {
     const { userId } = await makeStaff('finance');
     const orgId = await makeOrg('active');
-    const app = adminApp(fakeSession(userId));
+    const app = appWithSession(admin, fakeSession(userId));
     expect(
       (
         await app.request('/orgs/missing/extend-trial', {
@@ -386,7 +370,7 @@ describe('billing actions', () => {
     const orgId = await makeOrg('export_window', {
       deleteAfterAt: new Date('2030-01-01T00:00:00.000Z'),
     });
-    const app = adminApp(fakeSession(userId));
+    const app = appWithSession(admin, fakeSession(userId));
     const res = await app.request(`/orgs/${orgId}/reactivate`, { method: 'POST' });
     expect(res.status).toBe(200);
     expect((await json<{ lifecycleState: string }>(res)).lifecycleState).toBe('active');
@@ -396,13 +380,13 @@ describe('billing actions', () => {
 
   it('404s reactivate on an unknown org', async () => {
     const { userId } = await makeStaff('finance');
-    const app = adminApp(fakeSession(userId));
+    const app = appWithSession(admin, fakeSession(userId));
     expect((await app.request('/orgs/missing/reactivate', { method: 'POST' })).status).toBe(404);
   });
 
   it('sets lifecycle to active/trialing via the reactivate path', async () => {
     const { userId } = await makeStaff('superadmin');
-    const app = adminApp(fakeSession(userId));
+    const app = appWithSession(admin, fakeSession(userId));
 
     const orgA = await makeOrg('export_window', {
       deleteAfterAt: new Date('2030-01-01T00:00:00.000Z'),
@@ -431,7 +415,7 @@ describe('billing actions', () => {
   it('sets lifecycle to export_window via the terminal path', async () => {
     const { userId } = await makeStaff('superadmin');
     const orgId = await makeOrg('active');
-    const app = adminApp(fakeSession(userId));
+    const app = appWithSession(admin, fakeSession(userId));
     const res = await app.request(`/orgs/${orgId}/lifecycle`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -444,7 +428,7 @@ describe('billing actions', () => {
   it('sets lifecycle to a raw state (pending_deletion) via the direct override', async () => {
     const { userId } = await makeStaff('superadmin');
     const orgId = await makeOrg('export_window');
-    const app = adminApp(fakeSession(userId));
+    const app = appWithSession(admin, fakeSession(userId));
     const res = await app.request(`/orgs/${orgId}/lifecycle`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -457,7 +441,7 @@ describe('billing actions', () => {
   it('404s set-lifecycle on an unknown org and 422s a bad state', async () => {
     const { userId } = await makeStaff('superadmin');
     const orgId = await makeOrg('active');
-    const app = adminApp(fakeSession(userId));
+    const app = appWithSession(admin, fakeSession(userId));
     expect(
       (
         await app.request('/orgs/missing/lifecycle', {
@@ -483,7 +467,7 @@ describe('impersonation', () => {
   it('starts a time-boxed session (audited) then ends it (audited)', async () => {
     const { userId } = await makeStaff('support');
     const target = await makeUser('Target');
-    const app = adminApp(fakeSession(userId));
+    const app = appWithSession(admin, fakeSession(userId));
 
     const started = await app.request('/impersonations', {
       method: 'POST',
@@ -516,7 +500,7 @@ describe('impersonation', () => {
   it('uses the default ttl when omitted', async () => {
     const { userId } = await makeStaff('support');
     const target = await makeUser('Target');
-    const app = adminApp(fakeSession(userId));
+    const app = appWithSession(admin, fakeSession(userId));
     const started = await app.request('/impersonations', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -529,7 +513,7 @@ describe('impersonation', () => {
 
   it('404s impersonating an unknown target user', async () => {
     const { userId } = await makeStaff('support');
-    const app = adminApp(fakeSession(userId));
+    const app = appWithSession(admin, fakeSession(userId));
     const res = await app.request('/impersonations', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -541,7 +525,7 @@ describe('impersonation', () => {
   it('422s a missing reason', async () => {
     const { userId } = await makeStaff('support');
     const target = await makeUser('Target');
-    const app = adminApp(fakeSession(userId));
+    const app = appWithSession(admin, fakeSession(userId));
     const res = await app.request('/impersonations', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -552,7 +536,7 @@ describe('impersonation', () => {
 
   it('404s ending an unknown impersonation session', async () => {
     const { userId } = await makeStaff('support');
-    const app = adminApp(fakeSession(userId));
+    const app = appWithSession(admin, fakeSession(userId));
     expect((await app.request('/impersonations/ghost/end', { method: 'POST' })).status).toBe(404);
   });
 });
@@ -561,7 +545,7 @@ describe('audit feed and metrics', () => {
   it('returns the operator audit feed (paginated)', async () => {
     const { userId } = await makeStaff('superadmin');
     const orgId = await makeOrg('export_window');
-    const app = adminApp(fakeSession(userId));
+    const app = appWithSession(admin, fakeSession(userId));
     // Generate an audit event.
     await app.request(`/orgs/${orgId}/holds`, {
       method: 'POST',
@@ -580,7 +564,7 @@ describe('audit feed and metrics', () => {
     const { userId } = await makeStaff('support');
     await makeOrg('trialing');
     await makeOrg('deleted');
-    const app = adminApp(fakeSession(userId));
+    const app = appWithSession(admin, fakeSession(userId));
     const res = await app.request('/metrics', { method: 'GET' });
     expect(res.status).toBe(200);
     const body = await json<{

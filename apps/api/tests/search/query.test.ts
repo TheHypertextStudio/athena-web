@@ -1,7 +1,7 @@
 import { inArray } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 
-import { getDb, addMember, one, seedOrg, seedUserWithHub } from '../routes/harness.test';
+import { getDb, addMember, one, seedOrg, seedUserWithHub } from '../support/routes-harness';
 
 import { searchWorkspace } from '../../src/search/query';
 

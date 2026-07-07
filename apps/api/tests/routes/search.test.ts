@@ -7,7 +7,7 @@ import {
   getDb,
   seedOrg,
   seedUserWithHub,
-} from './harness.test';
+} from '../support/routes-harness';
 
 function routeFor(orgId: string, kind: string, id: string) {
   return {

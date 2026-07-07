@@ -55,6 +55,7 @@ import {
 import { adminBillingRoutes } from './admin-billing-routes';
 import { createAdminNotificationRoutes } from './admin-notifications';
 import { adminStaffRoutes } from './admin-staff-routes';
+import { AdminNotificationService } from '../services/notifications/admin-service';
 import { NotificationIntentService } from '../services/notifications/intent-service';
 
 /** The staff-gated operator back-office router. */
@@ -348,7 +349,12 @@ const admin = new Hono<AppEnv>()
   // ---- Staff management (sub-router) ------------------------------------
   .route('/staff', adminStaffRoutes)
   // ---- Notification announcements + monitoring --------------------------
-  .route('/notifications', createAdminNotificationRoutes(new NotificationIntentService(db), db))
+  .route(
+    '/notifications',
+    createAdminNotificationRoutes(
+      new AdminNotificationService(db, new NotificationIntentService(db)),
+    ),
+  )
   // ---- Metrics -----------------------------------------------------------
   .get(
     '/metrics',

@@ -116,9 +116,12 @@
   `/admin/notifications` sub-router for listing/detailing notification intents, approving draft or
   scheduled intents into `queued`, rejecting not-yet-delivered intents via cancelation, and reviewing
   related operator audit plus inbound provider events. The route module is mounted from `admin.ts`
-  with direct service/database injection so the already-large admin router stays thin. Richer
-  approval-required state remains a schema-backed follow-up. Focused validation:
-  `@docket/api` admin notification route tests pass.
+  with direct service injection so the already-large admin router stays thin. Follow-up architecture
+  correction moved Drizzle queries and operator audit writes out of `admin-notifications.ts` into
+  `AdminNotificationService`; the route now owns request/response wiring only, with no dependency
+  bag, no dependency-builder helper, and no `usecases` layer. Richer approval-required state remains
+  a schema-backed follow-up. Focused validation: `@docket/api` admin notification route tests,
+  `@docket/api` typecheck, and touched-file ESLint pass.
 
 ### [AUTH-SEC-001] Auth security & UX audit remediation
 

@@ -171,7 +171,9 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
   `@docket/{types,env,auth,boundaries,api}`. Targeted API coverage passed:
   `ingest-discord` 4/4, `ingest-discord-token` 3/3, and `event-sync-attribution` 3/3. Auth
   Discord OAuth-link coverage passed (`tests/auth.test.ts -t "Discord"`). Boundaries coverage
-  includes the real Discord observer signature/route/normalize suite.
+  includes the real Discord observer signature/route/normalize suite. Full closeout gate passed
+  after capping API Vitest fixture concurrency: `pnpm typecheck` (12/12), `pnpm lint` (12/12),
+  `pnpm test` (11/11; API 106/106 files, 1134/1134 tests), and `pnpm build` (3/3).
 - **Learnings**: Discord's only per-user-mention transport is the Gateway socket, which the
   serverless core can't hold — the fix is a transport-agnostic ingest edge + a quarantined relay,
   reusing the existing `event_subscription.ingestToken` seam so no new routing pattern is invented.

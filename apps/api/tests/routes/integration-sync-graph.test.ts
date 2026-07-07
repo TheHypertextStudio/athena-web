@@ -14,7 +14,7 @@ import type * as DbModule from '@docket/db';
 
 import type * as IntegrationSyncModule from '../../src/routes/integration-sync';
 import type * as IntegrationProviderModule from '../../src/routes/integration-provider';
-import { appWithActor, getDb, one, seedBaseOrg } from './harness.test';
+import { appWithActor, getDb, one, seedBaseOrg } from '../support/routes-harness';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;

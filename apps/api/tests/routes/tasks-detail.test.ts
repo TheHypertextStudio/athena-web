@@ -2,7 +2,7 @@
  * `@docket/api` — task lifecycle route tests: detail, patch, archive, state, subtasks.
  *
  * @remarks
- * Mirrors `harness.test.ts` (pglite + injected actor context). Dependency-edge
+ * Mirrors `routes-harness` (pglite + injected actor context). Dependency-edge
  * coverage lives in `task-dependencies.test.ts`.
  */
 import { eq } from 'drizzle-orm';
@@ -10,7 +10,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
-import { appWithActor, getDb, seedBaseOrg } from './harness.test';
+import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
 import type tasksRouter from '../../src/routes/tasks';
 
 let schema!: typeof DbModule;

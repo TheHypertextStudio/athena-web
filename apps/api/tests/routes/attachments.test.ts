@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type * as DbModule from '@docket/db';
 import type { AttachmentOut } from '@docket/types';
 
-import { appWithActor, getDb, one, seedBaseOrg } from './harness.test';
+import { appWithActor, getDb, one, seedBaseOrg } from '../support/routes-harness';
 import type { attachmentRoutes as attachmentRouter } from '../../src/routes/attachment-routes';
 import type * as ContainerModule from '../../src/container';
 

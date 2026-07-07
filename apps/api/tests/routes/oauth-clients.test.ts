@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { appWithSession, fakeSession, getDb, seedUserWithHub } from './harness.test';
+import { appWithSession, fakeSession, getDb, seedUserWithHub } from '../support/routes-harness';
 
 /** The migrated db module + the lazily-imported oauth-clients router (both memoized). */
 async function setup() {

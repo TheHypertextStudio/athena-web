@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
-import { getDb, one, seedBaseOrg } from './harness.test';
+import { getDb, one, seedBaseOrg } from '../support/routes-harness';
 import { sweepEmailSuggestions } from '../../src/lib/email-to-task/sweep';
 
 let schema!: typeof DbModule;

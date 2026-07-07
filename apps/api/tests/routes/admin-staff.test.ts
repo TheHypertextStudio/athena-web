@@ -16,7 +16,7 @@ import type * as DbModule from '@docket/db';
 
 import type { AppEnv, AuthSession } from '../../src/context';
 import { onError } from '../../src/error';
-import { fakeSession, getDb } from './harness.test';
+import { fakeSession, getDb } from '../support/routes-harness';
 import type adminRouter from '../../src/routes/admin';
 
 let schema!: typeof DbModule;

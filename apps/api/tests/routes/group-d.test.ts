@@ -6,7 +6,13 @@ import type * as DbModule from '@docket/db';
 
 import type { AppEnv, AuthSession } from '../../src/context';
 import { onError } from '../../src/error';
-import { appWithActor, appWithSession, fakeSession, getDb, seedBaseOrg } from './harness.test';
+import {
+  appWithActor,
+  appWithSession,
+  fakeSession,
+  getDb,
+  seedBaseOrg,
+} from '../support/routes-harness';
 import type agentSessionsRouter from '../../src/routes/agent-sessions';
 import type dailyPlanRouter from '../../src/routes/daily-plan';
 import type hubRouter from '../../src/routes/hub';

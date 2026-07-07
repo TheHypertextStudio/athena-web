@@ -568,12 +568,15 @@ describe('buildAuthOptions env-gating', () => {
     const { buildAuthOptions } = await import('../src/index');
     const opts = buildAuthOptions(baseEnv, MAILER_DEPS);
     const pk = (opts.plugins ?? []).find((p) => p.id === 'passkey');
-    const registration = (pk as { options?: { registration?: unknown } }).options?.registration as {
-      resolveUser: (args: {
-        ctx: { context: { internalAdapter: unknown } };
-        context: string;
-      }) => Promise<{ id: string; name: string }>;
-    };
+    type ResolveUser = (args: {
+      ctx: { context: { internalAdapter: unknown } };
+      context: string;
+    }) => Promise<{ id: string; name: string }>;
+    const registration = (pk as { options?: { registration?: { resolveUser?: ResolveUser } } })
+      .options?.registration;
+    if (!registration?.resolveUser) {
+      throw new Error('passkey registration resolver was not configured');
+    }
 
     const intentId = `${INTENT_PREFIX}wired`;
     const created: { name: string; email: string }[] = [];

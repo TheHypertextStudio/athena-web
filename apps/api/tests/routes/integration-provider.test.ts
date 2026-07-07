@@ -4,7 +4,7 @@ import type * as DbModule from '@docket/db';
 import type { ConnectorProvider } from '@docket/integrations';
 
 import type * as ProviderModule from '../../src/routes/integration-provider';
-import { getDb, seedBaseOrg } from './harness.test';
+import { getDb, seedBaseOrg } from '../support/routes-harness';
 
 // The production token-resolution path (Actor → Better Auth `user` → access token + refresh)
 // is gated behind `APP_MODE` and bypassed by the mock sentinel in `local`/`test`, so it was

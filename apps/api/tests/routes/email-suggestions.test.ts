@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type * as DbModule from '@docket/db';
 import type { EmailSuggestionOut } from '@docket/types';
 
-import { appWithActor, getDb, one, seedBaseOrg } from './harness.test';
+import { appWithActor, getDb, one, seedBaseOrg } from '../support/routes-harness';
 import type emailSuggestionsRouter from '../../src/routes/email-suggestions';
 
 let schema!: typeof DbModule;

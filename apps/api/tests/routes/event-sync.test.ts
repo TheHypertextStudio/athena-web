@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type * as DbModule from '@docket/db';
 
 import type * as DrainModule from '../../src/routes/event-sync';
-import { getDb, seedBaseOrg } from './harness.test';
+import { getDb, seedBaseOrg } from '../support/routes-harness';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;

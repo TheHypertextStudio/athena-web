@@ -7,7 +7,7 @@ import type { WorkGraphConnector, WorkGraphSnapshot } from '@docket/integrations
 import type * as DbModule from '@docket/db';
 
 import type * as ReconcileGraph from '../../src/routes/integration-reconcile-graph';
-import { addMember, getDb, one, seedBaseOrg } from './harness.test';
+import { addMember, getDb, one, seedBaseOrg } from '../support/routes-harness';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;

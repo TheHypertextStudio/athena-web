@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type { AuthSession } from '../../src/context';
-import { appWithSession, fakeSession, getDb, seedUserWithHub } from './harness.test';
+import { appWithSession, fakeSession, getDb, seedUserWithHub } from '../support/routes-harness';
 
 /** The migrated db module + the lazily-imported me-sessions router (both memoized). */
 async function setup() {

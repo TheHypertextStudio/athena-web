@@ -7,14 +7,14 @@
  * lead/program/team/assignee/delegate/project/milestone/cycle owned by *another* tenant.
  * The route layer must reject these (404, existence-hiding) before writing. These tests
  * seed two orgs and prove a reference into the *other* org is rejected, while an in-org
- * reference and a `null`/omitted reference are accepted. Mirrors `harness.test.ts`.
+ * reference and a `null`/omitted reference are accepted. Mirrors `routes-harness`.
  */
 import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
-import { appWithActor, getDb, seedBaseOrg } from './harness.test';
+import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
 import type projectsRouter from '../../src/routes/projects';
 import type tasksRouter from '../../src/routes/tasks';
 

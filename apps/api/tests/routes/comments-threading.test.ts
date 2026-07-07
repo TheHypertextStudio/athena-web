@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type * as DbModule from '@docket/db';
 import type { CommentOut } from '@docket/types';
 
-import { appWithActor, getDb, seedBaseOrg } from './harness.test';
+import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
 import type commentsRouter from '../../src/routes/comments';
 
 let schema!: typeof DbModule;

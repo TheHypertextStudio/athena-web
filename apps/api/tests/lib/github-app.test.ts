@@ -2,14 +2,6 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as GithubApp from '../../src/lib/github-app';
 
-// The env contract validates at module load, so set the minimum before importing the module under
-// test (dynamically, since static imports are hoisted above these assignments).
-process.env['APP_MODE'] = 'test';
-process.env['DATABASE_URL'] = 'pglite://memory://';
-process.env['BETTER_AUTH_SECRET'] = 'test-secret-test-secret-test-secret-0123456789';
-process.env['CRON_SECRET'] = 'test-cron-secret';
-process.env['SKIP_ENV_VALIDATION'] = '1';
-
 let signInstallState!: typeof GithubApp.signInstallState;
 let verifyInstallState!: typeof GithubApp.verifyInstallState;
 

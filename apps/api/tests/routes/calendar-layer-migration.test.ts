@@ -1,7 +1,7 @@
 import { eq, sql } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 
-import { getDb, one, seedBaseOrg, seedUserWithHub } from './harness.test';
+import { getDb, one, seedBaseOrg, seedUserWithHub } from '../support/routes-harness';
 
 /**
  * The exact backfill INSERT statements appended to `drizzle/0023_conscious_hulk.sql`.

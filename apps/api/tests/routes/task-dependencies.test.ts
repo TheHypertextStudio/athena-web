@@ -5,13 +5,13 @@
  * Covers the org-wide cross-project directed-acyclic `blocks` graph: edge creation
  * from either endpoint, the GET split into blocking/blockedBy, the acyclic
  * reachability check (409 CycleError), self-edge + duplicate rejection, deletion from
- * either endpoint, tenant isolation, and capability gating. Mirrors `harness.test.ts`.
+ * either endpoint, tenant isolation, and capability gating. Mirrors `routes-harness`.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
-import { appWithActor, getDb, seedBaseOrg } from './harness.test';
+import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
 import type tasksRouter from '../../src/routes/tasks';
 
 let schema!: typeof DbModule;

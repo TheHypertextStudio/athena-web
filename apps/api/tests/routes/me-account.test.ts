@@ -10,7 +10,7 @@ import {
   one,
   seedOrg,
   seedUserWithHub,
-} from './harness.test';
+} from '../support/routes-harness';
 
 /** The migrated db module + the lazily-imported me-account router (both memoized). */
 async function setup() {

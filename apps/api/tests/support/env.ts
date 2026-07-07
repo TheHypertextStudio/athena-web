@@ -6,6 +6,7 @@ export const API_TEST_ENV = {
   APP_MODE: 'test',
   NODE_ENV: 'test',
   BETTER_AUTH_SECRET: 'test-secret-test-secret-test-secret-0123456789',
+  BETTER_AUTH_TRUSTED_ORIGINS: 'https://docket.localhost',
   CRON_SECRET: 'test-cron-secret',
   SKIP_ENV_VALIDATION: '1',
 } as const satisfies Partial<NodeJS.ProcessEnv>;

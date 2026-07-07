@@ -1,7 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { getDb, one, seedUserWithHub } from './harness.test';
+import { getDb, one, seedUserWithHub } from '../support/routes-harness';
 
 import type {
   CalendarProviderAdapter,

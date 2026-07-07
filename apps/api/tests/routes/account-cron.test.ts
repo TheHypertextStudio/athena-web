@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { getDb, one, seedUserWithHub } from './harness.test';
+import { getDb, one, seedUserWithHub } from '../support/routes-harness';
 
 const AUTH = { authorization: 'Bearer test-cron-secret' };
 

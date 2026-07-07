@@ -13,7 +13,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type * as DbModule from '@docket/db';
 import type { GraphOut } from '@docket/types';
 
-import { appWithActor, getDb, one, seedBaseOrg } from './harness.test';
+import { appWithActor, getDb, one, seedBaseOrg } from '../support/routes-harness';
 import type graphRouter from '../../src/routes/dependency-graph';
 
 let schema!: typeof DbModule;

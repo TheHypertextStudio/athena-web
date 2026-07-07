@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type { ImportedItem } from '@docket/integrations';
 
 import type * as ReconcileModule from '../../src/routes/integration-reconcile';
-import { getDb } from './harness.test';
+import { getDb } from '../support/routes-harness';
 
 // `planTaskReconcile` is pure, but its module imports `@docket/db`, so we defer the import
 // until the harness has configured the (pglite) DATABASE_URL — exactly like the other suites.

@@ -11,7 +11,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
-import { appWithActor, getDb, one, seedBaseOrg } from './harness.test';
+import { appWithActor, getDb, one, seedBaseOrg } from '../support/routes-harness';
 import type tasksRouter from '../../src/routes/tasks';
 
 let schema!: typeof DbModule;

@@ -1,13 +1,6 @@
 import { Hono } from 'hono';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
-process.env['DATABASE_URL'] = 'pglite://memory://';
-process.env['APP_MODE'] = 'test';
-process.env['NODE_ENV'] = 'test';
-process.env['BETTER_AUTH_SECRET'] = 'test-secret-test-secret-test-secret-0123456789';
-process.env['CRON_SECRET'] = 'test-cron-secret';
-process.env['SKIP_ENV_VALIDATION'] = '1';
-
 let activeSignal: AbortSignal | null = null;
 let slowToolStarted!: Promise<void>;
 let markSlowToolStarted!: () => void;

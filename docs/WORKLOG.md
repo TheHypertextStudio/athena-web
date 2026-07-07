@@ -176,6 +176,14 @@ tests/routes/admin-staff.test.ts tests/routes/admin-notifications.test.ts
 tests/routes/notification-service-smoke.test.ts`, `../../node_modules/.bin/tsc --noEmit --pretty
 false`, and touched-file ESLint pass. Browser E2E remains a later dev-stack gate because capture
   mailer assertions are process-local unless a test mailbox endpoint is added.
+- **Validation/audit follow-up (2026-07-07)**: Confirmed notification env cleanup is not duplicated:
+  no `cleanEnvString` helper or definition remains under source files, while email/SMS/push provider
+  config parsing uses the shared `@docket/env.realEnvValue` helper. Re-ran focused package,
+  API, web, and admin gates: `@docket/env` 41 tests, `@docket/boundaries` 391 tests,
+  `@docket/notifications` 18 tests, focused API notification bundle 41 tests, web notification UX 6
+  tests, and admin console 2 tests passed. The earlier package-test stall was diagnostic noise from
+  concurrent/truncated Vitest output plus unrelated repo processes; no Vitest process from this
+  notification worktree remained alive when checked.
 
 ### [AUTH-SEC-001] Auth security & UX audit remediation
 

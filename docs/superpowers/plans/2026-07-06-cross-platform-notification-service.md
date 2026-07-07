@@ -458,7 +458,7 @@ export-ready, and daily digest sends now dispatch notification intents and deliv
 preserving their existing email bodies. Digest uses `skip_user_preferences` because the digest sweep
 already selects only users who opted into the digest feature.
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 Run:
 
@@ -474,6 +474,15 @@ Commit:
 git add apps/api packages/auth docs/WORKLOG.md
 git commit -m "feat(api): route transactional email through notifications"
 ```
+
+Verified in the final focused API bundle:
+
+```bash
+cd apps/api
+../../node_modules/.bin/vitest run tests/services/notifications/dispatcher-email.test.ts tests/routes/me-account.test.ts tests/routes/me-recovery.test.ts tests/routes/daily-digest.test.ts tests/services/notifications/inbound.test.ts tests/routes/internal-notifications.test.ts tests/services/notifications/dispatcher-sms-push.test.ts tests/routes/notification-service-smoke.test.ts
+```
+
+Result: 8 files and 41 tests passed.
 
 ---
 
@@ -515,7 +524,7 @@ Implemented with HMAC-signed internal routes mounted outside `/v1`. Provider ret
 handled by normalized `providerEventId` stored in the inbound-event payload; add a dedicated DB
 column/unique index later if concurrent duplicate callbacks become a real provider concern.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run:
 
@@ -530,6 +539,9 @@ Commit:
 git add apps/api packages/notifications docs/WORKLOG.md
 git commit -m "feat(api): ingest notification provider events"
 ```
+
+Verified in the final focused API bundle above: inbound service and internal notification route
+coverage passed with the email/SMS/push dispatcher and route smoke suites.
 
 ---
 
@@ -607,19 +619,19 @@ git commit -m "feat(admin): add notification announcement API"
 - Test: `packages/boundaries/tests/real/real.test.ts`
 - Test: `apps/api/tests/services/notifications/dispatcher-sms-push.test.ts`
 
-- [ ] **Step 1: Write RED boundary tests**
+- [x] **Step 1: Write RED boundary tests**
 
 Assert mock SMS/push capture sends deterministically, real adapters reject missing credentials safely, invalid push tokens surface structured failures, and SMS STOP state suppresses future sends.
 
-- [ ] **Step 2: Add boundary ports and mocks**
+- [x] **Step 2: Add boundary ports and mocks**
 
 Implement deterministic capture adapters analogous to `CaptureMailer`.
 
-- [ ] **Step 3: Add API channel adapters**
+- [x] **Step 3: Add API channel adapters**
 
 Wire SMS/push delivery creation to the boundary ports. Keep live provider credentials optional; tests must run with capture adapters.
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 Run:
 
@@ -635,6 +647,19 @@ Commit:
 git add packages/boundaries apps/api packages/env docs/WORKLOG.md
 git commit -m "feat(integrations): add notification sms and push ports"
 ```
+
+Final focused verification:
+
+```bash
+cd packages/env && ../../node_modules/.bin/vitest run
+cd packages/boundaries && ../../node_modules/.bin/vitest run
+cd packages/notifications && ../../node_modules/.bin/vitest run
+cd apps/api && ../../node_modules/.bin/vitest run tests/services/notifications/dispatcher-email.test.ts tests/routes/me-account.test.ts tests/routes/me-recovery.test.ts tests/routes/daily-digest.test.ts tests/services/notifications/inbound.test.ts tests/routes/internal-notifications.test.ts tests/services/notifications/dispatcher-sms-push.test.ts tests/routes/notification-service-smoke.test.ts
+```
+
+Results: `@docket/env` 41 tests, `@docket/boundaries` 391 tests, `@docket/notifications` 18 tests,
+and the focused API bundle 41 tests passed. Env string cleanup is centralized in
+`@docket/env.realEnvValue`; no `cleanEnvString` helper or definition remains under source files.
 
 ---
 
@@ -652,19 +677,19 @@ git commit -m "feat(integrations): add notification sms and push ports"
 - Test: `apps/web/tests/components/settings/notification-preferences-section.test.tsx`
 - Test: `apps/web/tests/components/settings/contact-points-section.test.tsx`
 
-- [ ] **Step 1: Write RED component tests**
+- [x] **Step 1: Write RED component tests**
 
 Cover Slack-like inbox tabs, "Also emailed" delivery hints, needs-action grouping, locked security preference explanation, quiet-hours editing, phone verification state, bounced/unsubscribed contact point state.
 
-- [ ] **Step 2: Implement inbox UX**
+- [x] **Step 2: Implement inbox UX**
 
 Use the typed TanStack Query layer. Do not hand-roll `useEffect` fetches.
 
-- [ ] **Step 3: Implement settings UX**
+- [x] **Step 3: Implement settings UX**
 
 Group preferences by human questions first, with an advanced category/channel matrix beneath.
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 Run:
 
@@ -680,6 +705,15 @@ Commit:
 git add apps/web docs/WORKLOG.md
 git commit -m "feat(web): add notification preferences experience"
 ```
+
+Final focused verification:
+
+```bash
+cd apps/web
+../../node_modules/.bin/vitest run tests/components/inbox/inbox-client.test.tsx tests/components/settings/notification-preferences-section.test.tsx tests/components/settings/contact-points-section.test.tsx
+```
+
+Result: 3 files and 6 tests passed.
 
 ---
 
@@ -709,7 +743,7 @@ Implemented as `/notifications` in `apps/admin`, with a presentational console p
 that calls `/v1/notifications` for draft/test/send/cancel and `/admin/notifications/*` for list,
 estimate, preview, approve, audit, and inbound monitoring.
 
-- [ ] **Step 3: Verify and commit**
+- [x] **Step 3: Verify and commit**
 
 Run:
 
@@ -725,6 +759,15 @@ Commit:
 git add apps/admin docs/WORKLOG.md
 git commit -m "feat(admin): add service announcement console"
 ```
+
+Final focused verification:
+
+```bash
+cd apps/admin
+../../node_modules/.bin/vitest run tests/notification-console.test.tsx
+```
+
+Result: 1 file and 2 tests passed.
 
 ---
 

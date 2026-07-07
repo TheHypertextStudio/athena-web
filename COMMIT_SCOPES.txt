@@ -14,4 +14,3 @@ onboarding
 permissions
 ui
 web
-work

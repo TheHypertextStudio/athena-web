@@ -586,6 +586,21 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
   composition root visible and prevents tests/fixtures from turning into accidental shared product
   architecture.
 
+### [VCS-002] Commit message body auto-wrap
+
+- **Completed**: 2026-07-07
+- **Summary**: Extended the existing native `commit-msg` validator so it formats commit-message
+  subjects and bodies after validation. Conventional Commit descriptions are normalized to sentence
+  case, and body paragraphs and list items are reflowed to 72 columns when they can be split safely
+  so rendered `git log` output avoids pager wraps. Generated Git messages, comments, code fences,
+  known commit trailers, and unbreakable tokens such as URLs or long identifiers are preserved.
+  Commits touching more than one file must include a nontrivial body.
+- **Files Changed**: `scripts/validate-commit-message.mjs`,
+  `COMMIT_SCOPES.txt`, `docs/contributing/workflow.md`, `docs/WORKLOG.md`.
+- **Validation**: Exercised the hook script against temporary commit messages covering prose
+  wrapping, bullet continuation indentation, long-token preservation, generated-message bypass, and
+  invalid scope rejection without message mutation.
+
 ### [DEVX-003] Commit scope allowlist extraction
 
 - **Completed**: 2026-07-07

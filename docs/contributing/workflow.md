@@ -230,7 +230,12 @@ git commit -m "fix(integrations): preserve connector OAuth state"
 git commit -m "chore: update repository maintenance docs"
 ```
 
-The `commit-msg` hook enforces the `COMMIT_SCOPES.txt` allowlist for any scoped commit.
+The `commit-msg` hook enforces the `COMMIT_SCOPES.txt` allowlist for any scoped commit. It also
+sentence-cases the commit description after the type/scope prefix and best-effort reflows body
+paragraphs and list items to 72 columns. Long unbreakable tokens such as URLs, paths, and hashes are
+preserved instead of rejected. Code fences, comments, trailers, and generated Git messages are left
+alone. Commits that touch more than one file must include a body with at least 20 non-comment
+characters.
 
 ### 4. Run Validations
 

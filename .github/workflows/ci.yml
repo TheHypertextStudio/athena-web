@@ -40,7 +40,7 @@ jobs:
       # Turbo task cache — on exact SHA hit turbo replays outputs without re-running.
       # restore-keys falls back to the nearest ancestor commit's cache so only
       # tasks whose inputs changed are re-executed.
-      - uses: actions/cache@v5
+      - uses: actions/cache@v6
         with:
           path: .turbo
           key: turbo-quality-${{ runner.os }}-${{ github.sha }}
@@ -68,7 +68,7 @@ jobs:
 
       - run: npm install -g corepack@0.35.0 && corepack enable
 
-      - uses: actions/cache@v5
+      - uses: actions/cache@v6
         with:
           path: .turbo
           key: turbo-test-${{ runner.os }}-${{ github.sha }}

@@ -21,12 +21,18 @@ import {
   RealLinearObserver,
   RealSlackObserver,
 } from '@docket/integrations';
-import type { Connector, ConnectorProvider, Observer, ObserverProvider } from '@docket/integrations';
+import type {
+  Connector,
+  ConnectorProvider,
+  Observer,
+  ObserverProvider,
+} from '@docket/integrations';
 import { CaptureMailer, SmtpMailer, smtpConfigFromEnv } from '@docket/mail';
 import type { Mailer } from '@docket/mail';
 
 import { env } from './env';
 
+/** Runtime configuration values used to choose local mocks or production services. */
 export interface AppRuntimeEnv {
   readonly APP_MODE?: 'local' | 'test' | 'production';
   readonly STRIPE_SECRET_KEY?: string;
@@ -56,6 +62,7 @@ export interface AppRuntimeEnv {
   readonly MICROSOFT_GRAPH_API_BASE?: string;
 }
 
+/** Service dependencies shared by API route handlers and background execution paths. */
 export interface AppContainer {
   readonly billing: BillingGateway;
   readonly agentRuntime: AgentRuntime;
@@ -74,6 +81,7 @@ function required(name: string, value: string | undefined): string {
   return value;
 }
 
+/** Build the container runtime configuration from the validated API environment. */
 export function toAppRuntimeEnv(): AppRuntimeEnv {
   return {
     APP_MODE: env.APP_MODE,
@@ -115,7 +123,10 @@ export function toAppRuntimeEnv(): AppRuntimeEnv {
   };
 }
 
-function connectorApiBase(provider: ConnectorProvider, runtimeEnv: AppRuntimeEnv): string | undefined {
+function connectorApiBase(
+  provider: ConnectorProvider,
+  runtimeEnv: AppRuntimeEnv,
+): string | undefined {
   switch (provider) {
     case 'github':
       return runtimeEnv.GITHUB_API_BASE;
@@ -136,6 +147,13 @@ function connectorApiBase(provider: ConnectorProvider, runtimeEnv: AppRuntimeEnv
   }
 }
 
+/**
+ * Build a connector client for a provider.
+ *
+ * @param provider - The integration provider to connect to.
+ * @param token - The provider access token used outside local/test mode.
+ * @param runtimeEnv - Optional runtime configuration override for tests.
+ */
 export function buildConnector(
   provider: ConnectorProvider,
   token: string | undefined,
@@ -151,6 +169,12 @@ export function buildConnector(
   });
 }
 
+/**
+ * Build a webhook observer for a provider.
+ *
+ * @param provider - The observer provider whose webhook payloads are handled.
+ * @param runtimeEnv - Optional runtime configuration override for tests.
+ */
 export function buildObserver(
   provider: ObserverProvider,
   runtimeEnv: AppRuntimeEnv = toAppRuntimeEnv(),
@@ -163,10 +187,7 @@ export function buildObserver(
       });
     case 'github':
       return new RealGitHubObserver({
-        signingSecret: required(
-          'GITHUB_APP_WEBHOOK_SECRET',
-          runtimeEnv.GITHUB_APP_WEBHOOK_SECRET,
-        ),
+        signingSecret: required('GITHUB_APP_WEBHOOK_SECRET', runtimeEnv.GITHUB_APP_WEBHOOK_SECRET),
       });
     case 'slack':
       return new RealSlackObserver({
@@ -190,6 +211,11 @@ function buildMailer(runtimeEnv: AppRuntimeEnv): Mailer {
   return new SmtpMailer(smtpConfig);
 }
 
+/**
+ * Construct the API dependency container for the current runtime mode.
+ *
+ * @param runtimeEnv - Optional runtime configuration override for tests.
+ */
 export function buildAppContainer(runtimeEnv: AppRuntimeEnv = toAppRuntimeEnv()): AppContainer {
   const mock = localMode(runtimeEnv);
   const priceKey = runtimeEnv.STRIPE_PRICE_TEAM ?? runtimeEnv.DOCKET_PRICE_LOOKUP_TEAM;
@@ -233,6 +259,7 @@ export function buildAppContainer(runtimeEnv: AppRuntimeEnv = toAppRuntimeEnv())
 
 let cached: AppContainer | undefined;
 
+/** Return the memoized process-wide API dependency container. */
 export function getContainer(): AppContainer {
   return (cached ??= buildAppContainer());
 }

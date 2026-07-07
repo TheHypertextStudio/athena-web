@@ -173,7 +173,12 @@ async function bootstrapAuthzSchema(client: PGlite): Promise<void> {
       start_date timestamp,
       target_date timestamp,
       visibility visibility not null default 'public',
-      ancestor_path text[] not null default '{}'::text[]
+      ancestor_path text[] not null default '{}'::text[],
+      source provenance_source not null default 'native',
+      source_integration_id text,
+      external_id text,
+      external_url text,
+      external_updated_at timestamp
     );
 
     create table "task" (
@@ -197,12 +202,17 @@ async function bootstrapAuthzSchema(client: PGlite): Promise<void> {
       parent_task_id text,
       estimate integer,
       estimate_minutes integer,
+      start_date timestamp,
       due_date timestamp,
       source provenance_source not null default 'native',
       source_integration_id text,
       external_id text,
       external_url text,
       source_sync_mode sync_mode,
+      external_updated_at timestamp,
+      external_etag text,
+      external_list_id text,
+      last_pushed_at timestamp,
       completed_at timestamp,
       canceled_at timestamp,
       visibility visibility not null default 'public',

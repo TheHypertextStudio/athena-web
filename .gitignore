@@ -41,7 +41,9 @@ coverage/
 .nyc_output/
 playwright-report/
 test-results/
-playwright/.auth/
+# Unanchored (no leading slash after the first segment) so it matches under any app, e.g.
+# apps/web/playwright/.auth/ — these are real session-cookie-bearing files, never commit them.
+**/playwright/.auth/
 
 # NOTE: packages/db/drizzle (generated migrations) is committed — do NOT ignore it.
 

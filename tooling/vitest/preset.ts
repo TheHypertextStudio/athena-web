@@ -75,6 +75,7 @@ export function docketVitest(options: DocketVitestOptions = {}) {
       environment,
       setupFiles,
       env,
+      unstubEnvs: true,
       include: ['tests/**/*.{test,spec}.{ts,tsx}'],
       // Turbo runs every package's vitest concurrently, so the machine is heavily
       // oversubscribed during `pnpm test`. The default hook timeout false-fails

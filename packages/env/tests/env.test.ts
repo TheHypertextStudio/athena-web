@@ -14,10 +14,9 @@ import {
 
 // ---------------------------------------------------------------------------
 // Shared helpers for the composition tests. Each composition reads `process.env`
-// at module-evaluation time and throws on a bad contract, so we use `vi.stubEnv`
-// to set a known environment + `vi.resetModules()` + dynamic import to exercise
-// both the pass and the throw paths in isolation. `vi.unstubAllEnvs()` reverts
-// every stub after each test, so vars never leak between cases.
+// at module-evaluation time and throws on a bad contract, so tests use Vitest's
+// native `vi.stubEnv` + `vi.resetModules()` + dynamic import to exercise both
+// the pass and the throw paths in isolation.
 // ---------------------------------------------------------------------------
 
 beforeEach(() => {
@@ -31,16 +30,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  vi.unstubAllEnvs();
   vi.restoreAllMocks();
 });
-
-/** Stub a batch of environment variables via `vi.stubEnv` (auto-reverted in `afterEach`). */
-function stubEnv(vars: Record<string, string>): void {
-  for (const [key, value] of Object.entries(vars)) {
-    vi.stubEnv(key, value);
-  }
-}
 
 /** A complete, valid API environment — every required var explicitly set (no hidden defaults). */
 function validApiEnv(): Record<string, string> {
@@ -260,7 +251,9 @@ describe('web composition (stripe publishable key)', () => {
 
 describe('api composition', () => {
   it('validates a complete explicit contract (NODE_ENV the only default)', async () => {
-    stubEnv(validApiEnv());
+    for (const [key, value] of Object.entries(validApiEnv())) {
+      vi.stubEnv(key, value);
+    }
     // Unset NODE_ENV (the vitest runner sets it to "test") to prove the schema default.
     vi.stubEnv('NODE_ENV', undefined);
     const mod = await import('../src/api');
@@ -276,13 +269,15 @@ describe('api composition', () => {
   });
 
   it('derives MCP OAuth URLs from API_URL and WEB_URL while preserving explicit overrides', async () => {
-    stubEnv({
+    for (const [key, value] of Object.entries({
       ...validApiEnv(),
       API_URL: 'https://api.example.com/',
       WEB_URL: 'https://app.example.com/',
       MCP_ISSUER_URL: 'https://issuer.example.com',
       OIDC_LOGIN_PAGE_URL: 'https://login.example.com/start',
-    });
+    })) {
+      vi.stubEnv(key, value);
+    }
     const mod = await import('../src/api');
     expect(mod.env.MCP_ISSUER_URL).toBe('https://issuer.example.com');
     expect(mod.env.MCP_RESOURCE_URL).toBe('https://api.example.com/mcp');
@@ -290,7 +285,9 @@ describe('api composition', () => {
   });
 
   it('does not derive MCP_ALLOWED_ORIGINS from the base web URL', async () => {
-    stubEnv(validApiEnv());
+    for (const [key, value] of Object.entries(validApiEnv())) {
+      vi.stubEnv(key, value);
+    }
     const mod = await import('../src/api');
     expect(mod.env.MCP_ALLOWED_ORIGINS).toBeUndefined();
   });
@@ -303,7 +300,12 @@ describe('api composition', () => {
 
   it('throws fail-fast when a required var is invalid', async () => {
     // beforeEach clears SKIP_ENV_VALIDATION to '', so validation runs
-    stubEnv({ ...validApiEnv(), BETTER_AUTH_SECRET: 'too-short' });
+    for (const [key, value] of Object.entries({
+      ...validApiEnv(),
+      BETTER_AUTH_SECRET: 'too-short',
+    })) {
+      vi.stubEnv(key, value);
+    }
     await expect(import('../src/api')).rejects.toThrow('Invalid environment variables');
   });
 
@@ -316,44 +318,52 @@ describe('api composition', () => {
 
   describe('cross-field: BILLING_ENABLED requires stripe key + price', () => {
     it('passes with secret key + price id', async () => {
-      stubEnv({
+      for (const [key, value] of Object.entries({
         ...validApiEnv(),
         BILLING_ENABLED: 'true',
         STRIPE_SECRET_KEY: 'sk_test_123',
         STRIPE_PRICE_TEAM: 'price_123',
-      });
+      })) {
+        vi.stubEnv(key, value);
+      }
       const mod = await import('../src/api');
       expect(mod.env.BILLING_ENABLED).toBe(true);
     });
 
     it('passes with secret key + lookup key (price-id absent)', async () => {
-      stubEnv({
+      for (const [key, value] of Object.entries({
         ...validApiEnv(),
         BILLING_ENABLED: 'true',
         STRIPE_SECRET_KEY: 'sk_test_123',
         DOCKET_PRICE_LOOKUP_TEAM: 'team_monthly',
-      });
+      })) {
+        vi.stubEnv(key, value);
+      }
       const mod = await import('../src/api');
       expect(mod.env.BILLING_ENABLED).toBe(true);
     });
 
     it('throws when the secret key is missing', async () => {
-      stubEnv({
+      for (const [key, value] of Object.entries({
         ...validApiEnv(),
         BILLING_ENABLED: 'true',
         STRIPE_PRICE_TEAM: 'price_123',
-      });
+      })) {
+        vi.stubEnv(key, value);
+      }
       await expect(import('../src/api')).rejects.toThrow(
         'BILLING_ENABLED=true requires STRIPE_SECRET_KEY',
       );
     });
 
     it('throws when both price id and lookup key are missing', async () => {
-      stubEnv({
+      for (const [key, value] of Object.entries({
         ...validApiEnv(),
         BILLING_ENABLED: 'true',
         STRIPE_SECRET_KEY: 'sk_test_123',
-      });
+      })) {
+        vi.stubEnv(key, value);
+      }
       await expect(import('../src/api')).rejects.toThrow(
         'BILLING_ENABLED=true requires STRIPE_PRICE_TEAM or DOCKET_PRICE_LOOKUP_TEAM',
       );
@@ -362,27 +372,36 @@ describe('api composition', () => {
 
   describe('cross-field: export bucket pairing', () => {
     it('passes when both URL and token are set', async () => {
-      stubEnv({
+      for (const [key, value] of Object.entries({
         ...validApiEnv(),
         EXPORT_BUCKET_URL: 'https://bucket.example.com',
         EXPORT_BUCKET_TOKEN: 'bucket-token',
-      });
+      })) {
+        vi.stubEnv(key, value);
+      }
       const mod = await import('../src/api');
       expect(mod.env.EXPORT_BUCKET_URL).toBe('https://bucket.example.com');
     });
 
     it('throws when only the URL is set', async () => {
-      stubEnv({
+      for (const [key, value] of Object.entries({
         ...validApiEnv(),
         EXPORT_BUCKET_URL: 'https://bucket.example.com',
-      });
+      })) {
+        vi.stubEnv(key, value);
+      }
       await expect(import('../src/api')).rejects.toThrow(
         'EXPORT_BUCKET_URL and EXPORT_BUCKET_TOKEN must be set together',
       );
     });
 
     it('throws when only the token is set', async () => {
-      stubEnv({ ...validApiEnv(), EXPORT_BUCKET_TOKEN: 'bucket-token' });
+      for (const [key, value] of Object.entries({
+        ...validApiEnv(),
+        EXPORT_BUCKET_TOKEN: 'bucket-token',
+      })) {
+        vi.stubEnv(key, value);
+      }
       await expect(import('../src/api')).rejects.toThrow(
         'EXPORT_BUCKET_URL and EXPORT_BUCKET_TOKEN must be set together',
       );
@@ -391,17 +410,24 @@ describe('api composition', () => {
 
   describe('cross-field: MCP tasks requires a session store', () => {
     it('passes when tasks are enabled with a session store', async () => {
-      stubEnv({
+      for (const [key, value] of Object.entries({
         ...validApiEnv(),
         MCP_TASKS_ENABLED: 'true',
         MCP_SESSION_STORE_URL: 'redis://localhost:6379',
-      });
+      })) {
+        vi.stubEnv(key, value);
+      }
       const mod = await import('../src/api');
       expect(mod.env.MCP_TASKS_ENABLED).toBe(true);
     });
 
     it('throws when tasks are enabled without a session store', async () => {
-      stubEnv({ ...validApiEnv(), MCP_TASKS_ENABLED: 'true' });
+      for (const [key, value] of Object.entries({
+        ...validApiEnv(),
+        MCP_TASKS_ENABLED: 'true',
+      })) {
+        vi.stubEnv(key, value);
+      }
       await expect(import('../src/api')).rejects.toThrow(
         'MCP_TASKS_ENABLED=true requires MCP_SESSION_STORE_URL',
       );

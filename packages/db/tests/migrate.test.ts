@@ -20,16 +20,6 @@ vi.mock('../src/client', () => ({ openPglite: migrateMocks.openPglite }));
 vi.mock('drizzle-orm/pglite', () => ({ drizzle: migrateMocks.drizzlePglite }));
 vi.mock('drizzle-orm/pglite/migrator', () => ({ migrate: migrateMocks.migratePglite }));
 
-const ORIGINAL_URL = process.env['DATABASE_URL'];
-const ORIGINAL_UNPOOLED = process.env['DATABASE_URL_UNPOOLED'];
-
-function restoreEnv(): void {
-  if (ORIGINAL_URL === undefined) delete process.env['DATABASE_URL'];
-  else process.env['DATABASE_URL'] = ORIGINAL_URL;
-  if (ORIGINAL_UNPOOLED === undefined) delete process.env['DATABASE_URL_UNPOOLED'];
-  else process.env['DATABASE_URL_UNPOOLED'] = ORIGINAL_UNPOOLED;
-}
-
 function resetDriverMocks(): void {
   migrateMocks.clients.length = 0;
   migrateMocks.openPglite.mockReset();
@@ -44,20 +34,19 @@ function resetDriverMocks(): void {
 }
 
 beforeEach(() => {
-  delete process.env['DATABASE_URL'];
-  delete process.env['DATABASE_URL_UNPOOLED'];
+  vi.stubEnv('DATABASE_URL', undefined);
+  vi.stubEnv('DATABASE_URL_UNPOOLED', undefined);
   vi.resetModules();
   resetDriverMocks();
 });
 
 afterEach(() => {
-  restoreEnv();
   vi.restoreAllMocks();
 });
 
 describe('migrate main()', () => {
   it('migrates a fresh in-memory PGlite URL', async () => {
-    process.env['DATABASE_URL'] = 'pglite://memory';
+    vi.stubEnv('DATABASE_URL', 'pglite://memory');
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const { main } = await import('../src/migrate');
 
@@ -72,7 +61,7 @@ describe('migrate main()', () => {
   });
 
   it('migrates a bare pglite: URL using the same driver path', async () => {
-    process.env['DATABASE_URL'] = 'pglite:';
+    vi.stubEnv('DATABASE_URL', 'pglite:');
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const { main } = await import('../src/migrate');
 
@@ -84,7 +73,7 @@ describe('migrate main()', () => {
   });
 
   it('migrates a pglite:// URL with the :memory: alias', async () => {
-    process.env['DATABASE_URL'] = 'pglite://:memory:';
+    vi.stubEnv('DATABASE_URL', 'pglite://:memory:');
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const { main } = await import('../src/migrate');
 
@@ -95,7 +84,7 @@ describe('migrate main()', () => {
 
   it('migrates an on-disk pglite path', async () => {
     const dir = join('/tmp', 'docket-migrate-test');
-    process.env['DATABASE_URL'] = `pglite://${dir}`;
+    vi.stubEnv('DATABASE_URL', `pglite://${dir}`);
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const { main } = await import('../src/migrate');
 
@@ -106,8 +95,8 @@ describe('migrate main()', () => {
   });
 
   it('prefers DATABASE_URL_UNPOOLED over DATABASE_URL', async () => {
-    process.env['DATABASE_URL_UNPOOLED'] = 'pglite://:memory:';
-    process.env['DATABASE_URL'] = 'pglite://memory';
+    vi.stubEnv('DATABASE_URL_UNPOOLED', 'pglite://:memory:');
+    vi.stubEnv('DATABASE_URL', 'pglite://memory');
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const { main } = await import('../src/migrate');
 

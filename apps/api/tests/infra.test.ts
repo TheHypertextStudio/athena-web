@@ -127,7 +127,7 @@ describe('server CORS trusted-origins parsing', () => {
   it('parses a comma-separated BETTER_AUTH_TRUSTED_ORIGINS list', async () => {
     // Re-import in a fresh module registry with the env set so the split branch runs.
     vi.resetModules();
-    process.env['BETTER_AUTH_TRUSTED_ORIGINS'] = 'https://a.com, https://b.com ,';
+    vi.stubEnv('BETTER_AUTH_TRUSTED_ORIGINS', 'https://a.com, https://b.com ,');
     const freshServe = vi.fn();
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.doMock('@hono/node-server', () => ({ serve: freshServe }));
@@ -136,7 +136,6 @@ describe('server CORS trusted-origins parsing', () => {
       expect((await fresh.request('/v1/health')).status).toBe(200);
     } finally {
       log.mockRestore();
-      delete process.env['BETTER_AUTH_TRUSTED_ORIGINS'];
       vi.doUnmock('@hono/node-server');
     }
   });

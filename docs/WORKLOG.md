@@ -1,7 +1,7 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-07-06
+> **Last Updated**: 2026-07-07
 
 ---
 
@@ -188,6 +188,26 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 ---
 
 ## Completed Tasks
+
+### [DISCORD-002] Shared provider catalog and external-recipient closeout
+
+- **Completed**: 2026-07-07
+- **Summary**: Consolidated provider capability metadata into a pure `@docket/types` catalog and
+  narrowed observer providers to the webhook-capable set (`github`, `linear`, `slack`, `discord`).
+  API directory/config/source/identity mappings now derive from that catalog, while web stream and
+  connector-identity UI code reuse shared labels/mappings without importing runtime adapters.
+  Routing now has one `externalRecipients` input for pre-resolved external relevance, so Discord's
+  linked-identity mentions and Slack's richer mention/DM/thread classifications share the same
+  strongest-reason merge path.
+- **Files Changed**: `packages/types/src/provider-catalog.ts`, integration observer/connector
+  type surfaces, API integration config/event-drain/routing code, stream/settings display helpers,
+  and focused provider-catalog/routing tests.
+- **Learnings**: Slack and Discord were not duplicating transport infrastructure, but provider
+  metadata was scattered enough to drift. The safe reuse seam is a pure catalog in `@docket/types`;
+  provider-specific syntax and Slack's workspace-aware relevance logic should remain local.
+- **Gate**: Focused package checks passed for `@docket/types`, `@docket/integrations`, `@docket/api`,
+  and `@docket/web`. Full root gate passed: `pnpm typecheck` (16/16 tasks), `pnpm lint` (16/16),
+  `pnpm test` (15/15; API 107/107 files, 1060/1060 tests), and `pnpm build` (3/3).
 
 ### [MCP-PROD-014] Prefer Vitest utilities over custom env plumbing
 

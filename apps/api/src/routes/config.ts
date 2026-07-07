@@ -10,7 +10,7 @@
  * sign-in page needs it before anyone is authenticated.
  */
 import { configuredSocialProviders, type SocialProvider } from '@docket/auth';
-import { PublicConfigOut } from '@docket/types';
+import { CONNECTOR_PROVIDER_IDS, PublicConfigOut, connectorIdentityProvider } from '@docket/types';
 import { Hono } from 'hono';
 
 import type { AppEnv } from '../context';
@@ -27,11 +27,11 @@ import { slackConfigured } from '../lib/slack-app';
  * connector → social mapping (`socialProviderId`) in the other direction.
  */
 const CONNECTORS_BY_PROVIDER: Partial<Record<SocialProvider, readonly string[]>> = {
-  google: ['drive', 'gmail', 'calendar', 'gtasks'],
-  microsoft: ['outlook'],
-  github: ['github'],
-  linear: ['linear'],
-  // `apple` (sign-in only) and `discord` (observe-only identity link) unlock no work connectors.
+  ...CONNECTOR_PROVIDER_IDS.reduce<Partial<Record<SocialProvider, string[]>>>((acc, provider) => {
+    const identityProvider = connectorIdentityProvider(provider);
+    acc[identityProvider] = [...(acc[identityProvider] ?? []), provider];
+    return acc;
+  }, {}),
 };
 
 const config = new Hono<AppEnv>().get(

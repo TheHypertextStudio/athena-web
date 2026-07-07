@@ -18,7 +18,7 @@
  * The observer (`packages/integrations`) stays pure — it emits raw Slack facts (mentioned ids,
  * channel type, thread ts); everything here is the DB-aware half: the Slack-id → Docket-user
  * map from connected integrations, and the thread-participation lookup. The resolved map feeds
- * `RoutableEvent.externalUserRecipients`, keeping `routing.ts` the single relevance authority.
+ * `RoutableEvent.externalRecipients`, keeping `routing.ts` the single relevance authority.
  */
 import { actor, db, integration, threadParticipation } from '@docket/db';
 import { asRecord, slackMentionedUserIds, str } from '@docket/integrations';

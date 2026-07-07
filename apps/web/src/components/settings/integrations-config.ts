@@ -1,4 +1,5 @@
 import type { IntegrationOut } from '@docket/types';
+import { CONNECTOR_PROVIDER_IDS, connectorIdentityProvider } from '@docket/types';
 import {
   Calendar,
   Folder,
@@ -67,10 +68,11 @@ export const STATUS_LABEL: Record<
 export function socialProviderForConnector(
   provider: string,
 ): 'google' | 'github' | 'linear' | 'microsoft' {
-  if (provider === 'github') return 'github';
-  if (provider === 'linear') return 'linear';
-  if (provider === 'outlook') return 'microsoft';
-  return 'google';
+  const connectorProvider = CONNECTOR_PROVIDER_IDS.find((p) => p === provider);
+  const identityProvider = connectorProvider
+    ? connectorIdentityProvider(connectorProvider)
+    : 'google';
+  return identityProvider === 'discord' ? 'google' : identityProvider;
 }
 
 // Provider/connector *availability* (isMockMode, connectorOAuthConfigured, connectorAvailable) is

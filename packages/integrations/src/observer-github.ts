@@ -26,13 +26,13 @@ import type { CanonicalEntityKind, EventKind } from '@docket/types';
 
 import { type DetailBuilder, genericDetail, runDetailBuilders } from './event-detail';
 import { asRecord, str } from './json';
-import type { ConnectorProvider } from './connector';
 import type {
   EventActorRef,
   EventDraft,
   EventEntityRef,
   InboundRouting,
   Observer,
+  ObserverProvider,
   RawInboundEvent,
   VerifySignatureInput,
 } from './observer';
@@ -104,7 +104,7 @@ export interface RealGitHubObserverConfig {
 /** A real, env-driven {@link Observer} for GitHub App webhooks. */
 export class RealGitHubObserver implements Observer {
   /** {@inheritDoc Observer.provider} */
-  readonly provider: ConnectorProvider = 'github';
+  readonly provider: ObserverProvider = 'github';
   private readonly signingSecret: string;
 
   constructor(config: RealGitHubObserverConfig) {

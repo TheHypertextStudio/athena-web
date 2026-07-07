@@ -69,23 +69,17 @@ export interface RoutableEvent {
   readonly actorId?: string | null;
   /** Extra Docket Actor ids involved (e.g. @-mentions) → mention/participant recipients. */
   readonly participantActorIds?: readonly string[];
-  /**
-   * Already-resolved Better Auth user ids for external participants (e.g. Discord users the drain
-   * mapped from a mentioned snowflake via their linked identity). Routed with the same
-   * mention/participant reason as {@link RoutableEvent.participantActorIds}, but skip the actor→user
-   * resolution because they are already user ids. This is what makes an external mention surface for
-   * the person actually named, not just the integration owner.
-   */
-  readonly participantUserIds?: readonly string[];
   /** External fallback: the integration owner to notify when there are no Docket owners. */
   readonly ownerUserId?: string | null;
   /**
-   * Pre-resolved external recipients (already Better Auth user ids, each with its reason) —
-   * supplied by provider-specific resolvers with their own identity mapping (e.g. Slack's
-   * connected-user mention/DM/thread classification in `slack-relevance.ts`). Merged with the
-   * same strongest-reason-wins rule as every other source.
+   * Pre-resolved external recipients (already Better Auth user ids, each with its reason).
+   *
+   * @remarks
+   * Provider-specific resolvers use this for both simple linked-identity participants (e.g.
+   * Discord mentions mapped from snowflakes) and richer provider logic (e.g. Slack
+   * mention/DM/thread classification). The router still owns strongest-reason-wins merging.
    */
-  readonly externalUserRecipients?: ReadonlyMap<string, StreamRelevance>;
+  readonly externalRecipients?: ReadonlyMap<string, StreamRelevance>;
 }
 
 /**
@@ -231,18 +225,11 @@ export async function resolveRecipients(
   };
   for (const [actorId, reason] of byActor) addUser(userByActor.get(actorId) ?? null, reason);
 
-  // External participants already resolved to user ids (e.g. mentioned Discord users mapped from
-  // their linked identity) — mention when the event is a mention, else participant. This is what
-  // routes an external mention to the person named, not just the integration owner.
-  const externalParticipantReason: StreamRelevance =
-    event.kind === 'mention' ? 'mention' : 'participant';
-  for (const userId of event.participantUserIds ?? []) addUser(userId, externalParticipantReason);
-
   // External integration-owner fallback (already a user id; the drain supplies it).
   if (event.ownerUserId) addUser(event.ownerUserId, reasonForExternal(event.kind));
 
   // Pre-resolved external recipients (already user ids, each with its provider-derived reason).
-  for (const [userId, reason] of event.externalUserRecipients ?? []) addUser(userId, reason);
+  for (const [userId, reason] of event.externalRecipients ?? []) addUser(userId, reason);
 
   // Explicit followers of this canonical entity (unmuted) — resolved straight to user ids.
   if (event.entity) {

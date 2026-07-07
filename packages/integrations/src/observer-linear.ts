@@ -23,13 +23,13 @@ import type { CanonicalEntityKind, EventDetail, EventKind } from '@docket/types'
 
 import { type DetailBuilder, genericDetail, runDetailBuilders } from './event-detail';
 import { asRecord, str } from './json';
-import type { ConnectorProvider } from './connector';
 import type {
   EventActorRef,
   EventDraft,
   EventEntityRef,
   InboundRouting,
   Observer,
+  ObserverProvider,
   RawInboundEvent,
   VerifySignatureInput,
 } from './observer';
@@ -104,7 +104,7 @@ export interface RealLinearObserverConfig {
 /** A real, env-driven {@link Observer} for Linear webhooks. */
 export class RealLinearObserver implements Observer {
   /** {@inheritDoc Observer.provider} */
-  readonly provider: ConnectorProvider = 'linear';
+  readonly provider: ObserverProvider = 'linear';
   private readonly signingSecret: string;
 
   constructor(config: RealLinearObserverConfig) {

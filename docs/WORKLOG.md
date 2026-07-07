@@ -121,8 +121,7 @@
 
 ### [DISCORD-001] Discord mentions in the activity firehose
 
-- **Status**: REVIEW (Phase 1 + Phase 2 code + tests + docs landed; gate green on all touched
-  packages; pending commit)
+- **Status**: COMPLETED
 - **Started**: 2026-07-02
 - **Priority**: P2
 - **Description**: Let a Docket user see everywhere they're @-mentioned on Discord in the personal
@@ -167,14 +166,12 @@ routes/integration-provider}.ts` (`/discord` + `/discord/:token` edges, drain so
 identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source option, "Mentioned
   you" chip, live catalog entry); new `services/discord-relay/` worker; `.env.example`; docs
   (`discord-observation.md`, `DECISIONS.md`, `activity-feed.md`, this log).
-- **Gate**: typecheck green — `@docket/{types,env,auth,boundaries,db,ui,api,discord-relay}` (web
-  typecheck has one PRE-EXISTING, unrelated error in the attachments WIP `use-attachments.ts:80`,
-  untouched here). Lint clean on every touched package (cleared 2 pre-existing `.toString()` lint
-  errors in `connector-github-app.test.ts` blocking a green boundaries run). Tests: boundaries
-  265/265 (incl. `observer-discord` 9), types 211, auth 43 (incl. Discord mount), discord-relay
-  10/10, api `ingest-discord` 4 + `ingest-discord-token` 3 + `event-sync-attribution` 2 +
-  `event-sync`/`config`/`me-identities`/`integration-provider` green. `@docket/api` dist rebuilt so
-  web RPC types pick up `discord`.
+- **Gate**: closeout evidence refreshed on 2026-07-07. Discord relay typecheck/lint/test passed
+  (10/10 relay tests). Server-side contract packages typecheck/lint passed:
+  `@docket/{types,env,auth,boundaries,api}`. Targeted API coverage passed:
+  `ingest-discord` 4/4, `ingest-discord-token` 3/3, and `event-sync-attribution` 3/3. Auth
+  Discord OAuth-link coverage passed (`tests/auth.test.ts -t "Discord"`). Boundaries coverage
+  includes the real Discord observer signature/route/normalize suite.
 - **Learnings**: Discord's only per-user-mention transport is the Gateway socket, which the
   serverless core can't hold — the fix is a transport-agnostic ingest edge + a quarantined relay,
   reusing the existing `event_subscription.ingestToken` seam so no new routing pattern is invented.

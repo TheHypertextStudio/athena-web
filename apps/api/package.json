@@ -41,7 +41,7 @@
     "@docket/mail": "workspace:*",
     "@docket/notifications": "workspace:*",
     "@docket/types": "workspace:*",
-    "@hono/node-server": "^2.0.4",
+    "@hono/node-server": "^2.0.8",
     "@hono/standard-validator": "catalog:",
     "@modelcontextprotocol/sdk": "catalog:",
     "@scalar/hono-api-reference": "catalog:",
@@ -49,7 +49,7 @@
     "fflate": "^0.8.3",
     "hono": "catalog:",
     "hono-openapi": "catalog:",
-    "tsx": "^4.22.4",
+    "tsx": "^4.23.0",
     "zod": "catalog:"
   },
   "devDependencies": {

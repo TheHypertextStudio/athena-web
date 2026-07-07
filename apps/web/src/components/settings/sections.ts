@@ -116,7 +116,7 @@ export const SETTINGS_SECTION_GROUPS: readonly SettingsSectionGroup[] = [
         description: 'Decide what Docket tells you, and where.',
         icon: ListChecks,
         href: 'notifications',
-        status: 'coming-soon',
+        status: 'available',
       },
     ],
   },

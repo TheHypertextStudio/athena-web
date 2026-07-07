@@ -26,6 +26,7 @@
     "@better-auth/passkey": "catalog:",
     "@docket/api": "workspace:*",
     "@docket/env": "workspace:*",
+    "@docket/notifications": "workspace:*",
     "@docket/types": "workspace:*",
     "@docket/ui": "workspace:*",
     "@emotion/cache": "^11.14.0",

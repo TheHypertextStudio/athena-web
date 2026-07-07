@@ -19,6 +19,20 @@ export const NotificationDestination = z
 /** Notification-destination value. */
 export type NotificationDestination = z.infer<typeof NotificationDestination>;
 
+/** Compact per-channel delivery state attached to inbox rows for user-facing hints. */
+export const NotificationDeliveryHint = z
+  .object({
+    channel: NotificationChannel,
+    status: NotificationDeliveryStatus,
+    valueMasked: z.string().optional(),
+  })
+  .meta({
+    id: 'NotificationDeliveryHint',
+    description: 'A compact delivery-channel hint for inbox presentation.',
+  });
+/** Notification-delivery-hint value. */
+export type NotificationDeliveryHint = z.infer<typeof NotificationDeliveryHint>;
+
 /** Per-channel delivery representation. */
 export const NotificationDeliveryOut = z
   .object({

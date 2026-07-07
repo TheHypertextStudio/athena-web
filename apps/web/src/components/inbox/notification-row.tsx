@@ -17,8 +17,9 @@
  *   agent's work directly from the Inbox.
  * - **Mark read** — shown for any unread row, dismisses it from the attention queue.
  */
+import { notificationDeliveryHintsFromBody } from '@docket/notifications';
 import type { NotificationOut } from '@docket/types';
-import { Check } from '@docket/ui/icons';
+import { Check, Mail, MessageSquare } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import { Button } from '@docket/ui/primitives';
 import Link from 'next/link';
@@ -58,6 +59,11 @@ export function NotificationRow({
   const approval = isApproval(notification.type);
   const href = notificationHref(notification);
   const summary = notification.body.summary;
+  const deliveryHints = notificationDeliveryHintsFromBody(notification.body);
+  const externalDeliveryHints = deliveryHints.filter(
+    (hint) =>
+      hint.channel !== 'web' && ['sent', 'delivered', 'read', 'acted'].includes(hint.status),
+  );
 
   return (
     <div
@@ -112,6 +118,14 @@ export function NotificationRow({
           <p className="text-on-surface-variant text-body line-clamp-2">{summary}</p>
         ) : null}
 
+        {externalDeliveryHints.length > 0 ? (
+          <div className="text-on-surface-variant flex flex-wrap items-center gap-2 text-xs">
+            {externalDeliveryHints.map((hint) => (
+              <DeliveryHint key={hint.channel} hint={hint} />
+            ))}
+          </div>
+        ) : null}
+
         {notification.organizationId ? (
           <div className="mt-0.5">
             <OrgChip
@@ -151,6 +165,29 @@ export function NotificationRow({
         </div>
       ) : null}
     </div>
+  );
+}
+
+/** Props for {@link DeliveryHint}. */
+interface DeliveryHintProps {
+  readonly hint: ReturnType<typeof notificationDeliveryHintsFromBody>[number];
+}
+
+/** Compact delivery state shown below service-wide notifications. */
+function DeliveryHint({ hint }: DeliveryHintProps): JSX.Element {
+  const Icon = hint.channel === 'email' ? Mail : MessageSquare;
+  const label =
+    hint.channel === 'email'
+      ? 'Also emailed'
+      : hint.channel === 'sms'
+        ? 'Also texted'
+        : 'Also sent';
+  return (
+    <span className="inline-flex items-center gap-1">
+      <Icon aria-hidden="true" className="size-3.5" />
+      <span>{label}</span>
+      {hint.valueMasked ? <span className="font-medium">{hint.valueMasked}</span> : null}
+    </span>
   );
 }
 

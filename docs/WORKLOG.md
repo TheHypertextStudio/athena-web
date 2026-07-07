@@ -132,6 +132,20 @@
   helpers keep email/SMS/push adapters from copying persistence mechanics. Focused validation:
   `@docket/env` env tests, `@docket/boundaries` SMS/push/mailer/select tests, `@docket/api`
   dispatcher SMS/push and email tests, plus env/boundaries/API typechecks pass.
+- **Web UX milestone update (2026-07-06)**: Added the user-facing notification experience without
+  duplicating notification DTOs in the web app. The inbox now groups unread approval requests under
+  "Needs action", handles `service_announcement` rows, and shows cross-channel delivery hints backed
+  by sibling delivery rows from the durable notification graph. Settings now exposes an available
+  `/orgs/[orgId]/settings/notifications` route for personal and shared workspaces, backed by the
+  typed query layer over `/v1/me/notification-preferences` and `/v1/me/contact-points`. New reusable
+  settings sections render quiet-hours editing, locked security/account channel rows, mutable
+  category/channel preferences, phone verification, and bounced/unsubscribed contact-point states.
+  Focused validation: notification inbox route tests, web inbox/settings component tests,
+  `@docket/notifications` schema/web tests, notifications/API/web typechecks, notifications/API/web
+  lint, API build, and dotenv-wrapped web build pass. A redundant post-build web typecheck/lint rerun
+  was stopped after it exceeded prior successful gate times; the web build's TypeScript phase had
+  already completed successfully after the `next.config.ts` change, and targeted ESLint on touched
+  web files reported no errors.
 
 ### [AUTH-SEC-001] Auth security & UX audit remediation
 

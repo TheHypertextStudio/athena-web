@@ -91,6 +91,70 @@ describe('admin notification routes', () => {
       items: [expect.objectContaining({ kind: 'delivered' })],
     });
   });
+
+  it('estimates audience delivery and suppression counts before send', async () => {
+    const staff = await makeStaff('support');
+    const intent = await seedIntent(staff.userId, 'Estimate announcement', {
+      channels: ['web', 'email'],
+    });
+    const app = adminApp(fakeSession(staff.userId));
+
+    const res = await app.request(`/notifications/${intent.id}/estimate`);
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      recipientCount: 1,
+      channelCounts: {
+        web: { send: 1, delay: 0, suppress: 0 },
+        email: { send: 0, delay: 0, suppress: 1 },
+      },
+      suppressions: [
+        {
+          channel: 'email',
+          reason: 'no_verified_contact_point',
+          count: 1,
+        },
+      ],
+      approvalRequired: false,
+    });
+  });
+
+  it('previews channel-specific staff announcement content', async () => {
+    const staff = await makeStaff('support');
+    const intent = await seedIntent(staff.userId, 'Preview announcement', {
+      body: {
+        text: 'Docket will be briefly unavailable tonight.',
+        html: '<p>Docket will be briefly unavailable tonight.</p>',
+      },
+      channels: ['web', 'email', 'sms', 'push'],
+      replyPolicy: 'staff_inbox',
+    });
+    const app = adminApp(fakeSession(staff.userId));
+
+    const res = await app.request(`/notifications/${intent.id}/preview`);
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      subject: 'Preview announcement',
+      replyPolicy: 'staff_inbox',
+      web: {
+        title: 'Preview announcement',
+        body: 'Docket will be briefly unavailable tonight.',
+      },
+      email: {
+        subject: 'Preview announcement',
+        text: 'Docket will be briefly unavailable tonight.',
+        html: '<p>Docket will be briefly unavailable tonight.</p>',
+      },
+      sms: {
+        text: 'Docket: Preview announcement. Docket will be briefly unavailable tonight.',
+      },
+      push: {
+        title: 'Preview announcement',
+        body: 'Docket will be briefly unavailable tonight.',
+      },
+    });
+  });
 });
 
 function adminApp(session: AuthSession) {
@@ -125,7 +189,11 @@ async function makeStaff(
   return { userId: user!.id, staffUserId: staff!.id };
 }
 
-async function seedIntent(createdBy: string, subject: string): Promise<{ readonly id: string }> {
+async function seedIntent(
+  createdBy: string,
+  subject: string,
+  overrides: Partial<typeof schema.notificationIntent.$inferInsert> = {},
+): Promise<{ readonly id: string }> {
   const userId = await seedUserWithHub(db, schema, `Recipient${uniq()}`);
   const [intent] = await db
     .insert(schema.notificationIntent)
@@ -140,6 +208,7 @@ async function seedIntent(createdBy: string, subject: string): Promise<{ readonl
       replyPolicy: 'none',
       status: 'draft',
       createdBy,
+      ...overrides,
     })
     .returning({ id: schema.notificationIntent.id });
   return intent!;

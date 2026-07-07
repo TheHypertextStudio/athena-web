@@ -1,4 +1,9 @@
-import { NotificationInboundEventOut, NotificationIntentOut } from '@docket/notifications';
+import {
+  NotificationAudienceEstimateOut,
+  NotificationInboundEventOut,
+  NotificationIntentOut,
+  NotificationPreviewOut,
+} from '@docket/notifications';
 import { AdminAuditPage } from '../admin-dto';
 import type { AppEnv } from '../context';
 import { ok } from '../lib/ok';
@@ -48,6 +53,41 @@ export function createAdminNotificationRoutes(notifications: AdminNotificationSe
           c,
           NotificationIntentOut,
           await notifications.get(userId, c.req.valid('param').id),
+        );
+      },
+    )
+    .get(
+      '/:id/estimate',
+      apiDoc({
+        tag: 'Admin Notifications',
+        summary: 'Estimate notification audience',
+        response: NotificationAudienceEstimateOut,
+        description:
+          'Estimate recipient count, channel delivery eligibility, suppressions, and approval gates before staff sends a notification.',
+      }),
+      zParam(idParam),
+      async (c) => {
+        return ok(
+          c,
+          NotificationAudienceEstimateOut,
+          await notifications.estimate(c.get('staffCtx').userId, c.req.valid('param').id),
+        );
+      },
+    )
+    .get(
+      '/:id/preview',
+      apiDoc({
+        tag: 'Admin Notifications',
+        summary: 'Preview notification channels',
+        response: NotificationPreviewOut,
+        description: 'Render staff-facing previews for each requested notification channel.',
+      }),
+      zParam(idParam),
+      async (c) => {
+        return ok(
+          c,
+          NotificationPreviewOut,
+          await notifications.preview(c.get('staffCtx').userId, c.req.valid('param').id),
         );
       },
     )

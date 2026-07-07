@@ -154,6 +154,13 @@
   thin curried adapter over direct `AdminNotificationService` injection. Focused validation:
   notification schema DTO tests, admin notification route tests, notification/API typechecks,
   touched-file ESLint, and `git diff --check` pass.
+- **Admin console milestone update (2026-07-07)**: Added the staff service-announcement console at
+  `/notifications` in `apps/admin`. The console supports compose, audience selection, channel
+  selection, scheduling, estimate/preview refresh, test send, approval, send now, cancel, delivery
+  monitoring, inbound reply monitoring, and operator audit review. It uses a presentational
+  `NotificationAnnouncementConsole` plus a small draft serializer so the route owns API state while
+  the UI remains testable. Focused validation: admin console Vitest coverage, admin typecheck,
+  touched-file ESLint, and dotenv-wrapped admin build pass.
 
 ### [AUTH-SEC-001] Auth security & UX audit remediation
 

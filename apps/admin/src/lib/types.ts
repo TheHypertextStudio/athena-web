@@ -1,6 +1,6 @@
 import type { InferResponseType } from 'hono/client';
 
-import type { api } from '@/lib/api';
+import type { api, productApi } from '@/lib/api';
 
 /**
  * The operator dashboard metrics (`GET /admin/metrics`).
@@ -45,3 +45,34 @@ export type AdminAuditEvent = AdminAuditPage['items'][number];
 
 /** An impersonation session (`POST /admin/impersonations`). */
 export type AdminImpersonation = InferResponseType<typeof api.admin.impersonations.$post>;
+
+/** Staff notification-intent list (`GET /admin/notifications`). */
+export type AdminNotificationPage = InferResponseType<typeof api.admin.notifications.$get>;
+
+/** One notification intent in the staff announcement console. */
+export type AdminNotificationIntent = AdminNotificationPage['items'][number];
+
+/** Staff audience estimate (`GET /admin/notifications/:id/estimate`). */
+export type AdminNotificationEstimate = InferResponseType<
+  (typeof api.admin.notifications)[':id']['estimate']['$get']
+>;
+
+/** Staff channel preview (`GET /admin/notifications/:id/preview`). */
+export type AdminNotificationPreview = InferResponseType<
+  (typeof api.admin.notifications)[':id']['preview']['$get']
+>;
+
+/** Staff notification audit page (`GET /admin/notifications/:id/audit`). */
+export type AdminNotificationAuditPage = InferResponseType<
+  (typeof api.admin.notifications)[':id']['audit']['$get']
+>;
+
+/** Staff notification inbound-event page (`GET /admin/notifications/:id/inbound-events`). */
+export type AdminNotificationInboundPage = InferResponseType<
+  (typeof api.admin.notifications)[':id']['inbound-events']['$get']
+>;
+
+/** Notification delivery page (`GET /v1/notifications/:id/deliveries`). */
+export type NotificationDeliveryPage = InferResponseType<
+  (typeof productApi.v1.notifications)[':id']['deliveries']['$get']
+>;

@@ -26,6 +26,7 @@ import { ProposalGroupCard } from '@/components/agents/proposal-group-card';
 import { api } from '@/lib/api';
 import { readError, readProblem } from '@/lib/problem';
 import { useSessionDetail } from '@/lib/use-session-detail';
+import { startViewTransition } from '@/lib/view-transition';
 
 /** Props for {@link AthenaConversation}. */
 export interface AthenaConversationProps {
@@ -54,7 +55,13 @@ export default function AthenaConversation({
         setError(await readProblem(res, 'Could not open the conversation.'));
         return;
       }
-      setThread(await res.json());
+      const data = await res.json();
+      // Called after a proposal group settles (via `ChatProposals`'s `onSettled`), so the group's
+      // ghost rows — each carrying a stable `view-transition-name` — morph out in place instead of
+      // the list just popping.
+      startViewTransition(() => {
+        setThread(data);
+      });
     } catch (caught) {
       setError(readError(caught, 'Something went wrong opening the conversation.'));
     } finally {

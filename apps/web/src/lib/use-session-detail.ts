@@ -5,6 +5,7 @@ import { buildActorDirectory, type ActorDirectory } from '@/components/agents/ac
 import type { ChangeReceiptItem, SessionControlsState } from '@/components/agents/session-sidebar';
 import { api } from './api';
 import { readError, readProblem } from './problem';
+import { startViewTransition } from './view-transition';
 
 /** SessionDetailState describes the use session detail data contract shared by the hook or component. */
 export interface SessionDetailState {
@@ -64,12 +65,19 @@ export function useSessionDetail(orgId: string, sessionId: string): SessionDetai
         return;
       }
       const detail = await sessionRes.json();
-      setSession(detail);
 
       const proposalsRes = await api.v1.orgs[':orgId'].sessions[':id'].proposals.$get({
         param: { orgId, id: sessionId },
       });
-      if (proposalsRes.ok) setProposals(await proposalsRes.json());
+      const nextProposals = proposalsRes.ok ? await proposalsRes.json() : null;
+
+      // The session's activities and its proposal groups render the ghost grammar together — commit
+      // both inside one View Transition so an approved/rejected group's ghost rows morph in place
+      // (each carries a stable `view-transition-name`) instead of popping out of the list.
+      startViewTransition(() => {
+        setSession(detail);
+        if (nextProposals) setProposals(nextProposals);
+      });
 
       const [membersRes, agentsRes, orgRes] = await Promise.all([
         api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),

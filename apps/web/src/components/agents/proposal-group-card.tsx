@@ -64,7 +64,7 @@ export function ProposalGroupCard({
       className="border-primary/40 bg-primary/5 rounded-xl border p-4"
     >
       <div className="flex items-center justify-between gap-3">
-        <h3 className="text-on-surface text-body font-medium">
+        <h3 className="text-on-surface text-h3">
           Athena proposes {count} {count === 1 ? 'change' : 'changes'}
         </h3>
         <span className="text-on-surface-variant text-xs">

@@ -29,6 +29,7 @@ export const queryKeys = {
   integrationLists: (orgId: string, integrationId: string) =>
     ['org', orgId, 'integrations', integrationId, 'lists'] as const,
   integrationsDirectory: (orgId: string) => ['org', orgId, 'integrations-directory'] as const,
+  mcpIntegrations: (orgId: string) => ['org', orgId, 'mcp-integrations'] as const,
   emailSuggestions: (orgId: string) => ['org', orgId, 'email-suggestions'] as const,
   emailSuggestionThread: (orgId: string, suggestionId: string) =>
     ['org', orgId, 'email-suggestions', suggestionId, 'thread'] as const,

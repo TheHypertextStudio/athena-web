@@ -17,12 +17,21 @@
  */
 import type { AgentSessionDetailOut, SessionActivityOut } from '@docket/types';
 import { EmptyState } from '@docket/ui/components';
-import { Sparkles } from '@docket/ui/icons';
+import { Cable, Sparkles } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
-import { Button, Skeleton } from '@docket/ui/primitives';
+import {
+  Button,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  Skeleton,
+} from '@docket/ui/primitives';
 import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 
 import { ProposalGroupCard } from '@/components/agents/proposal-group-card';
+import { AddMcpConnectorForm } from '@/components/settings/mcp-connectors-section';
 import { api } from '@/lib/api';
 import { readError, readProblem } from '@/lib/problem';
 import { useSessionDetail } from '@/lib/use-session-detail';
@@ -46,6 +55,7 @@ export default function AthenaConversation({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
+  const [connectOpen, setConnectOpen] = useState(false);
   const endRef = useRef<HTMLDivElement | null>(null);
 
   const load = useCallback(async (): Promise<void> => {
@@ -173,6 +183,38 @@ export default function AthenaConversation({
           {sending ? 'Sending…' : 'Send'}
         </Button>
       </form>
+
+      <div className="flex items-center justify-end gap-1 pt-1">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="text-on-surface-variant gap-1.5"
+          onClick={() => {
+            setConnectOpen(true);
+          }}
+        >
+          <Cable aria-hidden="true" className="size-3.5" />
+          Connect a tool
+        </Button>
+      </div>
+
+      <Dialog open={connectOpen} onOpenChange={setConnectOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Connect a tool</DialogTitle>
+            <DialogDescription>
+              Add a remote MCP server so Athena can use its tools in this conversation too.
+            </DialogDescription>
+          </DialogHeader>
+          <AddMcpConnectorForm
+            orgId={orgId}
+            onConnected={() => {
+              setConnectOpen(false);
+            }}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

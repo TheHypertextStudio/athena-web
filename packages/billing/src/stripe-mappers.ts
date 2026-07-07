@@ -8,6 +8,57 @@ import type {
   SubscriptionStatus,
 } from './index';
 
+/** The Stripe subscription fields Docket reads while normalizing billing state. */
+export interface StripeSubscriptionView {
+  /** Stripe object discriminator. */
+  readonly object: 'subscription';
+  /** Stripe subscription id. */
+  readonly id: string;
+  /** Raw Stripe subscription status. */
+  readonly status: string;
+  /** Docket reference metadata, when present. */
+  readonly metadata?: Record<string, string> | null;
+  /** Subscription items; dahlia stores the period end on the first item. */
+  readonly items?: {
+    readonly object?: string;
+    readonly data?: readonly { readonly current_period_end?: number }[];
+    readonly has_more?: boolean;
+    readonly url?: string;
+  };
+  /** Trial end unix timestamp, or null when absent. */
+  readonly trial_end?: number | null;
+}
+
+/** Non-subscription Stripe event object fields Docket reads. */
+export interface StripeEventObjectView {
+  /** Stripe object discriminator. */
+  readonly object?: string;
+  /** Stripe object id, when present. */
+  readonly id?: string;
+  /** Docket reference metadata, when present. */
+  readonly metadata?: Record<string, string> | null;
+  /** Checkout session client reference id. */
+  readonly client_reference_id?: string | null;
+}
+
+/** The Stripe event fields Docket maps into billing events. */
+export interface StripeEventView {
+  /** Stripe event id. */
+  readonly id: string;
+  /** Stripe event type string. */
+  readonly type: string;
+  /** Event creation unix timestamp. */
+  readonly created: number;
+  /** Stripe event data envelope. */
+  readonly data: { readonly object: StripeSubscriptionView | StripeEventObjectView };
+}
+
+function isSubscriptionObject(
+  object: StripeEventView['data']['object'],
+): object is StripeSubscriptionView {
+  return object.object === 'subscription';
+}
+
 /**
  * Map a Stripe subscription status onto the port's {@link SubscriptionStatus}.
  *
@@ -73,16 +124,11 @@ export function mapEventType(
  * @param fallbackReferenceId - Reference id to use when the subscription has no metadata.
  */
 export function toSubscription(
-  sub: Stripe.Subscription,
+  sub: StripeSubscriptionView,
   fallbackReferenceId?: string,
 ): Subscription {
-  // Stripe's types mark these as always-present, but real payloads can be partial.
-  const view = sub as {
-    metadata?: Record<string, string> | null;
-    items?: { data?: { current_period_end?: number }[] };
-  };
-  const referenceId = view.metadata?.['referenceId'] ?? fallbackReferenceId ?? '';
-  const periodEndUnix = view.items?.data?.[0]?.current_period_end ?? 0;
+  const referenceId = sub.metadata?.['referenceId'] ?? fallbackReferenceId ?? '';
+  const periodEndUnix = sub.items?.data?.[0]?.current_period_end ?? 0;
   return {
     id: sub.id,
     referenceId,
@@ -155,18 +201,16 @@ export function buildBaseCheckoutParams(
  *
  * @param event - A verified Stripe event.
  */
-export function mapStripeEvent(event: Stripe.Event): BillingEvent | null {
-  const object = event.data.object as unknown as Record<string, unknown>;
-  const isSubscription = object['object'] === 'subscription';
-  const subscription = isSubscription
-    ? toSubscription(object as unknown as Stripe.Subscription)
-    : undefined;
-  const metadata = object['metadata'] as Record<string, string> | null | undefined;
-  const referenceId =
-    subscription?.referenceId ??
-    metadata?.['referenceId'] ??
-    (object['client_reference_id'] as string | undefined) ??
-    '';
+export function mapStripeEvent(event: StripeEventView): BillingEvent | null {
+  const object = event.data.object;
+  let subscription: Subscription | undefined;
+  let referenceId: string;
+  if (isSubscriptionObject(object)) {
+    subscription = toSubscription(object);
+    referenceId = subscription.referenceId;
+  } else {
+    referenceId = object.metadata?.['referenceId'] ?? object.client_reference_id ?? '';
+  }
   const type = mapEventType(event.type, subscription?.status);
   if (!type) return null;
   return {

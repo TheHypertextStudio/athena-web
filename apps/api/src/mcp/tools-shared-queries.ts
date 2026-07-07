@@ -4,14 +4,11 @@ import { and, desc, eq, ilike, isNull, lt, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { NotFoundError, ValidationError } from '../error';
+import { rawResultRowCount } from '../lib/raw-result';
 import { createCursorCodec } from './cursors';
 
 /** The subject table whose `health` an update of each subject type also writes to. */
 export const subjectTable = { project, program, initiative } as const;
-
-const CycleReachResult = z.object({
-  rows: z.array(z.object({ hit: z.number() })),
-});
 
 /**
  * Validate a workflow-state transition for a task against its team's `workflow_states`.
@@ -99,8 +96,7 @@ export async function wouldCreateCycle(
   blockingTaskId: string,
   blockedTaskId: string,
 ): Promise<boolean> {
-  const reach = CycleReachResult.parse(
-    await db.execute(sql`
+  const reach = await db.execute(sql`
     WITH RECURSIVE reach AS (
       SELECT blocked_task_id AS n FROM task_dependency
         WHERE blocking_task_id = ${blockedTaskId} AND organization_id = ${orgId}
@@ -109,9 +105,8 @@ export async function wouldCreateCycle(
         JOIN reach r ON d.blocking_task_id = r.n WHERE d.organization_id = ${orgId}
     )
     SELECT 1 AS hit FROM reach WHERE n = ${blockingTaskId} LIMIT 1
-  `),
-  );
-  return reach.rows.length > 0;
+  `);
+  return rawResultRowCount(reach) > 0;
 }
 
 /** A lightweight projection for `run_view` rows. */

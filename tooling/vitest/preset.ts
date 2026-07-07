@@ -40,10 +40,6 @@ export interface DocketVitestOptions {
    * stays a meaningful gate rather than a chase over wiring/UI code.
    */
   coverageInclude?: string[];
-  /** Maximum Vitest workers for packages with resource-heavy setup. */
-  maxWorkers?: number | `${number}%`;
-  /** Whether Vitest should run test files in parallel. */
-  fileParallelism?: boolean;
   /** Per-test timeout in milliseconds. */
   testTimeout?: number;
   /** Per-hook timeout in milliseconds. */
@@ -69,10 +65,8 @@ export function docketVitest(options: DocketVitestOptions = {}) {
     coverageThreshold = 90,
     coverageExclude = [],
     coverageInclude = ['src/**/*.{ts,tsx}'],
-    maxWorkers,
-    fileParallelism,
-    testTimeout = 120_000,
-    hookTimeout = 120_000,
+    testTimeout = 30_000,
+    hookTimeout = 60_000,
   } = options;
   return defineConfig({
     plugins: useReact ? [react()] : [],
@@ -83,14 +77,11 @@ export function docketVitest(options: DocketVitestOptions = {}) {
       env,
       include: ['tests/**/*.{test,spec}.{ts,tsx}'],
       // Turbo runs every package's vitest concurrently, so the machine is heavily
-      // oversubscribed during `pnpm test`. The default 5s timeout false-fails
-      // otherwise-passing tests (e.g. crypto/pglite-heavy ones) purely from CPU
-      // starvation. Generous timeouts keep the full-suite run reliably green
-      // without affecting the happy path.
+      // oversubscribed during `pnpm test`. The default hook timeout false-fails
+      // otherwise-passing PGlite bootstrap hooks purely from CPU starvation, while
+      // per-test timeouts stay tighter so real hangs still surface quickly.
       testTimeout,
       hookTimeout,
-      maxWorkers,
-      fileParallelism,
       // Coverage is gated (with all:true so untested files count). Default 90% gives
       // headroom so we don't write brittle wiring/tautology tests to chase the last
       // few lines; the trust-spine packages pass coverageThreshold:100. Either bar is

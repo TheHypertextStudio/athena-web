@@ -40,18 +40,7 @@ vi.mock('../../src/lib/api', () => ({
 }));
 
 import { CreateProjectDialog } from '../../src/components/projects/create-project';
-
-/** A `Response`-like stub whose `ok`/`json()` the composer reads. */
-function jsonResponse(ok: boolean, body: unknown): Response {
-  return { ok, json: async () => body } as Response;
-}
-
-/** The `json` body of a mocked RPC spy's first call (asserted after a `toHaveBeenCalled`). */
-function firstJson(spy: ReturnType<typeof vi.fn>): Record<string, unknown> {
-  const call = spy.mock.calls[0];
-  if (!call) throw new Error('expected the RPC spy to have been called');
-  return (call[0] as { json: Record<string, unknown> }).json;
-}
+import { firstJson, jsonResponse } from '../support/http';
 
 // Valid ULID-shaped ids (no I/L/O/U) so the composer's `*.parse(...)` guards accept them.
 const ORG_ID = '0RG00000000000000000000001';
@@ -147,7 +136,7 @@ describe('CreateProjectDialog — robust composer', () => {
     await waitFor(() => {
       expect(projectPost).toHaveBeenCalledTimes(1);
     });
-    expect(firstJson(projectPost)).toMatchObject({
+    expect(firstJson(projectPost.mock.calls)).toMatchObject({
       name: 'Atlas',
       description: 'Re-platform.',
       teamId: TEAM_ID,
@@ -171,7 +160,7 @@ describe('CreateProjectDialog — robust composer', () => {
     await waitFor(() => {
       expect(projectPost).toHaveBeenCalledTimes(1);
     });
-    expect(firstJson(projectPost)).toMatchObject({ name: 'Led', leadId: GRACE_ID });
+    expect(firstJson(projectPost.mock.calls)).toMatchObject({ name: 'Led', leadId: GRACE_ID });
   });
 
   it('threads a toggled initiative through the create DTO', async () => {
@@ -194,7 +183,7 @@ describe('CreateProjectDialog — robust composer', () => {
     await waitFor(() => {
       expect(projectPost).toHaveBeenCalledTimes(1);
     });
-    expect(firstJson(projectPost)).toMatchObject({
+    expect(firstJson(projectPost.mock.calls)).toMatchObject({
       name: 'Linked',
       initiativeIds: [Q3_ID],
     });

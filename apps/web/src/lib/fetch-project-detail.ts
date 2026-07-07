@@ -125,7 +125,7 @@ export function fetchProjectDetail(
       return {
         ok: false,
         status: projectsRes.status,
-        json: () => projectsRes.json() as unknown as Promise<ProjectDetailData>,
+        json: () => projectsRes.json(),
       };
     }
 

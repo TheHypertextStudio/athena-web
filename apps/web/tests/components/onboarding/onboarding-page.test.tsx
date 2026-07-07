@@ -47,11 +47,7 @@ vi.mock('../../../src/lib/api', () => ({
 }));
 
 import OnboardingPage from '../../../src/app/onboarding/page';
-
-/** A `Response`-like stub whose `ok`/`json()` the page reads. */
-function jsonResponse(ok: boolean, body: unknown): Response {
-  return { ok, json: async () => body } as Response;
-}
+import { jsonResponse } from '../../support/http';
 
 /**
  * Render the page with a local-mode public config pre-seeded, so the connect step's

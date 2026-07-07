@@ -13,7 +13,7 @@
  * invalidation are genuine) wrapped around the hook under test, with the Hono call replaced by a
  * lightweight typed mock {@link RpcResponse} — no network, no `as any`.
  */
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import type { JSX, ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -21,42 +21,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   apiQueryOptions,
   createQueryClient,
-  type RpcResponse,
   queryKeys,
   SessionExpiredError,
   useApiMutation,
   useApiQuery,
 } from '../../src/lib/query';
+import { makeQueryWrapper, okResponse, problemResponse } from '../support/query';
 
 afterEach(cleanup);
-
-/** A typed mock Hono RPC response that resolves the given body. */
-function okResponse<T>(body: T): RpcResponse<T> {
-  return { ok: true, status: 200, json: () => Promise.resolve(body) };
-}
-
-/** A typed mock Hono RPC problem response (non-OK) carrying a problem `detail`. */
-function problemResponse<T>(detail: string, status = 422): RpcResponse<T> {
-  return {
-    ok: false,
-    status,
-    json: () => Promise.resolve({ detail } as unknown as T),
-  };
-}
-
-/** A fresh, retry-free QueryClient + provider wrapper for one test. */
-function makeWrapper(): {
-  client: QueryClient;
-  wrapper: (props: { children: ReactNode }) => JSX.Element;
-} {
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  });
-  const wrapper = ({ children }: { children: ReactNode }): JSX.Element => (
-    <QueryClientProvider client={client}>{children}</QueryClientProvider>
-  );
-  return { client, wrapper };
-}
 
 /** A minimal project-shaped record for the cache assertions. */
 interface ProjectShape {
@@ -66,7 +38,7 @@ interface ProjectShape {
 
 describe('useApiQuery', () => {
   it('resolves the parsed body on a successful Hono RPC call', async () => {
-    const { wrapper } = makeWrapper();
+    const { wrapper } = makeQueryWrapper();
     const project: ProjectShape = { id: 'p1', name: 'Alpha' };
 
     const { result } = renderHook(
@@ -89,7 +61,7 @@ describe('useApiQuery', () => {
   });
 
   it("surfaces the server's problem detail as the hook error on a non-OK response", async () => {
-    const { wrapper } = makeWrapper();
+    const { wrapper } = makeQueryWrapper();
 
     const { result } = renderHook(
       () =>
@@ -111,7 +83,7 @@ describe('useApiQuery', () => {
   });
 
   it('throws a SessionExpiredError on a 401 so the global handler can redirect', async () => {
-    const { wrapper } = makeWrapper();
+    const { wrapper } = makeQueryWrapper();
 
     const { result } = renderHook(
       () =>
@@ -187,7 +159,7 @@ describe('createQueryClient session-expiry wiring', () => {
 
 describe('useApiMutation', () => {
   it('applies an optimistic cache write and invalidates related keys on success', async () => {
-    const { client, wrapper } = makeWrapper();
+    const { client, wrapper } = makeQueryWrapper();
     const listKey = queryKeys.projects('org_1');
     // Seed the list cache so the optimistic write has something to mutate.
     client.setQueryData<readonly ProjectShape[]>(listKey, [{ id: 'p1', name: 'Old name' }]);
@@ -226,7 +198,7 @@ describe('useApiMutation', () => {
   });
 
   it('rolls back the optimistic write via onError when the mutation fails', async () => {
-    const { client, wrapper } = makeWrapper();
+    const { client, wrapper } = makeQueryWrapper();
     const listKey = queryKeys.projects('org_1');
     const seed: readonly ProjectShape[] = [{ id: 'p1', name: 'Old name' }];
     client.setQueryData<readonly ProjectShape[]>(listKey, seed);

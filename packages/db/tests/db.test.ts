@@ -1,7 +1,7 @@
 import { resolve } from 'node:path';
 
 import { PGlite } from '@electric-sql/pglite';
-import { eq, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { getTableConfig, type PgTable } from 'drizzle-orm/pg-core';
 import { drizzle } from 'drizzle-orm/pglite';
 import { migrate } from 'drizzle-orm/pglite/migrator';
@@ -223,7 +223,7 @@ describe('schema inserts + updates (covers $defaultFn + $onUpdate callbacks)', (
     client = new PGlite('memory://');
     const d = drizzle(client, { schema: fullSchema });
     await migrate(d, { migrationsFolder: resolve(import.meta.dirname, '../drizzle') });
-    db = d as unknown as Database;
+    db = d;
 
     // --- auth island (user/session/account/verification/passkey) ---
     ids['user'] = (
@@ -631,9 +631,9 @@ describe('schema inserts + updates (covers $defaultFn + $onUpdate callbacks)', (
       'passkey',
     ];
     for (const table of coreTables) {
-      const res = (await db.execute(
-        sql`select to_regclass(${`public.${table}`}) as reg`,
-      )) as unknown as { rows: { reg: string | null }[] };
+      const res = await client!.query<{ reg: string | null }>('select to_regclass($1) as reg', [
+        `public.${table}`,
+      ]);
       expect(res.rows[0]?.reg, `table ${table} should exist`).not.toBeNull();
     }
   });

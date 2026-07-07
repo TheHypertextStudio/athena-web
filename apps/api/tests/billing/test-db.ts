@@ -1,4 +1,4 @@
-import { type Database } from '@docket/db';
+import { fullSchema, type Database } from '@docket/db';
 import { PGlite } from '@electric-sql/pglite';
 import { drizzle } from 'drizzle-orm/pglite';
 
@@ -48,5 +48,5 @@ export async function createBillingLifecycleDb(): Promise<BillingLifecycleDbFixt
     );
   `);
 
-  return { db: drizzle(client) as unknown as Database, client };
+  return { db: drizzle(client, { schema: fullSchema }), client };
 }

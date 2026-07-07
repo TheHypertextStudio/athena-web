@@ -78,7 +78,7 @@ export function fetchCycleDetail(
       return {
         ok: false,
         status: cycleRes.status,
-        json: () => cycleRes.json() as unknown as Promise<CycleDetailData>,
+        json: () => cycleRes.json(),
       };
     }
 

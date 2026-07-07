@@ -16,8 +16,9 @@ import { dirname, isAbsolute, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { drizzle as drizzlePglite } from 'drizzle-orm/pglite';
+import type { PgDatabase } from 'drizzle-orm/pg-core';
+import type { PgQueryResultHKT } from 'drizzle-orm/pg-core/session';
 import { drizzle as drizzlePostgres } from 'drizzle-orm/postgres-js';
-import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { PGlite } from '@electric-sql/pglite';
 import postgres from 'postgres';
 
@@ -28,7 +29,7 @@ import * as schema from './schema';
 export const fullSchema = { ...schema, ...relations };
 
 /** The drizzle client type, parameterized over the full Docket schema. */
-export type Database = PostgresJsDatabase<typeof fullSchema>;
+export type Database = PgDatabase<PgQueryResultHKT, typeof fullSchema>;
 
 /**
  * Absolute monorepo root, derived from this file's location
@@ -91,7 +92,7 @@ function createDb(): Database {
   if (url.startsWith('pglite:')) {
     const client = openPglite(url);
     closeCached = () => client.close();
-    return drizzlePglite(client, { schema: fullSchema }) as unknown as Database;
+    return drizzlePglite(client, { schema: fullSchema });
   }
 
   /* v8 ignore start -- live-DB driver IO boundary: opening a real postgres/Neon

@@ -40,7 +40,7 @@ export function fetchEnrichedInitiatives(
       return {
         ok: false,
         status: listRes.status,
-        json: () => listRes.json() as unknown as Promise<readonly InitiativeCatalogRow[]>,
+        json: () => listRes.json(),
       };
     }
     const { items } = await listRes.json();

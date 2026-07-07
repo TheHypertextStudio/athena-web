@@ -52,18 +52,7 @@ vi.mock('../../src/lib/api', () => ({
 }));
 
 import { CreateTaskDialog } from '../../src/components/tasks/create-task';
-
-/** A `Response`-like stub whose `ok`/`json()` the composer reads. */
-function jsonResponse(ok: boolean, body: unknown): Response {
-  return { ok, json: async () => body } as Response;
-}
-
-/** The `json` body of a mocked RPC spy's first call (asserted after a `toHaveBeenCalled`). */
-function firstJson(spy: ReturnType<typeof vi.fn>): Record<string, unknown> {
-  const call = spy.mock.calls[0];
-  if (!call) throw new Error('expected the RPC spy to have been called');
-  return (call[0] as { json: Record<string, unknown> }).json;
-}
+import { firstJson, jsonResponse } from '../support/http';
 
 // Branded ids (ActorId / ProjectId / TeamId / LabelId) are ULIDs, so the composer's `*.parse(...)`
 // guards only accept the canonical 26-char Crockford-base32 shape. Use valid ULIDs throughout.
@@ -193,7 +182,7 @@ describe('CreateTaskDialog — robust composer', () => {
     await waitFor(() => {
       expect(taskPost).toHaveBeenCalledTimes(1);
     });
-    const body = firstJson(taskPost);
+    const body = firstJson(taskPost.mock.calls);
     expect(body).toMatchObject({
       title: 'Ship it',
       description: 'The whole thing.',
@@ -221,7 +210,7 @@ describe('CreateTaskDialog — robust composer', () => {
     await waitFor(() => {
       expect(taskPost).toHaveBeenCalledTimes(1);
     });
-    expect(firstJson(taskPost)).toMatchObject({ title: 'Wired', assigneeId: ADA_ID });
+    expect(firstJson(taskPost.mock.calls)).toMatchObject({ title: 'Wired', assigneeId: ADA_ID });
   });
 
   it('threads a chosen project through the create DTO', async () => {
@@ -240,7 +229,7 @@ describe('CreateTaskDialog — robust composer', () => {
     await waitFor(() => {
       expect(taskPost).toHaveBeenCalledTimes(1);
     });
-    expect(firstJson(taskPost)).toMatchObject({ title: 'Scoped', projectId: APOLLO_ID });
+    expect(firstJson(taskPost.mock.calls)).toMatchObject({ title: 'Scoped', projectId: APOLLO_ID });
   });
 
   it('threads a toggled label through the create DTO', async () => {
@@ -263,7 +252,7 @@ describe('CreateTaskDialog — robust composer', () => {
     await waitFor(() => {
       expect(taskPost).toHaveBeenCalledTimes(1);
     });
-    expect(firstJson(taskPost)).toMatchObject({ title: 'Tagged', labels: [BUG_ID] });
+    expect(firstJson(taskPost.mock.calls)).toMatchObject({ title: 'Tagged', labels: [BUG_ID] });
   });
 
   it('disables Create until the title is non-empty and never sends an empty title', async () => {

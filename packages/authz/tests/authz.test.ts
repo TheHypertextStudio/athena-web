@@ -1,6 +1,7 @@
 import {
   actor,
   type Database,
+  fullSchema,
   grant,
   organization,
   program,
@@ -229,9 +230,9 @@ async function bootstrapAuthzSchema(client: PGlite): Promise<void> {
 
 beforeAll(async () => {
   client = new PGlite('memory://');
-  const d = drizzle(client);
+  const d = drizzle(client, { schema: fullSchema });
   await bootstrapAuthzSchema(client);
-  db = d as unknown as Database;
+  db = d;
 
   const orgRows = await db.insert(organization).values({ name: 'Acme', slug: 'acme' }).returning();
   orgId = orgRows[0]!.id;

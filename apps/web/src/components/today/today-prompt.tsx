@@ -207,7 +207,7 @@ export function TodayPrompt({ orgId, orgLabel, onCaptured }: TodayPromptProps): 
             >
               <Sparkles className={busy === 'athena' ? 'animate-pulse' : undefined} />
               {busy === 'athena' ? 'Handing off…' : 'Ask Athena'}
-              <kbd className="text-on-surface-variant ml-1 hidden font-mono text-[10px] sm:inline">
+              <kbd className="text-on-surface-variant ml-1 hidden font-mono text-[10px] @lg:inline">
                 ⌘↵
               </kbd>
             </Button>

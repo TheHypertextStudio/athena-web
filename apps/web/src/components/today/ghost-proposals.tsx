@@ -18,6 +18,7 @@ import { type JSX, useCallback, useEffect, useState } from 'react';
 
 import { api } from '@/lib/api';
 import { readError, readProblem } from '@/lib/problem';
+import { startViewTransition } from '@/lib/view-transition';
 
 /** One session's pending groups, tagged with where to review them in full. */
 interface SessionProposals {
@@ -61,7 +62,12 @@ export function GhostProposals({ orgId, onApplied }: GhostProposalsProps): JSX.E
           return { sessionId: session.id, groups: res.ok ? await res.json() : [] };
         }),
       );
-      setItems(withGroups.filter((entry) => entry.groups.length > 0));
+      const next = withGroups.filter((entry) => entry.groups.length > 0);
+      // Each ghost row carries a stable `view-transition-name` — commit inside a View Transition
+      // so an approved batch's rows morph out of the lane in place instead of popping.
+      startViewTransition(() => {
+        setItems(next);
+      });
     } catch {
       // A failed poll leaves the lane as it was; Today stays calm.
     }

@@ -23,16 +23,25 @@
  * workspace as reviewable ghosts, and nothing lands until you approve. Same engine,
  * same doors — the empty state just leads with the Athena door.
  */
+import type { SessionStatus } from '@docket/types';
 import { ArrowRight, Sparkles } from '@docket/ui/icons';
 import { Button } from '@docket/ui/primitives';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { type JSX, type KeyboardEvent, useCallback, useState } from 'react';
 
+import { SessionStatusPill } from '@/components/agents/session-status';
 import { api } from '@/lib/api';
 import { readError, readProblem } from '@/lib/problem';
 import { STALE, apiQueryOptions, useApiQuery } from '@/lib/query';
 import { queryKeys } from '@/lib/query-keys';
+
+/** A just-created Athena job session, tracked inline instead of navigating away from Today. */
+interface AthenaSessionNotice {
+  id: string;
+  orgId: string;
+  status: SessionStatus;
+}
 
 /** A successful capture: enough to confirm AND point at the created task. */
 interface CaptureNotice {
@@ -58,6 +67,7 @@ export function TodayPrompt({ orgId, orgLabel, onCaptured }: TodayPromptProps): 
   const [text, setText] = useState('');
   const [busy, setBusy] = useState<'capture' | 'athena' | null>(null);
   const [notice, setNotice] = useState<CaptureNotice | null>(null);
+  const [athenaSession, setAthenaSession] = useState<AthenaSessionNotice | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Detect the fresh-workspace moment: zero tasks flips the box into its onboarding
@@ -81,6 +91,7 @@ export function TodayPrompt({ orgId, orgLabel, onCaptured }: TodayPromptProps): 
     setBusy('capture');
     setError(null);
     setNotice(null);
+    setAthenaSession(null);
     try {
       const res = await api.v1.orgs[':orgId'].capture.$post({
         param: { orgId },
@@ -109,6 +120,7 @@ export function TodayPrompt({ orgId, orgLabel, onCaptured }: TodayPromptProps): 
     setBusy('athena');
     setError(null);
     setNotice(null);
+    setAthenaSession(null);
     try {
       const res = await api.v1.orgs[':orgId'].sessions.$post({
         param: { orgId },
@@ -116,16 +128,25 @@ export function TodayPrompt({ orgId, orgLabel, onCaptured }: TodayPromptProps): 
       });
       if (!res.ok) {
         setError(await readProblem(res, 'Athena could not take that on.'));
-        setBusy(null);
         return;
       }
       const session = await res.json();
-      router.push(`/orgs/${orgId}/sessions/${session.id}`);
+      // The firehose-onboarding moment (empty workspace) has its own dedicated full-page
+      // review — that flow is unchanged. An everyday ask stays on Today: the session is
+      // tracked inline instead of navigating away, so asking Athena something never feels
+      // like leaving the page you were on.
+      if (emptyWorkspace) {
+        router.push(`/orgs/${orgId}/sessions/${session.id}`);
+        return;
+      }
+      setText('');
+      setAthenaSession({ id: session.id, orgId, status: session.status });
     } catch (caught) {
       setError(readError(caught, 'Athena could not take that on.'));
+    } finally {
       setBusy(null);
     }
-  }, [orgId, text, router]);
+  }, [orgId, text, router, emptyWorkspace]);
 
   const onKeyDown = useCallback(
     (event: KeyboardEvent<HTMLTextAreaElement>): void => {
@@ -158,6 +179,7 @@ export function TodayPrompt({ orgId, orgLabel, onCaptured }: TodayPromptProps): 
           onChange={(event) => {
             setText(event.target.value);
             if (notice) setNotice(null);
+            if (athenaSession) setAthenaSession(null);
           }}
           onKeyDown={onKeyDown}
           rows={text.includes('\n') || text.length > 90 ? 3 : 2}
@@ -219,6 +241,20 @@ export function TodayPrompt({ orgId, orgLabel, onCaptured }: TodayPromptProps): 
           </p>
         ) : null}
       </div>
+      {athenaSession ? (
+        <div className="border-outline-variant bg-surface-container-low flex items-center justify-between gap-3 rounded-xl border px-4 py-3">
+          <span className="flex min-w-0 items-center gap-2">
+            <SessionStatusPill status={athenaSession.status} />
+            <span className="text-on-surface-variant text-sm">Athena is on it</span>
+          </span>
+          <Link
+            href={`/orgs/${athenaSession.orgId}/sessions/${athenaSession.id}`}
+            className="text-on-surface hover:text-primary shrink-0 text-sm font-medium underline underline-offset-4 transition-colors"
+          >
+            View session
+          </Link>
+        </div>
+      ) : null}
     </div>
   );
 }

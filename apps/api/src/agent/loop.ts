@@ -63,11 +63,17 @@ function toolUsesOf(message: TurnMessage): ToolUse[] {
   );
 }
 
+/** Turn a `snake_case` tool identifier into a lowercase phrase, e.g. `update_task` → `update task`. */
+function humanizeToolName(name: string): string {
+  return name.replace(/_/g, ' ');
+}
+
 /** Build a human-readable one-line summary for a tool call (the UI's action headline). */
 function summarizeToolCall(name: string, input: unknown): string {
   const obj = input && typeof input === 'object' ? (input as Record<string, unknown>) : {};
   const title = typeof obj['title'] === 'string' ? obj['title'] : undefined;
-  return title ? `${name}: "${title}"` : name;
+  const phrase = humanizeToolName(name);
+  return title ? `${phrase}: "${title}"` : phrase;
 }
 
 /** Settle a session's status (single writer for status/endedAt consistency). */

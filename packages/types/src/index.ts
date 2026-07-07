@@ -33,6 +33,7 @@ export * from './integration';
 export * from './identity';
 export * from './oauth-client';
 export * from './public-config';
+export * from './provider-catalog';
 export * from './session';
 export * from './account';
 export * from './notification';

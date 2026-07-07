@@ -10,6 +10,8 @@
  * logic exercised against this port; only the I/O edge is swapped by the app container.
  * The mail capability's types live in `./mail`.
  */
+import type { ConnectorProviderId } from '@docket/types';
+
 import type { MailActions } from './mail';
 import type { WorkGraphConnector } from './work-graph';
 
@@ -22,14 +24,7 @@ import type { WorkGraphConnector } from './work-graph';
  * `outlook` is Microsoft Outlook mail via the Graph API (dormant until the Microsoft
  * OAuth credentials are configured — `/v1/config` hides unconfigured providers).
  */
-export type ConnectorProvider =
-  | 'github'
-  | 'drive'
-  | 'linear'
-  | 'gmail'
-  | 'calendar'
-  | 'gtasks'
-  | 'outlook';
+export type ConnectorProvider = ConnectorProviderId;
 
 /** Input to establish a connection to a provider for an org scope. */
 export interface ConnectInput {

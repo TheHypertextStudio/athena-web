@@ -27,7 +27,7 @@ import type {
   SourceSystemKind,
   StreamRelevance,
 } from '@docket/types';
-import { EventKind } from '@docket/types';
+import { EventKind, providerSourceSystem, sourceIdentityProvider } from '@docket/types';
 import { and, eq, inArray, lt, or } from 'drizzle-orm';
 
 import { routeAndWriteRecipients, type RoutableEntity } from '../consumers/routing';
@@ -49,23 +49,6 @@ type InboundEventRow = typeof inboundEvent.$inferSelect;
 
 /** The number of inbound events one drain invocation will process. */
 const SWEEP_BATCH_LIMIT = 100;
-
-/**
- * Map an inbound {@link ObserverProvider} onto its canonical {@link SourceSystemKind} badge.
- *
- * @remarks
- * The observer providers that actually emit events (linear/github/slack) map 1:1; `calendar`
- * is the `google_calendar` source. Observe-only providers without a source-system badge
- * (`drive`/`gtasks`) yield `null` — their drafts are skipped (they don't normalize to events).
- */
-const PROVIDER_SOURCE_SYSTEM: Partial<Record<ObserverProvider, SourceSystemKind>> = {
-  github: 'github',
-  linear: 'linear',
-  slack: 'slack',
-  discord: 'discord',
-  gmail: 'gmail',
-  calendar: 'google_calendar',
-};
 
 /** The result of one drain sweep. */
 export interface DrainResult {
@@ -155,50 +138,29 @@ async function ownerUserId(ctx: SweepCtx, integrationId: string): Promise<string
 }
 
 /**
- * The Better Auth `providerId` whose linked `account` rows map an external actor id (the provider's
- * user snowflake/sub) to a Docket user — for the sources whose users can link an identity via OAuth.
- *
- * @remarks
- * The mention-attribution seam: a mentioned external user surfaces the mention for the Docket user
- * who linked that identity, not just the integration owner. Sources with no linkable identity
- * (`slack` — observe-only, no OAuth; `docket` — internal) yield null, so mentions there fall back
- * to the integration-owner path. The Google products share one `google` grant.
- */
-function identityProviderForSource(source: SourceSystemKind): string | null {
-  switch (source) {
-    case 'discord':
-    case 'github':
-    case 'linear':
-      return source;
-    case 'gmail':
-    case 'google_calendar':
-      return 'google';
-    default:
-      return null;
-  }
-}
-
-/**
  * Resolve an event's external participants (mentioned users, by their native id) to the Docket
- * users who have linked that identity — the mention-attribution seam. Returns already-resolved
- * Better Auth user ids for {@link routeAndWriteRecipients}; empty when the source has no linkable
- * identity or none of the participants are linked.
+ * users who have linked that identity — the mention-attribution seam.
  *
  * @param source - The event's canonical source system.
  * @param participants - The normalized participants (external actor refs) from the draft.
+ * @param kind - The event kind, used to choose mention vs participant relevance.
  */
-async function resolveParticipantUserIds(
+async function resolveLinkedIdentityRecipients(
   source: SourceSystemKind,
   participants: EventDraft['participants'],
-): Promise<string[]> {
-  const providerId = identityProviderForSource(source);
-  if (!providerId || !participants || participants.length === 0) return [];
+  kind: EventKind,
+): Promise<Map<string, StreamRelevance>> {
+  const providerId = sourceIdentityProvider(source);
+  const recipients = new Map<string, StreamRelevance>();
+  if (!providerId || !participants || participants.length === 0) return recipients;
   const externalIds = participants.map((p) => p.externalId);
   const rows = await db
     .select({ userId: account.userId })
     .from(account)
     .where(and(eq(account.providerId, providerId), inArray(account.accountId, externalIds)));
-  return [...new Set(rows.map((r) => r.userId))];
+  const reason: StreamRelevance = kind === 'mention' ? 'mention' : 'participant';
+  for (const row of rows) recipients.set(row.userId, reason);
+  return recipients;
 }
 
 /** Lift a draft actor into a canonical {@link ActorRef} stamped with the resolved source. */
@@ -234,7 +196,7 @@ async function processOne(ev: InboundEventRow, ctx: SweepCtx): Promise<number> {
   const now = ctx.now;
   const provider = asObserverProvider(ev.provider);
   const orgId = ev.organizationId;
-  const source = provider ? PROVIDER_SOURCE_SYSTEM[provider] : undefined;
+  const source = provider ? providerSourceSystem(provider) : null;
   // Unrouted (no matching integration), unsupported provider, or a provider with no source-system
   // badge: acknowledge without events.
   if (!provider || !orgId || !source) {
@@ -293,7 +255,9 @@ async function processOne(ev: InboundEventRow, ctx: SweepCtx): Promise<number> {
     const entityRef = toEntityRef(draft.entity, source);
     // Resolve mentioned external users → linked Docket users, so the mention routes to whoever was
     // actually named (the integration-owner fallback below still applies for unlinked participants).
-    const participantUserIds = await resolveParticipantUserIds(source, draft.participants);
+    const externalRecipients =
+      slackRecipients ??
+      (await resolveLinkedIdentityRecipients(source, draft.participants, kind.data));
 
     // Insert + fan-out in one transaction (the routing Strategy writes the recipient rows).
     const result = await db.transaction(async (tx) => {
@@ -345,8 +309,7 @@ async function processOne(ev: InboundEventRow, ctx: SweepCtx): Promise<number> {
           // Slack events carry real per-user relevance; the owner fallback is only for
           // providers without an identity mapping.
           ownerUserId: slackRecipients ? null : userId,
-          participantUserIds,
-          ...(slackRecipients ? { externalUserRecipients: slackRecipients } : {}),
+          externalRecipients,
         },
         occurredAt,
       );

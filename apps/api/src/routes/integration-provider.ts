@@ -2,7 +2,15 @@ import { account, actor, db } from '@docket/db';
 import type { integration, task } from '@docket/db';
 import { auth } from '@docket/auth';
 import type { IdentityOut, IdentityProvider, IntegrationOut, TaskOut } from '@docket/types';
-import { type IntegrationDirectoryProvider } from '@docket/types';
+import {
+  CONNECTOR_PROVIDER_IDS,
+  DIRECTORY_PROVIDER_IDS,
+  IdentityProvider as IdentityProviderSchema,
+  PROVIDER_CATALOG,
+  WEBHOOK_PROVIDER_IDS,
+  connectorIdentityProvider,
+  type IntegrationDirectoryProvider,
+} from '@docket/types';
 import type { ConnectorProvider, ObserverProvider } from '@docket/integrations';
 import { WRITE_BACK_CAPABLE_PROVIDERS } from '@docket/integrations';
 import { and, eq, inArray } from 'drizzle-orm';
@@ -18,15 +26,7 @@ export type IntegrationRow = typeof integration.$inferSelect;
 export type TaskRow = typeof task.$inferSelect;
 
 /** The providers the {@link Connector} port can import from. */
-export const CONNECTOR_PROVIDERS: readonly ConnectorProvider[] = [
-  'github',
-  'drive',
-  'linear',
-  'gmail',
-  'calendar',
-  'gtasks',
-  'outlook',
-];
+export const CONNECTOR_PROVIDERS: readonly ConnectorProvider[] = [...CONNECTOR_PROVIDER_IDS];
 
 /**
  * Connectors whose `integration.writeBack` DEFAULTS ON at connect when the caller doesn't specify.
@@ -52,8 +52,7 @@ export const WRITE_BACK_PROVIDERS: ReadonlySet<string> = WRITE_BACK_CAPABLE_PROV
  * observe-only sources (Slack), which connect for signal ingestion but expose no import/sync.
  */
 export const DIRECTORY_PROVIDERS: readonly (ConnectorProvider | 'slack')[] = [
-  ...CONNECTOR_PROVIDERS,
-  'slack',
+  ...DIRECTORY_PROVIDER_IDS,
 ];
 
 /**
@@ -67,36 +66,23 @@ export const DIRECTORY_PROVIDERS: readonly (ConnectorProvider | 'slack')[] = [
  */
 export const PROVIDER_DIRECTORY: Readonly<
   Record<ConnectorProvider | 'slack', Omit<IntegrationDirectoryProvider, 'provider' | 'syncable'>>
-> = {
-  slack: { name: 'Slack', pattern: 'connector', roles: ['signal'], category: 'communication' },
-  github: {
-    name: 'GitHub',
-    pattern: 'connector',
-    roles: ['code', 'work'],
-    category: 'engineering',
-  },
-  linear: { name: 'Linear', pattern: 'connector', roles: ['work'], category: 'project-management' },
-  drive: { name: 'Google Drive', pattern: 'connector', roles: ['context'], category: 'documents' },
-  gmail: { name: 'Gmail', pattern: 'connector', roles: ['signal'], category: 'communication' },
-  calendar: {
-    name: 'Google Calendar',
-    pattern: 'connector',
-    roles: ['time'],
-    category: 'communication',
-  },
-  gtasks: {
-    name: 'Google Tasks',
-    pattern: 'connector',
-    roles: ['work'],
-    category: 'project-management',
-  },
-  outlook: {
-    name: 'Outlook',
-    pattern: 'connector',
-    roles: ['signal'],
-    category: 'communication',
-  },
-};
+> = Object.fromEntries(
+  DIRECTORY_PROVIDERS.map((provider) => {
+    const entry = PROVIDER_CATALOG[provider];
+    return [
+      provider,
+      {
+        name: entry.name,
+        pattern: entry.pattern,
+        roles: [...entry.roles],
+        category: entry.category,
+      },
+    ];
+  }),
+) as Record<
+  ConnectorProvider | 'slack',
+  Omit<IntegrationDirectoryProvider, 'provider' | 'syncable'>
+>;
 
 /** Narrow a stored integration `provider` string to a {@link ConnectorProvider}. */
 export function asConnectorProvider(provider: string): ConnectorProvider | null {
@@ -104,11 +90,7 @@ export function asConnectorProvider(provider: string): ConnectorProvider | null 
 }
 
 /** Every {@link ObserverProvider} — the connectors plus observe-only sources (Slack, Discord). */
-export const OBSERVER_PROVIDERS: readonly ObserverProvider[] = [
-  ...CONNECTOR_PROVIDERS,
-  'slack',
-  'discord',
-];
+export const OBSERVER_PROVIDERS: readonly ObserverProvider[] = [...WEBHOOK_PROVIDER_IDS];
 
 /** Narrow a stored integration/event `provider` string to an {@link ObserverProvider}. */
 export function asObserverProvider(provider: string): ObserverProvider | null {
@@ -124,10 +106,7 @@ export function asObserverProvider(provider: string): ObserverProvider | null {
  * GitHub and Linear each have their own.
  */
 export function socialProviderId(provider: ConnectorProvider): string {
-  if (provider === 'github') return 'github';
-  if (provider === 'linear') return 'linear';
-  if (provider === 'outlook') return 'microsoft';
-  return 'google';
+  return connectorIdentityProvider(provider);
 }
 
 /**
@@ -248,13 +227,7 @@ export async function resolveConnectorToken(
 }
 
 /** The social providers a linked identity can belong to (mirrors Better Auth `socialProviders`). */
-const IDENTITY_PROVIDERS: readonly IdentityProvider[] = [
-  'google',
-  'github',
-  'linear',
-  'discord',
-  'microsoft',
-];
+const IDENTITY_PROVIDERS: readonly IdentityProvider[] = [...IdentityProviderSchema.options];
 
 /**
  * List the user's linked external identities across every supported provider (Google / GitHub /

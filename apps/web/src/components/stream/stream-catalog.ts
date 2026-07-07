@@ -8,22 +8,28 @@
  * `organizationId`) so a toolbar-built predicate translates straight to SQL. The cross-org
  * personal stream adds a Workspace field; the per-workspace firehose omits it.
  */
-import { CanonicalEntityKind, EventKind } from '@docket/types';
+import { CanonicalEntityKind, EventKind, PROVIDER_CATALOG } from '@docket/types';
 
 import type { FieldCatalog, FieldDescriptor, FieldOption } from '@/components/views/field-catalog';
 
 import { KIND_LABEL, type StreamEventRow } from './stream-meta';
 
+const SOURCE_LABELS = Object.fromEntries(
+  Object.values(PROVIDER_CATALOG).flatMap((entry) =>
+    entry.sourceSystem ? [[entry.sourceSystem, entry.name]] : [],
+  ),
+);
+
 /** The known event sources, shown in the Source filter. */
 const SYSTEM_OPTIONS: readonly FieldOption[] = [
   { value: 'docket', label: 'Docket', hint: 'docket' },
-  { value: 'linear', label: 'Linear', hint: 'linear' },
-  { value: 'github', label: 'GitHub', hint: 'github' },
-  { value: 'slack', label: 'Slack', hint: 'slack' },
-  { value: 'discord', label: 'Discord', hint: 'discord' },
-  { value: 'google_calendar', label: 'Google Calendar', hint: 'google_calendar' },
-  { value: 'gmail', label: 'Gmail', hint: 'gmail' },
-  { value: 'outlook', label: 'Outlook', hint: 'outlook' },
+  ...['linear', 'github', 'slack', 'discord', 'google_calendar', 'gmail', 'outlook'].map(
+    (source) => ({
+      value: source,
+      label: SOURCE_LABELS[source] ?? source,
+      hint: source,
+    }),
+  ),
 ];
 
 /** Canonical kinds, shown in the Kind filter. */

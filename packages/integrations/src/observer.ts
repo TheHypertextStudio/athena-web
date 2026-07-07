@@ -20,19 +20,17 @@
  * chain of detail-builders ending in a `generic` fallback — so an event we don't yet have a
  * specific shape for still surfaces (a degraded row) instead of being dropped.
  */
-import type { CanonicalEntityKind, EventDetail, EventKind } from '@docket/types';
-
-import type { ConnectorProvider } from './connector';
+import type { CanonicalEntityKind, EventDetail, EventKind, WebhookProviderId } from '@docket/types';
 
 /**
  * The providers an {@link Observer} can be bound to.
  *
  * @remarks
- * A superset of {@link ConnectorProvider}: every connector can also be observed, plus
- * **observe-only** sources that have no work-import connector (e.g. Slack, Discord). Keeping
- * observer providers as their own union avoids polluting `ConnectorProvider`'s exhaustive switches.
+ * Narrowed to providers that actually expose webhook observation. Connector-only providers
+ * deliberately stay out of this union so ingest and observer factories cannot accept impossible
+ * observer providers.
  */
-export type ObserverProvider = ConnectorProvider | 'slack' | 'discord';
+export type ObserverProvider = WebhookProviderId;
 
 /** Inbound webhook request headers, lower-cased keys (Hono header lookup is case-insensitive). */
 export type InboundHeaders = Record<string, string | undefined>;

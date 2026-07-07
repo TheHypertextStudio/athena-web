@@ -197,8 +197,6 @@ export function buildObserver(
       return new RealDiscordObserver({
         publicKey: required('DISCORD_PUBLIC_KEY', runtimeEnv.DISCORD_PUBLIC_KEY),
       });
-    default:
-      throw new Error(`No production observer configured for provider ${provider}`);
   }
 }
 

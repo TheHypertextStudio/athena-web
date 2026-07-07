@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { dispatchSystemUserNotification } from '../../../src/services/notifications/system';
-import { getDb, one, seedUserWithHub } from '../../routes/harness.test';
+import { getDb, one, seedUserWithHub } from '../../support/routes-harness';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;

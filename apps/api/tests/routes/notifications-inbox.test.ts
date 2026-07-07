@@ -11,7 +11,6 @@ import {
   seedBaseOrg,
   seedUserWithHub,
 } from '../support/routes-harness';
-import type notificationsRouter from '../../src/routes/notifications';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;

@@ -10,7 +10,7 @@
  */
 import type { ContactPointCreate, ContactPointOut } from '@docket/notifications';
 import { cn } from '@docket/ui';
-import { CheckCircle2, Mail, MessageSquare, Trash2 } from '@docket/ui/icons';
+import { CheckCircle2, Mail, MessageSquare, Trash2, X } from '@docket/ui/icons';
 import { Badge, Button, Input } from '@docket/ui/primitives';
 import { type JSX, type SyntheticEvent, useState } from 'react';
 
@@ -36,7 +36,14 @@ export interface ContactPointsSectionProps {
   readonly onDisable: (id: string) => Promise<void> | void;
 }
 
-/** Notification destination list and phone-add form. */
+type AddableContactPointType = 'email' | 'phone';
+
+const CONTACT_METHODS: readonly { type: AddableContactPointType; label: string }[] = [
+  { type: 'phone', label: 'Phone' },
+  { type: 'email', label: 'Email' },
+];
+
+/** Notification destination list and destination-add form. */
 export function ContactPointsSection({
   contactPoints,
   creating,
@@ -48,36 +55,72 @@ export function ContactPointsSection({
   onMakePrimary,
   onDisable,
 }: ContactPointsSectionProps): JSX.Element {
-  const [phone, setPhone] = useState('');
+  const [contactType, setContactType] = useState<AddableContactPointType>('phone');
+  const [destination, setDestination] = useState('');
+  const [confirmDisableId, setConfirmDisableId] = useState<string | null>(null);
   const [codes, setCodes] = useState<Record<string, string>>({});
 
-  const submitPhone = (event: SyntheticEvent<HTMLFormElement>): void => {
+  const submitDestination = (event: SyntheticEvent<HTMLFormElement>): void => {
     event.preventDefault();
-    const value = phone.trim();
+    const value = destination.trim();
     if (!value) return;
-    void Promise.resolve(onAdd({ type: 'phone', value, purpose: 'sms_notifications' })).then(() => {
-      setPhone('');
+    const purpose = contactType === 'email' ? 'email_notifications' : 'sms_notifications';
+    void Promise.resolve(onAdd({ type: contactType, value, purpose })).then(() => {
+      setDestination('');
     });
   };
 
+  const destinationLabel = contactType === 'phone' ? 'Phone number' : 'Destination';
+  const destinationType = contactType === 'phone' ? 'tel' : 'email';
+  const autocomplete = contactType === 'phone' ? 'tel' : 'email';
+
   return (
     <section aria-label="Notification contact points" className="flex flex-col gap-4">
-      <form onSubmit={submitPhone} className="flex flex-col gap-2 @2xl:flex-row @2xl:items-end">
-        <label className="text-on-surface-variant flex min-w-0 flex-1 flex-col gap-1 text-xs">
-          Phone number
-          <Input
-            type="tel"
-            value={phone}
+      <form
+        onSubmit={submitDestination}
+        className="grid gap-2 @2xl:grid-cols-[10rem_minmax(0,1fr)_auto] @2xl:items-end"
+      >
+        <label className="text-on-surface-variant flex min-w-0 flex-col gap-1 text-xs">
+          Contact method
+          <select
+            value={contactType}
             disabled={creating}
-            autoComplete="tel"
+            className="border-outline-variant text-body focus-visible:ring-ring h-9 rounded-md border bg-transparent px-3 shadow-sm focus-visible:ring-2 focus-visible:outline-none"
             onChange={(event) => {
-              setPhone(event.target.value);
+              setContactType(event.target.value as AddableContactPointType);
+              setDestination('');
+            }}
+          >
+            {CONTACT_METHODS.map((method) => (
+              <option key={method.type} value={method.type}>
+                {method.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-on-surface-variant flex min-w-0 flex-1 flex-col gap-1 text-xs">
+          {destinationLabel}
+          <Input
+            type={destinationType}
+            value={destination}
+            disabled={creating}
+            autoComplete={autocomplete}
+            onChange={(event) => {
+              setDestination(event.target.value);
             }}
           />
         </label>
-        <Button type="submit" variant="outline" disabled={creating || phone.trim().length === 0}>
-          <MessageSquare className="size-4" />
-          {creating ? 'Adding…' : 'Add phone'}
+        <Button
+          type="submit"
+          variant="outline"
+          disabled={creating || destination.trim().length === 0}
+        >
+          {contactType === 'email' ? (
+            <Mail className="size-4" />
+          ) : (
+            <MessageSquare className="size-4" />
+          )}
+          {creating ? 'Adding…' : contactType === 'email' ? 'Add destination' : 'Add phone'}
         </Button>
       </form>
 
@@ -124,19 +167,51 @@ export function ContactPointsSection({
                   </Button>
                 ) : null}
                 {point.status !== 'disabled' ? (
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    aria-label={`Disable ${point.valueMasked}`}
-                    title={`Disable ${point.valueMasked}`}
-                    disabled={savingId === point.id}
-                    onClick={() => {
-                      void onDisable(point.id);
-                    }}
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
+                  confirmDisableId === point.id ? (
+                    <>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        aria-label={`Confirm disable ${point.valueMasked}`}
+                        disabled={savingId === point.id}
+                        onClick={() => {
+                          void Promise.resolve(onDisable(point.id)).then(() => {
+                            setConfirmDisableId(null);
+                          });
+                        }}
+                      >
+                        <Trash2 className="size-4" />
+                        Confirm
+                      </Button>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        aria-label={`Cancel disable ${point.valueMasked}`}
+                        disabled={savingId === point.id}
+                        onClick={() => {
+                          setConfirmDisableId(null);
+                        }}
+                      >
+                        <X className="size-4" />
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      aria-label={`Disable ${point.valueMasked}`}
+                      title={`Disable ${point.valueMasked}`}
+                      disabled={savingId === point.id}
+                      onClick={() => {
+                        setConfirmDisableId(point.id);
+                      }}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  )
                 ) : null}
               </div>
             </div>

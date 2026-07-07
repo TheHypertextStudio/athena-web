@@ -10,8 +10,14 @@ import { api } from '@/lib/api';
 import { readError, readProblem } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, useLiveApiQuery } from '@/lib/query';
 
-/** The Inbox's two feeds. */
-type InboxTab = 'inbox' | 'activity';
+/** The Inbox's attention slices and passive activity feed. */
+export type InboxTab =
+  | 'all'
+  | 'unread'
+  | 'needs_action'
+  | 'announcements'
+  | 'mentions'
+  | 'activity';
 
 /** The number of activity events pulled per page of the passive awareness feed. */
 const ACTIVITY_PAGE_SIZE = 50;
@@ -52,7 +58,7 @@ export interface InboxPageData {
  */
 export function useInboxPage(): InboxPageData {
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<InboxTab>('inbox');
+  const [tab, setTab] = useState<InboxTab>('all');
   const [pendingIds, setPendingIds] = useState<ReadonlySet<string>>(new Set());
   const [markingAll, setMarkingAll] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -176,13 +182,30 @@ export function useInboxPage(): InboxPageData {
   }, [notifications]);
 
   const unreadCount = useMemo(() => notifications.filter((n) => !n.readAt).length, [notifications]);
+  const announcementCount = useMemo(
+    () => notifications.filter((n) => n.type === 'service_announcement').length,
+    [notifications],
+  );
+  const mentionsCount = useMemo(
+    () => notifications.filter((n) => n.type === 'mention' || n.type === 'assignment').length,
+    [notifications],
+  );
 
   const segments = useMemo<readonly SegmentDef<InboxTab>[]>(
     () => [
-      { id: 'inbox', label: 'Inbox', count: unreadCount, emphasis: pendingApprovals > 0 },
+      { id: 'all', label: 'All', count: notifications.length },
+      { id: 'unread', label: 'Unread', count: unreadCount },
+      {
+        id: 'needs_action',
+        label: 'Needs action',
+        count: pendingApprovals,
+        emphasis: pendingApprovals > 0,
+      },
+      { id: 'announcements', label: 'Announcements', count: announcementCount },
+      { id: 'mentions', label: 'Mentions & assignments', count: mentionsCount },
       { id: 'activity', label: 'Activity' },
     ],
-    [unreadCount, pendingApprovals],
+    [announcementCount, mentionsCount, notifications.length, pendingApprovals, unreadCount],
   );
 
   return {

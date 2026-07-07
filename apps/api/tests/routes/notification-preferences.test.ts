@@ -2,7 +2,13 @@ import type * as DbModule from '@docket/db';
 import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { appWithSession, fakeSession, getDb, seedBaseOrg, seedUserWithHub } from './harness.test';
+import {
+  appWithSession,
+  fakeSession,
+  getDb,
+  seedBaseOrg,
+  seedUserWithHub,
+} from '../support/routes-harness';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;

@@ -8,7 +8,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type { AppEnv } from '../../src/context';
 import { onError } from '../../src/error';
 import { dispatchSystemUserNotification } from '../../src/services/notifications/system';
-import { getDb, one, seedUserWithHub } from './harness.test';
+import { getDb, one, seedUserWithHub } from '../support/routes-harness';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;

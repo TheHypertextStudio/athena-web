@@ -19,6 +19,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@docket/env": "workspace:*",
     "nodemailer": "9.0.3"
   },
   "devDependencies": {

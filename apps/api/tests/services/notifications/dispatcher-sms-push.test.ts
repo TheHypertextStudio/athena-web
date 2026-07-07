@@ -5,7 +5,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import { dispatchNotificationIntent } from '../../../src/services/notifications/dispatcher';
 import { recordNotificationProviderEvent } from '../../../src/services/notifications/inbound';
-import { getDb, one, seedUserWithHub } from '../../routes/harness.test';
+import { getDb, one, seedUserWithHub } from '../../support/routes-harness';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;

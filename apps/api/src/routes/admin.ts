@@ -17,7 +17,7 @@ import {
   user,
 } from '@docket/db';
 import { and, count, desc, eq, ilike, isNull, or, type SQL } from 'drizzle-orm';
-import { Hono } from 'hono';
+import { Hono, type Schema } from 'hono';
 
 import {
   AdminAuditPage,
@@ -56,7 +56,10 @@ import { adminBillingRoutes } from './admin-billing-routes';
 import { adminStaffRoutes } from './admin-staff-routes';
 
 /** The staff-gated operator back-office router. */
-export function createAdminRoutes(notificationRoutes: Hono<AppEnv>) {
+export function createAdminRoutes<
+  TNotificationSchema extends Schema,
+  TNotificationBasePath extends string,
+>(notificationRoutes: Hono<AppEnv, TNotificationSchema, TNotificationBasePath>) {
   return (
     new Hono<AppEnv>()
       .use('*', staffMiddleware)

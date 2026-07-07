@@ -111,4 +111,66 @@ describe('ContactPointsSection', () => {
       expect(onVerify).toHaveBeenCalledWith(PHONE_PENDING_ID, '000000');
     });
   });
+
+  it('adds an email contact point from the shared destination form', async () => {
+    const onAdd = vi.fn(() => Promise.resolve());
+    render(
+      <ContactPointsSection
+        contactPoints={[]}
+        creating={false}
+        savingId={null}
+        verifyingId={null}
+        error={null}
+        onAdd={onAdd}
+        onVerify={vi.fn()}
+        onMakePrimary={vi.fn()}
+        onDisable={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText('Contact method'), { target: { value: 'email' } });
+    fireEvent.change(screen.getByLabelText('Destination'), {
+      target: { value: 'alerts@example.com' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add destination' }));
+
+    await waitFor(() => {
+      expect(onAdd).toHaveBeenCalledWith({
+        type: 'email',
+        value: 'alerts@example.com',
+        purpose: 'email_notifications',
+      });
+    });
+  });
+
+  it('requires confirmation before disabling a contact point', () => {
+    const onDisable = vi.fn();
+    render(
+      <ContactPointsSection
+        contactPoints={[
+          contactPoint({
+            id: EMAIL_PRIMARY_ID,
+            type: 'email',
+            valueMasked: 'a***@x.test',
+            status: 'active',
+            primary: true,
+          }),
+        ]}
+        creating={false}
+        savingId={null}
+        verifyingId={null}
+        error={null}
+        onAdd={vi.fn()}
+        onVerify={vi.fn()}
+        onMakePrimary={vi.fn()}
+        onDisable={onDisable}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Disable a***@x.test' }));
+    expect(onDisable).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm disable a***@x.test' }));
+    expect(onDisable).toHaveBeenCalledWith(EMAIL_PRIMARY_ID);
+  });
 });

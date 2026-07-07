@@ -678,6 +678,9 @@ importers:
 
   packages/mail:
     dependencies:
+      '@docket/env':
+        specifier: workspace:*
+        version: link:../env
       nodemailer:
         specifier: 9.0.3
         version: 9.0.3

@@ -10,7 +10,7 @@ import { ActivityRow } from '@/components/inbox/activity-row';
 import { isApproval } from '@/components/inbox/notification-meta';
 import { NotificationRow } from '@/components/inbox/notification-row';
 import { SegmentedTabs } from '@/components/inbox/segmented-tabs';
-import { useInboxPage } from './use-inbox-page';
+import { type InboxTab, useInboxPage } from './use-inbox-page';
 
 /** InboxPage renders the authenticated inbox page. */
 export default function InboxClient(): JSX.Element {
@@ -20,7 +20,6 @@ export default function InboxClient(): JSX.Element {
     setTab,
     orderedInbox,
     activity,
-    unreadCount,
     loading,
     error,
     refetch,
@@ -33,11 +32,14 @@ export default function InboxClient(): JSX.Element {
     onMarkAllRead,
   } = useInboxPage();
 
-  const panelId = (id: 'inbox' | 'activity'): string => `inbox-${id}-panel`;
-  const needsAction = orderedInbox.filter(
+  const panelId = (id: InboxTab): string => `inbox-${id}-panel`;
+  const visibleInbox = orderedInbox.filter((notification) => filterNotification(tab, notification));
+  const visibleUnreadCount = visibleInbox.filter((notification) => !notification.readAt).length;
+  const needsAction = visibleInbox.filter(
     (notification) => isApproval(notification.type) && !notification.readAt,
   );
-  const updates = orderedInbox.filter((notification) => !needsAction.includes(notification));
+  const updates = visibleInbox.filter((notification) => !needsAction.includes(notification));
+  const empty = emptyStateForTab(tab);
 
   return (
     <div className="mx-auto flex h-full w-full max-w-4xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
@@ -54,7 +56,7 @@ export default function InboxClient(): JSX.Element {
           onChange={setTab}
           panelId={panelId}
         />
-        {tab === 'inbox' && !loading && unreadCount > 0 ? (
+        {tab !== 'activity' && !loading && visibleUnreadCount > 0 ? (
           <Button
             variant="ghost"
             size="sm"
@@ -90,14 +92,14 @@ export default function InboxClient(): JSX.Element {
       {/* ── Inbox feed (actionable) ───────────────────────────────────────── */}
       <section
         role="tabpanel"
-        id={panelId('inbox')}
-        aria-labelledby={`${panelId('inbox')}-tab`}
-        hidden={tab !== 'inbox'}
+        id={panelId(tab === 'activity' ? 'all' : tab)}
+        aria-labelledby={`${panelId(tab === 'activity' ? 'all' : tab)}-tab`}
+        hidden={tab === 'activity'}
         className="flex min-w-0 flex-col gap-1.5"
       >
         {loading ? (
           <FeedSkeleton />
-        ) : orderedInbox.length > 0 ? (
+        ) : visibleInbox.length > 0 ? (
           <div className="flex flex-col gap-5">
             <NotificationGroup
               title="Needs action"
@@ -117,10 +119,7 @@ export default function InboxClient(): JSX.Element {
             />
           </div>
         ) : (
-          <EmptyState
-            title="Inbox zero"
-            body="No approvals, mentions, or assignments need your response right now."
-          />
+          <EmptyState title={empty.title} body={empty.body} />
         )}
       </section>
 
@@ -144,6 +143,43 @@ export default function InboxClient(): JSX.Element {
       </section>
     </div>
   );
+}
+
+function filterNotification(tab: InboxTab, notification: NotificationOut): boolean {
+  switch (tab) {
+    case 'all':
+      return true;
+    case 'unread':
+      return !notification.readAt;
+    case 'needs_action':
+      return isApproval(notification.type) && !notification.readAt;
+    case 'announcements':
+      return notification.type === 'service_announcement';
+    case 'mentions':
+      return notification.type === 'mention' || notification.type === 'assignment';
+    case 'activity':
+      return false;
+    default:
+      return true;
+  }
+}
+
+function emptyStateForTab(tab: InboxTab): EmptyStateProps {
+  switch (tab) {
+    case 'unread':
+      return { title: 'All caught up', body: 'No unread notifications need your attention.' };
+    case 'needs_action':
+      return { title: 'Nothing needs action', body: 'No approvals are waiting on you right now.' };
+    case 'announcements':
+      return { title: 'No announcements', body: 'Service updates will show up here.' };
+    case 'mentions':
+      return { title: 'No mentions or assignments', body: 'Direct work pings will show up here.' };
+    default:
+      return {
+        title: 'Inbox zero',
+        body: 'No approvals, mentions, or assignments need your response right now.',
+      };
+  }
 }
 
 /** Props for {@link NotificationGroup}. */

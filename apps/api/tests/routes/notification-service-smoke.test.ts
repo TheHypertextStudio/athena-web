@@ -9,7 +9,7 @@ import {
   seedContactPoint,
   seedStaffUser,
   seedUserWithHub,
-} from './harness.test';
+} from '../support/routes-harness';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;

@@ -3,7 +3,7 @@ import { NotificationAudience } from '@docket/notifications';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { expandNotificationAudience } from '../../../src/services/notifications/audience';
-import { addMember, getDb, seedOrg, seedUserWithHub } from '../../routes/harness.test';
+import { addMember, getDb, seedOrg, seedUserWithHub } from '../../support/routes-harness';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;

@@ -1,5 +1,7 @@
 import { vi } from 'vitest';
 
+import type * as AuthModule from '@docket/auth';
+
 interface TestSession {
   readonly user: { readonly id: string; readonly name: string; readonly email: string };
 }
@@ -16,15 +18,22 @@ const mocks = vi.hoisted(() => ({
   handler: vi.fn(async () => new Response('ok')),
 }));
 
-vi.mock('@docket/auth', () => ({
-  auth: {
-    api: {
-      getSession: mocks.getSession,
-      getMcpSession: mocks.getMcpSession,
+vi.mock('@docket/auth', async (importOriginal) => {
+  const actual = await importOriginal<typeof AuthModule>();
+
+  return {
+    ...actual,
+    auth: {
+      ...actual.auth,
+      api: {
+        ...actual.auth.api,
+        getSession: mocks.getSession,
+        getMcpSession: mocks.getMcpSession,
+      },
+      handler: mocks.handler,
     },
-    handler: mocks.handler,
-  },
-}));
+  };
+});
 
 export const getSession = mocks.getSession;
 export const getMcpSession = mocks.getMcpSession;

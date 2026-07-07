@@ -857,14 +857,19 @@ git commit -m "test(web): cover notification settings e2e"
 
 Before declaring the objective complete, verify each item against current state:
 
-- [ ] Spec concepts exist in data model: intent, recipient snapshot, delivery, contact point, preferences, inbound event.
-- [ ] REST API surface exists and is tested: `/v1/me/notifications`, `/v1/me/notification-preferences`, `/v1/me/contact-points`, `/v1/notifications`, `/admin/notifications`, `/internal/notifications/*`.
-- [ ] Web channel preserves existing inbox behavior and adds intent/delivery linkage.
-- [ ] Email channel uses `Mailer` and records delivery state.
-- [ ] SMS and push have tested ports/adapters and contact-point behavior, even if live provider credentials are absent.
-- [ ] Incoming provider events and user replies normalize into inbound events and update delivery/contact state.
-- [ ] Staff announcement UX supports compose, audience, channels, preview, review, monitor.
-- [ ] User UX supports Slack-like inbox tabs, preferences, quiet hours, and contact points.
-- [ ] Docs explain behavior, setup, and operations.
-- [ ] Full typecheck, lint, unit/integration tests, and E2E gates pass with command output recorded.
-- [ ] `git rev-list --merges --count origin/main..HEAD` returns `0`.
+- [x] Spec concepts exist in data model: intent, recipient snapshot, delivery, contact point, preferences, inbound event.
+- [x] REST API surface exists and is tested: `/v1/me/notifications`, `/v1/me/notification-preferences`, `/v1/me/contact-points`, `/v1/notifications`, `/admin/notifications`, `/internal/notifications/*`.
+- [x] Web channel preserves existing inbox behavior and adds intent/delivery linkage.
+- [x] Email channel uses `Mailer` and records delivery state.
+- [x] SMS and push have tested ports/adapters and contact-point behavior, even if live provider credentials are absent.
+- [x] Incoming provider events and user replies normalize into inbound events and update delivery/contact state.
+- [x] Staff announcement UX supports compose, audience, channels, preview, review, monitor.
+- [x] User UX supports Slack-like inbox tabs, preferences, quiet hours, and contact points.
+- [x] Docs explain behavior, setup, and operations.
+- [x] Full typecheck, lint, unit/integration tests, and E2E gates pass with command output recorded.
+- [x] `git rev-list --merges --count origin/main..HEAD` returns `0`.
+
+Audit evidence recorded on 2026-07-07: `rg` confirmed notification-service schema symbols,
+route mounts, channel adapters, inbound services, staff/user UX files, docs, and test files in the
+current tree; `git status --porcelain=v1 -b` was clean after the E2E commit; and
+`git rev-list --merges --count origin/main..HEAD` returned `0`.

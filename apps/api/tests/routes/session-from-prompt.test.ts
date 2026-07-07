@@ -5,7 +5,7 @@
  * @remarks
  * The hybrid Home prompt box's "ask Athena to plan" escalation: a freeform prompt
  * becomes a session bound to the org's default agent (lazily created on first use) and
- * is run against the mock {@link import('@docket/agent-runtime').AgentRuntime}. Asserts the
+ * is run against the mock {@link import('@docket/agent-runtime').AgentTurnRuntime}. Asserts the
  * default agent is materialized once (idempotent), the prompt is persisted as the
  * session's opening `response` activity, and the session runs through to the gate.
  */
@@ -165,8 +165,8 @@ describe('POST /sessions (create + run from a freeform prompt)', () => {
     expect(agents).toHaveLength(1);
     expect(body.agentId).toBe(agents[0]?.id);
 
-    // The prompt is the session's opening `response` activity, followed by the scripted
-    // stream (thought → action → elicitation → response).
+    // The prompt is the session's opening `response` activity, followed by the first
+    // one-turn runtime pass (thought → action).
     const activities = await db
       .select()
       .from(sessionActivity)
@@ -174,12 +174,7 @@ describe('POST /sessions (create + run from a freeform prompt)', () => {
       .orderBy(asc(sessionActivity.createdAt));
     expect(activities[0]?.type).toBe('response');
     expect(activities[0]?.body).toMatchObject({ text: 'plan outreach strategy' });
-    expect(activities.slice(1).map((a) => a.type)).toEqual([
-      'thought',
-      'action',
-      'elicitation',
-      'response',
-    ]);
+    expect(activities.slice(1).map((a) => a.type)).toEqual(['thought', 'action']);
 
     // The session is task-less; the prompt is its brief.
     const session = await db
@@ -194,8 +189,7 @@ describe('POST /sessions (create + run from a freeform prompt)', () => {
   it('threads the freeform prompt through to the runtime as the task brief', async () => {
     const s = await seedOrg();
     const app = appFor(s.orgId, ['contribute'], s.humanActorId);
-    // Spy on the boundary runtime to capture the brief the wiring passes to startSession.
-    const spy = vi.spyOn(getContainer().agentRuntime, 'startSession');
+    const spy = vi.spyOn(getContainer().agentTurn, 'streamTurn');
     try {
       const res = await app.request('/', {
         method: 'POST',
@@ -204,9 +198,12 @@ describe('POST /sessions (create + run from a freeform prompt)', () => {
       });
       expect(res.status).toBe(200);
       expect(spy).toHaveBeenCalledTimes(1);
-      // The prompt — not the session id — is the runtime task brief (the threading fix).
-      expect(spy.mock.calls[0]?.[0]?.task).toBe('plan the launch roadmap');
-      expect(spy.mock.calls[0]?.[0]?.agent).toBe(DEFAULT_AGENT_NAME);
+      const firstMessage = spy.mock.calls[0]?.[0]?.messages[0];
+      expect(firstMessage?.content).toContainEqual({
+        type: 'text',
+        text: 'plan the launch roadmap',
+      });
+      expect(spy.mock.calls[0]?.[0]?.system).toContain(DEFAULT_AGENT_NAME);
     } finally {
       spy.mockRestore();
     }

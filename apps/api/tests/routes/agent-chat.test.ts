@@ -6,7 +6,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type * as DbModule from '@docket/db';
-import type * as BoundariesModule from '@docket/boundaries';
+import type * as AgentRuntimeModule from '@docket/agent-runtime';
 import type { AgentSessionDetailOut } from '@docket/types';
 
 import type { ActorCtx, AppEnv } from '../../src/context';
@@ -26,7 +26,7 @@ const MIGRATIONS = resolve(import.meta.dirname, '../../../../packages/db/drizzle
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
-let boundaries!: typeof BoundariesModule;
+let agentRuntime!: typeof AgentRuntimeModule;
 let agentSessions!: typeof agentSessionsRouter;
 let getContainer!: typeof GetContainer;
 
@@ -34,7 +34,7 @@ beforeAll(async () => {
   schema = await import('@docket/db');
   db = schema.db;
   await migrate(db as never, { migrationsFolder: MIGRATIONS });
-  boundaries = await import('@docket/boundaries');
+  agentRuntime = await import('@docket/agent-runtime');
   agentSessions = (await import('../../src/routes/agent-sessions')).default;
   ({ getContainer } = await import('../../src/container'));
 });
@@ -80,7 +80,7 @@ function appFor(orgId: string, actorId: string) {
 }
 
 /** Script N text-only turns (chat exchanges), indexed by assistant-message count. */
-function chatScript(replies: readonly string[]): readonly BoundariesModule.ScriptedTurn[] {
+function chatScript(replies: readonly string[]): readonly AgentRuntimeModule.ScriptedTurn[] {
   return replies.map((text) => ({
     message: { role: 'assistant' as const, content: [{ type: 'text' as const, text }] },
     stopReason: 'end_turn' as const,
@@ -111,7 +111,7 @@ describe('the Athena chat thread', () => {
   it('answers a message and keeps the conversation across exchanges', async () => {
     const seed = await seedOrg();
     const app = appFor(seed.orgId, seed.humanActorId);
-    const runtime = new boundaries.MockAgentTurnRuntime({
+    const runtime = new agentRuntime.MockAgentTurnRuntime({
       script: chatScript(['You have three tasks due today.', 'Nothing else is urgent.']),
     });
     const spy = vi
@@ -154,7 +154,7 @@ describe('the Athena chat thread', () => {
   it('starts a fresh chat session without deleting the prior one', async () => {
     const seed = await seedOrg();
     const app = appFor(seed.orgId, seed.humanActorId);
-    const runtime = new boundaries.MockAgentTurnRuntime({
+    const runtime = new agentRuntime.MockAgentTurnRuntime({
       script: chatScript(['Got it.']),
     });
     vi.spyOn(getContainer().agentTurn, 'streamTurn').mockImplementation((input) =>

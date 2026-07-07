@@ -7,6 +7,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 import type * as AgentRuntimeModule from '@docket/agent-runtime';
+import type * as IntegrationsModule from '@docket/integrations';
 import type { McpIntegrationOut } from '@docket/types';
 
 import type { ActorCtx, AppEnv } from '../../src/context';
@@ -31,6 +32,7 @@ const MIGRATIONS = resolve(import.meta.dirname, '../../../../packages/db/drizzle
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
 let agentRuntime!: typeof AgentRuntimeModule;
+let integrations!: typeof IntegrationsModule;
 let integrationsMcp!: typeof integrationsMcpRouter;
 let agentSessions!: typeof agentSessionsRouter;
 let ensureDefaultAgent!: typeof EnsureDefaultAgent;
@@ -42,6 +44,7 @@ beforeAll(async () => {
   db = schema.db;
   await migrate(db as never, { migrationsFolder: MIGRATIONS });
   agentRuntime = await import('@docket/agent-runtime');
+  integrations = await import('@docket/integrations');
   integrationsMcp = (await import('../../src/routes/integrations-mcp')).default;
   agentSessions = (await import('../../src/routes/agent-sessions')).default;
   ({ ensureDefaultAgent } = await import('../../src/lib/default-agent'));
@@ -218,7 +221,7 @@ describe('the union toolbox: remote read + local writes in one session', () => {
       {
         message: {
           role: 'assistant',
-          content: agentRuntime.SUNSAMA_BACKLOG.map((item, i) => ({
+          content: integrations.SUNSAMA_BACKLOG.map((item, i) => ({
             type: 'tool_use' as const,
             id: `toolu_su_c${String(i)}`,
             name: 'create_task',

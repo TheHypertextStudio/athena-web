@@ -9,4 +9,5 @@ export const API_TEST_ENV = {
   BETTER_AUTH_TRUSTED_ORIGINS: 'https://docket.localhost',
   CRON_SECRET: 'test-cron-secret',
   SKIP_ENV_VALIDATION: '1',
-} as const satisfies Partial<NodeJS.ProcessEnv>;
+  AGENT_MAX_TURNS: '8',
+} as const satisfies Record<string, string>;

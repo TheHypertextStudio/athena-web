@@ -231,7 +231,7 @@ export type TurnContentBlock = z.infer<typeof TurnContentBlock>;
  * One message in a session's durable provider transcript.
  *
  * @remarks
- * The canonical cross-package shape: the `@docket/boundaries` agent-turn port speaks
+ * The canonical cross-package shape: the `@docket/agent-runtime` turn port speaks
  * it and `@docket/db` persists it (`agent_session_transcript.messages`), so the
  * conversation a session resumes from can never drift from what the runtime emitted.
  * `thinking` blocks keep their provider `signature`, which is what makes replaying a

@@ -22,6 +22,8 @@ import {
   type TurnStreamer,
 } from '../src';
 
+type ContentBlockDeltaEvent = Extract<RawMessageStreamEvent, { type: 'content_block_delta' }>;
+
 /** Wrap a fixed event array as an async iterable. */
 async function* asStream(events: RawMessageStreamEvent[]): AsyncIterable<RawMessageStreamEvent> {
   for (const e of events) yield e;
@@ -55,7 +57,7 @@ function toolStart(index: number, id: string, name: string): RawMessageStreamEve
 }
 
 /** A content-block delta event. */
-function delta(index: number, eventDelta: RawMessageStreamEvent['delta']): RawMessageStreamEvent {
+function delta(index: number, eventDelta: ContentBlockDeltaEvent['delta']): RawMessageStreamEvent {
   return { type: 'content_block_delta', index, delta: eventDelta };
 }
 

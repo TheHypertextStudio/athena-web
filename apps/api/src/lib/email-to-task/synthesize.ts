@@ -10,7 +10,7 @@
  * Observer hook. See `docs/engineering/specs/email-to-task.md` §6.
  */
 import { db, emailSuggestion } from '@docket/db';
-import type { TaskSynthesizer } from '@docket/boundaries';
+import type { TaskSynthesizer } from '@docket/agent-runtime';
 import { and, eq, inArray } from 'drizzle-orm';
 
 import { emitEvent } from '../../routes/event-emit';

@@ -191,7 +191,7 @@ New slice files, colocating schema + types (no `*-types.ts`):
 **DTO rules** (project memory): never combine `.nullable().optional()` — pick one; ban hidden
 `??`/`||` defaults.
 
-## 5. The Connector port: a mail-actions capability (`packages/boundaries`)
+## 5. The Connector port: a mail-actions capability (`packages/integrations`)
 
 Gmail is read-only today; write-back is added as a **capability discovered exactly like
 `asWritable()`** — no disruption to existing providers.
@@ -222,7 +222,7 @@ interface MailActions {
   `fetchThread` → `threads.get`. Gmail joins write-_capable_ discovery but stays **out of**
   `WRITE_BACK_PROVIDERS` (that set is about _task_ push; mail actions are a separate capability).
 - **Mock**: record-only no-op — records the `(threadId, action)` so tests assert intent without I/O.
-  Keeps the app runnable against zero external accounts (`selectAdapter` local/test path).
+  Keeps the app runnable against zero external accounts (the API container local/test path).
 
 ## 6. The pipeline (API + cron)
 

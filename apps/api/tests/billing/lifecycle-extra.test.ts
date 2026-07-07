@@ -1,6 +1,6 @@
 import { resolve } from 'node:path';
 
-import type { BillingEvent } from '@docket/boundaries';
+import type { BillingEvent } from '@docket/billing';
 import { type Database, organization } from '@docket/db';
 import { PGlite } from '@electric-sql/pglite';
 import { eq } from 'drizzle-orm';

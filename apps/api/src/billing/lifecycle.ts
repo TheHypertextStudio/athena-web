@@ -15,7 +15,7 @@
  * wall clock at import time. All transitions are **idempotent**: re-running with the
  * same `now` is a no-op, which is what makes the cron sweep safe to retry.
  */
-import type { BillingEvent } from '@docket/boundaries';
+import type { BillingEvent } from '@docket/billing';
 import type { Database } from '@docket/db';
 import { organization } from '@docket/db';
 import { and, eq, inArray, isNotNull, lte, notInArray } from 'drizzle-orm';

@@ -155,15 +155,15 @@ untouched — Discord ingestion produces canonical events and nothing else.
 
 ## Design patterns (what's reused, what's new)
 
-| Seam                                   | Pattern                             | Where                                                                                                       |
-| -------------------------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| Discord source translation             | **Adapter**                         | `packages/boundaries/src/real/observer-discord.ts` behind the `Observer` port (mirrors `observer-slack.ts`) |
-| Picking the observer by provider       | **Strategy (registry)**             | `select.ts` `OBSERVER_FACTORIES['discord']`                                                                 |
-| `normalize`: typed detail → `generic`  | **Chain of Responsibility**         | the Discord detail-builder chain, ending in `genericDetail`                                                 |
-| Gateway → canonical ingest             | **Anti-Corruption Layer / Gateway** | `services/discord-relay` (Phase 2)                                                                          |
-| Relay → org routing without payload id | **token routing**                   | `event_subscription.ingestToken` + `/discord/:token`                                                        |
-| External participant → Docket user     | **enrichment (reserved slot)**      | drain resolution via Better Auth `account` (fills `ActorRef.docketActorId` intent)                          |
-| Mentioned users → recipients           | **Strategy (registry)**             | `routing.ts` `resolveRecipients` (+`participantUserIds`)                                                    |
+| Seam                                   | Pattern                             | Where                                                                                                    |
+| -------------------------------------- | ----------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Discord source translation             | **Adapter**                         | `packages/integrations/src/observer-discord.ts` behind the `Observer` port (mirrors `observer-slack.ts`) |
+| Picking the observer by provider       | **Strategy (registry)**             | `apps/api/src/container.ts` `buildObserver('discord')`                                                   |
+| `normalize`: typed detail → `generic`  | **Chain of Responsibility**         | the Discord detail-builder chain, ending in `genericDetail`                                              |
+| Gateway → canonical ingest             | **Anti-Corruption Layer / Gateway** | `services/discord-relay` (Phase 2)                                                                       |
+| Relay → org routing without payload id | **token routing**                   | `event_subscription.ingestToken` + `/discord/:token`                                                     |
+| External participant → Docket user     | **enrichment (reserved slot)**      | drain resolution via Better Auth `account` (fills `ActorRef.docketActorId` intent)                       |
+| Mentioned users → recipients           | **Strategy (registry)**             | `routing.ts` `resolveRecipients` (+`participantUserIds`)                                                 |
 
 Deliberately **not** built: a Discord-specific events table, a `provider`-string discriminator, a
 bespoke identity table, or any assistant coupling. Each of those would re-introduce exactly the

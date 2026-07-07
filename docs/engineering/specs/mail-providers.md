@@ -14,24 +14,24 @@ implementing one interface and updating one manifest, never editing the app laye
 ## 1. Capability model: structural, with a declarative manifest
 
 Two artifacts, kept in lockstep by a tripwire test
-(`packages/boundaries/tests/real/capability-manifest.test.ts`):
+(`packages/integrations/tests/capability-manifest.test.ts`):
 
 - **Structural capability (real adapters).** A provider is mail-capable iff its provider
   client implements `MailActionsProviderClient`
-  (`packages/boundaries/src/real/connector-provider-client.ts`). The connector's
+  (`packages/integrations/src/provider-client.ts`). The connector's
   `asMailActor()` discovers it via the `isMailActionsProviderClient` guard — there are no
   `if (provider === 'gmail')` gates anywhere.
-- **Declarative manifest.** `MAIL_CAPABLE_PROVIDERS` (`packages/boundaries/src/ports/mail.ts`)
+- **Declarative manifest.** `MAIL_CAPABLE_PROVIDERS` (`packages/integrations/src/mail.ts`)
   is the single set consumed by the mock connector's gate and by app-layer provider
   selection (e.g. which integrations the email-ingest sweep considers). Its sibling
   `WRITE_BACK_CAPABLE_PROVIDERS` (`ports/connector.ts`) plays the same role for task
   write-back — mail and task write-back are separate capabilities.
 
 Provider → client construction is the declarative `PROVIDER_CLIENT_FACTORIES` registry
-(`packages/boundaries/src/real/connector.ts`), typed `Record<ConnectorProvider, …>` so
+(`packages/integrations/src/real-connector.ts`), typed `Record<ConnectorProvider, …>` so
 adding a provider to the union is a compile error until every site is filled.
 
-## 2. The mail port (`packages/boundaries/src/ports/mail.ts`)
+## 2. The mail-actions port (`packages/integrations/src/mail.ts`)
 
 | Piece                        | Purpose                                                                                                                                                    |
 | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |

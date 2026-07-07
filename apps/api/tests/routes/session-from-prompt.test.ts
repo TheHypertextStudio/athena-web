@@ -5,7 +5,7 @@
  * @remarks
  * The hybrid Home prompt box's "ask Athena to plan" escalation: a freeform prompt
  * becomes a session bound to the org's default agent (lazily created on first use) and
- * is run against the mock {@link import('@docket/boundaries').AgentRuntime}. Asserts the
+ * is run against the mock {@link import('@docket/agent-runtime').AgentRuntime}. Asserts the
  * default agent is materialized once (idempotent), the prompt is persisted as the
  * session's opening `response` activity, and the session runs through to the gate.
  */

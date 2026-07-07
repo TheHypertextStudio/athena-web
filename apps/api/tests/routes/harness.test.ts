@@ -1,6 +1,6 @@
 import { resolve } from 'node:path';
 
-import { CaptureMailer } from '@docket/boundaries';
+import { CaptureMailer } from '@docket/mail';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { migrate } from 'drizzle-orm/pglite/migrator';

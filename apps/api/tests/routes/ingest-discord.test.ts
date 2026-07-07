@@ -1,7 +1,7 @@
 /**
  * `@docket/api` — the Discord ingestion edge: the type:1 PING→PONG handshake, a signed event
  * written to the write-ahead inbox, and a rejected signature. (Mock observer in test mode; the
- * Discord-specific Ed25519 verify/route/normalize logic is unit-tested in @docket/boundaries.)
+ * Discord-specific Ed25519 verify/route/normalize logic is unit-tested in @docket/integrations.)
  */
 import { and, eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';

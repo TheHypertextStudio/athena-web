@@ -2,7 +2,7 @@
  * `@docket/db` — the Drizzle database client, with driver selected from the URL scheme.
  *
  * @remarks
- * Per `boundaries.md` §1 the database is real Postgres in every mode (never mocked);
+ * The database is real Postgres in every mode (never mocked);
  * only the driver swaps, chosen from the `DATABASE_URL` scheme:
  *   - `pglite:`              embedded in-process Postgres (zero-account build/tests)
  *   - `postgres:`/`postgresql:` node-postgres-js (local Docker, or Neon over TCP)

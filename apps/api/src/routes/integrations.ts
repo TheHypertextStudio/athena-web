@@ -13,7 +13,7 @@ import {
   SyncRunOut,
   TaskOut,
 } from '@docket/types';
-import type { ImportedItem } from '@docket/boundaries';
+import type { ImportedItem } from '@docket/integrations';
 import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';

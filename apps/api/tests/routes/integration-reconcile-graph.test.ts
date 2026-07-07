@@ -1,8 +1,8 @@
 import { and, eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { FIXED_NOW, MockConnector } from '@docket/boundaries';
-import type { WorkGraphConnector, WorkGraphSnapshot } from '@docket/boundaries';
+import { FIXED_NOW, MockConnector } from '@docket/integrations';
+import type { WorkGraphConnector, WorkGraphSnapshot } from '@docket/integrations';
 
 import type * as DbModule from '@docket/db';
 

@@ -20,7 +20,7 @@ import {
   taskLabel,
 } from '@docket/db';
 import { Priority } from '@docket/types';
-import type { MailAction } from '@docket/boundaries';
+import type { MailAction } from '@docket/integrations';
 import { and, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 

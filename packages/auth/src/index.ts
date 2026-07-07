@@ -7,8 +7,10 @@
  * the module docstring there for the detailed rationale (passwordless-passkey-first,
  * env-gated plugins, MCP/OIDC binding decisions).
  */
-import { buildMailer } from '@docket/boundaries';
 import { env } from '@docket/env/api';
+import { isRealValue } from '@docket/env';
+import { CaptureMailer, SmtpMailer, smtpConfigFromEnv } from '@docket/mail';
+import type { Mailer, SmtpEnv } from '@docket/mail';
 import { betterAuth } from 'better-auth';
 
 import { buildAuthOptions } from './auth-builder';
@@ -37,7 +39,17 @@ export {
  * boundary container, so it builds its own mailer from the same env-driven selection via
  * {@link buildMailer} (SMTP relay in prod / Mailpit locally, capture mock under `local`/`test`).
  */
-const mailer = buildMailer({
+function buildAuthMailer(mailEnv: SmtpEnv & { readonly APP_MODE: 'local' | 'test' | 'production' }): Mailer {
+  if (mailEnv.APP_MODE === 'local' || mailEnv.APP_MODE === 'test') return new CaptureMailer();
+  if (!isRealValue(mailEnv.SMTP_HOST) || !isRealValue(mailEnv.MAIL_FROM)) {
+    throw new Error('Missing required production mail config: SMTP_HOST and MAIL_FROM');
+  }
+  const config = smtpConfigFromEnv(mailEnv);
+  if (!config) throw new Error('Missing required production mail config: SMTP_HOST and MAIL_FROM');
+  return new SmtpMailer(config);
+}
+
+const mailer = buildAuthMailer({
   APP_MODE: env.APP_MODE,
   ...(env.SMTP_HOST ? { SMTP_HOST: env.SMTP_HOST } : {}),
   ...(env.SMTP_PORT ? { SMTP_PORT: env.SMTP_PORT } : {}),
@@ -49,7 +61,7 @@ const mailer = buildMailer({
 
 /**
  * Non-production echo of the sign-up code (for e2e). Gated to `APP_MODE ∈ {local,test}`; the same
- * modes {@link buildMailer} forces the capture mock, so it is impossible to enable against a real
+ * modes force the capture mock, so it is impossible to enable against a real
  * relay or in production.
  */
 const devEchoSignupCode = env.APP_MODE === 'local' || env.APP_MODE === 'test';

@@ -16,7 +16,7 @@
  */
 import { dailyDigest, db, event, hub, user } from '@docket/db';
 import type { ActorRef, DigestStats, EntityRef } from '@docket/db';
-import type { SummarizerObservation } from '@docket/boundaries';
+import type { SummarizerObservation } from '@docket/agent-runtime';
 import { and, asc, eq, gte, lte, sql } from 'drizzle-orm';
 
 import { getContainer } from '../container';

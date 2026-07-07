@@ -15,7 +15,7 @@ import {
   verification,
 } from '@docket/db';
 import { isRealValue } from '@docket/env';
-import type { Mailer } from '@docket/boundaries';
+import type { Mailer } from '@docket/mail';
 import { type BetterAuthOptions, type BetterAuthPlugin } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { mcp, oAuthProxy, oidcProvider, twoFactor } from 'better-auth/plugins';

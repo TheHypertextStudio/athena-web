@@ -1,6 +1,6 @@
 import { actor, agent, agentSession, db, sessionActivity, task } from '@docket/db';
 import type { SessionActivityBody } from '@docket/db';
-import type { SessionActionBody, SessionActivity } from '@docket/boundaries';
+import type { SessionActionBody, SessionActivity } from '@docket/agent-runtime';
 import { and, asc, eq, sql } from 'drizzle-orm';
 
 import { getContainer } from '../container';

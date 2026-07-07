@@ -20,7 +20,7 @@
  */
 import { db, integration } from '@docket/db';
 import { ConnectorConfig, IntegrationSyncState } from '@docket/types';
-import { MAIL_CAPABLE_PROVIDERS, type MailActions, type MailListPage } from '@docket/boundaries';
+import { MAIL_CAPABLE_PROVIDERS, type MailActions, type MailListPage } from '@docket/integrations';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 
 import { getContainer } from '../../container';

@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
-import type { ExternalUser } from '@docket/boundaries';
+import type { ExternalUser } from '@docket/integrations';
 
 import type * as IntegrationIdentityModule from '../../src/routes/integration-identity';
 import { addMember, appWithActor, getDb, seedBaseOrg } from './harness.test';

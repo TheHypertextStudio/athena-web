@@ -1,7 +1,7 @@
 import { generateKeyPairSync } from 'node:crypto';
 import { resolve } from 'node:path';
 
-import type { Mailer, OutboundMessage } from '@docket/boundaries';
+import type { Mailer, OutboundMessage } from '@docket/mail';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 

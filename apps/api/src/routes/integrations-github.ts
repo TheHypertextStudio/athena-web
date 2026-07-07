@@ -17,7 +17,7 @@
  * so the UI can surface a retry, and the integration is left `error` with a real reason.
  */
 import { db, integration } from '@docket/db';
-import { mintInstallationToken, resolveInstallationAccount } from '@docket/boundaries';
+import { mintInstallationToken, resolveInstallationAccount } from '@docket/integrations';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 

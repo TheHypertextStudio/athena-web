@@ -1,5 +1,5 @@
 import { db, task, team } from '@docket/db';
-import type { ImportedItem } from '@docket/boundaries';
+import type { ImportedItem } from '@docket/integrations';
 import { and, asc, eq } from 'drizzle-orm';
 
 import { ConflictError } from '../error';

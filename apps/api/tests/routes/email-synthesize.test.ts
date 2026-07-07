@@ -1,4 +1,4 @@
-import { MockTaskSynthesizer } from '@docket/boundaries';
+import { MockTaskSynthesizer } from '@docket/agent-runtime';
 import { and, eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 

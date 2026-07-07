@@ -105,6 +105,13 @@
   already selects only users who opted into the digest feature while still recording contact-point and
   delivery health. Focused validation: `@docket/api` email dispatcher, account, export, digest, and
   recovery route tests pass.
+- **Inbound milestone update (2026-07-06)**: Added the notification inbound service and internal
+  callback surface at `/internal/notifications/*`. Email, SMS, and push provider payloads normalize
+  into `notification_inbound_event` rows, update delivery lifecycle state, and update contact-point
+  health for bounces, complaints/unsubscribes, STOP, START, and invalid push tokens. Routes require an
+  HMAC signature over the raw body and stay outside the public `/v1` API. Provider retries are
+  de-duplicated by normalized `providerEventId` in the stored payload; a dedicated unique DB key remains
+  a future hardening option. Focused validation: inbound service and internal route tests pass.
 
 ### [AUTH-SEC-001] Auth security & UX audit remediation
 

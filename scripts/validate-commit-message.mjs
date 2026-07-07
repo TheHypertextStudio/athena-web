@@ -16,24 +16,12 @@ const allowedTypes = new Set([
   'test',
 ]);
 
-const allowedScopes = new Set([
-  'admin',
-  'agents',
-  'api',
-  'auth',
-  'billing',
-  'data',
-  'design',
-  'hub',
-  'integrations',
-  'marketing',
-  'mcp',
-  'onboarding',
-  'permissions',
-  'ui',
-  'web',
-  'work',
-]);
+const allowedScopes = new Set(
+  readFileSync(new URL('../COMMIT_SCOPES.txt', import.meta.url), 'utf8')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith('#')),
+);
 
 const generatedMessages = [/^Merge /, /^Revert "/];
 

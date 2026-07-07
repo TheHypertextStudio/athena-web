@@ -1,12 +1,11 @@
 import type { actor, cycle, program } from '@docket/db';
 import { db, grant, milestone, project, task, team } from '@docket/db';
-import type { TaskRef } from '@docket/types';
-import type { TaskOut } from '@docket/types';
+import type { GrantResourceKind, TaskOut, TaskRef } from '@docket/types';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { NotFoundError, ValidationError } from '../error';
-import { rawResultRowCount } from '../lib/raw-result';
+import { rawResultRowCount, rawResultRows } from '../lib/raw-result';
 
 /** TaskRow is the selected database row shape consumed by these API route serializers. */
 export type TaskRow = typeof task.$inferSelect;
@@ -142,15 +141,16 @@ export async function buildTaskViewFilter(
   const granted = {
     organization: new Set<string>(),
     team: new Set<string>(),
+    initiative: new Set<string>(),
     project: new Set<string>(),
     program: new Set<string>(),
+    cycle: new Set<string>(),
     task: new Set<string>(),
-  };
+  } satisfies Record<GrantResourceKind, Set<string>>;
   for (const g of grants) {
     if (g.effect !== 'allow') continue;
     if (g.expiresAt && g.expiresAt.getTime() < now) continue;
-    const bucket = granted[g.resourceKind as keyof typeof granted] as Set<string> | undefined;
-    bucket?.add(g.resourceId);
+    granted[g.resourceKind].add(g.resourceId);
   }
   const orgRootView = granted.organization.has(orgId);
 
@@ -182,7 +182,7 @@ export async function loadNeighborhood(
   rootTaskId: string,
   depth: number,
 ): Promise<TaskRow[]> {
-  const found = (await db.execute(sql`
+  const found = await db.execute(sql`
     WITH RECURSIVE edges AS (
       SELECT blocking_task_id AS a, blocked_task_id AS b
         FROM task_dependency WHERE organization_id = ${orgId}
@@ -202,9 +202,9 @@ export async function loadNeighborhood(
       SELECT e.b, nb.d + 1 FROM nb JOIN edges e ON e.a = nb.id WHERE nb.d < ${depth}
     )
     SELECT DISTINCT id FROM nb
-  `)) as unknown as { rows: { id: string }[] };
+  `);
 
-  const ids = found.rows.map((r) => r.id);
+  const ids = rawResultRows<{ id: string }>(found).map((r) => r.id);
   if (ids.length === 0) return [];
   return db
     .select()
@@ -314,7 +314,7 @@ export async function wouldCreateSubtaskCycle(
   taskId: string,
   newParentId: string,
 ): Promise<boolean> {
-  const reach = (await tx.execute(sql`
+  const reach = await tx.execute(sql`
     WITH RECURSIVE ancestors AS (
       SELECT parent_task_id AS p FROM task
         WHERE id = ${newParentId} AND organization_id = ${orgId}
@@ -323,6 +323,6 @@ export async function wouldCreateSubtaskCycle(
         JOIN ancestors a ON t.id = a.p WHERE t.organization_id = ${orgId}
     )
     SELECT 1 AS hit FROM ancestors WHERE p = ${taskId} LIMIT 1
-  `)) as unknown as { rows: unknown[] };
-  return reach.rows.length > 0;
+  `);
+  return rawResultRowCount(reach) > 0;
 }

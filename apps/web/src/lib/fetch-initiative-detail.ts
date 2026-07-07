@@ -1,7 +1,7 @@
 import type { InitiativeDetail, MemberOut, ProgramOut, ProjectOut, RoleOut } from '@docket/types';
 
 import { api } from './api';
-import { type RpcResponse, apiQueryOptions, queryKeys } from './query';
+import { type RpcResponse, apiQueryOptions, queryKeys, rpcErrorResponse } from './query';
 
 /** InitiativeDetailData describes the fetch initiative detail data contract shared by the hook or component. */
 export interface InitiativeDetailData {
@@ -42,11 +42,7 @@ export function fetchInitiativeDetail(
       api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
     ]);
     if (!detailRes.ok) {
-      return {
-        ok: false,
-        status: detailRes.status,
-        json: () => detailRes.json(),
-      };
+      return rpcErrorResponse<InitiativeDetailData>(detailRes);
     }
     const detail = await detailRes.json();
     const allProjects = projectsRes.ok ? (await projectsRes.json()).items : [];

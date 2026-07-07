@@ -31,7 +31,7 @@ import {
   buildActorDirectory,
 } from '@/components/project-detail/actor-directory';
 import { api } from './api';
-import { type RpcResponse, apiQueryOptions, queryKeys } from './query';
+import { type RpcResponse, apiQueryOptions, queryKeys, rpcErrorResponse } from './query';
 
 /** The composite project-detail payload assembled from the typed RPC surface. */
 export interface ProjectDetailData {
@@ -122,11 +122,7 @@ export function fetchProjectDetail(
     ]);
 
     if (!projectsRes.ok) {
-      return {
-        ok: false,
-        status: projectsRes.status,
-        json: () => projectsRes.json(),
-      };
+      return rpcErrorResponse<ProjectDetailData>(projectsRes);
     }
 
     const { items: projectItems } = await projectsRes.json();

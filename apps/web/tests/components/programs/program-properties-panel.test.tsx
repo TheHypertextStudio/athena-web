@@ -13,7 +13,7 @@
  * through typed callbacks, so these assert real behavior without the live API.
  */
 import type { PickerOption } from '@docket/ui/components';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ProgramPropertiesPanel } from '../../../src/components/programs/properties-panel';

@@ -2,7 +2,7 @@ import type { InitiativeDetail, InitiativeOut } from '@docket/types';
 
 import type { InitiativeCatalogRow } from '@/components/initiatives/initiative-catalog';
 import { api } from '@/lib/api';
-import type { RpcResponse } from '@/lib/query-core';
+import { rpcErrorResponse, type RpcResponse } from '@/lib/query-core';
 
 /** Reduce an Initiative + its detail roll-up into the enriched row view-model. */
 export function toEnriched(
@@ -37,11 +37,7 @@ export function fetchEnrichedInitiatives(
       query: {},
     });
     if (!listRes.ok) {
-      return {
-        ok: false,
-        status: listRes.status,
-        json: () => listRes.json(),
-      };
+      return rpcErrorResponse<readonly InitiativeCatalogRow[]>(listRes);
     }
     const { items } = await listRes.json();
     const enriched = await Promise.all(

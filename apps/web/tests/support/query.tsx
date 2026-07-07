@@ -4,7 +4,7 @@ import type { JSX, ReactNode } from 'react';
 import type { RpcResponse } from '../../src/lib/query';
 
 /** Build a successful {@link RpcResponse}-shaped mock for query/mutation tests. */
-export function okResponse<T>(body: T): Extract<RpcResponse<T>, { readonly ok: true }> {
+export function okResponse<T>(body: T): RpcResponse<T> {
   return {
     ok: true,
     status: 200,

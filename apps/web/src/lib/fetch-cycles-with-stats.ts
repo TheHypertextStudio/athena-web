@@ -1,7 +1,7 @@
 import type { CycleOut, CycleStats } from '@docket/types';
 
 import { api } from '@/lib/api';
-import type { RpcResponse } from '@/lib/query-core';
+import { rpcErrorResponse, type RpcResponse } from '@/lib/query-core';
 
 /**
  * The cycles roster joined with each cycle's pace stats (from its single-cycle read).
@@ -44,11 +44,7 @@ export function fetchCyclesWithStats(
       query: { roll: 'true' },
     });
     if (!listRes.ok) {
-      return {
-        ok: false,
-        status: listRes.status,
-        json: () => listRes.json() as unknown as Promise<CyclesWithStats>,
-      };
+      return rpcErrorResponse<CyclesWithStats>(listRes);
     }
     const { items } = await listRes.json();
     const statsById: Record<string, CycleStats> = {};

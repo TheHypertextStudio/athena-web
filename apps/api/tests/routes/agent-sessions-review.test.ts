@@ -252,11 +252,11 @@ describe('POST /:id/activity/:activityId/approve', () => {
       .select()
       .from(auditEvent)
       .where(and(eq(auditEvent.subjectId, sessionId), eq(auditEvent.organizationId, s.orgId)));
-    expect(audits).toHaveLength(1);
-    expect(audits[0]?.type).toBe('approved');
-    expect(audits[0]?.actorId).toBe(s.agentActorId);
-    expect(audits[0]?.initiatorId).toBe(s.humanActorId);
-    expect(audits[0]?.metadata).toMatchObject({
+    const approvedAudit = audits.find((audit) => audit.type === 'approved');
+    expect(approvedAudit).toBeDefined();
+    expect(approvedAudit?.actorId).toBe(s.agentActorId);
+    expect(approvedAudit?.initiatorId).toBe(s.humanActorId);
+    expect(approvedAudit?.metadata).toMatchObject({
       activityId,
       approverActorId: s.humanActorId,
     });
@@ -331,7 +331,7 @@ describe('POST /:id/activity/:activityId/approve', () => {
 });
 
 describe('POST /:id/activity/:activityId/reject', () => {
-  it('rejects the action, writes a rejected audit event, and cancels the session', async () => {
+  it('rejects the action, writes a rejected audit event, and returns the session to running', async () => {
     const s = await seedOrg();
     const sessionId = await seedSession(s, 'awaiting_approval');
     const activityId = await seedActivity(sessionId, s.orgId, {
@@ -349,8 +349,8 @@ describe('POST /:id/activity/:activityId/reject', () => {
       .select({ status: agentSession.status, endedAt: agentSession.endedAt })
       .from(agentSession)
       .where(eq(agentSession.id, sessionId));
-    expect(sessionRows[0]?.status).toBe('canceled');
-    expect(sessionRows[0]?.endedAt).not.toBeNull();
+    expect(sessionRows[0]?.status).toBe('running');
+    expect(sessionRows[0]?.endedAt).toBeNull();
 
     const audits = await db
       .select({ type: auditEvent.type })

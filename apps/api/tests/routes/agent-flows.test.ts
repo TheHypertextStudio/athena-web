@@ -183,18 +183,18 @@ describe('POST /:id/run (agent session via the AgentRuntime port)', () => {
     expect(body.status).toBe('awaiting_approval');
     expect(body.startedAt).not.toBeNull();
 
-    // Activities persisted in emission order: thought → action(proposed) → elicitation → response.
+    // The first one-turn runtime pass parks on a gated tool call.
     const rows = await db
       .select()
       .from(sessionActivity)
       .where(eq(sessionActivity.sessionId, sessionId))
       .orderBy(asc(sessionActivity.createdAt));
-    expect(rows.map((r) => r.type)).toEqual(['thought', 'action', 'elicitation', 'response']);
+    expect(rows.map((r) => r.type)).toEqual(['thought', 'action']);
 
     const action = rows.find((r) => r.type === 'action');
     expect(action?.approvalStatus).toBe('proposed');
     expect(action?.body).toMatchObject({
-      action: { kind: 'update_task', summary: 'Move task to In Progress' },
+      action: { kind: 'update_task', summary: 'update task' },
     });
     // Non-action activities carry text and no approval.
     const thought = rows.find((r) => r.type === 'thought');

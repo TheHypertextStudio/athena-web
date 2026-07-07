@@ -8,50 +8,9 @@
  * with a complete assistant message that can be appended verbatim.
  */
 
-/** One content block inside a {@link TurnMessage}. */
-export type TurnContentBlock =
-  | {
-      /** Plain assistant/user text. */
-      readonly type: 'text';
-      /** The text content. */
-      readonly text: string;
-    }
-  | {
-      /** Provider reasoning; replayed verbatim on later turns. */
-      readonly type: 'thinking';
-      /** The reasoning text. */
-      readonly thinking: string;
-      /** The provider integrity signature required to replay this block. */
-      readonly signature: string;
-    }
-  | {
-      /** A tool invocation the model requested. */
-      readonly type: 'tool_use';
-      /** The provider block id; pairs this call with its `tool_result`. */
-      readonly id: string;
-      /** The tool name. */
-      readonly name: string;
-      /** The parsed tool input. */
-      readonly input: unknown;
-    }
-  | {
-      /** The host-supplied result of an executed tool call. */
-      readonly type: 'tool_result';
-      /** The `tool_use` block id this result answers. */
-      readonly toolUseId: string;
-      /** The serialized result content. */
-      readonly content: string;
-      /** Whether the tool call failed. */
-      readonly isError: boolean;
-    };
+import type { TurnContentBlock, TurnMessage } from '@docket/types';
 
-/** One message in the durable conversation transcript. */
-export interface TurnMessage {
-  /** Who produced the message. */
-  readonly role: 'user' | 'assistant';
-  /** The ordered content blocks. */
-  readonly content: readonly TurnContentBlock[];
-}
+export type { TurnContentBlock, TurnMessage };
 
 /** One tool made available to the model for this turn. */
 export interface TurnToolDef {
@@ -188,9 +147,24 @@ export const SUNSAMA_IMPORT_TURNS: readonly ScriptedTurn[] = [
           type: 'text',
           text: 'I read 3 backlog tasks. Proposing them as Docket tasks in one batch.',
         },
-        { type: 'tool_use', id: 'toolu_mock_su02', name: 'create_task', input: { title: 'Send the contractor agreement' } },
-        { type: 'tool_use', id: 'toolu_mock_su03', name: 'create_task', input: { title: 'Book the venue for the offsite' } },
-        { type: 'tool_use', id: 'toolu_mock_su04', name: 'create_task', input: { title: 'Reply to the partnership email' } },
+        {
+          type: 'tool_use',
+          id: 'toolu_mock_su02',
+          name: 'create_task',
+          input: { title: 'Send the contractor agreement' },
+        },
+        {
+          type: 'tool_use',
+          id: 'toolu_mock_su03',
+          name: 'create_task',
+          input: { title: 'Book the venue for the offsite' },
+        },
+        {
+          type: 'tool_use',
+          id: 'toolu_mock_su04',
+          name: 'create_task',
+          input: { title: 'Reply to the partnership email' },
+        },
       ],
     },
     stopReason: 'tool_use',

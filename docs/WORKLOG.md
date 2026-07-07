@@ -195,6 +195,21 @@ false`, and touched-file ESLint pass. Browser E2E remains a later dev-stack gate
   `pnpm --filter @docket/web lint`, and a fresh `pnpm test`. The final root test gate passed with
   13 successful tasks; `@docket/api` reported 111 files / 1102 tests and `@docket/web` reported 40
   files / 237 tests. Browser E2E remains the next unchecked milestone gate.
+- **Browser E2E follow-up (2026-07-07)**: Added
+  `apps/web/e2e/notifications.spec.ts` for the user-facing notification milestone. The spec signs up
+  and onboards a real user through the shared passkey E2E helper, opens
+  `/orgs/[orgId]/settings/notifications`, saves a mutable channel preference, saves quiet hours,
+  adds a phone contact point through `/v1/me/contact-points`, verifies the pending destination state,
+  and opens `/inbox` to confirm the notification shell renders without app-level error alerts. Ran an
+  isolated branch dev stack with `DATABASE_URL=pglite://.data/docket-e2e-notifications-1783402329`,
+  API on `http://localhost:4100`, and web on `http://localhost:3100`. Validation:
+  `pnpm --filter @docket/db db:migrate` with the E2E env passed; API and web served on the isolated
+  ports; `APP_URL=http://localhost:3100 API_URL=http://localhost:4100 PASSKEY_RP_ID=localhost pnpm
+--dir apps/web test:e2e sign-in.spec.ts` passed 1/1 in 1.7m; `APP_URL=http://localhost:3100
+API_URL=http://localhost:4100 PASSKEY_RP_ID=localhost pnpm --dir apps/web test:e2e
+notifications.spec.ts` passed 1/1 after selector tightening; `pnpm --dir apps/web exec tsc -p
+e2e/tsconfig.json --noEmit`, `pnpm --filter @docket/web lint`, and `pnpm exec prettier --check
+apps/web/e2e/notifications.spec.ts` passed.
 
 ### [AUTH-SEC-001] Auth security & UX audit remediation
 

@@ -644,6 +644,9 @@ importers:
 
   packages/integrations:
     dependencies:
+      '@docket/env':
+        specifier: workspace:*
+        version: link:../env
       '@docket/types':
         specifier: workspace:*
         version: link:../types

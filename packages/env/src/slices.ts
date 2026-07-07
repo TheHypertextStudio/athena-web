@@ -212,6 +212,18 @@ export const opsServer = {
   SMTP_PASS: z.string().min(1).optional(),
   /** From-address every transactional email is sent as (`"Name <addr>"` or a bare address). */
   MAIL_FROM: z.string().min(1).optional(),
+  /** HTTP SMS provider send endpoint. Absent/placeholder ⇒ the mock SMS sender is used. */
+  SMS_ENDPOINT: z.string().min(1).optional(),
+  /** HTTP SMS provider API key. */
+  SMS_API_KEY: z.string().min(1).optional(),
+  /** SMS sender number configured with the provider. */
+  SMS_FROM: z.string().min(1).optional(),
+  /** HTTP push provider send endpoint. Absent/placeholder ⇒ the mock push sender is used. */
+  PUSH_ENDPOINT: z.string().min(1).optional(),
+  /** HTTP push provider API key. */
+  PUSH_API_KEY: z.string().min(1).optional(),
+  /** Push provider application id/bundle id. */
+  PUSH_APP_ID: z.string().min(1).optional(),
   /**
    * Dev-only operator bootstrap allowlist: comma-separated `email[:role]` (role ∈
    * support|finance|superadmin, default superadmin). In non-production, a signed-in user

@@ -122,6 +122,16 @@
   bag, no dependency-builder helper, and no `usecases` layer. Richer approval-required state remains
   a schema-backed follow-up. Focused validation: `@docket/api` admin notification route tests,
   `@docket/api` typecheck, and touched-file ESLint pass.
+- **SMS/push boundary milestone update (2026-07-06)**: Added concrete `SmsSender` and
+  `PushSender` ports to `@docket/boundaries`, deterministic capture senders, HTTP real adapters, and
+  env-driven container selection for `sms`/`push`. Added `realEnvValue` to `@docket/env` so
+  adapter env parsing reuses the shared real-vs-placeholder rule instead of duplicating cleanup
+  helpers. The API dispatcher now attempts SMS and push deliveries after preference/contact-point
+  resolution, records provider ids/payloads on delivery rows, disables invalid push tokens, and
+  keeps service-announcement SMS/push gated by explicit user preference opt-in. Shared delivery-row
+  helpers keep email/SMS/push adapters from copying persistence mechanics. Focused validation:
+  `@docket/env` env tests, `@docket/boundaries` SMS/push/mailer/select tests, `@docket/api`
+  dispatcher SMS/push and email tests, plus env/boundaries/API typechecks pass.
 
 ### [AUTH-SEC-001] Auth security & UX audit remediation
 

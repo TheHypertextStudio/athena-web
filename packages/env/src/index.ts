@@ -32,3 +32,15 @@ export function isRealValue(value: string | undefined | null): value is string {
     v === 'mock'
   );
 }
+
+/**
+ * Return the trimmed usable env value, or `undefined` for absent/placeholder values.
+ *
+ * @remarks
+ * Use this when code needs the actual value after applying the same real-vs-mock rule as
+ * {@link isRealValue}. Keeping the trim + placeholder logic here prevents adapter-local
+ * cleanup helpers from drifting apart.
+ */
+export function realEnvValue(value: string | undefined | null): string | undefined {
+  return isRealValue(value) ? value.trim() : undefined;
+}

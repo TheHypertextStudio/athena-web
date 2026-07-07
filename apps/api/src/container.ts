@@ -13,19 +13,27 @@ import { LocalDiskBlob, RealBlob } from '@docket/blob-store';
 import type { BlobStore } from '@docket/blob-store';
 import { isRealValue } from '@docket/env';
 import {
+  CapturePushSender,
+  CaptureSmsSender,
   MockConnector,
   MockObserver,
+  RealPushSender,
   RealConnector,
   RealDiscordObserver,
   RealGitHubObserver,
   RealLinearObserver,
   RealSlackObserver,
+  RealSmsSender,
+  pushConfigFromEnv,
+  smsConfigFromEnv,
 } from '@docket/integrations';
 import type {
   Connector,
   ConnectorProvider,
   Observer,
   ObserverProvider,
+  PushSender,
+  SmsSender,
 } from '@docket/integrations';
 import { CaptureMailer, SmtpMailer, smtpConfigFromEnv } from '@docket/mail';
 import type { Mailer } from '@docket/mail';
@@ -51,6 +59,12 @@ export interface AppRuntimeEnv {
   readonly SMTP_USER?: string;
   readonly SMTP_PASS?: string;
   readonly MAIL_FROM?: string;
+  readonly SMS_ENDPOINT?: string;
+  readonly SMS_API_KEY?: string;
+  readonly SMS_FROM?: string;
+  readonly PUSH_ENDPOINT?: string;
+  readonly PUSH_API_KEY?: string;
+  readonly PUSH_APP_ID?: string;
   readonly BLOB_READ_WRITE_TOKEN?: string;
   readonly EXPORT_BUCKET_URL?: string;
   readonly GITHUB_API_BASE?: string;
@@ -69,6 +83,8 @@ export interface AppContainer {
   readonly summarizer: Summarizer;
   readonly taskSynthesizer: TaskSynthesizer;
   readonly mailer: Mailer;
+  readonly sms: SmsSender;
+  readonly push: PushSender;
   readonly blob: BlobStore;
 }
 
@@ -107,6 +123,12 @@ export function toAppRuntimeEnv(): AppRuntimeEnv {
     ...(env.SMTP_USER ? { SMTP_USER: env.SMTP_USER } : {}),
     ...(env.SMTP_PASS ? { SMTP_PASS: env.SMTP_PASS } : {}),
     ...(env.MAIL_FROM ? { MAIL_FROM: env.MAIL_FROM } : {}),
+    ...(env.SMS_ENDPOINT ? { SMS_ENDPOINT: env.SMS_ENDPOINT } : {}),
+    ...(env.SMS_API_KEY ? { SMS_API_KEY: env.SMS_API_KEY } : {}),
+    ...(env.SMS_FROM ? { SMS_FROM: env.SMS_FROM } : {}),
+    ...(env.PUSH_ENDPOINT ? { PUSH_ENDPOINT: env.PUSH_ENDPOINT } : {}),
+    ...(env.PUSH_API_KEY ? { PUSH_API_KEY: env.PUSH_API_KEY } : {}),
+    ...(env.PUSH_APP_ID ? { PUSH_APP_ID: env.PUSH_APP_ID } : {}),
     ...(env.BLOB_READ_WRITE_TOKEN ? { BLOB_READ_WRITE_TOKEN: env.BLOB_READ_WRITE_TOKEN } : {}),
     ...(env.EXPORT_BUCKET_URL ? { EXPORT_BUCKET_URL: env.EXPORT_BUCKET_URL } : {}),
     ...(env.GITHUB_API_BASE ? { GITHUB_API_BASE: env.GITHUB_API_BASE } : {}),
@@ -209,6 +231,26 @@ function buildMailer(runtimeEnv: AppRuntimeEnv): Mailer {
   return new SmtpMailer(smtpConfig);
 }
 
+function buildSmsSender(runtimeEnv: AppRuntimeEnv): SmsSender {
+  if (localMode(runtimeEnv)) return new CaptureSmsSender();
+  const smsConfig = smsConfigFromEnv(runtimeEnv);
+  if (!smsConfig) {
+    throw new Error('Missing required production SMS config: SMS_ENDPOINT, SMS_API_KEY, SMS_FROM');
+  }
+  return new RealSmsSender(smsConfig);
+}
+
+function buildPushSender(runtimeEnv: AppRuntimeEnv): PushSender {
+  if (localMode(runtimeEnv)) return new CapturePushSender();
+  const pushConfig = pushConfigFromEnv(runtimeEnv);
+  if (!pushConfig) {
+    throw new Error(
+      'Missing required production push config: PUSH_ENDPOINT, PUSH_API_KEY, PUSH_APP_ID',
+    );
+  }
+  return new RealPushSender(pushConfig);
+}
+
 /**
  * Construct the API dependency container for the current runtime mode.
  *
@@ -246,6 +288,8 @@ export function buildAppContainer(runtimeEnv: AppRuntimeEnv = toAppRuntimeEnv())
           apiKey: required('ANTHROPIC_API_KEY', runtimeEnv.ANTHROPIC_API_KEY),
         }),
     mailer: buildMailer(runtimeEnv),
+    sms: buildSmsSender(runtimeEnv),
+    push: buildPushSender(runtimeEnv),
     blob: mock
       ? new LocalDiskBlob()
       : new RealBlob({

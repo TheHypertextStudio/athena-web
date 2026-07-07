@@ -21,5 +21,7 @@ export * from './observer-github';
 export * from './observer-linear';
 export * from './observer-slack';
 export * from './provider-client';
+export * from './push';
 export * from './real-connector';
+export * from './sms';
 export * from './work-graph';

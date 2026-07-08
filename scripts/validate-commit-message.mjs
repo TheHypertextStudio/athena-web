@@ -246,6 +246,36 @@ function hasNontrivialBody(raw) {
   return bodyText(raw).length >= minimumBodyCharacters;
 }
 
+function validateBodyLineLength(raw) {
+  const lines = raw.replace(/\n$/, '').split('\n');
+  const subjectIndex = lines.findIndex((line) => line.trim() && !isComment(line));
+  if (subjectIndex === -1) return;
+
+  let inFence = false;
+  const violations = [];
+
+  for (let index = subjectIndex + 1; index < lines.length; index += 1) {
+    const line = lines[index];
+
+    if (isFence(line)) {
+      inFence = !inFence;
+      continue;
+    }
+
+    if (inFence || isComment(line) || line.trim() === '' || isCommitTrailer(line)) {
+      continue;
+    }
+
+    if (line.length > bodyLineWidth) {
+      violations.push(`line ${index + 1} is ${line.length} characters`);
+    }
+  }
+
+  if (violations.length > 0) {
+    fail(`body lines must be ${bodyLineWidth} characters or fewer (${violations.join(', ')}).`);
+  }
+}
+
 if (!conventionalSubject?.groups) {
   fail('subject must follow Conventional Commits.');
 }
@@ -276,3 +306,5 @@ if (touchesMultipleFiles && !hasNontrivialBody(formattedMessage)) {
 if (formattedMessage !== message) {
   writeFileSync(commitMessagePath, formattedMessage);
 }
+
+validateBodyLineLength(formattedMessage);

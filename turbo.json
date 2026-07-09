@@ -15,7 +15,7 @@
     "DATABASE_URL",
     "DATABASE_URL_UNPOOLED"
   ],
-  "globalPassThroughEnv": ["VERCEL", "VERCEL_*"],
+  "globalPassThroughEnv": ["VERCEL", "VERCEL_*", "BETTER_AUTH_*", "GOOGLE_*"],
   // Remote cache is signed (HMAC over artifacts). Inert until a cache is configured: with no
   // TURBO_TOKEN/TURBO_API set, turbo silently uses the local cache only. CI supplies the token +
   // TURBO_REMOTE_CACHE_SIGNATURE_KEY from secrets — see .github/workflows/ci.yml.

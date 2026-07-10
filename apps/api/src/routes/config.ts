@@ -58,6 +58,7 @@ Carries nothing secret and requires no session. Related: the authenticated perso
     return ok(c, PublicConfigOut, {
       appMode: env.APP_MODE,
       oauthProviders,
+      googleOAuthPublic: env.GOOGLE_OAUTH_PUBLIC,
       connectors,
       mcpUrl: env.MCP_RESOURCE_URL ?? null,
     });

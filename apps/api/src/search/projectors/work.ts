@@ -85,6 +85,7 @@ function namedWorkDocument(row: NamedWorkRow, kind: SearchDocumentKind): SearchD
   });
 }
 
+/** Projects tasks into searchable work documents. */
 export const taskSearchProjector = preloadedProjector<TaskRow>('task', (row) => ({
   ...workDocument(row, 'task', row.title, {
     summary: row.description,
@@ -104,21 +105,25 @@ export const taskSearchProjector = preloadedProjector<TaskRow>('task', (row) => 
   sourceTable: 'task',
 }));
 
+/** Projects projects into searchable work documents. */
 export const projectSearchProjector = preloadedProjector<NamedWorkRow>('project', (row) => ({
   ...namedWorkDocument(row, 'project'),
   sourceTable: 'project',
 }));
 
+/** Projects programs into searchable work documents. */
 export const programSearchProjector = preloadedProjector<NamedWorkRow>('program', (row) => ({
   ...namedWorkDocument(row, 'program'),
   sourceTable: 'program',
 }));
 
+/** Projects initiatives into searchable work documents. */
 export const initiativeSearchProjector = preloadedProjector<NamedWorkRow>('initiative', (row) => ({
   ...namedWorkDocument(row, 'initiative'),
   sourceTable: 'initiative',
 }));
 
+/** Projects milestones into searchable work documents. */
 export const milestoneSearchProjector = preloadedProjector<
   OrgScopedRow & { projectId: string; name: string; targetDate?: Date | null; sort?: number }
 >('milestone', (row) => ({
@@ -135,6 +140,7 @@ export const milestoneSearchProjector = preloadedProjector<
   subjectId: row.projectId,
 }));
 
+/** Projects team cycles into searchable work documents. */
 export const cycleSearchProjector = preloadedProjector<
   OrgScopedRow & {
     teamId: string;
@@ -160,6 +166,7 @@ export const cycleSearchProjector = preloadedProjector<
   subjectId: row.teamId,
 }));
 
+/** Projects labels into searchable work documents. */
 export const labelSearchProjector = preloadedProjector<
   OrgScopedRow & { name: string; color: string; group?: string | null; teamId?: string | null }
 >('label', (row) => ({
@@ -171,6 +178,7 @@ export const labelSearchProjector = preloadedProjector<
   sourceUpdatedAt: row.createdAt ?? null,
 }));
 
+/** Projects saved views into searchable work documents. */
 export const savedViewSearchProjector = preloadedProjector<
   OrgScopedRow & {
     name: string;
@@ -196,6 +204,7 @@ export const savedViewSearchProjector = preloadedProjector<
   sourceTable: 'saved_view',
 }));
 
+/** Search projectors registered for work sources. */
 export const workSearchProjectors = [
   taskSearchProjector,
   projectSearchProjector,

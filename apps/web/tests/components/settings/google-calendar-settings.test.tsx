@@ -5,9 +5,8 @@
  * @remarks
  * Pins Task 9's settings expansion: per-account write-scope status (from
  * {@link CalendarConnectionOut.scopeState}) renders distinctly for a write-enabled account vs. a
- * read-only one, the read-only account shows the labeled "coming soon" re-consent placeholder
- * (never a fabricated live action — there is no re-consent endpoint yet), and each account's
- * layers render underneath it via the shared layer panel.
+ * read-only one, the read-only account shows a real re-consent action, and each account's layers
+ * render underneath it via the shared layer panel.
  */
 import '@testing-library/jest-dom/vitest';
 
@@ -16,15 +15,26 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import type { JSX, ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { calendarGet, layersGet } = vi.hoisted(() => ({
+const { calendarGet, identitiesGet, layersGet, replace } = vi.hoisted(() => ({
   calendarGet: vi.fn(),
+  identitiesGet: vi.fn(),
   layersGet: vi.fn(),
+  replace: vi.fn(),
+}));
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ replace }),
+}));
+
+vi.mock('../../../src/lib/auth-client', () => ({
+  authClient: { linkSocial: vi.fn() },
 }));
 
 vi.mock('../../../src/lib/api', () => ({
   api: {
     v1: {
       me: {
+        identities: { $get: identitiesGet },
         calendar: {
           $get: calendarGet,
           layers: { $get: layersGet },
@@ -142,7 +152,13 @@ function calendarSettingsFixture() {
 
 beforeEach(() => {
   calendarGet.mockReset().mockResolvedValue(okResponse(calendarSettingsFixture()));
+  identitiesGet
+    .mockReset()
+    .mockResolvedValue(
+      okResponse({ items: [], googleOAuth: { available: true, stage: 'testing' } }),
+    );
   layersGet.mockReset().mockResolvedValue(okResponse({ items: calendarSettingsFixture().layers }));
+  replace.mockReset();
 });
 
 afterEach(() => {
@@ -165,9 +181,11 @@ describe('GoogleCalendarSettings', () => {
     expect(screen.getByText('Calendar editing enabled')).toBeInTheDocument();
     expect(screen.getByText('Calendar read-only')).toBeInTheDocument();
 
-    // The read-only account gets the labeled, disabled re-consent placeholder — never a live call.
+    // The read-only account gets a real incremental-consent action for Calendar editing.
     const enableButton = screen.getByRole('button', { name: /Enable calendar editing/ });
-    expect(enableButton).toBeDisabled();
+    await waitFor(() => {
+      expect(enableButton).toBeEnabled();
+    });
 
     // Each account's layer renders underneath it.
     expect(screen.getByText('Writer primary')).toBeInTheDocument();

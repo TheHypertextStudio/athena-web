@@ -14,6 +14,7 @@ export default docketVitest({
     BETTER_AUTH_PASSKEY_RP_ID: 'localhost',
     BETTER_AUTH_PASSKEY_RP_NAME: 'Docket',
     BETTER_AUTH_TRUSTED_ORIGINS: 'http://a.example.com, http://b.example.com ,',
+    GOOGLE_OAUTH_PUBLIC: 'false',
     CRON_SECRET: 'test-cron-secret',
     BILLING_ENABLED: 'false',
     MCP_TASKS_ENABLED: 'false',

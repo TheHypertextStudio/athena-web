@@ -9,6 +9,7 @@ import {
   PROVIDER_CATALOG,
   WEBHOOK_PROVIDER_IDS,
   connectorIdentityProvider,
+  parseOAuthScopes,
   type IntegrationDirectoryProvider,
 } from '@docket/types';
 import type { ConnectorProvider, ObserverProvider } from '@docket/integrations';
@@ -249,6 +250,8 @@ export async function linkedIdentities(userId: string): Promise<IdentityOut[]> {
       accountId: account.accountId,
       providerId: account.providerId,
       idToken: account.idToken,
+      accessToken: account.accessToken,
+      refreshToken: account.refreshToken,
       scope: account.scope,
       createdAt: account.createdAt,
     })
@@ -263,10 +266,8 @@ export async function linkedIdentities(userId: string): Promise<IdentityOut[]> {
       email: claims.email,
       name: claims.name,
       picture: claims.picture,
-      scopes: (row.scope ?? '')
-        .split(' ')
-        .map((s) => s.trim())
-        .filter(Boolean),
+      scopes: parseOAuthScopes(row.scope),
+      reauthorizationRequired: row.accessToken === null && row.refreshToken === null,
       linkedAt: row.createdAt.toISOString(),
     };
   });

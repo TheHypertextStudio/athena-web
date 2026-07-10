@@ -22,8 +22,11 @@ import { genId } from '../id';
 import { user } from './auth';
 import { organization } from './identity';
 
+/** Opaque route metadata persisted with a search document. */
 export type SearchRouteShape = Record<string, unknown>;
+/** Opaque facet metadata persisted with a search document. */
 export type SearchFacetShape = Record<string, unknown>;
+/** Opaque visibility metadata persisted with a search document. */
 export type SearchVisibilityShape = Record<string, unknown>;
 
 /** Durable semantic search document, projected from source rows and query-filtered later. */

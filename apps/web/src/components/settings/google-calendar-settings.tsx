@@ -9,20 +9,34 @@
  * {@link CalendarConnectionOut.scopeState}) and its layers (Task 8's `calendarLayersDef`/
  * `useUpdateLayerVisibility`, rendered via the shared {@link CalendarLayerPanel} the full calendar
  * view also uses), and any Docket-native layers (no linked account) get their own section below
- * the connections. "Enable calendar editing" is a labeled, disabled placeholder — re-consent for
- * calendar write access has no backend flow yet (see `docs/engineering/specs/calendar-ui.md`; this
- * is a known, explicitly-scoped gap, not a fabricated call).
+ * the connections. Connect and re-consent actions request the minimum Calendar scopes and return
+ * here to trigger an immediate sync.
  */
-import type { CalendarConnectionOut, CalendarConnectionStatus } from '@docket/types';
+import {
+  GOOGLE_CONNECTOR_SCOPES,
+  type CalendarConnectionOut,
+  type CalendarConnectionStatus,
+} from '@docket/types';
 import { Calendar, RefreshCw } from '@docket/ui/icons';
 import { Badge, Button } from '@docket/ui/primitives';
 import NextLink from 'next/link';
+import { useRouter } from 'next/navigation';
 import type { JSX } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import CalendarLayerPanel from '@/components/calendar/calendar-layer-panel';
 import { calendarLayersDef, calendarSettingsDef } from '@/components/calendar/calendar-data';
 import { api } from '@/lib/api';
-import { queryKeys, unwrap, useApiListQuery, useApiMutation, useApiQuery } from '@/lib/query';
+import { authClient } from '@/lib/auth-client';
+import { readError } from '@/lib/problem';
+import {
+  apiQueryOptions,
+  queryKeys,
+  unwrap,
+  useApiListQuery,
+  useApiMutation,
+  useApiQuery,
+} from '@/lib/query';
 
 import { relativeTime } from './format-time';
 
@@ -77,7 +91,18 @@ function syncSummary(data: {
 export default function GoogleCalendarSettings({
   orgId,
 }: GoogleCalendarSettingsProps): JSX.Element {
+  const router = useRouter();
+  const handledOAuthReturn = useRef(false);
+  const [oauthPending, setOauthPending] = useState(false);
+  const [oauthError, setOauthError] = useState<string | null>(null);
   const query = useApiQuery(calendarSettingsDef());
+  const identitiesQuery = useApiQuery(
+    apiQueryOptions(
+      queryKeys.identities(),
+      () => api.v1.me.identities.$get(),
+      'Could not check Google connection access.',
+    ),
+  );
 
   const updateCalendar = useApiMutation({
     mutationFn: (vars: { id: string; selected: boolean }) =>
@@ -95,8 +120,45 @@ export default function GoogleCalendarSettings({
   const sync = useApiMutation({
     mutationFn: () =>
       unwrap(() => api.v1.me.calendar.sync.$post({}), 'Could not sync Google Calendar.'),
-    invalidateKeys: [queryKeys.calendarSettings()],
+    invalidateKeys: [
+      queryKeys.calendarSettings(),
+      queryKeys.calendarLayers(),
+      queryKeys.identities(),
+    ],
   });
+
+  const startGoogleLink = useCallback(async (): Promise<void> => {
+    setOauthError(null);
+    setOauthPending(true);
+    try {
+      const callbackURL = `${window.location.pathname}?google=connected`;
+      await authClient.linkSocial({
+        provider: 'google',
+        scopes: [...GOOGLE_CONNECTOR_SCOPES.calendar],
+        callbackURL,
+        errorCallbackURL: `${window.location.pathname}?google=error`,
+      });
+    } catch (error: unknown) {
+      setOauthError(readError(error, 'Could not start Google Calendar authorization.'));
+      setOauthPending(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const result = new URLSearchParams(window.location.search).get('google');
+    if (!result || handledOAuthReturn.current) return;
+    handledOAuthReturn.current = true;
+    if (result === 'connected') {
+      sync.mutate(undefined, {
+        onSettled: () => {
+          router.replace(window.location.pathname);
+        },
+      });
+      return;
+    }
+    setOauthError('Google authorization was canceled or could not be completed.');
+    router.replace(window.location.pathname);
+  }, [router, sync]);
 
   const layersQuery = useApiListQuery(calendarLayersDef());
   const layers = layersQuery.data?.items ?? [];
@@ -117,6 +179,7 @@ export default function GoogleCalendarSettings({
   const nativeLayers = layers.filter((layer) => layer.connectionId === null);
   const mutationDisabled = updateCalendar.isPending || sync.isPending;
   const syncFeedback = sync.data ? syncSummary(sync.data) : null;
+  const googleAvailable = identitiesQuery.data?.googleOAuth?.available === true;
 
   if (query.isPending) {
     return <div className="bg-surface-container-low h-48 animate-pulse rounded-lg" />;
@@ -153,6 +216,24 @@ export default function GoogleCalendarSettings({
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            onClick={() => {
+              void startGoogleLink();
+            }}
+            disabled={!googleAvailable || oauthPending}
+            title={
+              googleAvailable
+                ? undefined
+                : 'Google Calendar is currently limited to production test users.'
+            }
+          >
+            {oauthPending
+              ? 'Opening Google…'
+              : (data?.connections.length ?? 0) > 0
+                ? 'Add Google account'
+                : 'Connect Google account'}
+          </Button>
           <NextLink
             href={`/orgs/${orgId}/settings/connections`}
             className="border-outline-variant text-on-surface hover:bg-surface-container-high inline-flex items-center rounded-md border px-3 py-1.5 text-sm font-medium"
@@ -172,6 +253,12 @@ export default function GoogleCalendarSettings({
           </button>
         </div>
       </div>
+
+      {oauthError ? (
+        <p role="alert" className="text-destructive text-sm">
+          {oauthError}
+        </p>
+      ) : null}
 
       {(data?.connections ?? []).length === 0 ? (
         <div className="border-outline-variant rounded-lg border p-4">
@@ -219,10 +306,13 @@ export default function GoogleCalendarSettings({
                 <Button
                   size="sm"
                   variant="outline"
-                  disabled
-                  title="Re-consent for calendar write access isn't available yet."
+                  disabled={!googleAvailable || oauthPending}
+                  onClick={() => {
+                    void startGoogleLink();
+                  }}
+                  title="Choose this Google account again to grant Calendar editing."
                 >
-                  Enable calendar editing (coming soon)
+                  Enable calendar editing
                 </Button>
               ) : null}
             </div>

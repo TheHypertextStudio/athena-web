@@ -1,11 +1,60 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-07-07
+> **Last Updated**: 2026-07-10
 
 ---
 
 ## Active Tasks
+
+### [PROD-GOOGLE-001] Production deployment and Google Workspace sync
+
+- **Status**: REVIEW
+- **Started**: 2026-07-10
+- **Priority**: P0
+- **Description**: Restore a gated production deployment for Docket and let users link multiple
+  Google accounts for two-way Calendar sync, with incremental Tasks, Drive, and Gmail consent.
+- **Approach**: Preserve the Vercel-web plus Cloud Run API/admin topology, repair CI before deploy,
+  add an explicit production migration job, harden Better Auth account/token handling, and stage
+  Google OAuth behind a test-user gate until public restricted-scope verification is approved.
+- **Subtasks**:
+  - [x] Repair formatting, E2E startup, Docker package-manager bootstrapping, and CI deployment gates.
+  - [x] Add Cloud Run database migration automation and remove the duplicate Cloud Run web deploy.
+  - [x] Add encrypted multi-account Google linking with connector-specific incremental scopes.
+  - [x] Make Calendar discoverable and complete connect, re-consent, sync, and unlink behavior.
+  - [x] Add production legal pages, Google data disclosures, and hybrid deployment documentation.
+  - [ ] Validate in CI and against staged production with the designated Google test user.
+- **Risks**:
+  - Production migrations must run before API code that expects the current calendar schema.
+  - Google Drive and Gmail restricted scopes require verification and an independent security review.
+  - Existing plaintext OAuth tokens must not survive the encryption rollout unnoticed.
+- **Validation**:
+  - `pnpm format:check`, `pnpm lint`, and `pnpm typecheck` pass across the workspace.
+  - `pnpm test` passes all 17 Turbo tasks; the API package passes 132 files / 1186 tests.
+  - `SKIP_ENV_VALIDATION=1 pnpm build` passes the API, admin, and web production builds.
+  - Fresh PGlite migration succeeds; migration, API, admin, and web Docker images all build.
+  - Live Portless web, API health, and OAuth discovery return 200; all seven Google/layered-calendar
+    Playwright journeys pass. The five hosted E2E regressions exposed by the first pull-request run
+    (MCP session, passkey signal/sign-in, and two visual captures) pass together on an isolated
+    branch-prefixed stack after forwarding the required runtime variables and removing machine-local
+    screenshot paths. After making the explicit sign-in test deterministic against Chromium's
+    conditional mediation, that test passes 10/10 repetitions and the complete serial browser suite
+    passes 18/18 locally; the follow-up hosted run remains the canonical full-suite gate.
+- **Blockers**:
+  - Staged production needs current GCP credentials, the Vercel deployment token, and the unpooled
+    database secret before the migration/deploy workflow can run.
+  - Public Google enablement remains gated on OAuth verification/security review and provisioning
+    `support@hypertext.studio` as the shared Workspace support group.
+- **Files Changed**:
+  - `.github/workflows/{ci,deploy}.yml`, deployment Dockerfiles, and `packages/db/Dockerfile`
+  - `packages/{auth,db,env,types}` Google account, scope, encryption, and lifecycle surfaces
+  - `apps/api` identity/config responses and `apps/web` Calendar connect/re-consent/navigation UX
+  - `apps/web/src/app/(marketing)/{privacy,terms}` and production/operator documentation
+- **Learnings**: Provider-backed calendar connections need a database-enforced link to the Better Auth
+  account lifecycle, and container installs must include the root prepare-script input even when Turbo
+  prunes source from the manifest layer. Branch-prefixed E2E hosts need explicit trusted-origin and
+  MCP metadata overrides. Workflow-level environment values also need matching package `turbo.json`
+  declarations under strict mode or the launched dev process never receives them.
 
 ### [NOTIF-UX-001] End-user notification UX completion
 

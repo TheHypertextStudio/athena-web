@@ -31,6 +31,7 @@ export * from './grant';
 export * from './agent';
 export * from './integration';
 export * from './identity';
+export * from './google-oauth';
 export * from './oauth-client';
 export * from './public-config';
 export * from './provider-catalog';

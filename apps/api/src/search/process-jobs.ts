@@ -3,11 +3,13 @@ import { and, asc, eq, inArray, lte } from 'drizzle-orm';
 import { projectSearchDocumentFromSource } from './registry';
 import type { SearchDocumentDraft } from './types';
 
+/** Options controlling one search-index worker batch. */
 export interface ProcessSearchIndexJobsOptions {
   limit?: number;
   now?: Date;
 }
 
+/** Processing counts returned by one search-index worker batch. */
 export interface ProcessSearchIndexJobsResult {
   processed: number;
   succeeded: number;

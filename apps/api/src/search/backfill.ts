@@ -25,6 +25,7 @@ const DEFAULT_SOURCE_TABLES = [
   'event',
 ] as const;
 
+/** Options for a paged search-index backfill. */
 export interface BackfillSearchIndexOptions {
   sourceTables?: readonly string[];
   limit?: number;
@@ -32,6 +33,7 @@ export interface BackfillSearchIndexOptions {
   cursor?: string;
 }
 
+/** Counts and resume state returned by a search-index backfill. */
 export interface BackfillSearchIndexResult {
   scanned: number;
   enqueued: number;

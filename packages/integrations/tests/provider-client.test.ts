@@ -8,10 +8,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import {
-  isWorkGraphProviderClient,
-  type ConnectorProviderClient,
-} from '../src/provider-client';
+import { isWorkGraphProviderClient, type ConnectorProviderClient } from '../src/provider-client';
 
 /** A minimal read-only client satisfying {@link ConnectorProviderClient} and nothing more. */
 function baseClient(): ConnectorProviderClient {

@@ -2,7 +2,7 @@ ARG NODE_VERSION=24
 FROM node:${NODE_VERSION}-alpine AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable
+RUN npm install --global corepack@0.35.0 && corepack enable
 
 # Prune to @docket/web + its workspace deps so the install layer is cache-stable across source edits.
 FROM base AS pruner
@@ -14,6 +14,7 @@ FROM base AS builder
 WORKDIR /app
 # Install from pruned manifests (cache-stable), then bring in the pruned source.
 COPY --from=pruner /app/out/json/ .
+COPY --from=pruner /app/scripts/install-git-guardrails.sh ./scripts/install-git-guardrails.sh
 RUN pnpm install --no-frozen-lockfile
 COPY --from=pruner /app/out/full/ .
 # Build-time env: API_URL for next.config rewrites, NEXT_PUBLIC_* get inlined into the bundle

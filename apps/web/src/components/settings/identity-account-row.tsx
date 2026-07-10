@@ -64,6 +64,9 @@ export function IdentityAccountRow({
             ))}
           </div>
         ) : null}
+        {identity.reauthorizationRequired ? (
+          <span className="text-destructive text-xs">Reconnect required</span>
+        ) : null}
       </div>
       <IntegrationActionButton
         tone="danger"

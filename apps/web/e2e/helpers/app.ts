@@ -22,8 +22,10 @@ export function newUser(label: string): TestUser {
   return { name: `${label} E2E`, email: `${label.toLowerCase()}+${tag}@example.com` };
 }
 
-/** Sign out of the current session (drops the cookie). */
+/** Sign out of the current session server-side, then clear any residual browser cookies. */
 export async function signOut(page: Page): Promise<void> {
+  const result = await apiFetch(page, '/api/auth/sign-out', { method: 'POST', body: {} });
+  expect(result.status, 'Better Auth sign-out should succeed').toBe(200);
   await page.context().clearCookies();
 }
 

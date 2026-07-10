@@ -32,6 +32,7 @@ import {
   MessageSquare,
   Activity,
   Building,
+  Calendar,
   FolderKanban,
   GanttChart,
   Home,
@@ -164,6 +165,7 @@ export function Sidebar({
   const homeRows: readonly NavRow<Exclude<HomeNavKey, 'search'>>[] = [
     { key: 'today', label: 'Today', icon: Home },
     { key: 'tasks', label: 'Tasks', icon: ListChecks },
+    { key: 'calendar', label: 'Calendar', icon: Calendar },
     { key: 'inbox', label: 'Inbox', icon: Inbox },
     { key: 'stream', label: 'Stream', icon: Activity },
     { key: 'portfolio', label: 'Portfolio', icon: GanttChart },

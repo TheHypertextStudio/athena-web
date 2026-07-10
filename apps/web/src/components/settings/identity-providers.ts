@@ -65,8 +65,10 @@ export const IDENTITY_PROVIDER_CATALOG: readonly IdentityProviderEntry[] = [
 const SCOPE_LABEL: Record<string, string> = {
   'https://www.googleapis.com/auth/tasks': 'Tasks',
   'https://www.googleapis.com/auth/calendar.readonly': 'Calendar',
+  'https://www.googleapis.com/auth/calendar.calendarlist.readonly': 'Calendar',
+  'https://www.googleapis.com/auth/calendar.events': 'Calendar editing',
   'https://www.googleapis.com/auth/drive.readonly': 'Drive',
-  'https://mail.google.com/': 'Gmail',
+  'https://www.googleapis.com/auth/gmail.modify': 'Gmail',
   'https://graph.microsoft.com/Mail.ReadWrite': 'Outlook mail',
 };
 

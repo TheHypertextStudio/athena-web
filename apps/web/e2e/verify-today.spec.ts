@@ -9,13 +9,11 @@ import { signUpAndOnboard } from './helpers/app';
 import { expect, test } from './helpers/fixtures';
 import { apiJson } from './helpers/net';
 
-const SHOTS =
-  '/private/tmp/claude-501/-Users-williecubed-Projects-Hypertext-Studio-athena-service/4c880a88-3eec-4e96-a3e8-dcb16ee3a6c9/scratchpad';
 const DAY = new Date().toISOString().slice(0, 10);
 const at = (h: number, m = 0): string =>
   new Date(`${DAY}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`).toISOString();
 
-test('capture today + calendar baseline', async ({ page }) => {
+test('capture today + calendar baseline', async ({ page }, testInfo) => {
   const { orgId } = await signUpAndOnboard(page, 'today');
   const teams = await apiJson<{ items: { id: string }[] }>(page, `/v1/orgs/${orgId}/teams`);
   const teamId = teams.items[0]?.id;
@@ -48,10 +46,12 @@ test('capture today + calendar baseline', async ({ page }) => {
     timeout: 30_000,
   });
   await page.waitForTimeout(4000); // let the today data + agenda settle
-  await page.screenshot({ path: `${SHOTS}/today-baseline.png` });
+  await page.screenshot({ path: testInfo.outputPath('today-baseline.png') });
 
   const rail = page.locator('#shell-aside');
   if ((await rail.count()) > 0) {
-    await rail.screenshot({ path: `${SHOTS}/agenda-timeline-baseline.png` }).catch(() => undefined);
+    await rail
+      .screenshot({ path: testInfo.outputPath('agenda-timeline-baseline.png') })
+      .catch(() => undefined);
   }
 });

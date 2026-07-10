@@ -60,6 +60,10 @@ export const authServer = {
   BETTER_AUTH_PASSKEY_RP_NAME: z.string().min(1),
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
+  /** Whether Google OAuth is open to every production user; false keeps it test-user-only. */
+  GOOGLE_OAUTH_PUBLIC: boolFromString(),
+  /** CSV of Docket account emails allowed to link Google while public access is disabled. */
+  GOOGLE_OAUTH_TEST_EMAILS: z.string().optional(),
   /**
    * Public HTTPS callback URL Docket registers with Google Calendar push-notification
    * `watch` subscriptions (`POST {this}` receives `X-Goog-*` headers at

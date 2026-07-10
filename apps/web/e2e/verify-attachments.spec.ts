@@ -12,11 +12,9 @@ import { myWorkHref } from './helpers/constants';
 import { expect, test } from './helpers/fixtures';
 import { apiJson } from './helpers/net';
 
-const SHOTS =
-  '/private/tmp/claude-501/-Users-williecubed-Projects-Hypertext-Studio-athena-service/4c880a88-3eec-4e96-a3e8-dcb16ee3a6c9/scratchpad';
 const TITLE = 'Attachments demo task';
 
-test('capture the task-detail attachments UI', async ({ page }) => {
+test('capture the task-detail attachments UI', async ({ page }, testInfo) => {
   page.on('console', (m) => {
     if (m.type() === 'error' && !m.text().includes('passkey')) console.log('PAGE ERROR:', m.text());
   });
@@ -40,7 +38,7 @@ test('capture the task-detail attachments UI', async ({ page }) => {
   await page.goto(myWorkHref(orgId), { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('heading', { name: 'My Work' })).toBeVisible({ timeout: 20_000 });
   await page.waitForTimeout(2500);
-  await page.screenshot({ path: `${SHOTS}/mywork.png` });
+  await page.screenshot({ path: testInfo.outputPath('mywork.png') });
 
   // Open the task from the list — a soft navigation to `tasks/[taskId]`.
   await page.getByText(TITLE).first().click({ timeout: 15_000 });
@@ -53,8 +51,8 @@ test('capture the task-detail attachments UI', async ({ page }) => {
   await heading.scrollIntoViewIfNeeded();
   await page.waitForTimeout(1000);
   const section = page.locator('section[aria-labelledby="attachments-heading"]').first();
-  await section.screenshot({ path: `${SHOTS}/attachments-empty.png` });
-  await page.screenshot({ path: `${SHOTS}/attachments-empty-full.png` });
+  await section.screenshot({ path: testInfo.outputPath('attachments-empty.png') });
+  await page.screenshot({ path: testInfo.outputPath('attachments-empty-full.png') });
 
   const fileInput = page.locator('input[type=file]').first();
   console.log('file input count (canEdit?):', await page.locator('input[type=file]').count());
@@ -67,6 +65,6 @@ test('capture the task-detail attachments UI', async ({ page }) => {
   });
   await expect(page.getByText('design-spec.pdf').first()).toBeVisible({ timeout: 20_000 });
   await heading.scrollIntoViewIfNeeded();
-  await section.screenshot({ path: `${SHOTS}/attachments-file.png` });
-  await page.screenshot({ path: `${SHOTS}/attachments-file-full.png` });
+  await section.screenshot({ path: testInfo.outputPath('attachments-file.png') });
+  await page.screenshot({ path: testInfo.outputPath('attachments-file-full.png') });
 });

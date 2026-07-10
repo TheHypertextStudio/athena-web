@@ -4,10 +4,7 @@ import type { ConnectorProvider } from '../src/connector';
 import { WRITE_BACK_CAPABLE_PROVIDERS } from '../src/connector';
 import { MAIL_CAPABLE_PROVIDERS } from '../src/mail';
 import { PROVIDER_CLIENT_FACTORIES } from '../src/real-connector';
-import {
-  isMailActionsProviderClient,
-  isWritableProviderClient,
-} from '../src/provider-client';
+import { isMailActionsProviderClient, isWritableProviderClient } from '../src/provider-client';
 import type { ProviderHttp } from '../src/provider-http';
 
 /**

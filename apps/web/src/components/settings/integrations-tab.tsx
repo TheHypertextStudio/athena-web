@@ -23,6 +23,7 @@ import type {
   SyncRunOut,
   TeamOut,
 } from '@docket/types';
+import { googleScopesForConnector } from '@docket/types';
 import { Skeleton } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
 import NextLink from 'next/link';
@@ -217,6 +218,7 @@ export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabPr
         await authClient.linkSocial({
           provider: socialProviderForConnector(provider),
           callbackURL: `${window.location.pathname}?verify=${id}`,
+          scopes: [...googleScopesForConnector(provider)],
         });
         return; // the browser redirects to the provider's consent screen
       }

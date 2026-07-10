@@ -62,19 +62,15 @@ Required behavior:
 
 Implementation notes:
 
-- Update `packages/auth/src/auth-builder.ts` only when the product is ready to ask every new Google
-  linker for the write scope.
-- If incremental re-consent is supported in the current auth flow, prefer an explicit "Enable
-  calendar editing" action on Google Calendar settings.
+- Google sign-in stays identity-only. Calendar settings uses Better Auth's incremental
+  `linkSocial` scopes for `calendar.calendarlist.readonly` and `calendar.events`.
+- The explicit "Enable calendar editing" action runs the same incremental consent flow and asks
+  the user to choose the displayed Google account again.
 - `apps/web/src/components/settings/identity-providers.ts` must label read-only Calendar and
   editable Calendar distinctly.
 
-**Known follow-up (not built in V1)**: `auth-builder.ts` was intentionally left untouched — this
-product is not yet asking every Google linker for the write scope, and no incremental re-consent
-endpoint exists. `google-calendar-settings.tsx` shows a labeled, disabled "Enable calendar editing
-(coming soon)" button in its place. `CalendarConnectionOut.scopeState` (nullable, captured from
-the existing OAuth grant) is fully wired end-to-end today, so as soon as a re-consent flow lands,
-the write-back pipeline below needs no changes — only the scope-upgrade action itself is missing.
+`CalendarConnectionOut.scopeState` remains the server-enforced source of truth after consent. A
+canceled or insufficient grant stays read-only and never reaches the provider write pipeline.
 
 ## Inbound Sync
 

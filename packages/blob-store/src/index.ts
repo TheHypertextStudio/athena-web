@@ -57,9 +57,4 @@ export interface BlobStore {
 export { LocalDiskBlob } from './local-disk';
 export type { LocalDiskBlobOptions } from './local-disk';
 export { RealBlob } from './vercel';
-export type {
-  BlobDeleteFn,
-  BlobUploadFn,
-  RealBlobConfig,
-  RealBlobDeps,
-} from './vercel';
+export type { BlobDeleteFn, BlobUploadFn, RealBlobConfig, RealBlobDeps } from './vercel';

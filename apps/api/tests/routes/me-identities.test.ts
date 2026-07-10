@@ -72,6 +72,7 @@ describe('linkedIdentities', () => {
       connectionCount: 0,
     });
     expect(ids[0]!.scopes).toContain('https://www.googleapis.com/auth/tasks');
+    expect(ids[0]!.reauthorizationRequired).toBe(true);
   });
 
   it('lists every supported provider; GitHub/Linear carry null claims (no id token)', async () => {
@@ -90,6 +91,13 @@ describe('linkedIdentities', () => {
   it('returns an empty list when nothing is linked — no synthetic/fabricated identity', async () => {
     const userId = await seedUser(`solo-${Math.random().toString(36).slice(2)}@x.test`, 'Solo');
     expect(await linkedIdentities(userId)).toEqual([]);
+  });
+
+  it('parses provider scopes stored with commas or whitespace', async () => {
+    const userId = await seedUser(`scopes-${Math.random().toString(36).slice(2)}@x.test`, 'Scope');
+    await seedAccount(userId, 'github', 'gh-scopes', 'read:user,repo  user:email');
+    const [identity] = await linkedIdentities(userId);
+    expect(identity?.scopes).toEqual(['read:user', 'repo', 'user:email']);
   });
 });
 

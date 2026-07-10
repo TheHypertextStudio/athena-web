@@ -1,9 +1,11 @@
 import { passkey } from '@better-auth/passkey';
 import {
   account,
+  actor,
   db,
   genId,
   hub,
+  integration,
   oauthAccessToken,
   oauthApplication,
   oauthConsent,
@@ -18,9 +20,10 @@ import { isRealValue } from '@docket/env';
 import type { Mailer } from '@docket/mail';
 import { type BetterAuthOptions, type BetterAuthPlugin } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
+import { APIError, createAuthMiddleware, getSessionFromCtx } from 'better-auth/api';
 import { mcp, oAuthProxy, oidcProvider, twoFactor } from 'better-auth/plugins';
 import { nextCookies } from 'better-auth/next-js';
-import { eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 
 import { generateAppleClientSecret, type AppleClientSecretInput } from './apple-secret';
 import { changeEmailConfirmationEmail } from './emails';
@@ -49,6 +52,7 @@ export interface AuthDeps {
  * provider-present and provider-absent branches.
  */
 export interface AuthEnv {
+  readonly APP_MODE?: 'local' | 'test' | 'production';
   readonly BETTER_AUTH_SECRET: string;
   readonly BETTER_AUTH_URL: string;
   readonly BETTER_AUTH_TRUSTED_ORIGINS?: string | undefined;
@@ -58,6 +62,8 @@ export interface AuthEnv {
   readonly BETTER_AUTH_PASSKEY_RP_NAME: string;
   readonly GOOGLE_CLIENT_ID?: string | undefined;
   readonly GOOGLE_CLIENT_SECRET?: string | undefined;
+  readonly GOOGLE_OAUTH_PUBLIC?: boolean | undefined;
+  readonly GOOGLE_OAUTH_TEST_EMAILS?: string | undefined;
   readonly GITHUB_APP_CLIENT_ID?: string | undefined;
   readonly GITHUB_APP_CLIENT_SECRET?: string | undefined;
   readonly LINEAR_CLIENT_ID?: string | undefined;
@@ -85,6 +91,16 @@ export function parseTrustedOrigins(raw: string | undefined): string[] {
       .map((s) => s.trim())
       .filter(Boolean) ?? []
   );
+}
+
+/** Whether a Docket account may start Google OAuth at the current release stage. */
+export function canUseGoogleOAuth(e: AuthEnv, email: string | null | undefined): boolean {
+  if (e.APP_MODE !== 'production' || e.GOOGLE_OAUTH_PUBLIC === true) return true;
+  const normalized = email?.trim().toLowerCase();
+  if (!normalized) return false;
+  return parseTrustedOrigins(e.GOOGLE_OAUTH_TEST_EMAILS)
+    .map((candidate) => candidate.toLowerCase())
+    .includes(normalized);
 }
 
 /** A pending `verification` row as {@link resolvePasskeyUser} reads it. */
@@ -272,6 +288,14 @@ const SESSION_UPDATE_AGE_S = 60 * 60 * 24;
  */
 const SESSION_FRESH_AGE_S = 60 * 5;
 
+/** Connector rows funded by each Better Auth identity provider. */
+const CONNECTORS_BY_IDENTITY: Readonly<Record<string, readonly string[]>> = {
+  google: ['calendar', 'drive', 'gmail', 'gtasks'],
+  github: ['github'],
+  linear: ['linear'],
+  microsoft: ['outlook'],
+};
+
 /**
  * Build the Better Auth configuration from the validated environment + injected boundaries.
  *
@@ -292,18 +316,9 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
     socialProviders.google = {
       clientId: e.GOOGLE_CLIENT_ID,
       clientSecret: e.GOOGLE_CLIENT_SECRET,
-      // `tasks` (read-WRITE, not `tasks.readonly`) is required for two-way Google Tasks sync —
-      // the connector's `pushTask` 403s without it. (Existing Google-linked users predating this
-      // scope must re-consent; they surface as `error`/needs-reauth, never silently.)
-      scope: [
-        'openid',
-        'email',
-        'profile',
-        'https://www.googleapis.com/auth/calendar.readonly',
-        'https://www.googleapis.com/auth/tasks',
-        'https://www.googleapis.com/auth/drive.readonly',
-        'https://mail.google.com/',
-      ],
+      // Sign-in receives identity only. Workspace scopes are requested incrementally by the
+      // Calendar/Tasks/Drive/Gmail connect action that needs them.
+      scope: ['openid', 'email', 'profile'],
       // `offline` returns a refresh token so background syncs run while nobody is signed in;
       // `select_account consent` shows the account chooser so a user can link a DIFFERENT Google
       // account each time (multi-account) and Google re-issues a refresh token on each grant.
@@ -502,6 +517,25 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
     // dependent connector checks and the passkey lockout guard cannot be bypassed through the
     // framework's generic endpoint.
     disabledPaths: ['/unlink-account'],
+    hooks: {
+      before: createAuthMiddleware(async (ctx) => {
+        const provider = (ctx.body as { provider?: unknown } | undefined)?.provider;
+        if (provider !== 'google') return;
+        if (ctx.path === '/sign-in/social' && !canUseGoogleOAuth(e, null)) {
+          throw new APIError('FORBIDDEN', {
+            message: 'Google sign-in is in private production testing.',
+          });
+        }
+        if (ctx.path === '/link-social') {
+          const currentSession = await getSessionFromCtx(ctx);
+          if (!canUseGoogleOAuth(e, currentSession?.user.email)) {
+            throw new APIError('FORBIDDEN', {
+              message: 'Google connections are currently limited to production test users.',
+            });
+          }
+        }
+      }),
+    },
     database: drizzleAdapter(db, {
       provider: 'pg',
       schema: {
@@ -548,6 +582,7 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
       ? {
           socialProviders,
           account: {
+            encryptOAuthTokens: true,
             accountLinking: {
               enabled: true,
               trustedProviders,
@@ -598,6 +633,37 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
         create: {
           after: async (createdUser) => {
             await db.insert(hub).values({ userId: createdUser.id });
+          },
+        },
+      },
+      account: {
+        delete: {
+          after: async (deletedAccount) => {
+            const providers = CONNECTORS_BY_IDENTITY[deletedAccount.providerId];
+            if (!providers || providers.length === 0) return;
+            const ownerActors = await db
+              .select({ id: actor.id })
+              .from(actor)
+              .where(eq(actor.userId, deletedAccount.userId));
+            if (ownerActors.length === 0) return;
+            await db
+              .update(integration)
+              .set({
+                status: 'error',
+                lastError: 'The linked account was removed. Reconnect an account to resume sync.',
+                lastErrorAt: new Date(),
+                syncStartedAt: null,
+              })
+              .where(
+                and(
+                  inArray(
+                    integration.createdBy,
+                    ownerActors.map((row) => row.id),
+                  ),
+                  inArray(integration.provider, [...providers]),
+                  eq(integration.externalAccountId, deletedAccount.accountId),
+                ),
+              );
           },
         },
       },

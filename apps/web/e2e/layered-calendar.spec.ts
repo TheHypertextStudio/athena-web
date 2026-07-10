@@ -366,9 +366,7 @@ test.describe('layered calendar', () => {
       waitUntil: 'domcontentloaded',
     });
     await expect(page.getByText('Calendar read-only')).toBeVisible();
-    await expect(
-      page.getByRole('button', { name: 'Enable calendar editing (coming soon)' }),
-    ).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Enable calendar editing' })).toBeEnabled();
 
     // The (shell-wide) agenda rail still shows the event.
     await page.goto(orgHref(orgId, 'my-work'), { waitUntil: 'domcontentloaded' });

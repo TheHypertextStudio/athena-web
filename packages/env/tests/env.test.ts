@@ -45,6 +45,7 @@ function validApiEnv(): Record<string, string> {
     BETTER_AUTH_URL: 'http://localhost:4000',
     BETTER_AUTH_PASSKEY_RP_ID: 'localhost',
     BETTER_AUTH_PASSKEY_RP_NAME: 'Docket',
+    GOOGLE_OAUTH_PUBLIC: 'false',
     CRON_SECRET: 'test-cron-secret',
     BILLING_ENABLED: 'false',
     MCP_TASKS_ENABLED: 'false',
@@ -151,6 +152,8 @@ describe('slices', () => {
 
     // Anything outside the enum is rejected.
     expect(() => stripeServer.BILLING_ENABLED.parse('yes')).toThrow();
+    expect(() => authServer.GOOGLE_OAUTH_PUBLIC.parse(undefined)).toThrow();
+    expect(authServer.GOOGLE_OAUTH_PUBLIC.parse('false')).toBe(false);
   });
 
   it('keeps genuinely-optional vars optional and fails fast on required ops/client vars', () => {

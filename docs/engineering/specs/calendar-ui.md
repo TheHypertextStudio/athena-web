@@ -244,9 +244,6 @@ tracked follow-up rather than a gap in the acceptance criteria above:
   read exists for "calendar items linked to task X" — only the inverse (item → tasks). Task
   detail's `TaskAttachments.tsx` is unchanged; building this honestly requires a new backend read
   first (see `docs/engineering/specs/calendar-architecture.md`).
-- **"Enable calendar editing" re-consent action** renders as a labeled, disabled "coming soon"
-  button in Google Calendar settings — there is no backend re-consent endpoint yet (see
-  `docs/engineering/specs/calendar-sync.md`'s OAuth section).
 - **Week view has no drag/resize.** The day timeline (`calendar-timeline.tsx`) supports real
   pointer-drag move/resize, snapped to 15 minutes; the week grid (`calendar-week-grid.tsx`) is
   deliberately a read-only-by-gesture 7-column stack — every card still opens the item workspace,
@@ -254,8 +251,6 @@ tracked follow-up rather than a gap in the acceptance criteria above:
 - **Linking an existing task is by pasted task id**, not a search/picker — no task-search/picker
   component exists in the codebase yet. This is a real, validated call (`TaskId.safeParse`), not
   fabricated data.
-- **`/calendar` is not wired into the app shell's primary navigation** (`HomeNavKey` in
-  `@docket/ui/components`) — it is reachable only by direct URL today.
 - **The item workspace's provider-metadata line omits the linked account's email** — showing it
   would need an extra connections fetch the drawer doesn't currently make; layer title, provider,
   and access role are shown instead.

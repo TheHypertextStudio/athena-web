@@ -23,6 +23,7 @@ export { generateAppleClientSecret, type AppleClientSecretInput } from './apple-
 export type { AuthDeps, AuthEnv, PasskeyUserAdapter } from './auth-builder';
 export {
   buildAuthOptions,
+  canUseGoogleOAuth,
   configuredSocialProviders,
   parseTrustedOrigins,
   resolvePasskeyUser,

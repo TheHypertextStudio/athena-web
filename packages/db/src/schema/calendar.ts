@@ -21,6 +21,7 @@ import { sql } from 'drizzle-orm';
 import {
   boolean,
   date,
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -40,7 +41,7 @@ import type {
   CalendarItemWritePatch,
   CalendarScopeState,
 } from '../types';
-import { user } from './auth';
+import { account, user } from './auth';
 import { actor, organization } from './identity';
 import { task } from './work';
 
@@ -74,6 +75,11 @@ export const calendarConnection = pgTable(
       t.provider,
       t.externalAccountId,
     ),
+    foreignKey({
+      columns: [t.userId, t.provider, t.externalAccountId],
+      foreignColumns: [account.userId, account.providerId, account.accountId],
+      name: 'calendar_connection_linked_account_fk',
+    }).onDelete('cascade'),
   ],
 );
 

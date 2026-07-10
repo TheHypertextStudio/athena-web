@@ -700,6 +700,12 @@ describe('schema inserts + updates (covers $defaultFn + $onUpdate callbacks)', (
 
   it('stores user-scoped Google Calendar accounts, calendars, and events', async () => {
     const userId = ids['user']!;
+    const linkedAccount = (
+      await db
+        .insert(account)
+        .values({ userId, providerId: 'google', accountId: 'google-sub-1' })
+        .returning()
+    )[0]!;
     const conn = (
       await db
         .insert(calendarConnection)
@@ -748,6 +754,13 @@ describe('schema inserts + updates (covers $defaultFn + $onUpdate callbacks)', (
 
     expect(event.calendarId).toBe(cal.id);
     expect(event.organizer?.email).toBe('ada@example.com');
+
+    await db.delete(account).where(eq(account.id, linkedAccount.id));
+    expect(
+      await db.select().from(calendarConnection).where(eq(calendarConnection.id, conn.id)),
+    ).toEqual([]);
+    expect(await db.select().from(calendarList).where(eq(calendarList.id, cal.id))).toEqual([]);
+    expect(await db.select().from(calendarEvent).where(eq(calendarEvent.id, event.id))).toEqual([]);
   });
 
   it('serves the relational query API built from the full schema', async () => {

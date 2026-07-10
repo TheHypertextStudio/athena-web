@@ -9,6 +9,7 @@
  * `listAccounts()` exposes only the `sub`). Requires an active session; unauthenticated callers
  * get HTTP 401.
  */
+import { canUseGoogleOAuth } from '@docket/auth';
 import { account, db, passkey } from '@docket/db';
 import { IdentityDeleteOut, IdentityListOut, IdentityProvider } from '@docket/types';
 import { and, eq } from 'drizzle-orm';
@@ -17,6 +18,7 @@ import { z } from 'zod';
 
 import type { AppEnv, AuthSession } from '../context';
 import { AuthError, ConflictError, NotFoundError, ReauthRequiredError } from '../error';
+import { env } from '../env';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zParam } from '../lib/validate';
@@ -55,7 +57,13 @@ The display \`email\`/\`name\`/\`picture\` are **decoded server-side from the st
     async (c) => {
       const session = requireSession(c);
       const items = await linkedIdentities(session.user.id);
-      return ok(c, IdentityListOut, { items });
+      return ok(c, IdentityListOut, {
+        items,
+        googleOAuth: {
+          available: canUseGoogleOAuth(env, session.user.email),
+          stage: env.GOOGLE_OAUTH_PUBLIC ? 'public' : 'testing',
+        },
+      });
     },
   )
   .delete(

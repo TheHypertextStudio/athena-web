@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  CONNECTOR_ITEMS,
-  FIXED_NOW,
-  fixedClock,
-} from '../src/fixtures';
+import { CONNECTOR_ITEMS, FIXED_NOW, fixedClock } from '../src/fixtures';
 
 describe('fixtures', () => {
   it('fixedClock always returns FIXED_NOW', () => {
@@ -13,7 +9,15 @@ describe('fixtures', () => {
   });
 
   it('CONNECTOR_ITEMS carries provenance for every provider', () => {
-    const providers = ['github', 'linear', 'drive', 'gmail', 'calendar', 'gtasks', 'outlook'] as const;
+    const providers = [
+      'github',
+      'linear',
+      'drive',
+      'gmail',
+      'calendar',
+      'gtasks',
+      'outlook',
+    ] as const;
     for (const provider of providers) {
       const items = CONNECTOR_ITEMS[provider];
       expect(items.length).toBeGreaterThan(0);
@@ -21,5 +25,4 @@ describe('fixtures', () => {
       expect(items[0]?.provenance.importedAt).toBe(FIXED_NOW);
     }
   });
-
 });

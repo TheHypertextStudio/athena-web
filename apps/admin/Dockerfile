@@ -16,6 +16,7 @@ FROM base AS builder
 WORKDIR /app
 # Install from pruned manifests (cache-stable), then bring in the pruned source.
 COPY --from=pruner /app/out/json/ .
+COPY --from=pruner /app/scripts/install-git-guardrails.sh ./scripts/install-git-guardrails.sh
 RUN pnpm install --no-frozen-lockfile
 COPY --from=pruner /app/out/full/ .
 ARG API_URL

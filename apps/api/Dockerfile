@@ -18,6 +18,7 @@ FROM base AS installer
 WORKDIR /app
 # Install from the pruned manifests first — this RUN is the cache-stable layer.
 COPY --from=pruner /app/out/json/ .
+COPY --from=pruner /app/scripts/install-git-guardrails.sh ./scripts/install-git-guardrails.sh
 RUN pnpm install --prod --no-frozen-lockfile
 # Then the pruned source (api + the workspace packages it imports, run from TS via tsx).
 COPY --from=pruner /app/out/full/ .

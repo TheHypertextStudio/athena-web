@@ -1,6 +1,6 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { getDb, one, seedUserWithHub } from '../support/routes-harness';
+import { getDb, one, seedGoogleAccount, seedUserWithHub } from '../support/routes-harness';
 
 import type {
   CalendarProviderAdapter,
@@ -77,6 +77,7 @@ async function seedWatchedLayer(
   schema: Awaited<ReturnType<typeof getDb>>,
   input: { userId: string; externalAccountId: string },
 ): Promise<{ layerId: string }> {
+  await seedGoogleAccount(schema.db, schema, input.userId, input.externalAccountId);
   const connection = one(
     await schema.db
       .insert(schema.calendarConnection)

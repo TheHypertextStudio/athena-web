@@ -172,19 +172,9 @@ Out of scope for V1:
 V1 shipped Tasks 1–10 of the implementation plan: provider-neutral layer/item/link schema, read
 services with agenda compatibility, native blocks, task links, a Google sync engine with
 write-back and conflict handling, push hints + scheduled sync, the web data layer, the full
-calendar view + item workspace, and this e2e/docs pass. Two items from this spec's original V1
-scope landed as explicit, tracked follow-ups rather than silently:
+calendar view + item workspace, incremental OAuth consent, primary navigation, and this e2e/docs
+pass. One item from this spec's original V1 scope remains an explicit, tracked follow-up:
 
-- **OAuth re-consent for calendar write access is not built.** "Editable events... after
-  re-consent to a write calendar scope" (V1 Scope, above) assumed a re-consent flow would ship.
-  It did not: `packages/auth/src/auth-builder.ts` was intentionally left untouched (per
-  `docs/engineering/specs/calendar-sync.md`'s own conditional — "update... only when the product
-  is ready to ask every new Google linker for the write scope"), so there is no backend endpoint
-  that upgrades an existing read-only Google grant to a write scope. Google Calendar settings
-  shows a labeled, disabled "Enable calendar editing (coming soon)" button instead of a working
-  action. The write-back pipeline itself (outbox, conflict handling, push) is fully implemented
-  and works today for any connection whose `scopeState.calendarWrite` is already `true` — only
-  the _upgrade path_ for existing read-only connections is missing.
 - **Task detail does not show linked calendar items.** "Task detail: shows linked calendar items
   as structured context, not only attachments" (UI Surfaces, above) needs a backend read for
   "calendar items linked to task X"; only the inverse (`GET /items/:id/tasks`, item → tasks)

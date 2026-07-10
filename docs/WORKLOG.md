@@ -327,8 +327,9 @@
   - Cloudflare DNS still needs the malformed `_vercel.hypertext.studio` CNAME replaced by the Vercel
     TXT verification value, plus `docket-api` and `docket-admin` CNAMEs for the ready Cloud Run
     services. The available local Cloudflare OAuth token has DNS read but not DNS write access.
-  - Public Google enablement remains gated on OAuth verification/security review and provisioning
-    `support@hypertext.studio` as the shared Workspace support group.
+  - Public Google enablement remains gated on OAuth verification/security review. The staged test-user
+    flow additionally needs a real Google web OAuth client; current Secret Manager versions are
+    placeholders.
 - **Files Changed**:
   - `.github/workflows/{ci,deploy}.yml`, deployment Dockerfiles, and `packages/db/Dockerfile`
   - `packages/{auth,db,env,types}` Google account, scope, encryption, and lifecycle surfaces
@@ -338,7 +339,8 @@
     GitHub migration/API job; obsolete Vercel GitHub variables removed; canonical app/API origins and
     `NEXT_PUBLIC_PASSKEY_RP_ID=hypertext.studio` configured for production and preview
   - GCP project `athena-services`: relinked from a closed billing account to the active Hypertext
-    Studio account; added `docket-database-url-unpooled` with Cloud Run runtime access
+    Studio account; added `docket-database-url-unpooled` with Cloud Run runtime access; verified
+    `support@hypertext.studio` exists with `willie@hypertext.studio` as an owner
 - **Learnings**: Provider-backed calendar connections need a database-enforced link to the Better Auth
   account lifecycle, and container installs must include the root prepare-script input even when Turbo
   prunes source from the manifest layer. Branch-prefixed E2E hosts need explicit trusted-origin and

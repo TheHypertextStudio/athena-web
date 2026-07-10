@@ -134,7 +134,10 @@ jobs:
     env:
       WEB_URL: https://docket.localhost
       NEXT_PUBLIC_APP_URL: https://docket.localhost
+      BETTER_AUTH_PASSKEY_RP_ID: docket.localhost
+      NEXT_PUBLIC_PASSKEY_RP_ID: docket.localhost
       BETTER_AUTH_TRUSTED_ORIGINS: https://docket.localhost,https://admin.docket.localhost,https://marketing.docket.localhost
+      AGENT_MAX_TURNS: '24'
       GOOGLE_OAUTH_PUBLIC: 'false'
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:

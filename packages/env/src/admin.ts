@@ -15,10 +15,12 @@ export const env = createEnv({
   client: {
     NEXT_PUBLIC_API_URL: clientShared.NEXT_PUBLIC_API_URL,
     NEXT_PUBLIC_APP_URL: clientShared.NEXT_PUBLIC_APP_URL,
+    NEXT_PUBLIC_PASSKEY_RP_ID: clientShared.NEXT_PUBLIC_PASSKEY_RP_ID,
   },
   runtimeEnv: {
     NEXT_PUBLIC_API_URL: process.env['NEXT_PUBLIC_API_URL'],
     NEXT_PUBLIC_APP_URL: process.env['NEXT_PUBLIC_APP_URL'],
+    NEXT_PUBLIC_PASSKEY_RP_ID: process.env['NEXT_PUBLIC_PASSKEY_RP_ID'],
   },
   emptyStringAsUndefined: true,
   skipValidation: Boolean(process.env['SKIP_ENV_VALIDATION']),

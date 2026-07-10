@@ -297,6 +297,9 @@
   - [x] Add production legal pages, Google data disclosures, and hybrid deployment documentation.
   - [x] Replace the token-authenticated Vercel CLI job with native Git deployment gated on the
         migration/API deployment check.
+  - [x] Restore GCP billing, provision the direct Neon migration secret, and reconcile the deploy
+        manifest with the OAuth providers that are actually configured in production.
+  - [x] Enforce the browser-visible passkey RP ID in web/admin builds and configure it in Vercel.
   - [ ] Validate in CI and against staged production with the designated Google test user.
 - **Risks**:
   - Production migrations must run before API code that expects the current calendar schema.
@@ -307,6 +310,12 @@
   - `pnpm test` passes all 17 Turbo tasks; the API package passes 132 files / 1186 tests.
   - `SKIP_ENV_VALIDATION=1 pnpm build` passes the API, admin, and web production builds.
   - Fresh PGlite migration succeeds; migration, API, admin, and web Docker images all build.
+  - Production control-plane follow-up passes `pnpm typecheck`, `pnpm lint`, `pnpm test` (17/17
+    tasks; API 132 files / 1186 tests), `SKIP_ENV_VALIDATION=1 pnpm build`, and an admin Docker build
+    with the canonical production origins plus `NEXT_PUBLIC_PASSKEY_RP_ID=hypertext.studio`.
+  - Live GCP proof confirms ready API/admin Cloud Run revisions, a 200 API health response, active
+    GitHub OIDC federation, Artifact Registry, Scheduler jobs, enabled Google APIs, and no missing
+    Secret Manager references in the corrected deploy workflow.
   - Live Portless web, API health, and OAuth discovery return 200; all seven Google/layered-calendar
     Playwright journeys pass. The five hosted E2E regressions exposed by the first pull-request run
     (MCP session, passkey signal/sign-in, and two visual captures) pass together on an isolated
@@ -315,8 +324,9 @@
     conditional mediation, that test passes 10/10 repetitions and the complete serial browser suite
     passes 18/18 locally; the follow-up hosted run remains the canonical full-suite gate.
 - **Blockers**:
-  - Staged production needs current GCP credentials and the unpooled database secret before the
-    migration/deploy workflow can run.
+  - Cloudflare DNS still needs the malformed `_vercel.hypertext.studio` CNAME replaced by the Vercel
+    TXT verification value, plus `docket-api` and `docket-admin` CNAMEs for the ready Cloud Run
+    services. The available local Cloudflare OAuth token has DNS read but not DNS write access.
   - Public Google enablement remains gated on OAuth verification/security review and provisioning
     `support@hypertext.studio` as the shared Workspace support group.
 - **Files Changed**:
@@ -325,7 +335,10 @@
   - `apps/api` identity/config responses and `apps/web` Calendar connect/re-consent/navigation UX
   - `apps/web/src/app/(marketing)/{privacy,terms}` and production/operator documentation
   - Vercel project `docket`: production-only `Backend ready` Deployment Check sourced from the
-    GitHub migration/API job; obsolete Vercel GitHub variables removed
+    GitHub migration/API job; obsolete Vercel GitHub variables removed; canonical app/API origins and
+    `NEXT_PUBLIC_PASSKEY_RP_ID=hypertext.studio` configured for production and preview
+  - GCP project `athena-services`: relinked from a closed billing account to the active Hypertext
+    Studio account; added `docket-database-url-unpooled` with Cloud Run runtime access
 - **Learnings**: Provider-backed calendar connections need a database-enforced link to the Better Auth
   account lifecycle, and container installs must include the root prepare-script input even when Turbo
   prunes source from the manifest layer. Branch-prefixed E2E hosts need explicit trusted-origin and
@@ -333,7 +346,8 @@
   declarations under strict mode or the launched dev process never receives them. Native Vercel Git
   deployments can preserve backend-first release ordering without a duplicate CLI build: a GitHub
   Actions Deployment Check holds production alias assignment until migrations and the API rollout
-  succeed.
+  succeed. A project may report `billingEnabled: true` while its linked billing account is closed;
+  validate the billing account's `open` state before treating that metadata as deployment-ready.
 
 ### [NOTIF-UX-001] End-user notification UX completion
 

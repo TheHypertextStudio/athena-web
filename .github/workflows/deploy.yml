@@ -93,6 +93,8 @@ jobs:
             CRON_SECRET=docket-cron-secret:latest
             GOOGLE_CLIENT_ID=docket-google-client-id:latest
             GOOGLE_CLIENT_SECRET=docket-google-client-secret:latest
+            GITHUB_CLIENT_ID=docket-github-client-id:latest
+            GITHUB_CLIENT_SECRET=docket-github-client-secret:latest
             LINEAR_CLIENT_ID=docket-linear-client-id:latest
             LINEAR_CLIENT_SECRET=docket-linear-client-secret:latest
             RESEND_API_KEY=docket-resend-api-key:latest
@@ -224,6 +226,7 @@ jobs:
             API_URL=${{ vars.API_URL }}
             NEXT_PUBLIC_API_URL=${{ vars.API_URL }}
             NEXT_PUBLIC_APP_URL=${{ vars.WEB_URL }}
+            NEXT_PUBLIC_PASSKEY_RP_ID=${{ vars.PASSKEY_RP_ID }}
 
       - id: deploy-admin
         uses: google-github-actions/deploy-cloudrun@v3

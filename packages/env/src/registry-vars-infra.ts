@@ -273,6 +273,15 @@ export const INFRA_VARS: readonly VarSpec[] = [
     where: 'Public web app base URL exposed to the browser',
   },
   {
+    name: 'NEXT_PUBLIC_PASSKEY_RP_ID',
+    slice: 'client',
+    scope: 'client',
+    targets: ['web', 'admin'],
+    required: true,
+    zod: clientShared.NEXT_PUBLIC_PASSKEY_RP_ID,
+    where: 'Browser-visible mirror of BETTER_AUTH_PASSKEY_RP_ID',
+  },
+  {
     name: 'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY',
     slice: 'client',
     scope: 'client',

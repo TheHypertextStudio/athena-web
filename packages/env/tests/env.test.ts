@@ -170,6 +170,8 @@ describe('slices', () => {
       'https://api.example.com',
     );
     expect(() => clientShared.NEXT_PUBLIC_APP_URL.parse(undefined)).toThrow();
+    expect(() => clientShared.NEXT_PUBLIC_PASSKEY_RP_ID.parse(undefined)).toThrow();
+    expect(clientShared.NEXT_PUBLIC_PASSKEY_RP_ID.parse('example.com')).toBe('example.com');
     expect(clientShared.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY.parse(undefined)).toBeUndefined();
   });
 });
@@ -229,9 +231,16 @@ describe.each([
     vi.stubEnv('SKIP_ENV_VALIDATION', 'false');
     vi.stubEnv('NEXT_PUBLIC_API_URL', 'https://api.example.com');
     vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://app.example.com');
+    if (_name !== 'marketing') vi.stubEnv('NEXT_PUBLIC_PASSKEY_RP_ID', 'example.com');
     const mod = await load();
     expect(mod.env.NEXT_PUBLIC_API_URL).toBe('https://api.example.com');
     expect(mod.env.NEXT_PUBLIC_APP_URL).toBe('https://app.example.com');
+    if (_name !== 'marketing') {
+      expect('NEXT_PUBLIC_PASSKEY_RP_ID' in mod.env).toBe(true);
+      if ('NEXT_PUBLIC_PASSKEY_RP_ID' in mod.env) {
+        expect(mod.env.NEXT_PUBLIC_PASSKEY_RP_ID).toBe('example.com');
+      }
+    }
   });
 
   it('throws fail-fast when the required public URLs are absent (no hidden default)', async () => {
@@ -242,6 +251,7 @@ describe.each([
   it('throws fail-fast on an invalid required public var', async () => {
     vi.stubEnv('NEXT_PUBLIC_API_URL', '');
     vi.stubEnv('NEXT_PUBLIC_APP_URL', '');
+    if (_name !== 'marketing') vi.stubEnv('NEXT_PUBLIC_PASSKEY_RP_ID', '');
     // emptyStringAsUndefined makes empty -> undefined, which then defaults; to
     // force a failure we provide a value that fails `min(1)` only via a
     // non-string is impossible here, so instead skip-validation path proves the
@@ -257,6 +267,7 @@ describe('web composition (stripe publishable key)', () => {
   it('carries the optional Stripe publishable key when set', async () => {
     vi.stubEnv('NEXT_PUBLIC_API_URL', 'https://api.example.com');
     vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://app.example.com');
+    vi.stubEnv('NEXT_PUBLIC_PASSKEY_RP_ID', 'example.com');
     vi.stubEnv('NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY', 'pk_test_123');
     const mod = await import('../src/web');
     expect(mod.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY).toBe('pk_test_123');

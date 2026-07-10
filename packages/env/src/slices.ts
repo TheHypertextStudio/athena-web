@@ -251,6 +251,8 @@ export const opsServer = {
 export const clientShared = {
   NEXT_PUBLIC_API_URL: z.string().min(1),
   NEXT_PUBLIC_APP_URL: z.string().min(1),
+  /** Browser-visible mirror of `BETTER_AUTH_PASSKEY_RP_ID` for WebAuthn Signal API calls. */
+  NEXT_PUBLIC_PASSKEY_RP_ID: z.string().min(1),
   NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: z.string().optional(),
 };
 

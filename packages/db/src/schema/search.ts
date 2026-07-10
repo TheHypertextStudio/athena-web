@@ -22,8 +22,11 @@ import { genId } from '../id';
 import { user } from './auth';
 import { organization } from './identity';
 
+/** Serialized route metadata used to navigate from a search result. */
 export type SearchRouteShape = Record<string, unknown>;
+/** Extensible kind-specific metadata used to filter search results. */
 export type SearchFacetShape = Record<string, unknown>;
+/** Permission metadata evaluated before a search document is returned. */
 export type SearchVisibilityShape = Record<string, unknown>;
 
 /** Durable semantic search document, projected from source rows and query-filtered later. */

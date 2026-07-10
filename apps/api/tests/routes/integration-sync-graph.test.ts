@@ -72,7 +72,10 @@ async function reload(id: string): Promise<IntegrationRow> {
 }
 
 /** Seed a user + linked Linear `account` (with the given OAuth scope string) + an org actor. */
-async function seedLinearActor(orgId: string, scope: string): Promise<string> {
+async function seedLinearActor(
+  orgId: string,
+  scope: string,
+): Promise<{ actorId: string; accountId: string }> {
   const u = one(
     await db
       .insert(schema.user)
@@ -82,10 +85,11 @@ async function seedLinearActor(orgId: string, scope: string): Promise<string> {
       })
       .returning({ id: schema.user.id }),
   );
+  const accountId = `lin-acct-${Math.random().toString(36).slice(2)}`;
   await db.insert(schema.account).values({
     userId: u.id,
     providerId: 'linear',
-    accountId: `lin-acct-${Math.random().toString(36).slice(2)}`,
+    accountId,
     scope,
   });
   const a = one(
@@ -94,7 +98,7 @@ async function seedLinearActor(orgId: string, scope: string): Promise<string> {
       .values({ organizationId: orgId, kind: 'human', displayName: 'LinWriter', userId: u.id })
       .returning({ id: schema.actor.id }),
   );
-  return a.id;
+  return { actorId: a.id, accountId };
 }
 
 interface IntegrationStateRes {
@@ -269,6 +273,25 @@ describe('verify persists the provider workspace id (Linear webhook routing key)
 });
 
 describe('Linear write-back scope enforcement', () => {
+  it('ignores client attempts to forge provider-owned webhook routing metadata', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const row = await seedLinearIntegration(orgId, humanActorId, false);
+    await db
+      .update(schema.integration)
+      .set({ connection: { externalWorkspaceId: 'verified-workspace' } })
+      .where(eq(schema.integration.id, row.id));
+    const w = appWithActor(integrations, orgId, ['manage'], humanActorId);
+
+    const response = await w.request(`/${row.id}`, {
+      method: 'PATCH',
+      headers: J,
+      body: JSON.stringify({ connection: { externalWorkspaceId: 'victim-workspace' } }),
+    });
+
+    expect(response.status).toBe(200);
+    expect((await reload(row.id)).connection.externalWorkspaceId).toBe('verified-workspace');
+  });
+
   it('verify records an honest error when writeBack is on but the identity lacks write scope', async () => {
     // seedBaseOrg's actor has no linked identity at all (no `userId`) — the strictest case.
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
@@ -301,18 +324,29 @@ describe('Linear write-back scope enforcement', () => {
     // Rejected atomically: writeBack was never actually flipped.
     expect((await reload(row.id)).writeBack).toBe(false);
 
-    // A DIFFERENT actor whose linked Linear identity carries `write` exercises the other
-    // outcome — no APP_MODE bypass, just real fixture data.
-    const writerActorId = await seedLinearActor(orgId, 'read write');
+    // A different manager cannot fund somebody else's integration with their own grant merely by
+    // toggling write-back: the bound integration owner remains the credential authority.
+    const writer = await seedLinearActor(orgId, 'read write');
+    const writerActorId = writer.actorId;
     const ww = appWithActor(integrations, orgId, ['manage'], writerActorId);
-    const granted = await ww.request(`/${row.id}`, {
+    const stillDenied = await ww.request(`/${row.id}`, {
       method: 'PATCH',
       headers: J,
       body: JSON.stringify({ writeBack: true }),
     });
+    expect(stillDenied.status).toBe(409);
+
+    // Explicitly binding the legacy row to the writer's linked account transfers credential
+    // ownership and checks that exact account's scope in the same atomic update.
+    const granted = await ww.request(`/${row.id}`, {
+      method: 'PATCH',
+      headers: J,
+      body: JSON.stringify({ externalAccountId: writer.accountId, writeBack: true }),
+    });
     expect(granted.status).toBe(200);
     const patched = await jsonBody<IntegrationStateRes>(granted);
     expect(patched.writeBack).toBe(true);
+    expect((await reload(row.id)).createdBy).toBe(writerActorId);
   });
 
   it('never nags a read-only (writeBack: false) Linear integration regardless of scope', async () => {

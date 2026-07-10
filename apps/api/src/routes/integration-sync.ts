@@ -108,7 +108,7 @@ export function toSyncRunOut(run: SyncRunRow): z.input<typeof SyncRunOut> {
 
 /** Options for one sync run. */
 export interface RunSyncOptions {
-  /** The actor whose provider grant funds the run (request actor, or the integration owner). */
+  /** The actor whose action is recorded on reconciled Docket work. */
   readonly actorId: string;
   /** Whether a user or the scheduler triggered it. */
   readonly trigger: SyncTrigger;
@@ -267,7 +267,8 @@ export type LeasedSyncExecutor = (ctx: LeasedSyncContext) => Promise<{
  * implemented exactly once. See `docs/engineering/specs/integration-sync.md`.
  *
  * @param row - The integration to sync (its `status` is read to decide whether to notify).
- * @param opts - The funding actor, the trigger, and the run's purpose.
+ * @param opts - The acting Docket actor, the trigger, and the run's purpose. Provider credentials
+ *   always come from `row.createdBy`, which owns the integration's bound external account.
  * @param execute - The purpose-specific pull.
  * @returns the finished {@link SyncRunRow}, or `null` if another run already holds the lease.
  */
@@ -300,7 +301,7 @@ export async function runLeasedSync(
     });
   }
 
-  const tokenResult = await resolveConnectorToken(opts.actorId, provider, row.externalAccountId);
+  const tokenResult = await resolveConnectorToken(row.createdBy, provider, row.externalAccountId);
   if (!tokenResult.ok) {
     return finishFailure(run, row, tokenResult.message, { needsReauth: true, now });
   }
@@ -325,7 +326,7 @@ export async function runLeasedSync(
  * work, materialize it, and record the outcome.
  *
  * @param row - The integration to sync.
- * @param opts - The funding actor and the trigger.
+ * @param opts - The Docket actor to attribute reconciliation changes to and the trigger.
  * @returns the finished {@link SyncRunRow}, or `null` if another run already holds the lease.
  */
 export async function runSync(

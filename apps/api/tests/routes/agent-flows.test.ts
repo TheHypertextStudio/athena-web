@@ -244,6 +244,11 @@ describe('POST /:id/run (agent session via the AgentRuntime port)', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({}),
     });
+    const stored = await db
+      .select({ type: sessionActivity.type })
+      .from(sessionActivity)
+      .where(eq(sessionActivity.sessionId, sessionId));
+    expect(stored.map((activity) => activity.type).sort()).toEqual(['action', 'thought']);
 
     // The stream live-tails non-terminal sessions; cancel first so the replay closes
     // (the live-tail behavior itself is covered in agent-proposals.test.ts).

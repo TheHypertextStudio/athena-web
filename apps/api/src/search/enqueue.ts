@@ -1,5 +1,6 @@
 import { and, eq, inArray } from 'drizzle-orm';
 
+/** Durable search-index job fields accepted by the enqueue boundary. */
 export interface EnqueueSearchIndexJobInput {
   organizationId?: string | null;
   userId?: string | null;

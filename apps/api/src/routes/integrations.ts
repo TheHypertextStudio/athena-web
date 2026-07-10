@@ -256,7 +256,6 @@ Requires \`manage\` — wiring an external data source into the org is an admini
       const writeBack = body.writeBack ?? WRITE_BACK_PROVIDERS.has(body.provider);
       const fields = {
         ...(body.roles !== undefined ? { roles: body.roles } : {}),
-        ...(body.connection !== undefined ? { connection: body.connection } : {}),
         ...(body.config !== undefined ? { config: body.config } : {}),
         ...(body.syncMode !== undefined ? { syncMode: body.syncMode } : {}),
         ...(externalAccountId !== undefined ? { externalAccountId } : {}),
@@ -358,7 +357,7 @@ Requires \`manage\` — it touches live provider credentials and configures sync
     }),
     zParam(idParam),
     async (c) => {
-      const { orgId, actorId } = c.get('actorCtx');
+      const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const row = await loadIntegration(orgId, id);
 
@@ -367,7 +366,11 @@ Requires \`manage\` — it touches live provider credentials and configures sync
 
       // Enumerating the provider's task lists needs a live credential, so a broken connection
       // surfaces here as a real reason (not an empty list that looks like "no lists").
-      const tokenResult = await resolveConnectorToken(actorId, provider, row.externalAccountId);
+      const tokenResult = await resolveConnectorToken(
+        row.createdBy,
+        provider,
+        row.externalAccountId,
+      );
       if (!tokenResult.ok) throw new ConflictError(tokenResult.message);
 
       const resources =
@@ -408,7 +411,7 @@ Requires \`manage\` — it touches live provider credentials and configures sync
       summary: 'Update an integration',
       capability: 'manage',
       response: IntegrationOut,
-      description: `Update an integration's mutable settings — \`roles\`, \`connection\` metadata, connector \`config\` (target team/project, \`listIds\`, \`defaultListId\`, \`pushNativeTasks\`, work-graph connectors' \`teamMappings\`, and — on mail-capable connectors — \`emailToTask: { enabled, threshold }\`, the strictly-opt-in email-to-task ingest switch validated against {@link ConnectorConfig}), \`syncMode\`, and \`writeBack\` — returning the refreshed {@link IntegrationOut}. A partial update: only present fields are written. \`status\` is intentionally **not** accepted — connection health is *earned* through the connect/verify and sync paths, never declared by a client, so this route can never fabricate \`connected\`. Enabling \`emailToTask\` also seeds the org's default automation rules once (idempotent), so the dismiss-promotions / archive-on-complete defaults exist the moment the feature turns on. Flipping \`writeBack: true\` on a Linear integration additionally requires the actor's linked Linear identity to carry the \`write\` OAuth scope — lacking it rejects with 409 (reconnect message); a read-only (\`writeBack: false\`) update never checks scope. When \`config.teamMappings\` is present it is validated: every \`teamId\` must be a real team in the caller's org and every \`externalTeamId\` must be unique within the array — either failure 422s (\`validation_error\`) rather than persisting a mapping that would silently misroute at sync time. A missing/cross-tenant id 404s. Requires \`manage\`. Related: \`POST /:id/verify\` (re-validate after changing the connection), \`GET /:id/lists\` (to discover valid \`config.listIds\`).`,
+      description: `Update an integration's mutable settings — \`roles\`, connector \`config\` (target team/project, \`listIds\`, \`defaultListId\`, \`pushNativeTasks\`, work-graph connectors' \`teamMappings\`, and — on mail-capable connectors — \`emailToTask: { enabled, threshold }\`, the strictly-opt-in email-to-task ingest switch validated against {@link ConnectorConfig}), \`syncMode\`, \`writeBack\`, and the one-time \`externalAccountId\` binding for a legacy connection — returning the refreshed {@link IntegrationOut}. Provider-owned \`connection\` metadata (including Linear's webhook-routing workspace id), credentials, and \`status\` are intentionally **not** accepted: identity/workspace metadata is learned from the provider during verification, and health is earned through verify/sync, so a client cannot forge routing or a healthy state. A partial update writes only accepted present fields. Enabling \`emailToTask\` also seeds the org's default automation rules once (idempotent), so the dismiss-promotions / archive-on-complete defaults exist the moment the feature turns on. Flipping \`writeBack: true\` on a Linear integration additionally requires the bound Linear identity to carry the \`write\` OAuth scope — lacking it rejects with 409 (reconnect message); a read-only (\`writeBack: false\`) update never checks scope. When \`config.teamMappings\` is present it is validated: every \`teamId\` must be a real team in the caller's org and every \`externalTeamId\` must be unique within the array — either failure 422s (\`validation_error\`) rather than persisting a mapping that would silently misroute at sync time. A missing/cross-tenant id 404s. Requires \`manage\`. Related: \`POST /:id/verify\` (re-validate after changing the connection), \`GET /:id/lists\` (to discover valid \`config.listIds\`).`,
     }),
     zParam(idParam),
     zJson(IntegrationUpdate),
@@ -436,20 +439,21 @@ Requires \`manage\` — it touches live provider credentials and configures sync
           }
         }
       }
-      // Flipping write-back ON for Linear is gated on the actor's linked identity actually
-      // carrying the `write` scope (see `POST /:id/verify` for the same check at connect time).
-      // A read-only update (writeBack absent or false) never consults scope — no nagging.
+      // Flipping write-back ON for Linear is gated on the bound owner's linked identity. When an
+      // actor explicitly binds a legacy row in this request, that exact account becomes the owner
+      // and is checked atomically. A read-only update never consults scope — no nagging.
+      const credentialActorId = body.externalAccountId !== undefined ? actorId : existing.createdBy;
+      const credentialAccountId = body.externalAccountId ?? existing.externalAccountId;
       if (
         body.writeBack === true &&
         existing.provider === 'linear' &&
-        !(await hasLinearWriteScope(actorId, existing.externalAccountId))
+        !(await hasLinearWriteScope(credentialActorId, credentialAccountId))
       ) {
         throw new ConflictError(LINEAR_WRITE_SCOPE_MESSAGE);
       }
 
-      const row = await setIntegration(id, {
+      const patch = {
         ...(body.roles !== undefined ? { roles: body.roles } : {}),
-        ...(body.connection !== undefined ? { connection: body.connection } : {}),
         ...(body.config !== undefined ? { config: body.config } : {}),
         ...(body.syncMode !== undefined ? { syncMode: body.syncMode } : {}),
         ...(body.writeBack !== undefined ? { writeBack: body.writeBack } : {}),
@@ -462,7 +466,8 @@ Requires \`manage\` — it touches live provider credentials and configures sync
               lastErrorAt: null,
             }
           : {}),
-      });
+      } satisfies Partial<typeof integration.$inferInsert>;
+      const row = Object.keys(patch).length === 0 ? existing : await setIntegration(id, patch);
 
       // Enablement moment: seed the org's default automation rules as soon as email-to-task
       // turns on (idempotent; the sweep-time call remains as a backstop) — decoupled from
@@ -530,7 +535,7 @@ Requires \`manage\` — it exercises live credentials and mutates health. Side e
       if (
         provider === 'linear' &&
         row.writeBack &&
-        !(await hasLinearWriteScope(actorId, row.externalAccountId))
+        !(await hasLinearWriteScope(row.createdBy, row.externalAccountId))
       ) {
         const updated = await setIntegration(id, {
           status: 'error',
@@ -543,7 +548,11 @@ Requires \`manage\` — it exercises live credentials and mutates health. Side e
       // The ONLY place that promotes an integration to `connected` at connect time: a credential
       // must actually resolve the external account here. Failures are recorded as `error` with a
       // real reason and returned as 200 (the truthful integration state), never thrown away.
-      const tokenResult = await resolveConnectorToken(actorId, provider, row.externalAccountId);
+      const tokenResult = await resolveConnectorToken(
+        row.createdBy,
+        provider,
+        row.externalAccountId,
+      );
       if (!tokenResult.ok) {
         const updated = await setIntegration(id, {
           status: 'error',
@@ -566,7 +575,11 @@ Requires \`manage\` — it exercises live credentials and mutates health. Side e
         // Label the connection by the linked IDENTITY (the account's email), not a resource. The
         // gtasks connector no longer returns a label (it used to return a task-list title), so the
         // identity email — resolved from the bound account's id token — is the source of truth.
-        const identityLabel = await resolveIdentityLabel(actorId, provider, row.externalAccountId);
+        const identityLabel = await resolveIdentityLabel(
+          row.createdBy,
+          provider,
+          row.externalAccountId,
+        );
         const account = identityLabel ?? result.account;
         let nextConfig = row.config;
         if (provider === 'linear') {
@@ -663,7 +676,11 @@ Requires \`contribute\` (it creates tasks, the same bar as authoring work direct
       const provider = asConnectorProvider(row.provider);
       if (!provider) throw new ConflictError('Integration provider does not support import');
 
-      const tokenResult = await resolveConnectorToken(actorId, provider, row.externalAccountId);
+      const tokenResult = await resolveConnectorToken(
+        row.createdBy,
+        provider,
+        row.externalAccountId,
+      );
       if (!tokenResult.ok) {
         await setIntegration(id, {
           status: 'error',

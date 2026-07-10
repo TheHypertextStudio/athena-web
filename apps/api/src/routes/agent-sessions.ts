@@ -357,6 +357,10 @@ Semantics: the org-scoped session must exist (404 \`Session not found\` otherwis
             .limit(1);
           status = rows[0]?.status ?? 'completed';
         }
+        // Hono closes again when the callback returns, but awaiting the close here is
+        // important for finite replays: it drains every queued SSE frame before the
+        // in-memory/test response reader observes EOF.
+        await stream.close();
       });
     },
   )

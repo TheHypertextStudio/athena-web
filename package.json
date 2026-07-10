@@ -40,7 +40,7 @@
     "search:backfill": "dotenv -e .env.local -- tsx scripts/search-backfill.ts",
     "search:repair": "dotenv -e .env.local -- tsx scripts/search-backfill.ts --repair",
     "search:process": "dotenv -e .env.local -- tsx scripts/search-process-jobs.ts",
-    "prepare": "sh scripts/install-git-guardrails.sh && (git update-index --skip-worktree .env.local 2>/dev/null || true)"
+    "prepare": "if [ -f scripts/install-git-guardrails.sh ]; then sh scripts/install-git-guardrails.sh; fi && (git update-index --skip-worktree .env.local 2>/dev/null || true)"
   },
   "devDependencies": {
     "@changesets/cli": "^2.31.0",

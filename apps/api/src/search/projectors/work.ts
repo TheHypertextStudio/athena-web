@@ -85,6 +85,7 @@ function namedWorkDocument(row: NamedWorkRow, kind: SearchDocumentKind): SearchD
   });
 }
 
+/** Projector for Docket task search documents. */
 export const taskSearchProjector = preloadedProjector<TaskRow>('task', (row) => ({
   ...workDocument(row, 'task', row.title, {
     summary: row.description,
@@ -104,21 +105,25 @@ export const taskSearchProjector = preloadedProjector<TaskRow>('task', (row) => 
   sourceTable: 'task',
 }));
 
+/** Projector for Docket project search documents. */
 export const projectSearchProjector = preloadedProjector<NamedWorkRow>('project', (row) => ({
   ...namedWorkDocument(row, 'project'),
   sourceTable: 'project',
 }));
 
+/** Projector for Docket program search documents. */
 export const programSearchProjector = preloadedProjector<NamedWorkRow>('program', (row) => ({
   ...namedWorkDocument(row, 'program'),
   sourceTable: 'program',
 }));
 
+/** Projector for Docket initiative search documents. */
 export const initiativeSearchProjector = preloadedProjector<NamedWorkRow>('initiative', (row) => ({
   ...namedWorkDocument(row, 'initiative'),
   sourceTable: 'initiative',
 }));
 
+/** Projector for project milestone search documents. */
 export const milestoneSearchProjector = preloadedProjector<
   OrgScopedRow & { projectId: string; name: string; targetDate?: Date | null; sort?: number }
 >('milestone', (row) => ({
@@ -135,6 +140,7 @@ export const milestoneSearchProjector = preloadedProjector<
   subjectId: row.projectId,
 }));
 
+/** Projector for team cycle search documents. */
 export const cycleSearchProjector = preloadedProjector<
   OrgScopedRow & {
     teamId: string;
@@ -160,6 +166,7 @@ export const cycleSearchProjector = preloadedProjector<
   subjectId: row.teamId,
 }));
 
+/** Projector for organization label search documents. */
 export const labelSearchProjector = preloadedProjector<
   OrgScopedRow & { name: string; color: string; group?: string | null; teamId?: string | null }
 >('label', (row) => ({
@@ -171,6 +178,7 @@ export const labelSearchProjector = preloadedProjector<
   sourceUpdatedAt: row.createdAt ?? null,
 }));
 
+/** Projector for saved-view search documents and their serialized filters. */
 export const savedViewSearchProjector = preloadedProjector<
   OrgScopedRow & {
     name: string;
@@ -196,6 +204,7 @@ export const savedViewSearchProjector = preloadedProjector<
   sourceTable: 'saved_view',
 }));
 
+/** Search projectors registered for work-family documents. */
 export const workSearchProjectors = [
   taskSearchProjector,
   projectSearchProjector,

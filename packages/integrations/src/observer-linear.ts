@@ -34,6 +34,9 @@ import type {
   VerifySignatureInput,
 } from './observer';
 
+/** Linear's documented maximum delivery age before a signed request is treated as a replay. */
+const LINEAR_REPLAY_WINDOW_MS = 60_000;
+
 /** Build the external person ref from a Linear user-shaped sub-object. */
 function actorFrom(user: Record<string, unknown> | undefined): EventActorRef | undefined {
   const externalId = str(user, 'id');
@@ -115,6 +118,10 @@ export class RealLinearObserver implements Observer {
   verifySignature(input: VerifySignatureInput): boolean {
     const signature = input.headers['linear-signature'];
     if (!signature) return false;
+    const timestamp = Number(input.headers['linear-timestamp']);
+    if (!Number.isFinite(timestamp) || Math.abs(Date.now() - timestamp) > LINEAR_REPLAY_WINDOW_MS) {
+      return false;
+    }
     const expected = createHmac('sha256', this.signingSecret)
       .update(input.rawBody, 'utf8')
       .digest('hex');

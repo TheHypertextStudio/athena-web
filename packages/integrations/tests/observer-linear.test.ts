@@ -12,13 +12,24 @@ function sign(body: string): string {
   return createHmac('sha256', SECRET).update(body, 'utf8').digest('hex');
 }
 
+/** A current Linear-Timestamp header value in milliseconds. */
+function recentTimestamp(): string {
+  return String(Date.now());
+}
+
 const observer = new RealLinearObserver({ signingSecret: SECRET });
 
 describe('RealLinearObserver.verifySignature', () => {
   it('accepts a valid signature', () => {
     const body = JSON.stringify({ type: 'Issue', action: 'create' });
     expect(
-      observer.verifySignature({ rawBody: body, headers: { 'linear-signature': sign(body) } }),
+      observer.verifySignature({
+        rawBody: body,
+        headers: {
+          'linear-signature': sign(body),
+          'linear-timestamp': recentTimestamp(),
+        },
+      }),
     ).toBe(true);
   });
 
@@ -26,7 +37,10 @@ describe('RealLinearObserver.verifySignature', () => {
     const body = JSON.stringify({ type: 'Issue' });
     const sig = sign(body);
     expect(
-      observer.verifySignature({ rawBody: `${body} `, headers: { 'linear-signature': sig } }),
+      observer.verifySignature({
+        rawBody: `${body} `,
+        headers: { 'linear-signature': sig, 'linear-timestamp': recentTimestamp() },
+      }),
     ).toBe(false);
   });
 
@@ -38,7 +52,23 @@ describe('RealLinearObserver.verifySignature', () => {
     const body = JSON.stringify({ type: 'Issue' });
     const wrong = createHmac('sha256', 'other').update(body, 'utf8').digest('hex');
     expect(
-      observer.verifySignature({ rawBody: body, headers: { 'linear-signature': wrong } }),
+      observer.verifySignature({
+        rawBody: body,
+        headers: { 'linear-signature': wrong, 'linear-timestamp': recentTimestamp() },
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects a valid signature with a stale timestamp (replay guard)', () => {
+    const body = JSON.stringify({ type: 'Issue' });
+    expect(
+      observer.verifySignature({
+        rawBody: body,
+        headers: {
+          'linear-signature': sign(body),
+          'linear-timestamp': String(Date.now() - 61_000),
+        },
+      }),
     ).toBe(false);
   });
 });

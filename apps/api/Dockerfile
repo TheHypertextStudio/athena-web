@@ -2,7 +2,9 @@ ARG NODE_VERSION=26
 FROM node:${NODE_VERSION}-alpine AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable
+# Corepack stopped shipping in Node 25. Install the compatible shim explicitly, then let the
+# root packageManager field select the repository-pinned pnpm release.
+RUN npm install --global corepack@0.35.0 && corepack enable pnpm
 
 # Prune the monorepo to @docket/api + its workspace deps. `out/json` is just manifests + lockfile;
 # `out/full` is the pruned source. Splitting them lets the dependency-install layer stay cached

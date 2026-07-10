@@ -211,7 +211,7 @@ const defaultAccessTokenFetcher: AccessTokenFetcher = (input) =>
  *   of a user's same-provider grants to use; null/undefined ⇒ the single grant.
  */
 export async function resolveLiveConnectorToken(
-  actorId: string,
+  actorId: string | null,
   provider: ConnectorProvider,
   fetchAccessToken: AccessTokenFetcher = defaultAccessTokenFetcher,
   externalAccountId?: string | null,
@@ -222,6 +222,8 @@ export async function resolveLiveConnectorToken(
     reason: 'needs_reauth' as const,
     message: `Sign in with ${providerId} to reconnect this integration.`,
   };
+
+  if (!actorId) return needsReauth;
 
   const rows = await db
     .select({ userId: actor.userId })
@@ -280,7 +282,7 @@ export async function resolveLiveConnectorToken(
  *   correct grant is used when a user linked several accounts of the same provider.
  */
 export async function resolveConnectorToken(
-  actorId: string,
+  actorId: string | null,
   provider: ConnectorProvider,
   externalAccountId?: string | null,
 ): Promise<ConnectorTokenResult> {
@@ -384,9 +386,10 @@ export { LINEAR_WRITE_SCOPE_MESSAGE } from '@docket/types';
  * @param actorId - The actor whose linked Linear identity to check.
  */
 export async function hasLinearWriteScope(
-  actorId: string,
+  actorId: string | null,
   externalAccountId?: string | null,
 ): Promise<boolean> {
+  if (!actorId) return false;
   const rows = await db
     .select({ userId: actor.userId })
     .from(actor)
@@ -413,11 +416,11 @@ export async function hasLinearWriteScope(
  * @param externalAccountId - The bound Google `sub`, or null for a legacy single-account row.
  */
 export async function resolveIdentityLabel(
-  actorId: string,
+  actorId: string | null,
   provider: ConnectorProvider,
   externalAccountId: string | null,
 ): Promise<string | undefined> {
-  if (!externalAccountId) return undefined;
+  if (!actorId || !externalAccountId) return undefined;
   const rows = await db
     .select({ userId: actor.userId })
     .from(actor)

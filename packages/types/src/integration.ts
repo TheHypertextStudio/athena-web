@@ -246,8 +246,9 @@ export type ConnectorResourceListOut = z.infer<typeof ConnectorResourceListOut>;
  * Body for creating an Integration (organizationId comes from the path, never the body).
  *
  * @remarks
- * `status` is intentionally NOT accepted: connection health is *earned* by a real
- * `connect()`/sync, never declared by the caller. New integrations always start `pending`.
+ * `status` and provider-owned `connection` metadata are intentionally NOT accepted: connection
+ * health and workspace routing are earned from a real `connect()`/sync, never declared by the
+ * caller. New integrations always start `pending`.
  */
 export const IntegrationCreate = z
   .object({
@@ -266,9 +267,6 @@ export const IntegrationCreate = z
       .describe(
         "What this integration contributes (work/context/signal/time/code); defaults to the provider's declared roles when omitted.",
       ),
-    connection: IntegrationConnection.optional().describe(
-      'Connection metadata (account label, credentialsRef, external workspace). The credential secret is referenced, never inlined.',
-    ),
     config: z
       .record(z.string(), z.unknown())
       .optional()
@@ -296,11 +294,12 @@ export const IntegrationCreate = z
 export type IntegrationCreate = z.infer<typeof IntegrationCreate>;
 
 /**
- * Body for updating an Integration's roles, connection, config, or sync mode.
+ * Body for updating an Integration's roles, config, sync mode, or account binding.
  *
  * @remarks
- * `status` is intentionally NOT accepted — see {@link IntegrationCreate}. Health transitions
- * only through the connect/verify and sync paths, so a client can never fabricate `connected`.
+ * `status` and provider-owned `connection` metadata are intentionally NOT accepted — see
+ * {@link IntegrationCreate}. Health and webhook-routing metadata transition only through the
+ * connect/verify and sync paths, so a client can never fabricate either.
  */
 export const IntegrationUpdate = z
   .object({
@@ -308,9 +307,6 @@ export const IntegrationUpdate = z
       .array(IntegrationRole)
       .optional()
       .describe('Replace the contributed roles; omit to leave unchanged.'),
-    connection: IntegrationConnection.optional().describe(
-      'Replace the connection metadata; omit to leave unchanged. Health is not affected here — re-verify via `POST /:id/verify`.',
-    ),
     config: z
       .record(z.string(), z.unknown())
       .optional()

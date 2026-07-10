@@ -48,6 +48,7 @@ function contentDocument(
   };
 }
 
+/** Projector for comments attached to searchable Docket subjects. */
 export const commentSearchProjector = preloadedProjector<
   OrgScopedRow & {
     authorId?: string | null;
@@ -77,6 +78,7 @@ export const commentSearchProjector = preloadedProjector<
   sourceTable: 'comment',
 }));
 
+/** Projector for status updates attached to searchable Docket subjects. */
 export const updateSearchProjector = preloadedProjector<
   OrgScopedRow & {
     authorId?: string | null;
@@ -101,6 +103,7 @@ export const updateSearchProjector = preloadedProjector<
   sourceTable: 'update',
 }));
 
+/** Projector for attachments associated with searchable Docket subjects. */
 export const attachmentSearchProjector = preloadedProjector<
   OrgScopedRow & {
     subjectType: string;
@@ -127,6 +130,7 @@ export const attachmentSearchProjector = preloadedProjector<
   sourceTable: 'attachment',
 }));
 
+/** Search projectors registered for content-family documents. */
 export const contentSearchProjectors = [
   commentSearchProjector,
   updateSearchProjector,

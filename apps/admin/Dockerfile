@@ -2,7 +2,9 @@ ARG NODE_VERSION=24
 FROM node:${NODE_VERSION}-alpine AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable
+# Corepack stopped shipping in Node 25. Install the compatible shim explicitly, then let the
+# root packageManager field select the repository-pinned pnpm release.
+RUN npm install --global corepack@0.35.0 && corepack enable pnpm
 
 # Prune to @docket/admin + its workspace deps so the install layer is cache-stable across source edits.
 FROM base AS pruner

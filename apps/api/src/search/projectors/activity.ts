@@ -59,6 +59,7 @@ function searchKindForEntity(entity: EventEntity | null | undefined): SearchDocu
   }
 }
 
+/** Projector that turns a canonical event-log row into searchable activity. */
 export const eventSearchProjector = preloadedProjector<EventRow>(
   'event',
   (row): SearchDocumentDraft => {
@@ -98,4 +99,5 @@ export const eventSearchProjector = preloadedProjector<EventRow>(
   },
 );
 
+/** Search projectors registered for activity-family documents. */
 export const activitySearchProjectors = [eventSearchProjector];

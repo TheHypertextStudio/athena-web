@@ -1263,11 +1263,12 @@ describe('integration DTOs', () => {
       provider: 'github',
       pattern: 'migration',
       roles: ['work', 'code'],
-      connection: { account: 'acme' },
+      connection: { externalWorkspaceId: 'client-must-not-set-this' },
       config: { repo: 'x' },
       syncMode: 'import',
     });
     expect(full.roles).toEqual(['work', 'code']);
+    expect('connection' in full).toBe(false);
   });
 
   it('IntegrationCreate rejects empty provider + bad pattern', () => {
@@ -1279,6 +1280,10 @@ describe('integration DTOs', () => {
     expect(IntegrationUpdate.parse({ roles: ['work'], config: {} }).roles).toEqual(['work']);
     // `status` is intentionally not part of the schema; a client cannot declare health.
     expect('status' in IntegrationUpdate.parse({ config: {} })).toBe(false);
+    expect(
+      'connection' in
+        IntegrationUpdate.parse({ connection: { externalWorkspaceId: 'client-controlled' } }),
+    ).toBe(false);
   });
 
   it('IntegrationOut parses + rejects missing connection', () => {

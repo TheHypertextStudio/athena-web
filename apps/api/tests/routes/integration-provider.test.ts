@@ -100,6 +100,14 @@ describe('resolveLiveConnectorToken', () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
+  it('asks for re-auth when an integration no longer has a credential owner', async () => {
+    const fetcher = vi.fn();
+    const res = await resolveLiveConnectorToken(null, 'linear', fetcher, 'linear-account');
+
+    expect(res).toMatchObject({ ok: false, reason: 'needs_reauth' });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
   it('asks for re-auth when the grant yields no access token', async () => {
     const { orgId } = await seedBaseOrg(db, schema);
     const { actorId, userId } = await seedLinkedActor(orgId);

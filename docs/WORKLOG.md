@@ -7,6 +7,72 @@
 
 ## Active Tasks
 
+### [LINEAR-SYNC-003] Multi-account Linear production-readiness review
+
+- **Status**: DONE
+- **Started**: 2026-07-10
+- **Completed**: 2026-07-10
+- **Priority**: P0
+- **Description**: Review the multi-account Linear implementation as a production gate, correct
+  confirmed correctness, security, migration, sync, UI, or deployment findings, and produce
+  deployment-ready validation evidence without deploying or changing live infrastructure.
+- **Plan**:
+  1. Review commit `5822689` and the surrounding identity, OAuth, integration, sync, webhook, task
+     reconciliation, settings, migration, and deployment paths.
+  2. Exercise legacy/fresh migration states and adversarial multi-tenant/account-selection cases.
+  3. Implement focused fixes and regression tests for every confirmed finding.
+  4. Run package-level checks followed by the repository typecheck, lint, test, and build gates.
+  5. Reconcile the deployment runbook/workflow, complete the self-review and retrospective, then
+     commit the production-readiness changes atomically.
+- **Risks**:
+  - Account identifiers are provider-owned credentials and must never be accepted across users or
+    organizations without an ownership check.
+  - Webhook fan-out and duplicate-workspace prevention must remain tenant-safe under concurrent
+    connections and retries.
+  - Historical PostgreSQL migrations must run on both fresh databases and databases that applied
+    the earlier enum migration sequence.
+- **Review findings and fixes**:
+  - Corrected a multi-admin credential-ownership bug: sync, verify, identity labels, and Linear
+    write-scope checks now resolve the integration owner's OAuth grant (`createdBy`), not whichever
+    manager happened to trigger the request. Explicitly binding a legacy connection remains the
+    only operation that transfers ownership to the current actor.
+  - Removed client-writable `connection` routing metadata from integration create/update DTOs and
+    API writes. Provider verification remains the only path that can persist workspace routing,
+    preventing a manager from steering a signed webhook into another tenant.
+  - Added Linear's required one-minute webhook replay window by validating `linear-timestamp`
+    before the raw-body HMAC comparison, with fresh, stale, tampered, and wrong-secret coverage.
+  - Repaired all three Node 26 production Dockerfiles by installing Corepack explicitly, made the
+    root prepare hook safe in Turbo-pruned images, and excluded stale build/test artifacts from the
+    Docker context (5.7 GB attempted context reduced to 18.82 MB).
+  - Fixed an adjacent finite-SSE replay race exposed by the production gate: terminal agent-session
+    streams now await Hono stream closure, and the regression test proves both persisted frames are
+    replayed. Ten consecutive focused runs passed after the fix.
+  - Closed the existing documentation-coverage gate with focused TSDoc on 34 exported search
+    declarations; no search behavior changed.
+- **Production preparation**:
+  - Documented and added `LINEAR_WEBHOOK_SECRET` to the provider setup wizard and example env. The
+    exact production endpoint is `/internal/ingest/linear`, not the stale `/v1/ingest/linear` path.
+  - Did not add a missing-secret reference to the deploy workflow: first create
+    `docket-linear-webhook-secret`, then mount
+    `LINEAR_WEBHOOK_SECRET=docket-linear-webhook-secret:latest`; referencing it before creation
+    would break every API deployment.
+- **Validation**:
+  - Repository typecheck and lint: 17/17 tasks passed.
+  - Tests: API 132 files / 1,196 tests; web 50 / 296; integrations 16 / 234; types 12 / 243;
+    database 7 / 53; test-utils 3 / 15; all other workspace packages passed in the root run.
+  - Workspace production build passed for API, web, and admin.
+  - Fresh production Docker images built for API, web, and admin with Node 26 and canonical
+    production URLs; container smoke checks returned API health 200 and web/admin sign-in 200.
+  - A final external hostname probe could not be completed from the agent environment because its
+    DNS/TLS path could not resolve the API/admin hosts. Artifact readiness is verified; live rollout
+    health remains a deployment-time check and was not represented as complete.
+- **Retrospective**:
+  - Account selection and request attribution are different responsibilities; the persisted
+    integration owner must select the credential even when another authorized manager triggers sync.
+  - Provider-derived routing keys must never share a client-editable configuration boundary.
+  - Build the exact release image early: it exposed both the Node 26/Corepack break and the pruned
+    prepare-hook failure that source-only gates could not see.
+
 ### [LINEAR-SYNC-002] Multi-account Linear connections and task materialization
 
 - **Status**: DONE
@@ -1947,7 +2013,7 @@ resolveIdentityLabel(actorId, externalAccountId) ?? result.account` (Actor→use
     unique `(provider, external_event_id)`), `observation` (the timeline; org-scoped + `user_id`),
     `daily_digest` (cross-org per-user, unique `(user_id, digest_date)` watermark), and
     `event_subscription` (the seam for later watch-channel providers). Migrations 0008/0009.
-  - **API**: `POST /v1/ingest/linear` (non-RPC edge, write-ahead then 200); lease-guarded drain
+  - **API**: `POST /internal/ingest/linear` (non-RPC edge, write-ahead then 200); lease-guarded drain
     `POST /v1/cron/process-events` with mention/assignment → `notification` bridges; the hero
     `POST /v1/cron/daily-digests` (timezone-aware "find who's due" by `HubPreferences.timezone` +
     send time, aggregate → summarize → render → mail, idempotent per user/day). Two new Cloud
@@ -1974,7 +2040,7 @@ resolveIdentityLabel(actorId, externalAccountId) ?? result.account` (Actor→use
   GCP Secret Manager secret `docket-linear-webhook-secret`, then add
   `LINEAR_WEBHOOK_SECRET=docket-linear-webhook-secret:latest` to `.github/workflows/deploy.yml`
   (alongside the other provider secrets) and configure the Linear OAuth app's webhook URL to
-  `<API_URL>/v1/ingest/linear`. Until the secret is set, the observer safely falls back to the
+  `<API_URL>/internal/ingest/linear`. Until the secret is set, the observer safely falls back to the
   mock; the secret must be created BEFORE adding the deploy.yml reference (a missing secret fails
   the Cloud Run deploy). Backfill embeddings / Athena RAG over the observation store is Phase 5.
 - **Learnings**: the five target sources don't share a delivery mechanism (Linear/Slack =

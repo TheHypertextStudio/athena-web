@@ -369,7 +369,7 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
   },
   {
     title: 'Linear Integration Set-up',
-    vars: ['LINEAR_CLIENT_ID', 'LINEAR_CLIENT_SECRET'],
+    vars: ['LINEAR_CLIENT_ID', 'LINEAR_CLIENT_SECRET', 'LINEAR_WEBHOOK_SECRET'],
     instructions: (env, urls) => [
       'Creates a Linear OAuth2 application. ~2 min. You need a Linear workspace admin.',
       '',
@@ -381,8 +381,12 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
       ...urls.webBases.map((web) => `     ${web}/api/auth/oauth2/callback/linear`),
       '4) Scopes: tick "read" (required for sign-in). For the issue-migration feature also tick',
       '   "write" and "issues:create".',
-      '5) Keep the app private (untick "Public") unless you intend multi-workspace installs → "Create".',
-      '6) Copy the "Client ID" and "Client secret" shown, and paste below.',
+      '5) Configure application webhooks so every authorized workspace sends Issue events to:',
+      `     ${urls.apiBase}/internal/ingest/linear`,
+      '   Enable Issues (required for immediate task reconciliation); Comments and Reactions also',
+      '   feed Docket activity. Linear shows a separate webhook signing secret on its detail page.',
+      '6) Keep the app private (untick "Public") unless you intend multi-workspace installs → "Create".',
+      '7) Copy the Client ID, Client secret, and webhook signing secret shown, and paste below.',
     ],
   },
   {

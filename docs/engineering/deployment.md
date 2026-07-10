@@ -267,11 +267,11 @@ block injects them as `:latest`. So the deploy is green today with connectors ho
 **To activate a provider**, register an OAuth app, then replace its placeholder secret value(s)
 and redeploy. The Better Auth callback URL for each is `${API_URL}/api/auth/callback/<provider>`:
 
-| Provider | Register at                                                  | Callback URL                                                   | Secrets to set                                           |
-| -------- | ------------------------------------------------------------ | -------------------------------------------------------------- | -------------------------------------------------------- |
-| GitHub   | GitHub → Settings → Developer settings → OAuth Apps          | `https://docket-api.hypertext.studio/api/auth/callback/github` | `docket-github-client-id`, `docket-github-client-secret` |
-| Linear   | Linear → Settings → API → OAuth applications                 | `https://docket-api.hypertext.studio/api/auth/callback/linear` | `docket-linear-client-id`, `docket-linear-client-secret` |
-| Google   | Google Cloud Console → APIs & Services → Credentials → OAuth | `https://docket-api.hypertext.studio/api/auth/callback/google` | `docket-google-client-id`, `docket-google-client-secret` |
+| Provider | Register at                                                  | Callback URL                                                   | Secrets to set                                                                                                                  |
+| -------- | ------------------------------------------------------------ | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| GitHub   | GitHub → Settings → Developer settings → OAuth Apps          | `https://docket-api.hypertext.studio/api/auth/callback/github` | `docket-github-client-id`, `docket-github-client-secret`                                                                        |
+| Linear   | Linear → Settings → API → OAuth applications                 | `https://docket-api.hypertext.studio/api/auth/callback/linear` | `docket-linear-client-id`, `docket-linear-client-secret`; webhook delivery additionally requires `docket-linear-webhook-secret` |
+| Google   | Google Cloud Console → APIs & Services → Credentials → OAuth | `https://docket-api.hypertext.studio/api/auth/callback/google` | `docket-google-client-id`, `docket-google-client-secret`                                                                        |
 
 ```bash
 # Add the real value as a new secret version (repeat per secret), then redeploy:
@@ -286,6 +286,13 @@ gcloud run services update docket-api --region=us-central1 --project=athena-serv
 > scopes (see `buildAuthOptions`); Linear's app must grant the `read` scope or every connector
 > call 400s. Existing users who linked before a scope change must re-consent — they surface as
 > `error` / needs-reauth, never a silent skip.
+
+Linear's OAuth application webhook is separate from its OAuth credential. Configure it to send at
+least Issue events to `https://docket-api.hypertext.studio/internal/ingest/linear`, then store the
+signing secret shown on the webhook detail page as `docket-linear-webhook-secret`. Mount it on the
+API as `LINEAR_WEBHOOK_SECRET=docket-linear-webhook-secret:latest`. `pnpm integrations` collects and
+writes this value for local, staging, or production without placing it in the repository. Create the
+Secret Manager entry before adding the Cloud Run mount: referencing a missing secret fails deploy.
 
 ### Slack (signal integration — not a Better Auth provider)
 

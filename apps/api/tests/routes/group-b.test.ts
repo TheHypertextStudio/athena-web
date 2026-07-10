@@ -557,7 +557,6 @@ describe('integrations router (CRUD; import covered elsewhere)', () => {
         provider: 'linear',
         pattern: 'migration',
         roles: ['work'],
-        connection: {},
         status: 'connected',
         config: { teamId: 'x' },
         syncMode: 'mirror',
@@ -571,7 +570,6 @@ describe('integrations router (CRUD; import covered elsewhere)', () => {
       headers: J,
       body: JSON.stringify({
         roles: ['work'],
-        connection: {},
         status: 'disconnected',
         config: {},
         syncMode: 'mirror',

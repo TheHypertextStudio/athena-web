@@ -15,7 +15,7 @@ CREATE TYPE "public"."idempotency_status" AS ENUM('in_progress', 'completed');--
 CREATE TYPE "public"."initiative_status" AS ENUM('active', 'completed');--> statement-breakpoint
 CREATE TYPE "public"."integration_pattern" AS ENUM('migration', 'connector');--> statement-breakpoint
 CREATE TYPE "public"."integration_role" AS ENUM('work', 'context', 'signal', 'time', 'code');--> statement-breakpoint
-CREATE TYPE "public"."integration_status" AS ENUM('connected', 'error', 'disconnected');--> statement-breakpoint
+CREATE TYPE "public"."integration_status" AS ENUM('pending', 'connected', 'error', 'disconnected');--> statement-breakpoint
 CREATE TYPE "public"."invitation_status" AS ENUM('pending', 'accepted', 'revoked', 'expired');--> statement-breakpoint
 CREATE TYPE "public"."notification_type" AS ENUM('mention', 'assignment', 'approval_request', 'status_change', 'comment', 'invitation', 'agent_session');--> statement-breakpoint
 CREATE TYPE "public"."org_lifecycle_state" AS ENUM('trialing', 'active', 'past_due', 'export_window', 'pending_deletion', 'deleted');--> statement-breakpoint
@@ -239,7 +239,7 @@ CREATE TABLE "integration" (
 	"pattern" "integration_pattern" NOT NULL,
 	"roles" "integration_role"[] DEFAULT '{}' NOT NULL,
 	"connection" jsonb DEFAULT '{}'::jsonb NOT NULL,
-	"status" "integration_status" DEFAULT 'connected' NOT NULL,
+	"status" "integration_status" DEFAULT 'pending' NOT NULL,
 	"config" jsonb DEFAULT '{}'::jsonb NOT NULL,
 	"sync_mode" "sync_mode" DEFAULT 'mirror' NOT NULL
 );

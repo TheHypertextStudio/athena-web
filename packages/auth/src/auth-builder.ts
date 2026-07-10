@@ -498,6 +498,10 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
       ? { allowedHosts, fallback: e.BETTER_AUTH_URL, protocol: 'auto' }
       : e.BETTER_AUTH_URL,
     trustedOrigins,
+    // Identity removal is owned by Docket's `/v1/me/identities/:provider/:accountId` route so
+    // dependent connector checks and the passkey lockout guard cannot be bypassed through the
+    // framework's generic endpoint.
+    disabledPaths: ['/unlink-account'],
     database: drizzleAdapter(db, {
       provider: 'pg',
       schema: {
@@ -541,7 +545,18 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
       ...(cookieDomain ? { crossSubDomainCookies: { enabled: true, domain: cookieDomain } } : {}),
     },
     ...(hasSocial
-      ? { socialProviders, account: { accountLinking: { enabled: true, trustedProviders } } }
+      ? {
+          socialProviders,
+          account: {
+            accountLinking: {
+              enabled: true,
+              trustedProviders,
+              // Explicit linking is session-gated; an external work account may legitimately use
+              // a different email and must never rewrite the user's Docket login identity.
+              allowDifferentEmails: true,
+            },
+          },
+        }
       : {}),
     plugins,
     session: {

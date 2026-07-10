@@ -96,7 +96,7 @@ async function ingestWebhook(c: Context, provider: ObserverProvider): Promise<Re
           sql`${integration.connection}->>'externalWorkspaceId' = ${routing.externalWorkspaceId}`,
         ),
       );
-    if (provider === 'slack') {
+    if (provider === 'slack' || provider === 'linear') {
       const byOrg = new Map<string, string>();
       for (const row of rows) {
         if (!byOrg.has(row.organizationId)) byOrg.set(row.organizationId, row.id);
@@ -105,6 +105,9 @@ async function ingestWebhook(c: Context, provider: ObserverProvider): Promise<Re
         matches.push({
           organizationId,
           integrationId,
+          // The inbox dedupe index is provider-global, while one Linear workspace may be
+          // intentionally connected by different Docket organizations. Keep one durable inbox
+          // row per routed org so every org's native-task mirror gets the delivery.
           externalEventId: `${routing.externalEventId}:${organizationId}`,
         });
       }

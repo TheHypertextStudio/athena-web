@@ -64,6 +64,14 @@ export const IdentityOut = z
     linkedAt: z
       .string()
       .describe('ISO-8601 instant the external account was linked to the Docket identity.'),
+    /** Number of Docket connections currently funded by this identity. */
+    connectionCount: z
+      .number()
+      .int()
+      .nonnegative()
+      .describe(
+        'How many org-scoped Docket connections currently use this identity. A value above zero blocks unlinking until those connections are disconnected or rebound.',
+      ),
   })
   .meta({
     id: 'IdentityOut',
@@ -84,3 +92,12 @@ export const IdentityListOut = z
   .meta({ id: 'IdentityListOut', description: "The user's linked external identities." });
 /** Identity-list value. */
 export type IdentityListOut = z.infer<typeof IdentityListOut>;
+
+/** Successful removal of one linked external identity. */
+export const IdentityDeleteOut = z
+  .object({
+    status: z.literal(true),
+  })
+  .meta({ id: 'IdentityDeleteOut', description: 'Confirmation that an identity was unlinked.' });
+/** Identity-delete response value. */
+export type IdentityDeleteOut = z.infer<typeof IdentityDeleteOut>;

@@ -55,13 +55,14 @@ async function seedInboundEvent(
   integrationId: string | null,
   externalEventId: string,
   payload: Record<string, unknown>,
+  eventType = 'mock',
 ): Promise<void> {
   await db.insert(schema.inboundEvent).values({
     organizationId: orgId,
     integrationId,
     provider: 'linear',
     externalEventId,
-    eventType: 'mock',
+    eventType,
     payload,
     signatureVerified: true,
   });
@@ -121,6 +122,28 @@ describe('sweepInboundEvents (the event drain)', () => {
 
     const evs = await db.select().from(schema.event).where(eq(schema.event.organizationId, orgId));
     expect(evs).toHaveLength(1);
+  });
+
+  it('reconciles a Linear Issue webhook into native Docket tasks during the drain', async () => {
+    const { orgId } = await seedBaseOrg(db, schema);
+    const { actorId } = await seedUserActor(orgId);
+    const intgId = await seedIntegration(orgId, actorId);
+    await seedInboundEvent(
+      orgId,
+      intgId,
+      'ev_issue_sync',
+      { kind: 'status_change', title: 'Issue changed', id: 'iss-live' },
+      'Issue',
+    );
+
+    await sweepInboundEvents(new Date());
+
+    const mirrored = await db
+      .select({ source: schema.task.source, integrationId: schema.task.sourceIntegrationId })
+      .from(schema.task)
+      .where(eq(schema.task.sourceIntegrationId, intgId));
+    expect(mirrored.length).toBeGreaterThan(0);
+    expect(mirrored.every((task) => task.source === 'linked')).toBe(true);
   });
 
   it('marks an unrouted event (no org) as skipped without creating an event', async () => {

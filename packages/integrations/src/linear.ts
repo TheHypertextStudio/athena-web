@@ -357,7 +357,7 @@ interface GraphQLResponse<T> {
 }
 
 /** The `viewer` + `organization` identity query used at verify time. */
-const VIEWER_QUERY = '{ viewer { id name email } organization { id urlKey } }';
+const VIEWER_QUERY = '{ viewer { id name email } organization { id name urlKey } }';
 
 /** Teams (containers) query — `first`/`after` paginated by GraphQL variable. */
 const TEAMS_QUERY =
@@ -495,7 +495,7 @@ export class LinearProviderClient implements WorkGraphProviderClient {
   async resolveAccount(): Promise<ResolvedAccount | undefined> {
     const data = await this.query<{
       viewer?: { name?: string; email?: string };
-      organization?: { id?: string; urlKey?: string };
+      organization?: { id?: string; name?: string; urlKey?: string };
     }>(VIEWER_QUERY);
     const label = data.viewer?.name ?? data.viewer?.email;
     if (label === undefined) return undefined;
@@ -505,6 +505,7 @@ export class LinearProviderClient implements WorkGraphProviderClient {
       ...(data.organization?.urlKey != null
         ? { externalWorkspaceSlug: data.organization.urlKey }
         : {}),
+      ...(data.organization?.name != null ? { externalWorkspaceName: data.organization.name } : {}),
     };
   }
 

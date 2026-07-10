@@ -15,6 +15,7 @@ let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
 let resolveLiveConnectorToken!: typeof ProviderModule.resolveLiveConnectorToken;
 let resolveConnectorToken!: typeof ProviderModule.resolveConnectorToken;
+let resolveActorConnectorIdentity!: typeof ProviderModule.resolveActorConnectorIdentity;
 
 beforeAll(async () => {
   schema = await getDb();
@@ -22,6 +23,7 @@ beforeAll(async () => {
   const mod = await import('../../src/routes/integration-provider');
   resolveLiveConnectorToken = mod.resolveLiveConnectorToken;
   resolveConnectorToken = mod.resolveConnectorToken;
+  resolveActorConnectorIdentity = mod.resolveActorConnectorIdentity;
 });
 
 let userSeq = 0;
@@ -41,6 +43,16 @@ async function seedLinkedActor(orgId: string): Promise<{ actorId: string; userId
   return { actorId: a!.id, userId };
 }
 
+/** Link one provider grant to a test user. */
+async function seedProviderAccount(
+  userId: string,
+  providerId: string,
+  accountId = `${providerId}-${Math.random().toString(36).slice(2)}`,
+): Promise<string> {
+  await db.insert(schema.account).values({ userId, providerId, accountId });
+  return accountId;
+}
+
 /** Seed a human `actor` with NO linked global user (the "never signed in" case). */
 async function seedUnlinkedActor(orgId: string): Promise<string> {
   const [a] = await db
@@ -54,8 +66,9 @@ describe('resolveLiveConnectorToken', () => {
   it('returns the fetched access token for a linked actor', async () => {
     const { orgId } = await seedBaseOrg(db, schema);
     const { actorId, userId } = await seedLinkedActor(orgId);
+    const accountId = await seedProviderAccount(userId, 'github');
 
-    const calls: { providerId: string; userId: string }[] = [];
+    const calls: { providerId: string; userId: string; accountId?: string }[] = [];
     const res = await resolveLiveConnectorToken(actorId, 'github', async (input) => {
       calls.push(input);
       return { accessToken: 'live-token' };
@@ -63,7 +76,7 @@ describe('resolveLiveConnectorToken', () => {
 
     expect(res).toEqual({ ok: true, token: 'live-token' });
     // The Actor was resolved to its global user id and that drove the token fetch.
-    expect(calls).toEqual([{ providerId: 'github', userId }]);
+    expect(calls).toEqual([{ providerId: 'github', userId, accountId }]);
   });
 
   it('asks for re-auth when the actor has no linked user (never touches the fetcher)', async () => {
@@ -89,7 +102,8 @@ describe('resolveLiveConnectorToken', () => {
 
   it('asks for re-auth when the grant yields no access token', async () => {
     const { orgId } = await seedBaseOrg(db, schema);
-    const { actorId } = await seedLinkedActor(orgId);
+    const { actorId, userId } = await seedLinkedActor(orgId);
+    await seedProviderAccount(userId, 'linear');
 
     const res = await resolveLiveConnectorToken(actorId, 'linear', async () => ({
       accessToken: null,
@@ -102,7 +116,8 @@ describe('resolveLiveConnectorToken', () => {
 
   it('asks for re-auth when the token fetch throws (revoked / refresh failure)', async () => {
     const { orgId } = await seedBaseOrg(db, schema);
-    const { actorId } = await seedLinkedActor(orgId);
+    const { actorId, userId } = await seedLinkedActor(orgId);
+    await seedProviderAccount(userId, 'github');
 
     const res = await resolveLiveConnectorToken(actorId, 'github', async () => {
       throw new Error('refresh-token exchange failed');
@@ -114,7 +129,7 @@ describe('resolveLiveConnectorToken', () => {
 
   it('maps each connector provider to its Better Auth social providerId', async () => {
     const { orgId } = await seedBaseOrg(db, schema);
-    const { actorId } = await seedLinkedActor(orgId);
+    const { actorId, userId } = await seedLinkedActor(orgId);
 
     const cases: [ConnectorProvider, string][] = [
       ['github', 'github'],
@@ -126,13 +141,58 @@ describe('resolveLiveConnectorToken', () => {
     ];
 
     for (const [provider, expected] of cases) {
+      const accountId = await seedProviderAccount(userId, expected);
       let seen: string | undefined;
-      await resolveLiveConnectorToken(actorId, provider, async (input) => {
-        seen = input.providerId;
-        return { accessToken: 't' };
-      });
+      await resolveLiveConnectorToken(
+        actorId,
+        provider,
+        async (input) => {
+          seen = input.providerId;
+          expect(input.accountId).toBe(accountId);
+          return { accessToken: 't' };
+        },
+        accountId,
+      );
       expect(seen).toBe(expected);
     }
+  });
+
+  it('requires an exact account selection when several same-provider identities are linked', async () => {
+    const { orgId } = await seedBaseOrg(db, schema);
+    const { actorId, userId } = await seedLinkedActor(orgId);
+    const first = await seedProviderAccount(userId, 'linear');
+    await seedProviderAccount(userId, 'linear');
+
+    const ambiguous = await resolveLiveConnectorToken(actorId, 'linear', vi.fn());
+    expect(ambiguous).toMatchObject({ ok: false, reason: 'account_selection_required' });
+
+    const fetcher = vi.fn(async () => ({ accessToken: 'selected-token' }));
+    await expect(resolveLiveConnectorToken(actorId, 'linear', fetcher, first)).resolves.toEqual({
+      ok: true,
+      token: 'selected-token',
+    });
+    expect(fetcher).toHaveBeenCalledWith({ providerId: 'linear', userId, accountId: first });
+  });
+});
+
+describe('resolveActorConnectorIdentity', () => {
+  it('auto-selects the actor’s single linked account for onboarding-style creates', async () => {
+    const { orgId } = await seedBaseOrg(db, schema);
+    const { actorId, userId } = await seedLinkedActor(orgId);
+    const accountId = await seedProviderAccount(userId, 'linear');
+
+    await expect(resolveActorConnectorIdentity(actorId, 'linear')).resolves.toBe(accountId);
+  });
+
+  it('requires an explicit selection when the actor linked several provider accounts', async () => {
+    const { orgId } = await seedBaseOrg(db, schema);
+    const { actorId, userId } = await seedLinkedActor(orgId);
+    await seedProviderAccount(userId, 'linear');
+    await seedProviderAccount(userId, 'linear');
+
+    await expect(resolveActorConnectorIdentity(actorId, 'linear')).rejects.toThrow(
+      /Choose which linear account/,
+    );
   });
 });
 

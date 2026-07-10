@@ -1,7 +1,7 @@
 # Integration Sync — the leased spine
 
 > **Status**: Shipped (M4 of the email-to-task productization).
-> **Last Updated**: 2026-07-02
+> **Last Updated**: 2026-07-10
 > **Owners**: Platform
 
 One spine runs every background pull against an external provider. Both purposes — the
@@ -49,6 +49,30 @@ Selection differs by design:
 
 Because both purposes share the per-integration lease, a task sync and an email ingest can
 never run concurrently against the same integration.
+
+### 2.1 Linear identity, activation, and webhook rules
+
+Linear connections are account-specific and org-scoped:
+
+- A user may link several Better Auth `linear` account rows, including identities whose provider
+  email differs from the Docket account email. Every Docket integration binds to one exact
+  `externalAccountId`; token refresh, scope checks, and viewer labels all resolve that row rather
+  than whichever Linear grant happens to be first.
+- Settings renders every linked identity and every Linear integration. An unbound legacy Linear row
+  may be bound once; a bound row cannot be silently rebound. An identity cannot be unlinked while
+  any Docket connection uses it, and credential removal requires passkey step-up.
+- Verification resolves and persists Linear's organization id, slug, and name. One Linear workspace
+  may be connected only once inside a Docket organization, even when two OAuth identities can see
+  it; the check and health update run at `SERIALIZABLE` isolation.
+- On first successful verification, every discovered Linear team is mapped to the Docket org's
+  earliest active team and `runSync` executes immediately. The first settings response therefore
+  reflects the real initial import, and Linear issues already exist as native linked Docket tasks.
+- A signed Linear delivery is fanned out once per matching Docket organization (deduping multiple
+  rows inside one org). Draining an `Issue` delivery requests a leased incremental `runSync` before
+  projecting activity, so issue changes repair the native task mirror near-real-time; the ordinary
+  scheduled sweep remains the missed/out-of-order webhook backstop. Provider-triggered repair uses
+  the existing `scheduled` trigger discriminator to avoid a database-enum migration for an
+  operational source distinction that does not change sync semantics.
 
 ## 3. Cursor storage (`integration.sync_state`)
 

@@ -15,6 +15,7 @@
  * the credential. Data is fetched at runtime, so the production build needs no running server.
  */
 import type {
+  IdentityOut,
   IntegrationDirectoryProvider,
   IntegrationOut,
   IntegrationPattern,
@@ -27,7 +28,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import NextLink from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import type { JSX } from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
@@ -40,6 +41,7 @@ import { GtasksAccountsSection } from './gtasks-accounts-section';
 import { IntegrationConfigPanel } from './integration-config-panel';
 import { MailIngestSection } from './mail-ingest-section';
 import { IntegrationProviderCard } from './integration-provider-card';
+import { IntegrationActionButton } from './integration-action-button';
 import {
   REDIRECT_CONNECT_PROVIDERS,
   categoryLabel,
@@ -51,6 +53,35 @@ import {
 const MULTI_ACCOUNT_PROVIDER = 'gtasks';
 /** First-party Google Calendar has dedicated nested configuration. */
 const FIRST_PARTY_CALENDAR_PROVIDER = 'calendar';
+
+/**
+ * Choose the connection rows a provider renders.
+ *
+ * @remarks
+ * Linear is intentionally multi-account and returns every row. Legacy single-card providers keep
+ * their first row (or one empty slot for the connect affordance), preserving their existing UI.
+ */
+export function visibleProviderConnections<T>(
+  provider: string,
+  connections: readonly T[],
+): readonly (T | undefined)[] {
+  return provider === 'linear' ? connections : [connections[0]];
+}
+
+/** Return linked Linear identities not already bound to a visible org connection. */
+export function availableLinearAccounts(
+  identities: readonly IdentityOut[],
+  connections: readonly IntegrationOut[],
+): readonly IdentityOut[] {
+  const bound = new Set(
+    connections
+      .map((connection) => connection.externalAccountId)
+      .filter((id): id is string => Boolean(id)),
+  );
+  return identities.filter(
+    (identity) => identity.provider === 'linear' && !bound.has(identity.accountId),
+  );
+}
 
 /** Which integration surface this instance renders. */
 export type IntegrationSurface = 'connections' | 'import';
@@ -105,6 +136,7 @@ export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabPr
   const searchParams = useSearchParams();
 
   const [busyProvider, setBusyProvider] = useState<string | null>(null);
+  const [selectedLinearAccountId, setSelectedLinearAccountId] = useState('');
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
   const [syncFeedback, setSyncFeedback] = useState<Record<string, string | null>>({});
@@ -137,10 +169,18 @@ export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabPr
       'Could not load teams.',
     ),
   );
+  const identitiesQ = useApiQuery(
+    apiQueryOptions(
+      queryKeys.identities(),
+      () => api.v1.me.identities.$get(),
+      'Could not load connected accounts.',
+    ),
+  );
 
   const directory: readonly IntegrationDirectoryProvider[] = directoryQ.data?.providers ?? [];
   const integrations: readonly IntegrationOut[] = integrationsQ.data?.items ?? [];
   const teams: readonly TeamOut[] = teamsQ.data?.items ?? [];
+  const identities: readonly IdentityOut[] = identitiesQ.data?.items ?? [];
   const loading = directoryQ.isPending;
   const loadError = directoryQ.isError ? directoryQ.error.message : null;
   const { data: config } = usePublicConfig();
@@ -160,7 +200,7 @@ export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabPr
    * validation lets the card read as connected.
    */
   const finishConnection = useCallback(
-    async (id: string, provider: string): Promise<void> => {
+    async (id: string, provider: string, useLinkedIdentity = false): Promise<void> => {
       // Redirect-connect providers (Slack): fetch the signed consent URL and navigate there.
       // The provider redirects back to settings with `?<provider>=connected|error` (works in
       // local mock mode too — the server short-circuits the consent to its callback).
@@ -173,7 +213,7 @@ export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabPr
         window.location.assign(url);
         return; // the browser navigates to the provider's consent screen
       }
-      if (connectorOAuthConfigured(config, provider)) {
+      if (!useLinkedIdentity && connectorOAuthConfigured(config, provider)) {
         await authClient.linkSocial({
           provider: socialProviderForConnector(provider),
           callbackURL: `${window.location.pathname}?verify=${id}`,
@@ -194,10 +234,34 @@ export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabPr
 
   /** Create a brand-new integration (pending) with this surface's pattern, then validate it. */
   const runConnect = useCallback(
-    async (provider: string, roles: readonly IntegrationRole[]): Promise<void> => {
+    async (
+      provider: string,
+      roles: readonly IntegrationRole[],
+      externalAccountId?: string,
+    ): Promise<void> => {
       setBusyProvider(provider);
       setActionError(provider, null);
       try {
+        const legacyLinear =
+          provider === 'linear' && externalAccountId
+            ? integrations.find(
+                (candidate) =>
+                  candidate.provider === 'linear' && candidate.externalAccountId === null,
+              )
+            : undefined;
+        if (legacyLinear && externalAccountId) {
+          await unwrap(
+            () =>
+              api.v1.orgs[':orgId'].integrations[':id'].$patch({
+                param: { orgId, id: legacyLinear.id },
+                json: { externalAccountId },
+              }),
+            'Could not bind this account to the existing Linear connection.',
+          );
+          await refreshIntegrations();
+          await finishConnection(legacyLinear.id, provider, true);
+          return;
+        }
         const created = await unwrap(
           () =>
             api.v1.orgs[':orgId'].integrations.$post({
@@ -207,19 +271,20 @@ export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabPr
                 pattern: cfg.pattern,
                 ...(roles.length > 0 ? { roles: [...roles] } : {}),
                 syncMode: cfg.pattern === 'migration' ? 'import' : 'mirror',
+                ...(externalAccountId ? { externalAccountId } : {}),
               },
             }),
           'Could not connect this integration.',
         );
         await refreshIntegrations();
-        await finishConnection(created.id, provider);
+        await finishConnection(created.id, provider, externalAccountId !== undefined);
       } catch (err) {
         setActionError(provider, readError(err, 'Could not connect this integration.'));
       } finally {
         setBusyProvider(null);
       }
     },
-    [orgId, cfg.pattern, finishConnection, refreshIntegrations, setActionError],
+    [orgId, cfg.pattern, finishConnection, integrations, refreshIntegrations, setActionError],
   );
 
   /** Finish/repair an existing integration's connection. */
@@ -328,6 +393,9 @@ export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabPr
     }
     return map;
   }, [integrations]);
+  const availableLinearIdentities = useMemo(() => {
+    return availableLinearAccounts(identities, byProvider.get('linear') ?? []);
+  }, [byProvider, identities]);
 
   // Only providers whose recommended pattern matches this surface appear here.
   const grouped = useMemo(() => {
@@ -449,60 +517,123 @@ export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabPr
               // Google Tasks renders in its own identity section (above), not as a card here.
               if (provider.provider === MULTI_ACCOUNT_PROVIDER) return null;
               if (provider.provider === FIRST_PARTY_CALENDAR_PROVIDER) return null;
-              const existing = byProvider.get(provider.provider)?.[0];
+              const providerConnections = byProvider.get(provider.provider) ?? [];
+              const displayedConnections = visibleProviderConnections(
+                provider.provider,
+                providerConnections,
+              );
               const configurable = hasInlineConfigPanel(provider.provider);
-              const configOpen = existing ? openConfigId === existing.id : false;
               return (
-                <IntegrationProviderCard
-                  key={provider.provider}
-                  provider={provider}
-                  existing={existing}
-                  canManage={canManage}
-                  available={connectorAvailable(config, provider.provider)}
-                  actionLabel={cfg.actionLabel}
-                  connectHint={cfg.connectHint}
-                  busy={busyProvider === provider.provider}
-                  syncing={existing ? syncingId === existing.id : false}
-                  disconnecting={existing ? disconnectingId === existing.id : false}
-                  syncFeedback={existing ? (syncFeedback[existing.id] ?? null) : null}
-                  actionError={actionErrors[provider.provider] ?? null}
-                  configurable={configurable}
-                  configOpen={configOpen}
-                  configPanel={
-                    existing && configurable ? (
-                      <IntegrationConfigPanel
-                        orgId={orgId}
-                        integration={existing}
-                        teams={teams}
-                        onReauthorize={() => runReconnect(existing)}
+                <Fragment key={provider.provider}>
+                  {displayedConnections.map((existing) => {
+                    const configOpen = existing ? openConfigId === existing.id : false;
+                    return (
+                      <IntegrationProviderCard
+                        key={existing?.id ?? provider.provider}
+                        provider={provider}
+                        existing={existing}
+                        canManage={canManage}
+                        available={connectorAvailable(config, provider.provider)}
+                        actionLabel={cfg.actionLabel}
+                        connectHint={cfg.connectHint}
+                        busy={busyProvider === provider.provider}
+                        syncing={existing ? syncingId === existing.id : false}
+                        disconnecting={existing ? disconnectingId === existing.id : false}
+                        syncFeedback={existing ? (syncFeedback[existing.id] ?? null) : null}
+                        actionError={actionErrors[provider.provider] ?? null}
+                        configurable={configurable}
+                        configOpen={configOpen}
+                        configPanel={
+                          existing && configurable ? (
+                            <IntegrationConfigPanel
+                              orgId={orgId}
+                              integration={existing}
+                              teams={teams}
+                              onReauthorize={() => runReconnect(existing)}
+                            />
+                          ) : null
+                        }
+                        onConnect={() => {
+                          void runConnect(provider.provider, provider.roles);
+                        }}
+                        onReconnect={() => {
+                          if (existing) void runReconnect(existing);
+                        }}
+                        onSync={() => {
+                          if (existing) {
+                            setSyncFeedback((prev) => ({ ...prev, [existing.id]: null }));
+                            setActionError(provider.provider, null);
+                            setSyncingId(existing.id);
+                            sync.mutate(existing.id);
+                          }
+                        }}
+                        onDisconnect={() => {
+                          if (existing) {
+                            setConfirmDisconnect({ id: existing.id, providerName: provider.name });
+                          }
+                        }}
+                        onToggleConfig={() => {
+                          if (existing) {
+                            setOpenConfigId((cur) => (cur === existing.id ? null : existing.id));
+                          }
+                        }}
                       />
-                    ) : null
-                  }
-                  onConnect={() => {
-                    void runConnect(provider.provider, provider.roles);
-                  }}
-                  onReconnect={() => {
-                    if (existing) void runReconnect(existing);
-                  }}
-                  onSync={() => {
-                    if (existing) {
-                      setSyncFeedback((prev) => ({ ...prev, [existing.id]: null }));
-                      setActionError(provider.provider, null);
-                      setSyncingId(existing.id);
-                      sync.mutate(existing.id);
-                    }
-                  }}
-                  onDisconnect={() => {
-                    if (existing) {
-                      setConfirmDisconnect({ id: existing.id, providerName: provider.name });
-                    }
-                  }}
-                  onToggleConfig={() => {
-                    if (existing) {
-                      setOpenConfigId((cur) => (cur === existing.id ? null : existing.id));
-                    }
-                  }}
-                />
+                    );
+                  })}
+                  {provider.provider === 'linear' && canManage ? (
+                    <li className="border-outline-variant bg-surface-container-low flex flex-wrap items-center gap-3 rounded-xl border border-dashed p-4">
+                      <label
+                        className="text-on-surface text-sm font-medium"
+                        htmlFor="linear-identity"
+                      >
+                        Connect another Linear account
+                      </label>
+                      {availableLinearIdentities.length > 0 ? (
+                        <>
+                          <select
+                            id="linear-identity"
+                            value={selectedLinearAccountId}
+                            onChange={(event) => {
+                              setSelectedLinearAccountId(event.target.value);
+                            }}
+                            className="border-outline-variant bg-surface text-on-surface min-w-56 rounded-md border px-3 py-2 text-sm"
+                          >
+                            <option value="">Choose an account</option>
+                            {availableLinearIdentities.map((identity) => (
+                              <option key={identity.accountId} value={identity.accountId}>
+                                {identity.email ??
+                                  identity.name ??
+                                  `Linear account …${identity.accountId.slice(-8)}`}
+                              </option>
+                            ))}
+                          </select>
+                          <IntegrationActionButton
+                            tone="primary"
+                            disabled={
+                              selectedLinearAccountId.length === 0 || busyProvider === 'linear'
+                            }
+                            onClick={() => {
+                              const accountId = selectedLinearAccountId;
+                              if (!accountId) return;
+                              void runConnect('linear', provider.roles, accountId).then(() => {
+                                setSelectedLinearAccountId('');
+                              });
+                            }}
+                          >
+                            {busyProvider === 'linear' ? 'Connecting…' : 'Connect'}
+                          </IntegrationActionButton>
+                        </>
+                      ) : (
+                        <NextLink
+                          href={`/orgs/${orgId}/settings/connected-accounts`}
+                          className="text-primary text-sm font-medium hover:underline"
+                        >
+                          Link another Linear account first
+                        </NextLink>
+                      )}
+                    </li>
+                  ) : null}
+                </Fragment>
               );
             })}
           </ul>

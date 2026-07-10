@@ -68,6 +68,15 @@ function cardSubtitle(
   return 'Connected';
 }
 
+/** Human-readable account/workspace identity for one concrete provider connection. */
+function connectionLabel(existing: IntegrationOut | undefined): string | null {
+  if (!existing) return null;
+  const values = [existing.connection.account, existing.connection.externalWorkspaceName].filter(
+    (value): value is string => Boolean(value),
+  );
+  return [...new Set(values)].join(' · ') || null;
+}
+
 /** The re-authorize button label for a not-yet-healthy integration. */
 function reconnectLabel(status: IntegrationOut['status'], busy: boolean): string {
   if (busy) return 'Connecting…';
@@ -198,6 +207,7 @@ export function IntegrationProviderCard({
   const reauthError = existing?.status === 'error' ? existing.lastError : null;
   const showPendingHint = existing?.status === 'pending';
   const showSyncFeedback = existing?.status === 'connected' && Boolean(syncFeedback);
+  const identityLabel = connectionLabel(existing);
 
   return (
     <li className="border-outline-variant bg-surface-container-low overflow-hidden rounded-xl border">
@@ -207,6 +217,9 @@ export function IntegrationProviderCard({
         </span>
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="text-on-surface text-body font-medium">{provider.name}</span>
+          {identityLabel ? (
+            <span className="text-on-surface-variant truncate text-xs">{identityLabel}</span>
+          ) : null}
           <span className="text-on-surface-variant text-xs">
             {cardSubtitle(existing, available, connectHint)}
           </span>

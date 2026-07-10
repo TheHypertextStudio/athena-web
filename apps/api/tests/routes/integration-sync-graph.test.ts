@@ -106,6 +106,7 @@ interface IntegrationStateRes {
     account?: string;
     externalWorkspaceId?: string;
     externalWorkspaceSlug?: string;
+    externalWorkspaceName?: string;
   };
 }
 
@@ -191,11 +192,53 @@ describe('verify persists the provider workspace id (Linear webhook routing key)
     expect(verified.status).toBe('connected');
     expect(verified.connection.externalWorkspaceId).toBe('mock-linear-org');
     expect(verified.connection.externalWorkspaceSlug).toBe('mock-linear');
+    expect(verified.connection.externalWorkspaceName).toBe('Mock Linear Workspace');
 
     // Durable — not just echoed in the response.
     const persisted = await reload(row.id);
     expect(persisted.connection.externalWorkspaceId).toBe('mock-linear-org');
     expect(persisted.connection.externalWorkspaceSlug).toBe('mock-linear');
+    expect(persisted.config['teamMappings']).toEqual([
+      { externalTeamId: 'lin-team-eng', teamId: expect.any(String) },
+      { externalTeamId: 'lin-team-ops', teamId: expect.any(String) },
+    ]);
+    expect(persisted.lastSyncedAt).not.toBeNull();
+  });
+
+  it('rejects a second account that resolves to the same Linear workspace in one org', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const first = one(
+      await db
+        .insert(schema.integration)
+        .values({
+          organizationId: orgId,
+          provider: 'linear',
+          pattern: 'connector',
+          externalAccountId: 'lin-one',
+          createdBy: humanActorId,
+        })
+        .returning(),
+    );
+    const second = one(
+      await db
+        .insert(schema.integration)
+        .values({
+          organizationId: orgId,
+          provider: 'linear',
+          pattern: 'connector',
+          externalAccountId: 'lin-two',
+          createdBy: humanActorId,
+        })
+        .returning(),
+    );
+    const w = appWithActor(integrations, orgId, ['manage'], humanActorId);
+
+    expect((await w.request(`/${first.id}/verify`, { method: 'POST', headers: J })).status).toBe(
+      200,
+    );
+    const duplicate = await w.request(`/${second.id}/verify`, { method: 'POST', headers: J });
+    expect(duplicate.status).toBe(409);
+    expect(await duplicate.json()).toMatchObject({ code: 'linear_workspace_already_connected' });
   });
 
   it('a UI-shaped connect (no writeBack in the body) verifies clean read-only', async () => {

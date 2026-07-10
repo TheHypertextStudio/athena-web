@@ -43,7 +43,7 @@ import { runAutomationsForEvent } from '../lib/automation/runtime';
 import { enqueueSearchIndexJobs } from '../search/enqueue';
 import { eventSearchReindexTarget } from '../search/event-log';
 import { asObserverProvider } from './integration-provider';
-import { LEASE_STALE_MS } from './integration-sync';
+import { LEASE_STALE_MS, runSync } from './integration-sync';
 import { publishEvent } from './stream-helpers';
 
 /** The selected `inbound_event` row shape. */
@@ -209,6 +209,27 @@ async function processOne(ev: InboundEventRow, ctx: SweepCtx): Promise<number> {
       .set({ status: 'skipped', processedAt: now })
       .where(eq(inboundEvent.id, ev.id));
     return 0;
+  }
+
+  // Linear Issue webhooks are both activity and a freshness signal. Reconcile through the same
+  // leased work-graph sync used by manual/scheduled runs before projecting the activity event, so
+  // a create/update/archive appears as a native Docket task during this drain. The run records its
+  // own durable success/failure; a provider outage must not discard the already-verified webhook.
+  if (provider === 'linear' && ev.eventType === 'Issue' && ev.integrationId) {
+    const [connected] = await db
+      .select()
+      .from(integration)
+      .where(
+        and(
+          eq(integration.id, ev.integrationId),
+          eq(integration.organizationId, orgId),
+          eq(integration.status, 'connected'),
+        ),
+      )
+      .limit(1);
+    if (connected?.createdBy) {
+      await runSync(connected, { actorId: connected.createdBy, trigger: 'scheduled' });
+    }
   }
 
   const drafts = observerFor(ctx, provider).normalize({

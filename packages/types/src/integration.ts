@@ -82,6 +82,12 @@ export const IntegrationConnection = z
       .describe(
         'The provider-side workspace URL slug, when known (for Linear, its `urlKey`) — used to build canonical external URLs. Persisted at `POST /:id/verify` time alongside `externalWorkspaceId`.',
       ),
+    externalWorkspaceName: z
+      .string()
+      .optional()
+      .describe(
+        'The provider-side workspace display name, when known. For Linear this is persisted during verification so multiple connected workspaces are distinguishable in Settings.',
+      ),
   })
   .meta({ id: 'IntegrationConnection', description: "An integration's connection metadata." });
 /** Integration-connection value. */
@@ -316,6 +322,13 @@ export const IntegrationUpdate = z
       .boolean()
       .optional()
       .describe('Toggle two-way write-back; omit to leave unchanged.'),
+    externalAccountId: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        'One-time binding for a legacy integration whose externalAccountId is null. An already-bound integration cannot be rebound; disconnect it and create a new connection instead.',
+      ),
   })
   .meta({ id: 'IntegrationUpdate', description: 'Update an integration.' });
 /** Validated integration-update body. */
@@ -377,11 +390,11 @@ export const SyncRunStatus = z
 /** Sync-run-status value. */
 export type SyncRunStatus = z.infer<typeof SyncRunStatus>;
 
-/** What triggered a sync run: a user action or the background scheduler. */
+/** What triggered a sync run: a user action or a background reconciliation signal. */
 export const SyncTrigger = z
   .enum(['manual', 'scheduled'])
   .describe(
-    'What started the run: `manual` (a user hit `POST /:id/sync`) or `scheduled` (the background re-sync cadence).',
+    'What started the run: `manual` (a user hit `POST /:id/sync`) or `scheduled` (the background cadence or a provider event requested reconciliation).',
   );
 /** Sync-trigger value. */
 export type SyncTrigger = z.infer<typeof SyncTrigger>;

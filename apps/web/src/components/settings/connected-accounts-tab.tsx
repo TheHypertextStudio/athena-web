@@ -25,10 +25,11 @@ import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
 import { readError } from '@/lib/problem';
 import { usePublicConfig } from '@/lib/public-config';
-import { STALE, apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
+import { STALE, apiQueryOptions, queryKeys, unwrap, useApiQuery } from '@/lib/query';
 
 import { IDENTITY_PROVIDER_CATALOG } from './identity-providers';
 import { ProviderGroup } from './provider-group';
+import { useReauth } from './use-reauth';
 
 /** Props for {@link ConnectedAccountsTab}. */
 export interface ConnectedAccountsTabProps {
@@ -39,6 +40,7 @@ export interface ConnectedAccountsTabProps {
 /** The Connected accounts settings tab — a provider directory to discover and manage linked accounts. */
 export function ConnectedAccountsTab({ orgId }: ConnectedAccountsTabProps): JSX.Element {
   const qc = useQueryClient();
+  const reauth = useReauth();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [addingProvider, setAddingProvider] = useState<IdentityProvider | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -88,8 +90,16 @@ export function ConnectedAccountsTab({ orgId }: ConnectedAccountsTabProps): JSX.
     (provider: IdentityProvider, accountId: string): void => {
       setError(null);
       setBusyId(accountId);
-      authClient
-        .unlinkAccount({ providerId: provider, accountId })
+      reauth()
+        .then(() =>
+          unwrap(
+            () =>
+              api.v1.me.identities[':provider'][':accountId'].$delete({
+                param: { provider, accountId },
+              }),
+            'Could not remove this account.',
+          ),
+        )
         .then(() => qc.invalidateQueries({ queryKey: queryKeys.identities() }))
         .catch((err: unknown) => {
           setError(readError(err, 'Could not remove this account.'));
@@ -98,7 +108,7 @@ export function ConnectedAccountsTab({ orgId }: ConnectedAccountsTabProps): JSX.
           setBusyId(null);
         });
     },
-    [qc],
+    [qc, reauth],
   );
 
   return (

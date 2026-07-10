@@ -14,7 +14,7 @@ import {
   TaskOut,
 } from '@docket/types';
 import type { ImportedItem } from '@docket/integrations';
-import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
@@ -22,6 +22,7 @@ import type { AppEnv } from '../context';
 import { ConflictError, NotFoundError, ValidationError } from '../error';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
+import { serializableTx } from '../lib/serializable-tx';
 import { zJson, zParam } from '../lib/validate';
 import { buildInstallUrl, signInstallState } from '../lib/github-app';
 import { buildSlackAuthorizeUrl, signSlackConnectState } from '../lib/slack-app';
@@ -38,6 +39,7 @@ import {
   hasLinearWriteScope,
   type IntegrationRow,
   resolveConnectorToken,
+  resolveActorConnectorIdentity,
   resolveIdentityLabel,
   socialProviderId,
   toOut,
@@ -77,6 +79,48 @@ async function loadIntegration(orgId: string, id: string): Promise<IntegrationRo
   const row = rows[0];
   if (!row) throw new NotFoundError('Integration not found');
   return row;
+}
+
+/**
+ * Persist a verified Linear connection while serializing the org/workspace uniqueness check.
+ *
+ * @remarks
+ * The workspace id lives inside JSON connection metadata, so it cannot share the existing
+ * `(org, provider, account)` unique index. SERIALIZABLE makes the predicate check and update one
+ * concurrency-safe operation: two accounts resolving to the same Linear workspace cannot both
+ * become connected in the same Docket organization.
+ */
+async function setVerifiedLinearIntegration(
+  id: string,
+  orgId: string,
+  externalWorkspaceId: string,
+  patch: Partial<typeof integration.$inferInsert>,
+): Promise<IntegrationRow> {
+  return serializableTx(async (tx) => {
+    const duplicates = await tx
+      .select({ id: integration.id })
+      .from(integration)
+      .where(
+        and(
+          eq(integration.organizationId, orgId),
+          eq(integration.provider, 'linear'),
+          sql`${integration.connection}->>'externalWorkspaceId' = ${externalWorkspaceId}`,
+        ),
+      );
+    if (duplicates.some((candidate) => candidate.id !== id)) {
+      throw new ConflictError(
+        'That Linear workspace is already connected to this Docket workspace.',
+        'linear_workspace_already_connected',
+      );
+    }
+    const [updated] = await tx
+      .update(integration)
+      .set(patch)
+      .where(and(eq(integration.id, id), eq(integration.organizationId, orgId)))
+      .returning();
+    if (!updated) throw new NotFoundError('Integration not found');
+    return updated;
+  });
 }
 
 /**
@@ -180,6 +224,22 @@ Requires \`manage\` — wiring an external data source into the org is an admini
       const { orgId, actorId } = c.get('actorCtx');
       const body = c.req.valid('json');
       await validateTeamMappings(orgId, body.config);
+      const selectedProvider = asConnectorProvider(body.provider);
+      let externalAccountId = body.externalAccountId;
+      if (selectedProvider && (externalAccountId !== undefined || body.provider === 'linear')) {
+        try {
+          externalAccountId =
+            (await resolveActorConnectorIdentity(actorId, selectedProvider, externalAccountId)) ??
+            undefined;
+        } catch (err) {
+          throw new ConflictError(
+            err instanceof Error ? err.message : 'The selected provider account is not linked.',
+            body.provider === 'linear' && body.externalAccountId === undefined
+              ? 'account_selection_required'
+              : 'conflict',
+          );
+        }
+      }
 
       // Connecting a provider is idempotent per (org, provider): reconnecting reuses the
       // existing integration (refreshing fields) to keep the integration id — and so each
@@ -199,17 +259,15 @@ Requires \`manage\` — wiring an external data source into the org is an admini
         ...(body.connection !== undefined ? { connection: body.connection } : {}),
         ...(body.config !== undefined ? { config: body.config } : {}),
         ...(body.syncMode !== undefined ? { syncMode: body.syncMode } : {}),
-        ...(body.externalAccountId !== undefined
-          ? { externalAccountId: body.externalAccountId }
-          : {}),
+        ...(externalAccountId !== undefined ? { externalAccountId } : {}),
         writeBack,
       };
 
       // Reconnect is idempotent per (org, provider, account): with an `externalAccountId` an org can
       // link several accounts of the same provider (one integration each); without one we preserve
       // the original single-account behavior (match the row that also has no bound account).
-      const accountMatch = body.externalAccountId
-        ? eq(integration.externalAccountId, body.externalAccountId)
+      const accountMatch = externalAccountId
+        ? eq(integration.externalAccountId, externalAccountId)
         : isNull(integration.externalAccountId);
       const existing = await db
         .select({ id: integration.id })
@@ -227,6 +285,7 @@ Requires \`manage\` — wiring an external data source into the org is an admini
         const row = await setIntegration(existing[0].id, {
           pattern: body.pattern,
           ...fields,
+          ...(externalAccountId !== undefined ? { createdBy: actorId } : {}),
           status: 'pending',
           lastError: null,
           lastErrorAt: null,
@@ -360,13 +419,30 @@ Requires \`manage\` — it touches live provider credentials and configures sync
       await validateTeamMappings(orgId, body.config);
 
       const existing = await loadIntegration(orgId, id);
+      if (body.externalAccountId !== undefined) {
+        if (existing.externalAccountId && existing.externalAccountId !== body.externalAccountId) {
+          throw new ConflictError(
+            'This connection is already bound to an account. Disconnect it to choose another.',
+          );
+        }
+        const provider = asConnectorProvider(existing.provider);
+        if (provider) {
+          try {
+            await resolveActorConnectorIdentity(actorId, provider, body.externalAccountId);
+          } catch (err) {
+            throw new ConflictError(
+              err instanceof Error ? err.message : 'The selected provider account is not linked.',
+            );
+          }
+        }
+      }
       // Flipping write-back ON for Linear is gated on the actor's linked identity actually
       // carrying the `write` scope (see `POST /:id/verify` for the same check at connect time).
       // A read-only update (writeBack absent or false) never consults scope — no nagging.
       if (
         body.writeBack === true &&
         existing.provider === 'linear' &&
-        !(await hasLinearWriteScope(actorId))
+        !(await hasLinearWriteScope(actorId, existing.externalAccountId))
       ) {
         throw new ConflictError(LINEAR_WRITE_SCOPE_MESSAGE);
       }
@@ -377,6 +453,15 @@ Requires \`manage\` — it touches live provider credentials and configures sync
         ...(body.config !== undefined ? { config: body.config } : {}),
         ...(body.syncMode !== undefined ? { syncMode: body.syncMode } : {}),
         ...(body.writeBack !== undefined ? { writeBack: body.writeBack } : {}),
+        ...(body.externalAccountId !== undefined
+          ? {
+              externalAccountId: body.externalAccountId,
+              createdBy: actorId,
+              status: 'pending' as const,
+              lastError: null,
+              lastErrorAt: null,
+            }
+          : {}),
       });
 
       // Enablement moment: seed the org's default automation rules as soon as email-to-task
@@ -442,7 +527,11 @@ Requires \`manage\` — it exercises live credentials and mutates health. Side e
       // honest failure mode from a broken credential) and recorded as `error` via the same
       // truthful 200 pattern below, never silently ignored or left dangling as a fabricated
       // `connected`.
-      if (provider === 'linear' && row.writeBack && !(await hasLinearWriteScope(actorId))) {
+      if (
+        provider === 'linear' &&
+        row.writeBack &&
+        !(await hasLinearWriteScope(actorId, row.externalAccountId))
+      ) {
         const updated = await setIntegration(id, {
           status: 'error',
           lastError: LINEAR_WRITE_SCOPE_MESSAGE,
@@ -465,7 +554,8 @@ Requires \`manage\` — it exercises live credentials and mutates health. Side e
       }
 
       try {
-        const result = await connectorFor(provider, tokenResult.token).connect({
+        const connector = connectorFor(provider, tokenResult.token);
+        const result = await connector.connect({
           provider,
           referenceId: orgId,
           ...(row.connection.externalWorkspaceId
@@ -476,9 +566,26 @@ Requires \`manage\` — it exercises live credentials and mutates health. Side e
         // Label the connection by the linked IDENTITY (the account's email), not a resource. The
         // gtasks connector no longer returns a label (it used to return a task-list title), so the
         // identity email — resolved from the bound account's id token — is the source of truth.
-        const identityLabel = await resolveIdentityLabel(actorId, row.externalAccountId);
+        const identityLabel = await resolveIdentityLabel(actorId, provider, row.externalAccountId);
         const account = identityLabel ?? result.account;
-        const updated = await setIntegration(id, {
+        let nextConfig = row.config;
+        if (provider === 'linear') {
+          const parsedConfig = ConnectorConfig.safeParse(row.config).data ?? {};
+          if (!parsedConfig.teamMappings || parsedConfig.teamMappings.length === 0) {
+            const [defaultTeamId, resources] = await Promise.all([
+              resolveImportTeam(orgId, row),
+              connector.listContainers?.({ connectionId: row.id, provider }) ?? [],
+            ]);
+            nextConfig = {
+              ...row.config,
+              teamMappings: resources.map((resource) => ({
+                externalTeamId: resource.id,
+                teamId: defaultTeamId,
+              })),
+            };
+          }
+        }
+        const verifiedPatch = {
           status: 'connected',
           lastError: null,
           lastErrorAt: null,
@@ -495,10 +602,31 @@ Requires \`manage\` — it exercises live credentials and mutates health. Side e
             ...(result.externalWorkspaceSlug !== undefined
               ? { externalWorkspaceSlug: result.externalWorkspaceSlug }
               : {}),
+            ...(result.externalWorkspaceName !== undefined
+              ? { externalWorkspaceName: result.externalWorkspaceName }
+              : {}),
           },
-        });
+          config: nextConfig,
+        } satisfies Partial<typeof integration.$inferInsert>;
+        let updated =
+          provider === 'linear' && result.externalWorkspaceId
+            ? await setVerifiedLinearIntegration(
+                id,
+                orgId,
+                result.externalWorkspaceId,
+                verifiedPatch,
+              )
+            : await setIntegration(id, verifiedPatch);
+        // First activation is useful immediately: every discovered Linear team is mapped to the
+        // org's default team above, then the same sync engine used by manual/scheduled/webhook
+        // runs materializes the issues as native Docket tasks before this request returns.
+        if (provider === 'linear' && row.lastSyncedAt === null) {
+          await runSync(updated, { actorId, trigger: 'manual' });
+          updated = await loadIntegration(orgId, id);
+        }
         return ok(c, IntegrationOut, toOut(updated));
       } catch (err) {
+        if (err instanceof ConflictError) throw err;
         const message = err instanceof Error ? err.message : 'Connection check failed';
         const updated = await setIntegration(id, {
           status: 'error',

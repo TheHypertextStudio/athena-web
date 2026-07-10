@@ -56,7 +56,7 @@ describe('POST /internal/ingest/linear', () => {
     const rows = await db
       .select()
       .from(schema.inboundEvent)
-      .where(eq(schema.inboundEvent.externalEventId, 'ev_1'));
+      .where(eq(schema.inboundEvent.externalEventId, `ev_1:${orgId}`));
     expect(rows).toHaveLength(1);
     expect(rows[0]!.organizationId).toBe(orgId);
     expect(rows[0]!.integrationId).toBe(intgId);
@@ -81,8 +81,36 @@ describe('POST /internal/ingest/linear', () => {
     const rows = await db
       .select()
       .from(schema.inboundEvent)
-      .where(eq(schema.inboundEvent.externalEventId, 'ev_dup'));
+      .where(eq(schema.inboundEvent.externalEventId, `ev_dup:${orgId}`));
     expect(rows).toHaveLength(1);
+  });
+
+  it('fans one Linear workspace delivery out to every connected Docket organization', async () => {
+    const first = await seedBaseOrg(db, schema);
+    const second = await seedBaseOrg(db, schema);
+    await seedLinearIntegration(first.orgId, first.humanActorId, 'ws_shared');
+    await seedLinearIntegration(second.orgId, second.humanActorId, 'ws_shared');
+
+    const res = await ingest.request('/linear', {
+      method: 'POST',
+      headers: SIGNED,
+      body: JSON.stringify({
+        type: 'Issue',
+        organizationId: 'ws_shared',
+        id: 'iss_shared',
+        externalEventId: 'ev_shared',
+      }),
+    });
+    expect(res.status).toBe(200);
+    const rows = await db
+      .select({ organizationId: schema.inboundEvent.organizationId })
+      .from(schema.inboundEvent)
+      .where(eq(schema.inboundEvent.provider, 'linear'));
+    const routed = rows
+      .filter((row) => row.organizationId === first.orgId || row.organizationId === second.orgId)
+      .map((row) => row.organizationId)
+      .sort();
+    expect(routed).toEqual([first.orgId, second.orgId].sort());
   });
 
   it('400s a missing or invalid signature before any write', async () => {

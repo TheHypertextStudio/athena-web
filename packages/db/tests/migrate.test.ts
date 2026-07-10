@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  */
 
 const migrateMocks = vi.hoisted(() => ({
-  clients: [] as { close: ReturnType<typeof vi.fn> }[],
+  clients: [] as { close: ReturnType<typeof vi.fn>; exec: ReturnType<typeof vi.fn> }[],
   drizzlePglite: vi.fn((client: unknown) => ({ client })),
   migratePglite: vi.fn(async () => undefined),
   openPglite: vi.fn(),
@@ -27,7 +27,10 @@ function resetDriverMocks(): void {
   migrateMocks.migratePglite.mockClear();
   migrateMocks.migratePglite.mockResolvedValue(undefined);
   migrateMocks.openPglite.mockImplementation(() => {
-    const client = { close: vi.fn(async () => undefined) };
+    const client = {
+      close: vi.fn(async () => undefined),
+      exec: vi.fn(async () => undefined),
+    };
     migrateMocks.clients.push(client);
     return client;
   });
@@ -56,6 +59,9 @@ describe('migrate main()', () => {
     expect(migrateMocks.migratePglite).toHaveBeenCalledWith(expect.anything(), {
       migrationsFolder: expect.stringContaining('packages/db/drizzle'),
     });
+    expect(migrateMocks.clients[0]!.exec).toHaveBeenCalledWith(
+      expect.stringContaining("ADD VALUE IF NOT EXISTS 'pending'"),
+    );
     expect(migrateMocks.clients[0]!.close).toHaveBeenCalledTimes(1);
     expect(log).toHaveBeenCalledWith(expect.stringContaining('migrations applied (pglite)'));
   });

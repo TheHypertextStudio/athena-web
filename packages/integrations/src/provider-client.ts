@@ -42,6 +42,8 @@ export interface ResolvedAccount {
    * {@link import('./connector').ConnectionResult.externalWorkspaceSlug}.
    */
   readonly externalWorkspaceSlug?: string;
+  /** The provider workspace's human-readable name, when known. */
+  readonly externalWorkspaceName?: string;
 }
 
 /**

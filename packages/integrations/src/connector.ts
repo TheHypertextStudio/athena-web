@@ -63,6 +63,8 @@ export interface ConnectionResult {
    * For Linear, this is the `urlKey` — used to build canonical external URLs.
    */
   readonly externalWorkspaceSlug?: string;
+  /** The provider workspace's human-readable name, when known. */
+  readonly externalWorkspaceName?: string;
 }
 
 /** Provenance attached to every imported item so its origin is auditable. */

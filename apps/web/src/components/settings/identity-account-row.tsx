@@ -29,7 +29,9 @@ export interface IdentityAccountRowProps {
 
 /** The display label for an account: its email, then name, then the provider name. */
 function accountLabel(identity: IdentityOut, providerName: string): string {
-  return identity.email ?? identity.name ?? providerName;
+  return (
+    identity.email ?? identity.name ?? `${providerName} account …${identity.accountId.slice(-8)}`
+  );
 }
 
 /** Initials for the avatar fallback (first letter of the label). */
@@ -55,6 +57,12 @@ export function IdentityAccountRow({
       </Avatar>
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <span className="text-on-surface text-body truncate font-medium">{label}</span>
+        {identity.connectionCount > 0 ? (
+          <span className="text-on-surface-variant text-xs">
+            Used by {identity.connectionCount} Docket connection
+            {identity.connectionCount === 1 ? '' : 's'}
+          </span>
+        ) : null}
         {access.length > 0 ? (
           <div className="flex flex-wrap items-center gap-1">
             {access.map((a) => (
@@ -67,7 +75,12 @@ export function IdentityAccountRow({
       </div>
       <IntegrationActionButton
         tone="danger"
-        disabled={removing}
+        disabled={removing || identity.connectionCount > 0}
+        title={
+          identity.connectionCount > 0
+            ? 'Disconnect or rebind this account’s Docket connections first.'
+            : undefined
+        }
         onClick={() => {
           onRemove(identity.accountId);
         }}

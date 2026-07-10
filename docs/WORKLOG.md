@@ -1,11 +1,98 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-07-07
+> **Last Updated**: 2026-07-10
 
 ---
 
 ## Active Tasks
+
+### [LINEAR-SYNC-002] Multi-account Linear connections and task materialization
+
+- **Status**: DONE
+- **Started**: 2026-07-10
+- **Completed**: 2026-07-10
+- **Priority**: P1
+- **Description**: Ensure one Docket user can link multiple Linear OAuth identities, see every
+  identity and every org-scoped Linear connection in Settings, bind each connection to the intended
+  identity, and materialize each connected workspace's Linear issues as first-party Docket tasks.
+- **Audit findings**:
+  - Better Auth and `GET /v1/me/identities` preserve and return multiple same-provider account rows,
+    and Connected accounts already renders every returned Linear identity. However, Docket does not
+    enable Better Auth's explicit `allowDifferentEmails` link policy, so a second Linear account with
+    a different email is rejected during the user-initiated link flow.
+  - The org Connections UI collapses Linear to the first integration (`byProvider.get(...)[0]`) and
+    creates an unbound legacy connection with no `externalAccountId`; token resolution can therefore
+    pick the wrong Linear grant and additional Linear identities cannot be connected or managed.
+  - Linear identities have no OIDC id token, so Connected accounts labels every one merely
+    "Linear" even though the live connector resolves the viewer and workspace during verification.
+  - The work-graph sync path already pulls Linear issues and reconciles them into native tasks with
+    per-integration provenance, and scheduled sync handles each integration independently.
+  - Linear webhook routing selects only the first matching integration for a workspace, so the same
+    Linear workspace connected into multiple Docket orgs does not fan out reliably.
+- **Plan**:
+  1. Generalize the existing Google Tasks multi-account connection surface into a provider-aware
+     identity-connections surface and use it for Linear, preserving per-connection health, sync,
+     configuration, and disconnect controls.
+  2. Enable and test authenticated, user-initiated linking of a second provider identity with a
+     different email, then make Linear connection creation select a linked Linear identity, persist
+     its `externalAccountId`, and verify that exact account before exposing it as healthy.
+  3. Persist/display the resolved Linear viewer and workspace labels so multiple identities and
+     connections are distinguishable in both Connected accounts and Connections settings.
+  4. Make account-specific Linear scope checks use the integration's bound `externalAccountId`.
+  5. Fan Linear workspace webhooks out once per connected Docket organization while de-duplicating
+     multiple same-org connections, matching the existing safe Slack fan-out shape.
+  6. Add API, sync, webhook-routing, and web component coverage proving two Linear identities create
+     two visible connections and each connection materializes its own issues as Docket tasks.
+  7. Update the integration sync specification, complete this worklog entry with validation and
+     retrospection, run focused gates, then run the repository typecheck/lint/test/build gates.
+- **Risks**:
+  - Legacy unbound Linear integrations must remain reconnectable without being silently reassigned
+    to a newly linked account.
+  - Two OAuth identities may point at the same Linear workspace; task/webhook handling must avoid
+    ambiguous routing or duplicate materialization inside one Docket organization.
+  - Unlinking an identity that still funds an org connection must surface a truthful reauth state.
+- **Validation**:
+  - `pnpm db:migrate` — passes against the configured on-disk PGlite database after repairing the
+    historical enum transaction edge; a fresh in-memory migration passes too.
+  - `@docket/api` — a full 132-file run passed 1,192/1,192 before the final two account-selection
+    assertions were added; the final focused Linear/identity set passes 37/37. The post-addition full
+    run passed 1,193/1,194 with only the unrelated pre-existing agent-session SSE timing flake; its
+    isolated `group-d` rerun passes 33/33. Coverage includes exact-account tokens, safe unlink,
+    duplicate-workspace rejection, activation sync, issue-webhook reconciliation, and org fan-out.
+  - `@docket/web` — 50 files / 296 tests passed, including multi-account settings selectors.
+  - `@docket/db` — 7 files / 53 tests; `@docket/auth` — 3 files / 51 tests;
+    `@docket/integrations` — 16 files / 233 tests.
+  - `pnpm typecheck` — 17/17 Turbo tasks passed.
+  - `pnpm lint` — 17/17 Turbo tasks passed.
+  - `pnpm build` — API, admin, and web build tasks passed.
+  - Live dev proof: `pnpm dev` stays running; `GET https://api.docket.localhost:1355/v1/health`
+    returns 200 `{"status":"ok"}` and `https://docket.localhost:1355` returns 200.
+  - Broad `pnpm test` reaches this slice's green package suites but the root gate remains blocked by
+    the pre-existing `@docket/test-utils` documentation-coverage audit: 34 undocumented exports in
+    the unrelated search-index implementation (`apps/api/src/search/*`, web search URL state, and
+    `packages/db/src/schema/search.ts`). No Linear-sync file appears in that failure list.
+- **Files Changed**:
+  - Identity/auth contracts and unlink safety: `packages/types/src/{identity,errors}.ts`,
+    `packages/auth/src/auth-builder.ts`, `apps/api/src/routes/{me-identities,integration-provider}.ts`.
+  - Linear connection/sync/webhooks: `packages/integrations/src/*`,
+    `apps/api/src/routes/{integrations,ingest,event-sync}.ts`.
+  - Settings UX: `apps/web/src/components/settings/{connected-accounts-tab,identity-account-row,integration-provider-card,integrations-tab}.tsx`.
+  - Local observability/migration repair: `packages/db/src/migrate.ts`, migrations `0000`/`0004`,
+    `turbo.json`, and the ignored local `.env.local` `WEB_URL` value.
+  - Specifications/tests: `docs/engineering/specs/integration-sync.md` and focused auth, DB,
+    integration, API, and web test files.
+- **Retrospection**:
+  - **What went well**: The existing work-graph reconciler already had the correct native-task and
+    provenance semantics; binding tokens to one account and routing webhook repair through the same
+    leased spine avoided a second sync implementation.
+  - **What could improve**: Linear's Better Auth account row does not retain per-account profile
+    claims, so Connected accounts uses a stable account-id suffix until verification can show the
+    richer viewer/workspace labels on the org connection.
+  - **What was learned**: Drizzle 0.45 wraps all pending PostgreSQL migrations in one transaction;
+    enum values introduced in one historical migration cannot be consumed by the next without an
+    idempotent preflight commit. Turbo strict-env also requires `WEB_URL` to be explicitly forwarded
+    to the API dev task.
 
 ### [NOTIF-UX-001] End-user notification UX completion
 

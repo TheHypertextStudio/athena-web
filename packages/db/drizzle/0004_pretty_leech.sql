@@ -1,6 +1,6 @@
 CREATE TYPE "public"."sync_run_status" AS ENUM('running', 'succeeded', 'failed');--> statement-breakpoint
 CREATE TYPE "public"."sync_trigger" AS ENUM('manual', 'scheduled');--> statement-breakpoint
-ALTER TYPE "public"."integration_status" ADD VALUE 'pending' BEFORE 'connected';--> statement-breakpoint
+ALTER TYPE "public"."integration_status" ADD VALUE IF NOT EXISTS 'pending' BEFORE 'connected';--> statement-breakpoint
 ALTER TYPE "public"."notification_type" ADD VALUE 'connector_sync_failed';--> statement-breakpoint
 ALTER TYPE "public"."notification_type" ADD VALUE 'connector_needs_reauth';--> statement-breakpoint
 CREATE TABLE "sync_run" (

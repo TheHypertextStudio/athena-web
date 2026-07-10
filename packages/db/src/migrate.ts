@@ -22,6 +22,27 @@ import { openPglite } from './client';
 const migrationsFolder = resolve(dirname(fileURLToPath(import.meta.url)), '../drizzle');
 
 /**
+ * Repair the historical integration-status enum before Drizzle opens its all-migrations transaction.
+ *
+ * @remarks
+ * Migration 0004 introduced `pending` and 0005 used it as a default. PostgreSQL requires an enum
+ * value addition to COMMIT before that value can be used, while Drizzle 0.45 runs every pending
+ * migration in one transaction. Fresh databases now create the complete enum in 0000; databases
+ * paused before 0004 need this idempotent preflight so the value is committed before `migrate()`.
+ * An undefined enum (`42704`) is the expected fresh-database case and is left for 0000 to create.
+ */
+async function ensurePendingIntegrationStatus(execute: () => Promise<unknown>): Promise<void> {
+  try {
+    await execute();
+  } catch (err) {
+    if (typeof err === 'object' && err !== null && 'code' in err && err.code === '42704') {
+      return;
+    }
+    throw err;
+  }
+}
+
+/**
  * Apply the generated `./drizzle` migrations using the driver matching the
  * `DATABASE_URL` (or `DATABASE_URL_UNPOOLED`) scheme, defaulting to an on-disk PGlite.
  *
@@ -42,6 +63,11 @@ export async function main(): Promise<void> {
 
   if (url.startsWith('pglite:')) {
     const client = openPglite(url);
+    await ensurePendingIntegrationStatus(() =>
+      client.exec(
+        `ALTER TYPE "public"."integration_status" ADD VALUE IF NOT EXISTS 'pending' BEFORE 'connected'`,
+      ),
+    );
     await migratePglite(drizzlePglite(client), { migrationsFolder });
     await client.close();
   } else {
@@ -58,6 +84,11 @@ export async function main(): Promise<void> {
         console.warn(notice);
       },
     });
+    await ensurePendingIntegrationStatus(() =>
+      client.unsafe(
+        `ALTER TYPE "public"."integration_status" ADD VALUE IF NOT EXISTS 'pending' BEFORE 'connected'`,
+      ),
+    );
     await migratePostgres(drizzlePostgres(client), { migrationsFolder });
     await client.end();
   }

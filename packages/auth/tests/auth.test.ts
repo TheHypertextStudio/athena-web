@@ -745,6 +745,8 @@ describe('buildAuthOptions env-gating', () => {
       scope: ['read'],
     });
     expect(opts.account?.accountLinking?.enabled).toBe(true);
+    expect(opts.account?.accountLinking?.allowDifferentEmails).toBe(true);
+    expect(opts.disabledPaths).toContain('/unlink-account');
     // Passwordless: `email-password` is NOT a trusted linking provider — only social ones.
     expect((opts.account?.accountLinking?.trustedProviders as string[]).sort()).toEqual([
       'github',

@@ -182,6 +182,9 @@ export class RealConnector implements Connector {
       ...(resolved?.externalWorkspaceSlug !== undefined
         ? { externalWorkspaceSlug: resolved.externalWorkspaceSlug }
         : {}),
+      ...(resolved?.externalWorkspaceName !== undefined
+        ? { externalWorkspaceName: resolved.externalWorkspaceName }
+        : {}),
     };
   }
 

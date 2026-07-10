@@ -129,7 +129,11 @@ export class MockConnector implements Connector {
       status: 'connected',
       account: input.externalWorkspaceId ?? `${input.provider}-workspace`,
       ...(input.provider === 'linear'
-        ? { externalWorkspaceId: 'mock-linear-org', externalWorkspaceSlug: 'mock-linear' }
+        ? {
+            externalWorkspaceId: 'mock-linear-org',
+            externalWorkspaceSlug: 'mock-linear',
+            externalWorkspaceName: 'Mock Linear Workspace',
+          }
         : {}),
     };
   }

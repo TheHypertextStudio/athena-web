@@ -1,5 +1,5 @@
-import { account, actor, db } from '@docket/db';
-import type { integration, task } from '@docket/db';
+import { account, actor, db, integration } from '@docket/db';
+import type { task } from '@docket/db';
 import { auth } from '@docket/auth';
 import type { IdentityOut, IdentityProvider, IntegrationOut, TaskOut } from '@docket/types';
 import {
@@ -110,6 +110,48 @@ export function socialProviderId(provider: ConnectorProvider): string {
 }
 
 /**
+ * Resolve and validate the exact linked identity selected for a connector.
+ *
+ * @remarks
+ * Production integrations must never accept an arbitrary provider account id from the client:
+ * the id has to be one of the acting user's Better Auth account rows. When the client omits an id,
+ * the user's single matching account is selected automatically (preserving onboarding); several
+ * matches require an explicit selection. Local/test actors used by the deterministic mock harness
+ * may not have a backing user, so that environment retains the legacy nullable fixture flow.
+ */
+export async function resolveActorConnectorIdentity(
+  actorId: string,
+  provider: ConnectorProvider,
+  externalAccountId?: string,
+): Promise<string | null> {
+  const [owner] = await db
+    .select({ userId: actor.userId })
+    .from(actor)
+    .where(eq(actor.id, actorId))
+    .limit(1);
+  if (!owner?.userId) {
+    if (env.APP_MODE !== 'production') return externalAccountId ?? null;
+    throw new Error('The acting user has no linked sign-in identity.');
+  }
+  const linked = await db
+    .select({ accountId: account.accountId })
+    .from(account)
+    .where(
+      and(eq(account.userId, owner.userId), eq(account.providerId, socialProviderId(provider))),
+    );
+  if (externalAccountId) {
+    if (!linked.some((candidate) => candidate.accountId === externalAccountId)) {
+      throw new Error('The selected provider account is not linked to this user.');
+    }
+    return externalAccountId;
+  }
+  if (linked.length === 1 && linked[0]) return linked[0].accountId;
+  if (linked.length > 1)
+    throw new Error(`Choose which ${socialProviderId(provider)} account to use.`);
+  throw new Error(`Link a ${socialProviderId(provider)} account before creating this connection.`);
+}
+
+/**
  * The outcome of resolving a connector's OAuth access token.
  *
  * @remarks
@@ -120,7 +162,11 @@ export function socialProviderId(provider: ConnectorProvider): string {
  */
 export type ConnectorTokenResult =
   | { readonly ok: true; readonly token: string }
-  | { readonly ok: false; readonly reason: 'needs_reauth'; readonly message: string };
+  | {
+      readonly ok: false;
+      readonly reason: 'needs_reauth' | 'account_selection_required';
+      readonly message: string;
+    };
 
 /**
  * Fetch a (possibly refreshed) OAuth access token for a `(providerId, userId)` pair.
@@ -185,11 +231,29 @@ export async function resolveLiveConnectorToken(
   const userId = rows[0]?.userId;
   if (!userId) return needsReauth;
 
+  const linked = await db
+    .select({ accountId: account.accountId })
+    .from(account)
+    .where(and(eq(account.userId, userId), eq(account.providerId, providerId)));
+  const selectedAccountId =
+    externalAccountId ?? (linked.length === 1 ? linked[0]?.accountId : null);
+  if (externalAccountId && !linked.some((row) => row.accountId === externalAccountId)) {
+    return needsReauth;
+  }
+  if (!externalAccountId && linked.length > 1) {
+    return {
+      ok: false,
+      reason: 'account_selection_required',
+      message: `Choose which ${providerId} account this integration should use.`,
+    };
+  }
+  if (!selectedAccountId) return needsReauth;
+
   try {
     const result = await fetchAccessToken({
       providerId,
       userId,
-      ...(externalAccountId ? { accountId: externalAccountId } : {}),
+      accountId: selectedAccountId,
     });
     if (!result.accessToken) return needsReauth;
     return { ok: true, token: result.accessToken };
@@ -244,19 +308,39 @@ const IDENTITY_PROVIDERS: readonly IdentityProvider[] = [...IdentityProviderSche
  * @param userId - The Docket user whose linked identities to list.
  */
 export async function linkedIdentities(userId: string): Promise<IdentityOut[]> {
-  const rows = await db
-    .select({
-      accountId: account.accountId,
-      providerId: account.providerId,
-      idToken: account.idToken,
-      scope: account.scope,
-      createdAt: account.createdAt,
-    })
-    .from(account)
-    .where(and(eq(account.userId, userId), inArray(account.providerId, [...IDENTITY_PROVIDERS])));
+  const [rows, connections] = await Promise.all([
+    db
+      .select({
+        accountId: account.accountId,
+        providerId: account.providerId,
+        idToken: account.idToken,
+        scope: account.scope,
+        createdAt: account.createdAt,
+      })
+      .from(account)
+      .where(and(eq(account.userId, userId), inArray(account.providerId, [...IDENTITY_PROVIDERS]))),
+    db
+      .select({
+        provider: integration.provider,
+        externalAccountId: integration.externalAccountId,
+      })
+      .from(integration)
+      .innerJoin(actor, eq(actor.id, integration.createdBy))
+      .where(eq(actor.userId, userId)),
+  ]);
+
+  const connectionCounts = new Map<string, number>();
+  for (const connection of connections) {
+    if (!connection.externalAccountId) continue;
+    const provider = asConnectorProvider(connection.provider);
+    if (!provider) continue;
+    const key = `${socialProviderId(provider)}:${connection.externalAccountId}`;
+    connectionCounts.set(key, (connectionCounts.get(key) ?? 0) + 1);
+  }
 
   return rows.map((row) => {
     const claims = decodeIdTokenClaims(row.idToken);
+    const key = `${row.providerId}:${row.accountId}`;
     return {
       accountId: row.accountId,
       provider: row.providerId as IdentityProvider,
@@ -264,10 +348,11 @@ export async function linkedIdentities(userId: string): Promise<IdentityOut[]> {
       name: claims.name,
       picture: claims.picture,
       scopes: (row.scope ?? '')
-        .split(' ')
+        .split(/[\s,]+/)
         .map((s) => s.trim())
         .filter(Boolean),
       linkedAt: row.createdAt.toISOString(),
+      connectionCount: connectionCounts.get(key) ?? 0,
     };
   });
 }
@@ -298,7 +383,10 @@ export { LINEAR_WRITE_SCOPE_MESSAGE } from '@docket/types';
  *
  * @param actorId - The actor whose linked Linear identity to check.
  */
-export async function hasLinearWriteScope(actorId: string): Promise<boolean> {
+export async function hasLinearWriteScope(
+  actorId: string,
+  externalAccountId?: string | null,
+): Promise<boolean> {
   const rows = await db
     .select({ userId: actor.userId })
     .from(actor)
@@ -306,7 +394,10 @@ export async function hasLinearWriteScope(actorId: string): Promise<boolean> {
     .limit(1);
   const userId = rows[0]?.userId;
   if (!userId) return false;
-  const linear = (await linkedIdentities(userId)).find((i) => i.provider === 'linear');
+  const linear = (await linkedIdentities(userId)).find(
+    (i) =>
+      i.provider === 'linear' && (externalAccountId == null || i.accountId === externalAccountId),
+  );
   return linear?.scopes.includes('write') ?? false;
 }
 
@@ -323,6 +414,7 @@ export async function hasLinearWriteScope(actorId: string): Promise<boolean> {
  */
 export async function resolveIdentityLabel(
   actorId: string,
+  provider: ConnectorProvider,
   externalAccountId: string | null,
 ): Promise<string | undefined> {
   if (!externalAccountId) return undefined;
@@ -333,7 +425,10 @@ export async function resolveIdentityLabel(
     .limit(1);
   const userId = rows[0]?.userId;
   if (!userId) return undefined;
-  const match = (await linkedIdentities(userId)).find((i) => i.accountId === externalAccountId);
+  const identityProvider = socialProviderId(provider);
+  const match = (await linkedIdentities(userId)).find(
+    (i) => i.provider === identityProvider && i.accountId === externalAccountId,
+  );
   return match?.email ?? match?.name ?? undefined;
 }
 

@@ -204,12 +204,12 @@ Athena is the built-in agent; compute/cost/telemetry are **not** stored by Docke
 
 These authenticate the **bootstrap script and CI to the cloud CLIs**; they are operator credentials, not runtime config.
 
-| Name                                  | Used by       | What it is                                                                                                            | Where to obtain                            |
-| ------------------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| `VERCEL_TOKEN`                        | bootstrap, CI | Vercel access token for non-interactive `vercel env add/pull/link`.                                                   | Vercel → Account Settings → Tokens.        |
-| `VERCEL_ORG_ID` / `VERCEL_PROJECT_ID` | bootstrap, CI | Identify the Vercel team + project for scripted env writes (also written to `.vercel/project.json` by `vercel link`). | `vercel link` output, or Project Settings. |
-| `NEON_API_KEY`                        | bootstrap, CI | Non-interactive `neonctl` auth (`neonctl --api-key`).                                                                 | Neon Console → Account → API keys.         |
-| `STRIPE_API_KEY` (test)               | bootstrap     | Lets bootstrap run `stripe products/prices create` non-interactively (`stripe --api-key`).                            | Stripe test secret key (`sk_test_…`).      |
+| Name                                  | Used by       | What it is                                                                                                                                          | Where to obtain                            |
+| ------------------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| `VERCEL_TOKEN`                        | bootstrap     | Optional Vercel access token for non-interactive `vercel env add/pull/link`; production CI uses the native Git integration and does not consume it. | Vercel → Account Settings → Tokens.        |
+| `VERCEL_ORG_ID` / `VERCEL_PROJECT_ID` | bootstrap     | Identify the Vercel team + project for scripted bootstrap writes (also written to `.vercel/project.json` by `vercel link`).                         | `vercel link` output, or Project Settings. |
+| `NEON_API_KEY`                        | bootstrap, CI | Non-interactive `neonctl` auth (`neonctl --api-key`).                                                                                               | Neon Console → Account → API keys.         |
+| `STRIPE_API_KEY` (test)               | bootstrap     | Lets bootstrap run `stripe products/prices create` non-interactively (`stripe --api-key`).                                                          | Stripe test secret key (`sk_test_…`).      |
 
 ---
 
@@ -478,7 +478,8 @@ Write atomically (write `.env.tmp` then rename); never overwrite an existing `.e
 
 For each app (`api`, `web`, `marketing`, `admin`) as a separate Vercel project:
 
-1. Link: `vercel link --project docket-<app> --yes` (uses `VERCEL_TOKEN`/`VERCEL_ORG_ID` non-interactively in CI).
+1. Link: `vercel link --project docket-<app> --yes` (uses an interactive Vercel login or the optional
+   bootstrap-only `VERCEL_TOKEN`/`VERCEL_ORG_ID`; production CI does not run this command).
 2. For each variable in that app's prod slice, pipe the value from stdin (avoids shell history leakage): `printf '%s' "<value>" | vercel env add <NAME> production --sensitive --force` (and `preview` where the var is needed for preview deploys). Verified syntax: `echo "value" | vercel env add NAME production`; `--force` overwrites, `--sensitive` marks secrets write-only.
    - **Secrets** (`*_SECRET`, `*_KEY`, `DATABASE_URL*`) → `--sensitive`.
    - **Public** (`NEXT_PUBLIC_*`) → `--no-sensitive`, added to `production` and `preview`.

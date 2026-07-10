@@ -285,15 +285,18 @@
 - **Priority**: P0
 - **Description**: Restore a gated production deployment for Docket and let users link multiple
   Google accounts for two-way Calendar sync, with incremental Tasks, Drive, and Gmail consent.
-- **Approach**: Preserve the Vercel-web plus Cloud Run API/admin topology, repair CI before deploy,
-  add an explicit production migration job, harden Better Auth account/token handling, and stage
-  Google OAuth behind a test-user gate until public restricted-scope verification is approved.
+- **Approach**: Preserve the Vercel-web plus Cloud Run API/admin topology, use Vercel's native Git
+  deployment with a blocking backend Deployment Check instead of a duplicate CLI deployment, add an
+  explicit production migration job, harden Better Auth account/token handling, and stage Google
+  OAuth behind a test-user gate until public restricted-scope verification is approved.
 - **Subtasks**:
   - [x] Repair formatting, E2E startup, Docker package-manager bootstrapping, and CI deployment gates.
   - [x] Add Cloud Run database migration automation and remove the duplicate Cloud Run web deploy.
   - [x] Add encrypted multi-account Google linking with connector-specific incremental scopes.
   - [x] Make Calendar discoverable and complete connect, re-consent, sync, and unlink behavior.
   - [x] Add production legal pages, Google data disclosures, and hybrid deployment documentation.
+  - [x] Replace the token-authenticated Vercel CLI job with native Git deployment gated on the
+        migration/API deployment check.
   - [ ] Validate in CI and against staged production with the designated Google test user.
 - **Risks**:
   - Production migrations must run before API code that expects the current calendar schema.
@@ -312,8 +315,8 @@
     conditional mediation, that test passes 10/10 repetitions and the complete serial browser suite
     passes 18/18 locally; the follow-up hosted run remains the canonical full-suite gate.
 - **Blockers**:
-  - Staged production needs current GCP credentials, the Vercel deployment token, and the unpooled
-    database secret before the migration/deploy workflow can run.
+  - Staged production needs current GCP credentials and the unpooled database secret before the
+    migration/deploy workflow can run.
   - Public Google enablement remains gated on OAuth verification/security review and provisioning
     `support@hypertext.studio` as the shared Workspace support group.
 - **Files Changed**:
@@ -321,11 +324,16 @@
   - `packages/{auth,db,env,types}` Google account, scope, encryption, and lifecycle surfaces
   - `apps/api` identity/config responses and `apps/web` Calendar connect/re-consent/navigation UX
   - `apps/web/src/app/(marketing)/{privacy,terms}` and production/operator documentation
+  - Vercel project `docket`: production-only `Backend ready` Deployment Check sourced from the
+    GitHub migration/API job; obsolete Vercel GitHub variables removed
 - **Learnings**: Provider-backed calendar connections need a database-enforced link to the Better Auth
   account lifecycle, and container installs must include the root prepare-script input even when Turbo
   prunes source from the manifest layer. Branch-prefixed E2E hosts need explicit trusted-origin and
   MCP metadata overrides. Workflow-level environment values also need matching package `turbo.json`
-  declarations under strict mode or the launched dev process never receives them.
+  declarations under strict mode or the launched dev process never receives them. Native Vercel Git
+  deployments can preserve backend-first release ordering without a duplicate CLI build: a GitHub
+  Actions Deployment Check holds production alias assignment until migrations and the API rollout
+  succeed.
 
 ### [NOTIF-UX-001] End-user notification UX completion
 

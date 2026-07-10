@@ -34,9 +34,10 @@
   - `SKIP_ENV_VALIDATION=1 pnpm build` passes the API, admin, and web production builds.
   - Fresh PGlite migration succeeds; migration, API, admin, and web Docker images all build.
   - Live Portless web, API health, and OAuth discovery return 200; all seven Google/layered-calendar
-    Playwright journeys pass. The broader suite passes 14/18 on a branch-prefixed host; the three
-    remaining non-calendar failures assert canonical MCP/RP-ID host metadata and require the canonical
-    CI hostname rather than the branch host.
+    Playwright journeys pass. The five hosted E2E regressions exposed by the first pull-request run
+    (MCP session, passkey signal/sign-in, and two visual captures) pass together on an isolated
+    branch-prefixed stack after forwarding the required runtime variables and removing machine-local
+    screenshot paths; the follow-up hosted run remains the canonical full-suite gate.
 - **Blockers**:
   - Staged production needs current GCP credentials, the Vercel deployment token, and the unpooled
     database secret before the migration/deploy workflow can run.
@@ -49,8 +50,9 @@
   - `apps/web/src/app/(marketing)/{privacy,terms}` and production/operator documentation
 - **Learnings**: Provider-backed calendar connections need a database-enforced link to the Better Auth
   account lifecycle, and container installs must include the root prepare-script input even when Turbo
-  prunes source from the manifest layer. Branch-prefixed E2E hosts also need explicit trusted-origin
-  configuration and cannot prove canonical MCP resource or passkey RP-ID metadata.
+  prunes source from the manifest layer. Branch-prefixed E2E hosts need explicit trusted-origin and
+  MCP metadata overrides. Workflow-level environment values also need matching package `turbo.json`
+  declarations under strict mode or the launched dev process never receives them.
 
 ### [NOTIF-UX-001] End-user notification UX completion
 

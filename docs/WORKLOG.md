@@ -308,7 +308,9 @@
     Playwright journeys pass. The five hosted E2E regressions exposed by the first pull-request run
     (MCP session, passkey signal/sign-in, and two visual captures) pass together on an isolated
     branch-prefixed stack after forwarding the required runtime variables and removing machine-local
-    screenshot paths; the follow-up hosted run remains the canonical full-suite gate.
+    screenshot paths. After making the explicit sign-in test deterministic against Chromium's
+    conditional mediation, that test passes 10/10 repetitions and the complete serial browser suite
+    passes 18/18 locally; the follow-up hosted run remains the canonical full-suite gate.
 - **Blockers**:
   - Staged production needs current GCP credentials, the Vercel deployment token, and the unpooled
     database secret before the migration/deploy workflow can run.

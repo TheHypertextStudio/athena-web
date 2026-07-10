@@ -8,6 +8,16 @@ import { apiFetch } from './helpers/net';
 
 test.describe('passkey sign-in', () => {
   test('returns to onboarding with a readable session after passkey sign-in', async ({ page }) => {
+    // This spec covers the explicit button ceremony. Without this override, Chromium's conditional
+    // UI can auto-select the virtual credential and navigate before Playwright reaches the button.
+    await page.addInitScript(() => {
+      if (!('PublicKeyCredential' in window)) return;
+      Object.defineProperty(window.PublicKeyCredential, 'isConditionalMediationAvailable', {
+        configurable: true,
+        value: async () => false,
+      });
+    });
+
     await signUp(page, newUser('SignIn'));
     await signOut(page);
 

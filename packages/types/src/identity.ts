@@ -60,6 +60,11 @@ export const IdentityOut = z
       .describe(
         'The OAuth scopes the user granted when linking this account — the ceiling on what org integrations using this identity can access.',
       ),
+    /** Whether this account must complete OAuth again before it can sync. */
+    reauthorizationRequired: z
+      .boolean()
+      .optional()
+      .describe('True when this linked identity has no usable OAuth token and must reconnect.'),
     /** ISO-8601 timestamp the account was linked. */
     linkedAt: z
       .string()
@@ -80,6 +85,13 @@ export const IdentityListOut = z
       .describe(
         'The external accounts the caller has linked to their Docket identity. Empty when they have linked none.',
       ),
+    googleOAuth: z
+      .object({
+        available: z.boolean(),
+        stage: z.enum(['testing', 'public']),
+      })
+      .optional()
+      .describe('Whether this authenticated user may start Google OAuth in this deployment.'),
   })
   .meta({ id: 'IdentityListOut', description: "The user's linked external identities." });
 /** Identity-list value. */

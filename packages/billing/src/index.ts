@@ -134,9 +134,4 @@ export { InMemoryBillingGateway } from './in-memory';
 export type { InMemoryBillingGatewayOptions } from './in-memory';
 export { RealStripeGateway } from './stripe';
 export type { RealStripeGatewayConfig } from './stripe';
-export {
-  mapStripeEvent,
-  parseApiBase,
-  toStatus,
-  toSubscription,
-} from './stripe-mappers';
+export { mapStripeEvent, parseApiBase, toStatus, toSubscription } from './stripe-mappers';

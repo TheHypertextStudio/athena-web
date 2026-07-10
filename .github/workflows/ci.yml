@@ -94,6 +94,33 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    env:
+      # Production credentials are validated at deployment; CI verifies every build artifact
+      # without exposing production secrets to pull-request runners.
+      SKIP_ENV_VALIDATION: '1'
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.node-version'
+
+      - run: npm install -g corepack@0.35.0 && corepack enable
+
+      - uses: actions/cache@v5
+        with:
+          path: .turbo
+          key: turbo-build-${{ runner.os }}-${{ github.sha }}
+          restore-keys: turbo-build-${{ runner.os }}-
+
+      - run: pnpm install --no-frozen-lockfile
+
+      - run: pnpm turbo run build --cache-dir=.turbo
+
   # Browser e2e against the real dev stack (portless HTTPS + Next dev + Hono API + PGlite),
   # exactly the topology `pnpm dev` gives a developer — including the MCP OAuth flows
   # (register → consent → token → Bearer /mcp), which .env.local enables locally.
@@ -123,7 +150,7 @@ jobs:
       # The self-signed CA is fine: Playwright runs with ignoreHTTPSErrors, and portless
       # injects NODE_EXTRA_CA_CERTS into the apps it launches.
       - name: Start portless proxy
-        run: sudo -E node node_modules/.bin/portless proxy start --port 443 --https --skip-trust &
+        run: sudo -E ./node_modules/.bin/portless proxy start --port 443 --https --skip-trust &
 
       - name: Start dev stack
         run: pnpm dev > /tmp/dev.log 2>&1 &
@@ -132,7 +159,7 @@ jobs:
 
       - name: Wait for the stack
         run: |
-          for i in $(seq 1 120); do
+          for _ in $(seq 1 120); do
             web=$(curl -sk -o /dev/null -w "%{http_code}" https://docket.localhost || true)
             api=$(curl -sk -o /dev/null -w "%{http_code}" https://api.docket.localhost/v1/health || true)
             oidc=$(curl -sk -o /dev/null -w "%{http_code}" https://api.docket.localhost/api/auth/.well-known/oauth-authorization-server || true)
@@ -158,3 +185,13 @@ jobs:
             apps/web/playwright-report/
             apps/web/test-results/
           retention-days: 7
+
+  deploy-production:
+    name: Deploy production
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [quality, test, build, e2e]
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/deploy.yml
+    secrets: inherit

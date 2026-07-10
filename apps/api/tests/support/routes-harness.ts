@@ -146,6 +146,17 @@ export async function seedUserWithHub(
   return u.id;
 }
 
+/** Seed the linked Google account required by provider-backed calendar connections. */
+export async function seedGoogleAccount(
+  db: Db,
+  schema: typeof DbModule,
+  userId: string,
+  accountId: string,
+  scope = 'calendar',
+): Promise<void> {
+  await db.insert(schema.account).values({ userId, providerId: 'google', accountId, scope });
+}
+
 /** Seed a staff operator user for admin-route and announcement tests. */
 export async function seedStaffUser(
   db: Db,

@@ -59,7 +59,6 @@ const CALENDAR_ITEM_KIND_LABEL: Record<CalendarItemKind, string> = {
   availability_block: 'Availability',
 };
 
-
 /** Props for {@link AgendaEntryCard}. */
 export interface AgendaEntryCardProps {
   /** The entry to render. */

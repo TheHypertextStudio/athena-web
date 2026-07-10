@@ -1,6 +1,6 @@
 {
-  "id": "99db9ab1-1e71-46dd-984d-6c8ed25a5852",
-  "prevId": "b6b81f39-77f9-4247-9139-d40f7f245589",
+  "id": "7518027c-22a8-4810-be22-d1191c7e373f",
+  "prevId": "e9d4b3b6-9fc1-4b0b-a702-b55bc4297ac7",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -604,59 +604,6 @@
           "onDelete": "cascade"
         }
       },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.rate_limit": {
-      "name": "rate_limit",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "key": {
-          "name": "key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "count": {
-          "name": "count",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "last_request": {
-          "name": "last_request",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "rate_limit_key_idx": {
-          "name": "rate_limit_key_idx",
-          "columns": [
-            {
-              "expression": "key",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "with": {},
-          "method": "btree",
-          "concurrently": false
-        }
-      },
-      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -1978,30 +1925,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "blob_key": {
-          "name": "blob_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "file_name": {
-          "name": "file_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "mime_type": {
-          "name": "mime_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "byte_size": {
-          "name": "byte_size",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
         "last_email_state_action": {
           "name": "last_email_state_action",
           "type": "text",
@@ -2722,12 +2645,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "rfc822_message_id": {
-          "name": "rfc822_message_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "status": {
           "name": "status",
           "type": "email_suggestion_status",
@@ -2791,27 +2708,6 @@
           "with": {},
           "method": "btree",
           "concurrently": false
-        },
-        "email_suggestion_org_message_id_idx": {
-          "name": "email_suggestion_org_message_id_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "rfc822_message_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "with": {},
-          "method": "btree",
-          "concurrently": false
         }
       },
       "foreignKeys": {
@@ -2841,153 +2737,6 @@
           "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "cascade"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.external_actor": {
-      "name": "external_actor",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "integration_id": {
-          "name": "integration_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "external_id": {
-          "name": "external_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "email": {
-          "name": "email",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "display_name": {
-          "name": "display_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "avatar_url": {
-          "name": "avatar_url",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "actor_id": {
-          "name": "actor_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "matched_by": {
-          "name": "matched_by",
-          "type": "external_actor_match",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "external_actor_org_idx": {
-          "name": "external_actor_org_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "with": {},
-          "method": "btree",
-          "concurrently": false
-        },
-        "external_actor_uq": {
-          "name": "external_actor_uq",
-          "columns": [
-            {
-              "expression": "integration_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "external_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "with": {},
-          "method": "btree",
-          "concurrently": false
-        }
-      },
-      "foreignKeys": {
-        "external_actor_organization_id_organization_id_fk": {
-          "name": "external_actor_organization_id_organization_id_fk",
-          "tableFrom": "external_actor",
-          "columnsFrom": ["organization_id"],
-          "tableTo": "organization",
-          "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
-        },
-        "external_actor_integration_id_integration_id_fk": {
-          "name": "external_actor_integration_id_integration_id_fk",
-          "tableFrom": "external_actor",
-          "columnsFrom": ["integration_id"],
-          "tableTo": "integration",
-          "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
-        },
-        "external_actor_actor_id_actor_id_fk": {
-          "name": "external_actor_actor_id_actor_id_fk",
-          "tableFrom": "external_actor",
-          "columnsFrom": ["actor_id"],
-          "tableTo": "actor",
-          "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "set null"
         }
       },
       "compositePrimaryKeys": {},
@@ -3343,12 +3092,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "last_full_synced_at": {
-          "name": "last_full_synced_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
         "last_error": {
           "name": "last_error",
           "type": "text",
@@ -3373,13 +3116,6 @@
           "primaryKey": false,
           "notNull": false,
           "default": 60
-        },
-        "sync_state": {
-          "name": "sync_state",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'::jsonb"
         }
       },
       "indexes": {
@@ -3453,6 +3189,85 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.integration_credential": {
+      "name": "integration_credential",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "integration_id": {
+          "name": "integration_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ciphertext": {
+          "name": "ciphertext",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "integration_credential_integration_uq": {
+          "name": "integration_credential_integration_uq",
+          "columns": [
+            {
+              "expression": "integration_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "integration_credential_organization_id_organization_id_fk": {
+          "name": "integration_credential_organization_id_organization_id_fk",
+          "tableFrom": "integration_credential",
+          "columnsFrom": ["organization_id"],
+          "tableTo": "organization",
+          "columnsTo": ["id"],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        },
+        "integration_credential_integration_id_integration_id_fk": {
+          "name": "integration_credential_integration_id_integration_id_fk",
+          "tableFrom": "integration_credential",
+          "columnsFrom": ["integration_id"],
+          "tableTo": "integration",
+          "columnsTo": ["id"],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.label": {
       "name": "label",
       "schema": "",
@@ -3499,18 +3314,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
-        },
-        "source_integration_id": {
-          "name": "source_integration_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "external_id": {
-          "name": "external_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {
@@ -3557,28 +3360,6 @@
           "method": "btree",
           "where": "\"label\".\"team_id\" is not null",
           "concurrently": false
-        },
-        "label_source_uq": {
-          "name": "label_source_uq",
-          "columns": [
-            {
-              "expression": "source_integration_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "external_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "with": {},
-          "method": "btree",
-          "where": "\"label\".\"external_id\" is not null",
-          "concurrently": false
         }
       },
       "foreignKeys": {
@@ -3599,15 +3380,6 @@
           "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "cascade"
-        },
-        "label_source_integration_id_integration_id_fk": {
-          "name": "label_source_integration_id_integration_id_fk",
-          "tableFrom": "label",
-          "columnsFrom": ["source_integration_id"],
-          "tableTo": "integration",
-          "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "set null"
         }
       },
       "compositePrimaryKeys": {},
@@ -4024,14 +3796,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "purpose": {
-          "name": "purpose",
-          "type": "sync_run_purpose",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'task_sync'"
-        },
         "processed": {
           "name": "processed",
           "type": "integer",
@@ -4327,38 +4091,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'upcoming'"
-        },
-        "source": {
-          "name": "source",
-          "type": "provenance_source",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'native'"
-        },
-        "source_integration_id": {
-          "name": "source_integration_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "external_id": {
-          "name": "external_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "external_url": {
-          "name": "external_url",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "external_updated_at": {
-          "name": "external_updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {
@@ -4397,28 +4129,6 @@
           "with": {},
           "method": "btree",
           "concurrently": false
-        },
-        "cycle_source_uq": {
-          "name": "cycle_source_uq",
-          "columns": [
-            {
-              "expression": "source_integration_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "external_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "with": {},
-          "method": "btree",
-          "where": "\"cycle\".\"source\" = 'linked'",
-          "concurrently": false
         }
       },
       "foreignKeys": {
@@ -4448,15 +4158,6 @@
           "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "cascade"
-        },
-        "cycle_source_integration_id_integration_id_fk": {
-          "name": "cycle_source_integration_id_integration_id_fk",
-          "tableFrom": "cycle",
-          "columnsFrom": ["source_integration_id"],
-          "tableTo": "integration",
-          "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "set null"
         }
       },
       "compositePrimaryKeys": {},
@@ -4990,38 +4691,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'{}'"
-        },
-        "source": {
-          "name": "source",
-          "type": "provenance_source",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'native'"
-        },
-        "source_integration_id": {
-          "name": "source_integration_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "external_id": {
-          "name": "external_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "external_url": {
-          "name": "external_url",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "external_updated_at": {
-          "name": "external_updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {
@@ -5053,28 +4722,6 @@
           "isUnique": false,
           "with": {},
           "method": "gin",
-          "concurrently": false
-        },
-        "project_source_uq": {
-          "name": "project_source_uq",
-          "columns": [
-            {
-              "expression": "source_integration_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "external_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "with": {},
-          "method": "btree",
-          "where": "\"project\".\"source\" = 'linked'",
           "concurrently": false
         }
       },
@@ -5120,15 +4767,6 @@
           "tableFrom": "project",
           "columnsFrom": ["team_id"],
           "tableTo": "team",
-          "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "set null"
-        },
-        "project_source_integration_id_integration_id_fk": {
-          "name": "project_source_integration_id_integration_id_fk",
-          "tableFrom": "project",
-          "columnsFrom": ["source_integration_id"],
-          "tableTo": "integration",
           "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "set null"
@@ -6007,6 +5645,14 @@
           "primaryKey": false,
           "notNull": true
         },
+        "kind": {
+          "name": "kind",
+          "type": "session_kind",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'job'"
+        },
         "status": {
           "name": "status",
           "type": "session_status",
@@ -6139,6 +5785,64 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.agent_session_transcript": {
+      "name": "agent_session_transcript",
+      "schema": "",
+      "columns": {
+        "session_id": {
+          "name": "session_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "messages": {
+          "name": "messages",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "agent_session_transcript_session_id_agent_session_id_fk": {
+          "name": "agent_session_transcript_session_id_agent_session_id_fk",
+          "tableFrom": "agent_session_transcript",
+          "columnsFrom": ["session_id"],
+          "tableTo": "agent_session",
+          "columnsTo": ["id"],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        },
+        "agent_session_transcript_organization_id_organization_id_fk": {
+          "name": "agent_session_transcript_organization_id_organization_id_fk",
+          "tableFrom": "agent_session_transcript",
+          "columnsFrom": ["organization_id"],
+          "tableTo": "organization",
+          "columnsTo": ["id"],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.session_activity": {
       "name": "session_activity",
       "schema": "",
@@ -6182,6 +5886,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "proposal_group_id": {
+          "name": "proposal_group_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -6202,6 +5912,27 @@
             },
             {
               "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "session_activity_proposal_group_idx": {
+          "name": "session_activity_proposal_group_idx",
+          "columns": [
+            {
+              "expression": "session_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "proposal_group_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -8355,157 +8086,6 @@
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
-    },
-    "public.thread_participation": {
-      "name": "thread_participation",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "provider": {
-          "name": "provider",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "external_workspace_id": {
-          "name": "external_workspace_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "channel_id": {
-          "name": "channel_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "thread_ts": {
-          "name": "thread_ts",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "external_user_id": {
-          "name": "external_user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "last_seen_at": {
-          "name": "last_seen_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "thread_participation_identity_uq": {
-          "name": "thread_participation_identity_uq",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "provider",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "external_workspace_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "channel_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "thread_ts",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "external_user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "with": {},
-          "method": "btree",
-          "concurrently": false
-        },
-        "thread_participation_lookup_idx": {
-          "name": "thread_participation_lookup_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "external_workspace_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "channel_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "thread_ts",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "with": {},
-          "method": "btree",
-          "concurrently": false
-        }
-      },
-      "foreignKeys": {
-        "thread_participation_organization_id_organization_id_fk": {
-          "name": "thread_participation_organization_id_organization_id_fk",
-          "tableFrom": "thread_participation",
-          "columnsFrom": ["organization_id"],
-          "tableTo": "organization",
-          "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
     }
   },
   "enums": {
@@ -8542,7 +8122,7 @@
     "public.attachment_kind": {
       "name": "attachment_kind",
       "schema": "public",
-      "values": ["email", "url", "calendar_event", "file"]
+      "values": ["email", "url", "calendar_event"]
     },
     "public.attachment_subject_type": {
       "name": "attachment_subject_type",
@@ -8632,7 +8212,7 @@
     "public.email_suggestion_status": {
       "name": "email_suggestion_status",
       "schema": "public",
-      "values": ["pending", "accepted", "dismissed", "expired"]
+      "values": ["pending", "accepted", "dismissed"]
     },
     "public.event_kind": {
       "name": "event_kind",
@@ -8655,11 +8235,6 @@
       "name": "event_subscription_status",
       "schema": "public",
       "values": ["active", "expired", "revoked", "error"]
-    },
-    "public.external_actor_match": {
-      "name": "external_actor_match",
-      "schema": "public",
-      "values": ["email", "manual"]
     },
     "public.grant_capability": {
       "name": "grant_capability",
@@ -8728,8 +8303,7 @@
         "invitation",
         "agent_session",
         "connector_sync_failed",
-        "connector_needs_reauth",
-        "automation"
+        "connector_needs_reauth"
       ]
     },
     "public.org_lifecycle_state": {
@@ -8762,6 +8336,11 @@
       "schema": "public",
       "values": ["thought", "action", "response", "elicitation", "error"]
     },
+    "public.session_kind": {
+      "name": "session_kind",
+      "schema": "public",
+      "values": ["chat", "job"]
+    },
     "public.session_status": {
       "name": "session_status",
       "schema": "public",
@@ -8783,16 +8362,7 @@
     "public.source_system": {
       "name": "source_system",
       "schema": "public",
-      "values": [
-        "docket",
-        "linear",
-        "github",
-        "slack",
-        "discord",
-        "google_calendar",
-        "gmail",
-        "outlook"
-      ]
+      "values": ["docket", "linear", "github", "slack", "google_calendar", "gmail"]
     },
     "public.staff_role": {
       "name": "staff_role",
@@ -8813,11 +8383,6 @@
       "name": "sync_mode",
       "schema": "public",
       "values": ["import", "mirror"]
-    },
-    "public.sync_run_purpose": {
-      "name": "sync_run_purpose",
-      "schema": "public",
-      "values": ["task_sync", "email_ingest"]
     },
     "public.sync_run_status": {
       "name": "sync_run_status",

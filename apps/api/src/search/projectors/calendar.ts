@@ -25,6 +25,7 @@ interface CalendarEventRow {
   archivedAt?: Date | null;
 }
 
+/** Projects calendar events into user-private search documents. */
 export const calendarEventSearchProjector = preloadedProjector<CalendarEventRow>(
   'calendar_event',
   (row): SearchDocumentDraft => ({
@@ -58,4 +59,5 @@ export const calendarEventSearchProjector = preloadedProjector<CalendarEventRow>
   }),
 );
 
+/** Search projectors registered for calendar sources. */
 export const calendarSearchProjectors = [calendarEventSearchProjector];

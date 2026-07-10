@@ -14,6 +14,7 @@ import {
   getDb,
   one,
   seedBaseOrg,
+  seedGoogleAccount,
   seedUserWithHub,
 } from '../support/routes-harness';
 
@@ -475,6 +476,7 @@ describe('calendar item <-> task links', () => {
     await addMemberWithCapabilities(schema, base.orgId, userId, ['contribute']);
     const app = appWithSession(calendarRouter, fakeSession(userId));
 
+    await seedGoogleAccount(schema.db, schema, userId, 'acct-1');
     const connection = one(
       await schema.db
         .insert(schema.calendarConnection)

@@ -50,7 +50,9 @@ export function OAuthButtons({
   onError,
 }: OAuthButtonsProps): JSX.Element | null {
   const { data: config } = usePublicConfig();
-  const providers = oauthProviderOptions(config?.oauthProviders ?? []);
+  const providers = oauthProviderOptions(config?.oauthProviders ?? []).filter(
+    (provider) => provider.id !== 'google' || config?.googleOAuthPublic === true,
+  );
   if (providers.length === 0) return null;
 
   /** Begin the OAuth redirect for `provider`, reporting a failure if the call rejects. */

@@ -23,6 +23,8 @@ const COLUMNS: readonly FooterColumn[] = [
     links: [
       { href: '/about', label: 'About' },
       { href: '/#how-it-works', label: 'How it works' },
+      { href: '/privacy', label: 'Privacy' },
+      { href: '/terms', label: 'Terms' },
     ],
   },
 ];

@@ -9,21 +9,23 @@
  * `listAccounts()` exposes only the `sub`). Requires an active session; unauthenticated callers
  * get HTTP 401.
  */
+import { canUseGoogleOAuth } from '@docket/auth';
 import { IdentityListOut } from '@docket/types';
 import { type Context, Hono } from 'hono';
 
 import type { AppEnv } from '../context';
 import { AuthError } from '../error';
+import { env } from '../env';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 
 import { linkedIdentities } from './integration-provider';
 
 /** Require an active session; throw 401 if none. */
-function requireUserId(c: Context<AppEnv>): string {
+function requireUser(c: Context<AppEnv>) {
   const session = c.get('session');
   if (!session?.user.id) throw new AuthError('Authentication required.');
-  return session.user.id;
+  return session.user;
 }
 
 const meIdentities = new Hono<AppEnv>().get(
@@ -37,9 +39,15 @@ const meIdentities = new Hono<AppEnv>().get(
 The display \`email\`/\`name\`/\`picture\` are **decoded server-side from the stored OIDC \`id_token\`** (Better Auth's \`listAccounts()\` exposes only the \`sub\`); they are nullable because the token can lack a claim and non-OIDC providers (GitHub/Linear) supply none, in which case the UI falls back to the provider name. User-scoped to \`session.user.id\`. Session-only, no capability; **401** when unauthenticated. Related: \`/me/connected-apps\` (apps authorized into Docket, the inverse direction).`,
   }),
   async (c) => {
-    const userId = requireUserId(c);
-    const items = await linkedIdentities(userId);
-    return ok(c, IdentityListOut, { items });
+    const currentUser = requireUser(c);
+    const items = await linkedIdentities(currentUser.id);
+    return ok(c, IdentityListOut, {
+      items,
+      googleOAuth: {
+        available: canUseGoogleOAuth(env, currentUser.email),
+        stage: env.GOOGLE_OAUTH_PUBLIC ? 'public' : 'testing',
+      },
+    });
   },
 );
 

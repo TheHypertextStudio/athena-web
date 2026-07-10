@@ -15,6 +15,7 @@ import {
   getDb,
   one,
   seedBaseOrg,
+  seedGoogleAccount,
   seedUserWithHub,
 } from '../support/routes-harness';
 
@@ -62,6 +63,7 @@ async function seedCalendarFixture() {
     timeboxEndsAt: new Date('2026-06-30T16:00:00.000Z'),
   });
 
+  await seedGoogleAccount(schema.db, schema, userId, 'google-sub-1');
   const connection = one(
     await schema.db
       .insert(schema.calendarConnection)

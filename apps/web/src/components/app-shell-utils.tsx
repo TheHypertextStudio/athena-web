@@ -12,6 +12,7 @@ import type { ReactNode } from 'react';
 export function homeKeyFromPath(pathname: string): HomeNavKey | undefined {
   if (/^\/today(?:\/|$)/.test(pathname)) return 'today';
   if (/^\/tasks(?:\/|$)/.test(pathname)) return 'tasks';
+  if (/^\/calendar(?:\/|$)/.test(pathname)) return 'calendar';
   if (/^\/inbox(?:\/|$)/.test(pathname)) return 'inbox';
   if (/^\/stream(?:\/|$)/.test(pathname)) return 'stream';
   if (/^\/portfolio(?:\/|$)/.test(pathname)) return 'portfolio';

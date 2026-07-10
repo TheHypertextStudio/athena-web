@@ -670,6 +670,7 @@ describe('calendar sync engine — provider neutrality (fake adapter)', () => {
   it('drives full sync, incremental sync, and cursor invalidation with zero Google-specific code', async () => {
     const schema = await getDb();
     const userId = await seedUserWithHub(schema.db, schema, 'NeutralUser');
+    await seedGoogleAccount(schema, { userId, accountId: 'fake-account', scope: 'fake.scope' });
     const { module, pullCalls, setPullImpl } = createFakeSyncModule();
 
     // Full run: one created item, cursor 'v1'.
@@ -744,6 +745,7 @@ describe('calendar sync engine — provider neutrality (fake adapter)', () => {
   it('skips a layer whose lease is already held, without calling the adapter', async () => {
     const schema = await getDb();
     const userId = await seedUserWithHub(schema.db, schema, 'NeutralLeaseHeldUser');
+    await seedGoogleAccount(schema, { userId, accountId: 'fake-account', scope: 'fake.scope' });
     const { module, pullCalls, setPullImpl } = createFakeSyncModule();
     setPullImpl(async () => ({ items: [], nextCursor: 'v1', cursorInvalid: false, full: true }));
 
@@ -772,6 +774,7 @@ describe('calendar sync engine — provider neutrality (fake adapter)', () => {
   it('reclaims a stale (expired) lease and syncs normally', async () => {
     const schema = await getDb();
     const userId = await seedUserWithHub(schema.db, schema, 'NeutralStaleLeaseUser');
+    await seedGoogleAccount(schema, { userId, accountId: 'fake-account', scope: 'fake.scope' });
     const { module, pullCalls, setPullImpl } = createFakeSyncModule();
     setPullImpl(async () => ({ items: [], nextCursor: 'v1', cursorInvalid: false, full: true }));
     await syncCalendarConnections(schema.db, { userId, now: NOW, adapters: { google: module } });
@@ -798,6 +801,7 @@ describe('calendar sync engine — provider neutrality (fake adapter)', () => {
   it('releases the lease (and records the error) even when the adapter throws mid-pull', async () => {
     const schema = await getDb();
     const userId = await seedUserWithHub(schema.db, schema, 'NeutralThrowUser');
+    await seedGoogleAccount(schema, { userId, accountId: 'fake-account', scope: 'fake.scope' });
     const { module, setPullImpl } = createFakeSyncModule();
     setPullImpl(async () => {
       throw new Error('provider unavailable');

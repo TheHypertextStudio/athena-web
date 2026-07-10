@@ -1,5 +1,6 @@
 import { and, eq, inArray } from 'drizzle-orm';
 
+/** Input required to enqueue one durable search-index operation. */
 export interface EnqueueSearchIndexJobInput {
   organizationId?: string | null;
   userId?: string | null;

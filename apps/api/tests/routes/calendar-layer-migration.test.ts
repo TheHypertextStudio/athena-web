@@ -1,7 +1,13 @@
 import { eq, sql } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 
-import { getDb, one, seedBaseOrg, seedUserWithHub } from '../support/routes-harness';
+import {
+  getDb,
+  one,
+  seedBaseOrg,
+  seedGoogleAccount,
+  seedUserWithHub,
+} from '../support/routes-harness';
 
 /**
  * The exact backfill INSERT statements appended to `drizzle/0023_conscious_hulk.sql`.
@@ -50,6 +56,7 @@ describe('layered-calendar migration (0016)', () => {
   it('inserts and reads back a calendarConnection + calendarLayer + calendarItem', async () => {
     const schema = await getDb();
     const userId = await seedUserWithHub(schema.db, schema, 'LayerUser');
+    await seedGoogleAccount(schema.db, schema, userId, 'google-sub-layer');
 
     const connection = one(
       await schema.db
@@ -172,6 +179,7 @@ describe('layered-calendar migration (0016)', () => {
   it('backfills calendar_layer/calendar_item from calendar_list/calendar_event, reusing ids, idempotently', async () => {
     const schema = await getDb();
     const userId = await seedUserWithHub(schema.db, schema, 'BackfillUser');
+    await seedGoogleAccount(schema.db, schema, userId, 'google-sub-backfill');
 
     const connection = one(
       await schema.db

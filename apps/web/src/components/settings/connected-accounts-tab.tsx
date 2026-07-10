@@ -44,11 +44,6 @@ export function ConnectedAccountsTab({ orgId }: ConnectedAccountsTabProps): JSX.
   const [error, setError] = useState<string | null>(null);
 
   const { data: config } = usePublicConfig();
-  const configured = useMemo(
-    () => new Set<string>(config?.oauthProviders ?? []),
-    [config?.oauthProviders],
-  );
-
   const identitiesQ = useApiQuery(
     apiQueryOptions(
       queryKeys.identities(),
@@ -60,6 +55,11 @@ export function ConnectedAccountsTab({ orgId }: ConnectedAccountsTabProps): JSX.
   const identities: readonly IdentityOut[] = identitiesQ.data?.items ?? [];
   const loading = identitiesQ.isPending;
   const loadError = identitiesQ.isError ? identitiesQ.error.message : null;
+  const configured = useMemo(() => {
+    const providers = new Set<string>(config?.oauthProviders ?? []);
+    if (identitiesQ.data?.googleOAuth?.available !== true) providers.delete('google');
+    return providers;
+  }, [config?.oauthProviders, identitiesQ.data?.googleOAuth?.available]);
 
   /** The linked accounts grouped by provider, so each provider lists its own. */
   const byProvider = useMemo(() => {

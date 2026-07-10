@@ -1,7 +1,9 @@
 import type { SearchDocumentFamily, SearchDocumentKind, SourceSystemKind } from '@docket/types';
 
+/** Search document families accepted by the search URL. */
 export const SEARCH_FAMILY_VALUES = ['work', 'people', 'content', 'activity'] as const;
 
+/** Search document kinds accepted by the search URL. */
 export const SEARCH_KIND_VALUES = [
   'organization',
   'team',
@@ -23,6 +25,7 @@ export const SEARCH_KIND_VALUES = [
   'activity',
 ] as const satisfies readonly SearchDocumentKind[];
 
+/** Source systems accepted by the search URL. */
 export const SEARCH_SOURCE_VALUES = [
   'docket',
   'linear',

@@ -25,6 +25,7 @@ export { generateAppleClientSecret, type AppleClientSecretInput } from './apple-
 export type { AuthDeps, AuthEnv, PasskeyUserAdapter } from './auth-builder';
 export {
   buildAuthOptions,
+  canUseGoogleOAuth,
   configuredSocialProviders,
   parseTrustedOrigins,
   resolvePasskeyUser,
@@ -39,7 +40,9 @@ export {
  * boundary container, so it builds its own mailer from the same env-driven selection via
  * {@link buildMailer} (SMTP relay in prod / Mailpit locally, capture mock under `local`/`test`).
  */
-function buildAuthMailer(mailEnv: SmtpEnv & { readonly APP_MODE: 'local' | 'test' | 'production' }): Mailer {
+function buildAuthMailer(
+  mailEnv: SmtpEnv & { readonly APP_MODE: 'local' | 'test' | 'production' },
+): Mailer {
   if (mailEnv.APP_MODE === 'local' || mailEnv.APP_MODE === 'test') return new CaptureMailer();
   if (!isRealValue(mailEnv.SMTP_HOST) || !isRealValue(mailEnv.MAIL_FROM)) {
     throw new Error('Missing required production mail config: SMTP_HOST and MAIL_FROM');

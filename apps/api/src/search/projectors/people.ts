@@ -59,6 +59,7 @@ function peopleDocument(
   };
 }
 
+/** Projects organizations into searchable people documents. */
 export const organizationSearchProjector = preloadedProjector<OrganizationRow>(
   'organization',
   (row) => ({
@@ -72,6 +73,7 @@ export const organizationSearchProjector = preloadedProjector<OrganizationRow>(
   }),
 );
 
+/** Projects teams into searchable people documents. */
 export const teamSearchProjector = preloadedProjector<
   OrgScopedRow & { name: string; key: string; description?: string | null }
 >('team', (row) => ({
@@ -83,6 +85,7 @@ export const teamSearchProjector = preloadedProjector<
   sourceTable: 'team',
 }));
 
+/** Projects human organization members into searchable people documents. */
 export const memberSearchProjector = preloadedProjector<
   OrgScopedRow & {
     kind: string;
@@ -103,6 +106,7 @@ export const memberSearchProjector = preloadedProjector<
   };
 });
 
+/** Projects agents into searchable people documents. */
 export const agentSearchProjector = preloadedProjector<
   OrgScopedRow & {
     actorId: string;
@@ -123,6 +127,7 @@ export const agentSearchProjector = preloadedProjector<
   sourceTable: 'agent',
 }));
 
+/** Projects agent sessions into searchable people documents. */
 export const agentSessionSearchProjector = preloadedProjector<{
   id: string;
   organizationId: string;
@@ -150,6 +155,7 @@ export const agentSessionSearchProjector = preloadedProjector<{
   subjectId: row.taskId ?? row.agentId,
 }));
 
+/** Search projectors registered for people sources. */
 export const peopleSearchProjectors = [
   organizationSearchProjector,
   teamSearchProjector,

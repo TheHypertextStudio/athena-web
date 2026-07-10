@@ -54,6 +54,11 @@ export const PublicConfigOut = z
         'The social providers a user can sign in with / link an identity from, derived from real server credentials: a provider appears here iff its OAuth client id + secret are configured. The sign-in page renders exactly these buttons. One of `google` | `github` | `linear` | `discord` | `apple` (apple is sign-in only, not a linkable identity).',
       )
       .meta({ example: ['google', 'github'] }),
+    /** Whether Google sign-in/linking is open beyond the production test-user allowlist. */
+    googleOAuthPublic: z
+      .boolean()
+      .optional()
+      .describe('False while Google OAuth is staged for designated test users only.'),
     /** The connector keys unlocked by the configured providers (e.g. `gtasks`, `github`). */
     connectors: z
       .array(z.string())

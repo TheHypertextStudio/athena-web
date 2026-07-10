@@ -1,16 +1,20 @@
-# Deployment — GCP Cloud Run
+# Deployment — Vercel + GCP Cloud Run
 
-Docket deploys three services to GCP Cloud Run (scale-to-zero) backed by Neon Postgres. GitHub Actions builds and pushes Docker images to Artifact Registry and deploys via the Cloud Run API, authenticated using Workload Identity Federation (no static service-account keys in CI).
+Docket uses a gated hybrid production topology backed by Neon Postgres. The product web app deploys
+to Vercel; the API, admin app, database migration job, and scheduled/background work deploy to GCP
+Cloud Run. GitHub Actions authenticates to GCP with Workload Identity Federation and deploys only
+after formatting, lint, types, tests, build, and browser E2E are green.
 
 ---
 
 ## Architecture
 
-| Service        | Domain                          | Image                                         | Notes                                                   |
-| -------------- | ------------------------------- | --------------------------------------------- | ------------------------------------------------------- |
-| `docket-api`   | `docket-api.hypertext.studio`   | `apps/api` — `pnpm deploy --prod` + `tsx/esm` | Hono Node.js; reads secrets from Secret Manager at boot |
-| `docket-web`   | `docket.hypertext.studio`       | `apps/web` — Next.js standalone               | Marketing site + app; `API_URL` baked in at build time  |
-| `docket-admin` | `docket-admin.hypertext.studio` | `apps/admin` — Next.js standalone             | `API_URL` baked in at build time                        |
+| Service             | Domain                          | Platform  | Notes                                                   |
+| ------------------- | ------------------------------- | --------- | ------------------------------------------------------- |
+| `docket` web        | `docket.hypertext.studio`       | Vercel    | Next.js product + marketing; same-origin API/auth proxy |
+| `docket-api`        | `docket-api.hypertext.studio`   | Cloud Run | Hono API, Better Auth, MCP, webhooks, cron endpoints    |
+| `docket-admin`      | `docket-admin.hypertext.studio` | Cloud Run | Next.js operator back office                            |
+| `docket-db-migrate` | none                            | Cloud Run | One-shot job; migrations over the unpooled Neon URL     |
 
 **Passkey RP ID:** `hypertext.studio` — the shared registrable suffix across the production web and admin hosts.
 
@@ -54,53 +58,34 @@ The bootstrap script checks for these and exits if any are missing or unauthenti
 
 ---
 
-## First deploy
+## Production bootstrap and rollout
 
-After bootstrap, push to `main`:
+1. Authenticate locally with `gcloud auth login`; every command must pass
+   `--project=athena-services --region=us-central1` rather than changing the global project.
+2. Create `docket-database-url-unpooled` in Secret Manager and grant the Cloud Run runtime identity
+   access. The deploy workflow runs `docket-db-migrate` and waits before deploying API code.
+3. Set the GitHub variables `API_URL`, `WEB_URL`, `ADMIN_URL`, `PASSKEY_RP_ID`,
+   `BETTER_AUTH_ALLOWED_HOSTS`, `GOOGLE_OAUTH_PUBLIC`, `GOOGLE_OAUTH_TEST_EMAILS`,
+   `VERCEL_ORG_ID`, and `VERCEL_PROJECT_ID`. Set the `VERCEL_TOKEN` GitHub secret.
+4. Keep `GOOGLE_OAUTH_PUBLIC=false` and set
+   `GOOGLE_OAUTH_TEST_EMAILS=willieechalmers@gmail.com` while Google verification is pending.
+5. Disable Vercel's ungated automatic production promotion for `main`; the gated GitHub workflow
+   runs `vercel build --prod` and `vercel deploy --prebuilt --prod` after CI succeeds.
+6. Push the validated commit to `main`. CI calls the reusable deploy workflow, which migrates,
+   deploys API, refreshes Scheduler jobs, then deploys admin and web.
 
-```bash
-git push origin main
-```
+DNS is managed in Cloudflare:
 
-**Expected outcome on the first push:**
+| Name           | Type         | Target                                     | Proxy            |
+| -------------- | ------------ | ------------------------------------------ | ---------------- |
+| `docket`       | Vercel value | Value shown by Vercel domain configuration | DNS only         |
+| `docket-api`   | CNAME        | `docket-api-<hash>-<region>.a.run.app`     | Proxied (orange) |
+| `docket-admin` | CNAME        | `docket-admin-<hash>-<region>.a.run.app`   | Proxied (orange) |
 
-- `docket-api` deploys successfully.
-- `docket-web` and `docket-admin` fail — `API_URL` is not yet set in GitHub variables (the Cloud Run URL wasn't known at bootstrap time).
-
-**After the API is live, get its URL and set the variables:**
-
-DNS is managed via **Cloudflare**. Add three CNAME records in the Cloudflare dashboard for the `hypertext.studio` zone, each pointing at the corresponding Cloud Run service URL:
-
-| Name           | Type  | Target                                   | Proxy            |
-| -------------- | ----- | ---------------------------------------- | ---------------- |
-| `docket-api`   | CNAME | `docket-api-<hash>-<region>.a.run.app`   | Proxied (orange) |
-| `docket`       | CNAME | `docket-web-<hash>-<region>.a.run.app`   | Proxied (orange) |
-| `docket-admin` | CNAME | `docket-admin-<hash>-<region>.a.run.app` | Proxied (orange) |
-
-**Required Cloudflare SSL/TLS setting:** set the zone's SSL/TLS mode to **Full** (not Full Strict). Cloudflare terminates TLS for your custom domains; the connection from Cloudflare to Cloud Run uses the `*.run.app` certificate, which is valid but not for your domain. Full Strict would reject it.
-
-No `gcloud run domain-mappings` commands needed — Cloudflare proxies requests to the raw Cloud Run URLs.
-
-Get the raw `.run.app` URLs after first deploy:
-
-```bash
-gcloud run services describe docket-api   --region=<REGION> --project=<PROJECT_ID> --format='value(status.url)'
-gcloud run services describe docket-web   --region=<REGION> --project=<PROJECT_ID> --format='value(status.url)'
-gcloud run services describe docket-admin --region=<REGION> --project=<PROJECT_ID> --format='value(status.url)'
-```
-
-Once DNS propagates, set the GitHub variables to the custom domains (not the `.run.app` URLs):
-
-```bash
-gh variable set API_URL    --body "https://docket-api.hypertext.studio"    --repo <owner/repo>
-gh variable set WEB_URL    --body "https://docket.hypertext.studio"        --repo <owner/repo>
-gh variable set ADMIN_URL  --body "https://docket-admin.hypertext.studio"  --repo <owner/repo>
-gh variable set PASSKEY_RP_ID --body "hypertext.studio"                    --repo <owner/repo>
-
-# Push again — all three services now deploy successfully with the real URLs baked in
-git commit --allow-empty -m "chore: trigger redeploy after URL vars set"
-git push
-```
+Vercel ownership also requires TXT
+`_vercel.hypertext.studio=vc-domain-verify=docket.hypertext.studio,fad2a1c1b1d7e78d9a71`.
+Cloudflare SSL/TLS remains **Full** for the proxied Cloud Run origins. No Cloud Run domain mapping is
+required.
 
 ---
 
@@ -110,23 +95,29 @@ git push
 
 Set by `pnpm bootstrap`. Add missing ones with `gh variable set NAME --body "VALUE" --repo owner/repo`.
 
-| Variable              | Set by               | Description                                                                                                              |
-| --------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `GCP_PROJECT_ID`      | bootstrap            | GCP project ID (e.g. `my-project-123`)                                                                                   |
-| `GCP_REGION`          | bootstrap            | Deployment region (e.g. `us-central1`)                                                                                   |
-| `GCP_SERVICE_ACCOUNT` | bootstrap            | Full SA email: `docket-deploy@<project>.iam.gserviceaccount.com`                                                         |
-| `GCP_WIF_PROVIDER`    | bootstrap            | Full WIF provider resource name: `projects/<num>/locations/global/workloadIdentityPools/github/providers/github-actions` |
-| `PASSKEY_RP_ID`       | bootstrap/manual     | WebAuthn relying-party domain. Use `hypertext.studio` for the production `*.hypertext.studio` hosts.                     |
-| `NEON_PROJECT_ID`     | bootstrap            | Neon project ID (from Neon console)                                                                                      |
-| `API_URL`             | manual (post-deploy) | Public custom-domain origin of `docket-api`                                                                              |
-| `WEB_URL`             | manual (post-deploy) | Public custom-domain origin of `docket-web`                                                                              |
-| `ADMIN_URL`           | manual (post-deploy) | Public custom-domain origin of `docket-admin`                                                                            |
+| Variable                    | Set by               | Description                                                                                                              |
+| --------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `GCP_PROJECT_ID`            | bootstrap            | GCP project ID (e.g. `my-project-123`)                                                                                   |
+| `GCP_REGION`                | bootstrap            | Deployment region (e.g. `us-central1`)                                                                                   |
+| `GCP_SERVICE_ACCOUNT`       | bootstrap            | Full SA email: `docket-deploy@<project>.iam.gserviceaccount.com`                                                         |
+| `GCP_WIF_PROVIDER`          | bootstrap            | Full WIF provider resource name: `projects/<num>/locations/global/workloadIdentityPools/github/providers/github-actions` |
+| `PASSKEY_RP_ID`             | bootstrap/manual     | WebAuthn relying-party domain. Use `hypertext.studio` for the production `*.hypertext.studio` hosts.                     |
+| `NEON_PROJECT_ID`           | bootstrap            | Neon project ID (from Neon console)                                                                                      |
+| `API_URL`                   | manual (post-deploy) | Public custom-domain origin of `docket-api`                                                                              |
+| `WEB_URL`                   | manual (post-deploy) | Public custom-domain origin of the Vercel web app                                                                        |
+| `ADMIN_URL`                 | manual (post-deploy) | Public custom-domain origin of `docket-admin`                                                                            |
+| `BETTER_AUTH_ALLOWED_HOSTS` | manual               | `docket.hypertext.studio,docket-api.hypertext.studio,docket-admin.hypertext.studio`                                      |
+| `GOOGLE_OAUTH_PUBLIC`       | manual               | `false` during review; `true` only after Google approval                                                                 |
+| `GOOGLE_OAUTH_TEST_EMAILS`  | manual               | Staged Docket user allowlist, initially `willieechalmers@gmail.com`                                                      |
+| `VERCEL_ORG_ID`             | Vercel               | Owning Vercel account/team id                                                                                            |
+| `VERCEL_PROJECT_ID`         | Vercel               | The linked `docket` web project id                                                                                       |
 
 ### Secrets (`secrets.*`)
 
 | Secret         | Set by    | Description                                                                   |
 | -------------- | --------- | ----------------------------------------------------------------------------- |
 | `NEON_API_KEY` | bootstrap | Neon API key — used by `neon-branch.yml` to create/delete PR preview branches |
+| `VERCEL_TOKEN` | manual    | Non-interactive Vercel production deployment token                            |
 
 ---
 
@@ -134,19 +125,20 @@ Set by `pnpm bootstrap`. Add missing ones with `gh variable set NAME --body "VAL
 
 Everything created by `pnpm bootstrap`:
 
-| Resource                     | Name / Path                                                                                                                  |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Service account              | `docket-deploy@<project>.iam.gserviceaccount.com`                                                                            |
-| SA roles                     | `roles/run.developer`, `roles/artifactregistry.writer`, `roles/secretmanager.secretAccessor`, `roles/iam.serviceAccountUser` |
-| Artifact Registry            | `<region>-docker.pkg.dev/<project>/docket`                                                                                   |
-| WIF pool                     | `projects/<project>/locations/global/workloadIdentityPools/github`                                                           |
-| WIF provider                 | `…/providers/github-actions` (OIDC, scoped to your GitHub repo)                                                              |
-| Secret Manager: database URL | `docket-database-url`                                                                                                        |
-| Secret Manager: auth secret  | `docket-auth-secret` (generated by bootstrap)                                                                                |
-| Secret Manager: cron secret  | `docket-cron-secret` (generated by bootstrap)                                                                                |
-| Cloud Run: API               | `docket-api`                                                                                                                 |
-| Cloud Run: web               | `docket-web`                                                                                                                 |
-| Cloud Run: admin             | `docket-admin`                                                                                                               |
+| Resource                      | Name / Path                                                                                                                  |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Service account               | `docket-deploy@<project>.iam.gserviceaccount.com`                                                                            |
+| SA roles                      | `roles/run.developer`, `roles/artifactregistry.writer`, `roles/secretmanager.secretAccessor`, `roles/iam.serviceAccountUser` |
+| Artifact Registry             | `<region>-docker.pkg.dev/<project>/docket`                                                                                   |
+| WIF pool                      | `projects/<project>/locations/global/workloadIdentityPools/github`                                                           |
+| WIF provider                  | `…/providers/github-actions` (OIDC, scoped to your GitHub repo)                                                              |
+| Secret Manager: database URL  | `docket-database-url`                                                                                                        |
+| Secret Manager: migration URL | `docket-database-url-unpooled`                                                                                               |
+| Secret Manager: auth secret   | `docket-auth-secret` (generated by bootstrap)                                                                                |
+| Secret Manager: cron secret   | `docket-cron-secret` (generated by bootstrap)                                                                                |
+| Cloud Run: API                | `docket-api`                                                                                                                 |
+| Cloud Run: migration job      | `docket-db-migrate`                                                                                                          |
+| Cloud Run: admin              | `docket-admin`                                                                                                               |
 
 ---
 
@@ -164,9 +156,12 @@ Runtime env vars are split between Secret Manager (sensitive) and Cloud Run env 
 | `docket-auth-secret`  | `BETTER_AUTH_SECRET` |
 | `docket-cron-secret`  | `CRON_SECRET`        |
 
+The migration job separately mounts `docket-database-url-unpooled` as
+`DATABASE_URL_UNPOOLED`; the pooled application URL must not be used for schema migrations.
+
 **From Cloud Run env vars** (set at deploy time from GitHub `vars.*`):
 
-`NODE_ENV`, `APP_MODE`, `API_URL`, `WEB_URL`, `BETTER_AUTH_URL`, `BETTER_AUTH_TRUSTED_ORIGINS`, `BETTER_AUTH_ALLOWED_HOSTS` (optional — host allowlist that switches Better Auth to a dynamic per-request base URL for previews/multi-domain; unset ⇒ static `BETTER_AUTH_URL`), `BETTER_AUTH_PASSKEY_RP_ID`, `BETTER_AUTH_PASSKEY_RP_NAME`, `BILLING_ENABLED`, `MCP_ALLOWED_ORIGINS` (a security allowlist — browser Origins allowed to hit `/mcp`, set explicitly per environment; never derived), `MCP_TASKS_ENABLED`, `MCP_CIMD_STRICT`.
+`NODE_ENV`, `APP_MODE`, `API_URL`, `WEB_URL`, `BETTER_AUTH_URL`, `BETTER_AUTH_TRUSTED_ORIGINS`, `BETTER_AUTH_ALLOWED_HOSTS`, `BETTER_AUTH_PASSKEY_RP_ID`, `BETTER_AUTH_PASSKEY_RP_NAME`, `GOOGLE_CALENDAR_WEBHOOK_URL`, `GOOGLE_OAUTH_PUBLIC`, `GOOGLE_OAUTH_TEST_EMAILS`, `BILLING_ENABLED`, `MCP_ALLOWED_ORIGINS`, `MCP_TASKS_ENABLED`, `MCP_CIMD_STRICT`.
 The MCP OAuth authorization server is **on by default in every deploy** — it needs no MCP-specific vars. `MCP_ISSUER_URL`, `MCP_RESOURCE_URL`, and `OIDC_LOGIN_PAGE_URL` derive mechanically from `API_URL`/`WEB_URL` (`packages/env/src/api.ts`); set one only to override its derivation (e.g. a non-standard sign-in route).
 
 ### Notification delivery providers
@@ -206,9 +201,11 @@ Quiet hours and user category/channel preferences are enforced before external s
 is always the canonical in-product record; email/SMS/push are sibling delivery rows whose status is
 visible to the staff notification monitor and compactly hinted in the user's inbox row.
 
-### Next.js services (web, admin)
+### Next.js services (Vercel web, Cloud Run admin)
 
-`NEXT_PUBLIC_*` vars are **baked into the bundle at build time** via Docker `--build-arg`. They cannot be changed without rebuilding the image. Non-public runtime vars (e.g. `NODE_ENV`) are set as Cloud Run env vars and take effect without a rebuild.
+`NEXT_PUBLIC_*` vars are **baked into each bundle at build time**. Vercel supplies the web values
+from its production environment; the admin image receives them as Docker build arguments. They
+cannot be changed without rebuilding.
 
 ---
 
@@ -223,12 +220,30 @@ The branch database URL is available as a workflow output (`db_url`, `db_url_wit
 
 ---
 
+## Production migrations
+
+The reusable deployment workflow builds `packages/db/Dockerfile`, deploys the immutable image as
+the `docket-db-migrate` Cloud Run Job, and executes it with `--wait`. An unsuccessful migration
+blocks API, admin, and web promotion. Migrations must be additive and must first pass against a
+fresh PGlite database plus a disposable Neon branch. Never roll production schema backward during
+an application rollback; route traffic to the prior compatible revision instead.
+
+Before migration, inspect for duplicate `(user_id, provider_id, account_id)` account rows. Migration
+`0029` intentionally stops on duplicates rather than deleting credentials ambiguously.
+
 ## Operations
 
 ### Viewing logs
 
 ```bash
 gcloud run services logs read docket-api --region=<REGION> --project=<PROJECT_ID> --limit=50
+```
+
+Migration executions and Scheduler state:
+
+```bash
+gcloud run jobs executions list --job=docket-db-migrate --region=<REGION> --project=<PROJECT_ID>
+gcloud scheduler jobs describe docket-sync-calendars --location=<REGION> --project=<PROJECT_ID>
 ```
 
 ### Forcing a redeploy without a code change
@@ -265,13 +280,14 @@ their Secret Manager secrets exist (seeded with `placeholder`) and the `deploy-a
 block injects them as `:latest`. So the deploy is green today with connectors honestly dormant.
 
 **To activate a provider**, register an OAuth app, then replace its placeholder secret value(s)
-and redeploy. The Better Auth callback URL for each is `${API_URL}/api/auth/callback/<provider>`:
+and redeploy. Browser linking uses the product origin so Better Auth's session cookie remains
+first-party through the Vercel rewrite:
 
 | Provider | Register at                                                  | Callback URL                                                   | Secrets to set                                           |
 | -------- | ------------------------------------------------------------ | -------------------------------------------------------------- | -------------------------------------------------------- |
 | GitHub   | GitHub → Settings → Developer settings → OAuth Apps          | `https://docket-api.hypertext.studio/api/auth/callback/github` | `docket-github-client-id`, `docket-github-client-secret` |
 | Linear   | Linear → Settings → API → OAuth applications                 | `https://docket-api.hypertext.studio/api/auth/callback/linear` | `docket-linear-client-id`, `docket-linear-client-secret` |
-| Google   | Google Cloud Console → APIs & Services → Credentials → OAuth | `https://docket-api.hypertext.studio/api/auth/callback/google` | `docket-google-client-id`, `docket-google-client-secret` |
+| Google   | Google Cloud Console → APIs & Services → Credentials → OAuth | `https://docket.hypertext.studio/api/auth/callback/google`     | `docket-google-client-id`, `docket-google-client-secret` |
 
 ```bash
 # Add the real value as a new secret version (repeat per secret), then redeploy:
@@ -282,10 +298,20 @@ printf '%s' '<the-client-secret>' | gcloud secrets versions add docket-github-cl
 gcloud run services update docket-api --region=us-central1 --project=athena-services
 ```
 
-> Google needs its OAuth consent screen configured with the calendar/tasks/drive/gmail readonly
-> scopes (see `buildAuthOptions`); Linear's app must grant the `read` scope or every connector
-> call 400s. Existing users who linked before a scope change must re-consent — they surface as
-> `error` / needs-reauth, never a silent skip.
+Google sign-in requests only `openid email profile`. Connector actions add scopes incrementally:
+
+| Connector | Scopes                                              |
+| --------- | --------------------------------------------------- |
+| Calendar  | `calendar.calendarlist.readonly`, `calendar.events` |
+| Tasks     | `tasks`                                             |
+| Drive     | `drive.readonly`                                    |
+| Gmail     | `gmail.modify`                                      |
+
+Keep the external consent screen in **Testing**, list `willieechalmers@gmail.com` as a test user,
+and keep `GOOGLE_OAUTH_PUBLIC=false` until brand, sensitive-scope, restricted-scope, and required
+security-assessment reviews are approved. The public home, privacy, and terms URLs must be entered
+in Google Cloud. Existing plaintext Google bearer tokens are invalidated by migration `0029` and
+surface as needs-reauth; the next consent stores encrypted tokens.
 
 ### Slack (signal integration — not a Better Auth provider)
 

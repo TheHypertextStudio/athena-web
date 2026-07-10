@@ -246,6 +246,55 @@ describe('auth config', () => {
     }
   });
 
+  it('marks account-funded integrations for reconnection after unlink', async () => {
+    const { auth } = await import('../src/index');
+    const { account, actor, db, integration, organization, user } = await import('@docket/db');
+    const { eq } = await import('drizzle-orm');
+
+    const suffix = Math.random().toString(36).slice(2);
+    const [owner] = await db
+      .insert(user)
+      .values({ name: 'Owner', email: `owner-${suffix}@example.com` })
+      .returning();
+    const [org] = await db
+      .insert(organization)
+      .values({ name: 'Hook Org', slug: `hook-${suffix}` })
+      .returning();
+    const [ownerActor] = await db
+      .insert(actor)
+      .values({
+        organizationId: org!.id,
+        userId: owner!.id,
+        kind: 'human',
+        displayName: 'Owner',
+      })
+      .returning();
+    const [linkedAccount] = await db
+      .insert(account)
+      .values({ userId: owner!.id, providerId: 'google', accountId: `google-${suffix}` })
+      .returning();
+    const [connected] = await db
+      .insert(integration)
+      .values({
+        organizationId: org!.id,
+        createdBy: ownerActor!.id,
+        provider: 'gtasks',
+        pattern: 'connector',
+        roles: ['work'],
+        externalAccountId: linkedAccount!.accountId,
+        status: 'connected',
+        syncMode: 'mirror',
+      })
+      .returning();
+
+    await db.delete(account).where(eq(account.id, linkedAccount!.id));
+    await auth.options.databaseHooks?.account?.delete?.after?.(linkedAccount!, null);
+
+    const [updated] = await db.select().from(integration).where(eq(integration.id, connected!.id));
+    expect(updated?.status).toBe('error');
+    expect(updated?.lastError).toContain('linked account was removed');
+  });
+
   it('getRecoveryCodeStatus: null when no codes, count + generatedAt when present', async () => {
     // Validates the recovery-code status path end-to-end — including the load-bearing assumption
     // that the encryption key is `BETTER_AUTH_SECRET` — by storing codes exactly as the twoFactor
@@ -719,16 +768,7 @@ describe('buildAuthOptions env-gating', () => {
     expect(opts.socialProviders?.google).toEqual({
       clientId: 'goog-id',
       clientSecret: 'goog-secret',
-      // Read-WRITE `tasks` (two-way sync), plus offline access + account chooser for multi-account.
-      scope: [
-        'openid',
-        'email',
-        'profile',
-        'https://www.googleapis.com/auth/calendar.readonly',
-        'https://www.googleapis.com/auth/tasks',
-        'https://www.googleapis.com/auth/drive.readonly',
-        'https://mail.google.com/',
-      ],
+      scope: ['openid', 'email', 'profile'],
       accessType: 'offline',
       prompt: 'select_account consent',
     });
@@ -745,12 +785,28 @@ describe('buildAuthOptions env-gating', () => {
       scope: ['read'],
     });
     expect(opts.account?.accountLinking?.enabled).toBe(true);
+    expect(opts.account?.accountLinking?.allowDifferentEmails).toBe(true);
+    expect(opts.account?.encryptOAuthTokens).toBe(true);
     // Passwordless: `email-password` is NOT a trusted linking provider — only social ones.
     expect((opts.account?.accountLinking?.trustedProviders as string[]).sort()).toEqual([
       'github',
       'google',
       'linear',
     ]);
+  });
+
+  it('limits production Google OAuth to public launch or an allowlisted test user', async () => {
+    const { canUseGoogleOAuth } = await import('../src/index');
+    const staged = {
+      ...baseEnv,
+      APP_MODE: 'production' as const,
+      GOOGLE_OAUTH_PUBLIC: false,
+      GOOGLE_OAUTH_TEST_EMAILS: 'willieechalmers@gmail.com, second@example.com',
+    };
+    expect(canUseGoogleOAuth(staged, 'WillieEChalmers@gmail.com')).toBe(true);
+    expect(canUseGoogleOAuth(staged, 'public@example.com')).toBe(false);
+    expect(canUseGoogleOAuth({ ...staged, GOOGLE_OAUTH_PUBLIC: true }, null)).toBe(true);
+    expect(canUseGoogleOAuth({ ...staged, APP_MODE: 'local' }, null)).toBe(true);
   });
 
   it('mounts Discord with the identify scope as a trusted linking provider when its pair is real', async () => {

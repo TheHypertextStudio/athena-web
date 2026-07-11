@@ -2,7 +2,13 @@
 
 **Spec area:** `env-and-bootstrap` · **Status:** implementation-grade · **Verified against current docs 2026-06-05** (t3-oss/env, Neon CLI `neonctl`, Vercel CLI, Stripe CLI, Better Auth 1.6.14, Linear OAuth).
 
-> **Note on §3 (bootstrap flow):** This spec was written targeting Vercel as the deployment platform. The production deployment now uses **GCP Cloud Run** — see [`docs/engineering/deployment.md`](../deployment.md) for the actual deployment reference, GitHub Actions variables, GCP resource inventory, and first-deploy walkthrough. Sections §0–§2 (env-var contract and `@docket/env` package design) remain accurate. Section §3 reflects the intended full provisioning flow; steps §3.8–§3.9 (Vercel CLI env writes, `vercel link`) do not apply to the current implementation.
+> **Note on §3 (bootstrap flow):** Production currently uses **Vercel for the public web app** and
+> **GCP Cloud Run for the API/admin services** — see
+> [`docs/engineering/deployment.md`](../deployment.md) for the live deployment reference, GitHub
+> Actions variables, GCP resource inventory, and first-deploy walkthrough. Sections §0–§2
+> (env-var contract and `@docket/env` package design) remain accurate. Section §3 reflects the
+> intended full provisioning flow; Vercel writes apply to the web project, while server-only
+> provider values are stored in GCP Secret Manager and mounted into the API revision.
 
 This spec defines (1) the complete environment-variable contract for every app/package, (2) the `@docket/env` validation package design (t3-oss/env `extends` composition), and (3) the `pnpm bootstrap` interactive provisioning flow that makes the service "just work" from env vars in both dev and prod, where **dev mirrors prod** (same env contract, same validation, only values differ).
 

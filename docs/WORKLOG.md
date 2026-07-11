@@ -7,6 +7,53 @@
 
 ## Active Tasks
 
+### [AUTH-PROD-001] Restore production account creation and verification email
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-07-10
+- **Priority**: P0
+- **Description**: Restore the real `docket.hypertext.studio` passwordless signup journey. Repair
+  the stale Vercel rewrite, deploy the current API with its signup/passkey endpoints, configure
+  Resend SMTP through Secret Manager, and stop the UI from claiming an email was sent when the
+  request failed.
+- **Plan**:
+  1. Make request-code failures explicit and keep the user on the email step unless the API accepts
+     the request.
+  2. Reject recursive production proxy origins and add regression coverage.
+  3. Wire Resend SMTP secrets, database migrations, and auth-route verification into deployment.
+  4. Reuse the verified `service.hypertext.studio` Resend domain, provision secrets, deploy local
+     `main`, and prove the full production signup/passkey/onboarding journey.
+- **Confirmed Root Causes**:
+  - Vercel returns `508 INFINITE_LOOP_DETECTED` for every same-origin auth route because its latest
+    deployment predates the corrected production `API_URL`.
+  - The signup client treats every request-code response except 429 as success, so it displays a
+    false email-sent state after that 508.
+  - Cloud Run still serves API commit `73ee4a78` from 2026-06-16, before signup challenge/passkey
+    routes landed; later deploys fail because Node 26 no longer bundles Corepack.
+  - Production has no SMTP secrets or Cloud Run mounts, while the current auth package requires a
+    real mailer at startup.
+- **Risks**:
+  - Keep provider keys out of argv, logs, Git, and local tracked files.
+  - Preserve Google Workspace root-domain MX/SPF records; keep Resend isolated on its existing
+    verified sending subdomain.
+  - Apply pending migrations before shifting API traffic and retain the prior ready revision if a
+    candidate fails.
+- **Implementation Progress**:
+  - Signup remains on the email step for 429, 5xx/508, and network failures; only an accepted
+    request advances to code verification.
+  - Web production builds reject a recursive `API_URL`/`NEXT_PUBLIC_APP_URL` origin pair.
+  - The API deploy now applies migrations from the built image, mounts the five-value Resend SMTP
+    contract, and probes health/session/signup routes after Cloud Run reports ready.
+  - Reused Resend's verified `service.hypertext.studio` domain, created a domain-restricted sending
+    key, and stored it plus the non-sensitive SMTP contract in `athena-services` Secret Manager.
+- **Validation Progress**:
+  - Repository typecheck 17/17, lint 17/17, tests 17/17 (web 301/301; API 1,196/1,196), tooling
+    10/10, production build 3/3, and actionlint all passed.
+  - Live SMTP smoke `5c372209-d09c-4fa4-bbd4-e3846536426a` was accepted and reached Resend's
+    `delivered` state for `willie@hypertext.studio`.
+  - Local Docker base-stage checks could not start because the Docker Desktop socket did not
+    respond; GitHub's Docker runner remains the production proof for the corrected Corepack layer.
+
 ### [BOOTSTRAP-LINEAR-001] Minimal-manual production provider bootstrap
 
 - **Status**: DONE

@@ -80,6 +80,36 @@ describe('SignUpPage', () => {
     expect(signInPasskey).toHaveBeenCalledTimes(1);
   });
 
+  it('does not claim an email was sent when the request-code endpoint fails', async () => {
+    authFetch.mockResolvedValue({ error: { status: 508, message: 'Infinite loop detected' } });
+
+    render(<SignUpPage />);
+    submitEmailStep();
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert').textContent).toBe(
+        'We could not send your verification code. Please try again in a few moments.',
+      );
+    });
+    expect(screen.queryByLabelText('Verification code')).toBeNull();
+    expect(addPasskey).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it('keeps the user on the email step when request-code is rate-limited', async () => {
+    authFetch.mockResolvedValue({ error: { status: 429, message: 'Too many requests' } });
+
+    render(<SignUpPage />);
+    submitEmailStep();
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert').textContent).toBe(
+        'Too many attempts. Please wait a minute and try again.',
+      );
+    });
+    expect(screen.queryByLabelText('Verification code')).toBeNull();
+  });
+
   it('surfaces a bad-code error and does not register a passkey', async () => {
     authFetch.mockImplementation((path: string) => {
       if (path === '/sign-up/request-code') return Promise.resolve({ data: { status: true } });

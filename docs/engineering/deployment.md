@@ -1,6 +1,9 @@
-# Deployment — GCP Cloud Run
+# Deployment — Vercel + GCP Cloud Run
 
-Docket deploys three services to GCP Cloud Run (scale-to-zero) backed by Neon Postgres. GitHub Actions builds and pushes Docker images to Artifact Registry and deploys via the Cloud Run API, authenticated using Workload Identity Federation (no static service-account keys in CI).
+Docket's public product app is deployed by Vercel; the API and staff-admin service run on GCP
+Cloud Run (scale-to-zero), backed by Neon Postgres. GitHub Actions builds and deploys the Cloud Run
+services through Workload Identity Federation (no static service-account keys in CI). Vercel
+production variables are build-time inputs: changing `API_URL` requires a new Vercel deployment.
 
 ---
 
@@ -9,12 +12,17 @@ Docket deploys three services to GCP Cloud Run (scale-to-zero) backed by Neon Po
 | Service        | Domain                          | Image                                         | Notes                                                   |
 | -------------- | ------------------------------- | --------------------------------------------- | ------------------------------------------------------- |
 | `docket-api`   | `docket-api.hypertext.studio`   | `apps/api` — `pnpm deploy --prod` + `tsx/esm` | Hono Node.js; reads secrets from Secret Manager at boot |
-| `docket-web`   | `docket.hypertext.studio`       | `apps/web` — Next.js standalone               | Marketing site + app; `API_URL` baked in at build time  |
+| `docket-web`   | `docket.hypertext.studio`       | `apps/web` — Vercel Next.js                   | Marketing site + app; `API_URL` baked in at build time  |
 | `docket-admin` | `docket-admin.hypertext.studio` | `apps/admin` — Next.js standalone             | `API_URL` baked in at build time                        |
 
 **Passkey RP ID:** `hypertext.studio` — the shared registrable suffix across the production web and admin hosts.
 
-All services: `--min-instances=0` (scale to zero), `--max-instances=10`, `--memory=512Mi`.
+Cloud Run services use `--min-instances=0` (scale to zero), `--max-instances=10`, and
+`--memory=512Mi`.
+
+The web app's `/v1/*` and `/api/auth/*` routes rewrite to `API_URL`. Its build rejects an API origin
+equal to `NEXT_PUBLIC_APP_URL`, which would recursively proxy the request back into Vercel and end
+in `508 INFINITE_LOOP_DETECTED`.
 
 > **Exception once Slack is activated:** run `docket-api` with `--min-instances=1`. Slack's
 > Events API requires a 200 within 3 seconds and disables an app's deliveries at >5% failures
@@ -188,7 +196,23 @@ Runtime env vars are split between Secret Manager (sensitive) and Cloud Run env 
 `NODE_ENV`, `APP_MODE`, `API_URL`, `WEB_URL`, `BETTER_AUTH_URL`, `BETTER_AUTH_TRUSTED_ORIGINS`, `BETTER_AUTH_ALLOWED_HOSTS` (optional — host allowlist that switches Better Auth to a dynamic per-request base URL for previews/multi-domain; unset ⇒ static `BETTER_AUTH_URL`), `BETTER_AUTH_PASSKEY_RP_ID`, `BETTER_AUTH_PASSKEY_RP_NAME`, `BILLING_ENABLED`, `MCP_ALLOWED_ORIGINS` (a security allowlist — browser Origins allowed to hit `/mcp`, set explicitly per environment; never derived), `MCP_TASKS_ENABLED`, `MCP_CIMD_STRICT`.
 The MCP OAuth authorization server is **on by default in every deploy** — it needs no MCP-specific vars. `MCP_ISSUER_URL`, `MCP_RESOURCE_URL`, and `OIDC_LOGIN_PAGE_URL` derive mechanically from `API_URL`/`WEB_URL` (`packages/env/src/api.ts`); set one only to override its derivation (e.g. a non-standard sign-in route).
 
-### Notification delivery providers
+### Transactional email and notification delivery providers
+
+Passwordless account creation requires transactional email in production. Docket uses Resend's
+SMTP relay on the existing verified `service.hypertext.studio` sending domain so root-domain Google
+Workspace mail routing remains unchanged:
+
+| Env var     | Production value/source                                           |
+| ----------- | ----------------------------------------------------------------- |
+| `SMTP_HOST` | `docket-smtp-host` → `smtp.resend.com`                            |
+| `SMTP_PORT` | `docket-smtp-port` → `587`                                        |
+| `SMTP_USER` | `docket-smtp-user` → `resend`                                     |
+| `SMTP_PASS` | `docket-smtp-pass` → restricted Resend sending API key            |
+| `MAIL_FROM` | `docket-mail-from` → `Docket <no-reply@service.hypertext.studio>` |
+
+All five are Secret Manager values mounted by the API deployment. Missing mail configuration is a
+startup error in production; the service must never claim to send verification codes through an
+in-memory capture adapter.
 
 The notification service always writes durable intents, recipient snapshots, delivery rows, web
 inbox rows, preferences, contact points, and inbound-event rows. External delivery adapters light
@@ -201,10 +225,8 @@ select capture adapters.
 | SMS     | `SMS_ENDPOINT`, `SMS_API_KEY`, `SMS_FROM`                                      | All three select the HTTP SMS adapter; otherwise `CaptureSmsSender` is used.                    |
 | Push    | `PUSH_ENDPOINT`, `PUSH_API_KEY`, `PUSH_APP_ID`                                 | All three select the HTTP push adapter; otherwise `CapturePushSender` is used.                  |
 
-The default `.github/workflows/deploy.yml` does not yet inject these optional provider secrets into
-Cloud Run. To activate a provider in production, create Secret Manager entries for sensitive values
-(`SMTP_PASS`, `SMS_API_KEY`, `PUSH_API_KEY`), add non-sensitive values as GitHub variables or Cloud
-Run env vars, then add them to the `deploy-api` job's `env_vars:` / `secrets:` block.
+The deployment workflow injects the mandatory SMTP values. Other notification providers remain
+inactive until their complete provider contract is provisioned and mounted.
 
 Provider callbacks land under `/internal/notifications/*`:
 

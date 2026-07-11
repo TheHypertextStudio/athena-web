@@ -31,7 +31,7 @@ jobs:
         run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
 
       - id: node-ver
-        run: echo "value=$(cat .node-version)" >> $GITHUB_OUTPUT
+        run: echo "value=$(cat .node-version)" >> "$GITHUB_OUTPUT"
 
       - uses: docker/build-push-action@v7
         with:
@@ -42,6 +42,23 @@ jobs:
           cache-from: type=gha,scope=api
           cache-to: type=gha,scope=api,mode=max
           build-args: NODE_VERSION=${{ steps.node-ver.outputs.value }}
+
+      - name: Apply production database migrations
+        env:
+          API_IMAGE: ${{ env.REGISTRY }}/api:${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +x
+          DATABASE_URL_UNPOOLED="$(gcloud secrets versions access latest \
+            --secret=docket-database-url-unpooled \
+            --project='${{ vars.GCP_PROJECT_ID }}')"
+          export DATABASE_URL_UNPOOLED
+          docker pull "$API_IMAGE"
+          docker run --rm \
+            --env DATABASE_URL_UNPOOLED \
+            "$API_IMAGE" \
+            node --import=tsx/esm /app/packages/db/src/migrate.ts
 
       - id: deploy-api
         uses: google-github-actions/deploy-cloudrun@v3
@@ -76,21 +93,36 @@ jobs:
             CRON_SECRET=docket-cron-secret:latest
             GOOGLE_CLIENT_ID=docket-google-client-id:latest
             GOOGLE_CLIENT_SECRET=docket-google-client-secret:latest
-            GITHUB_APP_ID=docket-github-app-id:latest
-            GITHUB_APP_SLUG=docket-github-app-slug:latest
-            GITHUB_APP_CLIENT_ID=docket-github-app-client-id:latest
-            GITHUB_APP_CLIENT_SECRET=docket-github-app-client-secret:latest
-            GITHUB_APP_PRIVATE_KEY=docket-github-app-private-key:latest
-            GITHUB_APP_WEBHOOK_SECRET=docket-github-app-webhook-secret:latest
             LINEAR_CLIENT_ID=docket-linear-client-id:latest
             LINEAR_CLIENT_SECRET=docket-linear-client-secret:latest
-            APPLE_CLIENT_ID=docket-apple-client-id:latest
-            APPLE_TEAM_ID=docket-apple-team-id:latest
-            APPLE_KEY_ID=docket-apple-key-id:latest
-            APPLE_PRIVATE_KEY=docket-apple-private-key:latest
+            SMTP_HOST=docket-smtp-host:latest
+            SMTP_PORT=docket-smtp-port:latest
+            SMTP_USER=docket-smtp-user:latest
+            SMTP_PASS=docket-smtp-pass:latest
+            MAIL_FROM=docket-mail-from:latest
 
       - name: Show Cloud Run URL
         run: echo "docket-api=${{ steps.deploy-api.outputs.url }}"
+
+      - name: Verify production health and auth routes
+        env:
+          API_URL: ${{ vars.API_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --retry 8 --retry-all-errors \
+            --retry-delay 3 "$API_URL/v1/health" >/dev/null
+          session_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            "$API_URL/api/auth/get-session")"
+          test "$session_status" = 200
+          signup_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            --request POST "$API_URL/api/auth/sign-up/request-code" \
+            --header 'Content-Type: application/json' \
+            --data '{}')"
+          case "$signup_status" in
+            400|422) ;;
+            *) echo "signup challenge probe returned HTTP $signup_status" >&2; exit 1 ;;
+          esac
 
       # Background sync (a core feature) only fires if Cloud Scheduler calls the cron endpoint.
       # Re-running this idempotent create-or-update every deploy guarantees the jobs exist and
@@ -122,7 +154,7 @@ jobs:
         run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
 
       - id: node-ver
-        run: echo "value=$(cat .node-version)" >> $GITHUB_OUTPUT
+        run: echo "value=$(cat .node-version)" >> "$GITHUB_OUTPUT"
 
       - uses: docker/build-push-action@v7
         with:
@@ -180,7 +212,7 @@ jobs:
         run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
 
       - id: node-ver
-        run: echo "value=$(cat .node-version)" >> $GITHUB_OUTPUT
+        run: echo "value=$(cat .node-version)" >> "$GITHUB_OUTPUT"
 
       - uses: docker/build-push-action@v7
         with:

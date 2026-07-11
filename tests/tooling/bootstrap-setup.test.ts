@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import { parseBootstrapFlags } from '../../scripts/bootstrap';
@@ -114,5 +117,38 @@ describe('bootstrap note wrapping', () => {
     const lines = wrapLines([`URL: https://linear.app/${'x'.repeat(120)}`], 40);
     expect(lines.length).toBeGreaterThan(1);
     expect(lines.every((line) => line.length <= 40)).toBe(true);
+  });
+});
+
+describe('production account-creation deployment contract', () => {
+  const workflow = readFileSync(
+    resolve(import.meta.dirname, '../../.github/workflows/deploy.yml'),
+    'utf8',
+  );
+
+  it('mounts the complete Resend SMTP contract without exposing a value in argv', () => {
+    for (const mount of [
+      'SMTP_HOST=docket-smtp-host:latest',
+      'SMTP_PORT=docket-smtp-port:latest',
+      'SMTP_USER=docket-smtp-user:latest',
+      'SMTP_PASS=docket-smtp-pass:latest',
+      'MAIL_FROM=docket-mail-from:latest',
+    ]) {
+      expect(workflow).toContain(mount);
+    }
+    expect(workflow).toContain('--env DATABASE_URL_UNPOOLED');
+    expect(workflow).not.toContain('--env DATABASE_URL_UNPOOLED=');
+  });
+
+  it('migrates before deployment and verifies health plus the signup route afterward', () => {
+    const migration = workflow.indexOf('- name: Apply production database migrations');
+    const deployment = workflow.indexOf('- id: deploy-api');
+    const verification = workflow.indexOf('- name: Verify production health and auth routes');
+
+    expect(migration).toBeGreaterThan(-1);
+    expect(deployment).toBeGreaterThan(migration);
+    expect(verification).toBeGreaterThan(deployment);
+    expect(workflow).toContain('$API_URL/v1/health');
+    expect(workflow).toContain('$API_URL/api/auth/sign-up/request-code');
   });
 });

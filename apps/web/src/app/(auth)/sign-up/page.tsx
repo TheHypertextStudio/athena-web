@@ -21,8 +21,18 @@ const SIGNUP_SESSION_ERROR = 'Your account was created. Please try again to fini
 /** Shown when a challenge endpoint returns 429 (rate-limited). */
 const RATE_LIMIT_MESSAGE = 'Too many attempts. Please wait a minute and try again.';
 
+/** Shown when the API did not accept a request to send the verification code. */
+const SIGNUP_CODE_UNAVAILABLE_MESSAGE =
+  'We could not send your verification code. Please try again in a few moments.';
+
 /** The two phases of passwordless sign-up: prove the email, then register the passkey. */
 type Step = 'collect' | 'verify';
+
+/** The only outcomes that may move the signup UI from email collection to code verification. */
+type SignupCodeResult =
+  | { readonly kind: 'sent' }
+  | { readonly kind: 'rate-limited' }
+  | { readonly kind: 'unavailable' };
 
 /**
  * Request a one-time sign-up code for the given email.
@@ -30,14 +40,16 @@ type Step = 'collect' | 'verify';
  * @remarks
  * Hits the `signup-challenge` plugin's `/sign-up/request-code`, which stores a hashed code and
  * emails the plaintext. Always succeeds (anti-enumeration) unless rate-limited (429). Returns
- * whether it was rate-limited so the caller can message that distinctly.
+ * whether the API accepted the send, rate-limited it, or failed before accepting it. A failed
+ * request must never advance the UI to the email-sent state.
  */
-async function requestSignupCode(name: string, email: string): Promise<{ rateLimited: boolean }> {
+async function requestSignupCode(name: string, email: string): Promise<SignupCodeResult> {
   const res = await authClient.$fetch('/sign-up/request-code', {
     method: 'POST',
     body: { name, email },
   });
-  return { rateLimited: res.error?.status === 429 };
+  if (!res.error) return { kind: 'sent' };
+  return res.error.status === 429 ? { kind: 'rate-limited' } : { kind: 'unavailable' };
 }
 
 /**
@@ -107,15 +119,17 @@ export default function SignUpPage(): JSX.Element {
     setError(null);
     setPending(true);
     try {
-      const { rateLimited } = await requestSignupCode(name.trim(), email.trim());
-      if (rateLimited) {
-        setError(RATE_LIMIT_MESSAGE);
+      const result = await requestSignupCode(name.trim(), email.trim());
+      if (result.kind !== 'sent') {
+        setError(
+          result.kind === 'rate-limited' ? RATE_LIMIT_MESSAGE : SIGNUP_CODE_UNAVAILABLE_MESSAGE,
+        );
         return;
       }
       setCode('');
       setStep('verify');
     } catch {
-      setError('We could not send your verification code. Please try again.');
+      setError(SIGNUP_CODE_UNAVAILABLE_MESSAGE);
     } finally {
       setPending(false);
     }

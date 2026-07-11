@@ -1,13 +1,16 @@
 import path from 'path';
 import type { NextConfig } from 'next';
 
+import { validatedApiOrigin } from './src/lib/proxy-origin';
+
 /** The API origin the browser is rewritten to (same-origin so Better Auth cookies flow). */
-const API_ORIGIN = process.env['API_URL'];
-if (!API_ORIGIN) {
+const apiUrl = process.env['API_URL'];
+if (!apiUrl) {
   throw new Error(
     'API_URL is required (the origin the web app proxies /v1 + /api/auth to) — see .env.example.',
   );
 }
+const API_ORIGIN = validatedApiOrigin(apiUrl, process.env['NEXT_PUBLIC_APP_URL']);
 
 /**
  * Extra allowed dev origins taken from the auth allowlist.

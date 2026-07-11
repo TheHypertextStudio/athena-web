@@ -42,6 +42,16 @@
     approval.
   - `pnpm format:check`, actionlint, typecheck 17/17, lint 17/17, tests 17/17 (API 1,198/1,198;
     web 301/301), production build 3/3, and the focused SSE stress loop 20/20 all pass.
+  - Commit `cd444b6` was promoted by the single gated CI run `29142586788`: build, test,
+    lint/types, E2E, database migration, Cloud Run API deployment, live health/auth probes, and
+    Vercel web/admin deployment all passed. No release workflow, CI tag, or duplicate deploy ran.
+  - The live public configuration reports production mode, configured Google OAuth credentials,
+    and the `calendar` connector; API health and the deployed web surface return `200`.
+- **Remaining Acceptance Blocker**:
+  - The signed-in browser connection is unavailable to this workspace, so the allowlisted
+    `willieechalmers@gmail.com` link/consent/sync journey still requires one interactive production
+    smoke test. Repository, workflow, secret-binding, deployment, and public runtime readiness are
+    complete; this task remains `IN_PROGRESS` until that user-session proof exists.
 
 ### [AUTH-PROD-001] Restore production account creation and verification email
 

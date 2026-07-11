@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -9,11 +9,40 @@ type ParseGoogleOAuthClientBundle = (
   urls: { readonly apiBase: string; readonly webBases: readonly string[] },
 ) => Record<'GOOGLE_CLIENT_ID' | 'GOOGLE_CLIENT_SECRET', string>;
 
+interface ProviderFixture {
+  readonly id: string;
+  readonly label: string;
+  readonly title: string;
+  readonly vars: readonly string[];
+  readonly requiredVars?: readonly string[];
+}
+
 // Keep this package's compile boundary intact while exercising the repository-level bootstrap.
 const scriptModule: string = new URL('../../../scripts/integration-providers.ts', import.meta.url)
   .href;
-const { parseGoogleOAuthClientBundle } = (await import(scriptModule)) as {
+const { parseGoogleOAuthClientBundle, PROVIDER_GROUPS } = (await import(scriptModule)) as {
   readonly parseGoogleOAuthClientBundle: ParseGoogleOAuthClientBundle;
+  readonly PROVIDER_GROUPS: readonly (ProviderFixture & {
+    readonly consoleUrl?: string;
+    readonly instructions?: (...args: never[]) => readonly string[];
+    readonly steps?: (...args: never[]) => readonly unknown[];
+  })[];
+};
+const setupModule: string = new URL('../../../scripts/integrations-setup.ts', import.meta.url).href;
+const { buildApiSecretBindings, classifyProviderStatus, splitInstructionSteps } = (await import(
+  setupModule
+)) as {
+  readonly buildApiSecretBindings: (
+    env: 'local' | 'staging' | 'production',
+    configured: ReadonlySet<string>,
+  ) => string[];
+  readonly classifyProviderStatus: (
+    group: ProviderFixture,
+    configured: ReadonlySet<string>,
+  ) => 'missing' | 'partial' | 'configured';
+  readonly splitInstructionSteps: (
+    lines: readonly string[],
+  ) => readonly { readonly note: readonly string[] }[];
 };
 
 const urls = {
@@ -79,5 +108,85 @@ describe('Google OAuth bootstrap credential import', () => {
     } catch (error) {
       expect(String(error)).not.toContain('private-client');
     }
+  });
+});
+
+describe('guided integration bootstrap contracts', () => {
+  it('splits numbered guides into one operator-sized checkpoint per action', () => {
+    expect(
+      splitInstructionSteps([
+        'Set up the provider.',
+        '',
+        '1) Open its console.',
+        '   Keep this tab open.',
+        '2) Create the credential.',
+      ]).map((step) => step.note),
+    ).toEqual([
+      ['Set up the provider.', ''],
+      ['1) Open its console.', '   Keep this tab open.'],
+      ['2) Create the credential.'],
+    ]);
+  });
+
+  it('classifies missing, partial, configured, and any-capability provider states', () => {
+    const oauth: ProviderFixture = {
+      id: 'oauth',
+      label: 'OAuth',
+      title: 'OAuth setup',
+      vars: ['CLIENT_ID', 'CLIENT_SECRET'],
+    };
+    expect(classifyProviderStatus(oauth, new Set())).toBe('missing');
+    expect(classifyProviderStatus(oauth, new Set(['CLIENT_ID']))).toBe('partial');
+    expect(classifyProviderStatus(oauth, new Set(['CLIENT_ID', 'CLIENT_SECRET']))).toBe(
+      'configured',
+    );
+    expect(
+      classifyProviderStatus(
+        { ...oauth, vars: ['SENTRY_DSN', 'BLOB_TOKEN'], requiredVars: [] },
+        new Set(['SENTRY_DSN']),
+      ),
+    ).toBe('configured');
+  });
+
+  it('builds deploy bindings from existing canonical and legacy secrets only', () => {
+    const bindings = buildApiSecretBindings(
+      'production',
+      new Set([
+        'docket-google-client-id',
+        'docket-google-client-secret',
+        'docket-github-client-id',
+        'docket-github-client-secret',
+      ]),
+    );
+    expect(bindings).toContain('DATABASE_URL=docket-database-url:latest');
+    expect(bindings).toContain('GOOGLE_CLIENT_ID=docket-google-client-id:latest');
+    expect(bindings).toContain('GITHUB_APP_CLIENT_ID=docket-github-client-id:latest');
+    expect(bindings.some((binding) => binding.startsWith('SLACK_CLIENT_ID='))).toBe(false);
+  });
+
+  it('keeps every provider in the guided catalog and deploys through the generated manifest', () => {
+    expect(PROVIDER_GROUPS.map((group) => group.id)).toEqual([
+      'google',
+      'github',
+      'linear',
+      'apple',
+      'slack',
+      'stripe',
+      'anthropic',
+      'email',
+      'observability',
+    ]);
+    for (const group of PROVIDER_GROUPS) {
+      expect(Boolean(group.instructions ?? group.steps), `${group.id} needs guided content`).toBe(
+        true,
+      );
+    }
+    const workflow = readFileSync(
+      new URL('../../../.github/workflows/deploy.yml', import.meta.url),
+      'utf8',
+    );
+    expect(workflow).toContain('secrets: ${{ vars.API_SECRET_BINDINGS }}');
+    expect(workflow.match(/environment: production/g)).toHaveLength(2);
+    expect(workflow).not.toContain('GITHUB_CLIENT_ID=docket-github-client-id');
   });
 });

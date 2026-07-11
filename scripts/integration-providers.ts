@@ -55,36 +55,60 @@ export function copyToClipboard(text: string): boolean {
  *   GitHub connect callback live here, because the browser does the OAuth dance same-origin on the
  *   product domain (each Next app proxies `/api/auth` to the API) and the session cookie must be
  *   first-party there. A provider that allows several callback URLs registers one per entry.
- * - `apiBase` — the public API origin. Server-to-server webhook edges live here; it is also
- *   registered as Better Auth's fallback callback origin for direct API-host OAuth requests.
+ * - `apiBase` — the public API origin. Only genuinely server-to-server edges live here: provider
+ *   webhooks (Stripe, the GitHub firehose) that the provider's *servers* POST to directly.
  */
 export interface SetupUrls {
   readonly apiBase: string;
   readonly webBases: readonly string[];
 }
 
+/** Stable identifiers for every provider supported by the interactive setup wizard. */
+export type ProviderId =
+  | 'google'
+  | 'github'
+  | 'linear'
+  | 'apple'
+  | 'slack'
+  | 'stripe'
+  | 'anthropic'
+  | 'email'
+  | 'observability';
+
+/** One operator-sized action in a provider's guided setup flow. */
+export interface ProviderStep {
+  readonly note: readonly string[];
+  readonly var?: string;
+  readonly openUrl?: string;
+}
+
 export interface ProviderGroup {
-  /** Stable id used for provider-specific setup behavior and validation. */
-  readonly id: string;
+  /** Stable identifier used by status selection and CLI pre-scoping. */
+  readonly id: ProviderId;
   readonly title: string;
+  /** Short picker label. */
+  readonly label: string;
+  /** Provider setup is not required for Docket's core local/product flow. */
+  readonly optional?: boolean;
+  /** Primary provider page offered by the browser-assisted runner. */
+  readonly consoleUrl?: string;
   /** Registry var names to prompt for, in order. */
   readonly vars: readonly string[];
   /** Environment-specific override for providers whose local and hosted transports differ. */
   readonly varsForEnvironment?: (env: Environment) => readonly string[];
+  /** Variables required to call the provider configured; defaults to every entry in {@link vars}. */
+  readonly requiredVars?: readonly string[];
+  /** Non-secret cloud values that belong in GitHub environment variables, not Secret Manager. */
+  readonly cloudVariables?: readonly string[];
   /** Explicit, copy-pasteable setup instructions for the chosen environment (shown all at once). */
   readonly instructions?: (env: Environment, urls: SetupUrls) => readonly string[];
-  /** Optional provider console URL that bootstrap opens before prompting for generated values. */
-  readonly launchUrl?: (env: Environment, urls: SetupUrls) => string;
   /**
    * A step-by-step alternative to {@link instructions}: each step shows a short, natural-language
    * instruction and then (optionally) prompts for the single value that step produces. Guidance
    * therefore always sits right next to the field it is for — no wall of text up front with every
    * value demanded at the end. Used by the GitHub App, whose console has many sequential steps.
    */
-  readonly steps?: (
-    env: Environment,
-    urls: SetupUrls,
-  ) => readonly { readonly note: readonly string[]; readonly var?: string }[];
+  readonly steps?: (env: Environment, urls: SetupUrls) => readonly ProviderStep[];
   /**
    * Turnkey secrets generated FOR the user (not prompted): the returned values are shown +
    * copied to the clipboard, saved like any collected var, and skipped in the prompt loop.
@@ -108,6 +132,11 @@ export interface ProviderGroup {
     readonly placeholder: string;
     readonly parse: (raw: string, urls: SetupUrls) => Record<string, string>;
   };
+}
+
+/** Resolve the variables a provider requires in the selected environment. */
+export function providerVars(group: ProviderGroup, env: Environment): readonly string[] {
+  return group.varsForEnvironment?.(env) ?? group.vars;
 }
 
 interface GoogleOAuthWebClient {
@@ -199,41 +228,6 @@ export function parseGoogleOAuthClientBundle(
   };
 }
 
-/** Resolve the variables a provider requires in the selected environment. */
-export function providerVars(group: ProviderGroup, env: Environment): readonly string[] {
-  return group.varsForEnvironment?.(env) ?? group.vars;
-}
-
-/**
- * Build Linear's supported pre-populated OAuth application creation URL.
- *
- * @remarks
- * Linear still requires an administrator to submit the form and copy the generated secrets, but
- * every deterministic field is encoded here: distribution, product/developer identity, callback
- * URLs, authorization-code grant, and application webhook subscriptions. Callback URLs use Better
- * Auth's built-in social-provider route (`/api/auth/callback/linear`), not the retired generic-OAuth
- * `/oauth2/callback` route.
- */
-export function linearOAuthAppManifestUrl(env: Environment, urls: SetupUrls): string {
-  const productUrl = urls.webBases[0] ?? urls.apiBase;
-  const params = new URLSearchParams({
-    distribution: env === 'production' ? 'public' : 'private',
-    'display.description': 'Sync Linear issues into Docket as first-party tasks.',
-    'developer.name': 'Hypertext Studio',
-    'oauth.client_name': appName(env),
-    'oauth.client_uri': productUrl,
-    'webhook.enabled': 'true',
-    'webhook.url': `${urls.apiBase}/internal/ingest/linear`,
-  });
-  for (const origin of new Set([...urls.webBases, urls.apiBase])) {
-    params.append('oauth.redirect_uris', `${origin}/api/auth/callback/linear`);
-  }
-  params.append('oauth.grant_types', 'authorization_code');
-  params.append('webhook.resourceTypes', 'Issue');
-  params.append('webhook.resourceTypes', 'Comment');
-  return `https://linear.app/settings/api/applications/new?${params.toString()}`;
-}
-
 /**
  * Turn a GitHub App private key the user provides — a path to the downloaded `.pem`, or pasted PEM
  * text — into the single-line base64 the env contract stores. An already-base64 value passes
@@ -296,7 +290,15 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
   {
     id: 'google',
     title: 'Google Integration Set-up',
-    vars: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'],
+    label: 'Google OAuth + Workspace',
+    consoleUrl: 'https://console.cloud.google.com/apis/credentials',
+    vars: [
+      'GOOGLE_CLIENT_ID',
+      'GOOGLE_CLIENT_SECRET',
+      'GOOGLE_OAUTH_PUBLIC',
+      'GOOGLE_OAUTH_TEST_EMAILS',
+    ],
+    cloudVariables: ['GOOGLE_OAUTH_PUBLIC', 'GOOGLE_OAUTH_TEST_EMAILS'],
     credentialBundle: {
       message: 'Downloaded Google OAuth Web-client JSON (path, or blank for manual entry)',
       placeholder: '~/Downloads/client_secret_….json',
@@ -328,14 +330,17 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
       '7) Under "Authorized redirect URIs" click "+ Add URI" and add one per Docket frontend',
       '   (the callback is browser-facing — it lives on the product origin, not the API), exactly:',
       ...urls.webBases.map((web) => `     ${web}/api/auth/callback/google`),
-      '8) Click "Create", then open the client and choose "Download JSON".',
-      '9) Enter that file path below. Bootstrap validates the URLs and imports both credentials',
-      '   without printing them. Leave it blank only if you need to enter the two values manually.',
+      '8) Click "Create". Keep the result open: bootstrap will ask for the Client ID, then mask the',
+      '   Client Secret while you paste it. You can choose downloaded-JSON import instead.',
+      '9) For production testing, keep public access off and provide the comma-separated Docket',
+      '   user emails allowed to exercise Google OAuth until Google verification is approved.',
     ],
   },
   {
     id: 'github',
     title: 'GitHub Integration Set-up',
+    label: 'GitHub App',
+    consoleUrl: 'https://github.com/settings/apps',
     vars: [
       'GITHUB_APP_ID',
       'GITHUB_APP_SLUG',
@@ -410,7 +415,7 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
                   '',
                   '(When you deploy to production you will set the Webhook URL once, to your public',
                   'API at https://your-api-host/internal/ingest/github, and turn it on. We have already',
-                  'generated GITHUB_APP_WEBHOOK_SECRET and saved it for that day.)',
+                  'generated GITHUB_APP_WEBHOOK_SECRET and will save it for that day.)',
                 ]
               : [
                   'Now the "Webhook" section — this is what makes the firehose real-time. Unlike the',
@@ -419,10 +424,10 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
                   '',
                   '  • Tick "Active".',
                   `  • Webhook URL:  ${urls.apiBase}/internal/ingest/github`,
-                  '  • Secret: paste the webhook secret we generated a moment ago (already on your',
-                  '    clipboard, so just paste).',
+                  '  • Secret: choose "Generate and copy" below, then paste from your clipboard.',
                   '  • Leave "Enable SSL verification" on.',
                 ],
+          var: 'GITHUB_APP_WEBHOOK_SECRET',
         },
         {
           note: [
@@ -520,27 +525,34 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
   {
     id: 'linear',
     title: 'Linear Integration Set-up',
+    label: 'Linear OAuth',
+    consoleUrl: 'https://linear.app/settings/api/applications/new',
     vars: ['LINEAR_CLIENT_ID', 'LINEAR_CLIENT_SECRET', 'LINEAR_WEBHOOK_SECRET'],
-    launchUrl: linearOAuthAppManifestUrl,
     instructions: (env, urls) => [
-      'The prefilled Linear OAuth application form is opening now. You need a workspace admin.',
+      'Creates a Linear OAuth2 application. ~2 min. You need a Linear workspace admin.',
       '',
-      `1) Review the prefilled application name ("${appName(env)}"), public distribution,`,
-      '   authorization-code grant, callbacks, and webhook settings.',
-      '2) Callback URLs are prefilled for every configured Docket host:',
-      ...[...new Set([...urls.webBases, urls.apiBase])].map(
-        (origin) => `     ${origin}/api/auth/callback/linear`,
-      ),
-      '3) The application webhook is prefilled to send Issue + Comment events to:',
+      '1) Open https://linear.app/settings/api/applications/new',
+      '   (or: Linear → workspace menu (top-left) → Settings → "API" → "OAuth applications" →',
+      '   "Create new").',
+      `2) Application name: "${appName(env)}". Add a developer name + icon if it asks.`,
+      '3) Callback URLs — browser-facing, so add one per Docket frontend, exactly, no trailing slash:',
+      ...urls.webBases.map((web) => `     ${web}/api/auth/oauth2/callback/linear`),
+      '4) Scopes: tick "read" (required for sign-in). For the issue-migration feature also tick',
+      '   "write" and "issues:create".',
+      '5) Configure application webhooks so every authorized workspace sends Issue events to:',
       `     ${urls.apiBase}/internal/ingest/linear`,
-      '4) Submit the form. Production is public so users can authorize multiple workspaces.',
-      '5) Copy the Client ID, Client secret, and webhook signing secret shown; those are the only',
-      '   values bootstrap cannot obtain for you. Paste them into the three masked prompts below.',
+      '   Enable Issues (required for immediate task reconciliation); Comments and Reactions also',
+      '   feed Docket activity. Linear shows a separate webhook signing secret on its detail page.',
+      '6) Keep the app private (untick "Public") unless you intend multi-workspace installs → "Create".',
+      '7) Copy the Client ID, Client secret, and webhook signing secret shown, and paste below.',
     ],
   },
   {
     id: 'apple',
-    title: 'Sign in with Apple Integration Set-up',
+    title: 'Sign in with Apple Integration Set-up (optional)',
+    label: 'Sign in with Apple',
+    optional: true,
+    consoleUrl: 'https://developer.apple.com/account/resources/identifiers/list',
     vars: ['APPLE_CLIENT_ID', 'APPLE_TEAM_ID', 'APPLE_KEY_ID', 'APPLE_PRIVATE_KEY'],
     instructions: (_env, urls) => [
       'Adds "Sign in with Apple" as a fourth sign-in option (web only). ~10 min. You need an Apple',
@@ -577,6 +589,8 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
   {
     id: 'slack',
     title: 'Slack Integration Set-up',
+    label: 'Slack App',
+    consoleUrl: 'https://api.slack.com/apps',
     vars: ['SLACK_CLIENT_ID', 'SLACK_CLIENT_SECRET', 'SLACK_SIGNING_SECRET'],
     instructions: (env, urls) => [
       'Creates the shared Slack app (user-token Events API). ~5 min. You need a Slack account;',
@@ -606,7 +620,9 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
   {
     id: 'stripe',
     title: 'Stripe Integration Set-up',
-    vars: ['STRIPE_SECRET_KEY', 'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY', 'STRIPE_WEBHOOK_SECRET'],
+    label: 'Stripe Billing',
+    consoleUrl: 'https://dashboard.stripe.com/apikeys',
+    vars: ['STRIPE_SECRET_KEY', 'STRIPE_PUBLISHABLE_KEY', 'STRIPE_WEBHOOK_SECRET'],
     instructions: (env, urls) => {
       const mode = env === 'production' ? 'live' : 'test';
       const lines = [
@@ -641,34 +657,33 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
       lines.push(
         '',
         'Note: plan prices (DOCKET_PRICE_LOOKUP_*) are created separately via the Stripe CLI/',
-        env === 'production'
-          ? 'dashboard and are not collected here. All three provider values below are required.'
-          : 'dashboard and are not collected here. Leave all three blank to keep billing on the mock.',
+        'dashboard and are not collected here. Leave all three blank to keep billing on the mock.',
       );
       return lines;
     },
   },
   {
     id: 'anthropic',
-    title: 'Anthropic Integration Set-up',
+    title: 'Anthropic Integration Set-up (optional)',
+    label: 'Anthropic',
+    optional: true,
+    consoleUrl: 'https://console.anthropic.com/settings/keys',
     vars: ['ANTHROPIC_API_KEY'],
     instructions: (env) => [
-      env === 'production'
-        ? 'Powers real Athena/Claude turns and is required for a complete production bootstrap.'
-        : 'Powers real Athena/Claude turns. Local/test use the deterministic mock regardless.',
+      'Powers real Athena/Claude turns. Optional — blank keeps the deterministic mock runtime',
+      '(local/test always use the mock regardless of this key).',
       '',
       '1) Open https://console.anthropic.com and sign in.',
       '2) Ensure the workspace has billing/credits (Settings → Billing).',
       '3) Settings → "API keys" → "Create Key".',
       `4) Name it "${appName(env)}" → Create → copy the key (starts with sk-ant-…, shown once).`,
-      env === 'production'
-        ? '5) Paste the production key below.'
-        : '5) Paste below or leave blank.',
+      '5) Paste below, or leave blank to skip.',
     ],
   },
   {
     id: 'email',
     title: 'Email Integration Set-up',
+    label: 'Transactional Email',
     vars: ['RESEND_API_KEY', 'MAIL_FROM'],
     varsForEnvironment: (env) =>
       env === 'local'
@@ -692,7 +707,7 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
           ]
         : [
             'Production sends transactional email through the native Resend HTTPS API.',
-            'A verified sender is required; the capture and SMTP transports are not used in production.',
+            'A verified sender is required; capture and SMTP transports are not used in production.',
             '',
             '1) In Resend, verify a sending domain and create a domain-restricted sending API key.',
             '2) Enter at the prompts below:',
@@ -702,12 +717,14 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
   },
   {
     id: 'observability',
-    title: 'Observability & Storage Set-up',
+    title: 'Observability & Storage Set-up (optional)',
+    label: 'Observability + Storage',
+    optional: true,
+    consoleUrl: 'https://sentry.io/settings/projects/',
     vars: ['SENTRY_DSN', 'BLOB_READ_WRITE_TOKEN', 'EXPORT_BUCKET_URL', 'EXPORT_BUCKET_TOKEN'],
-    instructions: (env) => [
-      env === 'production'
-        ? 'Sentry and export storage are required for a complete production bootstrap.'
-        : 'Local values may be left blank.',
+    requiredVars: [],
+    instructions: () => [
+      'All optional. Leave blank to disable each.',
       '',
       'Sentry (error reporting):',
       '  1) https://sentry.io → create/select a project (platform: Node).',

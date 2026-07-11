@@ -14,7 +14,7 @@
  * Cloud Run URLs are unknown until the first deploy; the script prints the follow-up commands.
  */
 
-import { execSync } from 'node:child_process';
+import { execFileSync, execSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, resolve } from 'node:path';
@@ -25,6 +25,7 @@ import { cancel, confirm, intro, log, note, outro, password, text } from '@clack
 
 import {
   chooseGcloudProject,
+  buildApiSecretBindings,
   confirmAuthAccounts,
   detectRepo,
   exec,
@@ -544,22 +545,57 @@ function setupGcp(cfg: Config): { saEmail: string; wifProvider: string } {
 function setupGithub(cfg: Config, saEmail: string, wifProvider: string): void {
   section('GitHub — Repository Variables');
 
-  const vars: Record<string, string> = {
+  const repoVars: Record<string, string> = {
     GCP_PROJECT_ID: cfg.project,
     GCP_REGION: cfg.region,
     GCP_SERVICE_ACCOUNT: saEmail,
     GCP_WIF_PROVIDER: wifProvider,
-    PASSKEY_RP_ID: cfg.domain,
     NEON_PROJECT_ID: cfg.neonProjectId,
+  };
+  const productionVars: Record<string, string> = {
+    PASSKEY_RP_ID: cfg.domain,
     API_URL: cfg.apiUrl,
     WEB_URL: cfg.webUrl,
     ADMIN_URL: cfg.adminUrl,
+    BETTER_AUTH_ALLOWED_HOSTS: [
+      new URL(cfg.webUrl).host,
+      new URL(cfg.apiUrl).host,
+      new URL(cfg.adminUrl).host,
+    ].join(','),
+    GOOGLE_OAUTH_PUBLIC: 'false',
   };
 
-  for (const [key, value] of Object.entries(vars)) {
+  for (const [key, value] of Object.entries(repoVars)) {
     exec(`gh variable set ${key} --body "${value}" --repo ${cfg.repo}`);
     ok(key);
   }
+  for (const [key, value] of Object.entries(productionVars)) {
+    exec(`gh variable set ${key} --env production --body "${value}" --repo ${cfg.repo}`);
+    ok(`${key} (production)`);
+  }
+
+  const configuredSecrets = new Set(
+    tryRun(`gcloud secrets list --project=${cfg.project} --format='value(name)'`)
+      .split('\n')
+      .map((name) => name.trim())
+      .filter(Boolean),
+  );
+  execFileSync(
+    'gh',
+    [
+      'variable',
+      'set',
+      'API_SECRET_BINDINGS',
+      '--env',
+      'production',
+      '--repo',
+      cfg.repo,
+      '--body',
+      buildApiSecretBindings('production', configuredSecrets).join('\n'),
+    ],
+    { stdio: 'inherit' },
+  );
+  ok('API_SECRET_BINDINGS');
 
   section('GitHub — Repository Secrets');
 

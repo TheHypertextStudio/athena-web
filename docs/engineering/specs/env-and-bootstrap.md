@@ -2,13 +2,7 @@
 
 **Spec area:** `env-and-bootstrap` · **Status:** implementation-grade · **Verified against current docs 2026-06-05** (t3-oss/env, Neon CLI `neonctl`, Vercel CLI, Stripe CLI, Better Auth 1.6.14, Linear OAuth).
 
-> **Note on §3 (bootstrap flow):** Production currently uses **Vercel for the public web app** and
-> **GCP Cloud Run for the API/admin services** — see
-> [`docs/engineering/deployment.md`](../deployment.md) for the live deployment reference, GitHub
-> Actions variables, GCP resource inventory, and first-deploy walkthrough. Sections §0–§2
-> (env-var contract and `@docket/env` package design) remain accurate. Section §3 reflects the
-> intended full provisioning flow; Vercel writes apply to the web project, while server-only
-> provider values are stored in GCP Secret Manager and mounted into the API revision.
+> **Note on §3 (bootstrap flow):** This spec was written targeting Vercel as the deployment platform. The production deployment now uses **GCP Cloud Run** — see [`docs/engineering/deployment.md`](../deployment.md) for the actual deployment reference, GitHub Actions variables, GCP resource inventory, and first-deploy walkthrough. Sections §0–§2 (env-var contract and `@docket/env` package design) remain accurate. Section §3 reflects the intended full provisioning flow; steps §3.8–§3.9 (Vercel CLI env writes, `vercel link`) do not apply to the current implementation.
 
 This spec defines (1) the complete environment-variable contract for every app/package, (2) the `@docket/env` validation package design (t3-oss/env `extends` composition), and (3) the `pnpm bootstrap` interactive provisioning flow that makes the service "just work" from env vars in both dev and prod, where **dev mirrors prod** (same env contract, same validation, only values differ).
 
@@ -149,15 +143,15 @@ are ephemeral under portless). See `docs/local-development.md` → "Tunnels & lo
 
 Billing subject = Organization (`referenceId = Organization.id`). Stripe SDK pinned `stripe@^22`; API version `2026-03-25.dahlia`. Webhook path = `${API_URL}/api/auth/stripe/webhook`. Keys/secret are **per-mode** (test for dev, live for prod) — same variable names, different values (parity).
 
-| Name                                 | Apps       | Scope  | D/P            | What it is                                                                                                                                                                                                           | Where to obtain                                                                                                                                                                                            |
-| ------------------------------------ | ---------- | ------ | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `STRIPE_SECRET_KEY`                  | api (auth) | server | D=P            | Secret API key. Dev = `sk_test_…`, prod = `sk_live_…`.                                                                                                                                                               | Stripe Dashboard → Developers → API keys (toggle Test/Live), or `stripe config --list` for the test key after `stripe login`.                                                                              |
-| `STRIPE_WEBHOOK_SECRET`              | api (auth) | server | D=P            | Signing secret for the webhook endpoint hitting `/api/auth/stripe/webhook`. **Dev** = the `whsec_…` printed by `stripe listen`; **prod** = the endpoint's secret from the Dashboard/CLI. **Per-endpoint, per-mode.** | Dev: `stripe listen --print-secret`. Prod: created when bootstrap registers the live webhook endpoint (`stripe webhook_endpoints create` returns it; or Dashboard → Webhooks → endpoint → Signing secret). |
-| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | web        | client | D=P            | Publishable key for embedded Checkout in the product app. Dev = `pk_test_…`, prod = `pk_live_…`.                                                                                                                     | Stripe Dashboard → API keys (publishable).                                                                                                                                                                 |
-| `DOCKET_PRICE_LOOKUP_TEAM`           | api (auth) | server | D=P            | **Primary** plan→price resolution: the `lookup_key` for the Team plan price. Mode-agnostic name; resolved at runtime to the active price in the current mode.                                                        | Set by bootstrap when it creates prices with `--lookup-key team_monthly`.                                                                                                                                  |
-| `DOCKET_PRICE_LOOKUP_TEAM_ANNUAL`    | api (auth) | server | D=P            | `lookup_key` for the annual Team price (if annual offered).                                                                                                                                                          | `--lookup-key team_annual`.                                                                                                                                                                                |
-| `STRIPE_PRICE_TEAM`                  | api (auth) | server | D=P (fallback) | **Fallback/override** explicit price ID per env (`price_…`). Used only if `authorize`-by-lookup is disabled. Never hardcode in code.                                                                                 | Output of `stripe prices create` (see §3.4).                                                                                                                                                               |
-| `STRIPE_BILLING_PORTAL_CONFIG_ID`    | api (auth) | server | D=P (optional) | Customer Portal configuration ID, if a non-default portal config is used.                                                                                                                                            | `stripe billing_portal configurations create` or Dashboard → Customer portal.                                                                                                                              |
+| Name                              | Apps       | Scope  | D/P            | What it is                                                                                                                                                                                                           | Where to obtain                                                                                                                                                                                            |
+| --------------------------------- | ---------- | ------ | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `STRIPE_SECRET_KEY`               | api (auth) | server | D=P            | Secret API key. Dev = `sk_test_…`, prod = `sk_live_…`.                                                                                                                                                               | Stripe Dashboard → Developers → API keys (toggle Test/Live), or `stripe config --list` for the test key after `stripe login`.                                                                              |
+| `STRIPE_WEBHOOK_SECRET`           | api (auth) | server | D=P            | Signing secret for the webhook endpoint hitting `/api/auth/stripe/webhook`. **Dev** = the `whsec_…` printed by `stripe listen`; **prod** = the endpoint's secret from the Dashboard/CLI. **Per-endpoint, per-mode.** | Dev: `stripe listen --print-secret`. Prod: created when bootstrap registers the live webhook endpoint (`stripe webhook_endpoints create` returns it; or Dashboard → Webhooks → endpoint → Signing secret). |
+| `STRIPE_PUBLISHABLE_KEY`          | api        | server | D=P            | Browser-safe publishable key returned at runtime by `GET /v1/config`. Dev = `pk_test_…`, prod = `pk_live_…`; avoids a Vercel build-time configuration dependency.                                                    | Stripe Dashboard → API keys (publishable).                                                                                                                                                                 |
+| `DOCKET_PRICE_LOOKUP_TEAM`        | api (auth) | server | D=P            | **Primary** plan→price resolution: the `lookup_key` for the Team plan price. Mode-agnostic name; resolved at runtime to the active price in the current mode.                                                        | Set by bootstrap when it creates prices with `--lookup-key team_monthly`.                                                                                                                                  |
+| `DOCKET_PRICE_LOOKUP_TEAM_ANNUAL` | api (auth) | server | D=P            | `lookup_key` for the annual Team price (if annual offered).                                                                                                                                                          | `--lookup-key team_annual`.                                                                                                                                                                                |
+| `STRIPE_PRICE_TEAM`               | api (auth) | server | D=P (fallback) | **Fallback/override** explicit price ID per env (`price_…`). Used only if `authorize`-by-lookup is disabled. Never hardcode in code.                                                                                 | Output of `stripe prices create` (see §3.4).                                                                                                                                                               |
+| `STRIPE_BILLING_PORTAL_CONFIG_ID` | api (auth) | server | D=P (optional) | Customer Portal configuration ID, if a non-default portal config is used.                                                                                                                                            | `stripe billing_portal configurations create` or Dashboard → Customer portal.                                                                                                                              |
 
 > Personal/solo tier is **no-card** (product decision), so no price is required to _create_ a personal org; the Team price set above gates shared/team orgs and invites.
 
@@ -226,7 +220,7 @@ packages/env/
 │  ├─ shared.ts        # platform/base URLs (NODE_ENV, *_URL, NEXT_PUBLIC_*_URL)
 │  ├─ db.ts            # DATABASE_URL, DATABASE_URL_UNPOOLED
 │  ├─ auth.ts          # BETTER_AUTH_*, GOOGLE/GITHUB/LINEAR client id+secret
-│  ├─ stripe.ts        # STRIPE_*, NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY, DOCKET_PRICE_*
+│  ├─ stripe.ts        # STRIPE_*, DOCKET_PRICE_*
 │  ├─ mcp.ts           # MCP_*, OIDC_LOGIN_PAGE_URL
 │  ├─ agent.ts         # ATHENA_*, ANTHROPIC_API_KEY
 │  ├─ ops.ts           # CRON_SECRET, SENTRY_DSN, EXPORT_*
@@ -340,13 +334,13 @@ export const env = createEnv({
     NEXT_PUBLIC_API_URL: z.url(),
     NEXT_PUBLIC_WEB_URL: z.url(),
     NEXT_PUBLIC_MARKETING_URL: z.url(),
-    NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: z.string().startsWith('pk_'),
+    STRIPE_PUBLISHABLE_KEY: z.string().startsWith('pk_'),
   },
   runtimeEnv: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
     NEXT_PUBLIC_WEB_URL: process.env.NEXT_PUBLIC_WEB_URL,
     NEXT_PUBLIC_MARKETING_URL: process.env.NEXT_PUBLIC_MARKETING_URL,
-    NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
+    STRIPE_PUBLISHABLE_KEY: process.env.STRIPE_PUBLISHABLE_KEY,
   },
   emptyStringAsUndefined: true,
   skipValidation: !!process.env.SKIP_ENV_VALIDATION,
@@ -424,23 +418,22 @@ Verified commands:
 > **Implemented** in `scripts/integrations-setup.ts`, runnable standalone as **`pnpm integrations`** and invoked automatically at the end of `pnpm bootstrap`. The flow generalizes beyond OAuth to **every external credential in `VAR_REGISTRY`** (Stripe, Anthropic, Resend/Mailpit, observability), is **environment-aware** (`local` / `staging` / `production`, each configured in its own pass with its own credentials and redirect URIs), and routes writes per environment:
 >
 > - `local` → non-destructive upsert into the root `.env.local`.
-> - `staging` / `production` → server vars to **GCP Secret Manager**, public `NEXT_PUBLIC_*` vars to **GitHub environment variables**. Secret names follow the `deploy.yml` convention: production keeps the unqualified `docket-<kebab>` names; staging is suffixed `docket-staging-<kebab>`. Production requires every provider value by default; only the explicit bootstrap `--skip-providers` phase flag permits an incomplete provider pass. Linear's webhook mount is written to `deploy.yml` automatically only after its three real secrets exist.
+> - `staging` / `production` → server vars to **GCP Secret Manager** and non-secret runtime controls to **GitHub environment variables**. Secret names follow the `deploy.yml` convention: production keeps the unqualified `docket-<kebab>` names; staging is suffixed `docket-staging-<kebab>`. Bootstrap publishes the metadata-only `API_SECRET_BINDINGS` manifest consumed by Cloud Run, so configured optional providers are mounted without making absent providers break deployment.
 >
 > Before any cloud write it **confirms the gcloud + gh accounts and the GCP project** (never assumes the active ones): it lists every authenticated account and every accessible project and lets the operator choose, scoping gcloud via `CLOUDSDK_CORE_ACCOUNT` (no global-config mutation) and `gh auth switch`-ing only when a different account is picked. `pnpm bootstrap` runs the same confirmation up front and reuses it.
 
-Provider-owned secrets still require a human to submit the provider form and copy the resulting
-values. Bootstrap automates everything around that boundary: it opens supported pre-populated forms,
-derives exact callback/webhook URLs, collects values through masked schema-validated prompts, and
-writes them directly to the environment's secret store. Empty production input is accepted only
-when a non-placeholder cloud value already exists. Recommend separate OAuth apps per environment.
+The wizard first shows `missing` / `partial` / `configured` status without reading credential values,
+then lets the operator select only providers to configure or explicitly rotate. Provider consoles
+remain operator-controlled, so the runner offers to open each console, shows one action at a time,
+and waits at a checkpoint with Back/Retry/Skip/Exit controls. Inputs are schema-validated and
+sensitive values are masked; a skipped provider writes nothing.
 
-- **Google:** "Create an OAuth client (Web application) at https://console.cloud.google.com/apis/credentials. Authorized redirect URIs: `<dev>` and/or `<prod>`. Enable the People API for profile; enable Drive/Gmail/Calendar APIs if you'll use those connectors." Prompt `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`.
+- **Google:** create a Web OAuth client with the exact generated origins/callbacks, then copy Client
+  ID and masked Client Secret one at a time. Downloaded-JSON import remains an alternate path.
+  Production defaults to staged access through `GOOGLE_OAUTH_PUBLIC=false` plus
+  `GOOGLE_OAUTH_TEST_EMAILS`.
 - **GitHub:** "Create ONE **GitHub App** under your org (Org → Settings → Developer settings → GitHub Apps) at `https://github.com/organizations/<org>/settings/apps` (not an OAuth App) — it powers sign-in, the issue/PR connector, and the webhook firehose. User-authorization callback `<…/internal/integrations/github/callback>`, setup URL `<…/internal/integrations/github/setup>`, webhook URL `<…/internal/ingest/github>`. Repository permissions Issues/PRs/Metadata read; account permission Email addresses read; subscribe to Issues/Issue comment/Pull request events; create one app per environment." Prompt `GITHUB_APP_ID`, `GITHUB_APP_SLUG`, `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_PRIVATE_KEY` (single-line base64 PEM), `GITHUB_APP_WEBHOOK_SECRET`.
-- **Linear:** open Linear's OAuth application-manifest URL with public distribution, every configured
-  Docket host's built-in Better Auth callback (`<origin>/api/auth/callback/linear`), and the
-  `<API_URL>/internal/ingest/linear` Issue/Comment webhook prefilled. Prompt only
-  `LINEAR_CLIENT_ID`, `LINEAR_CLIENT_SECRET`, and the separate `LINEAR_WEBHOOK_SECRET`; all three go
-  straight to Secret Manager and the webhook mount is added after they are confirmed.
+- **Linear:** "Create an OAuth application at Linear → Settings → API → OAuth applications. Callback URL: `<the oauth2/callback/linear URI>`. Scopes: `read` (login) plus `write,issues:create` for migration." Prompt `LINEAR_CLIENT_ID`, `LINEAR_CLIENT_SECRET`.
 
 Each pasted value is validated against its own `@docket/env` registry schema before being accepted (invalid values re-prompt rather than abort).
 
@@ -456,7 +449,8 @@ Verified commands; run against **test mode** for dev and **live mode** for prod 
 3. Webhook endpoints:
    - **Dev:** do **not** create a Dashboard endpoint; instead instruct the operator to run `stripe listen --forward-to localhost:8787/api/auth/stripe/webhook` in a side terminal, and capture `STRIPE_WEBHOOK_SECRET` via `stripe listen --print-secret`.
    - **Prod:** create the real endpoint → `stripe webhook_endpoints create --url https://api.docket.app/api/auth/stripe/webhook --enabled-events checkout.session.completed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,invoice.payment_failed,invoice.paid,invoice.payment_action_required,customer.subscription.trial_will_end --output json` → capture the returned signing secret into prod `STRIPE_WEBHOOK_SECRET`.
-4. Prompt for the publishable key (`NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, mode-matched) and the secret key (`STRIPE_SECRET_KEY`) — read from `stripe config --list` for test, prompt for live.
+4. Prompt for the runtime publishable key (`STRIPE_PUBLISHABLE_KEY`, mode-matched) and secret key
+   (`STRIPE_SECRET_KEY`). The API returns only the publishable key through `GET /v1/config`.
 5. Offer to seed test data for the e2e flow with `stripe trigger checkout.session.completed` (dev only) so the billing path can be smoke-tested immediately.
 
 ### 3.6 Step 7 — Athena agent
@@ -468,7 +462,8 @@ Prompt for `ATHENA_AGENT_ENDPOINT` and `ATHENA_AGENT_API_KEY` (and optional `ANT
 Assemble the validated values and write **per-app** files (parity with prod scoping):
 
 - `apps/api/.env` ← all server slices (db, auth, stripe-server, mcp, agent, ops) + `API_URL`, `PORT`, `NODE_ENV=development`.
-- `apps/web/.env` ← `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_WEB_URL`, `NEXT_PUBLIC_MARKETING_URL`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `NODE_ENV`.
+- The browser-safe Stripe key stays in the API runtime and is returned by `GET /v1/config`; it is
+  not duplicated into a Vercel build environment.
 - `apps/marketing/.env` ← `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_WEB_URL`, `NODE_ENV`.
 - `apps/admin/.env` ← `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_ADMIN_URL`, `NODE_ENV`.
 

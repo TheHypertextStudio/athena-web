@@ -281,13 +281,4 @@ export const INFRA_VARS: readonly VarSpec[] = [
     zod: clientShared.NEXT_PUBLIC_PASSKEY_RP_ID,
     where: 'Browser-visible mirror of BETTER_AUTH_PASSKEY_RP_ID',
   },
-  {
-    name: 'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY',
-    slice: 'client',
-    scope: 'client',
-    targets: APP,
-    required: false,
-    zod: clientShared.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
-    where: 'Stripe publishable key (pk_...) for embedded Checkout',
-  },
 ] as const;

@@ -42,8 +42,10 @@ Prompts for: GCP project ID, region, GitHub repo (`owner/repo`), passkey domain,
 3. Creates Artifact Registry repository `docket`
 4. Creates WIF pool `github` + OIDC provider `github-actions`, bound to your specific repo
 5. Creates Secret Manager secrets: `docket-database-url`, `docket-auth-secret`, `docket-cron-secret`
-6. Sets GitHub Actions variables via `gh variable set`
-7. Writes a `.env.local` skeleton with generated secrets
+6. Shows metadata-only status for all integrations and lets the operator select missing providers
+7. Guides one provider-console action at a time, with browser opening, back/retry/skip/exit controls
+8. Writes credentials atomically to Secret Manager and publishes `API_SECRET_BINDINGS`
+9. Writes a `.env.local` skeleton with independent generated development secrets
 
 ### Prerequisites
 
@@ -64,8 +66,9 @@ The bootstrap script checks for these and exits if any are missing or unauthenti
    `--project=athena-services --region=us-central1` rather than changing the global project.
 2. Create `docket-database-url-unpooled` in Secret Manager and grant the Cloud Run runtime identity
    access. The deploy workflow runs `docket-db-migrate` and waits before deploying API code.
-3. Set the GitHub variables `API_URL`, `WEB_URL`, `ADMIN_URL`, `PASSKEY_RP_ID`,
-   `BETTER_AUTH_ALLOWED_HOSTS`, `GOOGLE_OAUTH_PUBLIC`, and `GOOGLE_OAUTH_TEST_EMAILS`.
+3. Bootstrap sets the production GitHub environment variables `API_URL`, `WEB_URL`, `ADMIN_URL`,
+   `PASSKEY_RP_ID`, `BETTER_AUTH_ALLOWED_HOSTS`, `GOOGLE_OAUTH_PUBLIC`, and
+   `API_SECRET_BINDINGS`; the Google guide collects `GOOGLE_OAUTH_TEST_EMAILS`.
 4. Keep `GOOGLE_OAUTH_PUBLIC=false` and set
    `GOOGLE_OAUTH_TEST_EMAILS=willieechalmers@gmail.com` while Google verification is pending.
 5. Keep the `docket` Vercel project's Git integration enabled for `main`. In Project Settings →
@@ -112,6 +115,7 @@ Set by `pnpm bootstrap`. Add missing ones with `gh variable set NAME --body "VAL
 | `BETTER_AUTH_ALLOWED_HOSTS` | manual               | `docket.hypertext.studio,docket-api.hypertext.studio,docket-admin.hypertext.studio`                                      |
 | `GOOGLE_OAUTH_PUBLIC`       | manual               | `false` during review; `true` only after Google approval                                                                 |
 | `GOOGLE_OAUTH_TEST_EMAILS`  | manual               | Staged Docket user allowlist, initially `willieechalmers@gmail.com`                                                      |
+| `API_SECRET_BINDINGS`       | bootstrap            | Non-secret multiline Cloud Run env-to-Secret Manager mapping; includes only configured providers                         |
 
 ### Secrets (`secrets.*`)
 
@@ -148,7 +152,8 @@ Everything created by `pnpm bootstrap`:
 
 Runtime env vars are split between Secret Manager (sensitive) and Cloud Run env vars (non-sensitive). See `deploy.yml` jobs `deploy-api` for the full list.
 
-**From Secret Manager** (injected by Cloud Run at startup):
+**From Secret Manager** (injected by Cloud Run at startup through bootstrap's
+`API_SECRET_BINDINGS` manifest):
 
 | Secret                | Env var              |
 | --------------------- | -------------------- |
@@ -158,6 +163,9 @@ Runtime env vars are split between Secret Manager (sensitive) and Cloud Run env 
 
 The migration job separately mounts `docket-database-url-unpooled` as
 `DATABASE_URL_UNPOOLED`; the pooled application URL must not be used for schema migrations.
+Configured provider secrets are appended to the same manifest under their canonical runtime env
+names. Legacy `docket-github-client-*` secrets remain readable as `GITHUB_APP_CLIENT_*` until the
+guided GitHub App flow rotates them to canonical secret names.
 
 **From Cloud Run env vars** (set at deploy time from GitHub `vars.*`):
 
@@ -190,10 +198,9 @@ select capture adapters.
 | SMS     | `SMS_ENDPOINT`, `SMS_API_KEY`, `SMS_FROM`                               | All three select the HTTP SMS adapter; otherwise `CaptureSmsSender` is used.             |
 | Push    | `PUSH_ENDPOINT`, `PUSH_API_KEY`, `PUSH_APP_ID`                          | All three select the HTTP push adapter; otherwise `CapturePushSender` is used.           |
 
-The default `.github/workflows/deploy.yml` does not yet inject these optional provider secrets into
-Cloud Run. To activate a provider in production, create Secret Manager entries for sensitive values
-(`SMTP_PASS`, `SMS_API_KEY`, `PUSH_API_KEY`), add non-sensitive values as GitHub variables or Cloud
-Run env vars, then add them to the `deploy-api` job's `env_vars:` / `secrets:` block.
+The generated `API_SECRET_BINDINGS` manifest injects email values collected by the integration
+wizard into Cloud Run. SMS and push are not wizard providers yet; configure their complete variable
+sets separately before enabling those adapters.
 
 Provider callbacks land under `/internal/notifications/*`:
 

@@ -172,7 +172,7 @@ describe('slices', () => {
     expect(() => clientShared.NEXT_PUBLIC_APP_URL.parse(undefined)).toThrow();
     expect(() => clientShared.NEXT_PUBLIC_PASSKEY_RP_ID.parse(undefined)).toThrow();
     expect(clientShared.NEXT_PUBLIC_PASSKEY_RP_ID.parse('example.com')).toBe('example.com');
-    expect(clientShared.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY.parse(undefined)).toBeUndefined();
+    expect(stripeServer.STRIPE_PUBLISHABLE_KEY.parse(undefined)).toBeUndefined();
   });
 });
 
@@ -262,18 +262,6 @@ describe.each([
   });
 });
 
-// The web composition additionally validates the publishable Stripe key var.
-describe('web composition (stripe publishable key)', () => {
-  it('carries the optional Stripe publishable key when set', async () => {
-    vi.stubEnv('NEXT_PUBLIC_API_URL', 'https://api.example.com');
-    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://app.example.com');
-    vi.stubEnv('NEXT_PUBLIC_PASSKEY_RP_ID', 'example.com');
-    vi.stubEnv('NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY', 'pk_test_123');
-    const mod = await import('../src/web');
-    expect(mod.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY).toBe('pk_test_123');
-  });
-});
-
 // ===========================================================================
 // api.ts — server composition + cross-field rules
 // ===========================================================================
@@ -291,6 +279,7 @@ describe('api composition', () => {
     expect(mod.env.PORT).toBe(4000);
     expect(mod.env.NODE_ENV).toBe('development');
     expect(mod.env.BILLING_ENABLED).toBe(false);
+    expect(mod.env.STRIPE_PUBLISHABLE_KEY).toBeUndefined();
     expect(mod.env.MCP_CIMD_STRICT).toBe(true);
     expect(mod.env.MCP_ISSUER_URL).toBe('http://localhost:4000');
     expect(mod.env.MCP_RESOURCE_URL).toBe('http://localhost:4000/mcp');

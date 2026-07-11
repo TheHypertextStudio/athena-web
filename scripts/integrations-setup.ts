@@ -16,10 +16,8 @@
  *                             `docket-staging-…` names Cloud Run mounts in `deploy.yml`);
  *                             public `NEXT_PUBLIC_*` vars to GitHub environment variables.
  *
- * Credentials are never shared across environments: each environment is configured in its own
- * pass with its own OAuth apps / Stripe mode and redirect URIs. Production is completeness-first:
- * every provider value is required unless bootstrap was explicitly launched with
- * `--skip-providers`.
+ * Credentials are never shared across environments: each environment is configured in its
+ * own pass with its own OAuth apps / Stripe mode and its own redirect URIs.
  *
  * Runnable standalone (`pnpm integrations`) or invoked from {@link runIntegrationSetup} by
  * `scripts/bootstrap.ts`.
@@ -33,6 +31,7 @@ import process from 'node:process';
 
 import {
   cancel,
+  confirm,
   intro,
   isCancel,
   log,
@@ -52,6 +51,9 @@ import {
   DEFAULT_LOCAL_API_URL,
   copyToClipboard,
   type Environment,
+  type ProviderGroup,
+  type ProviderId,
+  type ProviderStep,
   type SetupUrls,
 } from './integration-providers';
 
@@ -88,22 +90,6 @@ export function tryRun(cmd: string): string {
 /** Run a command with inherited stdio (streams output); throws on failure. */
 export function exec(cmd: string): void {
   execSync(cmd, { encoding: 'utf8', stdio: 'inherit' });
-}
-
-/** Open a trusted provider setup URL in the user's default browser. */
-function openExternalUrl(url: string): boolean {
-  const command =
-    process.platform === 'darwin'
-      ? { file: 'open', args: [url] }
-      : process.platform === 'win32'
-        ? { file: 'cmd', args: ['/c', 'start', '', url] }
-        : { file: 'xdg-open', args: [url] };
-  try {
-    execFileSync(command.file, command.args, { stdio: 'ignore' });
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 /** `owner/repo` from the git `origin` remote, or '' if not a GitHub remote. */
@@ -214,7 +200,7 @@ function noteWidth(): number {
  * the box border. Pre-wrapping at word boundaries keeps every line within the frame; each
  * line's leading indentation is preserved so numbered/bulleted structure stays aligned.
  */
-export function wrapLines(lines: readonly string[], width = noteWidth()): string[] {
+function wrapLines(lines: readonly string[], width = noteWidth()): string[] {
   const out: string[] = [];
   for (const line of lines) {
     const indent = /^\s*/.exec(line)?.[0] ?? '';
@@ -239,18 +225,90 @@ export function wrapLines(lines: readonly string[], width = noteWidth()): string
       }
     }
     if (current !== '') segments.push(current);
-    segments.forEach((seg, i) => {
-      let prefix = i === 0 ? indent : hang;
-      let remaining = seg;
-      do {
-        const available = Math.max(1, width - prefix.length);
-        out.push(prefix + remaining.slice(0, available));
-        remaining = remaining.slice(available);
-        prefix = hang;
-      } while (remaining.length > 0);
-    });
+    segments.forEach((seg, i) => out.push((i === 0 ? indent : hang) + seg));
   }
   return out;
+}
+
+/** Split a numbered provider guide into operator-sized actions while preserving its preamble. */
+export function splitInstructionSteps(lines: readonly string[]): ProviderStep[] {
+  const steps: string[][] = [];
+  let current: string[] = [];
+  for (const line of lines) {
+    if (/^\s*\d+\)/.test(line) && current.some((entry) => entry.trim() !== '')) {
+      steps.push(current);
+      current = [];
+    }
+    current.push(line);
+  }
+  if (current.some((entry) => entry.trim() !== '')) steps.push(current);
+  return steps.map((step) => ({ note: step }));
+}
+
+/** Open a provider page using the host OS without routing credentials through a browser helper. */
+export function openExternalUrl(url: string): boolean {
+  const command =
+    process.platform === 'darwin'
+      ? { file: 'open', args: [url] }
+      : process.platform === 'win32'
+        ? { file: 'cmd', args: ['/c', 'start', '', url] }
+        : { file: 'xdg-open', args: [url] };
+  try {
+    execFileSync(command.file, command.args, { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Metadata-only readiness state shown in the provider picker and final handoff. */
+export type ProviderConfigurationStatus = 'missing' | 'partial' | 'configured';
+
+const LEGACY_SECRET_NAMES: Readonly<Partial<Record<string, string>>> = {
+  GITHUB_APP_CLIENT_ID: 'docket-github-client-id',
+  GITHUB_APP_CLIENT_SECRET: 'docket-github-client-secret',
+};
+
+/** Classify a provider without reading any credential values. */
+export function classifyProviderStatus(
+  group: ProviderGroup,
+  configuredVars: ReadonlySet<string>,
+  env: Environment = 'production',
+): ProviderConfigurationStatus {
+  const vars = providerVars(group, env);
+  const configuredCount = vars.filter((name) => configuredVars.has(name)).length;
+  if (configuredCount === 0) return 'missing';
+  const required = group.requiredVars?.filter((name) => vars.includes(name)) ?? vars;
+  if (required.length === 0) return 'configured';
+  return required.every((name) => configuredVars.has(name)) ? 'configured' : 'partial';
+}
+
+/** Canonical Cloud Run secret bindings for configured server-side provider variables. */
+export function buildApiSecretBindings(
+  env: Environment,
+  configuredSecrets: ReadonlySet<string>,
+): string[] {
+  const bindings = [
+    'DATABASE_URL=docket-database-url:latest',
+    'BETTER_AUTH_SECRET=docket-auth-secret:latest',
+    'CRON_SECRET=docket-cron-secret:latest',
+  ];
+  for (const group of PROVIDER_GROUPS) {
+    for (const varName of providerVars(group, env)) {
+      if (group.cloudVariables?.includes(varName)) continue;
+      const spec = findVar(varName);
+      if (!spec || spec.scope === 'client') continue;
+      const secret = secretName(env, varName);
+      const legacy = env === 'production' ? LEGACY_SECRET_NAMES[varName] : undefined;
+      const configuredName = configuredSecrets.has(secret)
+        ? secret
+        : legacy && configuredSecrets.has(legacy)
+          ? legacy
+          : undefined;
+      if (configuredName) bindings.push(`${varName}=${configuredName}:latest`);
+    }
+  }
+  return bindings;
 }
 
 // ── core: per-var prompt with schema validation ──────────────────────────────────
@@ -259,10 +317,6 @@ interface PromptContext {
   readonly env: Environment;
   /** Current value (from `.env.local` for local, or an existing secret for cloud). */
   readonly current?: string;
-  /** A cloud value exists but is intentionally not read back into the prompt. */
-  readonly provisioned?: boolean;
-  /** Empty input is invalid unless an existing local/cloud value will be preserved. */
-  readonly required?: boolean;
 }
 
 /**
@@ -272,10 +326,9 @@ interface PromptContext {
  * @returns the accepted value, or `undefined` when skipped/left blank.
  */
 async function promptVar(spec: VarSpec, ctx: PromptContext): Promise<string | undefined> {
-  const keepExisting = Boolean(ctx.current ?? ctx.provisioned);
-  const message = `${spec.name} — ${spec.where}${keepExisting ? ' (blank = keep existing)' : ''}`;
+  const message = `${spec.name} — ${spec.where}${ctx.current ? ' (blank = keep current)' : ''}`;
   const validate = (value: string | undefined): string | undefined => {
-    if (!value) return ctx.required && !keepExisting ? 'required for production' : undefined;
+    if (!value) return undefined; // empty = skip / keep current
     const result = spec.zod.safeParse(value);
     return result.success ? undefined : result.error.issues.map((i) => i.message).join('; ');
   };
@@ -478,63 +531,57 @@ interface CloudTarget {
   readonly project: string;
 }
 
-/** Return whether a stored provider value is real rather than empty/bootstrap placeholder text. */
-export function isConfiguredProviderValue(value: string): boolean {
-  const normalized = value.trim().toLowerCase();
-  return normalized !== '' && normalized !== 'placeholder' && !normalized.startsWith('your-');
+interface CloudConfigurationState {
+  readonly configuredVars: Set<string>;
+  readonly secretNames: Set<string>;
 }
 
-/** Check a cloud-backed registry value without printing it or placing it in argv. */
-function cloudVarIsConfigured(
-  env: Exclude<Environment, 'local'>,
-  target: CloudTarget,
-  varName: string,
-): boolean {
-  const spec = findVar(varName);
-  if (spec?.scope === 'client') {
-    return isConfiguredProviderValue(
-      tryRun(`gh variable get ${varName} --env ${env} --repo ${target.repo} 2>/dev/null`),
-    );
-  }
-  const name = secretName(env, varName);
-  return isConfiguredProviderValue(
-    tryRun(
-      `gcloud secrets versions access latest --secret=${name} --project=${target.project} 2>/dev/null`,
-    ),
+/** Read only secret/variable names for rerun status; credential values are never accessed. */
+function readCloudConfiguration(env: Environment, target: CloudTarget): CloudConfigurationState {
+  const secretNames = new Set(
+    tryRun(`gcloud secrets list --project=${target.project} --format='value(name)'`)
+      .split('\n')
+      .map((name) => name.trim())
+      .filter(Boolean),
   );
+  const variableNames = new Set(
+    tryRun(`gh variable list --env ${env} --repo ${target.repo} --json name --jq '.[].name'`)
+      .split('\n')
+      .map((name) => name.trim())
+      .filter(Boolean),
+  );
+  const configuredVars = new Set<string>();
+  for (const group of PROVIDER_GROUPS) {
+    for (const varName of providerVars(group, env)) {
+      const configured = group.cloudVariables?.includes(varName)
+        ? variableNames.has(varName)
+        : secretNames.has(secretName(env, varName)) ||
+          (env === 'production' &&
+            LEGACY_SECRET_NAMES[varName] !== undefined &&
+            secretNames.has(LEGACY_SECRET_NAMES[varName]));
+      if (configured) configuredVars.add(varName);
+    }
+  }
+  return { configuredVars, secretNames };
 }
 
-/**
- * Add the Linear webhook signing secret to the API Cloud Run deployment, idempotently.
- *
- * @throws When the expected API secret block or Linear client-secret anchor is absent.
- */
-export function ensureLinearWebhookSecretMount(workflow: string): string {
-  const mount = '            LINEAR_WEBHOOK_SECRET=docket-linear-webhook-secret:latest';
-  if (workflow.includes(mount)) return workflow;
-  const deployApi = workflow.indexOf('      - id: deploy-api');
-  const anchor = '            LINEAR_CLIENT_SECRET=docket-linear-client-secret:latest';
-  const anchorIndex = workflow.indexOf(anchor, deployApi);
-  if (deployApi < 0 || anchorIndex < 0) {
-    throw new Error('Could not find the deploy-api Linear secret block in deploy.yml');
-  }
-  const insertAt = anchorIndex + anchor.length;
-  return `${workflow.slice(0, insertAt)}\n${mount}${workflow.slice(insertAt)}`;
-}
-
-/** Wire the webhook mount only after all three real Linear production values exist in GCP. */
-function wireLinearWebhookSecretWhenReady(target: CloudTarget): void {
-  const required = ['LINEAR_CLIENT_ID', 'LINEAR_CLIENT_SECRET', 'LINEAR_WEBHOOK_SECRET'];
-  if (!required.every((name) => cloudVarIsConfigured('production', target, name))) return;
-  const path = resolve(ROOT, '.github/workflows/deploy.yml');
-  const current = readFileSync(path, 'utf8');
-  const next = ensureLinearWebhookSecretMount(current);
-  if (next !== current) {
-    writeFileSync(path, next);
-    ok('wired LINEAR_WEBHOOK_SECRET into the deploy-api workflow');
-  } else {
-    ok('deploy-api already mounts LINEAR_WEBHOOK_SECRET');
-  }
+/** Verify the selected gcloud session before the wizard asks the operator for any credentials. */
+async function ensureCloudSession(target: CloudTarget): Promise<void> {
+  const probe = (): boolean =>
+    Boolean(
+      tryRun(`gcloud projects describe ${target.project} --format='value(projectId)' 2>/dev/null`),
+    );
+  if (probe()) return;
+  const account = process.env['CLOUDSDK_CORE_ACCOUNT'] ?? '';
+  const reauthenticate = unwrap(
+    await confirm({
+      message: `The selected gcloud session${account ? ` (${account})` : ''} cannot access ${target.project}. Reauthenticate now?`,
+      initialValue: true,
+    }),
+  );
+  if (!reauthenticate) throw new Error(`gcloud access to ${target.project} is required.`);
+  exec(`gcloud auth login${account ? ` ${account}` : ''}`);
+  if (!probe()) throw new Error(`gcloud still cannot access ${target.project} after login.`);
 }
 
 /**
@@ -562,9 +609,6 @@ function pushSecret(env: Environment, target: CloudTarget, varName: string, valu
   if (!projectNumber) {
     throw new Error(`Could not resolve the project number for ${target.project}`);
   }
-  // Cloud Run uses the project's default compute service account unless the service explicitly
-  // selects another identity. Grant only this secret (rather than project-wide Secret Manager
-  // access), so a freshly provisioned provider can be mounted by the next API revision.
   execFileSync(
     'gcloud',
     [
@@ -588,6 +632,21 @@ function pushVariable(env: Environment, target: CloudTarget, key: string, value:
   ok(`${key} → GitHub ${env} variable`);
 }
 
+/** Publish the non-secret list of Cloud Run env-to-secret bindings consumed by deploy.yml. */
+function pushApiSecretBindings(
+  env: Environment,
+  target: CloudTarget,
+  secretNames: ReadonlySet<string>,
+): void {
+  const body = buildApiSecretBindings(env, secretNames).join('\n');
+  execFileSync(
+    'gh',
+    ['variable', 'set', 'API_SECRET_BINDINGS', '--env', env, '--repo', target.repo, '--body', body],
+    { stdio: 'inherit' },
+  );
+  ok(`API_SECRET_BINDINGS → GitHub ${env} variable`);
+}
+
 // ── per-environment setup pass ───────────────────────────────────────────────────
 
 interface SetupOptions {
@@ -601,6 +660,8 @@ interface SetupOptions {
   readonly embedded?: boolean;
   /** Pre-scope the environments to configure; when set, the multiselect prompt is skipped. */
   readonly environments?: Environment[];
+  /** Pre-scope providers for automation/tests; otherwise the status picker is shown. */
+  readonly providers?: ProviderId[];
 }
 
 /** Split a comma-separated origins string into trimmed, non-empty entries. */
@@ -613,8 +674,8 @@ function splitOrigins(raw: string | undefined): string[] {
 
 /**
  * Resolve the two distinct origins a provider's setup URLs hang off (see {@link SetupUrls}):
- * `apiBase` (the public API host for webhooks and Better Auth's direct fallback callback) and
- * `webBases` (the browser-facing product frontends whose same-origin OAuth routes proxy to it).
+ * `apiBase` (the public API host — only webhooks point here) and `webBases` (the browser-facing
+ * product frontends — OAuth/connect callbacks point here).
  *
  * @remarks
  * `local` derives both straight from `.env.local` (no prompt): `apiBase` from `API_URL`, and
@@ -652,15 +713,105 @@ async function resolveSetupUrls(
         validate: (v) => (v && v.length > 0 ? undefined : 'required'),
       }),
     );
-  const adminFromGh = repo ? tryRun(`gh variable get ADMIN_URL --env ${env} --repo ${repo}`) : '';
-  return { apiBase, webBases: [...new Set([webBase, adminFromGh].filter(Boolean))] };
+  return { apiBase, webBases: [webBase] };
 }
 
-/** Configure every provider for a single environment. */
+type GuidedResult = 'complete' | 'skip' | 'exit';
+
+/** Run provider steps with navigation and an explicit checkpoint after every operator action. */
+async function runGuidedSteps(
+  group: ProviderGroup,
+  steps: readonly ProviderStep[],
+  env: Environment,
+  envLocal: Record<string, string>,
+  configuredVars: ReadonlySet<string>,
+  rotate: boolean,
+  collected: Record<string, string>,
+  generatedValues: Readonly<Record<string, string>>,
+): Promise<GuidedResult> {
+  let index = 0;
+  while (index < steps.length) {
+    const current = steps[index];
+    if (!current) break;
+    note(
+      wrapLines(current.note).join('\n'),
+      `${group.label} — step ${String(index + 1)} of ${String(steps.length)}`,
+    );
+    const url = current.openUrl ?? (index === 0 ? group.consoleUrl : undefined);
+    if (url) {
+      const shouldOpen = unwrap(
+        await confirm({
+          message: `Open ${group.label} setup page in your browser?`,
+          initialValue: true,
+        }),
+      );
+      if (shouldOpen && !openExternalUrl(url))
+        warn(`Could not open browser. Open manually: ${url}`);
+    }
+
+    const alreadyConfigured = current.var ? configuredVars.has(current.var) : false;
+    const action = unwrap(
+      await select<'continue' | 'back' | 'retry' | 'skip' | 'exit'>({
+        message: current.var
+          ? alreadyConfigured && !rotate
+            ? `${current.var} is already configured. Continue?`
+            : `Ready to enter ${current.var}?`
+          : 'Finished this step?',
+        initialValue: 'continue',
+        options: [
+          {
+            value: 'continue',
+            label:
+              alreadyConfigured && !rotate
+                ? 'Keep existing'
+                : current.var
+                  ? current.var in generatedValues
+                    ? 'Generate and copy'
+                    : 'Enter value'
+                  : 'Done',
+          },
+          ...(index > 0 ? [{ value: 'back' as const, label: 'Back' }] : []),
+          { value: 'retry', label: 'Show this step again' },
+          { value: 'skip', label: 'Skip this provider' },
+          { value: 'exit', label: 'Exit integration setup' },
+        ],
+      }),
+    );
+    if (action === 'back') {
+      index = Math.max(0, index - 1);
+      continue;
+    }
+    if (action === 'retry') continue;
+    if (action === 'skip' || action === 'exit') return action;
+    if (current.var && (!alreadyConfigured || rotate)) {
+      const spec = findVar(current.var);
+      if (!spec) throw new Error(`${group.title} references unknown variable ${current.var}.`);
+      const generated = generatedValues[current.var];
+      if (generated) {
+        if (!copyToClipboard(generated)) {
+          warn('No supported clipboard utility is available; install one and retry this step.');
+          continue;
+        }
+        collected[current.var] = generated;
+        ok(`${current.var} generated and copied without being displayed`);
+      } else {
+        const value = await promptVar(spec, { env, current: nonEmpty(envLocal, current.var) });
+        if (value !== undefined) {
+          collected[current.var] = group.transform?.[current.var]?.(value) ?? value;
+        }
+      }
+    }
+    index += 1;
+  }
+  return 'complete';
+}
+
+/** Configure selected providers for a single environment. */
 async function setupEnvironment(
   env: Environment,
   repo: string,
   defaultProject: string,
+  providerIds?: readonly ProviderId[],
 ): Promise<void> {
   note(
     env === 'local'
@@ -681,138 +832,126 @@ async function setupEnvironment(
       repo || unwrap(await text({ message: 'GitHub owner/repo', placeholder: 'owner/repo' }));
     const project = await chooseGcloudProject(defaultProject, env);
     if (!repoForCloud || !project) {
-      throw new Error(`${env} requires both a GitHub repository and GCP project`);
+      warn(`skipping ${env} cloud writes — repo/project not provided`);
     } else {
       cloud = { repo: repoForCloud, project };
+      await ensureCloudSession(cloud);
     }
   }
 
-  const deployHints: string[] = [];
-
-  for (const group of PROVIDER_GROUPS) {
-    const collected: Record<string, string> = {};
-    const vars = providerVars(group, env);
-
-    // Bootstrap assumes a fresh repo and creates everything from scratch. But if this provider is
-    // ALREADY configured — every var it manages is present (a re-run, or values someone pasted in
-    // from the team's secret store) — verify that and skip rather than redo the work. (Only `local`
-    // reads existing state from .env.local; cloud envs always (re)provision.)
-    const alreadySet = vars.filter((varName) =>
-      env === 'local'
-        ? Boolean(nonEmpty(envLocal, varName))
-        : Boolean(cloud && cloudVarIsConfigured(env, cloud, varName)),
+  const cloudState = cloud
+    ? readCloudConfiguration(env, cloud)
+    : { configuredVars: new Set<string>(), secretNames: new Set<string>() };
+  const configuredVars =
+    env === 'local'
+      ? new Set(
+          Object.entries(envLocal)
+            .filter(([, value]) => value !== '')
+            .map(([name]) => name),
+        )
+      : cloudState.configuredVars;
+  const statuses = new Map(
+    PROVIDER_GROUPS.map((group) => [group.id, classifyProviderStatus(group, configuredVars, env)]),
+  );
+  note(
+    PROVIDER_GROUPS.map((group) => {
+      const status = statuses.get(group.id) ?? 'missing';
+      const icon = status === 'configured' ? '✓' : status === 'partial' ? '◐' : '○';
+      return `${icon} ${group.label.padEnd(24)} ${status}`;
+    }).join('\n'),
+    'Integration status (credential values were not read)',
+  );
+  const chosenIds =
+    providerIds ??
+    unwrap(
+      await multiselect<ProviderId>({
+        message: 'Which providers do you want to configure or rotate?',
+        required: true,
+        options: PROVIDER_GROUPS.map((group) => ({
+          value: group.id,
+          label: group.label,
+          hint: `${statuses.get(group.id) ?? 'missing'}${group.optional ? ', optional' : ''}`,
+        })),
+      }),
     );
-    if (vars.length > 0 && alreadySet.length === vars.length) {
-      ok(`${group.title}: already configured (${alreadySet.join(', ')}) — skipping.`);
-      if (env === 'production' && group.id === 'linear' && cloud) {
-        wireLinearWebhookSecretWhenReady(cloud);
-      }
+  const rotateIds = new Set<ProviderId>();
+  for (const providerId of chosenIds) {
+    if (statuses.get(providerId) !== 'configured') continue;
+    const group = PROVIDER_GROUPS.find((candidate) => candidate.id === providerId);
+    if (!group) continue;
+    const rotate = unwrap(
+      await confirm({
+        message: `${group.label} is already configured. Add new credential versions?`,
+        initialValue: false,
+      }),
+    );
+    if (rotate) rotateIds.add(providerId);
+  }
+
+  for (const group of PROVIDER_GROUPS.filter((candidate) => chosenIds.includes(candidate.id))) {
+    const vars = providerVars(group, env);
+    const rotate = rotateIds.has(group.id);
+    if (statuses.get(group.id) === 'configured' && !rotate) {
+      ok(`${group.label}: kept existing configuration`);
       continue;
     }
+    const collected: Record<string, string> = {};
 
-    const launchUrl = group.launchUrl?.(env, urls);
-    if (launchUrl) {
-      const opened = openExternalUrl(launchUrl);
-      const copied = opened ? false : copyToClipboard(launchUrl);
-      note(
-        wrapLines([
-          opened
-            ? 'Opened the prefilled provider form in your browser.'
-            : copied
-              ? 'The browser could not be opened, so the prefilled form URL was copied to your clipboard. Paste it into a browser.'
-              : 'The browser and clipboard could not be opened. Run bootstrap from a desktop session to launch the prefilled provider form.',
-        ]).join('\n'),
-        group.title,
-      );
-    }
+    const generatedValues = group.generate?.(env) ?? {};
 
-    // Turnkey secrets: generate (unless already set), show + copy to clipboard, then skip the
-    // prompt — so the value is on screen + clipboard while the user fills the provider's form.
-    const generated = group.generate?.(env) ?? {};
-    for (const [name, fresh] of Object.entries(generated)) {
-      const existing = nonEmpty(envLocal, name);
-      const provisioned = Boolean(
-        env !== 'local' && cloud && cloudVarIsConfigured(env, cloud, name),
-      );
-      if (existing) {
-        generated[name] = existing; // keep a working secret; never rotate it out from under them
-        continue;
-      }
-      if (provisioned) continue; // cloud value exists; never rotate an opaque signing secret
-      collected[name] = fresh;
-      const copied = copyToClipboard(fresh);
-      note(
-        wrapLines([
-          `${name}:`,
-          `  ${fresh}`,
-          '',
-          `Generated for you${copied ? ' and copied to your clipboard' : ''}. Paste it into the`,
-          'matching field on the provider as you fill the form below. It is saved to',
-          env === 'local'
-            ? 'your .env.local automatically — the two must match.'
-            : 'the cloud secret store automatically — the two must match.',
-        ]).join('\n'),
-        'Secret generated',
-      );
-    }
-
+    let guidedResult: GuidedResult;
     if (group.steps) {
-      // Step-by-step: show each short instruction immediately before prompting for the value it
-      // produces, so the guidance never drifts away from the field it describes.
-      for (const step of group.steps(env, urls)) {
-        note(wrapLines(step.note).join('\n'), group.title);
-        const varName = step.var;
-        if (!varName || varName in generated) continue;
-        const spec = findVar(varName);
-        if (!spec) {
-          warn(`unknown var ${varName} (registry drift) — skipping`);
-          continue;
-        }
-        const current = nonEmpty(envLocal, varName);
-        const provisioned = Boolean(
-          env !== 'local' && cloud && cloudVarIsConfigured(env, cloud, varName),
-        );
-        const value = await promptVar(spec, {
-          env,
-          current,
-          provisioned,
-          required: env === 'production',
-        });
-        if (value !== undefined && value !== current) {
-          collected[varName] = group.transform?.[varName]?.(value) ?? value;
-        }
-      }
+      guidedResult = await runGuidedSteps(
+        group,
+        group.steps(env, urls),
+        env,
+        envLocal,
+        configuredVars,
+        rotate,
+        collected,
+        generatedValues,
+      );
     } else {
-      note(
-        wrapLines([
-          ...(group.instructions?.(env, urls) ?? []),
-          '',
-          env === 'production'
-            ? 'Every provider value is required in production. Blank keeps an existing cloud value.'
-            : 'Leave a field blank to skip it.',
-        ]).join('\n'),
-        group.title,
+      guidedResult = await runGuidedSteps(
+        group,
+        splitInstructionSteps(group.instructions?.(env, urls) ?? []),
+        env,
+        envLocal,
+        configuredVars,
+        rotate,
+        collected,
+        generatedValues,
       );
 
-      if (group.credentialBundle) {
+      if (guidedResult === 'complete' && group.credentialBundle) {
         const bundle = group.credentialBundle;
-        let parsed: Record<string, string> | undefined;
-        const raw = unwrap(
-          await text({
-            message: bundle.message,
-            placeholder: bundle.placeholder,
-            validate: (value) => {
-              if (!value?.trim()) return undefined;
-              try {
-                parsed = bundle.parse(value, urls);
-                return undefined;
-              } catch (error) {
-                return error instanceof Error ? error.message : 'Credential file is invalid.';
-              }
-            },
+        const method = unwrap(
+          await select<'manual' | 'bundle'>({
+            message: `How do you want to enter ${group.label} credentials?`,
+            initialValue: 'manual',
+            options: [
+              { value: 'manual', label: 'Copy and paste values', hint: 'recommended' },
+              { value: 'bundle', label: 'Import downloaded credential file' },
+            ],
           }),
-        ).trim();
-        if (raw) {
+        );
+        if (method === 'bundle') {
+          let parsed: Record<string, string> | undefined;
+          const raw = unwrap(
+            await text({
+              message: bundle.message,
+              placeholder: bundle.placeholder,
+              validate: (value) => {
+                if (!value?.trim()) return 'required';
+                try {
+                  parsed = bundle.parse(value, urls);
+                  return undefined;
+                } catch (error) {
+                  return error instanceof Error ? error.message : 'Credential file is invalid.';
+                }
+              },
+            }),
+          ).trim();
           parsed ??= bundle.parse(raw, urls);
           for (const [varName, value] of Object.entries(parsed)) {
             if (!vars.includes(varName)) {
@@ -829,68 +968,67 @@ async function setupEnvironment(
         }
       }
 
-      for (const varName of vars) {
-        if (varName in generated || varName in collected) continue;
-        const spec = findVar(varName);
-        if (!spec) {
-          warn(`unknown var ${varName} (registry drift) — skipping`);
-          continue;
-        }
-        const current = nonEmpty(envLocal, varName);
-        const provisioned = Boolean(
-          env !== 'local' && cloud && cloudVarIsConfigured(env, cloud, varName),
-        );
-        const value = await promptVar(spec, {
+      if (guidedResult === 'complete') {
+        const captureSteps = vars
+          .filter((varName) => !(varName in collected) && (!configuredVars.has(varName) || rotate))
+          .map((varName) => ({
+            note: [`Copy ${varName} from ${group.label}, then return to this terminal.`],
+            var: varName,
+          }));
+        guidedResult = await runGuidedSteps(
+          group,
+          captureSteps,
           env,
-          current,
-          provisioned,
-          required: env === 'production',
-        });
-        if (value !== undefined && value !== current) {
-          collected[varName] = group.transform?.[varName]?.(value) ?? value;
-        }
+          envLocal,
+          configuredVars,
+          rotate,
+          collected,
+          generatedValues,
+        );
       }
     }
 
-    if (Object.keys(collected).length > 0 && env === 'local') {
+    if (guidedResult === 'exit') return;
+    if (guidedResult === 'skip') {
+      warn(`${group.label}: skipped; no collected values were written`);
+      continue;
+    }
+
+    if (Object.keys(collected).length === 0) {
+      warn(
+        `${group.label}: ${classifyProviderStatus(group, configuredVars, env)}; no values were changed`,
+      );
+      continue;
+    }
+
+    if (env === 'local') {
       upsertEnvVars(resolve(ROOT, '.env.local'), collected);
+      Object.keys(collected).forEach((name) => configuredVars.add(name));
       ok(`wrote ${Object.keys(collected).join(', ')} to .env.local`);
-    } else if (Object.keys(collected).length > 0 && cloud) {
+    } else if (cloud) {
       for (const [name, value] of Object.entries(collected)) {
         const spec = findVar(name);
-        if (spec?.scope === 'client') {
+        if (group.cloudVariables?.includes(name) || spec?.scope === 'client') {
           pushVariable(env, cloud, name, value);
-          deployHints.push(`  build-arg (web/admin): ${name}=\${{ vars.${name} }}`);
         } else {
           pushSecret(env, cloud, name, value);
-          if (!(env === 'production' && group.id === 'linear')) {
-            deployHints.push(`  secrets: ${name}=${secretName(env, name)}:latest`);
-          }
+          cloudState.secretNames.add(secretName(env, name));
         }
+        configuredVars.add(name);
       }
     }
-
-    if (env === 'production' && group.id === 'linear' && cloud) {
-      wireLinearWebhookSecretWhenReady(cloud);
-    }
-    if (env === 'production' && cloud) {
-      const missing = vars.filter((name) => !cloudVarIsConfigured(env, cloud, name));
-      if (missing.length > 0) {
-        throw new Error(`${group.title} is incomplete; missing: ${missing.join(', ')}`);
-      }
-    }
+    const finalStatus = classifyProviderStatus(group, configuredVars, env);
+    if (finalStatus === 'configured') ok(`${group.label}: configured and ready for deployment`);
+    else warn(`${group.label}: ${finalStatus}; rerun setup to provide the remaining values`);
   }
 
-  if (deployHints.length > 0) {
-    note(
-      [
-        'Add any NEW lines below to the docket-api (and web/admin) deploy steps:',
-        '',
-        ...new Set(deployHints),
-      ].join('\n'),
-      `${env}: wire these into .github/workflows/deploy.yml`,
-    );
-  }
+  if (cloud) pushApiSecretBindings(env, cloud, cloudState.secretNames);
+  note(
+    PROVIDER_GROUPS.map(
+      (group) => `${group.label}: ${classifyProviderStatus(group, configuredVars, env)}`,
+    ).join('\n'),
+    `${env} integration readiness`,
+  );
 }
 
 // ── entrypoint ───────────────────────────────────────────────────────────────────
@@ -930,7 +1068,7 @@ export async function runIntegrationSetup(opts: SetupOptions = {}): Promise<void
     opts.defaultProject ?? (needsCloud ? tryRun('gcloud config get-value project') : '');
 
   for (const env of chosen) {
-    await setupEnvironment(env, repo, defaultProject);
+    await setupEnvironment(env, repo, defaultProject, opts.providers);
   }
 
   const doneMsg = chosen.includes('local')

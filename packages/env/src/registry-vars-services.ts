@@ -15,6 +15,15 @@ export const SERVICE_VARS: readonly VarSpec[] = [
     sensitive: true,
   },
   {
+    name: 'STRIPE_PUBLISHABLE_KEY',
+    slice: 'stripe',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: stripeServer.STRIPE_PUBLISHABLE_KEY,
+    where: 'Stripe browser-safe publishable key (pk_...) exposed through GET /v1/config',
+  },
+  {
     name: 'STRIPE_WEBHOOK_SECRET',
     slice: 'stripe',
     scope: 'server',

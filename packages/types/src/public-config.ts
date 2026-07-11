@@ -59,6 +59,12 @@ export const PublicConfigOut = z
       .boolean()
       .optional()
       .describe('False while Google OAuth is staged for designated test users only.'),
+    /** Browser-safe Stripe publishable key, or null while billing is not configured. */
+    stripePublishableKey: z
+      .string()
+      .nullable()
+      .optional()
+      .describe('Stripe publishable key supplied at runtime; never a Stripe secret key.'),
     /** The connector keys unlocked by the configured providers (e.g. `gtasks`, `github`). */
     connectors: z
       .array(z.string())

@@ -1,9 +1,7 @@
-name: Deploy to Cloud Run
+name: Deploy production
 
 on:
-  push:
-    branches: [main]
-  workflow_dispatch:
+  workflow_call:
 
 env:
   REGION: ${{ vars.GCP_REGION }}
@@ -12,8 +10,9 @@ env:
 
 jobs:
   deploy-api:
-    name: API
+    name: Migrate database and deploy API
     runs-on: ubuntu-latest
+    environment: production
     permissions:
       contents: read
       id-token: write
@@ -33,7 +32,35 @@ jobs:
       - id: node-ver
         run: echo "value=$(cat .node-version)" >> "$GITHUB_OUTPUT"
 
-      - uses: docker/build-push-action@v7
+      - name: Build and push migration image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: packages/db/Dockerfile
+          push: true
+          tags: ${{ env.REGISTRY }}/migrate:${{ github.sha }}
+          cache-from: type=gha,scope=migrate
+          cache-to: type=gha,scope=migrate,mode=max
+          build-args: NODE_VERSION=${{ steps.node-ver.outputs.value }}
+
+      - name: Apply database migrations
+        run: |
+          gcloud run jobs deploy docket-db-migrate \
+            --project="${{ vars.GCP_PROJECT_ID }}" \
+            --region="${{ env.REGION }}" \
+            --image="${{ env.REGISTRY }}/migrate:${{ github.sha }}" \
+            --set-secrets=DATABASE_URL_UNPOOLED=docket-database-url-unpooled:latest \
+            --tasks=1 \
+            --max-retries=0 \
+            --task-timeout=15m \
+            --quiet
+          gcloud run jobs execute docket-db-migrate \
+            --project="${{ vars.GCP_PROJECT_ID }}" \
+            --region="${{ env.REGION }}" \
+            --wait
+
+      - name: Build and push API image
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: apps/api/Dockerfile
@@ -42,23 +69,6 @@ jobs:
           cache-from: type=gha,scope=api
           cache-to: type=gha,scope=api,mode=max
           build-args: NODE_VERSION=${{ steps.node-ver.outputs.value }}
-
-      - name: Apply production database migrations
-        env:
-          API_IMAGE: ${{ env.REGISTRY }}/api:${{ github.sha }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          set +x
-          DATABASE_URL_UNPOOLED="$(gcloud secrets versions access latest \
-            --secret=docket-database-url-unpooled \
-            --project='${{ vars.GCP_PROJECT_ID }}')"
-          export DATABASE_URL_UNPOOLED
-          docker pull "$API_IMAGE"
-          docker run --rm \
-            --env DATABASE_URL_UNPOOLED \
-            "$API_IMAGE" \
-            node --import=tsx/esm /app/packages/db/src/migrate.ts
 
       - id: deploy-api
         uses: google-github-actions/deploy-cloudrun@v3
@@ -80,52 +90,23 @@ jobs:
             WEB_URL=${{ vars.WEB_URL }}
             BETTER_AUTH_URL=${{ vars.API_URL }}
             BETTER_AUTH_TRUSTED_ORIGINS=${{ vars.WEB_URL }}\,${{ vars.ADMIN_URL }}
-            BETTER_AUTH_ALLOWED_HOSTS=docket.hypertext.studio\,docket-api.hypertext.studio\,docket-admin.hypertext.studio
+            BETTER_AUTH_ALLOWED_HOSTS=${{ vars.BETTER_AUTH_ALLOWED_HOSTS }}
             BETTER_AUTH_PASSKEY_RP_ID=${{ vars.PASSKEY_RP_ID }}
             BETTER_AUTH_PASSKEY_RP_NAME=Docket
+            GOOGLE_CALENDAR_WEBHOOK_URL=${{ vars.API_URL }}/webhooks/calendar/google
+            GOOGLE_OAUTH_PUBLIC=${{ vars.GOOGLE_OAUTH_PUBLIC }}
+            GOOGLE_OAUTH_TEST_EMAILS=${{ vars.GOOGLE_OAUTH_TEST_EMAILS }}
             BILLING_ENABLED=false
             MCP_ALLOWED_ORIGINS=${{ vars.WEB_URL }}\,https://claude.ai\,https://claude.com
             MCP_TASKS_ENABLED=false
             MCP_CIMD_STRICT=true
-          secrets: |
-            DATABASE_URL=docket-database-url:latest
-            BETTER_AUTH_SECRET=docket-auth-secret:latest
-            CRON_SECRET=docket-cron-secret:latest
-            GOOGLE_CLIENT_ID=docket-google-client-id:latest
-            GOOGLE_CLIENT_SECRET=docket-google-client-secret:latest
-            GITHUB_CLIENT_ID=docket-github-client-id:latest
-            GITHUB_CLIENT_SECRET=docket-github-client-secret:latest
-            LINEAR_CLIENT_ID=docket-linear-client-id:latest
-            LINEAR_CLIENT_SECRET=docket-linear-client-secret:latest
-            RESEND_API_KEY=docket-resend-api-key:latest
-            MAIL_FROM=docket-mail-from:latest
+          # Bootstrap owns this non-secret env→Secret Manager mapping. Optional providers are
+          # mounted only after their secrets exist, so an unconfigured integration cannot break deploy.
+          secrets: ${{ vars.API_SECRET_BINDINGS }}
 
       - name: Show Cloud Run URL
         run: echo "docket-api=${{ steps.deploy-api.outputs.url }}"
 
-      - name: Verify production health and auth routes
-        env:
-          API_URL: ${{ vars.API_URL }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl --fail --silent --show-error --retry 8 --retry-all-errors \
-            --retry-delay 3 "$API_URL/v1/health" >/dev/null
-          session_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
-            "$API_URL/api/auth/get-session")"
-          test "$session_status" = 200
-          signup_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
-            --request POST "$API_URL/api/auth/sign-up/request-code" \
-            --header 'Content-Type: application/json' \
-            --data '{}')"
-          case "$signup_status" in
-            400|422) ;;
-            *) echo "signup challenge probe returned HTTP $signup_status" >&2; exit 1 ;;
-          esac
-
-      # Background sync (a core feature) only fires if Cloud Scheduler calls the cron endpoint.
-      # Re-running this idempotent create-or-update every deploy guarantees the jobs exist and
-      # stay current — never a forgotten manual step. gcloud is already authenticated (WIF).
       - name: Ensure Cloud Scheduler jobs
         env:
           GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
@@ -133,67 +114,11 @@ jobs:
           API_URL: ${{ vars.API_URL }}
         run: npx -y tsx scripts/scheduler-setup.ts
 
-  deploy-web:
-    name: Web
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: google-github-actions/auth@v3
-        with:
-          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
-          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
-
-      - uses: docker/setup-buildx-action@v4
-
-      - name: Configure Docker for Artifact Registry
-        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
-
-      - id: node-ver
-        run: echo "value=$(cat .node-version)" >> "$GITHUB_OUTPUT"
-
-      - uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: apps/web/Dockerfile
-          push: true
-          tags: ${{ env.REGISTRY }}/web:${{ github.sha }}
-          cache-from: type=gha,scope=web
-          cache-to: type=gha,scope=web,mode=max
-          build-args: |
-            NODE_VERSION=${{ steps.node-ver.outputs.value }}
-            API_URL=${{ vars.API_URL }}
-            NEXT_PUBLIC_API_URL=${{ vars.API_URL }}
-            NEXT_PUBLIC_APP_URL=${{ vars.WEB_URL }}
-
-      - id: deploy-web
-        uses: google-github-actions/deploy-cloudrun@v3
-        with:
-          service: docket-web
-          region: ${{ env.REGION }}
-          image: ${{ env.REGISTRY }}/web:${{ github.sha }}
-          flags: >-
-            --allow-unauthenticated
-            --ingress=all
-            --min-instances=0
-            --max-instances=10
-            --memory=512Mi
-            --cpu=1
-          env_vars: |
-            NODE_ENV=production
-            APP_MODE=production
-          secrets: |
-            BETTER_AUTH_SECRET=docket-auth-secret:latest
-
-      - name: Show Cloud Run URL
-        run: echo "docket-web=${{ steps.deploy-web.outputs.url }}"
-
   deploy-admin:
-    name: Admin
+    name: Deploy admin
+    needs: deploy-api
     runs-on: ubuntu-latest
+    environment: production
     permissions:
       contents: read
       id-token: write

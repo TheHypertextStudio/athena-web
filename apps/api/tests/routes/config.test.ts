@@ -23,6 +23,22 @@ describe('GET /config', () => {
     expect(body.appMode).toBe('test');
     expect(body.oauthProviders).toEqual([]);
     expect(body.connectors).toEqual([]);
+    expect(body.stripePublishableKey).toBeNull();
+  });
+
+  it('returns the browser-safe Stripe key from runtime API configuration', async () => {
+    vi.stubEnv('STRIPE_PUBLISHABLE_KEY', 'pk_test_runtime');
+    vi.resetModules();
+    try {
+      const freshConfig = (await import('../../src/routes/config')).default;
+      const app = appWithSession(freshConfig, null);
+      const res = await app.request('/', { method: 'GET' });
+      const body = PublicConfigOut.parse(await res.json());
+      expect(body.stripePublishableKey).toBe('pk_test_runtime');
+    } finally {
+      vi.unstubAllEnvs();
+      vi.resetModules();
+    }
   });
 
   // Runs last: resets the module registry to pick up the stubbed env, which would orphan any

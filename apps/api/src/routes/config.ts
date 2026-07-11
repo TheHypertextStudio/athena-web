@@ -59,6 +59,7 @@ Carries nothing secret and requires no session. Related: the authenticated perso
       appMode: env.APP_MODE,
       oauthProviders,
       googleOAuthPublic: env.GOOGLE_OAUTH_PUBLIC,
+      stripePublishableKey: env.STRIPE_PUBLISHABLE_KEY ?? null,
       connectors,
       mcpUrl: env.MCP_RESOURCE_URL ?? null,
     });

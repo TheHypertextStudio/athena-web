@@ -92,6 +92,8 @@ export interface ProviderGroup {
   readonly optional?: boolean;
   /** Primary provider page offered by the browser-assisted runner. */
   readonly consoleUrl?: string;
+  /** Environment-aware provider form URL when deterministic fields can be prefilled. */
+  readonly launchUrl?: (env: Environment, urls: SetupUrls) => string;
   /** Registry var names to prompt for, in order. */
   readonly vars: readonly string[];
   /** Environment-specific override for providers whose local and hosted transports differ. */
@@ -137,6 +139,34 @@ export interface ProviderGroup {
 /** Resolve the variables a provider requires in the selected environment. */
 export function providerVars(group: ProviderGroup, env: Environment): readonly string[] {
   return group.varsForEnvironment?.(env) ?? group.vars;
+}
+
+/**
+ * Build Linear's supported pre-populated OAuth application creation URL.
+ *
+ * @remarks
+ * Linear still requires an administrator to submit the form and copy the generated secrets, but
+ * every deterministic field is encoded here: distribution, product identity, callback URLs, and
+ * Issue/Comment webhook subscriptions.
+ */
+export function linearOAuthAppManifestUrl(env: Environment, urls: SetupUrls): string {
+  const productUrl = urls.webBases[0] ?? urls.apiBase;
+  const params = new URLSearchParams({
+    distribution: env === 'production' ? 'public' : 'private',
+    'display.description': 'Sync Linear issues into Docket as first-party tasks.',
+    'developer.name': 'Hypertext Studio',
+    'oauth.client_name': appName(env),
+    'oauth.client_uri': productUrl,
+    'webhook.enabled': 'true',
+    'webhook.url': `${urls.apiBase}/internal/ingest/linear`,
+  });
+  for (const origin of new Set([...urls.webBases, urls.apiBase])) {
+    params.append('oauth.redirect_uris', `${origin}/api/auth/callback/linear`);
+  }
+  params.append('oauth.grant_types', 'authorization_code');
+  params.append('webhook.resourceTypes', 'Issue');
+  params.append('webhook.resourceTypes', 'Comment');
+  return `https://linear.app/settings/api/applications/new?${params.toString()}`;
 }
 
 interface GoogleOAuthWebClient {
@@ -527,23 +557,23 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
     title: 'Linear Integration Set-up',
     label: 'Linear OAuth',
     consoleUrl: 'https://linear.app/settings/api/applications/new',
+    launchUrl: linearOAuthAppManifestUrl,
     vars: ['LINEAR_CLIENT_ID', 'LINEAR_CLIENT_SECRET', 'LINEAR_WEBHOOK_SECRET'],
     instructions: (env, urls) => [
       'Creates a Linear OAuth2 application. ~2 min. You need a Linear workspace admin.',
       '',
-      '1) Open https://linear.app/settings/api/applications/new',
-      '   (or: Linear → workspace menu (top-left) → Settings → "API" → "OAuth applications" →',
-      '   "Create new").',
-      `2) Application name: "${appName(env)}". Add a developer name + icon if it asks.`,
-      '3) Callback URLs — browser-facing, so add one per Docket frontend, exactly, no trailing slash:',
-      ...urls.webBases.map((web) => `     ${web}/api/auth/oauth2/callback/linear`),
-      '4) Scopes: tick "read" (required for sign-in). For the issue-migration feature also tick',
-      '   "write" and "issues:create".',
-      '5) Configure application webhooks so every authorized workspace sends Issue events to:',
+      '1) Open the prefilled Linear application form offered by this wizard.',
+      '   (Or use Linear → workspace menu → Settings → API → OAuth applications.)',
+      `2) Confirm the application name is "${appName(env)}" and review the prefilled fields.`,
+      '3) Confirm each callback URL is present exactly as shown, without a trailing slash:',
+      ...[...new Set([...urls.webBases, urls.apiBase])].map(
+        (origin) => `     ${origin}/api/auth/callback/linear`,
+      ),
+      '4) Confirm the authorization-code grant and requested scopes.',
+      '5) Confirm application webhooks send Issue and Comment events to:',
       `     ${urls.apiBase}/internal/ingest/linear`,
-      '   Enable Issues (required for immediate task reconciliation); Comments and Reactions also',
-      '   feed Docket activity. Linear shows a separate webhook signing secret on its detail page.',
-      '6) Keep the app private (untick "Public") unless you intend multi-workspace installs → "Create".',
+      '   Linear shows a separate webhook signing secret on the application detail page.',
+      `6) Confirm distribution is ${env === 'production' ? 'public' : 'private'}, then create the app.`,
       '7) Copy the Client ID, Client secret, and webhook signing secret shown, and paste below.',
     ],
   },

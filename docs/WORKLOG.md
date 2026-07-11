@@ -113,10 +113,11 @@
     other contributor-tooling changes can be labeled without bypassing commit-message validation.
 - **Validation**:
   - `pnpm bootstrap -- --help` exits zero with a clean, non-wrapping flag summary.
-  - Tooling regression suite: 1 file / 8 tests passed (flags, mandatory catalog, placeholder
-    rejection, Linear manifest, idempotent workflow mount, and long-token wrapping).
-  - Repository typecheck 17/17, lint 17/17, tests 17/17 (API 1,196/1,196), and production build
-    3/3 all passed.
+  - Tooling regression suite: 1 file / 8 tests passed (flags, mandatory catalog, Linear manifest,
+    environment-specific Resend/Mailpit contracts, generated bindings, deployment ordering, and
+    long-token wrapping).
+  - Post-rebase repository typecheck 17/17, lint 17/17, tests 17/17 (API 1,198/1,198; web
+    301/301), and production build 3/3 all passed.
   - Commit-message validation accepts `feat(dx): ...` through the normal allowlist-backed hook.
 - **Retrospective**:
   - “Mandatory by default” and “skippable by flags” are compatible when omission is explicit and
@@ -125,6 +126,10 @@
     everything else and securely persisting pasted values is the useful automation target.
   - Long manifest URLs are operational data, not terminal prose; open/copy them and still harden
     the renderer for any future unbroken token.
+  - Rebased the provider work onto local `main` after the production signup/Resend bootstrap landed.
+    The reconciled deployment retains native Vercel Git promotion, generates all configured Cloud
+    Run secret mounts through `API_SECRET_BINDINGS`, runs migrations from the API image, and probes
+    the production health/session/signup routes before admin and web promotion.
 
 ### [LINEAR-SYNC-003] Multi-account Linear production-readiness review
 

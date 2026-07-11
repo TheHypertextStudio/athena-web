@@ -35,6 +35,13 @@ Run once per GCP project. Idempotent — safe to re-run.
 pnpm bootstrap
 ```
 
+When the infrastructure already exists and only production providers need configuration, use the
+short provider-only path:
+
+```bash
+pnpm bootstrap -- --skip-local --production --skip-infrastructure
+```
+
 Prompts for: GCP project ID, region, GitHub repo (`owner/repo`), passkey domain, Neon credentials. Then:
 
 1. Enables GCP APIs: Cloud Run, Artifact Registry, Secret Manager, IAM, IAM Credentials
@@ -64,8 +71,8 @@ The bootstrap script checks for these and exits if any are missing or unauthenti
 
 1. Authenticate locally with `gcloud auth login`; every command must pass
    `--project=athena-services --region=us-central1` rather than changing the global project.
-2. Create `docket-database-url-unpooled` in Secret Manager and grant the Cloud Run runtime identity
-   access. The deploy workflow runs `docket-db-migrate` and waits before deploying API code.
+2. Create `docket-database-url-unpooled` in Secret Manager. The deploy workflow runs migrations
+   from the exact API image before deploying that image to Cloud Run.
 3. Bootstrap sets the production GitHub environment variables `API_URL`, `WEB_URL`, `ADMIN_URL`,
    `PASSKEY_RP_ID`, `BETTER_AUTH_ALLOWED_HOSTS`, `GOOGLE_OAUTH_PUBLIC`, and
    `API_SECRET_BINDINGS`; the Google guide collects `GOOGLE_OAUTH_TEST_EMAILS`.
@@ -76,9 +83,9 @@ The bootstrap script checks for these and exits if any are missing or unauthenti
    `Deploy production / Migrate database and deploy API` and configure it to block production alias
    assignment. Vercel may build immediately, but it must not promote the deployment to the production
    domain until that backend check succeeds.
-6. Push the validated commit to `main`. CI migrates the database, deploys the API, refreshes Scheduler
-   jobs, and deploys admin. Vercel independently builds the web commit from Git and promotes it only
-   after the migration/API check passes.
+6. Push the validated commit to `main`. CI migrates the database, deploys the API, verifies the
+   health/session/signup routes, refreshes Scheduler jobs, and deploys admin. Vercel independently
+   builds the web commit from Git and promotes it only after the migration/API check passes.
 
 DNS is managed in Cloudflare:
 
@@ -242,11 +249,12 @@ The branch database URL is available as a workflow output (`db_url`, `db_url_wit
 
 ## Production migrations
 
-The reusable deployment workflow builds `packages/db/Dockerfile`, deploys the immutable image as
-the `docket-db-migrate` Cloud Run Job, and executes it with `--wait`. An unsuccessful migration
-blocks API, admin, and web promotion. Migrations must be additive and must first pass against a
-fresh PGlite database plus a disposable Neon branch. Never roll production schema backward during
-an application rollback; route traffic to the prior compatible revision instead.
+The reusable deployment workflow builds the immutable API image, reads the unpooled migration URL
+from Secret Manager without logging it, and runs the migration entry point inside that exact image.
+An unsuccessful migration blocks API, admin, and web promotion. Migrations must be additive and
+must first pass against a fresh PGlite database plus a disposable Neon branch. Never roll production
+schema backward during an application rollback; route traffic to the prior compatible revision
+instead.
 
 Before migration, inspect for duplicate `(user_id, provider_id, account_id)` account rows. Migration
 `0029` intentionally stops on duplicates rather than deleting credentials ambiguously.

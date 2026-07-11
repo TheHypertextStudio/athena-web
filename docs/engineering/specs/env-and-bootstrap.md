@@ -386,6 +386,13 @@ pnpm bootstrap
   └─ 11. Summary: print what was created, what needs manual console steps, next commands
 ```
 
+For an existing production project, the provider-only path skips local setup and infrastructure
+provisioning while retaining the complete production provider gate:
+
+```bash
+pnpm bootstrap -- --skip-local --production --skip-infrastructure
+```
+
 ### 3.1 Step 0 — Preflight
 
 For each of `neonctl`, `stripe`, `vercel`: detect presence (`--version`); if missing, print the install command (`npm i -g neonctl`, Stripe CLI install per OS, `npm i -g vercel`) and offer to continue with that provider skipped. Detect auth state:
@@ -433,7 +440,10 @@ sensitive values are masked; a skipped provider writes nothing.
   Production defaults to staged access through `GOOGLE_OAUTH_PUBLIC=false` plus
   `GOOGLE_OAUTH_TEST_EMAILS`.
 - **GitHub:** "Create ONE **GitHub App** under your org (Org → Settings → Developer settings → GitHub Apps) at `https://github.com/organizations/<org>/settings/apps` (not an OAuth App) — it powers sign-in, the issue/PR connector, and the webhook firehose. User-authorization callback `<…/internal/integrations/github/callback>`, setup URL `<…/internal/integrations/github/setup>`, webhook URL `<…/internal/ingest/github>`. Repository permissions Issues/PRs/Metadata read; account permission Email addresses read; subscribe to Issues/Issue comment/Pull request events; create one app per environment." Prompt `GITHUB_APP_ID`, `GITHUB_APP_SLUG`, `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_PRIVATE_KEY` (single-line base64 PEM), `GITHUB_APP_WEBHOOK_SECRET`.
-- **Linear:** "Create an OAuth application at Linear → Settings → API → OAuth applications. Callback URL: `<the oauth2/callback/linear URI>`. Scopes: `read` (login) plus `write,issues:create` for migration." Prompt `LINEAR_CLIENT_ID`, `LINEAR_CLIENT_SECRET`.
+- **Linear:** open Linear's supported pre-populated application form with the public/private
+  distribution, Docket identity, `/api/auth/callback/linear` redirect URIs, authorization-code
+  grant, and Issue/Comment webhook already filled. The operator reviews and submits the form, then
+  supplies `LINEAR_CLIENT_ID`, `LINEAR_CLIENT_SECRET`, and `LINEAR_WEBHOOK_SECRET`.
 
 Each pasted value is validated against its own `@docket/env` registry schema before being accepted (invalid values re-prompt rather than abort).
 

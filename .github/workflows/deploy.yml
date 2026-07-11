@@ -32,33 +32,6 @@ jobs:
       - id: node-ver
         run: echo "value=$(cat .node-version)" >> "$GITHUB_OUTPUT"
 
-      - name: Build and push migration image
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: packages/db/Dockerfile
-          push: true
-          tags: ${{ env.REGISTRY }}/migrate:${{ github.sha }}
-          cache-from: type=gha,scope=migrate
-          cache-to: type=gha,scope=migrate,mode=max
-          build-args: NODE_VERSION=${{ steps.node-ver.outputs.value }}
-
-      - name: Apply database migrations
-        run: |
-          gcloud run jobs deploy docket-db-migrate \
-            --project="${{ vars.GCP_PROJECT_ID }}" \
-            --region="${{ env.REGION }}" \
-            --image="${{ env.REGISTRY }}/migrate:${{ github.sha }}" \
-            --set-secrets=DATABASE_URL_UNPOOLED=docket-database-url-unpooled:latest \
-            --tasks=1 \
-            --max-retries=0 \
-            --task-timeout=15m \
-            --quiet
-          gcloud run jobs execute docket-db-migrate \
-            --project="${{ vars.GCP_PROJECT_ID }}" \
-            --region="${{ env.REGION }}" \
-            --wait
-
       - name: Build and push API image
         uses: docker/build-push-action@v7
         with:
@@ -69,6 +42,23 @@ jobs:
           cache-from: type=gha,scope=api
           cache-to: type=gha,scope=api,mode=max
           build-args: NODE_VERSION=${{ steps.node-ver.outputs.value }}
+
+      - name: Apply production database migrations
+        env:
+          API_IMAGE: ${{ env.REGISTRY }}/api:${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +x
+          DATABASE_URL_UNPOOLED="$(gcloud secrets versions access latest \
+            --secret=docket-database-url-unpooled \
+            --project='${{ vars.GCP_PROJECT_ID }}')"
+          export DATABASE_URL_UNPOOLED
+          docker pull "$API_IMAGE"
+          docker run --rm \
+            --env DATABASE_URL_UNPOOLED \
+            "$API_IMAGE" \
+            node --import=tsx/esm /app/packages/db/src/migrate.ts
 
       - id: deploy-api
         uses: google-github-actions/deploy-cloudrun@v3
@@ -90,7 +80,7 @@ jobs:
             WEB_URL=${{ vars.WEB_URL }}
             BETTER_AUTH_URL=${{ vars.API_URL }}
             BETTER_AUTH_TRUSTED_ORIGINS=${{ vars.WEB_URL }}\,${{ vars.ADMIN_URL }}
-            BETTER_AUTH_ALLOWED_HOSTS=${{ vars.BETTER_AUTH_ALLOWED_HOSTS }}
+            BETTER_AUTH_ALLOWED_HOSTS=docket.hypertext.studio\,docket-api.hypertext.studio\,docket-admin.hypertext.studio
             BETTER_AUTH_PASSKEY_RP_ID=${{ vars.PASSKEY_RP_ID }}
             BETTER_AUTH_PASSKEY_RP_NAME=Docket
             GOOGLE_CALENDAR_WEBHOOK_URL=${{ vars.API_URL }}/webhooks/calendar/google
@@ -106,6 +96,26 @@ jobs:
 
       - name: Show Cloud Run URL
         run: echo "docket-api=${{ steps.deploy-api.outputs.url }}"
+
+      - name: Verify production health and auth routes
+        env:
+          API_URL: ${{ vars.API_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --retry 8 --retry-all-errors \
+            --retry-delay 3 "$API_URL/v1/health" >/dev/null
+          session_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            "$API_URL/api/auth/get-session")"
+          test "$session_status" = 200
+          signup_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            --request POST "$API_URL/api/auth/sign-up/request-code" \
+            --header 'Content-Type: application/json' \
+            --data '{}')"
+          case "$signup_status" in
+            400|422) ;;
+            *) echo "signup challenge probe returned HTTP $signup_status" >&2; exit 1 ;;
+          esac
 
       - name: Ensure Cloud Scheduler jobs
         env:

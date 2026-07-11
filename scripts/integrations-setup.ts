@@ -200,7 +200,7 @@ function noteWidth(): number {
  * the box border. Pre-wrapping at word boundaries keeps every line within the frame; each
  * line's leading indentation is preserved so numbered/bulleted structure stays aligned.
  */
-function wrapLines(lines: readonly string[], width = noteWidth()): string[] {
+export function wrapLines(lines: readonly string[], width = noteWidth()): string[] {
   const out: string[] = [];
   for (const line of lines) {
     const indent = /^\s*/.exec(line)?.[0] ?? '';
@@ -216,12 +216,23 @@ function wrapLines(lines: readonly string[], width = noteWidth()): string[] {
     const segments: string[] = [];
     let current = '';
     for (const word of body.split(' ')) {
-      const pad = (segments.length === 0 ? indent : hang).length;
-      if (current === '') current = word;
-      else if (pad + current.length + 1 + word.length <= width) current += ` ${word}`;
-      else {
-        segments.push(current);
-        current = word;
+      let remainder = word;
+      while (remainder !== '') {
+        const pad = (segments.length === 0 ? indent : hang).length;
+        const available = Math.max(1, width - pad);
+        if (current !== '' && current.length + 1 + remainder.length <= available) {
+          current += ` ${remainder}`;
+          remainder = '';
+        } else if (current !== '') {
+          segments.push(current);
+          current = '';
+        } else if (remainder.length <= available) {
+          current = remainder;
+          remainder = '';
+        } else {
+          segments.push(remainder.slice(0, available));
+          remainder = remainder.slice(available);
+        }
       }
     }
     if (current !== '') segments.push(current);
@@ -728,6 +739,7 @@ async function runGuidedSteps(
   rotate: boolean,
   collected: Record<string, string>,
   generatedValues: Readonly<Record<string, string>>,
+  setupUrl?: string,
 ): Promise<GuidedResult> {
   let index = 0;
   while (index < steps.length) {
@@ -737,7 +749,7 @@ async function runGuidedSteps(
       wrapLines(current.note).join('\n'),
       `${group.label} — step ${String(index + 1)} of ${String(steps.length)}`,
     );
-    const url = current.openUrl ?? (index === 0 ? group.consoleUrl : undefined);
+    const url = current.openUrl ?? (index === 0 ? setupUrl : undefined);
     if (url) {
       const shouldOpen = unwrap(
         await confirm({
@@ -898,6 +910,7 @@ async function setupEnvironment(
     const collected: Record<string, string> = {};
 
     const generatedValues = group.generate?.(env) ?? {};
+    const setupUrl = group.launchUrl?.(env, urls) ?? group.consoleUrl;
 
     let guidedResult: GuidedResult;
     if (group.steps) {
@@ -910,6 +923,7 @@ async function setupEnvironment(
         rotate,
         collected,
         generatedValues,
+        setupUrl,
       );
     } else {
       guidedResult = await runGuidedSteps(
@@ -921,6 +935,7 @@ async function setupEnvironment(
         rotate,
         collected,
         generatedValues,
+        setupUrl,
       );
 
       if (guidedResult === 'complete' && group.credentialBundle) {
@@ -984,6 +999,7 @@ async function setupEnvironment(
           rotate,
           collected,
           generatedValues,
+          setupUrl,
         );
       }
     }

@@ -1032,9 +1032,7 @@ async function main(): Promise<void> {
   if (flags.skipInfrastructure) {
     const repo = detectRepo();
     if (!repo) throw new Error('Could not detect the GitHub owner/repo from origin');
-    const githubProject = tryRun(
-      `gh variable get GCP_PROJECT_ID --env production --repo ${repo} 2>/dev/null`,
-    );
+    const githubProject = tryRun(`gh variable get GCP_PROJECT_ID --repo ${repo} 2>/dev/null`);
     const project =
       githubProject !== '' ? githubProject : tryRun('gcloud config get-value project 2>/dev/null');
     if (!project) {

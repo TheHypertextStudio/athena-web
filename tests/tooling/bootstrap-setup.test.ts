@@ -9,11 +9,7 @@ import {
   PROVIDER_GROUPS,
   providerVars,
 } from '../../scripts/integration-providers';
-import {
-  ensureLinearWebhookSecretMount,
-  isConfiguredProviderValue,
-  wrapLines,
-} from '../../scripts/integrations-setup';
+import { buildApiSecretBindings, wrapLines } from '../../scripts/integrations-setup';
 
 describe('bootstrap phase flags', () => {
   it('accepts pnpm separator syntax and forces the production-only fast path', () => {
@@ -81,14 +77,6 @@ describe('mandatory production provider catalog', () => {
     ]);
     expect(PROVIDER_GROUPS.every((group) => group.vars.length > 0)).toBe(true);
   });
-
-  it('does not mistake bootstrap placeholders for configured cloud credentials', () => {
-    expect(isConfiguredProviderValue('')).toBe(false);
-    expect(isConfiguredProviderValue('placeholder')).toBe(false);
-    expect(isConfiguredProviderValue('your-client-secret')).toBe(false);
-    expect(isConfiguredProviderValue('real-provider-value')).toBe(true);
-  });
-
   it('uses Mailpit variables locally and the native Resend API contract in production', () => {
     const email = PROVIDER_GROUPS.find((group) => group.id === 'email');
     expect(email).toBeDefined();
@@ -102,32 +90,6 @@ describe('mandatory production provider catalog', () => {
       'MAIL_FROM',
     ]);
     expect(providerVars(email, 'production')).toEqual(['RESEND_API_KEY', 'MAIL_FROM']);
-  });
-});
-
-describe('Linear deploy secret mount', () => {
-  const workflow = `jobs:
-  deploy-api:
-    steps:
-      - id: deploy-api
-        with:
-          secrets: |
-            LINEAR_CLIENT_ID=docket-linear-client-id:latest
-            LINEAR_CLIENT_SECRET=docket-linear-client-secret:latest
-            APPLE_CLIENT_ID=docket-apple-client-id:latest
-`;
-
-  it('adds the webhook mount beside the Linear OAuth secrets exactly once', () => {
-    const once = ensureLinearWebhookSecretMount(workflow);
-    expect(once).toContain(
-      'LINEAR_CLIENT_SECRET=docket-linear-client-secret:latest\n' +
-        '            LINEAR_WEBHOOK_SECRET=docket-linear-webhook-secret:latest',
-    );
-    expect(ensureLinearWebhookSecretMount(once)).toBe(once);
-  });
-
-  it('fails closed when the expected deploy-api anchor is absent', () => {
-    expect(() => ensureLinearWebhookSecretMount('jobs: {}\n')).toThrow(/deploy-api Linear secret/);
   });
 });
 
@@ -145,14 +107,17 @@ describe('production account-creation deployment contract', () => {
     'utf8',
   );
 
-  it('mounts the complete native Resend API contract without exposing a value in argv', () => {
+  it('generates the complete native Resend API contract without exposing a value in argv', () => {
+    const configured = new Set(['docket-resend-api-key', 'docket-mail-from']);
+    const bindings = buildApiSecretBindings('production', configured);
     for (const mount of [
       'RESEND_API_KEY=docket-resend-api-key:latest',
       'MAIL_FROM=docket-mail-from:latest',
     ]) {
-      expect(workflow).toContain(mount);
+      expect(bindings).toContain(mount);
     }
     expect(workflow).not.toContain('SMTP_PASS=');
+    expect(workflow).toContain('secrets: ${{ vars.API_SECRET_BINDINGS }}');
     expect(workflow).toContain('--env DATABASE_URL_UNPOOLED');
     expect(workflow).not.toContain('--env DATABASE_URL_UNPOOLED=');
   });

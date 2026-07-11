@@ -278,6 +278,7 @@
     enum values introduced in one historical migration cannot be consumed by the next without an
     idempotent preflight commit. Turbo strict-env also requires `WEB_URL` to be explicitly forwarded
     to the API dev task.
+
 ### [PROD-GOOGLE-001] Production deployment and Google Workspace sync
 
 - **Status**: REVIEW
@@ -313,6 +314,10 @@
   - Production control-plane follow-up passes `pnpm typecheck`, `pnpm lint`, `pnpm test` (17/17
     tasks; API 132 files / 1186 tests), `SKIP_ENV_VALIDATION=1 pnpm build`, and an admin Docker build
     with the canonical production origins plus `NEXT_PUBLIC_PASSKEY_RP_ID=hypertext.studio`.
+  - Post-rebase proof against the combined Linear + Google release history passes `pnpm typecheck`,
+    `pnpm lint`, `pnpm exec turbo run test --concurrency=4` (17/17 tasks; API 132 files / 1197 tests),
+    and `SKIP_ENV_VALIDATION=1 pnpm build`. The identity unlink regression now asserts account counts
+    without depending on PostgreSQL row order.
   - Live GCP proof confirms ready API/admin Cloud Run revisions, a 200 API health response, active
     GitHub OIDC federation, Artifact Registry, Scheduler jobs, enabled Google APIs, and no missing
     Secret Manager references in the corrected deploy workflow.

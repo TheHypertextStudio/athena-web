@@ -135,10 +135,14 @@ describe('DELETE /me/identities/:provider/:accountId', () => {
       createdBy: owner!.id,
     });
 
-    expect(await linkedIdentities(userId)).toEqual([
-      expect.objectContaining({ accountId: 'lin-used', connectionCount: 1 }),
-      expect.objectContaining({ accountId: 'gh-spare', connectionCount: 0 }),
-    ]);
+    const identities = await linkedIdentities(userId);
+    expect(identities).toHaveLength(2);
+    expect(identities).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ accountId: 'lin-used', connectionCount: 1 }),
+        expect.objectContaining({ accountId: 'gh-spare', connectionCount: 0 }),
+      ]),
+    );
     const app = appWithSession(meIdentities, fakeSession(userId));
     const res = await app.request('/linear/lin-used', { method: 'DELETE' });
     expect(res.status).toBe(409);

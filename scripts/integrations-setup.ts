@@ -794,8 +794,43 @@ async function setupEnvironment(
         group.title,
       );
 
+      if (group.credentialBundle) {
+        const bundle = group.credentialBundle;
+        let parsed: Record<string, string> | undefined;
+        const raw = unwrap(
+          await text({
+            message: bundle.message,
+            placeholder: bundle.placeholder,
+            validate: (value) => {
+              if (!value?.trim()) return undefined;
+              try {
+                parsed = bundle.parse(value, urls);
+                return undefined;
+              } catch (error) {
+                return error instanceof Error ? error.message : 'Credential file is invalid.';
+              }
+            },
+          }),
+        ).trim();
+        if (raw) {
+          parsed ??= bundle.parse(raw, urls);
+          for (const [varName, value] of Object.entries(parsed)) {
+            if (!vars.includes(varName)) {
+              throw new Error(`${group.title} imported unknown variable ${varName}.`);
+            }
+            const spec = findVar(varName);
+            const result = spec?.zod.safeParse(value);
+            if (!spec || !result?.success) {
+              throw new Error(`${group.title} imported an invalid value for ${varName}.`);
+            }
+            collected[varName] = value;
+          }
+          ok(`imported ${Object.keys(parsed).join(', ')} from credential file`);
+        }
+      }
+
       for (const varName of vars) {
-        if (varName in generated) continue; // turnkey-generated above — not prompted
+        if (varName in generated || varName in collected) continue;
         const spec = findVar(varName);
         if (!spec) {
           warn(`unknown var ${varName} (registry drift) — skipping`);

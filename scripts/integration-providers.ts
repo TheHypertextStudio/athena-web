@@ -98,6 +98,105 @@ export interface ProviderGroup {
    * encoded to the single-line base64 the env contract expects.
    */
   readonly transform?: Readonly<Record<string, (raw: string) => string>>;
+  /**
+   * Optional multi-value credential import. The prompt accepts a downloaded provider file (or its
+   * contents), validates it against this environment's URLs, and returns registry variables. A
+   * blank response falls back to the normal per-variable prompts.
+   */
+  readonly credentialBundle?: {
+    readonly message: string;
+    readonly placeholder: string;
+    readonly parse: (raw: string, urls: SetupUrls) => Record<string, string>;
+  };
+}
+
+interface GoogleOAuthWebClient {
+  readonly client_id?: unknown;
+  readonly client_secret?: unknown;
+  readonly javascript_origins?: unknown;
+  readonly redirect_uris?: unknown;
+}
+
+/** Normalize an OAuth origin/redirect URL for exact comparisons without a trailing slash. */
+function normalizeOAuthUrl(value: string): string {
+  return value.replace(/\/+$/, '');
+}
+
+/** Read a credential bundle from pasted JSON or a filesystem path, including `~/…` paths. */
+function readCredentialBundle(raw: string): string {
+  const trimmed = raw.trim();
+  if (trimmed.startsWith('{')) return trimmed;
+  const path = trimmed.startsWith('~/')
+    ? resolve(process.env['HOME'] ?? '', trimmed.slice(2))
+    : resolve(trimmed);
+  return readFileSync(path, 'utf8');
+}
+
+/**
+ * Parse Google's downloaded OAuth Web-client JSON and validate its Docket browser configuration.
+ *
+ * @remarks
+ * Only the extracted registry values are returned. Error messages intentionally never include the
+ * client id, client secret, or raw file contents.
+ *
+ * @param raw - Path to the downloaded JSON file, or the JSON contents.
+ * @param urls - Expected Docket origins and browser-facing OAuth callbacks for this environment.
+ * @returns Google client credentials ready for the existing secret writer.
+ * @throws {Error} When the file is malformed, is not a Web client, or targets different URLs.
+ */
+export function parseGoogleOAuthClientBundle(
+  raw: string,
+  urls: SetupUrls,
+): Record<'GOOGLE_CLIENT_ID' | 'GOOGLE_CLIENT_SECRET', string> {
+  let document: unknown;
+  try {
+    document = JSON.parse(readCredentialBundle(raw));
+  } catch {
+    throw new Error('Could not read a valid Google OAuth client JSON file.');
+  }
+
+  if (!document || typeof document !== 'object' || !('web' in document)) {
+    throw new Error('Google credential must be an OAuth Web application client.');
+  }
+  const web = (document as { readonly web?: GoogleOAuthWebClient }).web;
+  if (!web || typeof web.client_id !== 'string' || typeof web.client_secret !== 'string') {
+    throw new Error('Google OAuth Web client JSON is missing its client id or client secret.');
+  }
+
+  const actualOrigins = Array.isArray(web.javascript_origins)
+    ? new Set(
+        web.javascript_origins
+          .filter((value): value is string => typeof value === 'string')
+          .map(normalizeOAuthUrl),
+      )
+    : new Set<string>();
+  const expectedOrigins = urls.webBases.map(normalizeOAuthUrl);
+  const missingOrigins = expectedOrigins.filter((origin) => !actualOrigins.has(origin));
+  if (missingOrigins.length > 0) {
+    throw new Error(
+      `Google OAuth client is missing authorized origin: ${missingOrigins.join(', ')}`,
+    );
+  }
+
+  const actualRedirects = Array.isArray(web.redirect_uris)
+    ? new Set(
+        web.redirect_uris
+          .filter((value): value is string => typeof value === 'string')
+          .map(normalizeOAuthUrl),
+      )
+    : new Set<string>();
+  const expectedRedirects = expectedOrigins.map((origin) => `${origin}/api/auth/callback/google`);
+  const missingRedirects = expectedRedirects.filter((redirect) => !actualRedirects.has(redirect));
+  if (missingRedirects.length > 0) {
+    throw new Error(
+      `Google OAuth client is missing authorized redirect URI: ${missingRedirects.join(', ')}`,
+    );
+  }
+
+  return {
+    GOOGLE_CLIENT_ID: web.client_id,
+    GOOGLE_CLIENT_SECRET: web.client_secret,
+  };
 }
 
 /** Resolve the variables a provider requires in the selected environment. */
@@ -198,6 +297,11 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
     id: 'google',
     title: 'Google Integration Set-up',
     vars: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'],
+    credentialBundle: {
+      message: 'Downloaded Google OAuth Web-client JSON (path, or blank for manual entry)',
+      placeholder: '~/Downloads/client_secret_….json',
+      parse: parseGoogleOAuthClientBundle,
+    },
     instructions: (env, urls) => [
       'Creates an OAuth 2.0 Web-application client. ~5 min. You need a Google account.',
       '',
@@ -218,12 +322,15 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
       '5) Create the credential: "APIs & Services" → "Credentials" → "+ Create credentials" →',
       '   "OAuth client ID" → Application type: "Web application" →',
       `   Name: "${appName(env)}".`,
-      '6) Under "Authorized redirect URIs" click "+ Add URI" and add one per Docket frontend',
-      '   (the callback is browser-facing — it lives on the product origin, not the API), exactly,',
-      '   no trailing slash:',
+      '6) Under "Authorized JavaScript origins" click "+ Add URI" and add one per Docket',
+      '   frontend, exactly, with no trailing slash:',
+      ...urls.webBases.map((web) => `     ${web}`),
+      '7) Under "Authorized redirect URIs" click "+ Add URI" and add one per Docket frontend',
+      '   (the callback is browser-facing — it lives on the product origin, not the API), exactly:',
       ...urls.webBases.map((web) => `     ${web}/api/auth/callback/google`),
-      '7) Click "Create". A dialog shows "Your Client ID" and "Your Client Secret".',
-      '8) Copy both now (you can re-open them later from the Credentials list) and paste below.',
+      '8) Click "Create", then open the client and choose "Download JSON".',
+      '9) Enter that file path below. Bootstrap validates the URLs and imports both credentials',
+      '   without printing them. Leave it blank only if you need to enter the two values manually.',
     ],
   },
   {

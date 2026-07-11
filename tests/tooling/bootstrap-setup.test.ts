@@ -132,8 +132,11 @@ describe('production account-creation deployment contract', () => {
     expect(verification).toBeGreaterThan(deployment);
     expect(workflow).toContain('$API_URL/v1/health');
     expect(workflow).toContain('$API_URL/api/auth/sign-up/request-code');
+    expect(workflow).toContain('BETTER_AUTH_ALLOWED_HOSTS="${{ vars.BETTER_AUTH_ALLOWED_HOSTS }}"');
     expect(workflow).toContain(
-      'BETTER_AUTH_ALLOWED_HOSTS=docket.hypertext.studio\\,docket-api.hypertext.studio\\,docket-admin.hypertext.studio',
+      'BETTER_AUTH_TRUSTED_ORIGINS="${{ vars.WEB_URL }},${{ vars.ADMIN_URL }}"',
     );
+    expect(workflow).toContain('env_vars_update_strategy: overwrite');
+    expect(workflow).toContain('secrets_update_strategy: overwrite');
   });
 });

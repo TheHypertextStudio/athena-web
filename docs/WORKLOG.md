@@ -113,6 +113,15 @@
     API 1,196/1,196), tooling 11/11, actionlint, and production-mode build 3/3. The first build
     attempt inherited `NODE_ENV=development` from `.env.local` and hit a transient admin prerender
     error; rerunning the full build with `NODE_ENV=production` passed.
+  - A live signup attempt on revision `docket-api-00030-hlx` exposed a revoked Resend credential:
+    the request returned `500` and `RealMailer` recorded provider status `401`. Rotated
+    `docket-resend-api-key` through masked clipboard-to-Secret Manager input, deployed revision
+    `docket-api-00031-7nv`, and proved a fresh verification-code request returned `200`.
+  - Cleaned the authoritative runtime on revision `docket-api-00032-br6`: 100% traffic, healthy API,
+    correct comma-delimited auth/MCP allowlists, only native Resend mail mounts, and no bogus
+    environment keys. Disabled the revoked Resend version and all retired SMTP secret versions.
+  - Hardened the reusable Cloud Run workflow with quoted comma values plus overwrite strategies for
+    environment variables and secret mounts. Formatting, actionlint, and tooling tests 8/8 pass.
 
 ### [BOOTSTRAP-LINEAR-001] Minimal-manual production provider bootstrap
 

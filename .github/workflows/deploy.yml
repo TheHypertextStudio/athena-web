@@ -79,20 +79,22 @@ jobs:
             API_URL=${{ vars.API_URL }}
             WEB_URL=${{ vars.WEB_URL }}
             BETTER_AUTH_URL=${{ vars.API_URL }}
-            BETTER_AUTH_TRUSTED_ORIGINS=${{ vars.WEB_URL }}\,${{ vars.ADMIN_URL }}
-            BETTER_AUTH_ALLOWED_HOSTS=docket.hypertext.studio\,docket-api.hypertext.studio\,docket-admin.hypertext.studio
+            BETTER_AUTH_TRUSTED_ORIGINS="${{ vars.WEB_URL }},${{ vars.ADMIN_URL }}"
+            BETTER_AUTH_ALLOWED_HOSTS="${{ vars.BETTER_AUTH_ALLOWED_HOSTS }}"
             BETTER_AUTH_PASSKEY_RP_ID=${{ vars.PASSKEY_RP_ID }}
             BETTER_AUTH_PASSKEY_RP_NAME=Docket
             GOOGLE_CALENDAR_WEBHOOK_URL=${{ vars.API_URL }}/webhooks/calendar/google
             GOOGLE_OAUTH_PUBLIC=${{ vars.GOOGLE_OAUTH_PUBLIC }}
             GOOGLE_OAUTH_TEST_EMAILS=${{ vars.GOOGLE_OAUTH_TEST_EMAILS }}
             BILLING_ENABLED=false
-            MCP_ALLOWED_ORIGINS=${{ vars.WEB_URL }}\,https://claude.ai\,https://claude.com
+            MCP_ALLOWED_ORIGINS="${{ vars.WEB_URL }},https://claude.ai,https://claude.com"
             MCP_TASKS_ENABLED=false
             MCP_CIMD_STRICT=true
+          env_vars_update_strategy: overwrite
           # Bootstrap owns this non-secret env→Secret Manager mapping. Optional providers are
-          # mounted only after their secrets exist, so an unconfigured integration cannot break deploy.
+          # mounted only after their secrets exist. Overwrite keeps retired mounts from surviving.
           secrets: ${{ vars.API_SECRET_BINDINGS }}
+          secrets_update_strategy: overwrite
 
       - name: Show Cloud Run URL
         run: echo "docket-api=${{ steps.deploy-api.outputs.url }}"
@@ -179,6 +181,7 @@ jobs:
           env_vars: |
             NODE_ENV=production
             APP_MODE=production
+          env_vars_update_strategy: overwrite
 
       - name: Show Cloud Run URL
         run: echo "docket-admin=${{ steps.deploy-admin.outputs.url }}"

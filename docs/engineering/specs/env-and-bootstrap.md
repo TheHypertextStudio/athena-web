@@ -421,7 +421,7 @@ Verified commands:
 
 ### 3.4 Step 5 — OAuth applications & third-party integrations (semi-automated)
 
-> **Implemented** in `scripts/integrations-setup.ts`, runnable standalone as **`pnpm integrations`** and invoked automatically at the end of `pnpm bootstrap`. The flow generalizes beyond OAuth to **every external credential in `VAR_REGISTRY`** (Stripe, Anthropic, SMTP, observability), is **environment-aware** (`local` / `staging` / `production`, each configured in its own pass with its own credentials and redirect URIs), and routes writes per environment:
+> **Implemented** in `scripts/integrations-setup.ts`, runnable standalone as **`pnpm integrations`** and invoked automatically at the end of `pnpm bootstrap`. The flow generalizes beyond OAuth to **every external credential in `VAR_REGISTRY`** (Stripe, Anthropic, Resend/Mailpit, observability), is **environment-aware** (`local` / `staging` / `production`, each configured in its own pass with its own credentials and redirect URIs), and routes writes per environment:
 >
 > - `local` → non-destructive upsert into the root `.env.local`.
 > - `staging` / `production` → server vars to **GCP Secret Manager**, public `NEXT_PUBLIC_*` vars to **GitHub environment variables**. Secret names follow the `deploy.yml` convention: production keeps the unqualified `docket-<kebab>` names; staging is suffixed `docket-staging-<kebab>`. Production requires every provider value by default; only the explicit bootstrap `--skip-providers` phase flag permits an incomplete provider pass. Linear's webhook mount is written to `deploy.yml` automatically only after its three real secrets exist.

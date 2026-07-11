@@ -195,13 +195,15 @@ export const agentServer = {
   AGENT_MAX_TURNS: z.coerce.number().int().min(1).max(200).optional(),
 };
 
-/** Cron secret, observability, blob/export storage, transactional email (SMTP). */
+/** Cron secret, observability, blob/export storage, and transactional email. */
 export const opsServer = {
   CRON_SECRET: z.string().min(1),
   SENTRY_DSN: z.string().optional(),
   BLOB_READ_WRITE_TOKEN: z.string().optional(),
   EXPORT_BUCKET_URL: z.string().optional(),
   EXPORT_BUCKET_TOKEN: z.string().optional(),
+  /** Resend API key for production transactional email over HTTPS. */
+  RESEND_API_KEY: z.string().min(1).optional(),
   /**
    * SMTP relay host for transactional email (`SmtpMailer`). Local: Mailpit (`localhost`).
    * Absent/placeholder ⇒ the mock `CaptureMailer` is used. Lenient (`min(1)`, optional);

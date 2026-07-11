@@ -25,6 +25,7 @@
         "EXPORT_BUCKET_*",
         "BILLING_ENABLED",
         "SMTP_*",
+        "RESEND_API_KEY",
         "MAIL_FROM",
         "STAFF_BOOTSTRAP_EMAILS"
       ]

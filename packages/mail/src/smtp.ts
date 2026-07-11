@@ -6,12 +6,11 @@
  * `APP_MODE ∈ {local,test}` by the app container; neither holds business logic:
  *
  * - {@link RealMailer} — posts each message to an HTTP transactional-email provider
- *   (a JSON `POST` with a bearer token). This is the transport the API container wires
- *   from `MAILER_ENDPOINT` / `MAILER_API_KEY` / `MAILER_FROM`; its network edge is the
- *   injectable {@link HttpClient}.
+ *   (a JSON `POST` with a bearer token). Production uses this adapter with Resend's
+ *   email endpoint and `RESEND_API_KEY`; its network edge is the injectable {@link HttpClient}.
  * - {@link SmtpMailer} — sends over SMTP via {@link https://nodemailer.com | nodemailer}.
- *   This is the transport the local stack exercises against Mailpit and that prod uses
- *   against a real SMTP relay, driven by the `SMTP_*` / `MAIL_FROM` env. The single
+ *   This is the optional local transport exercised against Mailpit, driven by the
+ *   `SMTP_*` / `MAIL_FROM` env. The single
  *   live-network call (`transporter.sendMail`) is the I/O boundary; all config parsing
  *   and message mapping around it are pure and unit-tested.
  *
@@ -32,6 +31,9 @@ export interface RealMailerConfig {
   /** From address all messages are sent as. */
   readonly from: string;
 }
+
+/** Resend's stable transactional email send endpoint. */
+export const RESEND_EMAIL_ENDPOINT = 'https://api.resend.com/emails';
 
 /**
  * A real, env-driven mailer that sends via an HTTP email provider.

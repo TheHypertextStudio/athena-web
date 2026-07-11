@@ -45,7 +45,7 @@ import type {
   PushSender,
   SmsSender,
 } from '@docket/integrations';
-import { CaptureMailer, SmtpMailer, smtpConfigFromEnv } from '@docket/mail';
+import { buildMailerFromEnv } from '@docket/mail';
 import type { Mailer } from '@docket/mail';
 
 import { env } from './env';
@@ -63,6 +63,7 @@ export interface AppRuntimeEnv {
   readonly GITHUB_APP_WEBHOOK_SECRET?: string;
   readonly SLACK_SIGNING_SECRET?: string;
   readonly DISCORD_PUBLIC_KEY?: string;
+  readonly RESEND_API_KEY?: string;
   readonly SMTP_HOST?: string;
   readonly SMTP_PORT?: string;
   readonly SMTP_SECURE?: string;
@@ -129,6 +130,7 @@ export function toAppRuntimeEnv(): AppRuntimeEnv {
       : {}),
     ...(env.SLACK_SIGNING_SECRET ? { SLACK_SIGNING_SECRET: env.SLACK_SIGNING_SECRET } : {}),
     ...(env.DISCORD_PUBLIC_KEY ? { DISCORD_PUBLIC_KEY: env.DISCORD_PUBLIC_KEY } : {}),
+    ...(env.RESEND_API_KEY ? { RESEND_API_KEY: env.RESEND_API_KEY } : {}),
     ...(env.SMTP_HOST ? { SMTP_HOST: env.SMTP_HOST } : {}),
     ...(env.SMTP_PORT ? { SMTP_PORT: env.SMTP_PORT } : {}),
     ...(env.SMTP_SECURE ? { SMTP_SECURE: env.SMTP_SECURE } : {}),
@@ -235,12 +237,16 @@ export function buildObserver(
 }
 
 function buildMailer(runtimeEnv: AppRuntimeEnv): Mailer {
-  if (localMode(runtimeEnv)) return new CaptureMailer();
-  const smtpConfig = smtpConfigFromEnv(runtimeEnv);
-  if (!smtpConfig) {
-    throw new Error('Missing required production SMTP config: SMTP_HOST and MAIL_FROM');
-  }
-  return new SmtpMailer(smtpConfig);
+  return buildMailerFromEnv({
+    APP_MODE: runtimeEnv.APP_MODE ?? 'production',
+    ...(runtimeEnv.RESEND_API_KEY ? { RESEND_API_KEY: runtimeEnv.RESEND_API_KEY } : {}),
+    ...(runtimeEnv.SMTP_HOST ? { SMTP_HOST: runtimeEnv.SMTP_HOST } : {}),
+    ...(runtimeEnv.SMTP_PORT ? { SMTP_PORT: runtimeEnv.SMTP_PORT } : {}),
+    ...(runtimeEnv.SMTP_SECURE ? { SMTP_SECURE: runtimeEnv.SMTP_SECURE } : {}),
+    ...(runtimeEnv.SMTP_USER ? { SMTP_USER: runtimeEnv.SMTP_USER } : {}),
+    ...(runtimeEnv.SMTP_PASS ? { SMTP_PASS: runtimeEnv.SMTP_PASS } : {}),
+    ...(runtimeEnv.MAIL_FROM ? { MAIL_FROM: runtimeEnv.MAIL_FROM } : {}),
+  });
 }
 
 function buildSmsSender(runtimeEnv: AppRuntimeEnv): SmsSender {

@@ -199,18 +199,15 @@ The MCP OAuth authorization server is **on by default in every deploy** — it n
 ### Transactional email and notification delivery providers
 
 Passwordless account creation requires transactional email in production. Docket uses Resend's
-SMTP relay on the existing verified `service.hypertext.studio` sending domain so root-domain Google
-Workspace mail routing remains unchanged:
+native HTTPS API on the existing verified `service.hypertext.studio` sending domain so root-domain
+Google Workspace mail routing remains unchanged:
 
-| Env var     | Production value/source                                           |
-| ----------- | ----------------------------------------------------------------- |
-| `SMTP_HOST` | `docket-smtp-host` → `smtp.resend.com`                            |
-| `SMTP_PORT` | `docket-smtp-port` → `587`                                        |
-| `SMTP_USER` | `docket-smtp-user` → `resend`                                     |
-| `SMTP_PASS` | `docket-smtp-pass` → restricted Resend sending API key            |
-| `MAIL_FROM` | `docket-mail-from` → `Docket <no-reply@service.hypertext.studio>` |
+| Env var          | Production value/source                                           |
+| ---------------- | ----------------------------------------------------------------- |
+| `RESEND_API_KEY` | `docket-resend-api-key` → domain-restricted Resend sending key    |
+| `MAIL_FROM`      | `docket-mail-from` → `Docket <no-reply@service.hypertext.studio>` |
 
-All five are Secret Manager values mounted by the API deployment. Missing mail configuration is a
+Both are Secret Manager values mounted by the API deployment. Missing mail configuration is a
 startup error in production; the service must never claim to send verification codes through an
 in-memory capture adapter.
 
@@ -219,11 +216,11 @@ inbox rows, preferences, contact points, and inbound-event rows. External delive
 up only when their provider env is real-shaped; blank, `mock`, `placeholder`, or `changeme` values
 select capture adapters.
 
-| Channel | Env vars                                                                       | Runtime behavior                                                                                |
-| ------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
-| Email   | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` | `SMTP_HOST` + `MAIL_FROM` select `SmtpMailer`; otherwise the in-memory `CaptureMailer` is used. |
-| SMS     | `SMS_ENDPOINT`, `SMS_API_KEY`, `SMS_FROM`                                      | All three select the HTTP SMS adapter; otherwise `CaptureSmsSender` is used.                    |
-| Push    | `PUSH_ENDPOINT`, `PUSH_API_KEY`, `PUSH_APP_ID`                                 | All three select the HTTP push adapter; otherwise `CapturePushSender` is used.                  |
+| Channel | Env vars                                                                | Runtime behavior                                                                         |
+| ------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Email   | Production: `RESEND_API_KEY`, `MAIL_FROM`; local: `SMTP_*`, `MAIL_FROM` | Production requires Resend HTTPS; local uses Mailpit when configured, otherwise capture. |
+| SMS     | `SMS_ENDPOINT`, `SMS_API_KEY`, `SMS_FROM`                               | All three select the HTTP SMS adapter; otherwise `CaptureSmsSender` is used.             |
+| Push    | `PUSH_ENDPOINT`, `PUSH_API_KEY`, `PUSH_APP_ID`                          | All three select the HTTP push adapter; otherwise `CapturePushSender` is used.           |
 
 The deployment workflow injects the mandatory SMTP values. Other notification providers remain
 inactive until their complete provider contract is provisioned and mounted.

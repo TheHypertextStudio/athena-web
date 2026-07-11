@@ -160,6 +160,7 @@ describe('slices', () => {
     expect(opsServer.CRON_SECRET.parse('cron-secret')).toBe('cron-secret');
     expect(opsServer.SENTRY_DSN.parse(undefined)).toBeUndefined();
     expect(opsServer.EXPORT_BUCKET_URL.parse(undefined)).toBeUndefined();
+    expect(opsServer.RESEND_API_KEY.parse(undefined)).toBeUndefined();
 
     expect(() => clientShared.NEXT_PUBLIC_API_URL.parse(undefined)).toThrow();
     expect(clientShared.NEXT_PUBLIC_API_URL.parse('https://api.example.com')).toBe(

@@ -48,6 +48,7 @@ import { findVar } from '../packages/env/src/registry';
 import type { VarSpec } from '../packages/env/src/registry';
 import {
   PROVIDER_GROUPS,
+  providerVars,
   DEFAULT_LOCAL_API_URL,
   copyToClipboard,
   type Environment,
@@ -555,6 +556,28 @@ function pushSecret(env: Environment, target: CloudTarget, varName: string, valu
     input: value,
     stdio: ['pipe', 'inherit', 'inherit'],
   });
+  const projectNumber = tryRun(
+    `gcloud projects describe ${target.project} --format='value(projectNumber)'`,
+  );
+  if (!projectNumber) {
+    throw new Error(`Could not resolve the project number for ${target.project}`);
+  }
+  // Cloud Run uses the project's default compute service account unless the service explicitly
+  // selects another identity. Grant only this secret (rather than project-wide Secret Manager
+  // access), so a freshly provisioned provider can be mounted by the next API revision.
+  execFileSync(
+    'gcloud',
+    [
+      'secrets',
+      'add-iam-policy-binding',
+      name,
+      `--project=${target.project}`,
+      `--member=serviceAccount:${projectNumber}-compute@developer.gserviceaccount.com`,
+      '--role=roles/secretmanager.secretAccessor',
+      '--quiet',
+    ],
+    { stdio: 'inherit' },
+  );
   ok(`${varName} → secret ${name} (${exists ? 'new version' : 'created'})`);
 }
 
@@ -668,17 +691,18 @@ async function setupEnvironment(
 
   for (const group of PROVIDER_GROUPS) {
     const collected: Record<string, string> = {};
+    const vars = providerVars(group, env);
 
     // Bootstrap assumes a fresh repo and creates everything from scratch. But if this provider is
     // ALREADY configured — every var it manages is present (a re-run, or values someone pasted in
     // from the team's secret store) — verify that and skip rather than redo the work. (Only `local`
     // reads existing state from .env.local; cloud envs always (re)provision.)
-    const alreadySet = group.vars.filter((varName) =>
+    const alreadySet = vars.filter((varName) =>
       env === 'local'
         ? Boolean(nonEmpty(envLocal, varName))
         : Boolean(cloud && cloudVarIsConfigured(env, cloud, varName)),
     );
-    if (group.vars.length > 0 && alreadySet.length === group.vars.length) {
+    if (vars.length > 0 && alreadySet.length === vars.length) {
       ok(`${group.title}: already configured (${alreadySet.join(', ')}) — skipping.`);
       if (env === 'production' && group.id === 'linear' && cloud) {
         wireLinearWebhookSecretWhenReady(cloud);
@@ -770,7 +794,7 @@ async function setupEnvironment(
         group.title,
       );
 
-      for (const varName of group.vars) {
+      for (const varName of vars) {
         if (varName in generated) continue; // turnkey-generated above — not prompted
         const spec = findVar(varName);
         if (!spec) {
@@ -815,7 +839,7 @@ async function setupEnvironment(
       wireLinearWebhookSecretWhenReady(cloud);
     }
     if (env === 'production' && cloud) {
-      const missing = group.vars.filter((name) => !cloudVarIsConfigured(env, cloud, name));
+      const missing = vars.filter((name) => !cloudVarIsConfigured(env, cloud, name));
       if (missing.length > 0) {
         throw new Error(`${group.title} is incomplete; missing: ${missing.join(', ')}`);
       }

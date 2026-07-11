@@ -8,9 +8,7 @@
  * env-gated plugins, MCP/OIDC binding decisions).
  */
 import { env } from '@docket/env/api';
-import { isRealValue } from '@docket/env';
-import { CaptureMailer, SmtpMailer, smtpConfigFromEnv } from '@docket/mail';
-import type { Mailer, SmtpEnv } from '@docket/mail';
+import { buildMailerFromEnv } from '@docket/mail';
 import { betterAuth } from 'better-auth';
 
 import { buildAuthOptions } from './auth-builder';
@@ -36,21 +34,12 @@ export {
  *
  * @remarks
  * `@docket/auth` sends from inside the Better Auth instance and has no access to the API's
- * boundary container, so it builds its own mailer from the same env-driven selection via
- * {@link buildMailer} (SMTP relay in prod / Mailpit locally, capture mock under `local`/`test`).
+ * boundary container, so it builds its own mailer from the shared env-driven selector
+ * (Resend API in production, optional Mailpit locally, capture mock under test).
  */
-function buildAuthMailer(mailEnv: SmtpEnv & { readonly APP_MODE: 'local' | 'test' | 'production' }): Mailer {
-  if (mailEnv.APP_MODE === 'local' || mailEnv.APP_MODE === 'test') return new CaptureMailer();
-  if (!isRealValue(mailEnv.SMTP_HOST) || !isRealValue(mailEnv.MAIL_FROM)) {
-    throw new Error('Missing required production mail config: SMTP_HOST and MAIL_FROM');
-  }
-  const config = smtpConfigFromEnv(mailEnv);
-  if (!config) throw new Error('Missing required production mail config: SMTP_HOST and MAIL_FROM');
-  return new SmtpMailer(config);
-}
-
-const mailer = buildAuthMailer({
+const mailer = buildMailerFromEnv({
   APP_MODE: env.APP_MODE,
+  ...(env.RESEND_API_KEY ? { RESEND_API_KEY: env.RESEND_API_KEY } : {}),
   ...(env.SMTP_HOST ? { SMTP_HOST: env.SMTP_HOST } : {}),
   ...(env.SMTP_PORT ? { SMTP_PORT: env.SMTP_PORT } : {}),
   ...(env.SMTP_SECURE ? { SMTP_SECURE: env.SMTP_SECURE } : {}),
@@ -61,8 +50,8 @@ const mailer = buildAuthMailer({
 
 /**
  * Non-production echo of the sign-up code (for e2e). Gated to `APP_MODE ∈ {local,test}`; the same
- * modes force the capture mock, so it is impossible to enable against a real
- * relay or in production.
+ * modes keep the echo outside production, regardless of whether local mail is captured
+ * in memory or delivered to Mailpit.
  */
 const devEchoSignupCode = env.APP_MODE === 'local' || env.APP_MODE === 'test';
 

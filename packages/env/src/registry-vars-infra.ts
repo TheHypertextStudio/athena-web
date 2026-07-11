@@ -54,6 +54,16 @@ export const INFRA_VARS: readonly VarSpec[] = [
     sensitive: true,
   },
   {
+    name: 'RESEND_API_KEY',
+    slice: 'ops',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: opsServer.RESEND_API_KEY,
+    where: 'Resend API key for production transactional email over HTTPS.',
+    sensitive: true,
+  },
+  {
     name: 'SMTP_HOST',
     slice: 'ops',
     scope: 'server',

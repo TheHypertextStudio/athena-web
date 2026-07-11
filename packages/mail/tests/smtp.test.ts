@@ -8,6 +8,8 @@ import { describe, expect, it } from 'vitest';
 
 import type { OutboundMessage } from '../src/index';
 import {
+  RealMailer,
+  RESEND_EMAIL_ENDPOINT,
   SmtpMailer,
   smtpConfigFromEnv,
   toSendMailOptions,
@@ -16,6 +18,54 @@ import {
   type SmtpMailerConfig,
   type SmtpTransport,
 } from '../src/smtp';
+
+describe('RealMailer', () => {
+  it('posts a Resend-compatible payload with bearer authentication', async () => {
+    const requests: { input: string; init?: RequestInit }[] = [];
+    const mailer = new RealMailer(
+      {
+        endpoint: RESEND_EMAIL_ENDPOINT,
+        apiKey: 're_secret',
+        from: 'Docket <no-reply@example.com>',
+      },
+      async (input, init) => {
+        requests.push({ input, ...(init ? { init } : {}) });
+        return new Response(JSON.stringify({ id: 'email-id' }), { status: 200 });
+      },
+    );
+
+    await mailer.send({ to: 'person@example.com', subject: 'Code', text: '123456' });
+
+    expect(requests).toEqual([
+      {
+        input: RESEND_EMAIL_ENDPOINT,
+        init: {
+          method: 'POST',
+          headers: {
+            Authorization: 'Bearer re_secret',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            from: 'Docket <no-reply@example.com>',
+            to: 'person@example.com',
+            subject: 'Code',
+            text: '123456',
+          }),
+        },
+      },
+    ]);
+  });
+
+  it('reports only the provider status when Resend rejects a send', async () => {
+    const mailer = new RealMailer(
+      { endpoint: RESEND_EMAIL_ENDPOINT, apiKey: 're_secret', from: 'from@example.com' },
+      async () => new Response('denied', { status: 403 }),
+    );
+    await expect(
+      mailer.send({ to: 'person@example.com', subject: 'Code', text: '123456' }),
+    ).rejects.toThrow('RealMailer send failed: 403');
+  });
+});
 
 /** A fake SMTP transport that records sends and returns a scripted result. */
 function fakeTransport(result: { rejected?: readonly unknown[] } | (() => never) = {}): {

@@ -4,7 +4,11 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { parseBootstrapFlags } from '../../scripts/bootstrap';
-import { linearOAuthAppManifestUrl, PROVIDER_GROUPS } from '../../scripts/integration-providers';
+import {
+  linearOAuthAppManifestUrl,
+  PROVIDER_GROUPS,
+  providerVars,
+} from '../../scripts/integration-providers';
 import {
   ensureLinearWebhookSecretMount,
   isConfiguredProviderValue,
@@ -84,6 +88,21 @@ describe('mandatory production provider catalog', () => {
     expect(isConfiguredProviderValue('your-client-secret')).toBe(false);
     expect(isConfiguredProviderValue('real-provider-value')).toBe(true);
   });
+
+  it('uses Mailpit variables locally and the native Resend API contract in production', () => {
+    const email = PROVIDER_GROUPS.find((group) => group.id === 'email');
+    expect(email).toBeDefined();
+    if (!email) throw new Error('email provider group missing');
+
+    expect(providerVars(email, 'local')).toEqual([
+      'SMTP_HOST',
+      'SMTP_PORT',
+      'SMTP_USER',
+      'SMTP_PASS',
+      'MAIL_FROM',
+    ]);
+    expect(providerVars(email, 'production')).toEqual(['RESEND_API_KEY', 'MAIL_FROM']);
+  });
 });
 
 describe('Linear deploy secret mount', () => {
@@ -126,16 +145,14 @@ describe('production account-creation deployment contract', () => {
     'utf8',
   );
 
-  it('mounts the complete Resend SMTP contract without exposing a value in argv', () => {
+  it('mounts the complete native Resend API contract without exposing a value in argv', () => {
     for (const mount of [
-      'SMTP_HOST=docket-smtp-host:latest',
-      'SMTP_PORT=docket-smtp-port:latest',
-      'SMTP_USER=docket-smtp-user:latest',
-      'SMTP_PASS=docket-smtp-pass:latest',
+      'RESEND_API_KEY=docket-resend-api-key:latest',
       'MAIL_FROM=docket-mail-from:latest',
     ]) {
       expect(workflow).toContain(mount);
     }
+    expect(workflow).not.toContain('SMTP_PASS=');
     expect(workflow).toContain('--env DATABASE_URL_UNPOOLED');
     expect(workflow).not.toContain('--env DATABASE_URL_UNPOOLED=');
   });
@@ -150,5 +167,8 @@ describe('production account-creation deployment contract', () => {
     expect(verification).toBeGreaterThan(deployment);
     expect(workflow).toContain('$API_URL/v1/health');
     expect(workflow).toContain('$API_URL/api/auth/sign-up/request-code');
+    expect(workflow).toContain(
+      'BETTER_AUTH_ALLOWED_HOSTS=docket.hypertext.studio\\,docket-api.hypertext.studio\\,docket-admin.hypertext.studio',
+    );
   });
 });

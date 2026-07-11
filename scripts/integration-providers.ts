@@ -69,6 +69,8 @@ export interface ProviderGroup {
   readonly title: string;
   /** Registry var names to prompt for, in order. */
   readonly vars: readonly string[];
+  /** Environment-specific override for providers whose local and hosted transports differ. */
+  readonly varsForEnvironment?: (env: Environment) => readonly string[];
   /** Explicit, copy-pasteable setup instructions for the chosen environment (shown all at once). */
   readonly instructions?: (env: Environment, urls: SetupUrls) => readonly string[];
   /** Optional provider console URL that bootstrap opens before prompting for generated values. */
@@ -96,6 +98,11 @@ export interface ProviderGroup {
    * encoded to the single-line base64 the env contract expects.
    */
   readonly transform?: Readonly<Record<string, (raw: string) => string>>;
+}
+
+/** Resolve the variables a provider requires in the selected environment. */
+export function providerVars(group: ProviderGroup, env: Environment): readonly string[] {
+  return group.varsForEnvironment?.(env) ?? group.vars;
 }
 
 /**
@@ -555,7 +562,11 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
   {
     id: 'email',
     title: 'Email Integration Set-up',
-    vars: ['SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS', 'MAIL_FROM'],
+    vars: ['RESEND_API_KEY', 'MAIL_FROM'],
+    varsForEnvironment: (env) =>
+      env === 'local'
+        ? ['SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS', 'MAIL_FROM']
+        : ['RESEND_API_KEY', 'MAIL_FROM'],
     instructions: (env) =>
       env === 'local'
         ? [
@@ -573,14 +584,12 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
             '3) View captured email at http://localhost:8025.',
           ]
         : [
-            'Use a transactional email provider (Resend, Postmark, Amazon SES, Mailgun, …).',
-            'Production requires a real provider and verified sender; the mock mailer is not valid.',
+            'Production sends transactional email through the native Resend HTTPS API.',
+            'A verified sender is required; the capture and SMTP transports are not used in production.',
             '',
-            '1) In your provider, create SMTP credentials and verify a sending domain/address.',
+            '1) In Resend, verify a sending domain and create a domain-restricted sending API key.',
             '2) Enter at the prompts below:',
-            '     • SMTP_HOST = the provider host (e.g. smtp.resend.com)',
-            '     • SMTP_PORT = 465 (implicit TLS) or 587 (STARTTLS) per the provider',
-            '     • SMTP_USER / SMTP_PASS = the provider SMTP username + password/API key',
+            '     • RESEND_API_KEY = the restricted Resend sending key',
             '     • MAIL_FROM = a VERIFIED sender, e.g. "Docket <no-reply@your-domain.com>"',
           ],
   },

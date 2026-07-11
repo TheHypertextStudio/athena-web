@@ -127,12 +127,12 @@ Each callback must include `x-docket-signature`, an HMAC-SHA256 over the raw bod
 
 ## Channel Semantics
 
-| Channel | Adapter           | Destination                         | Notes                                                                 |
-| ------- | ----------------- | ----------------------------------- | --------------------------------------------------------------------- |
-| Web     | DB projection     | `notification` inbox row            | Canonical user-visible state.                                         |
-| Email   | `Mailer` port     | active verified email contact point | SMTP in production; `CaptureMailer` in tests/local when unconfigured. |
-| SMS     | `SmsSender` port  | active verified phone contact point | HTTP provider seam; user opt-in required for service announcements.   |
-| Push    | `PushSender` port | active verified push token          | HTTP provider seam; invalid tokens disable the contact point.         |
+| Channel | Adapter           | Destination                         | Notes                                                                  |
+| ------- | ----------------- | ----------------------------------- | ---------------------------------------------------------------------- |
+| Web     | DB projection     | `notification` inbox row            | Canonical user-visible state.                                          |
+| Email   | `Mailer` port     | active verified email contact point | Resend HTTPS in production; Mailpit/capture locally; capture in tests. |
+| SMS     | `SmsSender` port  | active verified phone contact point | HTTP provider seam; user opt-in required for service announcements.    |
+| Push    | `PushSender` port | active verified push token          | HTTP provider seam; invalid tokens disable the contact point.          |
 
 ## Implementation Boundaries
 

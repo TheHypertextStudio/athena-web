@@ -14,13 +14,13 @@
 - **Priority**: P0
 - **Description**: Restore the real `docket.hypertext.studio` passwordless signup journey. Repair
   the stale Vercel rewrite, deploy the current API with its signup/passkey endpoints, configure
-  Resend SMTP through Secret Manager, and stop the UI from claiming an email was sent when the
+  Resend's native API through Secret Manager, and stop the UI from claiming an email was sent when the
   request failed.
 - **Plan**:
   1. Make request-code failures explicit and keep the user on the email step unless the API accepts
      the request.
   2. Reject recursive production proxy origins and add regression coverage.
-  3. Wire Resend SMTP secrets, database migrations, and auth-route verification into deployment.
+  3. Wire Resend API secrets, database migrations, and auth-route verification into deployment.
   4. Reuse the verified `service.hypertext.studio` Resend domain, provision secrets, deploy local
      `main`, and prove the full production signup/passkey/onboarding journey.
 - **Confirmed Root Causes**:
@@ -30,7 +30,7 @@
     false email-sent state after that 508.
   - Cloud Run still serves API commit `73ee4a78` from 2026-06-16, before signup challenge/passkey
     routes landed; later deploys fail because Node 26 no longer bundles Corepack.
-  - Production has no SMTP secrets or Cloud Run mounts, while the current auth package requires a
+  - Production had no mail secrets or Cloud Run mounts, while the current auth package requires a
     real mailer at startup.
 - **Risks**:
   - Keep provider keys out of argv, logs, Git, and local tracked files.
@@ -42,17 +42,31 @@
   - Signup remains on the email step for 429, 5xx/508, and network failures; only an accepted
     request advances to code verification.
   - Web production builds reject a recursive `API_URL`/`NEXT_PUBLIC_APP_URL` origin pair.
-  - The API deploy now applies migrations from the built image, mounts the five-value Resend SMTP
-    contract, and probes health/session/signup routes after Cloud Run reports ready.
+  - The API deploy now applies migrations from the built image, mounts the two-value native Resend
+    API contract, and probes health/session/signup routes after Cloud Run reports ready.
   - Reused Resend's verified `service.hypertext.studio` domain, created a domain-restricted sending
-    key, and stored it plus the non-sensitive SMTP contract in `athena-services` Secret Manager.
+    key, and stored it plus the verified sender in `athena-services` Secret Manager.
+  - Centralized mail transport selection: production requires Resend HTTPS, local development may
+    use Mailpit SMTP, and tests always use the capture adapter. Bootstrap now asks only for
+    `RESEND_API_KEY` and `MAIL_FROM` in hosted environments.
 - **Validation Progress**:
   - Repository typecheck 17/17, lint 17/17, tests 17/17 (web 301/301; API 1,196/1,196), tooling
     10/10, production build 3/3, and actionlint all passed.
-  - Live SMTP smoke `5c372209-d09c-4fa4-bbd4-e3846536426a` was accepted and reached Resend's
+  - Initial live SMTP smoke `5c372209-d09c-4fa4-bbd4-e3846536426a` was accepted and reached Resend's
     `delivered` state for `willie@hypertext.studio`.
+  - Native Resend API smoke `729e78c8-072b-4af6-9fc4-c8136c86519f` reached `delivered` using the
+    new domain-restricted production key and verified sender.
+  - First API promotion built its Node 26 image and applied production migrations successfully,
+    then failed safely before traffic shifted because the runtime service account lacked access to
+    the initial mail secrets. Granted secret-level access and hardened bootstrap to do this for
+    every future provider secret; also escaped the comma-delimited host allowlist exposed by the
+    deploy command.
   - Local Docker base-stage checks could not start because the Docker Desktop socket did not
     respond; GitHub's Docker runner remains the production proof for the corrected Corepack layer.
+  - Native Resend changes pass repository typecheck 17/17, lint 17/17, tests 17/17 (mail 28/28;
+    API 1,196/1,196), tooling 11/11, actionlint, and production-mode build 3/3. The first build
+    attempt inherited `NODE_ENV=development` from `.env.local` and hit a transient admin prerender
+    error; rerunning the full build with `NODE_ENV=production` passed.
 
 ### [BOOTSTRAP-LINEAR-001] Minimal-manual production provider bootstrap
 

@@ -50,11 +50,14 @@ export interface Mailer {
 export { CaptureMailer, ConsoleMailer } from './capture';
 export type { CaptureMailerOptions } from './capture';
 export {
+  RealMailer,
+  RESEND_EMAIL_ENDPOINT,
   SmtpMailer,
   defaultSmtpTransportFactory,
   smtpConfigFromEnv,
   toSendMailOptions,
 } from './smtp';
+export { buildMailerFromEnv } from './transport';
 export type {
   RealMailerConfig,
   SendMailOptions,
@@ -63,3 +66,4 @@ export type {
   SmtpTransport,
   SmtpTransportFactory,
 } from './smtp';
+export type { MailerEnv } from './transport';

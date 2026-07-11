@@ -80,7 +80,7 @@ jobs:
             WEB_URL=${{ vars.WEB_URL }}
             BETTER_AUTH_URL=${{ vars.API_URL }}
             BETTER_AUTH_TRUSTED_ORIGINS=${{ vars.WEB_URL }}\,${{ vars.ADMIN_URL }}
-            BETTER_AUTH_ALLOWED_HOSTS=${{ vars.BETTER_AUTH_ALLOWED_HOSTS }}
+            BETTER_AUTH_ALLOWED_HOSTS=docket.hypertext.studio\,docket-api.hypertext.studio\,docket-admin.hypertext.studio
             BETTER_AUTH_PASSKEY_RP_ID=${{ vars.PASSKEY_RP_ID }}
             BETTER_AUTH_PASSKEY_RP_NAME=Docket
             BILLING_ENABLED=false
@@ -95,10 +95,7 @@ jobs:
             GOOGLE_CLIENT_SECRET=docket-google-client-secret:latest
             LINEAR_CLIENT_ID=docket-linear-client-id:latest
             LINEAR_CLIENT_SECRET=docket-linear-client-secret:latest
-            SMTP_HOST=docket-smtp-host:latest
-            SMTP_PORT=docket-smtp-port:latest
-            SMTP_USER=docket-smtp-user:latest
-            SMTP_PASS=docket-smtp-pass:latest
+            RESEND_API_KEY=docket-resend-api-key:latest
             MAIL_FROM=docket-mail-from:latest
 
       - name: Show Cloud Run URL

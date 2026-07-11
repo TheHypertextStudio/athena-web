@@ -770,6 +770,28 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [PM-AUDIT-001] Multi-organization project-management design audit
+
+- **Completed**: 2026-07-10
+- **Priority**: P0
+- **Summary**: Audited Docket's cross-workspace and org-scoped project-management experience for an
+  owner coordinating companies, nonprofits, an emerging organization, and personal work. Separate
+  UI/UX and raw-functionality passes found that Docket already has a stronger cross-workspace
+  substrate than Linear, but hides its executive attention model and resets orientation when users
+  switch workspaces. The resulting scorecard defines a portfolio-first sequence around Today,
+  workspace continuity, Portfolio lenses, project freshness, and generalized personal views.
+- **Files Changed**: `docs/design/audits/2026-07-10-project-management.md`, `docs/WORKLOG.md`.
+- **Validation**: API suite passed (132 files / 1,198 tests); web suite passed (51 files / 301
+  tests). The local stack responded, but browser control was unavailable, so the current mobile and
+  populated screenshot gates are explicitly marked unverified rather than inferred from source.
+- **Learnings**:
+  - Aggregating every workspace is not enough; the personal layer must rank attention and expose
+    neglected or stale domains.
+  - Today already receives approvals, blockers, due work, inbox load, plan groups, and attention
+    counts, making the highest-value UX repair mostly a surfacing problem.
+  - The existing workspace attention field and Hub query capabilities provide useful seams, but
+    navigation continuity and grant-aware read tests must be settled before expanding the surface.
+
 ### [DISCORD-002] Shared provider catalog and external-recipient closeout
 
 - **Completed**: 2026-07-07

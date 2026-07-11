@@ -124,7 +124,7 @@ jobs:
 
       - run: pnpm turbo run build --cache-dir=.turbo
 
-  # Browser e2e against the real dev stack (portless HTTPS + Next dev + Hono API + PGlite),
+  # Browser e2e against the real dev stack (Portless routing + Next dev + Hono API + PGlite),
   # exactly the topology `pnpm dev` gives a developer — including the MCP OAuth flows
   # (register → consent → token → Bearer /mcp), which .env.local enables locally.
   e2e:
@@ -132,11 +132,22 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      WEB_URL: https://docket.localhost
-      NEXT_PUBLIC_APP_URL: https://docket.localhost
+      PORTLESS_PORT: '1355'
+      PORTLESS_HTTPS: '0'
+      PORTLESS_SYNC_HOSTS: '0'
+      APP_URL: http://docket.localhost:1355
+      API_URL: http://api.docket.localhost:1355
+      WEB_URL: http://docket.localhost:1355
+      NEXT_PUBLIC_API_URL: http://api.docket.localhost:1355
+      NEXT_PUBLIC_APP_URL: http://docket.localhost:1355
+      BETTER_AUTH_URL: http://api.docket.localhost:1355
       BETTER_AUTH_PASSKEY_RP_ID: docket.localhost
       NEXT_PUBLIC_PASSKEY_RP_ID: docket.localhost
-      BETTER_AUTH_TRUSTED_ORIGINS: https://docket.localhost,https://admin.docket.localhost,https://marketing.docket.localhost
+      BETTER_AUTH_TRUSTED_ORIGINS: http://docket.localhost:1355,http://admin.docket.localhost:1355
+      MCP_ISSUER_URL: http://api.docket.localhost:1355
+      MCP_RESOURCE_URL: http://api.docket.localhost:1355/mcp
+      MCP_ALLOWED_ORIGINS: http://docket.localhost:1355
+      OIDC_LOGIN_PAGE_URL: http://docket.localhost:1355/sign-in
       AGENT_MAX_TURNS: '24'
       GOOGLE_OAUTH_PUBLIC: 'false'
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -151,16 +162,14 @@ jobs:
 
       - run: pnpm install --no-frozen-lockfile
 
-      # The dev stack lives on the *.docket.localhost family; systemd-resolved usually
-      # synthesizes loopback for *.localhost, but pin it so name resolution is never the flake.
+      # Pin the routed hosts so name resolution is deterministic on every runner image.
       - name: Map dev hosts to loopback
-        run: echo "127.0.0.1 docket.localhost api.docket.localhost admin.docket.localhost marketing.docket.localhost" | sudo tee -a /etc/hosts
+        run: echo "127.0.0.1 docket.localhost api.docket.localhost admin.docket.localhost" | sudo tee -a /etc/hosts
 
-      # portless terminates HTTPS on :443 (privileged ⇒ sudo) and routes each dev app by host.
-      # The self-signed CA is fine: Playwright runs with ignoreHTTPSErrors, and portless
-      # injects NODE_EXTRA_CA_CERTS into the apps it launches.
+      # Portless documents :1355 as its non-privileged mode. HTTP *.localhost remains a secure
+      # browser context for WebAuthn, so CI needs neither sudo nor a generated certificate.
       - name: Start portless proxy
-        run: sudo -E ./node_modules/.bin/portless proxy start --port 443 --https --skip-trust &
+        run: pnpm exec portless proxy start --port 1355 --no-tls
 
       - name: Start dev stack
         run: pnpm dev > /tmp/dev.log 2>&1 &
@@ -170,9 +179,9 @@ jobs:
       - name: Wait for the stack
         run: |
           for _ in $(seq 1 120); do
-            web=$(curl -sk -o /dev/null -w "%{http_code}" https://docket.localhost || true)
-            api=$(curl -sk -o /dev/null -w "%{http_code}" https://api.docket.localhost/v1/health || true)
-            oidc=$(curl -sk -o /dev/null -w "%{http_code}" https://api.docket.localhost/api/auth/.well-known/oauth-authorization-server || true)
+            web=$(curl -s -o /dev/null -w "%{http_code}" http://docket.localhost:1355 || true)
+            api=$(curl -s -o /dev/null -w "%{http_code}" http://api.docket.localhost:1355/v1/health || true)
+            oidc=$(curl -s -o /dev/null -w "%{http_code}" http://api.docket.localhost:1355/api/auth/.well-known/oauth-authorization-server || true)
             echo "web=$web api=$api oidc=$oidc"
             if [ "$web" = "200" ] && [ "$api" = "200" ] && [ "$oidc" = "200" ]; then exit 0; fi
             sleep 5

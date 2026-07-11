@@ -7,6 +7,42 @@
 
 ## Active Tasks
 
+### [PROD-DEPLOY-002] Close final production promotion blockers
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-07-10
+- **Priority**: P0
+- **Description**: Promote the rebased Google Calendar production release through one gated `main`
+  run without duplicate deploys, automatic release tags, or avoidable Actions failures, then verify
+  the live auth, Google account-linking, and calendar-sync journey.
+- **Plan**:
+  1. Audit repository ancestry, cloud variables/secrets, workflow routing, and current live health.
+  2. Repair the GitHub-runner E2E topology and remove the failing automatic semantic-release lane.
+  3. Run local production gates, push `main` once, and watch the single routed deployment.
+  4. Verify deployed revisions, auth routes, Google OAuth availability, and calendar synchronization.
+- **Confirmed Blockers**:
+  - The previous CI E2E job attempted a privileged Portless `:443` proxy; Portless could not find a
+    running proxy in the non-interactive runner, so every readiness probe returned `000`.
+  - The automatic Release workflow failed while attempting a semantic-release Git commit/tag and
+    consumed a separate runner even though this production rollout does not use CI-generated tags.
+  - The prior formatting failure is already resolved on current `main`; `pnpm format:check` passes.
+  - A repository-wide uncached run exposed a contention-sensitive SSE replay flake: a terminal
+    agent session could yield EOF after the first queued historical frame. Historical frames now
+    flush in one atomic write; live-tail events remain incremental.
+- **Risks**:
+  - Preserve the native Vercel Git promotion path; do not invoke Vercel manually or require a token.
+  - Keep the production push to one intentional event after local proof is complete.
+  - Do not expose or read secret values while proving Secret Manager and binding readiness.
+- **Validation Progress**:
+  - Production repository variables, the 11-entry `API_SECRET_BINDINGS` manifest, enabled Google
+    OAuth/Resend secret versions, and public web/API/admin `200` responses were verified without
+    reading credential values.
+  - The isolated unprivileged Portless stack returned `200` for web, API health, and OIDC discovery;
+    all 18 Playwright scenarios passed, including passkeys, Google Calendar, MCP OAuth, and agent
+    approval.
+  - `pnpm format:check`, actionlint, typecheck 17/17, lint 17/17, tests 17/17 (API 1,198/1,198;
+    web 301/301), production build 3/3, and the focused SSE stress loop 20/20 all pass.
+
 ### [AUTH-PROD-001] Restore production account creation and verification email
 
 - **Status**: IN_PROGRESS

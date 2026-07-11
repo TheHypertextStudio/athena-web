@@ -319,14 +319,19 @@ Semantics: the org-scoped session must exist (404 \`Session not found\` otherwis
       const terminal = new Set(['completed', 'failed', 'canceled']);
       return streamSSE(c, async (stream) => {
         let lastSeen = lastEventId ?? '';
-        for (const activity of activities) {
-          if (lastSeen && activity.id <= lastSeen) continue;
-          await stream.writeSSE({
-            id: activity.id,
-            event: activity.type,
-            data: JSON.stringify(toActivityOut(activity)),
-          });
-          lastSeen = activity.id;
+        const replay = activities.filter((activity) => !lastSeen || activity.id > lastSeen);
+        if (replay.length > 0) {
+          // A finite replay is one atomic stream write. This prevents an in-memory/test reader
+          // from observing EOF between queued frames when a terminal session is under load.
+          await stream.write(
+            replay
+              .map(
+                (activity) =>
+                  `event: ${activity.type}\ndata: ${JSON.stringify(toActivityOut(activity))}\nid: ${activity.id}\n\n`,
+              )
+              .join(''),
+          );
+          lastSeen = replay.at(-1)?.id ?? lastSeen;
         }
         let status = sessionRows[0]?.status ?? 'completed';
         let sincePing = 0;

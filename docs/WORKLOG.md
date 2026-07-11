@@ -7,6 +7,64 @@
 
 ## Active Tasks
 
+### [BOOTSTRAP-LINEAR-001] Minimal-manual production provider bootstrap
+
+- **Status**: DONE
+- **Started**: 2026-07-10
+- **Completed**: 2026-07-10
+- **Priority**: P0
+- **Description**: Make `pnpm bootstrap` the minimal-manual-work entry point for every production
+  provider. Production runs all provider groups by default and rejects incomplete values; explicit
+  flags may skip whole phases. Linear additionally opens a prefilled public OAuth application form,
+  collects only provider-generated credentials, writes them directly to Secret Manager, and wires
+  the API deployment only after every required Linear secret exists.
+- **Plan**:
+  1. Add phase flags, including an existing-infrastructure provider-only path, while keeping every
+     production provider mandatory by default.
+  2. Generate and open Linear's supported OAuth application manifest URL with production callback
+     and webhook values prefilled.
+  3. Reuse masked prompts and stdin-only Secret Manager writes for the client id, client secret,
+     and webhook signing secret.
+  4. Patch the deploy workflow idempotently after successful secret provisioning.
+  5. Add pure regression tests, update the operator documentation, run all gates, and commit.
+- **Risks**:
+  - Never expose OAuth or webhook secrets through argv, logs, Git, or generated local files.
+  - Explicit skip flags may omit phases, but the default production path must never silently skip
+    an incomplete provider.
+  - Never add a Cloud Run secret mount before the corresponding Secret Manager entry exists.
+  - Use Better Auth's current built-in Linear callback path, not the retired generic-OAuth path.
+- **Implementation**:
+  - Added documented, typo-rejecting phase flags: `--production`, `--skip-local`, `--skip-tunnel`,
+    `--skip-production`, `--skip-infrastructure`, and `--skip-providers`. The provider-only path
+    reuses the production project/repository and skips Neon/GCP foundation prompts.
+  - Production now runs all nine provider groups by default. Blank input only preserves a real
+    existing cloud value; empty values and bootstrap placeholders fail the provider completeness
+    gate. `--skip-providers` is an explicit operator override, never a hidden default.
+  - Linear opens its official pre-populated OAuth manifest with public distribution, web/admin/API
+    callbacks, authorization-code grant, and Issue/Comment webhook already filled. Only Linear's
+    three generated values remain manual.
+  - Provider values continue to reach GCP/GitHub through stdin/masked prompts. The Linear webhook
+    workflow mount is added idempotently only after all three non-placeholder production secrets
+    can be read back from Secret Manager.
+  - Hardened terminal note wrapping so long unbroken URLs cannot overflow or shatter Clack boxes;
+    the Linear URL is opened directly or copied to the clipboard instead of dumped into the note.
+  - Registered `dx` as the repository's explicit developer-experience commit scope so bootstrap and
+    other contributor-tooling changes can be labeled without bypassing commit-message validation.
+- **Validation**:
+  - `pnpm bootstrap -- --help` exits zero with a clean, non-wrapping flag summary.
+  - Tooling regression suite: 1 file / 8 tests passed (flags, mandatory catalog, placeholder
+    rejection, Linear manifest, idempotent workflow mount, and long-token wrapping).
+  - Repository typecheck 17/17, lint 17/17, tests 17/17 (API 1,196/1,196), and production build
+    3/3 all passed.
+  - Commit-message validation accepts `feat(dx): ...` through the normal allowlist-backed hook.
+- **Retrospective**:
+  - “Mandatory by default” and “skippable by flags” are compatible when omission is explicit and
+    misspelled/contradictory flags fail closed.
+  - Provider-owned forms and generated secrets are the irreducible human boundary; pre-populating
+    everything else and securely persisting pasted values is the useful automation target.
+  - Long manifest URLs are operational data, not terminal prose; open/copy them and still harden
+    the renderer for any future unbroken token.
+
 ### [LINEAR-SYNC-003] Multi-account Linear production-readiness review
 
 - **Status**: DONE

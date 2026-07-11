@@ -217,7 +217,8 @@ git commit -m "changes"
 
 **Scopes:**
 
-Scopes are intentionally limited to product domains and high-level app features.
+Scopes are intentionally limited to product domains, high-level app features, and the `dx`
+developer-experience domain.
 The source of truth is the repo-wide `COMMIT_SCOPES.txt` file. Process scopes such as `ci`,
 `deploy`, `deps`, `pnpm`, `release`, and `build` are not valid scopes unless they are deliberately
 added to that file. For repo-wide maintenance, omit the scope.
@@ -226,6 +227,7 @@ Examples:
 
 ```bash
 git commit -m "feat(auth): add passkey recovery"
+git commit -m "feat(dx): streamline repository bootstrap"
 git commit -m "fix(integrations): preserve connector OAuth state"
 git commit -m "chore: update repository maintenance docs"
 ```

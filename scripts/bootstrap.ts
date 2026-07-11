@@ -7,7 +7,7 @@
  *     (its own freshly-generated dev secrets) → optionally walk through local integrations.
  *   Phase 2 (opt-in): provision production — gcloud/gh prereqs + account confirmation, GCP
  *     APIs/service account/WIF/Artifact Registry/Secret Manager, GitHub Actions vars + secrets,
- *     optionally production integrations.
+ *     every production provider unless the operator explicitly passes `--skip-providers`.
  *
  * Production secrets are held in memory and pushed straight to Secret Manager / GitHub — never
  * written to disk. Idempotent — safe to re-run; existing resources are detected and skipped.
@@ -43,6 +43,85 @@ const SA_NAME = 'docket-deploy';
 const AR_REPO = 'docket';
 const WIF_POOL = 'github';
 const WIF_PROVIDER = 'github-actions';
+
+/** Parsed phase controls accepted by `pnpm bootstrap -- <flags>`. */
+export interface BootstrapFlags {
+  readonly production: boolean;
+  readonly skipLocal: boolean;
+  readonly skipTunnel: boolean;
+  readonly skipProduction: boolean;
+  readonly skipInfrastructure: boolean;
+  readonly skipProviders: boolean;
+  readonly help: boolean;
+}
+
+/**
+ * Parse explicit bootstrap phase flags, rejecting misspellings instead of silently ignoring them.
+ *
+ * @throws When a flag is unknown, mutually exclusive, or skips every bootstrap phase.
+ */
+export function parseBootstrapFlags(args: readonly string[]): BootstrapFlags {
+  const known = new Set([
+    '--',
+    '--production',
+    '--skip-local',
+    '--skip-tunnel',
+    '--skip-production',
+    '--skip-infrastructure',
+    '--skip-providers',
+    '--help',
+    '-h',
+  ]);
+  const normalized = args.filter((arg) => arg !== '--');
+  const unknown = normalized.filter((arg) => !known.has(arg));
+  if (unknown.length > 0) throw new Error(`Unknown bootstrap flag(s): ${unknown.join(', ')}`);
+  const flags: BootstrapFlags = {
+    production: normalized.includes('--production'),
+    skipLocal: normalized.includes('--skip-local'),
+    skipTunnel: normalized.includes('--skip-tunnel'),
+    skipProduction: normalized.includes('--skip-production'),
+    skipInfrastructure: normalized.includes('--skip-infrastructure'),
+    skipProviders: normalized.includes('--skip-providers'),
+    help: normalized.includes('--help') || normalized.includes('-h'),
+  };
+  if (flags.production && flags.skipProduction) {
+    throw new Error('--production and --skip-production cannot be used together');
+  }
+  if (flags.skipInfrastructure && flags.skipProduction) {
+    throw new Error('--skip-infrastructure has no effect when production is skipped');
+  }
+  if (
+    flags.skipLocal &&
+    flags.production &&
+    flags.skipInfrastructure &&
+    flags.skipProviders &&
+    !flags.help
+  ) {
+    throw new Error('The selected flags would skip all local, infrastructure, and provider work');
+  }
+  if (flags.skipLocal && flags.skipProduction && !flags.help) {
+    throw new Error('--skip-local and --skip-production would skip every bootstrap phase');
+  }
+  return flags;
+}
+
+/** Render the bootstrap flags and the shortest production-provider invocation. */
+function bootstrapHelp(): string {
+  return [
+    'Usage: pnpm bootstrap -- [flags]',
+    '',
+    '  --production       provision production without the opt-in prompt',
+    '  --skip-local       skip local env and tunnel setup',
+    '  --skip-tunnel      keep local env setup but skip the cloudflared tunnel',
+    '  --skip-production  perform local setup only',
+    '  --skip-infrastructure reuse existing GCP/GitHub foundation',
+    '  --skip-providers   explicitly omit provider credential setup',
+    '  --help, -h         show this help',
+    '',
+    'Fastest provider-only production setup (all providers):',
+    '  pnpm bootstrap -- --skip-local --production --skip-infrastructure',
+  ].join('\n');
+}
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -839,7 +918,14 @@ async function setupDevTunnel(): Promise<void> {
 // ── main ──────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
+  const flags = parseBootstrapFlags(process.argv.slice(2));
   intro('Docket bootstrap — local dev setup (+ optional production)');
+
+  if (flags.help) {
+    note(bootstrapHelp(), 'Bootstrap flags');
+    outro('No changes made.');
+    return;
+  }
 
   note(
     [
@@ -852,31 +938,43 @@ async function main(): Promise<void> {
       '  • GitHub Actions variables + the Neon API key secret',
       '',
       'Prod secrets are pushed straight to Secret Manager / GitHub — never written to disk.',
+      '',
+      'Use `pnpm bootstrap -- --help` to skip or force whole phases explicitly.',
     ].join('\n'),
     'Overview',
   );
 
   // ── Phase 1 — local development (the priority) ──────────────────────────────
-  checkDevPrereqs();
-  writeEnvLocal();
-  const localIntegrations = unwrap(
-    await confirm({
-      message: 'Set up local integration credentials now (Google/GitHub/Stripe/… for dev)?',
-      initialValue: false,
-    }),
-  );
-  if (localIntegrations) {
-    await runIntegrationSetup({ environments: ['local'], embedded: true });
+  if (!flags.skipLocal) {
+    checkDevPrereqs();
+    writeEnvLocal();
+    if (!flags.skipProviders) {
+      const localIntegrations = unwrap(
+        await confirm({
+          message: 'Set up all local provider credentials now (Google/GitHub/Linear/… for dev)?',
+          initialValue: false,
+        }),
+      );
+      if (localIntegrations) {
+        await runIntegrationSetup({ environments: ['local'], embedded: true });
+      }
+    }
+    if (!flags.skipTunnel) await setupDevTunnel();
+  } else {
+    ok('Skipped local setup (--skip-local).');
   }
-  await setupDevTunnel();
 
   // ── Phase 2 — production (opt-in) ───────────────────────────────────────────
-  const doProd = unwrap(
-    await confirm({
-      message: 'Also provision production now (GCP + GitHub)? You can run this later.',
-      initialValue: false,
-    }),
-  );
+  const doProd = flags.skipProduction
+    ? false
+    : flags.production
+      ? true
+      : unwrap(
+          await confirm({
+            message: 'Also provision production now (GCP + GitHub)? You can run this later.',
+            initialValue: false,
+          }),
+        );
   if (!doProd) {
     note(
       [
@@ -895,17 +993,37 @@ async function main(): Promise<void> {
 
   checkProdPrereqs();
   await confirmAuthAccounts();
+  if (flags.skipInfrastructure) {
+    const repo = detectRepo();
+    if (!repo) throw new Error('Could not detect the GitHub owner/repo from origin');
+    const githubProject = tryRun(
+      `gh variable get GCP_PROJECT_ID --env production --repo ${repo} 2>/dev/null`,
+    );
+    const project =
+      githubProject !== '' ? githubProject : tryRun('gcloud config get-value project 2>/dev/null');
+    if (!project) {
+      throw new Error('Could not resolve the production GCP project from GitHub or gcloud');
+    }
+    ok('Skipped production infrastructure provisioning (--skip-infrastructure).');
+    if (!flags.skipProviders) {
+      await runIntegrationSetup({
+        environments: ['production'],
+        repo,
+        defaultProject: project,
+        authConfirmed: true,
+        embedded: true,
+      });
+    } else {
+      warn('Skipped mandatory production providers by explicit request (--skip-providers).');
+    }
+    outro('Bootstrap complete — existing production foundation reused.');
+    return;
+  }
   const cfg = await gatherConfig();
   const { saEmail, wifProvider } = setupGcp(cfg);
   setupGithub(cfg, saEmail, wifProvider);
 
-  const prodIntegrations = unwrap(
-    await confirm({
-      message: 'Set up production integration credentials now (OAuth/Stripe/…)?',
-      initialValue: false,
-    }),
-  );
-  if (prodIntegrations) {
+  if (!flags.skipProviders) {
     await runIntegrationSetup({
       environments: ['production'],
       repo: cfg.repo,
@@ -913,13 +1031,18 @@ async function main(): Promise<void> {
       authConfirmed: true,
       embedded: true,
     });
+  } else {
+    warn('Skipped mandatory production providers by explicit request (--skip-providers).');
   }
 
   printNextSteps(cfg);
   outro('Bootstrap complete — local dev + production provisioned.');
 }
 
-main().catch((err: unknown) => {
-  cancel(`Bootstrap failed: ${err instanceof Error ? err.message : String(err)}`);
-  process.exit(1);
-});
+// Self-invoke only when run directly (tests import the pure flag parser).
+if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
+  main().catch((err: unknown) => {
+    cancel(`Bootstrap failed: ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(1);
+  });
+}

@@ -418,15 +418,23 @@ Verified commands:
 > **Implemented** in `scripts/integrations-setup.ts`, runnable standalone as **`pnpm integrations`** and invoked automatically at the end of `pnpm bootstrap`. The flow generalizes beyond OAuth to **every external credential in `VAR_REGISTRY`** (Stripe, Anthropic, SMTP, observability), is **environment-aware** (`local` / `staging` / `production`, each configured in its own pass with its own credentials and redirect URIs), and routes writes per environment:
 >
 > - `local` → non-destructive upsert into the root `.env.local`.
-> - `staging` / `production` → server vars to **GCP Secret Manager**, public `NEXT_PUBLIC_*` vars to **GitHub environment variables**. Secret names follow the `deploy.yml` convention: production keeps the unqualified `docket-<kebab>` names; staging is suffixed `docket-staging-<kebab>`. For any **new** var the script prints the exact `deploy.yml` `secrets:` / `env_vars:` lines to add (Cloud Run only mounts secrets the workflow references — wiring a dedicated staging Cloud Run job remains a follow-up).
+> - `staging` / `production` → server vars to **GCP Secret Manager**, public `NEXT_PUBLIC_*` vars to **GitHub environment variables**. Secret names follow the `deploy.yml` convention: production keeps the unqualified `docket-<kebab>` names; staging is suffixed `docket-staging-<kebab>`. Production requires every provider value by default; only the explicit bootstrap `--skip-providers` phase flag permits an incomplete provider pass. Linear's webhook mount is written to `deploy.yml` automatically only after its three real secrets exist.
 >
 > Before any cloud write it **confirms the gcloud + gh accounts and the GCP project** (never assumes the active ones): it lists every authenticated account and every accessible project and lets the operator choose, scoping gcloud via `CLOUDSDK_CORE_ACCOUNT` (no global-config mutation) and `gh auth switch`-ing only when a different account is picked. `pnpm bootstrap` runs the same confirmation up front and reuses it.
 
-These provider consoles have **no scriptable creation API**, so the setup prints exact instructions + the exact redirect URI for the chosen environment (from §1.3) and collects the resulting id/secret via masked, schema-validated, re-promptable inputs (empty input keeps the current value or skips). Recommend separate OAuth apps per environment to keep secrets isolated.
+Provider-owned secrets still require a human to submit the provider form and copy the resulting
+values. Bootstrap automates everything around that boundary: it opens supported pre-populated forms,
+derives exact callback/webhook URLs, collects values through masked schema-validated prompts, and
+writes them directly to the environment's secret store. Empty production input is accepted only
+when a non-placeholder cloud value already exists. Recommend separate OAuth apps per environment.
 
 - **Google:** "Create an OAuth client (Web application) at https://console.cloud.google.com/apis/credentials. Authorized redirect URIs: `<dev>` and/or `<prod>`. Enable the People API for profile; enable Drive/Gmail/Calendar APIs if you'll use those connectors." Prompt `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`.
 - **GitHub:** "Create ONE **GitHub App** under your org (Org → Settings → Developer settings → GitHub Apps) at `https://github.com/organizations/<org>/settings/apps` (not an OAuth App) — it powers sign-in, the issue/PR connector, and the webhook firehose. User-authorization callback `<…/internal/integrations/github/callback>`, setup URL `<…/internal/integrations/github/setup>`, webhook URL `<…/internal/ingest/github>`. Repository permissions Issues/PRs/Metadata read; account permission Email addresses read; subscribe to Issues/Issue comment/Pull request events; create one app per environment." Prompt `GITHUB_APP_ID`, `GITHUB_APP_SLUG`, `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_PRIVATE_KEY` (single-line base64 PEM), `GITHUB_APP_WEBHOOK_SECRET`.
-- **Linear:** "Create an OAuth application at Linear → Settings → API → OAuth applications. Callback URL: `<the oauth2/callback/linear URI>`. Scopes: `read` (login) plus `write,issues:create` for migration." Prompt `LINEAR_CLIENT_ID`, `LINEAR_CLIENT_SECRET`.
+- **Linear:** open Linear's OAuth application-manifest URL with public distribution, every configured
+  Docket host's built-in Better Auth callback (`<origin>/api/auth/callback/linear`), and the
+  `<API_URL>/internal/ingest/linear` Issue/Comment webhook prefilled. Prompt only
+  `LINEAR_CLIENT_ID`, `LINEAR_CLIENT_SECRET`, and the separate `LINEAR_WEBHOOK_SECRET`; all three go
+  straight to Secret Manager and the webhook mount is added after they are confirmed.
 
 Each pasted value is validated against its own `@docket/env` registry schema before being accepted (invalid values re-prompt rather than abort).
 

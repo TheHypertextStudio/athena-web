@@ -31,7 +31,17 @@ Run once per GCP project. Idempotent — safe to re-run.
 pnpm bootstrap
 ```
 
-Prompts for: GCP project ID, region, GitHub repo (`owner/repo`), passkey domain, Neon credentials. Then:
+For the shortest provider-only run against an already-provisioned production foundation:
+
+```bash
+pnpm bootstrap -- --skip-local --production --skip-infrastructure
+```
+
+Production configures every provider by default. Whole phases can be omitted explicitly with
+`--skip-local`, `--skip-tunnel`, `--skip-production`, `--skip-infrastructure`, or
+`--skip-providers`; run
+`pnpm bootstrap -- --help` for the exact behavior. Prompts collect the GCP project ID, region,
+GitHub repo (`owner/repo`), passkey domain, Neon credentials, and provider-generated values. Then:
 
 1. Enables GCP APIs: Cloud Run, Artifact Registry, Secret Manager, IAM, IAM Credentials
 2. Creates service account `docket-deploy` with the four roles listed in [GCP resources](#gcp-resources)
@@ -40,6 +50,15 @@ Prompts for: GCP project ID, region, GitHub repo (`owner/repo`), passkey domain,
 5. Creates Secret Manager secrets: `docket-database-url`, `docket-auth-secret`, `docket-cron-secret`
 6. Sets GitHub Actions variables via `gh variable set`
 7. Writes a `.env.local` skeleton with generated secrets
+8. Opens provider setup forms where supported, validates every production provider value, and
+   writes secrets directly to Secret Manager without placing them in argv or local files
+
+Linear is the most automated provider: bootstrap opens Linear's pre-populated public OAuth
+application form with every Docket callback, the Issue/Comment webhook, and the production webhook
+URL already filled. The operator only submits the provider-owned form and pastes the generated
+client id, client secret, and webhook signing secret into three masked prompts. Once all three real
+values exist, bootstrap idempotently adds the webhook secret mount to `deploy.yml`; it never wires a
+missing secret.
 
 ### Prerequisites
 

@@ -55,6 +55,19 @@ export function workspaceKeyFromPath(pathname: string): WorkspaceNavKey | undefi
   return undefined;
 }
 
+/**
+ * Build a Docket sign-in URL that returns to the current same-origin app path.
+ *
+ * @remarks
+ * `pathname` and `search` come from Next's routing hooks, not an externally supplied URL. The
+ * sign-in page independently accepts only an absolute same-origin path for `next`, so this helper
+ * preserves a protected deep link without creating an open redirect.
+ */
+export function signInReturnPath(pathname: string, search = ''): string {
+  const next = `${pathname}${search ? `?${search}` : ''}`;
+  return `/sign-in?next=${encodeURIComponent(next)}`;
+}
+
 /** lastOrgStorageKey derives a stable app shell storage or navigation key. */
 export function lastOrgStorageKey(userId: string): string {
   return `docket:last-org:${userId}`;

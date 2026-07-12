@@ -12,7 +12,7 @@ import {
 } from '@docket/ui/components';
 import { VocabularyProvider } from '@docket/ui/hooks';
 import { Calendar, Search } from '@docket/ui/icons';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type JSX, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 
 import AccountMenu from '@/components/account-menu';
@@ -34,6 +34,7 @@ import {
   readLastOrg,
   renderLink,
   resolveActiveOrg,
+  signInReturnPath,
   workspaceKeyFromPath,
   writeDensity,
   writeLastOrg,
@@ -57,14 +58,15 @@ import { userErrorMessage } from '@/lib/problem';
 export function AppShellFrame({ children }: { children: ReactNode }): JSX.Element {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { data: session, isPending } = authClient.useSession();
 
   const routeOrgId = orgIdFromPath(pathname);
   const userId = session?.user.id ?? null;
 
   useEffect(() => {
-    if (!isPending && !session) router.replace('/sign-in');
-  }, [isPending, session, router]);
+    if (!isPending && !session) router.replace(signInReturnPath(pathname, searchParams.toString()));
+  }, [isPending, pathname, router, searchParams, session]);
 
   // The caller's orgs drive the sidebar's workspace switcher — read once through the shared query
   // layer, gated on an authenticated session and static-tiered (membership rarely changes within a

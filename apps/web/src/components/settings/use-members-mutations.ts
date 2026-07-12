@@ -6,6 +6,7 @@ import { api } from '@/lib/api';
 import { unwrap, useApiMutation } from '@/lib/query';
 
 import type { InvitePayload } from './invite-form';
+import { userErrorMessage } from '@/lib/problem';
 
 /** MembersMutationState describes the settings data contract shared by the hook or component. */
 export interface MembersMutationState {
@@ -144,11 +145,19 @@ export function useMembersMutations(
   });
 
   const inviting = inviteMutation.isPending;
-  const inviteError = inviteMutation.isError ? inviteMutation.error.message : null;
+  const inviteError = inviteMutation.isError
+    ? userErrorMessage(inviteMutation.error, 'Could not update workspace members.')
+    : null;
   const actionError =
-    (roleMutation.isError ? roleMutation.error.message : null) ??
-    (removeMutation.isError ? removeMutation.error.message : null) ??
-    (revokeMutation.isError ? revokeMutation.error.message : null);
+    (roleMutation.isError
+      ? userErrorMessage(roleMutation.error, 'Could not update workspace members.')
+      : null) ??
+    (removeMutation.isError
+      ? userErrorMessage(removeMutation.error, 'Could not update workspace members.')
+      : null) ??
+    (revokeMutation.isError
+      ? userErrorMessage(revokeMutation.error, 'Could not update workspace members.')
+      : null);
   const savingRoleFor = roleMutation.isPending ? roleMutation.variables.actorId : null;
   const removingFor = removeMutation.isPending ? removeMutation.variables : null;
   const revokingFor = revokeMutation.isPending ? revokeMutation.variables : null;

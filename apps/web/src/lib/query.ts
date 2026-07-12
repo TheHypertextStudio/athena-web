@@ -60,10 +60,10 @@ export { queryKeys } from './query-keys';
  *
  * @remarks
  * The one read primitive — always pass a definition from {@link apiQueryOptions} (key + fetcher +
- * optional {@link STALE} tier). The hook's `data` is the parsed body and its `error` carries the
- * server's problem message on failure (the error handling lives in the definition's query fn). It
- * inherits the {@link createQueryClient} defaults (refetch-on-focus, one retry), so the surface
- * stays fresh without a manual refresh button.
+ * optional {@link STALE} tier). The hook's `data` is the parsed body and its `error` carries only
+ * app-owned copy plus structured status/problem code on failure. It inherits the
+ * {@link createQueryClient} defaults (refetch-on-focus, one retry), so the surface stays fresh
+ * without a manual refresh button.
  *
  * @typeParam T - The parsed response body type, carried by the definition.
  * @param def - A typed definition from {@link apiQueryOptions}.

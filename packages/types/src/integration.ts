@@ -597,13 +597,12 @@ export type ExternalActorPatch = z.infer<typeof ExternalActorPatch>;
  * @remarks
  * Linear's OAuth grant only carries `read` scope until the actor reconnects and approves
  * `write`. Lives here (rather than in `@docket/api`) so it is one string shared verbatim by
- * BOTH ends of the check without either side importing the other's runtime: the API throws it
- * as a 409 `conflict` from `PATCH /integrations/:id` (and records it as an integration's
+ * BOTH ends of the check without either side importing the other's runtime: the API uses it as
+ * internal diagnostic copy for a 409 `linear_write_scope_required` failure (and records it as an integration's
  * `lastError` from `POST /:id/verify`) — see `hasLinearWriteScope`/`LINEAR_WRITE_SCOPE_MESSAGE`
- * usage in `apps/api/src/routes/integration-provider.ts` and `integrations.ts` — and the web
- * `IntegrationConfigPanel` matches the failed PATCH's error message against this same constant
- * to distinguish that ONE specific conflict from any other save failure (e.g. a 422 from
- * `validateTeamMappings`) before showing its "Re-authorize Linear" notice.
+ * usage in `apps/api/src/routes/integration-provider.ts` and `integrations.ts`. The web branches on
+ * that stable Problem code, never this diagnostic string, before showing its "Re-authorize Linear"
+ * notice.
  */
 export const LINEAR_WRITE_SCOPE_MESSAGE =
   'Reconnect Linear to grant write access — two-way sync needs the write scope.';

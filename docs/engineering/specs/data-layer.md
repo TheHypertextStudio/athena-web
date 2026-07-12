@@ -13,9 +13,9 @@
 | The toolkit (hooks, client, helpers) | `apps/web/src/lib/query.ts`             |
 | The query-key convention             | `apps/web/src/lib/query-keys.ts`        |
 | The Hono RPC client                  | `apps/web/src/lib/api.ts`               |
-| Problem→message decoding             | `apps/web/src/lib/problem.ts`           |
+| Problem→structured error boundary    | `apps/web/src/lib/problem.ts`           |
 | The single `QueryClient` mount       | `apps/web/src/components/providers.tsx` |
-| Behavior tests (the pinned contract) | `apps/web/tests/query.test.tsx`         |
+| Behavior tests (the pinned contract) | `apps/web/tests/lib/query.test.tsx`     |
 
 No business logic lives in the web app; it calls the API over `hc<AppType>` and the response types flow back through this layer end-to-end. There is **no `as any`** and **no ad-hoc key** anywhere in the data path.
 
@@ -57,8 +57,11 @@ queryClient.setQueryData(taskDef(orgId, id).queryKey, row); // type error unless
 ```
 
 - `key` — always from `queryKeys` (§3). Never inline a tuple.
-- `call` — a thunk performing **exactly one** Hono RPC call. The error handling (`application/problem+json` → readable message) is baked into the query fn via `unwrap`, so the hook's `error` carries the server's own message.
-- `fallbackMessage` — shown when the server sends no problem detail.
+- `call` — a thunk performing **exactly one** Hono RPC call. `unwrap` validates only the
+  machine-readable status/problem code and throws a structured `UserFacingError`; server and
+  provider prose is never promoted into UI state.
+- `fallbackMessage` — application-owned copy for this operation. It is the only request-specific
+  message the UI may show, including when the response contains problem `title` or `detail` fields.
 - `options` — anything `useQuery` accepts except `queryKey`/`queryFn`; this is where the `STALE` tier and `enabled` go.
 
 ### 2.2 Read hooks
@@ -109,6 +112,22 @@ Returns a `(def) => void` prefetcher bound to the active client. Wire it to a ro
 ### 2.6 `createQueryClient()` + `unwrap()`
 
 `createQueryClient` builds the one stable client (mounted once via a `useState` lazy initializer in `providers.tsx`) with app-wide defaults: `staleTime: STALE.standard`, `gcTime` 5 min (back-nav stays instant), `refetchOnWindowFocus: true` (replaces every manual "Refresh" button), `retry: 1`. `unwrap` is the RPC→Query bridge and is the only place a `Response.ok` check lives.
+
+### 2.7 Error contract — structured behavior, application-owned copy
+
+Production UI treats every API, authentication, provider, and caught failure as untrusted input.
+The central problem boundary converts that input into a `UserFacingError` with stable status/problem
+codes and preserves the raw value only as a diagnostic cause. Components and hooks:
+
+- branch on the error type, `status`, or `code`, never on message text;
+- display `userErrorMessage(error, fallback)`, where `fallback` is application-owned copy for the
+  operation;
+- use `readProblemError(response, fallback)` when handling a response outside the query layer; and
+- never read `.message`, `.lastError`, `error_description`, problem `title`/`detail`, or the legacy
+  string helpers `readProblem`/`readError` directly.
+
+This makes configuration names, exception text, and provider diagnostics incapable of reaching the
+interface even when a backend accidentally includes them in a response.
 
 ---
 
@@ -184,7 +203,13 @@ Only the **today** screen is unconverted (active WIP). All adoption here is veri
 
 The **fetch-in-effect anti-pattern** — `api.v1.*` or `fetch` inside a `useEffect` (the hand-rolled loading the query layer replaces) — is an **ESLint error** across the authed product app (`apps/web/src/app/(app)/**` + `components/**`), via `dataLayerConfig` in the shared `@docket/eslint-config` preset. Auth/OAuth/onboarding flows are intentionally out of scope (they legitimately `fetch` in effects for passkey/consent ceremonies, not product data). A blanket `api.v1` ban is deliberately _not_ imposed — the toolkit legitimately calls `api.v1` inside `apiQueryOptions` within page/component files — so the rule targets the effect-driven pattern; it can broaden once query definitions are relocated into `*.query.ts` data modules.
 
-- The behavior contract in `apps/web/tests/query.test.tsx` pins: `useApiQuery` resolves the parsed body and surfaces the server's problem `detail` as `error`; `useApiMutation` applies the optimistic write, rolls back on failure, and invalidates on settle.
+- `packages/test-utils/tests/web-error-source-policy.test.ts` scans all production TypeScript in
+  `apps/web` and `apps/admin`. CI rejects direct `.message`, `.lastError`, `error_description`, and
+  legacy string-reader use. The only explicit raw-message exemptions are the central classifier and
+  query boundary files; feature code cannot add local exemptions.
+- The behavior contract in `apps/web/tests/lib/query.test.tsx` pins structured query failures and safe
+  caller-owned fallback copy; `useApiMutation` applies the optimistic write, rolls back on failure,
+  and invalidates on settle.
 
 ---
 

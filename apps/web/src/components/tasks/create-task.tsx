@@ -40,7 +40,7 @@ import { api } from '@/lib/api';
 import { ComposerShell } from '@/components/composer/composer-shell';
 import { workflowStateOptions } from '@/components/pickers/options';
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
-import { readError, readProblem } from '@/lib/problem';
+import { userErrorMessage, readProblemError } from '@/lib/problem';
 
 import { TaskComposerPickers } from './task-form-pickers';
 
@@ -191,14 +191,19 @@ export function CreateTaskDialog({
         },
       });
       if (!res.ok) {
-        setError(await readProblem(res, 'Could not create the task.'));
+        setError(
+          userErrorMessage(
+            await readProblemError(res, 'Could not create the task.'),
+            'Could not create the task.',
+          ),
+        );
         return;
       }
       const created = await res.json();
       onOpenChange(false);
       onCreated(created);
     } catch (caught) {
-      setError(readError(caught, 'Something went wrong creating the task.'));
+      setError(userErrorMessage(caught, 'Something went wrong creating the task.'));
     } finally {
       setCreating(false);
     }

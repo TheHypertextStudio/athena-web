@@ -31,6 +31,7 @@ import {
 
 import { DeleteAccountDialog } from './delete-account-dialog';
 import { sectionHref } from './sections';
+import { userErrorMessage } from '@/lib/problem';
 
 /** Whole days from now until an ISO instant (floored at 0). */
 function daysUntil(iso: string): number {
@@ -73,7 +74,7 @@ export function DangerZoneTab(): JSX.Element {
   if (statusQ.isError) {
     return (
       <p role="alert" className="text-destructive text-body">
-        {statusQ.error.message}
+        {userErrorMessage(statusQ.error, 'Could not update account settings.')}
       </p>
     );
   }
@@ -102,7 +103,7 @@ export function DangerZoneTab(): JSX.Element {
           </div>
           {cancelDeletion.isError ? (
             <p role="alert" className="text-destructive text-body">
-              {cancelDeletion.error.message}
+              {userErrorMessage(cancelDeletion.error, 'Could not update account settings.')}
             </p>
           ) : null}
           <div>

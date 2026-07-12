@@ -111,7 +111,7 @@ describe('OnboardingPage — personal fork', () => {
     expect(push).toHaveBeenCalledWith('/today');
   });
 
-  it('keeps the user on the setup step and shows the error when create fails', async () => {
+  it('keeps the user on the setup step and shows safe copy when create fails', async () => {
     orgPost.mockResolvedValue(jsonResponse(false, { detail: 'Workspace limit reached.' }));
     renderPage(<OnboardingPage />);
 
@@ -119,7 +119,9 @@ describe('OnboardingPage — personal fork', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create your space' }));
 
     await waitFor(() => {
-      expect(screen.getByText('Workspace limit reached.')).toBeTruthy();
+      expect(
+        screen.getByText('Could not finish setting up your workspace. Please try again.'),
+      ).toBeTruthy();
     });
     // The connect step never appeared, and nothing navigated.
     expect(screen.queryByText('Google Tasks')).toBeNull();

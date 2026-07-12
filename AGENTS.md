@@ -1,6 +1,6 @@
 # AGENTS.md - Project Athena Agent Guidelines
 
-> **Version**: 1.1.0
+> **Version**: 1.1.1
 > **Last Updated**: 2026-07-12
 > **Applies To**: All AI coding agents working on Project Athena
 
@@ -333,6 +333,7 @@ BACKLOG → ACTIVE (IN_PROGRESS) → ACTIVE (REVIEW) → COMPLETED
 - **App Router conventions** - Layouts, loading, error boundaries
 - **shadcn/ui components** - Accessible, customizable
 - **Data fetching** - All reads/writes go through the typed TanStack Query layer in `apps/web/src/lib/query.ts` (`apiQueryOptions` + def-only `useApiQuery`/`useApiListQuery`/`useLiveApiQuery`/`useApiMutation`); never hand-roll `useEffect`+`fetch` or call `api.v1.*` in a component. See **`docs/engineering/specs/data-layer.md`**.
+- **Error handling** - UI copy must be application-owned. Never render exception/provider text or Problem `title`/`detail`; use `UserFacingError` helpers and branch only on error type, HTTP status, or stable Problem code. The source-policy test enforces this across web and admin production code.
 
 ### Database Patterns (Drizzle)
 

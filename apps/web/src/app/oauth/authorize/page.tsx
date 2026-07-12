@@ -135,12 +135,7 @@ function ConsentPage(): JSX.Element {
           credentials: 'same-origin',
         });
         if (!res.ok) {
-          const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-          setError(
-            typeof body['error_description'] === 'string'
-              ? body['error_description']
-              : 'Something went wrong. Please try again.',
-          );
+          setError('Could not update authorization. Please try again.');
           return;
         }
         const { redirectURI } = (await res.json()) as { redirectURI: string };

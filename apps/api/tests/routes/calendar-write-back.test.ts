@@ -1,7 +1,12 @@
 import { count, eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import type { CalendarItemConflict, CalendarItemOut, CalendarItemPermission } from '@docket/types';
+import {
+  type CalendarItemConflict,
+  type CalendarItemOut,
+  type CalendarItemPermission,
+  publicProblemTitle,
+} from '@docket/types';
 
 import {
   getDb,
@@ -279,14 +284,15 @@ describe('calendar write-back — scope/capability/conflict gating (via the real
     expect(res.status).toBe(403);
     const body = await json<{ code: string; title: string }>(res);
     expect(body.code).toBe('forbidden');
-    expect(body.title.toLowerCase()).toContain('write access');
+    expect(body.title).toBe(publicProblemTitle('forbidden'));
+    expect(JSON.stringify(body)).not.toContain('write access');
 
     expect(await countWritesForItem(schema, fixture.itemId)).toBe(0);
     const row = await loadItemRow(schema, fixture.itemId);
     expect(row.title).toBe('Design review');
   });
 
-  it('a non-editable layer denies with a layer_access_role message, distinct from an event-capability denial', async () => {
+  it('does not expose layer or event capability diagnostics', async () => {
     const schema = await getDb();
     const userId = await seedUserWithHub(schema.db, schema, 'LayerUser');
     const fixture = await seedProviderEventItem(schema, { userId, layerEditableCore: false });
@@ -298,8 +304,11 @@ describe('calendar write-back — scope/capability/conflict gating (via the real
       body: JSON.stringify({ title: 'Renamed' }),
     });
     expect(res.status).toBe(403);
-    const layerBody = await json<{ title: string }>(res);
-    expect(layerBody.title.toLowerCase()).toContain('calendar');
+    const layerBody = await json<{ code: string; title: string }>(res);
+    expect(layerBody).toMatchObject({
+      code: 'forbidden',
+      title: publicProblemTitle('forbidden'),
+    });
 
     const userId2 = await seedUserWithHub(schema.db, schema, 'CapabilityUser');
     const fixture2 = await seedProviderEventItem(schema, {
@@ -313,9 +322,12 @@ describe('calendar write-back — scope/capability/conflict gating (via the real
       body: JSON.stringify({ title: 'Renamed' }),
     });
     expect(res2.status).toBe(403);
-    const capabilityBody = await json<{ title: string }>(res2);
-    expect(capabilityBody.title).not.toBe(layerBody.title);
-    expect(capabilityBody.title.toLowerCase()).toContain('event');
+    const capabilityBody = await json<{ code: string; title: string }>(res2);
+    expect(capabilityBody).toMatchObject({
+      code: 'forbidden',
+      title: publicProblemTitle('forbidden'),
+    });
+    expect(JSON.stringify([layerBody, capabilityBody])).not.toMatch(/calendar|event/i);
   });
 });
 

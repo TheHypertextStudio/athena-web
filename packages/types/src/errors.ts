@@ -19,6 +19,7 @@ export const ProblemCode = z
     'identity_in_use',
     'account_selection_required',
     'linear_workspace_already_connected',
+    'linear_write_scope_required',
     'task_already_linked',
     'idempotency_key_reuse',
     'dependency_cycle',
@@ -45,6 +46,7 @@ export const ProblemCode = z
       '- `identity_in_use` (HTTP 409): a linked identity still funds one or more external connections and must not be removed.',
       '- `account_selection_required` (HTTP 409): a legacy unbound integration has multiple eligible identities; the user must choose one.',
       '- `linear_workspace_already_connected` (HTTP 409): the Linear workspace already has a connection in this Docket organization.',
+      '- `linear_write_scope_required` (HTTP 409): enabling Linear write-back requires reconnecting with the write scope.',
       '- `task_already_linked` (HTTP 409): a more specific conflict — the task is already linked to the target relationship being created.',
       '- `idempotency_key_reuse` (HTTP 422): an `Idempotency-Key` was replayed with a different request payload than the original.',
       '- `dependency_cycle` (HTTP 409): the requested dependency edge would introduce a cycle in the task graph.',
@@ -62,6 +64,45 @@ export const ProblemCode = z
 /** A machine-readable error code. */
 export type ProblemCode = z.infer<typeof ProblemCode>;
 
+/**
+ * Public, application-owned summaries for every problem code.
+ *
+ * @remarks
+ * These strings are deliberately derived from the closed code taxonomy, never from a thrown
+ * `Error.message`. Server exceptions often contain configuration keys, provider payloads, SQL
+ * details, or operator instructions; none of those are user interface copy. HTTP and MCP problem
+ * renderers must use this catalog while retaining the original exception only for diagnostics.
+ */
+export const PUBLIC_PROBLEM_TITLES = {
+  validation_error: 'Some information needs attention.',
+  unauthorized: 'Sign in required.',
+  forbidden: "You don't have permission to do that.",
+  not_found: 'That item could not be found.',
+  conflict: 'That change conflicts with the current state.',
+  identity_in_use: 'That connected account is still in use.',
+  account_selection_required: 'Choose an account to continue.',
+  linear_workspace_already_connected: 'That Linear workspace is already connected.',
+  linear_write_scope_required: 'Reconnect Linear with write access to enable two-way sync.',
+  task_already_linked: 'That task is already linked.',
+  idempotency_key_reuse: 'That request conflicts with an earlier attempt.',
+  dependency_cycle: 'That dependency would create a cycle.',
+  last_owner_guard: 'Every workspace must retain an owner.',
+  current_session: 'The current session cannot be revoked here.',
+  self_escalation: 'You cannot raise your own access level.',
+  personal_org_no_invites: 'Personal workspaces cannot invite members.',
+  reauth_required: 'Verify your identity to continue.',
+  deletion_blocked: 'Resolve workspace ownership before deleting your account.',
+  card_required: 'Payment details are required to continue.',
+  billing_frozen: 'Billing currently prevents this change.',
+  agent_plan_required: 'An active plan is required to use Athena.',
+  internal: 'Something went wrong on our side.',
+} as const satisfies Record<ProblemCode, string>;
+
+/** Return the safe public summary for a machine-readable problem code. */
+export function publicProblemTitle(code: ProblemCode): string {
+  return PUBLIC_PROBLEM_TITLES[code];
+}
+
 /** An RFC 9457 problem-details object. */
 export const Problem = z.object({
   type: z
@@ -71,7 +112,9 @@ export const Problem = z.object({
     ),
   title: z
     .string()
-    .describe('A short, human-readable summary of the problem (the thrown error message).'),
+    .describe(
+      'A short application-owned summary derived from `code`; never a thrown diagnostic message.',
+    ),
   status: z.number().int().describe('The HTTP status code, duplicated here per RFC 9457.'),
   detail: z
     .string()

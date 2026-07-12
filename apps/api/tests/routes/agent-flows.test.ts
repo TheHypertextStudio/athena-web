@@ -13,6 +13,7 @@ import type {
   agentSession as AgentSessionTable,
   sessionActivity as SessionActivityTable,
 } from '@docket/db';
+import { publicProblemTitle } from '@docket/types';
 
 import type { ActorCtx, AppEnv } from '../../src/context';
 import { onError } from '../../src/error';
@@ -365,7 +366,7 @@ describe('POST /:id/import (connector import via the Connector port)', () => {
     expect(rows).toHaveLength(1);
   });
 
-  it('returns 409 with connector error message when importWork throws', async () => {
+  it('returns a safe 409 without exposing the connector error message', async () => {
     const { MockConnector } = await import('@docket/integrations');
     const spy = vi
       .spyOn(MockConnector.prototype, 'importWork')
@@ -380,8 +381,12 @@ describe('POST /:id/import (connector import via the Connector port)', () => {
       body: JSON.stringify({}),
     });
     expect(res.status).toBe(409);
-    const body = (await res.json()) as { title: string };
-    expect(body.title).toBe('upstream timeout');
+    const body = (await res.json()) as { code: string; title: string };
+    expect(body).toMatchObject({
+      code: 'conflict',
+      title: publicProblemTitle('conflict'),
+    });
+    expect(JSON.stringify(body)).not.toContain('upstream timeout');
     spy.mockRestore();
   });
 

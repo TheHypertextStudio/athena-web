@@ -13,6 +13,7 @@ import { ScaleMenu } from '@/components/portfolio/scale-menu';
 import { type Granularity, buildScale } from '@/components/portfolio/time-scale';
 import { api } from '@/lib/api';
 import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
+import { userErrorMessage } from '@/lib/problem';
 
 /**
  * The Hub "Portfolio" surface — one cross-org roadmap timeline.
@@ -47,7 +48,9 @@ export default function PortfolioClient(): JSX.Element {
   );
   const data = portfolioQ.data ?? null;
   const loading = portfolioQ.isPending;
-  const error = portfolioQ.isError ? portfolioQ.error.message : null;
+  const error = portfolioQ.isError
+    ? userErrorMessage(portfolioQ.error, 'Could not load the portfolio.')
+    : null;
 
   /** The requested time-scale granularity (`auto` defers to the span-derived pick). */
   const [granularity, setGranularity] = useState<Granularity>('auto');

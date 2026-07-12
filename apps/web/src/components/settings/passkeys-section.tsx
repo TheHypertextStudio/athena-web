@@ -34,6 +34,7 @@ import { type JSX, useId, useState } from 'react';
 
 import { passkey } from '@/lib/auth-client';
 import { formatCalendarDate } from '@/lib/format-date';
+import { toUserFacingError, userErrorMessage } from '@/lib/problem';
 
 /** The Better Auth passkey record as returned by `listUserPasskeys` (subset this UI renders). */
 interface PasskeyRecord {
@@ -46,11 +47,11 @@ interface PasskeyRecord {
 /** The TanStack cache key for the signed-in user's passkey list. */
 const PASSKEYS_QUERY_KEY = ['passkeys'] as const;
 
-/** Fetch the current user's passkeys, throwing the Better Auth error message on failure. */
+/** Fetch the current user's passkeys, retaining only application-owned failure copy. */
 async function fetchPasskeys(): Promise<PasskeyRecord[]> {
   const result = await passkey.listUserPasskeys();
   if (result.error) {
-    throw new Error(result.error.message ?? 'Could not load your passkeys.');
+    throw toUserFacingError(result.error, 'Could not load your passkeys.');
   }
   return result.data;
 }
@@ -86,7 +87,7 @@ export function PasskeysSection(): JSX.Element {
   if (listQ.isError) {
     return (
       <p role="alert" className="text-destructive text-body">
-        {listQ.error.message}
+        {userErrorMessage(listQ.error, 'Could not update your passkeys.')}
       </p>
     );
   }
@@ -214,7 +215,7 @@ function AddPasskeyDialog({ open, onOpenChange, onAdded }: AddPasskeyDialogProps
       const trimmed = passkeyName.trim();
       const result = await passkey.addPasskey(trimmed.length > 0 ? { name: trimmed } : undefined);
       if (result.error) {
-        throw new Error(result.error.message ?? 'Could not add the passkey.');
+        throw toUserFacingError(result.error, 'Could not add the passkey.');
       }
     },
     onSuccess: () => {
@@ -259,7 +260,7 @@ function AddPasskeyDialog({ open, onOpenChange, onAdded }: AddPasskeyDialogProps
         </div>
         {add.isError ? (
           <p role="alert" className="text-destructive text-body">
-            {add.error.message}
+            {userErrorMessage(add.error, 'Could not update your passkeys.')}
           </p>
         ) : null}
         <DialogFooter>
@@ -338,7 +339,7 @@ function RenamePasskeyForm({
     mutationFn: async (nextName: string) => {
       const result = await passkey.updatePasskey({ id: record.id, name: nextName.trim() });
       if (result.error) {
-        throw new Error(result.error.message ?? 'Could not rename the passkey.');
+        throw toUserFacingError(result.error, 'Could not rename the passkey.');
       }
     },
     onSuccess: onRenamed,
@@ -365,7 +366,7 @@ function RenamePasskeyForm({
       </div>
       {rename.isError ? (
         <p role="alert" className="text-destructive text-body">
-          {rename.error.message}
+          {userErrorMessage(rename.error, 'Could not update your passkeys.')}
         </p>
       ) : null}
       <DialogFooter>
@@ -405,7 +406,7 @@ function RemovePasskeyDialog({
     mutationFn: async (id: string) => {
       const result = await passkey.deletePasskey({ id });
       if (result.error) {
-        throw new Error(result.error.message ?? 'Could not remove the passkey.');
+        throw toUserFacingError(result.error, 'Could not remove the passkey.');
       }
     },
     onSuccess: () => {
@@ -433,7 +434,7 @@ function RemovePasskeyDialog({
         </DialogHeader>
         {remove.isError ? (
           <p role="alert" className="text-destructive text-body">
-            {remove.error.message}
+            {userErrorMessage(remove.error, 'Could not update your passkeys.')}
           </p>
         ) : null}
         <DialogFooter>

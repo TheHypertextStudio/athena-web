@@ -17,7 +17,7 @@ import Link from 'next/link';
 import { type JSX, useCallback, useEffect, useState } from 'react';
 
 import { api } from '@/lib/api';
-import { readError, readProblem } from '@/lib/problem';
+import { userErrorMessage, readProblemError } from '@/lib/problem';
 import { startViewTransition } from '@/lib/view-transition';
 
 /** One session's pending groups, tagged with where to review them in full. */
@@ -87,13 +87,18 @@ export function GhostProposals({ orgId, onApplied }: GhostProposalsProps): JSX.E
           { param: { orgId, id: sessionId, groupId }, json: {} },
         );
         if (!res.ok) {
-          setError(await readProblem(res, 'Could not approve the batch.'));
+          setError(
+            userErrorMessage(
+              await readProblemError(res, 'Could not approve the batch.'),
+              'Could not approve the batch.',
+            ),
+          );
           return;
         }
         await load();
         onApplied();
       } catch (caught) {
-        setError(readError(caught, 'Something went wrong approving the batch.'));
+        setError(userErrorMessage(caught, 'Something went wrong approving the batch.'));
       } finally {
         setPendingGroupId(null);
       }

@@ -14,6 +14,7 @@ import type { QueryKey } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
 import { api } from './api';
+import { userErrorMessage } from './problem';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from './query';
 
 /** One accept call: the suggestion id plus optional edit-then-accept field overrides. */
@@ -77,7 +78,11 @@ export function useEmailSuggestions(orgId: string): EmailSuggestionsData {
     isPending: listQ.isPending,
     accept: async (args) => void (await acceptM.mutateAsync(args)),
     dismiss: async (id) => void (await dismissM.mutateAsync(id)),
-    actionError: acceptM.error?.message ?? dismissM.error?.message ?? null,
+    actionError: acceptM.error
+      ? userErrorMessage(acceptM.error, 'Could not accept that suggestion.')
+      : dismissM.error
+        ? userErrorMessage(dismissM.error, 'Could not dismiss that suggestion.')
+        : null,
   };
 }
 
@@ -121,6 +126,8 @@ export function useEmailSuggestionThread(
   return {
     thread: threadQ.data,
     isPending: enabled && threadQ.isPending,
-    error: threadQ.error?.message ?? null,
+    error: threadQ.error
+      ? userErrorMessage(threadQ.error, 'Could not load the source email.')
+      : null,
   };
 }

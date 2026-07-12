@@ -22,6 +22,7 @@ import { taskDetailDef } from '@/lib/use-task-detail';
 import { useCycleMutations } from '@/lib/use-cycle-mutations';
 import { useOrgCapability } from '@/lib/use-org-capability';
 import { STATE_GROUP_ORDER, stateTypeOf } from '@/lib/work-state';
+import { userErrorMessage } from '@/lib/problem';
 
 const EMPTY_NAME_MAP: ReadonlyMap<string, string> = new Map();
 
@@ -148,7 +149,7 @@ export default function CycleDetailPage(): JSX.Element {
           role="alert"
           className="border-outline-variant text-destructive text-body rounded-xl border p-4"
         >
-          {detailQ.error.message}
+          {userErrorMessage(detailQ.error, 'Could not load this cycle.')}
         </p>
       </div>
     );

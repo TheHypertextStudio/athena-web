@@ -29,6 +29,7 @@ import {
 } from '@/lib/query';
 
 import { ClientSetup } from './mcp-setup-panels';
+import { userErrorMessage } from '@/lib/problem';
 
 /** Human-readable label for each Docket MCP scope token. */
 const SCOPE_LABEL: Record<string, string> = {
@@ -71,7 +72,9 @@ export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.
 
   const apps: readonly ConnectedApp[] = appsQ.data?.items ?? [];
   const loading = appsQ.isPending;
-  const loadError = appsQ.isError ? appsQ.error.message : null;
+  const loadError = appsQ.isError
+    ? userErrorMessage(appsQ.error, 'Could not update connected apps.')
+    : null;
 
   const revoke = useApiMutation({
     mutationFn: (clientId: string) =>
@@ -179,7 +182,7 @@ export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.
 
         {revoke.isError ? (
           <p role="alert" className="text-destructive text-body">
-            {revoke.error.message}
+            {userErrorMessage(revoke.error, 'Could not update connected apps.')}
           </p>
         ) : null}
       </section>

@@ -24,7 +24,7 @@ import {
 } from '@/components/ui-bits';
 import { api } from '@/lib/api';
 import { formatTimestamp } from '@/lib/lifecycle';
-import { isAuthError, readError, readProblem } from '@/lib/problem';
+import { isAuthError, userErrorMessage, userProblemMessage } from '@/lib/problem';
 import type { AdminUserDetail } from '@/lib/types';
 
 /** Default impersonation session lifetime, in minutes (the API caps this at 480). */
@@ -61,12 +61,12 @@ export default function UserDetailPage(): JSX.Element {
       const res = await api.admin.users[':id'].$get({ param: { id: params.id } });
       if (!res.ok) {
         setAuthFailed(isAuthError(res));
-        setError(await readProblem(res, 'Could not load this user.'));
+        setError(await userProblemMessage(res, 'Could not load this user.'));
         return;
       }
       setDetail(await res.json());
     } catch (caught) {
-      setError(readError(caught, 'Something went wrong loading this user.'));
+      setError(userErrorMessage(caught, 'Something went wrong loading this user.'));
     } finally {
       setLoading(false);
     }
@@ -86,7 +86,7 @@ export default function UserDetailPage(): JSX.Element {
         json: { targetUserId: detail.user.id, reason, ttlMinutes: IMPERSONATION_TTL_MINUTES },
       });
       if (!res.ok) {
-        setImpersonateError(await readProblem(res, 'Could not start impersonation.'));
+        setImpersonateError(await userProblemMessage(res, 'Could not start impersonation.'));
         return;
       }
       const session = await res.json();
@@ -98,7 +98,7 @@ export default function UserDetailPage(): JSX.Element {
       });
       setReason('');
     } catch (caught) {
-      setImpersonateError(readError(caught, 'Something went wrong starting impersonation.'));
+      setImpersonateError(userErrorMessage(caught, 'Something went wrong starting impersonation.'));
     } finally {
       setImpersonating(false);
     }

@@ -14,6 +14,7 @@ import type { QueryKey } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
 import { api } from './api';
+import { userErrorMessage } from './problem';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from './query';
 
 /** The stable React Query key for a task's attachment list. */
@@ -107,7 +108,12 @@ export function useTaskAttachments(orgId: string, taskId: string): TaskAttachmen
     remove: async (attachmentId) => void (await removeM.mutateAsync(attachmentId)),
     downloadUrl: (attachmentId) =>
       `/v1/orgs/${orgId}/tasks/${taskId}/attachments/${attachmentId}/download`,
-    actionError:
-      addUrlM.error?.message ?? addFileM.error?.message ?? removeM.error?.message ?? null,
+    actionError: addUrlM.error
+      ? userErrorMessage(addUrlM.error, 'Could not add that attachment.')
+      : addFileM.error
+        ? userErrorMessage(addFileM.error, 'Could not upload that attachment.')
+        : removeM.error
+          ? userErrorMessage(removeM.error, 'Could not remove that attachment.')
+          : null,
   };
 }

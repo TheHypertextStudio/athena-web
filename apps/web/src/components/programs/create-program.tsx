@@ -33,7 +33,7 @@ import { ComposerShell } from '@/components/composer/composer-shell';
 import { enumOptions, HEALTH_OPTIONS } from '@/components/pickers/options';
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
 import { STATUS_LABEL } from '@/components/programs/program-status';
-import { readError, readProblem } from '@/lib/problem';
+import { userErrorMessage, readProblemError } from '@/lib/problem';
 
 /** The lists this composer's pickers draw from. */
 const COMPOSER_INCLUDE = ['actors'] as const;
@@ -129,14 +129,19 @@ export function CreateProgramDialog({
         },
       });
       if (!res.ok) {
-        setError(await readProblem(res, `Could not create the ${programNounLower}.`));
+        setError(
+          userErrorMessage(
+            await readProblemError(res, `Could not create the ${programNounLower}.`),
+            `Could not create the ${programNounLower}.`,
+          ),
+        );
         return;
       }
       const created = await res.json();
       onOpenChange(false);
       onCreated(created);
     } catch (caught) {
-      setError(readError(caught, `Something went wrong creating the ${programNounLower}.`));
+      setError(userErrorMessage(caught, `Something went wrong creating the ${programNounLower}.`));
     } finally {
       setCreating(false);
     }

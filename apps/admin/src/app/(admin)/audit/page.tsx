@@ -6,7 +6,7 @@ import { type JSX, useCallback, useEffect, useState } from 'react';
 import { EmptyState, ErrorBanner, PageHeader, SignInAction } from '@/components/ui-bits';
 import { api } from '@/lib/api';
 import { formatTimestamp } from '@/lib/lifecycle';
-import { isAuthError, readError, readProblem } from '@/lib/problem';
+import { isAuthError, userErrorMessage, userProblemMessage } from '@/lib/problem';
 import type { AdminAuditEvent } from '@/lib/types';
 
 /** Page size for the audit feed. */
@@ -38,12 +38,12 @@ export default function AuditPage(): JSX.Element {
       });
       if (!res.ok) {
         setAuthFailed(isAuthError(res));
-        setError(await readProblem(res, 'Could not load the audit log.'));
+        setError(await userProblemMessage(res, 'Could not load the audit log.'));
         return;
       }
       setEvents((await res.json()).items);
     } catch (caught) {
-      setError(readError(caught, 'Something went wrong loading the audit log.'));
+      setError(userErrorMessage(caught, 'Something went wrong loading the audit log.'));
     } finally {
       setLoading(false);
     }

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { buildActorDirectory, type ActorDirectory } from '@/components/agents/actor-directory';
 import type { ChangeReceiptItem, SessionControlsState } from '@/components/agents/session-sidebar';
 import { api } from './api';
-import { readError, readProblem } from './problem';
+import { userErrorMessage, readProblemError } from './problem';
 import { startViewTransition } from './view-transition';
 
 /** SessionDetailState describes the use session detail data contract shared by the hook or component. */
@@ -61,7 +61,12 @@ export function useSessionDetail(orgId: string, sessionId: string): SessionDetai
         param: { orgId, id: sessionId },
       });
       if (!sessionRes.ok) {
-        setLoadError(await readProblem(sessionRes, 'Could not load this session.'));
+        setLoadError(
+          userErrorMessage(
+            await readProblemError(sessionRes, 'Could not load this session.'),
+            'Could not load this session.',
+          ),
+        );
         return;
       }
       const detail = await sessionRes.json();
@@ -97,7 +102,7 @@ export function useSessionDetail(orgId: string, sessionId: string): SessionDetai
         setTaskTitle(null);
       }
     } catch (caught) {
-      setLoadError(readError(caught, 'Something went wrong loading this session.'));
+      setLoadError(userErrorMessage(caught, 'Something went wrong loading this session.'));
     } finally {
       setLoading(false);
     }
@@ -178,12 +183,17 @@ export function useSessionDetail(orgId: string, sessionId: string): SessionDetai
           ':activityId'
         ].approve.$post({ param: { orgId, id: sessionId, activityId }, json: {} });
         if (!res.ok) {
-          setActionError(await readProblem(res, 'Could not approve this action.'));
+          setActionError(
+            userErrorMessage(
+              await readProblemError(res, 'Could not approve this action.'),
+              'Could not approve this action.',
+            ),
+          );
           return;
         }
         await load();
       } catch (caught) {
-        setActionError(readError(caught, 'Something went wrong approving this action.'));
+        setActionError(userErrorMessage(caught, 'Something went wrong approving this action.'));
       } finally {
         setPendingActivityId(null);
       }
@@ -200,12 +210,17 @@ export function useSessionDetail(orgId: string, sessionId: string): SessionDetai
           ':activityId'
         ].reject.$post({ param: { orgId, id: sessionId, activityId }, json: {} });
         if (!res.ok) {
-          setActionError(await readProblem(res, 'Could not reject this action.'));
+          setActionError(
+            userErrorMessage(
+              await readProblemError(res, 'Could not reject this action.'),
+              'Could not reject this action.',
+            ),
+          );
           return;
         }
         await load();
       } catch (caught) {
-        setActionError(readError(caught, 'Something went wrong rejecting this action.'));
+        setActionError(userErrorMessage(caught, 'Something went wrong rejecting this action.'));
       } finally {
         setPendingActivityId(null);
       }
@@ -225,7 +240,12 @@ export function useSessionDetail(orgId: string, sessionId: string): SessionDetai
           },
         );
         if (!res.ok) {
-          setActionError(await readProblem(res, 'Could not send your reply.'));
+          setActionError(
+            userErrorMessage(
+              await readProblemError(res, 'Could not send your reply.'),
+              'Could not send your reply.',
+            ),
+          );
           return;
         }
         await reloadActivities();
@@ -237,7 +257,7 @@ export function useSessionDetail(orgId: string, sessionId: string): SessionDetai
           setSession((current) => (current ? { ...current, status: detail.status } : detail));
         }
       } catch (caught) {
-        setActionError(readError(caught, 'Something went wrong sending your reply.'));
+        setActionError(userErrorMessage(caught, 'Something went wrong sending your reply.'));
       } finally {
         setPendingActivityId(null);
       }
@@ -258,12 +278,19 @@ export function useSessionDetail(orgId: string, sessionId: string): SessionDetai
               ? await api.v1.orgs[':orgId'].sessions[':id'].resume.$post({ param })
               : await api.v1.orgs[':orgId'].sessions[':id'].cancel.$post({ param });
         if (!res.ok) {
-          setActionError(await readProblem(res, `Could not ${action} this session.`));
+          setActionError(
+            userErrorMessage(
+              await readProblemError(res, `Could not ${action} this session.`),
+              `Could not ${action} this session.`,
+            ),
+          );
           return;
         }
         await load();
       } catch (caught) {
-        setActionError(readError(caught, `Something went wrong trying to ${action} this session.`));
+        setActionError(
+          userErrorMessage(caught, `Something went wrong trying to ${action} this session.`),
+        );
       } finally {
         setControlPending(false);
       }
@@ -293,12 +320,19 @@ export function useSessionDetail(orgId: string, sessionId: string): SessionDetai
                 json,
               });
         if (!res.ok) {
-          setActionError(await readProblem(res, `Could not ${decision} the batch.`));
+          setActionError(
+            userErrorMessage(
+              await readProblemError(res, `Could not ${decision} the batch.`),
+              `Could not ${decision} the batch.`,
+            ),
+          );
           return;
         }
         await load();
       } catch (caught) {
-        setActionError(readError(caught, `Something went wrong trying to ${decision} the batch.`));
+        setActionError(
+          userErrorMessage(caught, `Something went wrong trying to ${decision} the batch.`),
+        );
       } finally {
         setControlPending(false);
       }
@@ -315,7 +349,12 @@ export function useSessionDetail(orgId: string, sessionId: string): SessionDetai
           ':activityId'
         ].proposal.$patch({ param: { orgId, id: sessionId, activityId }, json: { input } });
         if (!res.ok) {
-          setActionError(await readProblem(res, 'Could not save the edit.'));
+          setActionError(
+            userErrorMessage(
+              await readProblemError(res, 'Could not save the edit.'),
+              'Could not save the edit.',
+            ),
+          );
           return;
         }
         const proposalsRes = await api.v1.orgs[':orgId'].sessions[':id'].proposals.$get({
@@ -323,7 +362,7 @@ export function useSessionDetail(orgId: string, sessionId: string): SessionDetai
         });
         if (proposalsRes.ok) setProposals(await proposalsRes.json());
       } catch (caught) {
-        setActionError(readError(caught, 'Something went wrong saving the edit.'));
+        setActionError(userErrorMessage(caught, 'Something went wrong saving the edit.'));
       } finally {
         setPendingActivityId(null);
       }

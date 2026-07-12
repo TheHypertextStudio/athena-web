@@ -180,7 +180,7 @@ export const SERVICE_VARS: readonly VarSpec[] = [
     slice: 'agent',
     scope: 'server',
     targets: ['api'],
-    required: false,
+    required: true,
     zod: agentServer.AGENT_MAX_TURNS,
     where: 'Per-session turn budget for the Athena agentic loop (e.g. 24)',
   },

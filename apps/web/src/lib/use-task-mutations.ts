@@ -22,6 +22,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 
 import { api } from './api';
+import { userErrorMessage } from './problem';
 import { queryKeys, unwrap, useApiMutation } from './query';
 
 /** Fields accepted by the task patch mutation. All are optional; `null` clears the field. */
@@ -272,14 +273,19 @@ export function useTaskMutations(
     [commentMutation],
   );
 
-  const actionError =
-    patchMutation.error?.message ??
-    stateMutation.error?.message ??
-    priorityMutation.error?.message ??
-    addSubtaskMutation.error?.message ??
-    toggleSubtaskMutation.error?.message ??
-    commentMutation.error?.message ??
-    null;
+  const actionError = patchMutation.error
+    ? userErrorMessage(patchMutation.error, 'Could not update this task.')
+    : stateMutation.error
+      ? userErrorMessage(stateMutation.error, 'Could not change the task state.')
+      : priorityMutation.error
+        ? userErrorMessage(priorityMutation.error, 'Could not change the task priority.')
+        : addSubtaskMutation.error
+          ? userErrorMessage(addSubtaskMutation.error, 'Could not add that subtask.')
+          : toggleSubtaskMutation.error
+            ? userErrorMessage(toggleSubtaskMutation.error, 'Could not update that subtask.')
+            : commentMutation.error
+              ? userErrorMessage(commentMutation.error, 'Could not post that comment.')
+              : null;
 
   return {
     setState,

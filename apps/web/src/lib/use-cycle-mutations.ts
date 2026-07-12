@@ -14,6 +14,7 @@ import { formatWindow } from '@/components/cycles/format-window';
 import { stateTypeOf } from '@/lib/work-state';
 import { api } from './api';
 import type { CycleDetailData } from './fetch-cycle-detail';
+import { userErrorMessage } from './problem';
 import { queryKeys, unwrap, useApiMutation } from './query';
 
 /** CycleMutations describes the use cycle mutations data contract shared by the hook or component. */
@@ -126,7 +127,7 @@ export function useCycleMutations(
       setDialogOpen(false);
     },
     onError: (err) => {
-      setCloseError(err.message);
+      setCloseError(userErrorMessage(err, `Could not close this ${cycleNounLower}.`));
     },
     invalidateKeys: [cyclesKey],
   });
@@ -172,7 +173,9 @@ export function useCycleMutations(
   return {
     patchCycle: patch.mutate,
     propsPending: patch.isPending,
-    propsError: patch.error?.message ?? null,
+    propsError: patch.error
+      ? userErrorMessage(patch.error, `Could not update this ${cycleNounLower}.`)
+      : null,
     dialogOpen,
     setDialogOpen,
     decisions,

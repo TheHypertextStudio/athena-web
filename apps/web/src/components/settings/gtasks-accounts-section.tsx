@@ -28,7 +28,7 @@ import type { JSX } from 'react';
 import { useCallback, useState } from 'react';
 
 import { api } from '@/lib/api';
-import { readError } from '@/lib/problem';
+import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, unwrap, useApiQuery } from '@/lib/query';
 
 import { DisconnectConfirmDialog } from './disconnect-confirm-dialog';
@@ -163,9 +163,9 @@ function GtasksAccountRow(props: {
       </div>
 
       {/* Persistent connection error from the server (survives reload). */}
-      {account.status === 'error' && account.lastError ? (
+      {account.status === 'error' ? (
         <div role="alert" className="border-outline-variant border-t px-4 py-2 text-xs">
-          <p className="text-destructive">{account.lastError}</p>
+          <p className="text-destructive">This account could not be synced.</p>
           <p className="text-on-surface-variant mt-1">
             Use <span className="font-medium">Reconnect</span>, or re-link this account under
             Connected accounts.
@@ -323,7 +323,7 @@ export function GtasksAccountsSection({
         await refresh();
         setPickerOpen(false);
       } catch (err) {
-        setAddError(readError(err, 'Could not connect this account.'));
+        setAddError(userErrorMessage(err, 'Could not connect this account.'));
       } finally {
         setConnectingSub(null);
       }
@@ -346,7 +346,7 @@ export function GtasksAccountsSection({
         );
         await refresh();
       } catch (err) {
-        setAccountError(account.id, readError(err, 'Could not reconnect this account.'));
+        setAccountError(account.id, userErrorMessage(err, 'Could not reconnect this account.'));
       } finally {
         setBusyId(null);
       }
@@ -376,7 +376,7 @@ export function GtasksAccountsSection({
           }, 5000);
         }
       } catch (err) {
-        setAccountError(id, readError(err, 'Sync failed.'));
+        setAccountError(id, userErrorMessage(err, 'Sync failed.'));
       } finally {
         setBusyId(null);
       }
@@ -394,7 +394,7 @@ export function GtasksAccountsSection({
         );
         await refresh();
       } catch (err) {
-        setAccountError(id, readError(err, 'Could not disconnect this account.'));
+        setAccountError(id, userErrorMessage(err, 'Could not disconnect this account.'));
       } finally {
         setBusyId(null);
       }

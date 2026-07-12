@@ -21,6 +21,7 @@ import { type TabItem, ProjectTabs } from '@/components/project-detail/tabs';
 import { UpdatesTab } from '@/components/project-detail/updates-tab';
 import { useActiveOrg } from '@/components/active-org';
 import { useProjectDetailPage } from '@/lib/use-project-detail-page';
+import { userErrorMessage } from '@/lib/problem';
 
 type TabId = 'overview' | 'tasks' | 'updates';
 
@@ -112,7 +113,7 @@ export default function ProjectDetailPage(): JSX.Element {
           role="alert"
           className="border-outline-variant text-destructive text-body rounded-xl border p-4"
         >
-          {detailQ.error.message}
+          {userErrorMessage(detailQ.error, 'Could not load this project.')}
         </p>
       </div>
     );
@@ -181,7 +182,11 @@ export default function ProjectDetailPage(): JSX.Element {
             <Discussion
               comments={comments}
               loading={commentsQ.isPending}
-              error={commentsQ.isError ? commentsQ.error.message : null}
+              error={
+                commentsQ.isError
+                  ? userErrorMessage(commentsQ.error, 'Could not load this project.')
+                  : null
+              }
               resolveActor={resolveActor}
               agentActivity={agentActivity}
               posting={commentPosting}
@@ -283,7 +288,11 @@ export default function ProjectDetailPage(): JSX.Element {
           <UpdatesTab
             updates={updates}
             loading={updatesQ.isPending}
-            error={updatesQ.isError ? updatesQ.error.message : null}
+            error={
+              updatesQ.isError
+                ? userErrorMessage(updatesQ.error, 'Could not load this project.')
+                : null
+            }
             resolveActor={resolveActor}
             posting={updatePosting}
             postError={updateError}

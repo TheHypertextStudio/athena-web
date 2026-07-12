@@ -65,16 +65,6 @@ function LayerRow({ layer }: LayerRowProps): JSX.Element {
           Read-only
         </Badge>
       ) : null}
-      {layer.lastError ? (
-        <span
-          role="img"
-          aria-label={`Sync error: ${layer.lastError}`}
-          title={layer.lastError}
-          className="text-destructive shrink-0 text-xs"
-        >
-          !
-        </span>
-      ) : null}
     </li>
   );
 }

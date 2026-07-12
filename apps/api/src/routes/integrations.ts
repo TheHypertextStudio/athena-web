@@ -449,7 +449,7 @@ Requires \`manage\` — it touches live provider credentials and configures sync
         existing.provider === 'linear' &&
         !(await hasLinearWriteScope(credentialActorId, credentialAccountId))
       ) {
-        throw new ConflictError(LINEAR_WRITE_SCOPE_MESSAGE);
+        throw new ConflictError(LINEAR_WRITE_SCOPE_MESSAGE, 'linear_write_scope_required');
       }
 
       const patch = {

@@ -16,7 +16,7 @@ import type {
   task as TaskTable,
   user as UserTable,
 } from '@docket/db';
-import type { Capability } from '@docket/types';
+import { publicProblemTitle, type Capability } from '@docket/types';
 
 import type { McpContext } from '../../src/mcp/auth';
 import type { registerTools as RegisterTools } from '../../src/mcp/tools';
@@ -303,6 +303,7 @@ describe('Origin + auth guard', () => {
     expect(res.status).toBe(401);
     const problem = (await res.json()) as { status: number; code: string; title: string };
     expect(problem.code).toBe('unauthorized');
-    expect(problem.title).toContain('Origin');
+    expect(problem.title).toBe(publicProblemTitle('unauthorized'));
+    expect(JSON.stringify(problem)).not.toContain('Origin');
   });
 });

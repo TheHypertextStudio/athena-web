@@ -24,6 +24,7 @@ import { PasskeysSection } from './passkeys-section';
 import type { RecoveryCodesMode } from './recovery-codes-dialog';
 import { RecoveryCodesDialog } from './recovery-codes-dialog';
 import { SessionsSection } from './sessions-section';
+import { userErrorMessage } from '@/lib/problem';
 
 /** The Security settings tab — manage passkeys, email, active sessions, then recovery codes. */
 export function SecurityTab(): JSX.Element {
@@ -56,7 +57,7 @@ function RecoveryCodesSection(): JSX.Element {
   if (statusQ.isError) {
     return (
       <p role="alert" className="text-destructive text-body">
-        {statusQ.error.message}
+        {userErrorMessage(statusQ.error, 'Could not load security settings.')}
       </p>
     );
   }

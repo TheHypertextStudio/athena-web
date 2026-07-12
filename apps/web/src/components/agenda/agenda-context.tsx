@@ -34,6 +34,7 @@ import { todayISODate } from '@/lib/today';
 import { startViewTransition } from '@/lib/view-transition';
 
 import { type AgendaPlanMutations, useAgendaPlanMutations } from './agenda-mutations';
+import { userErrorMessage } from '@/lib/problem';
 
 /** Stable `view-transition-name` for an agenda entry, so it morphs across views (list ↔ timeline). */
 export function agendaEntryTransitionName(entryId: string): string {
@@ -369,7 +370,7 @@ export function AgendaProvider({ initialDate, children }: AgendaProviderProps): 
       isToday: date === todayISODate(),
       entries,
       loading: query.isPending,
-      error: query.error ? query.error.message : null,
+      error: query.error ? userErrorMessage(query.error, 'Could not refresh the agenda.') : null,
       view,
       setView,
       goToPreviousDay,

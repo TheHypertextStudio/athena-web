@@ -46,6 +46,7 @@ import { FilterToolbar } from '@/components/views/filter-toolbar';
 import { useViewState } from '@/components/views/use-view-state';
 import { api } from '@/lib/api';
 import { apiQueryOptions, queryKeys, useApiListQuery } from '@/lib/query';
+import { userErrorMessage } from '@/lib/problem';
 
 /**
  * The Projects list — client component.
@@ -103,7 +104,9 @@ export default function ProjectsListClient(): JSX.Element {
   const members = useMemo(() => membersQ.data?.items ?? [], [membersQ.data]);
 
   const loading = projectsQ.isPending;
-  const loadError = projectsQ.isError ? projectsQ.error.message : null;
+  const loadError = projectsQ.isError
+    ? userErrorMessage(projectsQ.error, 'Could not load projects.')
+    : null;
 
   /** Lead display name by actor id (for the lead column + filter labels). */
   const leadNameById = useMemo(

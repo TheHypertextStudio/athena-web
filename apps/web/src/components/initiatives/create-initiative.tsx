@@ -28,7 +28,7 @@ import { DERIVED_STATUS_LABEL } from '@/components/initiatives/derived-status';
 import { enumOptions, HEALTH_OPTIONS } from '@/components/pickers/options';
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
 import { formatCalendarDate } from '@/lib/format-date';
-import { readError, readProblem } from '@/lib/problem';
+import { userErrorMessage, readProblemError } from '@/lib/problem';
 
 /** The lists this composer's pickers draw from. */
 const COMPOSER_INCLUDE = ['actors'] as const;
@@ -120,14 +120,21 @@ export function CreateInitiativeDialog({
         },
       });
       if (!res.ok) {
-        setError(await readProblem(res, `Could not create the ${initiativeNounLower}.`));
+        setError(
+          userErrorMessage(
+            await readProblemError(res, `Could not create the ${initiativeNounLower}.`),
+            `Could not create the ${initiativeNounLower}.`,
+          ),
+        );
         return;
       }
       const created = await res.json();
       onOpenChange(false);
       onCreated(created);
     } catch (caught) {
-      setError(readError(caught, `Something went wrong creating the ${initiativeNounLower}.`));
+      setError(
+        userErrorMessage(caught, `Something went wrong creating the ${initiativeNounLower}.`),
+      );
     } finally {
       setCreating(false);
     }

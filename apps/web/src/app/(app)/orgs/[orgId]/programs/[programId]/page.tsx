@@ -20,6 +20,7 @@ import { useOrgCapability } from '@/lib/use-org-capability';
 import { stateTypeOf } from '@/lib/work-state';
 import { fetchProgramDetail } from '@/lib/fetch-program-detail';
 import { useProgramMutations } from '@/lib/use-program-mutations';
+import { userErrorMessage } from '@/lib/problem';
 
 type TabId = 'work' | 'updates';
 
@@ -157,7 +158,7 @@ export default function ProgramDetailPage(): JSX.Element {
           role="alert"
           className="border-outline-variant text-destructive text-body rounded-lg border p-4"
         >
-          {detailQ.error.message}
+          {userErrorMessage(detailQ.error, 'Could not load this program.')}
         </p>
       </div>
     );
@@ -214,7 +215,11 @@ export default function ProgramDetailPage(): JSX.Element {
               <WorkBoard
                 work={work}
                 loading={workQ.isPending}
-                error={workQ.isError ? workQ.error.message : null}
+                error={
+                  workQ.isError
+                    ? userErrorMessage(workQ.error, 'Could not load this program.')
+                    : null
+                }
                 cycleLabel={cycleLabel}
                 taskNounPlural={taskNounPlural}
                 projectNoun={projectNoun}
@@ -230,7 +235,11 @@ export default function ProgramDetailPage(): JSX.Element {
               <UpdatesPanel
                 updates={updates}
                 loading={updatesQ.isPending}
-                error={updatesQ.isError ? updatesQ.error.message : null}
+                error={
+                  updatesQ.isError
+                    ? userErrorMessage(updatesQ.error, 'Could not load this program.')
+                    : null
+                }
                 resolveActor={resolveActor}
                 posting={updatePosting}
                 postError={updateError}

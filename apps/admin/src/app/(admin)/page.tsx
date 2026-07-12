@@ -14,7 +14,7 @@ import {
 } from '@/components/ui-bits';
 import { api } from '@/lib/api';
 import { lifecycleLabel } from '@/lib/lifecycle';
-import { isAuthError, readError, readProblem } from '@/lib/problem';
+import { isAuthError, userErrorMessage, userProblemMessage } from '@/lib/problem';
 import type { AdminMetrics, AdminOrg } from '@/lib/types';
 
 /** The dashboard's loaded data: headline metrics and the at-risk org queues. */
@@ -60,7 +60,7 @@ export default function DashboardPage(): JSX.Element {
       ]);
       if (!metricsRes.ok) {
         setAuthFailed(isAuthError(metricsRes));
-        setError(await readProblem(metricsRes, 'Could not load the dashboard.'));
+        setError(await userProblemMessage(metricsRes, 'Could not load the dashboard.'));
         return;
       }
       const metrics = await metricsRes.json();
@@ -68,7 +68,7 @@ export default function DashboardPage(): JSX.Element {
       const pendingDeletion = deleteRes.ok ? (await deleteRes.json()).items : [];
       setData({ metrics, exportWindow, pendingDeletion });
     } catch (caught) {
-      setError(readError(caught, 'Something went wrong loading the dashboard.'));
+      setError(userErrorMessage(caught, 'Something went wrong loading the dashboard.'));
     } finally {
       setLoading(false);
     }

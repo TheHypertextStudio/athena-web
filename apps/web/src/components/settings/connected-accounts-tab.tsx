@@ -23,7 +23,7 @@ import { type JSX, useCallback, useMemo, useState } from 'react';
 
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
-import { readError } from '@/lib/problem';
+import { userErrorMessage } from '@/lib/problem';
 import { usePublicConfig } from '@/lib/public-config';
 import { STALE, apiQueryOptions, queryKeys, unwrap, useApiQuery } from '@/lib/query';
 
@@ -56,7 +56,9 @@ export function ConnectedAccountsTab({ orgId }: ConnectedAccountsTabProps): JSX.
   );
   const identities: readonly IdentityOut[] = identitiesQ.data?.items ?? [];
   const loading = identitiesQ.isPending;
-  const loadError = identitiesQ.isError ? identitiesQ.error.message : null;
+  const loadError = identitiesQ.isError
+    ? userErrorMessage(identitiesQ.error, 'Could not load connected accounts.')
+    : null;
   const configured = useMemo(() => {
     const providers = new Set<string>(config?.oauthProviders ?? []);
     if (identitiesQ.data?.googleOAuth?.available !== true) providers.delete('google');
@@ -81,7 +83,7 @@ export function ConnectedAccountsTab({ orgId }: ConnectedAccountsTabProps): JSX.
     authClient
       .linkSocial({ provider, callbackURL: window.location.pathname })
       .catch((err: unknown) => {
-        setError(readError(err, 'Could not start linking that account.'));
+        setError(userErrorMessage(err, 'Could not start linking that account.'));
         setAddingProvider(null);
       });
   }, []);
@@ -102,7 +104,7 @@ export function ConnectedAccountsTab({ orgId }: ConnectedAccountsTabProps): JSX.
         )
         .then(() => qc.invalidateQueries({ queryKey: queryKeys.identities() }))
         .catch((err: unknown) => {
-          setError(readError(err, 'Could not remove this account.'));
+          setError(userErrorMessage(err, 'Could not remove this account.'));
         })
         .finally(() => {
           setBusyId(null);

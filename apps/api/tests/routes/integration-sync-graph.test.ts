@@ -11,6 +11,7 @@ import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
+import { publicProblemTitle } from '@docket/types';
 
 import type * as IntegrationSyncModule from '../../src/routes/integration-sync';
 import type * as IntegrationProviderModule from '../../src/routes/integration-provider';
@@ -319,8 +320,14 @@ describe('Linear write-back scope enforcement', () => {
       body: JSON.stringify({ writeBack: true }),
     });
     expect(denied.status).toBe(409);
-    const problem = await jsonBody<{ title: string }>(denied);
-    expect(problem.title).toBe(WRITE_SCOPE_MESSAGE);
+    const problem = await jsonBody<{ code: string; title: string }>(denied);
+    expect(problem).toEqual({
+      type: 'https://docket.dev/problems/linear_write_scope_required',
+      title: publicProblemTitle('linear_write_scope_required'),
+      status: 409,
+      code: 'linear_write_scope_required',
+    });
+    expect(JSON.stringify(problem)).not.toContain(WRITE_SCOPE_MESSAGE);
     // Rejected atomically: writeBack was never actually flipped.
     expect((await reload(row.id)).writeBack).toBe(false);
 

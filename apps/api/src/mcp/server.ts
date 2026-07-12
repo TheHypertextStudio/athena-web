@@ -15,6 +15,7 @@
  */
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
+import { publicProblemTitle } from '@docket/types';
 import type { Context } from 'hono';
 
 import { env } from '../env';
@@ -122,7 +123,7 @@ function problem(c: Context, err: unknown): Response {
   return c.json(
     {
       type: `https://docket.dev/problems/${apiErr.code}`,
-      title: apiErr.message,
+      title: publicProblemTitle(apiErr.code),
       status: apiErr.status,
       code: apiErr.code,
     },

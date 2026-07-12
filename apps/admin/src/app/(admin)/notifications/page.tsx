@@ -13,7 +13,7 @@ import {
   type NotificationAnnouncementDraft,
 } from './notification-console-model';
 import { api, productApi } from '@/lib/api';
-import { readError, readProblem } from '@/lib/problem';
+import { readProblemError, userErrorMessage } from '@/lib/problem';
 import type {
   AdminNotificationEstimate,
   AdminNotificationIntent,
@@ -64,11 +64,11 @@ export default function NotificationsPage(): JSX.Element {
         api.admin.notifications[':id'].audit.$get({ param: { id } }),
       ]);
 
-    if (!intentRes.ok) throw new Error(await readProblem(intentRes, 'Could not load intent.'));
+    if (!intentRes.ok) throw await readProblemError(intentRes, 'Could not load intent.');
     if (!estimateRes.ok) {
-      throw new Error(await readProblem(estimateRes, 'Could not estimate audience.'));
+      throw await readProblemError(estimateRes, 'Could not estimate audience.');
     }
-    if (!previewRes.ok) throw new Error(await readProblem(previewRes, 'Could not render preview.'));
+    if (!previewRes.ok) throw await readProblemError(previewRes, 'Could not render preview.');
 
     const intent = await intentRes.json();
     setSelectedIntent(intent);
@@ -111,7 +111,7 @@ export default function NotificationsPage(): JSX.Element {
           query: { limit: '25', offset: '0' },
         });
         if (!res.ok) {
-          throw new Error(await readProblem(res, 'Could not load notifications.'));
+          throw await readProblemError(res, 'Could not load notifications.');
         }
         const page = await res.json();
         setIntents(page.items);
@@ -126,7 +126,7 @@ export default function NotificationsPage(): JSX.Element {
           setAuditEvents([]);
         }
       } catch (caught) {
-        setError(readError(caught, 'Something went wrong loading notifications.'));
+        setError(userErrorMessage(caught, 'Something went wrong loading notifications.'));
       } finally {
         setPendingAction(null);
       }
@@ -150,7 +150,7 @@ export default function NotificationsPage(): JSX.Element {
       const res = await productApi.v1.notifications.$post({
         json: notificationDraftToCreateInput(draft),
       });
-      if (!res.ok) throw new Error(await readProblem(res, 'Could not create notification draft.'));
+      if (!res.ok) throw await readProblemError(res, 'Could not create notification draft.');
       const intent = await res.json();
       setDraft(emptyDraft);
       await loadList(intent.id);
@@ -179,7 +179,7 @@ export default function NotificationsPage(): JSX.Element {
       const res = await productApi.v1.notifications[':id'].test.$post({
         param: { id: selectedIntent.id },
       });
-      if (!res.ok) throw new Error(await readProblem(res, 'Could not send test notification.'));
+      if (!res.ok) throw await readProblemError(res, 'Could not send test notification.');
       await loadIntent(selectedIntent.id);
       setStatusMessage('Test send queued');
     });
@@ -191,7 +191,7 @@ export default function NotificationsPage(): JSX.Element {
       const res = await api.admin.notifications[':id'].approve.$post({
         param: { id: selectedIntent.id },
       });
-      if (!res.ok) throw new Error(await readProblem(res, 'Could not approve notification.'));
+      if (!res.ok) throw await readProblemError(res, 'Could not approve notification.');
       await loadIntent(selectedIntent.id);
       setStatusMessage('Notification approved');
     });
@@ -203,7 +203,7 @@ export default function NotificationsPage(): JSX.Element {
       const res = await productApi.v1.notifications[':id'].send.$post({
         param: { id: selectedIntent.id },
       });
-      if (!res.ok) throw new Error(await readProblem(res, 'Could not send notification.'));
+      if (!res.ok) throw await readProblemError(res, 'Could not send notification.');
       await loadIntent(selectedIntent.id);
       setStatusMessage('Notification sent');
     });
@@ -215,7 +215,7 @@ export default function NotificationsPage(): JSX.Element {
       const res = await productApi.v1.notifications[':id'].cancel.$post({
         param: { id: selectedIntent.id },
       });
-      if (!res.ok) throw new Error(await readProblem(res, 'Could not cancel notification.'));
+      if (!res.ok) throw await readProblemError(res, 'Could not cancel notification.');
       await loadIntent(selectedIntent.id);
       setStatusMessage('Notification canceled');
     });
@@ -227,7 +227,7 @@ export default function NotificationsPage(): JSX.Element {
     try {
       await run();
     } catch (caught) {
-      setError(readError(caught, 'Notification action failed.'));
+      setError(userErrorMessage(caught, 'Notification action failed.'));
     } finally {
       setPendingAction(null);
     }

@@ -6,7 +6,7 @@
  * and emits the `@docket/types` {@link Problem} shape as `application/problem+json`.
  */
 import type { StandardSchemaV1 } from '@standard-schema/spec';
-import type { ProblemCode } from '@docket/types';
+import { publicProblemTitle, type ProblemCode } from '@docket/types';
 import type { Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { ZodError } from 'zod';
@@ -166,13 +166,18 @@ export function onError(err: Error, c: Context) {
         : new ApiError(500, 'internal', 'Internal server error');
 
   c.header('Content-Type', 'application/problem+json');
+  const fieldErrors = apiErr.fieldErrors
+    ? Object.fromEntries(
+        Object.keys(apiErr.fieldErrors).map((field) => [field, ['Invalid value.']]),
+      )
+    : undefined;
   return c.json(
     {
       type: `https://docket.dev/problems/${apiErr.code}`,
-      title: apiErr.message,
+      title: publicProblemTitle(apiErr.code),
       status: apiErr.status,
       code: apiErr.code,
-      ...(apiErr.fieldErrors ? { fieldErrors: apiErr.fieldErrors } : {}),
+      ...(fieldErrors ? { fieldErrors } : {}),
     },
     apiErr.status,
   );

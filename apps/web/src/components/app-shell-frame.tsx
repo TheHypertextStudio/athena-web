@@ -37,6 +37,7 @@ import {
   writeDensity,
   writeLastOrg,
 } from './app-shell-utils';
+import { userErrorMessage } from '@/lib/problem';
 
 /**
  * The authenticated app-shell frame: the single flattened sidebar, the multi-document tab bar,
@@ -76,7 +77,9 @@ export function AppShellFrame({ children }: { children: ReactNode }): JSX.Elemen
     ),
   );
   const orgs = useMemo(() => orgsQ.data?.items ?? [], [orgsQ.data]);
-  const orgsError = orgsQ.error ? orgsQ.error.message : null;
+  const orgsError = orgsQ.error
+    ? userErrorMessage(orgsQ.error, 'Could not load your workspaces.')
+    : null;
 
   if (isPending || !session) {
     return (

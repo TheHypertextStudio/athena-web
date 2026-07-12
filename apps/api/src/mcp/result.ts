@@ -10,9 +10,10 @@
  */
 import { type Capability, canActor, type ResourceRef } from '@docket/authz';
 import { db } from '@docket/db';
+import { publicProblemTitle } from '@docket/types';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 
-import { ApiError, CapabilityError, NotFoundError } from '../error';
+import { ApiError, CapabilityError, InsufficientScopeError, NotFoundError } from '../error';
 import type { McpActor, McpContext } from './auth';
 import { resolveActor } from './auth';
 import { type McpScope, requireScope } from './scope';
@@ -61,7 +62,12 @@ export async function runTool(body: () => Promise<CallToolResult>): Promise<Call
   try {
     return await body();
   } catch (err) {
-    if (err instanceof ApiError) return errorResult(`${err.code}: ${err.message}`);
+    if (err instanceof InsufficientScopeError) {
+      return errorResult(
+        `${err.code}: ${publicProblemTitle(err.code)} Required scope: ${err.requiredScope}.`,
+      );
+    }
+    if (err instanceof ApiError) return errorResult(`${err.code}: ${publicProblemTitle(err.code)}`);
     return errorResult('Internal error');
   }
 }

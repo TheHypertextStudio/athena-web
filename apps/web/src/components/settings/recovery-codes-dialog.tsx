@@ -27,6 +27,7 @@ import {
 import { type JSX, useState } from 'react';
 
 import { api } from '@/lib/api';
+import { userErrorMessage } from '@/lib/problem';
 import { unwrap } from '@/lib/query';
 
 import { useReauth } from './use-reauth';
@@ -102,7 +103,7 @@ export function RecoveryCodesDialog({
       await reauth();
       setCodes(await generateCodes());
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not generate recovery codes.');
+      setError(userErrorMessage(err, 'Could not generate recovery codes.'));
     } finally {
       setBusy(false);
     }

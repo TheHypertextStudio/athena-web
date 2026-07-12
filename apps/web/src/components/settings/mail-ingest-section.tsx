@@ -17,6 +17,7 @@ import NextLink from 'next/link';
 import { type JSX, useState } from 'react';
 
 import { api } from '@/lib/api';
+import { userErrorMessage } from '@/lib/problem';
 import { queryKeys, unwrap, useApiMutation } from '@/lib/query';
 
 /**
@@ -66,7 +67,7 @@ function MailIngestRow({ orgId, integration, canManage }: MailIngestRowProps): J
       setError(null);
     },
     onError: (e: Error) => {
-      setError(e.message);
+      setError(userErrorMessage(e, 'Could not save email-to-task settings.'));
     },
   });
 

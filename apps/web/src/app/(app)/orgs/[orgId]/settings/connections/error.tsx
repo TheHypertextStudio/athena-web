@@ -12,6 +12,8 @@
 import type { JSX } from 'react';
 import { useEffect } from 'react';
 
+import { userErrorMessage } from '@/lib/problem';
+
 /** The Integrations section error boundary. */
 export default function IntegrationsSettingsError({
   error,
@@ -32,7 +34,7 @@ export default function IntegrationsSettingsError({
       <div className="flex flex-col gap-1">
         <p className="text-on-surface text-body font-medium">Couldn’t load your integrations</p>
         <p className="text-on-surface-variant text-xs">
-          {error.message || 'Something went wrong while loading this section.'}
+          {userErrorMessage(error, 'Something went wrong while loading this section.')}
         </p>
       </div>
       <button

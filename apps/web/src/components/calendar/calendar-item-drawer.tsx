@@ -68,6 +68,7 @@ import {
   useRetryCalendarItemWrite,
   useUpdateCalendarItem,
 } from './calendar-mutations';
+import { userErrorMessage } from '@/lib/problem';
 
 /** Display labels for {@link CalendarItemTaskRole}, in the order the task stack groups them. */
 const ROLE_ORDER: readonly CalendarItemTaskRole[] = [
@@ -154,7 +155,11 @@ function SyncStatusSection({ item }: SyncStatusSectionProps): JSX.Element {
             {retry.isPending ? 'Retrying…' : 'Retry with local changes'}
           </Button>
         </div>
-        {retry.isError ? <p className="text-destructive text-xs">{retry.error.message}</p> : null}
+        {retry.isError ? (
+          <p className="text-destructive text-xs">
+            {userErrorMessage(retry.error, 'Could not update the calendar item.')}
+          </p>
+        ) : null}
       </div>
     );
   }
@@ -351,7 +356,7 @@ function CoreFieldsForm({ item }: CoreFieldsFormProps): JSX.Element {
           </Button>
           {update.isError ? (
             <p role="alert" className="text-destructive text-xs">
-              {update.error.message}
+              {userErrorMessage(update.error, 'Could not update the calendar item.')}
             </p>
           ) : null}
         </div>
@@ -509,7 +514,11 @@ function CreateTaskForm({ itemId, fallbackTitle, onDone }: CreateTaskFormProps):
           {create.isPending ? 'Creating…' : 'Create & link'}
         </Button>
       </div>
-      {create.isError ? <p className="text-destructive text-xs">{create.error.message}</p> : null}
+      {create.isError ? (
+        <p className="text-destructive text-xs">
+          {userErrorMessage(create.error, 'Could not update the calendar item.')}
+        </p>
+      ) : null}
     </form>
   );
 }
@@ -585,7 +594,11 @@ function LinkTaskForm({ itemId, onDone }: LinkTaskFormProps): JSX.Element {
           {link.isPending ? 'Linking…' : 'Link task'}
         </Button>
       </div>
-      {link.isError ? <p className="text-destructive text-xs">{link.error.message}</p> : null}
+      {link.isError ? (
+        <p className="text-destructive text-xs">
+          {userErrorMessage(link.error, 'Could not update the calendar item.')}
+        </p>
+      ) : null}
     </form>
   );
 }
@@ -878,7 +891,7 @@ export default function CalendarItemDrawer({
           <div className="flex flex-col gap-2 p-4">
             <SheetTitle className="sr-only">Calendar item error</SheetTitle>
             <p role="alert" className="text-destructive text-sm">
-              {itemQuery.error.message}
+              {userErrorMessage(itemQuery.error, 'Could not update the calendar item.')}
             </p>
           </div>
         ) : item ? (

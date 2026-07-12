@@ -86,7 +86,8 @@ export function ActivityItem({
 }: ActivityItemProps): JSX.Element {
   const badge = TYPE_BADGE[activity.type];
   const action = activity.type === 'action' ? actionOf(activity) : null;
-  const text = textOf(activity);
+  const text =
+    activity.type === 'error' ? 'Athena could not complete that step.' : textOf(activity);
 
   return (
     <li className="flex gap-3">
@@ -108,7 +109,7 @@ export function ActivityItem({
         {/* Body. */}
         {activity.type === 'error' ? (
           <p role="alert" className="text-destructive text-body leading-relaxed">
-            {text || 'The agent reported an error.'}
+            {text}
           </p>
         ) : activity.type === 'thought' ? (
           <ThoughtBody text={text} />

@@ -233,7 +233,8 @@ describe('IntegrationConfigPanel — two-way write-scope re-auth', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save settings' }));
 
     const alert = await screen.findByRole('alert');
-    expect(alert.textContent).toContain('Something else broke.');
+    expect(alert.textContent).toContain('Could not save settings.');
+    expect(alert.textContent).not.toContain('Something else broke.');
     expect(screen.queryByRole('button', { name: 'Re-authorize Linear' })).toBeNull();
   });
 
@@ -241,7 +242,13 @@ describe('IntegrationConfigPanel — two-way write-scope re-auth', () => {
     integrationPatch.mockResolvedValue(
       jsonResponse(
         false,
-        { detail: 'Reconnect Linear to grant write access — two-way sync needs the write scope.' },
+        {
+          type: 'https://docket.dev/problems/linear_write_scope_required',
+          title: 'Reconnect Linear with write access to enable two-way sync.',
+          status: 409,
+          code: 'linear_write_scope_required',
+          detail: 'provider diagnostic that must never render',
+        },
         409,
       ),
     );
@@ -256,7 +263,10 @@ describe('IntegrationConfigPanel — two-way write-scope re-auth', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save settings' }));
 
     const alert = await screen.findByRole('alert');
-    expect(alert.textContent).toContain('grant write access');
+    expect(alert.textContent).toContain(
+      'Reconnect Linear and approve write access to turn on two-way sync.',
+    );
+    expect(alert.textContent).not.toContain('provider diagnostic');
 
     const reauthButton = screen.getByRole('button', { name: 'Re-authorize Linear' });
     fireEvent.click(reauthButton);
@@ -276,7 +286,13 @@ describe('IntegrationConfigPanel — two-way write-scope re-auth', () => {
     integrationPatch.mockResolvedValue(
       jsonResponse(
         false,
-        { detail: 'Unknown team id(s) in teamMappings: some-stale-id', code: 'validation_error' },
+        {
+          type: 'https://docket.dev/problems/validation_error',
+          title: 'Some information needs attention.',
+          status: 422,
+          code: 'validation_error',
+          detail: 'Unknown team id(s) in teamMappings: some-stale-id',
+        },
         422,
       ),
     );
@@ -291,7 +307,8 @@ describe('IntegrationConfigPanel — two-way write-scope re-auth', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save settings' }));
 
     const alert = await screen.findByRole('alert');
-    expect(alert.textContent).toContain('Unknown team id(s)');
+    expect(alert.textContent).toContain('Could not save settings.');
+    expect(alert.textContent).not.toContain('Unknown team id(s)');
     expect(screen.queryByRole('button', { name: 'Re-authorize Linear' })).toBeNull();
   });
 
@@ -304,7 +321,13 @@ describe('IntegrationConfigPanel — two-way write-scope re-auth', () => {
     integrationPatch.mockResolvedValue(
       jsonResponse(
         false,
-        { detail: 'Reconnect Linear to grant write access — two-way sync needs the write scope.' },
+        {
+          type: 'https://docket.dev/problems/linear_write_scope_required',
+          title: 'Reconnect Linear with write access to enable two-way sync.',
+          status: 409,
+          code: 'linear_write_scope_required',
+          detail: 'provider diagnostic that must never render',
+        },
         409,
       ),
     );

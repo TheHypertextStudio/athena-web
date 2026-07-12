@@ -18,7 +18,7 @@ import {
   SignInAction,
 } from '@/components/ui-bits';
 import { api } from '@/lib/api';
-import { isAuthError, readError, readProblem } from '@/lib/problem';
+import { isAuthError, userErrorMessage, userProblemMessage } from '@/lib/problem';
 import type { AdminOrg } from '@/lib/types';
 
 /** Page size for the org list. */
@@ -58,14 +58,14 @@ export default function OrgsPage(): JSX.Element {
       });
       if (!res.ok) {
         setAuthFailed(isAuthError(res));
-        setError(await readProblem(res, 'Could not load organizations.'));
+        setError(await userProblemMessage(res, 'Could not load organizations.'));
         return;
       }
       const page = await res.json();
       setOrgs(page.items);
       setTotal(page.total);
     } catch (caught) {
-      setError(readError(caught, 'Something went wrong loading organizations.'));
+      setError(userErrorMessage(caught, 'Something went wrong loading organizations.'));
     } finally {
       setLoading(false);
     }

@@ -142,7 +142,7 @@ describe('StepConnect (dev / mock mode)', () => {
     });
   });
 
-  it('surfaces a problem message and offers a retry when connecting fails', async () => {
+  it('surfaces application-owned copy and offers a retry when connecting fails', async () => {
     const createIntegration = vi.fn(async () =>
       jsonResponse(false, { detail: 'Provider is unavailable.' }),
     );
@@ -153,7 +153,7 @@ describe('StepConnect (dev / mock mode)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Connect Google Tasks' }));
     await waitFor(() => {
-      expect(screen.getByText('Provider is unavailable.')).toBeTruthy();
+      expect(screen.getByText('Could not connect this source.')).toBeTruthy();
     });
     expect(screen.getByRole('button', { name: 'Retry connecting Google Tasks' })).toBeTruthy();
   });

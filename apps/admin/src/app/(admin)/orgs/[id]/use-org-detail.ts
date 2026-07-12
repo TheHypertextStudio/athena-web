@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { api } from '@/lib/api';
 import type { LifecycleState } from '@/lib/lifecycle';
-import { isAuthError, readError, readProblem } from '@/lib/problem';
+import { isAuthError, userErrorMessage, userProblemMessage } from '@/lib/problem';
 import type { AdminHold, AdminOrg } from '@/lib/types';
 
 /** All state + actions for the org detail screen. */
@@ -51,12 +51,12 @@ export function useOrgDetail(orgId: string): OrgDetailData {
       const res = await api.admin.orgs[':id'].$get({ param: { id: orgId } });
       if (!res.ok) {
         setAuthFailed(isAuthError(res));
-        setError(await readProblem(res, 'Could not load this organization.'));
+        setError(await userProblemMessage(res, 'Could not load this organization.'));
         return;
       }
       setOrg(await res.json());
     } catch (caught) {
-      setError(readError(caught, 'Something went wrong loading this organization.'));
+      setError(userErrorMessage(caught, 'Something went wrong loading this organization.'));
     } finally {
       setLoading(false);
     }
@@ -73,12 +73,12 @@ export function useOrgDetail(orgId: string): OrgDetailData {
       try {
         const res = await call();
         if (!res.ok) {
-          setActionError(await readProblem(res, failMessage));
+          setActionError(await userProblemMessage(res, failMessage));
           return;
         }
         setOrg((await res.json()) as AdminOrg);
       } catch (caught) {
-        setActionError(readError(caught, failMessage));
+        setActionError(userErrorMessage(caught, failMessage));
       } finally {
         setPending(null);
       }
@@ -127,14 +127,14 @@ export function useOrgDetail(orgId: string): OrgDetailData {
         json: { reason: holdReason },
       });
       if (!res.ok) {
-        setActionError(await readProblem(res, 'Could not place the hold.'));
+        setActionError(await userProblemMessage(res, 'Could not place the hold.'));
         return;
       }
       const hold = await res.json();
       setHolds((prev) => [hold, ...prev]);
       setHoldReason('');
     } catch (caught) {
-      setActionError(readError(caught, 'Something went wrong placing the hold.'));
+      setActionError(userErrorMessage(caught, 'Something went wrong placing the hold.'));
     } finally {
       setPending(null);
     }
@@ -149,12 +149,12 @@ export function useOrgDetail(orgId: string): OrgDetailData {
           param: { id: orgId, holdId },
         });
         if (!res.ok) {
-          setActionError(await readProblem(res, 'Could not release the hold.'));
+          setActionError(await userProblemMessage(res, 'Could not release the hold.'));
           return;
         }
         setHolds((prev) => prev.filter((h) => h.id !== holdId));
       } catch (caught) {
-        setActionError(readError(caught, 'Something went wrong releasing the hold.'));
+        setActionError(userErrorMessage(caught, 'Something went wrong releasing the hold.'));
       } finally {
         setPending(null);
       }

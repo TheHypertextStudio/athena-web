@@ -23,7 +23,7 @@ import {
   type UseQueryOptions,
 } from '@tanstack/react-query';
 
-import { readError, readProblemDetails } from '@/lib/problem';
+import { readProblemError, UserFacingError } from '@/lib/problem';
 
 /**
  * Thrown by {@link unwrap} when the API rejects a request with `401 Unauthorized` — i.e. the session
@@ -34,9 +34,9 @@ import { readError, readProblemDetails } from '@/lib/problem';
  * again" apart from ordinary request failures and drive the sign-out + redirect exactly once,
  * rather than surfacing a generic inline "could not load" on whatever surface made the call.
  */
-export class SessionExpiredError extends Error {
+export class SessionExpiredError extends UserFacingError {
   constructor(message = 'Your session has expired. Please sign in again.') {
-    super(message);
+    super(message, { status: 401, code: 'unauthorized' });
     this.name = 'SessionExpiredError';
   }
 }
@@ -145,9 +145,9 @@ export function rpcErrorResponse<T>(response: {
  * The error {@link unwrap} throws for a non-OK API response.
  *
  * @remarks
- * An `Error` subclass (so it satisfies TanStack's `DefaultError` and every existing
- * `error.message` read keeps working unchanged) that additionally carries the HTTP `status` and,
- * when the body parsed as a {@link Problem}, its machine-readable `code`. A caller can
+ * An `Error` subclass (so it satisfies TanStack's `DefaultError`) carrying application-owned copy,
+ * the HTTP `status`, and, when the body parsed as a {@link Problem}, its machine-readable `code`.
+ * A caller can
  * `instanceof`-narrow to this type to distinguish ONE specific failure (e.g. the Linear
  * write-scope 409 on `PATCH /integrations/:id`) from any other failure on the same endpoint (e.g.
  * a 422 from an unrelated validation error) — the message string alone can't do that, since two
@@ -156,14 +156,23 @@ export function rpcErrorResponse<T>(response: {
  *
  * @see `IntegrationConfigPanel`'s two-way re-auth notice for the motivating use.
  */
-export class ApiRequestError extends Error {
+export class ApiRequestError extends UserFacingError {
   /** The response's HTTP status code. */
-  readonly status: number;
+  override readonly status: number;
   /** The closed problem code, when the body parsed as a {@link Problem}. */
-  readonly code?: Problem['code'];
+  override readonly code?: Problem['code'];
 
-  constructor(details: { message: string; status: number; code?: Problem['code'] }) {
-    super(details.message);
+  constructor(details: {
+    message: string;
+    status: number;
+    code?: Problem['code'];
+    cause?: unknown;
+  }) {
+    super(details.message, {
+      status: details.status,
+      ...(details.code ? { code: details.code } : {}),
+      cause: details.cause,
+    });
     this.name = 'ApiRequestError';
     this.status = details.status;
     this.code = details.code;
@@ -176,18 +185,16 @@ export class ApiRequestError extends Error {
  * @remarks
  * The bridge between the Hono RPC convention (a `Response` whose `.ok` is checked, with errors
  * emitted as `application/problem+json`) and TanStack Query's throw-to-signal-error convention.
- * On a non-OK response it throws an {@link ApiRequestError} whose message is the server's problem
- * `detail`/`title` (via {@link readProblemDetails}) and whose `status`/`code` a caller may narrow
- * on; the thrown value flows into the hook's `error` state. A rejection from the call itself
- * (network failure) is re-thrown as a plain `Error` with a readable message via {@link readError}
- * — there is no HTTP response to carry a `status`/`code` in that case.
+ * On a non-OK response it throws an {@link ApiRequestError} with caller-owned copy and a structured
+ * `status`/`code`; response `title`/`detail` are ignored. A network rejection becomes the same safe
+ * error type with status `0` and the original value retained only as its diagnostic cause.
  *
  * @typeParam T - The parsed response body type, inferred from the Hono client call.
  * @param call - A thunk performing exactly one Hono RPC call.
- * @param fallbackMessage - The message to surface when the server sends no problem detail.
+ * @param fallbackMessage - Application-owned copy for this operation.
  * @returns the parsed response body.
  * @throws {ApiRequestError} when the response is non-OK.
- * @throws {Error} when the request itself rejects (network failure).
+ * @throws {ApiRequestError} when the request itself rejects (network failure).
  */
 export async function unwrap<T>(
   call: () => Promise<RpcResponse<T>>,
@@ -197,12 +204,22 @@ export async function unwrap<T>(
   try {
     response = await call();
   } catch (caught) {
-    throw new Error(readError(caught, fallbackMessage), { cause: caught });
+    throw new ApiRequestError({
+      message: fallbackMessage,
+      status: 0,
+      cause: caught,
+    });
   }
   if (!response.ok) {
-    if (response.status === 401) throw new SessionExpiredError();
-    const details = await readProblemDetails(response as unknown as Response, fallbackMessage);
-    throw new ApiRequestError(details);
+    const error = await readProblemError(response as unknown as Response, fallbackMessage);
+    if (response.status === 401 && error.code === 'unauthorized') {
+      throw new SessionExpiredError();
+    }
+    throw new ApiRequestError({
+      message: error.message,
+      status: response.status,
+      ...(error.code ? { code: error.code } : {}),
+    });
   }
   return response.json();
 }
@@ -273,7 +290,7 @@ export interface ApiInfiniteOptions {
  * @param key - The query key (carries the serialized filter params so each variant caches apart).
  * @param call - Performs one page fetch for the given cursor.
  * @param getNextPageParam - Returns the next cursor from a page, or `undefined` when exhausted.
- * @param fallbackMessage - Surfaced when the server sends no problem detail.
+ * @param fallbackMessage - Application-owned copy for this operation.
  * @param options - Optional staleness / poll interval.
  */
 export function apiInfiniteQueryOptions<TPage>(

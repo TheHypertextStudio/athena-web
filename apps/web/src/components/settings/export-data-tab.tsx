@@ -24,6 +24,7 @@ import {
   useApiMutation,
   useApiQuery,
 } from '@/lib/query';
+import { userErrorMessage } from '@/lib/problem';
 
 /** The Export data settings tab — request + download a personal-data archive. */
 export function ExportDataTab(): JSX.Element {
@@ -52,7 +53,7 @@ export function ExportDataTab(): JSX.Element {
   if (statusQ.isError) {
     return (
       <p role="alert" className="text-destructive text-body">
-        {statusQ.error.message}
+        {userErrorMessage(statusQ.error, 'Could not update your data export.')}
       </p>
     );
   }
@@ -92,7 +93,7 @@ export function ExportDataTab(): JSX.Element {
 
       {requestExport.isError ? (
         <p role="alert" className="text-destructive text-body">
-          {requestExport.error.message}
+          {userErrorMessage(requestExport.error, 'Could not update your data export.')}
         </p>
       ) : null}
 

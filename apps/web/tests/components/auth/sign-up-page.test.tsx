@@ -110,7 +110,7 @@ describe('SignUpPage', () => {
     expect(screen.queryByLabelText('Verification code')).toBeNull();
   });
 
-  it('surfaces a bad-code error and does not register a passkey', async () => {
+  it('surfaces safe bad-code copy and does not register a passkey', async () => {
     authFetch.mockImplementation((path: string) => {
       if (path === '/sign-up/request-code') return Promise.resolve({ data: { status: true } });
       if (path === '/sign-up/verify-code')
@@ -126,7 +126,7 @@ describe('SignUpPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Verify and create account' }));
 
     await waitFor(() => {
-      expect(screen.getByRole('alert').textContent).toBe('That code is incorrect.');
+      expect(screen.getByRole('alert').textContent).toBe('That code is invalid or has expired.');
     });
     expect(addPasskey).not.toHaveBeenCalled();
     expect(push).not.toHaveBeenCalled();

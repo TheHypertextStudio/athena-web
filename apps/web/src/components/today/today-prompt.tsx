@@ -32,7 +32,7 @@ import { type JSX, type KeyboardEvent, useCallback, useState } from 'react';
 
 import { SessionStatusPill } from '@/components/agents/session-status';
 import { api } from '@/lib/api';
-import { readError, readProblem } from '@/lib/problem';
+import { userErrorMessage, readProblemError } from '@/lib/problem';
 import { STALE, apiQueryOptions, useApiQuery } from '@/lib/query';
 import { queryKeys } from '@/lib/query-keys';
 
@@ -98,7 +98,12 @@ export function TodayPrompt({ orgId, orgLabel, onCaptured }: TodayPromptProps): 
         json: { text: text.trim() },
       });
       if (!res.ok) {
-        setError(await readProblem(res, 'Could not capture that.'));
+        setError(
+          userErrorMessage(
+            await readProblemError(res, 'Could not capture that.'),
+            'Could not capture that.',
+          ),
+        );
         return;
       }
       const created = await res.json();
@@ -109,7 +114,7 @@ export function TodayPrompt({ orgId, orgLabel, onCaptured }: TodayPromptProps): 
       });
       onCaptured?.();
     } catch (caught) {
-      setError(readError(caught, 'Could not capture that.'));
+      setError(userErrorMessage(caught, 'Could not capture that.'));
     } finally {
       setBusy(null);
     }
@@ -127,7 +132,12 @@ export function TodayPrompt({ orgId, orgLabel, onCaptured }: TodayPromptProps): 
         json: { prompt: text.trim() },
       });
       if (!res.ok) {
-        setError(await readProblem(res, 'Athena could not take that on.'));
+        setError(
+          userErrorMessage(
+            await readProblemError(res, 'Athena could not take that on.'),
+            'Athena could not take that on.',
+          ),
+        );
         return;
       }
       const session = await res.json();
@@ -142,7 +152,7 @@ export function TodayPrompt({ orgId, orgLabel, onCaptured }: TodayPromptProps): 
       setText('');
       setAthenaSession({ id: session.id, orgId, status: session.status });
     } catch (caught) {
-      setError(readError(caught, 'Athena could not take that on.'));
+      setError(userErrorMessage(caught, 'Athena could not take that on.'));
     } finally {
       setBusy(null);
     }

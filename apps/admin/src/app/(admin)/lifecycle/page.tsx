@@ -7,7 +7,7 @@ import { type JSX, useCallback, useEffect, useState } from 'react';
 import { EmptyState, ErrorBanner, PageHeader, ROW_CLASS, SignInAction } from '@/components/ui-bits';
 import { api } from '@/lib/api';
 import { formatTimestamp, lifecycleLabel } from '@/lib/lifecycle';
-import { isAuthError, readError, readProblem } from '@/lib/problem';
+import { isAuthError, userErrorMessage, userProblemMessage } from '@/lib/problem';
 import type { AdminLifecycleBoard } from '@/lib/types';
 
 /**
@@ -35,12 +35,12 @@ export default function LifecyclePage(): JSX.Element {
       const res = await api.admin.lifecycle.$get();
       if (!res.ok) {
         setAuthFailed(isAuthError(res));
-        setError(await readProblem(res, 'Could not load the lifecycle board.'));
+        setError(await userProblemMessage(res, 'Could not load the lifecycle board.'));
         return;
       }
       setBoard(await res.json());
     } catch (caught) {
-      setError(readError(caught, 'Something went wrong loading the lifecycle board.'));
+      setError(userErrorMessage(caught, 'Something went wrong loading the lifecycle board.'));
     } finally {
       setLoading(false);
     }

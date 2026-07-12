@@ -16,6 +16,7 @@ import { type JSX, type SubmitEventHandler, useState } from 'react';
 
 import { useCreateNativeBlock } from './calendar-mutations';
 import { fromLocalInputValue, toLocalInputValue } from './datetime-input';
+import { userErrorMessage } from '@/lib/problem';
 
 /** A round-to-the-half-hour default start, so the form opens with a sensible timed window. */
 function defaultStart(): Date {
@@ -111,7 +112,9 @@ export default function CreateBlockForm({ rangeKeys }: CreateBlockFormProps): JS
             {create.isPending ? 'Creating…' : 'Create block'}
           </Button>
           {create.isError ? (
-            <p className="text-destructive text-xs">{create.error.message}</p>
+            <p className="text-destructive text-xs">
+              {userErrorMessage(create.error, 'Could not create that calendar block.')}
+            </p>
           ) : null}
         </form>
       </PopoverContent>

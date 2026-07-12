@@ -31,7 +31,7 @@ import { ComposerShell } from '@/components/composer/composer-shell';
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
 import { TeamPicker } from '@/components/teams/team-picker';
 import { formatCalendarDate } from '@/lib/format-date';
-import { readError, readProblem } from '@/lib/problem';
+import { userErrorMessage, readProblemError } from '@/lib/problem';
 
 /** The lists this composer's pickers draw from. */
 const COMPOSER_INCLUDE = ['actors', 'initiatives'] as const;
@@ -144,14 +144,19 @@ export function CreateProjectDialog({
         },
       });
       if (!res.ok) {
-        setError(await readProblem(res, `Could not create the ${projectNounLower}.`));
+        setError(
+          userErrorMessage(
+            await readProblemError(res, `Could not create the ${projectNounLower}.`),
+            `Could not create the ${projectNounLower}.`,
+          ),
+        );
         return;
       }
       const created = await res.json();
       onOpenChange(false);
       onCreated(created);
     } catch (caught) {
-      setError(readError(caught, `Something went wrong creating the ${projectNounLower}.`));
+      setError(userErrorMessage(caught, `Something went wrong creating the ${projectNounLower}.`));
     } finally {
       setCreating(false);
     }

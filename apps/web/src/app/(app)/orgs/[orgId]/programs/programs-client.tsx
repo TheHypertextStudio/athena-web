@@ -20,6 +20,7 @@ import { FilterToolbar } from '@/components/views/filter-toolbar';
 import { useViewState } from '@/components/views/use-view-state';
 import { api } from '@/lib/api';
 import { apiQueryOptions, queryKeys, useApiListQuery } from '@/lib/query';
+import { userErrorMessage } from '@/lib/problem';
 
 /**
  * The org Programs list — the roster of ongoing operational lines of work (§8.4), as dense rows.
@@ -100,7 +101,9 @@ export default function ProgramsListClient(): JSX.Element {
   const members = useMemo(() => membersQ.data?.items ?? [], [membersQ.data]);
 
   const loading = programsQ.isPending;
-  const loadError = programsQ.isError ? programsQ.error.message : null;
+  const loadError = programsQ.isError
+    ? userErrorMessage(programsQ.error, 'Could not load programs.')
+    : null;
 
   /** Owner display name by actor id (for the row attribution + filter labels). */
   const ownerNameById = useMemo(

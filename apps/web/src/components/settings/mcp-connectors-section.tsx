@@ -18,6 +18,7 @@ import { Badge, Button, Input, Skeleton } from '@docket/ui/primitives';
 import { type JSX, useId, useState } from 'react';
 
 import { api } from '@/lib/api';
+import { userErrorMessage } from '@/lib/problem';
 import {
   apiQueryOptions,
   queryKeys,
@@ -130,9 +131,9 @@ function McpConnectorRow({ orgId, mcp, canManage }: McpConnectorRowProps): JSX.E
               ? ` · ${String(mcp.toolCount)} tool${mcp.toolCount === 1 ? '' : 's'}`
               : null}
           </span>
-          {mcp.status === 'error' && mcp.lastError ? (
+          {mcp.status === 'error' ? (
             <span role="alert" className="text-destructive block text-xs">
-              {mcp.lastError}
+              This server could not be reached. Verify its settings and try again.
             </span>
           ) : null}
         </span>
@@ -213,9 +214,10 @@ export function AddMcpConnectorForm({ orgId, onConnected }: AddMcpConnectorFormP
     onSuccess: (mcp) => {
       // The row is created either way (so it can be retried via "Verify" without re-entering the
       // form) — but the connector only counts as done here when the live health check actually
-      // passed. A failed check keeps the dialog open with the real reason, not a false "connected".
+      // passed. A failed check keeps the dialog open with safe recovery guidance, not a false
+      // "connected".
       if (mcp.status !== 'connected') {
-        setError(mcp.lastError ?? 'Could not verify that server.');
+        setError('Could not verify that server. Check its settings and try again.');
         return;
       }
       setError(null);
@@ -226,7 +228,7 @@ export function AddMcpConnectorForm({ orgId, onConnected }: AddMcpConnectorFormP
       onConnected?.(mcp);
     },
     onError: (e: Error) => {
-      setError(e.message);
+      setError(userErrorMessage(e, 'Could not connect that server.'));
     },
   });
 

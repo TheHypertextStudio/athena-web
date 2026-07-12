@@ -12,6 +12,7 @@ import type { QueryKey } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
 import { api } from './api';
+import { userErrorMessage } from './problem';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from './query';
 
 /** All automation-rule data + mutation callbacks for the settings surface. */
@@ -66,6 +67,10 @@ export function useAutomationRules(orgId: string): AutomationRulesData {
     isPending: listQ.isPending,
     setEnabled: async (id, enabled) => void (await toggleM.mutateAsync({ id, enabled })),
     remove: async (id) => void (await removeM.mutateAsync(id)),
-    actionError: toggleM.error?.message ?? removeM.error?.message ?? null,
+    actionError: toggleM.error
+      ? userErrorMessage(toggleM.error, 'Could not update that automation rule.')
+      : removeM.error
+        ? userErrorMessage(removeM.error, 'Could not remove that automation rule.')
+        : null,
   };
 }

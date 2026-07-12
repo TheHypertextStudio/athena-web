@@ -24,7 +24,7 @@ import { type JSX, useCallback, useId, useState } from 'react';
 
 import { api } from '@/lib/api';
 import { ComposerShell } from '@/components/composer/composer-shell';
-import { readError, readProblem } from '@/lib/problem';
+import { userErrorMessage, readProblemError } from '@/lib/problem';
 
 /** The longest auto-suggested key length (matches typical Linear-style team prefixes). */
 const MAX_SUGGESTED_KEY = 5;
@@ -121,14 +121,19 @@ export function CreateTeamDialog({
         },
       });
       if (!res.ok) {
-        setError(await readProblem(res, 'Could not create the team.'));
+        setError(
+          userErrorMessage(
+            await readProblemError(res, 'Could not create the team.'),
+            'Could not create the team.',
+          ),
+        );
         return;
       }
       const created = await res.json();
       onOpenChange(false);
       onCreated(created);
     } catch (caught) {
-      setError(readError(caught, 'Something went wrong creating the team.'));
+      setError(userErrorMessage(caught, 'Something went wrong creating the team.'));
     } finally {
       setCreating(false);
     }

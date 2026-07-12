@@ -8,6 +8,7 @@ import { useActiveOrg } from '@/components/active-org';
 import { api } from '@/lib/api';
 import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 import { todayISODate } from '@/lib/today';
+import { userErrorMessage } from '@/lib/problem';
 
 /** A plan group: one organization and the caller's tasks for the day within it. */
 export interface PlanGroup {
@@ -93,7 +94,7 @@ export function useTodayData(): TodayPageData {
   return {
     data,
     loading: todayQ.isPending,
-    error: todayQ.error ? todayQ.error.message : null,
+    error: todayQ.error ? userErrorMessage(todayQ.error, 'Could not load today.') : null,
     refetch: () => {
       void todayQ.refetch();
     },

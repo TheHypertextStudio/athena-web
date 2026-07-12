@@ -20,12 +20,7 @@
  * current `config` (from the `integration` prop, itself sourced from the query cache) so fields
  * this panel doesn't manage (`defaultListId`, `pushNativeTasks`, …) survive the write.
  */
-import {
-  LINEAR_WRITE_SCOPE_MESSAGE,
-  type ConnectorConfig,
-  type IntegrationOut,
-  type TeamOut,
-} from '@docket/types';
+import { type ConnectorConfig, type IntegrationOut, type TeamOut } from '@docket/types';
 import { cn } from '@docket/ui';
 import { Check } from '@docket/ui/icons';
 import { Button, Skeleton } from '@docket/ui/primitives';
@@ -47,6 +42,7 @@ import {
 import { connectorCopy } from './integrations-config';
 import { IntegrationActionButton } from './integration-action-button';
 import TeamMappingPicker, { NOT_SYNCED } from './team-mapping-picker';
+import { userErrorMessage } from '@/lib/problem';
 
 /** Props for {@link IntegrationConfigPanel}. */
 export interface IntegrationConfigPanelProps {
@@ -174,17 +170,17 @@ export function IntegrationConfigPanel({
     },
     onError: (e: Error, _vars, context) => {
       context?.rollback();
-      setError(e.message);
-      // Only the write-scope 409 (see `hasLinearWriteScope`/`LINEAR_WRITE_SCOPE_MESSAGE` on the
+      setError(userErrorMessage(e, 'Could not save integration settings.'));
+      // Only the write-scope problem (see `hasLinearWriteScope` on the
       // server) should show the re-auth notice — this PATCH's OTHER failure mode, a 422 from
       // `validateTeamMappings` running earlier in the same handler, is unrelated (e.g. a stale
-      // team mapping) and must fall through to the generic error line instead. Match on both the
-      // HTTP status AND the shared message constant (not a re-hardcoded string) rather than just
+      // team mapping) and must fall through to the generic error line instead. Match the stable
+      // problem code rather than provider prose, rather than just
       // "any error while attempting two-way", which fired the notice for every failure reason.
       const isWriteScopeConflict =
         e instanceof ApiRequestError &&
         e.status === 409 &&
-        e.message.includes(LINEAR_WRITE_SCOPE_MESSAGE);
+        e.code === 'linear_write_scope_required';
       setReauthNeeded(integration.provider === 'linear' && twoWay && isWriteScopeConflict);
     },
     invalidateKeys: [queryKeys.integrations(orgId)],
@@ -198,7 +194,7 @@ export function IntegrationConfigPanel({
    * can't be derived from props — it has to be cleared explicitly. `integration`'s own fields are
    * NOT a reliable signal here: an integration that was already healthy before the failed
    * `writeBack: true` attempt (the common case — only the OAuth *scope* was missing, not the
-   * connection) reconnects to the exact same `status`/`lastError` it already had, so a
+   * connection) reconnects to the exact same health state it already had, so a
    * prop-diffing effect would never fire. Reconnecting also doesn't unmount this panel in the
    * local/mock-verify flow (`finishConnection` only redirects when the provider needs live OAuth),
    * so without this the notice would sit there telling the user to do something they just did.
@@ -273,7 +269,11 @@ export function IntegrationConfigPanel({
           <TeamMappingPicker
             externalTeams={lists}
             loading={listsQ.isPending}
-            error={listsQ.isError ? listsQ.error.message : null}
+            error={
+              listsQ.isError
+                ? userErrorMessage(listsQ.error, 'Could not update integration settings.')
+                : null
+            }
             orgTeams={teams}
             containerNoun={copy.containerNoun}
             mapping={teamMap}
@@ -282,7 +282,9 @@ export function IntegrationConfigPanel({
         ) : listsQ.isPending ? (
           <Skeleton className="h-16 w-full rounded-lg" />
         ) : listsQ.isError ? (
-          <p className="text-destructive text-xs">{listsQ.error.message}</p>
+          <p className="text-destructive text-xs">
+            {userErrorMessage(listsQ.error, 'Could not update integration settings.')}
+          </p>
         ) : lists.length === 0 ? (
           <p className="text-on-surface-variant text-xs">
             No {copy.containerNounPlural} found for this account.

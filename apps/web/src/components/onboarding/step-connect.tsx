@@ -25,7 +25,7 @@ import { Calendar, Layers, TaskAlt } from '@docket/ui/icons';
 import { type JSX, useCallback, useEffect, useState } from 'react';
 
 import { api } from '@/lib/api';
-import { readError, readProblem } from '@/lib/problem';
+import { userErrorMessage, readProblemError } from '@/lib/problem';
 import { connectorAvailable, usePublicConfig } from '@/lib/public-config';
 
 import {
@@ -163,7 +163,10 @@ export function StepConnect({
       try {
         const createRes = await createIntegration(orgId, provider);
         if (!createRes.ok) {
-          const message = await readProblem(createRes, 'Could not connect this source.');
+          const message = userErrorMessage(
+            await readProblemError(createRes, 'Could not connect this source.'),
+            'Could not connect this source.',
+          );
           setStates((prev) => ({
             ...prev,
             [provider]: { phase: 'error', mirrored: 0, error: message },
@@ -174,7 +177,10 @@ export function StepConnect({
 
         const importRes = await importWork(orgId, created.id);
         if (!importRes.ok) {
-          const message = await readProblem(importRes, 'Connected, but could not bring work in.');
+          const message = userErrorMessage(
+            await readProblemError(importRes, 'Connected, but could not bring work in.'),
+            'Connected, but could not bring work in.',
+          );
           setStates((prev) => ({
             ...prev,
             [provider]: { phase: 'error', mirrored: 0, error: message },
@@ -188,7 +194,7 @@ export function StepConnect({
           [provider]: { phase: 'connected' as const, mirrored: items.length, error: null },
         }));
       } catch (caught) {
-        const message = readError(caught, 'Something went wrong connecting this source.');
+        const message = userErrorMessage(caught, 'Something went wrong connecting this source.');
         setStates((prev) => ({
           ...prev,
           [provider]: { phase: 'error', mirrored: 0, error: message },

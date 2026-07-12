@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { type JSX, useEffect, useState } from 'react';
 
 import { authClient, passkey, signIn } from '@/lib/auth-client';
+import { userErrorMessage } from '@/lib/problem';
 
 import { AuthError, Spinner } from '../_components/auth-feedback';
 import { AuthShell } from '../_components/auth-shell';
@@ -71,7 +72,7 @@ async function verifySignupCode(
   });
   if (res.error) {
     if (res.error.status === 429) return { error: RATE_LIMIT_MESSAGE };
-    return { error: res.error.message ?? 'That code is invalid or has expired.' };
+    return { error: userErrorMessage(res.error, 'That code is invalid or has expired.') };
   }
   return { intent: res.data.intent };
 }

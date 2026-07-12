@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { type JSX, useEffect, useState } from 'react';
 
 import { authClient, passkey, twoFactor } from '@/lib/auth-client';
+import { userErrorMessage } from '@/lib/problem';
 
 import { AuthError, Spinner } from '../_components/auth-feedback';
 import { AuthShell } from '../_components/auth-shell';
@@ -86,7 +87,7 @@ export default function RecoverPage(): JSX.Element {
         setError(
           verifyError.status === 429
             ? RATE_LIMIT_MESSAGE
-            : (verifyError.message ?? 'That code didn’t work. Check it and try again.'),
+            : userErrorMessage(verifyError, 'That code didn’t work. Check it and try again.'),
         );
         return;
       }

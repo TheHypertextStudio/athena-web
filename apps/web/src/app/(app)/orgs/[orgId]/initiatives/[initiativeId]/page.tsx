@@ -27,6 +27,7 @@ import { InitiativePropertiesPanel } from '@/components/initiatives/properties-p
 import { Roadmap } from '@/components/initiatives/roadmap';
 import { initiativeDetailDef } from '@/lib/fetch-initiative-detail';
 import { useInitiativeMutations } from '@/lib/use-initiative-mutations';
+import { userErrorMessage } from '@/lib/problem';
 
 const READ_ONLY_ROLE_KEYS = new Set(['guest']);
 
@@ -154,7 +155,7 @@ export default function InitiativeDetailPage(): JSX.Element {
           role="alert"
           className="border-outline-variant text-destructive text-body rounded-lg border p-4"
         >
-          {detailQ.error.message}
+          {userErrorMessage(detailQ.error, 'Could not load this initiative.')}
         </p>
       </div>
     );

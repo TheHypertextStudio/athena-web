@@ -18,6 +18,7 @@ import { NotificationPreferencesSection } from '@/components/settings/notificati
 import { SectionHeader } from '@/components/settings/section-header';
 import { settingsSections } from '@/components/settings/sections';
 import { api } from '@/lib/api';
+import { userErrorMessage } from '@/lib/problem';
 import {
   apiQueryOptions,
   queryKeys,
@@ -110,14 +111,22 @@ export default function NotificationsSettingsPage({
   });
 
   const loading = preferencesQ.isPending || contactPointsQ.isPending;
-  const readError = preferencesQ.error?.message ?? contactPointsQ.error?.message ?? null;
-  const mutationError =
-    patchPreferences.error?.message ??
-    addContactPoint.error?.message ??
-    verifyContactPoint.error?.message ??
-    makePrimary.error?.message ??
-    disableContactPoint.error?.message ??
-    null;
+  const loadError = preferencesQ.error
+    ? userErrorMessage(preferencesQ.error, 'Could not load notification preferences.')
+    : contactPointsQ.error
+      ? userErrorMessage(contactPointsQ.error, 'Could not load notification contact points.')
+      : null;
+  const mutationError = patchPreferences.error
+    ? userErrorMessage(patchPreferences.error, 'Could not save notification preferences.')
+    : addContactPoint.error
+      ? userErrorMessage(addContactPoint.error, 'Could not add that contact point.')
+      : verifyContactPoint.error
+        ? userErrorMessage(verifyContactPoint.error, 'Could not verify that contact point.')
+        : makePrimary.error
+          ? userErrorMessage(makePrimary.error, 'Could not make that contact point primary.')
+          : disableContactPoint.error
+            ? userErrorMessage(disableContactPoint.error, 'Could not disable that contact point.')
+            : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -131,9 +140,9 @@ export default function NotificationsSettingsPage({
           <Skeleton className="h-36 w-full rounded-lg" />
           <Skeleton className="h-64 w-full rounded-lg" />
         </div>
-      ) : readError || !preferencesQ.data || !contactPointsQ.data ? (
+      ) : loadError || !preferencesQ.data || !contactPointsQ.data ? (
         <p role="alert" className="text-destructive text-body">
-          {readError ?? 'Could not load notification settings.'}
+          {loadError ?? 'Could not load notification settings.'}
         </p>
       ) : (
         <>

@@ -19,6 +19,7 @@ import { type JSX, useState } from 'react';
 import { api } from '@/lib/api';
 import { formatCalendarDate } from '@/lib/format-date';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
+import { userErrorMessage } from '@/lib/problem';
 
 /** A coarse, dependency-free device label parsed from a session's raw User-Agent string. */
 function deviceLabel(userAgent: string | null): string {
@@ -93,7 +94,7 @@ export function SessionsSection(): JSX.Element {
   if (listQ.isError) {
     return (
       <p role="alert" className="text-destructive text-body">
-        {listQ.error.message}
+        {userErrorMessage(listQ.error, 'Could not update your sessions.')}
       </p>
     );
   }
@@ -129,12 +130,12 @@ export function SessionsSection(): JSX.Element {
 
         {revokeOne.isError ? (
           <p role="alert" className="text-destructive text-body">
-            {revokeOne.error.message}
+            {userErrorMessage(revokeOne.error, 'Could not update your sessions.')}
           </p>
         ) : null}
         {revokeOthers.isError ? (
           <p role="alert" className="text-destructive text-body">
-            {revokeOthers.error.message}
+            {userErrorMessage(revokeOthers.error, 'Could not update your sessions.')}
           </p>
         ) : null}
 

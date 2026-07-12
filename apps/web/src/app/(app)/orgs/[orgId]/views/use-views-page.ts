@@ -21,6 +21,7 @@ import { buildTaskCatalog, toStoredView, toViewState } from '@/components/views/
 import type { RunnerActor } from '@/components/views/view-runner';
 import { api } from '@/lib/api';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiListQuery } from '@/lib/query';
+import { userErrorMessage } from '@/lib/problem';
 
 /** The active working query the toolbar edits, the runner renders, and the composer saves. */
 interface WorkingQuery {
@@ -113,7 +114,9 @@ export function useViewsPage(orgId: string): ViewsPageData {
   const members: readonly MemberOut[] = membersQ.data?.items ?? [];
   const agents: readonly AgentOut[] = agentsQ.data?.items ?? [];
   const loading = viewsQ.isPending;
-  const loadError = viewsQ.isError ? viewsQ.error.message : null;
+  const loadError = viewsQ.isError
+    ? userErrorMessage(viewsQ.error, 'Could not load or save views.')
+    : null;
 
   const [query, setQuery] = useState<WorkingQuery>(EMPTY_QUERY);
   const [composerOpen, setComposerOpen] = useState(false);
@@ -252,7 +255,9 @@ export function useViewsPage(orgId: string): ViewsPageData {
     querySummary,
     canScopeToTeam,
     saving: saveMutation.isPending,
-    saveError: saveMutation.isError ? saveMutation.error.message : null,
+    saveError: saveMutation.isError
+      ? userErrorMessage(saveMutation.error, 'Could not load or save views.')
+      : null,
     save: (payload) => {
       saveMutation.mutate(payload);
     },

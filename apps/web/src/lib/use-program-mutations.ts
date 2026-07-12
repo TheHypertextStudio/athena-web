@@ -12,6 +12,7 @@ import { useCallback, useMemo } from 'react';
 
 import { api } from './api';
 import type { ProgramDetailData } from './fetch-program-detail';
+import { userErrorMessage } from './problem';
 import { queryKeys, unwrap, useApiMutation } from './query';
 
 /** ProgramPatch describes the use program mutations data contract shared by the hook or component. */
@@ -117,8 +118,12 @@ export function useProgramMutations(
       postUpdateM.mutate({ body, health });
     },
     propsPending: patch.isPending,
-    propsError: patch.error?.message ?? null,
+    propsError: patch.error
+      ? userErrorMessage(patch.error, 'Could not update this program.')
+      : null,
     updatePosting: postUpdateM.isPending,
-    updateError: postUpdateM.error?.message ?? null,
+    updateError: postUpdateM.error
+      ? userErrorMessage(postUpdateM.error, 'Could not post that update.')
+      : null,
   };
 }

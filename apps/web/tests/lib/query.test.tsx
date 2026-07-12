@@ -4,8 +4,8 @@
  * @remarks
  * These pin the contract the migration phase depends on:
  *
- * - {@link useApiQuery} resolves the parsed Hono RPC body on success, and surfaces the server's
- *   `application/problem+json` `detail` as the hook's `error` on a non-OK response.
+ * - {@link useApiQuery} resolves the parsed Hono RPC body on success and preserves only the
+ *   Problem's machine code/status on failure; rendered copy remains caller-owned.
  * - {@link useApiMutation} applies an optimistic cache write through `onMutate`, rolls it back
  *   on failure, and invalidates the related query keys on settle so dependent surfaces refetch.
  *
@@ -19,6 +19,7 @@ import type { JSX, ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  ApiRequestError,
   apiQueryOptions,
   createQueryClient,
   queryKeys,
@@ -60,7 +61,7 @@ describe('useApiQuery', () => {
     expect(result.current.error).toBeNull();
   });
 
-  it("surfaces the server's problem detail as the hook error on a non-OK response", async () => {
+  it('discards problem prose and retains only structured status/code on a non-OK response', async () => {
     const { wrapper } = makeQueryWrapper();
 
     const { result } = renderHook(
@@ -68,7 +69,14 @@ describe('useApiQuery', () => {
         useApiQuery(
           apiQueryOptions<ProjectShape>(
             queryKeys.project('org_1', 'p1'),
-            () => Promise.resolve(problemResponse('You lack access to this project.')),
+            () =>
+              Promise.resolve(
+                problemResponse(
+                  'AGENT_MAX_TURNS is not configured; refusing to run agent sessions',
+                  409,
+                  'conflict',
+                ),
+              ),
             'Could not load the project.',
           ),
         ),
@@ -78,7 +86,12 @@ describe('useApiQuery', () => {
     await waitFor(() => {
       expect(result.current.isError).toBe(true);
     });
-    expect(result.current.error?.message).toBe('You lack access to this project.');
+    expect(result.current.error).toBeInstanceOf(ApiRequestError);
+    expect(result.current.error).toMatchObject({
+      message: 'Could not load the project.',
+      status: 409,
+      code: 'conflict',
+    });
     expect(result.current.data).toBeUndefined();
   });
 
@@ -91,7 +104,9 @@ describe('useApiQuery', () => {
           apiQueryOptions<ProjectShape>(
             queryKeys.project('org_1', 'p1'),
             () =>
-              Promise.resolve({ ok: false, status: 401, json: () => Promise.resolve({} as never) }),
+              Promise.resolve(
+                problemResponse('diagnostic session text', 401, 'unauthorized') as never,
+              ),
             'Could not load the project.',
           ),
         ),
@@ -119,7 +134,9 @@ describe('createQueryClient session-expiry wiring', () => {
           apiQueryOptions<ProjectShape>(
             queryKeys.project('org_1', 'p1'),
             () =>
-              Promise.resolve({ ok: false, status: 401, json: () => Promise.resolve({} as never) }),
+              Promise.resolve(
+                problemResponse('diagnostic session text', 401, 'unauthorized') as never,
+              ),
             'Could not load the project.',
           ),
         ),
@@ -137,7 +154,7 @@ describe('createQueryClient session-expiry wiring', () => {
   it('does not retry a 401 (fails fast for the redirect)', async () => {
     const client = createQueryClient();
     const call = vi.fn(() =>
-      Promise.resolve({ ok: false, status: 401, json: () => Promise.resolve({} as never) }),
+      Promise.resolve(problemResponse('diagnostic session text', 401, 'unauthorized') as never),
     );
     const wrapper = ({ children }: { children: ReactNode }): JSX.Element => (
       <QueryClientProvider client={client}>{children}</QueryClientProvider>
@@ -154,6 +171,33 @@ describe('createQueryClient session-expiry wiring', () => {
     });
     expect(call).toHaveBeenCalledTimes(1); // no retry
     client.clear();
+  });
+
+  it('does not sign the user out for a structured re-authentication 401', async () => {
+    const { wrapper } = makeQueryWrapper();
+    const { result } = renderHook(
+      () =>
+        useApiQuery(
+          apiQueryOptions<ProjectShape>(
+            queryKeys.project('org_1', 'p1'),
+            () =>
+              Promise.resolve(problemResponse('private step-up detail', 401, 'reauth_required')),
+            'Verify your identity to continue.',
+          ),
+        ),
+      { wrapper },
+    );
+
+    await waitFor(() => {
+      expect(result.current.isError).toBe(true);
+    });
+    expect(result.current.error).toBeInstanceOf(ApiRequestError);
+    expect(result.current.error).not.toBeInstanceOf(SessionExpiredError);
+    expect(result.current.error).toMatchObject({
+      message: 'Verify your identity to continue.',
+      code: 'reauth_required',
+      status: 401,
+    });
   });
 });
 

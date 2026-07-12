@@ -15,7 +15,7 @@ import { type JSX, useState } from 'react';
 
 import { ActivityItem } from '@/components/agents/activity-item';
 import { api } from '@/lib/api';
-import { readError, readProblem } from '@/lib/problem';
+import { userErrorMessage, readProblemError } from '@/lib/problem';
 import { useSessionDetail } from '@/lib/use-session-detail';
 
 /** Props for {@link AthenaPlan}. */
@@ -41,13 +41,18 @@ export function AthenaPlan({ orgId, prompt }: AthenaPlanProps): JSX.Element {
         json: { prompt },
       });
       if (!res.ok) {
-        setError(await readProblem(res, 'Athena could not draft a plan.'));
+        setError(
+          userErrorMessage(
+            await readProblemError(res, 'Athena could not draft a plan.'),
+            'Athena could not draft a plan.',
+          ),
+        );
         return;
       }
       const session = await res.json();
       setSessionId(session.id);
     } catch (caught) {
-      setError(readError(caught, 'Athena could not draft a plan.'));
+      setError(userErrorMessage(caught, 'Athena could not draft a plan.'));
     } finally {
       setBusy(false);
     }

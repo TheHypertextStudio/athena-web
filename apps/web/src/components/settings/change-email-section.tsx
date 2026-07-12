@@ -18,6 +18,7 @@ import { Button, Input } from '@docket/ui/primitives';
 import { type JSX, useId, useState } from 'react';
 
 import { changeEmail, useSession } from '@/lib/auth-client';
+import { userErrorMessage } from '@/lib/problem';
 
 /** The change-email card: shows the current address and a request-change form. */
 export function ChangeEmailSection(): JSX.Element {
@@ -37,7 +38,7 @@ export function ChangeEmailSection(): JSX.Element {
       const callbackURL = `${window.location.pathname}?email-changed=1`;
       const result = await changeEmail({ newEmail, callbackURL });
       if (result.error) {
-        setError(result.error.message ?? 'Could not request the email change.');
+        setError(userErrorMessage(result.error, 'Could not request the email change.'));
         return;
       }
       setSent(true);

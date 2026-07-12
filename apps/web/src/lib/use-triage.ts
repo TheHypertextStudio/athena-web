@@ -17,7 +17,7 @@ import { buildProviderResolver } from '@/components/triage/provider-directory';
 import type { TriageDestination } from '@/components/triage/triage-actions';
 import type { TriageRowData } from '@/components/triage/triage-row';
 import { api } from './api';
-import { readError, readProblem } from './problem';
+import { userErrorMessage, readProblemError } from './problem';
 import { STALE, apiQueryOptions, queryKeys, useApiQuery } from './query';
 import { stateTypeOf } from './work-state';
 
@@ -219,12 +219,17 @@ export function useTriage(orgId: string): TriageState {
           json: { projectId: ProjectId.parse(projectId) },
         });
         if (!res.ok) {
-          setActionError(await readProblem(res, 'Could not move that item. Please try again.'));
+          setActionError(
+            userErrorMessage(
+              await readProblemError(res, 'Could not move that item. Please try again.'),
+              'Could not move that item. Please try again.',
+            ),
+          );
           return;
         }
         await refreshTasks();
       } catch (caught) {
-        setActionError(readError(caught, 'Something went wrong moving that item.'));
+        setActionError(userErrorMessage(caught, 'Something went wrong moving that item.'));
       } finally {
         endPending(taskId);
       }
@@ -242,12 +247,17 @@ export function useTriage(orgId: string): TriageState {
           json: { programId: ProgramId.parse(programId) },
         });
         if (!res.ok) {
-          setActionError(await readProblem(res, 'Could not send that item. Please try again.'));
+          setActionError(
+            userErrorMessage(
+              await readProblemError(res, 'Could not send that item. Please try again.'),
+              'Could not send that item. Please try again.',
+            ),
+          );
           return;
         }
         await refreshTasks();
       } catch (caught) {
-        setActionError(readError(caught, 'Something went wrong sending that item.'));
+        setActionError(userErrorMessage(caught, 'Something went wrong sending that item.'));
       } finally {
         endPending(taskId);
       }
@@ -264,12 +274,17 @@ export function useTriage(orgId: string): TriageState {
           param: { orgId, id: taskId },
         });
         if (!res.ok) {
-          setActionError(await readProblem(res, 'Could not dismiss that item. Please try again.'));
+          setActionError(
+            userErrorMessage(
+              await readProblemError(res, 'Could not dismiss that item. Please try again.'),
+              'Could not dismiss that item. Please try again.',
+            ),
+          );
           return;
         }
         await refreshTasks();
       } catch (caught) {
-        setActionError(readError(caught, 'Something went wrong dismissing that item.'));
+        setActionError(userErrorMessage(caught, 'Something went wrong dismissing that item.'));
       } finally {
         endPending(taskId);
       }
@@ -280,7 +295,9 @@ export function useTriage(orgId: string): TriageState {
   return {
     queue,
     loading: tasksQ.isPending,
-    loadError: tasksQ.error ? tasksQ.error.message : null,
+    loadError: tasksQ.error
+      ? userErrorMessage(tasksQ.error, 'Could not load the triage queue.')
+      : null,
     actionError,
     pending,
     projectDestinations,

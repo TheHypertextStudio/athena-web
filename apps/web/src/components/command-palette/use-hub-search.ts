@@ -28,6 +28,7 @@ import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 import { hrefForSearchResult, isExternalSearchHref } from '@/lib/search-route';
 
 import type { PaletteItem, PaletteScope } from './types';
+import { userErrorMessage } from '@/lib/problem';
 
 /** How long to wait after the last keystroke before issuing a search (ms). */
 const DEBOUNCE_MS = 180;
@@ -230,7 +231,9 @@ export function useHubSearch({ query, scope, close }: HubSearchInput): HubSearch
   // While the user is mid-burst (raw term not yet debounced) or the keyed request is in flight,
   // the result pane shows its loading skeleton; the error mirrors the search request's failure.
   const loading = hasQuery && (trimmed !== debounced || (debouncedHasQuery && searchQ.isPending));
-  const error = searchQ.isError ? searchQ.error.message : null;
+  const error = searchQ.isError
+    ? userErrorMessage(searchQ.error, 'Could not search your workspace.')
+    : null;
 
   return { results, loading, error: hasQuery ? error : null, hasQuery };
 }

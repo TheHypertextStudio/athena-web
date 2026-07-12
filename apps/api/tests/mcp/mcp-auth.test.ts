@@ -153,12 +153,14 @@ describe('result helpers', () => {
     expect(res.isError).toBe(true);
   });
 
-  it('runTool maps an ApiError to a readable isError result', async () => {
+  it('runTool maps an ApiError by code without exposing its message', async () => {
     const res = await resultMod.runTool(async () => {
-      throw new ApiError(404, 'not_found', 'gone');
+      throw new ApiError(404, 'not_found', 'DATABASE_URL is missing');
     });
     expect(res.isError).toBe(true);
-    expect((res.content[0] as { text: string }).text).toBe('not_found: gone');
+    expect((res.content[0] as { text: string }).text).toBe(
+      'not_found: That item could not be found.',
+    );
   });
 
   it('runTool maps an unexpected error to a generic Internal error', async () => {

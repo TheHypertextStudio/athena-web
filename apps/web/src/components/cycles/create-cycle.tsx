@@ -28,7 +28,7 @@ import { ComposerShell } from '@/components/composer/composer-shell';
 import { enumOptions } from '@/components/pickers/options';
 import { TeamPicker } from '@/components/teams/team-picker';
 import { formatCalendarDate } from '@/lib/format-date';
-import { readError, readProblem } from '@/lib/problem';
+import { userErrorMessage, readProblemError } from '@/lib/problem';
 import { todayISODate } from '@/lib/today';
 
 /** Default cycle length, in days, used to pre-fill the end date from the start. */
@@ -165,14 +165,19 @@ export function CreateCycleDialog({
         },
       });
       if (!res.ok) {
-        setError(await readProblem(res, `Could not create the ${cycleNounLower}.`));
+        setError(
+          userErrorMessage(
+            await readProblemError(res, `Could not create the ${cycleNounLower}.`),
+            `Could not create the ${cycleNounLower}.`,
+          ),
+        );
         return;
       }
       const created = await res.json();
       onOpenChange(false);
       onCreated(created);
     } catch (caught) {
-      setError(readError(caught, `Something went wrong creating the ${cycleNounLower}.`));
+      setError(userErrorMessage(caught, `Something went wrong creating the ${cycleNounLower}.`));
     } finally {
       setCreating(false);
     }

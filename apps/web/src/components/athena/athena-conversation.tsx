@@ -33,7 +33,7 @@ import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 import { ProposalGroupCard } from '@/components/agents/proposal-group-card';
 import { AddMcpConnectorForm } from '@/components/settings/mcp-connectors-section';
 import { api } from '@/lib/api';
-import { readError, readProblem } from '@/lib/problem';
+import { userErrorMessage, readProblemError } from '@/lib/problem';
 import { useSessionDetail } from '@/lib/use-session-detail';
 import { startViewTransition } from '@/lib/view-transition';
 
@@ -62,7 +62,12 @@ export default function AthenaConversation({
     try {
       const res = await api.v1.orgs[':orgId'].sessions.chat.$get({ param: { orgId } });
       if (!res.ok) {
-        setError(await readProblem(res, 'Could not open the conversation.'));
+        setError(
+          userErrorMessage(
+            await readProblemError(res, 'Could not open the conversation.'),
+            'Could not open the conversation.',
+          ),
+        );
         return;
       }
       const data = await res.json();
@@ -73,7 +78,7 @@ export default function AthenaConversation({
         setThread(data);
       });
     } catch (caught) {
-      setError(readError(caught, 'Something went wrong opening the conversation.'));
+      setError(userErrorMessage(caught, 'Something went wrong opening the conversation.'));
     } finally {
       setLoading(false);
     }
@@ -92,7 +97,12 @@ export default function AthenaConversation({
     try {
       const res = await api.v1.orgs[':orgId'].sessions.chat.new.$post({ param: { orgId } });
       if (!res.ok) {
-        setError(await readProblem(res, 'Could not start a new chat.'));
+        setError(
+          userErrorMessage(
+            await readProblemError(res, 'Could not start a new chat.'),
+            'Could not start a new chat.',
+          ),
+        );
         return;
       }
       const data = await res.json();
@@ -102,7 +112,7 @@ export default function AthenaConversation({
         setThread(data);
       });
     } catch (caught) {
-      setError(readError(caught, 'Something went wrong starting a new chat.'));
+      setError(userErrorMessage(caught, 'Something went wrong starting a new chat.'));
     }
   }, [orgId]);
 
@@ -119,13 +129,18 @@ export default function AthenaConversation({
       });
       if (!res.ok) {
         setDraft(text);
-        setError(await readProblem(res, 'Athena could not answer right now.'));
+        setError(
+          userErrorMessage(
+            await readProblemError(res, 'Athena could not answer right now.'),
+            'Athena could not answer right now.',
+          ),
+        );
         return;
       }
       setThread(await res.json());
     } catch (caught) {
       setDraft(text);
-      setError(readError(caught, 'Something went wrong reaching Athena.'));
+      setError(userErrorMessage(caught, 'Something went wrong reaching Athena.'));
     } finally {
       setSending(false);
     }

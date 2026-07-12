@@ -17,6 +17,7 @@ import { FilterToolbar } from '@/components/views/filter-toolbar';
 import { useViewState } from '@/components/views/use-view-state';
 import { api } from '@/lib/api';
 import { apiQueryOptions, queryKeys, useApiListQuery } from '@/lib/query';
+import { userErrorMessage } from '@/lib/problem';
 
 /**
  * The org Teams list — the roster of first-class units within the org (§7), as dense rows.
@@ -86,7 +87,7 @@ export default function TeamsListClient(): JSX.Element {
   const tasks = useMemo(() => tasksQ.data?.items ?? [], [tasksQ.data]);
 
   const loading = teamsQ.isPending;
-  const loadError = teamsQ.isError ? teamsQ.error.message : null;
+  const loadError = teamsQ.isError ? userErrorMessage(teamsQ.error, 'Could not load teams.') : null;
 
   /** Per-team project counts (a project belongs via `project.teamId`). */
   const projectCountByTeam = useMemo(() => {

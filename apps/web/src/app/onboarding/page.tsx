@@ -17,7 +17,7 @@ import type { OnboardingIntent, OnboardingStep, Vocabulary } from '@/components/
 import { WizardShell } from '@/components/onboarding/wizard-shell';
 import { api } from '@/lib/api';
 import { passkey, useSession } from '@/lib/auth-client';
-import { readError, readProblem } from '@/lib/problem';
+import { userErrorMessage, readProblemError } from '@/lib/problem';
 
 /** The ordered steps for the individual ("just me") fork. */
 const PERSONAL_STEPS: readonly OnboardingStep[] = ['intent', 'personal-welcome', 'connect'];
@@ -172,7 +172,13 @@ export default function OnboardingPage(): JSX.Element {
       const res = await createOrg(orgBody());
       if (!res.ok) {
         setError(
-          await readProblem(res, 'Could not finish setting up your workspace. Please try again.'),
+          userErrorMessage(
+            await readProblemError(
+              res,
+              'Could not finish setting up your workspace. Please try again.',
+            ),
+            'Could not finish setting up your workspace. Please try again.',
+          ),
         );
         return;
       }
@@ -181,7 +187,10 @@ export default function OnboardingPage(): JSX.Element {
       setStep('connect');
     } catch (caught) {
       setError(
-        readError(caught, 'Something went wrong setting up your workspace. Please try again.'),
+        userErrorMessage(
+          caught,
+          'Something went wrong setting up your workspace. Please try again.',
+        ),
       );
     } finally {
       setPending(false);
@@ -223,12 +232,14 @@ export default function OnboardingPage(): JSX.Element {
     try {
       const result = await passkey.addPasskey();
       if (result.error) {
-        setError(result.error.message ?? 'Could not add a passkey. You can add one later.');
+        setError(userErrorMessage(result.error, 'Could not add a passkey. You can add one later.'));
         return;
       }
       enterWorkspace();
     } catch (caught) {
-      setError(readError(caught, 'Could not add a passkey. You can add one later in Settings.'));
+      setError(
+        userErrorMessage(caught, 'Could not add a passkey. You can add one later in Settings.'),
+      );
     } finally {
       setPending(false);
     }

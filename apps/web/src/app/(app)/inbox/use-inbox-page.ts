@@ -7,7 +7,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { isApproval } from '@/components/inbox/notification-meta';
 import type { SegmentDef } from '@/components/inbox/segmented-tabs';
 import { api } from '@/lib/api';
-import { readError, readProblem } from '@/lib/problem';
+import { userErrorMessage, readProblemError } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, useLiveApiQuery } from '@/lib/query';
 
 /** The Inbox's attention slices and passive activity feed. */
@@ -118,12 +118,17 @@ export function useInboxPage(): InboxPageData {
           json: { action: 'approve' },
         });
         if (!res.ok) {
-          setActionError(await readProblem(res, 'Could not approve this item.'));
+          setActionError(
+            userErrorMessage(
+              await readProblemError(res, 'Could not approve this item.'),
+              'Could not approve this item.',
+            ),
+          );
           return;
         }
         await refreshInbox();
       } catch (caught) {
-        setActionError(readError(caught, 'Something went wrong approving this item.'));
+        setActionError(userErrorMessage(caught, 'Something went wrong approving this item.'));
       } finally {
         setPending(id, false);
       }
@@ -138,12 +143,17 @@ export function useInboxPage(): InboxPageData {
       try {
         const res = await api.v1.notifications[':id'].read.$post({ param: { id } });
         if (!res.ok) {
-          setActionError(await readProblem(res, 'Could not mark this item read.'));
+          setActionError(
+            userErrorMessage(
+              await readProblemError(res, 'Could not mark this item read.'),
+              'Could not mark this item read.',
+            ),
+          );
           return;
         }
         await refreshInbox();
       } catch (caught) {
-        setActionError(readError(caught, 'Something went wrong updating this item.'));
+        setActionError(userErrorMessage(caught, 'Something went wrong updating this item.'));
       } finally {
         setPending(id, false);
       }
@@ -157,12 +167,17 @@ export function useInboxPage(): InboxPageData {
     try {
       const res = await api.v1.notifications['read-all'].$post({ json: {} });
       if (!res.ok) {
-        setActionError(await readProblem(res, 'Could not mark everything read.'));
+        setActionError(
+          userErrorMessage(
+            await readProblemError(res, 'Could not mark everything read.'),
+            'Could not mark everything read.',
+          ),
+        );
         return;
       }
       await refreshInbox();
     } catch (caught) {
-      setActionError(readError(caught, 'Something went wrong marking everything read.'));
+      setActionError(userErrorMessage(caught, 'Something went wrong marking everything read.'));
     } finally {
       setMarkingAll(false);
     }
@@ -216,7 +231,7 @@ export function useInboxPage(): InboxPageData {
     unreadCount,
     pendingApprovals,
     loading: inboxQ.isPending,
-    error: inboxQ.error ? inboxQ.error.message : null,
+    error: inboxQ.error ? userErrorMessage(inboxQ.error, 'Could not load the inbox.') : null,
     actionError,
     pendingIds,
     markingAll,

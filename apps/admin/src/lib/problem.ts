@@ -1,54 +1,56 @@
-import type { Problem } from '@docket/types';
+import { Problem, type ProblemCode } from '@docket/types';
 
-/**
- * Read a human-readable message out of a failed API response.
- *
- * @remarks
- * Every API error is emitted as `application/problem+json` shaped like
- * {@link import('@docket/types').Problem | Problem}. This best-effort parses that body and
- * returns its `detail` (or `title`) so screens can surface the server's own message; when
- * the body is not a problem object (network error, non-JSON) it returns `fallback`. The
- * common admin case is a 403 when the signed-in user is not staff.
- *
- * @param response - The non-OK `fetch`/RPC {@link Response}.
- * @param fallback - The message to use when no problem detail can be read.
- * @returns the best available human-readable error message.
- */
-export async function readProblem(response: Response, fallback: string): Promise<string> {
-  try {
-    const body = (await response.json()) as Partial<Problem>;
-    return body.detail ?? body.title ?? fallback;
-  } catch {
-    return fallback;
+/** A failure whose message is application-owned and safe to render. */
+export class UserFacingError extends Error {
+  /** HTTP status when the failure came from an API response. */
+  readonly status?: number;
+  /** Stable API problem code when the response contained a valid Problem body. */
+  readonly code?: ProblemCode;
+
+  constructor(
+    message: string,
+    details: { status?: number; code?: ProblemCode; cause?: unknown } = {},
+  ) {
+    super(message, { cause: details.cause });
+    this.name = 'UserFacingError';
+    this.status = details.status;
+    this.code = details.code;
   }
 }
 
-/**
- * Read a human-readable message off an arbitrary thrown value.
- *
- * @remarks
- * Used in `catch` blocks where the rejection may be an `Error` (e.g. a network failure
- * from the RPC client) or an opaque value.
- *
- * @param error - The caught value.
- * @param fallback - The message to use when nothing readable can be extracted.
- * @returns the error's `message` when it is an `Error`, otherwise `fallback`.
- */
-export function readError(error: unknown, fallback: string): string {
-  return error instanceof Error ? error.message : fallback;
+/** Convert a failed API response to a structured error with caller-owned display copy. */
+export async function readProblemError(
+  response: Response,
+  fallback: string,
+): Promise<UserFacingError> {
+  try {
+    const parsed = Problem.safeParse(await response.json());
+    return new UserFacingError(fallback, {
+      status: response.status,
+      ...(parsed.success ? { code: parsed.data.code } : {}),
+    });
+  } catch {
+    return new UserFacingError(fallback, { status: response.status });
+  }
 }
 
-/**
- * Whether a failed response is an authentication/authorization failure (401 or 403).
- *
- * @remarks
- * The common admin case is a 403 when the signed-in account is not staff. Screens use this to
- * decide whether to offer a sign-in recovery affordance alongside the inline error (versus a
- * transient network/server error, which should not steer the operator to re-authenticate).
- *
- * @param response - The non-OK {@link Response}.
- * @returns `true` when the status is 401 or 403.
- */
+/** Return caller-owned display copy for a failed API response. */
+export async function userProblemMessage(response: Response, fallback: string): Promise<string> {
+  return (await readProblemError(response, fallback)).message;
+}
+
+/** Convert an arbitrary thrown value to a structured error safe to retain in UI state. */
+export function toUserFacingError(error: unknown, fallback: string): UserFacingError {
+  if (error instanceof UserFacingError) return error;
+  return new UserFacingError(fallback, { cause: error });
+}
+
+/** Return only application-owned display copy from a trusted structured failure. */
+export function userErrorMessage(error: unknown, fallback: string): string {
+  return toUserFacingError(error, fallback).message;
+}
+
+/** Whether a failed response is an authentication/authorization failure (401 or 403). */
 export function isAuthError(response: Response): boolean {
   return response.status === 401 || response.status === 403;
 }

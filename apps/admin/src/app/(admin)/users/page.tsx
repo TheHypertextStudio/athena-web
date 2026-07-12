@@ -7,7 +7,7 @@ import { type JSX, useCallback, useEffect, useState } from 'react';
 import { EmptyState, ErrorBanner, PageHeader, ROW_CLASS, SignInAction } from '@/components/ui-bits';
 import { api } from '@/lib/api';
 import { formatTimestamp } from '@/lib/lifecycle';
-import { isAuthError, readError, readProblem } from '@/lib/problem';
+import { isAuthError, userErrorMessage, userProblemMessage } from '@/lib/problem';
 import type { AdminUser } from '@/lib/types';
 
 /** Page size for the user list. */
@@ -40,14 +40,14 @@ export default function UsersPage(): JSX.Element {
       });
       if (!res.ok) {
         setAuthFailed(isAuthError(res));
-        setError(await readProblem(res, 'Could not load users.'));
+        setError(await userProblemMessage(res, 'Could not load users.'));
         return;
       }
       const page = await res.json();
       setUsers(page.items);
       setTotal(page.total);
     } catch (caught) {
-      setError(readError(caught, 'Something went wrong loading users.'));
+      setError(userErrorMessage(caught, 'Something went wrong loading users.'));
     } finally {
       setLoading(false);
     }

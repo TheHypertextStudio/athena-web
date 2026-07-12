@@ -265,7 +265,7 @@ describe('CreateTaskDialog — robust composer', () => {
     expect(taskPost).not.toHaveBeenCalled();
   });
 
-  it('surfaces the server problem message when the create fails', async () => {
+  it('surfaces application-owned copy when the create fails', async () => {
     taskPost.mockResolvedValue(jsonResponse(false, { detail: 'Title is taken.' }));
     const { onCreated } = renderComposer();
 
@@ -273,7 +273,8 @@ describe('CreateTaskDialog — robust composer', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
 
     const alert = await screen.findByRole('alert');
-    expect(within(alert).getByText('Title is taken.')).toBeTruthy();
+    expect(within(alert).getByText('Could not create the task.')).toBeTruthy();
+    expect(within(alert).queryByText('Title is taken.')).toBeNull();
     expect(onCreated).not.toHaveBeenCalled();
   });
 });

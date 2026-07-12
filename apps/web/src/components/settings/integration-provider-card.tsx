@@ -26,8 +26,7 @@ interface IntegrationProviderCardProps {
   disconnecting: boolean;
   /** Transient success toast after a manual sync (e.g. "Synced 3 items."). */
   syncFeedback: string | null;
-  /** Transient error from a connect/verify/disconnect action (persistent sync/connection errors
-   * come from the server via `existing.lastError`). */
+  /** Application-owned error copy from a connect/verify/disconnect action. */
   actionError: string | null;
   /** Whether this provider has an inline config panel (adds the "Configure" toggle). */
   configurable: boolean;
@@ -204,7 +203,10 @@ export function IntegrationProviderCard({
   onToggleConfig,
 }: IntegrationProviderCardProps): JSX.Element {
   const ProviderIcon = providerIcon(provider.provider);
-  const reauthError = existing?.status === 'error' ? existing.lastError : null;
+  const reauthError =
+    existing?.status === 'error'
+      ? 'This connection needs attention. Reconnect it and try again.'
+      : null;
   const showPendingHint = existing?.status === 'pending';
   const showSyncFeedback = existing?.status === 'connected' && Boolean(syncFeedback);
   const identityLabel = connectionLabel(existing);

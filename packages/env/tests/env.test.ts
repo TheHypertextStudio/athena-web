@@ -46,6 +46,7 @@ function validApiEnv(): Record<string, string> {
     BETTER_AUTH_PASSKEY_RP_ID: 'localhost',
     BETTER_AUTH_PASSKEY_RP_NAME: 'Docket',
     GOOGLE_OAUTH_PUBLIC: 'false',
+    AGENT_MAX_TURNS: '24',
     CRON_SECRET: 'test-cron-secret',
     BILLING_ENABLED: 'false',
     MCP_TASKS_ENABLED: 'false',
@@ -158,6 +159,9 @@ describe('slices', () => {
 
   it('keeps genuinely-optional vars optional and fails fast on required ops/client vars', () => {
     expect(agentServer.ANTHROPIC_API_KEY.parse(undefined)).toBeUndefined();
+    expect(() => agentServer.AGENT_MAX_TURNS.parse(undefined)).toThrow();
+    expect(agentServer.AGENT_MAX_TURNS.parse('24')).toBe(24);
+    expect(() => agentServer.AGENT_MAX_TURNS.parse('0')).toThrow();
 
     expect(() => opsServer.CRON_SECRET.parse(undefined)).toThrow();
     expect(opsServer.CRON_SECRET.parse('cron-secret')).toBe('cron-secret');

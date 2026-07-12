@@ -22,6 +22,7 @@ import { useCallback, useMemo } from 'react';
 
 import { api } from './api';
 import type { ProjectDetailData } from './fetch-project-detail';
+import { userErrorMessage } from './problem';
 import { queryKeys, unwrap, useApiMutation } from './query';
 
 /** The unbranded properties-panel patch surface. */
@@ -218,12 +219,22 @@ export function useProjectMutations(
     },
     createTask: createTaskM.mutate,
     propsPending: patch.isPending || initiativeM.isPending,
-    propsError: patch.error?.message ?? initiativeM.error?.message ?? null,
+    propsError: patch.error
+      ? userErrorMessage(patch.error, 'Could not update this project.')
+      : initiativeM.error
+        ? userErrorMessage(initiativeM.error, 'Could not update the linked initiative.')
+        : null,
     commentPosting: commentM.isPending,
-    commentError: commentM.error?.message ?? null,
+    commentError: commentM.error
+      ? userErrorMessage(commentM.error, 'Could not post that comment.')
+      : null,
     updatePosting: updateM.isPending,
-    updateError: updateM.error?.message ?? null,
+    updateError: updateM.error
+      ? userErrorMessage(updateM.error, 'Could not post that update.')
+      : null,
     createTaskPending: createTaskM.isPending,
-    createTaskError: createTaskM.error?.message ?? null,
+    createTaskError: createTaskM.error
+      ? userErrorMessage(createTaskM.error, 'Could not create that task.')
+      : null,
   };
 }

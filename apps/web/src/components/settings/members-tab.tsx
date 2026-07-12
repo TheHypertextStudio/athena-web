@@ -37,6 +37,7 @@ import { MemberRow } from './member-row';
 import type { RoleOption } from './role-control';
 import { asRoleKey, ROLE_KEY_ORDER, ROLE_PLAIN_LANGUAGE } from './roles';
 import { useMembersMutations } from './use-members-mutations';
+import { userErrorMessage } from '@/lib/problem';
 
 /** Props for {@link MembersTab}. */
 export interface MembersTabProps {
@@ -91,7 +92,9 @@ export function MembersTab({ orgId }: MembersTabProps): JSX.Element {
   const roles: readonly RoleOut[] = rolesQ.data?.items ?? [];
   const invitations = invitationsQ.data?.items ?? [];
   const loading = membersQ.isPending;
-  const loadError = membersQ.isError ? membersQ.error.message : null;
+  const loadError = membersQ.isError
+    ? userErrorMessage(membersQ.error, 'Could not load workspace members.')
+    : null;
 
   const {
     invite,

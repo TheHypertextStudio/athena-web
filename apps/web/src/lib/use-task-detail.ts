@@ -28,6 +28,7 @@ import type { QueryKey } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
 import { api } from './api';
+import { userErrorMessage } from './problem';
 import { STALE, apiQueryOptions, queryKeys, useApiQuery, useLiveApiQuery } from './query';
 
 /** Focus-only poll interval (ms) for a task's bound agent-session activity stream. */
@@ -206,6 +207,6 @@ export function useTaskDetail(orgId: string, taskId: string): TaskDetailData {
     commentsKey,
     isPending: taskQ.isPending,
     isError: taskQ.isError,
-    error: taskQ.isError ? taskQ.error.message : null,
+    error: taskQ.isError ? userErrorMessage(taskQ.error, 'Could not load this task.') : null,
   };
 }

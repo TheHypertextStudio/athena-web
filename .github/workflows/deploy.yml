@@ -76,6 +76,7 @@ jobs:
           GOOGLE_CALENDAR_WEBHOOK_URL: "${{ vars.API_URL }}/webhooks/calendar/google"
           GOOGLE_OAUTH_PUBLIC: "${{ vars.GOOGLE_OAUTH_PUBLIC }}"
           GOOGLE_OAUTH_TEST_EMAILS: "${{ vars.GOOGLE_OAUTH_TEST_EMAILS }}"
+          AGENT_MAX_TURNS: "${{ vars.AGENT_MAX_TURNS }}"
           BILLING_ENABLED: "false"
           MCP_ALLOWED_ORIGINS: "${{ vars.WEB_URL }},https://claude.ai,https://claude.com"
           MCP_TASKS_ENABLED: "false"

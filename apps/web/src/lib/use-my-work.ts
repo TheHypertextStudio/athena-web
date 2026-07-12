@@ -12,6 +12,7 @@ import { useCallback, useMemo } from 'react';
 
 import { type AgentTaskRowData, type RowActor } from '@/components/my-work/agent-task-row';
 import { type PillStatus, pillStatusOf } from '@/components/my-work/live-session-pill';
+import { userErrorMessage } from './problem';
 import { STATE_GROUP_LABEL, STATE_GROUP_ORDER, stateTypeOf } from './work-state';
 import { myWorkDefs } from './my-work-defs';
 import { queryKeys, useApiQuery } from './query';
@@ -75,7 +76,9 @@ export function useMyWork(orgId: string, userId: string | null): MyWorkState {
     membersQ.isPending ||
     agentsQ.isPending ||
     sessionsQ.isPending;
-  const loadError = tasksQ.isError ? tasksQ.error.message : null;
+  const loadError = tasksQ.isError
+    ? userErrorMessage(tasksQ.error, 'Could not load your work.')
+    : null;
 
   /** Optimistically patch the cached task roster (e.g. prepend a just-created task). */
   const setTasks = useCallback(

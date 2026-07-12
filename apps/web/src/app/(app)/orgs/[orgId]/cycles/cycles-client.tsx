@@ -42,6 +42,7 @@ import { isEmptyViewState } from '@/components/views/view-state-url';
 import { cycleDetailDef } from '@/lib/fetch-cycle-detail';
 import { fetchCyclesWithStats } from '@/lib/fetch-cycles-with-stats';
 import { apiQueryOptions, queryKeys, useApiListQuery, usePrefetchApi } from '@/lib/query';
+import { userErrorMessage } from '@/lib/problem';
 
 /** The default view applied when the URL carries none: group by status (the legacy segments). */
 const DEFAULT_VIEW: ViewState = {
@@ -88,7 +89,9 @@ export default function CyclesClient(): JSX.Element {
   const cycles: readonly CycleOut[] = cyclesQ.data?.cycles ?? EMPTY_CYCLES;
   const statsById: Readonly<Record<string, CycleStats>> = cyclesQ.data?.statsById ?? EMPTY_STATS;
   const loading = cyclesQ.isPending;
-  const loadError = cyclesQ.isError ? cyclesQ.error.message : null;
+  const loadError = cyclesQ.isError
+    ? userErrorMessage(cyclesQ.error, 'Could not load cycles.')
+    : null;
 
   /** Team display name by id (for the team filter labels + group headers). */
   const teamNameById = useMemo(

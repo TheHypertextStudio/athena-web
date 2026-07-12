@@ -121,7 +121,12 @@ function CommentEntry({
 /** One agent session-activity in the feed, styled as an inline timeline event. */
 function ActivityEntry({ activity }: { activity: SessionActivityOut }): JSX.Element {
   const action = activity.type === 'action' ? activityAction(activity.body) : null;
-  const text = action ? action.summary : activityText(activity.body);
+  const text =
+    activity.type === 'error'
+      ? 'Athena could not complete that step.'
+      : action
+        ? action.summary
+        : activityText(activity.body);
   const badge = activity.type === 'action' ? approvalBadge(activity.approvalStatus) : null;
   const isError = activity.type === 'error';
 

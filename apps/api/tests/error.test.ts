@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { z, type ZodError } from 'zod';
 
 import type { AppEnv } from '../src/context';
+import { publicProblemTitle } from '@docket/types';
 import {
   ApiError,
   AuthError,
@@ -110,19 +111,21 @@ describe('onError mapping', () => {
     const body = (await res.json()) as Record<string, unknown>;
     expect(body).toMatchObject({
       type: 'https://docket.dev/problems/not_found',
-      title: 'Missing',
+      title: publicProblemTitle('not_found'),
       status: 404,
       code: 'not_found',
     });
     expect('fieldErrors' in body).toBe(false);
   });
 
-  it('maps a ValidationError including fieldErrors', async () => {
-    const r = z.object({ a: z.string() }).safeParse({ a: 1 });
+  it('maps a ValidationError to field paths without exposing validator prose', async () => {
+    const privateDiagnostic = 'DATABASE_URL is missing';
+    const r = z.object({ a: z.string(privateDiagnostic) }).safeParse({ a: 1 });
     const res = await appThrowing(new ValidationError(r.error!)).request('/');
     expect(res.status).toBe(422);
     const body = (await res.json()) as { fieldErrors: Record<string, string[]> };
-    expect(body.fieldErrors['a']).toBeDefined();
+    expect(body.fieldErrors['a']).toEqual(['Invalid value.']);
+    expect(JSON.stringify(body)).not.toContain(privateDiagnostic);
   });
 
   it('wraps a bare ZodError into a 422 ValidationError', async () => {
@@ -133,11 +136,14 @@ describe('onError mapping', () => {
     expect(body.code).toBe('validation_error');
   });
 
-  it('maps an unknown error to a generic 500 internal', async () => {
-    const res = await appThrowing(new Error('kaboom')).request('/');
+  it('maps an unknown error to a generic 500 without exposing its message', async () => {
+    const privateDiagnostic = 'AGENT_MAX_TURNS is not configured; refusing to run agent sessions';
+    const res = await appThrowing(new Error(privateDiagnostic)).request('/');
     expect(res.status).toBe(500);
-    const body = (await res.json()) as { code: string; status: number };
+    const body = (await res.json()) as { code: string; status: number; title: string };
     expect(body.code).toBe('internal');
     expect(body.status).toBe(500);
+    expect(body.title).toBe(publicProblemTitle('internal'));
+    expect(JSON.stringify(body)).not.toContain(privateDiagnostic);
   });
 });

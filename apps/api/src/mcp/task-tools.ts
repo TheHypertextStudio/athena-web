@@ -41,10 +41,13 @@ export function createTaskToolHandler<InputArgs extends z.ZodRawShape>(
             result,
           ),
         )
-        .catch(async (err: unknown) => {
-          const message = err instanceof Error ? err.message : 'Internal error';
+        .catch(async () => {
           try {
-            await extra.taskStore.storeTaskResult(task.taskId, 'failed', errorResult(message));
+            await extra.taskStore.storeTaskResult(
+              task.taskId,
+              'failed',
+              errorResult('Internal error'),
+            );
           } catch {
             // The task may already have been cancelled; cancellation wins the race.
           }

@@ -26,7 +26,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { api } from '@/lib/api';
-import { readError, readProblem } from '@/lib/problem';
+import { userErrorMessage, readProblemError } from '@/lib/problem';
 import { buildActorDirectory } from '@/components/agents/actor-directory';
 import {
   type SessionFilter,
@@ -68,7 +68,12 @@ export default function AgentsFeedPage(): JSX.Element {
         api.v1.orgs[':orgId'].tasks.$get({ param: { orgId }, query: {} }),
       ]);
       if (!sessionsRes.ok) {
-        setLoadError(await readProblem(sessionsRes, 'Could not load agent sessions.'));
+        setLoadError(
+          userErrorMessage(
+            await readProblemError(sessionsRes, 'Could not load agent sessions.'),
+            'Could not load agent sessions.',
+          ),
+        );
         return;
       }
       setSessions((await sessionsRes.json()).items);
@@ -76,7 +81,7 @@ export default function AgentsFeedPage(): JSX.Element {
       if (agentsRes.ok) setAgents((await agentsRes.json()).items);
       if (tasksRes.ok) setTasks((await tasksRes.json()).items);
     } catch (caught) {
-      setLoadError(readError(caught, 'Something went wrong loading agent sessions.'));
+      setLoadError(userErrorMessage(caught, 'Something went wrong loading agent sessions.'));
     } finally {
       setLoading(false);
     }
@@ -104,11 +109,16 @@ export default function AgentsFeedPage(): JSX.Element {
         });
         if (!res.ok) {
           setAgents(before);
-          setDialError(await readProblem(res, 'Could not change the trust level.'));
+          setDialError(
+            userErrorMessage(
+              await readProblemError(res, 'Could not change the trust level.'),
+              'Could not change the trust level.',
+            ),
+          );
         }
       } catch (caught) {
         setAgents(before);
-        setDialError(readError(caught, 'Something went wrong changing the trust level.'));
+        setDialError(userErrorMessage(caught, 'Something went wrong changing the trust level.'));
       } finally {
         setDialPendingId(null);
       }

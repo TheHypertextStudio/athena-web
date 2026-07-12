@@ -11,6 +11,7 @@ import { useMemo } from 'react';
 
 import { api } from './api';
 import type { InitiativeDetailData } from './fetch-initiative-detail';
+import { userErrorMessage } from './problem';
 import { queryKeys, unwrap, useApiMutation } from './query';
 
 /** InitiativePatch describes the use initiative mutations data contract shared by the hook or component. */
@@ -163,14 +164,24 @@ export function useInitiativeMutations(
   return {
     patchInitiative: patch.mutate,
     propsPending: patch.isPending,
-    propsError: patch.error?.message ?? null,
+    propsError: patch.error
+      ? userErrorMessage(patch.error, 'Could not update this initiative.')
+      : null,
     linkProgram: linkProgramM.mutate,
     unlinkProgram: unlinkProgramM.mutate,
     linkProject: linkProjectM.mutate,
     unlinkProject: unlinkProjectM.mutate,
     programBusy: linkProgramM.isPending || unlinkProgramM.isPending,
     projectBusy: linkProjectM.isPending || unlinkProjectM.isPending,
-    programError: linkProgramM.error?.message ?? unlinkProgramM.error?.message ?? null,
-    projectError: linkProjectM.error?.message ?? unlinkProjectM.error?.message ?? null,
+    programError: linkProgramM.error
+      ? userErrorMessage(linkProgramM.error, 'Could not link that program.')
+      : unlinkProgramM.error
+        ? userErrorMessage(unlinkProgramM.error, 'Could not unlink that program.')
+        : null,
+    projectError: linkProjectM.error
+      ? userErrorMessage(linkProjectM.error, 'Could not link that project.')
+      : unlinkProjectM.error
+        ? userErrorMessage(unlinkProjectM.error, 'Could not unlink that project.')
+        : null,
   };
 }

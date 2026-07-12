@@ -196,9 +196,9 @@ export const agentServer = {
   // Seals org-held remote-MCP credentials (AES-256-GCM). Base64, exactly 32 bytes when
   // decoded; the connect route refuses to store a credential without it.
   CREDENTIALS_ENCRYPTION_KEY: z.string().optional(),
-  // The per-session turn budget for the agentic loop. Explicit (no hidden default in
-  // code): the loop refuses to run without it, and every environment declares it.
-  AGENT_MAX_TURNS: z.coerce.number().int().min(1).max(200).optional(),
+  // The per-session turn budget for the agentic loop. Required at process validation so a
+  // deployment can never boot into a state where an operator diagnostic reaches a request path.
+  AGENT_MAX_TURNS: z.coerce.number().int().min(1).max(200),
 };
 
 /** Cron secret, observability, blob/export storage, and transactional email. */

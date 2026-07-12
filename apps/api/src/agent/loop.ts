@@ -265,9 +265,6 @@ export async function driveSession(
   const orgName = orgRows[0]?.name ?? orgId;
 
   const maxTurns = env.AGENT_MAX_TURNS;
-  if (maxTurns === undefined) {
-    throw new ConflictError('AGENT_MAX_TURNS is not configured; refusing to run agent sessions');
-  }
 
   // Paid-plan gate, only on a session's FIRST run: every door (REST, the trigger_agent
   // MCP tool, the proactive sweep) funnels through here, and resumes of an

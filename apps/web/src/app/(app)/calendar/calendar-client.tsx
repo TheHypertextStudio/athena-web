@@ -28,6 +28,7 @@ import { formatCalendarDate } from '@/lib/format-date';
 import { queryKeys, useApiListQuery } from '@/lib/query';
 import { todayISODate } from '@/lib/today';
 import { startViewTransition } from '@/lib/view-transition';
+import { userErrorMessage } from '@/lib/problem';
 
 /** The calendar view's display mode. */
 type CalendarViewMode = 'day' | 'week';
@@ -174,7 +175,7 @@ export default function CalendarClient(): JSX.Element {
             <Skeleton className="h-96 w-full rounded-lg" />
           ) : itemsQuery.isError ? (
             <p role="alert" className="text-destructive text-sm">
-              {itemsQuery.error.message}
+              {userErrorMessage(itemsQuery.error, 'Could not load calendar items.')}
             </p>
           ) : view === 'day' ? (
             <CalendarTimeline

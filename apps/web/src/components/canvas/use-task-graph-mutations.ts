@@ -16,6 +16,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 
 import { api } from '@/lib/api';
+import { userErrorMessage } from '@/lib/problem';
 import { optimisticPatch, queryKeys, unwrap, useApiMutation } from '@/lib/query';
 
 import { type TaskGraphScope, taskGraphScopeKey } from './scope';
@@ -87,7 +88,7 @@ export function useTaskGraphMutations(scope: TaskGraphScope): TaskGraphMutations
     },
     onError: (err, _vars, ctx) => {
       ctx?.rollback();
-      setError(err.message || 'Could not add the dependency.');
+      setError(userErrorMessage(err, 'Could not add the dependency.'));
     },
     invalidateKeys,
   });
@@ -115,7 +116,7 @@ export function useTaskGraphMutations(scope: TaskGraphScope): TaskGraphMutations
     },
     onError: (err, _vars, ctx) => {
       ctx?.rollback();
-      setError(err.message || 'Could not remove the dependency.');
+      setError(userErrorMessage(err, 'Could not remove the dependency.'));
     },
     invalidateKeys,
   });
@@ -143,7 +144,7 @@ export function useTaskGraphMutations(scope: TaskGraphScope): TaskGraphMutations
     },
     onError: (err, vars, ctx) => {
       ctx?.rollback();
-      setError(err.message || 'Could not update the status.');
+      setError(userErrorMessage(err, 'Could not update the status.'));
     },
     onSuccess: (_data, vars) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.task(orgId, vars.taskId) });
@@ -185,7 +186,7 @@ export function useTaskGraphMutations(scope: TaskGraphScope): TaskGraphMutations
     },
     onError: (err, _vars, ctx) => {
       ctx?.rollback();
-      setError(err.message || 'Could not reparent the task.');
+      setError(userErrorMessage(err, 'Could not reparent the task.'));
     },
     invalidateKeys,
   });
@@ -205,7 +206,7 @@ export function useTaskGraphMutations(scope: TaskGraphScope): TaskGraphMutations
       setError(null);
     },
     onError: (err) => {
-      setError(err.message || 'Could not create the subtask.');
+      setError(userErrorMessage(err, 'Could not create the subtask.'));
     },
     invalidateKeys,
   });

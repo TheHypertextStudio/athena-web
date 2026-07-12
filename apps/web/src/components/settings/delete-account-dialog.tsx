@@ -26,7 +26,7 @@ import {
 import { type JSX, useId, useState } from 'react';
 
 import { api } from '@/lib/api';
-import { readError } from '@/lib/problem';
+import { userErrorMessage } from '@/lib/problem';
 import { queryKeys, unwrap, useApiMutation } from '@/lib/query';
 
 import { useReauth } from './use-reauth';
@@ -83,7 +83,7 @@ export function DeleteAccountDialog({
       setTyped('');
       onOpenChange(false);
     } catch (err) {
-      setError(readError(err, 'Could not schedule your account for deletion.'));
+      setError(userErrorMessage(err, 'Could not schedule your account for deletion.'));
     } finally {
       setBusy(false);
     }

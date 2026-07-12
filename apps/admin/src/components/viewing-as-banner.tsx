@@ -6,7 +6,7 @@ import { type JSX, useState } from 'react';
 import { useImpersonation } from '@/components/impersonation';
 import { api } from '@/lib/api';
 import { formatTimestamp } from '@/lib/lifecycle';
-import { readError, readProblem } from '@/lib/problem';
+import { userErrorMessage, userProblemMessage } from '@/lib/problem';
 
 /**
  * The persistent "viewing as" banner, shown whenever an impersonation session is active.
@@ -33,12 +33,12 @@ export function ViewingAsBanner(): JSX.Element | null {
     try {
       const res = await api.admin.impersonations[':id'].end.$post({ param: { id: active.id } });
       if (!res.ok) {
-        setError(await readProblem(res, 'Could not end the impersonation session.'));
+        setError(await userProblemMessage(res, 'Could not end the impersonation session.'));
         return;
       }
       clear();
     } catch (caught) {
-      setError(readError(caught, 'Something went wrong ending the session.'));
+      setError(userErrorMessage(caught, 'Something went wrong ending the session.'));
     } finally {
       setPending(false);
     }

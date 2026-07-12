@@ -26,6 +26,7 @@ import {
   searchPageFiltersToHttpQuery,
   searchPageHref,
 } from './search-url-state';
+import { userErrorMessage } from '@/lib/problem';
 
 const DEBOUNCE_MS = 180;
 const PAGE_SIZE = 30;
@@ -220,7 +221,9 @@ export function SearchClient({ scope, orgId }: SearchClientProps): JSX.Element {
   const data = searchQ.data ?? null;
   const loadingInitial = query.length > 0 && searchQ.isPending && cursor === null;
   const loadingMore = query.length > 0 && searchQ.isPending && cursor !== null;
-  const error = searchQ.isError ? searchQ.error.message : null;
+  const error = searchQ.isError
+    ? userErrorMessage(searchQ.error, 'Could not search your work.')
+    : null;
 
   useEffect(() => {
     setAccumulatedResults([]);

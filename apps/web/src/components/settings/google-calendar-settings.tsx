@@ -28,7 +28,7 @@ import CalendarLayerPanel from '@/components/calendar/calendar-layer-panel';
 import { calendarLayersDef, calendarSettingsDef } from '@/components/calendar/calendar-data';
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
-import { readError } from '@/lib/problem';
+import { userErrorMessage } from '@/lib/problem';
 import {
   apiQueryOptions,
   queryKeys,
@@ -139,7 +139,7 @@ export default function GoogleCalendarSettings({
         errorCallbackURL: `${window.location.pathname}?google=error`,
       });
     } catch (error: unknown) {
-      setOauthError(readError(error, 'Could not start Google Calendar authorization.'));
+      setOauthError(userErrorMessage(error, 'Could not start Google Calendar authorization.'));
       setOauthPending(false);
     }
   }, []);
@@ -188,7 +188,9 @@ export default function GoogleCalendarSettings({
   if (query.isError) {
     return (
       <div role="alert" className="border-outline-variant rounded-lg border p-4">
-        <p className="text-destructive text-sm">{query.error.message}</p>
+        <p className="text-destructive text-sm">
+          {userErrorMessage(query.error, 'Could not load Google Calendar settings.')}
+        </p>
       </div>
     );
   }
@@ -290,12 +292,12 @@ export default function GoogleCalendarSettings({
                 {STATUS_LABEL[connection.status].label}
               </Badge>
             </div>
-            {connection.lastError ? (
+            {connection.status === 'error' ? (
               <p
                 role="alert"
                 className="text-destructive border-outline-variant border-b px-4 py-2 text-xs"
               >
-                {connection.lastError}
+                Google Calendar could not be synced. Reconnect it and try again.
               </p>
             ) : null}
             <div className="border-outline-variant flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2.5">

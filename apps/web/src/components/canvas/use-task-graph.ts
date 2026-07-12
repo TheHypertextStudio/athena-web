@@ -22,6 +22,7 @@ import { computeInsights } from './graph-insight';
 import { type TaskGraphScope, taskGraphScopeKey } from './scope';
 import type { ResolvedAssignee, TaskNodeData } from './task-node';
 import type { CanvasDensity } from './use-dagre-layout';
+import { userErrorMessage } from '@/lib/problem';
 
 export type { TaskGraphScope } from './scope';
 
@@ -168,7 +169,10 @@ export function useTaskGraph(
     nodes,
     edges,
     isLoading: q.isLoading,
-    error: q.isError ? q.error.message || 'Could not load the dependency graph.' : null,
+    error: q.isError
+      ? userErrorMessage(q.error, 'Could not load the dependency graph.') ||
+        'Could not load the dependency graph.'
+      : null,
     isEmpty: !q.isLoading && nodes.length === 0,
   };
 }

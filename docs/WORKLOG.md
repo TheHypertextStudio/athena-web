@@ -7,6 +7,66 @@
 
 ## Active Tasks
 
+### [WEB-ERR-001] Make user-visible errors structured and safe by construction
+
+- **Status**: REVIEW
+- **Started**: 2026-07-12
+- **Priority**: P0
+- **Description**: Audit every web error path and prevent server, provider, configuration, and raw
+  exception messages from reaching rendered UI. User-visible failures must come from a closed,
+  typed client taxonomy with application-owned copy; diagnostic detail remains server-side.
+- **Plan**:
+  1. Inventory query, mutation, manual fetch, Better Auth, persisted-provider, error-boundary, and
+     direct JSX message paths across `apps/web`.
+  2. Split API diagnostic errors from public RFC 9457 summaries, so arbitrary thrown messages are
+     never serialized to HTTP clients.
+  3. Introduce a closed web `UserFacingError` type and central mapper that consumes status/problem
+     codes while accepting only application-owned fallback copy for display.
+  4. Migrate every web path away from raw `Error.message`, response `title`/`detail`, provider
+     `lastError`, and Better Auth message rendering.
+  5. Add repository-wide static enforcement plus runtime contract tests so future raw-message leaks
+     fail CI at construction time.
+  6. Update the data-layer/error-handling standard, run full gates, commit atomically, and promote.
+- **Non-negotiable Invariants**:
+  - API diagnostics and environment-variable names never appear in public problem responses.
+  - UI code cannot render `error.message`, problem `title`/`detail`, or provider `lastError`.
+  - Branching uses closed machine codes/status/kinds; displayed copy is owned by the web app.
+  - Unknown failures degrade to contextual fallback copy without exposing the caught value.
+- **Risks**:
+  - Preserve specific workflows such as re-authentication, billing, validation, and duplicate-state
+    handling by branching on stable codes rather than flattening every failure to one generic alert.
+  - Keep MCP/operator diagnostics useful through logging and structured machine codes even though
+    public HTTP copy becomes generic.
+- **Implementation**:
+  - API and MCP error renderers now derive public summaries from the closed Problem code catalog;
+    thrown messages and validator prose remain diagnostic-only. The Linear write-scope workflow
+    gained a stable `linear_write_scope_required` code instead of matching message text.
+  - Web and admin now share the same small contract: `UserFacingError` retains only app-owned copy,
+    HTTP status, and Problem code. Query, manual response, Better Auth, OAuth, provider-health, and
+    error-boundary sinks were migrated; persisted provider diagnostics and agent-error body text are
+    never rendered.
+  - `AGENT_MAX_TURNS` is required during environment validation and supplied by the deployment
+    workflow, so a missing value prevents startup instead of creating a request-time exception.
+  - A TypeScript source-policy test scans production web/admin code and rejects raw `.message`,
+    provider diagnostics, and legacy string readers. The same rule is now explicit in `AGENTS.md`
+    and the data-layer standard.
+- **Validation**:
+  - The poison-message contract tests prove the exact `AGENT_MAX_TURNS is not configured` text is
+    absent from HTTP, query, admin, and MCP results.
+  - Full repository typecheck and lint pass 17/17; all tests pass 17/17 (API 1,199/1,199, web
+    304/304, admin 5/5, source-policy/tooling 25/25).
+  - Production builds pass 3/3; repository format check, workflow actionlint, and `git diff --check`
+    pass.
+- **Retrospective**:
+  - The durable rule is intentionally small: diagnostics stay behind the boundary, UI copy is
+    caller-owned, and behavior branches on types/status/codes. Static enforcement prevents the
+    contract from depending on every reviewer remembering it.
+- **Remaining Acceptance**:
+  - The production `AGENT_MAX_TURNS` repository variable is configured at 24. Promote once through
+    the gated workflow, then verify the live signup, agenda, and safe-error behavior.
+
+---
+
 ### [CAL-PROD-001] Keep the shell agenda renderable during server failures
 
 - **Status**: REVIEW

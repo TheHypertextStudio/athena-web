@@ -1,28 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import { Problem, ProblemCode } from '../src/errors';
+import { Problem, ProblemCode, PUBLIC_PROBLEM_TITLES, publicProblemTitle } from '../src/errors';
 
 describe('ProblemCode', () => {
   it('accepts every closed code', () => {
-    const codes = [
-      'validation_error',
-      'unauthorized',
-      'forbidden',
-      'not_found',
-      'conflict',
-      'task_already_linked',
-      'idempotency_key_reuse',
-      'dependency_cycle',
-      'last_owner_guard',
-      'self_escalation',
-      'personal_org_no_invites',
-      'card_required',
-      'billing_frozen',
-      'internal',
-    ] as const;
+    const codes = ProblemCode.options;
     for (const code of codes) {
       expect(ProblemCode.parse(code)).toBe(code);
+      expect(publicProblemTitle(code)).toBe(PUBLIC_PROBLEM_TITLES[code]);
     }
+    expect(Object.keys(PUBLIC_PROBLEM_TITLES).sort()).toEqual([...codes].sort());
   });
 
   it('rejects an unknown code', () => {

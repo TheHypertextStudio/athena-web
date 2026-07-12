@@ -20,6 +20,7 @@
 import { useCallback } from 'react';
 
 import { passkey, signIn } from '@/lib/auth-client';
+import { toUserFacingError } from '@/lib/problem';
 
 /** The actionable error a no-passkey user sees when a sensitive action needs step-up re-auth. */
 const NO_PASSKEY_MESSAGE =
@@ -31,11 +32,11 @@ export function useReauth(): () => Promise<void> {
     // A social-only account has no passkey to challenge — surface a fix, not a cryptic failure.
     const list = await passkey.listUserPasskeys();
     if (!list.error && list.data.length === 0) {
-      throw new Error(NO_PASSKEY_MESSAGE);
+      throw toUserFacingError(undefined, NO_PASSKEY_MESSAGE);
     }
     const result = await signIn.passkey();
     if (result.error) {
-      throw new Error(result.error.message ?? 'Re-authentication was cancelled.');
+      throw toUserFacingError(result.error, 'Re-authentication was cancelled.');
     }
   }, []);
 }

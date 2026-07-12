@@ -189,7 +189,7 @@ describe('CreateProjectDialog — robust composer', () => {
     });
   });
 
-  it('surfaces the server problem message when the create fails', async () => {
+  it('surfaces application-owned copy when the create fails', async () => {
     projectPost.mockResolvedValue(jsonResponse(false, { detail: 'Name already used.' }));
     const { onCreated } = renderComposer();
 
@@ -197,7 +197,8 @@ describe('CreateProjectDialog — robust composer', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create Project' }));
 
     const alert = await screen.findByRole('alert');
-    expect(within(alert).getByText('Name already used.')).toBeTruthy();
+    expect(within(alert).getByText('Could not create the project.')).toBeTruthy();
+    expect(within(alert).queryByText('Name already used.')).toBeNull();
     expect(onCreated).not.toHaveBeenCalled();
   });
 });

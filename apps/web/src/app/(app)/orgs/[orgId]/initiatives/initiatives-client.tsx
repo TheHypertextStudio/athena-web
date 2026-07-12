@@ -58,6 +58,7 @@ import { type ViewState } from '@/components/views/field-catalog';
 import { isEmptyViewState } from '@/components/views/view-state-url';
 import { initiativeDetailDef } from '@/lib/fetch-initiative-detail';
 import { apiQueryOptions, queryKeys, useApiQuery, usePrefetchApi } from '@/lib/query';
+import { userErrorMessage } from '@/lib/problem';
 
 /** The default view applied when the URL carries none: group by status (the legacy sections). */
 const DEFAULT_VIEW: ViewState = {
@@ -101,7 +102,9 @@ export default function InitiativesListClient(): JSX.Element {
 
   const initiatives = useMemo(() => initiativesQ.data ?? [], [initiativesQ.data]);
   const loading = initiativesQ.isPending;
-  const error = initiativesQ.isError ? initiativesQ.error.message : null;
+  const error = initiativesQ.isError
+    ? userErrorMessage(initiativesQ.error, 'Could not load initiatives.')
+    : null;
 
   /** The initiative field catalog driving the toolbar + the apply engine + the table columns. */
   const catalog = useMemo(() => buildInitiativeCatalog(), []);

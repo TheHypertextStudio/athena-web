@@ -24,7 +24,7 @@ import {
   type CalendarItemOut,
   type CalendarLayerOut,
 } from '@docket/types';
-import { and, asc, eq, gt, inArray, isNotNull, isNull, lt, or, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, isNotNull, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
 import type { z } from 'zod';
 
 import { NotFoundError } from '../error';
@@ -181,20 +181,7 @@ export async function readCalendarItemsInRange(
   }
   itemFilters.push(isNull(calendarItem.archivedAt));
 
-  const rangeCondition = or(
-    and(
-      isNotNull(calendarItem.startsAt),
-      isNotNull(calendarItem.endsAt),
-      lt(calendarItem.startsAt, input.end),
-      gt(calendarItem.endsAt, input.start),
-    ),
-    and(
-      isNotNull(calendarItem.allDayStartDate),
-      isNotNull(calendarItem.allDayEndDate),
-      sql`${calendarItem.allDayStartDate} < ${input.end}::date`,
-      sql`${calendarItem.allDayEndDate} > ${input.start}::date`,
-    ),
-  );
+  const rangeCondition = calendarItemOverlapCondition(input.start, input.end);
 
   const itemRows = await db
     .select({ item: calendarItem, layer: calendarLayer, connection: calendarConnection })
@@ -212,6 +199,28 @@ export async function readCalendarItemsInRange(
   const items = itemRows.map((row) => serializeItemRow(row, linkedTasksByItem));
 
   return { layers: layerRows.map(toCalendarLayerOut), items };
+}
+
+/** Build the driver-safe overlap predicate shared by Calendar range reads. */
+export function calendarItemOverlapCondition(start: Date, end: Date): SQL {
+  const startDate = start.toISOString().slice(0, 10);
+  const endDate = end.toISOString().slice(0, 10);
+  const condition = or(
+    and(
+      isNotNull(calendarItem.startsAt),
+      isNotNull(calendarItem.endsAt),
+      lt(calendarItem.startsAt, end),
+      gt(calendarItem.endsAt, start),
+    ),
+    and(
+      isNotNull(calendarItem.allDayStartDate),
+      isNotNull(calendarItem.allDayEndDate),
+      sql`${calendarItem.allDayStartDate} < ${endDate}::date`,
+      sql`${calendarItem.allDayEndDate} > ${startDate}::date`,
+    ),
+  );
+  if (!condition) throw new Error('Calendar range predicate could not be constructed.');
+  return condition;
 }
 
 /** Read every calendar layer for a user (selected or not) — settings need the full list. */

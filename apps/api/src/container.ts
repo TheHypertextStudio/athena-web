@@ -277,8 +277,8 @@ function buildPushSender(runtimeEnv: AppRuntimeEnv): PushSender {
 export function buildAppContainer(runtimeEnv: AppRuntimeEnv = toAppRuntimeEnv()): AppContainer {
   const mock = localMode(runtimeEnv);
   const priceKey = runtimeEnv.STRIPE_PRICE_TEAM ?? runtimeEnv.DOCKET_PRICE_LOOKUP_TEAM;
-  return {
-    billing: mock
+  const billing = lazyValue(() =>
+    mock
       ? new InMemoryBillingGateway()
       : new RealStripeGateway({
           secretKey: required('STRIPE_SECRET_KEY', runtimeEnv.STRIPE_SECRET_KEY),
@@ -290,37 +290,85 @@ export function buildAppContainer(runtimeEnv: AppRuntimeEnv = toAppRuntimeEnv())
             ? { portalConfigId: runtimeEnv.STRIPE_BILLING_PORTAL_CONFIG_ID }
             : {}),
         }),
-    agentRuntime: mock
+  );
+  const agentRuntime = lazyValue(() =>
+    mock
       ? new MockAgentRuntime()
       : new RealProviderRuntime({
           apiKey: required('ANTHROPIC_API_KEY', runtimeEnv.ANTHROPIC_API_KEY),
         }),
-    agentTurn: mock
+  );
+  const agentTurn = lazyValue(() =>
+    mock
       ? new MockAgentTurnRuntime()
       : new RealAgentTurnRuntime({
           apiKey: required('ANTHROPIC_API_KEY', runtimeEnv.ANTHROPIC_API_KEY),
         }),
-    summarizer: mock
+  );
+  const summarizer = lazyValue(() =>
+    mock
       ? new MockSummarizer()
       : new RealSummarizer({
           apiKey: required('ANTHROPIC_API_KEY', runtimeEnv.ANTHROPIC_API_KEY),
         }),
-    taskSynthesizer: mock
+  );
+  const taskSynthesizer = lazyValue(() =>
+    mock
       ? new MockTaskSynthesizer()
       : new RealTaskSynthesizer({
           apiKey: required('ANTHROPIC_API_KEY', runtimeEnv.ANTHROPIC_API_KEY),
         }),
-    mailer: buildMailer(runtimeEnv),
-    mcpConnector: mock ? new MockMcpConnector() : new RealMcpConnector(),
-    sms: buildSmsSender(runtimeEnv),
-    push: buildPushSender(runtimeEnv),
-    blob: mock
+  );
+  const mailer = lazyValue(() => buildMailer(runtimeEnv));
+  const mcpConnector = lazyValue(() => (mock ? new MockMcpConnector() : new RealMcpConnector()));
+  const sms = lazyValue(() => buildSmsSender(runtimeEnv));
+  const push = lazyValue(() => buildPushSender(runtimeEnv));
+  const blob = lazyValue(() =>
+    mock
       ? new LocalDiskBlob()
       : new RealBlob({
-          baseUrl: required('EXPORT_BUCKET_URL', runtimeEnv.EXPORT_BUCKET_URL),
           token: required('BLOB_READ_WRITE_TOKEN', runtimeEnv.BLOB_READ_WRITE_TOKEN),
+          ...(runtimeEnv.EXPORT_BUCKET_URL ? { baseUrl: runtimeEnv.EXPORT_BUCKET_URL } : {}),
         }),
+  );
+
+  return {
+    get billing() {
+      return billing();
+    },
+    get agentRuntime() {
+      return agentRuntime();
+    },
+    get agentTurn() {
+      return agentTurn();
+    },
+    get summarizer() {
+      return summarizer();
+    },
+    get taskSynthesizer() {
+      return taskSynthesizer();
+    },
+    get mailer() {
+      return mailer();
+    },
+    get mcpConnector() {
+      return mcpConnector();
+    },
+    get sms() {
+      return sms();
+    },
+    get push() {
+      return push();
+    },
+    get blob() {
+      return blob();
+    },
   };
+}
+
+function lazyValue<T>(create: () => T): () => T {
+  let value: T | undefined;
+  return () => (value ??= create());
 }
 
 let cached: AppContainer | undefined;

@@ -129,6 +129,19 @@ describe('RealBlob.get', () => {
 });
 
 describe('RealBlob.url', () => {
+  it('derives the public store origin from a standard read-write token', () => {
+    const blob = new RealBlob({ token: 'vercel_blob_rw_store123_secret' });
+    expect(blob.url('exports/a.zip')).toBe(
+      'https://store123.public.blob.vercel-storage.com/exports/a.zip',
+    );
+  });
+
+  it('rejects a token without an encoded store id when no base URL is provided', () => {
+    expect(() => new RealBlob({ token: 'invalid' })).toThrow(
+      'Invalid BLOB_READ_WRITE_TOKEN: store id is missing.',
+    );
+  });
+
   it('addresses a key, trimming trailing base slashes and a leading key slash', () => {
     const blob = new RealBlob({ baseUrl: 'https://store.example.com///', token: 'tok' });
     expect(blob.url('/nested/key.txt')).toBe('https://store.example.com/nested/key.txt');

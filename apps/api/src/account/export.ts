@@ -10,6 +10,7 @@
  * and expires `ready` artifacts past their TTL. Mirrors the daily-digest sweep (uses the
  * shared {@link getContainer} blob + mailer ports; safe to retry).
  */
+import type { BlobStore } from '@docket/blob-store';
 import type { Database } from '@docket/db';
 import {
   accountExport,
@@ -143,14 +144,15 @@ export async function collectAccountExport(
  *
  * @param db - The database client.
  * @param now - The sweep's reference instant (ISO-8601).
+ * @param resolveBlob - Lazy blob-store resolver, injectable for focused failure tests.
  * @returns the per-outcome counts.
  */
 export async function sweepAccountExports(
   db: Database,
   now: string,
+  resolveBlob: () => BlobStore = () => getContainer().blob,
 ): Promise<AccountExportSweepResult> {
   const nowDate = new Date(now);
-  const { blob } = getContainer();
 
   // Expire ready artifacts whose link TTL has elapsed.
   const expiredRows = await db
@@ -165,6 +167,7 @@ export async function sweepAccountExports(
   let failed = 0;
   for (const job of pending) {
     try {
+      const blob = resolveBlob();
       const { document, user: userRow } = await collectAccountExport(db, job.userId);
       const expiresAt = new Date(nowDate.getTime() + ACCOUNT_EXPORT_TTL_MS);
       // A self-describing ZIP (README + split JSON), not a bare blob of JSON.

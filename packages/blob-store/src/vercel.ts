@@ -23,11 +23,10 @@ import { defaultHttpClient, type HttpClient } from './http';
 /** Validated configuration for {@link RealBlob} (sourced from env). */
 export interface RealBlobConfig {
   /**
-   * Public base URL of the Vercel Blob store (`EXPORT_BUCKET_URL`), e.g.
-   * `https://<store-id>.public.blob.vercel-storage.com`. Artifacts are addressed
-   * as `${baseUrl}/${key}`.
+   * Optional public base URL override. Standard Vercel Blob tokens encode their store id, so the
+   * adapter derives `https://<store-id>.public.blob.vercel-storage.com` when this is omitted.
    */
-  readonly baseUrl: string;
+  readonly baseUrl?: string;
   /** Vercel Blob read/write token (`BLOB_READ_WRITE_TOKEN`) used to authenticate uploads + reads. */
   readonly token: string;
 }
@@ -86,6 +85,13 @@ function normalizeKey(key: string): string {
   return key.replace(/^\/+/, '');
 }
 
+function baseUrl(config: RealBlobConfig): string {
+  if (config.baseUrl) return config.baseUrl.replace(/\/+$/, '');
+  const storeId = /^vercel_blob_rw_([^_]+)_/.exec(config.token)?.[1];
+  if (!storeId) throw new Error('Invalid BLOB_READ_WRITE_TOKEN: store id is missing.');
+  return `https://${storeId}.public.blob.vercel-storage.com`;
+}
+
 /**
  * A real, env-driven blob store backed by Vercel Blob.
  *
@@ -110,7 +116,7 @@ export class RealBlob implements BlobStore {
    */
   constructor(config: RealBlobConfig, deps: RealBlobDeps | HttpClient = {}) {
     this.token = config.token;
-    this.base = config.baseUrl.replace(/\/+$/, '');
+    this.base = baseUrl(config);
     const resolved: RealBlobDeps = typeof deps === 'function' ? { http: deps } : deps;
     this.http = resolved.http ?? defaultHttpClient;
     this.upload = resolved.upload ?? defaultUpload;

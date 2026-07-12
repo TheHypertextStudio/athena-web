@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { captureOutbox, getDb, one, seedUserWithHub } from '../support/routes-harness';
 
@@ -34,6 +34,43 @@ describe('collectAccountExport', () => {
 });
 
 describe('sweepAccountExports', () => {
+  it('does not resolve blob storage when there are no pending jobs', async () => {
+    const { db, sweepAccountExports } = await setup();
+    const resolveBlob = vi.fn(() => {
+      throw new Error('blob storage is not configured');
+    });
+
+    const result = await sweepAccountExports(db, NOW, resolveBlob);
+
+    expect(result.generated).toBe(0);
+    expect(result.failed).toBe(0);
+    expect(resolveBlob).not.toHaveBeenCalled();
+  });
+
+  it('records a pending job as failed when blob storage is unavailable', async () => {
+    const { db, schema, sweepAccountExports } = await setup();
+    const userId = await seedUserWithHub(db, schema, 'MissingBlob');
+    const job = one(
+      await db
+        .insert(schema.accountExport)
+        .values({ userId })
+        .returning({ id: schema.accountExport.id }),
+    );
+
+    const result = await sweepAccountExports(db, NOW, () => {
+      throw new Error('blob storage is not configured');
+    });
+
+    expect(result.failed).toBeGreaterThanOrEqual(1);
+    const row = one(
+      await db.select().from(schema.accountExport).where(eq(schema.accountExport.id, job.id)),
+    );
+    expect(row).toMatchObject({
+      status: 'failed',
+      error: 'blob storage is not configured',
+    });
+  });
+
   it('generates a pending export to blob storage and emails the link', async () => {
     const { db, schema, sweepAccountExports, outbox } = await setup();
     const userId = await seedUserWithHub(db, schema, 'Ready');

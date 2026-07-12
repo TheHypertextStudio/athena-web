@@ -77,6 +77,19 @@ describe('container', () => {
     expect(a).toBe(b);
     expect(a.billing).toBeDefined();
   });
+
+  it('constructs only the production service that a caller accesses', async () => {
+    const { buildAppContainer } = await import('../src/container');
+    const container = buildAppContainer({
+      APP_MODE: 'production',
+      RESEND_API_KEY: 're_test_key',
+      MAIL_FROM: 'Docket <noreply@example.com>',
+    });
+
+    expect(container.mailer).toBe(container.mailer);
+    expect(() => container.billing).toThrow('STRIPE_SECRET_KEY');
+    expect(() => container.blob).toThrow('BLOB_READ_WRITE_TOKEN');
+  });
 });
 
 describe('session middleware', () => {

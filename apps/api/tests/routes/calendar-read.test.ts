@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { PgDialect } from 'drizzle-orm/pg-core';
 
 import { addMember, getDb, one, seedBaseOrg, seedUserWithHub } from '../support/routes-harness';
 import {
+  calendarItemOverlapCondition,
   readCalendarItemsInRange,
   readCalendarLayers,
   readItemDetail,
@@ -57,6 +59,13 @@ async function seedItem(
 }
 
 describe('readCalendarItemsInRange', () => {
+  it('binds PostgreSQL date-column boundaries as canonical strings', () => {
+    const query = new PgDialect().sqlToQuery(calendarItemOverlapCondition(rangeStart, rangeEnd));
+
+    expect(query.params.slice(-2)).toEqual(['2026-07-02', '2026-07-01']);
+    expect(query.params.slice(-2).every((value) => !(value instanceof Date))).toBe(true);
+  });
+
   it('includes a timed item inside the window and one straddling its start, excludes one outside', async () => {
     const schema = await getDb();
     const userId = await seedUserWithHub(schema.db, schema, 'RangeUser');

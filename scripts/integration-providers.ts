@@ -760,9 +760,9 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
       '  1) https://sentry.io → create/select a project (platform: Node).',
       '  2) Settings → "Client Keys (DSN)" → copy the DSN (https://…@…ingest.sentry.io/…).',
       '',
-      'Export storage (only if you use data-export artifacts — provide URL + token together):',
-      '  • BLOB_READ_WRITE_TOKEN: Vercel → Storage → Blob → "Read/Write Token".',
-      '  • EXPORT_BUCKET_URL + EXPORT_BUCKET_TOKEN: your S3-compatible bucket endpoint + access token.',
+      'Export storage (only if you use data-export artifacts):',
+      '  • Vercel Blob: provide BLOB_READ_WRITE_TOKEN; the store URL is derived automatically.',
+      '  • Custom storage: provide EXPORT_BUCKET_URL + EXPORT_BUCKET_TOKEN together.',
     ],
   },
 ];

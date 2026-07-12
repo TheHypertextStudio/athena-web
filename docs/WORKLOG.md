@@ -7,6 +7,66 @@
 
 ## Active Tasks
 
+### [PROD-RUNTIME-001] Eliminate live production 500s
+
+- **Status**: REVIEW
+- **Started**: 2026-07-12
+- **Priority**: P0
+- **Description**: Repair the live Calendar item read, recovery-code regeneration, and scheduled
+  account-export failures discovered during the final production-readiness audit.
+- **Plan**:
+  1. Reproduce the PostgreSQL-only Calendar date binding failure and pass canonical date strings to
+     `date` predicates without weakening the range semantics.
+  2. Stop optional blob storage from being constructed while unrelated notification paths only need
+     mail delivery.
+  3. Make the account-export sweep behave deterministically when storage is unavailable and verify
+     the actual production queue state before selecting fail-soft behavior or provisioning storage.
+  4. Add regression coverage for each live failure, run repository gates, promote once, and verify
+     the corrected endpoints and Cloud Run logs against the deployed revision.
+- **Evidence**:
+  - Revision `docket-api-00040-cn6` returned repeated HTTP 500 responses from
+    `/v1/me/calendar/items`; stderr shows postgres-js rejecting a JavaScript `Date` bound to a
+    PostgreSQL `date` comparison.
+  - `POST /v1/me/recovery-codes` returned 500 immediately after successful passkey step-up, and
+    `POST /internal/cron/account-export-sweep` returned 500 on its scheduled cadence. Production has
+    no blob-storage variables, while `getContainer()` eagerly requires blob configuration even for
+    notification-only callers.
+- **Risks**:
+  - Recovery codes are replaced before the security notification is dispatched; a post-generation
+    infrastructure failure must not hide the plaintext codes from the one response that can show
+    them.
+  - Account exports must never claim readiness unless their archive was durably stored.
+  - The shared checkout contains unrelated UI work; all implementation and validation stay in this
+    isolated worktree.
+- **Implementation**:
+  - Calendar range reads now bind canonical `YYYY-MM-DD` strings to PostgreSQL `date` predicates
+    while retaining JavaScript dates for timestamp predicates.
+  - Production service adapters are getter-backed and memoized, so mail-only recovery notifications
+    and empty export sweeps do not require unrelated billing, AI, SMS, push, or blob configuration.
+  - Export sweeps resolve blob storage only for pending jobs. A missing storage adapter fails the
+    affected job without crashing the entire scheduled route or claiming that an archive is ready.
+  - Standard Vercel Blob tokens derive the public store URL when no custom URL override is supplied.
+    The `docket-production` store is linked only to the Vercel Production environment, and its token
+    is mounted into Cloud Run through Secret Manager without introducing a manual app deployment.
+- **Validation**:
+  - Focused API regression coverage passes 37/37 across Calendar reads, container initialization,
+    account exports, recovery codes, and cron routing.
+  - Blob-store coverage passes 13/13 and tooling/bootstrap coverage passes 25/25.
+  - Repository typecheck passes 17/17, lint passes 17/17, and tests pass 17/17 (API 1,203/1,203;
+    web 304/304; tooling 25/25). Production build passes 3/3.
+  - A live Blob upload/delete smoke test completed against `docket-production`, leaving the store
+    empty after cleanup.
+- **Retrospective**:
+  - A single eager application container turned optional integrations into global production
+    dependencies. Feature adapters now fail at their actual usage boundary, which keeps unrelated
+    routes available while preserving explicit failures for configured features.
+- **Remaining Acceptance**:
+  - Promote one gated revision, confirm the new Cloud Run image and secret mount, invoke the live
+    empty export sweep, and verify authenticated Calendar reads no longer emit HTTP 500.
+  - Complete Google consent and the first Calendar synchronization in the production account.
+
+---
+
 ### [WEB-ERR-001] Make user-visible errors structured and safe by construction
 
 - **Status**: REVIEW

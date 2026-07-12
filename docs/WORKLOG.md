@@ -168,6 +168,12 @@
     authoritative secret mounts. The action's inline comma parser mangled even quoted allowlists;
     the file path bypasses that tokenizer entirely. Formatting, actionlint, and tooling tests 8/8
     pass.
+  - Google account linking then exposed an invisible newline in Google client-id secret version 2:
+    the authorization URL ended in `%0A`, so Google returned `401 invalid_client`. Stored a
+    newline-free version 3, pinned revision `docket-api-00037-n7n` to it, disabled both malformed or
+    deleted prior client-id versions, and verified Google recognizes the exact production callback.
+    Bootstrap now trims outer clipboard whitespace at the Secret Manager boundary and rejects
+    whitespace-only values.
 
 ### [BOOTSTRAP-LINEAR-001] Minimal-manual production provider bootstrap
 

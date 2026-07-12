@@ -596,6 +596,22 @@ async function ensureCloudSession(target: CloudTarget): Promise<void> {
 }
 
 /**
+ * Normalize one operator-provided secret before it crosses the Secret Manager boundary.
+ *
+ * @remarks
+ * Provider credentials are single logical values, so surrounding clipboard whitespace is never
+ * meaningful. Trimming here prevents an invisible trailing newline from becoming part of an OAuth
+ * client id while preserving internal spaces such as `Docket <no-reply@example.com>`.
+ *
+ * @throws When the supplied value contains only whitespace.
+ */
+export function normalizeCloudSecret(value: string): string {
+  const normalized = value.trim();
+  if (!normalized) throw new Error('Cloud secret value must not be empty.');
+  return normalized;
+}
+
+/**
  * Create or add a new version of a GCP Secret Manager secret (re-runs rotate, never error).
  *
  * @remarks
@@ -603,6 +619,7 @@ async function ensureCloudSession(target: CloudTarget): Promise<void> {
  * and written straight to Secret Manager — it never touches local disk or the process arg list.
  */
 function pushSecret(env: Environment, target: CloudTarget, varName: string, value: string): void {
+  const normalized = normalizeCloudSecret(value);
   const name = secretName(env, varName);
   const exists = tryRun(
     `gcloud secrets describe ${name} --project=${target.project} --format='value(name)'`,
@@ -611,7 +628,7 @@ function pushSecret(env: Environment, target: CloudTarget, varName: string, valu
     ? `secrets versions add ${name} --project=${target.project}`
     : `secrets create ${name} --project=${target.project} --replication-policy=automatic`;
   execSync(`gcloud ${action} --data-file=-`, {
-    input: value,
+    input: normalized,
     stdio: ['pipe', 'inherit', 'inherit'],
   });
   const projectNumber = tryRun(

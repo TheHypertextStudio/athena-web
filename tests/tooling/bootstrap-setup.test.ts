@@ -9,7 +9,11 @@ import {
   PROVIDER_GROUPS,
   providerVars,
 } from '../../scripts/integration-providers';
-import { buildApiSecretBindings, wrapLines } from '../../scripts/integrations-setup';
+import {
+  buildApiSecretBindings,
+  normalizeCloudSecret,
+  wrapLines,
+} from '../../scripts/integrations-setup';
 
 describe('bootstrap phase flags', () => {
   it('accepts pnpm separator syntax and forces the production-only fast path', () => {
@@ -98,6 +102,21 @@ describe('bootstrap note wrapping', () => {
     const lines = wrapLines([`URL: https://linear.app/${'x'.repeat(120)}`], 40);
     expect(lines.length).toBeGreaterThan(1);
     expect(lines.every((line) => line.length <= 40)).toBe(true);
+  });
+});
+
+describe('cloud secret normalization', () => {
+  it('removes invisible clipboard whitespace without changing internal value content', () => {
+    expect(normalizeCloudSecret('  client.apps.googleusercontent.com\r\n')).toBe(
+      'client.apps.googleusercontent.com',
+    );
+    expect(normalizeCloudSecret('  Docket <no-reply@example.com>  ')).toBe(
+      'Docket <no-reply@example.com>',
+    );
+  });
+
+  it('rejects a value that becomes empty after normalization', () => {
+    expect(() => normalizeCloudSecret(' \r\n ')).toThrow(/must not be empty/);
   });
 });
 

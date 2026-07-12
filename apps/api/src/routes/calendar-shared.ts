@@ -187,10 +187,20 @@ export async function buildAgendaPayload(
   const end = new Date(start);
   end.setUTCDate(end.getUTCDate() + 1);
 
-  const eventEntries =
-    options.includeGoogleCalendar === false
-      ? []
-      : await buildGoogleCalendarAgendaEntries(userId, start, end, options);
+  let eventEntries: z.input<typeof AgendaOut>['entries'] = [];
+  if (options.includeGoogleCalendar !== false) {
+    try {
+      eventEntries = await buildGoogleCalendarAgendaEntries(userId, start, end, options);
+    } catch (error) {
+      // Provider enrichment is additive. A stale/malformed synced row must never suppress the
+      // user's Docket timeboxes or turn the shell's always-present agenda into a 500 response.
+      console.warn('[agenda] calendar enrichment failed; returning Docket timeboxes', {
+        userId,
+        date: options.date,
+        error,
+      });
+    }
+  }
 
   const entries = [...taskEntries, ...eventEntries].sort((a, b) => {
     const aStart = a.kind === 'task_timebox' ? a.startsAt : (a.event.startsAt ?? '');

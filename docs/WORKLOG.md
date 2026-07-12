@@ -7,6 +7,52 @@
 
 ## Active Tasks
 
+### [CAL-PROD-001] Keep the shell agenda renderable during server failures
+
+- **Status**: REVIEW
+- **Started**: 2026-07-12
+- **Priority**: P0
+- **Description**: Fix the production right-rail agenda's raw "Internal server error" state and
+  establish the invariant that basic agenda UI and locally available data always render, even when
+  calendar enrichment or the agenda endpoint fails.
+- **Plan**:
+  1. Trace the live right-rail error through the agenda query and combined calendar payload.
+  2. Make provider-calendar enrichment fail soft so Docket timeboxes still reach the client.
+  3. Make the agenda viewport render cached or empty content on query failure with only a quiet
+     degraded-data notice, never raw server copy in place of the surface.
+  4. Add API and UI regression coverage, run repository gates, deploy, and verify production.
+- **Observed Failure**:
+  - The live shell agenda replaced its entire viewport with "Internal server error" while the Today
+    page otherwise rendered normally. The combined endpoint currently lets any malformed/stale
+    provider-calendar row throw out the Docket timebox payload, and the client then gates the whole
+    canvas on `query.error`.
+- **Risks**:
+  - Preserve observability for corrupt provider data; degradation must log the enrichment failure.
+  - Do not misrepresent stale data as current; the rail should disclose degraded refresh quietly.
+- **Implementation**:
+  - The combined agenda isolates Google/provider enrichment behind a fail-soft boundary. Any
+    provider query/serialization invariant failure is logged with user/date context, while the API
+    still returns the user's Docket timeboxes with HTTP 200.
+  - The agenda viewport no longer gates its canvas on `query.error`. After initial loading it always
+    renders cached entries or the normal empty state, with a quiet degraded-refresh status that
+    never exposes raw server copy.
+- **Validation Progress**:
+  - Focused API agenda tests pass 11/11, including a malformed synced provider event that preserves
+    the Docket timebox and emits the diagnostic warning.
+  - Focused agenda resilience tests pass 2/2, proving controls/canvas remain visible and raw
+    "Internal server error" copy is absent.
+  - Repository typecheck 17/17, lint 17/17, and tests 17/17 pass (API 1,199/1,199; web 303/303;
+    tooling 25/25). Production build passes 3/3.
+- **Retrospective**:
+  - The old design made an additive provider projection a single point of failure twice: first in
+    the combined API payload, then again in the viewport's error gate. Resilience belongs at both
+    boundaries so a future backend regression still cannot erase ambient shell UI.
+- **Remaining Acceptance**:
+  - Promote through the gated workflow and verify the live right rail no longer renders the raw
+    error state.
+
+---
+
 ### [AUTH-PROD-002] Correct post-verification duplicate-account failure
 
 - **Status**: REVIEW

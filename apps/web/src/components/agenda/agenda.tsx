@@ -44,12 +44,26 @@ interface AgendaViewportProps {
   children: ReactNode;
 }
 
-/** The scrolling body that gates on load state, then renders the view canvas. */
+/**
+ * The scrolling body that always renders the agenda canvas once the initial read settles.
+ *
+ * @remarks
+ * Server data enriches this ambient shell surface; it does not own the surface. A failed refresh
+ * therefore leaves cached entries in place (or renders the normal empty state on first failure)
+ * with a quiet status notice instead of replacing the agenda with raw server error copy.
+ */
 function AgendaViewport({ children }: AgendaViewportProps): JSX.Element {
   const { loading, error } = useAgenda();
   return (
     <div className="min-h-0 flex-1 overflow-auto">
-      {loading ? <AgendaSkeleton /> : error ? <AgendaError message={error} /> : children}
+      {loading ? (
+        <AgendaSkeleton />
+      ) : (
+        <>
+          {error ? <AgendaDegradedNotice /> : null}
+          {children}
+        </>
+      )}
     </div>
   );
 }
@@ -59,20 +73,14 @@ function AgendaSkeleton(): JSX.Element {
   return <Skeleton className="h-[28rem] w-full rounded-xl" />;
 }
 
-/** Props for {@link AgendaError}. */
-interface AgendaErrorProps {
-  /** The load failure message. */
-  message: string;
-}
-
-/** A quiet inline error with the load failure. */
-function AgendaError({ message }: AgendaErrorProps): JSX.Element {
+/** A quiet, non-blocking disclosure that the rendered agenda could not refresh. */
+function AgendaDegradedNotice(): JSX.Element {
   return (
     <div
-      role="alert"
-      className="border-destructive/40 bg-destructive/5 text-destructive text-body rounded-lg border p-4"
+      role="status"
+      className="border-border bg-muted/40 text-muted-foreground text-caption mb-2 rounded-lg border px-3 py-2"
     >
-      {message}
+      Calendar updates are temporarily unavailable. Showing what we have.
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { and, eq } from 'drizzle-orm';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type {
   AgendaOut,
@@ -268,6 +268,37 @@ describe('first-party Google Calendar routes', () => {
       'task_timebox',
       'google_calendar_event',
     ]);
+  });
+
+  it('keeps Docket timeboxes renderable when provider-calendar enrichment is malformed', async () => {
+    const fixture = await seedCalendarFixture();
+    const app = appWithSession(agendaRouter, fakeSession(fixture.userId));
+    await fixture.schema.db.insert(fixture.schema.calendarItem).values({
+      userId: fixture.userId,
+      layerId: fixture.selectedCalendar.id,
+      connectionId: fixture.connection.id,
+      kind: 'provider_event',
+      provider: 'google',
+      externalCalendarId: 'selected-cal',
+      externalEventId: null,
+      title: 'Malformed synced event',
+      startsAt: new Date('2026-06-30T20:00:00.000Z'),
+      endsAt: new Date('2026-06-30T21:00:00.000Z'),
+      syncState: 'clean',
+    });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    try {
+      const out = await body<AgendaOut>(await app.request('/?date=2026-06-30'));
+
+      expect(out.entries.map((entry) => entry.kind)).toEqual(['task_timebox']);
+      expect(warn).toHaveBeenCalledWith(
+        '[agenda] calendar enrichment failed; returning Docket timeboxes',
+        expect.objectContaining({ userId: fixture.userId, date: '2026-06-30' }),
+      );
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it('creates a task from a Google Calendar event and attaches event context', async () => {

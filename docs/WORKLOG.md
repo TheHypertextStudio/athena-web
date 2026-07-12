@@ -164,8 +164,10 @@
   - Cleaned the authoritative runtime on revision `docket-api-00032-br6`: 100% traffic, healthy API,
     correct comma-delimited auth/MCP allowlists, only native Resend mail mounts, and no bogus
     environment keys. Disabled the revoked Resend version and all retired SMTP secret versions.
-  - Hardened the reusable Cloud Run workflow with quoted comma values plus overwrite strategies for
-    environment variables and secret mounts. Formatting, actionlint, and tooling tests 8/8 pass.
+  - Hardened the reusable Cloud Run workflow with a generated YAML `--env-vars-file` plus
+    authoritative secret mounts. The action's inline comma parser mangled even quoted allowlists;
+    the file path bypasses that tokenizer entirely. Formatting, actionlint, and tooling tests 8/8
+    pass.
 
 ### [BOOTSTRAP-LINEAR-001] Minimal-manual production provider bootstrap
 

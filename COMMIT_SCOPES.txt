@@ -13,5 +13,6 @@ marketing
 mcp
 onboarding
 permissions
+takeout
 ui
 web

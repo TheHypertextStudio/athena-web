@@ -25,6 +25,7 @@ import { OpenDocumentsProvider, useOpenDocuments } from '@/components/tabs';
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
 import { STALE, apiQueryOptions, queryKeys, useApiQuery, useLiveApiQuery } from '@/lib/query';
+import { CREATE_WORKSPACE_PATH } from '@/lib/workspace-creation';
 
 import {
   homeKeyFromPath,
@@ -204,6 +205,11 @@ function AppShellInner({
     [router, setContext, userId],
   );
 
+  /** Open the one shared repeat-workspace creation route from any shell launcher. */
+  const onCreateWorkspace = useCallback((): void => {
+    router.push(CREATE_WORKSPACE_PATH);
+  }, [router]);
+
   const sidebar = (
     <Sidebar
       workspaces={workspaces}
@@ -214,9 +220,10 @@ function AppShellInner({
       hrefForWorkspace={(orgId, key) => `/orgs/${orgId}/${key}`}
       renderLink={renderLink}
       onSelectWorkspace={onSelectWorkspace}
+      onCreateWorkspace={onCreateWorkspace}
       onOpenSearch={openPalette}
       personalWorkspace={resolvedOrgIsPersonal}
-      footer={<AccountMenu />}
+      footer={<AccountMenu onCreateWorkspace={onCreateWorkspace} />}
     />
   );
 

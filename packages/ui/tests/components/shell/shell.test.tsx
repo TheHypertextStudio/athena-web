@@ -36,6 +36,7 @@ describe('AppShell + Sidebar', () => {
                 hrefForWorkspace={(orgId, key) => `/orgs/${orgId}/${key}`}
                 renderLink={renderLink}
                 onSelectWorkspace={() => undefined}
+                onCreateWorkspace={() => undefined}
                 onOpenSearch={() => undefined}
               />
             }

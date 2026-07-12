@@ -1,44 +1,29 @@
 'use client';
 
-import type { OrgCreate, OrgCreateResult } from '@docket/types';
+import type { OrgCreate } from '@docket/types';
 import { cn } from '@docket/ui/lib/utils';
 import { Button } from '@docket/ui/primitives';
 import { useRouter } from 'next/navigation';
 import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { interpolate, primaryLabel, stepCopy } from '@/components/onboarding/onboarding-copy';
-import { INTENT_OPTIONS, StepIntent } from '@/components/onboarding/step-intent';
+import { StepIntent } from '@/components/onboarding/step-intent';
 import { StepConnect } from '@/components/onboarding/step-connect';
-import { StepName } from '@/components/onboarding/step-name';
 import { StepPasskey } from '@/components/onboarding/step-passkey';
 import { StepPersonalWelcome } from '@/components/onboarding/step-personal-welcome';
-import { StepVocabulary } from '@/components/onboarding/step-vocabulary';
-import type { OnboardingIntent, OnboardingStep, Vocabulary } from '@/components/onboarding/types';
+import type { OnboardingIntent, OnboardingStep } from '@/components/onboarding/types';
 import { WizardShell } from '@/components/onboarding/wizard-shell';
-import { api } from '@/lib/api';
+import { WorkspaceNameField } from '@/components/workspace-creation/workspace-name-field';
 import { passkey, useSession } from '@/lib/auth-client';
-import { userErrorMessage, readProblemError } from '@/lib/problem';
+<<<<<<< HEAD
+import { userErrorMessage } from '@/lib/problem';
+import { createWorkspace } from '@/lib/workspace-creation';
 
 /** The ordered steps for the individual ("just me") fork. */
 const PERSONAL_STEPS: readonly OnboardingStep[] = ['intent', 'personal-welcome', 'connect'];
 
 /** The ordered steps for the team / nonprofit fork. */
-const TEAM_STEPS: readonly OnboardingStep[] = ['intent', 'name', 'vocabulary', 'connect'];
-
-/**
- * Create an organization through the typed RPC, accepting any valid {@link OrgCreate} body.
- *
- * @param body - A validated org-create body (team or personal).
- * @returns the raw RPC {@link Response} for the caller to branch on.
- */
-function createOrg(body: OrgCreate): Promise<Response> {
-  return api.v1.orgs.$post({ json: body });
-}
-
-/** Resolve the default vocabulary preset an intent fork pre-selects. */
-function defaultVocabularyFor(intent: OnboardingIntent): Vocabulary {
-  return INTENT_OPTIONS.find((option) => option.intent === intent)?.vocabulary ?? 'startup';
-}
+const TEAM_STEPS: readonly OnboardingStep[] = ['intent', 'name', 'connect'];
 
 /** Extract a friendly first name from a full display name, if any. */
 function firstNameOf(name: string | undefined): string | undefined {
@@ -56,9 +41,8 @@ function firstNameOf(name: string | undefined): string | undefined {
  * - **Just me** → a welcome beat that explains the personal command center, then the live
  *   connect step. The personal space (`isPersonal: true`, named after the signed-in user when
  *   known) is created silently when the user leaves the welcome beat.
- * - **Team / nonprofit** → name the org, choose a vocabulary preset (with a live preview drawn
- *   from the real presets), then the live connect step. The org is created with the chosen
- *   name + vocabulary + intent when the user leaves the vocabulary beat.
+ * - **Team / nonprofit** → name the org, then continue to the live connect step. New workspaces
+ *   use Docket's standard terminology; intent remains an informational onboarding hint.
  *
  * Crucially the workspace is created when the user *enters* the connect step — not at the very
  * end — so the connect step has a real org to mirror work into (create integration → import).
@@ -79,7 +63,6 @@ export default function OnboardingPage(): JSX.Element {
   const [step, setStep] = useState<OnboardingStep>('intent');
   const [intent, setIntent] = useState<OnboardingIntent | null>(null);
   const [name, setName] = useState('');
-  const [vocabulary, setVocabulary] = useState<Vocabulary>('startup');
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -115,11 +98,10 @@ export default function OnboardingPage(): JSX.Element {
   const isPersonal = intent === 'personal';
   const nameReady = name.trim().length > 0;
 
-  /** Choose an intent on step 1, adopt its default vocabulary, and advance to its first beat. */
+  /** Choose an intent on step 1 and advance to its first beat. */
   const chooseIntent = useCallback((next: OnboardingIntent): void => {
     setError(null);
     setIntent(next);
-    setVocabulary(defaultVocabularyFor(next));
     const forkSteps = next === 'personal' ? PERSONAL_STEPS : TEAM_STEPS;
     setStep(forkSteps[1] ?? 'connect');
   }, []);
@@ -149,8 +131,13 @@ export default function OnboardingPage(): JSX.Element {
           intent: 'personal',
           vocabulary: 'startup',
         }
-      : { isPersonal: false, name: name.trim(), intent: intent ?? 'startup', vocabulary };
-  }, [isPersonal, firstName, name, intent, vocabulary]);
+      : {
+          isPersonal: false,
+          name: name.trim(),
+          intent: intent ?? 'startup',
+          vocabulary: 'startup',
+        };
+  }, [isPersonal, firstName, name, intent]);
 
   /**
    * Create the org (personal or team) and advance into the connect step bound to it.
@@ -169,20 +156,7 @@ export default function OnboardingPage(): JSX.Element {
     setError(null);
     setPending(true);
     try {
-      const res = await createOrg(orgBody());
-      if (!res.ok) {
-        setError(
-          userErrorMessage(
-            await readProblemError(
-              res,
-              'Could not finish setting up your workspace. Please try again.',
-            ),
-            'Could not finish setting up your workspace. Please try again.',
-          ),
-        );
-        return;
-      }
-      const { organization } = (await res.json()) as OrgCreateResult;
+      const { organization } = await createWorkspace(orgBody());
       setOrgId(organization.id);
       setStep('connect');
     } catch (caught) {
@@ -316,11 +290,12 @@ export default function OnboardingPage(): JSX.Element {
       {step === 'personal-welcome' ? <StepPersonalWelcome firstName={firstName} /> : null}
 
       {step === 'name' ? (
-        <StepName value={name} onChange={setName} onSubmit={goNext} canSubmit={nameReady} />
-      ) : null}
-
-      {step === 'vocabulary' ? (
-        <StepVocabulary value={vocabulary} onChange={setVocabulary} />
+        <WorkspaceNameField
+          value={name}
+          onChange={setName}
+          onSubmit={goNext}
+          canSubmit={nameReady}
+        />
       ) : null}
 
       {step === 'connect' && orgId !== null ? (

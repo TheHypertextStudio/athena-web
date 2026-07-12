@@ -27,13 +27,6 @@ export function stepCopy(step: OnboardingStep): {
         subtitle:
           'Give your team’s shared space a name. Don’t overthink it — you can change it later.',
       };
-    case 'vocabulary':
-      return {
-        eyebrow: 'Make it yours',
-        title: 'Docket speaks your world’s language',
-        subtitle:
-          'Pick the words that fit how your organization talks. Docket will use them everywhere.',
-      };
     case 'connect':
       return {
         eyebrow: 'Bring in your work',
@@ -72,7 +65,7 @@ export function primaryLabel(
   if (isConnectStep) {
     return mirroredTotal > 0 ? 'Enter your workspace' : 'Continue without connecting';
   }
-  if (step === 'vocabulary' || step === 'personal-welcome') {
+  if (step === 'name' || step === 'personal-welcome') {
     if (pending) return 'Setting things up…';
     return isPersonal ? 'Create your space' : 'Create workspace';
   }

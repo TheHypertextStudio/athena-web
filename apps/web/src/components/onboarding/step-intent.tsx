@@ -4,16 +4,15 @@
  * `onboarding/step-intent` — the first screen: "What brings you to Docket?".
  *
  * @remarks
- * Three large choice cards fork the rest of the wizard. The selection drives both the org's
- * `intent` and a sensible default vocabulary preset (still changeable later). The fork is
- * front-loaded here so each subsequent screen can stay about a single concept.
+ * Three large choice cards fork the rest of the wizard and record the org's informational
+ * `intent`. The fork is front-loaded so each subsequent screen stays about one concept.
  */
 import { Sparkles, User, Users } from '@docket/ui/icons';
 import type { LucideIcon } from '@docket/ui/icons';
 import type { JSX } from 'react';
 
 import { SelectableCard } from './selectable-card';
-import type { OnboardingIntent, Vocabulary } from './types';
+import type { OnboardingIntent } from './types';
 
 /** One intent fork rendered as a large choice card. */
 interface IntentOption {
@@ -23,32 +22,24 @@ interface IntentOption {
   title: string;
   /** Supporting sentence. */
   description: string;
-  /** The vocabulary preset this intent adopts by default. */
-  vocabulary: Vocabulary;
   /** The leading glyph for the card. */
   icon: LucideIcon;
 }
 
 /**
- * The three onboarding forks, in display order, with their default vocabulary presets.
- *
- * @remarks
- * Exported so the orchestrator can resolve the default vocabulary for the chosen intent
- * without re-declaring the mapping.
+ * The three onboarding forks, in display order.
  */
 export const INTENT_OPTIONS: readonly IntentOption[] = [
   {
     intent: 'personal',
     title: 'Just me',
     description: 'A personal command center to run your own work and bring everything together.',
-    vocabulary: 'startup',
     icon: User,
   },
   {
     intent: 'startup',
     title: 'My team or company',
     description: 'A shared workspace for a startup or growing team to plan and ship together.',
-    vocabulary: 'startup',
     icon: Users,
   },
   {
@@ -56,7 +47,6 @@ export const INTENT_OPTIONS: readonly IntentOption[] = [
     title: 'A nonprofit',
     description:
       'A home for mission-driven work — programs, initiatives, and the people behind them.',
-    vocabulary: 'nonprofit',
     icon: Sparkles,
   },
 ];

@@ -1,15 +1,5 @@
 import type { LucideIcon } from '@docket/ui/icons';
-import {
-  Cable,
-  Download,
-  Inbox,
-  Link,
-  ListChecks,
-  Shield,
-  Translate,
-  Trash2,
-  Users,
-} from '@docket/ui/icons';
+import { Cable, Download, Inbox, Link, ListChecks, Shield, Trash2, Users } from '@docket/ui/icons';
 
 /** A settings section's availability: a live routed page, or a planned ("coming soon") stub. */
 export type SectionStatus = 'available' | 'coming-soon';
@@ -35,14 +25,6 @@ export const PERSONAL_SETTINGS_SECTION_GROUPS: readonly SettingsSectionGroup[] =
   {
     label: 'Your space',
     sections: [
-      {
-        key: 'vocabulary',
-        label: 'Language',
-        description: 'Choose the words Docket uses across your space.',
-        icon: Translate,
-        href: 'vocabulary',
-        status: 'available',
-      },
       {
         key: 'connections',
         label: 'Connections',
@@ -118,4 +100,4 @@ export const PERSONAL_SETTINGS_SECTION_GROUPS: readonly SettingsSectionGroup[] =
 ];
 
 /** The section the `settings` root redirects to for a **personal workspace**. */
-export const DEFAULT_PERSONAL_SETTINGS_SECTION = 'vocabulary';
+export const DEFAULT_PERSONAL_SETTINGS_SECTION = 'connections';

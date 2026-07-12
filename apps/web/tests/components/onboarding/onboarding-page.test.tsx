@@ -9,7 +9,7 @@
  * - **Personal fork**: "Just me" → welcome → create the personal space (auto-named, no org-name
  *   prompt) → land on the live connect step bound to the new org id → "Skip for now" routes into
  *   that org's My Work. Back-nav disappears once the org exists (the user is committed).
- * - **Team fork**: "My team" → name → vocabulary → create the org → connect → enter.
+ * - **Team fork**: "My team" → name/create → connect → enter with standard terminology.
  * - A failed create keeps the user on the setup step and shows the server's message rather than
  *   advancing to a connect step with no org behind it.
  *
@@ -130,7 +130,7 @@ describe('OnboardingPage — personal fork', () => {
 });
 
 describe('OnboardingPage — team fork', () => {
-  it('walks name → vocabulary → create, then connect → enter routes into Home', async () => {
+  it('creates from the name step with standard terminology, then enters Home', async () => {
     orgPost.mockResolvedValue(
       jsonResponse(true, { organization: { id: 'org_team', name: 'Acme' } }),
     );
@@ -139,23 +139,22 @@ describe('OnboardingPage — team fork', () => {
     // Step 1: choose the team fork.
     fireEvent.click(screen.getByText('My team or company'));
 
-    // Step 2: name the org.
+    // Step 2: naming the org is now the complete creation form.
     const nameField = screen.getByLabelText(/name/i);
     fireEvent.change(nameField, { target: { value: 'Acme' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-
-    // Step 3: vocabulary → leaving it creates the org.
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Create workspace' })).toBeTruthy();
-    });
     fireEvent.click(screen.getByRole('button', { name: 'Create workspace' }));
 
     await waitFor(() => {
       expect(orgPost).toHaveBeenCalledTimes(1);
     });
     expect(orgPost).toHaveBeenCalledWith({
-      json: expect.objectContaining({ isPersonal: false, name: 'Acme' }),
+      json: expect.objectContaining({
+        isPersonal: false,
+        name: 'Acme',
+        vocabulary: 'startup',
+      }),
     });
+    expect(screen.queryByText(/speaks your world/i)).toBeNull();
 
     // Connect step is live and bound to the new org.
     await waitFor(() => {

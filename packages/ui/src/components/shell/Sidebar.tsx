@@ -74,6 +74,8 @@ export interface SidebarProps {
   readonly renderLink: (href: string, children: React.ReactNode) => React.ReactNode;
   /** Switch the active workspace to an org id. */
   readonly onSelectWorkspace: (orgId: string) => void;
+  /** Open the host application's shared-workspace creation flow. */
+  readonly onCreateWorkspace: () => void;
   /** Open the command palette (the Search Home row). */
   readonly onOpenSearch: () => void;
   /**
@@ -136,6 +138,7 @@ export function Sidebar({
   hrefForWorkspace,
   renderLink,
   onSelectWorkspace,
+  onCreateWorkspace,
   onOpenSearch,
   personalWorkspace = false,
   footer,
@@ -200,7 +203,11 @@ export function Sidebar({
       aria-label="Navigation"
       className="text-on-surface flex h-full w-full shrink-0 flex-col overflow-y-auto p-2 lg:w-60"
     >
-      <WorkspaceSwitcher workspaces={workspaces} onSelect={onSelectWorkspace} />
+      <WorkspaceSwitcher
+        workspaces={workspaces}
+        onSelect={onSelectWorkspace}
+        onCreate={onCreateWorkspace}
+      />
 
       <nav aria-label="Home" className="flex flex-col space-y-1 pt-2" onClick={handleNavActivate}>
         {homeRows.map((row) => {

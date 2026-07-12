@@ -7,14 +7,15 @@
  * Replaces the old left-edge org rail: a single styled dropdown that surfaces the *active
  * workspace* and lists every org the caller belongs to in one uniform list — personal and
  * shared orgs look and group identically, exactly like Linear. The trigger shows the active
- * workspace; opening it lists every workspace so the caller can switch in one click.
+ * workspace; opening it lists every workspace for one-click switching plus the host's shared
+ * creation action.
  * Selecting a workspace rebinds the active org via {@link useContextState} (so the org accent
  * applies instantly) and reports the selection through {@link WorkspaceSwitcherProps.onSelect}
  * so the host can navigate.
  */
 import * as React from 'react';
 
-import { ChevronDown } from '../../icons';
+import { ChevronDown, Plus } from '../../icons';
 import { cn } from '../../lib/utils';
 import { getOrgAccent } from '../../lib/org-accent';
 import {
@@ -26,6 +27,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '../../primitives';
 import { useContextState } from './ContextProvider';
@@ -42,6 +44,8 @@ export interface WorkspaceSwitcherProps {
    * Fires in addition to the local context rebind, so the host can navigate imperatively.
    */
   readonly onSelect: (orgId: string) => void;
+  /** Open the host application's shared-workspace creation flow. */
+  readonly onCreate: () => void;
 }
 
 /** Compute up-to-two-letter initials from a workspace name for the avatar fallback. */
@@ -123,8 +127,7 @@ function WorkspaceMenuRow({
 }
 
 /**
- * The integrated workspace switcher: the active workspace + a one-click switch between every
- * org the caller belongs to.
+ * The integrated workspace switcher: the active workspace, one-click switching, and creation.
  *
  * @remarks
  * Must be rendered inside a {@link ContextProvider} (it reads + rebinds the active org). Every
@@ -134,6 +137,7 @@ function WorkspaceMenuRow({
 export function WorkspaceSwitcher({
   workspaces,
   onSelect,
+  onCreate,
 }: WorkspaceSwitcherProps): React.JSX.Element {
   const { activeOrgId } = useContextState();
   const [open, setOpen] = React.useState(false);
@@ -159,7 +163,6 @@ export function WorkspaceSwitcher({
         <Button
           type="button"
           variant="ghost"
-          disabled={active === null}
           aria-label={`Workspace: ${triggerLabel}. Switch workspace`}
           className="h-auto w-full justify-start gap-2 px-2 py-1.5"
         >
@@ -191,6 +194,16 @@ export function WorkspaceSwitcher({
             }}
           />
         ))}
+        {workspaces.length > 0 ? <DropdownMenuSeparator /> : null}
+        <DropdownMenuItem
+          onSelect={() => {
+            setOpen(false);
+            onCreate();
+          }}
+        >
+          <Plus aria-hidden="true" className="size-4" />
+          Create workspace
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

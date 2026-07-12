@@ -1043,6 +1043,25 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [WORKSPACE-CREATE-001] Add shared workspace creation entry points
+
+- **Completed**: 2026-07-12
+- **Priority**: P1
+- **Summary**: Added a focused authenticated `/workspaces/new` flow launched from the workspace
+  switcher, account menu, and command palette. Onboarding and repeat creation now share one
+  workspace-name field and typed creation helper. Removed the user-facing vocabulary picker from
+  onboarding and Settings while retaining stored vocabulary skins for compatibility.
+- **Files Changed**: App-shell workspace launchers, onboarding workspace setup, Settings registries,
+  the new workspace page and shared creation modules, focused tests, product/build documentation,
+  and this log.
+- **Validation**: Focused web tests pass 303/303 and UI tests pass 256/256. Repository typecheck and
+  lint each pass 17/17 tasks; the full test gate passes 17/17 packages (including API 1,199/1,199),
+  and the production-pinned build passes 3/3. `pnpm format:check` and `git diff --check` pass.
+- **Learnings**: The retired Settings picker only changed in-session state, so removing it avoids a
+  misleading control without a migration. A neutral name field plus one typed creation helper is
+  the right shared boundary: onboarding can continue into connections while repeat creation can
+  refresh the org cache and enter the new workspace immediately.
+
 ### [DX-COMMIT-001] Enforce feature-oriented commit messages
 
 - **Completed**: 2026-07-12

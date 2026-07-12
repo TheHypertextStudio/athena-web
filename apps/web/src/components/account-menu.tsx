@@ -1,6 +1,6 @@
 'use client';
 
-import { LogOut } from '@docket/ui/icons';
+import { LogOut, Plus } from '@docket/ui/icons';
 import {
   Avatar,
   AvatarFallback,
@@ -21,12 +21,17 @@ import { authClient, signOut } from '@/lib/auth-client';
  *
  * @remarks
  * Gives sign-out a visible, discoverable home instead of hiding it in the command palette only
- * (audit finding). Shows the signed-in identity (name + email) and opens a menu whose primary
- * action signs out and returns to `/sign-in`. Self-contained — it reads the Better Auth session
- * directly, so it renders nothing until a session exists (and on the auth screens it is never
- * mounted). One default export per the component-file convention.
+ * (audit finding). Shows the signed-in identity (name + email) and opens a menu with global
+ * workspace creation plus sign-out. Self-contained — it reads the Better Auth session directly,
+ * so it renders nothing until a session exists (and on the auth screens it is never mounted).
+ * One default export per the component-file convention.
  */
-export default function AccountMenu(): JSX.Element | null {
+export default function AccountMenu({
+  onCreateWorkspace,
+}: {
+  /** Open the shared-workspace creation flow. */
+  onCreateWorkspace: () => void;
+}): JSX.Element | null {
   const router = useRouter();
   const { data: session } = authClient.useSession();
   if (!session) return null;
@@ -58,6 +63,11 @@ export default function AccountMenu(): JSX.Element | null {
         <DropdownMenuLabel className="truncate font-normal">
           Signed in as <span className="font-medium">{email}</span>
         </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={onCreateWorkspace}>
+          <Plus aria-hidden="true" className="size-4" />
+          Create workspace
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onSelect={() => {

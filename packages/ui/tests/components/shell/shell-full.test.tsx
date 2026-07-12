@@ -60,6 +60,7 @@ function sidebarHrefs() {
       `/${key}`,
     hrefForWorkspace: (orgId: string, key: string) => `/orgs/${orgId}/${key}`,
     renderLink,
+    onCreateWorkspace: () => undefined,
   };
 }
 
@@ -441,7 +442,7 @@ describe('WorkspaceSwitcher', () => {
     const onSelect = vi.fn();
     render(
       <ContextProvider initialContext={ACME.id}>
-        <WorkspaceSwitcher workspaces={WORKSPACES} onSelect={onSelect} />
+        <WorkspaceSwitcher workspaces={WORKSPACES} onSelect={onSelect} onCreate={() => undefined} />
       </ContextProvider>,
     );
     openMenu(screen.getByRole('button', { name: /Workspace: Acme Co/ }));
@@ -453,7 +454,11 @@ describe('WorkspaceSwitcher', () => {
   it('lists every org uniformly with no personal/shared partition and no Hub entry', async () => {
     render(
       <ContextProvider initialContext={ACME.id}>
-        <WorkspaceSwitcher workspaces={WORKSPACES} onSelect={() => undefined} />
+        <WorkspaceSwitcher
+          workspaces={WORKSPACES}
+          onSelect={() => undefined}
+          onCreate={() => undefined}
+        />
       </ContextProvider>,
     );
     openMenu(screen.getByRole('button', { name: /Workspace: Acme Co/ }));
@@ -470,19 +475,46 @@ describe('WorkspaceSwitcher', () => {
   it('falls back to the first org as the trigger when none is bound yet', () => {
     render(
       <ContextProvider initialContext={null}>
-        <WorkspaceSwitcher workspaces={WORKSPACES} onSelect={() => undefined} />
+        <WorkspaceSwitcher
+          workspaces={WORKSPACES}
+          onSelect={() => undefined}
+          onCreate={() => undefined}
+        />
       </ContextProvider>,
     );
     expect(screen.getByRole('button', { name: /Workspace: Acme Co/ })).toBeInTheDocument();
   });
 
-  it('disables the switcher when the caller has no orgs', () => {
+  it('keeps workspace creation available when the caller has no orgs', async () => {
+    const onCreate = vi.fn();
     render(
       <ContextProvider initialContext={null}>
-        <WorkspaceSwitcher workspaces={[]} onSelect={() => undefined} />
+        <WorkspaceSwitcher workspaces={[]} onSelect={() => undefined} onCreate={onCreate} />
       </ContextProvider>,
     );
-    expect(screen.getByRole('button', { name: /Workspace: Workspace/ })).toBeDisabled();
+    const trigger = screen.getByRole('button', { name: /Workspace: Workspace/ });
+    expect(trigger).toBeEnabled();
+    openMenu(trigger);
+    await waitFor(() =>
+      expect(screen.getByRole('menuitem', { name: 'Create workspace' })).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Create workspace' }));
+    expect(onCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens workspace creation from the switcher menu', async () => {
+    const onCreate = vi.fn();
+    render(
+      <ContextProvider initialContext={ACME.id}>
+        <WorkspaceSwitcher workspaces={WORKSPACES} onSelect={() => undefined} onCreate={onCreate} />
+      </ContextProvider>,
+    );
+    openMenu(screen.getByRole('button', { name: /Workspace: Acme Co/ }));
+    await waitFor(() =>
+      expect(screen.getByRole('menuitem', { name: 'Create workspace' })).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Create workspace' }));
+    expect(onCreate).toHaveBeenCalledTimes(1);
   });
 });
 

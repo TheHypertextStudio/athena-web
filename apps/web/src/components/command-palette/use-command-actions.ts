@@ -20,6 +20,7 @@ import { useMemo } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 import { signOut } from '@/lib/auth-client';
+import { CREATE_WORKSPACE_PATH } from '@/lib/workspace-creation';
 
 import type { PaletteItem, PaletteScope } from './types';
 
@@ -129,10 +130,10 @@ export function useCommandActions({ scope, close }: CommandActionsInput): readon
       {
         id: 'action:new-org',
         section: 'actions',
-        label: 'Add a workspace',
+        label: 'Create workspace',
         icon: Plus,
         keywords: ['create', 'join', 'organization', 'new'],
-        run: go('/onboarding'),
+        run: go(CREATE_WORKSPACE_PATH),
       },
       {
         id: 'action:density',

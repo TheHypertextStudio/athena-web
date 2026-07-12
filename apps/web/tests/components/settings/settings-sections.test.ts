@@ -62,8 +62,8 @@ describe('personal workspace sections', () => {
     expect(everyLabel).not.toContain('organization');
   });
 
-  it('still surfaces the personal-preference sections (Language + Connections + Import)', () => {
-    expect(personalKeys).toContain('vocabulary');
+  it('surfaces Connections and Import without the retired Language picker', () => {
+    expect(personalKeys).not.toContain('vocabulary');
     expect(personalKeys).toContain('connections');
     expect(personalKeys).toContain('import');
   });
@@ -120,6 +120,10 @@ describe('shared org sections (no regression)', () => {
     const notifications = orgSections.find((s) => s.key === 'notifications');
     expect(notifications?.status).toBe('available');
   });
+
+  it('does not expose the retired vocabulary picker', () => {
+    expect(orgSections.map((section) => section.key)).not.toContain('vocabulary');
+  });
 });
 
 describe('defaultSettingsSection', () => {
@@ -142,7 +146,7 @@ describe('sectionHref', () => {
   it('builds the absolute org-scoped settings route for a section suffix', () => {
     expect(sectionHref('org_123', 'members')).toBe('/orgs/org_123/settings/members');
     expect(sectionHref('org_123', defaultSettingsSection(true))).toBe(
-      '/orgs/org_123/settings/vocabulary',
+      '/orgs/org_123/settings/connections',
     );
   });
 });

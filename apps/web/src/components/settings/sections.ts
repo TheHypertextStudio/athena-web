@@ -6,16 +6,7 @@
  * The nav, the layout, and the section-root redirect all derive from this registry.
  * `settingsSectionGroups` picks the correct registry for the active workspace type.
  */
-import {
-  Cable,
-  CreditCard,
-  Inbox,
-  ListChecks,
-  Shield,
-  Sparkles,
-  Translate,
-  Users,
-} from '@docket/ui/icons';
+import { Cable, CreditCard, Inbox, ListChecks, Shield, Sparkles, Users } from '@docket/ui/icons';
 
 export type { SectionStatus, SettingsSection, SettingsSectionGroup } from './sections-personal';
 export {
@@ -92,14 +83,6 @@ export const SETTINGS_SECTION_GROUPS: readonly SettingsSectionGroup[] = [
         description: 'Rules that act on your email suggestions and tasks.',
         icon: Sparkles,
         href: 'automations',
-        status: 'available',
-      },
-      {
-        key: 'vocabulary',
-        label: 'Language',
-        description: 'Choose the language Docket speaks across this organization.',
-        icon: Translate,
-        href: 'vocabulary',
         status: 'available',
       },
       {

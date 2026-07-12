@@ -10,8 +10,12 @@
  * sole-owner shared orgs. The heavy work (export generation, the final purge) runs in the cron
  * sweeps — these routes only record intent and send the confirming email.
  */
-import { accountExport, db, hub } from '@docket/db';
+import { accountExport, actor, db, hub, organization } from '@docket/db';
 import {
+  type AccountExportOrigin,
+  AccountExportOptionsOut,
+  AccountExportRequest,
+  type AccountExportScope,
   type AccountExportStatus,
   AccountExportListOut,
   AccountExportOut,
@@ -26,6 +30,7 @@ import type { z } from 'zod';
 import { findOwnershipBlockers } from '../account/blockers';
 import { exportFilename } from '../account/archive';
 import { deletionCanceledEmail, deletionScheduledEmail } from '../account/emails';
+import { exportScope, FULL_ACCOUNT_EXPORT_SCOPE } from '../account/export';
 import { cancelAccountDeletion, scheduleAccountDeletion } from '../account/lifecycle';
 import { getContainer } from '../container';
 import type { AppEnv, AuthSession } from '../context';
@@ -40,6 +45,7 @@ import {
 import { ok } from '../lib/ok';
 import { one } from '../lib/one';
 import { apiDoc, describeRoute } from '../lib/openapi-route';
+import { zJson } from '../lib/validate';
 import { dispatchSystemUserNotification } from '../services/notifications/system';
 
 /** Like {@link ok} but with an explicit status (e.g. 201 Created, 202 Accepted). */
@@ -83,6 +89,8 @@ function toExportOut(row: typeof accountExport.$inferSelect): z.input<typeof Acc
   return {
     id: row.id,
     status: row.status,
+    origin: row.origin === 'account_deletion' ? 'account_deletion' : 'manual',
+    scope: exportScope(row.scope),
     requestedAt: row.requestedAt.toISOString(),
     readyAt: row.readyAt ? row.readyAt.toISOString() : null,
     expiresAt: row.expiresAt ? row.expiresAt.toISOString() : null,
@@ -91,6 +99,38 @@ function toExportOut(row: typeof accountExport.$inferSelect): z.input<typeof Acc
     // cross-origin and arrives unauthenticated → 401).
     downloadUrl: ready ? `/v1/me/account/exports/${row.id}/file` : null,
   };
+}
+
+/** List current workspaces the caller can include in a selective archive. */
+async function exportableWorkspaces(
+  userId: string,
+): Promise<z.input<typeof AccountExportOptionsOut>['workspaces']> {
+  const rows = await db
+    .select({ id: organization.id, name: organization.name })
+    .from(actor)
+    .innerJoin(organization, eq(actor.organizationId, organization.id))
+    .where(and(eq(actor.userId, userId), eq(actor.kind, 'human'), eq(actor.status, 'active')))
+    .orderBy(organization.name);
+  return rows.map((workspace) => ({ id: workspace.id, name: workspace.name }));
+}
+
+/** Resolve untrusted workspace ids into a persisted, human-readable archive scope. */
+async function resolveExportScope(
+  userId: string,
+  request: z.infer<typeof AccountExportRequest>,
+): Promise<AccountExportScope> {
+  const categories = [...new Set(request.categories)];
+  const workspaceIds = [...new Set(request.workspaceIds)];
+  const workspaces = await exportableWorkspaces(userId);
+  const selected = workspaces.filter((workspace) => workspaceIds.includes(workspace.id));
+  if (selected.length !== workspaceIds.length) {
+    throw new NotFoundError('One or more selected workspaces are unavailable.');
+  }
+  return AccountExportOut.shape.scope.parse({
+    categories,
+    workspaces: selected,
+    allWorkspaces: false,
+  });
 }
 
 /** The user's latest export (or null when they've never requested one). */
@@ -146,15 +186,23 @@ async function loadStatus(
  */
 async function enqueueExport(
   userId: string,
+  scope: AccountExportScope,
+  origin: AccountExportOrigin = 'manual',
 ): Promise<{ export: z.input<typeof AccountExportOut>; created: boolean }> {
   const pending = await one(
     db
       .select()
       .from(accountExport)
-      .where(and(eq(accountExport.userId, userId), eq(accountExport.status, 'pending'))),
+      .where(
+        and(
+          eq(accountExport.userId, userId),
+          eq(accountExport.status, 'pending'),
+          eq(accountExport.origin, origin),
+        ),
+      ),
   );
   if (pending) return { export: toExportOut(pending), created: false };
-  const [inserted] = await db.insert(accountExport).values({ userId }).returning();
+  const [inserted] = await db.insert(accountExport).values({ userId, scope, origin }).returning();
   if (!inserted) throw new Error('Failed to queue export.');
   return { export: toExportOut(inserted), created: true };
 }
@@ -216,7 +264,7 @@ Computed by scanning the caller's Hub deletion fields, recomputing ownership blo
       const now = new Date().toISOString();
       await scheduleAccountDeletion(db, user.id, now);
       // Offer a fresh export of everything before the data is purged.
-      await enqueueExport(user.id);
+      await enqueueExport(user.id, FULL_ACCOUNT_EXPORT_SCOPE, 'account_deletion');
 
       // Reuse the blockers already computed (empty here) so loadStatus doesn't re-scan.
       const status = await loadStatus(user.id, blockers);
@@ -270,6 +318,23 @@ Only effective during the grace window, before the cron sweep has purged the acc
   // Exports — an addressable sub-collection. (The binary sub-resource GET …/:id/file is mounted
   // separately outside the RPC contract; see meAccountExportDownload.)
   .get(
+    '/exports/options',
+    apiDoc({
+      tag: 'Me',
+      summary: 'Get account export options',
+      response: AccountExportOptionsOut,
+      description:
+        "Return the authenticated user's delivery email and current workspace memberships for the selective personal-data export form. The server is authoritative for selectable workspace ids; the create endpoint validates them again before queuing an archive.",
+    }),
+    async (c) => {
+      const { user } = requireSession(c);
+      return ok(c, AccountExportOptionsOut, {
+        deliveryEmail: user.email,
+        workspaces: await exportableWorkspaces(user.id),
+      });
+    },
+  )
+  .get(
     '/exports',
     apiDoc({
       tag: 'Me',
@@ -296,13 +361,15 @@ User-scoped to \`session.user.id\`; read-only; session-only, no capability. **40
       summary: 'Request an account export',
       response: AccountExportOut,
       status: 201,
-      description: `Queue an asynchronous **personal-data export** and return the export job. **The request is idempotent / de-duplicated:** if the caller already has a \`pending\` export, that existing job is returned with **200 OK** and no new job is created; only when there is no pending job is a fresh one queued and returned with **201 Created**. Either way a \`Location\` header points at the new job's resource (\`/v1/me/account/exports/:id\`).
+      description: `Queue an asynchronous **personal-data export** and return the export job. The request names the account/personal/workspace categories and exact workspace ids to include. **The request is idempotent / de-duplicated:** if the caller already has a \`pending\` manual export, that existing job is returned with **200 OK** and no new job is created; only when there is no pending manual export is a fresh one queued and returned with **201 Created**. Either way a \`Location\` header points at the new job's resource (\`/v1/me/account/exports/:id\`).
 
 This route only *records intent* — the actual archive generation runs in a cron sweep, which flips the job to \`ready\` (with a download link) or \`failed\`. **Side effect:** inserts an \`accountExport\` row (when none pending). Session-only, no capability; **401** when unauthenticated. The same enqueue is triggered automatically when scheduling account deletion. Related: \`GET /me/account/exports\`, and the binary \`GET …/:exportId/file\`.`,
     }),
+    zJson(AccountExportRequest),
     async (c) => {
       const { user } = requireSession(c);
-      const { export: created, created: isNew } = await enqueueExport(user.id);
+      const scope = await resolveExportScope(user.id, c.req.valid('json'));
+      const { export: created, created: isNew } = await enqueueExport(user.id, scope);
       c.header('Location', `${env.API_URL}/v1/me/account/exports/${created.id}`);
       return okWith(c, AccountExportOut, created, isNew ? 201 : 200);
     },
@@ -339,23 +406,25 @@ const NOT_READY_MESSAGE: Partial<Record<AccountExportStatus, string>> = {
  *
  * @remarks
  * Mounted at `/v1/me/account/exports` in `server.ts`, **outside** the typed RPC `AppType`: it
- * streams a ZIP (not a JSON envelope) and is fetched via a plain `<a href>` link, not the RPC
- * client — so it stays out of the contract `hc<AppType>` consumes (same convention as
- * cron/webhooks/stream). Authorization is implicit: only the caller's own `ready` export, keyed
- * by their session, is served — the `:exportId` is verified to belong to them. The bytes come
- * through the `BlobStore.get` port, so it works against local disk and prod Vercel Blob alike.
+ * streams a ZIP (not a JSON envelope) and is navigated to from the settings download action, so
+ * it stays out of the contract `hc<AppType>` consumes (same convention as cron/webhooks/stream).
+ * Authorization is implicit: only the caller's own `ready` export, keyed by their fresh session,
+ * is served — the `:exportId` is verified to belong to them. The bytes flow through `BlobStore.get`,
+ * so it works identically against local disk and prod Vercel Blob alike.
  */
 export const meAccountExportDownload: Hono<AppEnv> = new Hono<AppEnv>().get(
   '/:exportId/file',
   describeRoute({
     tags: ['Me'],
     summary: 'Download an account export file',
-    description: `Stream the generated ZIP archive for a \`ready\` export — the **binary sub-resource** of an export job. Unlike the rest of the account surface this returns raw bytes (\`Content-Type: application/zip\`, \`Content-Disposition: attachment\`), not a JSON envelope, and is fetched via a plain \`<a href>\` link rather than the typed RPC client; it is therefore mounted **outside** the typed RPC \`AppType\` contract (same convention as cron/webhooks/stream). The bytes flow through the \`BlobStore.get\` port, so it works identically against local disk in dev and Vercel Blob in production.
+    description: `Stream the generated ZIP file for a \`ready\` export — the **binary sub-resource** of an export job. Unlike the rest of the account surface this returns raw bytes (\`Content-Type: application/zip\`, \`Content-Disposition: attachment\`), not a JSON envelope. The settings screen opens this endpoint after passkey re-verification, so it is mounted **outside** the typed RPC \`AppType\` contract (same convention as cron/webhooks/stream). The bytes flow through the \`BlobStore.get\` port, so it works identically against local disk in dev and Vercel Blob in production.
 
-**Authorization is implicit and per-user:** only the caller's own export is served — \`:exportId\` is verified to belong to the session user. Errors: **404** when the export doesn't exist / isn't theirs, or when the underlying blob has already been swept; **409** when the export exists but isn't downloadable yet (\`pending\`), didn't finish (\`failed\`), or has \`expired\` (each with a status-specific message). Session-only, no capability; **401** when unauthenticated.`,
+**Authorization is implicit and per-user:** only the caller's own export is served — \`:exportId\` is verified to belong to the session user. A session older than five minutes receives **401** with \`reauth_required\`, then the settings screen asks for passkey verification before retrying. Errors: **404** when the export doesn't exist / isn't theirs, or when the underlying blob has already been swept; **409** when the export exists but isn't downloadable yet (\`pending\`), didn't finish (\`failed\`), or has \`expired\` (each with a status-specific message). Session-only, no capability.`,
   }),
   async (c) => {
-    const { user } = requireSession(c);
+    const session = requireSession(c);
+    requireFreshSession(session);
+    const { user } = session;
     const row = await getExportRow(user.id, c.req.param('exportId'));
     // 404 when the export doesn't exist / isn't theirs; 409 when it exists but isn't downloadable.
     if (!row) throw new NotFoundError('Export not found.');

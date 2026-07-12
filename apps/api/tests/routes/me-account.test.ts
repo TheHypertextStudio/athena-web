@@ -49,25 +49,84 @@ describe('GET /me/account', () => {
 });
 
 describe('POST /me/account/exports', () => {
-  it('creates a pending export (201 + Location) and is idempotent (200)', async () => {
+  it('creates a selective pending export (201 + Location) and is idempotent (200)', async () => {
     const { db, schema, meAccount } = await setup();
     const userId = await seedUserWithHub(db, schema, 'exporter');
     const app = appWithSession(meAccount, fakeSession(userId));
 
-    const res = await app.request('/exports', { method: 'POST' });
+    const res = await app.request('/exports', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ categories: ['account'], workspaceIds: [] }),
+    });
     expect(res.status).toBe(201);
-    const created = (await res.json()) as { id: string; status: string };
+    const created = (await res.json()) as {
+      id: string;
+      status: string;
+      scope: { categories: string[]; workspaces: unknown[]; allWorkspaces: boolean };
+    };
     expect(created.status).toBe('pending');
+    expect(created.scope).toEqual({
+      categories: ['account'],
+      workspaces: [],
+      allWorkspaces: false,
+    });
     expect(res.headers.get('location')).toContain(`/v1/me/account/exports/${created.id}`);
 
     // A second request returns the existing pending export (200, no duplicate).
-    const again = await app.request('/exports', { method: 'POST' });
+    const again = await app.request('/exports', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ categories: ['personal'], workspaceIds: [] }),
+    });
     expect(again.status).toBe(200);
     const rows = await db
       .select()
       .from(schema.accountExport)
       .where(eq(schema.accountExport.userId, userId));
     expect(rows).toHaveLength(1);
+  });
+
+  it('lists active selectable workspaces and rejects unavailable or suspended memberships', async () => {
+    const { db, schema, meAccount } = await setup();
+    const userId = await seedUserWithHub(db, schema, 'selector');
+    const ownOrg = await seedOrg(db, schema);
+    await addMember(db, schema, ownOrg, userId);
+    const outsiderOrg = await seedOrg(db, schema);
+    const suspendedOrg = await seedOrg(db, schema);
+    await addMember(db, schema, suspendedOrg, userId, 'member', 'suspended');
+    const app = appWithSession(meAccount, fakeSession(userId));
+
+    const options = await app.request('/exports/options', { method: 'GET' });
+    expect(options.status).toBe(200);
+    const body = (await options.json()) as { deliveryEmail: string; workspaces: { id: string }[] };
+    expect(body.deliveryEmail).toBe('ada@example.com');
+    expect(body.workspaces).not.toHaveLength(0);
+    expect(body.workspaces.map((workspace) => workspace.id)).not.toContain(suspendedOrg);
+
+    const selected = await app.request('/exports', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ categories: ['workspaces'], workspaceIds: [ownOrg] }),
+    });
+    expect(selected.status).toBe(201);
+    expect(
+      ((await selected.json()) as { scope: { workspaces: { id: string }[] } }).scope.workspaces,
+    ).toEqual([expect.objectContaining({ id: ownOrg })]);
+
+    const rejected = await app.request('/exports', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ categories: ['workspaces'], workspaceIds: [outsiderOrg] }),
+    });
+    expect(rejected.status).toBe(404);
+
+    const suspended = await app.request('/exports', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ categories: ['workspaces'], workspaceIds: [suspendedOrg] }),
+    });
+    expect(suspended.status).toBe(404);
   });
 });
 
@@ -76,7 +135,13 @@ describe('GET /me/account/exports', () => {
     const { db, schema, meAccount } = await setup();
     const userId = await seedUserWithHub(db, schema, 'lister');
     const app = appWithSession(meAccount, fakeSession(userId));
-    const created = (await (await app.request('/exports', { method: 'POST' })).json()) as {
+    const created = (await (
+      await app.request('/exports', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ categories: ['personal'], workspaceIds: [] }),
+      })
+    ).json()) as {
       id: string;
     };
 
@@ -133,6 +198,9 @@ describe('GET /me/account/exports/:exportId/file', () => {
     );
     const notReady = await app.request(`/${pending.id}/file`, { method: 'GET' });
     expect(notReady.status).toBe(409);
+
+    const stale = appWithSession(meAccountExportDownload, agedSession(userId, 600_000));
+    expect((await stale.request(`/${job.id}/file`, { method: 'GET' })).status).toBe(401);
 
     // An unknown export id → 404 Not Found.
     const unknown = await app.request('/01ARZ3NDEKTSV4RRFFQ69G5FAV/file', { method: 'GET' });

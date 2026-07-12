@@ -9,6 +9,7 @@
  * synchronously with `fflate` (zero-dependency, runs anywhere) so the export sweep can produce the
  * bytes in one call before handing them to the blob store.
  */
+import type { AccountExportScope } from '@docket/types';
 import { strToU8, zipSync } from 'fflate';
 
 /** The structured export payload collected for one user (the input to the archive). */
@@ -18,7 +19,7 @@ export interface ExportDocument {
   /** Identity: the user profile, linked external accounts, and authorized apps. */
   readonly identity: unknown;
   /** Cross-workspace personal data (notifications, observations, digests, plans, follows). */
-  readonly personal: Record<string, unknown>;
+  readonly personal: Record<string, unknown> | null;
   /** One entry per workspace the user belongs to, each with that workspace's work layer. */
   readonly memberships: readonly {
     readonly organization: {
@@ -28,6 +29,8 @@ export interface ExportDocument {
     };
     readonly work: Record<string, unknown[]>;
   }[];
+  /** The categories and workspaces included in this archive. */
+  readonly scope: AccountExportScope;
 }
 
 /** Generation metadata stamped into the README + manifest. */
@@ -72,7 +75,8 @@ function count(work: Record<string, unknown[]>, key: string): number {
 }
 
 /** Count the rows in a personal collection (0 when absent). */
-function countPersonal(personal: Record<string, unknown>, key: string): number {
+function countPersonal(personal: Record<string, unknown> | null, key: string): number {
+  if (personal === null) return 0;
   const value = personal[key];
   return Array.isArray(value) ? value.length : 0;
 }
@@ -91,9 +95,26 @@ function renderReadme(doc: ExportDocument, meta: ExportArchiveMeta): string {
     ? `${meta.name}${meta.email ? ` <${meta.email}>` : ''}`
     : (meta.email ?? 'your account');
 
+  const includesAccount = doc.scope.categories.includes('account');
+  const includesPersonal = doc.scope.categories.includes('personal');
+  const includesWorkspaces = doc.scope.categories.includes('workspaces');
+  const containsEverything =
+    includesAccount && includesPersonal && includesWorkspaces && doc.scope.allWorkspaces;
+  const included = [
+    includesAccount ? 'Account information' : null,
+    includesPersonal ? 'Personal Docket data' : null,
+    includesWorkspaces
+      ? doc.scope.allWorkspaces
+        ? 'All workspaces available when generated'
+        : `${doc.memberships.length} selected workspace${doc.memberships.length === 1 ? '' : 's'}`
+      : null,
+  ].filter((value): value is string => value !== null);
+
   return `# Your Docket data export
 
-This archive contains a complete copy of everything Docket holds for ${who}, at the moment it was generated.
+This archive contains ${
+    containsEverything ? 'a complete copy of everything Docket holds' : 'the data you selected'
+  } for ${who}, at the moment it was generated.
 
 - **Generated:** ${meta.generatedAt}
 - **Download link expires:** ${meta.expiresAt}
@@ -101,6 +122,7 @@ This archive contains a complete copy of everything Docket holds for ${who}, at 
 
 ## Summary
 
+- Included: ${included.join('; ')}
 - Workspaces: ${doc.memberships.length}
 - Projects: ${projects}
 - Tasks: ${tasks}
@@ -110,9 +132,9 @@ This archive contains a complete copy of everything Docket holds for ${who}, at 
 
 ## What's inside
 
-- \`account.json\` — your profile, the external accounts you've linked (Google, GitHub, …), and the apps you've authorized.
-- \`workspaces/\` — one file per workspace you belong to, each containing that workspace's work: projects, tasks, milestones, cycles, comments, updates, labels, and saved views.
-- \`personal.json\` — your cross-workspace personal data: notifications, activity (observations), daily plans, daily digests, and the things you follow.
+- ${includesAccount ? "`account.json` — your profile, the external accounts you've linked (Google, GitHub, …), and the apps you've authorized." : 'Account information was not selected.'}
+- ${includesWorkspaces ? "`workspaces/` — one file per selected workspace, each containing that workspace's work: projects, tasks, milestones, cycles, comments, updates, labels, and saved views." : 'Workspace data was not selected.'}
+- ${includesPersonal ? '`personal.json` — your cross-workspace personal data: notifications, activity (observations), daily plans, daily digests, and the things you follow.' : 'Personal Docket data was not selected.'}
 - \`manifest.json\` — a machine-readable summary (schema version, timestamps, counts).
 
 ## Notes
@@ -135,14 +157,13 @@ This archive contains a complete copy of everything Docket holds for ${who}, at 
 export function buildExportArchive(doc: ExportDocument, meta: ExportArchiveMeta): Uint8Array {
   const files: Record<string, Uint8Array> = {
     'README.md': strToU8(renderReadme(doc, meta)),
-    'account.json': strToU8(JSON.stringify(doc.identity, null, 2)),
-    'personal.json': strToU8(JSON.stringify(doc.personal, null, 2)),
     'manifest.json': strToU8(
       JSON.stringify(
         {
           schemaVersion: doc.schemaVersion,
           generatedAt: meta.generatedAt,
           expiresAt: meta.expiresAt,
+          scope: doc.scope,
           workspaceCount: doc.memberships.length,
         },
         null,
@@ -150,6 +171,12 @@ export function buildExportArchive(doc: ExportDocument, meta: ExportArchiveMeta)
       ),
     ),
   };
+  if (doc.scope.categories.includes('account') && doc.identity !== null) {
+    files['account.json'] = strToU8(JSON.stringify(doc.identity, null, 2));
+  }
+  if (doc.scope.categories.includes('personal') && doc.personal !== null) {
+    files['personal.json'] = strToU8(JSON.stringify(doc.personal, null, 2));
+  }
   for (const m of doc.memberships) {
     const base = exportSlug(m.organization.slug ?? m.organization.name);
     // Org slugs are globally unique, but suffix the id to be collision-proof either way.

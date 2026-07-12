@@ -13,6 +13,7 @@
  * import cycle resolves at query time, not module-init time.
  */
 import { sql } from 'drizzle-orm';
+import type { AccountExportScope } from '@docket/types';
 import {
   boolean,
   index,
@@ -107,6 +108,10 @@ export const accountExport = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
     status: accountExportStatus('status').notNull().default('pending'),
+    /** The requested archive categories and workspace snapshot. Null means a pre-scope legacy job. */
+    scope: jsonb('scope').$type<AccountExportScope>(),
+    /** `manual` for a user request; `account_deletion` for the mandatory full archive. */
+    origin: text('origin').notNull().default('manual'),
     blobKey: text('blob_key'),
     requestedAt: timestamp('requested_at').notNull().defaultNow(),
     readyAt: timestamp('ready_at'),

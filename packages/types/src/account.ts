@@ -28,6 +28,118 @@ export const AccountExportStatus = z
 /** Account-export-status value. */
 export type AccountExportStatus = z.infer<typeof AccountExportStatus>;
 
+/** A top-level category a person may include in a personal-data archive. */
+export const AccountExportCategory = z
+  .enum(['account', 'personal', 'workspaces'])
+  .describe(
+    'A selectable personal-data export category: account identity and connected apps, cross-workspace personal data, or selected Docket workspaces.',
+  );
+/** Account-export-category value. */
+export type AccountExportCategory = z.infer<typeof AccountExportCategory>;
+
+/** Why an archive was requested. */
+export const AccountExportOrigin = z
+  .enum(['manual', 'account_deletion'])
+  .describe(
+    'Whether the person created the archive from Export data or Docket created a complete archive while account deletion was scheduled.',
+  );
+/** Account-export-origin value. */
+export type AccountExportOrigin = z.infer<typeof AccountExportOrigin>;
+
+/** One workspace included in a persisted archive scope. */
+export const AccountExportWorkspace = z
+  .object({
+    /** Stable workspace id, validated as one the caller belonged to when the export was requested. */
+    id: z.string().describe('Stable workspace id.'),
+    /** Workspace name snapshot, retained so export history stays understandable after a rename. */
+    name: z.string().describe('Workspace name when the export was requested.'),
+  })
+  .meta({ id: 'AccountExportWorkspace', description: 'A workspace selected for one archive.' });
+/** Account-export-workspace value. */
+export type AccountExportWorkspace = z.infer<typeof AccountExportWorkspace>;
+
+/** The persisted, human-readable scope of one personal-data archive. */
+export const AccountExportScope = z
+  .object({
+    /** Categories included in the archive. */
+    categories: z
+      .array(AccountExportCategory)
+      .min(1)
+      .describe('Selected top-level categories, never empty.'),
+    /** Named workspace snapshot for a selective workspace export. */
+    workspaces: z
+      .array(AccountExportWorkspace)
+      .describe('Workspaces selected for this archive; empty when workspace data is excluded.'),
+    /** True only for legacy/full deletion exports whose workspaces were not snapshotted. */
+    allWorkspaces: z
+      .boolean()
+      .describe('Whether all workspaces available while the archive is generated are included.'),
+  })
+  .superRefine((scope, ctx) => {
+    const includesWorkspaces = scope.categories.includes('workspaces');
+    if (includesWorkspaces && !scope.allWorkspaces && scope.workspaces.length === 0) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['workspaces'],
+        message: 'Select at least one workspace when exporting workspace data.',
+      });
+    }
+    if (!includesWorkspaces && (scope.allWorkspaces || scope.workspaces.length > 0)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['workspaces'],
+        message: 'Workspace selections require the workspaces category.',
+      });
+    }
+  })
+  .meta({ id: 'AccountExportScope', description: 'The persisted scope of one data archive.' });
+/** Account-export-scope value. */
+export type AccountExportScope = z.infer<typeof AccountExportScope>;
+
+/** The client request for a selective personal-data archive. */
+export const AccountExportRequest = z
+  .object({
+    /** Categories the person wants in the archive. */
+    categories: z.array(AccountExportCategory).min(1),
+    /** Workspace ids, required only when the workspaces category is selected. */
+    workspaceIds: z.array(z.string()),
+  })
+  .superRefine((request, ctx) => {
+    const includesWorkspaces = request.categories.includes('workspaces');
+    if (includesWorkspaces && request.workspaceIds.length === 0) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['workspaceIds'],
+        message: 'Select at least one workspace when exporting workspace data.',
+      });
+    }
+    if (!includesWorkspaces && request.workspaceIds.length > 0) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['workspaceIds'],
+        message: 'Workspace selections require the workspaces category.',
+      });
+    }
+  })
+  .meta({
+    id: 'AccountExportRequest',
+    description: 'Requested categories and workspaces for a new archive.',
+  });
+/** Account-export-request value. */
+export type AccountExportRequest = z.infer<typeof AccountExportRequest>;
+
+/** Selectable archive settings and the caller's current workspace choices. */
+export const AccountExportOptionsOut = z
+  .object({
+    /** Address that receives the ready-to-download notification. */
+    deliveryEmail: z.email().describe('Email address used for archive-ready notifications.'),
+    /** Current workspaces the caller can choose for a selective archive. */
+    workspaces: z.array(AccountExportWorkspace).describe('Current selectable workspaces.'),
+  })
+  .meta({ id: 'AccountExportOptionsOut', description: 'Selectable data-export options.' });
+/** Account-export-options value. */
+export type AccountExportOptionsOut = z.infer<typeof AccountExportOptionsOut>;
+
 /**
  * A shared organization the user must resolve before deleting their account.
  *
@@ -82,6 +194,10 @@ export const AccountExportOut = z
     status: AccountExportStatus.describe(
       "The export job's current lifecycle status (see AccountExportStatus).",
     ),
+    /** Why the archive was requested. */
+    origin: AccountExportOrigin.describe('Whether this is a manual or deletion-triggered archive.'),
+    /** The data categories and workspaces this archive contains. */
+    scope: AccountExportScope.describe('The persisted scope of this archive.'),
     /** ISO-8601 instant the export was requested. */
     requestedAt: z.string().describe('ISO-8601 instant the export was requested (queued).'),
     /** ISO-8601 instant the archive became downloadable, when ready; else null. */

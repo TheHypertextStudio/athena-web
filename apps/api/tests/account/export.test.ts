@@ -1,7 +1,17 @@
+import { strFromU8, unzipSync } from 'fflate';
 import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
-import { captureOutbox, getDb, one, seedUserWithHub } from '../support/routes-harness';
+import type { AccountExportScope } from '@docket/types';
+
+import {
+  addMember,
+  captureOutbox,
+  getDb,
+  one,
+  seedOrg,
+  seedUserWithHub,
+} from '../support/routes-harness';
 
 const NOW = '2026-02-01T00:00:00.000Z';
 
@@ -9,7 +19,8 @@ const NOW = '2026-02-01T00:00:00.000Z';
 async function setup() {
   const schema = await getDb();
   const exportMod = await import('../../src/account/export');
-  return { schema, db: schema.db, ...exportMod, outbox: await captureOutbox() };
+  const { buildExportArchive } = await import('../../src/account/archive');
+  return { schema, db: schema.db, ...exportMod, buildExportArchive, outbox: await captureOutbox() };
 }
 
 beforeAll(async () => {
@@ -30,6 +41,47 @@ describe('collectAccountExport', () => {
     expect(doc.identity.user?.id).toBe(userId);
     expect(userRow?.id).toBe(userId);
     expect(doc.personal.notifications).toHaveLength(1);
+  });
+
+  it('omits unselected account and workspace files from a personal-only export', async () => {
+    const { db, schema, buildExportArchive, collectAccountExport } = await setup();
+    const userId = await seedUserWithHub(db, schema, 'Selective');
+    const { document } = await collectAccountExport(db, userId, {
+      categories: ['personal'],
+      workspaces: [],
+      allWorkspaces: false,
+    });
+
+    expect(document.identity).toBeNull();
+    expect(document.memberships).toEqual([]);
+    expect(document.personal).not.toBeNull();
+
+    const files = unzipSync(
+      buildExportArchive(document, {
+        generatedAt: NOW,
+        expiresAt: '2026-02-15T00:00:00.000Z',
+        name: 'Selective',
+        email: 'ada@example.com',
+      }),
+    );
+    expect(Object.keys(files).sort()).toEqual(['README.md', 'manifest.json', 'personal.json']);
+    expect(strFromU8(files['README.md']!)).toContain('the data you selected');
+  });
+
+  it('omits a workspace when the membership is suspended before the worker collects it', async () => {
+    const { db, schema, collectAccountExport } = await setup();
+    const userId = await seedUserWithHub(db, schema, 'Suspended');
+    const orgId = await seedOrg(db, schema);
+    const actorId = await addMember(db, schema, orgId, userId);
+    const scope: AccountExportScope = {
+      categories: ['workspaces'],
+      workspaces: [{ id: orgId, name: 'Former workspace' }],
+      allWorkspaces: false,
+    };
+
+    expect((await collectAccountExport(db, userId, scope)).document.memberships).toHaveLength(1);
+    await db.update(schema.actor).set({ status: 'suspended' }).where(eq(schema.actor.id, actorId));
+    expect((await collectAccountExport(db, userId, scope)).document.memberships).toEqual([]);
   });
 });
 
@@ -99,6 +151,8 @@ describe('sweepAccountExports', () => {
 
     const sent = outbox.find((m) => m.to === email && m.subject.includes('export'));
     if (!sent) throw new Error('Expected export-ready email');
+    expect(sent.text).toContain(`/exports/${job.id}`);
+    expect(sent.text).not.toContain(`/file`);
     const intent = await notificationIntentForSubject(schema, sent.subject, userId);
     expect(intent).toMatchObject({
       senderType: 'system',

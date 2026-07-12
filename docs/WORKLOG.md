@@ -1,7 +1,7 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-07-10
+> **Last Updated**: 2026-07-12
 
 ---
 
@@ -876,6 +876,25 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 ---
 
 ## Completed Tasks
+
+### [DX-COMMIT-001] Enforce feature-oriented commit messages
+
+- **Completed**: 2026-07-12
+- **Priority**: P1
+- **Summary**: Restricted authored commits to `feat`, `fix`, and `chore`; required every normal
+  commit to include at least 100 non-comment characters of plain-language context; and aligned
+  branch and contributor guidance around coherent product slices. Supporting tests, documentation,
+  refactors, build changes, CI changes, and performance work now travel with the feature or fix they
+  serve instead of creating process-oriented history.
+- **Files Changed**: `AGENTS.md`, `docs/contributing/workflow.md`, `package.json`,
+  `scripts/validate-commit-message.mjs`, `tests/tooling/commit-message.test.ts`, and this log.
+- **Validation**: `pnpm test:tooling` passes 25/25 tests, covering all three allowed types, rejected
+  legacy types, missing and placeholder bodies, free-form Markdown sections, formatting, and the
+  existing interactive bootstrap suite. Repository typecheck and lint each pass 17/17 package
+  tasks, and `git diff --check` reports no whitespace errors.
+- **Learnings**: A minimum-substance gate provides useful enforcement without forcing authors into
+  a mechanical body template. Plain prose should be the default, with Markdown sections reserved
+  for changes whose complexity benefits from additional structure.
 
 ### [PM-AUDIT-001] Multi-organization project-management design audit
 

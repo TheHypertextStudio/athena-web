@@ -1,7 +1,7 @@
 # AGENTS.md - Project Athena Agent Guidelines
 
-> **Version**: 1.0.1
-> **Last Updated**: 2026-06-30
+> **Version**: 1.1.0
+> **Last Updated**: 2026-07-12
 > **Applies To**: All AI coding agents working on Project Athena
 
 This document defines the operational framework for AI agents contributing to Project Athena. All agents MUST adhere to these guidelines to ensure consistent, high-quality, autonomous development.
@@ -160,30 +160,40 @@ All commits MUST follow [Conventional Commits](https://www.conventionalcommits.o
 ```
 <type>(<scope>): <description>
 
-[optional body]
+A plain-language explanation of the change, its motivation, and any important
+implementation or operational context. Use Markdown sections when they make a
+longer explanation easier to scan.
 
 [optional footer(s)]
 ```
 
 **Types:**
 
-- `feat`: New feature
-- `fix`: Bug fix
-- `docs`: Documentation only
-- `style`: Formatting, no code change
-- `refactor`: Code restructuring
-- `perf`: Performance improvement
-- `test`: Adding/fixing tests
-- `chore`: Maintenance tasks
-- `ci`: CI/CD changes
+- `feat`: A new product capability or meaningful extension to an existing feature
+- `fix`: A correction to broken or incorrect behavior
+- `chore`: Repository maintenance that does not change product behavior
+
+These are the only authored commit types. Documentation, tests, refactors, styles, build changes,
+CI changes, and performance work belong in the `feat` or `fix` commit for the product slice they
+support. Use `chore` when that work is standalone maintenance.
+
+Every normal commit requires a substantive body with at least 100 non-comment characters. Bodies
+must use plain language rather than a mandatory template. Explain what changed and why it belongs
+in the feature-oriented slice; use larger Markdown sections only when they improve readability.
 
 **Examples:**
 
 ```
-feat(api): add user authentication endpoints
-fix(calendar): resolve timezone offset calculation
-docs(readme): update installation instructions
-refactor(tasks): extract validation into shared utility
+feat(auth): Add Google account linking
+
+Connect authenticated users to Google Calendar through the existing integrations surface. The
+same feature slice includes its provider adapter, tests, setup documentation, and deployment
+configuration so the capability can be shipped and reviewed as one unit.
+
+fix(calendar): Resolve timezone offsets in event display
+
+Preserve the source calendar timezone while normalizing event boundaries. This prevents imported
+events from shifting when the viewer and connected Google account use different timezones.
 ```
 
 ### Commit Frequency
@@ -198,9 +208,12 @@ refactor(tasks): extract validation into shared utility
 main
   └── feature/<ticket-id>-<description>
   └── fix/<ticket-id>-<description>
-  └── docs/<description>
-  └── refactor/<description>
+  └── chore/<description>
 ```
+
+Development is feature-oriented. A branch and its commits should deliver one coherent product
+slice, including the implementation, tests, documentation, migrations, and operational changes
+needed to ship it. Do not split supporting work into process-oriented branches or commits.
 
 ### Linear History Requirement
 
@@ -227,8 +240,8 @@ Repository enforcement:
 Commit behavior:
 
 1. Commit atomically after each completed task
-2. Use Conventional Commits format
-3. Include meaningful descriptions
+2. Use only `feat`, `fix`, or `chore` Conventional Commit types
+3. Include a substantive plain-language body for every normal commit
 4. No user approval required (project override)
 
 ---

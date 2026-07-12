@@ -84,8 +84,6 @@ SENTRY_DSN=https://...
 main                           # Production-ready code
 ├── feature/<ticket>-<desc>    # New features
 ├── fix/<ticket>-<desc>        # Bug fixes
-├── docs/<desc>                # Documentation
-├── refactor/<desc>            # Code restructuring
 └── chore/<desc>               # Maintenance
 ```
 
@@ -94,10 +92,13 @@ main                           # Production-ready code
 ```
 feature/AUTH-001-google-signin
 fix/TASK-123-deadline-timezone
-docs/api-authentication
-refactor/task-service-cleanup
 chore/update-dependencies
 ```
+
+Branches are organized around product features and fixes, not engineering activity. Keep the
+implementation, tests, documentation, migrations, and deployment changes for a product slice on
+the same branch. Use `chore/` only for standalone maintenance that does not change product
+behavior.
 
 ### Branch Rules
 
@@ -177,19 +178,21 @@ Follow these guidelines:
 
 ### 3. Commit Changes
 
-Use [Conventional Commits](https://www.conventionalcommits.org/):
+Use [Conventional Commits](https://www.conventionalcommits.org/) with a message file so the body is
+easy to write and review:
 
 ```bash
-# Good commit messages
-git commit -m "feat(auth): add Google OAuth sign-in flow"
-git commit -m "fix(calendar): resolve timezone offset in event display"
-git commit -m "docs(api): document authentication endpoints"
-git commit -m "test(tasks): add unit tests for priority calculation"
+git commit -F /tmp/docket-commit-message.txt
+```
 
-# Bad commit messages
-git commit -m "fix bug"
-git commit -m "WIP"
-git commit -m "changes"
+Example message file:
+
+```text
+feat(auth): Add Google OAuth account linking
+
+Connect authenticated users to Google Calendar through the integrations surface. The feature
+includes provider configuration, callback handling, tests, and operator documentation so it can
+be deployed and reviewed as one coherent product slice.
 ```
 
 ### Commit Message Format
@@ -197,7 +200,8 @@ git commit -m "changes"
 ```
 <type>(<scope>): <description>
 
-[optional body]
+A substantive plain-language body that explains the change, its motivation,
+and any important implementation or operational context.
 
 [optional footer]
 ```
@@ -205,15 +209,9 @@ git commit -m "changes"
 **Types:**
 | Type | Description |
 |------|-------------|
-| `feat` | New feature |
-| `fix` | Bug fix |
-| `docs` | Documentation |
-| `style` | Formatting |
-| `refactor` | Code restructuring |
-| `perf` | Performance |
-| `test` | Tests |
-| `chore` | Maintenance |
-| `ci` | CI/CD |
+| `feat` | A new product capability or meaningful extension |
+| `fix` | A correction to broken or incorrect behavior |
+| `chore` | Standalone maintenance without product behavior changes |
 
 **Scopes:**
 
@@ -223,21 +221,27 @@ The source of truth is the repo-wide `COMMIT_SCOPES.txt` file. Process scopes su
 `deploy`, `deps`, `pnpm`, `release`, and `build` are not valid scopes unless they are deliberately
 added to that file. For repo-wide maintenance, omit the scope.
 
-Examples:
+These are the only allowed authored types. Documentation, tests, refactors, styles, build changes,
+CI changes, and performance work belong in the `feat` or `fix` commit for the feature they support.
+Use `chore` only when that work is standalone maintenance.
 
-```bash
-git commit -m "feat(auth): add passkey recovery"
-git commit -m "feat(dx): streamline repository bootstrap"
-git commit -m "fix(integrations): preserve connector OAuth state"
-git commit -m "chore: update repository maintenance docs"
+Example of a complete message file:
+
+```text
+fix(integrations): Preserve connector OAuth state
+
+Retain the signed state value through the provider callback instead of reconstructing it from
+request parameters. This closes an account-linking failure without changing the integration's
+public contract.
 ```
 
 The `commit-msg` hook enforces the `COMMIT_SCOPES.txt` allowlist for any scoped commit. It also
 sentence-cases the commit description after the type/scope prefix and best-effort reflows body
 paragraphs and list items to 72 columns. Long unbreakable tokens such as URLs, paths, and hashes are
 preserved instead of rejected. Code fences, comments, trailers, and generated Git messages are left
-alone. Commits that touch more than one file must include a body with at least 20 non-comment
-characters.
+alone. Every normal commit must use `feat`, `fix`, or `chore` and include a plain-language body with
+at least 100 non-comment characters. The body may use ordinary Markdown paragraphs, lists, and
+sections; no fixed heading template is required.
 
 ### 4. Run Validations
 

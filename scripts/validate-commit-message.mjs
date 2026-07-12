@@ -1,24 +1,11 @@
 #!/usr/bin/env node
 
 import { readFileSync, writeFileSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
 
 const bodyLineWidth = 72;
-const minimumBodyCharacters = 20;
+const minimumBodyCharacters = 100;
 
-const allowedTypes = new Set([
-  'build',
-  'chore',
-  'ci',
-  'docs',
-  'feat',
-  'fix',
-  'perf',
-  'refactor',
-  'revert',
-  'style',
-  'test',
-]);
+const allowedTypes = new Set(['chore', 'feat', 'fix']);
 
 const allowedScopes = new Set(
   readFileSync(new URL('../COMMIT_SCOPES.txt', import.meta.url), 'utf8')
@@ -58,28 +45,17 @@ function fail(reason) {
   console.error('');
   console.error('Use Conventional Commits: <type>(<scope>): <description>');
   console.error('Scope is optional, but if present it must be a product/domain scope.');
+  console.error('Every normal commit requires a substantive plain-language body.');
   console.error('');
   console.error(`Allowed types: ${[...allowedTypes].join(', ')}`);
   console.error(`Allowed scopes: ${[...allowedScopes].join(', ')}`);
   console.error('');
   console.error('Examples:');
-  console.error('  feat(auth): add passkey recovery');
-  console.error('  fix(integrations): preserve connector OAuth state');
-  console.error('  chore: update repository maintenance docs');
+  console.error('  fix(integrations): Reject newline-tainted OAuth client ids');
+  console.error('');
+  console.error('  Normalize operator input before writing provider secrets.');
+  console.error('  Hidden newlines change OAuth identifiers and break account linking.');
   process.exit(1);
-}
-
-function changedFileCount() {
-  try {
-    return execFileSync('git', ['diff', '--cached', '--name-only'], {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    })
-      .split('\n')
-      .filter(Boolean).length;
-  } catch {
-    return 0;
-  }
 }
 
 function isComment(line) {
@@ -246,6 +222,12 @@ function hasNontrivialBody(raw) {
   return bodyText(raw).length >= minimumBodyCharacters;
 }
 
+function hasBodySeparator(raw) {
+  const lines = raw.replace(/\n$/, '').split('\n');
+  const subjectIndex = lines.findIndex((line) => line.trim() && !isComment(line));
+  return subjectIndex !== -1 && lines[subjectIndex + 1]?.trim() === '';
+}
+
 function validateBodyLineLength(raw) {
   const lines = raw.replace(/\n$/, '').split('\n');
   const subjectIndex = lines.findIndex((line) => line.trim() && !isComment(line));
@@ -295,12 +277,13 @@ if (scope && !allowedScopes.has(scope)) {
 }
 
 const formattedMessage = formatCommitMessage(message);
-const touchesMultipleFiles = changedFileCount() > 1;
 
-if (touchesMultipleFiles && !hasNontrivialBody(formattedMessage)) {
-  fail(
-    `commits touching multiple files need a body with at least ${minimumBodyCharacters} non-comment characters.`,
-  );
+if (!hasBodySeparator(formattedMessage)) {
+  fail('subject and body must be separated by a blank line.');
+}
+
+if (!hasNontrivialBody(formattedMessage)) {
+  fail(`every commit needs a body with at least ${minimumBodyCharacters} non-comment characters.`);
 }
 
 if (formattedMessage !== message) {

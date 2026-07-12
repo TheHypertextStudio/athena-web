@@ -256,7 +256,7 @@ export const CORE_VARS: readonly VarSpec[] = [
     targets: ['api'],
     required: false,
     zod: authServer.LINEAR_CLIENT_ID,
-    where: 'Linear OAuth2 application client id (genericOAuth)',
+    where: 'Linear OAuth application client id (native Better Auth social provider)',
   },
   {
     name: 'LINEAR_CLIENT_SECRET',

@@ -24,6 +24,12 @@ jobs:
           workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
           service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
 
+      - name: Validate production Secret Manager bindings
+        env:
+          GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+          API_SECRET_BINDINGS: ${{ vars.API_SECRET_BINDINGS }}
+        run: npx -y tsx scripts/production-secrets.ts
+
       - uses: docker/setup-buildx-action@v4
 
       - name: Configure Docker for Artifact Registry

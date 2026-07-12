@@ -331,6 +331,38 @@ describe('api composition', () => {
     await expect(import('../src/api')).rejects.toThrow('Invalid environment variables');
   });
 
+  describe('production credential policy', () => {
+    const productionLinearEnv = {
+      ...validApiEnv(),
+      APP_MODE: 'production',
+      LINEAR_CLIENT_ID: 'linear-client-id',
+      LINEAR_CLIENT_SECRET: 'linear-client-secret',
+      LINEAR_WEBHOOK_SECRET: 'linear-webhook-secret',
+    };
+
+    it('requires all Linear production credentials', async () => {
+      for (const [key, value] of Object.entries(productionLinearEnv)) vi.stubEnv(key, value);
+      vi.stubEnv('LINEAR_CLIENT_SECRET', undefined);
+      await expect(import('../src/api')).rejects.toThrow(
+        'LINEAR_CLIENT_SECRET is required for the production Linear integration',
+      );
+    });
+
+    it('rejects placeholder values in any supplied production environment string', async () => {
+      for (const [key, value] of Object.entries(productionLinearEnv)) vi.stubEnv(key, value);
+      vi.stubEnv('LINEAR_CLIENT_SECRET', 'placeholder');
+      await expect(import('../src/api')).rejects.toThrow(
+        'LINEAR_CLIENT_SECRET must not contain an empty or placeholder value',
+      );
+    });
+
+    it('accepts real Linear credentials in production', async () => {
+      for (const [key, value] of Object.entries(productionLinearEnv)) vi.stubEnv(key, value);
+      const mod = await import('../src/api');
+      expect(mod.env.LINEAR_CLIENT_ID).toBe('linear-client-id');
+    });
+  });
+
   it('skips validation entirely when SKIP_ENV_VALIDATION is set', async () => {
     vi.stubEnv('SKIP_ENV_VALIDATION', '1');
     // No required vars present, but skipping means no throw + no cross-field check.

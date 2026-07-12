@@ -9,6 +9,7 @@
  */
 import { createEnv } from '@t3-oss/env-core';
 
+import { isRealValue } from './real-value';
 import {
   agentServer,
   authServer,
@@ -107,6 +108,20 @@ function assertCrossFieldRules(e: typeof env): void {
 
   if (e.MCP_TASKS_ENABLED && !e.MCP_SESSION_STORE_URL) {
     fail('MCP_TASKS_ENABLED=true requires MCP_SESSION_STORE_URL.');
+  }
+
+  if (e.APP_MODE === 'production') {
+    for (const [name, value] of Object.entries(e)) {
+      if (typeof value === 'string' && !isRealValue(value)) {
+        fail(`${name} must not contain an empty or placeholder value.`);
+      }
+    }
+    for (const name of ['LINEAR_CLIENT_ID', 'LINEAR_CLIENT_SECRET', 'LINEAR_WEBHOOK_SECRET']) {
+      const value = e[name as keyof typeof e];
+      if (typeof value !== 'string' || !isRealValue(value)) {
+        fail(`${name} is required for the production Linear integration.`);
+      }
+    }
   }
 }
 

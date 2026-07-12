@@ -7,6 +7,50 @@
 
 ## Active Tasks
 
+### [AUTH-PROD-002] Correct post-verification duplicate-account failure
+
+- **Status**: REVIEW
+- **Started**: 2026-07-12
+- **Priority**: P0
+- **Description**: Stop production signup from reporting a service outage after email verification
+  when the verified address already belongs to an account with a passkey or linked social identity.
+- **Plan**:
+  1. Trace the exact email-verification → passkey-registration response path in the deployed code.
+  2. Return a stable actionable 4xx code for an existing account instead of leaking a plain error
+     through Better Auth as HTTP 500.
+  3. Exercise the real auth handler in the ATO regression test and confirm the web error mapper
+     renders the existing-account guidance.
+  4. Validate, deploy through the gated production workflow, and repeat the live signup journey.
+- **Confirmed Root Cause**:
+  - `resolvePasskeyUser` intentionally rejected verified signup for an existing credentialed
+    account, but threw a plain `Error`. Better Auth serialized that as HTTP 500; the web passkey
+    mapper correctly classified an unknown 5xx as a temporary service outage, hiding the actual
+    "sign in instead" outcome.
+- **Risks**:
+  - Preserve the account-takeover defense: an email challenge must never attach another passkey to
+    an account that already has a passkey or linked social identity.
+  - Keep the verified signup intent single-use on rejection.
+- **Implementation**:
+  - `resolvePasskeyUser` now raises Better Auth's typed `BAD_REQUEST` API error with the shared
+    `ERROR_AUTHENTICATOR_PREVIOUSLY_REGISTERED` code. The existing web mapper turns that code into
+    "You already have an account with this email. Sign in instead."
+  - The ATO regression now calls `/passkey/generate-register-options` through the real auth handler
+    and asserts HTTP 400 plus the stable code, while still confirming no second credential appears.
+- **Validation Progress**:
+  - Auth tests 53/53 and web tests 301/301 pass; the latter includes the duplicate-account copy.
+  - Repository typecheck 17/17, lint 17/17, and tests 17/17 pass (API 1,198/1,198).
+  - The production build passes 3/3 with `NODE_ENV=production`. The first invocation inherited the
+    checkout's `.env.local` non-production `NODE_ENV` and reproduced an unrelated admin prerender
+    failure; pinning the production mode used by deployment removed it without source changes.
+- **Retrospective**:
+  - The helper-only security assertion proved rejection but not its HTTP semantics. Exercising the
+    public plugin endpoint is what catches accidental 500s and protects the user-facing contract.
+- **Remaining Acceptance**:
+  - Promote the commit through the gated workflow, verify the deployed revision, and repeat the
+    existing-email signup path against production.
+
+---
+
 ### [PROD-DEPLOY-002] Close final production promotion blockers
 
 - **Status**: IN_PROGRESS

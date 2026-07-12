@@ -18,6 +18,7 @@ import {
 } from '@docket/db';
 import { isRealValue } from '@docket/env';
 import type { Mailer } from '@docket/mail';
+import { PREVIOUSLY_REGISTERED_CODE } from '@docket/types';
 import { type BetterAuthOptions, type BetterAuthPlugin } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { APIError, createAuthMiddleware, getSessionFromCtx } from 'better-auth/api';
@@ -179,7 +180,10 @@ export async function resolvePasskeyUser(
     const hasSocial = (existing.accounts?.length ?? 0) > 0;
     const hasPasskey = (await adapter.countPasskeys(existing.user.id)) > 0;
     if (hasSocial || hasPasskey) {
-      throw new Error('passkey sign-up: an account already exists for this email');
+      throw new APIError('BAD_REQUEST', {
+        code: PREVIOUSLY_REGISTERED_CODE,
+        message: 'An account already exists for this email.',
+      });
     }
     return { id: existing.user.id, name: existing.user.name };
   }

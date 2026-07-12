@@ -455,7 +455,6 @@ describe('auth config', () => {
   });
 
   it('sign-up challenge: even a fully-verified code cannot graft a passkey onto an existing account that has one (ATO closed end-to-end)', async () => {
-    const { resolvePasskeyUser } = await import('../src/index');
     const { db, passkey, user } = await import('@docket/db');
     const { instance, post } = await testAuthWithCapture();
 
@@ -480,9 +479,18 @@ describe('auth config', () => {
     const verified = await post('/sign-up/verify-code', { email, code: code! });
     const { intent } = (await verified.json()) as { intent: string };
 
-    // Registration still refuses to bind the new passkey to the victim's existing account.
-    const adapter = await liveResolveAdapter(instance);
-    await expect(resolvePasskeyUser(adapter, intent)).rejects.toThrow('already exists');
+    // Registration still refuses to bind the new passkey to the victim's existing account. Prove
+    // the public handler contract too: this is an actionable 400, not a generic 500 that the web
+    // client would misreport as a service outage.
+    const registration = await instance.handler(
+      new Request(
+        `http://localhost/api/auth/passkey/generate-register-options?context=${encodeURIComponent(intent)}`,
+      ),
+    );
+    expect(registration.status).toBe(400);
+    expect(await registration.json()).toMatchObject({
+      code: 'ERROR_AUTHENTICATOR_PREVIOUSLY_REGISTERED',
+    });
 
     // The victim still has exactly their original single passkey — nothing grafted.
     const creds = await db.select().from(passkey);

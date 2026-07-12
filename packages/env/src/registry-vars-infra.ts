@@ -117,7 +117,8 @@ export const INFRA_VARS: readonly VarSpec[] = [
     targets: ['api'],
     required: false,
     zod: opsServer.MAIL_FROM,
-    where: 'From-address for transactional email, e.g. "Docket <no-reply@docket.dev>".',
+    where:
+      'From-address for transactional email, e.g. "Docket <no-reply@service.hypertext.studio>".',
   },
   {
     name: 'SMS_ENDPOINT',

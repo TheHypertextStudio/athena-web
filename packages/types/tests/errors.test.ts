@@ -32,7 +32,7 @@ describe('Problem', () => {
 
   it('parses a full problem with detail + fieldErrors', () => {
     const parsed = Problem.parse({
-      type: 'https://docket.dev/problems/validation',
+      type: 'about:blank',
       title: 'Validation failed',
       status: 422,
       detail: 'name is required',

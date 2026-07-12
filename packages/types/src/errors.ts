@@ -108,7 +108,7 @@ export const Problem = z.object({
   type: z
     .string()
     .describe(
-      'A URI reference identifying the problem type, of the form `https://docket.dev/problems/{code}`.',
+      'A URI reference identifying the problem type. Docket currently uses the RFC standard `about:blank`; the closed `code` field carries the machine-readable classification.',
     ),
   title: z
     .string()

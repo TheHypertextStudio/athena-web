@@ -153,7 +153,7 @@ type StaffSeedDatabase = Database | PgliteDatabase<typeof fullSchema>;
  *
  * @example
  * ```ts
- * const r = await grantStaffByEmail(db, { email: 'op@docket.dev', role: 'superadmin' });
+ * const r = await grantStaffByEmail(db, { email: 'op@hypertext.studio', role: 'superadmin' });
  * if (r.status === 'no-user') console.log('Sign in once, then re-run.');
  * ```
  */

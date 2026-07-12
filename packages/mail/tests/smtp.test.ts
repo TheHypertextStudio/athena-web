@@ -209,7 +209,7 @@ describe('SmtpMailer', () => {
     host: 'localhost',
     port: 1025,
     secure: false,
-    from: 'Docket <no-reply@docket.dev>',
+    from: 'Docket <no-reply@service.hypertext.studio>',
   };
 
   it('builds the transport from config via the injected factory once', () => {
@@ -228,7 +228,7 @@ describe('SmtpMailer', () => {
     await mailer.send({ to: 'a@b.com', subject: 'Welcome', html: '<p>hi</p>', text: 'hi' });
     expect(sent).toEqual([
       {
-        from: 'Docket <no-reply@docket.dev>',
+        from: 'Docket <no-reply@service.hypertext.studio>',
         to: 'a@b.com',
         subject: 'Welcome',
         html: '<p>hi</p>',

@@ -7,6 +7,40 @@
 
 ## Active Tasks
 
+### [CAL-UX-003] Harden scheduling interactions to calendar-product parity
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-07-13
+- **Priority**: P0
+- **Description**: Bring the shared Agenda/Calendar canvas's time-axis accuracy, collision layout,
+  direct manipulation, visual hierarchy, and edge-case behavior to the interaction bar established
+  by Google Calendar and Sunsama without introducing fixed date views.
+- **Observed Gaps**:
+  - The live canvas gives every timed item full lane width, so concurrent events can hide one
+    another even though a legacy, unused collision helper has tests.
+  - Hour labels remain fixed at one English 12-hour label per hour across the entire zoom range;
+    minor ticks do not communicate active snap precision, and mixed-timezone people lanes do not
+    align by instant.
+  - Drag/resize emits valid basic callbacks but lacks live preview, pointer cancellation, target-lane
+    permission checks, stable native-drag arbitration, and coverage for both resize edges.
+  - Short events can mutate after a zero-distance resize, and Agenda can collapse an editable
+    multi-day item to one clipped day.
+  - The prior implementation has no browser recording or interactive visual proof.
+- **Plan**:
+  1. Introduce a shared DST-aware display-time axis, adaptive tick policy, and zoom shortcuts.
+  2. Integrate deterministic collision columns into the production SchedulingCanvas.
+  3. Replace pointer-up-only gestures with live, cancellable move and start/end resize previews.
+  4. Unify source/target permission and multi-day editability across Calendar and Agenda.
+  5. Polish event density, hover/focus/read-only states, current-time presentation, and responsive
+     controls.
+  6. Verify pure geometry, component gestures, consumer mutation payloads, repository gates, and a
+     recorded real-browser interaction pass when a browser binding is available.
+- **Design**: `docs/superpowers/specs/2026-07-13-scheduling-interaction-parity-design.md`
+- **Validation Progress**: Baseline focused scheduling/calendar tests pass 28/28. Browser discovery
+  still reports no available binding in this thread, so interactive visual proof remains pending.
+
+---
+
 ### [BUILD-REPAIR-001] Restore clean repository build contracts
 
 - **Status**: COMPLETED

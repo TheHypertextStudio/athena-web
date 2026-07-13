@@ -115,7 +115,6 @@ export default function CalendarClient(): JSX.Element {
         createControl={
           <CreateBlockForm
             displayTimezone={displayTimezone}
-            rangeKeys={[queryKeys.calendarItems(dateAxis.startISO, dateAxis.endISO)]}
             layers={dateAxis.layers}
             preferences={preferences}
             selection={selection}

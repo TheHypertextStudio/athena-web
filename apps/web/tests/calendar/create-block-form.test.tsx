@@ -21,11 +21,11 @@ describe('CreateBlockForm display timezone', () => {
   it('rebases an open untouched toolbar draft and preserves its exact seed instants', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-07-01T16:10:00Z'));
-    const result = render(<CreateBlockForm displayTimezone="UTC" rangeKeys={[]} />);
+    const result = render(<CreateBlockForm displayTimezone="UTC" />);
 
     fireEvent.click(screen.getByRole('button', { name: 'New' }));
     expect(screen.getByLabelText('Starts')).toHaveValue('2026-07-01T16:30');
-    result.rerender(<CreateBlockForm displayTimezone="Asia/Kathmandu" rangeKeys={[]} />);
+    result.rerender(<CreateBlockForm displayTimezone="Asia/Kathmandu" />);
     expect(screen.getByLabelText('Starts')).toHaveValue('2026-07-01T22:15');
     expect(screen.getByLabelText('Ends')).toHaveValue('2026-07-01T22:45');
 
@@ -35,13 +35,10 @@ describe('CreateBlockForm display timezone', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create event' }));
     expect(mutate).toHaveBeenCalledWith(
       {
-        input: {
-          intent: 'event',
-          title: 'Hydrated toolbar draft',
-          startsAt: '2026-07-01T16:30:00Z',
-          endsAt: '2026-07-01T17:00:00.000Z',
-        },
-        rangeKeys: [],
+        intent: 'event',
+        title: 'Hydrated toolbar draft',
+        startsAt: '2026-07-01T16:30:00Z',
+        endsAt: '2026-07-01T17:00:00.000Z',
       },
       expect.any(Object),
     );
@@ -52,17 +49,13 @@ describe('CreateBlockForm display timezone', () => {
       startsAt: '2026-07-01T16:00:00.000Z',
       endsAt: '2026-07-01T17:00:00.000Z',
     };
-    const result = render(
-      <CreateBlockForm displayTimezone="UTC" rangeKeys={[]} selection={selection} />,
-    );
+    const result = render(<CreateBlockForm displayTimezone="UTC" selection={selection} />);
     expect(await screen.findByLabelText('Starts')).toHaveValue('2026-07-01T16:00');
     fireEvent.change(screen.getByLabelText('Starts'), {
       target: { value: '2026-07-01T18:00' },
     });
 
-    result.rerender(
-      <CreateBlockForm displayTimezone="Asia/Tokyo" rangeKeys={[]} selection={selection} />,
-    );
+    result.rerender(<CreateBlockForm displayTimezone="Asia/Tokyo" selection={selection} />);
     expect(screen.getByLabelText('Starts')).toHaveValue('2026-07-01T18:00');
     expect(screen.getByLabelText('Ends')).toHaveValue('2026-07-02T02:00');
 
@@ -73,13 +66,10 @@ describe('CreateBlockForm display timezone', () => {
     await waitFor(() => {
       expect(mutate).toHaveBeenCalledWith(
         {
-          input: {
-            intent: 'event',
-            title: 'Hydrated selection',
-            startsAt: '2026-07-01T09:00:00Z',
-            endsAt: '2026-07-01T17:00:00.000Z',
-          },
-          rangeKeys: [],
+          intent: 'event',
+          title: 'Hydrated selection',
+          startsAt: '2026-07-01T09:00:00Z',
+          endsAt: '2026-07-01T17:00:00.000Z',
         },
         expect.any(Object),
       );
@@ -89,7 +79,7 @@ describe('CreateBlockForm display timezone', () => {
   it('rounds toolbar defaults to the next Hub-zone half hour', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-07-01T16:10:00Z'));
-    render(<CreateBlockForm displayTimezone="Asia/Kathmandu" rangeKeys={[]} />);
+    render(<CreateBlockForm displayTimezone="Asia/Kathmandu" />);
 
     fireEvent.click(screen.getByRole('button', { name: 'New' }));
     expect(screen.getByLabelText('Starts')).toHaveValue('2026-07-01T22:00');
@@ -99,7 +89,7 @@ describe('CreateBlockForm display timezone', () => {
   it('chooses the later future occurrence when rounding inside a repeated hour', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-11-01T09:10:00Z'));
-    render(<CreateBlockForm displayTimezone="America/Los_Angeles" rangeKeys={[]} />);
+    render(<CreateBlockForm displayTimezone="America/Los_Angeles" />);
 
     fireEvent.click(screen.getByRole('button', { name: 'New' }));
     expect(screen.getByLabelText('Starts')).toHaveValue('2026-11-01T01:30');
@@ -110,13 +100,10 @@ describe('CreateBlockForm display timezone', () => {
 
     expect(mutate).toHaveBeenCalledWith(
       {
-        input: {
-          intent: 'event',
-          title: 'Later fold planning',
-          startsAt: '2026-11-01T09:30:00Z',
-          endsAt: '2026-11-01T10:00:00.000Z',
-        },
-        rangeKeys: [],
+        intent: 'event',
+        title: 'Later fold planning',
+        startsAt: '2026-11-01T09:30:00Z',
+        endsAt: '2026-11-01T10:00:00.000Z',
       },
       expect.any(Object),
     );
@@ -126,7 +113,6 @@ describe('CreateBlockForm display timezone', () => {
     render(
       <CreateBlockForm
         displayTimezone="America/Los_Angeles"
-        rangeKeys={[]}
         selection={{
           startsAt: '2026-11-01T09:30:00.000Z',
           endsAt: '2026-11-01T10:30:00.000Z',
@@ -144,13 +130,10 @@ describe('CreateBlockForm display timezone', () => {
     await waitFor(() => {
       expect(mutate).toHaveBeenCalledWith(
         {
-          input: {
-            intent: 'event',
-            title: 'Tokyo planning',
-            startsAt: '2026-11-01T09:30:00.000Z',
-            endsAt: '2026-11-01T10:30:00.000Z',
-          },
-          rangeKeys: [],
+          intent: 'event',
+          title: 'Tokyo planning',
+          startsAt: '2026-11-01T09:30:00.000Z',
+          endsAt: '2026-11-01T10:30:00.000Z',
         },
         expect.any(Object),
       );

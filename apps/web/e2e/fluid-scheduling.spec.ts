@@ -91,6 +91,8 @@ test.describe('fluid scheduling interaction contract', () => {
     };
     await expect(schedule).toHaveAttribute('data-lane-count', String(desktopRange.dayCount));
     await expect.poll(() => hasRangeSummary(state.rangeRequests, desktopRange)).toBe(true);
+    await expect(page.getByRole('checkbox', { name: 'Toggle Docket visibility' })).toBeVisible();
+    await expect(schedule.getByRole('status')).toHaveText('Nothing scheduled.');
     expect(page.viewportSize()).toEqual({ width: 1440, height: 900 });
     await expect(page.locator('html')).not.toHaveClass(/\bdark\b/);
     await attachCalendarScreenshot(page, testInfo, 'calendar-desktop-light');
@@ -169,7 +171,8 @@ test.describe('fluid scheduling interaction contract', () => {
     });
     const createdItem = state.items.at(-1);
     if (!createdItem) throw new Error('The selected timebox was not added to fixture state.');
-    await expect(scheduleItem(page, createdItem.id).body).toContainText('Deep work window');
+    const createdBody = scheduleItem(page, createdItem.id).body;
+    await expect(createdBody).toContainText('Deep work window');
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.emulateMedia({ colorScheme: 'dark' });
@@ -183,6 +186,8 @@ test.describe('fluid scheduling interaction contract', () => {
     await expect
       .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
       .toBe(true);
+    await createdBody.scrollIntoViewIfNeeded();
+    await expect(createdBody).toBeVisible();
     await attachCalendarScreenshot(page, testInfo, 'calendar-narrow-dark');
   });
 

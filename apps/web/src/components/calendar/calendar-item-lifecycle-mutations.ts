@@ -1,38 +1,33 @@
 'use client';
 
 import type { CalendarItemCreate, CalendarItemOut } from '@docket/types';
-import { type QueryKey, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { api } from '@/lib/api';
 import { queryKeys, unwrap, useApiMutation } from '@/lib/query';
 
-import { type CombinedRollback, removeCalendarItemFromRanges } from './calendar-mutation-cache';
+import {
+  CALENDAR_ITEMS_PREFIX,
+  type CombinedRollback,
+  removeCalendarItemFromRanges,
+} from './calendar-mutation-cache';
 
 /**
  * Create a Docket-native calendar block.
  *
  * @remarks
- * The server assigns identity, so creation stays invalidate-only. Callers supply the range keys
- * whose windows can contain the new item; the layers list is also refreshed for lazily-created
- * native layers.
+ * The server assigns identity, so creation stays invalidate-only. Every cached range is refreshed
+ * because the newly-created item can appear in any previously visited window; the layers list is
+ * also refreshed for lazily-created native layers.
  */
 export function useCreateCalendarItem() {
-  const queryClient = useQueryClient();
-  return useApiMutation<
-    CalendarItemOut,
-    { input: CalendarItemCreate; rangeKeys: readonly QueryKey[] }
-  >({
-    mutationFn: (vars) =>
+  return useApiMutation<CalendarItemOut, CalendarItemCreate>({
+    mutationFn: (input) =>
       unwrap(
-        () => api.v1.me.calendar.items.$post({ json: vars.input }),
+        () => api.v1.me.calendar.items.$post({ json: input }),
         'Could not create the calendar item.',
       ),
-    invalidateKeys: [queryKeys.calendarLayers()],
-    onSettled: async (_data, _error, vars) => {
-      await Promise.all(
-        vars.rangeKeys.map((key) => queryClient.invalidateQueries({ queryKey: key })),
-      );
-    },
+    invalidateKeys: [queryKeys.calendarLayers(), CALENDAR_ITEMS_PREFIX],
   });
 }
 

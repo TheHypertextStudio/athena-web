@@ -18,7 +18,6 @@ import {
 import { Plus } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import { Button, Input, Popover, PopoverContent, PopoverTrigger } from '@docket/ui/primitives';
-import type { QueryKey } from '@tanstack/react-query';
 import { type JSX, type SubmitEventHandler, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
@@ -34,7 +33,6 @@ export type { CalendarRegionSelection } from './calendar-time-draft';
 /** Props for {@link CreateBlockForm}. */
 export interface CreateBlockFormProps {
   readonly displayTimezone: string;
-  readonly rangeKeys: readonly QueryKey[];
   readonly layers?: readonly CalendarLayerOut[];
   readonly preferences?: CalendarPreferences;
   readonly selection?: CalendarRegionSelection | null;
@@ -44,7 +42,6 @@ export interface CreateBlockFormProps {
 /** Event/timebox quick-create popover, opened from the toolbar or a selected canvas region. */
 export default function CreateBlockForm({
   displayTimezone,
-  rangeKeys,
   layers = [],
   preferences,
   selection,
@@ -120,16 +117,13 @@ export default function CreateBlockForm({
       endsAt: endInstant,
       ...(intent === 'event' && layerId ? { layerId } : {}),
     } satisfies CalendarItemCreate;
-    create.mutate(
-      { input, rangeKeys },
-      {
-        onSuccess: () => {
-          setOpen(false);
-          setTitle('');
-          onSelectionConsumed?.();
-        },
+    create.mutate(input, {
+      onSuccess: () => {
+        setOpen(false);
+        setTitle('');
+        onSelectionConsumed?.();
       },
-    );
+    });
   };
 
   return (

@@ -5,8 +5,8 @@ import type { QueryClient, QueryKey } from '@tanstack/react-query';
  * Shared prefix for calendar item range and detail caches.
  *
  * @remarks
- * Layer visibility changes intentionally invalidate this broad prefix because they can affect every
- * visible range. Item-level writes invalidate only the range keys they actually patch.
+ * Layer visibility and item creation intentionally invalidate this broad prefix because they can
+ * affect every visible range. Updates and deletes invalidate only the range keys they patch.
  */
 export const CALENDAR_ITEMS_PREFIX: QueryKey = ['me', 'calendar-items'];
 

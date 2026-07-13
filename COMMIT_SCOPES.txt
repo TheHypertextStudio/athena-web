@@ -1,6 +1,7 @@
 # One allowed Conventional Commit scope per line.
 admin
 agents
+athena
 api
 auth
 billing

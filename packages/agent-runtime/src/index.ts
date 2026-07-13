@@ -98,6 +98,8 @@ export { MockAgentRuntime } from './mock-agent-runtime';
 export type { MockAgentRuntimeOptions } from './mock-agent-runtime';
 export { MockSummarizer } from './mock-summarizer';
 export { MockTaskSynthesizer } from './mock-task-synthesizer';
+export { makeAnthropicClient, anthropicClientOptions, wrapAnthropicError } from './anthropic';
+export type { AnthropicClientConfig } from './anthropic';
 export {
   RealProviderRuntime,
   blockKind,

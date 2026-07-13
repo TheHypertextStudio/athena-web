@@ -14,14 +14,26 @@ export interface AnthropicClientConfig {
   readonly apiKey: string;
   /** Base URL override (e.g. a gateway/proxy); defaults to the Anthropic API. */
   readonly baseURL?: string;
+  /** Cloudflare AI Gateway credential when an authenticated gateway is configured. */
+  readonly gatewayToken?: string;
+}
+
+/** Build direct or Cloudflare AI Gateway options for the Anthropic SDK. */
+export function anthropicClientOptions(
+  config: AnthropicClientConfig,
+): ConstructorParameters<typeof Anthropic>[0] {
+  return {
+    apiKey: config.apiKey,
+    ...(config.baseURL ? { baseURL: config.baseURL } : {}),
+    ...(config.gatewayToken
+      ? { defaultHeaders: { Authorization: `Bearer ${config.gatewayToken}` } }
+      : {}),
+  };
 }
 
 /** Build an Anthropic SDK client from validated config (the single construction site). */
 export function makeAnthropicClient(config: AnthropicClientConfig): Anthropic {
-  return new Anthropic({
-    apiKey: config.apiKey,
-    ...(config.baseURL ? { baseURL: config.baseURL } : {}),
-  });
+  return new Anthropic(anthropicClientOptions(config));
 }
 
 /**

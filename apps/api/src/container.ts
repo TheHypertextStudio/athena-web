@@ -8,6 +8,7 @@ import {
   RealSummarizer,
   RealTaskSynthesizer,
 } from '@docket/agent-runtime';
+import type { AnthropicClientConfig } from '@docket/agent-runtime';
 import type {
   AgentRuntime,
   AgentTurnRuntime,
@@ -57,6 +58,8 @@ export interface AppRuntimeEnv {
   readonly DOCKET_PRICE_LOOKUP_TEAM?: string;
   readonly STRIPE_BILLING_PORTAL_CONFIG_ID?: string;
   readonly ANTHROPIC_API_KEY?: string;
+  readonly CLOUDFLARE_AI_GATEWAY_BASE_URL?: string;
+  readonly CLOUDFLARE_AI_GATEWAY_TOKEN?: string;
   readonly LINEAR_WEBHOOK_SECRET?: string;
   readonly GITHUB_APP_WEBHOOK_SECRET?: string;
   readonly RESEND_API_KEY?: string;
@@ -104,6 +107,14 @@ function required(name: string, value: string | undefined): string {
   return value;
 }
 
+/** Resolve the shared direct-or-Gateway Anthropic configuration for live Athena adapters. */
+export function anthropicConfigFromEnv(runtimeEnv: AppRuntimeEnv): AnthropicClientConfig {
+  const apiKey = required('ANTHROPIC_API_KEY', runtimeEnv.ANTHROPIC_API_KEY);
+  const baseURL = runtimeEnv.CLOUDFLARE_AI_GATEWAY_BASE_URL;
+  const gatewayToken = runtimeEnv.CLOUDFLARE_AI_GATEWAY_TOKEN;
+  return baseURL && gatewayToken ? { apiKey, baseURL, gatewayToken } : { apiKey };
+}
+
 /** Build the container runtime configuration from the validated API environment. */
 export function toAppRuntimeEnv(): AppRuntimeEnv {
   return {
@@ -118,6 +129,12 @@ export function toAppRuntimeEnv(): AppRuntimeEnv {
       ? { STRIPE_BILLING_PORTAL_CONFIG_ID: env.STRIPE_BILLING_PORTAL_CONFIG_ID }
       : {}),
     ...(env.ANTHROPIC_API_KEY ? { ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY } : {}),
+    ...(env.CLOUDFLARE_AI_GATEWAY_BASE_URL
+      ? { CLOUDFLARE_AI_GATEWAY_BASE_URL: env.CLOUDFLARE_AI_GATEWAY_BASE_URL }
+      : {}),
+    ...(env.CLOUDFLARE_AI_GATEWAY_TOKEN
+      ? { CLOUDFLARE_AI_GATEWAY_TOKEN: env.CLOUDFLARE_AI_GATEWAY_TOKEN }
+      : {}),
     ...(env.LINEAR_WEBHOOK_SECRET ? { LINEAR_WEBHOOK_SECRET: env.LINEAR_WEBHOOK_SECRET } : {}),
     ...(env.GITHUB_APP_WEBHOOK_SECRET
       ? { GITHUB_APP_WEBHOOK_SECRET: env.GITHUB_APP_WEBHOOK_SECRET }
@@ -270,32 +287,18 @@ export function buildAppContainer(runtimeEnv: AppRuntimeEnv = toAppRuntimeEnv())
         }),
   );
   const agentRuntime = lazyValue(() =>
-    mock
-      ? new MockAgentRuntime()
-      : new RealProviderRuntime({
-          apiKey: required('ANTHROPIC_API_KEY', runtimeEnv.ANTHROPIC_API_KEY),
-        }),
+    mock ? new MockAgentRuntime() : new RealProviderRuntime(anthropicConfigFromEnv(runtimeEnv)),
   );
   const agentTurn = lazyValue(() =>
     mock
       ? new MockAgentTurnRuntime()
-      : new RealAgentTurnRuntime({
-          apiKey: required('ANTHROPIC_API_KEY', runtimeEnv.ANTHROPIC_API_KEY),
-        }),
+      : new RealAgentTurnRuntime(anthropicConfigFromEnv(runtimeEnv)),
   );
   const summarizer = lazyValue(() =>
-    mock
-      ? new MockSummarizer()
-      : new RealSummarizer({
-          apiKey: required('ANTHROPIC_API_KEY', runtimeEnv.ANTHROPIC_API_KEY),
-        }),
+    mock ? new MockSummarizer() : new RealSummarizer(anthropicConfigFromEnv(runtimeEnv)),
   );
   const taskSynthesizer = lazyValue(() =>
-    mock
-      ? new MockTaskSynthesizer()
-      : new RealTaskSynthesizer({
-          apiKey: required('ANTHROPIC_API_KEY', runtimeEnv.ANTHROPIC_API_KEY),
-        }),
+    mock ? new MockTaskSynthesizer() : new RealTaskSynthesizer(anthropicConfigFromEnv(runtimeEnv)),
   );
   const mailer = lazyValue(() => buildMailer(runtimeEnv));
   const mcpConnector = lazyValue(() => (mock ? new MockMcpConnector() : new RealMcpConnector()));

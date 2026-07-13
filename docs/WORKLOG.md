@@ -72,6 +72,22 @@
   useful than horizontally scrolling a nominally dense table.
 - **State**: COMPLETE — implementation, focused validation, documentation, and design review are
   complete; unrelated root-suite failures are recorded above rather than absorbed into this task.
+### [ATHENA-CLOUDFLARE-001] Route Athena provider traffic through Cloudflare AI Gateway
+
+- **Status**: COMPLETED
+- **Started**: 2026-07-13
+- **Completed**: 2026-07-13
+- **Priority**: P1
+- **Description**: Add the first Cloudflare migration seam without changing Docket's ownership of
+  agent policy, session state, audit history, or provider credentials.
+- **Implementation**: Added optional authenticated AI Gateway configuration and one shared
+  Anthropic-client option builder. Every live Athena adapter now receives the same direct-or-Gateway
+  configuration; incomplete Gateway configuration safely retains direct Anthropic traffic.
+- **Validation**: Focused agent-runtime and API tests pass, and both affected packages typecheck.
+- **Next**: Add the durable Queue/Workflow runner as a separate atom on this branch.
+
+---
+
 ### [APP-SHELL-LAYOUT-001] Make the app shell the persistent shared layout
 
 - **Status**: COMPLETED

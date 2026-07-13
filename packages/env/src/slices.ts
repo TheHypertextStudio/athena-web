@@ -172,6 +172,10 @@ export const mcpServer = {
 /** Agent runtime (the built-in Athena runtime, backed by the Anthropic Messages API). */
 export const agentServer = {
   ANTHROPIC_API_KEY: z.string().optional(),
+  /** Anthropic-compatible Cloudflare AI Gateway URL. Requires the matching token to activate. */
+  CLOUDFLARE_AI_GATEWAY_BASE_URL: z.url().optional(),
+  /** Cloudflare token used to authorize an AI Gateway request. */
+  CLOUDFLARE_AI_GATEWAY_TOKEN: z.string().min(1).optional(),
   // Seals org-held remote-MCP credentials (AES-256-GCM). Base64, exactly 32 bytes when
   // decoded; the connect route refuses to store a credential without it.
   CREDENTIALS_ENCRYPTION_KEY: z.string().optional(),

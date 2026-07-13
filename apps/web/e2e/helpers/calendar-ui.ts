@@ -107,6 +107,20 @@ export async function attachCalendarScreenshot(
   testInfo: TestInfo,
   name: string,
 ): Promise<void> {
+  await page.waitForFunction(() => {
+    const main = document.querySelector('main#main-content');
+    return main !== null && !main.classList.contains('animate-org-rebind');
+  });
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            resolve();
+          });
+        });
+      }),
+  );
   const fileName = name.endsWith('.png') ? name : `${name}.png`;
   const path = testInfo.outputPath(fileName);
   await page.screenshot({ path, fullPage: true });

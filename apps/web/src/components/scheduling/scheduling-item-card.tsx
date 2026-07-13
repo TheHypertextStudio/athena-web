@@ -7,18 +7,17 @@ import {
   useState,
 } from 'react';
 
-import { isScheduleItemEditable, itemBoundsInLane } from './scheduling-date-lanes';
+import { isScheduleItemEditable, type ScheduleItemLaneBounds } from './scheduling-date-lanes';
 import {
   readScheduleDragObject,
   SCHEDULE_DRAG_MIME,
   writeScheduleDragObject,
 } from './scheduling-drag-object';
+import { laneIndexAtOffset, MINUTES_PER_DAY, pixelDeltaToMinutes } from './scheduling-geometry';
 import {
-  laneIndexAtOffset,
-  MINUTES_PER_DAY,
-  minutesToPixels,
-  pixelDeltaToMinutes,
-} from './scheduling-geometry';
+  scheduleOverlapHorizontalStyle,
+  type ScheduleOverlapPlacement,
+} from './scheduling-overlap-layout';
 import type {
   ScheduleItem,
   ScheduleItemResize,
@@ -35,7 +34,10 @@ export interface SchedulingItemCardProps {
   readonly laneWidth: number;
   readonly pixelsPerHour: number;
   readonly snapMinutes: number;
-  readonly displayTimezone: string;
+  readonly bounds: ScheduleItemLaneBounds;
+  readonly top: number;
+  readonly height: number;
+  readonly placement: ScheduleOverlapPlacement;
   readonly renderItem?: SchedulingCanvasProps['renderItem'];
   readonly onOpenItem?: SchedulingCanvasProps['onOpenItem'];
   readonly onMoveItem?: SchedulingCanvasProps['onMoveItem'];
@@ -54,6 +56,30 @@ function clampMovedInterval(
   return { startMinutes: nextStart, endMinutes: nextStart + duration };
 }
 
+type ScheduleItemDensity = 'marker' | 'compact' | 'full';
+
+const WALL_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
+  timeZone: 'UTC',
+  hour: 'numeric',
+  minute: '2-digit',
+});
+
+/** Choose how much card detail fits without obscuring adjacent times. */
+function itemDensity(height: number): ScheduleItemDensity {
+  if (height < 24) return 'marker';
+  if (height < 48) return 'compact';
+  return 'full';
+}
+
+/** Format clipped wall-minute bounds with the viewer's locale conventions. */
+function formatTimeRange(bounds: ScheduleItemLaneBounds): string {
+  const atWallMinutes = (minutes: number): Date =>
+    new Date(Date.UTC(2000, 0, 1, Math.floor(minutes / 60), minutes % 60));
+  const start = WALL_TIME_FORMATTER.format(atWallMinutes(bounds.startMinutes));
+  const end = WALL_TIME_FORMATTER.format(atWallMinutes(bounds.endMinutes));
+  return `${start} – ${end}`;
+}
+
 /** Render and gesture-wire one timed item without owning any persistence. */
 export function SchedulingItemCard({
   item,
@@ -63,23 +89,22 @@ export function SchedulingItemCard({
   laneWidth,
   pixelsPerHour,
   snapMinutes,
-  displayTimezone,
+  bounds,
+  top,
+  height,
+  placement,
   renderItem,
   onOpenItem,
   onMoveItem,
   onResizeItem,
   onDropObjectOnItem,
-}: SchedulingItemCardProps): JSX.Element | null {
-  const bounds = itemBoundsInLane(item, lane, displayTimezone);
+}: SchedulingItemCardProps): JSX.Element {
   const [dropActive, setDropActive] = useState(false);
-  if (!bounds) return null;
-
   const editable = isScheduleItemEditable(item, lane);
-  const top = minutesToPixels(bounds.startMinutes, pixelsPerHour);
-  const height = Math.max(
-    minutesToPixels(bounds.endMinutes - bounds.startMinutes, pixelsPerHour),
-    18,
-  );
+  const density = itemDensity(height);
+  const timeRange = formatTimeRange(bounds);
+  const content = renderItem?.({ item, lane, allDay: false }) ?? item.title;
+  const horizontalStyle = scheduleOverlapHorizontalStyle(placement);
   const acceptsDrop = (event: ReactDragEvent<HTMLElement>): boolean =>
     item.dropTarget === true && event.dataTransfer.types.includes(SCHEDULE_DRAG_MIME);
 
@@ -151,9 +176,12 @@ export function SchedulingItemCard({
     <article
       className={
         dropActive
-          ? 'border-primary bg-primary-container absolute z-20 overflow-hidden rounded-md border shadow-md'
-          : 'border-outline-variant bg-surface-container-low absolute z-10 overflow-hidden rounded-md border shadow-sm'
+          ? 'border-primary bg-primary-container ring-primary/30 absolute z-30 overflow-hidden rounded-md border shadow-md ring-2'
+          : 'border-outline-variant bg-surface-container-low absolute z-10 overflow-hidden rounded-md border shadow-sm transition-[box-shadow,transform] focus-within:z-20 focus-within:shadow-md hover:z-20 hover:shadow-md motion-safe:hover:-translate-y-px'
       }
+      data-item-density={density}
+      data-layout-column={placement.columnIndex}
+      data-layout-column-count={placement.columnCount}
       data-schedule-item={item.id}
       draggable={item.dragObject !== undefined}
       onDragStart={(event) => {
@@ -178,18 +206,23 @@ export function SchedulingItemCard({
       }}
       style={{
         top,
-        left: 4,
-        right: 4,
+        ...horizontalStyle,
         height,
         borderLeftWidth: 3,
-        ...(item.color ? { borderLeftColor: item.color } : {}),
+        ...(item.color && !dropActive
+          ? {
+              borderColor: item.color,
+              borderLeftColor: item.color,
+              backgroundColor: `color-mix(in srgb, ${item.color} 12%, var(--color-surface-container-low))`,
+            }
+          : {}),
       }}
     >
       {editable && onResizeItem ? (
         <button
           type="button"
           aria-label={`Resize ${item.title} from start`}
-          className="absolute inset-x-0 top-0 z-20 h-1.5 cursor-ns-resize"
+          className="focus-visible:ring-ring absolute inset-x-0 top-0 z-20 h-1.5 cursor-ns-resize rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-inset"
           onPointerDown={(event) => {
             beginResize('start', event);
           }}
@@ -197,18 +230,39 @@ export function SchedulingItemCard({
       ) : null}
       <button
         type="button"
-        className="text-on-surface size-full truncate px-2 py-1 text-left text-xs font-medium"
+        aria-label={item.title}
+        className={
+          density === 'marker'
+            ? 'focus-visible:ring-ring relative z-10 size-full p-1 outline-none focus-visible:ring-2 focus-visible:ring-inset'
+            : 'text-on-surface focus-visible:ring-ring relative z-10 flex size-full min-w-0 flex-col overflow-hidden px-2 py-1 text-left text-xs font-medium outline-none focus-visible:ring-2 focus-visible:ring-inset'
+        }
+        title={density === 'full' ? undefined : `${item.title} · ${timeRange}`}
         onClick={() => {
           onOpenItem?.({ item, lane });
         }}
       >
-        {renderItem?.({ item, lane, allDay: false }) ?? item.title}
+        {density === 'marker' ? (
+          <span
+            aria-hidden="true"
+            className="bg-primary my-auto block h-1 w-full rounded-full"
+            style={item.color ? { backgroundColor: item.color } : undefined}
+          />
+        ) : (
+          <>
+            <span className="block w-full truncate">{content}</span>
+            {density === 'full' ? (
+              <span className="text-on-surface-variant block w-full truncate text-[10px] leading-4 font-normal tabular-nums">
+                {timeRange}
+              </span>
+            ) : null}
+          </>
+        )}
       </button>
       {editable && onMoveItem ? (
         <button
           type="button"
           aria-label={`Move ${item.title}`}
-          className="absolute top-1 right-1 z-20 size-4 cursor-move rounded"
+          className="focus-visible:ring-ring absolute top-1 right-1 z-20 size-4 cursor-move rounded outline-none focus-visible:ring-2 focus-visible:ring-inset"
           onPointerDown={beginMove}
         >
           <span aria-hidden="true">⋮</span>
@@ -218,7 +272,7 @@ export function SchedulingItemCard({
         <button
           type="button"
           aria-label={`Resize ${item.title} from end`}
-          className="absolute inset-x-0 bottom-0 z-20 h-1.5 cursor-ns-resize"
+          className="focus-visible:ring-ring absolute inset-x-0 bottom-0 z-20 h-1.5 cursor-ns-resize rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-inset"
           onPointerDown={(event) => {
             beginResize('end', event);
           }}

@@ -18,6 +18,7 @@ import {
   pixelsToMinutes,
 } from './scheduling-geometry';
 import { SchedulingItemCard } from './scheduling-item-card';
+import { positionScheduleLaneItems } from './scheduling-overlap-layout';
 import { SchedulingTimeGrid } from './scheduling-time-grid';
 import type { ScheduleLane, SchedulingCanvasProps } from './scheduling-types';
 
@@ -26,6 +27,7 @@ export type { ScheduleItemRenderContext, SchedulingCanvasProps } from './schedul
 const DEFAULT_VIEWPORT_WIDTH = 960;
 const HOUR_GUTTER_WIDTH = 64;
 const MINIMUM_LANE_WIDTH = 220;
+const MINIMUM_INTERACTIVE_PIXELS = 18;
 
 /**
  * Render a 24-hour fluid scheduling grid for arbitrary date/resource lanes.
@@ -90,6 +92,18 @@ export default function SchedulingCanvas({
   const snapMinutes = deriveSnapMinutes(effectivePixelsPerHour);
   const fullWidth = geometry.gutterWidth + geometry.contentWidth;
   const isEmpty = lanes.every((lane) => lane.items.length === 0);
+  const positionedLaneItems = useMemo(
+    () =>
+      lanes.map((lane) =>
+        positionScheduleLaneItems(
+          lane,
+          displayTimezone,
+          effectivePixelsPerHour,
+          MINIMUM_INTERACTIVE_PIXELS,
+        ),
+      ),
+    [displayTimezone, effectivePixelsPerHour, lanes],
+  );
 
   useEffect(() => {
     onViewportGeometry?.({
@@ -241,24 +255,29 @@ export default function SchedulingCanvas({
                     beginSelection(lane, event);
                   }}
                 >
-                  {lane.items.map((item) => (
-                    <SchedulingItemCard
-                      key={item.id}
-                      item={item}
-                      lane={lane}
-                      laneIndex={laneIndex}
-                      lanes={lanes}
-                      laneWidth={geometry.laneWidth}
-                      pixelsPerHour={effectivePixelsPerHour}
-                      snapMinutes={snapMinutes}
-                      displayTimezone={displayTimezone}
-                      renderItem={renderItem}
-                      onOpenItem={onOpenItem}
-                      onMoveItem={onMoveItem}
-                      onResizeItem={onResizeItem}
-                      onDropObjectOnItem={onDropObjectOnItem}
-                    />
-                  ))}
+                  {positionedLaneItems[laneIndex]?.map(
+                    ({ item, bounds, top, height, placement }) => (
+                      <SchedulingItemCard
+                        key={item.id}
+                        item={item}
+                        lane={lane}
+                        laneIndex={laneIndex}
+                        lanes={lanes}
+                        laneWidth={geometry.laneWidth}
+                        pixelsPerHour={effectivePixelsPerHour}
+                        snapMinutes={snapMinutes}
+                        bounds={bounds}
+                        top={top}
+                        height={height}
+                        placement={placement}
+                        renderItem={renderItem}
+                        onOpenItem={onOpenItem}
+                        onMoveItem={onMoveItem}
+                        onResizeItem={onResizeItem}
+                        onDropObjectOnItem={onDropObjectOnItem}
+                      />
+                    ),
+                  )}
                 </div>
               ))}
             </div>

@@ -45,6 +45,37 @@ function lane(
   };
 }
 
+/** Build a timed item on the shared UTC fixture date. */
+function timedItem(id: string, title: string, startHHMM: string, endHHMM: string): ScheduleItem {
+  return {
+    id,
+    title,
+    startsAt: `2026-07-01T${startHHMM}:00.000Z`,
+    endsAt: `2026-07-01T${endHHMM}:00.000Z`,
+    color: '#7c3aed',
+  };
+}
+
+/** Return a rendered scheduling item container, failing loudly when it is absent. */
+function renderedItem(id: string): HTMLElement {
+  const element = document.querySelector<HTMLElement>(`[data-schedule-item="${id}"]`);
+  if (!element) throw new Error(`No rendered scheduling item for ${id}`);
+  return element;
+}
+
+/** Capture only the horizontal collision style that must survive input reordering. */
+function horizontalStyle(id: string): { left: string; width: string } {
+  const element = renderedItem(id);
+  return { left: element.style.left, width: element.style.width };
+}
+
+/** Read accessible button names without depending on the visual time-detail treatment. */
+function buttonNames(): (string | null)[] {
+  return screen
+    .getAllByRole('button')
+    .map((button) => button.getAttribute('aria-label') ?? button.textContent);
+}
+
 afterEach(() => {
   cleanup();
 });
@@ -402,6 +433,220 @@ describe('SchedulingCanvas', () => {
     expect(screen.getByText('Europe/London')).toBeInTheDocument();
     expect(document.querySelector('[data-schedule-item="same-a"]')).toHaveStyle({ top: '540px' });
     expect(document.querySelector('[data-schedule-item="same-b"]')).toHaveStyle({ top: '540px' });
+  });
+
+  it.each([
+    {
+      name: 'identical pair',
+      items: [
+        timedItem('identical-b', 'Identical B', '09:00', '10:00'),
+        timedItem('identical-a', 'Identical A', '09:00', '10:00'),
+      ],
+    },
+    {
+      name: 'partial pair',
+      items: [
+        timedItem('partial-a', 'Partial A', '09:00', '10:00'),
+        timedItem('partial-b', 'Partial B', '09:30', '10:30'),
+      ],
+    },
+    {
+      name: 'nested triple',
+      items: [
+        timedItem('nested-a', 'Nested A', '09:00', '11:00'),
+        timedItem('nested-b', 'Nested B', '09:15', '10:45'),
+        timedItem('nested-c', 'Nested C', '09:30', '10:00'),
+      ],
+    },
+  ])('gives every item in a $name a distinct horizontal column', ({ items }) => {
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[lane('collision', 'Collision', items)]}
+        pixelsPerHour={60}
+        viewportWidth={500}
+      />,
+    );
+
+    const cards = items.map((item) => renderedItem(item.id));
+    expect(new Set(cards.map((card) => card.style.left)).size).toBe(items.length);
+    expect(new Set(cards.map((card) => card.style.width)).size).toBe(1);
+    expect(cards[0]?.style.width).not.toBe('');
+    expect(cards[0]?.style.width).not.toBe('calc(100% - 8px)');
+    for (const card of cards) {
+      expect(card).toHaveAttribute('data-layout-column-count', String(items.length));
+      expect(card).not.toHaveStyle({ right: '4px' });
+    }
+  });
+
+  it('gives disjoint timed items the full usable lane width', () => {
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[
+          lane('disjoint', 'Disjoint', [
+            timedItem('early', 'Early', '09:00', '09:30'),
+            timedItem('late', 'Late', '10:00', '10:30'),
+          ]),
+        ]}
+        pixelsPerHour={60}
+        viewportWidth={500}
+      />,
+    );
+
+    for (const id of ['early', 'late']) {
+      expect(renderedItem(id)).toHaveAttribute('data-layout-column', '0');
+      expect(renderedItem(id)).toHaveAttribute('data-layout-column-count', '1');
+      expect(renderedItem(id)).toHaveStyle({ left: '4px', width: 'calc(100% - 8px)' });
+    }
+  });
+
+  it('keeps horizontal styles and chronological button order stable after input reversal', () => {
+    const items = [
+      timedItem('later', 'Later', '10:30', '11:00'),
+      timedItem('short', 'Short', '09:00', '09:30'),
+      timedItem('long', 'Long', '09:00', '10:00'),
+    ];
+    const { rerender } = render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[lane('stable', 'Stable', items)]}
+        pixelsPerHour={60}
+        viewportWidth={500}
+      />,
+    );
+    const initialStyles = new Map(items.map((item) => [item.id, horizontalStyle(item.id)]));
+    expect(buttonNames()).toEqual(['Long', 'Short', 'Later']);
+
+    rerender(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[lane('stable', 'Stable', [...items].reverse())]}
+        pixelsPerHour={60}
+        viewportWidth={500}
+      />,
+    );
+
+    expect(buttonNames()).toEqual(['Long', 'Short', 'Later']);
+    expect(new Map(items.map((item) => [item.id, horizontalStyle(item.id)]))).toEqual(
+      initialStyles,
+    );
+  });
+
+  it('isolates collisions inside each arbitrary resource lane', () => {
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[
+          lane('empty', 'Empty'),
+          lane('busy', 'Busy', [
+            timedItem('busy-a', 'Busy A', '09:00', '10:00'),
+            timedItem('busy-b', 'Busy B', '09:15', '09:45'),
+          ]),
+          lane('solo', 'Solo', [timedItem('solo-a', 'Solo A', '09:15', '09:45')]),
+          lane('also-empty', 'Also empty'),
+        ]}
+        pixelsPerHour={60}
+        viewportWidth={1_000}
+      />,
+    );
+
+    expect(renderedItem('busy-a')).toHaveAttribute('data-layout-column-count', '2');
+    expect(renderedItem('busy-b')).toHaveAttribute('data-layout-column-count', '2');
+    expect(renderedItem('solo-a')).toHaveAttribute('data-layout-column-count', '1');
+    expect(renderedItem('solo-a')).toHaveStyle({ width: 'calc(100% - 8px)' });
+  });
+
+  it('uses the 18px minimum height for low-zoom collisions without inflating high zoom', () => {
+    const items = [
+      timedItem('short-a', 'Short A', '09:00', '09:05'),
+      timedItem('short-b', 'Short B', '09:10', '09:15'),
+    ];
+    const { rerender } = render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[lane('zoom', 'Zoom', items)]}
+        pixelsPerHour={60}
+        viewportWidth={500}
+      />,
+    );
+
+    expect(renderedItem('short-a')).toHaveStyle({ height: '18px' });
+    expect(renderedItem('short-a')).toHaveAttribute('data-layout-column-count', '2');
+    expect(renderedItem('short-b')).toHaveAttribute('data-layout-column-count', '2');
+
+    rerender(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[lane('zoom', 'Zoom', [...items].reverse())]}
+        pixelsPerHour={240}
+        viewportWidth={500}
+      />,
+    );
+    expect(renderedItem('short-a')).toHaveStyle({ height: '20px' });
+    expect(renderedItem('short-a')).toHaveAttribute('data-layout-column-count', '1');
+    expect(renderedItem('short-b')).toHaveAttribute('data-layout-column-count', '1');
+  });
+
+  it('keeps every identical-time item focusable, openable, and explicitly editable', () => {
+    const onOpenItem = vi.fn();
+    const items = [
+      timedItem('open-c', 'Open C', '09:00', '10:00'),
+      timedItem('open-a', 'Open A', '09:00', '10:00'),
+      timedItem('open-b', 'Open B', '09:00', '10:00'),
+    ];
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[lane('open', 'Open', items)]}
+        pixelsPerHour={60}
+        viewportWidth={500}
+        onOpenItem={onOpenItem}
+        onMoveItem={vi.fn()}
+        onResizeItem={vi.fn()}
+      />,
+    );
+
+    for (const item of items) {
+      const button = screen.getByRole('button', { name: item.title });
+      button.focus();
+      expect(button).toHaveFocus();
+      fireEvent.click(button);
+      expect(screen.getByRole('button', { name: `Move ${item.title}` })).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: `Resize ${item.title} from start` }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: `Resize ${item.title} from end` }),
+      ).toBeInTheDocument();
+    }
+    expect(onOpenItem).toHaveBeenCalledTimes(3);
+  });
+
+  it('uses marker, compact, and full treatments while showing locale time at full height', () => {
+    const renderItem = vi.fn(({ item }: { readonly item: ScheduleItem }) => `Custom ${item.title}`);
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[
+          lane('density', 'Density', [
+            timedItem('marker', 'Marker', '09:00', '09:05'),
+            timedItem('compact', 'Compact', '10:00', '10:30'),
+            timedItem('full', 'Full', '11:00', '12:00'),
+          ]),
+        ]}
+        pixelsPerHour={72}
+        viewportWidth={500}
+        renderItem={renderItem}
+      />,
+    );
+
+    expect(renderedItem('marker')).toHaveAttribute('data-item-density', 'marker');
+    expect(renderedItem('compact')).toHaveAttribute('data-item-density', 'compact');
+    expect(renderedItem('full')).toHaveAttribute('data-item-density', 'full');
+    expect(renderedItem('full')).toHaveTextContent(/11:00.*12:00/);
+    expect(renderedItem('full').getAttribute('style')).toContain('color-mix');
+    expect(renderItem).toHaveBeenCalledTimes(3);
   });
 
   it('keeps the grid mounted when the deterministic clock is absent or invalid', () => {

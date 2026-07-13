@@ -25,6 +25,11 @@ export {
   type ScheduleLaneGeometry,
 } from './scheduling-geometry';
 export {
+  layoutScheduleOverlaps,
+  type ScheduleOverlapInput,
+  type ScheduleOverlapPlacement,
+} from './scheduling-overlap-layout';
+export {
   deriveScheduleTicks,
   majorTickInterval,
   resolveScheduleTimezone,

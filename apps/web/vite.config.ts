@@ -41,10 +41,10 @@ const config = docketVitest({
     // (upcoming timeboxed blocks, start-ordered, else tasks due today) must stay correct
     // independent of the React tree that renders the list.
     'src/components/today/next-up-select.ts',
-    // The full calendar view's overlap/lane placement is pure, behavior-bearing layout logic
-    // (which column each overlapping item lands in, and how many columns a cluster needs) that
-    // must stay correct independent of the timeline's pixel geometry.
-    'src/components/calendar/lane-layout.ts',
+    // The shared scheduling canvas's visual-overlap placement is pure, behavior-bearing layout
+    // logic (which column each item lands in, how many columns a cluster needs, and the exact
+    // gutters between them) that must stay correct independent of the React card renderer.
+    'src/components/scheduling/scheduling-overlap-layout.ts',
   ],
 });
 

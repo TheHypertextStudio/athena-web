@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { layoutScheduleOverlaps, type ScheduleOverlapInput } from '@/components/scheduling';
+import { scheduleOverlapHorizontalStyle } from '@/components/scheduling/scheduling-overlap-layout';
 
 const STANDARD_PIXELS_PER_HOUR = 60;
 const MINIMUM_INTERACTIVE_PIXELS = 18;
@@ -180,6 +181,36 @@ describe('layoutScheduleOverlaps', () => {
     ).toEqual([
       { id: 'a', columnIndex: 0, columnCount: 1 },
       { id: 'b', columnIndex: 0, columnCount: 1 },
+    ]);
+  });
+});
+
+describe('scheduleOverlapHorizontalStyle', () => {
+  it('leaves exact four-pixel outer and internal gutters for two and three columns', () => {
+    expect(
+      [0, 1].map((columnIndex) =>
+        scheduleOverlapHorizontalStyle({
+          id: `two-${String(columnIndex)}`,
+          columnIndex,
+          columnCount: 2,
+        }),
+      ),
+    ).toEqual([
+      { left: 4, width: 'calc(50% - 6px)' },
+      { left: 'calc(50% + 2px)', width: 'calc(50% - 6px)' },
+    ]);
+    expect(
+      [0, 1, 2].map((columnIndex) =>
+        scheduleOverlapHorizontalStyle({
+          id: `three-${String(columnIndex)}`,
+          columnIndex,
+          columnCount: 3,
+        }),
+      ),
+    ).toEqual([
+      { left: 4, width: 'calc(33.333333% - 5.333333px)' },
+      { left: 'calc(33.333333% + 2.666667px)', width: 'calc(33.333333% - 5.333333px)' },
+      { left: 'calc(66.666667% + 1.333333px)', width: 'calc(33.333333% - 5.333333px)' },
     ]);
   });
 });

@@ -177,7 +177,7 @@ export function SchedulingItemCard({
       className={
         dropActive
           ? 'border-primary bg-primary-container ring-primary/30 absolute z-30 overflow-hidden rounded-md border shadow-md ring-2'
-          : 'border-outline-variant bg-surface-container-low absolute z-10 overflow-hidden rounded-md border shadow-sm transition-[box-shadow,transform] focus-within:z-20 focus-within:shadow-md hover:z-20 hover:shadow-md motion-safe:hover:-translate-y-px'
+          : 'border-outline-variant bg-surface-container-low absolute z-10 overflow-hidden rounded-md border shadow-sm transition-shadow focus-within:z-20 focus-within:shadow-md hover:z-20 hover:shadow-md'
       }
       data-item-density={density}
       data-layout-column={placement.columnIndex}
@@ -230,7 +230,7 @@ export function SchedulingItemCard({
       ) : null}
       <button
         type="button"
-        aria-label={item.title}
+        aria-label={density === 'marker' ? `${item.title}, ${timeRange}` : undefined}
         className={
           density === 'marker'
             ? 'focus-visible:ring-ring relative z-10 size-full p-1 outline-none focus-visible:ring-2 focus-visible:ring-inset'
@@ -254,7 +254,9 @@ export function SchedulingItemCard({
               <span className="text-on-surface-variant block w-full truncate text-[10px] leading-4 font-normal tabular-nums">
                 {timeRange}
               </span>
-            ) : null}
+            ) : (
+              <span className="sr-only">, {timeRange}</span>
+            )}
           </>
         )}
       </button>

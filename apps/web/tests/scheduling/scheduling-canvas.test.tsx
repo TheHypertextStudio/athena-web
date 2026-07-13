@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -69,11 +70,11 @@ function horizontalStyle(id: string): { left: string; width: string } {
   return { left: element.style.left, width: element.style.width };
 }
 
-/** Read accessible button names without depending on the visual time-detail treatment. */
-function buttonNames(): (string | null)[] {
-  return screen
-    .getAllByRole('button')
-    .map((button) => button.getAttribute('aria-label') ?? button.textContent);
+/** Read canonical timed-item DOM order without coupling to accessible presentation. */
+function timedItemOrder(): (string | undefined)[] {
+  return [...document.querySelectorAll<HTMLElement>('[data-schedule-item]')].map(
+    (element) => element.dataset['scheduleItem'],
+  );
 }
 
 afterEach(() => {
@@ -180,7 +181,7 @@ describe('SchedulingCanvas', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Focus block' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Focus block/ }));
     expect(onOpenItem).toHaveBeenCalledWith(
       expect.objectContaining({ item: TIMED_ITEM, lane: expect.objectContaining({ id: 'ada' }) }),
     );
@@ -233,7 +234,7 @@ describe('SchedulingCanvas', () => {
     expect(
       screen.queryByRole('button', { name: 'Resize Focus block from end' }),
     ).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Focus block' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Focus block/ }));
     expect(onOpenItem).toHaveBeenCalledOnce();
   });
 
@@ -262,10 +263,10 @@ describe('SchedulingCanvas', () => {
       />,
     );
 
-    fireEvent.dragOver(screen.getByRole('button', { name: 'Focus block' }), {
+    fireEvent.dragOver(screen.getByRole('button', { name: /^Focus block/ }), {
       dataTransfer: transfer,
     });
-    fireEvent.drop(screen.getByRole('button', { name: 'Focus block' }), {
+    fireEvent.drop(screen.getByRole('button', { name: /^Focus block/ }), {
       dataTransfer: transfer,
     });
 
@@ -516,7 +517,7 @@ describe('SchedulingCanvas', () => {
       />,
     );
     const initialStyles = new Map(items.map((item) => [item.id, horizontalStyle(item.id)]));
-    expect(buttonNames()).toEqual(['Long', 'Short', 'Later']);
+    expect(timedItemOrder()).toEqual(['long', 'short', 'later']);
 
     rerender(
       <SchedulingCanvas
@@ -527,7 +528,7 @@ describe('SchedulingCanvas', () => {
       />,
     );
 
-    expect(buttonNames()).toEqual(['Long', 'Short', 'Later']);
+    expect(timedItemOrder()).toEqual(['long', 'short', 'later']);
     expect(new Map(items.map((item) => [item.id, horizontalStyle(item.id)]))).toEqual(
       initialStyles,
     );
@@ -588,7 +589,8 @@ describe('SchedulingCanvas', () => {
     expect(renderedItem('short-b')).toHaveAttribute('data-layout-column-count', '1');
   });
 
-  it('keeps every identical-time item focusable, openable, and explicitly editable', () => {
+  it('supports canonical sequential keyboard and pointer activation for identical-time items', async () => {
+    const user = userEvent.setup();
     const onOpenItem = vi.fn();
     const items = [
       timedItem('open-c', 'Open C', '09:00', '10:00'),
@@ -602,16 +604,49 @@ describe('SchedulingCanvas', () => {
         pixelsPerHour={60}
         viewportWidth={500}
         onOpenItem={onOpenItem}
+      />,
+    );
+
+    const buttons = screen.getAllByRole('button', { name: /^Open [ABC]/ });
+    expect(buttons).toHaveLength(3);
+    expect(timedItemOrder()).toEqual(['open-a', 'open-b', 'open-c']);
+
+    await user.tab();
+    expect(buttons[0]).toHaveFocus();
+    await user.keyboard('{Enter}');
+    await user.tab();
+    expect(buttons[1]).toHaveFocus();
+    await user.keyboard('[Space]');
+    await user.tab();
+    expect(buttons[2]).toHaveFocus();
+    await user.click(buttons[2]!);
+
+    expect(onOpenItem).toHaveBeenCalledTimes(3);
+    expect(onOpenItem.mock.calls.map(([request]) => request.item.id)).toEqual([
+      'open-a',
+      'open-b',
+      'open-c',
+    ]);
+  });
+
+  it('keeps editable controls explicitly named for every identical-time item', () => {
+    const items = [
+      timedItem('edit-c', 'Edit C', '09:00', '10:00'),
+      timedItem('edit-a', 'Edit A', '09:00', '10:00'),
+      timedItem('edit-b', 'Edit B', '09:00', '10:00'),
+    ];
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[lane('edit', 'Edit', items)]}
+        pixelsPerHour={60}
+        viewportWidth={500}
         onMoveItem={vi.fn()}
         onResizeItem={vi.fn()}
       />,
     );
 
     for (const item of items) {
-      const button = screen.getByRole('button', { name: item.title });
-      button.focus();
-      expect(button).toHaveFocus();
-      fireEvent.click(button);
       expect(screen.getByRole('button', { name: `Move ${item.title}` })).toBeInTheDocument();
       expect(
         screen.getByRole('button', { name: `Resize ${item.title} from start` }),
@@ -620,7 +655,6 @@ describe('SchedulingCanvas', () => {
         screen.getByRole('button', { name: `Resize ${item.title} from end` }),
       ).toBeInTheDocument();
     }
-    expect(onOpenItem).toHaveBeenCalledTimes(3);
   });
 
   it('uses marker, compact, and full treatments while showing locale time at full height', () => {
@@ -644,9 +678,49 @@ describe('SchedulingCanvas', () => {
     expect(renderedItem('marker')).toHaveAttribute('data-item-density', 'marker');
     expect(renderedItem('compact')).toHaveAttribute('data-item-density', 'compact');
     expect(renderedItem('full')).toHaveAttribute('data-item-density', 'full');
+    expect(screen.getByRole('button', { name: /^Marker.*9:00.*9:05/ })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /^Custom Compact.*10:00.*10:30/ }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Custom Full.*11:00.*12:00/ })).toBeInTheDocument();
     expect(renderedItem('full')).toHaveTextContent(/11:00.*12:00/);
     expect(renderedItem('full').getAttribute('style')).toContain('color-mix');
     expect(renderItem).toHaveBeenCalledTimes(3);
+  });
+
+  it('distinguishes overlapping items with duplicate titles by their accessible time range', () => {
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[
+          lane('duplicate', 'Duplicate', [
+            timedItem('duplicate-later', 'Duplicate', '09:30', '10:30'),
+            timedItem('duplicate-earlier', 'Duplicate', '09:00', '10:00'),
+          ]),
+        ]}
+        pixelsPerHour={60}
+        viewportWidth={500}
+      />,
+    );
+
+    const buttons = screen.getAllByRole('button', { name: /Duplicate/ });
+    expect(buttons).toHaveLength(2);
+    expect(buttons[0]).toHaveAccessibleName(/Duplicate.*9:00.*10:00/);
+    expect(buttons[1]).toHaveAccessibleName(/Duplicate.*9:30.*10:30/);
+  });
+
+  it('elevates on hover without translating exact time or collision geometry', () => {
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[lane('hover', 'Hover', [TIMED_ITEM])]}
+        pixelsPerHour={60}
+        viewportWidth={500}
+      />,
+    );
+
+    expect(renderedItem('focus')).toHaveClass('hover:z-20', 'hover:shadow-md');
+    expect(renderedItem('focus')).not.toHaveClass('motion-safe:hover:-translate-y-px');
   });
 
   it('keeps the grid mounted when the deterministic clock is absent or invalid', () => {

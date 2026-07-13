@@ -36,6 +36,8 @@
   6. Verify pure geometry, component gestures, consumer mutation payloads, repository gates, and a
      recorded real-browser interaction pass when a browser binding is available.
 - **Design**: `docs/superpowers/specs/2026-07-13-scheduling-interaction-parity-design.md`
+- **Implementation Plan**:
+  `docs/superpowers/plans/2026-07-13-scheduling-interaction-parity.md`
 - **Validation Progress**: Baseline focused scheduling/calendar tests pass 28/28. Browser discovery
   still reports no available binding in this thread, so interactive visual proof remains pending.
 

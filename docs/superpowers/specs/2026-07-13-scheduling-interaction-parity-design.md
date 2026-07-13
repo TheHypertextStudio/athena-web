@@ -39,16 +39,18 @@ reason about.
 
 ## Time Axis
 
-The canvas receives one `displayTimezone`. All lanes in one canvas share that axis so a horizontal
-row always represents the same instant. Date lanes use the viewer's Hub timezone. People lanes also
-use the viewer's timezone for geometry and display the person's timezone as secondary header
-metadata. A person lane never silently reinterprets rows in that person's timezone.
+The canvas receives one `displayTimezone`. Date lanes share a 24-hour wall-clock axis so the same
+local time remains horizontally aligned across arbitrary adjacent dates. People lanes use that same
+viewer-timezone axis, which means a horizontal row represents the same instant for every person;
+each person's own timezone appears as secondary header metadata and never changes item geometry.
 
-A scheduling day is an interval between consecutive local midnights in `displayTimezone`, not an
-assumed 24-hour duration. Spring-forward days therefore contain 23 elapsed hours and omit the
-nonexistent local hour. Fall-back days contain 25 elapsed hours and render the repeated hour twice,
-including a short timezone abbreviation when needed to disambiguate it. Event geometry is measured
-against those instants, so a one-hour event always occupies one elapsed hour.
+The wall-clock grid remains stable on daylight-saving transitions. Temporal converts local clock
+positions to exact instants and detects ambiguity. A spring-forward hour is visibly marked as
+skipped and cannot silently produce a different label. A repeated fall-back hour is marked as
+repeated, and affected event labels include a short timezone abbreviation. Existing events that
+cross the repeated hour retain a non-zero visual duration instead of disappearing. Query boundaries
+still use the exact interval between consecutive local midnights, so reads include all 23 or 25
+elapsed hours even though the familiar wall-clock grid remains aligned across date lanes.
 
 Ticks are derived from zoom:
 
@@ -109,10 +111,11 @@ axis, lanes, current-time indicator, or locally available items.
 
 ## Data Flow
 
-The canvas continues to emit proposed semantic bounds. Calendar and Agenda convert those bounds to
-instants in `displayTimezone`, apply an optimistic cache patch, and reconcile through the existing
-typed mutation layer. Provider writes retain pending/conflict behavior. Failure rolls back the
-optimistic position and shows fixed safe copy; server exception text is never rendered.
+The canvas continues to emit proposed semantic wall-clock bounds. Calendar and Agenda convert those
+bounds to exact instants in `displayTimezone` through the shared Temporal helper, apply an
+optimistic cache patch, and reconcile through the existing typed mutation layer. Provider writes
+retain pending/conflict behavior. Failure rolls back the optimistic position and shows fixed safe
+copy; server exception text is never rendered.
 
 ## Accessibility
 

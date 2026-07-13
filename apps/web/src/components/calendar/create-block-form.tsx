@@ -44,6 +44,7 @@ function defaultSelection(): CalendarRegionSelection {
 
 /** Props for {@link CreateBlockForm}. */
 export interface CreateBlockFormProps {
+  readonly displayTimezone: string;
   readonly rangeKeys: readonly QueryKey[];
   readonly layers?: readonly CalendarLayerOut[];
   readonly preferences?: CalendarPreferences;
@@ -53,6 +54,7 @@ export interface CreateBlockFormProps {
 
 /** Event/timebox quick-create popover, opened from the toolbar or a selected canvas region. */
 export default function CreateBlockForm({
+  displayTimezone,
   rangeKeys,
   layers = [],
   preferences,
@@ -69,8 +71,11 @@ export default function CreateBlockForm({
   const [layerId, setLayerId] = useState<CalendarLayerOut['id'] | ''>(
     preferences?.defaultLayerId ?? '',
   );
-  const [startsAt, setStartsAt] = useState(() => toLocalInputValue(defaults.startsAt));
-  const [endsAt, setEndsAt] = useState(() => toLocalInputValue(defaults.endsAt));
+  const [startsAt, setStartsAt] = useState(() =>
+    toLocalInputValue(defaults.startsAt, displayTimezone),
+  );
+  const [endsAt, setEndsAt] = useState(() => toLocalInputValue(defaults.endsAt, displayTimezone));
+  const [timeError, setTimeError] = useState(false);
 
   const destinations = useMemo(
     () => layers.filter((layer) => layer.sourceKind === 'native_blocks' || layer.editableCore),
@@ -82,22 +87,35 @@ export default function CreateBlockForm({
 
   useEffect(() => {
     if (!selection) return;
-    setStartsAt(toLocalInputValue(selection.startsAt));
-    setEndsAt(toLocalInputValue(selection.endsAt));
+    setStartsAt(toLocalInputValue(selection.startsAt, displayTimezone));
+    setEndsAt(toLocalInputValue(selection.endsAt, displayTimezone));
+    setTimeError(false);
     setIntent(preferences?.defaultCreateIntent ?? 'event');
     setLayerId(configuredLayerAvailable ? (preferences?.defaultLayerId ?? '') : '');
     setOpen(true);
-  }, [configuredLayerAvailable, preferences, selection]);
+  }, [configuredLayerAvailable, displayTimezone, preferences, selection]);
 
   const submit: SubmitEventHandler<HTMLFormElement> = (event) => {
     event.preventDefault();
     const trimmed = title.trim();
     if (!trimmed) return;
+    const startInstant =
+      selection && startsAt === toLocalInputValue(selection.startsAt, displayTimezone)
+        ? selection.startsAt
+        : fromLocalInputValue(startsAt, displayTimezone);
+    const endInstant =
+      selection && endsAt === toLocalInputValue(selection.endsAt, displayTimezone)
+        ? selection.endsAt
+        : fromLocalInputValue(endsAt, displayTimezone);
+    if (!startInstant || !endInstant) {
+      setTimeError(true);
+      return;
+    }
     const input = {
       intent,
       title: trimmed,
-      startsAt: fromLocalInputValue(startsAt),
-      endsAt: fromLocalInputValue(endsAt),
+      startsAt: startInstant,
+      endsAt: endInstant,
       ...(intent === 'event' && layerId ? { layerId } : {}),
     } satisfies CalendarItemCreate;
     create.mutate(
@@ -118,8 +136,9 @@ export default function CreateBlockForm({
       onOpenChange={(next) => {
         if (next && !selection) {
           const region = defaultSelection();
-          setStartsAt(toLocalInputValue(region.startsAt));
-          setEndsAt(toLocalInputValue(region.endsAt));
+          setStartsAt(toLocalInputValue(region.startsAt, displayTimezone));
+          setEndsAt(toLocalInputValue(region.endsAt, displayTimezone));
+          setTimeError(false);
           setIntent(preferences?.defaultCreateIntent ?? 'event');
           setLayerId(configuredLayerAvailable ? (preferences?.defaultLayerId ?? '') : '');
         }
@@ -204,6 +223,7 @@ export default function CreateBlockForm({
                 value={startsAt}
                 onChange={(event) => {
                   setStartsAt(event.target.value);
+                  setTimeError(false);
                 }}
               />
             </label>
@@ -214,10 +234,16 @@ export default function CreateBlockForm({
                 value={endsAt}
                 onChange={(event) => {
                   setEndsAt(event.target.value);
+                  setTimeError(false);
                 }}
               />
             </label>
           </div>
+          {timeError ? (
+            <p role="alert" className="text-destructive text-xs">
+              Choose valid start and end times in your calendar timezone.
+            </p>
+          ) : null}
           <Button type="submit" size="sm" disabled={!title.trim() || create.isPending}>
             {create.isPending ? 'Creating…' : `Create ${intent}`}
           </Button>

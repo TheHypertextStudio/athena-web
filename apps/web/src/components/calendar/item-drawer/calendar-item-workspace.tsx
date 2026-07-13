@@ -13,6 +13,8 @@ import { DeleteCalendarItemAction, SyncStatusSection } from './status-actions';
 
 /** Props for {@link CalendarItemWorkspace}. */
 export interface CalendarItemWorkspaceProps {
+  /** Hub display timezone used by editable wall-clock fields. */
+  displayTimezone: string;
   /** Loaded calendar item to render. */
   item: CalendarItemOut;
   /** Owning layer, used for color, title, and provider context. */
@@ -27,6 +29,7 @@ export interface CalendarItemWorkspaceProps {
 
 /** Composed workspace body for one loaded calendar item. */
 export function CalendarItemWorkspace({
+  displayTimezone,
   item,
   layer,
   onClose,
@@ -86,7 +89,7 @@ export function CalendarItemWorkspace({
 
       <section className="flex flex-col gap-2">
         <h3 className="text-on-surface text-sm font-semibold">Details</h3>
-        <CoreFieldsForm item={item} />
+        <CoreFieldsForm displayTimezone={displayTimezone} item={item} />
       </section>
 
       <CalendarItemRelationsSection itemId={item.id} onOpenItem={onOpenItem} />

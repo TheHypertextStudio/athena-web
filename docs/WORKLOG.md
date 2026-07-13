@@ -42,6 +42,9 @@
   Task 2 focused suite passes 30/30, affected Agenda and Calendar tests pass 63/63, and the web
   typecheck plus focused lint pass. Collision, gesture, polish, and browser-proof work remains in
   the later plan tasks; this thread still has no available browser binding.
+  Review follow-up now pins display-timezone-safe datetime inputs and DST fold/gap handling; the
+  expanded affected suite passes 68/68. The Agenda provider/model split keeps both production
+  modules below 300 lines without changing the public context exports.
 
 ---
 

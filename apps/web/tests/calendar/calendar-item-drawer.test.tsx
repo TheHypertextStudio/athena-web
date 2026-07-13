@@ -171,7 +171,10 @@ function makeLayer(overrides: Partial<CalendarLayerOut> = {}): CalendarLayerOut 
 }
 
 /** Render the drawer inside a fresh QueryClient + ActiveOrgContext (for the task-link forms). */
-function renderDrawer(itemId: string | null): {
+function renderDrawer(
+  itemId: string | null,
+  displayTimezone = 'UTC',
+): {
   onClose: ReturnType<typeof vi.fn>;
   onOpenTask: ReturnType<typeof vi.fn>;
 } {
@@ -191,9 +194,15 @@ function renderDrawer(itemId: string | null): {
       </ActiveOrgContext>
     </QueryClientProvider>
   );
-  render(<CalendarItemDrawer itemId={itemId} onClose={onClose} onOpenTask={onOpenTask} />, {
-    wrapper,
-  });
+  render(
+    <CalendarItemDrawer
+      displayTimezone={displayTimezone}
+      itemId={itemId}
+      onClose={onClose}
+      onOpenTask={onOpenTask}
+    />,
+    { wrapper },
+  );
   return { onClose, onOpenTask };
 }
 
@@ -243,6 +252,28 @@ afterEach(() => {
 });
 
 describe('CalendarItemDrawer', () => {
+  it('preserves timed instants when another field changes in a different display timezone', async () => {
+    renderDrawer(ITEM_ID, 'Asia/Tokyo');
+
+    expect(await screen.findByLabelText('Starts')).toHaveValue('2026-07-02T01:00');
+    expect(screen.getByLabelText('Ends')).toHaveValue('2026-07-02T02:00');
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Updated review' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => {
+      expect(itemPatch).toHaveBeenCalledWith({
+        param: { id: ITEM_ID },
+        json: {
+          title: 'Updated review',
+          description: '',
+          location: '',
+          startsAt: '2026-07-01T16:00:00.000Z',
+          endsAt: '2026-07-01T17:00:00.000Z',
+        },
+      });
+    });
+  });
+
   it('shows multiple linked tasks, grouped by role', async () => {
     renderDrawer(ITEM_ID);
 

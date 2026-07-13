@@ -40,7 +40,7 @@ function chronological(entries: readonly AgendaEntry[]): AgendaEntry[] {
 
 /** Arranges the agenda for the active list/timeline view. */
 export default function AgendaCanvas(): JSX.Element {
-  const { entries, view } = useAgenda();
+  const { displayTimezone, entries, view } = useAgenda();
   const router = useRouter();
   const [openItemId, setOpenItemId] = useState<string | null>(null);
   return (
@@ -51,6 +51,7 @@ export default function AgendaCanvas(): JSX.Element {
         <TimelineArrangement entries={entries} onOpenCalendarItem={setOpenItemId} />
       )}
       <CalendarItemDrawer
+        displayTimezone={displayTimezone}
         itemId={openItemId}
         onClose={() => {
           setOpenItemId(null);

@@ -10,16 +10,19 @@ import { fromAllDayEndSeed, localAllDayEndSeed } from './presentation';
 
 /** Props for {@link CoreFieldsForm}. */
 export interface CoreFieldsFormProps {
+  /** Hub display timezone used to interpret native datetime-local values. */
+  displayTimezone: string;
   /** Calendar item whose editable core fields are shown. */
   item: CalendarItemOut;
 }
 
 /** Inline title, description, location, and time editor for one calendar item. */
-export function CoreFieldsForm({ item }: CoreFieldsFormProps): JSX.Element {
+export function CoreFieldsForm({ displayTimezone, item }: CoreFieldsFormProps): JSX.Element {
   const update = useUpdateCalendarItem(item.id);
   const canEdit = item.permissions.canEditCore;
   const timed = item.startsAt !== null;
-  const localInputSeed = (iso: string | null): string => (iso ? toLocalInputValue(iso) : '');
+  const localInputSeed = (iso: string | null): string =>
+    iso ? toLocalInputValue(iso, displayTimezone) : '';
 
   const [title, setTitle] = useState(item.title);
   const [description, setDescription] = useState(item.description ?? '');
@@ -28,6 +31,7 @@ export function CoreFieldsForm({ item }: CoreFieldsFormProps): JSX.Element {
   const [endsAt, setEndsAt] = useState(localInputSeed(item.endsAt));
   const [allDayStart, setAllDayStart] = useState(item.allDayStartDate ?? '');
   const [allDayEnd, setAllDayEnd] = useState(localAllDayEndSeed(item.allDayEndDate));
+  const [timeError, setTimeError] = useState(false);
 
   const dirty =
     title !== item.title ||
@@ -42,12 +46,24 @@ export function CoreFieldsForm({ item }: CoreFieldsFormProps): JSX.Element {
     event.preventDefault();
     if (!canEdit || !dirty || title.trim().length === 0) return;
     if (!timed && (allDayStart.length === 0 || allDayEnd.length === 0)) return;
+    const startInstant =
+      timed && startsAt === localInputSeed(item.startsAt)
+        ? (item.startsAt ?? null)
+        : fromLocalInputValue(startsAt, displayTimezone);
+    const endInstant =
+      timed && endsAt === localInputSeed(item.endsAt)
+        ? (item.endsAt ?? null)
+        : fromLocalInputValue(endsAt, displayTimezone);
+    if (timed && (!startInstant || !endInstant)) {
+      setTimeError(true);
+      return;
+    }
     update.mutate({
       title,
       description,
       location,
       ...(timed
-        ? { startsAt: fromLocalInputValue(startsAt), endsAt: fromLocalInputValue(endsAt) }
+        ? { startsAt: startInstant ?? undefined, endsAt: endInstant ?? undefined }
         : { allDayStartDate: allDayStart, allDayEndDate: fromAllDayEndSeed(allDayEnd) }),
     });
   };
@@ -96,6 +112,7 @@ export function CoreFieldsForm({ item }: CoreFieldsFormProps): JSX.Element {
             onChange={(event) => {
               if (timed) setStartsAt(event.target.value);
               else setAllDayStart(event.target.value);
+              setTimeError(false);
             }}
           />
         </label>
@@ -108,10 +125,16 @@ export function CoreFieldsForm({ item }: CoreFieldsFormProps): JSX.Element {
             onChange={(event) => {
               if (timed) setEndsAt(event.target.value);
               else setAllDayEnd(event.target.value);
+              setTimeError(false);
             }}
           />
         </label>
       </div>
+      {timeError ? (
+        <p role="alert" className="text-destructive text-xs">
+          Choose valid start and end times in your calendar timezone.
+        </p>
+      ) : null}
       {canEdit ? (
         <div className="flex items-center gap-2">
           <Button type="submit" size="sm" disabled={!dirty || update.isPending}>

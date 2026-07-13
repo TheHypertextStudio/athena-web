@@ -8,14 +8,32 @@
  * the create-native-block form so both edit times the same way.
  */
 
-/** Convert an ISO instant to a `datetime-local` input value in the viewer's local timezone. */
-export function toLocalInputValue(iso: string): string {
-  const d = new Date(iso);
+import { scheduleInstantAt, scheduleWallPositionForInstant } from '@/components/scheduling';
+
+/** Convert an ISO instant to a `datetime-local` value in the required display timezone. */
+export function toLocalInputValue(iso: string, displayTimezone: string): string {
+  const position = scheduleWallPositionForInstant(iso, displayTimezone);
+  if (!position) return '';
   const pad = (n: number): string => String(n).padStart(2, '0');
-  return `${String(d.getFullYear())}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const hours = Math.floor(position.wallMinutes / 60);
+  const minutes = position.wallMinutes % 60;
+  return `${position.date}T${pad(hours)}:${pad(minutes)}`;
 }
 
-/** Convert a `datetime-local` input value (local time) back to an ISO instant. */
-export function fromLocalInputValue(value: string): string {
-  return new Date(value).toISOString();
+/** Convert a display-timezone wall value to an exact instant, rejecting invalid local times. */
+export function fromLocalInputValue(value: string, displayTimezone: string): string | null {
+  const match = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})$/.exec(value);
+  if (!match) return null;
+  const hours = Number(match[2]);
+  const minutes = Number(match[3]);
+  if (hours > 23 || minutes > 59) return null;
+  const date = match[1];
+  if (!date) return null;
+  const wallMinutes = hours * 60 + minutes;
+  const instant = scheduleInstantAt(date, wallMinutes, displayTimezone, 'compatible');
+  if (!instant) return null;
+  const roundTrip = scheduleWallPositionForInstant(instant, displayTimezone);
+  return roundTrip !== null && roundTrip.date === date && roundTrip.wallMinutes === wallMinutes
+    ? instant
+    : null;
 }

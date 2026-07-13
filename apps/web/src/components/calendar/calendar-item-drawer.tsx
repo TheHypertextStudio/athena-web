@@ -17,6 +17,8 @@ import { CalendarItemWorkspace } from './item-drawer/calendar-item-workspace';
 
 /** Props for {@link CalendarItemDrawer}. */
 export interface CalendarItemDrawerProps {
+  /** Hub display timezone used by editable wall-clock fields. */
+  displayTimezone: string;
   /** Calendar item id to show, or `null` to keep the drawer closed. */
   itemId: string | null;
   /** Close the drawer. */
@@ -29,6 +31,7 @@ export interface CalendarItemDrawerProps {
 
 /** Layered-calendar item workspace drawer. */
 export default function CalendarItemDrawer({
+  displayTimezone,
   itemId,
   onClose,
   onOpenTask,
@@ -50,6 +53,7 @@ export default function CalendarItemDrawer({
         ) : (
           <CalendarItemDrawerContent
             key={itemId}
+            displayTimezone={displayTimezone}
             initialItemId={itemId}
             onClose={onClose}
             onOpenTask={onOpenTask}
@@ -62,6 +66,7 @@ export default function CalendarItemDrawer({
 }
 
 interface CalendarItemDrawerContentProps {
+  displayTimezone: string;
   initialItemId: string;
   onClose: () => void;
   onOpenTask: (orgId: string, taskId: string) => void;
@@ -69,6 +74,7 @@ interface CalendarItemDrawerContentProps {
 }
 
 function CalendarItemDrawerContent({
+  displayTimezone,
   initialItemId,
   onClose,
   onOpenTask,
@@ -113,6 +119,7 @@ function CalendarItemDrawerContent({
   return item ? (
     <CalendarItemWorkspace
       key={item.id}
+      displayTimezone={displayTimezone}
       item={item}
       layer={layer}
       onClose={onClose}

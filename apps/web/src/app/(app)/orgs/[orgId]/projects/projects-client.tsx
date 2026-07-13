@@ -6,7 +6,7 @@
  * @remarks
  * A Client Component reached at `/orgs/[orgId]/projects`. A Project is a *bounded* effort, so the
  * roster renders through the shared {@link EntityTable}: a leading lifecycle status glyph, a
- * flexing **Title** column, and the project's key properties — status, lead, health, target date,
+ * flexing **Title** column, and the project's key properties — status, lead, target date,
  * and task scope — in **aligned** columns under a light header. This is the same column-aligned
  * surface Initiatives (and, later, Tasks) render through, so a project roster and an initiative
  * roster share one visual hierarchy (the user's mandate: "structured the same … just like Linear");
@@ -15,7 +15,7 @@
  * Columns are derived from the project {@link buildProjectCatalog | catalog} where natural
  * ({@link projectColumns}), so the toolbar's groupable/sortable fields and the table's headers read
  * from one source of truth. The {@link FilterToolbar} stays mounted above the table over the same
- * catalog: the roster can be filtered by status / health / lead / team, grouped, and sorted — all
+ * catalog: the roster can be filtered by status / lead / team, grouped, and sorted — all
  * applied **client-side** over the already-loaded {@link useApiListQuery} results (Phase B data flow is
  * preserved; no manual refresh). The view state is held in the URL by {@link useViewState}, so a
  * filtered roster is shareable and survives a reload. Grouping renders full-width
@@ -191,7 +191,7 @@ export default function ProjectsListClient(): JSX.Element {
         <div className="flex flex-col gap-1">
           <h1 className="text-on-surface text-h1">{projectsLabel}</h1>
           <p className="text-on-surface-variant text-xs">
-            Bounded efforts with a finish line — tracked by status, health, and scope.
+            Bounded efforts with a finish line — tracked by status and scope.
           </p>
         </div>
         <Button
@@ -240,7 +240,7 @@ export default function ProjectsListClient(): JSX.Element {
         <EmptyState
           icon={FolderKanban}
           title={`No ${projectsLabel.toLowerCase()} yet`}
-          body={`${projectsLabel} are bounded efforts with a clear finish line. Create one to start tracking its status, health, and scope.`}
+          body={`${projectsLabel} are bounded efforts with a clear finish line. Create one to start tracking its status and scope.`}
           cta={{
             label: `Create your first ${projectLabel.toLowerCase()}`,
             onClick: () => {

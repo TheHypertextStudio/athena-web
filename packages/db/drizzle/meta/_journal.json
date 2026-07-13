@@ -218,6 +218,13 @@
       "when": 1783895808390,
       "tag": "0030_selective_account_export_scope",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1783961944184,
+      "tag": "0031_project_dependencies",
+      "breakpoints": true
     }
   ]
 }

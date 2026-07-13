@@ -43,12 +43,10 @@ const INITIATIVE_OPTIONS: readonly PickerOption[] = [{ value: 'init_1', label: '
 function renderPanel(overrides: Partial<React.ComponentProps<typeof PropertiesPanel>> = {}): {
   onLeadChange: ReturnType<typeof vi.fn>;
   onStatusChange: ReturnType<typeof vi.fn>;
-  onHealthChange: ReturnType<typeof vi.fn>;
   onProgramChange: ReturnType<typeof vi.fn>;
 } {
   const onLeadChange = vi.fn();
   const onStatusChange = vi.fn();
-  const onHealthChange = vi.fn();
   const onTimelineChange = vi.fn();
   const onProgramChange = vi.fn();
   const onInitiativeChange = vi.fn();
@@ -57,7 +55,6 @@ function renderPanel(overrides: Partial<React.ComponentProps<typeof PropertiesPa
       leadId={null}
       memberOptions={MEMBER_OPTIONS}
       status="planned"
-      health={null}
       startDate={null}
       targetDate={null}
       programId={null}
@@ -68,14 +65,13 @@ function renderPanel(overrides: Partial<React.ComponentProps<typeof PropertiesPa
       pending={false}
       onLeadChange={onLeadChange}
       onStatusChange={onStatusChange}
-      onHealthChange={onHealthChange}
       onTimelineChange={onTimelineChange}
       onProgramChange={onProgramChange}
       onInitiativeChange={onInitiativeChange}
       {...overrides}
     />,
   );
-  return { onLeadChange, onStatusChange, onHealthChange, onProgramChange };
+  return { onLeadChange, onStatusChange, onProgramChange };
 }
 
 describe('project PropertiesPanel — interactive rows (directive A)', () => {
@@ -87,7 +83,6 @@ describe('project PropertiesPanel — interactive rows (directive A)', () => {
 
     // Each unset property shows a calm "Set <field>" prompt (the visible button text).
     expect(screen.getByText('Set lead')).toBeTruthy();
-    expect(screen.getByText('Set health')).toBeTruthy();
     expect(screen.getByText('Set timeline')).toBeTruthy();
     // Status defaults to 'planned' (non-nullable), so it shows the value, not a prompt.
     expect(screen.getByRole('button', { name: 'Status — Planned' })).toBeTruthy();
@@ -119,13 +114,11 @@ describe('project PropertiesPanel — interactive rows (directive A)', () => {
     expect(onStatusChange).toHaveBeenCalledWith('completed');
   });
 
-  it('clears the health verdict through the picker "clear" row', () => {
-    const { onHealthChange } = renderPanel({ health: 'at_risk' });
+  it('does not expose a health feature in the project rail', () => {
+    renderPanel();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Health — At risk' }));
-    fireEvent.click(screen.getByRole('button', { name: 'No health' }));
-
-    expect(onHealthChange).toHaveBeenCalledWith(null);
+    expect(screen.queryByText('Health')).toBeNull();
+    expect(screen.queryByText('Set health')).toBeNull();
   });
 
   it('attaches a program through the entity picker', () => {
@@ -161,13 +154,7 @@ describe('project PropertiesPanel — interactive rows (directive A)', () => {
     // A panel where everything is unset must offer a "Set …" prompt for every property,
     // guarding against any future regression that reintroduces a dead row for one of them.
     renderPanel();
-    for (const field of [
-      'Set lead',
-      'Set health',
-      'Set timeline',
-      'Set program',
-      'Set initiative',
-    ]) {
+    for (const field of ['Set lead', 'Set timeline', 'Set program', 'Set initiative']) {
       expect(screen.getByText(field)).toBeTruthy();
     }
   });

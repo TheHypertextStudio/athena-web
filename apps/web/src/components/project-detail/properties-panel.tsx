@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * The project properties panel — lead, status, health, timeline, program, and initiative.
+ * The project properties panel — lead, status, timeline, program, and initiative.
  *
  * @remarks
  * The right-rail summary of a project's structural metadata, mirroring Linear's project
@@ -9,7 +9,7 @@
  * picker that assigns it through the project PATCH RPC (the host page owns the optimistic
  * mutation + rollback), and an unset property reads as a calm "Set <field>" affordance rather
  * than a dead "Not set" row. The lead is an {@link ActorPicker} over the org's members; status
- * and health are {@link EnumPicker}s; the timeline is a {@link DateRangePicker} over
+ * is an {@link EnumPicker}; the timeline is a {@link DateRangePicker} over
  * start/target; program and initiative are {@link EntityPicker}s whose nouns are
  * vocabulary-skinned by the host page. When the actor lacks `contribute` the rows render
  * read-only (plain value text / em-dash) so the panel still reads as complete.
@@ -19,7 +19,7 @@
  * resolves members/programs/initiatives into options and owns the PATCH, exactly as the picker
  * family is designed to be used.
  */
-import { type Health, type ProjectStatus } from '@docket/types';
+import type { ProjectStatus } from '@docket/types';
 import {
   ActorPicker,
   DateRangePicker,
@@ -28,11 +28,11 @@ import {
   type PickerOption,
 } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
-import { Activity, FolderKanban, Heart, LayoutGrid, RefreshCw, User } from '@docket/ui/icons';
+import { Activity, FolderKanban, LayoutGrid, RefreshCw, User } from '@docket/ui/icons';
 import type { JSX } from 'react';
 
 import { PropertyPanel, PropertyPanelRow } from '@/components/property-pickers/property-panel';
-import { healthOptions, projectStatusOptions } from '@/components/property-pickers/options';
+import { projectStatusOptions } from '@/components/property-pickers/options';
 import { formatCalendarDate } from '@/lib/format-date';
 
 /** Props for {@link PropertiesPanel}. */
@@ -43,8 +43,6 @@ export interface PropertiesPanelProps {
   memberOptions: readonly PickerOption[];
   /** The current project status. */
   status: ProjectStatus;
-  /** The current health verdict, or `null` when unset. */
-  health: Health | null;
   /** ISO start date, when scheduled. */
   startDate: string | null;
   /** ISO target date, when scheduled. */
@@ -65,8 +63,6 @@ export interface PropertiesPanelProps {
   onLeadChange: (leadId: string | null) => void;
   /** Set the project status. */
   onStatusChange: (status: ProjectStatus) => void;
-  /** Set the health verdict (or `null` to clear). */
-  onHealthChange: (health: Health | null) => void;
   /** Set the start/target timeline (either bound may be `null`). */
   onTimelineChange: (range: { start: string | null; end: string | null }) => void;
   /** Attach to a program (or `null` to detach). */
@@ -85,7 +81,6 @@ export function PropertiesPanel({
   leadId,
   memberOptions,
   status,
-  health,
   startDate,
   targetDate,
   programId,
@@ -96,7 +91,6 @@ export function PropertiesPanel({
   pending,
   onLeadChange,
   onStatusChange,
-  onHealthChange,
   onTimelineChange,
   onProgramChange,
   onInitiativeChange,
@@ -131,19 +125,6 @@ export function PropertiesPanel({
           }}
           placeholder="Set status"
           ariaLabel="Status"
-          readOnly={readOnly}
-          disabled={pending}
-        />
-      </PropertyPanelRow>
-
-      <PropertyPanelRow divided icon={<Heart className="size-4" />} label="Health">
-        <EnumPicker<Health>
-          options={healthOptions()}
-          value={health}
-          onChange={onHealthChange}
-          placeholder="Set health"
-          clearLabel="No health"
-          ariaLabel="Health"
           readOnly={readOnly}
           disabled={pending}
         />

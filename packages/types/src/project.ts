@@ -172,6 +172,64 @@ export const ProjectOut = z
 /** Project representation value. */
 export type ProjectOut = z.infer<typeof ProjectOut>;
 
+/** A compact Project reference suitable for a dependency list. */
+export const ProjectRef = z
+  .object({
+    id: ProjectId.describe('Stable id of the referenced Project.'),
+    name: z.string().describe('Human-readable Project name.'),
+    status: ProjectStatus.describe('Current Project lifecycle status.'),
+    targetDate: z.string().nullable().describe('Target date when set, otherwise null.'),
+  })
+  .meta({ id: 'ProjectRef', description: 'A compact Project reference.' });
+/** Compact Project dependency reference value. */
+export type ProjectRef = z.infer<typeof ProjectRef>;
+
+/** Body for creating a directed Project dependency relative to the path Project. */
+export const ProjectDependencyCreate = z
+  .object({
+    blockingProjectId: ProjectId.optional().describe(
+      'A Project that blocks the path Project. Supply exactly one endpoint.',
+    ),
+    blockedProjectId: ProjectId.optional().describe(
+      'A Project the path Project blocks. Supply exactly one endpoint.',
+    ),
+  })
+  .refine(
+    (value) => (value.blockingProjectId === undefined) !== (value.blockedProjectId === undefined),
+    { message: 'Supply exactly one dependency endpoint.' },
+  )
+  .meta({ id: 'ProjectDependencyCreate', description: 'Create a directed Project dependency.' });
+/** Validated Project dependency-create body. */
+export type ProjectDependencyCreate = z.infer<typeof ProjectDependencyCreate>;
+
+/** A Project's outgoing and incoming dependency edges. */
+export const ProjectDependencyOut = z
+  .object({
+    blocking: z.array(ProjectRef).describe('Projects the path Project blocks.'),
+    blockedBy: z.array(ProjectRef).describe('Projects that block the path Project.'),
+  })
+  .meta({ id: 'ProjectDependencyOut', description: 'A Project dependency split.' });
+/** Project dependency lists value. */
+export type ProjectDependencyOut = z.infer<typeof ProjectDependencyOut>;
+
+/** Successful Project dependency create acknowledgement. */
+export const ProjectDependencyCreated = z
+  .object({
+    created: z.literal(true),
+    blockingProjectId: ProjectId,
+    blockedProjectId: ProjectId,
+  })
+  .meta({ id: 'ProjectDependencyCreated', description: 'A created Project dependency edge.' });
+/** Project dependency create acknowledgement value. */
+export type ProjectDependencyCreated = z.infer<typeof ProjectDependencyCreated>;
+
+/** Successful Project dependency removal acknowledgement. */
+export const ProjectDependencyRemoved = z
+  .object({ removed: z.literal(true) })
+  .meta({ id: 'ProjectDependencyRemoved', description: 'A removed Project dependency edge.' });
+/** Project dependency removal acknowledgement value. */
+export type ProjectDependencyRemoved = z.infer<typeof ProjectDependencyRemoved>;
+
 /**
  * Weighted completion roll-up across a Project's Tasks.
  *

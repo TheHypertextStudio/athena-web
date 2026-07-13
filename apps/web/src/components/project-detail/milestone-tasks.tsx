@@ -15,14 +15,13 @@
  * routes to its task detail. A composer at the top adds a task; the empty state invites the first
  * one.
  */
-import type { TaskOut, TeamOut } from '@docket/types';
+import type { TaskOut } from '@docket/types';
 import { type EntityTableGroup } from '@docket/ui/components';
-import { Button, Input } from '@docket/ui/primitives';
+import { Button } from '@docket/ui/primitives';
 import type { JSX } from 'react';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 
 import type { ActorDirectory } from './actor-directory';
-import { TeamPicker } from '@/components/teams/team-picker';
 import { buildTaskCatalog } from '@/components/views/task-catalog';
 import { buildTaskColumns, TaskTable } from '@/components/views/task-table';
 import { formatCalendarDate } from '@/lib/format-date';
@@ -53,20 +52,8 @@ export interface MilestoneTasksProps {
   taskNoun: string;
   /** Open a task's detail. */
   onOpenTask: (taskId: string) => void;
-  /** Whether a task create is in flight. */
-  creating: boolean;
-  /** A create error to surface, if any. */
-  createError: string | null;
-  /** Create a task with the given title. */
-  onCreate: (title: string) => void;
-  /** The org's teams; a picker appears in the composer when there is more than one. */
-  teams: readonly TeamOut[];
-  /** The team new tasks land in (the org default or a user override). */
-  teamId: string | null;
-  /** Notify the parent that a different create-target team was chosen. */
-  onTeamChange: (teamId: string) => void;
-  /** Whether the org's teams are still loading (disables the create affordance). */
-  teamsLoading: boolean;
+  /** Open the full task composer scoped to this Project. */
+  onCreate: () => void;
   /** The org id, for building the per-row task-detail link target. */
   orgId: string;
 }
@@ -88,17 +75,10 @@ export function MilestoneTasks({
   resolveActor,
   taskNoun,
   onOpenTask,
-  creating,
-  createError,
   onCreate,
-  teams,
-  teamId,
-  onTeamChange,
-  teamsLoading,
   orgId,
 }: MilestoneTasksProps): JSX.Element {
   const prefetch = usePrefetchApi();
-  const [title, setTitle] = useState('');
 
   /** Milestone display order: declared milestones in `sort` order, then Unscheduled last. */
   const milestoneRank = useMemo(() => {
@@ -166,39 +146,16 @@ export function MilestoneTasks({
     }));
   }, [tasks, milestoneRank, milestoneLabel]);
 
-  function submit(event: React.SyntheticEvent): void {
-    event.preventDefault();
-    if (title.trim().length === 0) return;
-    onCreate(title.trim());
-    setTitle('');
-  }
-
   return (
     <div className="flex flex-col gap-3">
-      <form onSubmit={submit} className="flex flex-col gap-2">
-        <div className="flex gap-2">
-          <Input
-            aria-label={`New ${taskNoun} title`}
-            placeholder={`Add a ${taskNoun}…`}
-            value={title}
-            onChange={(event) => {
-              setTitle(event.target.value);
-            }}
-          />
-          <TeamPicker teams={teams} value={teamId} onChange={onTeamChange} disabled={creating} />
-          <Button
-            type="submit"
-            disabled={creating || teamsLoading || teamId === null || title.trim().length === 0}
-          >
-            {creating ? 'Adding…' : `Add ${taskNoun}`}
-          </Button>
-        </div>
-        {createError ? (
-          <p role="alert" className="text-destructive text-body">
-            {createError}
-          </p>
-        ) : null}
-      </form>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-on-surface-variant text-body">
+          Plan work here without leaving this project.
+        </p>
+        <Button type="button" onClick={onCreate}>
+          Add {taskNoun}
+        </Button>
+      </div>
 
       {tasks.length === 0 ? (
         <div className="border-outline-variant text-on-surface-variant text-body rounded-xl border border-dashed p-8 text-center">

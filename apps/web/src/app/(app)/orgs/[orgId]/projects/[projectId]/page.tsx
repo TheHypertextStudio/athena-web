@@ -6,11 +6,13 @@ import { useParams, useRouter } from 'next/navigation';
 import { type JSX, useMemo, useState } from 'react';
 
 import TaskGraphPanel from '@/components/canvas/task-graph-panel';
+import { EditableFreeformText } from '@/components/editor/freeform-text';
 import { AgentsStrip } from '@/components/project-detail/agents-strip';
-import { Discussion } from '@/components/project-detail/discussion';
+import { AgentActivityFeed } from '@/components/project-detail/agent-activity-feed';
 import { MilestoneTasks } from '@/components/project-detail/milestone-tasks';
 import { OverviewSummary } from '@/components/project-detail/overview-summary';
-import { HealthPill, WeightedProgress } from '@/components/project-detail/progress-bar';
+import { WeightedProgress } from '@/components/project-detail/progress-bar';
+import { ProjectDependenciesPanel } from '@/components/project-detail/project-dependencies';
 import { PropertiesPanel } from '@/components/project-detail/properties-panel';
 import {
   statusBadgeVariant,
@@ -20,6 +22,7 @@ import {
 import { type TabItem, ProjectTabs } from '@/components/project-detail/tabs';
 import { UpdatesTab } from '@/components/project-detail/updates-tab';
 import { useActiveOrg } from '@/components/active-org';
+import { CreateTaskDialog } from '@/components/tasks/create-task';
 import { useProjectDetailPage } from '@/lib/use-project-detail-page';
 import { userErrorMessage } from '@/lib/problem';
 
@@ -45,15 +48,13 @@ export default function ProjectDetailPage(): JSX.Element {
   const taskNounPlural = useVocabulary('task', { plural: true }).toLowerCase();
 
   const [tab, setTab] = useState<TabId>('overview');
-  const [teamOverride, setTeamOverride] = useState<string | null>(null);
-  const teamId = teamOverride ?? defaultTeamId;
+  const [taskComposerOpen, setTaskComposerOpen] = useState(false);
 
   const {
+    detailKey,
     detailQ,
-    commentsQ,
     updatesQ,
     project,
-    comments,
     updates,
     milestones,
     milestoneTasks,
@@ -62,25 +63,18 @@ export default function ProjectDetailPage(): JSX.Element {
     memberOptions,
     programOptions,
     initiativeOptions,
-    health,
     progress,
     agentsHere,
     agentActivity,
     currentInitiativeId,
     patchProject,
     setInitiative,
-    postComment,
     postUpdate,
-    createTask,
     propsPending,
     propsError,
-    commentPosting,
-    commentError,
     updatePosting,
     updateError,
-    createTaskPending,
-    createTaskError,
-  } = useProjectDetailPage(orgId, projectId, teamId);
+  } = useProjectDetailPage(orgId, projectId);
 
   const taskCount = milestoneTasks.length;
   const tabs: readonly TabItem[] = useMemo(
@@ -131,19 +125,25 @@ export default function ProjectDetailPage(): JSX.Element {
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
-      <header className="flex flex-col gap-3">
+      <header className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-on-surface text-h1">{project.name}</h1>
+          <h1 className="text-on-surface text-[clamp(2.25rem,5vw,4rem)] leading-[0.98] font-semibold tracking-[-0.045em]">
+            {project.name}
+          </h1>
           <Badge variant={statusBadgeVariant(project.status)}>
             {STATUS_LABEL[project.status] ?? project.status}
           </Badge>
-          <HealthPill health={health} />
         </div>
-        {project.description ? (
-          <p className="text-on-surface-variant text-body max-w-2xl leading-relaxed">
-            {project.description}
-          </p>
-        ) : null}
+        <EditableFreeformText
+          value={project.description}
+          placeholder="Add a short project description…"
+          canEdit={canEdit}
+          saving={propsPending}
+          onSave={(description) => {
+            patchProject({ description });
+          }}
+          className="text-on-surface-variant max-w-3xl leading-relaxed"
+        />
       </header>
 
       <ProjectTabs
@@ -168,7 +168,7 @@ export default function ProjectDetailPage(): JSX.Element {
               className="border-outline-variant bg-surface-container-low rounded-xl border p-4"
             >
               {progress ? (
-                <WeightedProgress progress={progress} health={health} />
+                <WeightedProgress progress={progress} />
               ) : (
                 <p className="text-on-surface-variant text-body">Progress is unavailable.</p>
               )}
@@ -179,29 +179,13 @@ export default function ProjectDetailPage(): JSX.Element {
               taskNounPlural={taskNounPlural}
             />
             <AgentsStrip agents={agentsHere} />
-            <Discussion
-              comments={comments}
-              loading={commentsQ.isPending}
-              error={
-                commentsQ.isError
-                  ? userErrorMessage(commentsQ.error, 'Could not load this project.')
-                  : null
-              }
-              resolveActor={resolveActor}
-              agentActivity={agentActivity}
-              posting={commentPosting}
-              postError={commentError}
-              onPost={(body) => {
-                postComment(body);
-              }}
-            />
+            <AgentActivityFeed activities={agentActivity} />
           </div>
           <aside className="flex flex-col gap-4">
             <PropertiesPanel
               leadId={project.leadId ?? null}
               memberOptions={memberOptions}
               status={projectStatusOf(project.status)}
-              health={health}
               startDate={project.startDate ?? null}
               targetDate={project.targetDate ?? null}
               programId={project.programId ?? null}
@@ -216,9 +200,6 @@ export default function ProjectDetailPage(): JSX.Element {
               onStatusChange={(status) => {
                 patchProject({ status });
               }}
-              onHealthChange={(next) => {
-                patchProject({ health: next });
-              }}
               onTimelineChange={({ start, end }) => {
                 patchProject({ startDate: start, targetDate: end });
               }}
@@ -228,6 +209,12 @@ export default function ProjectDetailPage(): JSX.Element {
               onInitiativeChange={(initiativeId) => {
                 setInitiative(initiativeId);
               }}
+            />
+            <ProjectDependenciesPanel
+              orgId={orgId}
+              projectId={projectId}
+              projectDetailKey={detailKey}
+              canEdit={canEdit}
             />
             {propsError ? (
               <p role="alert" className="text-destructive text-body px-1">
@@ -270,15 +257,9 @@ export default function ProjectDetailPage(): JSX.Element {
             onOpenTask={(taskId) => {
               router.push(`/orgs/${orgId}/tasks/${taskId}`);
             }}
-            creating={createTaskPending}
-            createError={createTaskError}
-            onCreate={(title) => {
-              createTask(title);
+            onCreate={() => {
+              setTaskComposerOpen(true);
             }}
-            teams={teams}
-            teamId={teamId}
-            onTeamChange={setTeamOverride}
-            teamsLoading={teamsLoading}
           />
         </div>
       ) : null}
@@ -296,12 +277,22 @@ export default function ProjectDetailPage(): JSX.Element {
             resolveActor={resolveActor}
             posting={updatePosting}
             postError={updateError}
-            onPost={(body, postHealth) => {
-              postUpdate(body, postHealth);
-            }}
+            onPost={postUpdate}
           />
         </div>
       ) : null}
+      <CreateTaskDialog
+        orgId={orgId}
+        teams={teams}
+        defaultTeamId={defaultTeamId}
+        teamsLoading={teamsLoading}
+        open={taskComposerOpen}
+        onOpenChange={setTaskComposerOpen}
+        defaultProjectId={projectId}
+        onCreated={() => {
+          void detailQ.refetch();
+        }}
+      />
     </div>
   );
 }

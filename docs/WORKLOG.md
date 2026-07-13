@@ -1,7 +1,7 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-07-12
+> **Last Updated**: 2026-07-13
 
 ---
 
@@ -19,6 +19,29 @@
   regression coverage for export scopes and Slack observer exports.
 - **Validation**: API export tests pass 8/8, Slack observer tests pass 21/21, and the production
   build passes API, admin, and web targets including TypeScript and static generation.
+
+---
+
+### [PROJECT-DETAIL-001] Focus project detail on work and dependencies
+
+- **Status**: COMPLETED
+- **Started**: 2026-07-13
+- **Completed**: 2026-07-13
+- **Priority**: P1
+- **Description**: Make the project title and work flow primary, remove health/comment UI, add
+  quiet Markdown-backed writing, show project dependencies, and keep task creation in context.
+- **Implementation**: Added the directed dependency API and migration, a dependency rail, a
+  freeform rich-text surface that stores Markdown without editor chrome, and a project-scoped full
+  task composer. Replaced project discussion with agent activity and removed comment rendering from
+  task detail.
+- **Validation**: Dependency route tests and focused project/editor component tests pass. Web
+  package typecheck currently reaches known unrelated API, export, provider, and problem-catalog
+  failures; the changed project-detail paths typecheck cleanly.
+- **Retrospective**: Keeping the project composer mounted at the project boundary lets task
+  creation inherit project context without adding another picker. A custom migration kept this
+  feature's dependency table isolated from concurrent schema work in the shared checkout.
+
+---
 
 ### [PROD-RUNTIME-001] Eliminate live production 500s
 

@@ -24,6 +24,17 @@ export {
   type DeriveLaneGeometryOptions,
   type ScheduleLaneGeometry,
 } from './scheduling-geometry';
+export {
+  deriveScheduleTicks,
+  majorTickInterval,
+  resolveScheduleTimezone,
+  scheduleDateRange,
+  scheduleInstantAt,
+  type DeriveScheduleTicksOptions,
+  type ScheduleDateRange,
+  type ScheduleTick,
+  type ScheduleTimeDisambiguation,
+} from './scheduling-time-axis';
 export type {
   ScheduleItem,
   ScheduleItemMove,

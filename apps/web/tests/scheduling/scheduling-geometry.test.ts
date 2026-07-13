@@ -114,4 +114,21 @@ describe('schedule date lanes', () => {
       itemBoundsInLane({ ...ITEM, startsAt: 'invalid' }, lane('july-1', '2026-07-01')),
     ).toBeNull();
   });
+
+  it('uses the canvas timezone and preserves duration through a repeated wall time', () => {
+    const repeatedHourItem: ScheduleItem = {
+      id: 'repeated-hour',
+      title: 'Repeated hour',
+      startsAt: '2026-11-01T08:30:00Z',
+      endsAt: '2026-11-01T09:30:00Z',
+    };
+
+    expect(
+      itemBoundsInLane(
+        repeatedHourItem,
+        lane('fall-back', '2026-11-01', 'UTC'),
+        'America/Los_Angeles',
+      ),
+    ).toEqual({ startMinutes: 90, endMinutes: 150 });
+  });
 });

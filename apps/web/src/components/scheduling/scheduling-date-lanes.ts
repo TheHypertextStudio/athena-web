@@ -59,20 +59,42 @@ export function findDateLane(lanes: readonly ScheduleLane[], instant: string): S
  * Clip a timed item to a lane's date and return minute-of-day geometry.
  *
  * Multi-day items begin at midnight or end at 24:00 as appropriate. Items wholly outside the lane
- * return `null`; all-day items are intentionally excluded from timed placement.
+ * return `null`; all-day items are intentionally excluded from timed placement. An explicit
+ * display timezone overrides resource metadata so every lane shares the canvas wall-clock axis.
+ *
+ * @param item - Timed item whose exact instants are being placed.
+ * @param lane - Date lane that clips the resulting wall-clock bounds.
+ * @param displayTimezone - Viewer timezone used by the shared canvas axis.
+ * @returns Clipped wall-clock bounds, or `null` when the item is not placeable in this lane.
  */
 export function itemBoundsInLane(
   item: ScheduleItem,
   lane: ScheduleLane,
+  displayTimezone = lane.timezone,
 ): ScheduleItemLaneBounds | null {
   if (item.allDay) return null;
-  const start = zonedDateParts(item.startsAt, lane.timezone);
-  const end = zonedDateParts(item.endsAt, lane.timezone);
+  const start = zonedDateParts(item.startsAt, displayTimezone);
+  const end = zonedDateParts(item.endsAt, displayTimezone);
   if (!start || !end || end.date < lane.date || start.date > lane.date) return null;
 
   const startMinutes = start.date < lane.date ? 0 : start.minutes;
   const endMinutes = end.date > lane.date ? 24 * 60 : end.minutes;
-  if (endMinutes <= startMinutes) return null;
+  if (endMinutes <= startMinutes) {
+    const elapsedMinutes =
+      (new Date(item.endsAt).getTime() - new Date(item.startsAt).getTime()) / 60_000;
+    if (
+      start.date !== lane.date ||
+      end.date !== lane.date ||
+      !Number.isFinite(elapsedMinutes) ||
+      elapsedMinutes <= 0
+    ) {
+      return null;
+    }
+    const repeatedEndMinutes = Math.min(24 * 60, startMinutes + elapsedMinutes);
+    return repeatedEndMinutes > startMinutes
+      ? { startMinutes, endMinutes: repeatedEndMinutes }
+      : null;
+  }
   return { startMinutes, endMinutes };
 }
 

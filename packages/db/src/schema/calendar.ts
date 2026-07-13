@@ -325,6 +325,54 @@ export const calendarItemTaskLink = pgTable(
   ],
 );
 
+/** A directed association between two calendar items owned by the same user. */
+export const calendarItemRelation = pgTable(
+  'calendar_item_relation',
+  {
+    sourceItemId: text('source_item_id')
+      .notNull()
+      .references(() => calendarItem.id, { onDelete: 'cascade' }),
+    targetItemId: text('target_item_id')
+      .notNull()
+      .references(() => calendarItem.id, { onDelete: 'cascade' }),
+    role: text('role').notNull().default('related'),
+    createdByUserId: text('created_by_user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.sourceItemId, t.targetItemId] }),
+    index('calendar_item_relation_target_idx').on(t.targetItemId),
+  ],
+);
+
+/** A personal calendar layer exposed to one workspace at details or busy-only access. */
+export const calendarLayerShare = pgTable(
+  'calendar_layer_share',
+  {
+    layerId: text('layer_id')
+      .notNull()
+      .references(() => calendarLayer.id, { onDelete: 'cascade' }),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    access: text('access').notNull().default('details'),
+    createdBy: text('created_by')
+      .notNull()
+      .references(() => actor.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at')
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    primaryKey({ columns: [t.layerId, t.organizationId] }),
+    index('calendar_layer_share_organization_idx').on(t.organizationId),
+  ],
+);
+
 /**
  * One provider-bound outbox write: a queued create/update/delete to push to the
  * provider for a {@link calendarItem}, with attempt/backoff bookkeeping.

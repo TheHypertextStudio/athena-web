@@ -111,6 +111,18 @@ export interface CalendarPushInput {
   readonly baseEtag: string | null;
 }
 
+/** Input to create a provider event with an id chosen before the first attempt. */
+export interface CalendarCreateInput {
+  readonly credentials: CalendarProviderCredentials;
+  readonly externalLayerId: string;
+  /**
+   * Stable provider id generated before enqueue. Adapters must reuse it for every retry so an
+   * ambiguous network failure can never create duplicate events.
+   */
+  readonly externalEventId: string;
+  readonly patch: CalendarItemWritePatch;
+}
+
 /** Input to {@link CalendarProviderAdapter.deleteItem}: the same anchor, no patch. */
 export interface CalendarDeleteInput {
   readonly credentials: CalendarProviderCredentials;
@@ -196,6 +208,8 @@ export interface CalendarProviderAdapter {
      */
     readonly layerEditableCore: boolean;
   }): Promise<CalendarPullResult>;
+  /** Create a provider event idempotently using the caller-supplied external id, when supported. */
+  createItem?: (input: CalendarCreateInput) => Promise<CalendarPushResult>;
   /** Push a local patch to one provider event; see {@link CalendarPushResult} for outcomes. */
   pushItem(input: CalendarPushInput): Promise<CalendarPushResult>;
   /** Delete one provider event; see {@link CalendarDeleteResult} for outcomes. */

@@ -26,12 +26,22 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import type { JSX, ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { itemGet, layersGet, itemTasksPost, retryWritePost, itemPatch } = vi.hoisted(() => ({
+const {
+  itemGet,
+  layersGet,
+  itemTasksPost,
+  retryWritePost,
+  itemPatch,
+  itemRelationsGet,
+  itemRelationDelete,
+} = vi.hoisted(() => ({
   itemGet: vi.fn(),
   layersGet: vi.fn(),
   itemTasksPost: vi.fn(),
   retryWritePost: vi.fn(),
   itemPatch: vi.fn(),
+  itemRelationsGet: vi.fn(),
+  itemRelationDelete: vi.fn(),
 }));
 
 vi.mock('../../src/lib/api', () => ({
@@ -50,6 +60,10 @@ vi.mock('../../src/lib/api', () => ({
                 $post: itemTasksPost,
                 ':taskId': { $delete: vi.fn() },
               },
+              relations: {
+                $get: itemRelationsGet,
+                ':relatedItemId': { $delete: itemRelationDelete },
+              },
             },
           },
         },
@@ -66,6 +80,7 @@ const LAYER_ID = CalendarLayerId.parse('01BX5ZZKBKACTAV9WEVGEMMVN1');
 const ORG_ID = OrganizationId.parse('01BX5ZZKBKACTAV9WEVGEMMVRZ');
 const TASK_A = TaskId.parse('01ARZ3NDEKTSV4RRFFQ69G5FA0');
 const TASK_B = TaskId.parse('01ARZ3NDEKTSV4RRFFQ69G5FA1');
+const RELATED_ITEM_ID = CalendarItemId.parse('01BX5ZZKBKACTAV9WEVGEMMVS2');
 
 /** A typed mock Hono RPC response. */
 function okResponse<T>(body: T) {
@@ -211,6 +226,16 @@ beforeEach(() => {
   );
   retryWritePost.mockReset().mockResolvedValue(okResponse(makeItem()));
   itemPatch.mockReset().mockResolvedValue(okResponse(makeItem()));
+  itemRelationsGet.mockReset().mockResolvedValue(okResponse({ items: [] }));
+  itemRelationDelete.mockReset().mockResolvedValue(
+    okResponse({
+      sourceItemId: ITEM_ID,
+      targetItemId: RELATED_ITEM_ID,
+      role: 'contained',
+      createdByUserId: '01BX5ZZKBKACTAV9WEVGEMMVA1',
+      createdAt: '2026-07-01T00:00:00.000Z',
+    }),
+  );
 });
 
 afterEach(() => {
@@ -271,6 +296,48 @@ describe('CalendarItemDrawer', () => {
       expect(link).toHaveAttribute('href', 'https://calendar.google.com/event/1');
     }
     expect(screen.getByRole('button', { name: 'Retry with local changes' })).toBeInTheDocument();
+  });
+
+  it('shows contained items, opens them in place, and detaches relationships', async () => {
+    itemRelationsGet.mockResolvedValue(
+      okResponse({
+        items: [
+          {
+            sourceItemId: ITEM_ID,
+            targetItemId: RELATED_ITEM_ID,
+            targetTitle: 'Customer interview',
+            targetKind: 'provider_event',
+            role: 'contained',
+            createdByUserId: '01BX5ZZKBKACTAV9WEVGEMMVA1',
+            createdAt: '2026-07-01T00:00:00.000Z',
+          },
+        ],
+      }),
+    );
+    itemGet.mockImplementation(({ param }: { param: { id: string } }) =>
+      Promise.resolve(
+        okResponse(
+          param.id === RELATED_ITEM_ID
+            ? makeItem({ id: RELATED_ITEM_ID, title: 'Customer interview' })
+            : makeItem(),
+        ),
+      ),
+    );
+    renderDrawer(ITEM_ID);
+
+    expect(await screen.findByText('Contents')).toBeInTheDocument();
+    expect(screen.getByText('Provider event')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Detach Customer interview' }));
+    await waitFor(() => {
+      expect(itemRelationDelete).toHaveBeenCalledWith({
+        param: { id: ITEM_ID, relatedItemId: RELATED_ITEM_ID },
+      });
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Customer interview' }));
+    await waitFor(() => {
+      expect(itemGet).toHaveBeenCalledWith({ param: { id: RELATED_ITEM_ID } });
+    });
   });
 
   it('edits an all-day item via date inputs, converting to the exclusive wire end date', async () => {

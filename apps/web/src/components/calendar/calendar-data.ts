@@ -84,6 +84,19 @@ export function calendarItemDef(itemId: string) {
   );
 }
 
+/** Directed contents/relationships attached to one owned calendar item. */
+export function calendarItemRelationsDef(itemId: string) {
+  return apiQueryOptions(
+    queryKeys.calendarItemRelations(itemId),
+    () =>
+      api.v1.me.calendar.items[':id'].relations.$get({
+        param: { id: itemId },
+      }),
+    'Could not load related calendar items.',
+    { staleTime: STALE.volatile },
+  );
+}
+
 /**
  * The first-party Google Calendar settings query definition (linked accounts + selectable
  * calendars + layers).

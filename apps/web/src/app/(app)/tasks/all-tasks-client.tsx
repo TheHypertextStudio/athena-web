@@ -20,6 +20,7 @@ import { type JSX, useMemo, useState } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 import { OrgChip } from '@/components/org-chip';
+import { writeScheduleDragObject } from '@/components/scheduling';
 import { authClient } from '@/lib/auth-client';
 import { myWorkDefs } from '@/lib/my-work-defs';
 import { todayISODate } from '@/lib/today';
@@ -139,6 +140,15 @@ function TaskRow({ task, orgLabel }: TaskRowProps): JSX.Element {
   return (
     <Link
       href={`/orgs/${task.organizationId}/tasks/${task.id}`}
+      draggable
+      onDragStart={(event) => {
+        writeScheduleDragObject(event.dataTransfer, {
+          kind: 'task',
+          taskId: task.id,
+          organizationId: task.organizationId,
+          title: task.title,
+        });
+      }}
       className="hover:bg-surface-container-low focus-visible:ring-ring flex items-center gap-3 rounded-lg px-3 py-2 transition-colors focus-visible:ring-2 focus-visible:outline-none"
     >
       <StatusIcon type={stateTypeOf(task.state)} />

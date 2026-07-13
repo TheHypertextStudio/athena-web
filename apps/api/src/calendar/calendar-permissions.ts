@@ -33,7 +33,7 @@ export type CalendarConnectionRow = typeof calendarConnection.$inferSelect;
  * available to resolve a more specific reason.
  */
 export function defaultItemPermissionsForKind(kind: CalendarItemKind): CalendarItemPermission {
-  if (kind === 'native_block') {
+  if (kind === 'native_block' || kind === 'native_event' || kind === 'timebox') {
     return { canEditCore: true, canDelete: true, readOnlyReason: null };
   }
   return { canEditCore: false, canDelete: false, readOnlyReason: 'kind' };
@@ -69,7 +69,13 @@ export function resolveItemPermissions(input: {
   const syncState = CalendarItemSyncState.parse(item.syncState);
 
   let base: CalendarItemPermission;
-  if (kind === 'native_block' || kind === 'task_timebox' || kind === 'availability_block') {
+  if (
+    kind === 'native_block' ||
+    kind === 'native_event' ||
+    kind === 'timebox' ||
+    kind === 'task_timebox' ||
+    kind === 'availability_block'
+  ) {
     base = defaultItemPermissionsForKind(kind);
   } else {
     // kind === 'provider_event' (the only remaining case).

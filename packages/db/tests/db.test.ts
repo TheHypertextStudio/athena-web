@@ -19,6 +19,12 @@ import {
   auditEventType,
   calendarConnection,
   calendarEvent,
+  calendarItem,
+  calendarItemRelation,
+  calendarItemTaskLink,
+  calendarItemWrite,
+  calendarLayer,
+  calendarLayerShare,
   calendarList,
   comment,
   contactPoint,
@@ -80,7 +86,14 @@ import {
   type WorkflowState,
   type WorkflowStateType,
 } from '../src/types';
-import { actorRelations, organizationRelations } from '../src/relations';
+import {
+  actorRelations,
+  calendarItemRelationRelations,
+  calendarItemRelations,
+  calendarLayerRelations,
+  calendarLayerShareRelations,
+  organizationRelations,
+} from '../src/relations';
 
 describe('genId', () => {
   it('returns a 26-char Crockford ULID', () => {
@@ -115,6 +128,30 @@ describe('types + enums + relations', () => {
   it('wires the relation builders', () => {
     expect(organizationRelations).toBeDefined();
     expect(actorRelations).toBeDefined();
+    expect(calendarLayerRelations).toBeDefined();
+    expect(calendarItemRelations).toBeDefined();
+    expect(calendarItemRelationRelations).toBeDefined();
+    expect(calendarLayerShareRelations).toBeDefined();
+  });
+
+  it('defines calendar item relations and per-workspace layer sharing structurally', () => {
+    const relationConfig = getTableConfig(calendarItemRelation);
+    expect(relationConfig.columns.map((column) => column.name)).toEqual(
+      expect.arrayContaining(['source_item_id', 'target_item_id', 'role', 'created_by_user_id']),
+    );
+    expect(relationConfig.primaryKeys[0]?.columns.map((column) => column.name)).toEqual([
+      'source_item_id',
+      'target_item_id',
+    ]);
+
+    const shareConfig = getTableConfig(calendarLayerShare);
+    expect(shareConfig.columns.map((column) => column.name)).toEqual(
+      expect.arrayContaining(['layer_id', 'organization_id', 'access', 'created_by']),
+    );
+    expect(shareConfig.primaryKeys[0]?.columns.map((column) => column.name)).toEqual([
+      'layer_id',
+      'organization_id',
+    ]);
   });
 
   it('lets the jsonb $type shapes be constructed', () => {
@@ -125,7 +162,18 @@ describe('types + enums + relations', () => {
       overrides: { task: { singular: 'Ticket', plural: 'Tickets' } },
     };
     const landing: HubLanding = { orgId: 'org_1' };
-    const prefs: HubPreferences = { landing, density: 'compact', theme: 'dark', timezone: 'UTC' };
+    const prefs: HubPreferences = {
+      landing,
+      density: 'compact',
+      theme: 'dark',
+      timezone: 'UTC',
+      calendar: {
+        pixelsPerHour: 72.5,
+        minLaneWidth: 240.5,
+        defaultCreateIntent: 'event',
+        defaultLayerId: null,
+      },
+    };
     const conn: AgentConnection = { endpoint: 'https://x', protocol: 'mcp', credentialsRef: 'c' };
     const routing: ApprovalRouting = { mode: 'role', approverRoleId: 'r' };
     const integrationConn: IntegrationConnection = {
@@ -187,6 +235,12 @@ describe('schema foreign-key references (covers every `.references(() => …)` c
     calendarConnection,
     calendarList,
     calendarEvent,
+    calendarLayer,
+    calendarItem,
+    calendarItemTaskLink,
+    calendarItemRelation,
+    calendarLayerShare,
+    calendarItemWrite,
     label,
     comment,
     auditEvent,

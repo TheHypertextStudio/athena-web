@@ -3,6 +3,9 @@
  */
 import { z } from 'zod';
 
+import { CalendarItemCreateIntent } from './calendar';
+import { CalendarLayerId } from './primitives';
+
 /** Where the Hub lands on open: the Hub, the last-used context, or a specific org. */
 export const HubLanding = z
   .union([z.literal('hub'), z.literal('last'), z.object({ orgId: z.string() })])
@@ -11,6 +14,34 @@ export const HubLanding = z
   );
 /** Hub landing value. */
 export type HubLanding = z.infer<typeof HubLanding>;
+
+/** Continuous scheduling-canvas preferences and quick-create defaults. */
+export const CalendarPreferences = z
+  .object({
+    pixelsPerHour: z
+      .number()
+      .min(24)
+      .max(240)
+      .optional()
+      .describe('Continuous vertical zoom in pixels per hour (default: 72).'),
+    minLaneWidth: z
+      .number()
+      .min(160)
+      .max(640)
+      .optional()
+      .describe('Minimum date-lane width in pixels before horizontal scrolling (default: 240).'),
+    defaultCreateIntent: CalendarItemCreateIntent.optional().describe(
+      'Whether new selected regions default to events or timeboxes (default: event).',
+    ),
+    defaultLayerId: CalendarLayerId.nullable()
+      .optional()
+      .describe(
+        'Preferred destination layer for new events, whether native or writable provider-backed; null returns to the Docket fallback.',
+      ),
+  })
+  .describe('Personal defaults for the continuous scheduling canvas.');
+/** Calendar preferences value. */
+export type CalendarPreferences = z.infer<typeof CalendarPreferences>;
 
 /** Personal Hub preferences. */
 export const HubPreferences = z
@@ -30,6 +61,7 @@ export const HubPreferences = z
       .describe(
         "IANA timezone (e.g. `America/Chicago`) anchoring the daily plan — also the digest's day boundary and send time.",
       ),
+    calendar: CalendarPreferences.optional().describe('Continuous calendar-canvas preferences.'),
     digest: z
       .object({
         enabled: z

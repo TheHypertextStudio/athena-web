@@ -1,5 +1,15 @@
 import type { LucideIcon } from '@docket/ui/icons';
-import { Cable, Download, Inbox, Link, ListChecks, Shield, Trash2, Users } from '@docket/ui/icons';
+import {
+  Cable,
+  Calendar,
+  Download,
+  Inbox,
+  Link,
+  ListChecks,
+  Shield,
+  Trash2,
+  Users,
+} from '@docket/ui/icons';
 
 /** A settings section's availability: a live routed page, or a planned ("coming soon") stub. */
 export type SectionStatus = 'available' | 'coming-soon';
@@ -56,6 +66,14 @@ export const PERSONAL_SETTINGS_SECTION_GROUPS: readonly SettingsSectionGroup[] =
         description: 'Decide what Docket tells you, and where.',
         icon: ListChecks,
         href: 'notifications',
+        status: 'available',
+      },
+      {
+        key: 'calendar',
+        label: 'Calendar',
+        description: 'Set scheduling defaults and choose what coworkers can compare.',
+        icon: Calendar,
+        href: 'calendar',
         status: 'available',
       },
     ],

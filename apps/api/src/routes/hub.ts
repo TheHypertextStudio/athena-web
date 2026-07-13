@@ -6,11 +6,12 @@
  * an active human Actor in and aggregates across them. Read-only projections only — never
  * merges tenant data (fan-out queries per membership, each item carries its own org id).
  */
-import { auditEvent, db, event, eventRecipient, notification } from '@docket/db';
+import { auditEvent, db, event, eventRecipient, hub as hubTable, notification } from '@docket/db';
 import {
   HubActivityOut,
   HubInboxOut,
   HubPortfolioOut,
+  HubPreferences,
   HubSearchOut,
   HubTodayOut,
   ListQuery,
@@ -22,7 +23,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AppEnv } from '../context';
-import { AuthError } from '../error';
+import { AuthError, NotFoundError } from '../error';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import {
@@ -32,7 +33,7 @@ import {
   decodeFilter,
   encodeCursor,
 } from '../lib/view-filter-sql';
-import { zQuery } from '../lib/validate';
+import { zJson, zQuery } from '../lib/validate';
 import { SearchHttpQuery } from '../search/http';
 import { searchWorkspace } from '../search/query';
 
@@ -47,8 +48,86 @@ const portfolioQuery = z.object({
   to: z.iso.date().optional(),
   initiativeId: z.string().optional(),
 });
+
+/** Read the caller-owned Hub row or existence-hide the missing personal root. */
+async function readHubPreferences(userId: string): Promise<z.infer<typeof HubPreferences>> {
+  const rows = await db
+    .select({ preferences: hubTable.preferences })
+    .from(hubTable)
+    .where(eq(hubTable.userId, userId))
+    .limit(1);
+  const row = rows[0];
+  if (!row) throw new NotFoundError('Hub not found');
+  return HubPreferences.parse(row.preferences);
+}
+
+/** Deep-merge nested preference groups so a calendar-only patch cannot erase sibling settings. */
+export function mergeHubPreferences(
+  current: z.infer<typeof HubPreferences>,
+  patch: z.infer<typeof HubPreferences>,
+): z.infer<typeof HubPreferences> {
+  return {
+    ...current,
+    ...patch,
+    ...(patch.digest ? { digest: { ...current.digest, ...patch.digest } } : {}),
+    ...(patch.proactive ? { proactive: { ...current.proactive, ...patch.proactive } } : {}),
+    ...(patch.calendar ? { calendar: { ...current.calendar, ...patch.calendar } } : {}),
+  };
+}
 /** Hub router: cross-org `today`, `inbox`, `activity`, `portfolio`, and `search` surfaces. */
 const hubRouter = new Hono<AppEnv>()
+  .get(
+    '/preferences',
+    apiDoc({
+      tag: 'Hub',
+      summary: 'Get Hub preferences',
+      response: HubPreferences,
+      description:
+        'Return the signed-in user personal Hub preferences, including unified-calendar layout and creation defaults. Preferences are resolved only from the caller-owned Hub row.',
+    }),
+    async (c) => {
+      const session = c.get('session');
+      if (!session?.user) throw new AuthError();
+      return ok(c, HubPreferences, await readHubPreferences(session.user.id));
+    },
+  )
+  .patch(
+    '/preferences',
+    apiDoc({
+      tag: 'Hub',
+      summary: 'Update Hub preferences',
+      response: HubPreferences,
+      description:
+        'Patch the signed-in user personal Hub preferences. Nested groups are deep-merged, so updating one calendar layout field preserves the remaining calendar, digest, and proactive settings.',
+    }),
+    zJson(HubPreferences),
+    async (c) => {
+      const session = c.get('session');
+      if (!session?.user) throw new AuthError();
+      const patch = c.req.valid('json');
+      const preferences = await db.transaction(async (tx) => {
+        const currentRows = await tx
+          .select({ preferences: hubTable.preferences })
+          .from(hubTable)
+          .where(eq(hubTable.userId, session.user.id))
+          .limit(1)
+          .for('update');
+        const current = currentRows[0];
+        if (!current) throw new NotFoundError('Hub not found');
+        const merged = mergeHubPreferences(HubPreferences.parse(current.preferences), patch);
+        const rows = await tx
+          .update(hubTable)
+          .set({ preferences: merged })
+          .where(eq(hubTable.userId, session.user.id))
+          .returning({ preferences: hubTable.preferences });
+        const updated = rows[0];
+        /* v8 ignore next -- @preserve the locked caller-owned Hub row exists */
+        if (!updated) throw new NotFoundError('Hub not found');
+        return HubPreferences.parse(updated.preferences);
+      });
+      return ok(c, HubPreferences, preferences);
+    },
+  )
   .get(
     '/today',
     apiDoc({

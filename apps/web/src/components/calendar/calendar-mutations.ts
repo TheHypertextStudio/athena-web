@@ -26,10 +26,12 @@ import type {
   CalendarItemTaskLinkCreate,
   CalendarItemTaskLinkOut,
   CalendarItemTaskLinkResultOut,
+  CalendarItemRelationOut,
   CalendarItemUpdate,
   CalendarLayersOut,
   CalendarLayerUpdate,
 } from '@docket/types';
+import { CalendarItemId, OrganizationId, TaskId } from '@docket/types';
 import { type QueryKey, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '@/lib/api';
@@ -137,7 +139,7 @@ interface CombinedRollback {
  * cache to search; `calendarLayers()` is always invalidated too, since a block filed on a lazily-
  * created default native layer can make a new layer appear.
  */
-export function useCreateNativeBlock() {
+export function useCreateCalendarItem() {
   const queryClient = useQueryClient();
   return useApiMutation<
     CalendarItemOut,
@@ -146,7 +148,7 @@ export function useCreateNativeBlock() {
     mutationFn: (vars) =>
       unwrap(
         () => api.v1.me.calendar.items.$post({ json: vars.input }),
-        'Could not create the calendar block.',
+        'Could not create the calendar item.',
       ),
     invalidateKeys: [queryKeys.calendarLayers()],
     onSettled: async (_data, _error, vars) => {
@@ -156,6 +158,9 @@ export function useCreateNativeBlock() {
     },
   });
 }
+
+/** @deprecated Use {@link useCreateCalendarItem}; retained for legacy block callers. */
+export const useCreateNativeBlock = useCreateCalendarItem;
 
 /**
  * Update a calendar item's core fields (`PATCH /v1/me/calendar/items/:id`).
@@ -207,6 +212,57 @@ export function useUpdateCalendarItem(itemId: string) {
       await Promise.all(
         onMutateResult.rangeKeys.map((key) => queryClient.invalidateQueries({ queryKey: key })),
       );
+    },
+  });
+}
+
+/** Variables for a canvas-owned update where the dragged item id is known only at gesture end. */
+export interface UpdateCalendarItemByIdVariables {
+  readonly itemId: string;
+  readonly patch: CalendarItemUpdate;
+}
+
+/** Update arbitrary calendar items from the shared scheduling canvas. */
+export function useUpdateCalendarItemById() {
+  const queryClient = useQueryClient();
+  return useApiMutation<CalendarItemOut, UpdateCalendarItemByIdVariables, CombinedRollback>({
+    mutationFn: ({ itemId, patch }) =>
+      unwrap(
+        () =>
+          api.v1.me.calendar.items[':id'].$patch({
+            param: { id: itemId },
+            json: patch,
+          }),
+        'Could not update the calendar item.',
+      ),
+    onMutate: ({ itemId, patch }) => {
+      const pendingPatch = (item: CalendarItemOut): CalendarItemOut => ({
+        ...item,
+        ...patch,
+        ...(item.kind === 'provider_event' ? { syncState: 'push_pending' as const } : {}),
+      });
+      const detailPatch = optimisticPatch<CalendarItemOut>(
+        queryClient,
+        queryKeys.calendarItem(itemId),
+        pendingPatch,
+      );
+      const rangePatch = patchCalendarItemAcrossRanges(queryClient, itemId, pendingPatch);
+      return {
+        rollback: () => {
+          detailPatch.rollback();
+          rangePatch.rollback();
+        },
+        rangeKeys: rangePatch.rangeKeys,
+      };
+    },
+    onError: (_error, _vars, context) => context?.rollback(),
+    onSettled: async (_data, _error, vars, context) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.calendarItem(vars.itemId) }),
+        ...(context?.rangeKeys ?? []).map((key) =>
+          queryClient.invalidateQueries({ queryKey: key }),
+        ),
+      ]);
     },
   });
 }
@@ -326,6 +382,89 @@ export function useLinkTaskToItem(itemId: string) {
         'Could not link the task.',
       ),
     invalidateKeys: [queryKeys.calendarItem(itemId)],
+  });
+}
+
+/** Link an arbitrary dragged task to an arbitrary calendar target. */
+export function useLinkTaskToCalendarItem() {
+  const queryClient = useQueryClient();
+  return useApiMutation<
+    CalendarItemTaskLinkResultOut,
+    {
+      itemId: string;
+      taskId: string;
+      organizationId: string;
+      role: 'contained' | 'related';
+    }
+  >({
+    mutationFn: (vars) =>
+      unwrap(
+        () =>
+          api.v1.me.calendar.items[':id'].tasks.$post({
+            param: { id: CalendarItemId.parse(vars.itemId) },
+            json: {
+              mode: 'link',
+              taskId: TaskId.parse(vars.taskId),
+              organizationId: OrganizationId.parse(vars.organizationId),
+              role: vars.role,
+            },
+          }),
+        'Could not add this task to the calendar item.',
+      ),
+    onSettled: async (_data, _error, vars) => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.calendarItem(vars.itemId) });
+    },
+  });
+}
+
+/** Associate one owned calendar item with another target. */
+export function useRelateCalendarItems() {
+  const queryClient = useQueryClient();
+  return useApiMutation<
+    CalendarItemRelationOut,
+    { sourceItemId: string; targetItemId: string; role: 'contained' | 'related' }
+  >({
+    mutationFn: (vars) =>
+      unwrap(
+        () =>
+          api.v1.me.calendar.items[':id'].relations.$post({
+            param: { id: CalendarItemId.parse(vars.sourceItemId) },
+            json: {
+              targetItemId: CalendarItemId.parse(vars.targetItemId),
+              role: vars.role,
+            },
+          }),
+        'Could not relate these calendar items.',
+      ),
+    onSettled: async (_data, _error, vars) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.calendarItem(vars.sourceItemId) }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.calendarItemRelations(vars.sourceItemId),
+        }),
+      ]);
+    },
+  });
+}
+
+/** Remove one related/contained calendar item from a target. */
+export function useDetachCalendarItemRelation(sourceItemId: string, targetItemId: string) {
+  return useApiMutation<CalendarItemRelationOut, undefined>({
+    mutationFn: () =>
+      unwrap(
+        () =>
+          api.v1.me.calendar.items[':id'].relations[':relatedItemId'].$delete({
+            param: {
+              id: CalendarItemId.parse(sourceItemId),
+              relatedItemId: CalendarItemId.parse(targetItemId),
+            },
+          }),
+        'Could not remove this calendar relationship.',
+      ),
+    invalidateKeys: [
+      queryKeys.calendarItem(sourceItemId),
+      queryKeys.calendarItemRelations(sourceItemId),
+    ],
   });
 }
 

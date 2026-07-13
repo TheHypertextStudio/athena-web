@@ -58,7 +58,7 @@ import {
 } from '../calendar/calendar-serializers';
 import { detachTaskFromItem, linkTaskToItem } from '../calendar/calendar-task-links';
 import {
-  createNativeBlock,
+  createCalendarItem,
   deleteCalendarItem,
   updateCalendarItem,
 } from '../calendar/calendar-write';
@@ -69,6 +69,8 @@ import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
 import { enqueueSearchUpsert } from '../search/write-through';
 
+import { calendarItemRelationRoutes } from './calendar-item-relation-routes';
+import { calendarLayerShareRoutes } from './calendar-layer-share-routes';
 import { readCalendarSettings, requireUserId } from './calendar-shared';
 import { syncCalendarConnections } from './calendar-sync-engine';
 import { createDefaultCalendarSyncModules } from './calendar-sync-modules';
@@ -268,6 +270,7 @@ const meCalendar = new Hono<AppEnv>()
       return ok(c, CalendarLayerOut, toCalendarLayerOut(updated));
     },
   )
+  .route('/', calendarLayerShareRoutes)
   .post(
     '/sync',
     apiDoc({
@@ -399,16 +402,20 @@ const meCalendar = new Hono<AppEnv>()
     '/items',
     apiDoc({
       tag: 'Me',
-      summary: 'Create a native calendar block',
+      summary: 'Create a calendar item',
       response: CalendarItemOut,
       description:
-        "Create a Docket-native calendar block (focus, travel, do-not-schedule, holds) with no provider account required. `layerId` targets one of the caller's own native-block layers; omitted, the block is filed on the caller's default native-blocks layer, created lazily on first use.",
+        "Create a Docket-owned event or timebox from an explicit `intent`, while retaining the legacy `kind: 'native_block'` request. Docket-owned destinations are committed directly. A writable provider layer uses the local-first provider outbox so the item remains visible and retryable through provider failures.",
     }),
     zJson(CalendarItemCreate),
     async (c) => {
       const userId = requireUserId(c);
       const body = c.req.valid('json');
-      const created = await createNativeBlock(db, { userId, input: body });
+      const created = await createCalendarItem(db, {
+        userId,
+        input: body,
+        syncModules: createDefaultCalendarSyncModules(),
+      });
       return ok(c, CalendarItemOut, toCalendarItemOut(created, { linkedTasks: [] }));
     },
   )
@@ -464,7 +471,7 @@ const meCalendar = new Hono<AppEnv>()
       summary: 'Update a calendar item',
       response: CalendarItemOut,
       description:
-        "Patch a calendar item's core fields (title, description, location, timezone, time bounds). `native_block` items apply directly; `provider_event` items apply locally and push to the provider (foreground attempt), returning a fresh `syncState`; `task_timebox`/`availability_block` items reject edits (422, derived views). An empty string for `description`/`location` clears the field. Changing the time shape (timed <-> all-day) requires the complete new shape's fields. 404 when the item does not exist or is not owned by the caller; 403 when a `provider_event` edit lacks the required scope/role/capability; 409 when the item has an unresolved conflict.",
+        "Patch a calendar item's core fields (title, description, location, timezone, time bounds). `native_block`, `native_event`, and `timebox` items apply directly; `provider_event` items apply locally and push to the provider (foreground attempt), returning a fresh `syncState`; `task_timebox`/`availability_block` items reject edits (422, derived views). An empty string for `description`/`location` clears the field. Changing the time shape (timed <-> all-day) requires the complete new shape's fields. 404 when the item does not exist or is not owned by the caller; 403 when a `provider_event` edit lacks the required scope/role/capability; 409 when the item has an unresolved conflict.",
     }),
     zParam(idParam),
     zJson(CalendarItemUpdate),
@@ -491,7 +498,7 @@ const meCalendar = new Hono<AppEnv>()
       summary: 'Delete a calendar item',
       response: CalendarItemOut,
       description:
-        'Delete a calendar item and return its representation as a tombstone. `native_block` items hard-delete immediately (task links removed by cascade). `provider_event` items push a delete to the provider (foreground attempt) and only archive locally once the provider confirms it; other outcomes leave the item visible with an updated `syncState`. `task_timebox`/`availability_block` items reject deletion (422, derived views). 404 when the item does not exist or is not owned by the caller; 403 when a `provider_event` delete lacks the required scope/role/capability; 409 when the item has an unresolved conflict.',
+        'Delete a calendar item and return its representation as a tombstone. `native_block`, `native_event`, and `timebox` items hard-delete immediately (task links and relationships are removed by cascade). `provider_event` items push a delete to the provider (foreground attempt) and only archive locally once the provider confirms it; other outcomes leave the item visible with an updated `syncState`. `task_timebox`/`availability_block` items reject deletion (422, derived views). 404 when the item does not exist or is not owned by the caller; 403 when a `provider_event` delete lacks the required scope/role/capability; 409 when the item has an unresolved conflict.',
     }),
     zParam(idParam),
     async (c) => {
@@ -529,6 +536,7 @@ const meCalendar = new Hono<AppEnv>()
       return ok(c, CalendarItemOut, detail);
     },
   )
+  .route('/', calendarItemRelationRoutes)
   .post(
     '/items/:id/tasks',
     apiDoc({

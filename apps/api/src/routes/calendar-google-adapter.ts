@@ -25,6 +25,7 @@ import { decodeIdTokenClaims } from '../lib/id-token';
 
 import {
   CalendarReauthRequiredError,
+  type CalendarCreateInput,
   type CalendarDeleteInput,
   type CalendarDeleteResult,
   type CalendarProviderAdapter,
@@ -427,6 +428,48 @@ async function pushItem(
   }
 }
 
+/**
+ * Create one Google event with a stable caller-supplied id.
+ *
+ * @remarks
+ * Retrying the same POST after an ambiguous response may produce `409` because Google already
+ * accepted the first attempt. In that case the adapter reads the known id and treats the existing
+ * resource as the successful result. The outbox therefore never manufactures a second event.
+ */
+async function createItem(
+  fetchJson: GoogleFetchJson,
+  input: CalendarCreateInput,
+): Promise<CalendarPushResult> {
+  const collectionUrl = `${GOOGLE_CALENDAR_BASE}/calendars/${encodeURIComponent(input.externalLayerId)}/events`;
+  const itemUrl = `${collectionUrl}/${encodeURIComponent(input.externalEventId)}`;
+  try {
+    const event = await fetchJson<GoogleCalendarEventResource>(
+      collectionUrl,
+      input.credentials.accessToken,
+      {
+        method: 'POST',
+        body: { id: input.externalEventId, ...toEventPatchBody(input.patch) },
+      },
+    );
+    const snapshot = toItemSnapshot(event, true);
+    /* v8 ignore next -- @preserve defensive: a successful insert echoes the event id */
+    if (snapshot === null) throw new Error('Google event create response missing an id');
+    return { outcome: 'applied', item: snapshot };
+  } catch (err) {
+    if (err instanceof GoogleCalendarApiError && err.status === 409) {
+      const existing = await fetchConflictSnapshot(
+        fetchJson,
+        itemUrl,
+        input.credentials.accessToken,
+      );
+      return existing === null
+        ? { outcome: 'retryable', message: 'Created event could not yet be read back' }
+        : { outcome: 'applied', item: existing };
+    }
+    return mapPushError(err);
+  }
+}
+
 /** Delete one Google event: `DELETE .../events/{id}` with `If-Match`; `410` counts as already-applied. */
 async function deleteItem(
   fetchJson: GoogleFetchJson,
@@ -545,6 +588,7 @@ export function createGoogleCalendarAdapter(
         layerEditableCore,
       });
     },
+    createItem: (input) => createItem(fetchJson, input),
     pushItem: (input) => pushItem(fetchJson, input),
     deleteItem: (input) => deleteItem(fetchJson, input),
     startWatch: (input) => startWatch(fetchJson, input),

@@ -325,10 +325,10 @@ describe('native calendar block CRUD', () => {
       headers: jsonHeaders(),
       body: JSON.stringify({ title: 'Renamed' }),
     });
-    // No connection => resolveItemPermissions denies with 'provider_scope' => 403, not 422.
+    // No connection => resolveItemPermissions denies with the structured provider-scope code.
     expect(res.status).toBe(403);
     const body = await json<{ code: string }>(res);
-    expect(body.code).toBe('forbidden');
+    expect(body.code).toBe('insufficient_scope');
   });
 
   it('isolates ownership: another user gets 404 on GET/PATCH/DELETE', async () => {

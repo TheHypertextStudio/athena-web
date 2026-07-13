@@ -191,11 +191,18 @@ export type CalendarLayerSourceKind = z.infer<typeof CalendarLayerSourceKind>;
 
 /** The kind of time object a {@link CalendarItemOut} represents. */
 export const CalendarItemKind = z
-  .enum(['provider_event', 'native_block', 'task_timebox', 'availability_block'])
+  .enum([
+    'provider_event',
+    'native_event',
+    'native_block',
+    'timebox',
+    'task_timebox',
+    'availability_block',
+  ])
   .meta({
     id: 'CalendarItemKind',
     description:
-      "The kind of time object a calendar item represents: 'provider_event' (synced from an external provider), 'native_block' (created directly in Docket), 'task_timebox' (a scheduled task instance), or 'availability_block' (a computed free/busy window).",
+      'The kind of time object a calendar item represents: provider events, Docket-native events, legacy native blocks, first-class timeboxes, legacy task timeboxes, or computed availability blocks.',
   });
 /** Calendar-item-kind value. */
 export type CalendarItemKind = z.infer<typeof CalendarItemKind>;
@@ -224,11 +231,11 @@ export type CalendarItemSyncState = z.infer<typeof CalendarItemSyncState>;
 
 /** The role a linked task plays relative to a calendar item. */
 export const CalendarItemTaskRole = z
-  .enum(['prep', 'agenda', 'follow_up', 'outcome', 'related'])
+  .enum(['prep', 'agenda', 'follow_up', 'outcome', 'contained', 'related'])
   .meta({
     id: 'CalendarItemTaskRole',
     description:
-      "The role a linked task plays relative to a calendar item: 'prep' (preparation work), 'agenda' (discussion topic), 'follow_up' (post-item action), 'outcome' (a result/decision captured from the item), or 'related' (loosely associated, no specific role).",
+      'The role a linked task plays relative to a calendar item: preparation, agenda, follow-up, outcome, contained work, or a general relationship.',
   });
 /** Calendar-item-task-role value. */
 export type CalendarItemTaskRole = z.infer<typeof CalendarItemTaskRole>;
@@ -475,37 +482,54 @@ export const CalendarItemsRangeOut = z
 /** Calendar-items-range value. */
 export type CalendarItemsRangeOut = z.infer<typeof CalendarItemsRangeOut>;
 
-/** Body for creating a Docket-native calendar block. */
+/** User intent for creating a new Docket-owned calendar item. */
+export const CalendarItemCreateIntent = z.enum(['event', 'timebox']).meta({
+  id: 'CalendarItemCreateIntent',
+  description: 'Whether quick create should produce a native event or a first-class timebox.',
+});
+/** Calendar-item create-intent value. */
+export type CalendarItemCreateIntent = z.infer<typeof CalendarItemCreateIntent>;
+
+/** Fields shared by legacy native-block and intent-based calendar item creation. */
+const CalendarItemCreateFields = z.object({
+  title: z.string().min(1).describe('Block title. Required, non-empty.'),
+  description: z.string().optional().describe('Optional description/body for the block.'),
+  location: z.string().optional().describe('Optional location for the block.'),
+  timezone: z.string().optional().describe('Optional timezone id for the block.'),
+  startsAt: z
+    .string()
+    .optional()
+    .describe('Timed start timestamp; provide together with `endsAt` for a timed block.'),
+  endsAt: z
+    .string()
+    .optional()
+    .describe('Timed end timestamp; provide together with `startsAt` for a timed block.'),
+  allDayStartDate: DateString.optional().describe(
+    'All-day start date; provide together with `allDayEndDate` for an all-day block.',
+  ),
+  allDayEndDate: DateString.optional().describe(
+    'All-day exclusive end date; provide together with `allDayStartDate` for an all-day block.',
+  ),
+  status: CalendarItemStatus.optional().describe(
+    "Initial status; omitted defaults server-side (typically 'confirmed').",
+  ),
+  layerId: CalendarLayerId.optional().describe(
+    "Target native layer id; omitted uses the caller's default native layer.",
+  ),
+});
+
+/** Body for creating a Docket-owned event or timebox, with legacy native-block compatibility. */
 export const CalendarItemCreate = z
-  .object({
-    kind: z
-      .literal('native_block')
-      .describe('Item kind; native-block creation always creates a `native_block` item.'),
-    title: z.string().min(1).describe('Block title. Required, non-empty.'),
-    description: z.string().optional().describe('Optional description/body for the block.'),
-    location: z.string().optional().describe('Optional location for the block.'),
-    timezone: z.string().optional().describe('Optional timezone id for the block.'),
-    startsAt: z
-      .string()
-      .optional()
-      .describe('Timed start timestamp; provide together with `endsAt` for a timed block.'),
-    endsAt: z
-      .string()
-      .optional()
-      .describe('Timed end timestamp; provide together with `startsAt` for a timed block.'),
-    allDayStartDate: DateString.optional().describe(
-      'All-day start date; provide together with `allDayEndDate` for an all-day block.',
-    ),
-    allDayEndDate: DateString.optional().describe(
-      'All-day exclusive end date; provide together with `allDayStartDate` for an all-day block.',
-    ),
-    status: CalendarItemStatus.optional().describe(
-      "Initial status; omitted defaults server-side (typically 'confirmed').",
-    ),
-    layerId: CalendarLayerId.optional().describe(
-      "Target native layer id; omitted uses the caller's default native layer.",
-    ),
-  })
+  .union([
+    CalendarItemCreateFields.extend({
+      kind: z.literal('native_block').describe('Legacy native-block create discriminator.'),
+      intent: z.never().optional(),
+    }),
+    CalendarItemCreateFields.extend({
+      intent: CalendarItemCreateIntent.describe('Create a native event or first-class timebox.'),
+      kind: z.never().optional(),
+    }),
+  ])
   .refine(
     (v) =>
       (v.startsAt !== undefined && v.endsAt !== undefined) ||
@@ -515,7 +539,11 @@ export const CalendarItemCreate = z
       message: 'A calendar event requires either timed bounds or all-day date bounds',
     },
   )
-  .meta({ id: 'CalendarItemCreate', description: 'Create a Docket-native calendar block.' });
+  .meta({
+    id: 'CalendarItemCreate',
+    description:
+      'Create a Docket-native event or timebox while accepting the legacy native-block shape.',
+  });
 /** Validated calendar-item-create body. */
 export type CalendarItemCreate = z.infer<typeof CalendarItemCreate>;
 
@@ -712,6 +740,196 @@ export const CalendarItemTaskLinkResultOut = z
   });
 /** Calendar-item task-link result value. */
 export type CalendarItemTaskLinkResultOut = z.infer<typeof CalendarItemTaskLinkResultOut>;
+
+/** The directed relationship one calendar item has to another. */
+export const CalendarItemRelationRole = z.enum(['contained', 'related']).meta({
+  id: 'CalendarItemRelationRole',
+  description:
+    'A directed calendar-item relationship: the target is contained by the source, or generally related.',
+});
+/** Calendar-item relation-role value. */
+export type CalendarItemRelationRole = z.infer<typeof CalendarItemRelationRole>;
+
+/** A directed relationship between two calendar items. */
+export const CalendarItemRelationOut = z
+  .object({
+    sourceItemId: CalendarItemId.describe('Calendar item the relationship starts from.'),
+    targetItemId: CalendarItemId.describe('Calendar item the relationship points to.'),
+    targetTitle: z.string().optional().describe('Current target title when expanded by a read.'),
+    targetKind: CalendarItemKind.optional().describe(
+      'Current target kind when expanded by a read.',
+    ),
+    role: CalendarItemRelationRole.describe('How the source relates to the target.'),
+    createdByUserId: z.string().min(1).describe('User who created the relationship.'),
+    createdAt: z.string().describe('Relationship creation timestamp.'),
+  })
+  .meta({
+    id: 'CalendarItemRelationOut',
+    description: 'A directed relationship between two calendar items.',
+  });
+/** Calendar-item relation value. */
+export type CalendarItemRelationOut = z.infer<typeof CalendarItemRelationOut>;
+
+/** Body for relating the calendar item in the route to another item. */
+export const CalendarItemRelationCreate = z
+  .object({
+    targetItemId: CalendarItemId.describe('Calendar item the route item relates to.'),
+    role: CalendarItemRelationRole.default('related').describe(
+      'Directed relationship role; defaults to a general association.',
+    ),
+  })
+  .meta({
+    id: 'CalendarItemRelationCreate',
+    description: 'Create a directed relationship from one calendar item to another.',
+  });
+/** Calendar-item relation-create body. */
+export type CalendarItemRelationCreate = z.infer<typeof CalendarItemRelationCreate>;
+
+/** Detail level granted when a personal calendar layer is shared into a workspace. */
+export const CalendarLayerShareAccess = z.enum(['details', 'busy']).meta({
+  id: 'CalendarLayerShareAccess',
+  description: 'Share full item details or only redacted busy windows.',
+});
+/** Calendar-layer share-access value. */
+export type CalendarLayerShareAccess = z.infer<typeof CalendarLayerShareAccess>;
+
+/** One personal calendar layer shared into an organization. */
+export const CalendarLayerShareOut = z
+  .object({
+    layerId: CalendarLayerId.describe('Shared personal calendar layer.'),
+    organizationId: OrganizationId.describe('Workspace receiving the layer.'),
+    access: CalendarLayerShareAccess.describe('Detail level visible to workspace members.'),
+    createdBy: ActorId.describe('Workspace actor who created the share.'),
+    createdAt: z.string().describe('Share creation timestamp.'),
+    updatedAt: z.string().describe('Share update timestamp.'),
+  })
+  .meta({
+    id: 'CalendarLayerShareOut',
+    description: 'A personal calendar layer shared into a workspace.',
+  });
+/** Calendar-layer share value. */
+export type CalendarLayerShareOut = z.infer<typeof CalendarLayerShareOut>;
+
+/** Body for sharing or updating a personal calendar layer in a workspace. */
+export const CalendarLayerShareCreate = z
+  .object({
+    layerId: CalendarLayerId.describe('Personal calendar layer exposed to the workspace.'),
+    access: CalendarLayerShareAccess.default('details').describe(
+      'Detail level granted to workspace members; defaults to item details.',
+    ),
+  })
+  .meta({
+    id: 'CalendarLayerShareCreate',
+    description: 'Expose one personal calendar layer to the workspace in the route.',
+  });
+/** Calendar-layer share-create body. */
+export type CalendarLayerShareCreate = z.infer<typeof CalendarLayerShareCreate>;
+
+/** Body for replacing all layer exposures in the workspace in the route. */
+export const CalendarLayerSharesReplace = z
+  .object({
+    shares: z
+      .array(CalendarLayerShareCreate)
+      .describe('Complete replacement set of layer exposures for the workspace.'),
+  })
+  .meta({
+    id: 'CalendarLayerSharesReplace',
+    description: 'Replace all personal calendar layer exposures for one workspace.',
+  });
+/** Calendar-layer share replacement body. */
+export type CalendarLayerSharesReplace = z.infer<typeof CalendarLayerSharesReplace>;
+
+/** Query for comparing several workspace members over one bounded time range. */
+export const ScheduleComparisonQuery = z
+  .object({
+    start: z.iso.datetime().describe('Comparison range start, inclusive.'),
+    end: z.iso.datetime().describe('Comparison range end, exclusive.'),
+    actorIds: z
+      .array(ActorId)
+      .min(1)
+      .describe('Workspace actors whose schedules should be compared.'),
+  })
+  .refine((value) => value.end > value.start, {
+    path: ['end'],
+    message: '`end` must be after `start`',
+  })
+  .meta({
+    id: 'ScheduleComparisonQuery',
+    description: 'Compare workspace-member schedules over a bounded time range.',
+  });
+/** Schedule-comparison query value. */
+export type ScheduleComparisonQuery = z.infer<typeof ScheduleComparisonQuery>;
+
+/** Time fields shared by detailed and redacted comparison items. */
+const ScheduleComparisonTimeFields = z.object({
+  startsAt: z.string().nullable().describe('Timed start; null for an all-day item.'),
+  endsAt: z.string().nullable().describe('Timed end; null for an all-day item.'),
+  allDayStartDate: DateString.nullable().describe('All-day start date; null for a timed item.'),
+  allDayEndDate: DateString.nullable().describe(
+    'All-day exclusive end date; null for a timed item.',
+  ),
+});
+
+/** One permission-safe schedule item in a people comparison. */
+export const ScheduleComparisonItemOut = z
+  .discriminatedUnion('access', [
+    ScheduleComparisonTimeFields.extend({
+      access: z.literal('busy'),
+    }),
+    ScheduleComparisonTimeFields.extend({
+      access: z.literal('details'),
+      itemId: CalendarItemId.describe('Visible calendar item id.'),
+      layerId: CalendarLayerId.describe('Visible calendar layer id.'),
+      kind: CalendarItemKind.describe('Visible item kind.'),
+      title: z.string().describe('Visible item title.'),
+    }),
+  ])
+  .refine(
+    (value) =>
+      (value.startsAt !== null && value.endsAt !== null) ||
+      (value.allDayStartDate !== null && value.allDayEndDate !== null),
+    {
+      path: ['startsAt'],
+      message: 'A comparison item requires timed or all-day bounds',
+    },
+  )
+  .meta({
+    id: 'ScheduleComparisonItemOut',
+    description:
+      'A schedule item that structurally omits ids, kind, and title when access is busy-only.',
+  });
+/** Schedule-comparison item value. */
+export type ScheduleComparisonItemOut = z.infer<typeof ScheduleComparisonItemOut>;
+
+/** One workspace member's permission-filtered schedule. */
+export const ScheduleComparisonPersonOut = z
+  .object({
+    actorId: ActorId.describe('Workspace actor whose schedule is represented.'),
+    displayName: z.string().describe('Display name for the comparison lane header.'),
+    avatar: z.string().nullable().describe('Avatar URL, or null when the actor has none.'),
+    timezone: z.string().nullable().describe("Actor's calendar timezone, when known."),
+    items: z.array(ScheduleComparisonItemOut).describe('Visible details or redacted busy windows.'),
+  })
+  .meta({
+    id: 'ScheduleComparisonPersonOut',
+    description: "One workspace member's permission-filtered schedule.",
+  });
+/** Schedule-comparison person value. */
+export type ScheduleComparisonPersonOut = z.infer<typeof ScheduleComparisonPersonOut>;
+
+/** Permission-safe schedule comparison response. */
+export const ScheduleComparisonOut = z
+  .object({
+    start: z.string().describe('Comparison range start.'),
+    end: z.string().describe('Comparison range end.'),
+    people: z.array(ScheduleComparisonPersonOut).describe('Schedules grouped by workspace actor.'),
+  })
+  .meta({
+    id: 'ScheduleComparisonOut',
+    description: 'Permission-safe schedules for several workspace members.',
+  });
+/** Schedule-comparison response value. */
+export type ScheduleComparisonOut = z.infer<typeof ScheduleComparisonOut>;
 
 /** Result of syncing linked calendar accounts/layers/items. */
 export const CalendarSyncResultOut = z

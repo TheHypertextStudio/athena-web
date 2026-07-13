@@ -3,7 +3,7 @@
 > **Status**: Shipped (V1) — see "Shipped State And Known Follow-Ups" below for what landed
 > differently than originally described here.
 > **Area**: Calendar, agenda, tasks, connected accounts
-> **Last Updated**: 2026-07-05
+> **Last Updated**: 2026-07-12
 
 ## Objective
 
@@ -38,8 +38,8 @@ contract later.
   Docket agenda views.
 - As a user, I can toggle individual calendars/layers on or off without disconnecting the account.
 - As a user, I can distinguish layers visually by name, color, provider, and editability.
-- As a user, I can view a combined day/week calendar that includes external meetings, Docket-native
-  blocks, and task timeboxes.
+- As a user, I can view an unbounded rolling calendar whose visible date lanes derive from the
+  viewport rather than a fixed day/week mode.
 
 ### Inline Editing
 
@@ -72,6 +72,18 @@ contract later.
 - As a user, native blocks can be edited even when no external provider is connected.
 - As a user, native blocks appear in the same calendar views as provider events.
 
+### Unified Scheduling
+
+- As a user, I can drag over any date lane to create either an event or a timebox, using my saved
+  default while retaining an explicit choice before persistence.
+- As a user, I can move and resize editable items across arbitrary date lanes at a continuously
+  adjustable time scale.
+- As a user, I can drag tasks or calendar items onto a timebox or event to create a contained or
+  related relationship.
+- As a workspace member, I can compare any selected set of people as schedule lanes. Only layers
+  explicitly shared to that workspace participate, and busy-only/private data is structurally
+  redacted by the API.
+
 ## Core Objects
 
 ### Calendar Layer
@@ -90,7 +102,9 @@ Layers have visibility, color, provider/source metadata, editability, and sync h
 A calendar item is one visible time object. It can be:
 
 - `provider_event`: an event synced from Google Calendar or a future provider.
-- `native_block`: a Docket-owned time block.
+- `native_event`: a Docket-owned calendar event.
+- `timebox`: a Docket-owned container for tasks or related calendar items.
+- `native_block`: the legacy Docket-owned block shape, retained for compatibility.
 - `task_timebox`: a Docket task scheduled onto a daily plan.
 - `availability_block`: a provider or Docket block that affects scheduling but is not a meeting.
 
@@ -106,6 +120,7 @@ The item workspace is a detail drawer for a calendar item. It contains:
 - Conflict or write-scope warnings.
 - A linked task stack grouped by role.
 - Actions to create, link, detach, and open tasks.
+- Contained and related calendar items, with open and detach actions.
 
 The workspace is the richer version of a simple linked-task stack. V1 should implement the workspace
 shell even if some sections start compact.
@@ -128,8 +143,8 @@ shell even if some sections start compact.
 ## UI Surfaces
 
 - Global agenda rail: continues to show the current day but renders layer-aware items.
-- Calendar view: day/week timeline with layer controls, inline edit, drag/resize, and item
-  workspace.
+- Calendar view: a viewport-driven rolling date canvas with layer controls, continuous zoom,
+  region creation, drag/resize, object drop targets, people comparison, and item workspace.
 - Today page: can show "next up" from layered calendar items and task timeboxes.
 - Task detail: shows linked calendar items as structured context, not only attachments.
 - Google Calendar settings: expands from calendar visibility to account/layer/write-scope/sync health.
@@ -144,6 +159,9 @@ In scope:
 - Read-only Google Calendar continues working for existing users.
 - Write-backed core edits for Google events after re-consent to a write calendar scope.
 - Docket-native blocks.
+- First-class native events and timeboxes.
+- Explicit calendar-item relationships and task containment.
+- Workspace-scoped layer sharing and privacy-safe schedule comparison.
 - Event workspace with multiple linked tasks.
 - Layered agenda/calendar reads.
 - Manual sync and scheduled/push-assisted sync.
@@ -165,6 +183,11 @@ Out of scope for V1:
 - Native blocks can be created, edited, and deleted without any external provider.
 - A calendar item can link to many tasks, and a task can be linked to many calendar items.
 - Calendar views can filter/toggle layers without blanking or fetching through ad-hoc client code.
+- The visible lane count and rolling query window derive from live viewport geometry; no product
+  mode or fixed date count is embedded in the scheduling component.
+- Empty, loading, and server-error states leave the 24-hour grid mounted and usable for local
+  interaction.
+- Busy-only comparison responses contain no title, item id, layer id, or provider metadata.
 - Task links never expose tasks the viewer cannot otherwise access.
 
 ## Shipped State And Known Follow-Ups
@@ -182,11 +205,9 @@ pass. One item from this spec's original V1 scope remains an explicit, tracked f
   was left unbuilt. `TaskAttachments.tsx` is unchanged.
 
 Other known, deliberately-scoped simplifications (not gaps in the acceptance criteria, but worth
-tracking): the full calendar view (`/calendar`) is reachable only by direct URL, not yet wired
-into the app shell's primary navigation; the week view has no drag/resize (the day view does);
-linking an existing task to a calendar item is by pasted task id (no search/picker component
-exists in the codebase yet); the item workspace's provider-metadata line omits the linked
-account's email.
+tracking): linking an existing task from inside the item drawer is still by pasted task id (the
+calendar and task-list canvases provide direct drag/drop); the item workspace's provider-metadata
+line omits the linked account's email.
 
 ## Source Notes
 

@@ -1,9 +1,8 @@
 # Layered Calendar UI Spec
 
-> **Status**: Implemented (V1) — see "Deferred UI Affordances" for what shipped narrower than
-> this spec describes.
+> **Status**: Implemented — fluid scheduling canvas
 > **Area**: Web app, agenda, settings, task detail
-> **Last Updated**: 2026-07-05
+> **Last Updated**: 2026-07-12
 
 ## Goal
 
@@ -28,24 +27,51 @@ Changes:
 
 ### Full Calendar View
 
-Introduce a fuller calendar view when implementation reaches UI slice.
+The full calendar is a host around the shared scheduling canvas, not a separate day/week widget.
+The host owns data, permissions, persistence, date-window expansion, and display copy. The canvas
+owns only geometry and pointer interpretation.
 
 Required controls:
 
-- day/week mode,
+- date and people axes,
 - layer toggle panel,
-- today/previous/next navigation,
-- inline edit enable/disable toggle,
-- create native block action,
+- today/previous/next viewport navigation,
+- continuous time-scale zoom,
+- event/timebox creation defaults,
 - visible sync/reauth/conflict status.
 
 Layout:
 
 - Dense operational interface, not a marketing layout.
-- Timeline grid with stable row/hour dimensions.
+- A 24-hour grid whose pixels-per-hour scale is continuous and whose snap interval is derived from
+  usable pointer geometry, down to a maximum five-minute resolution.
+- Equal-width arbitrary lanes. The count visible at once derives from container width and a saved
+  minimum lane width; overflow scrolls horizontally.
+- A rolling query window with one measured viewport of overscan in each direction. Reaching a
+  boundary shifts the host window without introducing named or fixed-count view modes.
 - Items colored by layer with icons for source/kind.
 - Overlapping items should form stable columns or stacks without hiding text.
 - All text must fit in cards across mobile and desktop.
+
+### Canvas Interaction Contract
+
+- Pointer selection emits a snapped region; it never persists an object itself.
+- Move and resize emit proposed bounds and target lane; the host applies permission and mutation
+  policy.
+- Tasks and calendar items use one closed drag payload. Timeboxes interpret drops as `contained`;
+  calendar events interpret drops as `related`.
+- Every pointer operation has a form-based alternative through quick create or the item drawer.
+- Empty, loading, stale, and failure notices are overlays. They must never replace or unmount the
+  lane and hour grid.
+
+### People Comparison
+
+- The workspace and member selection determine an arbitrary lane set; the canvas does not impose a
+  maximum or special two-person layout.
+- Comparison reads include only personal layers explicitly shared into the selected workspace.
+- `busy` items are a separate structural response variant with time bounds only. The web client
+  must not receive hidden titles, item ids, layer ids, or provider metadata and then attempt to hide
+  them cosmetically.
 
 ### Item Workspace Drawer
 
@@ -57,6 +83,7 @@ Sections:
 - Core fields: title, time/date/all-day, location, description.
 - Sync status: clean, pending write, read-only, failed, conflict, needs reauth.
 - Linked tasks: grouped by role.
+- Contained and related calendar items.
 - Task actions: create task, link existing task, detach, open task.
 - Provider metadata: account, calendar/layer, organizer, attendees summary.
 
@@ -183,6 +210,14 @@ Connected accounts should also distinguish access labels:
 - Drive,
 - Gmail.
 
+Personal calendar behavior settings additionally own:
+
+- default region-creation intent (`event` or `timebox`),
+- default event destination layer,
+- continuous pixels-per-hour value,
+- minimum lane width,
+- per-workspace layer sharing (`details` or `busy`), disabled until explicitly configured.
+
 ## Task Detail UI
 
 Task detail should move beyond generic attachment cards for calendar relationships.
@@ -208,6 +243,8 @@ Keep existing `calendar_event` attachments working during migration. New feature
 - Conflict: show item-level conflict banner and actions.
 - Sync in progress: keep stale data on screen and show subtle progress.
 - Provider outage: keep cached data visible with last error.
+- Agenda/calendar read failure: render the scheduling grid with a fixed safe status message; never
+  surface server exception text as user copy.
 
 ## Accessibility And Interaction
 
@@ -244,19 +281,9 @@ tracked follow-up rather than a gap in the acceptance criteria above:
   read exists for "calendar items linked to task X" — only the inverse (item → tasks). Task
   detail's `TaskAttachments.tsx` is unchanged; building this honestly requires a new backend read
   first (see `docs/engineering/specs/calendar-architecture.md`).
-- **Week view has no drag/resize.** The day timeline (`calendar-timeline.tsx`) supports real
-  pointer-drag move/resize, snapped to 15 minutes; the week grid (`calendar-week-grid.tsx`) is
-  deliberately a read-only-by-gesture 7-column stack — every card still opens the item workspace,
-  whose inline core-fields form is the non-pointer edit path for both views.
 - **Linking an existing task is by pasted task id**, not a search/picker — no task-search/picker
-  component exists in the codebase yet. This is a real, validated call (`TaskId.safeParse`), not
-  fabricated data.
+  component exists in the codebase yet. This remains a validated drawer action; task rows can also
+  be dragged directly onto canvas targets.
 - **The item workspace's provider-metadata line omits the linked account's email** — showing it
   would need an extra connections fetch the drawer doesn't currently make; layer title, provider,
   and access role are shown instead.
-- **The agenda rail is not yet wired to the new `calendar_item` normalizer seam.** `AgendaEntry`
-  gained an additive `'calendar_item'` source and a `calendar-item-card.tsx`-matching render
-  branch, but `AgendaProvider` still sources only from the Hub `today`/`agenda` reads
-  (`agendaDef`/`planDef`), not `calendarItemsDef` — the seam is prepared and renders correctly
-  when exercised, but nothing in the live agenda rail's data source calls into it yet. The Today
-  page's "next up" reads `Hub.today.calendar` directly and is unaffected either way.

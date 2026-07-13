@@ -9,6 +9,7 @@ import {
   GoogleCalendarApiError,
   type GoogleAccessTokenFetcher,
   type GoogleFetchJson,
+  type GoogleFetchJsonInit,
 } from '../../src/routes/calendar-google-adapter';
 import {
   claimLayerLease,
@@ -574,6 +575,49 @@ describe('calendar sync engine — Google adapter (fake fetchJson)', () => {
         layerEditableCore: true,
       }),
     ).rejects.toThrow('boom');
+  });
+
+  it('creates with a stable event id and treats a retry 409 as an applied read-back', async () => {
+    const calls: { method: string; url: string; body: unknown }[] = [];
+    const adapter = createGoogleCalendarAdapter(
+      async <T>(url: string, _token: string, init?: GoogleFetchJsonInit) => {
+        calls.push({ method: init?.method ?? 'GET', url, body: init?.body });
+        if (init?.method === 'POST') {
+          throw new GoogleCalendarApiError(409, 'already exists');
+        }
+        return {
+          id: 'stableevent01',
+          status: 'confirmed',
+          summary: 'Planning',
+          start: { dateTime: '2026-07-12T10:00:00.000Z' },
+          end: { dateTime: '2026-07-12T11:00:00.000Z' },
+          organizer: { self: true },
+        } as T;
+      },
+    );
+    const createItem = adapter.createItem;
+    expect(createItem).toBeTypeOf('function');
+    if (!createItem) throw new Error('Google adapter missing createItem');
+
+    const result = await createItem({
+      credentials: { accessToken: 'token' },
+      externalLayerId: 'primary',
+      externalEventId: 'stableevent01',
+      patch: {
+        title: 'Planning',
+        startsAt: '2026-07-12T10:00:00.000Z',
+        endsAt: '2026-07-12T11:00:00.000Z',
+      },
+    });
+
+    expect(result.outcome).toBe('applied');
+    expect(calls).toEqual([
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.objectContaining({ id: 'stableevent01', summary: 'Planning' }),
+      }),
+      expect.objectContaining({ method: 'GET', url: expect.stringContaining('/stableevent01') }),
+    ]);
   });
 });
 

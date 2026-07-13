@@ -2,6 +2,7 @@ import { count, eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import {
+  CalendarLayerId,
   type CalendarItemConflict,
   type CalendarItemOut,
   type CalendarItemPermission,
@@ -23,7 +24,11 @@ import {
   retryCalendarItemWrite,
 } from '../../src/calendar/calendar-outbox';
 import { readItemDetail } from '../../src/calendar/calendar-read';
-import { deleteCalendarItem, updateCalendarItem } from '../../src/calendar/calendar-write';
+import {
+  createCalendarItem,
+  deleteCalendarItem,
+  updateCalendarItem,
+} from '../../src/calendar/calendar-write';
 import {
   GoogleCalendarApiError,
   type GoogleAccessTokenFetcher,
@@ -211,6 +216,7 @@ interface FetchCall {
 function buildGoogleFetchJson(
   calls: FetchCall[],
   handlers: {
+    eventCreate?: (body: Record<string, unknown>) => unknown;
     eventGet?: () => unknown;
     eventPatch?: (body: Record<string, unknown>, ifMatch: string | undefined) => unknown;
     eventDelete?: (ifMatch: string | undefined) => unknown;
@@ -220,6 +226,11 @@ function buildGoogleFetchJson(
     const method = init?.method ?? 'GET';
     calls.push({ method, url, headers: init?.headers ?? {}, body: init?.body });
     const ifMatch = init?.headers?.['If-Match'];
+    if (method === 'POST') {
+      /* v8 ignore next -- @preserve defensive: every POST test supplies eventCreate */
+      if (!handlers.eventCreate) throw new Error('unexpected POST call');
+      return handlers.eventCreate(init?.body as Record<string, unknown>) as T;
+    }
     if (method === 'PATCH') {
       /* v8 ignore next -- @preserve defensive: every PATCH test supplies eventPatch */
       if (!handlers.eventPatch) throw new Error('unexpected PATCH call');
@@ -332,6 +343,50 @@ describe('calendar write-back — scope/capability/conflict gating (via the real
 });
 
 describe('calendar write-back — successful push', () => {
+  it('CREATE uses one stable provider id and marks the local-first item clean after push', async () => {
+    const schema = await getDb();
+    const userId = await seedUserWithHub(schema.db, schema, 'CreatePushUser');
+    const fixture = await seedProviderEventItem(schema, { userId });
+    const calls: FetchCall[] = [];
+    const fetchJson = buildGoogleFetchJson(calls, {
+      eventCreate: (request) => ({
+        id: request['id'],
+        status: 'confirmed',
+        summary: request['summary'],
+        start: request['start'],
+        end: request['end'],
+        updated: '2026-07-02T10:00:00.000Z',
+        etag: 'etag-created',
+      }),
+    });
+
+    const created = await createCalendarItem(schema.db, {
+      userId,
+      input: {
+        intent: 'event',
+        layerId: CalendarLayerId.parse(fixture.layerId),
+        title: 'Provider planning',
+        startsAt: '2026-07-03T10:00:00.000Z',
+        endsAt: '2026-07-03T11:00:00.000Z',
+      },
+      syncModules: syncModulesFor(fetchJson),
+    });
+
+    expect(created.kind).toBe('provider_event');
+    expect(created.syncState).toBe('clean');
+    expect(created.externalEventId).toMatch(/^[0-9a-f]{32}$/);
+    expect(calls).toEqual([
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.objectContaining({
+          id: created.externalEventId,
+          summary: 'Provider planning',
+        }),
+      }),
+    ]);
+    expect((await loadLatestWrite(schema, created.id)).status).toBe('applied');
+  });
+
   it('PATCH applies locally, pushes to the provider, and stamps the fresh etag/timestamp', async () => {
     const schema = await getDb();
     const userId = await seedUserWithHub(schema.db, schema, 'PushUser');

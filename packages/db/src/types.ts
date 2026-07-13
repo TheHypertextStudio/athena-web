@@ -67,6 +67,17 @@ export interface HubPreferences {
   readonly theme?: 'system' | 'light' | 'dark';
   /** IANA timezone for the daily plan (also the digest's day boundary + send time). */
   readonly timezone?: string;
+  /** Continuous scheduling-canvas preferences and quick-create defaults. */
+  readonly calendar?: {
+    /** Continuous vertical zoom in pixels per hour. */
+    readonly pixelsPerHour?: number;
+    /** Minimum date-lane width in pixels before horizontal scrolling. */
+    readonly minLaneWidth?: number;
+    /** Whether new selected regions default to events or timeboxes. */
+    readonly defaultCreateIntent?: 'event' | 'timebox';
+    /** Preferred native or writable provider layer for event creation. */
+    readonly defaultLayerId?: string | null;
+  };
   /** Daily digest delivery settings (the Sunsama-style end-of-day summary). */
   readonly digest?: {
     /** Whether the daily digest is generated and delivered. */

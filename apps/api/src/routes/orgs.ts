@@ -29,6 +29,7 @@ import agents from './agents';
 import billing from './billing';
 import automationRules from './automation-rules';
 import capture from './capture';
+import calendarSchedules from './calendar-schedules';
 import comments from './comments';
 import cycles from './cycles';
 import emailSuggestions from './email-suggestions';
@@ -305,6 +306,7 @@ Related: \`GET /\` lists all orgs the caller belongs to; the nested routers unde
   .route('/:orgId/agents', agents)
   .route('/:orgId/sessions', agentSessions)
   .route('/:orgId/capture', capture)
+  .route('/:orgId/calendar', calendarSchedules)
   .route('/:orgId/email-suggestions', emailSuggestions)
   .route('/:orgId/automation-rules', automationRules)
   .route('/:orgId/integrations/mcp', integrationsMcp)

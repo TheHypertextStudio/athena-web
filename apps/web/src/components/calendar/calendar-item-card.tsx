@@ -50,7 +50,9 @@ export function calendarItemTransitionName(itemId: string): string {
 /** The icon glyph for each layered-calendar item kind. Reused by the item workspace drawer. */
 export const CALENDAR_ITEM_KIND_ICON: Record<CalendarItemKind, LucideIcon> = {
   provider_event: Calendar,
+  native_event: Calendar,
   native_block: Layers,
+  timebox: Layers,
   task_timebox: TaskAlt,
   availability_block: Schedule,
 };
@@ -58,7 +60,9 @@ export const CALENDAR_ITEM_KIND_ICON: Record<CalendarItemKind, LucideIcon> = {
 /** The compact kind label shown in the card's metadata line. Reused by the item workspace drawer. */
 export const CALENDAR_ITEM_KIND_LABEL: Record<CalendarItemKind, string> = {
   provider_event: 'Provider event',
+  native_event: 'Event',
   native_block: 'Block',
+  timebox: 'Timebox',
   task_timebox: 'Timebox',
   availability_block: 'Availability',
 };

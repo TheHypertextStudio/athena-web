@@ -35,9 +35,25 @@ describe('HubPreferences', () => {
       density: 'compact',
       theme: 'dark',
       timezone: 'America/Chicago',
+      calendar: {
+        pixelsPerHour: 88.5,
+        minLaneWidth: 260.25,
+        defaultCreateIntent: 'timebox',
+        defaultLayerId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+      },
     });
     expect(parsed.density).toBe('compact');
     expect(parsed.theme).toBe('dark');
+    expect(parsed.calendar?.pixelsPerHour).toBe(88.5);
+    expect(parsed.calendar?.defaultCreateIntent).toBe('timebox');
+  });
+
+  it('keeps calendar preferences continuous and allows clearing the destination layer', () => {
+    expect(
+      HubPreferences.parse({
+        calendar: { pixelsPerHour: 73.125, minLaneWidth: 241.75, defaultLayerId: null },
+      }).calendar,
+    ).toEqual({ pixelsPerHour: 73.125, minLaneWidth: 241.75, defaultLayerId: null });
   });
 
   it('rejects an invalid density', () => {
@@ -50,5 +66,13 @@ describe('HubPreferences', () => {
 
   it('rejects an invalid landing', () => {
     expect(HubPreferences.safeParse({ landing: 'nope' }).success).toBe(false);
+  });
+
+  it('rejects out-of-range calendar geometry and unknown create intents', () => {
+    expect(HubPreferences.safeParse({ calendar: { pixelsPerHour: 12 } }).success).toBe(false);
+    expect(HubPreferences.safeParse({ calendar: { minLaneWidth: 100 } }).success).toBe(false);
+    expect(HubPreferences.safeParse({ calendar: { defaultCreateIntent: 'block' } }).success).toBe(
+      false,
+    );
   });
 });

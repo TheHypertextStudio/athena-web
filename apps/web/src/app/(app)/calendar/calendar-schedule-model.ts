@@ -1,0 +1,156 @@
+import type { CalendarItemOut, ScheduleComparisonOut } from '@docket/types';
+
+import { shiftISODate } from '@/components/agenda/agenda-context';
+import type { ScheduleItem, ScheduleLane } from '@/components/scheduling';
+import { todayISODate } from '@/lib/today';
+
+/** The resource dimension rendered by the calendar canvas. */
+export type CalendarAxis = 'dates' | 'people';
+
+/** Configurable policy for retaining date lanes outside the measured viewport. */
+export interface RollingDateWindowPolicy {
+  /** Number of complete measured viewports retained before and after the visible lanes. */
+  readonly overscanViewports: number;
+}
+
+/** A rolling date window derived entirely from current viewport geometry. */
+export interface RollingDateWindow {
+  readonly startDate: string;
+  readonly laneCount: number;
+  readonly initialLaneIndex: number;
+}
+
+/** Default rolling-window policy: retain one measured viewport on either side. */
+export const DEFAULT_ROLLING_DATE_WINDOW_POLICY: RollingDateWindowPolicy = {
+  overscanViewports: 1,
+};
+
+/** Convert one local date and minute-of-day into an ISO instant. */
+export function instantAt(date: string, minutes: number): string {
+  const value = new Date(`${date}T00:00:00`);
+  value.setMinutes(minutes, 0, 0);
+  return value.toISOString();
+}
+
+/** Return the instant range covering any positive number of local date lanes. */
+export function dateRange(
+  startDate: string,
+  laneCount: number,
+): { startISO: string; endISO: string } {
+  return {
+    startISO: instantAt(startDate, 0),
+    endISO: instantAt(shiftISODate(startDate, laneCount), 0),
+  };
+}
+
+/**
+ * Derive a rolling date window from any measured visible-lane count and overscan policy.
+ *
+ * @remarks
+ * The result scales with geometry: neither the visible window nor its retained neighbors use a
+ * named view or a fixed number of dates.
+ */
+export function deriveRollingDateWindow(
+  anchorDate: string,
+  measuredVisibleLaneCount: number,
+  policy: RollingDateWindowPolicy = DEFAULT_ROLLING_DATE_WINDOW_POLICY,
+): RollingDateWindow {
+  const visibleLaneCount = Math.max(1, Math.floor(measuredVisibleLaneCount));
+  const overscanViewports = Math.max(0, Math.floor(policy.overscanViewports));
+  const initialLaneIndex = visibleLaneCount * overscanViewports;
+  return {
+    startDate: shiftISODate(anchorDate, -initialLaneIndex),
+    laneCount: visibleLaneCount * (overscanViewports * 2 + 1),
+    initialLaneIndex,
+  };
+}
+
+/** Return whether a normalized calendar item overlaps a local date lane. */
+export function overlapsDate(item: CalendarItemOut, date: string): boolean {
+  if (item.allDayStartDate && item.allDayEndDate) {
+    return item.allDayStartDate <= date && date < item.allDayEndDate;
+  }
+  if (!item.startsAt || !item.endsAt) return false;
+  const laneStart = new Date(`${date}T00:00:00`).getTime();
+  const laneEnd = new Date(`${shiftISODate(date, 1)}T00:00:00`).getTime();
+  return new Date(item.startsAt).getTime() < laneEnd && new Date(item.endsAt).getTime() > laneStart;
+}
+
+/** Convert one calendar item into the geometry-only scheduling contract. */
+export function toScheduleItem(
+  item: CalendarItemOut,
+  date: string,
+  color: string | null | undefined,
+): ScheduleItem {
+  const allDay = item.allDayStartDate !== null && item.allDayEndDate !== null;
+  const startsAt = item.startsAt ?? instantAt(item.allDayStartDate ?? date, 0);
+  const endsAt = item.endsAt ?? instantAt(item.allDayEndDate ?? shiftISODate(date, 1), 0);
+  const singleDay =
+    item.startsAt !== null &&
+    item.endsAt !== null &&
+    todayISODate(new Date(item.startsAt)) === todayISODate(new Date(item.endsAt));
+  return {
+    id: item.id,
+    title: item.title,
+    startsAt,
+    endsAt,
+    allDay,
+    color: color ?? undefined,
+    editable: item.permissions.canEditCore && !allDay && singleDay,
+    dragObject:
+      item.kind === 'task_timebox' || item.kind === 'availability_block'
+        ? undefined
+        : { kind: 'calendar_item', itemId: item.id, title: item.title },
+    dropTarget: ['provider_event', 'native_event', 'native_block', 'timebox'].includes(item.kind),
+  };
+}
+
+/** Build one date lane from an arbitrary visible range payload. */
+export function buildDateLane(
+  date: string,
+  items: readonly CalendarItemOut[],
+  colorByLayer: ReadonlyMap<string, string | null>,
+): ScheduleLane {
+  return {
+    id: `date:${date}`,
+    date,
+    label:
+      new Date(`${date}T00:00:00`).toLocaleDateString(undefined, {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+      }) || date,
+    items: items
+      .filter((item) => overlapsDate(item, date))
+      .map((item) => toScheduleItem(item, date, colorByLayer.get(item.layerId))),
+  };
+}
+
+/** Convert one permission-filtered person response into a read-only resource lane. */
+export function buildComparisonLane(
+  person: ScheduleComparisonOut['people'][number],
+  date: string,
+): ScheduleLane {
+  return {
+    id: `person:${person.actorId}`,
+    resourceId: person.actorId,
+    date,
+    label: person.displayName,
+    timezone: person.timezone ?? undefined,
+    editable: false,
+    items: person.items.map((item, index) => {
+      const allDay = item.allDayStartDate !== null && item.allDayEndDate !== null;
+      return {
+        id:
+          item.access === 'details'
+            ? item.itemId
+            : `busy:${person.actorId}:${item.startsAt ?? item.allDayStartDate ?? String(index)}`,
+        title: item.access === 'details' ? item.title : 'Busy',
+        startsAt: item.startsAt ?? instantAt(item.allDayStartDate ?? date, 0),
+        endsAt: item.endsAt ?? instantAt(item.allDayEndDate ?? shiftISODate(date, 1), 0),
+        allDay,
+        editable: false,
+      };
+    }),
+  };
+}

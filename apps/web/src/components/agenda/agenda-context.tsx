@@ -29,12 +29,12 @@ import {
 } from 'react';
 
 import { api } from '@/lib/api';
+import { calendarItemsDef } from '@/components/calendar/calendar-data';
 import { apiQueryOptions, queryKeys, useApiListQuery, usePrefetchApi } from '@/lib/query';
 import { todayISODate } from '@/lib/today';
 import { startViewTransition } from '@/lib/view-transition';
 
 import { type AgendaPlanMutations, useAgendaPlanMutations } from './agenda-mutations';
-import { userErrorMessage } from '@/lib/problem';
 
 /** Stable `view-transition-name` for an agenda entry, so it morphs across views (list ↔ timeline). */
 export function agendaEntryTransitionName(entryId: string): string {
@@ -292,6 +292,14 @@ function planDef(date: string) {
   );
 }
 
+/** The local-day instant range used by the layered calendar read. */
+function calendarDayRange(date: string): { startISO: string; endISO: string } {
+  return {
+    startISO: new Date(`${date}T00:00:00`).toISOString(),
+    endISO: new Date(`${shiftISODate(date, 1)}T00:00:00`).toISOString(),
+  };
+}
+
 /**
  * Owns the selected day, fetches its agenda, and provides both to descendants.
  *
@@ -309,6 +317,10 @@ export function AgendaProvider({ initialDate, children }: AgendaProviderProps): 
   // only the very first load (no data at all) shows one.
   const query = useApiListQuery(agendaDef(date));
   const data: AgendaOut | null = query.data ?? null;
+  const calendarRange = calendarDayRange(date);
+  const calendarQuery = useApiListQuery(
+    calendarItemsDef(calendarRange.startISO, calendarRange.endISO),
+  );
 
   // The daily plan carries the item id + checked-off status the Hub `today` projection lacks: we
   // source display (titles, timeboxes) from `today` and augment each entry with its plan-item id +
@@ -326,17 +338,29 @@ export function AgendaProvider({ initialDate, children }: AgendaProviderProps): 
     for (const neighbour of [shiftISODate(date, -1), shiftISODate(date, 1)]) {
       prefetch(agendaDef(neighbour));
       prefetch(planDef(neighbour));
+      const range = calendarDayRange(neighbour);
+      prefetch(calendarItemsDef(range.startISO, range.endISO));
     }
   }, [date, prefetch]);
 
-  const entries = useMemo(
-    () =>
-      toAgendaEntries(data).map((entry) => {
-        const item = entry.taskId ? planByTask.get(entry.taskId) : undefined;
-        return item ? { ...entry, planItemId: item.id, done: item.status === 'done' } : entry;
-      }),
-    [data, planByTask],
-  );
+  const entries = useMemo(() => {
+    const legacyEntries = toAgendaEntries(data).map((entry) => {
+      const item = entry.taskId ? planByTask.get(entry.taskId) : undefined;
+      return item ? { ...entry, planItemId: item.id, done: item.status === 'done' } : entry;
+    });
+    const layeredEntries = calendarQuery.data
+      ? calendarItemsToAgendaEntries(calendarQuery.data).filter(
+          (entry) => data === null || entry.calendarItem?.kind !== 'task_timebox',
+        )
+      : [];
+    const merged = new Map<string, AgendaEntry>();
+    for (const entry of legacyEntries) merged.set(entry.id, entry);
+    // Layered items win duplicate provider ids so agenda interactions retain the normalized
+    // permissions, relationship drop target, and item-workspace identity. Task timeboxes above are
+    // deliberately filtered while the legacy plan source is available, preserving plan controls.
+    for (const entry of layeredEntries) merged.set(entry.id, entry);
+    return [...merged.values()];
+  }, [calendarQuery.data, data, planByTask]);
 
   // The day's in-place edit operations (check-off, set/clear timebox, move, remove), bound to this
   // day's caches. Owned by the write layer so the provider stays read + navigation only.
@@ -369,8 +393,11 @@ export function AgendaProvider({ initialDate, children }: AgendaProviderProps): 
       date,
       isToday: date === todayISODate(),
       entries,
-      loading: query.isPending,
-      error: query.error ? userErrorMessage(query.error, 'Could not refresh the agenda.') : null,
+      loading: query.isPending && calendarQuery.isPending,
+      error:
+        query.isError || calendarQuery.isError
+          ? 'Calendar updates are temporarily unavailable.'
+          : null,
       view,
       setView,
       goToPreviousDay,
@@ -382,7 +409,9 @@ export function AgendaProvider({ initialDate, children }: AgendaProviderProps): 
       date,
       entries,
       query.isPending,
-      query.error,
+      query.isError,
+      calendarQuery.isPending,
+      calendarQuery.isError,
       view,
       setView,
       goToPreviousDay,

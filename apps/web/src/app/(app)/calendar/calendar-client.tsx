@@ -1,203 +1,147 @@
 'use client';
 
 /**
- * `(app)/calendar` — the full layered-calendar view's client shell.
+ * `(app)/calendar` — orchestrates the fluid date and people scheduling axes.
  *
  * @remarks
- * Owns the navigated day/week and the day↔week mode (mirroring `agenda-context.tsx`'s
- * date-is-a-plain-state, view-is-a-View-Transition split: navigating is a new data fetch, so it is
- * NOT wrapped; switching day↔week reshapes the same page, so it IS). Fetches the active range's
- * items and the full layers list, renders the mode-appropriate grid
- * ({@link CalendarTimeline}/{@link CalendarWeekGrid}), the layer toggle panel, the create-block
- * action, a view-level sync/conflict banner, and the item workspace drawer.
+ * Geometry, data loading, controls, and gesture persistence live in focused collaborators. This
+ * component owns only page-level state; it does not define day/week modes or a fixed lane count.
  */
-import { ChevronLeft, ChevronRight } from '@docket/ui/icons';
-import { Button, Skeleton } from '@docket/ui/primitives';
-import { cn } from '@docket/ui/lib/utils';
+import type { CalendarPreferences, HubPreferences } from '@docket/types';
 import { useRouter } from 'next/navigation';
-import { type JSX, useState } from 'react';
+import { type JSX, useEffect, useState } from 'react';
 
 import { shiftISODate } from '@/components/agenda/agenda-context';
 import CalendarItemDrawer from '@/components/calendar/calendar-item-drawer';
-import CalendarLayerPanel from '@/components/calendar/calendar-layer-panel';
-import CalendarTimeline from '@/components/calendar/calendar-timeline';
-import CalendarWeekGrid from '@/components/calendar/calendar-week-grid';
-import { calendarItemsDef, calendarLayersDef } from '@/components/calendar/calendar-data';
-import CreateBlockForm from '@/components/calendar/create-block-form';
+import CreateBlockForm, {
+  type CalendarRegionSelection,
+} from '@/components/calendar/create-block-form';
+import { api } from '@/lib/api';
 import { formatCalendarDate } from '@/lib/format-date';
-import { queryKeys, useApiListQuery } from '@/lib/query';
+import {
+  apiQueryOptions,
+  queryKeys,
+  STALE,
+  unwrap,
+  useApiMutation,
+  useApiQuery,
+} from '@/lib/query';
 import { todayISODate } from '@/lib/today';
-import { startViewTransition } from '@/lib/view-transition';
-import { userErrorMessage } from '@/lib/problem';
 
-/** The calendar view's display mode. */
-type CalendarViewMode = 'day' | 'week';
+import { CalendarComparisonControls } from './calendar-comparison-controls';
+import type { CalendarAxis } from './calendar-schedule-model';
+import { CalendarSchedulingSurface } from './calendar-scheduling-surface';
+import { CalendarToolbar } from './calendar-toolbar';
+import { useCalendarDateAxis } from './use-calendar-date-axis';
+import { useCalendarPeopleAxis } from './use-calendar-people-axis';
 
-/** The day `getDay()` (Sunday-start) the week containing `date` begins on. */
-function startOfWeek(date: string): string {
-  const day = new Date(`${date}T00:00:00`).getDay();
-  return shiftISODate(date, -day);
-}
+const DEFAULT_PIXELS_PER_HOUR = 72;
 
-/** An instant range, exclusive of `endISO`, over which calendar items are queried. */
-interface CalendarDayRange {
-  /** Range start (ISO 8601 datetime, inclusive). */
-  startISO: string;
-  /** Range end (ISO 8601 datetime, exclusive). */
-  endISO: string;
-}
-
-/** The `[startISO, endISO)` instant range covering `days` local calendar days from `startDate`. */
-function rangeISO(startDate: string, days: number): CalendarDayRange {
-  const start = new Date(`${startDate}T00:00:00`);
-  const end = new Date(`${shiftISODate(startDate, days)}T00:00:00`);
-  return { startISO: start.toISOString(), endISO: end.toISOString() };
-}
-
-/** The full calendar view. */
+/** Render the unified calendar page over the shared scheduling canvas. */
 export default function CalendarClient(): JSX.Element {
   const router = useRouter();
-  const [date, setDate] = useState(() => todayISODate());
-  const [view, setViewState] = useState<CalendarViewMode>('day');
+  const [axis, setAxis] = useState<CalendarAxis>('dates');
+  const [anchorDate, setAnchorDate] = useState(() => todayISODate());
+  const [visibleLaneCount, setVisibleLaneCount] = useState(1);
   const [openItemId, setOpenItemId] = useState<string | null>(null);
+  const [selection, setSelection] = useState<CalendarRegionSelection | null>(null);
+  const [pixelsPerHour, setPixelsPerHour] = useState(DEFAULT_PIXELS_PER_HOUR);
 
-  const rangeStartDate = view === 'week' ? startOfWeek(date) : date;
-  const { startISO, endISO } = rangeISO(rangeStartDate, view === 'week' ? 7 : 1);
+  const preferencesQuery = useApiQuery(
+    apiQueryOptions(
+      queryKeys.hubPreferences(),
+      () => api.v1.hub.preferences.$get(),
+      'Could not load calendar preferences.',
+      { staleTime: STALE.standard },
+    ),
+  );
+  const preferences = preferencesQuery.data?.calendar;
+  useEffect(() => {
+    if (preferences?.pixelsPerHour !== undefined) setPixelsPerHour(preferences.pixelsPerHour);
+  }, [preferences?.pixelsPerHour]);
 
-  const itemsQuery = useApiListQuery(calendarItemsDef(startISO, endISO));
-  const layersQuery = useApiListQuery(calendarLayersDef());
-  const items = itemsQuery.data?.items ?? [];
-  const layers = layersQuery.data?.items ?? [];
+  const savePreferences = useApiMutation<HubPreferences, CalendarPreferences>({
+    mutationFn: (calendar) =>
+      unwrap(
+        () => api.v1.hub.preferences.$patch({ json: { calendar } }),
+        'Could not save calendar preferences.',
+      ),
+    invalidateKeys: [queryKeys.hubPreferences()],
+  });
+  const dateAxis = useCalendarDateAxis(anchorDate, visibleLaneCount);
+  const peopleAxis = useCalendarPeopleAxis(axis, anchorDate);
 
-  const setView = (next: CalendarViewMode): void => {
-    startViewTransition(() => {
-      setViewState(next);
-    });
-  };
-  const goToday = (): void => {
-    setDate(todayISODate());
-  };
-  const goPrevious = (): void => {
-    setDate((d) => shiftISODate(d, view === 'week' ? -7 : -1));
-  };
-  const goNext = (): void => {
-    setDate((d) => shiftISODate(d, view === 'week' ? 7 : 1));
-  };
-
-  const conflictCount = items.filter((item) => item.hasConflict).length;
-  const failedCount = items.filter(
-    (item) => !item.hasConflict && item.syncState === 'provider_error',
-  ).length;
-
+  const visibleEnd = shiftISODate(anchorDate, Math.max(0, visibleLaneCount - 1));
   const heading =
-    view === 'day'
-      ? (formatCalendarDate(date) ?? date)
-      : `${formatCalendarDate(rangeStartDate) ?? rangeStartDate} – ${
-          formatCalendarDate(shiftISODate(rangeStartDate, 6)) ?? ''
-        }`;
+    axis === 'people' || visibleLaneCount <= 1
+      ? (formatCalendarDate(anchorDate) ?? anchorDate)
+      : `${formatCalendarDate(anchorDate) ?? anchorDate} – ${formatCalendarDate(visibleEnd) ?? visibleEnd}`;
+  const navigate = (direction: 'previous' | 'next'): void => {
+    const magnitude = axis === 'people' ? 1 : visibleLaneCount;
+    setAnchorDate((date) => shiftISODate(date, direction === 'next' ? magnitude : -magnitude));
+  };
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 p-4 @2xl:p-6 @4xl:p-8">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-1.5">
-          <Button size="sm" variant="outline" onClick={goToday}>
-            Today
-          </Button>
-          <Button size="icon" variant="ghost" aria-label="Previous" onClick={goPrevious}>
-            <ChevronLeft />
-          </Button>
-          <Button size="icon" variant="ghost" aria-label="Next" onClick={goNext}>
-            <ChevronRight />
-          </Button>
-          <h1 className="text-on-surface ml-1 text-lg font-semibold">{heading}</h1>
-        </div>
-        <div className="flex items-center gap-2">
-          <div
-            role="group"
-            aria-label="Calendar view"
-            className="border-outline-variant flex rounded-md border p-0.5"
-          >
-            <button
-              type="button"
-              aria-pressed={view === 'day'}
-              onClick={() => {
-                setView('day');
-              }}
-              className={cn(
-                'rounded-sm px-2.5 py-1 text-xs font-medium transition-colors',
-                view === 'day'
-                  ? 'bg-surface-container-high text-on-surface'
-                  : 'text-on-surface-variant',
-              )}
-            >
-              Day
-            </button>
-            <button
-              type="button"
-              aria-pressed={view === 'week'}
-              onClick={() => {
-                setView('week');
-              }}
-              className={cn(
-                'rounded-sm px-2.5 py-1 text-xs font-medium transition-colors',
-                view === 'week'
-                  ? 'bg-surface-container-high text-on-surface'
-                  : 'text-on-surface-variant',
-              )}
-            >
-              Week
-            </button>
-          </div>
-          <CreateBlockForm rangeKeys={[queryKeys.calendarItems(startISO, endISO)]} />
-        </div>
-      </header>
+    <div className="flex w-full flex-col gap-4 p-4 @2xl:p-6 @4xl:p-8">
+      <CalendarToolbar
+        heading={heading}
+        axis={axis}
+        pixelsPerHour={pixelsPerHour}
+        onToday={() => {
+          setAnchorDate(todayISODate());
+        }}
+        onPrevious={() => {
+          navigate('previous');
+        }}
+        onNext={() => {
+          navigate('next');
+        }}
+        onAxisChange={setAxis}
+        onZoomChange={setPixelsPerHour}
+        onZoomCommit={() => {
+          savePreferences.mutate({ ...(preferences ?? {}), pixelsPerHour });
+        }}
+        createControl={
+          <CreateBlockForm
+            rangeKeys={[queryKeys.calendarItems(dateAxis.startISO, dateAxis.endISO)]}
+            layers={dateAxis.layers}
+            preferences={preferences}
+            selection={selection}
+            onSelectionConsumed={() => {
+              setSelection(null);
+            }}
+          />
+        }
+      />
 
-      {conflictCount > 0 || failedCount > 0 ? (
-        <div
-          role="alert"
-          className="border-destructive/40 bg-destructive/10 flex items-center gap-2 rounded-lg border px-3 py-2 text-sm"
-        >
-          <span className="text-destructive font-medium">
-            {conflictCount > 0
-              ? `${String(conflictCount)} sync conflict${conflictCount === 1 ? '' : 's'}`
-              : null}
-            {conflictCount > 0 && failedCount > 0 ? ' · ' : null}
-            {failedCount > 0
-              ? `${String(failedCount)} sync error${failedCount === 1 ? '' : 's'}`
-              : null}
-          </span>
-        </div>
+      {axis === 'people' ? (
+        <CalendarComparisonControls
+          workspaces={peopleAxis.sharedWorkspaces}
+          workspaceId={peopleAxis.comparisonOrgId}
+          members={peopleAxis.activeMembers}
+          selectedActorIds={peopleAxis.selectedActorIds}
+          membersPending={peopleAxis.membersPending}
+          onWorkspaceChange={peopleAxis.selectWorkspace}
+          onActorChange={peopleAxis.toggleActor}
+        />
       ) : null}
 
-      <div className="grid grid-cols-1 gap-4 @3xl:grid-cols-[minmax(0,1fr)_16rem]">
-        <div className="border-outline-variant min-w-0 overflow-x-auto rounded-lg border p-3">
-          {itemsQuery.isPending ? (
-            <Skeleton className="h-96 w-full rounded-lg" />
-          ) : itemsQuery.isError ? (
-            <p role="alert" className="text-destructive text-sm">
-              {userErrorMessage(itemsQuery.error, 'Could not load calendar items.')}
-            </p>
-          ) : view === 'day' ? (
-            <CalendarTimeline
-              items={items}
-              layers={layers}
-              isToday={date === todayISODate()}
-              onOpenItem={setOpenItemId}
-            />
-          ) : (
-            <CalendarWeekGrid
-              weekStartDate={rangeStartDate}
-              items={items}
-              layers={layers}
-              onOpenItem={setOpenItemId}
-            />
-          )}
-        </div>
-        <aside className="flex flex-col gap-2">
-          <h2 className="text-on-surface text-sm font-semibold">Layers</h2>
-          <CalendarLayerPanel layers={layers} />
-        </aside>
-      </div>
+      <CalendarSchedulingSurface
+        axis={axis}
+        visibleLaneCount={visibleLaneCount}
+        pixelsPerHour={pixelsPerHour}
+        preferences={preferences}
+        dateAxis={dateAxis}
+        peopleAxis={peopleAxis}
+        onVisibleLaneCountChange={setVisibleLaneCount}
+        onReachBoundary={(direction) => {
+          setAnchorDate((date) =>
+            shiftISODate(date, direction === 'next' ? visibleLaneCount : -visibleLaneCount),
+          );
+        }}
+        onSelectRegion={setSelection}
+        onOpenItem={setOpenItemId}
+      />
 
       <CalendarItemDrawer
         itemId={openItemId}

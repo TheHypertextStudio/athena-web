@@ -10,9 +10,17 @@
  * `calendar-outbox.ts`) and attempts the provider push in the foreground. Task-link
  * mutations live in `calendar-task-links.ts`.
  */
+import { randomBytes } from 'node:crypto';
+
 import { and, asc, eq } from 'drizzle-orm';
 
-import { calendarItem, calendarItemWrite, calendarLayer, type Database } from '@docket/db';
+import {
+  calendarConnection,
+  calendarItem,
+  calendarItemWrite,
+  calendarLayer,
+  type Database,
+} from '@docket/db';
 import {
   CalendarItemKind,
   type CalendarItemCreate,
@@ -204,6 +212,166 @@ export async function createNativeBlock(
   /* v8 ignore next -- @preserve defensive: insert always returns a row */
   if (row === undefined) throw new Error('native block insert returned no row');
   return row;
+}
+
+/** Build the complete provider write payload for a newly-created event. */
+function createWritePatch(body: CalendarItemCreate): CalendarItemWritePatch {
+  return {
+    title: body.title,
+    ...(body.description !== undefined ? { description: body.description } : {}),
+    ...(body.location !== undefined ? { location: body.location } : {}),
+    ...(body.timezone !== undefined ? { timezone: body.timezone } : {}),
+    ...(body.startsAt !== undefined ? { startsAt: body.startsAt } : {}),
+    ...(body.endsAt !== undefined ? { endsAt: body.endsAt } : {}),
+    ...(body.allDayStartDate !== undefined ? { allDayStartDate: body.allDayStartDate } : {}),
+    ...(body.allDayEndDate !== undefined ? { allDayEndDate: body.allDayEndDate } : {}),
+  };
+}
+
+/**
+ * Create an event or first-class timebox from the fluid scheduling canvas.
+ *
+ * @remarks
+ * Timeboxes and destination-less events are Docket-owned direct writes. An event targeting a
+ * writable provider layer is inserted locally first with a stable provider id, then enqueued as a
+ * `create` write and attempted once. This local-first boundary keeps the item visible through
+ * provider outages and makes every retry idempotent.
+ */
+export async function createCalendarItem(
+  db: Database,
+  input: { userId: string; input: CalendarItemCreate; syncModules?: SyncModules },
+): Promise<CalendarItemRow> {
+  const { userId, input: body } = input;
+  if ('kind' in body && body.kind === 'native_block') {
+    return createNativeBlock(db, { userId, input: body });
+  }
+
+  validateCreateBounds(body);
+  const intent = body.intent;
+  const requestedLayer =
+    body.layerId === undefined
+      ? null
+      : (
+          await db
+            .select({ layer: calendarLayer, connection: calendarConnection })
+            .from(calendarLayer)
+            .leftJoin(calendarConnection, eq(calendarConnection.id, calendarLayer.connectionId))
+            .where(and(eq(calendarLayer.id, body.layerId), eq(calendarLayer.userId, userId)))
+            .limit(1)
+        )[0];
+  if (body.layerId !== undefined && requestedLayer === undefined) {
+    throw new NotFoundError('Calendar layer not found');
+  }
+
+  const nativeLayer =
+    requestedLayer?.layer.sourceKind === 'native_blocks'
+      ? requestedLayer.layer
+      : body.layerId === undefined
+        ? await ensureNativeLayer(db, userId)
+        : null;
+
+  if (intent === 'timebox' || nativeLayer !== null) {
+    if (intent === 'timebox' && body.layerId !== undefined && nativeLayer === null) {
+      throw new ValidationError([
+        { path: ['layerId'], message: 'Timeboxes must use a Docket-owned calendar layer' },
+      ]);
+    }
+    /* v8 ignore next -- @preserve defensive: the branches above always resolve a native layer */
+    const targetLayer = nativeLayer ?? (await ensureNativeLayer(db, userId));
+    const inserted = await db
+      .insert(calendarItem)
+      .values({
+        userId,
+        layerId: targetLayer.id,
+        connectionId: null,
+        kind: intent === 'timebox' ? 'timebox' : 'native_event',
+        provider: 'docket',
+        status: body.status ?? 'confirmed',
+        syncState: 'clean',
+        title: body.title,
+        ...(body.description !== undefined ? { description: body.description } : {}),
+        ...(body.location !== undefined ? { location: body.location } : {}),
+        ...(body.timezone !== undefined ? { timezone: body.timezone } : {}),
+        ...(body.startsAt !== undefined ? { startsAt: new Date(body.startsAt) } : {}),
+        ...(body.endsAt !== undefined ? { endsAt: new Date(body.endsAt) } : {}),
+        ...(body.allDayStartDate !== undefined ? { allDayStartDate: body.allDayStartDate } : {}),
+        ...(body.allDayEndDate !== undefined ? { allDayEndDate: body.allDayEndDate } : {}),
+      })
+      .returning();
+    const row = inserted[0];
+    /* v8 ignore next -- @preserve defensive: insert always returns a row */
+    if (row === undefined) throw new Error('calendar item insert returned no row');
+    return row;
+  }
+
+  const target = requestedLayer;
+  if (
+    target?.layer.sourceKind !== 'provider_calendar' ||
+    !target.layer.editableCore ||
+    target.layer.externalLayerId === null ||
+    target.connection?.scopeState?.calendarWrite !== true
+  ) {
+    throw new InsufficientScopeError(
+      'calendar.write',
+      'The selected calendar is not available for event creation',
+    );
+  }
+
+  // Google-compatible lowercase hexadecimal is stable across every outbox retry. Other adapters
+  // receive the same opaque id through the provider-neutral create contract.
+  const externalEventId = randomBytes(16).toString('hex');
+  const inserted = await db
+    .insert(calendarItem)
+    .values({
+      userId,
+      layerId: target.layer.id,
+      connectionId: target.connection.id,
+      kind: 'provider_event',
+      provider: target.connection.provider,
+      externalCalendarId: target.layer.externalLayerId,
+      externalEventId,
+      status: body.status ?? 'confirmed',
+      syncState: 'push_pending',
+      permissions: { canEditCore: true, canDelete: true, readOnlyReason: null },
+      title: body.title,
+      ...(body.description !== undefined ? { description: body.description } : {}),
+      ...(body.location !== undefined ? { location: body.location } : {}),
+      ...(body.timezone !== undefined ? { timezone: body.timezone } : {}),
+      ...(body.startsAt !== undefined ? { startsAt: new Date(body.startsAt) } : {}),
+      ...(body.endsAt !== undefined ? { endsAt: new Date(body.endsAt) } : {}),
+      ...(body.allDayStartDate !== undefined ? { allDayStartDate: body.allDayStartDate } : {}),
+      ...(body.allDayEndDate !== undefined ? { allDayEndDate: body.allDayEndDate } : {}),
+    })
+    .returning();
+  const created = inserted[0];
+  /* v8 ignore next -- @preserve defensive: insert always returns a row */
+  if (created === undefined) throw new Error('provider calendar item insert returned no row');
+
+  const writeRows = await db
+    .insert(calendarItemWrite)
+    .values({
+      userId,
+      calendarItemId: created.id,
+      connectionId: target.connection.id,
+      provider: target.connection.provider,
+      operation: 'create',
+      patch: createWritePatch(body),
+      status: 'pending',
+      attempts: 0,
+    })
+    .returning({ id: calendarItemWrite.id });
+  const write = writeRows[0];
+  /* v8 ignore next -- @preserve defensive: insert always returns a row */
+  if (write === undefined) throw new Error('calendar create outbox insert returned no row');
+  if (input.syncModules !== undefined) {
+    await attemptCalendarItemWrite(db, write.id, input.syncModules);
+  }
+  const fresh = await db
+    .select()
+    .from(calendarItem)
+    .where(eq(calendarItem.id, created.id))
+    .limit(1);
+  return fresh[0] ?? created;
 }
 
 /** Reject a PATCH/DELETE against a derived-view kind (`task_timebox`/`availability_block`). */
@@ -481,7 +649,9 @@ export async function updateCalendarItem(
   const loaded = await loadOwnedCalendarItem(db, userId, itemId);
   const kind = CalendarItemKind.parse(loaded.item.kind);
 
-  if (kind === 'native_block') return applyNativeBlockPatch(db, loaded.item, patch);
+  if (kind === 'native_block' || kind === 'native_event' || kind === 'timebox') {
+    return applyNativeBlockPatch(db, loaded.item, patch);
+  }
   if (kind === 'task_timebox' || kind === 'availability_block') rejectDerivedKind(kind, 'edits');
 
   // kind === 'provider_event'
@@ -574,7 +744,9 @@ export async function deleteCalendarItem(
   const loaded = await loadOwnedCalendarItem(db, userId, itemId);
   const kind = CalendarItemKind.parse(loaded.item.kind);
 
-  if (kind === 'native_block') return hardDeleteCalendarItem(db, loaded.item);
+  if (kind === 'native_block' || kind === 'native_event' || kind === 'timebox') {
+    return hardDeleteCalendarItem(db, loaded.item);
+  }
   if (kind === 'task_timebox' || kind === 'availability_block') rejectDerivedKind(kind, 'deletion');
 
   // kind === 'provider_event'

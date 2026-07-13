@@ -3,12 +3,21 @@ import { describe, expect, it } from 'vitest';
 import { CalendarItemId, CalendarItemWriteId, CalendarLayerId } from '../src/primitives';
 import {
   CalendarItemCreate,
+  CalendarItemKind,
   CalendarItemOut,
+  CalendarItemRelationCreate,
+  CalendarItemRelationOut,
+  CalendarItemTaskRole,
   CalendarItemTaskLinkCreate,
   CalendarItemTaskLinkResultOut,
   CalendarItemUpdate,
+  CalendarLayerShareCreate,
+  CalendarLayerSharesReplace,
   CalendarLayerOut,
   CalendarRangeQuery,
+  ScheduleComparisonItemOut,
+  ScheduleComparisonOut,
+  ScheduleComparisonQuery,
 } from '../src/calendar';
 import type { CalendarItemLinkedTaskOut } from '../src/calendar';
 
@@ -131,6 +140,12 @@ function baseItem() {
 }
 
 describe('CalendarItemOut', () => {
+  it('accepts native events, first-class timeboxes, and the legacy native block kind', () => {
+    expect(CalendarItemKind.parse('native_event')).toBe('native_event');
+    expect(CalendarItemKind.parse('timebox')).toBe('timebox');
+    expect(CalendarItemKind.parse('native_block')).toBe('native_block');
+  });
+
   it('parses a timed item', () => {
     const parsed = CalendarItemOut.parse({
       ...baseItem(),
@@ -237,6 +252,36 @@ describe('CalendarItemCreate', () => {
     expect(parsed.allDayStartDate).toBe('2026-06-30');
   });
 
+  it('accepts event and timebox create intents without a legacy kind', () => {
+    const event = CalendarItemCreate.parse({
+      intent: 'event',
+      title: 'Design review',
+      startsAt: '2026-06-30T16:00:00.000Z',
+      endsAt: '2026-06-30T17:00:00.000Z',
+    });
+    const timebox = CalendarItemCreate.parse({
+      intent: 'timebox',
+      title: 'Prepare slides',
+      startsAt: '2026-06-30T15:00:00.000Z',
+      endsAt: '2026-06-30T16:00:00.000Z',
+    });
+
+    expect(event.intent).toBe('event');
+    expect(timebox.intent).toBe('timebox');
+  });
+
+  it('rejects a body that mixes the legacy kind with the new create intent', () => {
+    expect(
+      CalendarItemCreate.safeParse({
+        kind: 'native_block',
+        intent: 'event',
+        title: 'Ambiguous',
+        startsAt: '2026-06-30T16:00:00.000Z',
+        endsAt: '2026-06-30T17:00:00.000Z',
+      }).success,
+    ).toBe(false);
+  });
+
   it('rejects neither timed nor all-day bounds', () => {
     expect(CalendarItemCreate.safeParse(base).success).toBe(false);
   });
@@ -280,6 +325,10 @@ describe('CalendarItemUpdate', () => {
 });
 
 describe('CalendarItemTaskLinkCreate', () => {
+  it('accepts the contained task role for task stacks inside calendar items', () => {
+    expect(CalendarItemTaskRole.parse('contained')).toBe('contained');
+  });
+
   it('parses the "link" mode (existing task)', () => {
     const parsed = CalendarItemTaskLinkCreate.parse({
       mode: 'link',
@@ -340,5 +389,124 @@ describe('CalendarItemTaskLinkResultOut', () => {
     });
     expect(parsed.link.taskId).toBe(TASK_ID);
     expect(parsed.task.title).toBe('Follow up');
+  });
+});
+
+describe('calendar item relationships', () => {
+  it('parses contained and related directed relationships', () => {
+    expect(CalendarItemRelationCreate.parse({ targetItemId: TASK_ID, role: 'contained' })).toEqual({
+      targetItemId: TASK_ID,
+      role: 'contained',
+    });
+    expect(CalendarItemRelationCreate.parse({ targetItemId: TASK_ID })).toEqual({
+      targetItemId: TASK_ID,
+      role: 'related',
+    });
+
+    const relation = CalendarItemRelationOut.parse({
+      sourceItemId: ITEM_ID,
+      targetItemId: TASK_ID,
+      role: 'related',
+      createdByUserId: 'user_1',
+      createdAt: '2026-07-12T12:00:00.000Z',
+    });
+    expect(relation.sourceItemId).toBe(ITEM_ID);
+  });
+
+  it('rejects unsupported relationship roles', () => {
+    expect(
+      CalendarItemRelationCreate.safeParse({ targetItemId: TASK_ID, role: 'blocks' }).success,
+    ).toBe(false);
+  });
+});
+
+describe('calendar layer sharing', () => {
+  it('defaults a layer exposure to details and replaces a workspace share set', () => {
+    expect(CalendarLayerShareCreate.parse({ layerId: LAYER_ID })).toEqual({
+      layerId: LAYER_ID,
+      access: 'details',
+    });
+    expect(
+      CalendarLayerSharesReplace.parse({
+        shares: [
+          { layerId: LAYER_ID, access: 'details' },
+          { layerId: CONNECTION_ID, access: 'busy' },
+        ],
+      }).shares,
+    ).toHaveLength(2);
+  });
+
+  it('rejects unsupported share access', () => {
+    expect(
+      CalendarLayerShareCreate.safeParse({ layerId: LAYER_ID, access: 'private' }).success,
+    ).toBe(false);
+  });
+});
+
+describe('schedule comparison', () => {
+  it('parses a bounded actor comparison query', () => {
+    const parsed = ScheduleComparisonQuery.parse({
+      start: '2026-07-12T00:00:00.000Z',
+      end: '2026-07-13T00:00:00.000Z',
+      actorIds: ['01BX5ZZKBKACTAV9WEVGEMMVS3'],
+    });
+    expect(parsed.actorIds).toHaveLength(1);
+  });
+
+  it('accepts a consumer-defined number of comparison lanes', () => {
+    const actorIds = Array.from(
+      { length: 75 },
+      (_, index) => `01BX5ZZKBKACTAV9WEVG${String(index).padStart(6, '0')}`,
+    );
+
+    expect(
+      ScheduleComparisonQuery.parse({
+        start: '2026-07-12T00:00:00.000Z',
+        end: '2026-07-13T00:00:00.000Z',
+        actorIds,
+      }).actorIds,
+    ).toHaveLength(75);
+  });
+
+  it('structurally redacts busy-only items while allowing detailed items', () => {
+    const busy = ScheduleComparisonItemOut.parse({
+      access: 'busy',
+      startsAt: '2026-07-12T16:00:00.000Z',
+      endsAt: '2026-07-12T17:00:00.000Z',
+      allDayStartDate: null,
+      allDayEndDate: null,
+      title: 'Must not cross the boundary',
+    });
+    expect(busy).not.toHaveProperty('title');
+
+    const detailed = ScheduleComparisonItemOut.parse({
+      access: 'details',
+      itemId: ITEM_ID,
+      layerId: LAYER_ID,
+      kind: 'native_event',
+      title: 'Design review',
+      startsAt: '2026-07-12T16:00:00.000Z',
+      endsAt: '2026-07-12T17:00:00.000Z',
+      allDayStartDate: null,
+      allDayEndDate: null,
+    });
+    expect(detailed).toHaveProperty('title', 'Design review');
+  });
+
+  it('parses person headers alongside permission-filtered items', () => {
+    const result = ScheduleComparisonOut.parse({
+      start: '2026-07-12T00:00:00.000Z',
+      end: '2026-07-13T00:00:00.000Z',
+      people: [
+        {
+          actorId: '01BX5ZZKBKACTAV9WEVGEMMVS3',
+          displayName: 'Ada Lovelace',
+          avatar: null,
+          timezone: 'America/Los_Angeles',
+          items: [],
+        },
+      ],
+    });
+    expect(result.people[0]?.displayName).toBe('Ada Lovelace');
   });
 });

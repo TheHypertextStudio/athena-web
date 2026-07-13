@@ -1079,6 +1079,50 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [CAL-UX-002] Build the fluid unified scheduling canvas
+
+- **Completed**: 2026-07-12
+- **Duration**: One implementation session
+- **Summary**:
+  - Replaced fixed calendar modes with an arbitrary-lane scheduling canvas. Live viewport geometry
+    determines the rolling date window; overscan is an explicit host policy, not a fixed day count.
+  - Added continuously adjustable vertical scale, derived five-to-sixty-minute snapping, region
+    selection, cross-lane move/resize, horizontal boundary expansion, and vertical scroll retention.
+  - Added first-class native events and timeboxes, provider-backed event creation through an
+    idempotent local-first outbox, calendar-item relationships, task containment, personal defaults,
+    and explicit per-workspace layer sharing.
+  - Added permission-safe people comparison over arbitrary selected members. Busy-only and private
+    items are structurally redacted before leaving the API.
+  - Unified the agenda timeline on the same canvas, made task rows/calendar items draggable onto
+    event/timebox targets, and kept the grid mounted beneath loading, empty, stale, and error states.
+  - Split the calendar page, drawer, and expanded API route into focused modules. The calendar page
+    and drawer public entry points are now 158 and 123 lines respectively; their extracted UI
+    collaborators remain at or below 219 lines.
+- **Files Changed**: Calendar type contracts and tests; calendar DB schema, relations, migration
+  `0031`, and migration tests; provider sync/write services and API routes/tests; scheduling,
+  calendar, agenda, settings, and task-list web components/tests; layered-calendar product/UI specs;
+  this worklog.
+- **Validation**:
+  - Full repository typecheck and lint pass (17 package tasks each).
+  - Production build passes for API, web, and admin; `/calendar` and
+    `/orgs/[orgId]/settings/calendar` are present in the built route manifest.
+  - 2,699 tests pass across the repository. The full run exposed three unrelated MCP credential
+    tests whose key is snapshotted before their in-file assignment; those six tests pass when the
+    documented key is present at process start. All 45 focused API tests, 37 focused scheduling/UI
+    tests, 261 type tests, and 54 DB/migration tests pass.
+  - Browser control was unavailable in this session (no browser binding), so no interactive
+    screenshot claim is made; runtime interaction coverage comes from the focused DOM tests and
+    production build.
+- **Retrospective**:
+  - **Went well**: keeping geometry/pointer interpretation consumer-neutral made date, person, and
+    agenda lanes share one engine without view-mode branches.
+  - **Improved during implementation**: monolithic drawer/page/route files were split before adding
+    more behavior; rolling-window changes now preserve vertical time position.
+  - **Learned**: legacy agenda provider rows share ids with normalized calendar items, so merge order
+    must favor the normalized item to retain permissions and relationship behavior.
+
+---
+
 ### [WORKSPACE-CREATE-001] Add shared workspace creation entry points
 
 - **Completed**: 2026-07-12

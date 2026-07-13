@@ -102,6 +102,14 @@ async function persistApplied(
     await db
       .update(calendarItem)
       .set({
+        externalEventId: snapshot.externalEventId,
+        recurringEventId: snapshot.recurringEventId,
+        status: snapshot.status,
+        htmlLink: snapshot.htmlLink,
+        organizer: snapshot.organizer,
+        attendees: snapshot.attendees,
+        providerRaw: snapshot.raw,
+        permissions: snapshot.permissions,
         externalEtag: snapshot.externalEtag,
         updatedExternalAt: snapshot.updatedExternalAt,
         lastPushedAt: now,
@@ -309,25 +317,46 @@ export async function attemptCalendarItemWrite(
     return 'failed';
   }
 
-  const result: NormalizedWriteResult =
-    write.operation === 'delete'
-      ? normalizeDeleteResult(
-          await syncModule.adapter.deleteItem({
-            credentials,
-            externalLayerId: item.externalCalendarId,
-            externalEventId: item.externalEventId,
-            baseEtag: write.baseExternalEtag,
-          }),
-        )
-      : normalizePushResult(
-          await syncModule.adapter.pushItem({
-            credentials,
-            externalLayerId: item.externalCalendarId,
-            externalEventId: item.externalEventId,
-            patch: write.patch,
-            baseEtag: write.baseExternalEtag,
-          }),
-        );
+  let result: NormalizedWriteResult;
+  if (write.operation === 'delete') {
+    result = normalizeDeleteResult(
+      await syncModule.adapter.deleteItem({
+        credentials,
+        externalLayerId: item.externalCalendarId,
+        externalEventId: item.externalEventId,
+        baseEtag: write.baseExternalEtag,
+      }),
+    );
+  } else if (write.operation === 'create') {
+    const createItem = syncModule.adapter.createItem;
+    if (typeof createItem !== 'function') {
+      await persistPermanentFailure(
+        db,
+        write,
+        item,
+        `Provider '${provider}' does not support event creation`,
+      );
+      return 'failed';
+    }
+    result = normalizePushResult(
+      await createItem({
+        credentials,
+        externalLayerId: item.externalCalendarId,
+        externalEventId: item.externalEventId,
+        patch: write.patch,
+      }),
+    );
+  } else {
+    result = normalizePushResult(
+      await syncModule.adapter.pushItem({
+        credentials,
+        externalLayerId: item.externalCalendarId,
+        externalEventId: item.externalEventId,
+        patch: write.patch,
+        baseEtag: write.baseExternalEtag,
+      }),
+    );
+  }
 
   switch (result.outcome) {
     case 'applied':

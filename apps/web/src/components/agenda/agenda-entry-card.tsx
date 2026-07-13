@@ -46,7 +46,9 @@ export type AgendaEntryLayout = 'row' | 'block';
 /** The icon glyph for a layered-calendar item's kind, mirroring `calendar-item-card.tsx`'s mapping. */
 const CALENDAR_ITEM_KIND_ICON: Record<CalendarItemKind, LucideIcon> = {
   provider_event: Calendar,
+  native_event: Calendar,
   native_block: Layers,
+  timebox: Layers,
   task_timebox: TaskAlt,
   availability_block: Schedule,
 };
@@ -54,7 +56,9 @@ const CALENDAR_ITEM_KIND_ICON: Record<CalendarItemKind, LucideIcon> = {
 /** The compact context label for a layered-calendar item's kind. */
 const CALENDAR_ITEM_KIND_LABEL: Record<CalendarItemKind, string> = {
   provider_event: 'Calendar',
+  native_event: 'Event',
   native_block: 'Block',
+  timebox: 'Timebox',
   task_timebox: 'Timebox',
   availability_block: 'Availability',
 };
@@ -65,12 +69,15 @@ export interface AgendaEntryCardProps {
   entry: AgendaEntry;
   /** How the card lays out (default `row`). */
   layout?: AgendaEntryLayout;
+  /** Open a normalized calendar item in the shared workspace drawer. */
+  onOpenCalendarItem?: (itemId: string) => void;
 }
 
 /** The shared entry card, reshaped by `layout`, with a check-off and a link to the task. */
 export default function AgendaEntryCard({
   entry,
   layout = 'row',
+  onOpenCalendarItem,
 }: AgendaEntryCardProps): JSX.Element {
   const { orgName } = useActiveOrg();
   const { toggleDone } = useAgenda();
@@ -113,6 +120,7 @@ export default function AgendaEntryCard({
     entry.source === 'calendar_item' && entry.calendarItem
       ? CALENDAR_ITEM_KIND_ICON[entry.calendarItem.kind]
       : null;
+  const calendarItemId = entry.calendarItem?.id;
   const content = block ? (
     <>
       <span className={titleClass}>{entry.title}</span>
@@ -183,6 +191,19 @@ export default function AgendaEntryCard({
         >
           {content}
         </Link>
+      ) : calendarItemId && onOpenCalendarItem ? (
+        <button
+          type="button"
+          onClick={() => {
+            onOpenCalendarItem(calendarItemId);
+          }}
+          className={cn(
+            'focus-visible:ring-ring flex min-w-0 flex-1 rounded-sm text-left focus-visible:ring-2 focus-visible:outline-none',
+            block ? 'flex-col gap-0.5' : 'flex-row items-start gap-3',
+          )}
+        >
+          {content}
+        </button>
       ) : entry.externalUrl ? (
         <a
           href={entry.externalUrl}

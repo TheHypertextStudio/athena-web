@@ -49,7 +49,9 @@
   untouched drawer fields rebase without shifting exact instants, edited fields remain user-owned,
   and Kathmandu toolbar defaults land on the next wall-clock half hour. A fall-back-hour regression
   also ensures rounding chooses the earliest boundary still in the future. Agenda/Calendar now
-  passes 72/72 with web typecheck and focused lint green.
+  passes 72/72 with web typecheck and focused lint green. The final quick-create synchronization
+  pass now gives toolbar and selected-region drafts the same exact-seed/per-field ownership rule;
+  timezone hydration rebases only untouched fields and the expanded suite passes 74/74.
 
 ---
 

@@ -18,6 +18,74 @@ afterEach(() => {
 });
 
 describe('CreateBlockForm display timezone', () => {
+  it('rebases an open untouched toolbar draft and preserves its exact seed instants', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-01T16:10:00Z'));
+    const result = render(<CreateBlockForm displayTimezone="UTC" rangeKeys={[]} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'New' }));
+    expect(screen.getByLabelText('Starts')).toHaveValue('2026-07-01T16:30');
+    result.rerender(<CreateBlockForm displayTimezone="Asia/Kathmandu" rangeKeys={[]} />);
+    expect(screen.getByLabelText('Starts')).toHaveValue('2026-07-01T22:15');
+    expect(screen.getByLabelText('Ends')).toHaveValue('2026-07-01T22:45');
+
+    fireEvent.change(screen.getByPlaceholderText('Event title'), {
+      target: { value: 'Hydrated toolbar draft' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create event' }));
+    expect(mutate).toHaveBeenCalledWith(
+      {
+        input: {
+          intent: 'event',
+          title: 'Hydrated toolbar draft',
+          startsAt: '2026-07-01T16:30:00Z',
+          endsAt: '2026-07-01T17:00:00.000Z',
+        },
+        rangeKeys: [],
+      },
+      expect.any(Object),
+    );
+  });
+
+  it('preserves an edited selected-region field while rebasing its untouched peer', async () => {
+    const selection = {
+      startsAt: '2026-07-01T16:00:00.000Z',
+      endsAt: '2026-07-01T17:00:00.000Z',
+    };
+    const result = render(
+      <CreateBlockForm displayTimezone="UTC" rangeKeys={[]} selection={selection} />,
+    );
+    expect(await screen.findByLabelText('Starts')).toHaveValue('2026-07-01T16:00');
+    fireEvent.change(screen.getByLabelText('Starts'), {
+      target: { value: '2026-07-01T18:00' },
+    });
+
+    result.rerender(
+      <CreateBlockForm displayTimezone="Asia/Tokyo" rangeKeys={[]} selection={selection} />,
+    );
+    expect(screen.getByLabelText('Starts')).toHaveValue('2026-07-01T18:00');
+    expect(screen.getByLabelText('Ends')).toHaveValue('2026-07-02T02:00');
+
+    fireEvent.change(screen.getByPlaceholderText('Event title'), {
+      target: { value: 'Hydrated selection' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create event' }));
+    await waitFor(() => {
+      expect(mutate).toHaveBeenCalledWith(
+        {
+          input: {
+            intent: 'event',
+            title: 'Hydrated selection',
+            startsAt: '2026-07-01T09:00:00Z',
+            endsAt: '2026-07-01T17:00:00.000Z',
+          },
+          rangeKeys: [],
+        },
+        expect.any(Object),
+      );
+    });
+  });
+
   it('rounds toolbar defaults to the next Hub-zone half hour', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-07-01T16:10:00Z'));

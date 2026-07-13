@@ -19,55 +19,17 @@ import { Plus } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import { Button, Input, Popover, PopoverContent, PopoverTrigger } from '@docket/ui/primitives';
 import type { QueryKey } from '@tanstack/react-query';
-import { type JSX, type SubmitEventHandler, useEffect, useMemo, useState } from 'react';
+import { type JSX, type SubmitEventHandler, useEffect, useMemo, useRef, useState } from 'react';
 
+import {
+  type CalendarRegionSelection,
+  calendarTimeDraftFromSeed,
+  defaultCalendarRegionSelection,
+} from './calendar-time-draft';
 import { useCreateCalendarItem } from './calendar-mutations';
 import { fromLocalInputValue, toLocalInputValue } from './datetime-input';
-import { scheduleInstantAt, scheduleWallPositionForInstant } from '@/components/scheduling';
 
-/** A draft region supplied by the scheduling canvas. */
-export interface CalendarRegionSelection {
-  readonly startsAt: string;
-  readonly endsAt: string;
-}
-
-/** Round forward to the next half-hour for toolbar-triggered creation. */
-function defaultSelection(displayTimezone: string): CalendarRegionSelection {
-  const now = new Date().toISOString();
-  const position = scheduleWallPositionForInstant(now, displayTimezone);
-  const roundedMinutes = position ? Math.floor(position.wallMinutes / 30) * 30 + 30 : 0;
-  let startsAt = now;
-  if (position) {
-    const nowEpoch = Date.parse(now);
-    for (let wallMinutes = roundedMinutes; wallMinutes <= 24 * 60; wallMinutes += 30) {
-      const candidates = new Set(
-        (['earlier', 'later'] as const)
-          .map((disambiguation) =>
-            scheduleInstantAt(position.date, wallMinutes, displayTimezone, disambiguation),
-          )
-          .filter((candidate): candidate is string => candidate !== null),
-      );
-      const nextCandidate = [...candidates]
-        .filter((candidate) => {
-          const roundTrip = scheduleWallPositionForInstant(candidate, displayTimezone);
-          const matchesRequestedWall =
-            wallMinutes === 24 * 60
-              ? roundTrip?.wallMinutes === 0
-              : roundTrip?.date === position.date && roundTrip.wallMinutes === wallMinutes;
-          return Date.parse(candidate) > nowEpoch && matchesRequestedWall;
-        })
-        .sort((left, right) => Date.parse(left) - Date.parse(right))[0];
-      if (nextCandidate) {
-        startsAt = nextCandidate;
-        break;
-      }
-    }
-  }
-  return {
-    startsAt,
-    endsAt: new Date(Date.parse(startsAt) + 30 * 60_000).toISOString(),
-  };
-}
+export type { CalendarRegionSelection } from './calendar-time-draft';
 
 /** Props for {@link CreateBlockForm}. */
 export interface CreateBlockFormProps {
@@ -89,7 +51,9 @@ export default function CreateBlockForm({
   onSelectionConsumed,
 }: CreateBlockFormProps): JSX.Element {
   const create = useCreateCalendarItem();
-  const [seed, setSeed] = useState(() => defaultSelection(displayTimezone));
+  const [draft, setDraft] = useState(() =>
+    calendarTimeDraftFromSeed(defaultCalendarRegionSelection(displayTimezone), displayTimezone),
+  );
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [intent, setIntent] = useState<CalendarItemCreateIntent>(
@@ -98,9 +62,9 @@ export default function CreateBlockForm({
   const [layerId, setLayerId] = useState<CalendarLayerOut['id'] | ''>(
     preferences?.defaultLayerId ?? '',
   );
-  const [startsAt, setStartsAt] = useState(() => toLocalInputValue(seed.startsAt, displayTimezone));
-  const [endsAt, setEndsAt] = useState(() => toLocalInputValue(seed.endsAt, displayTimezone));
   const [timeError, setTimeError] = useState(false);
+  const previousSelectionKey = useRef<string | null>(null);
+  const previousTimezone = useRef(displayTimezone);
 
   const destinations = useMemo(
     () => layers.filter((layer) => layer.sourceKind === 'native_blocks' || layer.editableCore),
@@ -110,29 +74,41 @@ export default function CreateBlockForm({
     !preferences?.defaultLayerId ||
     destinations.some((layer) => layer.id === preferences.defaultLayerId);
 
+  const selectionKey = selection ? `${selection.startsAt}\u0000${selection.endsAt}` : null;
   useEffect(() => {
-    if (!selection) return;
-    setSeed(selection);
-    setStartsAt(toLocalInputValue(selection.startsAt, displayTimezone));
-    setEndsAt(toLocalInputValue(selection.endsAt, displayTimezone));
-    setTimeError(false);
-    setIntent(preferences?.defaultCreateIntent ?? 'event');
-    setLayerId(configuredLayerAvailable ? (preferences?.defaultLayerId ?? '') : '');
-    setOpen(true);
-  }, [configuredLayerAvailable, displayTimezone, preferences, selection]);
+    const newSelection = selection != null && selectionKey !== previousSelectionKey.current;
+    const timezoneChanged = displayTimezone !== previousTimezone.current;
+    if (newSelection) {
+      setDraft(calendarTimeDraftFromSeed(selection, displayTimezone));
+      setTimeError(false);
+      setIntent(preferences?.defaultCreateIntent ?? 'event');
+      setLayerId(configuredLayerAvailable ? (preferences?.defaultLayerId ?? '') : '');
+      setOpen(true);
+    } else if (timezoneChanged) {
+      setDraft((current) => ({
+        ...current,
+        startsAt: current.startsEdited
+          ? current.startsAt
+          : toLocalInputValue(current.seed.startsAt, displayTimezone),
+        endsAt: current.endsEdited
+          ? current.endsAt
+          : toLocalInputValue(current.seed.endsAt, displayTimezone),
+      }));
+    }
+    previousSelectionKey.current = selectionKey;
+    previousTimezone.current = displayTimezone;
+  }, [configuredLayerAvailable, displayTimezone, preferences, selection, selectionKey]);
 
   const submit: SubmitEventHandler<HTMLFormElement> = (event) => {
     event.preventDefault();
     const trimmed = title.trim();
     if (!trimmed) return;
-    const startInstant =
-      startsAt === toLocalInputValue(seed.startsAt, displayTimezone)
-        ? seed.startsAt
-        : fromLocalInputValue(startsAt, displayTimezone);
-    const endInstant =
-      endsAt === toLocalInputValue(seed.endsAt, displayTimezone)
-        ? seed.endsAt
-        : fromLocalInputValue(endsAt, displayTimezone);
+    const startInstant = !draft.startsEdited
+      ? draft.seed.startsAt
+      : fromLocalInputValue(draft.startsAt, displayTimezone);
+    const endInstant = !draft.endsEdited
+      ? draft.seed.endsAt
+      : fromLocalInputValue(draft.endsAt, displayTimezone);
     if (!startInstant || !endInstant) {
       setTimeError(true);
       return;
@@ -161,10 +137,8 @@ export default function CreateBlockForm({
       open={open}
       onOpenChange={(next) => {
         if (next && !selection) {
-          const region = defaultSelection(displayTimezone);
-          setSeed(region);
-          setStartsAt(toLocalInputValue(region.startsAt, displayTimezone));
-          setEndsAt(toLocalInputValue(region.endsAt, displayTimezone));
+          const region = defaultCalendarRegionSelection(displayTimezone);
+          setDraft(calendarTimeDraftFromSeed(region, displayTimezone));
           setTimeError(false);
           setIntent(preferences?.defaultCreateIntent ?? 'event');
           setLayerId(configuredLayerAvailable ? (preferences?.defaultLayerId ?? '') : '');
@@ -247,9 +221,13 @@ export default function CreateBlockForm({
               <span className="text-on-surface-variant">Starts</span>
               <Input
                 type="datetime-local"
-                value={startsAt}
+                value={draft.startsAt}
                 onChange={(event) => {
-                  setStartsAt(event.target.value);
+                  setDraft((current) => ({
+                    ...current,
+                    startsAt: event.target.value,
+                    startsEdited: true,
+                  }));
                   setTimeError(false);
                 }}
               />
@@ -258,9 +236,13 @@ export default function CreateBlockForm({
               <span className="text-on-surface-variant">Ends</span>
               <Input
                 type="datetime-local"
-                value={endsAt}
+                value={draft.endsAt}
                 onChange={(event) => {
-                  setEndsAt(event.target.value);
+                  setDraft((current) => ({
+                    ...current,
+                    endsAt: event.target.value,
+                    endsEdited: true,
+                  }));
                   setTimeError(false);
                 }}
               />

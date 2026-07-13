@@ -30,7 +30,7 @@ export function fromLocalInputValue(value: string, displayTimezone: string): str
   const date = match[1];
   if (!date) return null;
   const wallMinutes = hours * 60 + minutes;
-  const instant = scheduleInstantAt(date, wallMinutes, displayTimezone, 'compatible');
+  const instant = scheduleInstantAt(date, wallMinutes, displayTimezone, 'reject');
   if (!instant) return null;
   const roundTrip = scheduleWallPositionForInstant(instant, displayTimezone);
   return roundTrip !== null && roundTrip.date === date && roundTrip.wallMinutes === wallMinutes

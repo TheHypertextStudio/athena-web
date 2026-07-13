@@ -6,9 +6,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { useActiveOrg } from '@/components/active-org';
 import type { ScheduleLane } from '@/components/scheduling';
 import { api } from '@/lib/api';
-import { apiQueryOptions, queryKeys, STALE, useApiListQuery } from '@/lib/query';
+import { apiQueryOptions, queryKeys, STALE, useApiQuery } from '@/lib/query';
 
 import { buildComparisonLane, dateRange, type CalendarAxis } from './calendar-schedule-model';
+import type { SharedCalendarItemDetail } from './calendar-shared-item-details';
 
 /** Minimal member projection needed by the comparison picker. */
 export interface ComparisonMember {
@@ -23,6 +24,7 @@ export interface CalendarPeopleAxisState {
   readonly selectedActorIds: readonly string[];
   readonly activeMembers: readonly ComparisonMember[];
   readonly lanes: readonly ScheduleLane[];
+  readonly detailByItemId: ReadonlyMap<string, SharedCalendarItemDetail>;
   readonly membersPending: boolean;
   readonly error: boolean;
   readonly comparisonPending: boolean;
@@ -45,7 +47,7 @@ export function useCalendarPeopleAxis(
     if (!comparisonOrgId && sharedWorkspaces[0]) setComparisonOrgId(sharedWorkspaces[0].id);
   }, [comparisonOrgId, sharedWorkspaces]);
 
-  const membersQuery = useApiListQuery(
+  const membersQuery = useApiQuery(
     apiQueryOptions(
       queryKeys.members(comparisonOrgId || 'none'),
       () =>
@@ -71,7 +73,7 @@ export function useCalendarPeopleAxis(
 
   const range = dateRange(anchorDate, 1, displayTimezone);
   const actorIdsKey = [...selectedActorIds].sort().join(',');
-  const comparisonQuery = useApiListQuery(
+  const comparisonQuery = useApiQuery(
     apiQueryOptions(
       queryKeys.scheduleComparison(
         comparisonOrgId || 'none',
@@ -102,6 +104,28 @@ export function useCalendarPeopleAxis(
       ),
     [anchorDate, comparisonQuery.data, displayTimezone],
   );
+  const detailByItemId = useMemo(
+    () =>
+      new Map(
+        (comparisonQuery.data?.people ?? []).flatMap((person) =>
+          person.items.flatMap((item) =>
+            item.access === 'details'
+              ? [
+                  [
+                    item.itemId,
+                    {
+                      personName: person.displayName,
+                      personTimezone: person.timezone,
+                      item,
+                    },
+                  ] as const,
+                ]
+              : [],
+          ),
+        ),
+      ),
+    [comparisonQuery.data],
+  );
 
   return {
     sharedWorkspaces,
@@ -109,6 +133,7 @@ export function useCalendarPeopleAxis(
     selectedActorIds,
     activeMembers,
     lanes,
+    detailByItemId,
     membersPending: membersQuery.isPending,
     error: comparisonQuery.isError || membersQuery.isError,
     comparisonPending: comparisonQuery.isPending,

@@ -15,6 +15,7 @@ import type {
   CalendarLayerOut,
   CalendarLayerUpdate,
   HubPreferences,
+  ScheduleComparisonOut,
 } from '@docket/types';
 import type { Page } from '@playwright/test';
 
@@ -48,10 +49,12 @@ export interface CalendarRouteState {
   rangeFailure?: { readonly status: number; readonly body: unknown };
   agendaResponse?: AgendaOut;
   agendaFailure?: { readonly status: number; readonly body: unknown };
+  comparisonResponse?: ScheduleComparisonOut;
   readonly itemCreates: CalendarItemCreateType[];
   readonly itemPatches: CalendarItemPatchRecord[];
   readonly taskLinkPosts: CalendarTaskLinkPostRecord[];
   readonly relationGets: string[];
+  readonly ownedItemGets: string[];
   readonly relationPosts: CalendarRelationPostRecord[];
   readonly preferencePatches: HubPreferences[];
   readonly rangeRequests: string[];
@@ -65,6 +68,7 @@ export function calendarRouteState(
         CalendarRouteState,
         | 'agendaFailure'
         | 'agendaResponse'
+        | 'comparisonResponse'
         | 'nextCreatedItemId'
         | 'preferences'
         | 'rangeFailure'
@@ -79,6 +83,7 @@ export function calendarRouteState(
     itemPatches: [],
     taskLinkPosts: [],
     relationGets: [],
+    ownedItemGets: [],
     relationPosts: [],
     preferencePatches: [],
     rangeRequests: [],
@@ -239,6 +244,7 @@ async function installDetailRoutes(page: Page, state: CalendarRouteState): Promi
     if (child) return route.fallback();
     const item = state.items.find((candidate) => candidate.id === itemId);
     if (request.method() === 'GET') {
+      state.ownedItemGets.push(itemId ?? '');
       await route.fulfill(item ? { json: item } : { status: 404, json: { code: 'NOT_FOUND' } });
       return;
     }
@@ -260,6 +266,15 @@ async function installDetailRoutes(page: Page, state: CalendarRouteState): Promi
       return;
     }
     await route.fallback();
+  });
+}
+
+/** Install one permission-filtered people-comparison response when a browser contract needs it. */
+async function installComparisonRoutes(page: Page, state: CalendarRouteState): Promise<void> {
+  if (!state.comparisonResponse) return;
+  await page.route('**/v1/orgs/*/calendar/schedules?**', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    await route.fulfill({ json: state.comparisonResponse });
   });
 }
 
@@ -294,6 +309,7 @@ export async function installCalendarRoutes(page: Page, state: CalendarRouteStat
   await installPreferenceRoutes(page, state);
   await installLayerRoutes(page, state);
   await installCollectionRoutes(page, state);
+  await installComparisonRoutes(page, state);
   await installRelationRoutes(page, state);
   await installDetailRoutes(page, state);
   await installTaskRoutes(page, state);

@@ -241,6 +241,43 @@ describe('SchedulingCanvas', () => {
     );
   });
 
+  it('renders explicitly opaque timed and all-day items without inert open controls', () => {
+    const onOpenItem = vi.fn();
+    const opaqueTimed = {
+      ...TIMED_ITEM,
+      id: 'opaque-timed',
+      title: 'Private timed block',
+      startsAt: '2026-07-01T09:00:00Z',
+      endsAt: '2026-07-01T09:05:00Z',
+      editable: false,
+      openable: false,
+    } as ScheduleItem & { readonly openable: false };
+    const opaqueAllDay = {
+      ...ALL_DAY_ITEM,
+      id: 'opaque-all-day',
+      title: 'Private all-day block',
+      openable: false,
+    } as ScheduleItem & { readonly openable: false };
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[lane('ada', 'Ada', [opaqueTimed, opaqueAllDay])]}
+        pixelsPerHour={60}
+        viewportWidth={500}
+        onOpenItem={onOpenItem}
+      />,
+    );
+
+    const timedBody = document.querySelector('[data-schedule-item-body="opaque-timed"]');
+    const allDayBody = document.querySelector('[data-schedule-item-body="opaque-all-day"]');
+    expect(timedBody?.tagName).not.toBe('BUTTON');
+    expect(allDayBody?.tagName).not.toBe('BUTTON');
+    expect(timedBody).toHaveTextContent('Private timed block, 9:00 AM – 9:05 AM');
+    fireEvent.click(timedBody!);
+    fireEvent.click(allDayBody!);
+    expect(onOpenItem).not.toHaveBeenCalled();
+  });
+
   it('keeps the lane and hour grid mounted under empty and error states', () => {
     const { rerender } = render(
       <SchedulingCanvas

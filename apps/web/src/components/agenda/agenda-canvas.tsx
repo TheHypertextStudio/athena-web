@@ -18,6 +18,7 @@ import {
   type ScheduleLane,
   SchedulingCanvas,
 } from '@/components/scheduling';
+import { useNow } from '@/lib/use-now';
 
 import { type AgendaEntry, isTimeboxed, useAgenda } from './agenda-context';
 import AgendaEntryCard from './agenda-entry-card';
@@ -104,7 +105,7 @@ function TimelineArrangement({
   const router = useRouter();
   const { date, displayTimezone, pixelsPerHour, setTimebox, timeboxFailed, clearTimeboxFailure } =
     useAgenda();
-  const [now] = useState(() => new Date().toISOString());
+  const now = useNow().toISOString();
   const updateCalendarItem = useUpdateCalendarItemById();
   const linkTask = useLinkTaskToCalendarItem();
   const relateItems = useRelateCalendarItems();

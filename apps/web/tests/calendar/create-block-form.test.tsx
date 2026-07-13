@@ -139,4 +139,30 @@ describe('CreateBlockForm display timezone', () => {
       );
     });
   });
+
+  it('rejects an edited start inside a repeated wall-clock hour', async () => {
+    render(
+      <CreateBlockForm
+        displayTimezone="America/Los_Angeles"
+        selection={{
+          startsAt: '2026-11-01T07:30:00.000Z',
+          endsAt: '2026-11-01T10:30:00.000Z',
+        }}
+      />,
+    );
+
+    expect(await screen.findByLabelText('Starts')).toHaveValue('2026-11-01T00:30');
+    fireEvent.change(screen.getByLabelText('Starts'), {
+      target: { value: '2026-11-01T01:30' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('Event title'), {
+      target: { value: 'Ambiguous planning' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create event' }));
+
+    expect(
+      screen.getByText('Choose valid start and end times in your calendar timezone.'),
+    ).toBeInTheDocument();
+    expect(mutate).not.toHaveBeenCalled();
+  });
 });

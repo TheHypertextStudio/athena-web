@@ -1,28 +1,15 @@
 'use client';
 
-import {
-  type JSX,
-  type PointerEvent as ReactPointerEvent,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { type JSX, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { SchedulingAllDayItem } from './scheduling-all-day-item';
 import { SchedulingCanvasNotice } from './scheduling-canvas-notice';
-import {
-  deriveLaneGeometry,
-  deriveSnapMinutes,
-  MINUTES_PER_DAY,
-  minutesToPixels,
-  pixelsToMinutes,
-} from './scheduling-geometry';
+import { deriveLaneGeometry, deriveSnapMinutes, minutesToPixels } from './scheduling-geometry';
 import { SchedulingHorizontalBoundary } from './scheduling-horizontal-boundary';
 import { SchedulingItemCard } from './scheduling-item-card';
 import { positionScheduleLaneItems } from './scheduling-overlap-layout';
 import { SchedulingTimeGrid } from './scheduling-time-grid';
-import type { ScheduleLane, SchedulingCanvasProps } from './scheduling-types';
+import type { SchedulingCanvasProps } from './scheduling-types';
+import { useSchedulingRegionSelection } from './use-scheduling-region-selection';
 export type { ScheduleItemRenderContext, SchedulingCanvasProps } from './scheduling-types';
 const DEFAULT_VIEWPORT_WIDTH = 960;
 const HOUR_GUTTER_WIDTH = 64;
@@ -84,6 +71,12 @@ export default function SchedulingCanvas({
     [lanes.length, minimumLaneWidth, observedWidth, viewportWidth],
   );
   const snapMinutes = deriveSnapMinutes(effectivePixelsPerHour);
+  const regionSelection = useSchedulingRegionSelection({
+    lanes,
+    pixelsPerHour: effectivePixelsPerHour,
+    snapMinutes,
+    onSelectRegion,
+  });
   const fullWidth = geometry.gutterWidth + geometry.contentWidth;
   const positionedLaneItems = useMemo(
     () =>
@@ -143,28 +136,6 @@ export default function SchedulingCanvas({
     initialScrollMinutes,
     lanes[0]?.id,
   ]);
-  const beginSelection = (lane: ScheduleLane, event: ReactPointerEvent<HTMLDivElement>): void => {
-    if (!onSelectRegion || event.button !== 0 || event.target !== event.currentTarget) return;
-    event.preventDefault();
-    const rect = event.currentTarget.getBoundingClientRect();
-    const origin = pixelsToMinutes(event.clientY - rect.top, effectivePixelsPerHour, snapMinutes);
-    const onPointerUp = (upEvent: PointerEvent): void => {
-      window.removeEventListener('pointerup', onPointerUp);
-      const current = pixelsToMinutes(
-        upEvent.clientY - rect.top,
-        effectivePixelsPerHour,
-        snapMinutes,
-      );
-      let startMinutes = Math.min(origin, current);
-      let endMinutes = Math.max(origin, current);
-      if (startMinutes === endMinutes) {
-        if (endMinutes === MINUTES_PER_DAY) startMinutes -= snapMinutes;
-        else endMinutes += snapMinutes;
-      }
-      onSelectRegion({ lane, startMinutes, endMinutes });
-    };
-    window.addEventListener('pointerup', onPointerUp);
-  };
   return (
     <section
       ref={viewportRef}
@@ -249,8 +220,29 @@ export default function SchedulingCanvas({
                   className="border-outline-variant relative shrink-0 touch-none border-r"
                   data-schedule-lane={lane.id}
                   style={{ width: geometry.laneWidth, height: 24 * effectivePixelsPerHour }}
-                  onPointerDown={beginSelection.bind(null, lane)}
+                  onPointerDown={(event) => {
+                    regionSelection.onPointerDown(lane, event);
+                  }}
                 >
+                  {regionSelection.preview?.laneId === lane.id ? (
+                    <div
+                      aria-hidden="true"
+                      className="border-primary/40 bg-primary/10 pointer-events-none absolute inset-x-1 z-10 rounded-md border"
+                      data-schedule-region-preview={lane.id}
+                      data-start-minutes={regionSelection.preview.startMinutes}
+                      data-end-minutes={regionSelection.preview.endMinutes}
+                      style={{
+                        top: minutesToPixels(
+                          regionSelection.preview.startMinutes,
+                          effectivePixelsPerHour,
+                        ),
+                        height: minutesToPixels(
+                          regionSelection.preview.endMinutes - regionSelection.preview.startMinutes,
+                          effectivePixelsPerHour,
+                        ),
+                      }}
+                    />
+                  ) : null}
                   {positionedLaneItems[laneIndex]?.map(
                     ({ item, bounds, top, height, placement }) => (
                       <SchedulingItemCard
@@ -259,6 +251,7 @@ export default function SchedulingCanvas({
                         lane={lane}
                         laneIndex={laneIndex}
                         lanes={lanes}
+                        displayTimezone={displayTimezone}
                         laneWidth={geometry.laneWidth}
                         gutterWidth={geometry.gutterWidth}
                         pixelsPerHour={effectivePixelsPerHour}

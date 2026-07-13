@@ -8,6 +8,7 @@ import { optimisticPatch, queryKeys, unwrap, useApiMutation } from '@/lib/query'
 import { acquireSerializedOptimisticWrite } from '@/lib/serialized-optimistic-write';
 
 import {
+  CALENDAR_ITEMS_PREFIX,
   type CombinedRollback,
   patchCalendarItemAcrossRanges,
   type SerializedCombinedRollback,
@@ -55,13 +56,7 @@ export function useUpdateCalendarItem(itemId: string) {
       };
     },
     onError: (_error, _vars, context) => context?.rollback(),
-    invalidateKeys: [queryKeys.calendarItem(itemId)],
-    onSettled: async (_data, _error, _vars, context) => {
-      if (!context) return;
-      await Promise.all(
-        context.rangeKeys.map((key) => queryClient.invalidateQueries({ queryKey: key })),
-      );
-    },
+    invalidateKeys: [CALENDAR_ITEMS_PREFIX],
   });
 }
 
@@ -122,14 +117,9 @@ export function useUpdateCalendarItemById() {
       }
     },
     onError: (_error, _vars, context) => context?.rollback(),
-    onSettled: async (_data, _error, vars, context) => {
+    onSettled: async (_data, _error, _vars, context) => {
       try {
-        await Promise.all([
-          queryClient.invalidateQueries({ queryKey: queryKeys.calendarItem(vars.itemId) }),
-          ...(context?.rangeKeys ?? []).map((key) =>
-            queryClient.invalidateQueries({ queryKey: key }),
-          ),
-        ]);
+        await queryClient.invalidateQueries({ queryKey: CALENDAR_ITEMS_PREFIX });
       } finally {
         context?.releaseQueue();
       }

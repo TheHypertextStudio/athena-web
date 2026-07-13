@@ -8,7 +8,7 @@
  * - Each read def unwraps its mocked RPC call to the parsed body.
  * - `useUpdateCalendarItem` optimistically patches BOTH the item-detail cache and any seeded
  *   range-list cache entry containing the item, rolls both back on a rejected mutation, and
- *   invalidates the item detail plus exactly the range keys it touched on success.
+ *   invalidates the complete calendar-item cache family on success so destination ranges refresh.
  * - `useUpdateLayerVisibility` optimistically patches the layers list and invalidates it plus the
  *   broad `['me', 'calendar-items']` prefix.
  * - `useDeleteCalendarItem` optimistically removes the item from a seeded range-list cache entry
@@ -89,6 +89,7 @@ import {
   calendarItemsDef,
   calendarLayersDef,
 } from '../../src/components/calendar/calendar-data';
+import { CALENDAR_ITEMS_PREFIX } from '../../src/components/calendar/calendar-mutation-cache';
 import {
   useCreateAndLinkTask,
   useDeleteCalendarItem,
@@ -344,7 +345,7 @@ describe('useUpdateCalendarItem', () => {
     );
   });
 
-  it('patches every seeded range cache entry containing the item and invalidates it on settle', async () => {
+  it('patches every seeded range cache entry containing the item and invalidates the family on settle', async () => {
     const { client, wrapper } = makeWrapper();
     client.setQueryData(queryKeys.calendarItem(ITEM_ID), nativeItem());
     const rangeKey = queryKeys.calendarItems(START, END);
@@ -374,8 +375,7 @@ describe('useUpdateCalendarItem', () => {
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true);
     });
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.calendarItem(ITEM_ID) });
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: rangeKey });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: CALENDAR_ITEMS_PREFIX });
   });
 
   it('patches a provider_event item to a pending syncState without fabricating other fields', async () => {
@@ -401,6 +401,43 @@ describe('useUpdateCalendarItem', () => {
 });
 
 describe('useUpdateCalendarItemById', () => {
+  it('invalidates a cached destination range that did not contain the item before a move', async () => {
+    const { client, wrapper } = makeWrapper();
+    const original = nativeItem();
+    const sourceRangeKey = queryKeys.calendarItems(START, END);
+    const destinationRangeKey = queryKeys.calendarItems(
+      '2026-08-01T00:00:00.000Z',
+      '2026-08-02T00:00:00.000Z',
+    );
+    client.setQueryData(queryKeys.calendarItem(ITEM_ID), original);
+    client.setQueryData<CalendarItemsRangeOut>(sourceRangeKey, {
+      layers: [layer()],
+      items: [original],
+    });
+    client.setQueryData<CalendarItemsRangeOut>(destinationRangeKey, {
+      layers: [layer()],
+      items: [],
+    });
+
+    const { result } = renderHook(() => useUpdateCalendarItemById(), { wrapper });
+
+    act(() => {
+      result.current.mutate({
+        itemId: ITEM_ID,
+        patch: {
+          startsAt: '2026-08-01T18:00:00.000Z',
+          endsAt: '2026-08-01T19:00:00.000Z',
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true);
+    });
+    expect(client.getQueryState(sourceRangeKey)?.isInvalidated).toBe(true);
+    expect(client.getQueryState(destinationRangeKey)?.isInvalidated).toBe(true);
+  });
+
   it('rolls back provider sync state, detail, and every containing range after rejection', async () => {
     const { client, wrapper } = makeWrapper();
     const original = providerItem({ syncState: 'provider_error' });

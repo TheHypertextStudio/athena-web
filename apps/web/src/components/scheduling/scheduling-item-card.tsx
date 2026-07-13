@@ -8,12 +8,13 @@ import {
   SCHEDULE_DRAG_MIME,
   writeScheduleDragObject,
 } from './scheduling-drag-object';
-import { formatScheduleWallTimeRange } from './scheduling-gesture';
 import { MINUTES_PER_DAY, minutesToPixels } from './scheduling-geometry';
 import {
   scheduleOverlapHorizontalStyle,
   type ScheduleOverlapPlacement,
 } from './scheduling-overlap-layout';
+import { SchedulingItemBody, type ScheduleItemDensity } from './scheduling-item-body';
+import { formatScheduleItemTimeRange } from './scheduling-time-label';
 import type { ScheduleItem, ScheduleLane, SchedulingCanvasProps } from './scheduling-types';
 import { useSchedulingGesture } from './use-scheduling-gesture';
 
@@ -25,6 +26,7 @@ export interface SchedulingItemCardProps {
   readonly lane: ScheduleLane;
   readonly laneIndex: number;
   readonly lanes: readonly ScheduleLane[];
+  readonly displayTimezone: string;
   readonly laneWidth: number;
   readonly gutterWidth: number;
   readonly pixelsPerHour: number;
@@ -42,8 +44,6 @@ export interface SchedulingItemCardProps {
   readonly onGestureAnnouncementChange: (announcement: string) => void;
 }
 
-type ScheduleItemDensity = 'marker' | 'compact' | 'full';
-
 /** Choose how much card detail fits without obscuring adjacent times. */
 function itemDensity(height: number): ScheduleItemDensity {
   if (height < 24) return 'marker';
@@ -57,6 +57,7 @@ export function SchedulingItemCard({
   lane,
   laneIndex,
   lanes,
+  displayTimezone,
   laneWidth,
   gutterWidth,
   pixelsPerHour,
@@ -88,9 +89,20 @@ export function SchedulingItemCard({
     bounds,
     editable,
     viewportRef,
-    onOpenItem,
+    onOpenItem: item.openable === false ? undefined : onOpenItem,
     onMoveItem,
     onResizeItem,
+    formatPreviewTimeRange: (mode, preview) =>
+      formatScheduleItemTimeRange({
+        item,
+        lane,
+        laneIndex,
+        lanes,
+        displayTimezone,
+        bounds,
+        preview,
+        previewMode: mode,
+      }),
     onAnnouncementChange: onGestureAnnouncementChange,
   });
   const visibleBounds = gesture.preview ?? bounds;
@@ -111,13 +123,20 @@ export function SchedulingItemCard({
     'focus-visible:ring-ring absolute z-20 size-6 max-w-full cursor-ns-resize touch-none bg-transparent pointer-events-none outline-none group-focus-within:pointer-events-auto group-hover:pointer-events-auto focus-visible:ring-2 focus-visible:ring-inset [@media(pointer:coarse)]:size-11 [@media(pointer:coarse)]:pointer-events-auto';
   const resizeIndicatorClassName =
     'bg-primary/70 pointer-events-none absolute h-0.5 w-3 max-w-full rounded-full opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 motion-reduce:transition-none [@media(pointer:coarse)]:opacity-100';
-  const bodyClassName =
-    density === 'marker'
-      ? 'focus-visible:ring-ring relative z-10 size-full overflow-hidden rounded-sm p-1 outline-none focus-visible:ring-2 focus-visible:ring-inset'
-      : 'text-on-surface focus-visible:ring-ring relative z-10 flex size-full min-w-0 flex-col overflow-hidden rounded-sm px-2 py-1 text-left text-xs font-medium outline-none focus-visible:ring-2 focus-visible:ring-inset';
-  const timeRange = formatScheduleWallTimeRange(visibleBounds);
+  const timeRange = formatScheduleItemTimeRange({
+    item,
+    lane,
+    laneIndex,
+    lanes,
+    displayTimezone,
+    bounds,
+    preview: gesture.preview,
+    previewMode: gesture.previewMode,
+  });
   const content = renderItem?.({ item, lane, allDay: false }) ?? item.title;
   const dragObject = item.dragObject;
+  const bodyOpenable = item.openable !== false;
+  const bodyMovable = editable && onMoveItem !== undefined;
   const horizontalStyle = scheduleOverlapHorizontalStyle(placement);
   const acceptsDrop = (event: ReactDragEvent<HTMLElement>): boolean =>
     item.dropTarget === true && event.dataTransfer.types.includes(SCHEDULE_DRAG_MIME);
@@ -182,35 +201,18 @@ export function SchedulingItemCard({
           />
         </button>
       ) : null}
-      <button
-        type="button"
-        aria-label={density === 'marker' ? `${item.title}, ${timeRange}` : undefined}
-        aria-describedby={!editable && item.readOnlyLabel ? readOnlyDescriptionId : undefined}
-        className={`${bodyClassName} ${editable && onMoveItem ? 'cursor-grab' : ''}`}
-        data-schedule-item-body={item.id}
-        title={density === 'full' ? undefined : `${item.title} · ${timeRange}`}
+      <SchedulingItemBody
+        item={item}
+        density={density}
+        timeRange={timeRange}
+        content={content}
+        readOnlyDescriptionId={readOnlyDescriptionId}
+        editable={editable}
+        openable={bodyOpenable}
+        movable={bodyMovable}
         onPointerDown={gesture.onBodyPointerDown}
         onClick={gesture.onBodyClick}
-      >
-        {density === 'marker' ? (
-          <span
-            aria-hidden="true"
-            className="bg-primary my-auto block h-1 w-full rounded-full"
-            style={item.color ? { backgroundColor: item.color } : undefined}
-          />
-        ) : (
-          <>
-            <span className="block w-full truncate">{content}</span>
-            {density === 'full' ? (
-              <span className="text-on-surface-variant block w-full truncate text-[10px] leading-4 font-normal tabular-nums">
-                {timeRange}
-              </span>
-            ) : (
-              <span className="sr-only">, {timeRange}</span>
-            )}
-          </>
-        )}
-      </button>
+      />
       {!editable && item.readOnlyLabel ? (
         <span
           id={readOnlyDescriptionId}

@@ -2,6 +2,7 @@ import '@testing-library/jest-dom/vitest';
 
 import { CalendarItemId, type CalendarItemOut, CalendarLayerId } from '@docket/types';
 import { act, cleanup, render, screen } from '@testing-library/react';
+import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as SchedulingModule from '../../src/components/scheduling';
 import type {
@@ -52,6 +53,10 @@ vi.mock('../../src/components/calendar/calendar-layer-panel', () => ({
 }));
 
 import { CalendarSchedulingSurface } from '../../src/app/(app)/calendar/calendar-scheduling-surface';
+import {
+  CalendarSharedItemDetails,
+  type SharedCalendarItemDetail,
+} from '../../src/app/(app)/calendar/calendar-shared-item-details';
 import type { CalendarDateAxisState } from '../../src/app/(app)/calendar/use-calendar-date-axis';
 import type { CalendarPeopleAxisState } from '../../src/app/(app)/calendar/use-calendar-people-axis';
 
@@ -163,6 +168,26 @@ function peopleAxisState(): CalendarPeopleAxisState {
         ],
       },
     ],
+    detailByItemId: new Map([
+      [
+        ITEM_ID,
+        {
+          personName: 'Grace',
+          personTimezone: 'America/Chicago',
+          item: {
+            access: 'details' as const,
+            itemId: ITEM_ID,
+            layerId: LAYER_ID,
+            kind: 'native_event' as const,
+            title: 'Shared detail',
+            startsAt: '2026-07-13T16:00:00Z',
+            endsAt: '2026-07-13T17:00:00Z',
+            allDayStartDate: null,
+            allDayEndDate: null,
+          },
+        },
+      ],
+    ]),
     membersPending: false,
     error: false,
     comparisonPending: false,
@@ -178,25 +203,44 @@ function renderSurface(
   laneDate = '2026-07-13',
 ): {
   readonly onOpenItem: ReturnType<typeof vi.fn>;
+  readonly onOpenSharedItem: ReturnType<typeof vi.fn>;
   readonly onSelectRegion: ReturnType<typeof vi.fn>;
 } {
   const onOpenItem = vi.fn();
+  const onOpenSharedItem = vi.fn();
   const onSelectRegion = vi.fn();
-  render(
-    <CalendarSchedulingSurface
-      axis={axis}
-      visibleLaneCount={1}
-      pixelsPerHour={72}
-      displayTimezone={DISPLAY_TIMEZONE}
-      dateAxis={dateAxisState(source, laneDate)}
-      peopleAxis={peopleAxisState()}
-      onVisibleLaneCountChange={vi.fn()}
-      onReachBoundary={vi.fn()}
-      onSelectRegion={onSelectRegion}
-      onOpenItem={onOpenItem}
-    />,
-  );
-  return { onOpenItem, onSelectRegion };
+  function TestSurface(): React.JSX.Element {
+    const [openSharedItem, setOpenSharedItem] = useState<SharedCalendarItemDetail | null>(null);
+    return (
+      <>
+        <CalendarSchedulingSurface
+          axis={axis}
+          visibleLaneCount={1}
+          pixelsPerHour={72}
+          displayTimezone={DISPLAY_TIMEZONE}
+          dateAxis={dateAxisState(source, laneDate)}
+          peopleAxis={peopleAxisState()}
+          onVisibleLaneCountChange={vi.fn()}
+          onReachBoundary={vi.fn()}
+          onSelectRegion={onSelectRegion}
+          onOpenItem={onOpenItem}
+          onOpenSharedItem={(detail) => {
+            onOpenSharedItem(detail);
+            setOpenSharedItem(detail);
+          }}
+        />
+        <CalendarSharedItemDetails
+          detail={openSharedItem}
+          displayTimezone={DISPLAY_TIMEZONE}
+          onClose={() => {
+            setOpenSharedItem(null);
+          }}
+        />
+      </>
+    );
+  }
+  render(<TestSurface />);
+  return { onOpenItem, onOpenSharedItem, onSelectRegion };
 }
 
 /** Return the latest props received by the callback-driven canvas mock. */
@@ -278,8 +322,9 @@ describe('CalendarSchedulingSurface persistence', () => {
     ]);
   });
 
-  it('does not expose move or resize callbacks on people lanes', () => {
-    const { onOpenItem } = renderSurface('people');
+  it('opens authorized people details read-only without requesting the owned item endpoint', () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const { onOpenItem, onOpenSharedItem } = renderSurface('people');
 
     expect(canvasProps().onMoveItem).toBeUndefined();
     expect(canvasProps().onResizeItem).toBeUndefined();
@@ -287,10 +332,62 @@ describe('CalendarSchedulingSurface persistence', () => {
     act(() => {
       const lane = canvasProps().lanes[0]!;
       canvasProps().onOpenItem?.({ item: lane.items[0]!, lane });
+    });
+
+    const dialog = screen.getByRole('dialog', { name: 'Shared detail' });
+    expect(dialog).toHaveTextContent('Grace');
+    expect(dialog).toHaveTextContent('Read-only');
+    expect(dialog).toHaveTextContent('Native event');
+    expect(dialog).toHaveTextContent('Jul 13, 2026');
+    expect(dialog).not.toHaveTextContent('01BX5ZZKBKACTAV9WEVGEMMVN1');
+    expect(dialog.querySelector('input, textarea, select')).toBeNull();
+    expect(onOpenItem).not.toHaveBeenCalled();
+    expect(onOpenSharedItem).toHaveBeenCalledOnce();
+    expect(fetchSpy).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
+  });
+
+  it('keeps busy-only people items opaque and non-openable', () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const { onOpenItem, onOpenSharedItem } = renderSurface('people');
+
+    act(() => {
+      const lane = canvasProps().lanes[0]!;
       canvasProps().onOpenItem?.({ item: lane.items[1]!, lane });
     });
-    expect(onOpenItem).toHaveBeenCalledOnce();
-    expect(onOpenItem).toHaveBeenCalledWith(ITEM_ID);
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(onOpenItem).not.toHaveBeenCalled();
+    expect(onOpenSharedItem).not.toHaveBeenCalled();
+    expect(fetchSpy).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
+  });
+
+  it('disambiguates repeated-hour instants in shared read-only details', () => {
+    render(
+      <CalendarSharedItemDetails
+        displayTimezone="America/Los_Angeles"
+        onClose={vi.fn()}
+        detail={{
+          personName: 'Grace',
+          personTimezone: 'America/Chicago',
+          item: {
+            access: 'details',
+            itemId: ITEM_ID,
+            layerId: LAYER_ID,
+            kind: 'native_event',
+            title: 'Fold planning',
+            startsAt: '2026-11-01T08:30:00Z',
+            endsAt: '2026-11-01T09:30:00Z',
+            allDayStartDate: null,
+            allDayEndDate: null,
+          },
+        }}
+      />,
+    );
+
+    expect(screen.getByText(/1:30 AM PDT.*1:30 AM PST/)).toBeInTheDocument();
+    expect(screen.getByRole('dialog')).not.toHaveTextContent('2:30 AM');
   });
 
   it('defensively rejects clipped multi-day and all-day callback payloads', () => {

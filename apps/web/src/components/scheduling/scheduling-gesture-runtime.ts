@@ -37,6 +37,10 @@ export interface UseSchedulingGestureOptions {
   readonly onOpenItem?: SchedulingCanvasProps['onOpenItem'];
   readonly onMoveItem?: SchedulingCanvasProps['onMoveItem'];
   readonly onResizeItem?: SchedulingCanvasProps['onResizeItem'];
+  readonly formatPreviewTimeRange: (
+    mode: ScheduleGestureMode,
+    preview: ScheduleGesturePreview,
+  ) => string;
   readonly onAnnouncementChange: (announcement: string) => void;
 }
 

@@ -130,4 +130,27 @@ describe('CalendarLayerPanel', () => {
     render(<CalendarLayerPanel layers={[]} />, { wrapper });
     expect(screen.getByText(/No calendar layers yet/)).toBeInTheDocument();
   });
+
+  it('uses fixed sync-health copy instead of rendering stored diagnostic text', () => {
+    const client = new QueryClient();
+    const wrapper = ({ children }: { children: ReactNode }): JSX.Element => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    render(
+      <CalendarLayerPanel
+        layers={[
+          makeLayer({
+            lastError: 'AGENT_MAX_TURNS is not configured; refusing to run agent sessions',
+          }),
+        ]}
+      />,
+      { wrapper },
+    );
+
+    expect(screen.getByRole('img', { name: 'Calendar sync issue' })).toHaveAttribute(
+      'title',
+      'Calendar sync issue',
+    );
+    expect(screen.getByRole('list')).not.toHaveTextContent('AGENT_MAX_TURNS');
+  });
 });

@@ -1,5 +1,6 @@
 /** Pointer editing, collision layout, permissions, and resilient-error browser contracts. */
 import { CalendarItemId } from '@docket/types';
+import type { OrgCreateResult, ScheduleComparisonOut } from '@docket/types';
 
 import { signUpAndOnboard } from './helpers/app';
 import {
@@ -18,6 +19,7 @@ import {
   scheduleViewport,
 } from './helpers/calendar-ui';
 import { expect, test } from './helpers/fixtures';
+import { apiJson } from './helpers/net';
 
 const ANCHOR_DATE = '2026-07-13';
 const NEXT_DATE = shiftDate(ANCHOR_DATE, 1);
@@ -165,6 +167,57 @@ test.describe('fluid scheduling interaction contract', () => {
     await expect(drawer.getByLabel('Title')).toBeDisabled();
     expect(state.itemPatches).toHaveLength(0);
     await attachCalendarScreenshot(page, testInfo, 'fluid-provider-read-only');
+  });
+
+  test('details-shared people cards open comparison-backed read-only details', async ({ page }) => {
+    await page.clock.setFixedTime(`${ANCHOR_DATE}T17:00:00.000Z`);
+    const { user } = await signUpAndOnboard(page, 'FluidSharedDetails');
+    const workspace = await apiJson<OrgCreateResult>(page, '/v1/orgs', {
+      method: 'POST',
+      body: { name: 'Shared planning', isPersonal: false, vocabulary: 'startup' },
+    });
+    const comparison: ScheduleComparisonOut = {
+      start: `${ANCHOR_DATE}T00:00:00.000Z`,
+      end: `${NEXT_DATE}T00:00:00.000Z`,
+      people: [
+        {
+          actorId: workspace.ownerActorId,
+          displayName: user.name,
+          avatar: null,
+          timezone: 'America/Chicago',
+          items: [
+            {
+              access: 'details',
+              itemId: CALENDAR_IDS.readOnlyEvent,
+              layerId: CALENDAR_IDS.googleReadOnlyLayer,
+              kind: 'native_event',
+              title: 'Shared roadmap review',
+              startsAt: utcAt(ANCHOR_DATE, 15),
+              endsAt: utcAt(ANCHOR_DATE, 16),
+              allDayStartDate: null,
+              allDayEndDate: null,
+            },
+          ],
+        },
+      ],
+    };
+    const state = calendarRouteState({
+      layers: [makeCalendarLayer({ id: CALENDAR_IDS.nativeLayer, title: 'Docket' })],
+      items: [],
+      comparisonResponse: comparison,
+      preferences: { timezone: 'UTC', calendar: { pixelsPerHour: 72 } },
+    });
+    await installCalendarRoutes(page, state);
+    await page.goto('/calendar', { waitUntil: 'domcontentloaded' });
+    await page.getByRole('button', { name: 'people' }).click();
+
+    await scheduleItem(page, CALENDAR_IDS.readOnlyEvent).body.click();
+    const dialog = page.getByRole('dialog', { name: 'Shared roadmap review' });
+    await expect(dialog).toContainText('Read-only');
+    await expect(dialog).toContainText(`Shared by ${user.name} with this workspace.`);
+    await expect(dialog.locator('input, textarea, select')).toHaveCount(0);
+    expect(state.ownedItemGets).toHaveLength(0);
+    expect(state.itemPatches).toHaveLength(0);
   });
 
   test('hostile range failures show only safe copy over the intact schedule grid', async ({

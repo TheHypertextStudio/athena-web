@@ -181,7 +181,7 @@ export function buildComparisonLane(
         id:
           item.access === 'details'
             ? item.itemId
-            : `busy:${person.actorId}:${item.startsAt ?? item.allDayStartDate ?? String(index)}`,
+            : `busy:${person.actorId}:${item.startsAt ?? item.allDayStartDate ?? 'unknown'}:${item.endsAt ?? item.allDayEndDate ?? 'unknown'}:${index}`,
         title: item.access === 'details' ? item.title : 'Busy',
         startsAt:
           item.startsAt ??
@@ -191,6 +191,7 @@ export function buildComparisonLane(
           requiredScheduleInstant(item.allDayEndDate ?? shiftISODate(date, 1), 0, displayTimezone),
         allDay,
         editable: false,
+        openable: item.access === 'details',
       };
     }),
   };

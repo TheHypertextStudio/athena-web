@@ -19,6 +19,7 @@ import {
   isInlineEditableScheduleItem,
   itemBoundsInLane,
 } from '../../src/components/scheduling/scheduling-date-lanes';
+import { positionScheduleLaneItems } from '../../src/components/scheduling/scheduling-overlap-layout';
 
 const ITEM_ID = CalendarItemId.parse('01BX5ZZKBKACTAV9WEVGEMMVS1');
 const LAYER_ID = CalendarLayerId.parse('01BX5ZZKBKACTAV9WEVGEMMVN1');
@@ -244,6 +245,35 @@ describe('calendar schedule timezone model', () => {
       endsAt: '2026-07-02T15:00:00Z',
     });
     expect(resourceLane.items[0]).not.toHaveProperty('readOnlyLabel');
+  });
+
+  it('keeps simultaneous busy-only windows distinct through collision layout', () => {
+    const person: ScheduleComparisonOut['people'][number] = {
+      actorId: ActorId.parse('01BX5ZZKBKACTAV9WEVGEMMVRZ'),
+      displayName: 'Grace',
+      avatar: null,
+      timezone: null,
+      items: [
+        {
+          access: 'busy',
+          startsAt: '2026-07-02T09:00:00Z',
+          endsAt: '2026-07-02T10:00:00Z',
+          allDayStartDate: null,
+          allDayEndDate: null,
+        },
+        {
+          access: 'busy',
+          startsAt: '2026-07-02T09:00:00Z',
+          endsAt: '2026-07-02T11:00:00Z',
+          allDayStartDate: null,
+          allDayEndDate: null,
+        },
+      ],
+    };
+
+    const lane = buildComparisonLane(person, '2026-07-02', 'UTC');
+    expect(new Set(lane.items.map((item) => item.id)).size).toBe(2);
+    expect(positionScheduleLaneItems(lane, 'UTC', 72, 18)).toHaveLength(2);
   });
 });
 

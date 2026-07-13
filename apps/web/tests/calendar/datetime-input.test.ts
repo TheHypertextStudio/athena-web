@@ -15,9 +15,7 @@ describe('datetime-local display-zone conversion', () => {
     expect(fromLocalInputValue('2026-03-08T02:30', 'America/Los_Angeles')).toBeNull();
   });
 
-  it('accepts a repeated wall time with deterministic earlier resolution', () => {
-    expect(fromLocalInputValue('2026-11-01T01:30', 'America/Los_Angeles')).toBe(
-      '2026-11-01T08:30:00Z',
-    );
+  it('returns null for an ambiguous repeated display-zone wall time', () => {
+    expect(fromLocalInputValue('2026-11-01T01:30', 'America/Los_Angeles')).toBeNull();
   });
 });

@@ -77,10 +77,11 @@ export const queryKeys = {
   calendarItems: (startISO: string, endISO: string) =>
     ['me', 'calendar-items', startISO, endISO] as const,
   // Deliberately NOT nested under `calendarItems(...)` — an item detail's key doesn't extend
-  // any particular range key (an item can appear in many ranges), so range invalidation and
-  // item-detail invalidation are independent; pass both explicitly where a write affects both
-  // (mirrors how `agenda`/`dailyPlan` are separate sibling keys coordinated by their mutation
-  // layer rather than one nested under the other).
+  // any particular range key (an item can appear in many ranges). Targeted reads stay independent,
+  // while the coarse `['me', 'calendar-items']` prefix intentionally refreshes both details and
+  // every cached range after a write can change range membership (mirrors how `agenda`/`dailyPlan`
+  // are separate sibling keys coordinated by their mutation layer rather than one nested under the
+  // other).
   calendarItem: (itemId: string) => ['me', 'calendar-items', 'detail', itemId] as const,
   calendarItemRelations: (itemId: string) =>
     ['me', 'calendar-items', 'detail', itemId, 'relations'] as const,

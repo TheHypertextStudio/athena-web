@@ -304,6 +304,29 @@ describe('CalendarItemDrawer', () => {
     expect(screen.getByLabelText('Ends')).toHaveValue('2026-07-02T02:00');
   });
 
+  it('rejects an edited time inside a repeated wall-clock hour', async () => {
+    itemGet.mockResolvedValue(
+      okResponse(
+        makeItem({
+          startsAt: '2026-11-01T07:30:00.000Z',
+          endsAt: '2026-11-01T10:30:00.000Z',
+        }),
+      ),
+    );
+    renderDrawer(ITEM_ID, 'America/Los_Angeles');
+
+    expect(await screen.findByLabelText('Starts')).toHaveValue('2026-11-01T00:30');
+    fireEvent.change(screen.getByLabelText('Starts'), {
+      target: { value: '2026-11-01T01:30' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    expect(
+      screen.getByText('Choose valid start and end times in your calendar timezone.'),
+    ).toBeInTheDocument();
+    expect(itemPatch).not.toHaveBeenCalled();
+  });
+
   it('preserves timed instants when another field changes in a different display timezone', async () => {
     renderDrawer(ITEM_ID, 'Asia/Tokyo');
 

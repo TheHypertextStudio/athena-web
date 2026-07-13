@@ -20,6 +20,7 @@ import {
 } from '@/components/scheduling';
 
 import { canPersistCalendarItemBounds, type CalendarAxis } from './calendar-schedule-model';
+import type { SharedCalendarItemDetail } from './calendar-shared-item-details';
 import type { CalendarDateAxisState } from './use-calendar-date-axis';
 import type { CalendarPeopleAxisState } from './use-calendar-people-axis';
 
@@ -46,6 +47,7 @@ export interface CalendarSchedulingSurfaceProps {
   readonly onReachBoundary: (direction: 'previous' | 'next') => void;
   readonly onSelectRegion: (selection: CalendarRegionSelection) => void;
   readonly onOpenItem: (itemId: string) => void;
+  readonly onOpenSharedItem: (detail: SharedCalendarItemDetail) => void;
 }
 
 /**
@@ -68,6 +70,7 @@ export function CalendarSchedulingSurface({
   onReachBoundary,
   onSelectRegion,
   onOpenItem,
+  onOpenSharedItem,
 }: CalendarSchedulingSurfaceProps): JSX.Element {
   const updateItem = useUpdateCalendarItemById();
   const linkTask = useLinkTaskToCalendarItem();
@@ -196,7 +199,11 @@ export function CalendarSchedulingSurface({
               }
             }}
             onOpenItem={({ item }: { item: ScheduleItem }) => {
-              if (axis === 'people' && item.id.startsWith('busy:')) return;
+              if (axis === 'people') {
+                const detail = peopleAxis.detailByItemId.get(item.id);
+                if (detail) onOpenSharedItem(detail);
+                return;
+              }
               onOpenItem(item.id);
             }}
             {...(axis === 'dates'

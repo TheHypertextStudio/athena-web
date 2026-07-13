@@ -54,7 +54,12 @@ export function useSchedulingGesture(
       const targetLane = next ? current.lanes[next.laneIndex] : undefined;
       current.onAnnouncementChange(
         next && mode && targetLane
-          ? formatSchedulingGestureAnnouncement(mode, current.item.title, targetLane.label, next)
+          ? formatSchedulingGestureAnnouncement(
+              mode,
+              current.item.title,
+              targetLane.label,
+              current.formatPreviewTimeRange(mode, next),
+            )
           : '',
       );
     },
@@ -91,7 +96,12 @@ export function useSchedulingGesture(
       if (!changed) return;
       if (announce) {
         current.onAnnouncementChange(
-          formatSchedulingGestureAnnouncement(mode, current.item.title, targetLane.label, next),
+          formatSchedulingGestureAnnouncement(
+            mode,
+            current.item.title,
+            targetLane.label,
+            current.formatPreviewTimeRange(mode, next),
+          ),
         );
       }
       if (mode === 'move') {

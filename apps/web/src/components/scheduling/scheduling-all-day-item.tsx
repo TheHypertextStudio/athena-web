@@ -31,6 +31,7 @@ export function SchedulingAllDayItem({
   const readOnlyDescriptionId = useId();
   const dragObject = item.dragObject;
   const editable = isScheduleItemEditable(item, lane);
+  const openable = item.openable !== false;
   const acceptsDrop = (event: ReactDragEvent<HTMLElement>): boolean =>
     item.dropTarget === true && event.dataTransfer.types.includes(SCHEDULE_DRAG_MIME);
 
@@ -60,18 +61,27 @@ export function SchedulingAllDayItem({
         onDropObjectOnItem({ object, targetItem: item, targetLane: lane });
       }}
     >
-      <button
-        type="button"
-        aria-describedby={!editable && item.readOnlyLabel ? readOnlyDescriptionId : undefined}
-        className="text-on-secondary-container focus-visible:ring-ring hover:bg-surface-container-high min-w-0 flex-1 truncate rounded px-1.5 py-0.5 text-left text-[10px] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-inset motion-reduce:transition-none"
-        data-schedule-item-body={item.id}
-        style={item.color ? { borderLeft: `3px solid ${item.color}` } : undefined}
-        onClick={() => {
-          onOpenItem?.({ item, lane });
-        }}
-      >
-        {renderItem?.({ item, lane, allDay: true }) ?? item.title}
-      </button>
+      {openable ? (
+        <button
+          type="button"
+          aria-describedby={!editable && item.readOnlyLabel ? readOnlyDescriptionId : undefined}
+          className="text-on-secondary-container focus-visible:ring-ring hover:bg-surface-container-high min-w-0 flex-1 truncate rounded px-1.5 py-0.5 text-left text-[10px] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-inset motion-reduce:transition-none"
+          data-schedule-item-body={item.id}
+          style={item.color ? { borderLeft: `3px solid ${item.color}` } : undefined}
+          onClick={() => onOpenItem?.({ item, lane })}
+        >
+          {renderItem?.({ item, lane, allDay: true }) ?? item.title}
+        </button>
+      ) : (
+        <span
+          aria-describedby={!editable && item.readOnlyLabel ? readOnlyDescriptionId : undefined}
+          className="text-on-secondary-container min-w-0 flex-1 truncate rounded px-1.5 py-0.5 text-left text-[10px]"
+          data-schedule-item-body={item.id}
+          style={item.color ? { borderLeft: `3px solid ${item.color}` } : undefined}
+        >
+          {renderItem?.({ item, lane, allDay: true }) ?? item.title}
+        </span>
+      )}
       {!editable && item.readOnlyLabel ? (
         <span
           id={readOnlyDescriptionId}

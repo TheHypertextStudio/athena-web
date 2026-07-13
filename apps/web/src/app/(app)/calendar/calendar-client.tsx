@@ -27,10 +27,15 @@ import {
   useApiMutation,
   useApiQuery,
 } from '@/lib/query';
+import { useNow } from '@/lib/use-now';
 
 import { CalendarComparisonControls } from './calendar-comparison-controls';
 import type { CalendarAxis } from './calendar-schedule-model';
 import { CalendarSchedulingSurface } from './calendar-scheduling-surface';
+import {
+  CalendarSharedItemDetails,
+  type SharedCalendarItemDetail,
+} from './calendar-shared-item-details';
 import { CalendarToolbar } from './calendar-toolbar';
 import { useCalendarDateAxis } from './use-calendar-date-axis';
 import { useCalendarPeopleAxis } from './use-calendar-people-axis';
@@ -43,9 +48,10 @@ export default function CalendarClient(): JSX.Element {
   const [axis, setAxis] = useState<CalendarAxis>('dates');
   const [visibleLaneCount, setVisibleLaneCount] = useState(1);
   const [openItemId, setOpenItemId] = useState<string | null>(null);
+  const [openSharedItem, setOpenSharedItem] = useState<SharedCalendarItemDetail | null>(null);
   const [selection, setSelection] = useState<CalendarRegionSelection | null>(null);
   const [pixelsPerHour, setPixelsPerHour] = useState(DEFAULT_PIXELS_PER_HOUR);
-  const [now] = useState(() => new Date().toISOString());
+  const now = useNow().toISOString();
 
   const preferencesQuery = useApiQuery(
     apiQueryOptions(
@@ -81,6 +87,9 @@ export default function CalendarClient(): JSX.Element {
   });
   const dateAxis = useCalendarDateAxis(anchorDate, visibleLaneCount, displayTimezone);
   const peopleAxis = useCalendarPeopleAxis(axis, anchorDate, displayTimezone);
+  useEffect(() => {
+    setOpenSharedItem(null);
+  }, [anchorDate, axis, peopleAxis.comparisonOrgId]);
 
   const visibleEnd = shiftISODate(anchorDate, Math.max(0, visibleLaneCount - 1));
   const heading =
@@ -154,6 +163,7 @@ export default function CalendarClient(): JSX.Element {
         }}
         onSelectRegion={setSelection}
         onOpenItem={setOpenItemId}
+        onOpenSharedItem={setOpenSharedItem}
       />
 
       <CalendarItemDrawer
@@ -164,6 +174,13 @@ export default function CalendarClient(): JSX.Element {
         }}
         onOpenTask={(orgId, taskId) => {
           router.push(`/orgs/${orgId}/tasks/${taskId}`);
+        }}
+      />
+      <CalendarSharedItemDetails
+        detail={openSharedItem}
+        displayTimezone={displayTimezone}
+        onClose={() => {
+          setOpenSharedItem(null);
         }}
       />
     </div>

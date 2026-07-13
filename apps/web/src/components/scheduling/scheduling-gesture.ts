@@ -167,10 +167,9 @@ export function formatSchedulingGestureAnnouncement(
   mode: ScheduleGestureMode,
   itemTitle: string,
   laneLabel: string,
-  preview: ScheduleGesturePreview,
+  timeRange: string,
 ): string {
-  const time = formatScheduleWallTimeRange(preview);
-  if (mode === 'move') return `Moving ${itemTitle} to ${laneLabel}, ${time}.`;
+  if (mode === 'move') return `Moving ${itemTitle} to ${laneLabel}, ${timeRange}.`;
   const edge = mode === 'resize-start' ? 'start' : 'end';
-  return `Resizing ${edge} of ${itemTitle} in ${laneLabel}, ${time}.`;
+  return `Resizing ${edge} of ${itemTitle} in ${laneLabel}, ${timeRange}.`;
 }

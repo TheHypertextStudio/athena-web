@@ -5,17 +5,21 @@ import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { orgsGet, requireAuthentication, sessionState } = vi.hoisted(() => ({
-  orgsGet: vi.fn(),
-  requireAuthentication: vi.fn(),
-  sessionState: {
-    data: null as null | { user: { id: string; name: string; email: string } },
-    isPending: true,
-  },
-}));
+const { orgsGet, pathnameState, requireAuthentication, resolveTabTitle, sessionState } = vi.hoisted(
+  () => ({
+    orgsGet: vi.fn(),
+    pathnameState: { value: '/today' },
+    requireAuthentication: vi.fn(),
+    resolveTabTitle: vi.fn(() => Promise.resolve('Project Atlas')),
+    sessionState: {
+      data: null as null | { user: { id: string; name: string; email: string } },
+      isPending: true,
+    },
+  }),
+);
 
 vi.mock('next/navigation', () => ({
-  usePathname: () => '/today',
+  usePathname: () => pathnameState.value,
   useRouter: () => ({ push: vi.fn() }),
 }));
 
@@ -54,6 +58,11 @@ vi.mock('../../src/components/authentication-interlock', () => ({
   useAuthenticationInterlock: () => ({ requireAuthentication }),
 }));
 
+vi.mock('../../src/components/tabs/resolve-title', () => ({
+  fallbackTitle: () => 'Project',
+  resolveTabTitle,
+}));
+
 import { AppShellFrame } from '../../src/components/app-shell-frame';
 
 /** Render the frame with the same query boundary supplied by the root app providers. */
@@ -80,8 +89,10 @@ function renderFrame() {
 beforeEach(() => {
   sessionState.data = null;
   sessionState.isPending = true;
+  pathnameState.value = '/today';
   orgsGet.mockReset().mockImplementation(() => new Promise(() => undefined));
   requireAuthentication.mockReset();
+  resolveTabTitle.mockClear();
   window.history.replaceState({}, '', '/today?view=week');
   vi.stubGlobal('matchMedia', (query: string) => ({
     matches: false,
@@ -173,5 +184,14 @@ describe('AppShellFrame session loading', () => {
 
     expect(await screen.findByText('Private route content')).toBeVisible();
     expect(screen.getByRole('main')).toBe(loadingMain);
+  });
+
+  it('does not resolve protected document tabs before the session exists', async () => {
+    pathnameState.value = '/orgs/01HZX5K3QJ9F8B7C6D5E4F3G2H/projects/01HZX5K3QJ9F8B7C6D5E4F3G2J';
+
+    renderFrame();
+
+    await act(async () => Promise.resolve());
+    expect(resolveTabTitle).not.toHaveBeenCalled();
   });
 });

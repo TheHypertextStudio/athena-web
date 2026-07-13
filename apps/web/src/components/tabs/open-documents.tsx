@@ -155,7 +155,7 @@ export function OpenDocumentsProvider({
     persist(userId, tabs);
   }, [userId, tabs]);
 
-  const activeRef = useMemo(() => tabRefFromPath(pathname), [pathname]);
+  const activeRef = useMemo(() => (userId ? tabRefFromPath(pathname) : null), [pathname, userId]);
   const activeKey = activeRef ? tabKey(activeRef) : undefined;
 
   // Open (or no-op if already open) the tab for the active document route, then resolve its
@@ -169,6 +169,7 @@ export function OpenDocumentsProvider({
   // throwaway first mount) still lands the title.
   const resolvedRef = useRef(new Set<string>());
   useEffect(() => {
+    if (!userId) return;
     const ref = tabRefFromPath(pathname);
     if (!ref) return;
     const key = tabKey(ref);
@@ -181,7 +182,7 @@ export function OpenDocumentsProvider({
     void resolveTabTitle(ref).then((title) => {
       setTabs((current) => current.map((t) => (t.key === key ? { ...t, title } : t)));
     });
-  }, [pathname]);
+  }, [pathname, userId]);
 
   const closeTab = useCallback(
     (key: string): void => {

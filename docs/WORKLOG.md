@@ -72,6 +72,22 @@
   useful than horizontally scrolling a nominally dense table.
 - **State**: COMPLETE — implementation, focused validation, documentation, and design review are
   complete; unrelated root-suite failures are recorded above rather than absorbed into this task.
+### [APP-SHELL-LAYOUT-001] Make the app shell the persistent shared layout
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-07-13
+- **Priority**: P1
+- **Description**: Replace the duplicate provisional shell and full-layout Suspense boundary with
+  one shared `(app)` layout whose shell instance remains mounted through session and organization
+  loading.
+- **Approach**: Remove the shell's query-string suspension dependency, mount one `AppShell` from the
+  shared frame, and switch only its sidebar, content, account, and agenda slots as authenticated
+  context becomes available.
+- **Validation**: Add a shell-identity regression, preserve interlock and protected-content tests,
+  then run focused tests and the repository typecheck, lint, test, build, and browser checks.
+
+---
+
 ### [APP-SHELL-LOADING-001] Keep the app shell visible during authenticated loading
 
 - **Status**: COMPLETED

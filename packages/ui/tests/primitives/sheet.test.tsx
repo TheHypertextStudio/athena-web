@@ -96,7 +96,7 @@ describe('Sheet family', () => {
     expect(sheet).not.toHaveClass('left-0');
   });
 
-  it('renders a dimmed scrim overlay behind the panel', async () => {
+  it('renders the modal scrim and panel above app-local sticky layers', async () => {
     const { baseElement } = render(
       <Sheet defaultOpen>
         <SheetContent>
@@ -105,9 +105,11 @@ describe('Sheet family', () => {
         </SheetContent>
       </Sheet>,
     );
-    await screen.findByRole('dialog');
+    const sheet = await screen.findByRole('dialog');
     const overlay = baseElement.querySelector('.bg-black\\/40');
     expect(overlay).not.toBeNull();
+    expect(overlay).toHaveClass('z-[100]');
+    expect(sheet).toHaveClass('z-[100]');
   });
 
   it('closes on Escape and returns focus to the opener', async () => {

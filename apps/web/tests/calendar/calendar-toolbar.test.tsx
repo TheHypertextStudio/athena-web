@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { CalendarToolbar } from '../../src/app/(app)/calendar/calendar-toolbar';
@@ -16,19 +17,26 @@ function renderToolbar(pixelsPerHour = 80): {
 } {
   const onZoomChange = vi.fn();
   const onZoomCommit = vi.fn();
-  render(
-    <CalendarToolbar
-      heading="Jul 13, 2026"
-      axis="dates"
-      pixelsPerHour={pixelsPerHour}
-      onToday={vi.fn()}
-      onPrevious={vi.fn()}
-      onNext={vi.fn()}
-      onAxisChange={vi.fn()}
-      onZoomChange={onZoomChange}
-      onZoomCommit={onZoomCommit}
-    />,
-  );
+  function Harness(): React.JSX.Element {
+    const [value, setValue] = useState(pixelsPerHour);
+    return (
+      <CalendarToolbar
+        heading="Jul 13, 2026"
+        axis="dates"
+        pixelsPerHour={value}
+        onToday={vi.fn()}
+        onPrevious={vi.fn()}
+        onNext={vi.fn()}
+        onAxisChange={vi.fn()}
+        onZoomChange={(next) => {
+          onZoomChange(next);
+          setValue(next);
+        }}
+        onZoomCommit={onZoomCommit}
+      />
+    );
+  }
+  render(<Harness />);
   return { onZoomChange, onZoomCommit };
 }
 
@@ -46,15 +54,50 @@ describe('CalendarToolbar', () => {
     expect(onZoomCommit).toHaveBeenCalledWith(value);
   });
 
+  it('offers the same presets through a compact narrow-toolbar selector', () => {
+    const { onZoomChange, onZoomCommit } = renderToolbar(80);
+    const selector = screen.getByRole('combobox', { name: 'Calendar zoom preset' });
+
+    fireEvent.change(selector, { target: { value: '144' } });
+
+    expect(onZoomChange).toHaveBeenCalledWith(144);
+    expect(onZoomCommit).toHaveBeenCalledWith(144);
+    expect(selector).toHaveClass('sm:hidden');
+    expect(screen.getByRole('group', { name: 'Calendar zoom shortcuts' })).toHaveClass(
+      'hidden',
+      'sm:flex',
+    );
+  });
+
   it('keeps arbitrary slider values first-class and persists the emitted scalar', () => {
     const { onZoomChange, onZoomCommit } = renderToolbar();
     const slider = screen.getByRole('slider', { name: 'Calendar zoom' });
 
     fireEvent.change(slider, { target: { value: '116' } });
     fireEvent.pointerUp(slider, { target: { value: '116' } });
+    fireEvent.blur(slider, { target: { value: '116' } });
 
     expect(onZoomChange).toHaveBeenCalledWith(116);
+    expect(onZoomCommit).toHaveBeenCalledOnce();
     expect(onZoomCommit).toHaveBeenCalledWith(116);
+    expect(slider).toHaveAttribute('name', 'calendarZoom');
+    expect(slider).toHaveAttribute('id', 'calendar-zoom');
+    expect(slider).toHaveAttribute('aria-valuetext', 'Detail density, 161% zoom');
+    expect(screen.getByText('Detail density')).toHaveAttribute('for', 'calendar-zoom');
+  });
+
+  it.each([
+    [24, 'Overview density', 'Overview density, 33% zoom'],
+    [72, 'Standard density', 'Standard density, 100% zoom'],
+    [144, 'Detail density', 'Detail density, 200% zoom'],
+  ] as const)('describes %s pixels per hour as %s', (value, output, ariaValue) => {
+    renderToolbar(value);
+
+    expect(screen.getByText(output)).toBeInTheDocument();
+    expect(screen.getByRole('slider', { name: 'Calendar zoom' })).toHaveAttribute(
+      'aria-valuetext',
+      ariaValue,
+    );
   });
 
   it('highlights a shortcut only when its scalar exactly matches', () => {

@@ -2,19 +2,29 @@
 
 import { ChevronLeft, ChevronRight } from '@docket/ui/icons';
 import { Button } from '@docket/ui/primitives';
-import type { JSX, ReactNode } from 'react';
+import { type JSX, type ReactNode, useRef } from 'react';
 
 import type { CalendarAxis } from './calendar-schedule-model';
 
 const MIN_PIXELS_PER_HOUR = 24;
 const MAX_PIXELS_PER_HOUR = 240;
+const STANDARD_PIXELS_PER_HOUR = 72;
 const ZOOM_SHORTCUTS = [
   { label: 'Overview', value: 24 },
-  { label: 'Standard', value: 72 },
+  { label: 'Standard', value: STANDARD_PIXELS_PER_HOUR },
   { label: 'Detail', value: 144 },
 ] as const;
 const PLAIN_CONTROL_CLASS =
-  'hover:bg-surface-container-highest focus-visible:ring-ring rounded outline-none transition-colors focus-visible:ring-2 focus-visible:ring-offset-1 motion-reduce:transition-none';
+  'hover:bg-surface-container-highest focus-visible:ring-ring min-h-10 rounded outline-none transition-colors focus-visible:ring-2 focus-visible:ring-offset-1 motion-reduce:transition-none';
+
+/** Describe a continuous zoom value with the nearest recognizable density preset. */
+function zoomDensityLabel(pixelsPerHour: number): (typeof ZOOM_SHORTCUTS)[number]['label'] {
+  return ZOOM_SHORTCUTS.reduce((nearest, candidate) =>
+    Math.abs(candidate.value - pixelsPerHour) < Math.abs(nearest.value - pixelsPerHour)
+      ? candidate
+      : nearest,
+  ).label;
+}
 
 /** Props for the fluid calendar's navigation, axis, zoom, and create controls. */
 export interface CalendarToolbarProps {
@@ -43,22 +53,43 @@ export function CalendarToolbar({
   onZoomChange,
   onZoomCommit,
 }: CalendarToolbarProps): JSX.Element {
+  const lastSliderCommitRef = useRef<number | null>(null);
+  const densityLabel = zoomDensityLabel(pixelsPerHour);
+  const zoomPercentage = Math.round((pixelsPerHour / STANDARD_PIXELS_PER_HOUR) * 100);
+  const activeShortcut = ZOOM_SHORTCUTS.find(({ value }) => value === pixelsPerHour);
+  const commitSliderZoom = (value: number): void => {
+    if (lastSliderCommitRef.current === value) return;
+    lastSliderCommitRef.current = value;
+    onZoomCommit(value);
+  };
   return (
-    <header className="flex flex-wrap items-center justify-between gap-3">
+    <header className="flex flex-wrap items-center justify-between gap-2 sm:gap-3">
       <div className="flex items-center gap-1.5">
-        <Button size="sm" variant="outline" onClick={onToday}>
+        <Button className="min-h-10" size="sm" variant="outline" onClick={onToday}>
           Today
         </Button>
-        <Button size="icon" variant="ghost" aria-label="Previous dates" onClick={onPrevious}>
+        <Button
+          className="min-h-10 min-w-10"
+          size="icon"
+          variant="ghost"
+          aria-label="Previous dates"
+          onClick={onPrevious}
+        >
           <ChevronLeft />
         </Button>
-        <Button size="icon" variant="ghost" aria-label="Next dates" onClick={onNext}>
+        <Button
+          className="min-h-10 min-w-10"
+          size="icon"
+          variant="ghost"
+          aria-label="Next dates"
+          onClick={onNext}
+        >
           <ChevronRight />
         </Button>
         <h1 className="text-on-surface ml-1 text-lg font-semibold">{heading}</h1>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-1.5 sm:gap-3">
         <div
           role="group"
           aria-label="Calendar lane axis"
@@ -85,7 +116,7 @@ export function CalendarToolbar({
         <div
           role="group"
           aria-label="Calendar zoom shortcuts"
-          className="border-outline-variant flex rounded-md border p-0.5"
+          className="border-outline-variant hidden rounded-md border p-0.5 sm:flex"
         >
           {ZOOM_SHORTCUTS.map(({ label, value }) => (
             <button
@@ -106,25 +137,51 @@ export function CalendarToolbar({
             </button>
           ))}
         </div>
+        <select
+          aria-label="Calendar zoom preset"
+          className={`border-outline-variant bg-surface text-on-surface min-h-10 rounded-md border px-2 text-xs sm:hidden ${PLAIN_CONTROL_CLASS}`}
+          value={activeShortcut ? String(activeShortcut.value) : 'custom'}
+          onChange={(event) => {
+            if (event.target.value === 'custom') return;
+            const value = Number(event.target.value);
+            onZoomChange(value);
+            onZoomCommit(value);
+          }}
+        >
+          <option value="custom">Custom zoom</option>
+          {ZOOM_SHORTCUTS.map(({ label, value }) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
         <label className="text-on-surface-variant flex items-center gap-2 text-xs">
-          <span>Zoom</span>
+          <span className="sr-only sm:not-sr-only">Zoom</span>
           <input
+            id="calendar-zoom"
             aria-label="Calendar zoom"
+            aria-valuetext={`${densityLabel} density, ${String(zoomPercentage)}% zoom`}
+            name="calendarZoom"
             type="range"
             min={MIN_PIXELS_PER_HOUR}
             max={MAX_PIXELS_PER_HOUR}
             step={1}
             value={pixelsPerHour}
+            className="h-10 w-24 sm:w-28"
             onChange={(event) => {
+              lastSliderCommitRef.current = null;
               onZoomChange(Number(event.target.value));
             }}
             onPointerUp={(event) => {
-              onZoomCommit(Number(event.currentTarget.value));
+              commitSliderZoom(Number(event.currentTarget.value));
             }}
             onBlur={(event) => {
-              onZoomCommit(Number(event.currentTarget.value));
+              commitSliderZoom(Number(event.currentTarget.value));
             }}
           />
+          <output htmlFor="calendar-zoom" className="hidden min-w-24 text-right lg:block">
+            {densityLabel} density
+          </output>
         </label>
         {axis === 'dates' ? createControl : null}
       </div>

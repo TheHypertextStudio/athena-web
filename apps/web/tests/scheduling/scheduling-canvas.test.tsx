@@ -79,6 +79,7 @@ function timedItemOrder(): (string | undefined)[] {
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
 });
 
 describe('SchedulingCanvas', () => {
@@ -162,58 +163,179 @@ describe('SchedulingCanvas', () => {
     );
   });
 
-  it('emits consumer-owned open, cross-lane move, and end-resize callbacks', () => {
-    const onOpenItem = vi.fn();
+  it('shows an exact live body-move preview before one exact same-lane pointerup commit', () => {
     const onMoveItem = vi.fn();
-    const onResizeItem = vi.fn();
     const displayTimezone = 'UTC';
     const initialStart = scheduleWallPositionForInstant(TIMED_ITEM.startsAt, displayTimezone);
     const initialEnd = scheduleWallPositionForInstant(TIMED_ITEM.endsAt, displayTimezone);
+    const sourceLane = lane('ada', 'Ada', [TIMED_ITEM]);
     render(
       <SchedulingCanvas
         displayTimezone={displayTimezone}
-        lanes={[lane('ada', 'Ada', [TIMED_ITEM]), lane('grace', 'Grace')]}
+        lanes={[sourceLane]}
+        pixelsPerHour={60}
+        viewportWidth={500}
+        onMoveItem={onMoveItem}
+      />,
+    );
+
+    const body = screen.getByRole('button', { name: /^Focus block/ });
+    expect(body).toHaveClass('cursor-grab');
+    fireEvent.pointerDown(body, { button: 0, pointerId: 7, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(window, { pointerId: 7, clientX: 100, clientY: 130 });
+
+    expect(onMoveItem).not.toHaveBeenCalled();
+    expect(renderedItem('focus')).toHaveAttribute('data-gesture-preview', 'move');
+    expect(renderedItem('focus')).toHaveTextContent('9:30 AM – 10:30 AM');
+    expect(document.querySelector('[aria-live="polite"]')).toHaveTextContent(
+      'Moving Focus block to Ada, 9:30 AM – 10:30 AM.',
+    );
+
+    fireEvent.pointerUp(window, { pointerId: 7, clientX: 100, clientY: 130 });
+
+    expect(onMoveItem).toHaveBeenCalledTimes(1);
+    expect(onMoveItem).toHaveBeenCalledWith({
+      item: TIMED_ITEM,
+      fromLane: sourceLane,
+      toLane: sourceLane,
+      startMinutes: (initialStart?.wallMinutes ?? Number.NaN) + 30,
+      endMinutes: (initialEnd?.wallMinutes ?? Number.NaN) + 30,
+    });
+  });
+
+  it('commits a body move across an editable arbitrary lane', () => {
+    const onMoveItem = vi.fn();
+    const sourceLane = lane('ada', 'Ada', [TIMED_ITEM]);
+    const targetLane = lane('grace', 'Grace');
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[sourceLane, targetLane]}
         pixelsPerHour={60}
         viewportWidth={800}
+        onMoveItem={onMoveItem}
+      />,
+    );
+
+    const body = screen.getByRole('button', { name: /^Focus block/ });
+    fireEvent.pointerDown(body, { button: 0, pointerId: 8, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(window, { pointerId: 8, clientX: 500, clientY: 130 });
+    expect(document.querySelector('[aria-live="polite"]')).toHaveTextContent(
+      'Moving Focus block to Grace, 9:30 AM – 10:30 AM.',
+    );
+    fireEvent.pointerUp(window, { pointerId: 8, clientX: 500, clientY: 130 });
+
+    expect(onMoveItem).toHaveBeenCalledOnce();
+    expect(onMoveItem).toHaveBeenCalledWith({
+      item: TIMED_ITEM,
+      fromLane: sourceLane,
+      toLane: targetLane,
+      startMinutes: 9 * 60 + 30,
+      endMinutes: 10 * 60 + 30,
+    });
+  });
+
+  it('keeps a below-threshold body press as an open click with no move', () => {
+    const onOpenItem = vi.fn();
+    const onMoveItem = vi.fn();
+    const sourceLane = lane('ada', 'Ada', [TIMED_ITEM]);
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[sourceLane]}
+        pixelsPerHour={60}
+        viewportWidth={500}
         onOpenItem={onOpenItem}
         onMoveItem={onMoveItem}
+      />,
+    );
+
+    const body = screen.getByRole('button', { name: /^Focus block/ });
+    fireEvent.pointerDown(body, { button: 0, pointerId: 9, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(window, { pointerId: 9, clientX: 100, clientY: 103 });
+    fireEvent.pointerUp(window, { pointerId: 9, clientX: 100, clientY: 103 });
+    fireEvent.click(body, { detail: 1 });
+
+    expect(onMoveItem).not.toHaveBeenCalled();
+    expect(onOpenItem).toHaveBeenCalledOnce();
+    expect(onOpenItem).toHaveBeenCalledWith({ item: TIMED_ITEM, lane: sourceLane });
+  });
+
+  it('activates at exactly four Euclidean pixels but commits only a changed preview', () => {
+    const onMoveItem = vi.fn();
+    const onOpenItem = vi.fn();
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[lane('ada', 'Ada', [TIMED_ITEM])]}
+        pixelsPerHour={240}
+        viewportWidth={500}
+        onMoveItem={onMoveItem}
+        onOpenItem={onOpenItem}
+      />,
+    );
+
+    const body = screen.getByRole('button', { name: /^Focus block/ });
+    fireEvent.pointerDown(body, { button: 0, pointerId: 10, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(window, { pointerId: 10, clientX: 100, clientY: 104 });
+
+    expect(renderedItem('focus')).toHaveAttribute('data-gesture-preview', 'move');
+    fireEvent.pointerUp(window, { pointerId: 10, clientX: 100, clientY: 104 });
+    fireEvent.click(body, { detail: 1 });
+    expect(onMoveItem).not.toHaveBeenCalled();
+    expect(onOpenItem).not.toHaveBeenCalled();
+  });
+
+  it('previews and commits both edge resizes with exact semantic bounds', () => {
+    const onResizeItem = vi.fn();
+    const sourceLane = lane('ada', 'Ada', [TIMED_ITEM]);
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[sourceLane]}
+        pixelsPerHour={60}
+        viewportWidth={500}
         onResizeItem={onResizeItem}
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /^Focus block/ }));
-    expect(onOpenItem).toHaveBeenCalledWith(
-      expect.objectContaining({ item: TIMED_ITEM, lane: expect.objectContaining({ id: 'ada' }) }),
+    const startGrip = screen.getByRole('button', { name: 'Resize Focus block from start' });
+    fireEvent.pointerDown(startGrip, { button: 0, pointerId: 11, clientY: 100 });
+    fireEvent.pointerMove(window, { pointerId: 11, clientY: 130 });
+    expect(document.querySelector('[aria-live="polite"]')).toHaveTextContent(
+      'Resizing start of Focus block in Ada, 9:30 AM – 10:00 AM.',
     );
+    fireEvent.pointerUp(window, { pointerId: 11, clientY: 130 });
 
-    fireEvent.pointerDown(screen.getByRole('button', { name: 'Move Focus block' }), {
-      clientX: 20,
-      clientY: 100,
-    });
-    fireEvent.pointerUp(window, { clientX: 500, clientY: 130 });
-    expect(onMoveItem).toHaveBeenCalledWith(
-      expect.objectContaining({
-        item: TIMED_ITEM,
-        fromLane: expect.objectContaining({ id: 'ada' }),
-        toLane: expect.objectContaining({ id: 'grace' }),
-        startMinutes: (initialStart?.wallMinutes ?? Number.NaN) + 30,
-        endMinutes: (initialEnd?.wallMinutes ?? Number.NaN) + 30,
-      }),
+    const endGrip = screen.getByRole('button', { name: 'Resize Focus block from end' });
+    fireEvent.pointerDown(endGrip, { button: 0, pointerId: 12, clientY: 100 });
+    fireEvent.pointerMove(window, { pointerId: 12, clientY: 130 });
+    expect(document.querySelector('[aria-live="polite"]')).toHaveTextContent(
+      'Resizing end of Focus block in Ada, 9:00 AM – 10:30 AM.',
     );
+    fireEvent.pointerUp(window, { pointerId: 12, clientY: 130 });
 
-    fireEvent.pointerDown(screen.getByRole('button', { name: 'Resize Focus block from end' }), {
-      clientY: 100,
-    });
-    fireEvent.pointerUp(window, { clientY: 130 });
-    expect(onResizeItem).toHaveBeenCalledWith(
-      expect.objectContaining({
-        item: TIMED_ITEM,
-        lane: expect.objectContaining({ id: 'ada' }),
-        edge: 'end',
-        startMinutes: initialStart?.wallMinutes,
-        endMinutes: (initialEnd?.wallMinutes ?? Number.NaN) + 30,
-      }),
-    );
+    expect(onResizeItem).toHaveBeenCalledTimes(2);
+    expect(onResizeItem.mock.calls).toEqual([
+      [
+        {
+          item: TIMED_ITEM,
+          lane: sourceLane,
+          edge: 'start',
+          startMinutes: 9 * 60 + 30,
+          endMinutes: 10 * 60,
+        },
+      ],
+      [
+        {
+          item: TIMED_ITEM,
+          lane: sourceLane,
+          edge: 'end',
+          startMinutes: 9 * 60,
+          endMinutes: 10 * 60 + 30,
+        },
+      ],
+    ]);
   });
 
   it('respects lane and item editability while preserving open behavior', () => {
@@ -236,6 +358,362 @@ describe('SchedulingCanvas', () => {
     ).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /^Focus block/ }));
     expect(onOpenItem).toHaveBeenCalledOnce();
+  });
+
+  it('clears a live preview and emits no commit on Escape', () => {
+    const onMoveItem = vi.fn();
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[lane('ada', 'Ada', [TIMED_ITEM])]}
+        pixelsPerHour={60}
+        viewportWidth={500}
+        onMoveItem={onMoveItem}
+      />,
+    );
+
+    const body = screen.getByRole('button', { name: /^Focus block/ });
+    fireEvent.pointerDown(body, { button: 0, pointerId: 13, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(window, { pointerId: 13, clientX: 100, clientY: 130 });
+    expect(renderedItem('focus')).toHaveAttribute('data-gesture-preview', 'move');
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(renderedItem('focus')).not.toHaveAttribute('data-gesture-preview');
+    expect(document.querySelector('[aria-live="polite"]')).toHaveTextContent('');
+    fireEvent.pointerUp(window, { pointerId: 13, clientX: 100, clientY: 130 });
+    expect(onMoveItem).not.toHaveBeenCalled();
+  });
+
+  it('clears a live preview and emits no commit on pointer cancel', () => {
+    const onResizeItem = vi.fn();
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[lane('ada', 'Ada', [TIMED_ITEM])]}
+        pixelsPerHour={60}
+        viewportWidth={500}
+        onResizeItem={onResizeItem}
+      />,
+    );
+
+    const grip = screen.getByRole('button', { name: 'Resize Focus block from end' });
+    fireEvent.pointerDown(grip, { button: 0, pointerId: 14, clientY: 100 });
+    fireEvent.pointerMove(window, { pointerId: 14, clientY: 130 });
+    expect(renderedItem('focus')).toHaveAttribute('data-gesture-preview', 'resize-end');
+
+    fireEvent.pointerCancel(window, { pointerId: 14 });
+    expect(renderedItem('focus')).not.toHaveAttribute('data-gesture-preview');
+    fireEvent.pointerUp(window, { pointerId: 14, clientY: 130 });
+    expect(onResizeItem).not.toHaveBeenCalled();
+  });
+
+  it('keeps a short overview item unchanged after zero-distance resizes', () => {
+    const onResizeItem = vi.fn();
+    const short = timedItem('short-overview', 'Short overview', '09:00', '09:05');
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[lane('ada', 'Ada', [short])]}
+        pixelsPerHour={24}
+        viewportWidth={500}
+        onResizeItem={onResizeItem}
+      />,
+    );
+
+    for (const edge of ['start', 'end'] as const) {
+      const grip = screen.getByRole('button', {
+        name: `Resize Short overview from ${edge}`,
+      });
+      fireEvent.pointerDown(grip, {
+        button: 0,
+        pointerId: edge === 'start' ? 15 : 16,
+        clientY: 100,
+      });
+      fireEvent.pointerUp(window, { pointerId: edge === 'start' ? 15 : 16, clientY: 100 });
+    }
+
+    expect(onResizeItem).not.toHaveBeenCalled();
+    expect(renderedItem('short-overview')).toHaveStyle({ top: '216px', height: '18px' });
+  });
+
+  it('exposes no valid preview or commit over a forbidden target lane', () => {
+    const onMoveItem = vi.fn();
+    const onOpenItem = vi.fn();
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[lane('ada', 'Ada', [TIMED_ITEM]), lane('grace', 'Grace', [], false)]}
+        pixelsPerHour={60}
+        viewportWidth={800}
+        onMoveItem={onMoveItem}
+        onOpenItem={onOpenItem}
+      />,
+    );
+
+    const body = screen.getByRole('button', { name: /^Focus block/ });
+    fireEvent.pointerDown(body, { button: 0, pointerId: 17, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(window, { pointerId: 17, clientX: 500, clientY: 130 });
+    expect(renderedItem('focus')).not.toHaveAttribute('data-gesture-preview');
+    expect(document.querySelector('[aria-live="polite"]')).toHaveTextContent('');
+    fireEvent.pointerUp(window, { pointerId: 17, clientX: 500, clientY: 130 });
+    fireEvent.click(body, { detail: 1 });
+    expect(onMoveItem).not.toHaveBeenCalled();
+    expect(onOpenItem).not.toHaveBeenCalled();
+  });
+
+  it('captures an activated pointer and releases it exactly once at completion', () => {
+    const onMoveItem = vi.fn();
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[lane('ada', 'Ada', [TIMED_ITEM])]}
+        pixelsPerHour={60}
+        viewportWidth={500}
+        onMoveItem={onMoveItem}
+      />,
+    );
+
+    const body = screen.getByRole('button', { name: /^Focus block/ });
+    const setPointerCapture = vi.fn();
+    const releasePointerCapture = vi.fn();
+    Object.defineProperties(body, {
+      setPointerCapture: { configurable: true, value: setPointerCapture },
+      releasePointerCapture: { configurable: true, value: releasePointerCapture },
+    });
+
+    fireEvent.pointerDown(body, { button: 0, pointerId: 18, clientX: 100, clientY: 100 });
+    expect(setPointerCapture).not.toHaveBeenCalled();
+    fireEvent.pointerMove(window, { pointerId: 18, clientX: 100, clientY: 130 });
+    expect(setPointerCapture).toHaveBeenCalledOnce();
+    expect(setPointerCapture).toHaveBeenCalledWith(18);
+    fireEvent.pointerUp(window, { pointerId: 18, clientX: 100, clientY: 130 });
+    expect(releasePointerCapture).toHaveBeenCalledOnce();
+    expect(releasePointerCapture).toHaveBeenCalledWith(18);
+  });
+
+  it('cancels on lost pointer capture and ignores the later pointerup', () => {
+    const onMoveItem = vi.fn();
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[lane('ada', 'Ada', [TIMED_ITEM])]}
+        pixelsPerHour={60}
+        viewportWidth={500}
+        onMoveItem={onMoveItem}
+      />,
+    );
+
+    const body = screen.getByRole('button', { name: /^Focus block/ });
+    Object.defineProperties(body, {
+      setPointerCapture: { configurable: true, value: vi.fn() },
+      releasePointerCapture: { configurable: true, value: vi.fn() },
+    });
+    fireEvent.pointerDown(body, { button: 0, pointerId: 181, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(window, { pointerId: 181, clientX: 100, clientY: 130 });
+    fireEvent(body, new Event('lostpointercapture', { bubbles: false }));
+    fireEvent.pointerUp(window, { pointerId: 181, clientX: 100, clientY: 130 });
+
+    expect(renderedItem('focus')).not.toHaveAttribute('data-gesture-preview');
+    expect(onMoveItem).not.toHaveBeenCalled();
+  });
+
+  it('runs sequential gestures without multiplying commits or replacing the card and live node', () => {
+    const onMoveItem = vi.fn();
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[lane('ada', 'Ada', [TIMED_ITEM])]}
+        pixelsPerHour={60}
+        viewportWidth={500}
+        onMoveItem={onMoveItem}
+      />,
+    );
+
+    const body = screen.getByRole('button', { name: /^Focus block/ });
+    const article = renderedItem('focus');
+    const liveNode = document.querySelector('[aria-live="polite"]');
+    expect(liveNode).not.toBeNull();
+    for (const pointerId of [182, 183]) {
+      fireEvent.pointerDown(body, { button: 0, pointerId, clientX: 100, clientY: 100 });
+      fireEvent.pointerMove(window, { pointerId, clientX: 100, clientY: 130 });
+      expect(renderedItem('focus')).toBe(article);
+      expect(renderedItem('focus')).toHaveAttribute('data-layout-column', '0');
+      expect(document.querySelector('[aria-live="polite"]')).toBe(liveNode);
+      fireEvent.pointerUp(window, { pointerId, clientX: 100, clientY: 130 });
+    }
+
+    expect(onMoveItem).toHaveBeenCalledTimes(2);
+    expect(document.querySelector('[aria-live="polite"]')).toBe(liveNode);
+  });
+
+  it('adjusts the dedicated move control and both resize grips by one active snap per key', () => {
+    const onMoveItem = vi.fn();
+    const onResizeItem = vi.fn();
+    const sourceLane = lane('ada', 'Ada', [TIMED_ITEM]);
+    const targetLane = lane('grace', 'Grace');
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[sourceLane, targetLane]}
+        pixelsPerHour={60}
+        viewportWidth={800}
+        onMoveItem={onMoveItem}
+        onResizeItem={onResizeItem}
+      />,
+    );
+
+    const move = screen.getByRole('button', { name: 'Move Focus block' });
+    fireEvent.keyDown(move, { key: 'ArrowDown' });
+    fireEvent.keyUp(move, { key: 'ArrowDown' });
+    fireEvent.keyDown(move, { key: 'ArrowRight' });
+    fireEvent.keyUp(move, { key: 'ArrowRight' });
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Resize Focus block from start' }), {
+      key: 'ArrowDown',
+    });
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Resize Focus block from end' }), {
+      key: 'ArrowUp',
+    });
+
+    expect(onMoveItem.mock.calls).toEqual([
+      [
+        {
+          item: TIMED_ITEM,
+          fromLane: sourceLane,
+          toLane: sourceLane,
+          startMinutes: 9 * 60 + 10,
+          endMinutes: 10 * 60 + 10,
+        },
+      ],
+      [
+        {
+          item: TIMED_ITEM,
+          fromLane: sourceLane,
+          toLane: targetLane,
+          startMinutes: 9 * 60,
+          endMinutes: 10 * 60,
+        },
+      ],
+    ]);
+    expect(onResizeItem.mock.calls).toEqual([
+      [
+        {
+          item: TIMED_ITEM,
+          lane: sourceLane,
+          edge: 'start',
+          startMinutes: 9 * 60 + 10,
+          endMinutes: 10 * 60,
+        },
+      ],
+      [
+        {
+          item: TIMED_ITEM,
+          lane: sourceLane,
+          edge: 'end',
+          startMinutes: 9 * 60,
+          endMinutes: 10 * 60 - 10,
+        },
+      ],
+    ]);
+  });
+
+  it('does not emit duplicate or unchanged keyboard commits at lane and day boundaries', () => {
+    const onMoveItem = vi.fn();
+    const onResizeItem = vi.fn();
+    const midnight = timedItem('midnight', 'Midnight', '00:00', '01:00');
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[lane('ada', 'Ada', [midnight])]}
+        pixelsPerHour={60}
+        viewportWidth={500}
+        onMoveItem={onMoveItem}
+        onResizeItem={onResizeItem}
+      />,
+    );
+
+    const move = screen.getByRole('button', { name: 'Move Midnight' });
+    fireEvent.keyDown(move, { key: 'ArrowLeft' });
+    fireEvent.keyUp(move, { key: 'ArrowLeft' });
+    fireEvent.keyDown(move, { key: 'ArrowUp' });
+    fireEvent.keyUp(move, { key: 'ArrowUp' });
+    const start = screen.getByRole('button', { name: 'Resize Midnight from start' });
+    fireEvent.keyDown(start, { key: 'ArrowUp' });
+    fireEvent.keyUp(start, { key: 'ArrowUp' });
+
+    expect(onMoveItem).not.toHaveBeenCalled();
+    expect(onResizeItem).not.toHaveBeenCalled();
+  });
+
+  it('takes one bounded auto-scroll step per active pointer movement near viewport edges', () => {
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[lane('ada', 'Ada', [TIMED_ITEM])]}
+        pixelsPerHour={60}
+        viewportWidth={500}
+        onMoveItem={vi.fn()}
+      />,
+    );
+    const viewport = screen.getByRole('region', { name: 'Schedule' });
+    const scrollBy = vi.fn();
+    Object.defineProperties(viewport, {
+      clientWidth: { configurable: true, value: 500 },
+      clientHeight: { configurable: true, value: 500 },
+      scrollWidth: { configurable: true, value: 1_000 },
+      scrollHeight: { configurable: true, value: 2_000 },
+      scrollLeft: { configurable: true, writable: true, value: 100 },
+      scrollTop: { configurable: true, writable: true, value: 100 },
+      scrollBy: { configurable: true, value: scrollBy },
+      getBoundingClientRect: {
+        configurable: true,
+        value: () => ({ left: 0, right: 500, top: 0, bottom: 500, width: 500, height: 500 }),
+      },
+    });
+
+    const body = screen.getByRole('button', { name: /^Focus block/ });
+    fireEvent.pointerDown(body, { button: 0, pointerId: 19, clientX: 250, clientY: 250 });
+    fireEvent.pointerMove(window, { pointerId: 19, clientX: 490, clientY: 490 });
+    fireEvent.pointerMove(window, { pointerId: 19, clientX: 491, clientY: 491 });
+
+    expect(scrollBy).toHaveBeenCalledTimes(2);
+    expect(scrollBy).toHaveBeenNthCalledWith(1, { left: 16, top: 16, behavior: 'auto' });
+    expect(scrollBy).toHaveBeenNthCalledWith(2, { left: 16, top: 16, behavior: 'auto' });
+    fireEvent.pointerCancel(window, { pointerId: 19 });
+  });
+
+  it('removes every armed global handler on source disappearance without warnings or commit', () => {
+    const addSpy = vi.spyOn(window, 'addEventListener');
+    const removeSpy = vi.spyOn(window, 'removeEventListener');
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const onMoveItem = vi.fn();
+    const { unmount } = render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[lane('ada', 'Ada', [TIMED_ITEM])]}
+        pixelsPerHour={60}
+        viewportWidth={500}
+        onMoveItem={onMoveItem}
+      />,
+    );
+
+    fireEvent.pointerDown(screen.getByRole('button', { name: /^Focus block/ }), {
+      button: 0,
+      pointerId: 20,
+      clientX: 100,
+      clientY: 100,
+    });
+    const gestureAdds = addSpy.mock.calls.filter(([type]) =>
+      ['pointermove', 'pointerup', 'pointercancel', 'keydown'].includes(type),
+    );
+    expect(gestureAdds).toHaveLength(4);
+    unmount();
+
+    for (const [type, listener, options] of gestureAdds) {
+      if (options === undefined) expect(removeSpy).toHaveBeenCalledWith(type, listener);
+      else expect(removeSpy).toHaveBeenCalledWith(type, listener, options);
+    }
+    expect(onMoveItem).not.toHaveBeenCalled();
+    expect(consoleError).not.toHaveBeenCalled();
   });
 
   it('emits a typed object drop only for an explicit item target', () => {
@@ -275,6 +753,66 @@ describe('SchedulingCanvas', () => {
       targetItem: target,
       targetLane: expect.objectContaining({ id: 'ada' }),
     });
+  });
+
+  it('separates relationship drag onto a dedicated affordance with the exact typed payload', () => {
+    const dragObject = {
+      kind: 'calendar_item' as const,
+      itemId: TIMED_ITEM.id,
+      title: TIMED_ITEM.title,
+    };
+    const onOpenItem = vi.fn();
+    const onMoveItem = vi.fn();
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[lane('ada', 'Ada', [{ ...TIMED_ITEM, dragObject }], false)]}
+        pixelsPerHour={60}
+        viewportWidth={500}
+        onOpenItem={onOpenItem}
+        onMoveItem={onMoveItem}
+      />,
+    );
+
+    const article = renderedItem('focus');
+    expect(article).not.toHaveAttribute('draggable');
+    const affordance = screen.getByRole('button', {
+      name: 'Drag Focus block to create a relationship',
+    });
+    expect(affordance).toHaveAttribute('draggable', 'true');
+
+    const transfer = { effectAllowed: 'none', setData: vi.fn() };
+    fireEvent.pointerDown(affordance, {
+      button: 0,
+      pointerId: 21,
+      clientX: 100,
+      clientY: 100,
+    });
+    fireEvent.pointerMove(window, { pointerId: 21, clientX: 100, clientY: 130 });
+    fireEvent.pointerUp(window, { pointerId: 21, clientX: 100, clientY: 130 });
+    fireEvent.dragStart(affordance, { dataTransfer: transfer });
+    expect(transfer.effectAllowed).toBe('link');
+    expect(transfer.setData.mock.calls).toEqual([
+      [SCHEDULE_DRAG_MIME, JSON.stringify(dragObject)],
+      ['text/plain', TIMED_ITEM.title],
+    ]);
+    expect(onMoveItem).not.toHaveBeenCalled();
+    expect(onOpenItem).not.toHaveBeenCalled();
+  });
+
+  it('does not expose a relationship-drag affordance without a drag object', () => {
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[lane('ada', 'Ada', [TIMED_ITEM])]}
+        pixelsPerHour={60}
+        viewportWidth={500}
+      />,
+    );
+
+    expect(
+      screen.queryByRole('button', { name: 'Drag Focus block to create a relationship' }),
+    ).not.toBeInTheDocument();
   });
 
   it('preserves vertical time position while a rolling host replaces its lane window', () => {

@@ -88,6 +88,16 @@ export interface ScheduleItemResize {
   readonly endMinutes: number;
 }
 
+/** One direct-manipulation operation supported by a timed scheduling item. */
+export type ScheduleGestureMode = 'move' | 'resize-start' | 'resize-end';
+
+/** Valid wall-clock and lane bounds shown before a scheduling gesture commits. */
+export interface ScheduleGesturePreview {
+  readonly laneIndex: number;
+  readonly startMinutes: number;
+  readonly endMinutes: number;
+}
+
 /** Context supplied to a consumer-owned scheduling item renderer. */
 export interface ScheduleItemRenderContext {
   readonly item: ScheduleItem;

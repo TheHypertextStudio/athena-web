@@ -1,11 +1,6 @@
 'use client';
 
-import {
-  type DragEvent as ReactDragEvent,
-  type JSX,
-  type PointerEvent as ReactPointerEvent,
-  useState,
-} from 'react';
+import { type DragEvent as ReactDragEvent, type JSX, type RefObject, useState } from 'react';
 
 import { isScheduleItemEditable, type ScheduleItemLaneBounds } from './scheduling-date-lanes';
 import {
@@ -13,17 +8,16 @@ import {
   SCHEDULE_DRAG_MIME,
   writeScheduleDragObject,
 } from './scheduling-drag-object';
-import { laneIndexAtOffset, MINUTES_PER_DAY, pixelDeltaToMinutes } from './scheduling-geometry';
+import { formatScheduleWallTimeRange } from './scheduling-gesture';
+import { minutesToPixels } from './scheduling-geometry';
 import {
   scheduleOverlapHorizontalStyle,
   type ScheduleOverlapPlacement,
 } from './scheduling-overlap-layout';
-import type {
-  ScheduleItem,
-  ScheduleItemResize,
-  ScheduleLane,
-  SchedulingCanvasProps,
-} from './scheduling-types';
+import type { ScheduleItem, ScheduleLane, SchedulingCanvasProps } from './scheduling-types';
+import { useSchedulingGesture } from './use-scheduling-gesture';
+
+const MINIMUM_PREVIEW_HEIGHT = 18;
 
 /** Props for one timed item rendered inside a scheduling lane. */
 export interface SchedulingItemCardProps {
@@ -32,52 +26,29 @@ export interface SchedulingItemCardProps {
   readonly laneIndex: number;
   readonly lanes: readonly ScheduleLane[];
   readonly laneWidth: number;
+  readonly gutterWidth: number;
   readonly pixelsPerHour: number;
   readonly snapMinutes: number;
   readonly bounds: ScheduleItemLaneBounds;
   readonly top: number;
   readonly height: number;
   readonly placement: ScheduleOverlapPlacement;
+  readonly viewportRef: RefObject<HTMLElement | null>;
   readonly renderItem?: SchedulingCanvasProps['renderItem'];
   readonly onOpenItem?: SchedulingCanvasProps['onOpenItem'];
   readonly onMoveItem?: SchedulingCanvasProps['onMoveItem'];
   readonly onResizeItem?: SchedulingCanvasProps['onResizeItem'];
   readonly onDropObjectOnItem?: SchedulingCanvasProps['onDropObjectOnItem'];
-}
-
-/** Keep a moved interval inside one 24-hour lane without changing its duration. */
-function clampMovedInterval(
-  startMinutes: number,
-  endMinutes: number,
-  deltaMinutes: number,
-): { startMinutes: number; endMinutes: number } {
-  const duration = endMinutes - startMinutes;
-  const nextStart = Math.max(0, Math.min(MINUTES_PER_DAY - duration, startMinutes + deltaMinutes));
-  return { startMinutes: nextStart, endMinutes: nextStart + duration };
+  readonly onGestureAnnouncementChange: (announcement: string) => void;
 }
 
 type ScheduleItemDensity = 'marker' | 'compact' | 'full';
-
-const WALL_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
-  timeZone: 'UTC',
-  hour: 'numeric',
-  minute: '2-digit',
-});
 
 /** Choose how much card detail fits without obscuring adjacent times. */
 function itemDensity(height: number): ScheduleItemDensity {
   if (height < 24) return 'marker';
   if (height < 48) return 'compact';
   return 'full';
-}
-
-/** Format clipped wall-minute bounds with the viewer's locale conventions. */
-function formatTimeRange(bounds: ScheduleItemLaneBounds): string {
-  const atWallMinutes = (minutes: number): Date =>
-    new Date(Date.UTC(2000, 0, 1, Math.floor(minutes / 60), minutes % 60));
-  const start = WALL_TIME_FORMATTER.format(atWallMinutes(bounds.startMinutes));
-  const end = WALL_TIME_FORMATTER.format(atWallMinutes(bounds.endMinutes));
-  return `${start} – ${end}`;
 }
 
 /** Render and gesture-wire one timed item without owning any persistence. */
@@ -87,106 +58,75 @@ export function SchedulingItemCard({
   laneIndex,
   lanes,
   laneWidth,
+  gutterWidth,
   pixelsPerHour,
   snapMinutes,
   bounds,
   top,
   height,
   placement,
+  viewportRef,
   renderItem,
   onOpenItem,
   onMoveItem,
   onResizeItem,
   onDropObjectOnItem,
+  onGestureAnnouncementChange,
 }: SchedulingItemCardProps): JSX.Element {
   const [dropActive, setDropActive] = useState(false);
   const editable = isScheduleItemEditable(item, lane);
-  const density = itemDensity(height);
-  const timeRange = formatTimeRange(bounds);
+  const gesture = useSchedulingGesture({
+    item,
+    lane,
+    laneIndex,
+    lanes,
+    laneWidth,
+    gutterWidth,
+    pixelsPerHour,
+    snapMinutes,
+    bounds,
+    editable,
+    viewportRef,
+    onOpenItem,
+    onMoveItem,
+    onResizeItem,
+    onAnnouncementChange: onGestureAnnouncementChange,
+  });
+  const visibleBounds = gesture.preview ?? bounds;
+  const visibleTop = gesture.preview
+    ? minutesToPixels(visibleBounds.startMinutes, pixelsPerHour)
+    : top;
+  const visibleHeight = gesture.preview
+    ? Math.max(
+        MINIMUM_PREVIEW_HEIGHT,
+        minutesToPixels(visibleBounds.endMinutes - visibleBounds.startMinutes, pixelsPerHour),
+      )
+    : height;
+  const laneTranslation = gesture.preview ? (gesture.preview.laneIndex - laneIndex) * laneWidth : 0;
+  const density = itemDensity(visibleHeight);
+  const bodyClassName =
+    density === 'marker'
+      ? 'focus-visible:ring-ring relative z-10 size-full p-1 outline-none focus-visible:ring-2 focus-visible:ring-inset'
+      : 'text-on-surface focus-visible:ring-ring relative z-10 flex size-full min-w-0 flex-col overflow-hidden px-2 py-1 text-left text-xs font-medium outline-none focus-visible:ring-2 focus-visible:ring-inset';
+  const timeRange = formatScheduleWallTimeRange(visibleBounds);
   const content = renderItem?.({ item, lane, allDay: false }) ?? item.title;
+  const dragObject = item.dragObject;
   const horizontalStyle = scheduleOverlapHorizontalStyle(placement);
   const acceptsDrop = (event: ReactDragEvent<HTMLElement>): boolean =>
     item.dropTarget === true && event.dataTransfer.types.includes(SCHEDULE_DRAG_MIME);
-
-  const beginMove = (event: ReactPointerEvent<HTMLButtonElement>): void => {
-    if (!onMoveItem) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const startY = event.clientY;
-    const laneRegion = event.currentTarget.closest<HTMLElement>('[data-schedule-lane-region]');
-    const laneRegionLeft = laneRegion?.getBoundingClientRect().left;
-    const onPointerUp = (upEvent: PointerEvent): void => {
-      window.removeEventListener('pointerup', onPointerUp);
-      const targetIndex =
-        laneRegionLeft !== undefined
-          ? laneIndexAtOffset(upEvent.clientX - laneRegionLeft, lanes.length, laneWidth)
-          : laneIndex;
-      const toLane = targetIndex === null ? lane : (lanes[targetIndex] ?? lane);
-      const deltaMinutes = pixelDeltaToMinutes(
-        upEvent.clientY - startY,
-        pixelsPerHour,
-        snapMinutes,
-      );
-      const moved = clampMovedInterval(bounds.startMinutes, bounds.endMinutes, deltaMinutes);
-      if (toLane.id === lane.id && moved.startMinutes === bounds.startMinutes) return;
-      onMoveItem({ item, fromLane: lane, toLane, ...moved });
-    };
-    window.addEventListener('pointerup', onPointerUp);
-  };
-
-  const beginResize = (
-    edge: ScheduleItemResize['edge'],
-    event: ReactPointerEvent<HTMLButtonElement>,
-  ): void => {
-    if (!onResizeItem) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const startY = event.clientY;
-    const onPointerUp = (upEvent: PointerEvent): void => {
-      window.removeEventListener('pointerup', onPointerUp);
-      const deltaMinutes = pixelDeltaToMinutes(
-        upEvent.clientY - startY,
-        pixelsPerHour,
-        snapMinutes,
-      );
-      const next =
-        edge === 'start'
-          ? {
-              startMinutes: Math.max(
-                0,
-                Math.min(bounds.endMinutes - snapMinutes, bounds.startMinutes + deltaMinutes),
-              ),
-              endMinutes: bounds.endMinutes,
-            }
-          : {
-              startMinutes: bounds.startMinutes,
-              endMinutes: Math.min(
-                MINUTES_PER_DAY,
-                Math.max(bounds.startMinutes + snapMinutes, bounds.endMinutes + deltaMinutes),
-              ),
-            };
-      if (next.startMinutes === bounds.startMinutes && next.endMinutes === bounds.endMinutes)
-        return;
-      onResizeItem({ item, lane, edge, ...next });
-    };
-    window.addEventListener('pointerup', onPointerUp);
-  };
 
   return (
     <article
       className={
         dropActive
-          ? 'border-primary bg-primary-container ring-primary/30 absolute z-30 overflow-hidden rounded-md border shadow-md ring-2'
-          : 'border-outline-variant bg-surface-container-low absolute z-10 overflow-hidden rounded-md border shadow-sm transition-shadow focus-within:z-20 focus-within:shadow-md hover:z-20 hover:shadow-md'
+          ? 'border-primary bg-primary-container ring-primary/30 group absolute z-30 overflow-hidden rounded-md border shadow-md ring-2'
+          : 'border-outline-variant bg-surface-container-low group absolute z-10 overflow-hidden rounded-md border shadow-sm transition-shadow focus-within:z-20 focus-within:shadow-md hover:z-20 hover:shadow-md'
       }
       data-item-density={density}
       data-layout-column={placement.columnIndex}
       data-layout-column-count={placement.columnCount}
       data-schedule-item={item.id}
-      draggable={item.dragObject !== undefined}
-      onDragStart={(event) => {
-        if (item.dragObject) writeScheduleDragObject(event.dataTransfer, item.dragObject);
-      }}
+      data-gesture-preview={gesture.preview ? gesture.previewMode : undefined}
       onDragOver={(event) => {
         if (!acceptsDrop(event)) return;
         event.preventDefault();
@@ -205,9 +145,10 @@ export function SchedulingItemCard({
         onDropObjectOnItem({ object, targetItem: item, targetLane: lane });
       }}
       style={{
-        top,
+        top: visibleTop,
         ...horizontalStyle,
-        height,
+        height: visibleHeight,
+        transform: laneTranslation === 0 ? undefined : `translateX(${String(laneTranslation)}px)`,
         borderLeftWidth: 3,
         ...(item.color && !dropActive
           ? {
@@ -222,24 +163,18 @@ export function SchedulingItemCard({
         <button
           type="button"
           aria-label={`Resize ${item.title} from start`}
-          className="focus-visible:ring-ring absolute inset-x-0 top-0 z-20 h-1.5 cursor-ns-resize rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-inset"
-          onPointerDown={(event) => {
-            beginResize('start', event);
-          }}
+          className="bg-primary/50 focus-visible:ring-ring absolute inset-x-0 top-0 z-20 h-1.5 cursor-ns-resize rounded-sm opacity-0 transition-opacity outline-none group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:ring-2 focus-visible:ring-inset"
+          onPointerDown={gesture.onStartResizePointerDown}
+          onKeyDown={gesture.onStartResizeKeyDown}
         />
       ) : null}
       <button
         type="button"
         aria-label={density === 'marker' ? `${item.title}, ${timeRange}` : undefined}
-        className={
-          density === 'marker'
-            ? 'focus-visible:ring-ring relative z-10 size-full p-1 outline-none focus-visible:ring-2 focus-visible:ring-inset'
-            : 'text-on-surface focus-visible:ring-ring relative z-10 flex size-full min-w-0 flex-col overflow-hidden px-2 py-1 text-left text-xs font-medium outline-none focus-visible:ring-2 focus-visible:ring-inset'
-        }
+        className={`${bodyClassName} ${editable && onMoveItem ? 'cursor-grab' : ''}`}
         title={density === 'full' ? undefined : `${item.title} · ${timeRange}`}
-        onClick={() => {
-          onOpenItem?.({ item, lane });
-        }}
+        onPointerDown={gesture.onBodyPointerDown}
+        onClick={gesture.onBodyClick}
       >
         {density === 'marker' ? (
           <span
@@ -265,19 +200,40 @@ export function SchedulingItemCard({
           type="button"
           aria-label={`Move ${item.title}`}
           className="focus-visible:ring-ring absolute top-1 right-1 z-20 size-4 cursor-move rounded outline-none focus-visible:ring-2 focus-visible:ring-inset"
-          onPointerDown={beginMove}
+          onPointerDown={gesture.onMovePointerDown}
+          onKeyDown={gesture.onMoveKeyDown}
         >
           <span aria-hidden="true">⋮</span>
+        </button>
+      ) : null}
+      {dragObject ? (
+        <button
+          type="button"
+          draggable
+          aria-label={`Drag ${item.title} to create a relationship`}
+          className="focus-visible:ring-ring absolute bottom-1 left-1 z-20 size-4 cursor-grab rounded outline-none focus-visible:ring-2 focus-visible:ring-inset"
+          onPointerDown={(event) => {
+            event.stopPropagation();
+          }}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+          }}
+          onDragStart={(event) => {
+            event.stopPropagation();
+            writeScheduleDragObject(event.dataTransfer, dragObject);
+          }}
+        >
+          <span aria-hidden="true">↗</span>
         </button>
       ) : null}
       {editable && onResizeItem ? (
         <button
           type="button"
           aria-label={`Resize ${item.title} from end`}
-          className="focus-visible:ring-ring absolute inset-x-0 bottom-0 z-20 h-1.5 cursor-ns-resize rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-inset"
-          onPointerDown={(event) => {
-            beginResize('end', event);
-          }}
+          className="bg-primary/50 focus-visible:ring-ring absolute inset-x-0 bottom-0 z-20 h-1.5 cursor-ns-resize rounded-sm opacity-0 transition-opacity outline-none group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:ring-2 focus-visible:ring-inset"
+          onPointerDown={gesture.onEndResizePointerDown}
+          onKeyDown={gesture.onEndResizeKeyDown}
         />
       ) : null}
     </article>

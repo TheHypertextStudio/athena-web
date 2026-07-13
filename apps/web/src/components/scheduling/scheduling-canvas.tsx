@@ -9,7 +9,6 @@ import {
   useRef,
   useState,
 } from 'react';
-
 import {
   deriveLaneGeometry,
   deriveSnapMinutes,
@@ -21,14 +20,12 @@ import { SchedulingItemCard } from './scheduling-item-card';
 import { positionScheduleLaneItems } from './scheduling-overlap-layout';
 import { SchedulingTimeGrid } from './scheduling-time-grid';
 import type { ScheduleLane, SchedulingCanvasProps } from './scheduling-types';
-
 export type { ScheduleItemRenderContext, SchedulingCanvasProps } from './scheduling-types';
 
 const DEFAULT_VIEWPORT_WIDTH = 960;
 const HOUR_GUTTER_WIDTH = 64;
 const MINIMUM_LANE_WIDTH = 220;
 const MINIMUM_INTERACTIVE_PIXELS = 18;
-
 /**
  * Render a 24-hour fluid scheduling grid for arbitrary date/resource lanes.
  *
@@ -60,8 +57,8 @@ export default function SchedulingCanvas({
   const initializedVerticalScrollRef = useRef(false);
   const previousPixelsPerHourRef = useRef(pixelsPerHour);
   const [observedWidth, setObservedWidth] = useState(DEFAULT_VIEWPORT_WIDTH);
+  const [gestureAnnouncement, setGestureAnnouncement] = useState('');
   const boundaryLockRef = useRef<'previous' | 'next' | null>(null);
-
   useLayoutEffect(() => {
     if (viewportWidth !== undefined) return;
     const element = viewportRef.current;
@@ -77,7 +74,6 @@ export default function SchedulingCanvas({
       observer.disconnect();
     };
   }, [viewportWidth]);
-
   const effectivePixelsPerHour = Math.max(1, pixelsPerHour);
   const geometry = useMemo(
     () =>
@@ -104,14 +100,12 @@ export default function SchedulingCanvas({
       ),
     [displayTimezone, effectivePixelsPerHour, lanes],
   );
-
   useEffect(() => {
     onViewportGeometry?.({
       visibleLaneCount: geometry.visibleLaneCount,
       laneWidth: geometry.laneWidth,
     });
   }, [geometry.laneWidth, geometry.visibleLaneCount, onViewportGeometry]);
-
   useLayoutEffect(() => {
     const viewport = viewportRef.current;
     if (!viewport) return;
@@ -144,7 +138,6 @@ export default function SchedulingCanvas({
     initialScrollMinutes,
     lanes[0]?.id,
   ]);
-
   const beginSelection = (lane: ScheduleLane, event: ReactPointerEvent<HTMLDivElement>): void => {
     if (!onSelectRegion || event.button !== 0 || event.target !== event.currentTarget) return;
     event.preventDefault();
@@ -167,7 +160,6 @@ export default function SchedulingCanvas({
     };
     window.addEventListener('pointerup', onPointerUp);
   };
-
   return (
     <section
       ref={viewportRef}
@@ -191,6 +183,9 @@ export default function SchedulingCanvas({
         onReachBoundary(direction);
       }}
     >
+      <p className="sr-only" aria-live="polite" aria-atomic="true">
+        {gestureAnnouncement}
+      </p>
       <div className="min-w-full" style={{ width: fullWidth }}>
         <header className="bg-surface-container-low sticky top-0 z-40 flex border-b">
           <div
@@ -264,17 +259,20 @@ export default function SchedulingCanvas({
                         laneIndex={laneIndex}
                         lanes={lanes}
                         laneWidth={geometry.laneWidth}
+                        gutterWidth={geometry.gutterWidth}
                         pixelsPerHour={effectivePixelsPerHour}
                         snapMinutes={snapMinutes}
                         bounds={bounds}
                         top={top}
                         height={height}
                         placement={placement}
+                        viewportRef={viewportRef}
                         renderItem={renderItem}
                         onOpenItem={onOpenItem}
                         onMoveItem={onMoveItem}
                         onResizeItem={onResizeItem}
                         onDropObjectOnItem={onDropObjectOnItem}
+                        onGestureAnnouncementChange={setGestureAnnouncement}
                       />
                     ),
                   )}

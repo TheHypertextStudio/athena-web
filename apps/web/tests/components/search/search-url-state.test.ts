@@ -10,7 +10,7 @@ describe('search page URL state', () => {
   it('parses semantic filters while dropping invalid enum values', () => {
     const filters = parseSearchPageFilters(
       new URLSearchParams(
-        'q=launch&families=work,nope&kinds=task,ghost&sources=slack,bogus&orgIds=org_1,org_2&ownerIds=owner_1&assigneeIds=actor_1&labelIds=label_1&statuses=active,todo&healths=at_risk&from=2026-07-01T12%3A00%3A00.000Z&to=2026-07-03',
+        'q=launch&families=work,nope&kinds=task,ghost&sources=github,slack,bogus&orgIds=org_1,org_2&ownerIds=owner_1&assigneeIds=actor_1&labelIds=label_1&statuses=active,todo&healths=at_risk&from=2026-07-01T12%3A00%3A00.000Z&to=2026-07-03',
       ),
     );
 
@@ -18,7 +18,7 @@ describe('search page URL state', () => {
       query: 'launch',
       families: ['work'],
       kinds: ['task'],
-      sources: ['slack'],
+      sources: ['github'],
       orgIds: ['org_1', 'org_2'],
       ownerIds: ['owner_1'],
       assigneeIds: ['actor_1'],

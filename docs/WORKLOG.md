@@ -45,6 +45,10 @@
   Review follow-up now pins display-timezone-safe datetime inputs and DST fold/gap handling; the
   expanded affected suite passes 68/68. The Agenda provider/model split keeps both production
   modules below 300 lines without changing the public context exports.
+  Re-review coverage also pins same-item timezone hydration and selected-zone default rounding:
+  untouched drawer fields rebase without shifting exact instants, edited fields remain user-owned,
+  and Kathmandu toolbar defaults land on the next wall-clock half hour. Agenda/Calendar now passes
+  71/71 with web typecheck and focused lint green.
 
 ---
 

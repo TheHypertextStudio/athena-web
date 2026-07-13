@@ -14,9 +14,20 @@ import CreateBlockForm from '../../src/components/calendar/create-block-form';
 afterEach(() => {
   cleanup();
   mutate.mockReset();
+  vi.useRealTimers();
 });
 
 describe('CreateBlockForm display timezone', () => {
+  it('rounds toolbar defaults to the next Hub-zone half hour', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-01T16:10:00Z'));
+    render(<CreateBlockForm displayTimezone="Asia/Kathmandu" rangeKeys={[]} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'New' }));
+    expect(screen.getByLabelText('Starts')).toHaveValue('2026-07-01T22:00');
+    expect(screen.getByLabelText('Ends')).toHaveValue('2026-07-01T22:30');
+  });
+
   it('shows and submits a selected region without changing its instants', async () => {
     render(
       <CreateBlockForm

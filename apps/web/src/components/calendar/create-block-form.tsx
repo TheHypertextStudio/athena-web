@@ -23,6 +23,7 @@ import { type JSX, type SubmitEventHandler, useEffect, useMemo, useState } from 
 
 import { useCreateCalendarItem } from './calendar-mutations';
 import { fromLocalInputValue, toLocalInputValue } from './datetime-input';
+import { scheduleInstantAt, scheduleWallPositionForInstant } from '@/components/scheduling';
 
 /** A draft region supplied by the scheduling canvas. */
 export interface CalendarRegionSelection {
@@ -31,14 +32,16 @@ export interface CalendarRegionSelection {
 }
 
 /** Round forward to the next half-hour for toolbar-triggered creation. */
-function defaultSelection(): CalendarRegionSelection {
-  const start = new Date();
-  start.setSeconds(0, 0);
-  start.setMinutes(start.getMinutes() < 30 ? 30 : 0);
-  if (start.getMinutes() === 0) start.setHours(start.getHours() + 1);
+function defaultSelection(displayTimezone: string): CalendarRegionSelection {
+  const now = new Date().toISOString();
+  const position = scheduleWallPositionForInstant(now, displayTimezone);
+  const roundedMinutes = position ? Math.floor(position.wallMinutes / 30) * 30 + 30 : 0;
+  const startsAt = position
+    ? (scheduleInstantAt(position.date, roundedMinutes, displayTimezone) ?? now)
+    : now;
   return {
-    startsAt: start.toISOString(),
-    endsAt: new Date(start.getTime() + 30 * 60_000).toISOString(),
+    startsAt,
+    endsAt: new Date(Date.parse(startsAt) + 30 * 60_000).toISOString(),
   };
 }
 
@@ -62,7 +65,7 @@ export default function CreateBlockForm({
   onSelectionConsumed,
 }: CreateBlockFormProps): JSX.Element {
   const create = useCreateCalendarItem();
-  const defaults = useMemo(defaultSelection, []);
+  const [seed, setSeed] = useState(() => defaultSelection(displayTimezone));
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [intent, setIntent] = useState<CalendarItemCreateIntent>(
@@ -71,10 +74,8 @@ export default function CreateBlockForm({
   const [layerId, setLayerId] = useState<CalendarLayerOut['id'] | ''>(
     preferences?.defaultLayerId ?? '',
   );
-  const [startsAt, setStartsAt] = useState(() =>
-    toLocalInputValue(defaults.startsAt, displayTimezone),
-  );
-  const [endsAt, setEndsAt] = useState(() => toLocalInputValue(defaults.endsAt, displayTimezone));
+  const [startsAt, setStartsAt] = useState(() => toLocalInputValue(seed.startsAt, displayTimezone));
+  const [endsAt, setEndsAt] = useState(() => toLocalInputValue(seed.endsAt, displayTimezone));
   const [timeError, setTimeError] = useState(false);
 
   const destinations = useMemo(
@@ -87,6 +88,7 @@ export default function CreateBlockForm({
 
   useEffect(() => {
     if (!selection) return;
+    setSeed(selection);
     setStartsAt(toLocalInputValue(selection.startsAt, displayTimezone));
     setEndsAt(toLocalInputValue(selection.endsAt, displayTimezone));
     setTimeError(false);
@@ -100,12 +102,12 @@ export default function CreateBlockForm({
     const trimmed = title.trim();
     if (!trimmed) return;
     const startInstant =
-      selection && startsAt === toLocalInputValue(selection.startsAt, displayTimezone)
-        ? selection.startsAt
+      startsAt === toLocalInputValue(seed.startsAt, displayTimezone)
+        ? seed.startsAt
         : fromLocalInputValue(startsAt, displayTimezone);
     const endInstant =
-      selection && endsAt === toLocalInputValue(selection.endsAt, displayTimezone)
-        ? selection.endsAt
+      endsAt === toLocalInputValue(seed.endsAt, displayTimezone)
+        ? seed.endsAt
         : fromLocalInputValue(endsAt, displayTimezone);
     if (!startInstant || !endInstant) {
       setTimeError(true);
@@ -135,7 +137,8 @@ export default function CreateBlockForm({
       open={open}
       onOpenChange={(next) => {
         if (next && !selection) {
-          const region = defaultSelection();
+          const region = defaultSelection(displayTimezone);
+          setSeed(region);
           setStartsAt(toLocalInputValue(region.startsAt, displayTimezone));
           setEndsAt(toLocalInputValue(region.endsAt, displayTimezone));
           setTimeError(false);

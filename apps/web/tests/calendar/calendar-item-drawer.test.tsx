@@ -177,6 +177,7 @@ function renderDrawer(
 ): {
   onClose: ReturnType<typeof vi.fn>;
   onOpenTask: ReturnType<typeof vi.fn>;
+  rerenderDrawer: (displayTimezone: string) => void;
 } {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -194,7 +195,7 @@ function renderDrawer(
       </ActiveOrgContext>
     </QueryClientProvider>
   );
-  render(
+  const result = render(
     <CalendarItemDrawer
       displayTimezone={displayTimezone}
       itemId={itemId}
@@ -203,7 +204,20 @@ function renderDrawer(
     />,
     { wrapper },
   );
-  return { onClose, onOpenTask };
+  return {
+    onClose,
+    onOpenTask,
+    rerenderDrawer: (nextDisplayTimezone) => {
+      result.rerender(
+        <CalendarItemDrawer
+          displayTimezone={nextDisplayTimezone}
+          itemId={itemId}
+          onClose={onClose}
+          onOpenTask={onOpenTask}
+        />,
+      );
+    },
+  };
 }
 
 beforeEach(() => {
@@ -252,6 +266,44 @@ afterEach(() => {
 });
 
 describe('CalendarItemDrawer', () => {
+  it('rebases untouched timed fields when the display timezone hydrates', async () => {
+    const { rerenderDrawer } = renderDrawer(ITEM_ID, 'UTC');
+
+    expect(await screen.findByLabelText('Starts')).toHaveValue('2026-07-01T16:00');
+    expect(screen.getByLabelText('Ends')).toHaveValue('2026-07-01T17:00');
+    rerenderDrawer('Asia/Tokyo');
+    expect(screen.getByLabelText('Starts')).toHaveValue('2026-07-02T01:00');
+    expect(screen.getByLabelText('Ends')).toHaveValue('2026-07-02T02:00');
+
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Hydrated review' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => {
+      expect(itemPatch).toHaveBeenCalledWith({
+        param: { id: ITEM_ID },
+        json: {
+          title: 'Hydrated review',
+          description: '',
+          location: '',
+          startsAt: '2026-07-01T16:00:00.000Z',
+          endsAt: '2026-07-01T17:00:00.000Z',
+        },
+      });
+    });
+  });
+
+  it('does not overwrite an edited time field when the display timezone hydrates', async () => {
+    const { rerenderDrawer } = renderDrawer(ITEM_ID, 'UTC');
+    expect(await screen.findByLabelText('Starts')).toHaveValue('2026-07-01T16:00');
+
+    fireEvent.change(screen.getByLabelText('Starts'), {
+      target: { value: '2026-07-01T18:00' },
+    });
+    rerenderDrawer('Asia/Tokyo');
+
+    expect(screen.getByLabelText('Starts')).toHaveValue('2026-07-01T18:00');
+    expect(screen.getByLabelText('Ends')).toHaveValue('2026-07-02T02:00');
+  });
+
   it('preserves timed instants when another field changes in a different display timezone', async () => {
     renderDrawer(ITEM_ID, 'Asia/Tokyo');
 

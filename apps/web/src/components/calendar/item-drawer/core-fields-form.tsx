@@ -2,7 +2,7 @@
 
 import type { CalendarItemOut } from '@docket/types';
 import { Button, Input } from '@docket/ui/primitives';
-import { type JSX, type SubmitEventHandler, useState } from 'react';
+import { type JSX, type SubmitEventHandler, useEffect, useRef, useState } from 'react';
 
 import { fromLocalInputValue, toLocalInputValue } from '../datetime-input';
 import { useUpdateCalendarItem } from '../calendar-mutations';
@@ -23,22 +23,32 @@ export function CoreFieldsForm({ displayTimezone, item }: CoreFieldsFormProps): 
   const timed = item.startsAt !== null;
   const localInputSeed = (iso: string | null): string =>
     iso ? toLocalInputValue(iso, displayTimezone) : '';
+  const startSeed = localInputSeed(item.startsAt);
+  const endSeed = localInputSeed(item.endsAt);
 
   const [title, setTitle] = useState(item.title);
   const [description, setDescription] = useState(item.description ?? '');
   const [location, setLocation] = useState(item.location ?? '');
-  const [startsAt, setStartsAt] = useState(localInputSeed(item.startsAt));
-  const [endsAt, setEndsAt] = useState(localInputSeed(item.endsAt));
+  const [startsAt, setStartsAt] = useState(startSeed);
+  const [endsAt, setEndsAt] = useState(endSeed);
   const [allDayStart, setAllDayStart] = useState(item.allDayStartDate ?? '');
   const [allDayEnd, setAllDayEnd] = useState(localAllDayEndSeed(item.allDayEndDate));
   const [timeError, setTimeError] = useState(false);
+  const previousSeeds = useRef({ startsAt: startSeed, endsAt: endSeed });
+
+  useEffect(() => {
+    const previous = previousSeeds.current;
+    setStartsAt((current) => (current === previous.startsAt ? startSeed : current));
+    setEndsAt((current) => (current === previous.endsAt ? endSeed : current));
+    previousSeeds.current = { startsAt: startSeed, endsAt: endSeed };
+  }, [endSeed, startSeed]);
 
   const dirty =
     title !== item.title ||
     description !== (item.description ?? '') ||
     location !== (item.location ?? '') ||
     (timed
-      ? startsAt !== localInputSeed(item.startsAt) || endsAt !== localInputSeed(item.endsAt)
+      ? startsAt !== startSeed || endsAt !== endSeed
       : allDayStart !== (item.allDayStartDate ?? '') ||
         allDayEnd !== localAllDayEndSeed(item.allDayEndDate));
 
@@ -47,11 +57,11 @@ export function CoreFieldsForm({ displayTimezone, item }: CoreFieldsFormProps): 
     if (!canEdit || !dirty || title.trim().length === 0) return;
     if (!timed && (allDayStart.length === 0 || allDayEnd.length === 0)) return;
     const startInstant =
-      timed && startsAt === localInputSeed(item.startsAt)
+      timed && startsAt === startSeed
         ? (item.startsAt ?? null)
         : fromLocalInputValue(startsAt, displayTimezone);
     const endInstant =
-      timed && endsAt === localInputSeed(item.endsAt)
+      timed && endsAt === endSeed
         ? (item.endsAt ?? null)
         : fromLocalInputValue(endsAt, displayTimezone);
     if (timed && (!startInstant || !endInstant)) {

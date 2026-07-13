@@ -23,6 +23,21 @@
 
 ---
 
+### [ATHENA-CLOUDFLARE-001] Route Athena provider traffic through Cloudflare AI Gateway
+
+- **Status**: COMPLETED
+- **Started**: 2026-07-13
+- **Completed**: 2026-07-13
+- **Priority**: P1
+- **Description**: Add the first Cloudflare migration seam without changing Docket's ownership of
+  agent policy, session state, audit history, or provider credentials.
+- **Implementation**: Added optional authenticated AI Gateway configuration and one shared
+  Anthropic-client option builder. Every live Athena adapter now receives the same direct-or-Gateway
+  configuration; incomplete Gateway configuration safely retains direct Anthropic traffic.
+- **Validation**: Focused agent-runtime and API tests pass, and both affected packages typecheck.
+
+---
+
 ### [INIT-ICONS-001] Add customizable Material icons to strategic work
 
 - **Status**: COMPLETED

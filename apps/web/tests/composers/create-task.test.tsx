@@ -17,7 +17,7 @@
  */
 import { OrganizationId, TeamId, type TeamOut } from '@docket/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Hoisted so the mock factory (lifted above imports) can reference them.
@@ -174,8 +174,11 @@ describe('CreateTaskDialog — robust composer', () => {
     });
 
     fireEvent.change(screen.getByLabelText('Task title'), { target: { value: '  Ship it  ' } });
-    fireEvent.change(screen.getByLabelText('Add a description…'), {
-      target: { value: 'The whole thing.' },
+    const description = screen.getByLabelText('Add a description…');
+    // Tiptap observes the contenteditable DOM; act flushes that observer before form submission.
+    await act(async () => {
+      description.innerHTML = '<p>The whole thing.</p>';
+      fireEvent.input(description);
     });
     fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
 

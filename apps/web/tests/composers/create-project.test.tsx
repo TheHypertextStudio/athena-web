@@ -14,7 +14,7 @@
  */
 import { OrganizationId, TeamId, type TeamOut } from '@docket/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { projectPost, membersGet, agentsGet, initiativesGet } = vi.hoisted(() => ({
@@ -128,8 +128,11 @@ describe('CreateProjectDialog — robust composer', () => {
     const { onCreated } = renderComposer();
 
     fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Atlas' } });
-    fireEvent.change(screen.getByLabelText('Add a description…'), {
-      target: { value: 'Re-platform.' },
+    const description = screen.getByLabelText('Add a description…');
+    // Tiptap observes the contenteditable DOM; act flushes that observer before form submission.
+    await act(async () => {
+      description.innerHTML = '<p>Re-platform.</p>';
+      fireEvent.input(description);
     });
     fireEvent.click(screen.getByRole('button', { name: 'Create Project' }));
 

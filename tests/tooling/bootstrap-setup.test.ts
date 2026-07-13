@@ -20,6 +20,7 @@ import {
   splitInstructionSteps,
   wrapLines,
 } from '../../scripts/integrations-setup';
+import { findVar } from '../../packages/env/src/registry';
 
 describe('bootstrap phase flags', () => {
   it('accepts pnpm separator syntax and forces the production-only fast path', () => {
@@ -86,6 +87,14 @@ describe('mandatory production provider catalog', () => {
       'observability',
     ]);
     expect(PROVIDER_GROUPS.every((group) => group.vars.length > 0)).toBe(true);
+  });
+
+  it('registers every provider credential so the wizard can prompt for it', () => {
+    for (const group of PROVIDER_GROUPS) {
+      for (const varName of group.vars) {
+        expect(findVar(varName), `${group.label}: ${varName}`).toBeDefined();
+      }
+    }
   });
   it('uses Mailpit variables locally and the native Resend API contract in production', () => {
     const email = PROVIDER_GROUPS.find((group) => group.id === 'email');

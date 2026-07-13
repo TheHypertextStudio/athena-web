@@ -11,6 +11,7 @@ import {
   useAuthenticationInterlock,
 } from '../../src/components/authentication-interlock';
 import { unwrap, useApiMutation } from '../../src/lib/query';
+import { problemResponse } from '../support/query';
 
 /** A user-intent control that requests authentication for one protected deep link. */
 function ProtectedAction(): JSX.Element {
@@ -33,11 +34,9 @@ function ProtectedMutation(): JSX.Element {
     mutationFn: () =>
       unwrap(
         () =>
-          Promise.resolve({
-            ok: false,
-            status: 401,
-            json: () => Promise.resolve({ code: 'unauthorized' }),
-          }),
+          Promise.resolve(
+            problemResponse('private session diagnostic', 401, 'unauthorized') as never,
+          ),
         'Could not save.',
       ),
   });
@@ -62,11 +61,9 @@ function DirectProtectedAction(): JSX.Element {
       await recoverAuthentication(() =>
         unwrap(
           () =>
-            Promise.resolve({
-              ok: false,
-              status: 401,
-              json: () => Promise.resolve({ code: 'unauthorized' }),
-            }),
+            Promise.resolve(
+              problemResponse('private session diagnostic', 401, 'unauthorized') as never,
+            ),
           'Could not connect.',
         ),
       );

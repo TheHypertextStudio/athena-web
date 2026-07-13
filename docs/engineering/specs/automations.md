@@ -9,8 +9,8 @@
 
 Automations let an organization declare **rules as data** — `{ on, when, then }` — that react
 to anything happening in Docket: internal domain events (a task completed, a suggestion
-created) and external events arriving through integrations (a Linear issue, a GitHub PR, a
-Slack message). No policy lives in code: adding a trigger, condition, or action never edits
+created) and external events arriving through integrations (a Linear issue, a GitHub PR, or a
+calendar event). No policy lives in code: adding a trigger, condition, or action never edits
 the engine.
 
 ## 1. Architecture at a glance
@@ -43,7 +43,7 @@ resolves against this shape — it is the **only** contract rule authors program
 | ---------------- | ------ | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `organizationId` | string | both                                  | Rule scoping — rules only ever see their own org's events.                                                                                                                                                         |
 | `kind`           | string | both                                  | The canonical event verb (`created`, `completed`, `status_change`, `assignment`, `comment`, …).                                                                                                                    |
-| `source`         | string | both                                  | Origin tool: `docket` for internal emits; `linear` / `github` / `slack` / … for drained events.                                                                                                                    |
+| `source`         | string | both                                  | Origin tool: `docket` for internal emits; `linear` / `github` / `gmail` / `google_calendar` for drained events.                                                                                                    |
 | `subjectType?`   | string | internal; external only when resolved | Docket entity type (`task`, `email_suggestion`, `project`, `initiative`, `cycle`, …).                                                                                                                              |
 | `subjectId?`     | string | with `subjectType`                    | The Docket entity id.                                                                                                                                                                                              |
 | `entityKind?`    | string | when known                            | Canonical kind (`work_item`, `project`, `program`, `initiative`, `cycle`, `thread`, `message`, …) — how rules address external events, since a Linear issue and a Docket task both project as `work_item`.         |
@@ -196,9 +196,9 @@ projects every drafted event automatically.
 | `assignment`                 | `task`                                                        | create/update with assignee                        |
 | `comment`                    | polymorphic (`task`/`project`/`program`/`initiative`/`cycle`) | comments                                           |
 
-External (via drain): `source ∈ {linear, github, slack, google_calendar}` with
+External (via drain): `source ∈ {linear, github, gmail, google_calendar}` with
 `entityKind ∈ {work_item, thread, message, calendar_event, …}` and per-tool `detail` arms
-(`linear.issue`, `github.pull_request`, `slack.message`).
+(`linear.issue`, `github.pull_request`).
 
 ## 8. How to add an action
 

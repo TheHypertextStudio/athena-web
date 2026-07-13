@@ -31,12 +31,6 @@ import { EventKind, providerSourceSystem, sourceIdentityProvider } from '@docket
 import { and, eq, inArray, lt, or } from 'drizzle-orm';
 
 import { routeAndWriteRecipients, type RoutableEntity } from '../consumers/routing';
-import {
-  connectedSlackUsers,
-  recordSlackParticipation,
-  resolveSlackRecipients,
-  slackMessageFacts,
-} from '../consumers/slack-relevance';
 import { buildObserver, toAppRuntimeEnv, type AppRuntimeEnv } from '../container';
 import { projectInboundDraft } from '../lib/automation/event';
 import { runAutomationsForEvent } from '../lib/automation/runtime';
@@ -91,23 +85,6 @@ interface SweepCtx {
   readonly env: AppRuntimeEnv;
   readonly observers: Map<ObserverProvider, Observer>;
   readonly owners: Map<string, string | null>;
-  /** Connected Slack identities per `(org, team)` — the many events of one workspace share it. */
-  readonly slackUsers: Map<string, Map<string, string>>;
-}
-
-/** Resolve (and cache for the sweep) an org's connected Slack users for a workspace. */
-async function slackUsersFor(
-  ctx: SweepCtx,
-  organizationId: string,
-  teamId: string,
-): Promise<Map<string, string>> {
-  const key = `${organizationId}:${teamId}`;
-  let users = ctx.slackUsers.get(key);
-  if (!users) {
-    users = await connectedSlackUsers(organizationId, teamId);
-    ctx.slackUsers.set(key, users);
-  }
-  return users;
 }
 
 /** Resolve (and cache for the sweep) the provider observer. */
@@ -240,37 +217,6 @@ async function processOne(ev: InboundEventRow, ctx: SweepCtx): Promise<number> {
 
   const userId = ev.integrationId ? await ownerUserId(ctx, ev.integrationId) : null;
 
-  // Slack relevance: workspace-scoped deliveries carry no single owner, so each message is
-  // classified per connected user (mention / DM / thread participation) from the raw payload.
-  // A message that concerns nobody creates NO canonical event (noise control — the raw payload
-  // stays in the inbox for re-normalization), and the integration-owner fallback is suppressed
-  // (it would fan the whole workspace's traffic to whoever connected it).
-  const slackFacts = provider === 'slack' ? slackMessageFacts(ev.payload) : null;
-  let slackRecipients: ReadonlyMap<string, StreamRelevance> | null = null;
-  if (provider === 'slack') {
-    if (!slackFacts) {
-      await db
-        .update(inboundEvent)
-        .set({ status: 'skipped', processedAt: now })
-        .where(eq(inboundEvent.id, ev.id));
-      return 0;
-    }
-    const connected = await slackUsersFor(ctx, orgId, slackFacts.teamId);
-    // Participation is remembered even for messages that concern nobody — a later reply in
-    // this thread must know the (connected) author was here.
-    if (slackFacts.authorSlackId && connected.has(slackFacts.authorSlackId)) {
-      await recordSlackParticipation(orgId, slackFacts);
-    }
-    slackRecipients = await resolveSlackRecipients(orgId, slackFacts, connected);
-    if (slackRecipients.size === 0) {
-      await db
-        .update(inboundEvent)
-        .set({ status: 'skipped', processedAt: now })
-        .where(eq(inboundEvent.id, ev.id));
-      return 0;
-    }
-  }
-
   let created = 0;
   for (const draft of drafts) {
     const kind = EventKind.safeParse(draft.kind);
@@ -280,9 +226,11 @@ async function processOne(ev: InboundEventRow, ctx: SweepCtx): Promise<number> {
     const entityRef = toEntityRef(draft.entity, source);
     // Resolve mentioned external users → linked Docket users, so the mention routes to whoever was
     // actually named (the integration-owner fallback below still applies for unlinked participants).
-    const externalRecipients =
-      slackRecipients ??
-      (await resolveLinkedIdentityRecipients(source, draft.participants, kind.data));
+    const externalRecipients = await resolveLinkedIdentityRecipients(
+      source,
+      draft.participants,
+      kind.data,
+    );
 
     // Insert + fan-out in one transaction (the routing Strategy writes the recipient rows).
     const result = await db.transaction(async (tx) => {
@@ -331,9 +279,7 @@ async function processOne(ev: InboundEventRow, ctx: SweepCtx): Promise<number> {
           organizationId: orgId,
           kind: kind.data,
           entity: routableEntity,
-          // Slack events carry real per-user relevance; the owner fallback is only for
-          // providers without an identity mapping.
-          ownerUserId: slackRecipients ? null : userId,
+          ownerUserId: userId,
           externalRecipients,
         },
         occurredAt,
@@ -421,7 +367,6 @@ export async function sweepInboundEvents(now: Date): Promise<DrainResult> {
     env: toAppRuntimeEnv(),
     observers: new Map(),
     owners: new Map(),
-    slackUsers: new Map(),
   };
 
   let processed = 0;

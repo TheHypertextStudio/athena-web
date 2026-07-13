@@ -2,7 +2,7 @@
  * `@docket/api` — the ambient-intelligence ingestion edge (mounted OUTSIDE the RPC `AppType`).
  *
  * @remarks
- * `POST /internal/ingest/{linear,github,slack,discord}` receive provider webhooks and record
+ * `POST /internal/ingest/{linear,github}` receive provider webhooks and record
  * them in the durable write-ahead inbox ({@link inboundEvent}) — the "persist incoming data as
  * fast as possible" invariant. It is non-RPC (an untyped external edge), so it lives in
  * `server.ts` alongside `/internal/billing` and `/internal/cron`.
@@ -15,7 +15,7 @@
  * ({@link sweepInboundEvents}) does that asynchronously. Dedup against webhook retries is the
  * unique `(provider, external_event_id)` index.
  */
-import { db, eventSubscription, inboundEvent, integration } from '@docket/db';
+import { db, inboundEvent, integration } from '@docket/db';
 import type { ObserverProvider } from '@docket/integrations';
 import { and, eq, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -38,7 +38,7 @@ function asPayload(value: unknown): Record<string, unknown> {
  * rows to map the workspace/installation against.
  *
  * @param c - The Hono request context.
- * @param provider - The provider this route ingests (`linear` | `github` | `slack` | `discord`).
+ * @param provider - The provider this route ingests (`linear` | `github`).
  */
 async function ingestWebhook(c: Context, provider: ObserverProvider): Promise<Response> {
   // Read the RAW bytes first: the signature is an HMAC over the exact request body.
@@ -58,21 +58,6 @@ async function ingestWebhook(c: Context, provider: ObserverProvider): Promise<Re
     return c.json({ error: 'invalid json' }, 400);
   }
 
-  // Slack's one-time URL-verification handshake: echo the challenge (already signature-checked).
-  if (provider === 'slack') {
-    const obj = payload as Record<string, unknown> | null;
-    if (obj?.['type'] === 'url_verification') {
-      const challenge = obj['challenge'];
-      if (typeof challenge === 'string') return c.json({ challenge });
-    }
-  }
-
-  // Discord's endpoint handshake: a signed type:1 PING is answered with a type:1 PONG.
-  if (provider === 'discord') {
-    const obj = payload as Record<string, unknown> | null;
-    if (obj?.['type'] === 1) return c.json({ type: 1 });
-  }
-
   const routing = observer.route(payload);
   if (!routing) return c.json({ error: 'unrecognized payload' }, 400);
 
@@ -80,11 +65,6 @@ async function ingestWebhook(c: Context, provider: ObserverProvider): Promise<Re
   // for a workspace Docket doesn't have connected is acknowledged (200) but recorded unrouted,
   // so a missing integration never 500s a third-party retry storm.
   //
-  // Slack is per-USER connectable, so one workspace may back several integrations (one per
-  // connecting user) across one or more orgs: the delivery fans out to ONE inbound row per org
-  // (the drain resolves per-user relevance from all of that org's connected users), with the
-  // org id suffixed onto the dedup key so retries stay per-org no-ops. Single-integration
-  // providers keep the provider's own event id verbatim.
   const matches: { organizationId: string; integrationId: string; externalEventId: string }[] = [];
   if (routing.externalWorkspaceId) {
     const rows = await db
@@ -96,7 +76,7 @@ async function ingestWebhook(c: Context, provider: ObserverProvider): Promise<Re
           sql`${integration.connection}->>'externalWorkspaceId' = ${routing.externalWorkspaceId}`,
         ),
       );
-    if (provider === 'slack' || provider === 'linear') {
+    if (provider === 'linear') {
       const byOrg = new Map<string, string>();
       for (const row of rows) {
         if (!byOrg.has(row.organizationId)) byOrg.set(row.organizationId, row.id);
@@ -146,77 +126,9 @@ async function ingestWebhook(c: Context, provider: ObserverProvider): Promise<Re
   return c.json({ received: true, routed: matches.length > 0 });
 }
 
-/**
- * Handle one relay-forwarded event routed by an opaque ingest token (not a provider signature).
- *
- * @remarks
- * The counterpart to {@link ingestWebhook} for sources that can't be observed over stateless HTTP:
- * the Discord Gateway relay (a trusted, always-on Docket component) forwards `MESSAGE_CREATE`
- * envelopes here, authenticated by the per-integration {@link eventSubscription.ingestToken}
- * embedded in the URL rather than a Discord Ed25519 signature. The token both authenticates the
- * caller and resolves the integration → org, so there is no payload-based workspace lookup. From
- * there it is the same write-ahead-then-ACK as the signed edge; the async drain normalizes it.
- *
- * @param c - The Hono request context (with the `token` path param).
- * @param provider - The provider this token edge ingests (`discord`).
- */
-async function ingestTokenWebhook(c: Context, provider: ObserverProvider): Promise<Response> {
-  const token = c.req.param('token');
-  if (!token) return c.json({ error: 'missing ingest token' }, 400);
-
-  // The token authenticates the relay AND resolves the integration + org (via the subscription).
-  const [sub] = await db
-    .select({ integrationId: integration.id, organizationId: integration.organizationId })
-    .from(eventSubscription)
-    .innerJoin(integration, eq(integration.id, eventSubscription.integrationId))
-    .where(
-      and(
-        eq(eventSubscription.ingestToken, token),
-        eq(eventSubscription.provider, provider),
-        eq(eventSubscription.status, 'active'),
-      ),
-    )
-    .limit(1);
-  if (!sub) return c.json({ error: 'unknown ingest token' }, 401);
-
-  const rawBody = await c.req.text();
-  let payload: unknown;
-  try {
-    payload = JSON.parse(rawBody);
-  } catch {
-    return c.json({ error: 'invalid json' }, 400);
-  }
-
-  // The observer owns dedup id + event-type extraction; org routing came from the token, not here.
-  const observer = buildObserver(provider);
-  const routing = observer.route(payload);
-  if (!routing) return c.json({ error: 'unrecognized payload' }, 400);
-
-  await db
-    .insert(inboundEvent)
-    .values({
-      organizationId: sub.organizationId,
-      integrationId: sub.integrationId,
-      provider,
-      externalEventId: routing.externalEventId,
-      eventType: routing.eventType,
-      payload: asPayload(payload),
-      signatureVerified: true,
-    })
-    .onConflictDoNothing({
-      target: [inboundEvent.provider, inboundEvent.externalEventId],
-    });
-
-  return c.json({ received: true, routed: true });
-}
-
 /** The ingestion app: verify → write-ahead → 200, one provider edge per route. */
 const ingest = new Hono()
   .post('/linear', (c) => ingestWebhook(c, 'linear'))
-  .post('/github', (c) => ingestWebhook(c, 'github'))
-  .post('/slack', (c) => ingestWebhook(c, 'slack'))
-  .post('/discord', (c) => ingestWebhook(c, 'discord'))
-  // Token-routed edge for the Discord Gateway relay (authenticated by the ingest token, not Ed25519).
-  .post('/discord/:token', (c) => ingestTokenWebhook(c, 'discord'));
+  .post('/github', (c) => ingestWebhook(c, 'github'));
 
 export default ingest;

@@ -3,14 +3,14 @@
  *
  * @remarks
  * A connect flow round-trips through a third party's browser redirect (GitHub App install,
- * Slack OAuth consent), so the context it started with — which org/integration/user the grant
+ * so the context it started with — which org/integration the grant
  * is for — must survive the trip tamper-proof. These helpers mint and verify an opaque
  * `payload.signature` token: the payload is base64url JSON carrying the flow's fields plus an
  * absolute `exp`, and the signature is an HMAC-SHA256 keyed by `BETTER_AUTH_SECRET`. That both
  * prevents an attacker from binding a grant to another tenant and doubles as CSRF protection
  * on the callback.
  *
- * Each provider module ({@link signInstallState} in `github-app.ts`, `slack-app.ts`) owns its
+ * Each provider module ({@link signInstallState} in `github-app.ts`) owns its
  * payload shape and field validation; this module owns only the envelope (sign/verify/expiry).
  */
 import { createHmac, timingSafeEqual } from 'node:crypto';

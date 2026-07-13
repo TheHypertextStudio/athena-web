@@ -182,7 +182,7 @@ describe('StepConnect (prod / OAuth gating)', () => {
     const prodConfig: PublicConfigOut = {
       appMode: 'production',
       oauthProviders: ['google'],
-      connectors: ['drive', 'gmail', 'calendar', 'gtasks'],
+      connectors: ['gmail', 'calendar', 'gtasks'],
       mcpUrl: null,
     };
     renderStep(

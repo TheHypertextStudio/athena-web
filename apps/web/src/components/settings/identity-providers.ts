@@ -4,24 +4,14 @@
  * @remarks
  * The Connected accounts page is a **discover-and-manage** directory: every supported provider is
  * always shown, so the page reads as a catalog rather than a one-button display. Entries are either
- * `live` (a real Better Auth social provider — google/github/linear/discord/microsoft — whose
+ * `live` (a real Better Auth social provider — google/github/linear — whose
  * actual connectability in this deployment is decided by `usePublicConfig().oauthProviders`) or
  * `coming-soon` (a roadmap provider rendered as a disabled entry). Linkable availability is NEVER
  * read from the environment here — that lives in `@/lib/public-config`; this file is the pure
  * display catalog (id, name, icon).
  */
 import type { IdentityProvider } from '@docket/types';
-import {
-  Calendar,
-  Github,
-  Google,
-  Layers,
-  type LucideIcon,
-  Mail,
-  MessagesSquare,
-  Target,
-  Workflow,
-} from '@docket/ui/icons';
+import { Github, Google, Layers, type LucideIcon } from '@docket/ui/icons';
 
 /** A real, linkable identity provider (its OAuth may or may not be wired in this deployment). */
 export interface LiveIdentityProvider {
@@ -52,13 +42,6 @@ export const IDENTITY_PROVIDER_CATALOG: readonly IdentityProviderEntry[] = [
   { kind: 'live', id: 'google', name: 'Google', icon: Google },
   { kind: 'live', id: 'github', name: 'GitHub', icon: Github },
   { kind: 'live', id: 'linear', name: 'Linear', icon: Layers },
-  { kind: 'live', id: 'discord', name: 'Discord', icon: MessagesSquare },
-  { kind: 'live', id: 'microsoft', name: 'Microsoft', icon: Mail },
-  // Slack is intentionally absent: it is an org *integration* (Settings → Connections), not a
-  // sign-in identity — listing it here as an account would conflate the two.
-  { kind: 'coming-soon', id: 'jira', name: 'Jira', icon: Workflow },
-  { kind: 'coming-soon', id: 'asana', name: 'Asana', icon: Target },
-  { kind: 'coming-soon', id: 'apple-calendar', name: 'Apple Calendar', icon: Calendar },
 ];
 
 /** Friendly labels for the Google OAuth scopes we request (the raw URLs are unreadable). */
@@ -67,9 +50,7 @@ const SCOPE_LABEL: Record<string, string> = {
   'https://www.googleapis.com/auth/calendar.readonly': 'Calendar',
   'https://www.googleapis.com/auth/calendar.calendarlist.readonly': 'Calendar',
   'https://www.googleapis.com/auth/calendar.events': 'Calendar editing',
-  'https://www.googleapis.com/auth/drive.readonly': 'Drive',
   'https://www.googleapis.com/auth/gmail.modify': 'Gmail',
-  'https://graph.microsoft.com/Mail.ReadWrite': 'Outlook mail',
 };
 
 /** The friendly, de-duplicated access labels for an identity's granted scopes (Google only today). */

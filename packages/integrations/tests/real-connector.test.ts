@@ -481,57 +481,7 @@ describe('RealConnector — asWorkGraph capability seam', () => {
   });
 });
 
-describe('RealConnector — Google (Drive / Gmail / Calendar REST)', () => {
-  it('Drive: resolves the account email, defaults the API base, and imports files', async () => {
-    const { http, calls } = fakeHttp([
-      new Response(JSON.stringify({ user: { emailAddress: 'me@x.dev' } }), { status: 200 }),
-      new Response(
-        JSON.stringify({
-          files: [
-            { id: 'f1', name: 'Q1 Doc', webViewLink: 'https://drive.google.com/file/d/f1' },
-            { id: 'f2', name: 'No link' },
-          ],
-        }),
-        { status: 200 },
-      ),
-    ]);
-    const connector = new RealConnector({ provider: 'drive', accessToken: 'g_tok' }, http);
-    const conn = await connector.connect({ provider: 'drive', referenceId: 'org_1' });
-    expect(conn).toEqual({
-      connectionId: 'drive:org_1',
-      provider: 'drive',
-      status: 'connected',
-      account: 'me@x.dev',
-    });
-    expect(calls[0]!.url).toBe('https://www.googleapis.com/drive/v3/about?fields=user');
-    expect(header(calls[0]!, 'Authorization')).toBe('Bearer g_tok');
-
-    const items = await connector.importWork({ connectionId: 'c1', provider: 'drive' });
-    expect(calls[1]!.url).toBe(
-      'https://www.googleapis.com/drive/v3/files?fields=files(id,name,webViewLink),nextPageToken&pageSize=100',
-    );
-    expect(items[0]).toEqual({
-      id: 'f1',
-      kind: 'document',
-      title: 'Q1 Doc',
-      provenance: {
-        provider: 'drive',
-        externalId: 'f1',
-        externalUrl: 'https://drive.google.com/file/d/f1',
-        importedAt: items[0]!.provenance.importedAt,
-      },
-    });
-    expect(items[1]?.provenance).not.toHaveProperty('externalUrl');
-  });
-
-  it('Drive: falls back to the displayName when emailAddress is absent', async () => {
-    const { http } = fakeHttp([
-      new Response(JSON.stringify({ user: { displayName: 'Me' } }), { status: 200 }),
-    ]);
-    const connector = new RealConnector({ provider: 'drive', accessToken: 'tok' }, http);
-    expect((await connector.connect({ provider: 'drive', referenceId: 'o' })).account).toBe('Me');
-  });
-
+describe('RealConnector — Google (Gmail / Calendar / Tasks REST)', () => {
   it('Gmail: resolves the profile email and imports threads using snippet as title', async () => {
     const { http, calls } = fakeHttp([
       new Response(JSON.stringify({ emailAddress: 'me@gmail.com' }), { status: 200 }),
@@ -733,19 +683,6 @@ describe('RealConnector — Google (Drive / Gmail / Calendar REST)', () => {
     ]);
   });
 
-  it('Drive: listContainers resolves to [] (no container concept) instead of throwing', async () => {
-    // RealConnector.listContainers delegates unconditionally — it no longer gates on
-    // `provider === 'gtasks'` before calling through. GoogleProviderClient.listContainers must
-    // therefore handle every non-gtasks Google product structurally, matching GitHub/Linear,
-    // rather than throwing a ConnectorError.
-    const { http, calls } = fakeHttp([]);
-    const connector = new RealConnector({ provider: 'drive', accessToken: 'tok' }, http);
-    await expect(
-      connector.listContainers({ connectionId: 'c1', provider: 'drive' }),
-    ).resolves.toEqual([]);
-    expect(calls).toHaveLength(0);
-  });
-
   it('Tasks: connects without deriving an account label, and resolves the task url', async () => {
     const { http } = fakeHttp([
       new Response(JSON.stringify({ items: [{ id: 'list-only-id' }] }), { status: 200 }),
@@ -770,40 +707,6 @@ describe('RealConnector — Google (Drive / Gmail / Calendar REST)', () => {
     const connector = new RealConnector({ provider: 'gtasks', accessToken: 'tok' }, http);
     const status = await connector.mirrorStatus({ connectionId: 'c1', provider: 'gtasks' });
     expect(status).toEqual({ connectionId: 'c1', status: 'idle', itemCount: 0 });
-  });
-
-  it('reports mirror status sized from the product listing', async () => {
-    const { http } = fakeHttp([
-      new Response(
-        JSON.stringify({
-          files: [
-            { id: 'f1', name: 'a' },
-            { id: 'f2', name: 'b' },
-          ],
-        }),
-        {
-          status: 200,
-        },
-      ),
-    ]);
-    const connector = new RealConnector({ provider: 'drive', accessToken: 'tok' }, http);
-    const status = await connector.mirrorStatus({ connectionId: 'c1', provider: 'drive' });
-    expect(status).toEqual({ connectionId: 'c1', status: 'idle', itemCount: 2 });
-  });
-
-  it('Drive: paginates files using nextPageToken', async () => {
-    const { http, calls } = fakeHttp([
-      new Response(JSON.stringify({ files: [{ id: 'f1', name: 'A' }], nextPageToken: 'tok1' }), {
-        status: 200,
-      }),
-      new Response(JSON.stringify({ files: [{ id: 'f2', name: 'B' }] }), { status: 200 }),
-    ]);
-    const connector = new RealConnector({ provider: 'drive', accessToken: 'tok' }, http);
-    const items = await connector.importWork({ connectionId: 'c1', provider: 'drive' });
-    expect(items).toHaveLength(2);
-    expect(items[0]?.id).toBe('f1');
-    expect(items[1]?.id).toBe('f2');
-    expect(calls[1]!.url).toContain('pageToken=tok1');
   });
 
   it('Gmail: truncates long snippets to 80 chars for the title', async () => {
@@ -835,13 +738,9 @@ describe('RealConnector — Google (Drive / Gmail / Calendar REST)', () => {
 
   it('resolves canonical product urls for link resolution', async () => {
     const { http } = fakeHttp([]);
-    const drive = new RealConnector({ provider: 'drive', accessToken: 'tok' }, http);
     const gmail = new RealConnector({ provider: 'gmail', accessToken: 'tok' }, http);
     const calendar = new RealConnector({ provider: 'calendar', accessToken: 'tok' }, http);
     const base = { connectionId: 'c1', resourceId: 'r1' };
-    expect(
-      (await drive.linkResource({ ...base, provider: 'drive', externalId: 'f1' })).externalUrl,
-    ).toBe('https://drive.google.com/file/d/f1');
     expect(
       (await gmail.linkResource({ ...base, provider: 'gmail', externalId: 't1' })).externalUrl,
     ).toBe('https://mail.google.com/mail/#all/t1');

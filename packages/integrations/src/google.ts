@@ -1,10 +1,10 @@
 /**
- * `@docket/integrations` — the Google product connector clients (Drive / Calendar /
+ * `@docket/integrations` — the Google product connector clients (Calendar /
  * Tasks) and the shared Google pagination helper.
  *
  * @remarks
  * One client class per product, each implementing exactly the capabilities the product
- * has: Drive and Calendar are read-only base clients; Google Tasks additionally
+ * has: Calendar is read-only; Google Tasks additionally
  * implements the writable provider-client interface (task write-back + containers).
  * Gmail lives in `./gmail` and implements the mail interface. Capability is
  * therefore **structural** — the connector discovers it via the `is*ProviderClient`
@@ -32,12 +32,7 @@ import type { ProviderHttp } from './provider-http';
 import { MAX_IMPORT_PAGES, logConnectorTruncation } from './connector-log';
 
 /** The Google products served by the per-product clients in this module + `./gmail`. */
-export type GoogleProduct = Extract<ConnectorProvider, 'drive' | 'gmail' | 'calendar' | 'gtasks'>;
-
-/** Drive `about` identity payload (the signed-in user's email/name). */
-interface DriveAbout {
-  user?: { emailAddress?: string; displayName?: string };
-}
+export type GoogleProduct = Extract<ConnectorProvider, 'gmail' | 'calendar' | 'gtasks'>;
 /** Google Tasks list-collection payload (used for identity + container enumeration). */
 interface TaskListsPayload {
   items?: { id?: string; title?: string }[];
@@ -91,68 +86,6 @@ export async function paginateGoogle<T>(
     });
   }
   return all;
-}
-
-/**
- * The Google Drive connector client (read-only documents surface).
- */
-export class GoogleDriveProviderClient implements ConnectorProviderClient {
-  /** @param http - The provider HTTP wrapper bound to the Drive API base. */
-  constructor(private readonly http: ProviderHttp) {}
-
-  /** {@inheritDoc ConnectorProviderClient.resolveAccount} */
-  async resolveAccount(): Promise<ResolvedAccount | undefined> {
-    const json = await this.http.getJson<DriveAbout>('/about?fields=user');
-    const label = json.user?.emailAddress ?? json.user?.displayName;
-    return label !== undefined ? { label } : undefined;
-  }
-
-  /** {@inheritDoc ConnectorProviderClient.importWork} — Drive files as document items. */
-  async importWork(_input: ImportWorkInput, importedAt: string): Promise<ImportedItem[]> {
-    interface DriveFile {
-      id: string;
-      name: string;
-      webViewLink?: string;
-    }
-    const all = await paginateGoogle<DriveFile>(this.http, 'drive', 'files', {
-      buildUrl: (pageToken) =>
-        `/files?fields=files(id,name,webViewLink),nextPageToken&pageSize=100${pageToken ? `&pageToken=${pageToken}` : ''}`,
-      extract: (json) => {
-        const j = json as { files?: DriveFile[]; nextPageToken?: string };
-        return { items: j.files ?? [], nextPageToken: j.nextPageToken };
-      },
-    });
-    return all.map((f) => ({
-      id: f.id,
-      kind: 'document' as const,
-      title: f.name,
-      provenance: {
-        provider: 'drive' as const,
-        externalId: f.id,
-        ...(f.webViewLink ? { externalUrl: f.webViewLink } : {}),
-        importedAt,
-      },
-    }));
-  }
-
-  /** {@inheritDoc ConnectorProviderClient.mirrorStatus} */
-  async mirrorStatus(input: MirrorStatusInput): Promise<MirrorResult> {
-    const items = await this.importWork(
-      { connectionId: input.connectionId, provider: 'drive' },
-      new Date(0).toISOString(),
-    );
-    return { connectionId: input.connectionId, status: 'idle', itemCount: items.length };
-  }
-
-  /** {@inheritDoc ConnectorProviderClient.resolveExternalUrl} */
-  async resolveExternalUrl(input: LinkResourceInput): Promise<string | undefined> {
-    return `https://drive.google.com/file/d/${input.externalId}`;
-  }
-
-  /** {@inheritDoc ConnectorProviderClient.listContainers} — Drive has no container concept. */
-  async listContainers(): Promise<ResourceRef[]> {
-    return [];
-  }
 }
 
 /**

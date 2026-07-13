@@ -102,12 +102,6 @@ export const authServer = {
   GITHUB_APP_WEBHOOK_SECRET: z.string().optional(),
   LINEAR_CLIENT_ID: z.string().optional(),
   LINEAR_CLIENT_SECRET: z.string().optional(),
-  /** Microsoft Entra app client id — Outlook sign-in/link + the Graph mail connector. */
-  MICROSOFT_CLIENT_ID: z.string().optional(),
-  /** Microsoft Entra app client secret. */
-  MICROSOFT_CLIENT_SECRET: z.string().optional(),
-  /** Entra tenant (`common` for multi-tenant; a tenant id to restrict to one directory). */
-  MICROSOFT_TENANT_ID: z.string().optional(),
   /** App-level Linear webhook signing secret — verifies inbound ambient-observation events. */
   LINEAR_WEBHOOK_SECRET: z.string().optional(),
   /**
@@ -129,25 +123,6 @@ export const authServer = {
    * real-vs-hidden via {@link isRealValue} over all four `APPLE_*` vars.
    */
   APPLE_PRIVATE_KEY: z.string().optional(),
-  /** Slack app signing secret — verifies inbound Slack Events API requests (`v0=` HMAC). */
-  SLACK_SIGNING_SECRET: z.string().optional(),
-  /**
-   * Slack app OAuth client id — powers the "Connect Slack" user-token flow (`oauth.v2.authorize`).
-   * The shared hosted app's credentials; absent ⇒ Slack connect is unavailable (409 on connect-url).
-   */
-  SLACK_CLIENT_ID: z.string().optional(),
-  /** Slack app OAuth client secret — paired with {@link authServer.SLACK_CLIENT_ID} for `oauth.v2.access`. */
-  SLACK_CLIENT_SECRET: z.string().optional(),
-  /**
-   * Discord app **public key** (raw 32-byte Ed25519 key, hex) — verifies inbound Discord-signed
-   * requests at `POST /internal/ingest/discord` (`X-Signature-Ed25519` over `timestamp + body`).
-   * Absent/placeholder ⇒ the Discord observer falls back to the mock.
-   */
-  DISCORD_PUBLIC_KEY: z.string().optional(),
-  /** Discord OAuth2 application client id — powers "Connect Discord" account linking (`identify`). */
-  DISCORD_CLIENT_ID: z.string().optional(),
-  /** Discord OAuth2 application client secret — paired all-or-nothing with {@link DISCORD_CLIENT_ID}. */
-  DISCORD_CLIENT_SECRET: z.string().optional(),
   /**
    * Shared secret for Better Auth's `oAuthProxy` plugin — lets preview/branch deployments run the
    * social-OAuth flow through production (whose callback URL is the only one registered with the
@@ -270,14 +245,10 @@ export const connectorServer = {
   GITHUB_API_BASE: z.string().min(1).optional(),
   /** Linear GraphQL API base override (defaults to `https://api.linear.app`). */
   LINEAR_API_BASE: z.string().min(1).optional(),
-  /** Google Drive REST API base override. */
-  GOOGLE_DRIVE_API_BASE: z.string().min(1).optional(),
   /** Gmail REST API base override. */
   GOOGLE_GMAIL_API_BASE: z.string().min(1).optional(),
   /** Google Calendar REST API base override. */
   GOOGLE_CALENDAR_API_BASE: z.string().min(1).optional(),
   /** Google Tasks REST API base override. */
   GOOGLE_TASKS_API_BASE: z.string().min(1).optional(),
-  /** Microsoft Graph API base override. */
-  MICROSOFT_GRAPH_API_BASE: z.string().min(1).optional(),
 };

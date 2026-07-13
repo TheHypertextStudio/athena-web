@@ -101,16 +101,7 @@ describe('integrations directory', () => {
     const dir = await body<DirectoryRes>(res);
 
     const providers = dir.providers.map((p) => p.provider).sort();
-    expect(providers).toEqual([
-      'calendar',
-      'drive',
-      'github',
-      'gmail',
-      'gtasks',
-      'linear',
-      'outlook',
-      'slack',
-    ]);
+    expect(providers).toEqual(['calendar', 'github', 'gmail', 'gtasks', 'linear']);
 
     const github = dir.providers.find((p) => p.provider === 'github')!;
     expect(github.name).toBe('GitHub');
@@ -118,12 +109,6 @@ describe('integrations directory', () => {
     expect(github.roles).toContain('code');
     expect(github.category).toBe('engineering');
 
-    // Slack is the observe-only entry: signal role, no Connector sync.
-    const slack = dir.providers.find((p) => p.provider === 'slack')!;
-    expect(slack.name).toBe('Slack');
-    expect(slack.pattern).toBe('connector');
-    expect(slack.roles).toEqual(['signal']);
-    expect(slack.syncable).toBe(false);
     expect(github.syncable).toBe(true);
 
     // The three onboarding connect sources are all present with sensible directory entries.
@@ -239,7 +224,7 @@ describe('integrations sync', () => {
       .insert(schema.integration)
       .values({
         organizationId: orgId,
-        provider: 'drive',
+        provider: 'github',
         pattern: 'connector',
         roles: ['context'],
         config: { teamId: 'not-a-real-team' },
@@ -600,13 +585,24 @@ describe('integrations connect lifecycle (validate before connected)', () => {
     expect(created.status).toBe('pending');
   });
 
-  it('ignores a client-supplied status (a caller cannot self-declare connected)', async () => {
+  it('rejects providers outside the supported data-provider allowlist', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
     const w = appWithActor(integrations, orgId, ['manage'], humanActorId);
     const res = await w.request('/', {
       method: 'POST',
       headers: J,
       body: JSON.stringify({ provider: 'drive', pattern: 'connector', status: 'connected' }),
+    });
+    expect(res.status).toBe(422);
+  });
+
+  it('ignores a client-supplied status (a caller cannot self-declare connected)', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const w = appWithActor(integrations, orgId, ['manage'], humanActorId);
+    const res = await w.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ provider: 'github', pattern: 'connector', status: 'connected' }),
     });
     const created = await body<IntegrationStateRes>(res);
     expect(created.status).toBe('pending');

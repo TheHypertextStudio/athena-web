@@ -99,7 +99,7 @@ export interface ConnectorProviderClient {
  * @remarks
  * Extends the read-only {@link ConnectorProviderClient} with a single `pushTask` that applies
  * one {@link TaskPushOp} to the provider. Kept as a *separate* interface so the read-only
- * providers (GitHub/Linear/Drive/Gmail/Calendar) implement nothing extra; `RealConnector`
+ * providers (GitHub/Linear/Gmail/Calendar/Google Tasks) implement nothing extra; `RealConnector`
  * narrows via {@link isWritableProviderClient} — purely structural — and exposes it through
  * {@link Connector.asWritable}. Membership must agree with the `WRITE_BACK_CAPABLE_PROVIDERS`
  * manifest (a boundary test enforces it).
@@ -123,7 +123,7 @@ export function isWritableProviderClient(
 }
 
 /**
- * The mail-capable provider client (today `GmailProviderClient`; Outlook/Graph next).
+ * The mail-capable provider client (`GmailProviderClient`).
  *
  * @remarks
  * Extends the read-only client with incremental thread listing, mailbox mutation, and

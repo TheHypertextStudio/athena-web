@@ -5,7 +5,7 @@
  *
  * @remarks
  * Heterogeneous events render through one homogeneous row; the source is shown here as a small
- * badge, not a per-source layout. Brand-ish dot colors keep Slack/Linear/GitHub/Docket instantly
+ * badge, not a per-source layout. Brand-ish dot colors keep Linear/GitHub/Docket instantly
  * recognizable; an unknown provider falls back to its raw name with a neutral dot.
  */
 import { PROVIDER_CATALOG, type SourceSystemKind } from '@docket/types';
@@ -20,17 +20,14 @@ const SOURCE_LABELS = Object.fromEntries(
 const SYSTEM_COLORS: Record<string, string> = {
   docket: '#7a5cff',
   linear: '#5e6ad2',
-  slack: '#611f69',
-  discord: '#5865f2',
   github: '#1f2328',
   google_calendar: '#9a948c',
   gmail: '#9a948c',
-  outlook: '#5c7fb8',
 };
 
 /** Props for {@link ProviderBadge}. */
 export interface ProviderBadgeProps {
-  /** The source system (`docket` | `linear` | `slack` | `discord` | `github` | `google_calendar` | `gmail` | `outlook`). */
+  /** The source system (`docket` | `linear` | `github` | `google_calendar` | `gmail`). */
   readonly system: SourceSystemKind;
 }
 

@@ -2,12 +2,10 @@ import type { IntegrationOut } from '@docket/types';
 import { CONNECTOR_PROVIDER_IDS, connectorIdentityProvider } from '@docket/types';
 import {
   Calendar,
-  Folder,
   Github,
   Layers,
   type LucideIcon,
   Mail,
-  MessageSquare,
   Sparkles,
   TaskAlt,
 } from '@docket/ui/icons';
@@ -16,12 +14,9 @@ import {
 export const PROVIDER_ICON: Record<string, LucideIcon> = {
   github: Github,
   linear: Layers,
-  drive: Folder,
   gmail: Mail,
-  outlook: Mail,
   calendar: Calendar,
   gtasks: TaskAlt,
-  slack: MessageSquare,
 };
 
 /**
@@ -30,7 +25,7 @@ export const PROVIDER_ICON: Record<string, LucideIcon> = {
  * rather than a Better Auth social-link. The callback returns to settings with
  * `?<provider>=connected|error`.
  */
-export const REDIRECT_CONNECT_PROVIDERS: ReadonlySet<string> = new Set(['slack']);
+export const REDIRECT_CONNECT_PROVIDERS: ReadonlySet<string> = new Set();
 
 /** providerIcon returns the icon component for an integration provider. */
 export function providerIcon(provider: string): LucideIcon {
@@ -61,18 +56,16 @@ export const STATUS_LABEL: Record<
  * Map a connector provider to the Better Auth social provider whose OAuth grant funds it.
  *
  * @remarks
- * Mirrors the server's `socialProviderId`: all four Google products share the one `google`
- * grant; GitHub, Linear, and Microsoft (Outlook) each have their own. Used to decide which
+ * Mirrors the server's `socialProviderId`: all three Google products share the one `google`
+ * grant; GitHub and Linear each have their own. Used to decide which
  * provider's OAuth redirect to launch when finishing/repairing a connection.
  */
-export function socialProviderForConnector(
-  provider: string,
-): 'google' | 'github' | 'linear' | 'microsoft' {
+export function socialProviderForConnector(provider: string): 'google' | 'github' | 'linear' {
   const connectorProvider = CONNECTOR_PROVIDER_IDS.find((p) => p === provider);
   const identityProvider = connectorProvider
     ? connectorIdentityProvider(connectorProvider)
     : 'google';
-  return identityProvider === 'discord' ? 'google' : identityProvider;
+  return identityProvider;
 }
 
 // Provider/connector *availability* (isMockMode, connectorOAuthConfigured, connectorAvailable) is

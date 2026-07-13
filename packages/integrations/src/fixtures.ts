@@ -93,20 +93,6 @@ export const CONNECTOR_ITEMS: Readonly<Record<ConnectorProvider, readonly Import
       },
     },
   ],
-  drive: [
-    {
-      id: '01HZ0000000000000000DR0001',
-      kind: 'document',
-      title: 'Q1 Planning Doc',
-      body: 'Quarterly objectives and key results.',
-      provenance: {
-        provider: 'drive',
-        externalId: 'drive-file-abc',
-        externalUrl: 'https://drive.google.com/file/d/drive-file-abc',
-        importedAt: FIXED_NOW,
-      },
-    },
-  ],
   gmail: [
     {
       id: '01HZ0000000000000000GM0001',
@@ -114,19 +100,6 @@ export const CONNECTOR_ITEMS: Readonly<Record<ConnectorProvider, readonly Import
       title: 'Re: Contract renewal',
       body: 'Following up on the renewal terms.',
       provenance: { provider: 'gmail', externalId: 'gmail-thread-xyz', importedAt: FIXED_NOW },
-    },
-  ],
-  outlook: [
-    {
-      id: '01HZ0000000000000000OL0001',
-      kind: 'message',
-      title: 'Can you review the vendor contract?',
-      provenance: {
-        provider: 'outlook',
-        externalId: 'outlook-message-0001',
-        externalUrl: 'https://outlook.mock.docket.local/mail/outlook-message-0001',
-        importedAt: FIXED_NOW,
-      },
     },
   ],
   calendar: [
@@ -503,28 +476,6 @@ export const MAIL_THREAD_SUMMARIES: Readonly<
       receivedAt: FIXED_NOW,
       rfc822MessageId: '<promo-0001@shop.example.com>',
       externalUrl: 'https://mail.mock.docket.local/#all/gmail-thread-promo',
-    },
-  ],
-  outlook: [
-    {
-      threadId: 'outlook-conversation-actionable',
-      subject: 'Can you send the signed NDA back by Thursday?',
-      snippet: 'Can you send the signed NDA back by Thursday? Legal is waiting on it.',
-      from: 'Grace Hopper <grace@example.com>',
-      receivedAt: FIXED_NOW,
-      // Deliberately matches no Gmail fixture: cross-provider dedup is exercised by tests
-      // that reuse a Message-ID across providers, not by the default fixture sets.
-      rfc822MessageId: '<outlook-actionable-0001@example.com>',
-      externalUrl: 'https://outlook.mock.docket.local/mail/outlook-conversation-actionable',
-    },
-    {
-      threadId: 'outlook-conversation-promo',
-      subject: 'Last chance: 40% off annual plans',
-      snippet: 'Upgrade now and save. Unsubscribe from these offers any time.',
-      from: 'Offers <no-reply@saas.example.com>',
-      receivedAt: FIXED_NOW,
-      rfc822MessageId: '<outlook-promo-0001@saas.example.com>',
-      externalUrl: 'https://outlook.mock.docket.local/mail/outlook-conversation-promo',
     },
   ],
 };

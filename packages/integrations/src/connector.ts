@@ -3,7 +3,7 @@
  *
  * @remarks
  * The single typed edge to an external work/context provider
- * (GitHub/Drive/Linear/Gmail/Calendar/Google Tasks). The real adapters call the
+ * (GitHub/Linear/Gmail/Calendar/Google Tasks). The real adapters call the
  * provider API with an OAuth token; the mock returns fixture issues/docs/events/tasks
  * carrying provenance.
  * The Migration-vs-Connector logic and import / read-only-mirror are real business
@@ -20,10 +20,12 @@ import type { WorkGraphConnector } from './work-graph';
  *
  * @remarks
  * `gtasks` is Google Tasks (the user's personal to-dos), distinct from `calendar`
- * (Google Calendar events) and the Google document/mail surfaces (`drive`/`gmail`).
- * `outlook` is Microsoft Outlook mail via the Graph API (dormant until the Microsoft
- * OAuth credentials are configured — `/v1/config` hides unconfigured providers).
+ * (Google Calendar events) and the Gmail surface.
+ * Google Calendar and Google Tasks are separate products funded by the Google identity grant.
  */
+/** Provider ids retained only for compiling dormant adapters and reading legacy rows. */
+export type LegacyConnectorProvider = 'drive' | 'outlook';
+/** Active connector ids accepted by the application catalog. */
 export type ConnectorProvider = ConnectorProviderId;
 
 /** Input to establish a connection to a provider for an org scope. */
@@ -70,7 +72,7 @@ export interface ConnectionResult {
 /** Provenance attached to every imported item so its origin is auditable. */
 export interface ItemProvenance {
   /** The provider the item came from. */
-  readonly provider: ConnectorProvider;
+  readonly provider: ConnectorProvider | LegacyConnectorProvider;
   /** The item's native id in the source system. */
   readonly externalId: string;
   /** Canonical URL of the item in the source system, when available. */
@@ -327,7 +329,7 @@ export interface Connector {
    *
    * @remarks
    * The single typed seam the sync engine uses to detect two-way support: read-only
-   * connectors (GitHub/Linear/Drive/Gmail/Calendar) omit it or return `undefined`, and only
+   * connectors (GitHub/Linear/Gmail/Calendar/Google Tasks) omit it or return `undefined`, and only
    * a write-back connector (Google Tasks) returns a {@link WritableConnector}.
    */
   asWritable?(): WritableConnector | undefined;

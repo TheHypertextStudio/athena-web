@@ -10,6 +10,7 @@
 import { z } from 'zod';
 
 import { ActorId, IntegrationId, OrganizationId } from './primitives';
+import { CONNECTOR_PROVIDER_IDS, DIRECTORY_PROVIDER_IDS } from './provider-catalog';
 
 /** Integration pattern: replace (migration) vs complement (connector). */
 export const IntegrationPattern = z
@@ -186,8 +187,8 @@ export type ConnectorConfig = z.infer<typeof ConnectorConfig>;
  * Per-purpose incremental-sync cursors, stored in the integration's `sync_state` jsonb.
  *
  * @remarks
- * Cursors are opaque, provider-owned resume tokens (Gmail `historyId`; Microsoft Graph
- * `deltaLink`) — never parsed by the app, only echoed back to the connector's
+ * Cursors are opaque, provider-owned resume tokens (for example Gmail `historyId`) — never
+ * parsed by the app, only echoed back to the connector's
  * `listThreads`. Written exclusively while the sync lease is held, so concurrent sweeps
  * cannot interleave cursor updates. An absent purpose key means no cursor yet: the next
  * pull is a full one. See `docs/engineering/specs/mail-providers.md` §4.
@@ -253,10 +254,9 @@ export type ConnectorResourceListOut = z.infer<typeof ConnectorResourceListOut>;
 export const IntegrationCreate = z
   .object({
     provider: z
-      .string()
-      .min(1)
+      .enum(CONNECTOR_PROVIDER_IDS)
       .describe(
-        'The provider id to connect (e.g. `gtasks`, `linear`, `slack`, `github`) — one of the ids from `GET /directory`.',
+        'The provider id to connect — one of `gmail`, `gtasks`, `calendar`, `github`, or `linear` from `GET /directory`.',
       ),
     pattern: IntegrationPattern.describe(
       'Whether this is a `migration` (one-time replace) or `connector` (ongoing complement).',
@@ -334,7 +334,7 @@ export type IntegrationUpdate = z.infer<typeof IntegrationUpdate>;
 export const IntegrationDirectoryProvider = z
   .object({
     provider: z
-      .string()
+      .enum(DIRECTORY_PROVIDER_IDS)
       .describe('The provider id to pass as `provider` when connecting (e.g. `gtasks`).'),
     name: z
       .string()
@@ -350,9 +350,7 @@ export const IntegrationDirectoryProvider = z
       .describe("A grouping label for the connect wizard (e.g. the provider's product category)."),
     syncable: z
       .boolean()
-      .describe(
-        'Whether the provider supports import/sync through the Connector port. Observe-only signal sources (e.g. Slack) are `false` — they push events inbound and expose no sync.',
-      ),
+      .describe('Whether the provider supports import/sync through the Connector port.'),
   })
   .meta({
     id: 'IntegrationDirectoryProvider',

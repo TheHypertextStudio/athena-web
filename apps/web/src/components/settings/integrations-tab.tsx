@@ -15,6 +15,7 @@
  * the credential. Data is fetched at runtime, so the production build needs no running server.
  */
 import type {
+  ConnectorProviderId,
   IdentityOut,
   IntegrationDirectoryProvider,
   IntegrationOut,
@@ -33,7 +34,8 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
-import { userErrorMessage } from '@/lib/problem';
+import { useAuthenticationRecovery } from '@/components/authentication-interlock';
+import { readError } from '@/lib/problem';
 import { connectorAvailable, connectorOAuthConfigured, usePublicConfig } from '@/lib/public-config';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
 
@@ -44,7 +46,6 @@ import { MailIngestSection } from './mail-ingest-section';
 import { IntegrationProviderCard } from './integration-provider-card';
 import { IntegrationActionButton } from './integration-action-button';
 import {
-  REDIRECT_CONNECT_PROVIDERS,
   categoryLabel,
   hasInlineConfigPanel,
   socialProviderForConnector,
@@ -135,6 +136,7 @@ export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabPr
   const qc = useQueryClient();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const recoverAuthentication = useAuthenticationRecovery();
 
   const [busyProvider, setBusyProvider] = useState<string | null>(null);
   const [selectedLinearAccountId, setSelectedLinearAccountId] = useState('');
@@ -183,9 +185,7 @@ export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabPr
   const teams: readonly TeamOut[] = teamsQ.data?.items ?? [];
   const identities: readonly IdentityOut[] = identitiesQ.data?.items ?? [];
   const loading = directoryQ.isPending;
-  const loadError = directoryQ.isError
-    ? userErrorMessage(directoryQ.error, 'Could not update integrations.')
-    : null;
+  const loadError = directoryQ.isError ? directoryQ.error.message : null;
   const { data: config } = usePublicConfig();
 
   const setActionError = useCallback((provider: string, message: string | null) => {
@@ -204,18 +204,6 @@ export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabPr
    */
   const finishConnection = useCallback(
     async (id: string, provider: string, useLinkedIdentity = false): Promise<void> => {
-      // Redirect-connect providers (Slack): fetch the signed consent URL and navigate there.
-      // The provider redirects back to settings with `?<provider>=connected|error` (works in
-      // local mock mode too — the server short-circuits the consent to its callback).
-      if (REDIRECT_CONNECT_PROVIDERS.has(provider)) {
-        const { url } = await unwrap(
-          () =>
-            api.v1.orgs[':orgId'].integrations[':id']['connect-url'].$get({ param: { orgId, id } }),
-          'Could not start the provider connect flow.',
-        );
-        window.location.assign(url);
-        return; // the browser navigates to the provider's consent screen
-      }
       if (!useLinkedIdentity && connectorOAuthConfigured(config, provider)) {
         await authClient.linkSocial({
           provider: socialProviderForConnector(provider),
@@ -224,22 +212,24 @@ export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabPr
         });
         return; // the browser redirects to the provider's consent screen
       }
-      const verified = await unwrap(
-        () => api.v1.orgs[':orgId'].integrations[':id'].verify.$post({ param: { orgId, id } }),
-        'Could not validate this connection.',
+      const verified = await recoverAuthentication(() =>
+        unwrap(
+          () => api.v1.orgs[':orgId'].integrations[':id'].verify.$post({ param: { orgId, id } }),
+          'Could not validate this connection.',
+        ),
       );
       await refreshIntegrations();
       if (verified.status !== 'connected') {
-        setActionError(provider, 'Connection could not be validated. Reconnect it and try again.');
+        setActionError(provider, verified.lastError ?? 'Connection could not be validated.');
       }
     },
-    [config, orgId, refreshIntegrations, setActionError],
+    [config, orgId, recoverAuthentication, refreshIntegrations, setActionError],
   );
 
   /** Create a brand-new integration (pending) with this surface's pattern, then validate it. */
   const runConnect = useCallback(
     async (
-      provider: string,
+      provider: ConnectorProviderId,
       roles: readonly IntegrationRole[],
       externalAccountId?: string,
     ): Promise<void> => {
@@ -254,41 +244,53 @@ export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabPr
               )
             : undefined;
         if (legacyLinear && externalAccountId) {
-          await unwrap(
-            () =>
-              api.v1.orgs[':orgId'].integrations[':id'].$patch({
-                param: { orgId, id: legacyLinear.id },
-                json: { externalAccountId },
-              }),
-            'Could not bind this account to the existing Linear connection.',
+          await recoverAuthentication(() =>
+            unwrap(
+              () =>
+                api.v1.orgs[':orgId'].integrations[':id'].$patch({
+                  param: { orgId, id: legacyLinear.id },
+                  json: { externalAccountId },
+                }),
+              'Could not bind this account to the existing Linear connection.',
+            ),
           );
           await refreshIntegrations();
           await finishConnection(legacyLinear.id, provider, true);
           return;
         }
-        const created = await unwrap(
-          () =>
-            api.v1.orgs[':orgId'].integrations.$post({
-              param: { orgId },
-              json: {
-                provider,
-                pattern: cfg.pattern,
-                ...(roles.length > 0 ? { roles: [...roles] } : {}),
-                syncMode: cfg.pattern === 'migration' ? 'import' : 'mirror',
-                ...(externalAccountId ? { externalAccountId } : {}),
-              },
-            }),
-          'Could not connect this integration.',
+        const created = await recoverAuthentication(() =>
+          unwrap(
+            () =>
+              api.v1.orgs[':orgId'].integrations.$post({
+                param: { orgId },
+                json: {
+                  provider,
+                  pattern: cfg.pattern,
+                  ...(roles.length > 0 ? { roles: [...roles] } : {}),
+                  syncMode: cfg.pattern === 'migration' ? 'import' : 'mirror',
+                  ...(externalAccountId ? { externalAccountId } : {}),
+                },
+              }),
+            'Could not connect this integration.',
+          ),
         );
         await refreshIntegrations();
         await finishConnection(created.id, provider, externalAccountId !== undefined);
       } catch (err) {
-        setActionError(provider, userErrorMessage(err, 'Could not connect this integration.'));
+        setActionError(provider, readError(err, 'Could not connect this integration.'));
       } finally {
         setBusyProvider(null);
       }
     },
-    [orgId, cfg.pattern, finishConnection, integrations, refreshIntegrations, setActionError],
+    [
+      orgId,
+      cfg.pattern,
+      finishConnection,
+      integrations,
+      recoverAuthentication,
+      refreshIntegrations,
+      setActionError,
+    ],
   );
 
   /** Finish/repair an existing integration's connection. */
@@ -299,10 +301,7 @@ export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabPr
       try {
         await finishConnection(existing.id, existing.provider);
       } catch (err) {
-        setActionError(
-          existing.provider,
-          userErrorMessage(err, 'Could not reconnect this integration.'),
-        );
+        setActionError(existing.provider, readError(err, 'Could not reconnect this integration.'));
       } finally {
         setBusyProvider(null);
       }
@@ -330,24 +329,6 @@ export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabPr
     });
   }, [verifyReturnId, router]);
 
-  // Redirect-connect return: the provider callback lands back with `?<provider>=connected|error`.
-  // The server already recorded the connection health outcome — refresh and
-  // strip the flag; an error also surfaces an inline nudge on the provider's card.
-  const redirectProvider =
-    [...REDIRECT_CONNECT_PROVIDERS].find((provider) => {
-      const status = searchParams.get(provider);
-      return status === 'connected' || status === 'error';
-    }) ?? null;
-  const redirectStatus = redirectProvider ? searchParams.get(redirectProvider) : null;
-  useEffect(() => {
-    if (!redirectProvider || !redirectStatus) return;
-    void refreshIntegrations();
-    if (redirectStatus === 'error') {
-      setActionError(redirectProvider, 'The connection was not completed.');
-    }
-    router.replace(window.location.pathname);
-  }, [redirectProvider, redirectStatus, router, refreshIntegrations, setActionError]);
-
   const sync = useApiMutation({
     mutationFn: (id: string) =>
       unwrap(
@@ -364,10 +345,10 @@ export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabPr
         setSyncFeedback((prev) => ({ ...prev, [id]: null }));
       }, 5000);
     },
-    onError: (err: Error, id: string) => {
+    onError: (err: { message: string }, id: string) => {
       setSyncingId(null);
       const provider = integrations.find((i) => i.id === id)?.provider;
-      if (provider) setActionError(provider, userErrorMessage(err, 'Sync failed.'));
+      if (provider) setActionError(provider, err.message);
     },
     invalidateKeys: [queryKeys.integrations(orgId)],
   });
@@ -383,12 +364,10 @@ export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabPr
       const provider = integrations.find((i) => i.id === id)?.provider;
       if (provider) setActionError(provider, null);
     },
-    onError: (err: Error, id: string) => {
+    onError: (err: { message: string }, id: string) => {
       setDisconnectingId(null);
       const provider = integrations.find((i) => i.id === id)?.provider;
-      if (provider) {
-        setActionError(provider, userErrorMessage(err, 'Could not disconnect this integration.'));
-      }
+      if (provider) setActionError(provider, err.message);
     },
     invalidateKeys: [queryKeys.integrations(orgId)],
   });

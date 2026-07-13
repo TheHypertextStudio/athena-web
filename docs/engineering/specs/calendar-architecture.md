@@ -34,7 +34,7 @@ Required shape:
 
 - `id`
 - `userId`
-- `provider`: `google` initially; future `microsoft`, `caldav`, `apple`
+- `provider`: `google`
 - `externalAccountId`
 - `accountEmail`
 - `accountName`
@@ -56,7 +56,7 @@ Suggested columns:
 - `id`
 - `userId`
 - `connectionId` nullable for Docket-native layers
-- `provider`: nullable or `docket | google | microsoft | caldav`
+- `provider`: nullable or `docket | google`
 - `sourceKind`: `provider_calendar | native_blocks | task_timeboxes | availability`
 - `externalLayerId`: provider calendar id when applicable
 - `title`
@@ -186,7 +186,7 @@ Purpose:
 
 Add to `@docket/types`:
 
-- `CalendarProvider = 'docket' | 'google' | 'microsoft' | 'caldav'`
+- `CalendarProvider = 'docket' | 'google'`
 - `CalendarLayerSourceKind`
 - `CalendarItemKind`
 - `CalendarItemStatus`
@@ -282,7 +282,7 @@ Implement as small units rather than expanding route files:
   every call site (the pull engine, `syncSingleLayer`, the outbox's `attemptCalendarItemWrite`)
   resolves credentials through the same discover-then-resolve seam
   (`createDefaultCalendarSyncModules`/`createGoogleCalendarSyncModule`), so a future
-  Microsoft/CalDAV adapter plugs in without the engine knowing provider-specific auth shapes.
+  Google Calendar is the only external calendar adapter in the current provider allowlist.
 - **Permission normalization** is a real, adapter-emitted `CalendarItemPermission` (`canEditCore`,
   `canDelete`, `readOnlyReason`) computed once per item and denormalized onto `calendarItem`,
   not re-derived ad hoc by each reader. `calendar-write.ts`'s `problemForReadOnlyReason` is an

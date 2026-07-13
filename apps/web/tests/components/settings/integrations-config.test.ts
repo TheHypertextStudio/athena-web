@@ -80,6 +80,5 @@ describe('hasInlineConfigPanel', () => {
 
   it('is false for a provider with no config panel at all', () => {
     expect(hasInlineConfigPanel('github')).toBe(false);
-    expect(hasInlineConfigPanel('drive')).toBe(false);
   });
 });

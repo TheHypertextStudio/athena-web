@@ -25,7 +25,6 @@ import { apiDoc } from '../lib/openapi-route';
 import { serializableTx } from '../lib/serializable-tx';
 import { zJson, zParam } from '../lib/validate';
 import { buildInstallUrl, signInstallState } from '../lib/github-app';
-import { buildSlackAuthorizeUrl, signSlackConnectState } from '../lib/slack-app';
 import { seedDefaultAutomationRules } from '../lib/automation/rules-store';
 import { capabilityGuard } from '../permissions/capability-guard';
 
@@ -320,7 +319,6 @@ Requires \`manage\` — wiring an external data source into the org is an admini
       const providers: z.input<typeof IntegrationDirectoryOut>['providers'] =
         DIRECTORY_PROVIDERS.map((provider) => ({
           provider,
-          // Observe-only sources (Slack) push events inbound and expose no Connector sync.
           syncable: asConnectorProvider(provider) !== null,
           ...PROVIDER_DIRECTORY[provider],
         }));
@@ -754,10 +752,7 @@ Requires \`manage\` — triggering org-wide mirroring is an administrative actio
       return ok(c, SyncRunOut, toSyncRunOut(run));
     },
   )
-  // Redirect-style connects. GitHub = installing the GitHub App; Slack = the shared app's
-  // user-token OAuth consent. Both return a URL (with a signed `state` binding this integration
-  // + org) the client sends the user to; the provider redirects back to the matching non-RPC
-  // `/internal/integrations/<provider>/callback`, which records the grant.
+  // GitHub installation returns a URL with a signed `state` binding this integration + org.
   .get(
     '/:id/connect-url',
     capabilityGuard('manage'),
@@ -765,9 +760,7 @@ Requires \`manage\` — triggering org-wide mirroring is an administrative actio
       tag: 'Integrations',
       summary: 'Get a provider connect URL',
       capability: 'manage',
-      description: `Return the **connect URL** the client redirects the user to in order to connect this integration — for GitHub that is the GitHub App install page, for Slack the shared Docket app's OAuth consent (user-token scopes). The response is \`{ url }\` (a bare JSON object, not the standard envelope). The URL embeds a signed \`state\` that binds this integration id + org (+ the connecting user for Slack), so when the user finishes the provider redirects to the non-RPC \`/internal/integrations/<provider>/callback\`, which records the installation/grant against this integration.
-
-Only valid for a GitHub or Slack integration row (else 409 \`A connect URL is only available for GitHub or Slack integrations\`), and only when the provider app is configured (else 409 naming the missing env var); a missing/cross-tenant id 404s. Requires \`manage\`. Related: \`POST /\` (create the integration row first), \`POST /:id/sync\`.`,
+      description: `Return the **connect URL** the client redirects the user to in order to install a GitHub App integration. The response is \`{ url }\`. A missing/cross-tenant id 404s. Requires \`manage\`. Related: \`POST /\` (create the integration row first), \`POST /:id/sync\`.`,
     }),
     zParam(idParam),
     async (c) => {
@@ -780,20 +773,7 @@ Only valid for a GitHub or Slack integration row (else 409 \`A connect URL is on
           throw new ConflictError('The GitHub App is not configured (GITHUB_APP_SLUG is unset)');
         return c.json({ url });
       }
-      if (row.provider === 'slack') {
-        // The Slack grant is a USER token, so the state also carries who is connecting — the
-        // browser callback has no session to recover it from.
-        const userId = c.get('session')?.user.id;
-        /* v8 ignore next -- @preserve defensive: /v1 routes are session-gated by requireAuth */
-        if (!userId) throw new ConflictError('A signed-in session is required to connect Slack');
-        const url = buildSlackAuthorizeUrl(
-          signSlackConnectState({ integrationId: id, orgId, userId }),
-        );
-        if (!url)
-          throw new ConflictError('The Slack app is not configured (SLACK_CLIENT_ID is unset)');
-        return c.json({ url });
-      }
-      throw new ConflictError('A connect URL is only available for GitHub or Slack integrations');
+      throw new ConflictError('A connect URL is only available for GitHub integrations');
     },
   )
   .get(

@@ -16,7 +16,6 @@ import { WizardShell } from '@/components/onboarding/wizard-shell';
 import { WorkspaceNameField } from '@/components/workspace-creation/workspace-name-field';
 import { useAuthenticationRecovery } from '@/components/authentication-interlock';
 import { passkey, useSession } from '@/lib/auth-client';
-<<<<<<< HEAD
 import { userErrorMessage } from '@/lib/problem';
 import { createWorkspace } from '@/lib/workspace-creation';
 

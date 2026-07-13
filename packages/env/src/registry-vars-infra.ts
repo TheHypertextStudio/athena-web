@@ -208,15 +208,6 @@ export const INFRA_VARS: readonly VarSpec[] = [
     where: 'Linear GraphQL API base override. Absent ⇒ https://api.linear.app',
   },
   {
-    name: 'GOOGLE_DRIVE_API_BASE',
-    slice: 'connector',
-    scope: 'server',
-    targets: ['api'],
-    required: false,
-    zod: connectorServer.GOOGLE_DRIVE_API_BASE,
-    where: 'Google Drive REST API base override. Absent ⇒ https://www.googleapis.com/drive/v3',
-  },
-  {
     name: 'GOOGLE_GMAIL_API_BASE',
     slice: 'connector',
     scope: 'server',
@@ -224,15 +215,6 @@ export const INFRA_VARS: readonly VarSpec[] = [
     required: false,
     zod: connectorServer.GOOGLE_GMAIL_API_BASE,
     where: 'Gmail REST API base override. Absent ⇒ https://gmail.googleapis.com/gmail/v1',
-  },
-  {
-    name: 'MICROSOFT_GRAPH_API_BASE',
-    slice: 'connector',
-    scope: 'server',
-    targets: ['api'],
-    required: false,
-    zod: connectorServer.MICROSOFT_GRAPH_API_BASE,
-    where: 'Microsoft Graph API base override. Absent ⇒ https://graph.microsoft.com/v1.0',
   },
   {
     name: 'GOOGLE_CALENDAR_API_BASE',

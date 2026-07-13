@@ -30,7 +30,6 @@ export const SEARCH_SOURCE_VALUES = [
   'docket',
   'linear',
   'github',
-  'slack',
   'google_calendar',
   'gmail',
 ] as const satisfies readonly SourceSystemKind[];

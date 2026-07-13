@@ -71,7 +71,6 @@ export type ProviderId =
   | 'github'
   | 'linear'
   | 'apple'
-  | 'slack'
   | 'stripe'
   | 'anthropic'
   | 'email'
@@ -355,13 +354,13 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
       '3) Enable the APIs you need: ☰ menu → "APIs & Services" → "Library". Search each, open it,',
       '   click "Enable":',
       '     • "Google People API"   (required — sign-in profile)',
-      '     • "Google Drive API", "Gmail API", "Google Calendar API", "Google Tasks API"',
+      '     • "Gmail API", "Google Calendar API", "Google Tasks API"',
       '       (only the connectors you plan to use)',
       '4) Configure the consent screen (first time only): "APIs & Services" → "OAuth consent screen".',
       '     • User type: "External" (or "Internal" if this is a Google Workspace org) → Create',
       '     • App name: "Docket", User support email: you, Developer contact email: you → Save',
       '     • Scopes: add ".../auth/userinfo.email", ".../auth/userinfo.profile", "openid"',
-      '       (+ drive/gmail/calendar/tasks scopes if you enabled those APIs) → Save',
+      '       (+ gmail/calendar/tasks scopes if you enabled those APIs) → Save',
       '     • If the app is in "Testing", add your Google address under "Test users".',
       '5) Create the credential: "APIs & Services" → "Credentials" → "+ Create credentials" →',
       '   "OAuth client ID" → Application type: "Web application" →',
@@ -624,37 +623,6 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
       '',
     ],
     transform: { APPLE_PRIVATE_KEY: encodeApplePrivateKeyInput },
-  },
-  {
-    id: 'slack',
-    title: 'Slack Integration Set-up',
-    label: 'Slack App',
-    consoleUrl: 'https://api.slack.com/apps',
-    vars: ['SLACK_CLIENT_ID', 'SLACK_CLIENT_SECRET', 'SLACK_SIGNING_SECRET'],
-    instructions: (env, urls) => [
-      'Creates the shared Slack app (user-token Events API). ~5 min. You need a Slack account;',
-      'the app is created once and then installed per-user via "Connect Slack" in Docket.',
-      '',
-      'Setting up locally? This is optional — local dev runs against a built-in mock (the connect',
-      'flow short-circuits to fixtures), so you can press Enter past these prompts and wire up',
-      'Slack later. A real local webhook loop also needs the cloudflared tunnel (`pnpm bootstrap`)',
-      'and a SEPARATE dev Slack app — Slack allows one events request URL per app.',
-      '',
-      '1) Open https://api.slack.com/apps and click "Create New App" → "From a manifest".',
-      '2) Pick any workspace you own to host the app (end users install it into their own).',
-      '3) Paste the manifest from infra/slack/docket-app-manifest.yaml, substituting:',
-      `     • oauth redirect url  : ${urls.apiBase}/internal/integrations/slack/callback`,
-      `     • events request_url  : ${urls.apiBase}/internal/ingest/slack`,
-      '   → Create. (Slack verifies the request URL live, so the API must already be deployed',
-      '   and reachable at that host — deploy first, then create/update the app.)',
-      env === 'production'
-        ? '4) Under "Manage Distribution", activate public distribution so any workspace can install it.'
-        : '4) Distribution can stay off for a dev app (you install it into your own workspace).',
-      '5) Open "Basic Information" → "App Credentials":',
-      '     • Client ID     → SLACK_CLIENT_ID',
-      '     • Client Secret → SLACK_CLIENT_SECRET',
-      '     • Signing Secret→ SLACK_SIGNING_SECRET',
-    ],
   },
   {
     id: 'stripe',

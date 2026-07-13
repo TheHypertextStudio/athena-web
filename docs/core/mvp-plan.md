@@ -172,19 +172,19 @@ Drop into an organization and the whole app rebinds to that context. Step back t
 
 ## 6. Integrations
 
-Every organization you run already lives in a scatter of tools. A startup keeps its planning in one app, its files in a shared drive, its conversations in email and chat. A nonprofit might run almost entirely out of a Google account: documents, a shared calendar, a donor inbox. Docket does not ask you to throw any of that away. It sits on top of the tools each venture already uses and connects to them one organization at a time, so the morning you sign up it can already show you real work pulled in from where it lives today. That is the whole point of starting on top: Docket has to be useful on day one, before you have moved a single thing, or you would never bother moving anything at all.
+Every organization you run already lives in a scatter of tools. A startup keeps its planning in Linear, its code in GitHub, and its messages and meetings in Google Workspace. A nonprofit might run almost entirely out of Gmail, Google Calendar, and Google Tasks. Docket sits on top of those tools and connects to them one organization at a time, so the morning you sign up it can already show you real work pulled in from where it lives today.
 
-From there, two kinds of connection exist, and the difference is about ownership. A migration is for the tool that holds your actual to-do list and plans, the place where "the work" lives — Docket pulls that work in and becomes its true home, and the old planning tool is meant to be retired. A connector is for the tools you will keep using for what they are best at: your files stay in your drive, your messages stay in your email and chat, your meetings stay on your calendar, your code stays in your code host. Docket does not try to swallow those. It links to them, so a task can point you straight at the relevant document or thread, and it watches the ones that matter — an incoming donor email, a looming deadline — for things that should become work you actually plan. The long-term aim is for Docket to be the one place your work truly lives across every venture, while everything that genuinely belongs elsewhere keeps belonging elsewhere, always one clear click away.
+From there, two kinds of connection exist, and the difference is about ownership. Linear is the migration source for planning work. Gmail, Google Tasks, Google Calendar, and GitHub remain authoritative for the data they own; Docket links to them and turns relevant signals into work.
 
 Each organization connects **its own** toolstack (a startup's GitHub + Linear + Google Workspace; a nonprofit's Google Workspace). Docket sits _above_ those tools.
 
-- **The end game: Docket becomes the source of truth — for the _work_ layer.** Like Linear, Docket aims to be where your planning and tasks truly live. But it never tries to own everything: **code stays in GitHub, documents stay in Drive, calendar and email stay where they are** — Docket _links_ to them.
+- **The end game: Docket becomes the source of truth — for the _work_ layer.** Like Linear, Docket aims to be where your planning and tasks truly live. Code stays in GitHub, while Gmail and Google Calendar remain authoritative — Docket _links_ to them.
 - **Federation is the on‑ramp.** You start by importing/mirroring from the tools a team already uses, so Docket is useful on day one; over time it becomes the home.
 - **Two ways to connect a tool:**
-  - **Migration** (e.g. Linear, Jira, Asana): Docket _takes over_ — it imports the work in and becomes the source of truth; the old tool is retired.
-  - **Connector** (e.g. GitHub, Drive, Gmail, Calendar, Slack): Docket _complements_ — it persistently links context/signal/code; the external tool stays authoritative.
+  - **Migration** (Linear): Docket _takes over_ — it imports the work in and becomes the source of truth.
+  - **Connector** (GitHub, Gmail, Google Calendar, Google Tasks): Docket _complements_ — it links code, signal, time, and work while the external tool stays authoritative.
 - **What integrations contribute:** **Work** → tasks; **Context** → linked docs; **Signal** (email/chat) → things that can become tasks/updates; **Time** (calendar) → deadlines; **Code** (pull requests/commits — the one explicitly software‑specific role) → links on a task.
-- **Signal, concretely (shipped: Slack):** connect your Slack with one consent, and the messages that concern _you_ — @mentions, DMs, replies in threads you're part of — land in your personal Stream next to everything else, each linking back to the conversation. Docket deliberately does not mirror whole channels: only what concerns someone in the org becomes an event (see `docs/engineering/specs/slack-integration.md`).
+- **Signal, concretely:** connect Gmail with one consent, and relevant messages land in your personal Stream next to everything else, each linking back to the thread.
 - **MVP depth:** one‑time/transitional **import** for migration tools; **read‑only mirror** for connectors. Two‑way sync is a deliberate later step.
 
 Linked work carries its **provenance** (where it came from, with a live link), so the unified views always show one clean picture, labeled by source.
@@ -335,7 +335,7 @@ The "Agents" area is essentially a **live, filterable feed of Sessions** (runnin
 
 ### 8.7 Settings (per‑Organization)
 
-Settings is where each organization is shaped to fit how that particular venture actually runs — and because you may run several at once, every organization gets its own settings, kept cleanly apart. The heart of it is people. Rather than making you hunt through abstract permission menus, the Members and Access area puts every person front and center and lets you grant access in plain language: someone is an Owner, an Admin, a Member, or a Guest, and a Guest sees nothing at all until you explicitly let them in. The fine-grained controls still exist for the rare case that needs them, but they're tucked behind an "advanced" door so the everyday experience stays human and legible. From here you also connect that organization's own tools — its calendar, its email, its document drive, its existing task tracker — through a short guided wizard that asks the one question that matters up front: should Docket take this tool over and become the new home for that work, or simply link to it and leave the original in charge? The wizard spells out the consequences so you're never surprised by what happens to your data.
+Settings is where each organization is shaped to fit how that particular venture actually runs — and because you may run several at once, every organization gets its own settings, kept cleanly apart. The heart of it is people. From here you connect the organization's Gmail, Google Calendar, Google Tasks, GitHub, or Linear account through a short guided wizard that explains whether Docket imports work or links to the external source.
 
 - **One "Members & Access" area** — people are primary; access is editable per‑person and from each resource. Granular permissions are shown as **plain‑language roles** (Owner/Admin/Member/Guest), with the detailed capability grid behind an "advanced" option for custom roles. **Guests** sit in the same list with a "Guest" badge and see nothing until granted.
 - **Integrations** — a **categorized directory**; connecting a tool is a **wizard that picks Migration vs. Connector up front**, consequences spelled out.
@@ -372,7 +372,7 @@ For _our_ team running the hosted business (not a customer surface) — "Stripe'
 ## 9. Out of Scope (for the MVP, or deliberately not owned)
 
 - **Two‑way integration sync** — MVP is import + read‑only mirror; bidirectional is a fast‑follow.
-- **Native documents** — context lives in connected tools (Drive, etc.) and is linked, not authored in Docket.
+- **Native documents** — document storage is outside the current provider allowlist and is not a Docket integration surface.
 - **An agent marketplace / agent "skills"** — agents are execution muscle; keep the provider set small (Athena, Claude, maybe Codex). Skills, if ever, are an Athena concern, not a Docket product feature.
 - **Owning code, files, calendar, or email** — these stay in their authoritative tools; Docket links.
 - **Capacity/load planning that mixes agent cost with human hours** — out for MVP.

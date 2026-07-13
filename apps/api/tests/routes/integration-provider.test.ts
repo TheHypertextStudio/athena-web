@@ -145,7 +145,6 @@ describe('resolveLiveConnectorToken', () => {
       ['calendar', 'google'],
       ['gmail', 'google'],
       ['gtasks', 'google'],
-      ['drive', 'google'],
     ];
 
     for (const [provider, expected] of cases) {

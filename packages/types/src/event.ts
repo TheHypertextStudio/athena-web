@@ -154,8 +154,8 @@ export type EntityRef = z.infer<typeof EntityRef>;
  * Replaces the old contract-free `payload` jsonb. Each tool attaches a typed variant;
  * the `generic` variant carries anything we don't yet have a specific shape for, so a new
  * source still surfaces (a degraded row) rather than being dropped — the raw original
- * always remains in `inbound_event` for later re-enrichment. Adding a tool's detail = one
- * new arm here, no schema migration.
+ * always remains in `inbound_event` for later re-enrichment. Retired provider arms remain
+ * parseable solely for historical rows; no new observer can emit them.
  */
 export const EventDetail = z
   .discriminatedUnion('schema', [
@@ -176,23 +176,18 @@ export const EventDetail = z
       draft: z.boolean(),
     }),
     z.object({
+      /** Historical Slack detail retained only so stored events remain readable. */
       schema: z.literal('slack.message'),
       channelId: z.string(),
       threadTs: z.string().nullable(),
       text: z.string(),
-      /**
-       * Slack conversation type (`im` | `mpim` | `channel` | `group`) — drives DM relevance
-       * routing. Defaulted so rows stored before this field existed still parse.
-       */
       channelType: z.string().nullable().default(null),
     }),
     z.object({
+      /** Historical Discord detail retained only so stored events remain readable. */
       schema: z.literal('discord.message'),
-      /** The Discord channel the message was posted in (a `thread` entity in canonical terms). */
       channelId: z.string(),
-      /** The guild the channel belongs to, or `null` for a direct message. */
       guildId: z.string().nullable(),
-      /** The message body. */
       text: z.string(),
     }),
     z.object({

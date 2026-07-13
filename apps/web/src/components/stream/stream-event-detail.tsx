@@ -7,7 +7,7 @@
  * Preserves source richness without per-source layouts by reading the typed
  * {@link EventDetail} union (not a contract-free blob): a from→to pill for Docket state
  * changes, a state/priority line for Linear issues, a number/merged/draft line for GitHub
- * PRs, a quoted snippet for Slack messages, and a summary/link for the `generic` arm.
+ * PRs and a summary/link for the `generic` arm.
  * Falls back to the event's `summary` when there's no typed detail, and renders nothing
  * when there's nothing extra — so terse events stay compact.
  */
@@ -61,8 +61,6 @@ function renderDetail(detail: EventDetail): JSX.Element | null {
       const status = detail.merged ? 'merged' : detail.draft ? 'draft' : 'open';
       return <Pill label={`#${detail.number} · ${status}`} />;
     }
-    case 'slack.message':
-      return <Quote text={detail.text} />;
     case 'generic':
       return detail.summary ? <Quote text={detail.summary} /> : null;
     default:

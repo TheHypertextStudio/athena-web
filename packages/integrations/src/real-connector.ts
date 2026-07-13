@@ -15,7 +15,7 @@
  *   importable work, and link resolution to the canonical `html_url`.
  * - **Linear** — GraphQL: the `viewer`, the migration import of issues
  *   (`id`/`identifier`/`title`/`description`/`url`), and link resolution.
- * - **Drive / Gmail / Calendar / Google Tasks** — Google REST APIs with an OAuth bearer
+ * - **Gmail / Calendar / Google Tasks** — Google REST APIs with an OAuth bearer
  *   token, used for the read-only work/link/mirror/signal surface.
  *
  * The Migration-vs-Connector + import/mirror business logic lives in the app layer.
@@ -43,13 +43,8 @@ import type { WorkGraphConnector } from './work-graph';
 import { defaultHttpClient, type HttpClient } from './http';
 import { GitHubProviderClient } from './github';
 import { LinearProviderClient } from './linear';
-import {
-  GoogleCalendarProviderClient,
-  GoogleDriveProviderClient,
-  GoogleTasksProviderClient,
-} from './google';
+import { GoogleCalendarProviderClient, GoogleTasksProviderClient } from './google';
 import { GmailProviderClient } from './gmail';
-import { MicrosoftProviderClient } from './microsoft';
 import { ProviderHttp } from './provider-http';
 import {
   isMailActionsProviderClient,
@@ -63,11 +58,9 @@ export {
   GitHubProviderClient,
   LinearProviderClient,
   GoogleCalendarProviderClient,
-  GoogleDriveProviderClient,
   GoogleTasksProviderClient,
 };
 export { GmailProviderClient } from './gmail';
-export { MicrosoftProviderClient } from './microsoft';
 
 /** Validated configuration for {@link RealConnector} (sourced from the connection credential + env). */
 export interface RealConnectorConfig {
@@ -86,11 +79,9 @@ export interface RealConnectorConfig {
 export const PROVIDER_API_BASE: Readonly<Record<ConnectorProvider, string>> = {
   github: 'https://api.github.com',
   linear: 'https://api.linear.app',
-  drive: 'https://www.googleapis.com/drive/v3',
   gmail: 'https://gmail.googleapis.com/gmail/v1',
   calendar: 'https://www.googleapis.com/calendar/v3',
   gtasks: 'https://tasks.googleapis.com/tasks/v1',
-  outlook: 'https://graph.microsoft.com/v1.0',
 };
 
 /**
@@ -109,11 +100,9 @@ export const PROVIDER_CLIENT_FACTORIES: Readonly<
 > = {
   github: (http) => new GitHubProviderClient(http),
   linear: (http) => new LinearProviderClient(http),
-  drive: (http) => new GoogleDriveProviderClient(http),
   gmail: (http) => new GmailProviderClient(http),
   calendar: (http) => new GoogleCalendarProviderClient(http),
   gtasks: (http) => new GoogleTasksProviderClient(http),
-  outlook: (http) => new MicrosoftProviderClient(http),
 };
 
 /**

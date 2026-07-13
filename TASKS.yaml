@@ -54,7 +54,7 @@ tasks:
     completed_at: '2026-01-04'
     deliverables:
       - Better Auth server configuration
-      - OAuth providers (Google, Apple, Microsoft)
+      - OAuth providers (Google, Apple)
       - Passkey/WebAuthn support
       - Auth database schema
       - Client-side auth hooks
@@ -370,26 +370,8 @@ tasks:
       - id: google-calendar
         title: 'Google Calendar sync'
         status: backlog
-      - id: apple-calendar
-        title: 'Apple Calendar sync'
-        status: backlog
     deliverables:
       - apps/api/src/integrations/calendar/
-
-  INTEG-002:
-    title: 'Third-party Integrations'
-    status: backlog
-    priority: p2
-    dependencies: [NOTIF-001]
-    subtasks:
-      - id: slack-integration
-        title: 'Slack integration'
-        status: backlog
-      - id: discord-integration
-        title: 'Discord integration'
-        status: done
-    deliverables:
-      - apps/api/src/integrations/
 
   # ============================================================================
   # Phase 5: Production Readiness (P2)

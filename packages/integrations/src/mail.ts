@@ -4,19 +4,18 @@
  * @remarks
  * Provider-neutral, standards-based mailbox surface: RFC 5322 message identity
  * (`Message-ID` / `In-Reply-To` / `References`), a provider-native thread identity with
- * documented per-provider semantics, cursor-based incremental listing, mailbox mutation,
+ * documented Gmail semantics, cursor-based incremental listing, mailbox mutation,
  * and on-demand thread fetch. Discovered via `Connector.asMailActor()` — capability
  * membership is declared once in {@link MAIL_CAPABLE_PROVIDERS} and enforced structurally
  * by each provider client implementing `MailActionsProviderClient` (a consistency test
  * keeps the two in lockstep). See `docs/engineering/specs/mail-providers.md`.
  *
  * **Thread identity semantics.** `threadId` is always the provider's native thread handle:
- * Gmail's `threadId`; Microsoft Graph's `conversationId`. It is only meaningful within its
- * own integration. Cross-provider identity uses {@link MailThreadSummary.rfc822MessageId}
- * — the RFC 5322 `Message-ID` (Graph: `internetMessageId`) — which is globally unique per
- * message and survives forwarding between mailboxes.
+ * Gmail's `threadId`. It is only meaningful within its own integration. Cross-provider
+ * identity uses {@link MailThreadSummary.rfc822MessageId}, the RFC 5322 `Message-ID`, which
+ * is globally unique per message and survives forwarding between mailboxes.
  */
-import type { ConnectorProvider } from './connector';
+import type { ConnectorProvider, LegacyConnectorProvider } from './connector';
 
 /**
  * The providers whose connectors expose the mail capability.
@@ -29,7 +28,6 @@ import type { ConnectorProvider } from './connector';
  */
 export const MAIL_CAPABLE_PROVIDERS: ReadonlySet<ConnectorProvider> = new Set<ConnectorProvider>([
   'gmail',
-  'outlook',
 ]);
 
 /**
@@ -39,8 +37,7 @@ export const MAIL_CAPABLE_PROVIDERS: ReadonlySet<ConnectorProvider> = new Set<Co
  * A discriminated union so a `label` is carried only by the label ops — `archive` /
  * `markRead` / `markUnread` / `trash` cannot be given a stray label, and `applyLabel` /
  * `removeLabel` cannot omit one. Adapters map each variant to the provider's real verbs:
- * Gmail uses `INBOX`/`UNREAD` label deltas + the trash endpoint; Microsoft Graph maps
- * archive/trash to folder moves, read state to `isRead`, and labels to `categories`.
+ * Gmail uses `INBOX`/`UNREAD` label deltas and the trash endpoint.
  */
 export type MailAction =
   | { readonly kind: 'archive' }
@@ -55,7 +52,7 @@ export interface MailActionInput {
   /** The connection performing the action. */
   readonly connectionId: string;
   /** The mail provider. */
-  readonly provider: ConnectorProvider;
+  readonly provider: ConnectorProvider | LegacyConnectorProvider;
   /** The provider-native thread id to act on (see the module remarks on identity). */
   readonly threadId: string;
   /** The action to apply. */

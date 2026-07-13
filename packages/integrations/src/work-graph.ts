@@ -259,7 +259,7 @@ export type WorkItemPushOp =
  * @remarks
  * Exposed only by connectors that model a full work graph (today, Linear), discovered via
  * {@link import('./connector').Connector.asWorkGraph}. Read-only connectors and connectors
- * whose provider has no rich work-graph concept (GitHub/Drive/Gmail/Calendar/Google Tasks)
+ * whose provider has no rich work-graph concept (GitHub/Gmail/Calendar/Google Tasks)
  * omit it or return `undefined` there.
  */
 export interface WorkGraphConnector {

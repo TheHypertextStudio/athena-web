@@ -122,15 +122,11 @@ export function tunnelRegistrationUrls(hostname: string): {
   googleRedirectUri: string;
   googleOrigin: string;
   githubWebhook: string;
-  slackRedirectUri: string;
-  slackEventsUrl: string;
 } {
   const origin = `https://${hostname}`;
   return {
     googleRedirectUri: `${origin}/api/auth/callback/google`,
     googleOrigin: origin,
     githubWebhook: `${origin}/internal/ingest/github`,
-    slackRedirectUri: `${origin}/internal/integrations/slack/callback`,
-    slackEventsUrl: `${origin}/internal/ingest/slack`,
   };
 }

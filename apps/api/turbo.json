@@ -13,7 +13,6 @@
         "GOOGLE_*",
         "GITHUB_*",
         "LINEAR_*",
-        "SLACK_SIGNING_SECRET",
         "MCP_*",
         "OIDC_*",
         "STRIPE_*",

@@ -4,7 +4,7 @@
  * @remarks
  * A StreamEvent is the read-shape of one {@link EventOut} as rendered in the cross-org
  * personal feed and the per-workspace firehose. It is a thin projection over the canonical
- * `event` log: heterogeneous origins (Docket, Linear, Slack, GitHub, …) render through one
+ * `event` log: heterogeneous origins (Docket, Linear, GitHub, Gmail, Google Calendar) render through one
  * homogeneous row because analogous things share a canonical {@link EntityRef} kind and the
  * `source` carries only the attribution badge. Provider-specific data rides in the typed
  * {@link EventDetail} pocket — never a contract-free blob.

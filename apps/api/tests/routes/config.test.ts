@@ -40,24 +40,4 @@ describe('GET /config', () => {
       vi.resetModules();
     }
   });
-
-  // Runs last: resets the module registry to pick up the stubbed env, which would orphan any
-  // shared DB proxy other tests in this file depended on — this file has none.
-  it('surfaces outlook once MICROSOFT_CLIENT_ID/SECRET are configured (M6: dormant until env values exist)', async () => {
-    vi.stubEnv('MICROSOFT_CLIENT_ID', 'ms-client-id-123');
-    vi.stubEnv('MICROSOFT_CLIENT_SECRET', 'ms-client-secret-456');
-    vi.resetModules();
-    try {
-      const freshConfig = (await import('../../src/routes/config')).default;
-      const app = appWithSession(freshConfig, null);
-      const res = await app.request('/', { method: 'GET' });
-      expect(res.status).toBe(200);
-      const body = PublicConfigOut.parse(await res.json());
-      expect(body.oauthProviders).toContain('microsoft');
-      expect(body.connectors).toContain('outlook');
-    } finally {
-      vi.unstubAllEnvs();
-      vi.resetModules();
-    }
-  });
 });

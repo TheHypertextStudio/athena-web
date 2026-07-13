@@ -3,7 +3,7 @@
  *
  * @remarks
  * The typed edge for the cross-tool activity feed: it turns an inbound provider event (a
- * Linear webhook, a GitHub delivery, a Slack event) into normalized {@link EventDraft}s in
+ * Linear webhook or GitHub delivery) into normalized {@link EventDraft}s in
  * the *canonical* shape — `kind` + `entity` + typed `detail` — so a Linear issue and a Docket
  * task arrive identically (`entity.kind = 'work_item'`) and render through one row. It is the
  * read/observe sibling of the {@link Connector} port.
@@ -30,7 +30,10 @@ import type { CanonicalEntityKind, EventDetail, EventKind, WebhookProviderId } f
  * deliberately stay out of this union so ingest and observer factories cannot accept impossible
  * observer providers.
  */
-export type ObserverProvider = WebhookProviderId;
+/** Webhook ids retained only for dormant observers and historical event routing. */
+export type LegacyObserverProvider = 'slack' | 'discord';
+/** Active webhook ids accepted by the application catalog. */
+export type ObserverProvider = WebhookProviderId | LegacyObserverProvider;
 
 /** Inbound webhook request headers, lower-cased keys (Hono header lookup is case-insensitive). */
 export type InboundHeaders = Record<string, string | undefined>;

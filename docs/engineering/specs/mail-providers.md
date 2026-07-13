@@ -1,9 +1,6 @@
 # Mail Providers
 
-> **Status**: Mail port + Gmail client shipped (M2); cursor storage + the consuming sweep
-> shipped (M3/M4); the Outlook/Graph client shipped **dormant** (M6) — fully implemented and
-> unit-tested against canned Graph JSON, hidden by `/v1/config` until `MICROSOFT_CLIENT_ID`/
-> `MICROSOFT_CLIENT_SECRET` are configured. Lighting up Outlook = env values + a smoke test.
+> **Status**: Gmail mail port, cursor storage, and the consuming sweep shipped (M2–M4).
 > **Last Updated**: 2026-07-02
 > **Owners**: Platform
 
@@ -44,13 +41,10 @@ adding a provider to the union is a compile error until every site is filled.
 
 ## 3. Identity semantics (the standards story)
 
-- **`threadId` is provider-native and integration-local**: Gmail's `threadId`; Microsoft
-  Graph's `conversationId`. Never compare thread ids across providers.
-- **`rfc822MessageId` is the cross-provider identity**: the RFC 5322 `Message-ID` of the
-  thread's latest message (Graph surfaces it as `internetMessageId`). Globally unique per
-  message and stable across mailboxes — it is the dedup key that stops the same email,
-  seen through two providers, from producing two suggestions (persisted on
-  `email_suggestion.rfc822_message_id` from M3).
+- **`threadId` is Gmail's provider-native, integration-local thread id.** Never compare
+  thread ids across Gmail integrations.
+- **`rfc822MessageId` is the cross-mailbox identity**: the RFC 5322 `Message-ID` of the
+  thread's latest message. It is globally unique per message and stable across mailboxes.
 - **Threading headers**: `fetchThread` returns `In-Reply-To` and the `References` chain
   (oldest first) per message, enabling future cross-mailbox conversation stitching.
 - **`externalUrl` is captured at listing time**, from the provider (Gmail: derived deep
@@ -70,10 +64,9 @@ adding a provider to the union is a compile error until every site is filled.
    the re-pull safe.
 4. Any other failure throws `ConnectorError` (`auth` / `rate_limit` / `provider`) as usual.
 
-| Provider     | Cursor                                                                                      | Warm endpoint                                                      | Expiry signal                  |
-| ------------ | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ------------------------------ |
-| Gmail        | `historyId` (from `users.getProfile` on cold pulls; the `history.list` response thereafter) | `GET /users/me/history?startHistoryId=…&historyTypes=messageAdded` | HTTP **404** on `history.list` |
-| Outlook (M6) | `deltaLink`                                                                                 | `GET /me/mailFolders('inbox')/messages/delta`                      | HTTP **410 Gone**              |
+| Provider | Cursor                                                                                      | Warm endpoint                                                      | Expiry signal                  |
+| -------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ------------------------------ |
+| Gmail    | `historyId` (from `users.getProfile` on cold pulls; the `history.list` response thereafter) | `GET /users/me/history?startHistoryId=…&historyTypes=messageAdded` | HTTP **404** on `history.list` |
 
 Cursor **storage** is the integration's `sync_state` jsonb (M3), written only while the
 sync lease is held (see `integration-sync.md`, M4).
@@ -89,7 +82,6 @@ persist a cursor that represents real forward progress:
   the cursor is left unchanged so the next sweep resumes the same `startHistoryId` window
   (re-fetching a few already-seen threads is harmless — ingest dedups downstream) instead of
   skipping the un-fetched, older history forever.
-- **Outlook/Graph**: the walk stops as soon as it has `maxThreads` distinct conversations,
   even if more delta pages remain. The client always returns a real resumption cursor: the
   page's `@odata.nextLink` when capped mid-walk (Graph's own pagination token — safe to
   replay), or the terminal `@odata.deltaLink` once the walk genuinely drains. A backlog
@@ -103,16 +95,15 @@ what was actually consumed.
 
 ## 5. MailAction → provider mapping
 
-| Verb                         | Gmail (`threads.modify` deltas) | Outlook / Graph (M6)                               |
-| ---------------------------- | ------------------------------- | -------------------------------------------------- |
-| `archive`                    | remove label `INBOX`            | move message(s) to the `archive` well-known folder |
-| `markRead`                   | remove label `UNREAD`           | `PATCH { isRead: true }`                           |
-| `markUnread`                 | add label `UNREAD`              | `PATCH { isRead: false }`                          |
-| `trash`                      | `POST /threads/{id}/trash`      | move to `deleteditems`                             |
-| `applyLabel` / `removeLabel` | add/remove the label id         | read-modify-write of `categories[]`                |
+| Verb                         | Gmail (`threads.modify` deltas) |
+| ---------------------------- | ------------------------------- | ----------------------------------- |
+| `archive`                    | remove label `INBOX`            |
+| `markRead`                   | remove label `UNREAD`           | `PATCH { isRead: true }`            |
+| `markUnread`                 | add label `UNREAD`              | `PATCH { isRead: false }`           |
+| `trash`                      | `POST /threads/{id}/trash`      | move to `deleteditems`              |
+| `applyLabel` / `removeLabel` | add/remove the label id         | read-modify-write of `categories[]` |
 
-Gmail acts on whole threads; Graph acts on messages, so `MicrosoftProviderClient` fans a
-thread action out over the conversation's messages (see its module remarks).
+Gmail acts on whole threads.
 Rule-layer idempotency is the `attachment.lastEmailStateAction` ledger — providers don't
 need their own.
 
@@ -121,11 +112,9 @@ need their own.
 | Provider            | Client                                                    | Capabilities                        |
 | ------------------- | --------------------------------------------------------- | ----------------------------------- |
 | `gmail`             | `real/connector-gmail.ts` `GmailProviderClient`           | base + mail                         |
-| `drive`             | `real/connector-google.ts` `GoogleDriveProviderClient`    | base                                |
 | `calendar`          | `real/connector-google.ts` `GoogleCalendarProviderClient` | base                                |
 | `gtasks`            | `real/connector-google.ts` `GoogleTasksProviderClient`    | base + task write-back + containers |
 | `github` / `linear` | existing clients                                          | base                                |
-| `outlook` (M6)      | `real/connector-microsoft.ts`                             | base + mail                         |
 
 The mock (`mock/connector.ts`) implements the same capability gates from the manifests and
 serves deterministic `MAIL_THREAD_SUMMARIES` fixtures (`fixtures/index.ts`): one actionable

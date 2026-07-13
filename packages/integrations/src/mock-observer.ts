@@ -35,7 +35,6 @@ export interface MockObserverOptions {
 const SIGNATURE_HEADERS = [
   'linear-signature',
   'x-hub-signature-256',
-  'x-slack-signature',
   'x-signature-ed25519',
 ] as const;
 

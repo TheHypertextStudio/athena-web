@@ -25,6 +25,7 @@
  * `{kind: 'cursorExpired'}` (the caller retries once without a cursor).
  */
 import type {
+  ConnectorProvider,
   ImportWorkInput,
   ImportedItem,
   LinkResourceInput,
@@ -126,7 +127,7 @@ export class MicrosoftProviderClient implements MailActionsProviderClient {
       kind: 'message' as const,
       title: m.subject ?? (m.bodyPreview ? m.bodyPreview.slice(0, 80) : `Message ${m.id}`),
       provenance: {
-        provider: 'outlook' as const,
+        provider: 'outlook',
         externalId: m.id,
         ...(m.webLink ? { externalUrl: m.webLink } : {}),
         importedAt,
@@ -137,7 +138,7 @@ export class MicrosoftProviderClient implements MailActionsProviderClient {
   /** {@inheritDoc ConnectorProviderClient.mirrorStatus} */
   async mirrorStatus(input: MirrorStatusInput): Promise<MirrorResult> {
     const items = await this.importWork(
-      { connectionId: input.connectionId, provider: 'outlook' },
+      { connectionId: input.connectionId, provider: 'outlook' as ConnectorProvider },
       new Date(0).toISOString(),
     );
     return { connectionId: input.connectionId, status: 'idle', itemCount: items.length };

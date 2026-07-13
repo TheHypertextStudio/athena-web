@@ -28,10 +28,8 @@ import {
   RealMcpConnector,
   RealPushSender,
   RealConnector,
-  RealDiscordObserver,
   RealGitHubObserver,
   RealLinearObserver,
-  RealSlackObserver,
   RealSmsSender,
   pushConfigFromEnv,
   smsConfigFromEnv,
@@ -61,8 +59,6 @@ export interface AppRuntimeEnv {
   readonly ANTHROPIC_API_KEY?: string;
   readonly LINEAR_WEBHOOK_SECRET?: string;
   readonly GITHUB_APP_WEBHOOK_SECRET?: string;
-  readonly SLACK_SIGNING_SECRET?: string;
-  readonly DISCORD_PUBLIC_KEY?: string;
   readonly RESEND_API_KEY?: string;
   readonly SMTP_HOST?: string;
   readonly SMTP_PORT?: string;
@@ -80,11 +76,9 @@ export interface AppRuntimeEnv {
   readonly EXPORT_BUCKET_URL?: string;
   readonly GITHUB_API_BASE?: string;
   readonly LINEAR_API_BASE?: string;
-  readonly GOOGLE_DRIVE_API_BASE?: string;
   readonly GOOGLE_GMAIL_API_BASE?: string;
   readonly GOOGLE_CALENDAR_API_BASE?: string;
   readonly GOOGLE_TASKS_API_BASE?: string;
-  readonly MICROSOFT_GRAPH_API_BASE?: string;
 }
 
 /** Service dependencies shared by API route handlers and background execution paths. */
@@ -128,8 +122,6 @@ export function toAppRuntimeEnv(): AppRuntimeEnv {
     ...(env.GITHUB_APP_WEBHOOK_SECRET
       ? { GITHUB_APP_WEBHOOK_SECRET: env.GITHUB_APP_WEBHOOK_SECRET }
       : {}),
-    ...(env.SLACK_SIGNING_SECRET ? { SLACK_SIGNING_SECRET: env.SLACK_SIGNING_SECRET } : {}),
-    ...(env.DISCORD_PUBLIC_KEY ? { DISCORD_PUBLIC_KEY: env.DISCORD_PUBLIC_KEY } : {}),
     ...(env.RESEND_API_KEY ? { RESEND_API_KEY: env.RESEND_API_KEY } : {}),
     ...(env.SMTP_HOST ? { SMTP_HOST: env.SMTP_HOST } : {}),
     ...(env.SMTP_PORT ? { SMTP_PORT: env.SMTP_PORT } : {}),
@@ -147,15 +139,11 @@ export function toAppRuntimeEnv(): AppRuntimeEnv {
     ...(env.EXPORT_BUCKET_URL ? { EXPORT_BUCKET_URL: env.EXPORT_BUCKET_URL } : {}),
     ...(env.GITHUB_API_BASE ? { GITHUB_API_BASE: env.GITHUB_API_BASE } : {}),
     ...(env.LINEAR_API_BASE ? { LINEAR_API_BASE: env.LINEAR_API_BASE } : {}),
-    ...(env.GOOGLE_DRIVE_API_BASE ? { GOOGLE_DRIVE_API_BASE: env.GOOGLE_DRIVE_API_BASE } : {}),
     ...(env.GOOGLE_GMAIL_API_BASE ? { GOOGLE_GMAIL_API_BASE: env.GOOGLE_GMAIL_API_BASE } : {}),
     ...(env.GOOGLE_CALENDAR_API_BASE
       ? { GOOGLE_CALENDAR_API_BASE: env.GOOGLE_CALENDAR_API_BASE }
       : {}),
     ...(env.GOOGLE_TASKS_API_BASE ? { GOOGLE_TASKS_API_BASE: env.GOOGLE_TASKS_API_BASE } : {}),
-    ...(env.MICROSOFT_GRAPH_API_BASE
-      ? { MICROSOFT_GRAPH_API_BASE: env.MICROSOFT_GRAPH_API_BASE }
-      : {}),
   };
 }
 
@@ -168,16 +156,12 @@ function connectorApiBase(
       return runtimeEnv.GITHUB_API_BASE;
     case 'linear':
       return runtimeEnv.LINEAR_API_BASE;
-    case 'drive':
-      return runtimeEnv.GOOGLE_DRIVE_API_BASE;
     case 'gmail':
       return runtimeEnv.GOOGLE_GMAIL_API_BASE;
     case 'calendar':
       return runtimeEnv.GOOGLE_CALENDAR_API_BASE;
     case 'gtasks':
       return runtimeEnv.GOOGLE_TASKS_API_BASE;
-    case 'outlook':
-      return runtimeEnv.MICROSOFT_GRAPH_API_BASE;
     default:
       return undefined;
   }
@@ -224,14 +208,6 @@ export function buildObserver(
     case 'github':
       return new RealGitHubObserver({
         signingSecret: required('GITHUB_APP_WEBHOOK_SECRET', runtimeEnv.GITHUB_APP_WEBHOOK_SECRET),
-      });
-    case 'slack':
-      return new RealSlackObserver({
-        signingSecret: required('SLACK_SIGNING_SECRET', runtimeEnv.SLACK_SIGNING_SECRET),
-      });
-    case 'discord':
-      return new RealDiscordObserver({
-        publicKey: required('DISCORD_PUBLIC_KEY', runtimeEnv.DISCORD_PUBLIC_KEY),
       });
   }
 }

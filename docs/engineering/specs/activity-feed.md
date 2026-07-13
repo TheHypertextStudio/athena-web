@@ -5,10 +5,9 @@
 
 ## What it is, for a person
 
-You work across many tools — Docket, Linear, GitHub, Slack, calendar, email. The feed gives
+You work across many tools — Docket, Linear, GitHub, Google Calendar, Gmail, and Google Tasks. The feed gives
 you _one place_ showing everything that concerns you, from every tool, in plain language
-("Dani replied on your project", "you were assigned a pull request", "you were mentioned in
-Slack"). Two properties make it good:
+("Dani replied on your project", "you were assigned a pull request", "you received a Gmail signal"). Two properties make it good:
 
 - **Similar things look the same regardless of source.** A Docket task, a Linear issue, and a
   GitHub PR are all _"a piece of work"_ — they render through one row, with a small badge for
@@ -23,13 +22,13 @@ entry point into one canonical shape: **who** (`actor`) did **what** (`kind`) to
 thing** (`entity`), **when** (`occurredAt`), **from where** (`source`), plus an optional typed
 tool-specific pocket (`detail`).
 
-| Axis        | Type (`@docket/types`)                                                      | Notes                                                                                                                                                                                                                                                                        |
-| ----------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| verb        | `EventKind`                                                                 | closed enum: created/updated/status*change/completed/comment/mention/assignment/reaction/message/calendar*\*                                                                                                                                                                 |
-| which thing | `EntityRef { kind, source, externalId, title?, url?, docketEntityId? }`     | `kind` is the closed `CanonicalEntityKind` — a Docket task, Linear issue, GitHub PR all map to `work_item`; this is what lets analogous things share one row                                                                                                                 |
-| from where  | `SourceSystem { system, integrationId?, externalUrl? }`                     | typed attribution, replacing a free-text `provider` string                                                                                                                                                                                                                   |
-| who         | `ActorRef { source, externalId, displayName?, avatarUrl?, docketActorId? }` |                                                                                                                                                                                                                                                                              |
-| detail      | `EventDetail` (closed discriminated union on `schema`)                      | typed per source (`linear.issue`, `github.pull_request`, `slack.message`, `docket.state_change`) **plus a `generic` variant** so an unmapped-but-valid event still surfaces (degraded) instead of being dropped; the raw original stays in `inbound_event` for re-enrichment |
+| Axis        | Type (`@docket/types`)                                                      | Notes                                                                                                                                                                                                                                                       |
+| ----------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| verb        | `EventKind`                                                                 | closed enum: created/updated/status*change/completed/comment/mention/assignment/reaction/message/calendar*\*                                                                                                                                                |
+| which thing | `EntityRef { kind, source, externalId, title?, url?, docketEntityId? }`     | `kind` is the closed `CanonicalEntityKind` — a Docket task, Linear issue, GitHub PR all map to `work_item`; this is what lets analogous things share one row                                                                                                |
+| from where  | `SourceSystem { system, integrationId?, externalUrl? }`                     | typed attribution, replacing a free-text `provider` string                                                                                                                                                                                                  |
+| who         | `ActorRef { source, externalId, displayName?, avatarUrl?, docketActorId? }` |                                                                                                                                                                                                                                                             |
+| detail      | `EventDetail` (closed discriminated union on `schema`)                      | typed per source (`linear.issue`, `github.pull_request`, `docket.state_change`) **plus a `generic` variant** so an unmapped-but-valid event still surfaces (degraded) instead of being dropped; the raw original stays in `inbound_event` for re-enrichment |
 
 `docketEntityId` / `docketActorId` are reserved enrichment slots (resolve an external ref to
 its Docket twin later); null today.
@@ -80,29 +79,8 @@ never a class hierarchy when the variation is data-shaped.
 ## Adding a new tool (the scale payoff)
 
 Touches only leaves: (1) an observer **Adapter** under `packages/integrations/src/` with its
-detail-builder chain ending in `generic`; (2) one new arm on the `EventDetail` union + the new
-`system` string in `ObserverProvider`/`source_system`; (3) a mapping from the tool's native
-object types onto the closed `EntityRef.kind` taxonomy inside that adapter. External-only
-entities are covered by `routing.ts`'s default (no-owner) rule — **zero core changes** to
-consumers, routing, the feed, pagination, or the assistant.
-
-Three exceptions worth naming. One carve-out for **signal sources with their own identity space**
-(Slack today): "who does this concern" cannot come from Docket entity ownership, so such a tool
-additionally ships a relevance consumer (e.g. `apps/api/src/consumers/slack-relevance.ts`) that
-maps provider identities to Docket users and feeds a pre-resolved `userId → reason` map into
-routing via the `RoutableEvent.externalUserRecipients` input. `routing.ts` stays the single
-relevance authority (strongest-reason-wins merge) — the tool adds a leaf consumer plus that one
-declared input, not edits to routing's rules. Signal sources also apply **noise control**: a
-message that concerns nobody is deliberately NOT normalized into a canonical `event` (the inbox
-row is marked `skipped`; the raw payload stays in `inbound_event` for re-normalization). The
-"degraded rather than dropped" rule in the model table applies to _unmapped shapes_, not to
-messages nobody in the org has a reason to see. See
-`docs/engineering/specs/slack-integration.md`.
-
-The other two are both worked out in [`discord-observation.md`](./discord-observation.md): a
-source that only delivers over a **persistent socket** (Discord's Gateway) is observed through a
-quarantined, logic-free **relay** that POSTs to the token-routed ingest edge — the substrate stays
-serverless and never learns the transport. And routing an event to the person _actually named_
-(not just the integration owner) is the **mention-attribution seam**: `RoutableEvent.participantUserIds`
-resolved from a source's linked identities (Better Auth `account`) — provider-neutral infra that any
-observer emitting mentioned `participants` gets for free (Discord is its first consumer today).
+detail-builder chain ending in `generic`; (2) a mapping from the active provider's native object
+types onto the closed `EntityRef.kind` taxonomy inside that adapter. External-only entities are
+covered by `routing.ts`'s default (no-owner) rule — **zero core changes** to consumers, routing,
+the feed, pagination, or the assistant. The active external observers are GitHub and Linear;
+Gmail and Google Calendar contribute through connector sync and the shared activity model.

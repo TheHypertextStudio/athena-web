@@ -32,7 +32,6 @@ import internalNotifications from './routes/internal-notifications';
 import { meAccountExportDownload } from './routes/me-account';
 import streamSse from './routes/stream-sse';
 import integrationsGithub from './routes/integrations-github';
-import integrationsSlack from './routes/integrations-slack';
 import webhooks from './routes/webhooks';
 
 const trustedOrigins =
@@ -81,7 +80,6 @@ server.route('/internal/billing', webhooks);
 server.route('/internal/ingest', ingest);
 server.route('/internal/notifications', internalNotifications);
 server.route('/internal/integrations/github', integrationsGithub);
-server.route('/internal/integrations/slack', integrationsSlack);
 server.route('/internal/cron', cron);
 // Provider push-notification webhooks: NOT under `/internal` (Docket registers this exact URL
 // directly with each provider, e.g. Google's `channels.watch`, rather than calling it itself),

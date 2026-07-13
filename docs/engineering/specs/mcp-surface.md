@@ -476,8 +476,7 @@ annotations: { readOnly:F, destructive:F, idempotent:T, openWorld:true }
 Begin connecting a new external provider. Returns a **URL-mode elicitation** target (spec elicitation; engineering plan §4) so the user completes the connector's OAuth in a browser. Does NOT pass any Docket token to the provider.
 
 ```ts
-input: z.object({ org: Slug, provider: z.enum(["github","google_drive","gmail",
-                  "google_calendar","linear","jira","asana"]),
+input: z.object({ org: Slug, provider: z.enum(["github","gmail","calendar","gtasks","linear"]),
                   pattern: z.enum(["migration","connector"]) })
 output: z.object({ integration_id: Id, authorize_url: z.string().url(),
                    status: z.enum(["pending","connected"]) })

@@ -16,10 +16,7 @@
 import type { PublicConfigOut } from '@docket/types';
 import type { UseQueryResult } from '@tanstack/react-query';
 
-import {
-  REDIRECT_CONNECT_PROVIDERS,
-  socialProviderForConnector,
-} from '@/components/settings/integrations-config';
+import { socialProviderForConnector } from '@/components/settings/integrations-config';
 import { api } from '@/lib/api';
 import { STALE, apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 
@@ -66,11 +63,6 @@ export function connectorOAuthConfigured(
   config: PublicConfigOut | undefined,
   provider: string,
 ): boolean {
-  // Redirect-connect providers (Slack) have their own app credentials, not a social grant —
-  // the server advertises them directly in `connectors` when configured.
-  if (REDIRECT_CONNECT_PROVIDERS.has(provider)) {
-    return config?.connectors.includes(provider) ?? false;
-  }
   const social = socialProviderForConnector(provider);
   return config?.oauthProviders.includes(social) ?? false;
 }

@@ -19,8 +19,7 @@ import { IdentityProvider } from './identity';
  * @remarks
  * A superset of {@link IdentityProvider}: it adds `apple`, which is a **sign-in-only** provider
  * (it links no connector identity, so it is not an `IdentityProvider`) but must still be reported
- * so the sign-in page can render its button. `discord` is here too (it is both a linkable identity
- * and, in principle, a sign-in provider). Mirrors `@docket/auth`'s `configuredSocialProviders`.
+ * so the sign-in page can render its button. Mirrors `@docket/auth`'s `configuredSocialProviders`.
  */
 export const SignInProvider = z
   .enum([...IdentityProvider.options, 'apple'])
@@ -34,7 +33,7 @@ export type SignInProvider = z.infer<typeof SignInProvider>;
  * @remarks
  * `oauthProviders` are the social providers a user can link/sign in with (their OAuth client
  * id + secret are configured); `connectors` are the connector keys those grants unlock (e.g. a
- * configured Google grant unlocks `drive`/`gmail`/`calendar`/`gtasks`). `mcpUrl` is the MCP
+ * configured Google grant unlocks `gmail`/`calendar`/`gtasks`). `mcpUrl` is the MCP
  * server URL to show in the Authorized-apps setup guide, or null when not configured (the client
  * then derives it from its own origin).
  */
@@ -51,7 +50,7 @@ export const PublicConfigOut = z
     oauthProviders: z
       .array(SignInProvider)
       .describe(
-        'The social providers a user can sign in with / link an identity from, derived from real server credentials: a provider appears here iff its OAuth client id + secret are configured. The sign-in page renders exactly these buttons. One of `google` | `github` | `linear` | `discord` | `apple` (apple is sign-in only, not a linkable identity).',
+        'The social providers a user can sign in with / link an identity from, derived from real server credentials: a provider appears here iff its OAuth client id + secret are configured. The sign-in page renders exactly these buttons. One of `google` | `github` | `linear` | `apple` (apple is sign-in only, not a linkable identity).',
       )
       .meta({ example: ['google', 'github'] }),
     /** Whether Google sign-in/linking is open beyond the production test-user allowlist. */
@@ -69,9 +68,9 @@ export const PublicConfigOut = z
     connectors: z
       .array(z.string())
       .describe(
-        'The connector keys unlocked by the configured providers — the data sources an org can sync. A configured Google grant unlocks `drive`/`gmail`/`calendar`/`gtasks`; GitHub unlocks `github`; Linear unlocks `linear`. Empty when no providers are configured.',
+        'The connector keys unlocked by the configured providers — the data sources an org can sync. A configured Google grant unlocks `gmail`/`calendar`/`gtasks`; GitHub unlocks `github`; Linear unlocks `linear`. Empty when no providers are configured.',
       )
-      .meta({ example: ['drive', 'gmail', 'calendar', 'gtasks', 'github'] }),
+      .meta({ example: ['gmail', 'calendar', 'gtasks', 'github'] }),
     /** The MCP server URL, or null when not configured. */
     mcpUrl: z
       .string()

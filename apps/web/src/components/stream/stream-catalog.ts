@@ -23,13 +23,20 @@ const SOURCE_LABELS = Object.fromEntries(
 /** The known event sources, shown in the Source filter. */
 const SYSTEM_OPTIONS: readonly FieldOption[] = [
   { value: 'docket', label: 'Docket', hint: 'docket' },
-  ...['linear', 'github', 'slack', 'discord', 'google_calendar', 'gmail', 'outlook'].map(
-    (source) => ({
+  ...Object.values(PROVIDER_CATALOG)
+    .map((entry) => entry.sourceSystem)
+    .filter(
+      (
+        source,
+      ): source is NonNullable<
+        (typeof PROVIDER_CATALOG)[keyof typeof PROVIDER_CATALOG]['sourceSystem']
+      > => source !== null,
+    )
+    .map((source) => ({
       value: source,
       label: SOURCE_LABELS[source] ?? source,
       hint: source,
-    }),
-  ),
+    })),
 ];
 
 /** Canonical kinds, shown in the Kind filter. */

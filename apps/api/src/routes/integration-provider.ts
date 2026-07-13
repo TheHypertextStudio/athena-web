@@ -49,24 +49,19 @@ export const CONNECTOR_PROVIDERS: readonly ConnectorProvider[] = [...CONNECTOR_P
 export const WRITE_BACK_PROVIDERS: ReadonlySet<string> = WRITE_BACK_CAPABLE_PROVIDERS;
 
 /**
- * Every provider the connect wizard can offer: the {@link Connector} providers plus
- * observe-only sources (Slack), which connect for signal ingestion but expose no import/sync.
+ * Every provider the connect wizard can offer.
  */
-export const DIRECTORY_PROVIDERS: readonly (ConnectorProvider | 'slack')[] = [
-  ...DIRECTORY_PROVIDER_IDS,
-];
+export const DIRECTORY_PROVIDERS: readonly ConnectorProvider[] = [...DIRECTORY_PROVIDER_IDS];
 
 /**
  * The connect-wizard directory entry for each connectable provider.
  *
  * @remarks
  * Keyed off {@link DIRECTORY_PROVIDERS}: a Migration pattern *replaces* a tool, a Connector
- * pattern *complements* one. Slack is observe-only — it contributes the `signal` role and
- * routes inbound Events API traffic, and `asConnectorProvider('slack')` stays null so
- * import/sync endpoints correctly 409.
+ * pattern *complements* one.
  */
 export const PROVIDER_DIRECTORY: Readonly<
-  Record<ConnectorProvider | 'slack', Omit<IntegrationDirectoryProvider, 'provider' | 'syncable'>>
+  Record<ConnectorProvider, Omit<IntegrationDirectoryProvider, 'provider' | 'syncable'>>
 > = Object.fromEntries(
   DIRECTORY_PROVIDERS.map((provider) => {
     const entry = PROVIDER_CATALOG[provider];
@@ -80,17 +75,14 @@ export const PROVIDER_DIRECTORY: Readonly<
       },
     ];
   }),
-) as Record<
-  ConnectorProvider | 'slack',
-  Omit<IntegrationDirectoryProvider, 'provider' | 'syncable'>
->;
+) as Record<ConnectorProvider, Omit<IntegrationDirectoryProvider, 'provider' | 'syncable'>>;
 
 /** Narrow a stored integration `provider` string to a {@link ConnectorProvider}. */
 export function asConnectorProvider(provider: string): ConnectorProvider | null {
   return CONNECTOR_PROVIDERS.find((p) => p === provider) ?? null;
 }
 
-/** Every {@link ObserverProvider} — the connectors plus observe-only sources (Slack, Discord). */
+/** Every webhook-backed provider accepted by the inbound event routes. */
 export const OBSERVER_PROVIDERS: readonly ObserverProvider[] = [...WEBHOOK_PROVIDER_IDS];
 
 /** Narrow a stored integration/event `provider` string to an {@link ObserverProvider}. */
@@ -103,7 +95,7 @@ export function asObserverProvider(provider: string): ObserverProvider | null {
  * `access_token` is used to call that provider's API.
  *
  * @remarks
- * All four Google products share the same OAuth grant (one `google` account row);
+ * All three Google products share the same OAuth grant (one `google` account row);
  * GitHub and Linear each have their own.
  */
 export function socialProviderId(provider: ConnectorProvider): string {

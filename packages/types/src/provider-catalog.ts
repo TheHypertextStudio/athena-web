@@ -11,32 +11,24 @@ import type { IdentityProvider } from './identity';
 import type { IntegrationPattern, IntegrationRole } from './integration';
 
 /** Provider ids that expose the Connector port. */
-export const CONNECTOR_PROVIDER_IDS = [
-  'github',
-  'drive',
-  'linear',
-  'gmail',
-  'calendar',
-  'gtasks',
-  'outlook',
-] as const;
+export const CONNECTOR_PROVIDER_IDS = ['gmail', 'gtasks', 'calendar', 'github', 'linear'] as const;
 /** Connector-provider id value. */
 export type ConnectorProviderId = (typeof CONNECTOR_PROVIDER_IDS)[number];
 
 /** Provider ids that expose an inbound webhook observer. */
-export const WEBHOOK_PROVIDER_IDS = ['github', 'linear', 'slack', 'discord'] as const;
+export const WEBHOOK_PROVIDER_IDS = ['github', 'linear'] as const;
 /** Webhook-provider id value. */
 export type WebhookProviderId = (typeof WEBHOOK_PROVIDER_IDS)[number];
 
 /** Provider ids shown in the Connections directory. */
-export const DIRECTORY_PROVIDER_IDS = [...CONNECTOR_PROVIDER_IDS, 'slack'] as const;
+export const DIRECTORY_PROVIDER_IDS = [...CONNECTOR_PROVIDER_IDS] as const;
 /** Directory-provider id value. */
 export type DirectoryProviderId = (typeof DIRECTORY_PROVIDER_IDS)[number];
 
 /** Static provider metadata shared by API and web surfaces. */
 export interface ProviderCatalogEntry {
   /** Stable provider id. */
-  readonly id: DirectoryProviderId | 'discord';
+  readonly id: DirectoryProviderId;
   /** Human-readable provider name. */
   readonly name: string;
   /** Whether this provider exposes connector sync/import. */
@@ -61,19 +53,6 @@ export interface ProviderCatalogEntry {
 
 /** Shared provider catalog keyed by provider id. */
 export const PROVIDER_CATALOG = {
-  slack: {
-    id: 'slack',
-    name: 'Slack',
-    connector: false,
-    webhook: true,
-    directory: true,
-    pattern: 'connector',
-    roles: ['signal'],
-    category: 'communication',
-    sourceSystem: 'slack',
-    connectorIdentityProvider: null,
-    sourceIdentityProvider: null,
-  },
   github: {
     id: 'github',
     name: 'GitHub',
@@ -99,19 +78,6 @@ export const PROVIDER_CATALOG = {
     sourceSystem: 'linear',
     connectorIdentityProvider: 'linear',
     sourceIdentityProvider: 'linear',
-  },
-  drive: {
-    id: 'drive',
-    name: 'Google Drive',
-    connector: true,
-    webhook: false,
-    directory: true,
-    pattern: 'connector',
-    roles: ['context'],
-    category: 'documents',
-    sourceSystem: null,
-    connectorIdentityProvider: 'google',
-    sourceIdentityProvider: null,
   },
   gmail: {
     id: 'gmail',
@@ -152,38 +118,10 @@ export const PROVIDER_CATALOG = {
     connectorIdentityProvider: 'google',
     sourceIdentityProvider: null,
   },
-  outlook: {
-    id: 'outlook',
-    name: 'Outlook',
-    connector: true,
-    webhook: false,
-    directory: true,
-    pattern: 'connector',
-    roles: ['signal'],
-    category: 'communication',
-    sourceSystem: 'outlook',
-    connectorIdentityProvider: 'microsoft',
-    sourceIdentityProvider: null,
-  },
-  discord: {
-    id: 'discord',
-    name: 'Discord',
-    connector: false,
-    webhook: true,
-    directory: false,
-    pattern: 'connector',
-    roles: ['signal'],
-    category: 'communication',
-    sourceSystem: 'discord',
-    connectorIdentityProvider: null,
-    sourceIdentityProvider: 'discord',
-  },
-} as const satisfies Record<DirectoryProviderId | 'discord', ProviderCatalogEntry>;
+} as const satisfies Record<DirectoryProviderId, ProviderCatalogEntry>;
 
 /** Return the canonical source-system badge for a provider, if it emits events. */
-export function providerSourceSystem(
-  provider: DirectoryProviderId | 'discord',
-): SourceSystemKind | null {
+export function providerSourceSystem(provider: DirectoryProviderId): SourceSystemKind | null {
   return PROVIDER_CATALOG[provider].sourceSystem;
 }
 

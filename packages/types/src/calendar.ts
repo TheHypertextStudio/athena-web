@@ -23,7 +23,7 @@ import {
 import { TaskOut } from './task';
 
 /** Calendar providers supported by the layered-calendar domain. */
-export const CalendarProvider = z.enum(['docket', 'google', 'microsoft', 'caldav']);
+export const CalendarProvider = z.enum(['docket', 'google']);
 /** Calendar provider value. */
 export type CalendarProvider = z.infer<typeof CalendarProvider>;
 

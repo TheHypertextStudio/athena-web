@@ -5,7 +5,6 @@ export const GOOGLE_CONNECTOR_SCOPES = {
     'https://www.googleapis.com/auth/calendar.events',
   ],
   gtasks: ['https://www.googleapis.com/auth/tasks'],
-  drive: ['https://www.googleapis.com/auth/drive.readonly'],
   gmail: ['https://www.googleapis.com/auth/gmail.modify'],
 } as const;
 

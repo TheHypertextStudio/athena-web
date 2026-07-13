@@ -9,7 +9,7 @@
  * `kind` tells the caller WHY, so the API can persist a truthful status, pick the right
  * remediation (re-auth vs retry), and notify the owner. No failure is silent.
  */
-import type { ConnectorProvider } from './connector';
+import type { ConnectorProvider, LegacyConnectorProvider } from './connector';
 
 /**
  * The category of a connector failure — drives remediation, not just messaging.
@@ -25,7 +25,7 @@ export type ConnectorErrorKind = 'auth' | 'rate_limit' | 'network' | 'provider' 
 /** Construction options for a {@link ConnectorError}. */
 export interface ConnectorErrorOptions {
   /** The provider the failing call targeted. */
-  readonly provider: ConnectorProvider;
+  readonly provider: ConnectorProvider | LegacyConnectorProvider;
   /** The failure category. */
   readonly kind: ConnectorErrorKind;
   /** The HTTP status, when the failure came from a response. */
@@ -41,7 +41,7 @@ export class ConnectorError extends Error {
   /** The failure category. */
   readonly kind: ConnectorErrorKind;
   /** The provider the failing call targeted. */
-  readonly provider: ConnectorProvider;
+  readonly provider: ConnectorProvider | LegacyConnectorProvider;
   /** The HTTP status, when the failure came from a response. */
   readonly status?: number;
   /** Seconds to wait before retrying (429 `Retry-After`), when known. */

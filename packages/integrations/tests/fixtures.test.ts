@@ -9,15 +9,7 @@ describe('fixtures', () => {
   });
 
   it('CONNECTOR_ITEMS carries provenance for every provider', () => {
-    const providers = [
-      'github',
-      'linear',
-      'drive',
-      'gmail',
-      'calendar',
-      'gtasks',
-      'outlook',
-    ] as const;
+    const providers = ['github', 'linear', 'gmail', 'calendar', 'gtasks'] as const;
     for (const provider of providers) {
       const items = CONNECTOR_ITEMS[provider];
       expect(items.length).toBeGreaterThan(0);

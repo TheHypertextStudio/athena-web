@@ -146,8 +146,8 @@ export function streamHref(row: StreamEventRow): string | null {
  * there is none (the org firehose carries no relevance, so no chip renders).
  *
  * @remarks
- * Surfaces the `event_recipient.reason` the router assigned — e.g. a Discord/Slack mention resolved
- * to this user reads "Mentioned you", so the feed answers "why is this here" at a glance.
+ * Surfaces the `event_recipient.reason` the router assigned — a mention resolved to this user
+ * reads "Mentioned you", so the feed answers "why is this here" at a glance.
  */
 export function relevanceLabel(relevance: StreamRelevance | null): string | null {
   switch (relevance) {

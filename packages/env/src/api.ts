@@ -100,12 +100,6 @@ function assertCrossFieldRules(e: typeof env): void {
     fail('OAUTH_PROXY_SECRET and OAUTH_PROXY_PRODUCTION_URL must be set together.');
   }
 
-  // The Discord OAuth pair powers "Connect Discord"; half-configured would mount a provider that
-  // 400s at the token exchange. (The Ed25519 ingest key, DISCORD_PUBLIC_KEY, is independent.)
-  if (Boolean(e.DISCORD_CLIENT_ID) !== Boolean(e.DISCORD_CLIENT_SECRET)) {
-    fail('DISCORD_CLIENT_ID and DISCORD_CLIENT_SECRET must be set together.');
-  }
-
   if (e.MCP_TASKS_ENABLED && !e.MCP_SESSION_STORE_URL) {
     fail('MCP_TASKS_ENABLED=true requires MCP_SESSION_STORE_URL.');
   }

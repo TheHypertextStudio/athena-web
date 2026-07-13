@@ -204,49 +204,6 @@ describe('registerOrRenewWatches', () => {
     expect(freshRow.watchChannelId).toBeNull();
   });
 
-  it('skips a provider whose adapter has no startWatch, without throwing or discovering connections', async () => {
-    const schema = await getDb();
-    const userId = await seedUserWithHub(schema.db, schema, 'CaldavUser');
-
-    const caldavAdapter: CalendarProviderAdapter = {
-      provider: 'caldav',
-      listLayers: async () => {
-        throw new Error('should not be called — no startWatch means the provider is skipped');
-      },
-      pullChanges: async () => {
-        throw new Error('should not be called');
-      },
-      pushItem: () => {
-        throw new Error('should not be called');
-      },
-      deleteItem: () => {
-        throw new Error('should not be called');
-      },
-      // Deliberately no `startWatch`/`stopWatch` — CalDAV has no push-notification model.
-    };
-    const caldavModule: CalendarProviderSyncModule = {
-      adapter: caldavAdapter,
-      discoverConnections: async () => {
-        throw new Error('should not be called — engine must check for startWatch first');
-      },
-      resolveCredentials: async () => {
-        throw new Error('should not be called');
-      },
-      captureScopeState: () => {
-        throw new Error('should not be called');
-      },
-    };
-
-    const tally = await registerOrRenewWatches(schema.db, {
-      userId,
-      now: NOW,
-      adapters: { caldav: caldavModule },
-      callbackUrlFor: () => 'https://api.docket.test/webhooks/calendar/caldav',
-    });
-
-    expect(tally.registered).toBe(0);
-  });
-
   it('no-ops entirely (zero adapter calls) when callbackUrlFor returns an empty URL', async () => {
     const schema = await getDb();
     const userId = await seedUserWithHub(schema.db, schema, 'NoCallbackUser');

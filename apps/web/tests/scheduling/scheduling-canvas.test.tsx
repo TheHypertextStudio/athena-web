@@ -348,14 +348,18 @@ describe('SchedulingCanvas', () => {
     expect(startGrip).toHaveAttribute('data-schedule-resize-target', 'start');
     expect(startGrip).toHaveClass(
       '-top-3',
-      '-left-3',
+      'left-0',
       'size-6',
       'touch-none',
       'bg-transparent',
+      'pointer-events-none',
+      'group-hover:pointer-events-auto',
+      'group-focus-within:pointer-events-auto',
       '[@media(pointer:coarse)]:-top-8',
-      '[@media(pointer:coarse)]:-left-8',
       '[@media(pointer:coarse)]:size-11',
+      '[@media(pointer:coarse)]:pointer-events-auto',
     );
+    expect(startGrip).not.toHaveClass('-left-3', '[@media(pointer:coarse)]:-left-8');
     expect(startIndicator).toHaveClass(
       'bottom-2.5',
       'h-0.5',
@@ -373,15 +377,19 @@ describe('SchedulingCanvas', () => {
     const endIndicator = endGrip.querySelector('[data-schedule-resize-indicator="end"]');
     expect(endGrip).toHaveAttribute('data-schedule-resize-target', 'end');
     expect(endGrip).toHaveClass(
-      '-right-3',
+      'right-0',
       '-bottom-3',
       'size-6',
       'touch-none',
       'bg-transparent',
-      '[@media(pointer:coarse)]:-right-8',
+      'pointer-events-none',
+      'group-hover:pointer-events-auto',
+      'group-focus-within:pointer-events-auto',
       '[@media(pointer:coarse)]:-bottom-8',
       '[@media(pointer:coarse)]:size-11',
+      '[@media(pointer:coarse)]:pointer-events-auto',
     );
+    expect(endGrip).not.toHaveClass('-right-3', '[@media(pointer:coarse)]:-right-8');
     expect(endIndicator).toHaveClass(
       'top-2.5',
       'h-0.5',
@@ -416,6 +424,70 @@ describe('SchedulingCanvas', () => {
         },
       ],
     ]);
+  });
+
+  it('keeps first-lane day-start and last-lane day-end targets inside canvas boundaries', () => {
+    const dayStart = timedItem('day-start', 'Day start', '00:00', '01:00');
+    const dayEnd: ScheduleItem = {
+      ...timedItem('day-end', 'Day end', '23:00', '23:30'),
+      endsAt: '2026-07-02T00:00:00.000Z',
+    };
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[lane('first', 'First', [dayStart]), lane('last', 'Last', [dayEnd])]}
+        pixelsPerHour={60}
+        viewportWidth={800}
+        onResizeItem={vi.fn()}
+      />,
+    );
+
+    const firstCard = renderedItem('day-start');
+    const startGrip = screen.getByRole('button', { name: 'Resize Day start from start' });
+    const startIndicator = startGrip.querySelector('[data-schedule-resize-indicator="start"]');
+    expect(firstCard.closest('[data-schedule-lane]')).toHaveAttribute(
+      'data-schedule-lane',
+      'first',
+    );
+    expect(firstCard).toHaveStyle({
+      top: '0px',
+      left: '4px',
+      width: 'calc(100% - 8px)',
+    });
+    expect(startGrip).toHaveClass('top-0', 'left-0', 'size-6', '[@media(pointer:coarse)]:size-11');
+    expect(startGrip).not.toHaveClass('-top-3', '-left-3', '[@media(pointer:coarse)]:-top-8');
+    expect(startIndicator).toHaveClass(
+      'top-0',
+      'opacity-0',
+      'group-hover:opacity-100',
+      'group-focus-within:opacity-100',
+      '[@media(pointer:coarse)]:opacity-100',
+    );
+
+    const lastCard = renderedItem('day-end');
+    const endGrip = screen.getByRole('button', { name: 'Resize Day end from end' });
+    const endIndicator = endGrip.querySelector('[data-schedule-resize-indicator="end"]');
+    expect(lastCard.closest('[data-schedule-lane]')).toHaveAttribute('data-schedule-lane', 'last');
+    expect(lastCard).toHaveStyle({
+      top: '1380px',
+      left: '4px',
+      width: 'calc(100% - 8px)',
+      height: '60px',
+    });
+    expect(endGrip).toHaveClass(
+      'right-0',
+      'bottom-0',
+      'size-6',
+      '[@media(pointer:coarse)]:size-11',
+    );
+    expect(endGrip).not.toHaveClass('-right-3', '-bottom-3', '[@media(pointer:coarse)]:-bottom-8');
+    expect(endIndicator).toHaveClass(
+      'bottom-0',
+      'opacity-0',
+      'group-hover:opacity-100',
+      'group-focus-within:opacity-100',
+      '[@media(pointer:coarse)]:opacity-100',
+    );
   });
 
   it('respects lane and item editability while preserving open behavior', () => {
@@ -487,41 +559,83 @@ describe('SchedulingCanvas', () => {
     expect(onResizeItem).not.toHaveBeenCalled();
   });
 
-  it('keeps a short overview item unchanged after zero-distance resizes', () => {
+  it('keeps body, move, link, and resize paths distinct on an 18px card', () => {
     const onOpenItem = vi.fn();
+    const onMoveItem = vi.fn();
     const onResizeItem = vi.fn();
-    const short = timedItem('short-overview', 'Short overview', '09:00', '09:05');
+    const dragObject = {
+      kind: 'calendar_item' as const,
+      itemId: 'short-overview',
+      title: 'Short overview',
+    };
+    const short = {
+      ...timedItem('short-overview', 'Short overview', '09:00', '09:05'),
+      dragObject,
+    };
+    const sourceLane = lane('ada', 'Ada', [short]);
     render(
       <SchedulingCanvas
         displayTimezone="UTC"
-        lanes={[lane('ada', 'Ada', [short])]}
+        lanes={[sourceLane]}
         pixelsPerHour={24}
         viewportWidth={500}
         onOpenItem={onOpenItem}
-        onMoveItem={vi.fn()}
+        onMoveItem={onMoveItem}
         onResizeItem={onResizeItem}
       />,
     );
 
     const article = renderedItem('short-overview');
     const body = screen.getByRole('button', { name: /^Short overview/ });
+    const move = screen.getByRole('button', { name: 'Move Short overview' });
+    const link = screen.getByRole('button', {
+      name: 'Drag Short overview to create a relationship',
+    });
+    const startGrip = screen.getByRole('button', { name: 'Resize Short overview from start' });
+    const endGrip = screen.getByRole('button', { name: 'Resize Short overview from end' });
     expect(article).toHaveClass('overflow-visible');
     expect(body).toHaveClass('cursor-grab', 'overflow-hidden', 'rounded-sm');
-    expect(screen.getByRole('button', { name: 'Move Short overview' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Resize Short overview from start' })).toHaveClass(
+    expect(move).toHaveClass('z-30');
+    expect(link).toHaveClass('z-30');
+    expect(link).toHaveAttribute('draggable', 'true');
+    expect(startGrip).toHaveClass(
       '-top-3',
-      '-left-3',
+      'left-0',
+      'z-20',
       'size-6',
       '[@media(pointer:coarse)]:size-11',
     );
-    expect(screen.getByRole('button', { name: 'Resize Short overview from end' })).toHaveClass(
-      '-right-3',
+    expect(endGrip).toHaveClass(
+      'right-0',
       '-bottom-3',
+      'z-20',
       'size-6',
       '[@media(pointer:coarse)]:size-11',
     );
     fireEvent.click(body);
     expect(onOpenItem).toHaveBeenCalledOnce();
+
+    fireEvent.pointerDown(move, { button: 0, pointerId: 15, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(window, { pointerId: 15, clientX: 100, clientY: 112 });
+    fireEvent.pointerUp(window, { pointerId: 15, clientX: 100, clientY: 112 });
+    expect(onMoveItem).toHaveBeenCalledWith({
+      item: short,
+      fromLane: sourceLane,
+      toLane: sourceLane,
+      startMinutes: 9 * 60 + 30,
+      endMinutes: 9 * 60 + 35,
+    });
+
+    const transfer = { effectAllowed: 'none', setData: vi.fn() };
+    fireEvent.pointerDown(link, { button: 0, pointerId: 16, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(window, { pointerId: 16, clientX: 100, clientY: 112 });
+    fireEvent.pointerUp(window, { pointerId: 16, clientX: 100, clientY: 112 });
+    fireEvent.dragStart(link, { dataTransfer: transfer });
+    expect(transfer.setData.mock.calls).toEqual([
+      [SCHEDULE_DRAG_MIME, JSON.stringify(dragObject)],
+      ['text/plain', short.title],
+    ]);
+    expect(onMoveItem).toHaveBeenCalledOnce();
 
     for (const edge of ['start', 'end'] as const) {
       const grip = screen.getByRole('button', {
@@ -529,10 +643,10 @@ describe('SchedulingCanvas', () => {
       });
       fireEvent.pointerDown(grip, {
         button: 0,
-        pointerId: edge === 'start' ? 15 : 16,
+        pointerId: edge === 'start' ? 17 : 18,
         clientY: 100,
       });
-      fireEvent.pointerUp(window, { pointerId: edge === 'start' ? 15 : 16, clientY: 100 });
+      fireEvent.pointerUp(window, { pointerId: edge === 'start' ? 17 : 18, clientY: 100 });
     }
 
     expect(onResizeItem).not.toHaveBeenCalled();

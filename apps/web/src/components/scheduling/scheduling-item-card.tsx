@@ -9,7 +9,7 @@ import {
   writeScheduleDragObject,
 } from './scheduling-drag-object';
 import { formatScheduleWallTimeRange } from './scheduling-gesture';
-import { minutesToPixels } from './scheduling-geometry';
+import { MINUTES_PER_DAY, minutesToPixels } from './scheduling-geometry';
 import {
   scheduleOverlapHorizontalStyle,
   type ScheduleOverlapPlacement,
@@ -104,6 +104,12 @@ export function SchedulingItemCard({
     : height;
   const laneTranslation = gesture.preview ? (gesture.preview.laneIndex - laneIndex) * laneWidth : 0;
   const density = itemDensity(visibleHeight);
+  const startsAtDayBoundary = bounds.startMinutes === 0;
+  const endsAtDayBoundary = bounds.endMinutes === MINUTES_PER_DAY;
+  const resizeTargetClassName =
+    'focus-visible:ring-ring absolute z-20 size-6 cursor-ns-resize touch-none bg-transparent pointer-events-none outline-none group-focus-within:pointer-events-auto group-hover:pointer-events-auto focus-visible:ring-2 focus-visible:ring-inset [@media(pointer:coarse)]:size-11 [@media(pointer:coarse)]:pointer-events-auto';
+  const resizeIndicatorClassName =
+    'bg-primary/70 pointer-events-none absolute h-0.5 w-3 rounded-full opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100';
   const bodyClassName =
     density === 'marker'
       ? 'focus-visible:ring-ring relative z-10 size-full overflow-hidden rounded-sm p-1 outline-none focus-visible:ring-2 focus-visible:ring-inset'
@@ -163,14 +169,14 @@ export function SchedulingItemCard({
         <button
           type="button"
           aria-label={`Resize ${item.title} from start`}
-          className="focus-visible:ring-ring absolute -top-3 -left-3 z-20 size-6 cursor-ns-resize touch-none bg-transparent outline-none focus-visible:ring-2 focus-visible:ring-inset [@media(pointer:coarse)]:-top-8 [@media(pointer:coarse)]:-left-8 [@media(pointer:coarse)]:size-11"
+          className={`${resizeTargetClassName} left-0 ${startsAtDayBoundary ? 'top-0' : '-top-3 [@media(pointer:coarse)]:-top-8'}`}
           data-schedule-resize-target="start"
           onPointerDown={gesture.onStartResizePointerDown}
           onKeyDown={gesture.onStartResizeKeyDown}
         >
           <span
             aria-hidden="true"
-            className="bg-primary/70 pointer-events-none absolute right-0 bottom-2.5 h-0.5 w-3 rounded-full opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100"
+            className={`${resizeIndicatorClassName} right-0 ${startsAtDayBoundary ? 'top-0' : 'bottom-2.5'}`}
             data-schedule-resize-indicator="start"
           />
         </button>
@@ -206,7 +212,7 @@ export function SchedulingItemCard({
         <button
           type="button"
           aria-label={`Move ${item.title}`}
-          className="focus-visible:ring-ring absolute top-1 right-1 z-20 size-4 cursor-move rounded outline-none focus-visible:ring-2 focus-visible:ring-inset"
+          className="focus-visible:ring-ring absolute top-1 right-1 z-30 size-4 cursor-move rounded outline-none focus-visible:ring-2 focus-visible:ring-inset"
           onPointerDown={gesture.onMovePointerDown}
           onKeyDown={gesture.onMoveKeyDown}
         >
@@ -218,7 +224,7 @@ export function SchedulingItemCard({
           type="button"
           draggable
           aria-label={`Drag ${item.title} to create a relationship`}
-          className="focus-visible:ring-ring absolute bottom-1 left-1 z-20 size-4 cursor-grab rounded outline-none focus-visible:ring-2 focus-visible:ring-inset"
+          className="focus-visible:ring-ring absolute bottom-1 left-1 z-30 size-4 cursor-grab rounded outline-none focus-visible:ring-2 focus-visible:ring-inset"
           onPointerDown={(event) => {
             event.stopPropagation();
           }}
@@ -238,14 +244,14 @@ export function SchedulingItemCard({
         <button
           type="button"
           aria-label={`Resize ${item.title} from end`}
-          className="focus-visible:ring-ring absolute -right-3 -bottom-3 z-20 size-6 cursor-ns-resize touch-none bg-transparent outline-none focus-visible:ring-2 focus-visible:ring-inset [@media(pointer:coarse)]:-right-8 [@media(pointer:coarse)]:-bottom-8 [@media(pointer:coarse)]:size-11"
+          className={`${resizeTargetClassName} right-0 ${endsAtDayBoundary ? 'bottom-0' : '-bottom-3 [@media(pointer:coarse)]:-bottom-8'}`}
           data-schedule-resize-target="end"
           onPointerDown={gesture.onEndResizePointerDown}
           onKeyDown={gesture.onEndResizeKeyDown}
         >
           <span
             aria-hidden="true"
-            className="bg-primary/70 pointer-events-none absolute top-2.5 left-0 h-0.5 w-3 rounded-full opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100"
+            className={`${resizeIndicatorClassName} left-0 ${endsAtDayBoundary ? 'bottom-0' : 'top-2.5'}`}
             data-schedule-resize-indicator="end"
           />
         </button>

@@ -14,9 +14,9 @@ const canvas = vi.hoisted<{ props: SchedulingCanvasProps | undefined }>(() => ({
   props: undefined,
 }));
 const mutationState = vi.hoisted(() => ({
-  update: { mutate: vi.fn(), isError: false, error: null as Error | null },
-  link: { mutate: vi.fn(), isError: false, error: null as Error | null },
-  relate: { mutate: vi.fn(), isError: false, error: null as Error | null },
+  update: { mutate: vi.fn(), reset: vi.fn(), isError: false, error: null as Error | null },
+  link: { mutate: vi.fn(), reset: vi.fn(), isError: false, error: null as Error | null },
+  relate: { mutate: vi.fn(), reset: vi.fn(), isError: false, error: null as Error | null },
 }));
 
 vi.mock('../../src/components/scheduling', async (importOriginal) => {
@@ -176,8 +176,12 @@ function renderSurface(
   axis: 'dates' | 'people' = 'dates',
   source: CalendarItemOut = calendarItem(),
   laneDate = '2026-07-13',
-): { readonly onOpenItem: ReturnType<typeof vi.fn> } {
+): {
+  readonly onOpenItem: ReturnType<typeof vi.fn>;
+  readonly onSelectRegion: ReturnType<typeof vi.fn>;
+} {
   const onOpenItem = vi.fn();
+  const onSelectRegion = vi.fn();
   render(
     <CalendarSchedulingSurface
       axis={axis}
@@ -188,11 +192,11 @@ function renderSurface(
       peopleAxis={peopleAxisState()}
       onVisibleLaneCountChange={vi.fn()}
       onReachBoundary={vi.fn()}
-      onSelectRegion={vi.fn()}
+      onSelectRegion={onSelectRegion}
       onOpenItem={onOpenItem}
     />,
   );
-  return { onOpenItem };
+  return { onOpenItem, onSelectRegion };
 }
 
 /** Return the latest props received by the callback-driven canvas mock. */
@@ -203,12 +207,15 @@ function canvasProps(): SchedulingCanvasProps {
 beforeEach(() => {
   canvas.props = undefined;
   mutationState.update.mutate.mockReset();
+  mutationState.update.reset.mockReset();
   mutationState.update.isError = false;
   mutationState.update.error = null;
   mutationState.link.mutate.mockReset();
+  mutationState.link.reset.mockReset();
   mutationState.link.isError = false;
   mutationState.link.error = null;
   mutationState.relate.mutate.mockReset();
+  mutationState.relate.reset.mockReset();
   mutationState.relate.isError = false;
   mutationState.relate.error = null;
 });
@@ -384,6 +391,91 @@ describe('CalendarSchedulingSurface persistence', () => {
       });
     });
     expect(mutationState.update.mutate).not.toHaveBeenCalled();
+  });
+
+  it('rejects skipped and repeated selection walls while preserving an exact normal selection', () => {
+    const { onSelectRegion } = renderSurface();
+    let props = canvasProps();
+    act(() => {
+      props.onSelectRegion?.({ lane: props.lanes[0]!, startMinutes: 540, endMinutes: 600 });
+    });
+    expect(onSelectRegion).toHaveBeenCalledWith({
+      startsAt: '2026-07-13T16:00:00Z',
+      endsAt: '2026-07-13T17:00:00Z',
+    });
+
+    cleanup();
+    const spring = renderSurface('dates', calendarItem(), '2026-03-08');
+    props = canvasProps();
+    act(() => {
+      props.onSelectRegion?.({ lane: props.lanes[0]!, startMinutes: 150, endMinutes: 180 });
+    });
+    expect(spring.onSelectRegion).not.toHaveBeenCalled();
+
+    cleanup();
+    const fold = renderSurface('dates', calendarItem(), '2026-11-01');
+    props = canvasProps();
+    act(() => {
+      props.onSelectRegion?.({ lane: props.lanes[0]!, startMinutes: 90, endMinutes: 150 });
+    });
+    expect(fold.onSelectRegion).not.toHaveBeenCalled();
+  });
+
+  it('clears stale mutation failures before a different relationship action', () => {
+    renderSurface();
+    mutationState.update.reset.mockClear();
+    mutationState.link.reset.mockClear();
+    mutationState.relate.reset.mockClear();
+    const props = canvasProps();
+    act(() => {
+      props.onDropObjectOnItem?.({
+        object: {
+          kind: 'task',
+          taskId: '01ARZ3NDEKTSV4RRFFQ69G5FA0',
+          organizationId: '01BX5ZZKBKACTAV9WEVGEMMVRZ',
+          title: 'Draft launch memo',
+        },
+        targetItem: props.lanes[0]!.items[0]!,
+        targetLane: props.lanes[0]!,
+      });
+    });
+
+    expect(mutationState.update.reset).toHaveBeenCalledOnce();
+    expect(mutationState.link.reset).toHaveBeenCalledOnce();
+    expect(mutationState.relate.reset).toHaveBeenCalledOnce();
+    expect(mutationState.link.mutate).toHaveBeenCalledOnce();
+  });
+
+  it('rejects derived relationship targets and calendar-item self drops', () => {
+    const derived = calendarItem();
+    derived.kind = 'availability_block';
+    renderSurface('dates', derived);
+    let props = canvasProps();
+    act(() => {
+      props.onDropObjectOnItem?.({
+        object: {
+          kind: 'task',
+          taskId: '01ARZ3NDEKTSV4RRFFQ69G5FA0',
+          organizationId: '01BX5ZZKBKACTAV9WEVGEMMVRZ',
+          title: 'Draft launch memo',
+        },
+        targetItem: props.lanes[0]!.items[0]!,
+        targetLane: props.lanes[0]!,
+      });
+    });
+    expect(mutationState.link.mutate).not.toHaveBeenCalled();
+
+    cleanup();
+    renderSurface();
+    props = canvasProps();
+    act(() => {
+      props.onDropObjectOnItem?.({
+        object: { kind: 'calendar_item', itemId: ITEM_ID, title: 'Planning session' },
+        targetItem: props.lanes[0]!.items[0]!,
+        targetLane: props.lanes[0]!,
+      });
+    });
+    expect(mutationState.relate.mutate).not.toHaveBeenCalled();
   });
 
   it.each(['update', 'link', 'relate'] as const)(

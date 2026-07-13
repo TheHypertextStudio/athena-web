@@ -14,6 +14,11 @@ const RELATIONSHIP_TARGET_KINDS = new Set([
   'timebox',
 ]);
 
+/** Return whether an Agenda entry is a domain-valid calendar relationship target. */
+export function isAgendaRelationshipTarget(entry: AgendaEntry): boolean {
+  return Boolean(entry.calendarItem && RELATIONSHIP_TARGET_KINDS.has(entry.calendarItem.kind));
+}
+
 /** Return whether the Agenda owns a supported persistence path for one entry's bounds. */
 function canPersistAgendaEntryBounds(entry: AgendaEntry): boolean {
   if (entry.planItemId && entry.source === 'task') return true;
@@ -76,6 +81,6 @@ export function toAgendaScheduleItem(
               title: entry.title,
             }
           : undefined,
-    dropTarget: Boolean(calendarItem && RELATIONSHIP_TARGET_KINDS.has(calendarItem.kind)),
+    dropTarget: isAgendaRelationshipTarget(entry),
   };
 }

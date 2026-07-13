@@ -36,6 +36,7 @@ import { type QueryKey, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '@/lib/api';
 import { optimisticPatch, queryKeys, unwrap, useApiMutation } from '@/lib/query';
+import { acquireSerializedOptimisticWrite } from '@/lib/serialized-optimistic-write';
 
 /**
  * The literal shared prefix of every `/v1/me/calendar/items` cache entry — both the range reads
@@ -47,8 +48,8 @@ import { optimisticPatch, queryKeys, unwrap, useApiMutation } from '@/lib/query'
  */
 const CALENDAR_ITEMS_PREFIX: QueryKey = ['me', 'calendar-items'];
 
-/** Serialize dynamic optimistic snapshots shared by Calendar and the always-mounted Agenda rail. */
-const DYNAMIC_UPDATE_QUEUES = new WeakMap<object, Promise<void>>();
+/** Calendar and Agenda share this intentional cross-item serialization boundary. */
+const DYNAMIC_UPDATE_QUEUE_KEY = 'calendar-item-by-id-updates';
 
 /** Whether a cached query key is a `calendarItems(startISO, endISO)` range entry (not a detail). */
 function isRangeKey(key: QueryKey): boolean {
@@ -92,11 +93,19 @@ function patchCalendarItemAcrossRanges(
   recipe: (item: CalendarItemOut) => CalendarItemOut,
 ): RangePatchResult {
   const snapshots = findRangesContainingItem(queryClient, itemId);
-  for (const { key, data } of snapshots) {
-    queryClient.setQueryData<CalendarItemsRangeOut>(key, {
-      ...data,
-      items: data.items.map((item) => (item.id === itemId ? recipe(item) : item)),
-    });
+  const applied: RangeSnapshot[] = [];
+  try {
+    for (const snapshot of snapshots) {
+      const { key, data } = snapshot;
+      queryClient.setQueryData<CalendarItemsRangeOut>(key, {
+        ...data,
+        items: data.items.map((item) => (item.id === itemId ? recipe(item) : item)),
+      });
+      applied.push(snapshot);
+    }
+  } catch (error) {
+    for (const { key, data } of applied.reverse()) queryClient.setQueryData(key, data);
+    throw error;
   }
   return {
     rollback: () => {
@@ -238,7 +247,6 @@ export function useUpdateCalendarItemById() {
     UpdateCalendarItemByIdVariables,
     SerializedCombinedRollback
   >({
-    scope: { id: 'calendar-item-by-id-updates' },
     mutationFn: ({ itemId, patch }) =>
       unwrap(
         () =>
@@ -249,35 +257,34 @@ export function useUpdateCalendarItemById() {
         'Could not update the calendar item.',
       ),
     onMutate: async ({ itemId, patch }) => {
-      const previousWrite = DYNAMIC_UPDATE_QUEUES.get(queryClient) ?? Promise.resolve();
-      let releaseQueue = (): void => undefined;
-      const currentWrite = new Promise<void>((resolve) => {
-        releaseQueue = resolve;
-      });
-      DYNAMIC_UPDATE_QUEUES.set(
-        queryClient,
-        previousWrite.then(() => currentWrite),
-      );
-      await previousWrite;
+      const lease = await acquireSerializedOptimisticWrite(queryClient, DYNAMIC_UPDATE_QUEUE_KEY);
       const pendingPatch = (item: CalendarItemOut): CalendarItemOut => ({
         ...item,
         ...patch,
         ...(item.kind === 'provider_event' ? { syncState: 'push_pending' as const } : {}),
       });
-      const detailPatch = optimisticPatch<CalendarItemOut>(
-        queryClient,
-        queryKeys.calendarItem(itemId),
-        pendingPatch,
-      );
-      const rangePatch = patchCalendarItemAcrossRanges(queryClient, itemId, pendingPatch);
-      return {
-        rollback: () => {
-          detailPatch.rollback();
-          rangePatch.rollback();
-        },
-        rangeKeys: rangePatch.rangeKeys,
-        releaseQueue,
-      };
+      const applied: { rollback: () => void }[] = [];
+      try {
+        const detailPatch = optimisticPatch<CalendarItemOut>(
+          queryClient,
+          queryKeys.calendarItem(itemId),
+          pendingPatch,
+        );
+        applied.push(detailPatch);
+        const rangePatch = patchCalendarItemAcrossRanges(queryClient, itemId, pendingPatch);
+        applied.push(rangePatch);
+        return {
+          rollback: () => {
+            for (const optimistic of [...applied].reverse()) optimistic.rollback();
+          },
+          rangeKeys: rangePatch.rangeKeys,
+          releaseQueue: lease.release,
+        };
+      } catch (error) {
+        for (const optimistic of applied.reverse()) optimistic.rollback();
+        lease.release();
+        throw error;
+      }
     },
     onError: (_error, _vars, context) => context?.rollback(),
     onSettled: async (_data, _error, vars, context) => {

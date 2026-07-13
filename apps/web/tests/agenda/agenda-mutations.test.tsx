@@ -53,6 +53,8 @@ const OLD_START = '2026-07-01T16:00:00.000Z';
 const OLD_END = '2026-07-01T17:00:00.000Z';
 const NEW_START = '2026-07-01T18:00:00.000Z';
 const NEW_END = '2026-07-01T19:00:00.000Z';
+const LATER_START = '2026-07-01T20:00:00.000Z';
+const LATER_END = '2026-07-01T21:00:00.000Z';
 
 /** A typed mock Hono response for the mutation unwrap layer. */
 function okResponse<T>(body: T) {
@@ -257,8 +259,15 @@ describe('useAgendaPlanMutations', () => {
     expect(client.getQueryData(queryKeys.dailyPlan(DAY))).toEqual({ items: [dailyPlanItem()] });
     expect(client.getQueryData(queryKeys.agenda(DAY))).toEqual(agendaOut());
     expect(client.getQueryData(queryKeys.today(DAY))).toEqual(todayOut());
+    act(() => {
+      result.current.clearTimeboxFailure();
+    });
+    await waitFor(() => {
+      expect(result.current.timeboxFailed).toBe(false);
+    });
     expect(Object.keys(result.current).sort()).toEqual(
       [
+        'clearTimeboxFailure',
         'clearTimebox',
         'moveToDay',
         'removeFromPlan',
@@ -267,5 +276,76 @@ describe('useAgendaPlanMutations', () => {
         'toggleDone',
       ].sort(),
     );
+  });
+
+  it('serializes timebox snapshots across hook instances until the older write settles', async () => {
+    const { client, wrapper } = makeWrapper();
+    client.setQueryData(queryKeys.dailyPlan(DAY), { items: [dailyPlanItem()] });
+    client.setQueryData(queryKeys.agenda(DAY), agendaOut());
+    client.setQueryData(queryKeys.today(DAY), todayOut());
+
+    let rejectFirst: ((reason: Error) => void) | undefined;
+    let resolveSecond: ((response: ReturnType<typeof okResponse<object>>) => void) | undefined;
+    dailyPlanPatch
+      .mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectFirst = reject;
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveSecond = resolve;
+          }),
+      );
+
+    const { result } = renderHook(
+      () => ({
+        firstSurface: useAgendaPlanMutations(DAY),
+        secondSurface: useAgendaPlanMutations(DAY),
+      }),
+      { wrapper },
+    );
+
+    act(() => {
+      result.current.firstSurface.setTimebox(agendaEntry(), NEW_START, NEW_END);
+    });
+    await waitFor(() => {
+      expect(dailyPlanPatch).toHaveBeenCalledOnce();
+    });
+
+    act(() => {
+      result.current.secondSurface.setTimebox(agendaEntry(), LATER_START, LATER_END);
+    });
+    expect(dailyPlanPatch).toHaveBeenCalledOnce();
+    expect(
+      client.getQueryData<{ items: DailyPlanItemOut[] }>(queryKeys.dailyPlan(DAY))?.items[0],
+    ).toMatchObject({ timeboxStartsAt: NEW_START, timeboxEndsAt: NEW_END });
+
+    act(() => {
+      rejectFirst?.(new Error('older write rejected'));
+    });
+    await waitFor(() => {
+      expect(dailyPlanPatch).toHaveBeenCalledTimes(2);
+    });
+    expect(
+      client.getQueryData<{ items: DailyPlanItemOut[] }>(queryKeys.dailyPlan(DAY))?.items[0],
+    ).toMatchObject({ timeboxStartsAt: LATER_START, timeboxEndsAt: LATER_END });
+    expect(client.getQueryData<AgendaOut>(queryKeys.agenda(DAY))?.entries[0]).toMatchObject({
+      startsAt: LATER_START,
+      endsAt: LATER_END,
+    });
+    expect(client.getQueryData<HubTodayOut>(queryKeys.today(DAY))?.calendar[0]).toMatchObject({
+      startsAt: LATER_START,
+      endsAt: LATER_END,
+    });
+
+    act(() => {
+      resolveSecond?.(okResponse({}));
+    });
+    await waitFor(() => {
+      expect(result.current.secondSurface.timeboxFailed).toBe(false);
+    });
   });
 });

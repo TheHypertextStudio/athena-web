@@ -26,7 +26,7 @@ import {
   OrganizationId,
   TaskId,
 } from '@docket/types';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, type QueryKey } from '@tanstack/react-query';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import type { JSX, ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -556,6 +556,82 @@ describe('useUpdateCalendarItemById', () => {
     await waitFor(() => {
       expect(result.current.agendaSurface.isSuccess).toBe(true);
     });
+  });
+
+  it('restores partial setup patches and releases a failed setup before the next dynamic write', async () => {
+    const { client, wrapper } = makeWrapper();
+    const original = providerItem({ syncState: 'clean' });
+    const firstRangeKey = queryKeys.calendarItems(START, END);
+    const secondRangeKey = queryKeys.calendarItems(
+      '2026-06-30T00:00:00.000Z',
+      '2026-07-03T00:00:00.000Z',
+    );
+    client.setQueryData(queryKeys.calendarItem(ITEM_ID), original);
+    for (const key of [firstRangeKey, secondRangeKey]) {
+      client.setQueryData<CalendarItemsRangeOut>(key, {
+        layers: [layer()],
+        items: [original],
+      });
+    }
+
+    const originalSetQueryData = client.setQueryData.bind(client) as (
+      key: QueryKey,
+      updater: unknown,
+    ) => unknown;
+    let throwDuringSecondRange = true;
+    vi.spyOn(client, 'setQueryData').mockImplementation((key: QueryKey, updater: unknown) => {
+      if (
+        throwDuringSecondRange &&
+        JSON.stringify(key) === JSON.stringify(secondRangeKey) &&
+        typeof updater === 'object' &&
+        updater !== null
+      ) {
+        throwDuringSecondRange = false;
+        throw new Error('synthetic optimistic setup failure');
+      }
+      return originalSetQueryData(key, updater);
+    });
+
+    const { result } = renderHook(() => useUpdateCalendarItemById(), { wrapper });
+    const firstPatch = {
+      startsAt: '2026-07-01T18:00:00Z',
+      endsAt: '2026-07-01T19:00:00Z',
+    };
+    act(() => {
+      result.current.mutate({ itemId: ITEM_ID, patch: firstPatch });
+    });
+
+    await waitFor(() => {
+      expect(result.current.isError).toBe(true);
+    });
+    expect(itemPatch).not.toHaveBeenCalled();
+    expect(client.getQueryData(queryKeys.calendarItem(ITEM_ID))).toEqual(original);
+    for (const key of [firstRangeKey, secondRangeKey]) {
+      expect(client.getQueryData<CalendarItemsRangeOut>(key)?.items).toEqual([original]);
+    }
+
+    const laterPatch = {
+      startsAt: '2026-07-01T20:00:00Z',
+      endsAt: '2026-07-01T21:00:00Z',
+    };
+    act(() => {
+      result.current.mutate({ itemId: ITEM_ID, patch: laterPatch });
+    });
+    await waitFor(() => {
+      expect(itemPatch).toHaveBeenCalledOnce();
+    });
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true);
+    });
+    expect(client.getQueryData<CalendarItemOut>(queryKeys.calendarItem(ITEM_ID))).toMatchObject({
+      ...laterPatch,
+      syncState: 'push_pending',
+    });
+    for (const key of [firstRangeKey, secondRangeKey]) {
+      expect(
+        client.getQueryData<CalendarItemsRangeOut>(key)?.items.find((item) => item.id === ITEM_ID),
+      ).toMatchObject({ ...laterPatch, syncState: 'push_pending' });
+    }
   });
 });
 

@@ -3,7 +3,7 @@
 /** `agenda/agenda-canvas` — list and shared-fluid-canvas arrangements of one agenda. */
 import { Stack } from '@docket/ui/primitives';
 import { useRouter } from 'next/navigation';
-import { type JSX, useMemo, useState } from 'react';
+import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 
 import CalendarItemDrawer from '@/components/calendar/calendar-item-drawer';
 import {
@@ -21,7 +21,11 @@ import {
 
 import { type AgendaEntry, isTimeboxed, useAgenda } from './agenda-context';
 import AgendaEntryCard from './agenda-entry-card';
-import { isAgendaEntryInlineEditable, toAgendaScheduleItem } from './agenda-schedule-item';
+import {
+  isAgendaEntryInlineEditable,
+  isAgendaRelationshipTarget,
+  toAgendaScheduleItem,
+} from './agenda-schedule-item';
 
 const INLINE_UPDATE_FAILURE_COPY =
   'Could not update this item. Your previous time has been restored.';
@@ -98,11 +102,24 @@ function TimelineArrangement({
   readonly onOpenCalendarItem: (itemId: string) => void;
 }): JSX.Element {
   const router = useRouter();
-  const { date, displayTimezone, pixelsPerHour, setTimebox, timeboxFailed } = useAgenda();
+  const { date, displayTimezone, pixelsPerHour, setTimebox, timeboxFailed, clearTimeboxFailure } =
+    useAgenda();
   const [now] = useState(() => new Date().toISOString());
   const updateCalendarItem = useUpdateCalendarItemById();
   const linkTask = useLinkTaskToCalendarItem();
   const relateItems = useRelateCalendarItems();
+  const resetCalendarItem = updateCalendarItem.reset;
+  const resetLinkTask = linkTask.reset;
+  const resetRelateItems = relateItems.reset;
+  const clearInlineFailures = useCallback(() => {
+    clearTimeboxFailure();
+    resetCalendarItem();
+    resetLinkTask();
+    resetRelateItems();
+  }, [clearTimeboxFailure, resetCalendarItem, resetLinkTask, resetRelateItems]);
+  useEffect(() => {
+    clearInlineFailures();
+  }, [clearInlineFailures, date]);
   const entryById = useMemo(() => new Map(entries.map((entry) => [entry.id, entry])), [entries]);
   const lane = useMemo<ScheduleLane>(
     () => ({
@@ -122,6 +139,7 @@ function TimelineArrangement({
   );
 
   const persistExactBounds = (entry: AgendaEntry, startsAt: string, endsAt: string): void => {
+    clearInlineFailures();
     if (entry.planItemId) {
       setTimebox(entry, startsAt, endsAt);
     } else if (entry.calendarItem) {
@@ -233,8 +251,11 @@ function TimelineArrangement({
           persistResize(item, targetLane, edge, startMinutes, endMinutes);
         }}
         onDropObjectOnItem={({ object, targetItem }) => {
-          const target = entryById.get(targetItem.id)?.calendarItem;
-          if (!target) return;
+          const targetEntry = entryById.get(targetItem.id);
+          const target = targetEntry?.calendarItem;
+          if (!targetEntry || !target || !isAgendaRelationshipTarget(targetEntry)) return;
+          if (object.kind === 'calendar_item' && object.itemId === target.id) return;
+          clearInlineFailures();
           const role = target.kind === 'timebox' ? 'contained' : 'related';
           if (object.kind === 'task') {
             linkTask.mutate({

@@ -25,12 +25,13 @@ const agendaState = vi.hoisted(() => ({
   view: 'timeline' as const,
   entries: [] as unknown[],
   setTimebox: vi.fn(),
+  clearTimeboxFailure: vi.fn(),
   timeboxFailed: false,
 }));
 const mutationState = vi.hoisted(() => ({
-  update: { mutate: vi.fn(), isError: false, error: null as Error | null },
-  link: { mutate: vi.fn(), isError: false, error: null as Error | null },
-  relate: { mutate: vi.fn(), isError: false, error: null as Error | null },
+  update: { mutate: vi.fn(), reset: vi.fn(), isError: false, error: null as Error | null },
+  link: { mutate: vi.fn(), reset: vi.fn(), isError: false, error: null as Error | null },
+  relate: { mutate: vi.fn(), reset: vi.fn(), isError: false, error: null as Error | null },
 }));
 
 vi.mock('next/navigation', () => ({ useRouter: () => router }));
@@ -190,15 +191,19 @@ beforeEach(() => {
   agendaState.date = '2026-07-13';
   agendaState.entries = [];
   agendaState.setTimebox.mockReset();
+  agendaState.clearTimeboxFailure.mockReset();
   agendaState.timeboxFailed = false;
   router.push.mockReset();
   mutationState.update.mutate.mockReset();
+  mutationState.update.reset.mockReset();
   mutationState.update.isError = false;
   mutationState.update.error = null;
   mutationState.link.mutate.mockReset();
+  mutationState.link.reset.mockReset();
   mutationState.link.isError = false;
   mutationState.link.error = null;
   mutationState.relate.mutate.mockReset();
+  mutationState.relate.reset.mockReset();
   mutationState.relate.isError = false;
   mutationState.relate.error = null;
 });
@@ -398,6 +403,72 @@ describe('Agenda scheduling interactions', () => {
       });
     });
     expect(mutationState.update.mutate).not.toHaveBeenCalled();
+  });
+
+  it('clears every stale inline failure before a plan timebox write', () => {
+    const entry = planTimebox();
+    renderTimeline([entry]);
+    agendaState.clearTimeboxFailure.mockClear();
+    mutationState.update.reset.mockClear();
+    mutationState.link.reset.mockClear();
+    mutationState.relate.reset.mockClear();
+    const props = canvasProps();
+    const lane = props.lanes[0]!;
+
+    act(() => {
+      props.onMoveItem?.({
+        item: lane.items[0]!,
+        fromLane: lane,
+        toLane: lane,
+        startMinutes: 600,
+        endMinutes: 660,
+      });
+    });
+
+    expect(agendaState.clearTimeboxFailure).toHaveBeenCalledOnce();
+    expect(mutationState.update.reset).toHaveBeenCalledOnce();
+    expect(mutationState.link.reset).toHaveBeenCalledOnce();
+    expect(mutationState.relate.reset).toHaveBeenCalledOnce();
+    expect(agendaState.setTimebox).toHaveBeenCalledWith(
+      entry,
+      '2026-07-13T17:00:00Z',
+      '2026-07-13T18:00:00Z',
+    );
+  });
+
+  it('rejects derived relationship targets and calendar-item self drops', () => {
+    const derived = calendarItem('01BX5ZZKBKACTAV9WEVGEMMVE1', 'Availability', {
+      kind: 'availability_block',
+      provider: null,
+    });
+    renderTimeline([calendarEntry(derived)]);
+    let props = canvasProps();
+    act(() => {
+      props.onDropObjectOnItem?.({
+        object: {
+          kind: 'task',
+          taskId: TASK_ID,
+          organizationId: ORG_ID,
+          title: 'Draft launch memo',
+        },
+        targetItem: props.lanes[0]!.items[0]!,
+        targetLane: props.lanes[0]!,
+      });
+    });
+    expect(mutationState.link.mutate).not.toHaveBeenCalled();
+
+    cleanup();
+    const target = calendarItem('01BX5ZZKBKACTAV9WEVGEMMVE2', 'Provider event');
+    renderTimeline([calendarEntry(target)]);
+    props = canvasProps();
+    act(() => {
+      props.onDropObjectOnItem?.({
+        object: { kind: 'calendar_item', itemId: target.id, title: target.title },
+        targetItem: props.lanes[0]!.items[0]!,
+        targetLane: props.lanes[0]!,
+      });
+    });
+    expect(mutationState.relate.mutate).not.toHaveBeenCalled();
   });
 
   it.each(['timebox', 'calendar', 'link', 'relate'] as const)(

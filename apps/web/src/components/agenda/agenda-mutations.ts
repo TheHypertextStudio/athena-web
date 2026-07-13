@@ -5,8 +5,8 @@
  *
  * @remarks
  * Every in-place edit to a day's plan goes through the Hub daily-plan CRUD, optimistically patches
- * the two caches the agenda reads — the `dailyPlan` items (ids + status + timebox) and the Hub
- * `today` projection (the `plan`/`calendar` the views actually render) — and invalidates them so the
+ * the three caches the agenda reads — the `dailyPlan` items (ids + status + timebox), the combined
+ * `agenda` entries, and the Hub `today` projection (`plan`/`calendar`) — and invalidates them so the
  * cache reconciles with the server on settle. Keeping the writes here leaves {@link AgendaProvider}
  * to own only read + navigation state.
  *
@@ -21,6 +21,7 @@ import { useCallback, useMemo } from 'react';
 
 import { api } from '@/lib/api';
 import { optimisticPatch, queryKeys, unwrap, useApiMutation } from '@/lib/query';
+import { acquireSerializedOptimisticWrite } from '@/lib/serialized-optimistic-write';
 
 import type { AgendaEntry } from './agenda-context';
 
@@ -28,6 +29,8 @@ import type { AgendaEntry } from './agenda-context';
 export interface AgendaPlanMutations {
   /** Whether the latest timebox write failed after its optimistic update was restored. */
   timeboxFailed: boolean;
+  /** Clear a previous timebox failure before another inline scheduling action starts. */
+  clearTimeboxFailure: () => void;
   /** Check an entry off for the day (or un-check it). */
   toggleDone: (entry: AgendaEntry) => void;
   /** Place the entry on the timeline for the given local clock window (ISO instants). */
@@ -63,7 +66,7 @@ type AgendaTaskTimebox = Extract<AgendaOut['entries'][number], { kind: 'task_tim
 function combineRollbacks(...patches: { rollback: () => void }[]): { rollback: () => void } {
   return {
     rollback: () => {
-      for (const patch of patches) patch.rollback();
+      for (const patch of [...patches].reverse()) patch.rollback();
     },
   };
 }
@@ -122,7 +125,7 @@ function removeAgendaTask(
 
 /**
  * Bind the day's plan-item edit operations to the active client, optimistically patching the
- * `dailyPlan(date)` and `today(date)` caches so each edit lands instantly.
+ * `dailyPlan(date)`, `agenda(date)`, and `today(date)` caches so each edit lands instantly.
  *
  * @param date - The day these edits apply to (the cache keys they patch + invalidate).
  */
@@ -169,26 +172,49 @@ export function useAgendaPlanMutations(date: string): AgendaPlanMutations {
           }),
         'Could not update the timebox.',
       ),
-    onMutate: (vars) =>
-      combineRollbacks(
-        optimisticPatch<DailyPlanCache>(queryClient, queryKeys.dailyPlan(date), (prev) => ({
-          items: prev.items.map((item) =>
-            item.id === vars.id
-              ? { ...item, timeboxStartsAt: vars.startsAt, timeboxEndsAt: vars.endsAt }
-              : item,
-          ),
-        })),
-        optimisticPatch<AgendaOut>(queryClient, queryKeys.agenda(date), (prev) => ({
-          ...prev,
-          entries: nextAgendaEntries(prev.entries, vars),
-        })),
-        optimisticPatch<HubTodayOut>(queryClient, queryKeys.today(date), (prev) => ({
-          ...prev,
-          calendar: nextCalendar(prev.calendar, vars),
-        })),
-      ),
+    onMutate: async (vars) => {
+      const lease = await acquireSerializedOptimisticWrite(queryClient, `agenda-timebox:${date}`);
+      const applied: { rollback: () => void }[] = [];
+      try {
+        applied.push(
+          optimisticPatch<DailyPlanCache>(queryClient, queryKeys.dailyPlan(date), (prev) => ({
+            items: prev.items.map((item) =>
+              item.id === vars.id
+                ? { ...item, timeboxStartsAt: vars.startsAt, timeboxEndsAt: vars.endsAt }
+                : item,
+            ),
+          })),
+        );
+        applied.push(
+          optimisticPatch<AgendaOut>(queryClient, queryKeys.agenda(date), (prev) => ({
+            ...prev,
+            entries: nextAgendaEntries(prev.entries, vars),
+          })),
+        );
+        applied.push(
+          optimisticPatch<HubTodayOut>(queryClient, queryKeys.today(date), (prev) => ({
+            ...prev,
+            calendar: nextCalendar(prev.calendar, vars),
+          })),
+        );
+        return {
+          ...combineRollbacks(...applied),
+          releaseQueue: lease.release,
+        };
+      } catch (error) {
+        combineRollbacks(...applied).rollback();
+        lease.release();
+        throw error;
+      }
+    },
     onError: (_error, _vars, context) => context?.rollback(),
-    invalidateKeys: dayKeys,
+    onSettled: async (_data, _error, _vars, context) => {
+      try {
+        await Promise.all(dayKeys.map((key) => queryClient.invalidateQueries({ queryKey: key })));
+      } finally {
+        context?.releaseQueue();
+      }
+    },
   });
 
   const remove = useApiMutation({
@@ -304,6 +330,10 @@ export function useAgendaPlanMutations(date: string): AgendaPlanMutations {
     },
     [timebox],
   );
+  const resetTimebox = timebox.reset;
+  const clearTimeboxFailure = useCallback(() => {
+    resetTimebox();
+  }, [resetTimebox]);
   const moveToDay = useCallback(
     (entry: AgendaEntry, targetDate: string) => {
       const task = editableTask(entry);
@@ -329,12 +359,21 @@ export function useAgendaPlanMutations(date: string): AgendaPlanMutations {
   return useMemo(
     () => ({
       timeboxFailed: timebox.isError,
+      clearTimeboxFailure,
       toggleDone,
       setTimebox,
       clearTimebox,
       moveToDay,
       removeFromPlan,
     }),
-    [timebox.isError, toggleDone, setTimebox, clearTimebox, moveToDay, removeFromPlan],
+    [
+      timebox.isError,
+      clearTimeboxFailure,
+      toggleDone,
+      setTimebox,
+      clearTimebox,
+      moveToDay,
+      removeFromPlan,
+    ],
   );
 }

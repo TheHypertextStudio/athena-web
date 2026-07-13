@@ -1,7 +1,7 @@
 'use client';
 
 import type { CalendarItemOut, CalendarPreferences } from '@docket/types';
-import type { JSX } from 'react';
+import { type JSX, useCallback, useEffect } from 'react';
 
 import CalendarLayerPanel from '@/components/calendar/calendar-layer-panel';
 import {
@@ -25,6 +25,12 @@ import type { CalendarPeopleAxisState } from './use-calendar-people-axis';
 
 const INLINE_UPDATE_FAILURE_COPY =
   'Could not update this item. Your previous time has been restored.';
+const RELATIONSHIP_TARGET_KINDS: ReadonlySet<CalendarItemOut['kind']> = new Set([
+  'provider_event',
+  'native_event',
+  'native_block',
+  'timebox',
+]);
 
 /** Props for the shared canvas and its axis-specific status/sidebar affordances. */
 export interface CalendarSchedulingSurfaceProps {
@@ -67,6 +73,24 @@ export function CalendarSchedulingSurface({
   const linkTask = useLinkTaskToCalendarItem();
   const relateItems = useRelateCalendarItems();
   const minLaneWidth = preferences?.minLaneWidth ?? 240;
+  const resetUpdateItem = updateItem.reset;
+  const resetLinkTask = linkTask.reset;
+  const resetRelateItems = relateItems.reset;
+  const clearInlineFailures = useCallback(() => {
+    resetUpdateItem();
+    resetLinkTask();
+    resetRelateItems();
+  }, [resetLinkTask, resetRelateItems, resetUpdateItem]);
+  useEffect(() => {
+    clearInlineFailures();
+  }, [
+    axis,
+    clearInlineFailures,
+    dateAxis.windowLaneCount,
+    dateAxis.windowStartDate,
+    displayTimezone,
+    peopleAxis.comparisonOrgId,
+  ]);
 
   const sourceIsInlineEditable = (source: CalendarItemOut): boolean =>
     isInlineEditableScheduleItem({
@@ -77,6 +101,7 @@ export function CalendarSchedulingSurface({
       displayTimezone,
     });
   const persistExactBounds = (itemId: string, startsAt: string, endsAt: string): void => {
+    clearInlineFailures();
     updateItem.mutate({
       itemId,
       patch: { startsAt, endsAt },
@@ -90,6 +115,8 @@ export function CalendarSchedulingSurface({
       endsAt,
       displayTimezone,
     });
+  const resolveWallInstant = (date: string, minutes: number): string | null =>
+    scheduleInstantAt(date, minutes, displayTimezone, 'reject');
   const moveBounds = (
     itemId: string,
     date: string,
@@ -98,8 +125,8 @@ export function CalendarSchedulingSurface({
   ): void => {
     const source = dateAxis.itemById.get(itemId);
     if (!source || !sourceIsInlineEditable(source)) return;
-    const startsAt = scheduleInstantAt(date, startMinutes, displayTimezone, 'reject');
-    const endsAt = scheduleInstantAt(date, endMinutes, displayTimezone, 'reject');
+    const startsAt = resolveWallInstant(date, startMinutes);
+    const endsAt = resolveWallInstant(date, endMinutes);
     if (!startsAt || !endsAt || !candidateIsSafe(startsAt, endsAt)) return;
     persistExactBounds(itemId, startsAt, endsAt);
   };
@@ -112,14 +139,8 @@ export function CalendarSchedulingSurface({
   ): void => {
     const source = dateAxis.itemById.get(itemId);
     if (!source?.startsAt || !source.endsAt || !sourceIsInlineEditable(source)) return;
-    const startsAt =
-      edge === 'start'
-        ? scheduleInstantAt(date, startMinutes, displayTimezone, 'reject')
-        : source.startsAt;
-    const endsAt =
-      edge === 'end'
-        ? scheduleInstantAt(date, endMinutes, displayTimezone, 'reject')
-        : source.endsAt;
+    const startsAt = edge === 'start' ? resolveWallInstant(date, startMinutes) : source.startsAt;
+    const endsAt = edge === 'end' ? resolveWallInstant(date, endMinutes) : source.endsAt;
     if (!startsAt || !endsAt || !candidateIsSafe(startsAt, endsAt)) return;
     persistExactBounds(itemId, startsAt, endsAt);
   };
@@ -182,8 +203,8 @@ export function CalendarSchedulingSurface({
               ? {
                   onReachBoundary,
                   onSelectRegion: ({ lane, startMinutes, endMinutes }) => {
-                    const startsAt = scheduleInstantAt(lane.date, startMinutes, displayTimezone);
-                    const endsAt = scheduleInstantAt(lane.date, endMinutes, displayTimezone);
+                    const startsAt = resolveWallInstant(lane.date, startMinutes);
+                    const endsAt = resolveWallInstant(lane.date, endMinutes);
                     if (!startsAt || !endsAt) return;
                     onSelectRegion({
                       startsAt,
@@ -219,7 +240,9 @@ export function CalendarSchedulingSurface({
             }}
             onDropObjectOnItem={({ object, targetItem }) => {
               const target = dateAxis.itemById.get(targetItem.id);
-              if (!target) return;
+              if (!target || !RELATIONSHIP_TARGET_KINDS.has(target.kind)) return;
+              if (object.kind === 'calendar_item' && object.itemId === target.id) return;
+              clearInlineFailures();
               const role = target.kind === 'timebox' ? 'contained' : 'related';
               if (object.kind === 'task') {
                 linkTask.mutate({

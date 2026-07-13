@@ -28,6 +28,7 @@ import {
   buildApiSecretBindings,
   confirmAuthAccounts,
   detectRepo,
+  ensureRuntimeSecretAccess,
   exec,
   listGcloudAccounts,
   listGhAccounts,
@@ -534,6 +535,7 @@ function setupGcp(cfg: Config): { saEmail: string; wifProvider: string } {
       );
       created.push(`✓ ${name} (${label})`);
     }
+    ensureRuntimeSecretAccess(cfg.project, name);
   }
   note([...created, ...skipped].join('\n') || '(none)', 'Secret Manager');
 

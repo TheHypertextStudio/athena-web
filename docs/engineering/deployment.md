@@ -42,7 +42,8 @@ Prompts for: GCP project ID, region, GitHub repo (`owner/repo`), passkey domain,
 2. Creates service account `docket-deploy` with the four roles listed in [GCP resources](#gcp-resources)
 3. Creates Artifact Registry repository `docket`
 4. Creates WIF pool `github` + OIDC provider `github-actions`, bound to your specific repo
-5. Creates Secret Manager secrets: `docket-database-url`, `docket-auth-secret`, `docket-cron-secret`
+5. Creates Secret Manager secrets: `docket-database-url`, `docket-auth-secret`, `docket-cron-secret`,
+   then grants the Cloud Run runtime identity `roles/secretmanager.secretAccessor` on each secret
 6. Lets the operator select the environment and providers before resolving provider URLs or opening
    unrelated consoles
 7. Reads latest cloud secret payloads without printing them, preserves ready values, and identifies

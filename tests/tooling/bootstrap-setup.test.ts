@@ -16,6 +16,7 @@ import {
   parseIntegrationArgs,
   policyProviderVars,
   requiredProviderVars,
+  runtimeSecretAccessorBindingArgs,
   setupProviderVars,
   splitInstructionSteps,
   wrapLines,
@@ -241,6 +242,28 @@ describe('cloud secret normalization', () => {
 
   it('rejects a value that becomes empty after normalization', () => {
     expect(() => normalizeCloudSecret(' \r\n ')).toThrow(/must not be empty/);
+  });
+});
+
+describe('bootstrap runtime Secret Manager access', () => {
+  const bootstrap = readFileSync(
+    resolve(import.meta.dirname, '../../scripts/bootstrap.ts'),
+    'utf8',
+  );
+
+  it('binds the default Cloud Run runtime identity to every base secret', () => {
+    expect(
+      runtimeSecretAccessorBindingArgs('123456789', 'docket-auth-secret', 'docket-prod'),
+    ).toEqual([
+      'secrets',
+      'add-iam-policy-binding',
+      'docket-auth-secret',
+      '--project=docket-prod',
+      '--member=serviceAccount:123456789-compute@developer.gserviceaccount.com',
+      '--role=roles/secretmanager.secretAccessor',
+      '--quiet',
+    ]);
+    expect(bootstrap).toContain('ensureRuntimeSecretAccess(cfg.project, name)');
   });
 });
 

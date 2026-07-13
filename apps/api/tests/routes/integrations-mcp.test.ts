@@ -18,14 +18,16 @@ import type { ensureDefaultAgent as EnsureDefaultAgent } from '../../src/lib/def
 import type { unsealCredential as Unseal } from '../../src/lib/credentials';
 import type { getContainer as GetContainer } from '../../src/container';
 
-process.env['DATABASE_URL'] = 'pglite://memory://';
-process.env['APP_MODE'] = 'test';
-process.env['NODE_ENV'] = 'test';
-process.env['BETTER_AUTH_SECRET'] = 'test-secret-test-secret-test-secret-0123456789';
-process.env['CRON_SECRET'] = 'test-cron-secret';
-process.env['SKIP_ENV_VALIDATION'] = '1';
-process.env['AGENT_MAX_TURNS'] = '8';
-process.env['CREDENTIALS_ENCRYPTION_KEY'] = Buffer.from('0'.repeat(32)).toString('base64');
+vi.hoisted(() => {
+  process.env['DATABASE_URL'] = 'pglite://memory://';
+  process.env['APP_MODE'] = 'test';
+  process.env['NODE_ENV'] = 'test';
+  process.env['BETTER_AUTH_SECRET'] = 'test-secret-test-secret-test-secret-0123456789';
+  process.env['CRON_SECRET'] = 'test-cron-secret';
+  process.env['SKIP_ENV_VALIDATION'] = '1';
+  process.env['AGENT_MAX_TURNS'] = '8';
+  process.env['CREDENTIALS_ENCRYPTION_KEY'] = Buffer.from('0'.repeat(32)).toString('base64');
+});
 
 const MIGRATIONS = resolve(import.meta.dirname, '../../../../packages/db/drizzle');
 

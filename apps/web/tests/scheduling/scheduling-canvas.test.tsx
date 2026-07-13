@@ -426,6 +426,78 @@ describe('SchedulingCanvas', () => {
     ]);
   });
 
+  it.each([
+    {
+      edge: 'start',
+      item: timedItem('preview-start', 'Preview start', '00:30', '01:30'),
+      pointerId: 111,
+      clientY: 70,
+      previewMode: 'resize-start',
+      boundaryClass: 'top-0',
+      outsideClasses: ['-top-3', '[@media(pointer:coarse)]:-top-8'],
+      indicatorBoundaryClass: 'top-0',
+      indicatorOutsideClass: 'bottom-2.5',
+      expectedTime: '12:00 AM – 1:30 AM',
+    },
+    {
+      edge: 'end',
+      item: timedItem('preview-end', 'Preview end', '22:30', '23:30'),
+      pointerId: 112,
+      clientY: 130,
+      previewMode: 'resize-end',
+      boundaryClass: 'bottom-0',
+      outsideClasses: ['-bottom-3', '[@media(pointer:coarse)]:-bottom-8'],
+      indicatorBoundaryClass: 'bottom-0',
+      indicatorOutsideClass: 'top-2.5',
+      expectedTime: '10:30 PM – 12:00 AM',
+    },
+  ])(
+    'positions the $edge target from its live day-boundary preview before commit',
+    ({
+      edge,
+      item,
+      pointerId,
+      clientY,
+      previewMode,
+      boundaryClass,
+      outsideClasses,
+      indicatorBoundaryClass,
+      indicatorOutsideClass,
+      expectedTime,
+    }) => {
+      const onResizeItem = vi.fn();
+      render(
+        <SchedulingCanvas
+          displayTimezone="UTC"
+          lanes={[lane('preview', 'Preview', [item])]}
+          pixelsPerHour={60}
+          viewportWidth={500}
+          onResizeItem={onResizeItem}
+        />,
+      );
+
+      const grip = screen.getByRole('button', {
+        name: `Resize ${item.title} from ${edge}`,
+      });
+      fireEvent.pointerDown(grip, { button: 0, pointerId, clientY: 100 });
+      fireEvent.pointerMove(window, { pointerId, clientY });
+
+      const card = renderedItem(item.id);
+      const indicator = grip.querySelector(`[data-schedule-resize-indicator="${edge}"]`);
+      expect(card).toHaveAttribute('data-gesture-preview', previewMode);
+      expect(card).toHaveTextContent(expectedTime);
+      expect(grip).toHaveClass(boundaryClass);
+      expect(grip).not.toHaveClass(...outsideClasses);
+      expect(indicator).toHaveClass(indicatorBoundaryClass);
+      expect(indicator).not.toHaveClass(indicatorOutsideClass);
+      expect(onResizeItem).not.toHaveBeenCalled();
+
+      fireEvent.pointerCancel(window, { pointerId });
+      expect(card).not.toHaveAttribute('data-gesture-preview');
+      expect(onResizeItem).not.toHaveBeenCalled();
+    },
+  );
+
   it('keeps first-lane day-start and last-lane day-end targets inside canvas boundaries', () => {
     const dayStart = timedItem('day-start', 'Day start', '00:00', '01:00');
     const dayEnd: ScheduleItem = {
@@ -1263,6 +1335,69 @@ describe('SchedulingCanvas', () => {
       expect(card).not.toHaveStyle({ right: '4px' });
     }
   });
+
+  it.each([5, 6])(
+    'clamps resize targets inside the first and last cards of a %i-column collision',
+    (columnCount) => {
+      const items = Array.from({ length: columnCount }, (_, index) =>
+        timedItem(
+          `dense-${String(columnCount)}-${String(index)}`,
+          `Dense ${String(columnCount)} ${String(index)}`,
+          '09:00',
+          '10:00',
+        ),
+      );
+      render(
+        <SchedulingCanvas
+          displayTimezone="UTC"
+          lanes={[lane('dense', 'Dense', items)]}
+          pixelsPerHour={60}
+          viewportWidth={280}
+          onResizeItem={vi.fn()}
+        />,
+      );
+
+      const firstItem = items[0]!;
+      const lastItem = items.at(-1)!;
+      const firstCard = renderedItem(firstItem.id);
+      const lastCard = renderedItem(lastItem.id);
+      expect(firstCard).toHaveAttribute('data-layout-column', '0');
+      expect(lastCard).toHaveAttribute('data-layout-column', String(columnCount - 1));
+      expect(firstCard).toHaveAttribute('data-layout-column-count', String(columnCount));
+      expect(lastCard).toHaveAttribute('data-layout-column-count', String(columnCount));
+      expect(firstCard).toHaveStyle({ left: '4px' });
+      expect(lastCard.style.left).not.toBe(firstCard.style.left);
+      expect(firstCard.style.width).toBe(lastCard.style.width);
+      expect(firstCard.style.width).not.toBe('calc(100% - 8px)');
+
+      const firstStart = screen.getByRole('button', {
+        name: `Resize ${firstItem.title} from start`,
+      });
+      const lastEnd = screen.getByRole('button', {
+        name: `Resize ${lastItem.title} from end`,
+      });
+      expect(firstStart.closest('[data-schedule-item]')).toBe(firstCard);
+      expect(lastEnd.closest('[data-schedule-item]')).toBe(lastCard);
+      expect(firstStart).toHaveClass(
+        'left-0',
+        'max-w-full',
+        'size-6',
+        '[@media(pointer:coarse)]:size-11',
+      );
+      expect(lastEnd).toHaveClass(
+        'right-0',
+        'max-w-full',
+        'size-6',
+        '[@media(pointer:coarse)]:size-11',
+      );
+      expect(firstStart.querySelector('[data-schedule-resize-indicator="start"]')).toHaveClass(
+        'max-w-full',
+      );
+      expect(lastEnd.querySelector('[data-schedule-resize-indicator="end"]')).toHaveClass(
+        'max-w-full',
+      );
+    },
+  );
 
   it('gives disjoint timed items the full usable lane width', () => {
     render(

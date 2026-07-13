@@ -104,12 +104,12 @@ export function SchedulingItemCard({
     : height;
   const laneTranslation = gesture.preview ? (gesture.preview.laneIndex - laneIndex) * laneWidth : 0;
   const density = itemDensity(visibleHeight);
-  const startsAtDayBoundary = bounds.startMinutes === 0;
-  const endsAtDayBoundary = bounds.endMinutes === MINUTES_PER_DAY;
+  const startsAtDayBoundary = visibleBounds.startMinutes === 0;
+  const endsAtDayBoundary = visibleBounds.endMinutes === MINUTES_PER_DAY;
   const resizeTargetClassName =
-    'focus-visible:ring-ring absolute z-20 size-6 cursor-ns-resize touch-none bg-transparent pointer-events-none outline-none group-focus-within:pointer-events-auto group-hover:pointer-events-auto focus-visible:ring-2 focus-visible:ring-inset [@media(pointer:coarse)]:size-11 [@media(pointer:coarse)]:pointer-events-auto';
+    'focus-visible:ring-ring absolute z-20 size-6 max-w-full cursor-ns-resize touch-none bg-transparent pointer-events-none outline-none group-focus-within:pointer-events-auto group-hover:pointer-events-auto focus-visible:ring-2 focus-visible:ring-inset [@media(pointer:coarse)]:size-11 [@media(pointer:coarse)]:pointer-events-auto';
   const resizeIndicatorClassName =
-    'bg-primary/70 pointer-events-none absolute h-0.5 w-3 rounded-full opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100';
+    'bg-primary/70 pointer-events-none absolute h-0.5 w-3 max-w-full rounded-full opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100';
   const bodyClassName =
     density === 'marker'
       ? 'focus-visible:ring-ring relative z-10 size-full overflow-hidden rounded-sm p-1 outline-none focus-visible:ring-2 focus-visible:ring-inset'

@@ -117,12 +117,19 @@ export function programStatusOptions(): readonly PickerOption<ProgramStatus>[] {
 
 /** Human label for each {@link InitiativeStatus}. */
 const INITIATIVE_STATUS_LABEL: Record<InitiativeStatus, string> = {
+  proposed: 'Proposed',
   active: 'Active',
   completed: 'Completed',
+  canceled: 'Canceled',
 };
 
 /** The canonical initiative-status ordering for the picker menu. */
-const INITIATIVE_STATUS_ORDER: readonly InitiativeStatus[] = ['active', 'completed'];
+const INITIATIVE_STATUS_ORDER: readonly InitiativeStatus[] = [
+  'proposed',
+  'active',
+  'completed',
+  'canceled',
+];
 
 /** Build the {@link InitiativeStatus} enum options. */
 export function initiativeStatusOptions(): readonly PickerOption<InitiativeStatus>[] {

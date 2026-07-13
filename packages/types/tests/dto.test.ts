@@ -19,7 +19,7 @@ import {
   SessionStatus,
   SessionTrigger,
 } from '../src/agent';
-import { AttachmentCreate } from '../src/attachment';
+import { AttachmentCreate, AttachmentSubjectType } from '../src/attachment';
 import {
   CalendarConnectionOut,
   CalendarEventCreateTask,
@@ -59,6 +59,9 @@ import {
 } from '../src/hub';
 import {
   InitiativeCreate,
+  InitiativeHierarchyLinkCreate,
+  InitiativeHierarchyLinkMove,
+  InitiativeHierarchyLinkOut,
   InitiativeOut,
   InitiativeStatus,
   InitiativeUpdate,
@@ -102,6 +105,8 @@ import {
   OrgCreateResult,
   OrgOut,
   OrgSummary,
+  WorkspaceSettingsOut,
+  WorkspaceSettingsUpdate,
 } from '../src/organization';
 import { ProgramCreate, ProgramOut, ProgramStatus, ProgramUpdate } from '../src/program';
 import { ProjectCreate, ProjectOut } from '../src/project';
@@ -431,7 +436,9 @@ describe('actor + team DTOs', () => {
 
 describe('initiative DTOs', () => {
   it('InitiativeStatus accepts/rejects', () => {
+    expect(InitiativeStatus.parse('proposed')).toBe('proposed');
     expect(InitiativeStatus.parse('completed')).toBe('completed');
+    expect(InitiativeStatus.parse('canceled')).toBe('canceled');
     expect(InitiativeStatus.safeParse('paused').success).toBe(false);
   });
 
@@ -440,12 +447,21 @@ describe('initiative DTOs', () => {
     const full = InitiativeCreate.parse({
       name: 'I',
       description: 'd',
+      summary: 'A concise strategic outcome.',
       ownerId: ID,
       status: 'active',
+      priority: 'high',
+      updateCadence: 'biweekly',
       targetDate: '2026-01-01',
       health: 'at_risk',
     });
     expect(full.health).toBe('at_risk');
+    expect(full.priority).toBe('high');
+    expect(full.updateCadence).toBe('biweekly');
+  });
+
+  it('InitiativeCreate rejects summaries longer than 280 characters', () => {
+    expect(InitiativeCreate.safeParse({ name: 'I', summary: 'x'.repeat(281) }).success).toBe(false);
   });
 
   it('InitiativeCreate rejects empty name', () => {
@@ -467,14 +483,37 @@ describe('initiative DTOs', () => {
     expect(InitiativeUpdate.safeParse({ name: '' }).success).toBe(false);
   });
 
+  it('validates context-owned Initiative hierarchy links', () => {
+    const create = InitiativeHierarchyLinkCreate.parse({
+      parentInitiativeId: ID,
+      childInitiativeId: ID2,
+    });
+    expect(create.childInitiativeId).toBe(ID2);
+    expect(InitiativeHierarchyLinkMove.parse({ parentInitiativeId: ID3 }).parentInitiativeId).toBe(
+      ID3,
+    );
+    expect(
+      InitiativeHierarchyLinkOut.parse({
+        id: ID3,
+        contextOrganizationId: ID,
+        parentInitiativeId: ID2,
+        childInitiativeId: ID3,
+        createdAt: '2026-07-13T12:00:00.000Z',
+      }).contextOrganizationId,
+    ).toBe(ID);
+  });
+
   it('InitiativeOut parses', () => {
     const parsed = InitiativeOut.parse({
       id: ID,
       organizationId: ID2,
       name: 'I',
+      summary: null,
       description: null,
       ownerId: null,
       status: 'active',
+      priority: 'none',
+      updateCadence: 'monthly',
       targetDate: null,
       health: null,
       createdAt: 'x',
@@ -492,6 +531,19 @@ describe('initiative DTOs', () => {
         createdAt: 'x',
       }).success,
     ).toBe(false);
+  });
+});
+
+describe('workspace settings DTOs', () => {
+  it('accepts Initiative maximum depths from one through five', () => {
+    expect(WorkspaceSettingsOut.parse({ initiativeMaxDepth: 2 }).initiativeMaxDepth).toBe(2);
+    expect(WorkspaceSettingsUpdate.parse({ initiativeMaxDepth: 1 }).initiativeMaxDepth).toBe(1);
+    expect(WorkspaceSettingsUpdate.parse({ initiativeMaxDepth: 5 }).initiativeMaxDepth).toBe(5);
+  });
+
+  it('rejects Initiative maximum depths outside one through five', () => {
+    expect(WorkspaceSettingsUpdate.safeParse({ initiativeMaxDepth: 0 }).success).toBe(false);
+    expect(WorkspaceSettingsUpdate.safeParse({ initiativeMaxDepth: 6 }).success).toBe(false);
   });
 });
 
@@ -1672,6 +1724,10 @@ describe('calendar DTOs', () => {
       metadata: { calendarId: ID2, connectionId: ID, startsAt: '2026-06-30T16:00:00.000Z' },
     });
     expect(parsed.kind).toBe('calendar_event');
+  });
+
+  it('attachments can name an Initiative as their subject', () => {
+    expect(AttachmentSubjectType.parse('initiative')).toBe('initiative');
   });
 
   it('AttachmentCreate rejects a calendar event attachment without an external event id', () => {

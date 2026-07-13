@@ -4,12 +4,13 @@ import {
   initiative,
   initiativeProgram,
   initiativeProject,
+  label,
   program,
   project,
 } from '@docket/db';
 import type { Health } from '@docket/types';
 import type { InitiativeDetail, InitiativeOut } from '@docket/types';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { NotFoundError } from '../error';
@@ -21,9 +22,6 @@ export type ProjectRow = typeof project.$inferSelect;
 /** ProgramRow is the selected database row shape consumed by these API route serializers. */
 export type ProgramRow = typeof program.$inferSelect;
 
-/** TERMINAL_PROJECT_STATUSES lists the statuses treated specially by this API route helper. */
-export const TERMINAL_PROJECT_STATUSES = new Set(['completed', 'canceled']);
-
 /** Health verdicts ordered worst→best so the roll-up can pick the most severe. */
 const HEALTH_SEVERITY: readonly Health[] = ['off_track', 'at_risk', 'on_track'];
 
@@ -33,6 +31,8 @@ export const idParam = z.object({ id: z.string() });
 export const projectLinkParam = z.object({ id: z.string(), projectId: z.string() });
 /** programLinkParam is the reusable OpenAPI parameter schema for this API route route. */
 export const programLinkParam = z.object({ id: z.string(), programId: z.string() });
+/** hierarchyLinkParam identifies one context-owned Initiative hierarchy edge. */
+export const hierarchyLinkParam = z.object({ linkId: z.string() });
 
 /** toOut converts internal API route data into the public API response shape. */
 export function toOut(i: InitiativeRow): z.input<typeof InitiativeOut> {
@@ -40,9 +40,12 @@ export function toOut(i: InitiativeRow): z.input<typeof InitiativeOut> {
     id: i.id,
     organizationId: i.organizationId,
     name: i.name,
+    summary: i.summary,
     description: i.description,
     ownerId: i.ownerId,
     status: i.status,
+    priority: i.priority,
+    updateCadence: i.updateCadence,
     targetDate: i.targetDate?.toISOString() ?? null,
     health: i.health,
     createdAt: i.createdAt.toISOString(),
@@ -82,6 +85,23 @@ export async function assertOwnerInOrg(
     .where(and(eq(actor.id, ownerId), eq(actor.organizationId, orgId)))
     .limit(1);
   if (!rows[0]) throw new NotFoundError('Owner not found');
+}
+
+/** Assert every requested Initiative label is organization-global and owned by its workspace. */
+export async function assertInitiativeLabels(
+  orgId: string,
+  labelIds: readonly string[] | undefined,
+): Promise<string[]> {
+  const uniqueIds = [...new Set(labelIds ?? [])];
+  if (uniqueIds.length === 0) return [];
+  const rows = await db
+    .select({ id: label.id })
+    .from(label)
+    .where(
+      and(eq(label.organizationId, orgId), isNull(label.teamId), inArray(label.id, uniqueIds)),
+    );
+  if (rows.length !== uniqueIds.length) throw new NotFoundError('Label not found');
+  return uniqueIds;
 }
 
 function worstHealth(healths: readonly (Health | null)[]): Health | null {
@@ -162,21 +182,17 @@ export function projectOverlapsWindow(proj: ProjectRow, from?: string, to?: stri
 /** Assemble the full {@link InitiativeDetail} DTO from a row + its associated children. */
 export function buildInitiativeDetail(
   row: InitiativeRow,
-  projects: ProjectRow[],
-  programs: ProgramRow[],
+  projects: readonly { readonly health: Health | null }[],
+  programs: readonly { readonly health: Health | null }[],
 ): z.input<typeof InitiativeDetail> {
   const childHealths: (Health | null)[] = [
     ...projects.map((p) => p.health),
     ...programs.map((p) => p.health),
   ];
-  const childCount = projects.length + programs.length;
-  const allProjectsTerminal =
-    projects.length > 0 && projects.every((p) => TERMINAL_PROJECT_STATUSES.has(p.status));
   return {
     ...toOut(row),
     childMix: { programs: programs.length, projects: projects.length },
     distribution: healthDistribution(childHealths),
     rolledUpHealth: worstHealth(childHealths),
-    derivedStatus: childCount > 0 && allProjectsTerminal ? 'completed' : 'active',
   };
 }

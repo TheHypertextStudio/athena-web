@@ -15,7 +15,22 @@ export const actorKind = pgEnum('actor_kind', ['human', 'agent', 'team']);
 export const actorStatus = pgEnum('actor_status', ['active', 'suspended']);
 
 /** Initiative (theme) status. */
-export const initiativeStatus = pgEnum('initiative_status', ['active', 'completed']);
+export const initiativeStatus = pgEnum('initiative_status', [
+  'proposed',
+  'active',
+  'completed',
+  'canceled',
+]);
+/** Initiative priority. */
+export const initiativePriority = pgEnum('initiative_priority', ['none', 'low', 'medium', 'high']);
+/** Expected interval between Initiative updates. */
+export const initiativeUpdateCadence = pgEnum('initiative_update_cadence', [
+  'weekly',
+  'biweekly',
+  'monthly',
+  'quarterly',
+  'none',
+]);
 /** Program status — Programs are ongoing, so there is intentionally NO `completed`. */
 export const programStatus = pgEnum('program_status', ['active', 'paused', 'archived']);
 /** Project status (bounded effort lifecycle). */
@@ -158,7 +173,7 @@ export const commentSubjectType = pgEnum('comment_subject_type', [
  * Only `task` ships in v1; the enum exists so the subject can widen (calendar events,
  * projects) without reshaping the table — mirroring {@link commentSubjectType}.
  */
-export const attachmentSubjectType = pgEnum('attachment_subject_type', ['task']);
+export const attachmentSubjectType = pgEnum('attachment_subject_type', ['task', 'initiative']);
 /**
  * The kind of resource an Attachment references.
  *

@@ -7,20 +7,39 @@
  * the creator's Owner actor, a default team (+ its team actor + membership), and the
  * org-root role grants. All nested routes go through `orgContextMiddleware`.
  */
-import { actor, db, grant, organization, role, team, teamMember } from '@docket/db';
+import {
+  actor,
+  db,
+  grant,
+  initiativeHierarchyLink,
+  organization,
+  role,
+  team,
+  teamMember,
+} from '@docket/db';
 import type { DefaultTeamOut } from '@docket/types';
-import { OrgCreate, OrgCreateResult, OrgOut, OrgSummary, pageOf } from '@docket/types';
+import {
+  OrgCreate,
+  OrgCreateResult,
+  OrgOut,
+  OrgSummary,
+  WorkspaceSettingsOut,
+  WorkspaceSettingsUpdate,
+  pageOf,
+} from '@docket/types';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type { z } from 'zod';
 
 import type { AppEnv } from '../context';
-import { AuthError } from '../error';
+import { AuthError, ConflictError } from '../error';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson } from '../lib/validate';
+import { capabilityGuard } from '../permissions/capability-guard';
 import { orgContextMiddleware } from '../permissions/org-context-middleware';
 import { enqueueSearchUpsert } from '../search/write-through';
+import { initiativeHierarchyDepth } from './initiative-hierarchy';
 import { SYSTEM_ROLES, resolveUniqueSlug, slugify, toOrgOut } from './org-helpers';
 import activity from './activity';
 import stream from './stream';
@@ -261,6 +280,64 @@ Returns \`OrgCreateResult\` — the new org plus its seeded \`defaultTeam\` and 
         enqueueSearchUpsert(result.org.id, 'team', result.defaultTeam.id),
       ]);
       return ok(c, OrgCreateResult, payload);
+    },
+  )
+  .get(
+    '/:orgId/settings/work-structure',
+    orgContextMiddleware,
+    apiDoc({
+      tag: 'Orgs',
+      summary: 'Get workspace work-structure settings',
+      response: WorkspaceSettingsOut,
+    }),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const rows = await db
+        .select({ initiativeMaxDepth: organization.initiativeMaxDepth })
+        .from(organization)
+        .where(eq(organization.id, orgId))
+        .limit(1);
+      const settings = rows[0];
+      /* v8 ignore next -- @preserve org context middleware proved the workspace exists */
+      if (!settings) throw new AuthError();
+      return ok(c, WorkspaceSettingsOut, settings);
+    },
+  )
+  .patch(
+    '/:orgId/settings/work-structure',
+    orgContextMiddleware,
+    capabilityGuard('manage'),
+    apiDoc({
+      tag: 'Orgs',
+      summary: 'Update workspace work-structure settings',
+      capability: 'manage',
+      response: WorkspaceSettingsOut,
+    }),
+    zJson(WorkspaceSettingsUpdate),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const body = c.req.valid('json');
+      if (body.initiativeMaxDepth !== undefined) {
+        const edges = await db
+          .select({
+            parentInitiativeId: initiativeHierarchyLink.parentInitiativeId,
+            childInitiativeId: initiativeHierarchyLink.childInitiativeId,
+          })
+          .from(initiativeHierarchyLink)
+          .where(eq(initiativeHierarchyLink.contextOrganizationId, orgId));
+        if (initiativeHierarchyDepth(edges) > body.initiativeMaxDepth) {
+          throw new ConflictError('Existing Initiative hierarchy exceeds the requested depth');
+        }
+      }
+      const rows = await db
+        .update(organization)
+        .set(body)
+        .where(eq(organization.id, orgId))
+        .returning({ initiativeMaxDepth: organization.initiativeMaxDepth });
+      const settings = rows[0];
+      /* v8 ignore next -- @preserve org context middleware proved the workspace exists */
+      if (!settings) throw new AuthError();
+      return ok(c, WorkspaceSettingsOut, settings);
     },
   )
   .get(

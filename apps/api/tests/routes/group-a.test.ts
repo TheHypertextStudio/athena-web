@@ -42,14 +42,34 @@ describe('initiatives router', () => {
     expect(empty.status).toBe(200);
     expect((await json<{ items: unknown[] }>(empty)).items).toHaveLength(0);
 
-    // Create (covers status default + targetDate present).
+    // Create (covers new Initiative properties + targetDate present).
     const created = await writer.request('/', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name: 'Q3 Push', targetDate: '2026-09-30', health: 'on_track' }),
+      body: JSON.stringify({
+        name: 'Q3 Push',
+        summary: 'Win a dedicated transit funding source.',
+        description: '# Overview',
+        status: 'proposed',
+        priority: 'high',
+        updateCadence: 'biweekly',
+        targetDate: '2026-09-30',
+        health: 'on_track',
+      }),
     });
     expect(created.status).toBe(200);
-    const initiative = await json<{ id: string; targetDate: string | null }>(created);
+    const initiative = await json<{
+      id: string;
+      summary: string | null;
+      status: string;
+      priority: string;
+      updateCadence: string;
+      targetDate: string | null;
+    }>(created);
+    expect(initiative.summary).toBe('Win a dedicated transit funding source.');
+    expect(initiative.status).toBe('proposed');
+    expect(initiative.priority).toBe('high');
+    expect(initiative.updateCadence).toBe('biweekly');
     expect(initiative.targetDate).toBe('2026-09-30T00:00:00.000Z');
 
     // List has one now.
@@ -68,14 +88,29 @@ describe('initiatives router', () => {
       body: JSON.stringify({
         name: 'Q3 Push v2',
         description: 'desc',
+        summary: 'Updated summary',
         ownerId: humanActorId,
         status: 'completed',
+        priority: 'medium',
+        updateCadence: 'quarterly',
         targetDate: null,
         health: 'at_risk',
       }),
     });
     expect(patched.status).toBe(200);
-    expect((await json<{ targetDate: string | null }>(patched)).targetDate).toBeNull();
+    expect(
+      await json<{
+        summary: string | null;
+        priority: string;
+        updateCadence: string;
+        targetDate: string | null;
+      }>(patched),
+    ).toMatchObject({
+      summary: 'Updated summary',
+      priority: 'medium',
+      updateCadence: 'quarterly',
+      targetDate: null,
+    });
 
     // Delete.
     const deleted = await writer.request(`/${initiative.id}`, { method: 'DELETE' });

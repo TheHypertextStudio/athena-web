@@ -9,6 +9,7 @@ import {
   Shield,
   Trash2,
   Users,
+  Workflow,
 } from '@docket/ui/icons';
 
 /** A settings section's availability: a live routed page, or a planned ("coming soon") stub. */
@@ -35,6 +36,14 @@ export const PERSONAL_SETTINGS_SECTION_GROUPS: readonly SettingsSectionGroup[] =
   {
     label: 'Your space',
     sections: [
+      {
+        key: 'work-structure',
+        label: 'Work structure',
+        description: 'Set how deeply strategic initiatives can be nested.',
+        icon: Workflow,
+        href: 'work-structure',
+        status: 'available',
+      },
       {
         key: 'connections',
         label: 'Connections',

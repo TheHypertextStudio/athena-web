@@ -6,7 +6,16 @@
  * The nav, the layout, and the section-root redirect all derive from this registry.
  * `settingsSectionGroups` picks the correct registry for the active workspace type.
  */
-import { Cable, CreditCard, Inbox, ListChecks, Shield, Sparkles, Users } from '@docket/ui/icons';
+import {
+  Cable,
+  CreditCard,
+  Inbox,
+  ListChecks,
+  Shield,
+  Sparkles,
+  Users,
+  Workflow,
+} from '@docket/ui/icons';
 
 export type { SectionStatus, SettingsSection, SettingsSectionGroup } from './sections-personal';
 export {
@@ -61,6 +70,14 @@ export const SETTINGS_SECTION_GROUPS: readonly SettingsSectionGroup[] = [
   {
     label: 'Workspace',
     sections: [
+      {
+        key: 'work-structure',
+        label: 'Work structure',
+        description: 'Set how deeply strategic initiatives can be nested.',
+        icon: Workflow,
+        href: 'work-structure',
+        status: 'available',
+      },
       {
         key: 'connections',
         label: 'Connections',

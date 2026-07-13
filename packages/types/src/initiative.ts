@@ -4,16 +4,39 @@
 import { z } from 'zod';
 
 import { Health } from './capability';
-import { ActorId, InitiativeId, OrganizationId, ProgramId, ProjectId } from './primitives';
+import { AttachmentOut } from './attachment';
+import { LabelOut } from './label';
+import {
+  ActorId,
+  Id,
+  InitiativeId,
+  LabelId,
+  OrganizationId,
+  ProgramId,
+  ProjectId,
+} from './primitives';
+import { UpdateOut } from './update';
 
 /** Initiative (theme) status. */
 export const InitiativeStatus = z
-  .enum(['active', 'completed'])
-  .describe(
-    'Initiative theme status. `active` = in flight; `completed` = wrapped up. This is the STORED status; the detail read also exposes a `derivedStatus` computed live from the children (which can differ from the stored value).',
-  );
+  .enum(['proposed', 'active', 'completed', 'canceled'])
+  .describe('Manually owned Initiative lifecycle: proposed, active, completed, or canceled.');
 /** Initiative status value. */
 export type InitiativeStatus = z.infer<typeof InitiativeStatus>;
+
+/** Initiative priority. */
+export const InitiativePriority = z
+  .enum(['none', 'low', 'medium', 'high'])
+  .describe('The Initiative priority; defaults to none.');
+/** Initiative priority value. */
+export type InitiativePriority = z.infer<typeof InitiativePriority>;
+
+/** Expected interval between narrative Initiative updates. */
+export const InitiativeUpdateCadence = z
+  .enum(['weekly', 'biweekly', 'monthly', 'quarterly', 'none'])
+  .describe('The update interval used to determine whether an active Initiative is stale.');
+/** Initiative update cadence value. */
+export type InitiativeUpdateCadence = z.infer<typeof InitiativeUpdateCadence>;
 
 /** Body for creating an Initiative (organizationId comes from the path, never the body). */
 export const InitiativeCreate = z
@@ -23,11 +46,22 @@ export const InitiativeCreate = z
       .min(1)
       .describe('Human-readable initiative (theme) name. Required, non-empty.'),
     description: z.string().optional().describe('Optional free-text description of the theme.'),
+    summary: z
+      .string()
+      .max(280)
+      .optional()
+      .describe('Optional plain-text summary, limited to 280 characters.'),
     ownerId: ActorId.optional().describe(
       'Optional owning Actor (accountable person). Must reference an Actor in the caller’s org (404 `Owner not found` otherwise).',
     ),
     status: InitiativeStatus.optional().describe(
       'Initial status. Defaults to `active` when omitted.',
+    ),
+    priority: InitiativePriority.optional().describe(
+      'Initial priority. Defaults to `none` when omitted.',
+    ),
+    updateCadence: InitiativeUpdateCadence.optional().describe(
+      'Expected update interval. Defaults to `monthly` when omitted.',
     ),
     targetDate: z.iso
       .date()
@@ -36,6 +70,10 @@ export const InitiativeCreate = z
     health: Health.optional().describe(
       'Optional initial health verdict (`on_track`/`at_risk`/`off_track`). Omit to leave unset.',
     ),
+    labelIds: z
+      .array(LabelId)
+      .optional()
+      .describe('Organization-global Labels to attach during creation.'),
   })
   .meta({ id: 'InitiativeCreate', description: 'Create an initiative within an organization.' });
 /** Validated initiative-create body. */
@@ -54,13 +92,23 @@ export const InitiativeUpdate = z
       .nullable()
       .optional()
       .describe('New description. Omit to leave unchanged; `null` clears it.'),
+    summary: z
+      .string()
+      .max(280)
+      .nullable()
+      .optional()
+      .describe('New plain-text summary. Omit to leave unchanged; `null` clears it.'),
     ownerId: ActorId.nullable()
       .optional()
       .describe(
         'Re-point the owner (must be an Actor in the caller’s org). Omit to leave unchanged; `null` clears it.',
       ),
     status: InitiativeStatus.optional().describe(
-      'New stored status (`active`/`completed`). Including this emits a `status_change` observation. Omit to leave unchanged.',
+      'New lifecycle status. Including this emits a status-change observation.',
+    ),
+    priority: InitiativePriority.optional().describe('New priority. Omit to leave unchanged.'),
+    updateCadence: InitiativeUpdateCadence.optional().describe(
+      'New expected update interval. Omit to leave unchanged.',
     ),
     targetDate: z.iso
       .date()
@@ -72,6 +120,10 @@ export const InitiativeUpdate = z
     health: Health.nullable()
       .optional()
       .describe('New health verdict. Omit to leave unchanged; `null` clears it.'),
+    labelIds: z
+      .array(LabelId)
+      .optional()
+      .describe('Complete replacement set of organization-global Labels.'),
   })
   .meta({ id: 'InitiativeUpdate', description: 'Update an initiative.' });
 /** Validated initiative-update body. */
@@ -88,12 +140,13 @@ export const InitiativeOut = z
       .nullable()
       .optional()
       .describe('Free-text description, or `null`/absent when none.'),
+    summary: z.string().nullable().describe('Plain-text summary, or `null` when none.'),
     ownerId: ActorId.nullable()
       .optional()
       .describe('The owning Actor (accountable person), or `null` when unowned.'),
-    status: InitiativeStatus.describe(
-      'The STORED status (`active`/`completed`) — see `derivedStatus` on the detail for the children-derived value.',
-    ),
+    status: InitiativeStatus.describe('The manually owned lifecycle status.'),
+    priority: InitiativePriority.describe('The Initiative priority.'),
+    updateCadence: InitiativeUpdateCadence.describe('The expected narrative update interval.'),
     targetDate: z
       .string()
       .nullable()
@@ -186,9 +239,7 @@ export type InitiativeChildMix = z.infer<typeof InitiativeChildMix>;
  * - `distribution` — the per-health-bucket breakdown of those children.
  * - `rolledUpHealth` — the worst child health (`off_track > at_risk > on_track`), or `null`
  *   when no child carries a verdict. This is the auto-derived signal the contract calls for.
- * - `derivedStatus` — `completed` when there is at least one child and every associated
- *   Project has reached a terminal (`completed`/`canceled`) status; otherwise `active`.
- *   This reflects the children's reality independent of the stored `status` field.
+ * Connected-work health never overwrites the independently writable Initiative health.
  */
 export const InitiativeDetail = InitiativeOut.extend({
   childMix: InitiativeChildMix.describe(
@@ -200,12 +251,142 @@ export const InitiativeDetail = InitiativeOut.extend({
   rolledUpHealth: Health.nullable().describe(
     'The single worst child health (`off_track ≻ at_risk ≻ on_track`), or `null` when no child carries a verdict. The auto-derived health signal for the theme.',
   ),
-  derivedStatus: InitiativeStatus.describe(
-    'Status auto-derived from children: `completed` only when there is at least one child AND every associated Project is terminal (`completed`/`canceled`); otherwise `active`. May differ from the stored `status`.',
-  ),
 }).meta({ id: 'InitiativeDetail', description: 'An initiative with its child roll-up.' });
 /** Initiative detail value. */
 export type InitiativeDetail = z.infer<typeof InitiativeDetail>;
+
+/** Body for placing an Initiative beneath another in the current workspace context. */
+export const InitiativeHierarchyLinkCreate = z
+  .object({
+    parentInitiativeId: InitiativeId.describe('Parent Initiative in the workspace hierarchy.'),
+    childInitiativeId: InitiativeId.describe('Child Initiative in the workspace hierarchy.'),
+  })
+  .meta({
+    id: 'InitiativeHierarchyLinkCreate',
+    description: 'Create a context-owned Initiative hierarchy link.',
+  });
+/** Validated Initiative hierarchy-link create body. */
+export type InitiativeHierarchyLinkCreate = z.infer<typeof InitiativeHierarchyLinkCreate>;
+
+/** Body for moving an existing hierarchy link beneath a different parent. */
+export const InitiativeHierarchyLinkMove = z
+  .object({
+    parentInitiativeId: InitiativeId.describe('New parent Initiative in the same context.'),
+  })
+  .meta({
+    id: 'InitiativeHierarchyLinkMove',
+    description: 'Move a context-owned Initiative hierarchy link.',
+  });
+/** Validated Initiative hierarchy-link move body. */
+export type InitiativeHierarchyLinkMove = z.infer<typeof InitiativeHierarchyLinkMove>;
+
+/** One context-owned Initiative hierarchy edge. */
+export const InitiativeHierarchyLinkOut = z
+  .object({
+    id: Id.describe('Stable hierarchy-link identifier.'),
+    contextOrganizationId: OrganizationId.describe('Workspace that owns this hierarchy edge.'),
+    parentInitiativeId: InitiativeId.describe('Parent Initiative.'),
+    childInitiativeId: InitiativeId.describe('Child Initiative.'),
+    createdAt: z.string().describe('Creation timestamp (ISO-8601).'),
+  })
+  .meta({
+    id: 'InitiativeHierarchyLinkOut',
+    description: 'A context-owned Initiative hierarchy link.',
+  });
+/** Initiative hierarchy-link representation. */
+export type InitiativeHierarchyLinkOut = z.infer<typeof InitiativeHierarchyLinkOut>;
+
+/** URL resource attached to an Initiative strategic document. */
+export const InitiativeResourceCreate = z
+  .object({
+    title: z.string().min(1).describe('Human-readable resource title.'),
+    url: z.url().describe('External URL referenced by the Initiative.'),
+  })
+  .meta({ id: 'InitiativeResourceCreate', description: 'Attach a URL to an Initiative.' });
+/** Validated Initiative resource body. */
+export type InitiativeResourceCreate = z.infer<typeof InitiativeResourceCreate>;
+
+/** Compact Initiative reference used by context hierarchy reads. */
+export const InitiativeReference = z.object({
+  id: InitiativeId,
+  organizationId: OrganizationId,
+  organizationName: z.string(),
+  name: z.string(),
+  status: InitiativeStatus,
+  health: Health.nullable(),
+  crossWorkspace: z.boolean(),
+});
+/** Compact Initiative reference value. */
+export type InitiativeReference = z.infer<typeof InitiativeReference>;
+
+/** One visible row in the context hierarchy overview. */
+export const InitiativeOverviewItem = InitiativeOut.extend({
+  organizationName: z.string(),
+  parentInitiativeId: InitiativeId.nullable(),
+  depth: z.number().int().min(1).max(5),
+  childCount: z.number().int().min(0),
+  ownerName: z.string().nullable(),
+  lastUpdateAt: z.string().nullable(),
+}).meta({ id: 'InitiativeOverviewItem', description: 'One Initiative hierarchy overview row.' });
+/** Initiative hierarchy overview row value. */
+export type InitiativeOverviewItem = z.infer<typeof InitiativeOverviewItem>;
+
+/** Severity category for an executive attention item. */
+export const InitiativeAttentionSeverity = z.enum(['off_track', 'at_risk', 'stale']);
+/** Initiative attention severity value. */
+export type InitiativeAttentionSeverity = z.infer<typeof InitiativeAttentionSeverity>;
+
+/** One deterministic executive attention item. */
+export const InitiativeAttentionItem = z.object({
+  initiativeId: InitiativeId,
+  organizationId: OrganizationId,
+  organizationName: z.string(),
+  parentInitiativeId: InitiativeId.nullable(),
+  parentInitiativeName: z.string().nullable(),
+  title: z.string(),
+  excerpt: z.string().nullable(),
+  severity: InitiativeAttentionSeverity,
+  action: z.enum(['open', 'update']),
+  lastUpdateAt: z.string().nullable(),
+});
+/** Initiative attention item value. */
+export type InitiativeAttentionItem = z.infer<typeof InitiativeAttentionItem>;
+
+/** Aggregate executive Initiative overview. */
+export const InitiativeOverviewOut = z.object({
+  items: z.array(InitiativeOverviewItem),
+  attention: z.array(InitiativeAttentionItem).max(4),
+});
+/** Aggregate Initiative overview value. */
+export type InitiativeOverviewOut = z.infer<typeof InitiativeOverviewOut>;
+
+/** A direct or descendant Program/Project contributing to an Initiative rollup. */
+export const InitiativeConnectedWork = z.object({
+  kind: z.enum(['program', 'project']),
+  id: z.string(),
+  organizationId: OrganizationId,
+  name: z.string(),
+  status: z.string(),
+  health: Health.nullable(),
+  direct: z.boolean(),
+  inheritedThroughInitiativeId: InitiativeId.nullable(),
+});
+/** Connected Initiative work row value. */
+export type InitiativeConnectedWork = z.infer<typeof InitiativeConnectedWork>;
+
+/** Aggregate document-detail read in one workspace hierarchy context. */
+export const InitiativeAggregateDetail = InitiativeDetail.extend({
+  contextOrganizationId: OrganizationId,
+  parent: InitiativeReference.nullable(),
+  children: z.array(InitiativeReference),
+  connectedWork: z.array(InitiativeConnectedWork),
+  labels: z.array(LabelOut),
+  resources: z.array(AttachmentOut),
+  latestUpdate: UpdateOut.nullable(),
+  updateCount: z.number().int().min(0),
+}).meta({ id: 'InitiativeAggregateDetail', description: 'Aggregate Initiative document detail.' });
+/** Aggregate Initiative detail value. */
+export type InitiativeAggregateDetail = z.infer<typeof InitiativeAggregateDetail>;
 
 /** Body for linking a Project to an Initiative (the initiative id comes from the path). */
 export const InitiativeProjectLink = z

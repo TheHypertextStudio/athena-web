@@ -18,13 +18,20 @@
  *
  * @see {@link useComposerOptions} for the owner option source.
  */
-import { ActorId, type Health, type InitiativeOut, type InitiativeStatus } from '@docket/types';
+import {
+  ActorId,
+  type Health,
+  type InitiativeOut,
+  type InitiativePriority,
+  type InitiativeStatus,
+  type InitiativeUpdateCadence,
+} from '@docket/types';
 import { ActorPicker, DatePicker, EnumPicker } from '@docket/ui/components';
+import { Button } from '@docket/ui/primitives';
 import { type JSX, useCallback, useState } from 'react';
 
 import { api } from '@/lib/api';
 import { ComposerShell } from '@/components/composer/composer-shell';
-import { DERIVED_STATUS_LABEL } from '@/components/initiatives/derived-status';
 import { enumOptions, HEALTH_OPTIONS } from '@/components/pickers/options';
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
 import { formatCalendarDate } from '@/lib/format-date';
@@ -34,7 +41,46 @@ import { userErrorMessage, readProblemError } from '@/lib/problem';
 const COMPOSER_INCLUDE = ['actors'] as const;
 
 /** The Initiative statuses, ordered open → done. */
-const INITIATIVE_STATUS_ORDER: readonly InitiativeStatus[] = ['active', 'completed'];
+const INITIATIVE_STATUS_ORDER: readonly InitiativeStatus[] = [
+  'proposed',
+  'active',
+  'completed',
+  'canceled',
+];
+const INITIATIVE_STATUS_LABEL: Record<InitiativeStatus, string> = {
+  proposed: 'Proposed',
+  active: 'Active',
+  completed: 'Completed',
+  canceled: 'Canceled',
+};
+const PRIORITY_ORDER: readonly InitiativePriority[] = ['none', 'low', 'medium', 'high'];
+const PRIORITY_LABEL: Record<InitiativePriority, string> = {
+  none: 'No priority',
+  low: 'Low priority',
+  medium: 'Medium priority',
+  high: 'High priority',
+};
+const CADENCE_ORDER: readonly InitiativeUpdateCadence[] = [
+  'weekly',
+  'biweekly',
+  'monthly',
+  'quarterly',
+  'none',
+];
+const CADENCE_LABEL: Record<InitiativeUpdateCadence, string> = {
+  weekly: 'Weekly updates',
+  biweekly: 'Biweekly updates',
+  monthly: 'Monthly updates',
+  quarterly: 'Quarterly updates',
+  none: 'No update cadence',
+};
+const GUIDED_DOCUMENT = `# Overview
+
+# Motivation and Purpose
+
+# Desired Outcome
+
+# Approach`;
 
 /** Format an ISO date for a picker trigger, narrowing the app helper's `null` to `undefined`. */
 function triggerDate(value: string | null): string | undefined {
@@ -73,11 +119,15 @@ export function CreateInitiativeDialog({
   const options = useComposerOptions(orgId, COMPOSER_INCLUDE, open);
 
   const [name, setName] = useState('');
+  const [summary, setSummary] = useState('');
   const [body, setBody] = useState('');
   const [ownerId, setOwnerId] = useState<string | null>(null);
   const [status, setStatus] = useState<InitiativeStatus>('active');
   const [targetDate, setTargetDate] = useState<string | null>(null);
   const [health, setHealth] = useState<Health | null>(null);
+  const [priority, setPriority] = useState<InitiativePriority>('none');
+  const [updateCadence, setUpdateCadence] = useState<InitiativeUpdateCadence>('monthly');
+  const [template, setTemplate] = useState<'blank' | 'strategic' | 'objective'>('blank');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -86,11 +136,15 @@ export function CreateInitiativeDialog({
     (next: boolean): void => {
       if (!next) {
         setName('');
+        setSummary('');
         setBody('');
         setOwnerId(null);
         setStatus('active');
         setTargetDate(null);
         setHealth(null);
+        setPriority('none');
+        setUpdateCadence('monthly');
+        setTemplate('blank');
         setError(null);
       }
       onOpenChange(next);
@@ -112,7 +166,10 @@ export function CreateInitiativeDialog({
         param: { orgId },
         json: {
           name: trimmed,
+          ...(summary.trim() ? { summary: summary.trim() } : {}),
           status,
+          priority,
+          updateCadence,
           ...(trimmedBody.length > 0 ? { description: trimmedBody } : {}),
           ...(ownerId ? { ownerId: ActorId.parse(ownerId) } : {}),
           ...(targetDate ? { targetDate } : {}),
@@ -141,10 +198,13 @@ export function CreateInitiativeDialog({
   }, [
     name,
     body,
+    summary,
     status,
     ownerId,
     targetDate,
     health,
+    priority,
+    updateCadence,
     orgId,
     initiativeNounLower,
     onOpenChange,
@@ -168,6 +228,38 @@ export function CreateInitiativeDialog({
       onSubmit={() => void submit()}
       submitLabel={`Create ${initiativeNoun}`}
     >
+      <div className="flex w-full flex-col gap-2">
+        <input
+          value={summary}
+          maxLength={280}
+          onChange={(event) => {
+            setSummary(event.target.value);
+          }}
+          placeholder="One-sentence summary"
+          aria-label="Summary"
+          className="border-outline-variant bg-surface text-on-surface placeholder:text-on-surface-variant h-8 w-full rounded-md border px-2 text-sm"
+        />
+        <div className="flex flex-wrap gap-1" aria-label="Document template">
+          {(['blank', 'strategic', 'objective'] as const).map((value) => (
+            <Button
+              key={value}
+              type="button"
+              size="sm"
+              variant={template === value ? 'secondary' : 'ghost'}
+              onClick={() => {
+                setTemplate(value);
+                setBody(value === 'blank' ? '' : GUIDED_DOCUMENT);
+              }}
+            >
+              {value === 'blank'
+                ? 'Blank'
+                : value === 'strategic'
+                  ? 'Strategic initiative'
+                  : 'Objective'}
+            </Button>
+          ))}
+        </div>
+      </div>
       <ActorPicker
         options={options.actorOptions}
         value={ownerId}
@@ -178,7 +270,7 @@ export function CreateInitiativeDialog({
         disabled={creating}
       />
       <EnumPicker
-        options={enumOptions(INITIATIVE_STATUS_ORDER, DERIVED_STATUS_LABEL)}
+        options={enumOptions(INITIATIVE_STATUS_ORDER, INITIATIVE_STATUS_LABEL)}
         value={status}
         onChange={(next) => {
           if (next) setStatus(next);
@@ -202,6 +294,26 @@ export function CreateInitiativeDialog({
         placeholder="Set health"
         clearLabel="No health"
         ariaLabel="Health"
+        disabled={creating}
+      />
+      <EnumPicker
+        options={enumOptions(PRIORITY_ORDER, PRIORITY_LABEL)}
+        value={priority}
+        onChange={(next) => {
+          if (next) setPriority(next);
+        }}
+        placeholder="Priority"
+        ariaLabel="Priority"
+        disabled={creating}
+      />
+      <EnumPicker
+        options={enumOptions(CADENCE_ORDER, CADENCE_LABEL)}
+        value={updateCadence}
+        onChange={(next) => {
+          if (next) setUpdateCadence(next);
+        }}
+        placeholder="Update cadence"
+        ariaLabel="Update cadence"
         disabled={creating}
       />
     </ComposerShell>

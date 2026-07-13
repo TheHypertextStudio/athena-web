@@ -6,7 +6,16 @@
  * Programs via org-scoped edges. `view` reads; `contribute` mutates + links; `manage`
  * deletes. Detail and timeline reads derive health/status from associated children.
  */
-import { db, initiative, initiativeProgram, initiativeProject, program, project } from '@docket/db';
+import {
+  db,
+  initiative,
+  initiativeHierarchyLink,
+  initiativeLabel,
+  initiativeProgram,
+  initiativeProject,
+  program,
+  project,
+} from '@docket/db';
 import {
   InitiativeCreate,
   InitiativeDetail,
@@ -22,7 +31,7 @@ import {
   CursorQuery,
   pageOf,
 } from '@docket/types';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type { z } from 'zod';
 
@@ -36,6 +45,7 @@ import { capabilityGuard } from '../permissions/capability-guard';
 import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
 
 import {
+  assertInitiativeLabels,
   assertOwnerInOrg,
   associatedPrograms,
   associatedProjects,
@@ -48,6 +58,10 @@ import {
   toOut,
 } from './initiative-helpers';
 import { emitEvent } from './event-emit';
+import initiativeAggregates from './initiative-aggregates';
+import initiativeHierarchyRoutes from './initiative-hierarchy-routes';
+import { accessibleInitiativeOrganizationIds } from './initiative-hierarchy';
+import initiativeResources from './initiative-resources';
 
 /** Initiatives router: org-scoped CRUD + child associations + roadmap roll-up. */
 const initiatives = new Hono<AppEnv>()
@@ -95,22 +109,38 @@ const initiatives = new Hono<AppEnv>()
       const { orgId, actorId } = c.get('actorCtx');
       const body = c.req.valid('json');
       await assertOwnerInOrg(orgId, body.ownerId);
-      const inserted = await db
-        .insert(initiative)
-        .values({
-          organizationId: orgId,
-          name: body.name,
-          description: body.description,
-          ownerId: body.ownerId,
-          status: body.status ?? 'active',
-          targetDate: body.targetDate ? new Date(body.targetDate) : undefined,
-          health: body.health,
-          createdBy: actorId,
-        })
-        .returning();
-      const row = inserted[0];
-      /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
-      if (!row) throw new Error('initiative insert returned no row');
+      const labelIds = await assertInitiativeLabels(orgId, body.labelIds);
+      const row = await db.transaction(async (tx) => {
+        const inserted = await tx
+          .insert(initiative)
+          .values({
+            organizationId: orgId,
+            name: body.name,
+            summary: body.summary,
+            description: body.description,
+            ownerId: body.ownerId,
+            status: body.status ?? 'active',
+            priority: body.priority ?? 'none',
+            updateCadence: body.updateCadence ?? 'monthly',
+            targetDate: body.targetDate ? new Date(body.targetDate) : undefined,
+            health: body.health,
+            createdBy: actorId,
+          })
+          .returning();
+        const created = inserted[0];
+        /* v8 ignore next -- @preserve defensive: insert always returns one row */
+        if (!created) throw new Error('initiative insert returned no row');
+        if (labelIds.length > 0) {
+          await tx.insert(initiativeLabel).values(
+            labelIds.map((labelId) => ({
+              initiativeId: created.id,
+              labelId,
+              organizationId: orgId,
+            })),
+          );
+        }
+        return created;
+      });
       await emitEvent({
         organizationId: orgId,
         kind: 'created',
@@ -128,15 +158,56 @@ const initiatives = new Hono<AppEnv>()
       tag: 'Initiatives',
       summary: 'Get initiative detail',
       response: InitiativeDetail,
-      description: `Fetch a single initiative enriched with the roll-up derived from its associated children. Because an initiative holds no work itself, the detail loads every associated Project (via \`initiative_project\`) and Program (via \`initiative_program\`) and computes: \`childMix\` (how many Programs/Projects it spans), \`distribution\` (per-health-bucket counts of those children, with children that carry no health verdict counted as \`unknown\` rather than silently treated as on-track), \`rolledUpHealth\` (the single worst child health, ordered \`off_track ≻ at_risk ≻ on_track\`, or null when no child has a verdict), and \`derivedStatus\` (\`completed\` only when there is at least one child and every associated Project has reached a terminal \`completed\`/\`canceled\` status — otherwise \`active\`; this reflects the children's reality independent of the stored \`status\` column). 404 (\`Initiative not found\`) when the id is absent or owned by another org. Read-only; org membership suffices, no capability guard. Returns {@link InitiativeDetail}. See \`GET /:id/timeline\` for the roadmap view of the same children.`,
+      description: `Fetch a single initiative enriched with the roll-up derived from its directly connected work. The response includes the canonical Initiative status, child mix, health distribution, and connected-work health without overwriting the independently writable Initiative health.`,
     }),
     zParam(idParam),
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const row = await loadInitiative(orgId, id);
-      const projects = await associatedProjects(orgId, id);
-      const programs = await associatedPrograms(orgId, id);
+      const [hierarchyLinks, accessibleIds] = await Promise.all([
+        db
+          .select()
+          .from(initiativeHierarchyLink)
+          .where(eq(initiativeHierarchyLink.contextOrganizationId, orgId)),
+        accessibleInitiativeOrganizationIds(orgId, c.get('session')),
+      ]);
+      const childrenByParent = new Map<string, string[]>();
+      for (const link of hierarchyLinks) {
+        const children = childrenByParent.get(link.parentInitiativeId) ?? [];
+        children.push(link.childInitiativeId);
+        childrenByParent.set(link.parentInitiativeId, children);
+      }
+      const rollupIds = [id];
+      const visit = (parentId: string): void => {
+        for (const childId of childrenByParent.get(parentId) ?? []) {
+          if (rollupIds.includes(childId)) continue;
+          rollupIds.push(childId);
+          visit(childId);
+        }
+      };
+      visit(id);
+      const initiativeRows = await db
+        .select({ id: initiative.id, organizationId: initiative.organizationId })
+        .from(initiative)
+        .where(inArray(initiative.id, rollupIds));
+      const visibleNodes = initiativeRows.filter((row) => accessibleIds.has(row.organizationId));
+      const associated = await Promise.all(
+        visibleNodes.map(async (node) => ({
+          projects: await associatedProjects(node.organizationId, node.id),
+          programs: await associatedPrograms(node.organizationId, node.id),
+        })),
+      );
+      const projects = [
+        ...new Map(
+          associated.flatMap((entry) => entry.projects).map((row) => [row.id, row]),
+        ).values(),
+      ];
+      const programs = [
+        ...new Map(
+          associated.flatMap((entry) => entry.programs).map((row) => [row.id, row]),
+        ).values(),
+      ];
       return ok(c, InitiativeDetail, buildInitiativeDetail(row, projects, programs));
     },
   )
@@ -148,7 +219,7 @@ const initiatives = new Hono<AppEnv>()
       summary: 'Update an initiative',
       capability: 'contribute',
       response: InitiativeOut,
-      description: `Partially update an initiative. Every field is optional: an absent key leaves that column untouched, while an explicit \`null\` (where the field is nullable — \`description\`, \`ownerId\`, \`targetDate\`, \`health\`) clears it. A re-pointed \`ownerId\` is re-validated to live in the caller's org (404 \`Owner not found\` otherwise, existence-hiding), exactly as on create. Note this edits ONLY the stored row; it does not touch the derived \`derivedStatus\`/\`rolledUpHealth\` you see on \`GET /:id\`, which are always recomputed live from the children. Side effect: when \`status\` is included in the body, emits a \`status_change\` observation carrying the new status (no observation is emitted for other field edits). 404 (\`Initiative not found\`) when the id is absent or cross-tenant. Requires \`contribute\`. Returns the updated {@link InitiativeOut}.`,
+      description: `Partially update an Initiative's stored properties. Health and status writes emit the corresponding audit observations; connected-work health remains a separate live roll-up.`,
     }),
     zParam(idParam),
     zJson(InitiativeUpdate),
@@ -157,21 +228,47 @@ const initiatives = new Hono<AppEnv>()
       const { id } = c.req.valid('param');
       const body = c.req.valid('json');
       await assertOwnerInOrg(orgId, body.ownerId);
-      const updated = await db
-        .update(initiative)
-        .set({
+      const labelIds = await assertInitiativeLabels(orgId, body.labelIds);
+      const row = await db.transaction(async (tx) => {
+        const values: Partial<typeof initiative.$inferInsert> = {
           ...(body.name !== undefined ? { name: body.name } : {}),
+          ...(body.summary !== undefined ? { summary: body.summary } : {}),
           ...(body.description !== undefined ? { description: body.description } : {}),
           ...(body.ownerId !== undefined ? { ownerId: body.ownerId } : {}),
           ...(body.status !== undefined ? { status: body.status } : {}),
+          ...(body.priority !== undefined ? { priority: body.priority } : {}),
+          ...(body.updateCadence !== undefined ? { updateCadence: body.updateCadence } : {}),
           ...(body.targetDate !== undefined
             ? { targetDate: body.targetDate ? new Date(body.targetDate) : null }
             : {}),
           ...(body.health !== undefined ? { health: body.health } : {}),
-        })
-        .where(and(eq(initiative.id, id), eq(initiative.organizationId, orgId)))
-        .returning();
-      const row = updated[0];
+        };
+        const updated =
+          Object.keys(values).length > 0
+            ? await tx
+                .update(initiative)
+                .set(values)
+                .where(and(eq(initiative.id, id), eq(initiative.organizationId, orgId)))
+                .returning()
+            : await tx
+                .select()
+                .from(initiative)
+                .where(and(eq(initiative.id, id), eq(initiative.organizationId, orgId)))
+                .limit(1);
+        const changed = updated[0];
+        if (!changed) return undefined;
+        if (body.labelIds !== undefined) {
+          await tx.delete(initiativeLabel).where(eq(initiativeLabel.initiativeId, id));
+          if (labelIds.length > 0) {
+            await tx
+              .insert(initiativeLabel)
+              .values(
+                labelIds.map((labelId) => ({ initiativeId: id, labelId, organizationId: orgId })),
+              );
+          }
+        }
+        return changed;
+      });
       if (!row) throw new NotFoundError('Initiative not found');
       if (body.status !== undefined) {
         await emitEvent({
@@ -181,6 +278,20 @@ const initiatives = new Hono<AppEnv>()
           title: row.name,
           subject: { type: 'initiative', id: row.id, title: row.name },
           detail: { schema: 'docket.state_change', fromState: null, toState: row.status },
+        });
+      }
+      if (body.health !== undefined) {
+        await emitEvent({
+          organizationId: orgId,
+          kind: 'status_change',
+          actorId,
+          title: `${row.name} health changed`,
+          subject: { type: 'initiative', id: row.id, title: row.name },
+          detail: {
+            schema: 'docket.state_change',
+            fromState: null,
+            toState: row.health ?? 'unset',
+          },
         });
       }
       await enqueueSearchUpsert(orgId, 'initiative', row.id);
@@ -219,7 +330,7 @@ const initiatives = new Hono<AppEnv>()
       summary: 'Link a project to an initiative',
       capability: 'contribute',
       response: InitiativeProjectLinked,
-      description: `Associate a Project with this initiative by writing an \`initiative_project\` edge (a many-to-many join carrying a frozen \`organization_id\`). Both endpoints must already exist in the caller's org: the initiative is loaded (404 \`Initiative not found\`) and the Project is re-read scoped to the org (404 \`Project not found\`, existence-hiding for cross-tenant ids). If the edge already exists the request fails with 409 (\`Project already linked to this initiative\`) — the operation is guarded, not silently idempotent. Side effect: once linked, the Project's health/status begins feeding this initiative's derived roll-up (\`GET /:id\` distribution, \`rolledUpHealth\`, \`derivedStatus\`) and it appears as a bar on \`GET /:id/timeline\`. Requires \`contribute\`. Returns {@link InitiativeProjectLinked} \`{ initiativeId, projectId, linked: true }\`. Reverse with \`DELETE /:id/projects/:projectId\`.`,
+      description: `Associate a Project with this Initiative. The Project contributes to connected-work roll-ups and the Initiative timeline while the Initiative's own status and health remain independent.`,
     }),
     zParam(idParam),
     zJson(InitiativeProjectLink),
@@ -294,7 +405,7 @@ const initiatives = new Hono<AppEnv>()
       summary: 'Link a program to an initiative',
       capability: 'contribute',
       response: InitiativeProgramLinked,
-      description: `Associate a Program with this initiative by writing an \`initiative_program\` edge. Mirrors project linking: the initiative must exist in the caller's org (404 \`Initiative not found\`) and the Program is re-read scoped to the org (404 \`Program not found\`, existence-hiding). A duplicate edge fails with 409 (\`Program already linked to this initiative\`). Side effect: the Program then renders as an ongoing lane (no end date) on \`GET /:id/timeline\` and its health folds into the initiative's distribution and \`rolledUpHealth\`; note that derived \`completed\` status keys off Projects only, so a Program never makes \`derivedStatus\` terminal. Requires \`contribute\`. Returns {@link InitiativeProgramLinked} \`{ initiativeId, programId, linked: true }\`. Reverse with \`DELETE /:id/programs/:programId\`.`,
+      description: `Associate a Program with this Initiative. The Program contributes to connected-work roll-ups and the Initiative timeline while the Initiative's own status and health remain independent.`,
     }),
     zParam(idParam),
     zJson(InitiativeProgramLink),
@@ -401,4 +512,8 @@ const initiatives = new Hono<AppEnv>()
     },
   );
 
-export default initiatives;
+export default new Hono<AppEnv>()
+  .route('/', initiativeAggregates)
+  .route('/', initiativeHierarchyRoutes)
+  .route('/', initiativeResources)
+  .route('/', initiatives);

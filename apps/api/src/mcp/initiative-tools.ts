@@ -12,12 +12,13 @@ import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { NotFoundError } from '../error';
+import { emitEvent } from '../routes/event-emit';
 import { enqueueSearchUpsert } from '../search/write-through';
 import type { McpContext } from './auth';
 import { jsonResult, runTool, scopedActor, authorize } from './result';
 import { assertRefInOrg } from './tools-shared';
 
-/** Register create_program, create_initiative, link_initiative on `server`. */
+/** Register Initiative and Program mutation tools on `server`. */
 export function registerInitiativeTools(server: McpRegistrar, ctx: McpContext): void {
   server.registerTool(
     'create_program',
@@ -77,8 +78,15 @@ export function registerInitiativeTools(server: McpRegistrar, ctx: McpContext): 
       inputSchema: {
         orgId: z.string().min(1),
         name: z.string().min(1),
+        summary: z.string().max(280).optional(),
         description: z.string().optional(),
         ownerId: z.string().optional(),
+        status: z.enum(['proposed', 'active', 'completed', 'canceled']).default('active'),
+        health: z.enum(['on_track', 'at_risk', 'off_track']).optional(),
+        priority: z.enum(['none', 'low', 'medium', 'high']).default('none'),
+        updateCadence: z
+          .enum(['weekly', 'biweekly', 'monthly', 'quarterly', 'none'])
+          .default('monthly'),
         targetDate: z.iso.date().optional(),
       },
       annotations: {
@@ -103,9 +111,13 @@ export function registerInitiativeTools(server: McpRegistrar, ctx: McpContext): 
           .values({
             organizationId: input.orgId,
             name: input.name,
+            summary: input.summary,
             description: input.description,
             ownerId: input.ownerId,
-            status: 'active',
+            status: input.status,
+            health: input.health,
+            priority: input.priority,
+            updateCadence: input.updateCadence,
             targetDate: input.targetDate ? new Date(input.targetDate) : undefined,
             createdBy: actorCtx.actorId,
           })
@@ -114,7 +126,99 @@ export function registerInitiativeTools(server: McpRegistrar, ctx: McpContext): 
         /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
         if (!row) throw new Error('initiative insert returned no row');
         await enqueueSearchUpsert(input.orgId, 'initiative', row.id);
-        return jsonResult({ id: row.id, name: row.name });
+        return jsonResult({
+          id: row.id,
+          name: row.name,
+          summary: row.summary,
+          status: row.status,
+          health: row.health,
+          priority: row.priority,
+          updateCadence: row.updateCadence,
+          targetDate: row.targetDate?.toISOString() ?? null,
+        });
+      }),
+  );
+
+  server.registerTool(
+    'update_initiative',
+    {
+      title: 'Update initiative',
+      description: 'Update an Initiative document or its independently owned strategic state.',
+      inputSchema: {
+        orgId: z.string().min(1),
+        initiativeId: z.string().min(1),
+        name: z.string().min(1).optional(),
+        summary: z.string().max(280).nullable().optional(),
+        description: z.string().nullable().optional(),
+        ownerId: z.string().nullable().optional(),
+        status: z.enum(['proposed', 'active', 'completed', 'canceled']).optional(),
+        health: z.enum(['on_track', 'at_risk', 'off_track']).nullable().optional(),
+        priority: z.enum(['none', 'low', 'medium', 'high']).optional(),
+        updateCadence: z.enum(['weekly', 'biweekly', 'monthly', 'quarterly', 'none']).optional(),
+        targetDate: z.iso.date().nullable().optional(),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    (input) =>
+      runTool(async () => {
+        const actorCtx = await scopedActor(ctx, input.orgId, 'work:write');
+        await authorize(actorCtx, 'contribute', {
+          kind: 'initiative',
+          id: input.initiativeId,
+          orgId: input.orgId,
+        });
+        await assertRefInOrg(actor, input.orgId, input.ownerId ?? undefined, 'Owner not found');
+        const rows = await db
+          .update(initiative)
+          .set({
+            ...(input.name !== undefined ? { name: input.name } : {}),
+            ...(input.summary !== undefined ? { summary: input.summary } : {}),
+            ...(input.description !== undefined ? { description: input.description } : {}),
+            ...(input.ownerId !== undefined ? { ownerId: input.ownerId } : {}),
+            ...(input.status !== undefined ? { status: input.status } : {}),
+            ...(input.health !== undefined ? { health: input.health } : {}),
+            ...(input.priority !== undefined ? { priority: input.priority } : {}),
+            ...(input.updateCadence !== undefined ? { updateCadence: input.updateCadence } : {}),
+            ...(input.targetDate !== undefined
+              ? { targetDate: input.targetDate ? new Date(input.targetDate) : null }
+              : {}),
+          })
+          .where(
+            and(eq(initiative.id, input.initiativeId), eq(initiative.organizationId, input.orgId)),
+          )
+          .returning();
+        const row = rows[0];
+        if (!row) throw new NotFoundError('Initiative not found');
+        if (input.health !== undefined || input.status !== undefined) {
+          await emitEvent({
+            organizationId: input.orgId,
+            kind: 'status_change',
+            actorId: actorCtx.actorId,
+            title: row.name,
+            subject: { type: 'initiative', id: row.id, title: row.name },
+            detail: {
+              schema: 'docket.state_change',
+              fromState: null,
+              toState: input.health ?? input.status ?? 'unset',
+            },
+          });
+        }
+        await enqueueSearchUpsert(input.orgId, 'initiative', row.id);
+        return jsonResult({
+          id: row.id,
+          name: row.name,
+          summary: row.summary,
+          status: row.status,
+          health: row.health,
+          priority: row.priority,
+          updateCadence: row.updateCadence,
+          targetDate: row.targetDate?.toISOString() ?? null,
+        });
       }),
   );
 

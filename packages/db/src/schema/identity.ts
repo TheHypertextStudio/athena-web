@@ -16,6 +16,7 @@ import { sql } from 'drizzle-orm';
 import type { AccountExportScope } from '@docket/types';
 import {
   boolean,
+  check,
   index,
   integer,
   jsonb,
@@ -137,6 +138,7 @@ export const organization = pgTable(
     vocabulary: jsonb('vocabulary').$type<VocabularySkin>().notNull().default(presetStartup),
     agentGuidance: text('agent_guidance'),
     approvalRouting: jsonb('approval_routing').$type<ApprovalRouting>(),
+    initiativeMaxDepth: integer('initiative_max_depth').notNull().default(2),
     lifecycleState: orgLifecycleState('lifecycle_state').notNull().default('trialing'),
     exportReadyAt: timestamp('export_ready_at'),
     deleteAfterAt: timestamp('delete_after_at'),
@@ -150,6 +152,7 @@ export const organization = pgTable(
   (t) => [
     uniqueIndex('organization_slug_uq').on(t.slug),
     index('organization_lifecycle_idx').on(t.lifecycleState),
+    check('organization_initiative_max_depth_check', sql`${t.initiativeMaxDepth} between 1 and 5`),
   ],
 );
 

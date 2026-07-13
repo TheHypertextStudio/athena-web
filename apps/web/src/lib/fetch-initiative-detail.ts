@@ -1,15 +1,23 @@
-import type { InitiativeDetail, MemberOut, ProgramOut, ProjectOut, RoleOut } from '@docket/types';
+import type {
+  InitiativeAggregateDetail,
+  LabelOut,
+  MemberOut,
+  ProgramOut,
+  ProjectOut,
+  RoleOut,
+} from '@docket/types';
 
 import { api } from './api';
 import { type RpcResponse, apiQueryOptions, queryKeys, rpcErrorResponse } from './query';
 
 /** InitiativeDetailData describes the fetch initiative detail data contract shared by the hook or component. */
 export interface InitiativeDetailData {
-  readonly detail: InitiativeDetail;
+  readonly detail: InitiativeAggregateDetail;
   readonly allProjects: readonly ProjectOut[];
   readonly allPrograms: readonly ProgramOut[];
   readonly members: readonly MemberOut[];
   readonly roles: readonly RoleOut[];
+  readonly labels: readonly LabelOut[];
 }
 
 /**
@@ -34,13 +42,17 @@ export function fetchInitiativeDetail(
   initiativeId: string,
 ): () => Promise<RpcResponse<InitiativeDetailData>> {
   return async () => {
-    const [detailRes, projectsRes, programsRes, membersRes, rolesRes] = await Promise.all([
-      api.v1.orgs[':orgId'].initiatives[':id'].$get({ param: { orgId, id: initiativeId } }),
-      api.v1.orgs[':orgId'].projects.$get({ param: { orgId }, query: {} }),
-      api.v1.orgs[':orgId'].programs.$get({ param: { orgId }, query: {} }),
-      api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
-      api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
-    ]);
+    const [detailRes, projectsRes, programsRes, membersRes, rolesRes, labelsRes] =
+      await Promise.all([
+        api.v1.orgs[':orgId'].initiatives[':id'].aggregate.$get({
+          param: { orgId, id: initiativeId },
+        }),
+        api.v1.orgs[':orgId'].projects.$get({ param: { orgId }, query: {} }),
+        api.v1.orgs[':orgId'].programs.$get({ param: { orgId }, query: {} }),
+        api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
+        api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
+        api.v1.orgs[':orgId'].labels.$get({ param: { orgId } }),
+      ]);
     if (!detailRes.ok) {
       return rpcErrorResponse<InitiativeDetailData>(detailRes);
     }
@@ -49,10 +61,11 @@ export function fetchInitiativeDetail(
     const allPrograms = programsRes.ok ? (await programsRes.json()).items : [];
     const members = membersRes.ok ? (await membersRes.json()).items : [];
     const roles = rolesRes.ok ? (await rolesRes.json()).items : [];
+    const labels = labelsRes.ok ? (await labelsRes.json()).items : [];
     return {
       ok: true,
       status: detailRes.status,
-      json: () => Promise.resolve({ detail, allProjects, allPrograms, members, roles }),
+      json: () => Promise.resolve({ detail, allProjects, allPrograms, members, roles, labels }),
     };
   };
 }

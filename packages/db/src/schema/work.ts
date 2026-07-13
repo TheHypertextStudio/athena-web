@@ -13,7 +13,9 @@ import { index, integer, pgTable, text, timestamp, uniqueIndex } from 'drizzle-o
 import {
   cycleStatus,
   health,
+  initiativePriority,
   initiativeStatus,
+  initiativeUpdateCadence,
   programStatus,
   projectStatus,
   provenanceSource,
@@ -30,9 +32,12 @@ export const initiative = pgTable(
   {
     ...auditColumns(),
     name: text('name').notNull(),
+    summary: text('summary'),
     description: text('description'),
     ownerId: text('owner_id').references(() => actor.id, { onDelete: 'set null' }),
     status: initiativeStatus('status').notNull().default('active'),
+    priority: initiativePriority('priority').notNull().default('none'),
+    updateCadence: initiativeUpdateCadence('update_cadence').notNull().default('monthly'),
     targetDate: timestamp('target_date'),
     health: health('health'),
   },

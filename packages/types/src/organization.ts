@@ -135,6 +135,28 @@ export const OrgSummary = z
 /** Organization summary value. */
 export type OrgSummary = z.infer<typeof OrgSummary>;
 
+/** Settings that control the work model within one workspace context. */
+export const WorkspaceSettingsOut = z
+  .object({
+    initiativeMaxDepth: z
+      .number()
+      .int()
+      .min(1)
+      .max(5)
+      .describe('Maximum total levels in the workspace Initiative hierarchy.'),
+  })
+  .meta({ id: 'WorkspaceSettingsOut', description: 'Workspace work-structure settings.' });
+/** Workspace settings representation. */
+export type WorkspaceSettingsOut = z.infer<typeof WorkspaceSettingsOut>;
+
+/** Mutable workspace work-structure settings. */
+export const WorkspaceSettingsUpdate = WorkspaceSettingsOut.partial().meta({
+  id: 'WorkspaceSettingsUpdate',
+  description: 'Workspace work-structure settings to update.',
+});
+/** Workspace settings update body. */
+export type WorkspaceSettingsUpdate = z.infer<typeof WorkspaceSettingsUpdate>;
+
 /** The default team returned alongside a freshly-created org. */
 export const DefaultTeamOut = z
   .object({

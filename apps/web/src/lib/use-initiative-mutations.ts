@@ -1,8 +1,13 @@
 import {
   ActorId,
-  type InitiativeDetail,
+  type Health,
+  type InitiativeAggregateDetail,
   type InitiativeOut,
+  type InitiativePriority,
+  type InitiativeStatus,
   type InitiativeUpdate,
+  type InitiativeUpdateCadence,
+  LabelId,
   ProgramId,
   ProjectId,
 } from '@docket/types';
@@ -16,16 +21,34 @@ import { queryKeys, unwrap, useApiMutation } from './query';
 
 /** InitiativePatch describes the use initiative mutations data contract shared by the hook or component. */
 export interface InitiativePatch {
+  name?: string;
+  summary?: string | null;
+  description?: string | null;
   ownerId?: string | null;
+  status?: InitiativeStatus;
+  health?: Health | null;
+  priority?: InitiativePriority;
+  updateCadence?: InitiativeUpdateCadence;
   targetDate?: string | null;
+  labelIds?: string[];
 }
 
 function toInitiativePatchBody(patch: InitiativePatch): InitiativeUpdate {
   return {
+    ...(patch.name !== undefined ? { name: patch.name } : {}),
+    ...(patch.summary !== undefined ? { summary: patch.summary } : {}),
+    ...(patch.description !== undefined ? { description: patch.description } : {}),
     ...(patch.ownerId !== undefined
       ? { ownerId: patch.ownerId === null ? null : ActorId.parse(patch.ownerId) }
       : {}),
     ...(patch.targetDate !== undefined ? { targetDate: patch.targetDate } : {}),
+    ...(patch.status !== undefined ? { status: patch.status } : {}),
+    ...(patch.health !== undefined ? { health: patch.health } : {}),
+    ...(patch.priority !== undefined ? { priority: patch.priority } : {}),
+    ...(patch.updateCadence !== undefined ? { updateCadence: patch.updateCadence } : {}),
+    ...(patch.labelIds !== undefined
+      ? { labelIds: patch.labelIds.map((id) => LabelId.parse(id)) }
+      : {}),
   };
 }
 
@@ -55,13 +78,14 @@ export function useInitiativeMutations(
   const queryClient = useQueryClient();
   const detailKey = useMemo(() => queryKeys.initiative(orgId, initiativeId), [orgId, initiativeId]);
   const timelineKey = useMemo(() => [...detailKey, 'timeline'] as const, [detailKey]);
+  const overviewKey = useMemo(() => queryKeys.initiatives(orgId), [orgId]);
   const associationKeys = useMemo(
-    () => [timelineKey, detailKey] as const,
-    [timelineKey, detailKey],
+    () => [timelineKey, detailKey, overviewKey] as const,
+    [timelineKey, detailKey, overviewKey],
   );
 
   const patchDetail = (
-    apply: (d: InitiativeDetail) => InitiativeDetail,
+    apply: (d: InitiativeAggregateDetail) => InitiativeAggregateDetail,
   ): InitiativeDetailData | undefined => {
     const previous = queryClient.getQueryData<InitiativeDetailData>(detailKey);
     queryClient.setQueryData<InitiativeDetailData>(detailKey, (cur) =>
@@ -84,7 +108,15 @@ export function useInitiativeMutations(
       onMutate: async (patchBody) => {
         await queryClient.cancelQueries({ queryKey: detailKey });
         const body = toInitiativePatchBody(patchBody);
-        const previous = patchDetail((d) => ({ ...d, ...body }));
+        const cached = queryClient.getQueryData<InitiativeDetailData>(detailKey);
+        const { labelIds, ...properties } = body;
+        const previous = patchDetail((d) => ({
+          ...d,
+          ...properties,
+          ...(labelIds
+            ? { labels: (cached?.labels ?? []).filter((label) => labelIds.includes(label.id)) }
+            : {}),
+        }));
         return { previous };
       },
       onError: (_err, _body, ctx) => {
@@ -101,13 +133,12 @@ export function useInitiativeMutations(
                   childMix: cur.detail.childMix,
                   distribution: cur.detail.distribution,
                   rolledUpHealth: cur.detail.rolledUpHealth,
-                  derivedStatus: cur.detail.derivedStatus,
                 },
               }
             : cur,
         );
       },
-      invalidateKeys: [detailKey],
+      invalidateKeys: [detailKey, overviewKey],
     },
   );
 

@@ -15,7 +15,7 @@
  * user-changeable.
  *
  * An Initiative carries no work of its own, so the catalog reads the *roll-up* the page already
- * enriches each row with: the auto-derived `derivedStatus` and the worst-child `rolledUpHealth`.
+ * enriches each row with the canonical `status` and worst-child `rolledUpHealth`.
  * Status and health declare a custom {@link FieldDescriptor.rank} so they order by lifecycle /
  * severity rather than alphabetically, and carry a glyph `hint` so a grouped header can show the
  * field's domain glyph.
@@ -37,10 +37,12 @@ export interface InitiativeCatalogRow extends InitiativeRowData {
   readonly createdAt: string;
 }
 
-/** Human label for each Initiative derived status. */
+/** Human label for each Initiative lifecycle status. */
 const STATUS_LABEL: Record<string, string> = {
+  proposed: 'Proposed',
   active: 'Active',
   completed: 'Completed',
+  canceled: 'Canceled',
 };
 
 /**
@@ -51,7 +53,9 @@ const STATUS_LABEL: Record<string, string> = {
  * else `active`), so the glyph borrows the shared project-status glyph vocabulary — `active`
  * reads as the in-progress dot, `completed` as the check — keeping a theme row in the same family.
  */
-const STATUS_OPTIONS: readonly FieldOption[] = (['active', 'completed'] as const).map((status) => ({
+const STATUS_OPTIONS: readonly FieldOption[] = (
+  ['proposed', 'active', 'completed', 'canceled'] as const
+).map((status) => ({
   value: status,
   label: STATUS_LABEL[status] ?? status,
   hint: statusGlyphType(status),
@@ -59,7 +63,7 @@ const STATUS_OPTIONS: readonly FieldOption[] = (['active', 'completed'] as const
 
 /** Lifecycle order rank for a derived status (active → completed; unknown last). */
 function statusRank(value: string | number | null): number {
-  const order = ['active', 'completed'];
+  const order = ['proposed', 'active', 'completed', 'canceled'];
   if (value === null) return order.length;
   const index = order.indexOf(String(value));
   return index === -1 ? order.length : index;
@@ -86,10 +90,10 @@ function healthRank(value: string | number | null): number {
 export function buildInitiativeCatalog(): FieldCatalog<InitiativeCatalogRow> {
   return [
     {
-      key: 'derivedStatus',
+      key: 'status',
       label: 'Status',
       type: 'enum',
-      accessor: (initiative) => initiative.derivedStatus,
+      accessor: (initiative) => initiative.status,
       options: STATUS_OPTIONS,
       groupable: true,
       sortable: true,
@@ -179,11 +183,11 @@ export function initiativeColumns(
   catalog: FieldCatalog<InitiativeCatalogRow>,
   deps: InitiativeColumnDeps,
 ): readonly Column<InitiativeCatalogRow>[] {
-  const status = findField(catalog, 'derivedStatus');
+  const status = findField(catalog, 'status');
   const health = findField(catalog, 'rolledUpHealth');
 
   return [
-    // Leading derived-status glyph — the shared, always-kept leading column.
+    // Leading lifecycle-status glyph — the shared, always-kept leading column.
     {
       key: 'glyph',
       header: '',
@@ -191,8 +195,8 @@ export function initiativeColumns(
       priority: 'always',
       render: (initiative) =>
         createElement(StatusIcon, {
-          type: statusGlyphType(initiative.derivedStatus),
-          label: STATUS_LABEL[initiative.derivedStatus] ?? initiative.derivedStatus,
+          type: statusGlyphType(initiative.status),
+          label: STATUS_LABEL[initiative.status] ?? initiative.status,
         }),
     },
     // TITLE — the one flexing, truncating column (never hidden).
@@ -209,7 +213,7 @@ export function initiativeColumns(
     },
     // STATUS — a quiet text label (an Initiative's status is auto-derived, no badge weight needed).
     {
-      key: 'derivedStatus',
+      key: 'status',
       header: status?.label ?? 'Status',
       width: '7rem',
       priority: 1,
@@ -217,7 +221,7 @@ export function initiativeColumns(
         createElement(
           'span',
           { className: 'text-on-surface-variant text-xs font-medium' },
-          STATUS_LABEL[initiative.derivedStatus] ?? initiative.derivedStatus,
+          STATUS_LABEL[initiative.status] ?? initiative.status,
         ),
     },
     // HEALTH — the rolled-up (worst-child) verdict as a token dot + label (shared baseline).

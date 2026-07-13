@@ -1,8 +1,17 @@
 import { beforeAll, describe, expect, it } from 'vitest';
+import { eq } from 'drizzle-orm';
 
 import type * as DbModule from '@docket/db';
 
-import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
+import {
+  addMember,
+  appWithActor,
+  fakeSession,
+  getDb,
+  seedBaseOrg,
+  seedOrg,
+  seedUserWithHub,
+} from '../support/routes-harness';
 import type initiativesRouter from '../../src/routes/initiatives';
 
 let schema!: typeof DbModule;
@@ -82,7 +91,7 @@ interface Detail {
   childMix: { programs: number; projects: number };
   distribution: { onTrack: number; atRisk: number; offTrack: number; unknown: number };
   rolledUpHealth: 'on_track' | 'at_risk' | 'off_track' | null;
-  derivedStatus: 'active' | 'completed';
+  status: 'proposed' | 'active' | 'completed' | 'canceled';
 }
 
 describe('initiatives detail roll-up', () => {
@@ -98,8 +107,7 @@ describe('initiatives detail roll-up', () => {
     expect(d.childMix).toEqual({ programs: 0, projects: 0 });
     expect(d.distribution).toEqual({ onTrack: 0, atRisk: 0, offTrack: 0, unknown: 0 });
     expect(d.rolledUpHealth).toBeNull();
-    // No children -> NOT auto-completed (a childless theme is still active).
-    expect(d.derivedStatus).toBe('active');
+    expect(d.status).toBe('active');
   });
 
   it('rolls up child health to the worst verdict and buckets the distribution', async () => {
@@ -133,11 +141,10 @@ describe('initiatives detail roll-up', () => {
     expect(d.childMix).toEqual({ programs: 1, projects: 3 });
     expect(d.distribution).toEqual({ onTrack: 1, atRisk: 1, offTrack: 1, unknown: 1 });
     expect(d.rolledUpHealth).toBe('off_track');
-    // Not every project is terminal -> derived status stays active.
-    expect(d.derivedStatus).toBe('active');
+    expect(d.status).toBe('active');
   });
 
-  it('derives completed status when every associated project is terminal', async () => {
+  it('does not overwrite manual status when every associated project is terminal', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
     const writer = appWithActor(initiatives, orgId, ['contribute'], humanActorId);
     const id = await seedInitiative(orgId, humanActorId);
@@ -157,11 +164,11 @@ describe('initiatives detail roll-up', () => {
 
     const res = await writer.request(`/${id}`, { method: 'GET' });
     const d = await json<Detail>(res);
-    expect(d.derivedStatus).toBe('completed');
+    expect(d.status).toBe('active');
     expect(d.rolledUpHealth).toBe('on_track');
   });
 
-  it('keeps derived status active when a program is the only child (programs are never terminal)', async () => {
+  it('keeps manual status independent when a program is the only child', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
     const writer = appWithActor(initiatives, orgId, ['contribute'], humanActorId);
     const id = await seedInitiative(orgId, humanActorId);
@@ -173,8 +180,7 @@ describe('initiatives detail roll-up', () => {
     });
 
     const d = await json<Detail>(await writer.request(`/${id}`, { method: 'GET' }));
-    // A program-only initiative has no projects, so it can never auto-complete.
-    expect(d.derivedStatus).toBe('active');
+    expect(d.status).toBe('active');
     expect(d.childMix).toEqual({ programs: 1, projects: 0 });
   });
 
@@ -188,6 +194,170 @@ describe('initiatives detail roll-up', () => {
 
     const viewerB = appWithActor(initiatives, orgB.orgId, ['view'], orgB.humanActorId);
     expect((await viewerB.request(`/${idInA}`, { method: 'GET' })).status).toBe(404);
+  });
+});
+
+describe('initiatives context hierarchy', () => {
+  it('creates one child level by default and rejects self-links, duplicate parents, and cycles', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(initiatives, orgId, ['contribute'], humanActorId);
+    const root = await seedInitiative(orgId, humanActorId);
+    const child = await seedInitiative(orgId, humanActorId);
+    const grandchild = await seedInitiative(orgId, humanActorId);
+
+    const linked = await writer.request('/hierarchy-links', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ parentInitiativeId: root, childInitiativeId: child }),
+    });
+    expect(linked.status).toBe(200);
+    const overview = await writer.request('/overview');
+    expect(overview.status).toBe(200);
+    expect((await json<{ items: { id: string; depth: number }[] }>(overview)).items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: root, depth: 1 }),
+        expect.objectContaining({ id: child, depth: 2 }),
+      ]),
+    );
+
+    const tooDeep = await writer.request('/hierarchy-links', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ parentInitiativeId: child, childInitiativeId: grandchild }),
+    });
+    expect(tooDeep.status).toBe(409);
+
+    const selfLink = await writer.request('/hierarchy-links', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ parentInitiativeId: root, childInitiativeId: root }),
+    });
+    expect(selfLink.status).toBe(409);
+
+    const duplicateParent = await writer.request('/hierarchy-links', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ parentInitiativeId: grandchild, childInitiativeId: child }),
+    });
+    expect(duplicateParent.status).toBe(409);
+
+    const cycle = await writer.request('/hierarchy-links', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ parentInitiativeId: child, childInitiativeId: root }),
+    });
+    expect(cycle.status).toBe(409);
+  });
+
+  it('allows an accessible foreign Initiative as a child without granting access', async () => {
+    const userId = await seedUserWithHub(db, schema, 'Hierarchy owner');
+    const contextOrgId = await seedOrg(db, schema);
+    const foreignOrgId = await seedOrg(db, schema);
+    const contextActorId = await addMember(db, schema, contextOrgId, userId, 'owner');
+    const foreignActorId = await addMember(db, schema, foreignOrgId, userId, 'member');
+    const root = await seedInitiative(contextOrgId, contextActorId);
+    const foreignChild = await seedInitiative(foreignOrgId, foreignActorId);
+    const writer = appWithActor(
+      initiatives,
+      contextOrgId,
+      ['contribute'],
+      contextActorId,
+      fakeSession(userId),
+    );
+
+    const linked = await writer.request('/hierarchy-links', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ parentInitiativeId: root, childInitiativeId: foreignChild }),
+    });
+    expect(linked.status).toBe(200);
+    expect(
+      (await json<{ items: { id: string }[] }>(await writer.request('/overview'))).items.some(
+        (item) => item.id === foreignChild,
+      ),
+    ).toBe(true);
+
+    const outsiderId = await seedUserWithHub(db, schema, 'Context only');
+    const outsiderActorId = await addMember(db, schema, contextOrgId, outsiderId, 'member');
+    const outsider = appWithActor(
+      initiatives,
+      contextOrgId,
+      ['contribute'],
+      outsiderActorId,
+      fakeSession(outsiderId),
+    );
+    const inaccessible = await outsider.request('/hierarchy-links', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ parentInitiativeId: root, childInitiativeId: foreignChild }),
+    });
+    expect(inaccessible.status).toBe(404);
+    expect(
+      (await json<{ items: { id: string }[] }>(await outsider.request('/overview'))).items.some(
+        (item) => item.id === foreignChild,
+      ),
+    ).toBe(false);
+  });
+
+  it('returns labels, URL resources, updates, and deduplicated descendant work in aggregate detail', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(initiatives, orgId, ['contribute'], humanActorId);
+    const root = await seedInitiative(orgId, humanActorId);
+    const child = await seedInitiative(orgId, humanActorId);
+    const projectId = await seedProject(orgId, humanActorId, {
+      name: 'Inherited project',
+      health: 'at_risk',
+    });
+    const [label] = await db
+      .insert(schema.label)
+      .values({ organizationId: orgId, name: 'Board priority', color: '#7c3aed' })
+      .returning({ id: schema.label.id });
+
+    await writer.request('/hierarchy-links', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ parentInitiativeId: root, childInitiativeId: child }),
+    });
+    await writer.request(`/${child}/projects`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ projectId }),
+    });
+    const patched = await writer.request(`/${root}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ labelIds: [label!.id] }),
+    });
+    expect(patched.status).toBe(200);
+    expect(
+      await db
+        .select()
+        .from(schema.initiativeLabel)
+        .where(eq(schema.initiativeLabel.initiativeId, root)),
+    ).toHaveLength(1);
+    const resource = await writer.request(`/${root}/resources`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ title: 'Board packet', url: 'https://example.com/packet' }),
+    });
+    expect(resource.status).toBe(200);
+
+    const aggregate = await writer.request(`/${root}/aggregate`);
+    expect(aggregate.status).toBe(200);
+    const body = await json<{
+      children: { id: string }[];
+      connectedWork: { id: string; direct: boolean; inheritedThroughInitiativeId: string }[];
+      labels: { id: string }[];
+      resources: { title: string }[];
+      rolledUpHealth: string | null;
+    }>(aggregate);
+    expect(body.children).toMatchObject([{ id: child }]);
+    expect(body.connectedWork).toMatchObject([
+      { id: projectId, direct: false, inheritedThroughInitiativeId: child },
+    ]);
+    expect(body.labels).toMatchObject([{ id: label!.id }]);
+    expect(body.resources).toMatchObject([{ title: 'Board packet' }]);
+    expect(body.rolledUpHealth).toBe('at_risk');
   });
 });
 

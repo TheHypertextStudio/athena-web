@@ -39,6 +39,7 @@ export async function createBillingLifecycleDb(): Promise<BillingLifecycleDbFixt
       vocabulary jsonb not null default '{}'::jsonb,
       agent_guidance text,
       approval_routing jsonb,
+      initiative_max_depth integer not null default 2,
       lifecycle_state org_lifecycle_state not null default 'trialing',
       export_ready_at timestamp,
       delete_after_at timestamp,

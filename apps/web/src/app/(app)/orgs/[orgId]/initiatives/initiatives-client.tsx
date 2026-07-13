@@ -1,191 +1,147 @@
 'use client';
 
-/**
- * The Initiatives list (mvp-plan §8.4).
- *
- * @remarks
- * A Client Component reached at `/orgs/[orgId]/initiatives`. An Initiative is a cross-cutting
- * *theme* that holds no work of its own — it associates many-to-many with Projects + Programs —
- * so this list is a portfolio of themes, not a work queue. The roster renders through the shared
- * {@link EntityTable}: a leading derived-status glyph, a flexing **Title** column, and the theme's
- * key properties — status, rolled-up health, and the membership mix (how many Programs / Projects
- * it spans) — in **aligned** columns under a light header. This is the same column-aligned surface
- * the Projects roster renders through (the user's mandate: "structured the same … just like
- * Linear"); an Initiative simply differs in its trailing scope columns, since it carries no lead or
- * target date of its own.
- *
- * The list endpoint returns only the stored Initiative rows; the per-theme roll-up
- * (`childMix` / `derivedStatus` / `rolledUpHealth`) lives on the detail read, so the page enriches
- * each row by fetching its detail in parallel (the same enrich-per-item idiom the project-detail
- * screen uses for task milestones). That composite read is cached + kept live through the
- * dynamic-data layer (auto-refetch on focus + after a create), so there is no manual refresh.
- *
- * The roster adopts the unified {@link FilterToolbar} over the initiative
- * {@link buildInitiativeCatalog | catalog}, and the table's columns are derived from that same
- * catalog ({@link initiativeColumns}) so the toolbar's group/sort fields and the table headers read
- * from one source of truth. It can be filtered by status / health, grouped, and sorted — all
- * applied **client-side** over the already-loaded {@link useApiQuery} results (the enrich-per-item
- * data flow is preserved; no manual refresh). The view state is held in the URL by
- * {@link useViewState}, defaulting to a group-by-status grouping so the familiar sectioned look is
- * preserved, but now user-changeable; grouping renders full-width {@link GroupHeader} boundary rows
- * that span every column.
- *
- * A header "New {initiative}" affordance creates a theme from a name; the entity noun routes
- * through {@link useVocabulary} so vocabulary skins apply. Data is fetched at runtime, so the
- * production build needs no running server.
- */
-import type { InitiativeOut } from '@docket/types';
-import { EmptyState, EntityTable, StatusIcon } from '@docket/ui/components';
-import type { WorkflowStateType } from '@docket/ui/components';
+import type { InitiativeAttentionItem, InitiativeOverviewOut } from '@docket/types';
+import { EmptyState } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Plus, Target } from '@docket/ui/icons';
-import { Button, Skeleton } from '@docket/ui/primitives';
+import { Badge, Button, Skeleton } from '@docket/ui/primitives';
+import { useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { type JSX, useCallback, useMemo, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
 
-import {
-  buildInitiativeCatalog,
-  initiativeColumns,
-} from '@/components/initiatives/initiative-catalog';
 import { CreateInitiativeDialog } from '@/components/initiatives/create-initiative';
-import { fetchEnrichedInitiatives } from '@/components/initiatives/initiative-fetcher';
-import { applyView, EMPTY_GROUP_ID } from '@/components/views/apply-view';
-import { FilterToolbar } from '@/components/views/filter-toolbar';
-import { useViewState } from '@/components/views/use-view-state';
-import { type ViewState } from '@/components/views/field-catalog';
-import { isEmptyViewState } from '@/components/views/view-state-url';
+import { initiativeOverviewDef } from '@/lib/fetch-initiative-overview';
+import { queryKeys, useApiQuery, usePrefetchApi } from '@/lib/query';
 import { initiativeDetailDef } from '@/lib/fetch-initiative-detail';
-import { apiQueryOptions, queryKeys, useApiQuery, usePrefetchApi } from '@/lib/query';
 import { userErrorMessage } from '@/lib/problem';
 
-/** The default view applied when the URL carries none: group by status (the legacy sections). */
-const DEFAULT_VIEW: ViewState = {
-  filters: [],
-  groupBy: { field: 'derivedStatus' },
-  sort: [],
-};
+const STATUS_LABEL = {
+  proposed: 'Proposed',
+  active: 'Active',
+  completed: 'Completed',
+  canceled: 'Canceled',
+} as const;
+const HEALTH_LABEL = {
+  on_track: 'On track',
+  at_risk: 'At risk',
+  off_track: 'Off track',
+} as const;
 
-/**
- * The Initiatives list page.
- *
- * @returns the rendered list.
- */
+function AttentionSurface({ item, orgId }: { item: InitiativeAttentionItem; orgId: string }) {
+  const href = `/orgs/${item.organizationId}/initiatives/${item.initiativeId}${item.action === 'update' ? '?tab=updates&compose=1' : ''}`;
+  return (
+    <div className="flex min-w-0 flex-1 flex-col items-stretch gap-3 @2xl:flex-row @2xl:items-center @2xl:justify-between @2xl:gap-4">
+      <div className="min-w-0">
+        <div className="mb-1 flex items-center gap-2 text-xs">
+          <span className="text-on-surface-variant font-medium tracking-wide uppercase">
+            Needs your attention
+          </span>
+          <Badge variant={item.severity === 'off_track' ? 'destructive' : 'secondary'}>
+            {item.severity === 'stale' ? 'Update due' : HEALTH_LABEL[item.severity]}
+          </Badge>
+          {item.organizationId !== orgId ? (
+            <Badge variant="outline">{item.organizationName}</Badge>
+          ) : null}
+        </div>
+        <Link href={href} className="text-on-surface text-sm font-medium hover:underline">
+          {item.title}
+        </Link>
+        {item.excerpt ? (
+          <p className="text-on-surface-variant mt-1 line-clamp-2 text-sm">{item.excerpt}</p>
+        ) : null}
+      </div>
+      <Button asChild size="sm" variant="outline" className="min-h-10 self-start @2xl:min-h-0">
+        <Link href={href}>{item.action === 'update' ? 'Post update' : 'Open'}</Link>
+      </Button>
+    </div>
+  );
+}
+
+/** Executive Initiative hierarchy overview. */
 export default function InitiativesListClient(): JSX.Element {
+  const { orgId } = useParams<{ orgId: string }>();
   const router = useRouter();
-  const params = useParams<{ orgId: string }>();
-  const orgId = params.orgId;
-  const prefetch = usePrefetchApi();
   const queryClient = useQueryClient();
-
+  const prefetch = usePrefetchApi();
   const initiativeNoun = useVocabulary('initiative');
-  const initiativeNounLower = initiativeNoun.toLowerCase();
-  const initiativeNounPlural = useVocabulary('initiative', { plural: true });
-  const programNoun = useVocabulary('program').toLowerCase();
-  const programNounPlural = useVocabulary('program', { plural: true }).toLowerCase();
-  const programsHeader = useVocabulary('program', { plural: true });
-  const projectNoun = useVocabulary('project').toLowerCase();
-  const projectNounPlural = useVocabulary('project', { plural: true }).toLowerCase();
-  const projectsHeader = useVocabulary('project', { plural: true });
-
+  const initiativePlural = useVocabulary('initiative', { plural: true });
   const [createOpen, setCreateOpen] = useState(false);
-  const { state, setFilters, setGroupBy, setSort } = useViewState();
+  const [attentionIndex, setAttentionIndex] = useState(0);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | keyof typeof STATUS_LABEL>('all');
+  const [sort, setSort] = useState<'title' | 'target' | 'status'>('title');
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
+  const overview = useApiQuery(initiativeOverviewDef(orgId));
+  const data: InitiativeOverviewOut | undefined = overview.data;
+  const attention = data?.attention ?? [];
+  const currentAttention = attention[attentionIndex % Math.max(attention.length, 1)];
+  const visibleItems = useMemo(() => {
+    const items = data?.items ?? [];
+    const byId = new Map(items.map((item) => [item.id, item]));
+    const childrenByParent = new Map<string | null, typeof items>();
+    for (const item of items) {
+      const siblings = childrenByParent.get(item.parentInitiativeId) ?? [];
+      childrenByParent.set(item.parentInitiativeId, [...siblings, item]);
+    }
+    const compare = (a: (typeof items)[number], b: (typeof items)[number]): number => {
+      if (sort === 'target') return (a.targetDate ?? '9999').localeCompare(b.targetDate ?? '9999');
+      if (sort === 'status')
+        return a.status.localeCompare(b.status) || a.name.localeCompare(b.name);
+      return a.name.localeCompare(b.name);
+    };
+    const ordered: typeof items = [];
+    const visit = (parentId: string | null): void => {
+      for (const item of [...(childrenByParent.get(parentId) ?? [])].sort(compare)) {
+        ordered.push(item);
+        visit(item.id);
+      }
+    };
+    visit(null);
+    const needle = search.trim().toLowerCase();
+    const keep = new Set<string>();
+    for (const item of ordered) {
+      const matchesText =
+        !needle || `${item.name} ${item.summary ?? ''}`.toLowerCase().includes(needle);
+      const matchesStatus = statusFilter === 'all' || item.status === statusFilter;
+      if (!matchesText || !matchesStatus) continue;
+      let current: (typeof items)[number] | undefined = item;
+      while (current) {
+        keep.add(current.id);
+        current = current.parentInitiativeId ? byId.get(current.parentInitiativeId) : undefined;
+      }
+    }
+    return ordered.filter((item) => {
+      if (!keep.has(item.id)) return false;
+      if (needle || statusFilter !== 'all') return true;
+      let parentId = item.parentInitiativeId;
+      while (parentId) {
+        if (collapsed.has(parentId)) return false;
+        parentId = byId.get(parentId)?.parentInitiativeId ?? null;
+      }
+      return true;
+    });
+  }, [collapsed, data?.items, search, sort, statusFilter]);
 
-  const initiativesQ = useApiQuery(
-    apiQueryOptions(
-      queryKeys.initiatives(orgId),
-      fetchEnrichedInitiatives(orgId),
-      `Could not load ${initiativeNounPlural.toLowerCase()}.`,
-    ),
-  );
-
-  const initiatives = useMemo(() => initiativesQ.data ?? [], [initiativesQ.data]);
-  const loading = initiativesQ.isPending;
-  const error = initiativesQ.isError
-    ? userErrorMessage(initiativesQ.error, 'Could not load initiatives.')
-    : null;
-
-  /** The initiative field catalog driving the toolbar + the apply engine + the table columns. */
-  const catalog = useMemo(() => buildInitiativeCatalog(), []);
-
-  /** The aligned table columns, derived from the same catalog the toolbar drives. */
-  const columns = useMemo(
-    () =>
-      initiativeColumns(catalog, {
-        programsHeader,
-        programNoun,
-        programNounPlural,
-        projectsHeader,
-        projectNoun,
-        projectNounPlural,
-      }),
-    [
-      catalog,
-      programsHeader,
-      programNoun,
-      programNounPlural,
-      projectsHeader,
-      projectNoun,
-      projectNounPlural,
-    ],
-  );
-
-  /** Default to the legacy group-by-status sections until the user configures the view. */
-  const effectiveState = useMemo(() => (isEmptyViewState(state) ? DEFAULT_VIEW : state), [state]);
-
-  /** Filter + sort + group the loaded roster client-side per the active view state. */
-  const applied = useMemo(
-    () => applyView(initiatives, effectiveState, catalog),
-    [initiatives, effectiveState, catalog],
-  );
-
-  /** Map an `applyView` bucket onto an {@link EntityTable} group (status buckets carry a glyph). */
-  const groups = useMemo(() => {
-    if (!applied.groups) return undefined;
-    const isStatusGroup = effectiveState.groupBy?.field === 'derivedStatus';
-    return applied.groups.map((group) => ({
-      id: group.id,
-      label: group.label,
-      decoration:
-        isStatusGroup && group.hint && group.id !== EMPTY_GROUP_ID ? (
-          <StatusIcon type={group.hint as WorkflowStateType} label={group.label} />
-        ) : undefined,
-      rows: group.rows,
-    }));
-  }, [applied.groups, effectiveState.groupBy]);
-
-  /**
-   * Refetch the roster from the server (prefix-matched, so this also refreshes any open
-   * initiative-detail beneath it), then route to the freshly-created theme's timeline-first detail.
-   */
   const handleCreated = useCallback(
-    (created: InitiativeOut): void => {
+    (created: { id: string }): void => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.initiatives(orgId) });
       router.push(`/orgs/${orgId}/initiatives/${created.id}`);
     },
-    [orgId, router, queryClient],
+    [orgId, queryClient, router],
   );
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 p-4 @2xl:p-6 @4xl:p-8">
-      <header className="flex flex-col gap-3 @2xl:flex-row @2xl:flex-wrap @2xl:items-center @2xl:justify-between">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-on-surface text-h1">{initiativeNounPlural}</h1>
-          <p className="text-on-surface-variant text-xs">
-            Cross-cutting themes that roll up the health of the {programNoun}s and {projectNoun}s
-            beneath them — no work lives here directly.
-          </p>
-        </div>
+    <main className="mx-auto flex w-full max-w-7xl flex-col gap-5 p-4 @2xl:p-6 @4xl:p-8">
+      <header className="flex items-center justify-between gap-4">
+        <h1 className="text-on-surface text-h1">{initiativePlural}</h1>
         <Button
-          type="button"
-          className="gap-1.5"
+          className="min-h-10 gap-1.5"
           onClick={() => {
             setCreateOpen(true);
           }}
         >
-          <Plus aria-hidden="true" className="size-4" />
-          New {initiativeNoun.toLowerCase()}
+          <Plus aria-hidden className="size-4" /> New {initiativeNoun.toLowerCase()}
         </Button>
       </header>
 
@@ -197,87 +153,208 @@ export default function InitiativesListClient(): JSX.Element {
         onCreated={handleCreated}
       />
 
-      {!loading && !error && initiatives.length > 0 ? (
-        <FilterToolbar
-          catalog={catalog}
-          state={effectiveState}
-          onFiltersChange={setFilters}
-          onGroupByChange={setGroupBy}
-          onSortChange={setSort}
-        />
+      {!overview.isPending && !overview.isError ? (
+        <section
+          className="border-outline-variant flex min-h-28 flex-col items-stretch gap-3 border-y px-1 py-4 @2xl:flex-row @2xl:items-center"
+          aria-label="Needs your attention"
+        >
+          {currentAttention ? (
+            <AttentionSurface item={currentAttention} orgId={orgId} />
+          ) : (
+            <div>
+              <p className="text-on-surface text-sm font-medium">Nothing needs attention</p>
+              <p className="text-on-surface-variant mt-1 text-sm">
+                No active initiative is at risk, off track, or overdue for an update.
+              </p>
+            </div>
+          )}
+          {attention.length > 1 ? (
+            <div className="flex shrink-0 items-center justify-end gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Previous attention item"
+                onClick={() => {
+                  setAttentionIndex((value) => (value - 1 + attention.length) % attention.length);
+                }}
+              >
+                ←
+              </Button>
+              <span className="text-on-surface-variant text-xs tabular-nums">
+                {(attentionIndex % attention.length) + 1}/{attention.length}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Next attention item"
+                onClick={() => {
+                  setAttentionIndex((value) => (value + 1) % attention.length);
+                }}
+              >
+                →
+              </Button>
+            </div>
+          ) : null}
+        </section>
       ) : null}
 
-      {loading ? (
-        <ListSkeleton />
-      ) : error ? (
-        <p
-          role="alert"
-          className="border-outline-variant text-destructive text-body rounded-xl border p-4"
-        >
-          {error}
+      {data && data.items.length > 0 ? (
+        <div className="border-outline-variant flex flex-wrap items-center gap-2 border-b pb-3">
+          <input
+            value={search}
+            onChange={(event) => {
+              setSearch(event.target.value);
+            }}
+            placeholder={`Filter ${initiativePlural.toLowerCase()}…`}
+            aria-label={`Filter ${initiativePlural.toLowerCase()}`}
+            className="border-input bg-background h-10 min-w-52 flex-1 rounded-md border px-2 text-sm @2xl:h-8"
+          />
+          <select
+            value={statusFilter}
+            onChange={(event) => {
+              setStatusFilter(event.target.value as typeof statusFilter);
+            }}
+            className="border-input bg-background h-10 rounded-md border px-2 text-xs @2xl:h-8"
+            aria-label="Filter by status"
+          >
+            <option value="all">All statuses</option>
+            {Object.entries(STATUS_LABEL).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+          <select
+            value={sort}
+            onChange={(event) => {
+              setSort(event.target.value as typeof sort);
+            }}
+            className="border-input bg-background h-10 rounded-md border px-2 text-xs @2xl:h-8"
+            aria-label="Sort initiatives"
+          >
+            <option value="title">Sort by title</option>
+            <option value="status">Sort by status</option>
+            <option value="target">Sort by target</option>
+          </select>
+        </div>
+      ) : null}
+
+      {overview.isPending ? (
+        <div className="space-y-2">
+          {Array.from({ length: 5 }, (_, index) => (
+            <Skeleton key={index} className="h-11 w-full" />
+          ))}
+        </div>
+      ) : overview.isError ? (
+        <p role="alert" className="text-destructive text-sm">
+          {userErrorMessage(overview.error, 'Could not load initiatives.')}
         </p>
-      ) : initiatives.length === 0 ? (
+      ) : data && data.items.length > 0 ? (
+        <div>
+          <table className="w-full border-collapse text-sm">
+            <thead className="hidden @2xl:table-header-group">
+              <tr className="border-outline-variant text-on-surface-variant border-b text-left text-xs">
+                <th className="py-2 font-medium">Initiative</th>
+                <th className="py-2 font-medium">Status</th>
+                <th className="py-2 font-medium">Health</th>
+                <th className="py-2 font-medium">Owner</th>
+                <th className="py-2 font-medium">Target</th>
+                <th className="py-2 font-medium">Last update</th>
+              </tr>
+            </thead>
+            <tbody className="block @2xl:table-row-group">
+              {visibleItems.map((item) => (
+                <tr
+                  key={item.id}
+                  className="border-outline-variant/60 hover:bg-surface-container-low block border-b @2xl:table-row"
+                  onMouseEnter={() => {
+                    prefetch(initiativeDetailDef(item.organizationId, item.id));
+                  }}
+                >
+                  <td className="block min-w-0 py-3 @2xl:table-cell @2xl:pr-4">
+                    <div
+                      className="flex items-center"
+                      style={{ paddingLeft: `${(item.depth - 1) * 24}px` }}
+                    >
+                      {item.childCount > 0 ? (
+                        <button
+                          type="button"
+                          className="text-on-surface-variant -my-2 mr-1 flex size-10 shrink-0 items-center justify-center @2xl:mr-0 @2xl:size-6"
+                          aria-label={`${collapsed.has(item.id) ? 'Expand' : 'Collapse'} ${item.name}`}
+                          aria-expanded={!collapsed.has(item.id)}
+                          onClick={() => {
+                            setCollapsed((current) => {
+                              const next = new Set(current);
+                              if (next.has(item.id)) next.delete(item.id);
+                              else next.add(item.id);
+                              return next;
+                            });
+                          }}
+                        >
+                          {collapsed.has(item.id) ? '›' : '⌄'}
+                        </button>
+                      ) : (
+                        <span className="mr-1 w-10 shrink-0 @2xl:mr-0 @2xl:w-6" />
+                      )}
+                      <Link
+                        href={`/orgs/${item.organizationId}/initiatives/${item.id}`}
+                        className="text-on-surface min-w-0 font-medium hover:underline"
+                      >
+                        {item.name}
+                      </Link>
+                      {item.organizationId !== orgId ? (
+                        <Badge className="ml-2" variant="outline">
+                          {item.organizationName}
+                        </Badge>
+                      ) : null}
+                    </div>
+                    {item.summary ? (
+                      <p
+                        className="text-on-surface-variant mt-1 line-clamp-2 pl-10 text-xs @2xl:mt-0.5 @2xl:truncate @2xl:pl-6"
+                        style={{ marginLeft: `${(item.depth - 1) * 24}px` }}
+                      >
+                        {item.summary}
+                      </p>
+                    ) : null}
+                    <p className="text-on-surface-variant mt-2 flex flex-wrap gap-x-3 gap-y-1 pl-10 text-xs @2xl:hidden">
+                      <span>{STATUS_LABEL[item.status]}</span>
+                      <span>{item.health ? HEALTH_LABEL[item.health] : 'No health'}</span>
+                      <span>
+                        {item.lastUpdateAt
+                          ? `Updated ${item.lastUpdateAt.slice(0, 10)}`
+                          : 'Never updated'}
+                      </span>
+                    </p>
+                  </td>
+                  <td className="hidden py-3 pr-4 @2xl:table-cell">{STATUS_LABEL[item.status]}</td>
+                  <td className="hidden py-3 pr-4 @2xl:table-cell">
+                    {item.health ? HEALTH_LABEL[item.health] : '—'}
+                  </td>
+                  <td className="hidden py-3 pr-4 @2xl:table-cell">{item.ownerName ?? '—'}</td>
+                  <td className="hidden py-3 pr-4 tabular-nums @2xl:table-cell">
+                    {item.targetDate ? item.targetDate.slice(0, 10) : '—'}
+                  </td>
+                  <td className="hidden py-3 tabular-nums @2xl:table-cell">
+                    {item.lastUpdateAt ? item.lastUpdateAt.slice(0, 10) : 'Never'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
         <EmptyState
           icon={Target}
-          title={`No ${initiativeNounPlural.toLowerCase()} yet`}
-          body={`Create a theme to start grouping ${programNoun}s and ${projectNoun}s into a roadmap.`}
+          title={`No ${initiativePlural.toLowerCase()} yet`}
+          body="Create a strategic theme to connect ongoing programs and bounded projects."
           cta={{
-            label: `Create your first ${initiativeNounLower}`,
+            label: `Create your first ${initiativeNoun.toLowerCase()}`,
             onClick: () => {
               setCreateOpen(true);
             },
           }}
         />
-      ) : applied.rows.length === 0 ? (
-        <EmptyState
-          icon={Target}
-          title={`No matching ${initiativeNounPlural.toLowerCase()}`}
-          body={`No ${initiativeNounLower} matches the active filters. Adjust or clear them to see more.`}
-        />
-      ) : (
-        <EntityTable
-          aria-label={initiativeNounPlural}
-          columns={columns}
-          groups={groups}
-          rows={applied.rows}
-          getRowKey={(initiative) => initiative.id}
-          rowHref={(initiative) => `/orgs/${orgId}/initiatives/${initiative.id}`}
-          renderRowLink={(lp) => (
-            <Link
-              href={lp.href}
-              className={lp.className}
-              onClick={lp.onClick}
-              onMouseEnter={lp.onMouseEnter}
-              onFocus={lp.onFocus}
-              tabIndex={lp.tabIndex}
-              aria-current={lp['aria-current']}
-            >
-              {lp.children}
-            </Link>
-          )}
-          onRowPrefetch={(initiative) => {
-            prefetch(initiativeDetailDef(orgId, initiative.id));
-          }}
-        />
       )}
-    </div>
-  );
-}
-
-/** Loading placeholder: a bordered list of slim row skeletons matching the table density. */
-function ListSkeleton(): JSX.Element {
-  return (
-    <div
-      className="border-outline-variant divide-outline-variant flex flex-col divide-y overflow-hidden rounded-xl border"
-      aria-hidden="true"
-    >
-      {[0, 1, 2, 3, 4].map((i) => (
-        <div key={i} className="flex min-h-9 items-center gap-2 px-3 py-1.5">
-          <Skeleton className="size-3.5 rounded-full" />
-          <Skeleton className="h-4 w-48" />
-          <Skeleton className="ml-auto h-4 w-24" />
-        </div>
-      ))}
-    </div>
+    </main>
   );
 }

@@ -29,8 +29,8 @@ export interface InitiativeRowData {
   readonly name: string;
   /** A short description, when set. */
   readonly description: string | null;
-  /** The auto-derived status (no manual field). */
-  readonly derivedStatus: InitiativeStatus;
+  /** The Initiative's canonical lifecycle status. */
+  readonly status: InitiativeStatus;
   /** The rolled-up (worst-child) health verdict, or null when none is set. */
   readonly rolledUpHealth: Health | null;
   /** How many Programs the theme spans. */

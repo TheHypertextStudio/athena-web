@@ -692,12 +692,24 @@ describe('create_initiative tool', () => {
       arguments: {
         orgId: s.orgId,
         name: 'Theme',
+        summary: 'A strategic theme',
         description: 'd',
         ownerId: s.actorId,
+        status: 'proposed',
+        health: 'at_risk',
+        priority: 'high',
+        updateCadence: 'quarterly',
         targetDate: '2026-06-01',
       },
     })) as CallToolResult;
     expect(payload(full)['name']).toBe('Theme');
+    expect(payload(full)).toMatchObject({
+      summary: 'A strategic theme',
+      status: 'proposed',
+      health: 'at_risk',
+      priority: 'high',
+      updateCadence: 'quarterly',
+    });
 
     const bare = (await client.callTool({
       name: 'create_initiative',
@@ -710,6 +722,31 @@ describe('create_initiative tool', () => {
       arguments: { orgId: s.orgId, name: 'X', ownerId: MISSING },
     })) as CallToolResult;
     expect(badOwner.isError).toBe(true);
+  });
+
+  it('updates Initiative state and document fields', async () => {
+    const s = await seedOrg(['contribute']);
+    const client = await connect(s.ctx);
+    const updated = (await client.callTool({
+      name: 'update_initiative',
+      arguments: {
+        orgId: s.orgId,
+        initiativeId: s.initiativeId,
+        summary: 'Ready for board review',
+        status: 'completed',
+        health: 'on_track',
+        priority: 'medium',
+        updateCadence: 'none',
+      },
+    })) as CallToolResult;
+    expect(updated.isError).toBeFalsy();
+    expect(payload(updated)).toMatchObject({
+      summary: 'Ready for board review',
+      status: 'completed',
+      health: 'on_track',
+      priority: 'medium',
+      updateCadence: 'none',
+    });
   });
 });
 

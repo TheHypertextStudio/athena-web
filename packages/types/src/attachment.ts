@@ -2,7 +2,7 @@
  * `@docket/types` — Attachment slice DTOs.
  *
  * @remarks
- * An attachment is a typed reference from a subject (a task, for now) to an external or
+ * An attachment is a typed reference from a subject to an external or
  * stored resource. `url` attachments are dumb pointers (a pasted link + fetched
  * title/favicon); `email` attachments are integration-backed pointers (the content stays in
  * Gmail); `calendar_event` attachments point at cached first-party Google Calendar context;
@@ -13,8 +13,8 @@ import { z } from 'zod';
 
 import { AttachmentId, OrganizationId } from './primitives';
 
-/** The polymorphic subject kinds an Attachment can attach to (only `task` ships in v1). */
-export const AttachmentSubjectType = z.enum(['task']);
+/** The polymorphic subject kinds an Attachment can attach to. */
+export const AttachmentSubjectType = z.enum(['task', 'initiative']);
 /** Attachment subject-type value. */
 export type AttachmentSubjectType = z.infer<typeof AttachmentSubjectType>;
 
@@ -103,9 +103,7 @@ export const AttachmentOut = z
   .object({
     id: AttachmentId.describe('Opaque attachment id.'),
     organizationId: OrganizationId.describe('Owning org id (the tenant key).'),
-    subjectType: AttachmentSubjectType.describe(
-      "Kind of subject the attachment hangs off (only 'task' in v1).",
-    ),
+    subjectType: AttachmentSubjectType.describe('Kind of subject the attachment hangs off.'),
     subjectId: z.string().describe('Id of the subject (the host task) the attachment belongs to.'),
     kind: AttachmentKind.describe("Resource kind: 'url', 'email', 'calendar_event', or 'file'."),
     title: z.string().describe('Human label for the attachment.'),

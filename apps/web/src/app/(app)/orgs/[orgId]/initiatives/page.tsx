@@ -11,10 +11,8 @@
 import { HydrationBoundary } from '@tanstack/react-query';
 import type { JSX } from 'react';
 
-import { fetchEnrichedInitiatives } from '@/components/initiatives/initiative-fetcher';
-import { unwrap } from '@/lib/query-core';
-import { queryKeys } from '@/lib/query-keys';
 import { dehydrate, getServerApi, getServerQueryClient } from '@/lib/query-server';
+import { initiativeOverviewDef } from '@/lib/fetch-initiative-overview';
 
 import InitiativesListClient from './initiatives-client';
 
@@ -32,11 +30,7 @@ export default async function InitiativesListPage({
   const { orgId } = await params;
   const queryClient = getServerQueryClient();
   const api = await getServerApi();
-
-  await queryClient.prefetchQuery({
-    queryKey: queryKeys.initiatives(orgId),
-    queryFn: () => unwrap(fetchEnrichedInitiatives(orgId, api), 'Could not load initiatives.'),
-  });
+  await queryClient.prefetchQuery(initiativeOverviewDef(orgId, api));
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>

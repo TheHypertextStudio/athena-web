@@ -14,7 +14,7 @@ export function toEnriched(
     name: base.name,
     description: base.description ?? null,
     createdAt: base.createdAt,
-    derivedStatus: detail?.derivedStatus ?? 'active',
+    status: base.status,
     rolledUpHealth: detail?.rolledUpHealth ?? null,
     programCount: detail?.childMix.programs ?? 0,
     projectCount: detail?.childMix.projects ?? 0,

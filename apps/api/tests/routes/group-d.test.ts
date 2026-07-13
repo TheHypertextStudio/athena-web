@@ -122,6 +122,53 @@ describe('orgs router', () => {
     expect((await body<{ id: string }>(read)).id).toBe(orgId);
   });
 
+  it('reads and updates Work structure settings without invalidating existing hierarchy', async () => {
+    const { userId } = await seedUserWithHub();
+    const app = orgsApp(fakeSession(userId));
+    const created = await app.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ name: 'Settings workspace' }),
+    });
+    const result = await body<{ organization: { id: string }; ownerActorId: string }>(created);
+    const orgId = result.organization.id;
+
+    const initial = await app.request(`/${orgId}/settings/work-structure`);
+    expect(initial.status).toBe(200);
+    expect(await body(initial)).toEqual({ initiativeMaxDepth: 2 });
+
+    const raised = await app.request(`/${orgId}/settings/work-structure`, {
+      method: 'PATCH',
+      headers: J,
+      body: JSON.stringify({ initiativeMaxDepth: 3 }),
+    });
+    expect(raised.status).toBe(200);
+    expect(await body(raised)).toEqual({ initiativeMaxDepth: 3 });
+
+    const [root, child] = await db
+      .insert(schema.initiative)
+      .values([
+        { organizationId: orgId, name: 'Root', createdBy: result.ownerActorId },
+        { organizationId: orgId, name: 'Child', createdBy: result.ownerActorId },
+      ])
+      .returning({ id: schema.initiative.id });
+    await db.insert(schema.initiativeHierarchyLink).values({
+      contextOrganizationId: orgId,
+      parentInitiativeId: root!.id,
+      childInitiativeId: child!.id,
+      createdBy: result.ownerActorId,
+    });
+
+    const conflict = await app.request(`/${orgId}/settings/work-structure`, {
+      method: 'PATCH',
+      headers: J,
+      body: JSON.stringify({ initiativeMaxDepth: 1 }),
+    });
+    expect(conflict.status).toBe(409);
+    const unchanged = await app.request(`/${orgId}/settings/work-structure`);
+    expect(await body(unchanged)).toEqual({ initiativeMaxDepth: 3 });
+  });
+
   it('POST / without slug derives one via slugify (incl. fallback for symbol-only names)', async () => {
     const { userId } = await seedUserWithHub();
     const app = orgsApp(fakeSession(userId));

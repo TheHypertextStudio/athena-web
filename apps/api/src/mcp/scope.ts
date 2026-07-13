@@ -51,6 +51,7 @@ export const TOOL_SCOPE: Readonly<Record<string, McpScope>> = {
   update_project: 'work:write',
   create_program: 'work:write',
   create_initiative: 'work:write',
+  update_initiative: 'work:write',
   link_initiative: 'work:write',
   add_comment: 'work:write',
   post_update: 'work:write',

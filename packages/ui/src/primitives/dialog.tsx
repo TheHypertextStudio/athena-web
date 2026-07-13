@@ -68,7 +68,9 @@ export const DialogClose = DialogPrimitive.Close;
  *
  * @remarks
  * A semi-opaque scrim that fades in/out with the dialog. Rendered automatically by
- * {@link DialogContent}; exported for callers that compose their own portal layout.
+ * {@link DialogContent}; exported for callers that compose their own portal layout. Dialogs use
+ * the `z-[110]` modal layer so confirmations opened from a `z-[100]` {@link Sheet} remain
+ * visible and interactive.
  */
 export function DialogOverlay({
   className,
@@ -93,7 +95,8 @@ export function DialogOverlay({
  * centered in the viewport. The panel is labelled by its {@link DialogTitle} (Radix requires a
  * `DialogTitle` descendant for accessibility). A built-in close button (top-right, MUI `X`
  * glyph) is included unless `showClose` is `false`. The panel caps at `max-h-[85vh]` and
- * scrolls its body when content overflows.
+ * scrolls its body when content overflows. The panel shares the overlay's `z-[110]` modal layer,
+ * above sheets at `z-[100]`.
  *
  * Focus management: on open, Radix's `FocusScope` moves focus to the first focusable descendant
  * (so the primary field lands focused without a React `autoFocus` attribute — a DOM `autoFocus`

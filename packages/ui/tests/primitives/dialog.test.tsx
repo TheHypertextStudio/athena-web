@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest';
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useState } from 'react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { Button } from '../../src/primitives/button';
 import {
@@ -16,6 +16,7 @@ import {
   DialogTrigger,
 } from '../../src/primitives/dialog';
 import { Input } from '../../src/primitives/input';
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from '../../src/primitives/sheet';
 
 /** A controlled host that mirrors the Linear create-flow usage of the Dialog. */
 function ControlledDialog(): React.JSX.Element {
@@ -72,6 +73,34 @@ function TriggerlessDialog(): React.JSX.Element {
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+/** A destructive confirmation opened from an already-modal sheet. */
+function SheetConfirmation({ onConfirm }: { onConfirm: () => void }): React.JSX.Element {
+  const [confirmationOpen, setConfirmationOpen] = useState(false);
+
+  return (
+    <Sheet defaultOpen>
+      <SheetContent>
+        <SheetTitle>Calendar item</SheetTitle>
+        <SheetDescription>Review the selected calendar item.</SheetDescription>
+        <Button
+          onClick={() => {
+            setConfirmationOpen(true);
+          }}
+        >
+          Delete item
+        </Button>
+        <Dialog open={confirmationOpen} onOpenChange={setConfirmationOpen}>
+          <DialogContent showClose={false}>
+            <DialogTitle>Delete calendar item?</DialogTitle>
+            <DialogDescription>This action cannot be undone.</DialogDescription>
+            <Button onClick={onConfirm}>Confirm delete</Button>
+          </DialogContent>
+        </Dialog>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -190,6 +219,24 @@ describe('Dialog family', () => {
     expect(overlay).not.toBeNull();
     expect(overlay).toHaveClass('z-[110]');
     expect(screen.getByRole('dialog')).toHaveClass('z-[110]');
+  });
+
+  it('keeps a confirmation dialog and its scrim above the sheet that opened it', async () => {
+    const onConfirm = vi.fn();
+    const { baseElement } = render(<SheetConfirmation onConfirm={onConfirm} />);
+    const sheet = await screen.findByRole('dialog', { name: 'Calendar item' });
+    expect(sheet).toHaveClass('z-[100]');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete item' }));
+
+    const confirmation = await screen.findByRole('dialog', { name: 'Delete calendar item?' });
+    const overlays = baseElement.querySelectorAll('.bg-black\\/40');
+    const confirmationOverlay = overlays.item(overlays.length - 1);
+    expect(confirmationOverlay).toHaveClass('z-[110]');
+    expect(confirmation).toHaveClass('z-[110]');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm delete' }));
+    expect(onConfirm).toHaveBeenCalledOnce();
   });
 
   it('merges custom classes onto the content, header, footer, title, and description', async () => {

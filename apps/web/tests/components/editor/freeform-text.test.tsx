@@ -16,7 +16,9 @@ describe('FreeformTextEditor', () => {
       />,
     );
 
-    expect(screen.getByLabelText('Description').getAttribute('contenteditable')).toBe('true');
+    const writing = screen.getByRole('textbox', { name: 'Description' });
+    expect(writing.getAttribute('contenteditable')).toBe('true');
+    expect(writing.getAttribute('aria-multiline')).toBe('true');
     expect(screen.queryByText(/markdown/i)).toBeNull();
     expect(screen.queryByRole('toolbar')).toBeNull();
   });

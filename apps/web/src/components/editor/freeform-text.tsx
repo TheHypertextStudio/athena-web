@@ -82,7 +82,9 @@ export function FreeformTextEditor({
     editorProps: {
       attributes: {
         'aria-label': ariaLabel,
+        'aria-multiline': 'true',
         'data-placeholder': placeholder,
+        role: 'textbox',
         class:
           'text-on-surface text-body min-h-10 w-full cursor-text outline-none [&_a]:text-primary [&_a]:underline [&_blockquote]:border-outline-variant [&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:pl-3 [&_code]:bg-surface-container-high [&_code]:rounded [&_code]:px-1 [&_h1]:text-h2 [&_h1]:mt-4 [&_h1]:font-semibold [&_h2]:text-h3 [&_h2]:mt-3 [&_h2]:font-semibold [&_h3]:mt-3 [&_h3]:font-semibold [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-1 [&_pre]:bg-surface-container-high [&_pre]:my-2 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:p-3 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5',
       },

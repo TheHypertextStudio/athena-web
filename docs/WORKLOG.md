@@ -2726,6 +2726,25 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
   the right shared boundary: onboarding can continue into connections while repeat creation can
   refresh the org cache and enter the new workspace immediately.
 
+---
+
+### [BOOT-IAM-001] Grant API runtime access to bootstrap secrets
+
+- **Completed**: 2026-07-13
+- **Summary**: Bootstrap now grants the default Cloud Run runtime identity
+  `roles/secretmanager.secretAccessor` on every base secret it creates or reuses. The integrations
+  writer calls the same helper after each provider secret write, so no mounted secret relies on a
+  manual IAM repair.
+- **Files Changed**: `scripts/bootstrap.ts`, `scripts/integrations-setup.ts`,
+  `tests/tooling/bootstrap-setup.test.ts`, `docs/engineering/deployment.md`
+- **Validation**: Bootstrap tooling tests pass 18/18; repository typecheck and targeted formatting
+  checks pass.
+- **Learnings**: Secret creation and Cloud Run mounting are separate controls. Reconcile the
+  runtime binding at the secret write boundary so new provider credentials are deployable by
+  construction.
+
+---
+
 ### [DX-COMMIT-001] Enforce feature-oriented commit messages
 
 - **Completed**: 2026-07-12

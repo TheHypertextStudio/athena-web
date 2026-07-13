@@ -756,6 +756,36 @@ export function normalizeCloudSecret(value: string): string {
   return normalized;
 }
 
+/** Build the least-privilege Secret Manager binding for the default Cloud Run runtime identity. */
+export function runtimeSecretAccessorBindingArgs(
+  projectNumber: string,
+  secretName: string,
+  project: string,
+): string[] {
+  return [
+    'secrets',
+    'add-iam-policy-binding',
+    secretName,
+    `--project=${project}`,
+    `--member=serviceAccount:${projectNumber}-compute@developer.gserviceaccount.com`,
+    '--role=roles/secretmanager.secretAccessor',
+    '--quiet',
+  ];
+}
+
+/** Ensure the Cloud Run runtime can read one mounted secret without broad project access. */
+export function ensureRuntimeSecretAccess(project: string, secretName: string): void {
+  const projectNumber = tryRun(
+    `gcloud projects describe ${project} --format='value(projectNumber)'`,
+  );
+  if (!projectNumber) {
+    throw new Error(`Could not resolve the project number for ${project}`);
+  }
+  execFileSync('gcloud', runtimeSecretAccessorBindingArgs(projectNumber, secretName, project), {
+    stdio: 'inherit',
+  });
+}
+
 /**
  * Create or add a new version of a GCP Secret Manager secret (re-runs rotate, never error).
  *
@@ -776,25 +806,7 @@ function pushSecret(env: Environment, target: CloudTarget, varName: string, valu
     input: normalized,
     stdio: ['pipe', 'inherit', 'inherit'],
   });
-  const projectNumber = tryRun(
-    `gcloud projects describe ${target.project} --format='value(projectNumber)'`,
-  );
-  if (!projectNumber) {
-    throw new Error(`Could not resolve the project number for ${target.project}`);
-  }
-  execFileSync(
-    'gcloud',
-    [
-      'secrets',
-      'add-iam-policy-binding',
-      name,
-      `--project=${target.project}`,
-      `--member=serviceAccount:${projectNumber}-compute@developer.gserviceaccount.com`,
-      '--role=roles/secretmanager.secretAccessor',
-      '--quiet',
-    ],
-    { stdio: 'inherit' },
-  );
+  ensureRuntimeSecretAccess(target.project, name);
   ok(`${varName} → secret ${name} (${exists ? 'new version' : 'created'})`);
 }
 

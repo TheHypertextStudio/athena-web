@@ -98,7 +98,10 @@ beforeEach(() => {
   requireAuthentication.mockReset();
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 describe('ExportDataTab', () => {
   it('makes selected data, delivery, and a ready export understandable', async () => {
@@ -154,12 +157,39 @@ describe('ExportDataTab', () => {
     ).toBeVisible();
   });
 
+  it('never renders server diagnostics when export history fails', async () => {
+    exportsGet.mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: () =>
+        Promise.resolve({
+          type: 'about:blank',
+          code: 'internal',
+          title: 'Internal server error',
+          status: 500,
+          detail: 'AGENT_MAX_TURNS is not configured; refusing to run agent sessions',
+        }),
+    });
+    renderTab();
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Could not load your export history.');
+    expect(alert).not.toHaveTextContent('AGENT_MAX_TURNS');
+    expect(alert).not.toHaveTextContent('Internal server error');
+  });
+
   it('opens the auth interlock instead of navigating to a raw unauthorized response', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(
-        Response.json({ code: 'unauthorized', title: 'Authentication required' }, { status: 401 }),
-      );
+    const fetchMock = vi.fn().mockResolvedValue(
+      Response.json(
+        {
+          type: 'about:blank',
+          code: 'unauthorized',
+          title: 'Authentication required',
+          status: 401,
+        },
+        { status: 401 },
+      ),
+    );
     vi.stubGlobal('fetch', fetchMock);
     renderTab();
 

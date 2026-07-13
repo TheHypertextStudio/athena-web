@@ -1,157 +1,134 @@
 'use client';
 
 /**
- * `settings` — the Export data tab.
+ * `settings` — the selective personal-data export surface.
  *
  * @remarks
- * Lets the user request a full copy of their Docket data. A request (`POST /v1/me/account/export`)
- * queues an asynchronous job; the export cron generates the archive to blob storage and emails a
- * time-limited link. This tab reflects the latest job's status from `GET /v1/me/account` — polling
- * while it is `pending` — and surfaces the download link (with its expiry) once `ready`. Exporting
- * is non-destructive, so it lives in its own calm section, separate from the Danger zone.
+ * Coordinates three typed reads: selectable export options, recent archive history, and an
+ * optional email-linked archive. Selection, history rendering, and secure download behavior live
+ * in focused adjacent components so this module remains the data-orchestration boundary.
  */
-import { Download } from '@docket/ui/icons';
-import { Button, Skeleton } from '@docket/ui/primitives';
+import { Skeleton } from '@docket/ui/primitives';
 import { type JSX } from 'react';
 
 import { api } from '@/lib/api';
-import { formatCalendarDate } from '@/lib/format-date';
 import {
   STALE,
   apiQueryOptions,
   queryKeys,
   unwrap,
+  useApiListQuery,
   useApiMutation,
   useApiQuery,
 } from '@/lib/query';
 import { userErrorMessage } from '@/lib/problem';
 
-/** The Export data settings tab — request + download a personal-data archive. */
-export function ExportDataTab({
-  focusedExportId: _focusedExportId,
-}: { focusedExportId?: string } = {}): JSX.Element {
-  const statusQ = useApiQuery(
+import { type ExportRequestInput } from './export-data-model';
+import { ExportHistory } from './export-history';
+import { ExportRequestForm } from './export-request-form';
+
+/** Props for {@link ExportDataTab}. */
+export interface ExportDataTabProps {
+  /** An export linked from email; it is fetched and pinned above the general history. */
+  readonly focusedExportId?: string;
+}
+
+/** Select data, request an archive, and securely download completed exports. */
+export function ExportDataTab({ focusedExportId }: ExportDataTabProps): JSX.Element {
+  const optionsQ = useApiQuery(
     apiQueryOptions(
-      queryKeys.account(),
-      () => api.v1.me.account.$get(),
-      'Could not load your export status.',
+      queryKeys.accountExportOptions(),
+      () => api.v1.me.account.exports.options.$get(),
+      'Could not load export options.',
+      { staleTime: STALE.static },
+    ),
+  );
+  const exportsQ = useApiListQuery(
+    apiQueryOptions(
+      queryKeys.accountExports(),
+      () => api.v1.me.account.exports.$get(),
+      'Could not load your export history.',
       {
         staleTime: STALE.volatile,
-        // Poll briskly while an export is generating so "ready" appears within a couple seconds.
-        refetchInterval: (q) => (q.state.data?.export?.status === 'pending' ? 2000 : false),
+        refetchInterval: (query) =>
+          query.state.data?.items.some((exportJob) => exportJob.status === 'pending')
+            ? 2000
+            : false,
       },
     ),
   );
-
+  const focusedExportQ = useApiQuery(
+    apiQueryOptions(
+      queryKeys.accountExport(focusedExportId ?? ''),
+      () =>
+        api.v1.me.account.exports[':exportId'].$get({
+          param: { exportId: focusedExportId ?? '' },
+        }),
+      'Could not load this export.',
+      { enabled: Boolean(focusedExportId), staleTime: STALE.volatile },
+    ),
+  );
   const requestExport = useApiMutation({
-    mutationFn: () =>
+    mutationFn: (input: ExportRequestInput) =>
       unwrap(
         () =>
           api.v1.me.account.exports.$post({
-            json: { categories: ['account', 'personal'], workspaceIds: [] },
+            json: { categories: [...input.categories], workspaceIds: [...input.workspaceIds] },
           }),
         'Could not start your data export.',
       ),
-    invalidateKeys: [queryKeys.account()],
+    invalidateKeys: [queryKeys.account(), queryKeys.accountExports()],
   });
 
-  if (statusQ.isPending) {
-    return <Skeleton className="h-28 w-full rounded-lg" />;
+  const focusedPending = Boolean(focusedExportId) && focusedExportQ.isPending;
+  if (optionsQ.isPending || exportsQ.isPending || focusedPending) {
+    return <Skeleton className="h-96 w-full rounded-lg" />;
   }
-  if (statusQ.isError) {
+  if (optionsQ.isError || exportsQ.isError) {
     return (
       <p role="alert" className="text-destructive text-body">
-        {userErrorMessage(statusQ.error, 'Could not update your data export.')}
+        {optionsQ.isError
+          ? userErrorMessage(optionsQ.error, 'Could not load export options.')
+          : userErrorMessage(exportsQ.error, 'Could not load your export history.')}
       </p>
     );
   }
 
-  const exportJob = statusQ.data.export;
-  const downloadUrl = exportJob?.status === 'ready' ? exportJob.downloadUrl : null;
-
-  // Collapse the job into a single view state (the download link, when ready, takes precedence).
-  const view = downloadUrl
-    ? 'ready'
-    : exportJob?.status === 'pending' || requestExport.isPending
-      ? 'preparing'
-      : exportJob?.status === 'failed'
-        ? 'failed'
-        : 'idle';
-
-  const requestButton = (label: string, variant?: 'outline') => (
-    <Button
-      type="button"
-      {...(variant ? { variant } : {})}
-      disabled={requestExport.isPending}
-      onClick={() => {
-        requestExport.mutate(undefined);
-      }}
-    >
-      {label}
-    </Button>
-  );
+  const focusedExport = focusedExportQ.data ?? null;
+  const history = [
+    ...(focusedExport ? [focusedExport] : []),
+    ...exportsQ.data.items.filter((exportJob) => exportJob.id !== focusedExportId),
+  ].slice(0, 10);
+  const hasPendingExport = exportsQ.data.items.some((exportJob) => exportJob.status === 'pending');
 
   return (
-    <section className="flex flex-col gap-4" aria-label="Export data">
-      <p className="text-on-surface-variant text-body max-w-prose">
-        Download a machine-readable archive of everything tied to your account — your profile,
-        connected accounts, and every workspace you belong to. We&apos;ll prepare it in the
-        background and email you a download link when it&apos;s ready.
-      </p>
-
-      {requestExport.isError ? (
-        <p role="alert" className="text-destructive text-body">
-          {userErrorMessage(requestExport.error, 'Could not update your data export.')}
+    <section className="flex flex-col gap-8" aria-label="Export data">
+      <div className="flex flex-col gap-2">
+        <p className="text-on-surface-variant text-body max-w-prose">
+          Create a downloadable ZIP file of the Docket data you choose. Exporting does not delete
+          anything. Docket captures the selected data when it prepares your export.
         </p>
-      ) : null}
-
-      <div className="border-outline-variant flex flex-col gap-3 rounded-lg border p-4">
-        {view === 'ready' && downloadUrl ? (
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center gap-2">
-              <Download className="text-on-surface-variant size-5" aria-hidden />
-              <span className="text-on-surface text-body font-medium">Your export is ready</span>
-            </div>
-            <p className="text-on-surface-variant text-body">
-              {exportJob?.expiresAt
-                ? `This link expires on ${formatCalendarDate(exportJob.expiresAt) ?? ''}.`
-                : 'Download your data below.'}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <Button asChild>
-                <a href={downloadUrl} download>
-                  Download your data
-                </a>
-              </Button>
-              {requestButton('Request a fresh export', 'outline')}
-            </div>
-          </div>
-        ) : view === 'preparing' ? (
-          <div className="flex flex-col gap-1">
-            <span className="text-on-surface text-body font-medium">Preparing your export…</span>
-            <p className="text-on-surface-variant text-body">
-              This can take a few minutes. We&apos;ll email you when it&apos;s ready — you can leave
-              this page.
-            </p>
-          </div>
-        ) : view === 'failed' ? (
-          <div className="flex flex-col gap-3">
-            <p role="alert" className="text-destructive text-body">
-              Your last export didn&apos;t finish. Please try again.
-            </p>
-            <div>{requestButton('Try again')}</div>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-3">
-            <p className="text-on-surface-variant text-body">
-              {exportJob?.status === 'expired'
-                ? 'Your previous download link has expired. Request a new export below.'
-                : "You haven't exported your data yet."}
-            </p>
-            <div>{requestButton('Request export')}</div>
-          </div>
-        )}
+        {focusedExportQ.isError ? (
+          <p role="alert" className="text-destructive text-body">
+            This export is no longer available. You can create a new export below.
+          </p>
+        ) : null}
       </div>
+
+      <ExportRequestForm
+        options={optionsQ.data}
+        hasPendingExport={hasPendingExport}
+        creating={requestExport.isPending}
+        error={
+          requestExport.isError
+            ? userErrorMessage(requestExport.error, 'Could not start your data export.')
+            : null
+        }
+        onCreate={(input) => {
+          requestExport.mutate(input);
+        }}
+      />
+      <ExportHistory exports={history} />
     </section>
   );
 }

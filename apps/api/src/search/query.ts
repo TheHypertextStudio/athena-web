@@ -2,6 +2,12 @@ import { OrganizationId, type SearchDocumentKind, type SearchOut } from '@docket
 import type { searchDocument } from '@docket/db';
 import { and, desc, eq, ilike, inArray, isNull, or, sql } from 'drizzle-orm';
 
+import {
+  resourceAccessKey,
+  resolveResourceAccess,
+  type ResourceAccessRef,
+} from '../permissions/resource-access';
+
 interface SearchWorkspaceInput {
   scope: 'hub' | 'org';
   userId: string;
@@ -45,39 +51,11 @@ interface CallerOrgAccess {
   isGuest: boolean;
 }
 
-interface SubjectRef {
-  organizationId: string;
-  kind: string;
-  id: string;
-}
-
-type GrantResourceKind =
-  | 'organization'
-  | 'team'
-  | 'initiative'
-  | 'program'
-  | 'project'
-  | 'cycle'
-  | 'task';
 type SearchVisibility =
   | { mode: 'org_members' }
   | { mode: 'user_private' }
   | { mode: 'grantable'; subjectKind?: unknown; subjectId?: unknown }
   | { mode: 'event'; subjectKind?: unknown; subjectId?: unknown };
-
-interface ResourceFacts {
-  organizationId: string;
-  visibility: 'public' | 'private';
-  chain: readonly { kind: GrantResourceKind; id: string }[];
-}
-
-const CAPABILITY_RANK = {
-  view: 0,
-  comment: 1,
-  contribute: 2,
-  assign: 3,
-  manage: 4,
-} as const;
 
 /** Run permission-filtered semantic workspace search. */
 export async function searchWorkspace(input: SearchWorkspaceInput): Promise<SearchOut> {
@@ -230,17 +208,17 @@ async function filterVisibleRows(
   rows: readonly SearchDocumentRow[],
   caller: { userId: string; accessByOrg: ReadonlyMap<string, CallerOrgAccess> },
 ): Promise<{ rows: SearchDocumentRow[]; recipientEventIds: ReadonlySet<string> }> {
-  const subjectRefs = new Map<string, SubjectRef>();
+  const subjectRefs = new Map<string, ResourceAccessRef>();
   const eventIds: string[] = [];
 
   for (const row of rows) {
     const visibility = readVisibility(row.visibility);
     if (visibility.mode === 'event') eventIds.push(row.entityId);
     const subject = visibilitySubject(row, visibility);
-    if (subject) subjectRefs.set(subjectKey(subject), subject);
+    if (subject) subjectRefs.set(resourceAccessKey(subject), subject);
   }
 
-  const subjectAccess = await resolveSubjectAccess([...subjectRefs.values()], caller.accessByOrg);
+  const subjectAccess = await resolveResourceAccess(caller.userId, [...subjectRefs.values()]);
   const recipientEventIds = await loadRecipientEventIds(caller.userId, eventIds);
 
   const visibleRows = rows.filter((row) => {
@@ -252,12 +230,12 @@ async function filterVisibleRows(
         return Boolean(row.organizationId && caller.accessByOrg.has(row.organizationId));
       case 'grantable': {
         const subject = visibilitySubject(row, visibility);
-        return subject ? (subjectAccess.get(subjectKey(subject)) ?? false) : false;
+        return subject ? (subjectAccess.get(resourceAccessKey(subject))?.canView ?? false) : false;
       }
       case 'event': {
         if (recipientEventIds.has(row.entityId)) return true;
         const subject = visibilitySubject(row, visibility);
-        if (subject) return subjectAccess.get(subjectKey(subject)) ?? false;
+        if (subject) return subjectAccess.get(resourceAccessKey(subject))?.canView ?? false;
         if (row.userId) return row.userId === caller.userId;
         return Boolean(row.organizationId && caller.accessByOrg.has(row.organizationId));
       }
@@ -284,7 +262,7 @@ function readVisibility(value: unknown): SearchVisibility {
 function visibilitySubject(
   row: SearchDocumentRow,
   visibility: SearchVisibility,
-): SubjectRef | null {
+): ResourceAccessRef | null {
   if (!row.organizationId) return null;
   const subjectKind =
     visibility.mode === 'grantable' || visibility.mode === 'event'
@@ -297,340 +275,6 @@ function visibilitySubject(
   const kind = typeof subjectKind === 'string' ? subjectKind : row.subjectKind;
   const id = typeof subjectId === 'string' ? subjectId : row.subjectId;
   return kind && id ? { organizationId: row.organizationId, kind, id } : null;
-}
-
-function subjectKey(ref: SubjectRef): string {
-  return `${ref.organizationId}:${ref.kind}:${ref.id}`;
-}
-
-async function resolveSubjectAccess(
-  refs: readonly SubjectRef[],
-  accessByOrg: ReadonlyMap<string, CallerOrgAccess>,
-): Promise<Map<string, boolean>> {
-  const facts = await loadResourceFacts(refs);
-  const grants = await loadCallerGrants([...accessByOrg.values()]);
-  const result = new Map<string, boolean>();
-
-  for (const ref of refs) {
-    const access = accessByOrg.get(ref.organizationId);
-    const fact = facts.get(subjectKey(ref));
-    if (!access || !fact) {
-      result.set(subjectKey(ref), false);
-      continue;
-    }
-    const publicByMembership = fact.visibility === 'public' && !access.isGuest;
-    result.set(subjectKey(ref), publicByMembership || hasEffectiveViewGrant(fact, grants, access));
-  }
-
-  return result;
-}
-
-async function loadResourceFacts(refs: readonly SubjectRef[]): Promise<Map<string, ResourceFacts>> {
-  const schema = await import('@docket/db');
-  const facts = new Map<string, ResourceFacts>();
-  const refsByKind = new Map<string, SubjectRef[]>();
-  for (const ref of refs) {
-    const bucket = refsByKind.get(ref.kind) ?? [];
-    bucket.push(ref);
-    refsByKind.set(ref.kind, bucket);
-  }
-
-  const taskRefs = refsByKind.get('task') ?? [];
-  if (taskRefs.length > 0) {
-    const rows = await schema.db
-      .select({
-        id: schema.task.id,
-        organizationId: schema.task.organizationId,
-        visibility: schema.task.visibility,
-        teamId: schema.task.teamId,
-        projectId: schema.task.projectId,
-        programId: schema.task.programId,
-      })
-      .from(schema.task)
-      .where(
-        inArray(
-          schema.task.id,
-          taskRefs.map((ref) => ref.id),
-        ),
-      );
-    for (const row of rows) {
-      const ref = taskRefs.find(
-        (candidate) => candidate.id === row.id && candidate.organizationId === row.organizationId,
-      );
-      if (!ref) continue;
-      facts.set(subjectKey(ref), {
-        organizationId: row.organizationId,
-        visibility: row.visibility,
-        chain: [
-          { kind: 'task', id: row.id },
-          { kind: 'team', id: row.teamId },
-          ...(row.projectId ? [{ kind: 'project' as const, id: row.projectId }] : []),
-          ...(row.programId ? [{ kind: 'program' as const, id: row.programId }] : []),
-          { kind: 'organization', id: row.organizationId },
-        ],
-      });
-    }
-  }
-
-  const projectRefs = refsByKind.get('project') ?? [];
-  if (projectRefs.length > 0) {
-    const rows = await schema.db
-      .select({
-        id: schema.project.id,
-        organizationId: schema.project.organizationId,
-        visibility: schema.project.visibility,
-        teamId: schema.project.teamId,
-        programId: schema.project.programId,
-      })
-      .from(schema.project)
-      .where(
-        inArray(
-          schema.project.id,
-          projectRefs.map((ref) => ref.id),
-        ),
-      );
-    for (const row of rows) {
-      const ref = projectRefs.find(
-        (candidate) => candidate.id === row.id && candidate.organizationId === row.organizationId,
-      );
-      if (!ref) continue;
-      facts.set(subjectKey(ref), {
-        organizationId: row.organizationId,
-        visibility: row.visibility,
-        chain: [
-          { kind: 'project', id: row.id },
-          ...(row.teamId ? [{ kind: 'team' as const, id: row.teamId }] : []),
-          ...(row.programId ? [{ kind: 'program' as const, id: row.programId }] : []),
-          { kind: 'organization', id: row.organizationId },
-        ],
-      });
-    }
-  }
-
-  const programRefs = refsByKind.get('program') ?? [];
-  if (programRefs.length > 0) {
-    const rows = await schema.db
-      .select({
-        id: schema.program.id,
-        organizationId: schema.program.organizationId,
-        visibility: schema.program.visibility,
-      })
-      .from(schema.program)
-      .where(
-        inArray(
-          schema.program.id,
-          programRefs.map((ref) => ref.id),
-        ),
-      );
-    for (const row of rows) {
-      const ref = programRefs.find(
-        (candidate) => candidate.id === row.id && candidate.organizationId === row.organizationId,
-      );
-      if (!ref) continue;
-      facts.set(subjectKey(ref), {
-        organizationId: row.organizationId,
-        visibility: row.visibility,
-        chain: [
-          { kind: 'program', id: row.id },
-          { kind: 'organization', id: row.organizationId },
-        ],
-      });
-    }
-  }
-
-  const initiativeRefs = refsByKind.get('initiative') ?? [];
-  if (initiativeRefs.length > 0) {
-    const rows = await schema.db
-      .select({
-        id: schema.initiative.id,
-        organizationId: schema.initiative.organizationId,
-      })
-      .from(schema.initiative)
-      .where(
-        inArray(
-          schema.initiative.id,
-          initiativeRefs.map((ref) => ref.id),
-        ),
-      );
-    for (const row of rows) {
-      const ref = initiativeRefs.find(
-        (candidate) => candidate.id === row.id && candidate.organizationId === row.organizationId,
-      );
-      if (!ref) continue;
-      facts.set(subjectKey(ref), {
-        organizationId: row.organizationId,
-        visibility: 'public',
-        chain: [
-          { kind: 'initiative', id: row.id },
-          { kind: 'organization', id: row.organizationId },
-        ],
-      });
-    }
-  }
-
-  const teamRefs = refsByKind.get('team') ?? [];
-  if (teamRefs.length > 0) {
-    const rows = await schema.db
-      .select({
-        id: schema.team.id,
-        organizationId: schema.team.organizationId,
-        visibility: schema.team.visibility,
-      })
-      .from(schema.team)
-      .where(
-        inArray(
-          schema.team.id,
-          teamRefs.map((ref) => ref.id),
-        ),
-      );
-    for (const row of rows) {
-      const ref = teamRefs.find(
-        (candidate) => candidate.id === row.id && candidate.organizationId === row.organizationId,
-      );
-      if (!ref) continue;
-      facts.set(subjectKey(ref), {
-        organizationId: row.organizationId,
-        visibility: row.visibility,
-        chain: [
-          { kind: 'team', id: row.id },
-          { kind: 'organization', id: row.organizationId },
-        ],
-      });
-    }
-  }
-
-  const cycleRefs = refsByKind.get('cycle') ?? [];
-  if (cycleRefs.length > 0) {
-    const rows = await schema.db
-      .select({
-        id: schema.cycle.id,
-        organizationId: schema.cycle.organizationId,
-        teamId: schema.cycle.teamId,
-      })
-      .from(schema.cycle)
-      .where(
-        inArray(
-          schema.cycle.id,
-          cycleRefs.map((ref) => ref.id),
-        ),
-      );
-    for (const row of rows) {
-      const ref = cycleRefs.find(
-        (candidate) => candidate.id === row.id && candidate.organizationId === row.organizationId,
-      );
-      if (!ref) continue;
-      facts.set(subjectKey(ref), {
-        organizationId: row.organizationId,
-        visibility: 'public',
-        chain: [
-          { kind: 'cycle', id: row.id },
-          { kind: 'team', id: row.teamId },
-          { kind: 'organization', id: row.organizationId },
-        ],
-      });
-    }
-  }
-
-  const orgRefs = refsByKind.get('organization') ?? [];
-  if (orgRefs.length > 0) {
-    const rows = await schema.db
-      .select({ id: schema.organization.id })
-      .from(schema.organization)
-      .where(
-        inArray(
-          schema.organization.id,
-          orgRefs.map((ref) => ref.id),
-        ),
-      );
-    for (const row of rows) {
-      const ref = orgRefs.find(
-        (candidate) => candidate.id === row.id && candidate.organizationId === row.id,
-      );
-      if (!ref) continue;
-      facts.set(subjectKey(ref), {
-        organizationId: row.id,
-        visibility: 'public',
-        chain: [{ kind: 'organization', id: row.id }],
-      });
-    }
-  }
-
-  return facts;
-}
-
-interface CallerGrant {
-  organizationId: string;
-  subjectId: string;
-  resourceKind: GrantResourceKind;
-  resourceId: string;
-  capabilities: readonly string[];
-  effect: string;
-  cascades: boolean;
-  expiresAt: Date | null;
-}
-
-async function loadCallerGrants(accesses: readonly CallerOrgAccess[]): Promise<CallerGrant[]> {
-  if (accesses.length === 0) return [];
-  const schema = await import('@docket/db');
-  const organizationIds = [...new Set(accesses.map((access) => access.organizationId))];
-  const subjectIds = [
-    ...new Set(
-      accesses.flatMap((access) =>
-        [access.actorId, access.roleId].filter((id): id is string => Boolean(id)),
-      ),
-    ),
-  ];
-  if (subjectIds.length === 0) return [];
-  return schema.db
-    .select({
-      organizationId: schema.grant.organizationId,
-      subjectId: schema.grant.subjectId,
-      resourceKind: schema.grant.resourceKind,
-      resourceId: schema.grant.resourceId,
-      capabilities: schema.grant.capabilities,
-      effect: schema.grant.effect,
-      cascades: schema.grant.cascades,
-      expiresAt: schema.grant.expiresAt,
-    })
-    .from(schema.grant)
-    .where(
-      and(
-        inArray(schema.grant.organizationId, organizationIds),
-        inArray(schema.grant.subjectId, subjectIds),
-      ),
-    );
-}
-
-function hasEffectiveViewGrant(
-  fact: ResourceFacts,
-  grants: readonly CallerGrant[],
-  access: CallerOrgAccess,
-): boolean {
-  const subjectIds = new Set(
-    [access.actorId, access.roleId].filter((id): id is string => Boolean(id)),
-  );
-  const now = Date.now();
-  const target = fact.chain[0];
-  return grants.some((grant) => {
-    if (grant.organizationId !== fact.organizationId) return false;
-    if (!subjectIds.has(grant.subjectId)) return false;
-    if (grant.effect !== 'allow') return false;
-    if (grant.expiresAt && grant.expiresAt.getTime() < now) return false;
-    if (!grantCapabilitiesView(grant.capabilities)) return false;
-    return fact.chain.some((resource) => {
-      const matches = resource.kind === grant.resourceKind && resource.id === grant.resourceId;
-      if (!matches) return false;
-      return resource === target || grant.cascades;
-    });
-  });
-}
-
-function grantCapabilitiesView(capabilities: readonly string[]): boolean {
-  return capabilities.some(
-    (capability) =>
-      capability in CAPABILITY_RANK &&
-      CAPABILITY_RANK[capability as keyof typeof CAPABILITY_RANK] >= CAPABILITY_RANK.view,
-  );
 }
 
 async function loadRecipientEventIds(

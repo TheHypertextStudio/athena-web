@@ -38,6 +38,18 @@
     personal tables.
 - **Dependencies**: Imports the completed `PROJECT-DETAIL-001` dependency/editor foundation from
   `feat/project-detail-revision` before new work.
+- **Progress**:
+  - Phase 0 Task 1A extracted Search's grant-aware resource checks into a shared batched permission
+    service. The resolver returns both view access and the strongest effective capability for every
+    supported resource kind, while preserving guest, membership, cascade, expiry, deny, and
+    cross-organization boundaries. Search now consumes that service without changing its result
+    contract.
+- **Validation**:
+  - The focused resource-access suite passes 8/8, and the combined permission/Search regression
+    slice passes 21/21. Scoped lint passes for the resolver, Search consumer, and focused tests.
+  - Full API typecheck and lint remain blocked by the imported branch foundation's unrelated
+    account-export, retired Slack provider, provider-union, and container return errors; neither
+    command reports an error in the Phase 0 Task 1A files.
 - **Baseline**: `origin/main` has one unrelated tooling failure because the provider catalog test
   still expects retired Slack configuration. The shared main checkout already contains the
   one-line pending correction; feature validation will keep that unrelated edit out of this branch.

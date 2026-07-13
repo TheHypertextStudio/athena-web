@@ -69,6 +69,45 @@ export function resolveScheduleTimezone(preferred?: string): string {
   return isSupportedTimezone(viewerTimezone) ? viewerTimezone : 'UTC';
 }
 
+/**
+ * Convert an exact ISO instant to one canvas-zone wall-clock position.
+ *
+ * @param instant - Exact ISO instant to place on the wall-clock axis.
+ * @param timezone - Required IANA timezone shared by the canvas.
+ * @returns The bare local date and minute offset from local midnight, or `null` for invalid input.
+ */
+export function scheduleWallPositionForInstant(
+  instant: string,
+  timezone: string,
+): { readonly date: string; readonly wallMinutes: number } | null {
+  try {
+    const zonedDateTime = Temporal.Instant.from(instant).toZonedDateTimeISO(timezone);
+    return {
+      date: zonedDateTime.toPlainDate().toString(),
+      wallMinutes: zonedDateTime.hour * 60 + zonedDateTime.minute,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Measure signed physical duration between two exact ISO instants.
+ *
+ * @param startInstant - Inclusive exact start instant.
+ * @param endInstant - Exclusive exact end instant.
+ * @returns Elapsed minutes, or `null` when either instant is invalid.
+ */
+export function scheduleElapsedMinutes(startInstant: string, endInstant: string): number | null {
+  try {
+    const start = Temporal.Instant.from(startInstant);
+    const end = Temporal.Instant.from(endInstant);
+    return Number(end.epochNanoseconds - start.epochNanoseconds) / 60_000_000_000;
+  } catch {
+    return null;
+  }
+}
+
 /** Return one plain date-time at a bounded minute offset from local midnight. */
 function plainDateTimeAt(
   date: Temporal.PlainDate,

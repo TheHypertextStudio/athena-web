@@ -5,14 +5,20 @@ import {
   majorTickInterval,
   resolveScheduleTimezone,
   scheduleDateRange,
+  scheduleElapsedMinutes,
   scheduleInstantAt,
+  scheduleWallPositionForInstant,
 } from '@/components/scheduling';
 
 describe('schedule wall-clock model', () => {
-  it('uses exact local-midnight boundaries across a spring-forward date', () => {
+  it('uses exact local-midnight boundaries across short and long DST dates', () => {
     expect(scheduleDateRange('2026-03-08', 1, 'America/Los_Angeles')).toEqual({
       startISO: '2026-03-08T08:00:00Z',
       endISO: '2026-03-09T07:00:00Z',
+    });
+    expect(scheduleDateRange('2026-11-01', 1, 'America/Los_Angeles')).toEqual({
+      startISO: '2026-11-01T07:00:00Z',
+      endISO: '2026-11-02T08:00:00Z',
     });
   });
 
@@ -26,6 +32,20 @@ describe('schedule wall-clock model', () => {
   it('falls back from an invalid preferred timezone to the viewer timezone', () => {
     expect(resolveScheduleTimezone('Not/A_Timezone')).toBe(resolveScheduleTimezone());
     expect(resolveScheduleTimezone('America/Los_Angeles')).toBe('America/Los_Angeles');
+  });
+
+  it('converts exact instants to wall positions through the Temporal primitive', () => {
+    expect(scheduleWallPositionForInstant('2026-11-01T08:30:00Z', 'America/Los_Angeles')).toEqual({
+      date: '2026-11-01',
+      wallMinutes: 90,
+    });
+    expect(scheduleWallPositionForInstant('invalid', 'America/Los_Angeles')).toBeNull();
+    expect(scheduleWallPositionForInstant('2026-11-01T08:30:00Z', 'Not/A_Timezone')).toBeNull();
+  });
+
+  it('derives positive elapsed minutes between exact instants', () => {
+    expect(scheduleElapsedMinutes('2026-11-01T08:30:00Z', '2026-11-01T09:30:00Z')).toBe(60);
+    expect(scheduleElapsedMinutes('invalid', '2026-11-01T09:30:00Z')).toBeNull();
   });
 });
 

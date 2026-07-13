@@ -23,6 +23,7 @@ import {
   pixelDeltaToMinutes,
   pixelsToMinutes,
 } from './scheduling-geometry';
+import { resolveScheduleTimezone } from './scheduling-time-axis';
 import type {
   ScheduleItem,
   ScheduleItemMove,
@@ -112,6 +113,7 @@ interface TimedScheduleItemProps {
   readonly laneWidth: number;
   readonly pixelsPerHour: number;
   readonly snapMinutes: number;
+  readonly displayTimezone: string;
   readonly renderItem?: SchedulingCanvasProps['renderItem'];
   readonly onOpenItem?: SchedulingCanvasProps['onOpenItem'];
   readonly onMoveItem?: SchedulingCanvasProps['onMoveItem'];
@@ -128,13 +130,14 @@ function TimedScheduleItem({
   laneWidth,
   pixelsPerHour,
   snapMinutes,
+  displayTimezone,
   renderItem,
   onOpenItem,
   onMoveItem,
   onResizeItem,
   onDropObjectOnItem,
 }: TimedScheduleItemProps): JSX.Element | null {
-  const bounds = itemBoundsInLane(item, lane);
+  const bounds = itemBoundsInLane(item, lane, displayTimezone);
   if (!bounds) return null;
   const editable = isScheduleItemEditable(item, lane);
   const top = minutesToPixels(bounds.startMinutes, pixelsPerHour);
@@ -324,6 +327,7 @@ export default function SchedulingCanvas({
   const previousPixelsPerHourRef = useRef(pixelsPerHour);
   const [observedWidth, setObservedWidth] = useState(DEFAULT_VIEWPORT_WIDTH);
   const boundaryLockRef = useRef<'previous' | 'next' | null>(null);
+  const displayTimezone = resolveScheduleTimezone();
 
   useLayoutEffect(() => {
     if (viewportWidth !== undefined) return;
@@ -536,6 +540,7 @@ export default function SchedulingCanvas({
                       laneWidth={geometry.laneWidth}
                       pixelsPerHour={effectivePixelsPerHour}
                       snapMinutes={snapMinutes}
+                      displayTimezone={displayTimezone}
                       renderItem={renderItem}
                       onOpenItem={onOpenItem}
                       onMoveItem={onMoveItem}

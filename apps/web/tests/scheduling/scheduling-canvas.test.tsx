@@ -4,7 +4,9 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  resolveScheduleTimezone,
   SCHEDULE_DRAG_MIME,
+  scheduleWallPositionForInstant,
   SchedulingCanvas,
   type ScheduleItem,
   type ScheduleLane,
@@ -26,7 +28,7 @@ const ALL_DAY_ITEM: ScheduleItem = {
   allDay: true,
 };
 
-/** Build a scheduling lane with UTC geometry and consumer-owned item data. */
+/** Build a scheduling lane with consumer-owned resource metadata and item data. */
 function lane(
   id: string,
   label: string,
@@ -129,6 +131,9 @@ describe('SchedulingCanvas', () => {
     const onOpenItem = vi.fn();
     const onMoveItem = vi.fn();
     const onResizeItem = vi.fn();
+    const displayTimezone = resolveScheduleTimezone();
+    const initialStart = scheduleWallPositionForInstant(TIMED_ITEM.startsAt, displayTimezone);
+    const initialEnd = scheduleWallPositionForInstant(TIMED_ITEM.endsAt, displayTimezone);
     render(
       <SchedulingCanvas
         lanes={[lane('ada', 'Ada', [TIMED_ITEM]), lane('grace', 'Grace')]}
@@ -155,8 +160,8 @@ describe('SchedulingCanvas', () => {
         item: TIMED_ITEM,
         fromLane: expect.objectContaining({ id: 'ada' }),
         toLane: expect.objectContaining({ id: 'grace' }),
-        startMinutes: 570,
-        endMinutes: 630,
+        startMinutes: (initialStart?.wallMinutes ?? Number.NaN) + 30,
+        endMinutes: (initialEnd?.wallMinutes ?? Number.NaN) + 30,
       }),
     );
 
@@ -169,8 +174,8 @@ describe('SchedulingCanvas', () => {
         item: TIMED_ITEM,
         lane: expect.objectContaining({ id: 'ada' }),
         edge: 'end',
-        startMinutes: 540,
-        endMinutes: 630,
+        startMinutes: initialStart?.wallMinutes,
+        endMinutes: (initialEnd?.wallMinutes ?? Number.NaN) + 30,
       }),
     );
   });

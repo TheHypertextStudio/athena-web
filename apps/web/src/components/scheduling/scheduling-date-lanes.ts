@@ -1,4 +1,5 @@
 import type { ScheduleItem, ScheduleLane } from './scheduling-types';
+import { scheduleElapsedMinutes, scheduleWallPositionForInstant } from './scheduling-time-axis';
 
 /** Timed item bounds clipped to one lane's 24-hour date. */
 export interface ScheduleItemLaneBounds {
@@ -6,53 +7,19 @@ export interface ScheduleItemLaneBounds {
   readonly endMinutes: number;
 }
 
-interface ZonedDateParts {
-  readonly date: string;
-  readonly minutes: number;
+/** Return an ISO instant's `YYYY-MM-DD` date in the required canvas timezone. */
+export function dateKeyForInstant(instant: string, displayTimezone: string): string | null {
+  return scheduleWallPositionForInstant(instant, displayTimezone)?.date ?? null;
 }
 
-/** Convert an instant to its date and minute-of-day in an optional IANA timezone. */
-function zonedDateParts(instant: string, timezone?: string): ZonedDateParts | null {
-  const date = new Date(instant);
-  if (Number.isNaN(date.getTime())) return null;
-
-  let formatter: Intl.DateTimeFormat;
-  try {
-    formatter = new Intl.DateTimeFormat('en-CA', {
-      ...(timezone ? { timeZone: timezone } : {}),
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      hourCycle: 'h23',
-    });
-  } catch {
-    return null;
-  }
-  const parts = new Map(
-    formatter
-      .formatToParts(date)
-      .filter((part) => part.type !== 'literal')
-      .map((part) => [part.type, part.value]),
-  );
-  const year = parts.get('year');
-  const month = parts.get('month');
-  const day = parts.get('day');
-  const hour = Number(parts.get('hour'));
-  const minute = Number(parts.get('minute'));
-  if (!year || !month || !day || !Number.isFinite(hour) || !Number.isFinite(minute)) return null;
-  return { date: `${year}-${month}-${day}`, minutes: hour * 60 + minute };
-}
-
-/** Return an ISO instant's `YYYY-MM-DD` date in an optional IANA timezone. */
-export function dateKeyForInstant(instant: string, timezone?: string): string | null {
-  return zonedDateParts(instant, timezone)?.date ?? null;
-}
-
-/** Find the first arbitrary lane whose date contains an instant in that lane's timezone. */
-export function findDateLane(lanes: readonly ScheduleLane[], instant: string): ScheduleLane | null {
-  return lanes.find((lane) => dateKeyForInstant(instant, lane.timezone) === lane.date) ?? null;
+/** Find the first lane whose date contains an instant in the shared canvas timezone. */
+export function findDateLane(
+  lanes: readonly ScheduleLane[],
+  instant: string,
+  displayTimezone: string,
+): ScheduleLane | null {
+  const date = dateKeyForInstant(instant, displayTimezone);
+  return date ? (lanes.find((lane) => lane.date === date) ?? null) : null;
 }
 
 /**
@@ -70,22 +37,21 @@ export function findDateLane(lanes: readonly ScheduleLane[], instant: string): S
 export function itemBoundsInLane(
   item: ScheduleItem,
   lane: ScheduleLane,
-  displayTimezone = lane.timezone,
+  displayTimezone: string,
 ): ScheduleItemLaneBounds | null {
   if (item.allDay) return null;
-  const start = zonedDateParts(item.startsAt, displayTimezone);
-  const end = zonedDateParts(item.endsAt, displayTimezone);
+  const start = scheduleWallPositionForInstant(item.startsAt, displayTimezone);
+  const end = scheduleWallPositionForInstant(item.endsAt, displayTimezone);
   if (!start || !end || end.date < lane.date || start.date > lane.date) return null;
 
-  const startMinutes = start.date < lane.date ? 0 : start.minutes;
-  const endMinutes = end.date > lane.date ? 24 * 60 : end.minutes;
+  const startMinutes = start.date < lane.date ? 0 : start.wallMinutes;
+  const endMinutes = end.date > lane.date ? 24 * 60 : end.wallMinutes;
   if (endMinutes <= startMinutes) {
-    const elapsedMinutes =
-      (new Date(item.endsAt).getTime() - new Date(item.startsAt).getTime()) / 60_000;
+    const elapsedMinutes = scheduleElapsedMinutes(item.startsAt, item.endsAt);
     if (
       start.date !== lane.date ||
       end.date !== lane.date ||
-      !Number.isFinite(elapsedMinutes) ||
+      elapsedMinutes === null ||
       elapsedMinutes <= 0
     ) {
       return null;

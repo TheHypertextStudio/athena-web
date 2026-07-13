@@ -49,7 +49,7 @@ export interface ScheduleLane {
   readonly items: readonly ScheduleItem[];
   /** Optional resource represented by the lane, such as a person, room, or calendar. */
   readonly resourceId?: string;
-  /** IANA timezone used to interpret item instants inside this lane. */
+  /** Optional resource timezone shown as metadata; it never controls shared canvas geometry. */
   readonly timezone?: string;
   /** Whether items in the lane may be moved or resized. Defaults to `true`. */
   readonly editable?: boolean;

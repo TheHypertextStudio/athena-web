@@ -85,33 +85,38 @@ describe('fluid scheduling geometry', () => {
 });
 
 describe('schedule date lanes', () => {
-  it('maps instants to date lanes using each lane timezone', () => {
-    const lanes = [lane('utc-july-1', '2026-07-01'), lane('utc-july-2', '2026-07-02')];
+  it('maps every lane with the one explicit canvas timezone instead of resource metadata', () => {
+    const lanes = [
+      lane('utc-july-1', '2026-07-01', 'Asia/Tokyo'),
+      lane('utc-july-2', '2026-07-02', 'America/Los_Angeles'),
+    ];
     expect(dateKeyForInstant(ITEM.startsAt, 'UTC')).toBe('2026-07-01');
-    expect(findDateLane(lanes, ITEM.startsAt)?.id).toBe('utc-july-1');
+    expect(findDateLane(lanes, ITEM.startsAt, 'UTC')?.id).toBe('utc-july-1');
 
-    const losAngeles = lane('la-july-1', '2026-07-01', 'America/Los_Angeles');
-    expect(findDateLane([losAngeles], ITEM.endsAt)?.id).toBe('la-july-1');
+    const losAngeles = lane('la-july-1', '2026-07-01', 'Asia/Tokyo');
+    expect(findDateLane([losAngeles], ITEM.endsAt, 'America/Los_Angeles')?.id).toBe('la-july-1');
   });
 
   it('clips multi-day items to a lane and ignores all-day or out-of-date items', () => {
-    expect(itemBoundsInLane(ITEM, lane('july-1', '2026-07-01'))).toEqual({
+    expect(itemBoundsInLane(ITEM, lane('july-1', '2026-07-01'), 'UTC')).toEqual({
       startMinutes: 23 * 60 + 30,
       endMinutes: 24 * 60,
     });
-    expect(itemBoundsInLane(ITEM, lane('july-2', '2026-07-02'))).toEqual({
+    expect(itemBoundsInLane(ITEM, lane('july-2', '2026-07-02'), 'UTC')).toEqual({
       startMinutes: 0,
       endMinutes: 30,
     });
-    expect(itemBoundsInLane({ ...ITEM, allDay: true }, lane('july-1', '2026-07-01'))).toBeNull();
-    expect(itemBoundsInLane(ITEM, lane('july-3', '2026-07-03'))).toBeNull();
+    expect(
+      itemBoundsInLane({ ...ITEM, allDay: true }, lane('july-1', '2026-07-01'), 'UTC'),
+    ).toBeNull();
+    expect(itemBoundsInLane(ITEM, lane('july-3', '2026-07-03'), 'UTC')).toBeNull();
   });
 
   it('treats invalid instants and timezones as non-placeable input', () => {
     expect(dateKeyForInstant('not-a-date', 'UTC')).toBeNull();
     expect(dateKeyForInstant(ITEM.startsAt, 'Not/A_Timezone')).toBeNull();
     expect(
-      itemBoundsInLane({ ...ITEM, startsAt: 'invalid' }, lane('july-1', '2026-07-01')),
+      itemBoundsInLane({ ...ITEM, startsAt: 'invalid' }, lane('july-1', '2026-07-01'), 'UTC'),
     ).toBeNull();
   });
 

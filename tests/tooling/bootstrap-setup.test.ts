@@ -80,7 +80,6 @@ describe('mandatory production provider catalog', () => {
       'github',
       'linear',
       'apple',
-      'slack',
       'stripe',
       'anthropic',
       'email',

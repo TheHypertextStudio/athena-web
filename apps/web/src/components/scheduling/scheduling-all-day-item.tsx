@@ -1,12 +1,13 @@
 'use client';
 
-import { type DragEvent as ReactDragEvent, type JSX, useState } from 'react';
+import { type DragEvent as ReactDragEvent, type JSX, useId, useState } from 'react';
 
 import {
   readScheduleDragObject,
   SCHEDULE_DRAG_MIME,
   writeScheduleDragObject,
 } from './scheduling-drag-object';
+import { isScheduleItemEditable } from './scheduling-date-lanes';
 import type { ScheduleItem, ScheduleLane, SchedulingCanvasProps } from './scheduling-types';
 
 /** Props for one openable and relationship-capable all-day pill. */
@@ -27,7 +28,9 @@ export function SchedulingAllDayItem({
   onDropObjectOnItem,
 }: SchedulingAllDayItemProps): JSX.Element {
   const [dropActive, setDropActive] = useState(false);
+  const readOnlyDescriptionId = useId();
   const dragObject = item.dragObject;
+  const editable = isScheduleItemEditable(item, lane);
   const acceptsDrop = (event: ReactDragEvent<HTMLElement>): boolean =>
     item.dropTarget === true && event.dataTransfer.types.includes(SCHEDULE_DRAG_MIME);
 
@@ -59,7 +62,9 @@ export function SchedulingAllDayItem({
     >
       <button
         type="button"
-        className="text-on-secondary-container min-w-0 flex-1 truncate px-1.5 py-0.5 text-left text-[10px]"
+        aria-describedby={!editable && item.readOnlyLabel ? readOnlyDescriptionId : undefined}
+        className="text-on-secondary-container focus-visible:ring-ring hover:bg-surface-container-high min-w-0 flex-1 truncate rounded px-1.5 py-0.5 text-left text-[10px] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-inset motion-reduce:transition-none"
+        data-schedule-item-body={item.id}
         style={item.color ? { borderLeft: `3px solid ${item.color}` } : undefined}
         onClick={() => {
           onOpenItem?.({ item, lane });
@@ -67,12 +72,20 @@ export function SchedulingAllDayItem({
       >
         {renderItem?.({ item, lane, allDay: true }) ?? item.title}
       </button>
+      {!editable && item.readOnlyLabel ? (
+        <span
+          id={readOnlyDescriptionId}
+          className="text-on-secondary-container pointer-events-none shrink-0 px-1 text-[9px] leading-none font-semibold"
+        >
+          {item.readOnlyLabel}
+        </span>
+      ) : null}
       {dragObject ? (
         <button
           type="button"
           draggable
           aria-label={`Drag ${item.title} to create a relationship`}
-          className="focus-visible:ring-ring mx-0.5 size-4 shrink-0 cursor-grab rounded outline-none focus-visible:ring-2 focus-visible:ring-inset"
+          className="text-on-secondary-container focus-visible:ring-ring hover:bg-surface-container-high mx-0.5 size-4 shrink-0 cursor-grab rounded transition-colors outline-none focus-visible:ring-2 focus-visible:ring-inset motion-reduce:transition-none"
           onClick={(event) => {
             event.preventDefault();
             event.stopPropagation();

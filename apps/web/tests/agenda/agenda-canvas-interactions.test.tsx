@@ -292,6 +292,23 @@ describe('Agenda scheduling interactions', () => {
         ['Availability', false],
       ]),
     );
+    const readOnlyLabels = new Map(
+      canvasProps().lanes[0]!.items.map((item) => [
+        item.title,
+        (item as typeof item & { readonly readOnlyLabel?: string }).readOnlyLabel,
+      ]),
+    );
+    expect(readOnlyLabels).toEqual(
+      new Map([
+        ['Native event', undefined],
+        ['Provider event', undefined],
+        ['Timebox', undefined],
+        ['Provider read only', 'Read-only'],
+        ['Conflict', 'Read-only'],
+        ['Derived task timebox', undefined],
+        ['Availability', undefined],
+      ]),
+    );
   });
 
   it.each([
@@ -315,7 +332,11 @@ describe('Agenda scheduling interactions', () => {
     renderTimeline([calendarEntry(item)]);
     const scheduleItem = canvasProps().lanes[0]!.items[0]!;
 
-    expect(scheduleItem).toMatchObject({ editable: false, dropTarget: true });
+    expect(scheduleItem).toMatchObject({
+      editable: false,
+      dropTarget: true,
+      readOnlyLabel: undefined,
+    });
     expect(screen.queryByRole('button', { name: `Move ${item.title}` })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: `Resize ${item.title}` })).not.toBeInTheDocument();
 

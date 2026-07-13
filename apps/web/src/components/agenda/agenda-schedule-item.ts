@@ -32,6 +32,15 @@ function canPersistAgendaEntryBounds(entry: AgendaEntry): boolean {
   );
 }
 
+/** Return application-owned copy only for explicit calendar-domain read-only states. */
+function agendaReadOnlyLabel(entry: AgendaEntry): string | undefined {
+  const item = entry.calendarItem;
+  if (!item || DERIVED_READ_ONLY_KINDS.has(item.kind)) return undefined;
+  return !item.permissions.canEditCore || item.hasConflict || item.status === 'conflicted'
+    ? 'Read-only'
+    : undefined;
+}
+
 /** Return whether one Agenda entry can safely round-trip through inline wall-clock controls. */
 export function isAgendaEntryInlineEditable(entry: AgendaEntry, displayTimezone: string): boolean {
   const item = entry.calendarItem;
@@ -70,6 +79,7 @@ export function toAgendaScheduleItem(
     allDay,
     color: entry.layerColor ?? entry.calendar?.color ?? undefined,
     editable: isAgendaEntryInlineEditable(entry, displayTimezone),
+    readOnlyLabel: agendaReadOnlyLabel(entry),
     dragObject:
       calendarItem && !derivedCalendarItem
         ? { kind: 'calendar_item', itemId: calendarItem.id, title: entry.title }

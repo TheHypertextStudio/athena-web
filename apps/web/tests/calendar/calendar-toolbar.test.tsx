@@ -99,4 +99,23 @@ describe('CalendarToolbar', () => {
     );
     expect(screen.getByRole('button', { name: 'Detail' })).toHaveAttribute('aria-pressed', 'false');
   });
+
+  it('gives plain axis and zoom controls visible hover, keyboard focus, and reduced-motion states', () => {
+    renderToolbar();
+
+    for (const control of [
+      screen.getByRole('button', { name: 'dates' }),
+      screen.getByRole('button', { name: 'people' }),
+      screen.getByRole('button', { name: 'Overview' }),
+      screen.getByRole('button', { name: 'Standard' }),
+      screen.getByRole('button', { name: 'Detail' }),
+    ]) {
+      expect(control).toHaveClass(
+        'hover:bg-surface-container-highest',
+        'focus-visible:ring-2',
+        'transition-colors',
+        'motion-reduce:transition-none',
+      );
+    }
+  });
 });

@@ -121,7 +121,7 @@ describe('calendar schedule timezone model', () => {
       editable: true,
     });
     expect(toScheduleItem(calendarItem(), '2026-07-01', null, 'America/Los_Angeles')).toMatchObject(
-      { editable: false },
+      { editable: false, readOnlyLabel: undefined },
     );
 
     const allDay = toScheduleItem(
@@ -163,6 +163,7 @@ describe('calendar schedule timezone model', () => {
   it.each([
     {
       label: 'provider permission denial',
+      readOnlyLabel: 'Read-only',
       overrides: {
         kind: 'provider_event' as const,
         permissions: {
@@ -174,25 +175,40 @@ describe('calendar schedule timezone model', () => {
     },
     {
       label: 'provider conflict',
+      readOnlyLabel: 'Read-only',
       overrides: { kind: 'provider_event' as const, hasConflict: true },
     },
-    { label: 'derived task timebox', overrides: { kind: 'task_timebox' as const } },
-    { label: 'derived availability', overrides: { kind: 'availability_block' as const } },
-  ])('keeps $label read-only without removing relationship behavior', ({ overrides }) => {
-    const item = toScheduleItem(
-      calendarItem({
-        startsAt: '2026-07-13T16:00:00Z',
-        endsAt: '2026-07-13T17:00:00Z',
-        ...overrides,
-      }),
-      '2026-07-13',
-      null,
-      'America/Los_Angeles',
-    );
+    {
+      label: 'derived task timebox',
+      readOnlyLabel: undefined,
+      overrides: { kind: 'task_timebox' as const },
+    },
+    {
+      label: 'derived availability',
+      readOnlyLabel: undefined,
+      overrides: { kind: 'availability_block' as const },
+    },
+  ])(
+    'keeps $label non-writable without mislabeling its domain state',
+    ({ overrides, readOnlyLabel }) => {
+      const item = toScheduleItem(
+        calendarItem({
+          startsAt: '2026-07-13T16:00:00Z',
+          endsAt: '2026-07-13T17:00:00Z',
+          ...overrides,
+        }),
+        '2026-07-13',
+        null,
+        'America/Los_Angeles',
+      );
 
-    expect(item.editable).toBe(false);
-    if (item.dropTarget) expect(item.dropTarget).toBe(true);
-  });
+      expect(item.editable).toBe(false);
+      expect((item as typeof item & { readonly readOnlyLabel?: string }).readOnlyLabel).toBe(
+        readOnlyLabel,
+      );
+      if (item.dropTarget) expect(item.dropTarget).toBe(true);
+    },
+  );
 
   it('builds date and resource lanes with viewer-zone membership and metadata-only resource zones', () => {
     const timed = calendarItem({
@@ -227,6 +243,7 @@ describe('calendar schedule timezone model', () => {
       startsAt: '2026-07-01T15:00:00Z',
       endsAt: '2026-07-02T15:00:00Z',
     });
+    expect(resourceLane.items[0]).not.toHaveProperty('readOnlyLabel');
   });
 });
 

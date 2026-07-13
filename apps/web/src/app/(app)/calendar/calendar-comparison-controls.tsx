@@ -34,11 +34,12 @@ export function CalendarComparisonControls({
       <label className="flex min-w-48 flex-col gap-1 text-xs font-medium">
         <span className="text-on-surface-variant">Workspace</span>
         <select
+          name="comparison-workspace"
           value={workspaceId}
           onChange={(event) => {
             onWorkspaceChange(event.target.value);
           }}
-          className="border-input bg-background h-9 rounded-md border px-2 text-sm"
+          className="border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
         >
           {workspaces.length === 0 ? <option value="">No shared workspaces</option> : null}
           {workspaces.map((workspace) => (
@@ -54,10 +55,12 @@ export function CalendarComparisonControls({
           {members.map((member) => (
             <label
               key={member.actorId}
-              className="border-outline-variant flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs"
+              className="border-outline-variant hover:bg-surface-container-high focus-within:ring-ring flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors focus-within:ring-2 focus-within:ring-offset-1 motion-reduce:transition-none"
             >
               <input
+                name="comparison-actors"
                 type="checkbox"
+                value={member.actorId}
                 checked={selectedActorIds.includes(member.actorId)}
                 onChange={(event) => {
                   onActorChange(member.actorId, event.target.checked);
@@ -68,6 +71,10 @@ export function CalendarComparisonControls({
           ))}
           {membersPending ? (
             <span className="text-on-surface-variant text-xs">Loading people…</span>
+          ) : members.length === 0 ? (
+            <span role="status" className="text-on-surface-variant text-xs">
+              No people available.
+            </span>
           ) : null}
         </div>
       </fieldset>

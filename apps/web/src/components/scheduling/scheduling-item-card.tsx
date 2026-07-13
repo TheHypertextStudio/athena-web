@@ -1,6 +1,6 @@
 'use client';
 
-import { type DragEvent as ReactDragEvent, type JSX, type RefObject, useState } from 'react';
+import { type DragEvent as ReactDragEvent, type JSX, type RefObject, useId, useState } from 'react';
 
 import { isScheduleItemEditable, type ScheduleItemLaneBounds } from './scheduling-date-lanes';
 import {
@@ -74,6 +74,7 @@ export function SchedulingItemCard({
   onGestureAnnouncementChange,
 }: SchedulingItemCardProps): JSX.Element {
   const [dropActive, setDropActive] = useState(false);
+  const readOnlyDescriptionId = useId();
   const editable = isScheduleItemEditable(item, lane);
   const gesture = useSchedulingGesture({
     item,
@@ -109,7 +110,7 @@ export function SchedulingItemCard({
   const resizeTargetClassName =
     'focus-visible:ring-ring absolute z-20 size-6 max-w-full cursor-ns-resize touch-none bg-transparent pointer-events-none outline-none group-focus-within:pointer-events-auto group-hover:pointer-events-auto focus-visible:ring-2 focus-visible:ring-inset [@media(pointer:coarse)]:size-11 [@media(pointer:coarse)]:pointer-events-auto';
   const resizeIndicatorClassName =
-    'bg-primary/70 pointer-events-none absolute h-0.5 w-3 max-w-full rounded-full opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100';
+    'bg-primary/70 pointer-events-none absolute h-0.5 w-3 max-w-full rounded-full opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 motion-reduce:transition-none [@media(pointer:coarse)]:opacity-100';
   const bodyClassName =
     density === 'marker'
       ? 'focus-visible:ring-ring relative z-10 size-full overflow-hidden rounded-sm p-1 outline-none focus-visible:ring-2 focus-visible:ring-inset'
@@ -126,7 +127,7 @@ export function SchedulingItemCard({
       className={
         dropActive
           ? 'border-primary bg-primary-container ring-primary/30 group absolute z-30 overflow-visible rounded-md border shadow-md ring-2'
-          : 'border-outline-variant bg-surface-container-low group absolute z-10 overflow-visible rounded-md border shadow-sm transition-shadow focus-within:z-20 focus-within:shadow-md hover:z-20 hover:shadow-md'
+          : 'border-outline-variant bg-surface-container-low group absolute z-10 overflow-visible rounded-md border shadow-sm transition-shadow focus-within:z-20 focus-within:shadow-md hover:z-20 hover:shadow-md motion-reduce:transition-none'
       }
       data-item-density={density}
       data-layout-column={placement.columnIndex}
@@ -184,7 +185,9 @@ export function SchedulingItemCard({
       <button
         type="button"
         aria-label={density === 'marker' ? `${item.title}, ${timeRange}` : undefined}
+        aria-describedby={!editable && item.readOnlyLabel ? readOnlyDescriptionId : undefined}
         className={`${bodyClassName} ${editable && onMoveItem ? 'cursor-grab' : ''}`}
+        data-schedule-item-body={item.id}
         title={density === 'full' ? undefined : `${item.title} · ${timeRange}`}
         onPointerDown={gesture.onBodyPointerDown}
         onClick={gesture.onBodyClick}
@@ -208,11 +211,19 @@ export function SchedulingItemCard({
           </>
         )}
       </button>
+      {!editable && item.readOnlyLabel ? (
+        <span
+          id={readOnlyDescriptionId}
+          className="bg-surface/90 text-on-surface-variant pointer-events-none absolute right-0.5 bottom-0.5 z-30 max-w-[calc(100%-0.25rem)] truncate rounded px-1 py-0.5 text-[9px] leading-none font-semibold"
+        >
+          {item.readOnlyLabel}
+        </span>
+      ) : null}
       {editable && onMoveItem ? (
         <button
           type="button"
           aria-label={`Move ${item.title}`}
-          className="focus-visible:ring-ring absolute top-1 right-1 z-30 size-4 cursor-move rounded outline-none focus-visible:ring-2 focus-visible:ring-inset"
+          className="text-on-surface-variant hover:bg-surface-container-high active:bg-surface-container-highest focus-visible:ring-ring absolute top-1 right-1 z-30 size-4 cursor-move rounded transition-colors outline-none focus-visible:ring-2 focus-visible:ring-inset motion-reduce:transition-none"
           onPointerDown={gesture.onMovePointerDown}
           onKeyDown={gesture.onMoveKeyDown}
         >
@@ -224,7 +235,7 @@ export function SchedulingItemCard({
           type="button"
           draggable
           aria-label={`Drag ${item.title} to create a relationship`}
-          className="focus-visible:ring-ring absolute bottom-1 left-1 z-30 size-4 cursor-grab rounded outline-none focus-visible:ring-2 focus-visible:ring-inset"
+          className="text-on-surface-variant hover:bg-surface-container-high active:bg-surface-container-highest focus-visible:ring-ring absolute bottom-1 left-1 z-30 size-4 cursor-grab rounded transition-colors outline-none focus-visible:ring-2 focus-visible:ring-inset motion-reduce:transition-none"
           onPointerDown={(event) => {
             event.stopPropagation();
           }}

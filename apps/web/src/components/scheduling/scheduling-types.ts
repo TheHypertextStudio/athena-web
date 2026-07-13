@@ -16,6 +16,8 @@ export interface ScheduleItem {
   readonly color?: string;
   /** Whether move and resize affordances are available. Defaults to the lane's policy. */
   readonly editable?: boolean;
+  /** Optional application-owned label for a domain-level read-only state. */
+  readonly readOnlyLabel?: string;
   /** Optional app object exposed when this item is dragged onto another scheduling item. */
   readonly dragObject?: ScheduleDragObject;
   /** Whether tasks/events may be dropped onto this item as a relationship target. */

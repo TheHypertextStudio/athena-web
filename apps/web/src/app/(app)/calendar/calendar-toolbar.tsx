@@ -13,6 +13,8 @@ const ZOOM_SHORTCUTS = [
   { label: 'Standard', value: 72 },
   { label: 'Detail', value: 144 },
 ] as const;
+const PLAIN_CONTROL_CLASS =
+  'hover:bg-surface-container-highest focus-visible:ring-ring rounded outline-none transition-colors focus-visible:ring-2 focus-visible:ring-offset-1 motion-reduce:transition-none';
 
 /** Props for the fluid calendar's navigation, axis, zoom, and create controls. */
 export interface CalendarToolbarProps {
@@ -72,8 +74,8 @@ export function CalendarToolbar({
               }}
               className={
                 axis === value
-                  ? 'bg-surface-container-high text-on-surface rounded px-2.5 py-1 text-xs font-medium capitalize'
-                  : 'text-on-surface-variant rounded px-2.5 py-1 text-xs font-medium capitalize'
+                  ? `bg-surface-container-high text-on-surface px-2.5 py-1 text-xs font-medium capitalize ${PLAIN_CONTROL_CLASS}`
+                  : `text-on-surface-variant px-2.5 py-1 text-xs font-medium capitalize ${PLAIN_CONTROL_CLASS}`
               }
             >
               {value}
@@ -92,8 +94,8 @@ export function CalendarToolbar({
               aria-pressed={pixelsPerHour === value}
               className={
                 pixelsPerHour === value
-                  ? 'bg-surface-container-high text-on-surface rounded px-2 py-1 text-[11px] font-medium'
-                  : 'text-on-surface-variant rounded px-2 py-1 text-[11px] font-medium'
+                  ? `bg-surface-container-high text-on-surface px-2 py-1 text-[11px] font-medium ${PLAIN_CONTROL_CLASS}`
+                  : `text-on-surface-variant px-2 py-1 text-[11px] font-medium ${PLAIN_CONTROL_CLASS}`
               }
               onClick={() => {
                 onZoomChange(value);

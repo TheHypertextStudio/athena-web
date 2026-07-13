@@ -27,12 +27,7 @@ const DEFAULT_VIEWPORT_WIDTH = 960;
 const HOUR_GUTTER_WIDTH = 64;
 const MINIMUM_LANE_WIDTH = 220;
 const MINIMUM_INTERACTIVE_PIXELS = 18;
-/**
- * Render a 24-hour fluid scheduling grid for arbitrary date/resource lanes.
- *
- * The canvas owns only geometry and pointer interpretation. All data loading, item persistence,
- * opening behavior, permission policy, and display-state copy remain consumer-owned callbacks.
- */
+/** Render a 24-hour fluid grid while consumers own data, persistence, and policy. */
 export default function SchedulingCanvas({
   displayTimezone,
   lanes,
@@ -57,6 +52,8 @@ export default function SchedulingCanvas({
   const initializedWindowRef = useRef<string | undefined>(undefined);
   const initializedVerticalScrollRef = useRef(false);
   const previousPixelsPerHourRef = useRef(pixelsPerHour);
+  const viewportCenterMinutesRef = useRef<number | undefined>(undefined);
+  const timedGridRef = useRef<HTMLDivElement>(null);
   const [observedWidth, setObservedWidth] = useState(DEFAULT_VIEWPORT_WIDTH);
   const [gestureAnnouncement, setGestureAnnouncement] = useState('');
   const boundaryLockRef = useRef<'previous' | 'next' | null>(null);
@@ -71,9 +68,7 @@ export default function SchedulingCanvas({
     if (typeof ResizeObserver === 'undefined') return;
     const observer = new ResizeObserver(update);
     observer.observe(element);
-    return () => {
-      observer.disconnect();
-    };
+    return observer.disconnect.bind(observer);
   }, [viewportWidth]);
   const effectivePixelsPerHour = Math.max(1, pixelsPerHour);
   const geometry = useMemo(
@@ -110,6 +105,7 @@ export default function SchedulingCanvas({
   useLayoutEffect(() => {
     const viewport = viewportRef.current;
     if (!viewport) return;
+    const timedGridOffset = timedGridRef.current?.offsetTop ?? 0;
     const windowKey = lanes[0]?.id;
     if (initializedWindowRef.current !== windowKey) {
       viewport.scrollLeft =
@@ -119,17 +115,25 @@ export default function SchedulingCanvas({
     if (!initializedVerticalScrollRef.current) {
       viewport.scrollTop = Math.max(
         0,
-        minutesToPixels(initialScrollMinutes, effectivePixelsPerHour) - 48,
+        timedGridOffset + minutesToPixels(initialScrollMinutes, effectivePixelsPerHour) - 48,
       );
       initializedVerticalScrollRef.current = true;
     } else if (previousPixelsPerHourRef.current !== effectivePixelsPerHour) {
       const previous = Math.max(1, previousPixelsPerHourRef.current);
-      const centerMinutes = ((viewport.scrollTop + viewport.clientHeight / 2) / previous) * 60;
+      const centerMinutes =
+        viewportCenterMinutesRef.current ??
+        ((viewport.scrollTop + viewport.clientHeight / 2 - timedGridOffset) / previous) * 60;
       viewport.scrollTop = Math.max(
         0,
-        minutesToPixels(centerMinutes, effectivePixelsPerHour) - viewport.clientHeight / 2,
+        timedGridOffset +
+          minutesToPixels(centerMinutes, effectivePixelsPerHour) -
+          viewport.clientHeight / 2,
       );
     }
+    viewportCenterMinutesRef.current =
+      ((viewport.scrollTop + viewport.clientHeight / 2 - timedGridOffset) /
+        effectivePixelsPerHour) *
+      60;
     previousPixelsPerHourRef.current = effectivePixelsPerHour;
   }, [
     effectivePixelsPerHour,
@@ -165,13 +169,17 @@ export default function SchedulingCanvas({
     <section
       ref={viewportRef}
       aria-label="Schedule"
-      className="border-outline-variant bg-surface relative overflow-auto rounded-xl border"
+      className="border-outline-variant bg-surface relative h-[clamp(20rem,68dvh,48rem)] overflow-auto overscroll-contain rounded-xl border"
       data-lane-count={lanes.length}
       data-visible-lane-count={geometry.visibleLaneCount}
       data-snap-minutes={snapMinutes}
       onScroll={(event) => {
-        if (!onReachBoundary) return;
         const viewport = event.currentTarget;
+        const timedGridOffset = timedGridRef.current?.offsetTop ?? 0;
+        viewportCenterMinutesRef.current =
+          ((viewport.scrollTop + viewport.clientHeight / 2 - timedGridOffset) * 60) /
+          effectivePixelsPerHour;
+        if (!onReachBoundary) return;
         const atPrevious = viewport.scrollLeft <= geometry.gutterWidth + 2;
         const atNext = viewport.scrollLeft + viewport.clientWidth >= viewport.scrollWidth - 2;
         const direction = atPrevious ? 'previous' : atNext ? 'next' : null;
@@ -225,8 +233,7 @@ export default function SchedulingCanvas({
             ))}
           </div>
         </header>
-
-        <div className="relative">
+        <div ref={timedGridRef} className="relative">
           <SchedulingTimeGrid
             lanes={lanes}
             displayTimezone={displayTimezone}
@@ -244,9 +251,7 @@ export default function SchedulingCanvas({
                   className="border-outline-variant relative shrink-0 touch-none border-r"
                   data-schedule-lane={lane.id}
                   style={{ width: geometry.laneWidth, height: 24 * effectivePixelsPerHour }}
-                  onPointerDown={(event) => {
-                    beginSelection(lane, event);
-                  }}
+                  onPointerDown={beginSelection.bind(null, lane)}
                 >
                   {positionedLaneItems[laneIndex]?.map(
                     ({ item, bounds, top, height, placement }) => (
@@ -278,7 +283,6 @@ export default function SchedulingCanvas({
               ))}
             </div>
           </SchedulingTimeGrid>
-
           {error || isEmpty ? (
             <div
               role={error ? 'alert' : 'status'}

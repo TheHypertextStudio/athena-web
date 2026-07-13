@@ -123,6 +123,124 @@ describe('SchedulingCanvas', () => {
     expect(screen.getByText('Focus block')).toBeInTheDocument();
   });
 
+  it('owns a fluid bounded viewport and preserves its visual center across continuous zoom', () => {
+    const { rerender } = render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[lane('ada', 'Ada')]}
+        pixelsPerHour={60}
+        viewportWidth={500}
+      />,
+    );
+    const canvas = screen.getByRole('region', { name: 'Schedule' });
+    expect(canvas).toHaveClass('h-[clamp(20rem,68dvh,48rem)]', 'overscroll-contain');
+
+    Object.defineProperties(canvas, {
+      clientHeight: { configurable: true, value: 400 },
+      scrollTop: { configurable: true, writable: true, value: 400 },
+    });
+    fireEvent.scroll(canvas);
+    rerender(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[lane('ada', 'Ada')]}
+        pixelsPerHour={120}
+        viewportWidth={500}
+      />,
+    );
+
+    expect(canvas.scrollTop).toBe(1_000);
+  });
+
+  it('preserves the last observed center when zoom-out clamps the old DOM scroll offset', () => {
+    const { rerender } = render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[lane('ada', 'Ada')]}
+        pixelsPerHour={120}
+        viewportWidth={500}
+      />,
+    );
+    const canvas = screen.getByRole('region', { name: 'Schedule' });
+    let scrollTop = 1_000;
+    Object.defineProperties(canvas, {
+      clientHeight: { configurable: true, value: 400 },
+      scrollTop: {
+        configurable: true,
+        get: () => scrollTop,
+        set: (value: number) => {
+          scrollTop = value;
+        },
+      },
+    });
+    fireEvent.scroll(canvas);
+    scrollTop = 200;
+
+    rerender(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[lane('ada', 'Ada')]}
+        pixelsPerHour={60}
+        viewportWidth={500}
+      />,
+    );
+
+    expect(canvas.scrollTop).toBe(400);
+  });
+
+  it('preserves wall-clock center relative to a variable-height all-day header', () => {
+    const { rerender } = render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[lane('ada', 'Ada', [ALL_DAY_ITEM])]}
+        pixelsPerHour={60}
+        viewportWidth={500}
+      />,
+    );
+    const canvas = screen.getByRole('region', { name: 'Schedule' });
+    const timedGrid = document.querySelector('[data-schedule-lane-region]')?.parentElement
+      ?.parentElement;
+    expect(timedGrid).not.toBeNull();
+    if (!timedGrid) return;
+    Object.defineProperties(canvas, {
+      clientHeight: { configurable: true, value: 400 },
+      scrollTop: { configurable: true, writable: true, value: 650 },
+    });
+    Object.defineProperty(timedGrid, 'offsetTop', { configurable: true, value: 100 });
+    fireEvent.scroll(canvas);
+
+    rerender(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[lane('ada', 'Ada', [ALL_DAY_ITEM])]}
+        pixelsPerHour={120}
+        viewportWidth={500}
+      />,
+    );
+
+    expect(canvas.scrollTop).toBe(1_400);
+  });
+
+  it('exposes stable body hooks for timed and all-day items', () => {
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[lane('ada', 'Ada', [TIMED_ITEM, ALL_DAY_ITEM])]}
+        pixelsPerHour={60}
+        viewportWidth={500}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: /^Focus block/ })).toHaveAttribute(
+      'data-schedule-item-body',
+      TIMED_ITEM.id,
+    );
+    expect(screen.getByRole('button', { name: ALL_DAY_ITEM.title })).toHaveAttribute(
+      'data-schedule-item-body',
+      ALL_DAY_ITEM.id,
+    );
+  });
+
   it('keeps the lane and hour grid mounted under empty and error states', () => {
     const { rerender } = render(
       <SchedulingCanvas
@@ -364,6 +482,7 @@ describe('SchedulingCanvas', () => {
       'bottom-2.5',
       'h-0.5',
       'opacity-0',
+      'motion-reduce:transition-none',
       '[@media(pointer:coarse)]:opacity-100',
     );
     fireEvent.pointerDown(startGrip, { button: 0, pointerId: 11, clientY: 100 });
@@ -580,8 +699,38 @@ describe('SchedulingCanvas', () => {
     expect(
       screen.queryByRole('button', { name: 'Resize Focus block from end' }),
     ).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Focus block is read-only')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /^Focus block/ }));
     expect(onOpenItem).toHaveBeenCalledOnce();
+  });
+
+  it('shows an application-owned read-only label without adding move or resize controls', () => {
+    const item = {
+      ...TIMED_ITEM,
+      editable: false,
+      readOnlyLabel: 'Read-only',
+    } as ScheduleItem & { readonly readOnlyLabel: string };
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[lane('ada', 'Ada', [item])]}
+        pixelsPerHour={60}
+        viewportWidth={500}
+        onOpenItem={vi.fn()}
+        onMoveItem={vi.fn()}
+        onResizeItem={vi.fn()}
+      />,
+    );
+
+    const body = screen.getByRole('button', { name: /^Focus block/ });
+    const description = screen.getByText('Read-only');
+    expect(description).toHaveAttribute('id');
+    expect(body).toHaveAttribute('aria-describedby', description.id);
+    expect(body).toHaveAccessibleDescription('Read-only');
+    expect(screen.queryByRole('button', { name: 'Move Focus block' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Resize Focus block from end' }),
+    ).not.toBeInTheDocument();
   });
 
   it('clears a live preview and emits no commit on Escape', () => {
@@ -1100,6 +1249,12 @@ describe('SchedulingCanvas', () => {
     );
 
     const pill = screen.getByRole('button', { name: ALL_DAY_ITEM.title });
+    expect(pill).toHaveClass(
+      'hover:bg-surface-container-high',
+      'focus-visible:ring-2',
+      'transition-colors',
+      'motion-reduce:transition-none',
+    );
     fireEvent.click(pill);
     expect(onOpenItem).toHaveBeenCalledWith({ item: target, lane: sourceLane });
 
@@ -1141,6 +1296,42 @@ describe('SchedulingCanvas', () => {
     };
     fireEvent.drop(pill, { dataTransfer: selfTransfer });
     expect(onDropObjectOnItem).toHaveBeenCalledOnce();
+  });
+
+  it('describes an explicit all-day domain read-only label from its open control', () => {
+    const item = { ...ALL_DAY_ITEM, editable: false, readOnlyLabel: 'Read-only' };
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[lane('ada', 'Ada', [item])]}
+        pixelsPerHour={60}
+        viewportWidth={500}
+        onOpenItem={vi.fn()}
+      />,
+    );
+
+    const body = screen.getByRole('button', { name: ALL_DAY_ITEM.title });
+    const description = screen.getByText('Read-only');
+    expect(description).toHaveAttribute('id');
+    expect(body).toHaveAttribute('aria-describedby', description.id);
+    expect(body).toHaveAccessibleDescription('Read-only');
+  });
+
+  it('keeps read-only description ids unique when an item appears in multiple lanes', () => {
+    const timed = { ...TIMED_ITEM, editable: false, readOnlyLabel: 'Read-only' };
+    const allDay = { ...ALL_DAY_ITEM, editable: false, readOnlyLabel: 'Read-only' };
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[lane('ada', 'Ada', [timed, allDay]), lane('grace', 'Grace', [timed, allDay])]}
+        pixelsPerHour={60}
+        viewportWidth={800}
+      />,
+    );
+
+    const descriptionIds = screen.getAllByText('Read-only').map((description) => description.id);
+    expect(descriptionIds).toHaveLength(4);
+    expect(new Set(descriptionIds).size).toBe(4);
   });
 
   it('separates relationship drag onto a dedicated affordance with the exact typed payload', () => {
@@ -1646,6 +1837,37 @@ describe('SchedulingCanvas', () => {
     }
   });
 
+  it('gives timed move and relationship controls visible interaction states', () => {
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[
+          lane('edit', 'Edit', [
+            {
+              ...TIMED_ITEM,
+              dragObject: { kind: 'calendar_item', itemId: TIMED_ITEM.id, title: TIMED_ITEM.title },
+            },
+          ]),
+        ]}
+        pixelsPerHour={60}
+        viewportWidth={500}
+        onMoveItem={vi.fn()}
+      />,
+    );
+
+    for (const control of [
+      screen.getByRole('button', { name: 'Move Focus block' }),
+      screen.getByRole('button', { name: 'Drag Focus block to create a relationship' }),
+    ]) {
+      expect(control).toHaveClass(
+        'hover:bg-surface-container-high',
+        'active:bg-surface-container-highest',
+        'transition-colors',
+        'motion-reduce:transition-none',
+      );
+    }
+  });
+
   it('uses marker, compact, and full treatments while showing locale time at full height', () => {
     const renderItem = vi.fn(({ item }: { readonly item: ScheduleItem }) => `Custom ${item.title}`);
     render(
@@ -1708,7 +1930,11 @@ describe('SchedulingCanvas', () => {
       />,
     );
 
-    expect(renderedItem('focus')).toHaveClass('hover:z-20', 'hover:shadow-md');
+    expect(renderedItem('focus')).toHaveClass(
+      'hover:z-20',
+      'hover:shadow-md',
+      'motion-reduce:transition-none',
+    );
     expect(renderedItem('focus')).not.toHaveClass('motion-safe:hover:-translate-y-px');
   });
 

@@ -96,6 +96,14 @@ export function canPersistCalendarItemBounds(item: CalendarItemOut): boolean {
   );
 }
 
+/** Return application-owned copy only for explicit calendar-domain read-only states. */
+function calendarReadOnlyLabel(item: CalendarItemOut): string | undefined {
+  if (DERIVED_READ_ONLY_KINDS.has(item.kind)) return undefined;
+  return !item.permissions.canEditCore || item.hasConflict || item.status === 'conflicted'
+    ? 'Read-only'
+    : undefined;
+}
+
 /** Convert one calendar item into the geometry-only scheduling contract. */
 export function toScheduleItem(
   item: CalendarItemOut,
@@ -123,6 +131,7 @@ export function toScheduleItem(
       endsAt: item.endsAt,
       displayTimezone,
     }),
+    readOnlyLabel: calendarReadOnlyLabel(item),
     dragObject:
       item.kind === 'task_timebox' || item.kind === 'availability_block'
         ? undefined

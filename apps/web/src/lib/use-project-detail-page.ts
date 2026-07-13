@@ -16,23 +16,11 @@ import { useOrgCapability } from '@/lib/use-org-capability';
 import { useProjectMutations } from '@/lib/use-project-mutations';
 
 /** All data, queries, and mutations the project detail page needs. */
-export function useProjectDetailPage(orgId: string, projectId: string, teamId: string | null) {
+export function useProjectDetailPage(orgId: string, projectId: string) {
   const detailKey = queryKeys.project(orgId, projectId);
-  const commentsKey = useMemo(() => [...detailKey, 'comments'] as const, [detailKey]);
   const updatesKey = useMemo(() => [...detailKey, 'updates'] as const, [detailKey]);
 
   const detailQ = useApiQuery(projectDetailDef(orgId, projectId));
-  const commentsQ = useApiQuery(
-    apiQueryOptions(
-      commentsKey,
-      () =>
-        api.v1.orgs[':orgId'].comments.$get({
-          param: { orgId },
-          query: { subjectType: 'project', subjectId: projectId },
-        }),
-      'Could not load comments.',
-    ),
-  );
   const updatesQ = useApiQuery(
     apiQueryOptions(
       updatesKey,
@@ -45,10 +33,9 @@ export function useProjectDetailPage(orgId: string, projectId: string, teamId: s
     ),
   );
 
-  const comments = useMemo(() => commentsQ.data?.items ?? [], [commentsQ.data]);
   const updates = useMemo(() => updatesQ.data?.items ?? [], [updatesQ.data]);
 
-  const mutations = useProjectMutations(orgId, projectId, teamId);
+  const mutations = useProjectMutations(orgId, projectId);
 
   const detail = detailQ.data ?? null;
   const project = detail?.project ?? null;
@@ -76,19 +63,17 @@ export function useProjectDetailPage(orgId: string, projectId: string, teamId: s
     [initiatives],
   );
 
-  const health = project?.health ?? null;
   const progress = detail?.progress ?? null;
   const agentsHere = detail?.agentsHere ?? [];
   const agentActivity = detail?.agentActivity ?? [];
   const currentInitiativeId = detail?.currentInitiativeId ?? null;
 
   return {
+    detailKey,
     detailQ,
-    commentsQ,
     updatesQ,
     detail,
     project,
-    comments,
     updates,
     milestones,
     milestoneTasks,
@@ -97,7 +82,6 @@ export function useProjectDetailPage(orgId: string, projectId: string, teamId: s
     memberOptions,
     programOptions,
     initiativeOptions,
-    health,
     progress,
     agentsHere,
     agentActivity,

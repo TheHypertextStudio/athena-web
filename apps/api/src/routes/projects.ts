@@ -23,6 +23,7 @@ import { capabilityGuard } from '../permissions/capability-guard';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
 import { emitEvent } from './event-emit';
+import { projectDependencyRoutes } from './project-dependency-routes';
 
 type ProjectRow = typeof project.$inferSelect;
 
@@ -393,6 +394,7 @@ const projects = new Hono<AppEnv>()
 
       return ok(c, ProjectProgress, computeProgress(taskRows));
     },
-  );
+  )
+  .route('/', projectDependencyRoutes);
 
 export default projects;

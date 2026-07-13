@@ -5,13 +5,13 @@
  *
  * @remarks
  * Every create modal — task, project, program, initiative, cycle, team — is the *same* shape: a
- * small contextual breadcrumb, a large title field, an optional auto-growing description, an inline
+ * small contextual breadcrumb, a large title field, an optional freeform description, an inline
  * row of compact property pills, and a recessed action bar with a single primary action — all inside
  * a focused {@link Dialog}. This shell owns that chrome so each composer only declares its fields
  * and wires its create call.
  *
  * It is intentionally presentational and fully controlled: the host composer owns the
- * title/description text and the `open` state, and supplies the property pickers as `children`.
+ * title/description Markdown and the `open` state, and supplies the property pickers as `children`.
  * Submit is driven by Enter on the title field (a fast path) as well as the action-bar button, and
  * the whole form is disabled while a create is in flight. Dismissing a *dirty* draft (a non-empty
  * title or description) asks for confirmation first, so an accidental Esc / backdrop / close never
@@ -24,8 +24,9 @@
  */
 import { Button, Dialog, DialogContent, DialogTitle } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
-import { type JSX, type ReactNode, useId, useLayoutEffect, useRef, useState } from 'react';
+import { type JSX, type ReactNode, useId, useState } from 'react';
 
+import { FreeformTextEditor } from '@/components/editor/freeform-text';
 /** Props for {@link ComposerShell}. */
 export interface ComposerShellProps {
   /** Whether the dialog is open (the host page owns this state). */
@@ -93,18 +94,8 @@ export function ComposerShell({
   submitLabel,
 }: ComposerShellProps): JSX.Element {
   const formId = useId();
-  const bodyRef = useRef<HTMLTextAreaElement>(null);
   // Whether the user is being asked to confirm discarding a non-empty draft.
   const [confirmingDiscard, setConfirmingDiscard] = useState(false);
-
-  // Auto-grow the description to fit its content so it reads as part of the surface rather than a
-  // fixed box with a resize grip. Reset to `auto` first so it can shrink as well as grow.
-  useLayoutEffect(() => {
-    const el = bodyRef.current;
-    if (!el) return;
-    el.style.height = 'auto';
-    el.style.height = `${el.scrollHeight}px`;
-  }, [body]);
 
   // A draft worth protecting is one with typed text; bare default property picks are not.
   const isDirty = title.trim().length > 0 || body.trim().length > 0;
@@ -175,23 +166,16 @@ export function ComposerShell({
             className="placeholder:text-on-surface-variant text-on-surface w-full bg-transparent text-lg font-medium tracking-tight outline-none disabled:opacity-50"
           />
           {bodyPlaceholder !== undefined ? (
-            <textarea
-              ref={bodyRef}
-              aria-label={bodyPlaceholder}
-              placeholder={bodyPlaceholder}
+            <FreeformTextEditor
               value={body}
               disabled={creating}
-              onChange={(event) => {
-                onBodyChange(event.target.value);
+              onChange={onBodyChange}
+              placeholder={bodyPlaceholder}
+              ariaLabel={bodyPlaceholder}
+              onSubmit={() => {
+                if (canSubmit && !creating) onSubmit();
               }}
-              onKeyDown={(event) => {
-                // Cmd/Ctrl+Enter submits from the body, mirroring Linear's composer.
-                if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
-                  event.preventDefault();
-                  if (canSubmit && !creating) onSubmit();
-                }
-              }}
-              className="placeholder:text-on-surface-variant text-on-surface text-body max-h-[40vh] min-h-[9rem] w-full resize-none overflow-y-auto bg-transparent leading-relaxed outline-none disabled:opacity-50"
+              className="max-h-[40vh] min-h-28 overflow-y-auto py-1"
             />
           ) : null}
         </form>

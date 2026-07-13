@@ -8,16 +8,16 @@
  * This is the reference application of the unified filtering engine (the pattern the Apply phase
  * copies to Programs, Initiatives, Cycles, and Teams). It replaces the bespoke single-select
  * status menu the Projects list used to ship: a project can now be filtered by **status**,
- * **health**, **lead**, and **team**; grouped by status / health / lead / team; and sorted by
- * status, health, target date, or name — all through one Linear-style bar.
+ * **lead**, and **team**; grouped by status / lead / team; and sorted by status, target date, or
+ * name — all through one Linear-style bar.
  *
- * Status and health declare a custom {@link FieldDescriptor.rank} so they order by lifecycle /
- * severity rather than alphabetically, and carry a glyph `hint` so a grouped header can show the
+ * Status declares a custom {@link FieldDescriptor.rank} so it orders by lifecycle rather than
+ * alphabetically, and carries a glyph `hint` so a grouped header can show the
  * field's domain glyph. Lead and team are `relation` fields whose options + label resolution are
  * injected from the page's already-loaded members/teams (Phase B data), so the value chooser
  * needs no extra fetch.
  */
-import type { Health, ProjectOut } from '@docket/types';
+import type { ProjectOut } from '@docket/types';
 import { ActorAvatar, type Column, StatusIcon } from '@docket/ui/components';
 import { Calendar, ListChecks } from '@docket/ui/icons';
 import { createElement, type ReactNode } from 'react';
@@ -29,7 +29,6 @@ import {
   labelForValue,
 } from '@/components/views/field-catalog';
 
-import { HEALTH_DOT_CLASS, HEALTH_LABEL } from './health';
 import { ProjectStatusBadge, STATUS_LABEL, statusGlyphType, statusLabel } from './project-status';
 
 /** The project lifecycle statuses, in workflow order, with their glyph hints. */
@@ -40,19 +39,6 @@ const STATUS_OPTIONS: readonly FieldOption[] = (
 /** Lifecycle order rank for a status (planned → active → completed → canceled; unknown last). */
 function statusRank(value: string | number | null): number {
   const order = ['planned', 'active', 'completed', 'canceled'];
-  if (value === null) return order.length;
-  const index = order.indexOf(String(value));
-  return index === -1 ? order.length : index;
-}
-
-/** The health verdicts, most-concerning treated by severity rank, with their labels. */
-const HEALTH_OPTIONS: readonly FieldOption[] = (['on_track', 'at_risk', 'off_track'] as const).map(
-  (health: Health) => ({ value: health, label: HEALTH_LABEL[health], hint: health }),
-);
-
-/** Severity order rank for a health verdict (on track → at risk → off track; unset last). */
-function healthRank(value: string | number | null): number {
-  const order = ['on_track', 'at_risk', 'off_track'];
   if (value === null) return order.length;
   const index = order.indexOf(String(value));
   return index === -1 ? order.length : index;
@@ -91,16 +77,6 @@ export function buildProjectCatalog(deps: ProjectCatalogDeps): FieldCatalog<Proj
       groupable: true,
       sortable: true,
       rank: statusRank,
-    },
-    {
-      key: 'health',
-      label: 'Health',
-      type: 'enum',
-      accessor: (project) => project.health ?? null,
-      options: HEALTH_OPTIONS,
-      groupable: true,
-      sortable: true,
-      rank: healthRank,
     },
     {
       key: 'leadId',
@@ -185,7 +161,6 @@ export function projectColumns(
 ): readonly Column<ProjectOut>[] {
   const status = findField(catalog, 'status');
   const lead = findField(catalog, 'leadId');
-  const health = findField(catalog, 'health');
   const targetDate = findField(catalog, 'targetDate');
 
   return [
@@ -216,27 +191,6 @@ export function projectColumns(
       width: '7rem',
       priority: 1,
       render: (project) => createElement(ProjectStatusBadge, { status: project.status }),
-    },
-    // HEALTH — a small token dot + label (shared baseline property).
-    {
-      key: 'health',
-      header: health?.label ?? 'Health',
-      minWidth: '7rem',
-      priority: 2,
-      render: (project) =>
-        project.health
-          ? createElement(
-              'span',
-              {
-                className: 'text-on-surface-variant flex items-center gap-1.5 text-xs font-medium',
-              },
-              createElement('span', {
-                'aria-hidden': true,
-                className: `size-1.5 rounded-full ${HEALTH_DOT_CLASS[project.health]}`,
-              }),
-              HEALTH_LABEL[project.health],
-            )
-          : emDash(),
     },
     // LEAD/OWNER avatar — relation field; resolveLabel turns the id into a display name.
     {

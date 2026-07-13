@@ -84,3 +84,24 @@ export const taskDependency = pgTable(
     check('task_dependency_no_self', sql`${t.blockingTaskId} <> ${t.blockedTaskId}`),
   ],
 );
+
+/** A directed Project `blocks` edge (blocking → blocked), scoped to one organization. */
+export const projectDependency = pgTable(
+  'project_dependency',
+  {
+    blockingProjectId: text('blocking_project_id')
+      .notNull()
+      .references(() => project.id, { onDelete: 'cascade' }),
+    blockedProjectId: text('blocked_project_id')
+      .notNull()
+      .references(() => project.id, { onDelete: 'cascade' }),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.blockingProjectId, t.blockedProjectId] }),
+    index('project_dependency_blocked_idx').on(t.blockedProjectId),
+    check('project_dependency_no_self', sql`${t.blockingProjectId} <> ${t.blockedProjectId}`),
+  ],
+);

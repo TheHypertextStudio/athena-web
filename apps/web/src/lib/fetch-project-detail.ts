@@ -24,7 +24,7 @@ import type {
 import { ProjectId } from '@docket/types';
 
 import type { AgentHere } from '@/components/project-detail/agents-strip';
-import type { AgentActivityEntry } from '@/components/project-detail/discussion';
+import type { AgentActivityEntry } from '@/components/project-detail/agent-activity-feed';
 import type { MilestoneTask } from '@/components/project-detail/milestone-tasks';
 import {
   type ActorDirectory,

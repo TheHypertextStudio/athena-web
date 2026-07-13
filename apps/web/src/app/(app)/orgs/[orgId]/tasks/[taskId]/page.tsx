@@ -1,7 +1,13 @@
 'use client';
 
 import { type Priority } from '@docket/types';
-import { ActorAvatar, ActorPicker, DatePicker, type PickerOption } from '@docket/ui/components';
+import {
+  ActorAvatar,
+  ActorPicker,
+  DatePicker,
+  type ActorKind,
+  type PickerOption,
+} from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Separator, Skeleton } from '@docket/ui/primitives';
 import { useParams, useRouter } from 'next/navigation';
@@ -9,7 +15,6 @@ import { type JSX, useCallback, useMemo } from 'react';
 
 import TaskGraphPanel from '@/components/canvas/task-graph-panel';
 import { formatWindow } from '@/components/cycles/format-window';
-import { CommentActivityFeed, type FeedActor } from '@/components/task-detail/CommentActivityFeed';
 import { Dependencies } from '@/components/task-detail/Dependencies';
 import { PriorityPicker } from '@/components/task-detail/PriorityPicker';
 import { StatusPicker } from '@/components/task-detail/StatusPicker';
@@ -32,6 +37,12 @@ function isoDateOf(value: string): string {
   return value.slice(0, 10);
 }
 
+interface TaskFeedActor {
+  name: string;
+  kind: ActorKind;
+  avatarUrl?: string | null;
+}
+
 /** TaskDetailPage renders the authenticated task page. */
 export default function TaskDetailPage(): JSX.Element {
   const router = useRouter();
@@ -52,10 +63,7 @@ export default function TaskDetailPage(): JSX.Element {
     milestones,
     cycles,
     roles,
-    comments,
-    activities,
     detailKey,
-    commentsKey,
     isPending,
     isError,
     error,
@@ -67,15 +75,14 @@ export default function TaskDetailPage(): JSX.Element {
     patchTask,
     addSubtask,
     toggleSubtask,
-    addComment,
     actionError,
     propsPending,
     statusPending,
     priorityPending,
-  } = useTaskMutations(orgId, taskId, detailKey, commentsKey);
+  } = useTaskMutations(orgId, taskId, detailKey, detailKey);
 
   const resolveActor = useCallback(
-    (actorId: string | null | undefined): FeedActor => {
+    (actorId: string | null | undefined): TaskFeedActor => {
       if (!actorId) return { name: 'Unknown', kind: 'human' };
       const member = members.find((m) => m.actorId === actorId);
       if (member) return { name: member.displayName, kind: 'human', avatarUrl: member.avatar };
@@ -279,14 +286,6 @@ export default function TaskDetailPage(): JSX.Element {
               />
             </div>
           </section>
-
-          <CommentActivityFeed
-            comments={comments}
-            activities={activities}
-            resolveActor={resolveActor}
-            onComment={addComment}
-            canComment
-          />
         </div>
 
         <TaskPropertiesRail

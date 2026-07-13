@@ -2,20 +2,17 @@
  * Mutation hook for the project detail page.
  *
  * @remarks
- * Encapsulates all five writes — project property patch, initiative association change,
- * comment post, status update post, and task creation — along with the optimistic
+ * Encapsulates project property, initiative-association, and status-update writes with optimistic
  * cache helpers that keep the composite {@link ProjectDetailData} snapshot consistent
  * between the request and the server's settle-time read-back.
  */
 import {
   ActorId,
-  type Health,
   type ProjectOut,
   type ProjectStatus,
   type ProjectUpdate,
   ProgramId,
   ProjectId,
-  TeamId,
 } from '@docket/types';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
@@ -27,9 +24,9 @@ import { queryKeys, unwrap, useApiMutation } from './query';
 
 /** The unbranded properties-panel patch surface. */
 export interface ProjectPatch {
+  description?: string | null;
   leadId?: string | null;
   status?: ProjectStatus;
-  health?: Health | null;
   startDate?: string | null;
   targetDate?: string | null;
   programId?: string | null;
@@ -37,11 +34,11 @@ export interface ProjectPatch {
 
 function toProjectPatchBody(patch: ProjectPatch): ProjectUpdate {
   return {
+    ...(patch.description !== undefined ? { description: patch.description } : {}),
     ...(patch.leadId !== undefined
       ? { leadId: patch.leadId === null ? null : ActorId.parse(patch.leadId) }
       : {}),
     ...(patch.status !== undefined ? { status: patch.status } : {}),
-    ...(patch.health !== undefined ? { health: patch.health } : {}),
     ...(patch.startDate !== undefined ? { startDate: patch.startDate } : {}),
     ...(patch.targetDate !== undefined ? { targetDate: patch.targetDate } : {}),
     ...(patch.programId !== undefined
@@ -54,17 +51,11 @@ function toProjectPatchBody(patch: ProjectPatch): ProjectUpdate {
 export interface ProjectMutations {
   patchProject: (patch: ProjectPatch) => void;
   setInitiative: (initiativeId: string | null) => void;
-  postComment: (body: string) => void;
-  postUpdate: (body: string, health: Health | undefined) => void;
-  createTask: (title: string) => void;
+  postUpdate: (body: string) => void;
   propsPending: boolean;
   propsError: string | null;
-  commentPosting: boolean;
-  commentError: string | null;
   updatePosting: boolean;
   updateError: string | null;
-  createTaskPending: boolean;
-  createTaskError: string | null;
 }
 
 /**
@@ -72,16 +63,10 @@ export interface ProjectMutations {
  *
  * @param orgId - The active organization id.
  * @param projectId - The project being mutated.
- * @param teamId - Team id that new tasks land in.
  */
-export function useProjectMutations(
-  orgId: string,
-  projectId: string,
-  teamId: string | null,
-): ProjectMutations {
+export function useProjectMutations(orgId: string, projectId: string): ProjectMutations {
   const queryClient = useQueryClient();
   const detailKey = useMemo(() => queryKeys.project(orgId, projectId), [orgId, projectId]);
-  const commentsKey = useMemo(() => [...detailKey, 'comments'] as const, [detailKey]);
   const updatesKey = useMemo(() => [...detailKey, 'updates'] as const, [detailKey]);
 
   const patchCachedProject = useCallback(
@@ -160,81 +145,32 @@ export function useProjectMutations(
     invalidateKeys: [detailKey],
   });
 
-  const commentM = useApiMutation({
-    mutationFn: (body: string) =>
-      unwrap(
-        () =>
-          api.v1.orgs[':orgId'].comments.$post({
-            param: { orgId },
-            json: { subjectType: 'project', subjectId: projectId, body },
-          }),
-        'Could not post your comment.',
-      ),
-    invalidateKeys: [commentsKey],
-  });
-
   const updateM = useApiMutation({
-    mutationFn: ({ body, health }: { body: string; health: Health | undefined }) =>
+    mutationFn: (body: string) =>
       unwrap(
         () =>
           api.v1.orgs[':orgId'].updates.$post({
             param: { orgId },
-            json: {
-              subjectType: 'project',
-              subjectId: projectId,
-              body,
-              ...(health ? { health } : {}),
-            },
+            json: { subjectType: 'project', subjectId: projectId, body },
           }),
         'Could not post your update.',
       ),
-    onSuccess: (_created, { health }) => {
-      if (health) patchCachedProject((cur) => ({ ...cur, health }));
-    },
     invalidateKeys: [updatesKey, detailKey],
-  });
-
-  const createTaskM = useApiMutation({
-    mutationFn: (title: string) => {
-      if (!teamId)
-        return Promise.reject(new Error('No team is available yet to create a task in.'));
-      return unwrap(
-        () =>
-          api.v1.orgs[':orgId'].tasks.$post({
-            param: { orgId },
-            json: { title, teamId: TeamId.parse(teamId), projectId: ProjectId.parse(projectId) },
-          }),
-        'Could not create the task.',
-      );
-    },
-    invalidateKeys: [detailKey, queryKeys.tasks(orgId)],
   });
 
   return {
     patchProject: patch.mutate,
     setInitiative: initiativeM.mutate,
-    postComment: commentM.mutate,
-    postUpdate: (body, health) => {
-      updateM.mutate({ body, health });
-    },
-    createTask: createTaskM.mutate,
+    postUpdate: updateM.mutate,
     propsPending: patch.isPending || initiativeM.isPending,
     propsError: patch.error
       ? userErrorMessage(patch.error, 'Could not update this project.')
       : initiativeM.error
         ? userErrorMessage(initiativeM.error, 'Could not update the linked initiative.')
         : null,
-    commentPosting: commentM.isPending,
-    commentError: commentM.error
-      ? userErrorMessage(commentM.error, 'Could not post that comment.')
-      : null,
     updatePosting: updateM.isPending,
     updateError: updateM.error
       ? userErrorMessage(updateM.error, 'Could not post that update.')
-      : null,
-    createTaskPending: createTaskM.isPending,
-    createTaskError: createTaskM.error
-      ? userErrorMessage(createTaskM.error, 'Could not create that task.')
       : null,
   };
 }

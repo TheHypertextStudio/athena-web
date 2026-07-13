@@ -1090,11 +1090,15 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
     Continuous zoom remains one 24–240 pixels-per-hour scalar; Overview, Standard, and Detail are
     shortcuts rather than separate views, and zoom preserves the centered wall time.
   - Integrated deterministic side-by-side collision columns into the production canvas, including
-    minimum interactive height for short low-zoom items and stable four-pixel gutters.
-  - Added live, cancellable pointer and keyboard move plus start/end resize interactions with exact
-    previews, activation thresholds, edge autoscroll, announcements, and permission/source-model
-    checks before persistence. Read-only, conflicted, derived, all-day, and multi-day items remain
-    openable without false timed-edit affordances.
+    minimum interactive height for short low-zoom items, stable four-pixel gutters, and an
+    accessible `+N` disclosure that promotes hidden dense items into the real direct-edit surface.
+    Replaced the unconditional quadratic collision matrix with a linear-memory interval sweep and
+    component-scoped minimum coloring for the exact-instant conflicts that can occur at DST folds.
+  - Added live, cancellable pointer, touch, and keyboard move plus true-edge resize interactions
+    with exact previews, activation thresholds, edge autoscroll, announcements, and permission/
+    source-model checks before persistence. Writable all-day and cross-midnight ranges edit from
+    their true first/last segments; read-only, conflicted, and derived items stay openable without
+    false edit affordances.
   - Made region selection obey the same interaction lifecycle: the initiating pointer owns a
     captured live preview, while Escape, pointer cancel, lost capture, and unmount all clear it
     without creating an item.
@@ -1104,35 +1108,48 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
     clear prior comparison members, lanes, selection, and shared details before loading the next
     workspace. Details-shared cards open immutable comparison-backed details without an owner-only
     item request; busy-only cards remain opaque, static, and non-openable.
-  - Added native task-to-timebox and calendar-item-to-event drops while keeping relation drag
-    arbitration separate from timed move/resize. Calendar and Agenda continue rendering their grids
-    beneath loading, empty, stale, and hostile server failures with fixed application-owned copy.
-    Stored per-layer diagnostics likewise surface only the fixed `Calendar sync issue` indicator.
+  - Added native task-to-timebox and calendar-item-to-event drops while keeping relationship drag,
+    keyboard target mode, and timed move/resize arbitration separate. Calendar and Agenda continue
+    rendering their grids beneath loading, empty, stale, and hostile server failures with fixed
+    application-owned copy and retry actions. Stored per-layer diagnostics likewise surface only
+    the fixed `Calendar sync issue` indicator.
+  - Kept continuous zoom as one scalar with three shortcuts, compacted those shortcuts to a preset
+    selector on narrow screens, made the 1440px surface retain two fluid date lanes beside Agenda,
+    and moved secondary layer controls below the grid whenever they would consume scheduling width.
 - **Files Changed**: Shared scheduling time-axis, collision, gesture, viewport, card, notice, and
   type modules; Calendar and Agenda consumers/mutation policies; focused unit/component tests;
-  recorded Chromium e2e contracts and helpers; layered-calendar product and engineering specs.
+  recorded Chromium e2e contracts and helpers; layered-calendar product and engineering specs;
+  `docs/design/audits/2026-07-13-calendar.md`.
 - **Design**: `docs/superpowers/specs/2026-07-13-scheduling-interaction-parity-design.md`
 - **Implementation Plan**:
   `docs/superpowers/plans/2026-07-13-scheduling-interaction-parity.md`
 - **Validation**:
-  - Focused Scheduling, Calendar, and Agenda suites pass 30/30 files and 246/246 tests.
-  - The isolated real Chromium contract passes 13/13 scenarios, covering arbitrary rolling windows,
-    every zoom form, region creation, responsive cache changes, cross-date move, both resize edges,
-    three simultaneous collisions, object drops, provider read-only behavior, safe server failures,
-    comparison-backed shared details, and spring/fall DST behavior. Videos, screenshots, and
-    inspected contact sheets are retained under `apps/web/.data/calendar-e2e-evidence/` as ignored
-    local artifacts.
-  - Repository typecheck and lint pass 17/17 tasks each. The full test gate passes 17/17 package
-    tasks (web 517/517; API 1,212/1,212; tooling 36/36), and the production build passes API, web,
-    and admin 3/3.
+  - Focused Scheduling, Calendar, and Agenda suites pass 54/54 files and 427/427 tests.
+  - The isolated real Chromium contract passes 10/10 recorded scenarios, covering arbitrary
+    rolling windows, every zoom form, region creation, responsive cache changes, cross-date and
+    all-day moves, true-edge resizing, dense `+N` promotion, object drops, keyboard relationships,
+    provider read-only behavior, safe server failures, comparison-backed shared details, touch
+    long-press, and spring/fall DST behavior. The four required design-review screenshots and all
+    ten videos are retained under `apps/web/.data/calendar-e2e-evidence/final/` as ignored local
+    artifacts.
+  - The 10,000-item disjoint overlap benchmark fell from 1,591.2ms and roughly 984MB RSS to 21.9ms
+    near the 168–172MB process baseline. A 10,000-item lane with one exact-only conflict completes
+    in 13–14ms and recolors only that pair; deterministic randomized parity, mixed exact/wall input
+    permutations, and a two-colorable adversarial graph protect the optimized paths.
+  - Repository formatting passes; typecheck and lint pass 17/17 tasks each. The full test gate
+    passes 17/17 package tasks (web 698/698; UI 257/257; tooling 36/36), and the production build
+    passes API, web, and admin 3/3.
 - **Retrospective**:
   - **Went well**: keeping geometry and gestures consumer-neutral let Calendar, Agenda, dates, and
     people/resource comparison share one interaction engine without hardcoded day/week branches.
-  - **Improved during validation**: the recorded browser pass caught three product bugs that the
-    component suite did not expose—header/gutter clipping, resize-driven boundary navigation, and a
-    stale compact query window after creation—and each now has focused regression coverage. An
-    independent review then closed destination-range update invalidation, DST edit ambiguity,
-    pointer cancellation, shared-detail privacy, opaque-item semantics, and live-clock edge cases.
+  - **Improved during validation**: recorded browser passes caught header/gutter clipping,
+    resize-driven boundary navigation, a stale compact query window, one-day desktop collapse,
+    phantom pre-measurement lanes, drawer stacking, dense-item action loss, and touch/keyboard focus
+    traps. Independent review also closed destination-range invalidation, explicit DST-fold edit
+    choice, cross-midnight clipping, pointer cancellation, all-day true-edge ownership,
+    shared-detail privacy, opaque-item semantics, live-clock edge cases, exact-conflict scope,
+    minimum collision coloring, and mixed exact/wall ordering. A final read-only rereview found no
+    remaining Critical or Important blocker in those fixes.
   - **Learned**: a responsive rolling calendar must invalidate the whole item-range cache family
     after creation and updates; invalidating only the active range is observably wrong when lane
     geometry changes or an item moves into a previously empty destination range.

@@ -219,8 +219,9 @@ Out of scope for V1:
   before persistence.
 - Tasks and calendar items can be dropped on eligible events and timeboxes to create related and
   contained relationships; malformed, derived-target, and self-drop payloads are ignored.
-- All-day and multi-day items remain openable and relationship-capable but never issue timed inline
-  writes.
+- Writable all-day ranges move and resize by calendar date from their true first/last segments;
+  writable cross-midnight timed items expose only the edge owned by each segment. Read-only or
+  derived multi-day items remain openable and relationship-capable without false write controls.
 - Read-only items show an explicit indicator and remain openable and linkable without false
   move/resize affordances.
 - Details-shared comparison items open immutable details from the authorized comparison response

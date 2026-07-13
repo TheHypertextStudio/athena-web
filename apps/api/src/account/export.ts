@@ -13,6 +13,10 @@
 import type { BlobStore } from '@docket/blob-store';
 import type { Database } from '@docket/db';
 import {
+  AccountExportScope,
+  type AccountExportScope as AccountExportScopeValue,
+} from '@docket/types';
+import {
   accountExport,
   actor,
   dailyDigest,
@@ -40,6 +44,19 @@ import { exportReadyEmail } from './emails';
 
 /** Days a generated export download URL is advertised as valid for. */
 export const ACCOUNT_EXPORT_TTL_DAYS = 14;
+
+/** The scope used by legacy export rows and account-deletion archives. */
+export const FULL_ACCOUNT_EXPORT_SCOPE: AccountExportScopeValue = {
+  categories: ['account', 'personal', 'workspaces'],
+  workspaces: [],
+  allWorkspaces: true,
+};
+
+/** Parse a persisted scope while keeping pre-scope export rows downloadable. */
+export function exportScope(value: unknown): AccountExportScopeValue {
+  const parsed = AccountExportScope.safeParse(value);
+  return parsed.success ? parsed.data : FULL_ACCOUNT_EXPORT_SCOPE;
+}
 
 /** Milliseconds in {@link ACCOUNT_EXPORT_TTL_DAYS}. */
 const ACCOUNT_EXPORT_TTL_MS = ACCOUNT_EXPORT_TTL_DAYS * 24 * 60 * 60 * 1000;
@@ -72,26 +89,44 @@ export interface AccountExportDocument {
 export async function collectAccountExport(
   db: Database,
   userId: string,
+  scope: AccountExportScopeValue = FULL_ACCOUNT_EXPORT_SCOPE,
 ): Promise<AccountExportDocument> {
+  const includesAccount = scope.categories.includes('account');
+  const includesPersonal = scope.categories.includes('personal');
+  const includesWorkspaces = scope.categories.includes('workspaces');
+  const selectedWorkspaceIds = scope.workspaces.map((workspace) => workspace.id);
   // First wave: every read that doesn't depend on the hub id, in parallel. The org list is a
   // single query (subquery over the user's human memberships) rather than ids-then-fetch.
   const [userRow, hubRow, identities, consents, orgs] = await Promise.all([
-    one(db.select().from(user).where(eq(user.id, userId))),
-    one(db.select().from(hub).where(eq(hub.userId, userId))),
-    linkedIdentities(userId),
-    db.select().from(oauthConsent).where(eq(oauthConsent.userId, userId)),
-    db
-      .select()
-      .from(organization)
-      .where(
-        inArray(
-          organization.id,
-          db
-            .select({ id: actor.organizationId })
-            .from(actor)
-            .where(and(eq(actor.userId, userId), eq(actor.kind, 'human'))),
-        ),
-      ),
+    includesAccount ? one(db.select().from(user).where(eq(user.id, userId))) : null,
+    includesPersonal ? one(db.select().from(hub).where(eq(hub.userId, userId))) : null,
+    includesAccount ? linkedIdentities(userId) : [],
+    includesAccount ? db.select().from(oauthConsent).where(eq(oauthConsent.userId, userId)) : [],
+    includesWorkspaces
+      ? db
+          .select()
+          .from(organization)
+          .where(
+            and(
+              inArray(
+                organization.id,
+                db
+                  .select({ id: actor.organizationId })
+                  .from(actor)
+                  .where(
+                    and(
+                      eq(actor.userId, userId),
+                      eq(actor.kind, 'human'),
+                      eq(actor.status, 'active'),
+                    ),
+                  ),
+              ),
+              ...(scope.allWorkspaces || selectedWorkspaceIds.length === 0
+                ? []
+                : [inArray(organization.id, selectedWorkspaceIds)]),
+            ),
+          )
+      : [],
   ]);
   const hubId = hubRow?.id;
 
@@ -105,11 +140,17 @@ export async function collectAccountExport(
         hubId
           ? db.select().from(dailyPlanItem).where(eq(dailyPlanItem.hubId, hubId))
           : Promise.resolve([]),
-        db.select().from(notification).where(eq(notification.userId, userId)),
-        db.select().from(event).where(eq(event.userId, userId)),
-        db.select().from(eventRecipient).where(eq(eventRecipient.userId, userId)),
-        db.select().from(dailyDigest).where(eq(dailyDigest.userId, userId)),
-        db.select().from(streamSubscription).where(eq(streamSubscription.userId, userId)),
+        includesPersonal
+          ? db.select().from(notification).where(eq(notification.userId, userId))
+          : [],
+        includesPersonal ? db.select().from(event).where(eq(event.userId, userId)) : [],
+        includesPersonal
+          ? db.select().from(eventRecipient).where(eq(eventRecipient.userId, userId))
+          : [],
+        includesPersonal ? db.select().from(dailyDigest).where(eq(dailyDigest.userId, userId)) : [],
+        includesPersonal
+          ? db.select().from(streamSubscription).where(eq(streamSubscription.userId, userId))
+          : [],
       ]);
       return {
         hub: hubRow ?? null,
@@ -125,9 +166,12 @@ export async function collectAccountExport(
 
   const document = {
     schemaVersion: 1,
-    identity: { user: userRow ?? null, linkedAccounts: identities, connectedApps: consents },
+    identity: includesAccount
+      ? { user: userRow ?? null, linkedAccounts: identities, connectedApps: consents }
+      : null,
     memberships,
-    personal,
+    personal: includesPersonal ? personal : null,
+    scope,
   };
   return { document, user: userRow ?? null };
 }
@@ -168,7 +212,11 @@ export async function sweepAccountExports(
   for (const job of pending) {
     try {
       const blob = resolveBlob();
-      const { document, user: userRow } = await collectAccountExport(db, job.userId);
+      const { document, user: userRow } = await collectAccountExport(
+        db,
+        job.userId,
+        exportScope(job.scope),
+      );
       const expiresAt = new Date(nowDate.getTime() + ACCOUNT_EXPORT_TTL_MS);
       // A self-describing ZIP (README + split JSON), not a bare blob of JSON.
       const archive = buildExportArchive(document, {
@@ -190,7 +238,7 @@ export async function sweepAccountExports(
       if (userRow) {
         const email = exportReadyEmail({
           name: userRow.name,
-          downloadUrl: `${env.API_URL}/v1/me/account/exports/${job.id}/file`,
+          downloadUrl: `${env.API_URL}/v1/me/account/exports/${job.id}`,
           expiresAt: expiresAt.toISOString(),
         });
         await dispatchSystemUserNotification(db, {

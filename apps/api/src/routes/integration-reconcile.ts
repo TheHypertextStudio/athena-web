@@ -23,7 +23,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { db, task, team } from '@docket/db';
 import type { WorkflowStateType } from '@docket/db';
 import { ConnectorConfig } from '@docket/types';
-import type { ImportedItem } from '@docket/integrations';
+import type { ConnectorProvider, ImportedItem } from '@docket/integrations';
 import type { WritableConnector } from '@docket/integrations';
 
 import { ConflictError } from '../error';
@@ -479,6 +479,6 @@ async function pushNativeCreates(
 }
 
 /** Narrow a stored provider string for the connector push input (already validated upstream). */
-function asProvider(provider: string): ImportedItem['provenance']['provider'] {
-  return provider as ImportedItem['provenance']['provider'];
+function asProvider(provider: string): ConnectorProvider {
+  return provider as ConnectorProvider;
 }

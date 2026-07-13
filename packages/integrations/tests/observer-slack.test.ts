@@ -3,11 +3,18 @@ import { createHmac } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 
 import { RealSlackObserver } from '../src/observer-slack';
+import { slackMentionedUserIds } from '../src';
 
 const SECRET = 'slack_signing_secret_test';
 const RECEIVED_AT = '2026-06-28T12:00:00.000Z';
 
 const observer = new RealSlackObserver({ signingSecret: SECRET });
+
+describe('public Slack helpers', () => {
+  it('exports the canonical mention parser from the package barrel', () => {
+    expect(slackMentionedUserIds('hi <@U1> and <@U1> <@W2|wanda>')).toEqual(['U1', 'W2']);
+  });
+});
 
 /** Sign a body exactly as Slack does: `v0=` + hex HMAC over `v0:<ts>:<body>`. */
 function sign(body: string, ts: string): string {

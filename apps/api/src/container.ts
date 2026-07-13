@@ -209,6 +209,8 @@ export function buildObserver(
       return new RealGitHubObserver({
         signingSecret: required('GITHUB_APP_WEBHOOK_SECRET', runtimeEnv.GITHUB_APP_WEBHOOK_SECRET),
       });
+    default:
+      throw new Error(`No active observer implementation for legacy provider: ${provider}`);
   }
 }
 

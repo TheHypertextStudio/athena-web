@@ -27,7 +27,9 @@ import {
 import { userErrorMessage } from '@/lib/problem';
 
 /** The Export data settings tab — request + download a personal-data archive. */
-export function ExportDataTab(): JSX.Element {
+export function ExportDataTab({
+  focusedExportId: _focusedExportId,
+}: { focusedExportId?: string } = {}): JSX.Element {
   const statusQ = useApiQuery(
     apiQueryOptions(
       queryKeys.account(),
@@ -43,7 +45,13 @@ export function ExportDataTab(): JSX.Element {
 
   const requestExport = useApiMutation({
     mutationFn: () =>
-      unwrap(() => api.v1.me.account.exports.$post(), 'Could not start your data export.'),
+      unwrap(
+        () =>
+          api.v1.me.account.exports.$post({
+            json: { categories: ['account', 'personal'], workspaceIds: [] },
+          }),
+        'Could not start your data export.',
+      ),
     invalidateKeys: [queryKeys.account()],
   });
 

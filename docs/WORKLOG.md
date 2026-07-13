@@ -7,6 +7,19 @@
 
 ## Active Tasks
 
+### [BUILD-REPAIR-001] Restore clean repository build contracts
+
+- **Status**: REVIEW
+- **Started**: 2026-07-13
+- **Priority**: P1
+- **Description**: Repair the API, integration, error-taxonomy, and export-client contracts that
+  prevented the clean repository from type-checking and building.
+- **Implementation**: Added export-scope normalization, legacy provider compatibility, public
+  problem-catalog exports, authentication error aliases, and typed export requests. Added focused
+  regression coverage for export scopes and Slack observer exports.
+- **Validation**: Focused API and integrations tests pass; production build is being rerun after
+  the final web contract repair.
+
 ### [PROD-RUNTIME-001] Eliminate live production 500s
 
 - **Status**: REVIEW

@@ -34,9 +34,19 @@ import { readProblemError, UserFacingError } from '@/lib/problem';
  * again" apart from ordinary request failures and drive the sign-out + redirect exactly once,
  * rather than surfacing a generic inline "could not load" on whatever surface made the call.
  */
-export class SessionExpiredError extends UserFacingError {
+export class AuthenticationRequiredError extends UserFacingError {
+  constructor(details: { message?: string; status?: number; code?: Problem['code'] } = {}) {
+    super(details.message ?? 'Authentication is required. Please sign in again.', {
+      status: details.status ?? 401,
+      code: details.code ?? 'unauthorized',
+    });
+    this.name = 'AuthenticationRequiredError';
+  }
+}
+
+export class SessionExpiredError extends AuthenticationRequiredError {
   constructor(message = 'Your session has expired. Please sign in again.') {
-    super(message, { status: 401, code: 'unauthorized' });
+    super({ message, status: 401, code: 'unauthorized' });
     this.name = 'SessionExpiredError';
   }
 }

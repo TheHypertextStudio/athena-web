@@ -44,3 +44,8 @@ export function toUserFacingError(error: unknown, fallback: string): UserFacingE
 export function userErrorMessage(error: unknown, fallback: string): string {
   return toUserFacingError(error, fallback).message;
 }
+
+/** Return safe caller-owned copy for an imperative action that needs inline error state. */
+export function readError(error: unknown, fallback: string): string {
+  return userErrorMessage(error, fallback);
+}

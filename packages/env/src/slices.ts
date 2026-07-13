@@ -104,6 +104,10 @@ export const authServer = {
   LINEAR_CLIENT_SECRET: z.string().optional(),
   /** App-level Linear webhook signing secret — verifies inbound ambient-observation events. */
   LINEAR_WEBHOOK_SECRET: z.string().optional(),
+  /** Shared Slack app OAuth client id for the dormant user-token connect flow. */
+  SLACK_CLIENT_ID: z.string().optional(),
+  /** Shared Slack app OAuth client secret for the dormant user-token connect flow. */
+  SLACK_CLIENT_SECRET: z.string().optional(),
   /**
    * Apple **Services ID** (e.g. `com.docket.web`) — the OAuth `client_id` for "Sign in with Apple"
    * and the `sub` of the client-secret JWT. Unlike the other providers, Apple's client secret is

@@ -64,6 +64,16 @@ export const ProblemCode = z
 /** A machine-readable error code. */
 export type ProblemCode = z.infer<typeof ProblemCode>;
 
+/** Public recovery action associated with a stable problem code. */
+export type ProblemRecovery =
+  | 'sign_in'
+  | 'reauthenticate'
+  | 'retry'
+  | 'review'
+  | 'billing'
+  | 'reconnect'
+  | 'return';
+
 /**
  * Public, application-owned summaries for every problem code.
  *
@@ -101,6 +111,90 @@ export const PUBLIC_PROBLEM_TITLES = {
 /** Return the safe public summary for a machine-readable problem code. */
 export function publicProblemTitle(code: ProblemCode): string {
   return PUBLIC_PROBLEM_TITLES[code];
+}
+
+/** Occurrence-safe public definition used by the stable problem-help pages. */
+export interface ProblemDefinition {
+  readonly code: ProblemCode;
+  readonly status: number;
+  readonly title: string;
+  readonly summary: string;
+  readonly recovery: ProblemRecovery;
+}
+
+/** The recovery action for each problem code. */
+const PROBLEM_RECOVERY: Record<ProblemCode, ProblemRecovery> = {
+  validation_error: 'review',
+  unauthorized: 'sign_in',
+  forbidden: 'review',
+  not_found: 'return',
+  conflict: 'review',
+  identity_in_use: 'review',
+  account_selection_required: 'review',
+  linear_workspace_already_connected: 'review',
+  linear_write_scope_required: 'reconnect',
+  task_already_linked: 'review',
+  idempotency_key_reuse: 'retry',
+  dependency_cycle: 'review',
+  last_owner_guard: 'review',
+  current_session: 'return',
+  self_escalation: 'review',
+  personal_org_no_invites: 'review',
+  reauth_required: 'reauthenticate',
+  deletion_blocked: 'review',
+  card_required: 'billing',
+  billing_frozen: 'billing',
+  agent_plan_required: 'billing',
+  internal: 'retry',
+};
+
+/** HTTP status for each stable problem code. */
+const PROBLEM_STATUS: Record<ProblemCode, number> = {
+  validation_error: 422,
+  unauthorized: 401,
+  forbidden: 403,
+  not_found: 404,
+  conflict: 409,
+  identity_in_use: 409,
+  account_selection_required: 409,
+  linear_workspace_already_connected: 409,
+  linear_write_scope_required: 409,
+  task_already_linked: 409,
+  idempotency_key_reuse: 422,
+  dependency_cycle: 409,
+  last_owner_guard: 409,
+  current_session: 409,
+  self_escalation: 403,
+  personal_org_no_invites: 409,
+  reauth_required: 401,
+  deletion_blocked: 409,
+  card_required: 402,
+  billing_frozen: 402,
+  agent_plan_required: 402,
+  internal: 500,
+};
+
+/** Stable ordered problem codes used to generate the public problem index. */
+export const PROBLEM_CODES: readonly ProblemCode[] = [...ProblemCode.options];
+
+/** Public, occurrence-safe definitions keyed by their stable machine code. */
+export const PROBLEM_CATALOG: Readonly<Record<ProblemCode, ProblemDefinition>> = Object.fromEntries(
+  PROBLEM_CODES.map((code) => [
+    code,
+    {
+      code,
+      status: PROBLEM_STATUS[code],
+      title: PUBLIC_PROBLEM_TITLES[code],
+      summary: `${PUBLIC_PROBLEM_TITLES[code]} Follow the general recovery guidance below.`,
+      recovery: PROBLEM_RECOVERY[code],
+    },
+  ]),
+) as Record<ProblemCode, ProblemDefinition>;
+
+/** Resolve a route parameter to a public problem definition without throwing. */
+export function problemDefinition(code: string): ProblemDefinition | undefined {
+  const parsed = ProblemCode.safeParse(code);
+  return parsed.success ? PROBLEM_CATALOG[parsed.data] : undefined;
 }
 
 /** An RFC 9457 problem-details object. */

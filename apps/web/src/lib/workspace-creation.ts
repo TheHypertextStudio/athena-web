@@ -16,6 +16,6 @@ export const CREATE_WORKSPACE_PATH = '/workspaces/new';
 export function createWorkspace(body: OrgCreate): Promise<OrgCreateResult> {
   return unwrap(
     () => api.v1.orgs.$post({ json: body }),
-    'Could not create your workspace. Please try again.',
+    'Could not finish setting up your workspace. Please try again.',
   );
 }

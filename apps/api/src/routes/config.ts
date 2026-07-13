@@ -10,7 +10,12 @@
  * sign-in page needs it before anyone is authenticated.
  */
 import { configuredSocialProviders, type SocialProvider } from '@docket/auth';
-import { CONNECTOR_PROVIDER_IDS, PublicConfigOut, connectorIdentityProvider } from '@docket/types';
+import {
+  CONNECTOR_PROVIDER_IDS,
+  PublicConfigOut,
+  connectorIdentityProvider,
+  type SignInProvider,
+} from '@docket/types';
 import { Hono } from 'hono';
 
 import type { AppEnv } from '../context';
@@ -33,6 +38,13 @@ const CONNECTORS_BY_PROVIDER: Partial<Record<SocialProvider, readonly string[]>>
   }, {}),
 };
 
+/** Keep dormant Better Auth providers out of the public active-provider contract. */
+function isPublicSignInProvider(provider: SocialProvider): provider is SignInProvider {
+  return (
+    provider === 'google' || provider === 'github' || provider === 'linear' || provider === 'apple'
+  );
+}
+
 const config = new Hono<AppEnv>().get(
   '/',
   apiDoc({
@@ -47,7 +59,7 @@ Carries nothing secret and requires no session. Related: the authenticated perso
     extra: { security: [] },
   }),
   (c) => {
-    const oauthProviders = configuredSocialProviders(env);
+    const oauthProviders = configuredSocialProviders(env).filter(isPublicSignInProvider);
     const connectors = oauthProviders.flatMap((p) => CONNECTORS_BY_PROVIDER[p] ?? []);
     return ok(c, PublicConfigOut, {
       appMode: env.APP_MODE,

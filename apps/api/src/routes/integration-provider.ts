@@ -8,11 +8,12 @@ import {
   IdentityProvider as IdentityProviderSchema,
   PROVIDER_CATALOG,
   WEBHOOK_PROVIDER_IDS,
+  type WebhookProviderId,
   connectorIdentityProvider,
   parseOAuthScopes,
   type IntegrationDirectoryProvider,
 } from '@docket/types';
-import type { ConnectorProvider, ObserverProvider } from '@docket/integrations';
+import type { ConnectorProvider } from '@docket/integrations';
 import { WRITE_BACK_CAPABLE_PROVIDERS } from '@docket/integrations';
 import { and, eq, inArray } from 'drizzle-orm';
 import type { z } from 'zod';
@@ -83,10 +84,10 @@ export function asConnectorProvider(provider: string): ConnectorProvider | null 
 }
 
 /** Every webhook-backed provider accepted by the inbound event routes. */
-export const OBSERVER_PROVIDERS: readonly ObserverProvider[] = [...WEBHOOK_PROVIDER_IDS];
+export const OBSERVER_PROVIDERS: readonly WebhookProviderId[] = [...WEBHOOK_PROVIDER_IDS];
 
 /** Narrow a stored integration/event `provider` string to an {@link ObserverProvider}. */
-export function asObserverProvider(provider: string): ObserverProvider | null {
+export function asObserverProvider(provider: string): WebhookProviderId | null {
   return OBSERVER_PROVIDERS.find((p) => p === provider) ?? null;
 }
 

@@ -28,6 +28,23 @@ beforeAll(async () => {
 });
 
 describe('collectAccountExport', () => {
+  it('normalizes legacy export jobs to the full persisted scope', async () => {
+    const { exportScope, FULL_ACCOUNT_EXPORT_SCOPE } = await setup();
+
+    expect(exportScope(null)).toEqual(FULL_ACCOUNT_EXPORT_SCOPE);
+    expect(
+      exportScope({
+        categories: ['personal'],
+        workspaces: [],
+        allWorkspaces: false,
+      }),
+    ).toEqual({
+      categories: ['personal'],
+      workspaces: [],
+      allWorkspaces: false,
+    });
+  });
+
   it('captures the user identity and their cross-org personal rows', async () => {
     const { db, schema, collectAccountExport } = await setup();
     const userId = await seedUserWithHub(db, schema, 'Ivy');

@@ -13,7 +13,7 @@ import {
 import { VocabularyProvider } from '@docket/ui/hooks';
 import { Calendar, Search } from '@docket/ui/icons';
 import { Skeleton } from '@docket/ui/primitives';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { type JSX, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 
 import AccountMenu from '@/components/account-menu';
@@ -59,59 +59,23 @@ import {
  */
 export function AppShellFrame({ children }: { children: ReactNode }): JSX.Element {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const { data: session, isPending } = authClient.useSession();
   const { requireAuthentication } = useAuthenticationInterlock();
 
   useEffect(() => {
     if (!isPending && !session) {
-      const search = searchParams.toString();
-      requireAuthentication(`${pathname}${search ? `?${search}` : ''}`);
+      requireAuthentication(`${pathname}${window.location.search}`);
     }
-  }, [isPending, pathname, requireAuthentication, searchParams, session]);
+  }, [isPending, pathname, requireAuthentication, session]);
 
-  if (!session) {
-    return <AppShellLoadingFrame homeKey={homeKeyFromPath(pathname)} />;
-  }
-
-  return (
-    <AuthenticatedAppShellFrame
-      pathname={pathname}
-      routeOrgId={orgIdFromPath(pathname)}
-      userId={session.user.id}
-    >
-      {children}
-    </AuthenticatedAppShellFrame>
-  );
-}
-
-interface AuthenticatedAppShellFrameProps {
-  /** Current route pathname used to select shell navigation. */
-  readonly pathname: string;
-  /** Organization bound by the current route, if any. */
-  readonly routeOrgId: string | null;
-  /** Authenticated user whose shell preferences should be restored. */
-  readonly userId: string;
-  /** Authenticated route content. */
-  readonly children: ReactNode;
-}
-
-/** Mount authenticated queries and providers only after the session has resolved. */
-function AuthenticatedAppShellFrame({
-  pathname,
-  routeOrgId,
-  userId,
-  children,
-}: AuthenticatedAppShellFrameProps): JSX.Element {
   // The caller's orgs drive the sidebar's workspace switcher — read once through the shared query
-  // layer, gated on an authenticated session and static-tiered (membership rarely changes within a
-  // session), shared with the rest of the app under queryKeys.orgs().
+  // layer and gated on an authenticated session. The frame itself stays mounted while this settles.
   const orgsQ = useApiQuery(
     apiQueryOptions(
       queryKeys.orgs(),
       () => api.v1.orgs.$get(),
       'Could not load your organizations.',
-      { staleTime: STALE.static },
+      { enabled: Boolean(session), staleTime: STALE.static },
     ),
   );
   const orgs = useMemo(() => orgsQ.data?.items ?? [], [orgsQ.data]);
@@ -119,18 +83,25 @@ function AuthenticatedAppShellFrame({
     ? userErrorMessage(orgsQ.error, 'Could not load your workspaces.')
     : null;
 
-  if (orgsQ.isPending) {
-    return <AppShellLoadingFrame homeKey={homeKeyFromPath(pathname)} />;
-  }
-
+  const userId = session?.user.id ?? null;
+  const routeOrgId = orgIdFromPath(pathname);
+  const shellLoading = !session || orgsQ.isPending;
   const initialOrgId = routeOrgId ?? readLastOrg(userId);
 
   return (
-    <ContextProvider initialContext={initialOrgId} initialDensity={readDensity(userId)}>
-      <ActiveOrgContext orgs={orgs} activeOrgId={routeOrgId} orgsError={orgsError}>
+    <ContextProvider
+      initialContext={shellLoading ? null : initialOrgId}
+      initialDensity={readDensity(userId)}
+    >
+      <ActiveOrgContext
+        orgs={shellLoading ? [] : orgs}
+        activeOrgId={shellLoading ? null : routeOrgId}
+        orgsError={orgsError}
+      >
         <CommandPaletteProvider>
           <OpenDocumentsProvider userId={userId}>
             <AppShellInner
+              loading={shellLoading}
               routeOrgId={routeOrgId}
               userId={userId}
               workspaceKey={workspaceKeyFromPath(pathname)}
@@ -141,57 +112,6 @@ function AuthenticatedAppShellFrame({
           </OpenDocumentsProvider>
         </CommandPaletteProvider>
       </ActiveOrgContext>
-    </ContextProvider>
-  );
-}
-
-/** Props for the shell shown before authenticated context is available. */
-export interface AppShellLoadingFrameProps {
-  /** Home destination to highlight when the pathname is already known. */
-  readonly homeKey?: HomeNavKey;
-}
-
-/**
- * Render Docket's stable shell while session or workspace context resolves.
- *
- * @remarks
- * Home links remain available because they do not depend on workspace data. Search, workspace
- * switching, account actions, the agenda query, and route children stay unmounted until an
- * authenticated session exists. The same frame is reused by the route-group Suspense fallback,
- * preventing either client session settlement or query-string hydration from blanking the app.
- */
-export function AppShellLoadingFrame({ homeKey }: AppShellLoadingFrameProps = {}): JSX.Element {
-  const sidebar = (
-    <Sidebar
-      loading
-      workspaces={[]}
-      activeHomeKey={homeKey}
-      hrefForHome={(key) => `/${key}`}
-      hrefForWorkspace={(orgId, key) => `/orgs/${orgId}/${key}`}
-      renderLink={renderLink}
-      onSelectWorkspace={() => undefined}
-      onCreateWorkspace={() => undefined}
-      onOpenSearch={() => undefined}
-      footer={<AppShellAccountSkeleton />}
-    />
-  );
-
-  return (
-    <ContextProvider initialContext={null} initialDensity="comfortable">
-      <VocabularyProvider>
-        <AppShell
-          sidebar={sidebar}
-          mobileBrand={<span className="text-body font-semibold">Docket</span>}
-          mobileActions={<Skeleton className="size-9 rounded-lg" aria-hidden="true" />}
-          aside={{
-            node: <AppShellAgendaSkeleton />,
-            label: 'Agenda',
-            icon: <Calendar aria-hidden="true" />,
-          }}
-        >
-          <AppShellContentSkeleton />
-        </AppShell>
-      </VocabularyProvider>
     </ContextProvider>
   );
 }
@@ -244,6 +164,7 @@ function AppShellAgendaSkeleton(): JSX.Element {
 }
 
 interface AppShellInnerProps {
+  loading: boolean;
   routeOrgId: string | null;
   userId: string | null;
   workspaceKey?: WorkspaceNavKey;
@@ -262,6 +183,7 @@ interface AppShellInnerProps {
  * mirrored into the shell context (driving the org accent + the Workspace section's hrefs).
  */
 function AppShellInner({
+  loading,
   routeOrgId,
   userId,
   workspaceKey,
@@ -269,7 +191,7 @@ function AppShellInner({
   children,
 }: AppShellInnerProps): JSX.Element {
   const router = useRouter();
-  const { setContext, density } = useContextState();
+  const { setContext, setDensity, density } = useContextState();
   const { orgs, skin } = useActiveOrg();
   const { openPalette } = useCommandPalette();
   const { tabs, activeKey, closeTab } = useOpenDocuments();
@@ -281,15 +203,19 @@ function AppShellInner({
       queryKeys.notificationsCount(),
       () => api.v1.notifications.count.$get(),
       'Could not load notifications.',
-      { staleTime: STALE.volatile },
+      { enabled: !loading, staleTime: STALE.volatile },
     ),
     60_000,
   );
   const unreadCount = unreadCountQ.data?.unread ?? 0;
 
   useEffect(() => {
-    writeDensity(userId, density);
-  }, [userId, density]);
+    if (userId) setDensity(readDensity(userId));
+  }, [setDensity, userId]);
+
+  useEffect(() => {
+    if (userId) writeDensity(userId, density);
+  }, [density, userId]);
 
   const workspaces = useMemo<readonly Workspace[]>(
     () =>
@@ -320,8 +246,12 @@ function AppShellInner({
   const personalOrgId = useMemo(() => orgs.find((o) => o.isPersonal)?.id ?? null, [orgs]);
 
   useEffect(() => {
-    if (resolvedOrgId) setContext(resolvedOrgId);
-  }, [resolvedOrgId, setContext]);
+    if (loading) {
+      setContext(null);
+    } else if (resolvedOrgId) {
+      setContext(resolvedOrgId);
+    }
+  }, [loading, resolvedOrgId, setContext]);
 
   useEffect(() => {
     if (resolvedOrgId) writeLastOrg(userId, resolvedOrgId);
@@ -343,6 +273,7 @@ function AppShellInner({
 
   const sidebar = (
     <Sidebar
+      loading={loading}
       workspaces={workspaces}
       activeHomeKey={homeKey}
       activeWorkspaceKey={workspaceKey}
@@ -354,11 +285,17 @@ function AppShellInner({
       onCreateWorkspace={onCreateWorkspace}
       onOpenSearch={openPalette}
       personalWorkspace={resolvedOrgIsPersonal}
-      footer={<AccountMenu onCreateWorkspace={onCreateWorkspace} />}
+      footer={
+        loading ? (
+          <AppShellAccountSkeleton />
+        ) : (
+          <AccountMenu onCreateWorkspace={onCreateWorkspace} />
+        )
+      }
     />
   );
 
-  const tabBar = (
+  const tabBar = loading ? undefined : (
     <TabBar tabs={tabs} activeKey={activeKey} renderLink={renderLink} onClose={closeTab} />
   );
 
@@ -367,11 +304,15 @@ function AppShellInner({
     [workspaces, resolvedOrgId],
   );
 
-  const mobileBrand = (
+  const mobileBrand = loading ? (
+    <span className="text-body font-semibold">Docket</span>
+  ) : (
     <span className="text-body truncate font-semibold">{activeWorkspaceName ?? 'Docket'}</span>
   );
 
-  const mobileActions = (
+  const mobileActions = loading ? (
+    <Skeleton className="size-9 rounded-lg" aria-hidden="true" />
+  ) : (
     <button
       type="button"
       aria-label="Search"
@@ -383,18 +324,25 @@ function AppShellInner({
   );
 
   return (
-    <VocabularyProvider skin={skin}>
-      <AthenaPanelProvider orgId={resolvedOrgId}>
+    <VocabularyProvider skin={loading ? null : skin}>
+      <AthenaPanelProvider orgId={loading ? null : resolvedOrgId}>
         <AppShell
           sidebar={sidebar}
           tabBar={tabBar}
-          banner={<RecoveryNudgeBanner personalOrgId={personalOrgId} userId={userId} />}
+          banner={
+            loading ? undefined : (
+              <RecoveryNudgeBanner personalOrgId={personalOrgId} userId={userId} />
+            )
+          }
           mobileBrand={mobileBrand}
           mobileActions={mobileActions}
-          // The portable agenda rides along on every authenticated page as the shell's right rail.
-          aside={{ node: <Agenda />, label: 'Agenda', icon: <Calendar aria-hidden="true" /> }}
+          aside={{
+            node: loading ? <AppShellAgendaSkeleton /> : <Agenda />,
+            label: 'Agenda',
+            icon: <Calendar aria-hidden="true" />,
+          }}
         >
-          {children}
+          {loading ? <AppShellContentSkeleton /> : children}
         </AppShell>
       </AthenaPanelProvider>
     </VocabularyProvider>

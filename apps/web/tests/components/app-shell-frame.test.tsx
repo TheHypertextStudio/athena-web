@@ -1,11 +1,12 @@
 import '@testing-library/jest-dom/vitest';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { requireAuthentication, sessionState } = vi.hoisted(() => ({
+const { orgsGet, requireAuthentication, sessionState } = vi.hoisted(() => ({
+  orgsGet: vi.fn(),
   requireAuthentication: vi.fn(),
   sessionState: {
     data: null as null | { user: { id: string; name: string; email: string } },
@@ -16,7 +17,6 @@ const { requireAuthentication, sessionState } = vi.hoisted(() => ({
 vi.mock('next/navigation', () => ({
   usePathname: () => '/today',
   useRouter: () => ({ push: vi.fn() }),
-  useSearchParams: () => new URLSearchParams('view=week'),
 }));
 
 vi.mock('next/link', () => ({
@@ -44,7 +44,7 @@ vi.mock('../../src/lib/api', () => ({
   api: {
     v1: {
       orgs: {
-        $get: vi.fn(() => new Promise(() => undefined)),
+        $get: orgsGet,
       },
     },
   },
@@ -57,23 +57,32 @@ vi.mock('../../src/components/authentication-interlock', () => ({
 import { AppShellFrame } from '../../src/components/app-shell-frame';
 
 /** Render the frame with the same query boundary supplied by the root app providers. */
-function renderFrame(): void {
+function renderFrame() {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  render(
+  const frame = () => (
     <QueryClientProvider client={queryClient}>
       <AppShellFrame>
         <div>Private route content</div>
       </AppShellFrame>
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
+  const rendered = render(frame());
+  return {
+    ...rendered,
+    rerenderFrame: () => {
+      rendered.rerender(frame());
+    },
+  };
 }
 
 beforeEach(() => {
   sessionState.data = null;
   sessionState.isPending = true;
+  orgsGet.mockReset().mockImplementation(() => new Promise(() => undefined));
   requireAuthentication.mockReset();
+  window.history.replaceState({}, '', '/today?view=week');
   vi.stubGlobal('matchMedia', (query: string) => ({
     matches: false,
     media: query,
@@ -131,5 +140,38 @@ describe('AppShellFrame session loading', () => {
     expect(screen.queryByText('Private route content')).not.toBeInTheDocument();
     expect(screen.queryByText('No workspace yet')).not.toBeInTheDocument();
     expect(requireAuthentication).not.toHaveBeenCalled();
+  });
+
+  it('preserves the shared shell instance when session and organization context resolve', async () => {
+    let resolveOrganizations: ((response: Response) => void) | undefined;
+    orgsGet.mockImplementation(
+      () =>
+        new Promise<Response>((resolve) => {
+          resolveOrganizations = resolve;
+        }),
+    );
+    const { rerenderFrame } = renderFrame();
+    const loadingMain = screen.getByRole('main');
+
+    sessionState.data = {
+      user: { id: 'user_1', name: 'Ada Lovelace', email: 'ada@example.com' },
+    };
+    sessionState.isPending = false;
+    rerenderFrame();
+
+    await waitFor(() => {
+      expect(orgsGet).toHaveBeenCalledOnce();
+    });
+    await act(async () => {
+      resolveOrganizations?.(
+        new Response(JSON.stringify({ items: [] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      );
+    });
+
+    expect(await screen.findByText('Private route content')).toBeVisible();
+    expect(screen.getByRole('main')).toBe(loadingMain);
   });
 });

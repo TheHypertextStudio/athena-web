@@ -1,22 +1,15 @@
-import { Suspense, type JSX, type ReactNode } from 'react';
+import { type JSX, type ReactNode } from 'react';
 
-import { AppShellFrame, AppShellLoadingFrame } from '@/components/app-shell-frame';
+import { AppShellFrame } from '@/components/app-shell-frame';
 
 /**
  * Layout for the authenticated `(app)` route group.
  *
  * @remarks
- * A thin Server Component that wraps every authenticated page in the client
- * {@link AppShellFrame}, which owns the session gate, the org rail/sidebar shell, and the active
- * context. The Suspense boundary is required because that frame reads the current query string to
- * preserve a protected deep link through sign-in. Keeping the layout itself a Server Component
- * avoids forcing the whole group to render on the client while still sharing one shell across
- * `/today`, `/orgs/[orgId]/my-work`, and the project detail.
+ * A thin Server Component that wraps every authenticated page in the one persistent client
+ * {@link AppShellFrame}. Session, workspace, and page loading update regions inside that shared
+ * shell; the layout itself is never replaced by a loading or Suspense fallback.
  */
 export default function AppGroupLayout({ children }: { children: ReactNode }): JSX.Element {
-  return (
-    <Suspense fallback={<AppShellLoadingFrame />}>
-      <AppShellFrame>{children}</AppShellFrame>
-    </Suspense>
-  );
+  return <AppShellFrame>{children}</AppShellFrame>;
 }

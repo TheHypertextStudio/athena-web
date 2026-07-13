@@ -55,7 +55,7 @@
   "devDependencies": {
     "@docket/eslint-config": "workspace:*",
     "@docket/tsconfig": "workspace:*",
-    "@dotenvx/dotenvx": "^1.75.1",
+    "@dotenvx/dotenvx": "^2.6.0",
     "@standard-schema/spec": "^1.0.0",
     "@electric-sql/pglite": "catalog:",
     "@types/node": "catalog:",

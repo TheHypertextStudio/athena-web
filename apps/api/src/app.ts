@@ -30,6 +30,7 @@ import meIdentities from './routes/me-identities';
 import { createMeNotificationsRoutes } from './routes/me-notifications';
 import meRecovery from './routes/me-recovery';
 import meSessions from './routes/me-sessions';
+import time from './routes/time';
 import { createAdminRoutes } from './routes/admin';
 import { createAdminNotificationRoutes } from './routes/admin-notifications';
 import { createNotificationPreferenceRoutes } from './routes/notification-preferences';
@@ -68,6 +69,7 @@ const routes = app
   .route('/notifications', createNotificationsRoutes(notificationInbox, notificationIntents))
   .route('/daily-plan', dailyPlan)
   .route('/agenda', agenda)
+  .route('/time', time)
   .route('/hub', hubRouter)
   .route('/me/connected-apps', connectedApps)
   .route('/me/calendar', meCalendar)

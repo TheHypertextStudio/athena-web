@@ -147,6 +147,42 @@ export const NotificationId = id<'NotificationId'>().describe(
 export const DailyPlanItemId = id<'DailyPlanItemId'>().describe(
   "ULID id of a DailyPlanItem — one entry in a user's planned day.",
 );
+/** Branded `Hub` id (the user's personal, cross-workspace command center). */
+export const HubId = id<'HubId'>().describe(
+  'ULID id of a Hub — the personal cross-workspace ownership boundary for user-owned data.',
+);
+/** Branded `TimeRecord` id (one user-visible unit of tracked work). */
+export const TimeRecordId = id<'TimeRecordId'>().describe(
+  'ULID id of a TimeRecord — a Hub-owned semantic container for exact human and agent effort.',
+);
+/** Branded `TimeInterval` id (one exact measured interval). */
+export const TimeIntervalId = id<'TimeIntervalId'>().describe(
+  'ULID id of a TimeInterval — one bounded, actor-attributed measurement of time.',
+);
+/** Branded `TimeContext` id (a typed non-counting link from time to work/context). */
+export const TimeContextId = id<'TimeContextId'>().describe(
+  'ULID id of a TimeContext — a typed relationship between a TimeRecord and a Docket context.',
+);
+/** Branded `TimeAllocation` id (an explicit reportable time split). */
+export const TimeAllocationId = id<'TimeAllocationId'>().describe(
+  'ULID id of a TimeAllocation — an explicit reportable attribution of a TimeRecord.',
+);
+/** Branded `TimeCategory` id (a Hub-owned time taxonomy node). */
+export const TimeCategoryId = id<'TimeCategoryId'>().describe(
+  'ULID id of a TimeCategory — a user-owned category for reflection and reporting.',
+);
+/** Branded `TimeSubmission` id (an explicit shared/reporting snapshot). */
+export const TimeSubmissionId = id<'TimeSubmissionId'>().describe(
+  'ULID id of a TimeSubmission — an immutable visibility-scoped time-report snapshot.',
+);
+/** Branded `TimeSubmissionItem` id (one record/allocation snapshot in a time submission). */
+export const TimeSubmissionItemId = id<'TimeSubmissionItemId'>().describe(
+  'ULID id of a TimeSubmissionItem — one immutable record/allocation snapshot in a submission.',
+);
+/** Branded `AgentExecution` id (one dispatched unit of agent runtime work). */
+export const AgentExecutionId = id<'AgentExecutionId'>().describe(
+  'ULID id of an AgentExecution — one exact runtime lifecycle beneath an AgentSession.',
+);
 /** Branded `AuditEvent` id. */
 export const AuditEventId = id<'AuditEventId'>().describe(
   'ULID id of an AuditEvent — a tenant-scoped record of a sensitive action.',

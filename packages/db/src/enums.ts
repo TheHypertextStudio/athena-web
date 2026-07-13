@@ -343,6 +343,69 @@ export const auditEventType = pgEnum('audit_event_type', [
 
 /** Status of a Hub daily-plan item. */
 export const dailyPlanItemStatus = pgEnum('daily_plan_item_status', ['planned', 'done']);
+
+/** User-visible lifecycle of a Hub-owned time record. */
+export const timeRecordStatus = pgEnum('time_record_status', [
+  'open',
+  'paused',
+  'closed',
+  'submitted',
+  'superseded',
+]);
+/** How a time record first entered the ledger. */
+export const timeCaptureSource = pgEnum('time_capture_source', [
+  'live',
+  'manual',
+  'reconstructed',
+  'agent',
+]);
+/** The actor responsible for one exact time interval. */
+export const timeIntervalActorKind = pgEnum('time_interval_actor_kind', ['human', 'agent']);
+/** What occupied an interval; only active modes count as effort by default. */
+export const timeIntervalMode = pgEnum('time_interval_mode', [
+  'human_active',
+  'agent_active',
+  'tool_wait',
+  'awaiting_human',
+]);
+/** Provenance for an interval's timestamps. */
+export const timeIntervalSource = pgEnum('time_interval_source', [
+  'user_timer',
+  'manual_entry',
+  'reconstructed_entry',
+  'agent_runtime',
+]);
+/** How a non-counting typed context relates to a time record. */
+export const timeContextRole = pgEnum('time_context_role', [
+  'primary',
+  'related',
+  'calendar_context',
+  'planning_context',
+  'agent_context',
+]);
+/** Which target may receive reportable time credit. */
+export const timeAllocationTargetKind = pgEnum('time_allocation_target_kind', [
+  'task',
+  'workspace',
+  'project',
+  'category',
+]);
+/** Lifecycle of an immutable, deliberately-shared time report. */
+export const timeSubmissionStatus = pgEnum('time_submission_status', [
+  'draft',
+  'submitted',
+  'withdrawn',
+]);
+/** One dispatched unit of agent work inside a durable agent session. */
+export const agentExecutionStatus = pgEnum('agent_execution_status', [
+  'queued',
+  'running',
+  'tool_wait',
+  'awaiting_human',
+  'completed',
+  'failed',
+  'canceled',
+]);
 /** Organization data-lifecycle state machine (trial → export → deletion). */
 export const orgLifecycleState = pgEnum('org_lifecycle_state', [
   'trialing',
@@ -471,9 +534,9 @@ export const eventKind = pgEnum('event_kind', [
 ]);
 
 /**
- * The tool an event came from (its attribution badge), replacing the old free-text
- * `provider` string-as-discriminator. `docket` is the internal source; the rest are the
- * external {@link ObserverProvider}s. Closed set — adding a tool adds a member here.
+ * The active event sources. Retired values remain in the historical migration chain so old
+ * databases can be upgraded; new ingestion and writes are restricted by the application
+ * provider catalog.
  */
 export const sourceSystem = pgEnum('source_system', [
   'docket',

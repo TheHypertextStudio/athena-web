@@ -7,6 +7,44 @@
 
 ## Active Tasks
 
+### [PM-WORKBENCH-001] Build the cross-workspace project management workbench
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-07-13
+- **Priority**: P0
+- **Description**: Close the project-management audit's trust and operating-surface gaps for a
+  user managing six independent domains. Deliver one permission-safe Portfolio workbench with
+  Overview, Timeline, and Projects lenses, then deepen Project and Initiative metadata and saved
+  views without weakening workspace isolation.
+- **Plan**:
+  1. Extract and apply one grant-aware resource visibility resolver across Search, Project/Task
+     reads, Hub Today/Portfolio, dependency neighbors, and activity.
+  2. Add Project/Initiative priority and labels plus workspace-inherited Project update cadence,
+     freshness, and compact executive detail surfaces.
+  3. Enrich the Hub Portfolio projection and build shared-filter Overview, Timeline, and Projects
+     modes with selective inline edits and intentional mobile behavior.
+  4. Generalize organization saved views to Tasks/Projects and add isolated personal Hub views for
+     Portfolio.
+  5. Validate populated light/dark desktop/mobile states against the Docket Craft Rubric and close
+     every hard gate before completion.
+- **Decisions**:
+  - Portfolio defaults to Overview; all three modes share one URL-backed filtered data set.
+  - Priority reuses `none | low | medium | high | urgent`.
+  - Project update cadence is `none | weekly | biweekly | monthly`, inherited from a workspace
+    default unless a Project overrides it.
+  - Project dependencies reuse the existing cycle-safe domain and appear as schedule risk only
+    when an unfinished blocker's target falls after the dependent Project starts.
+  - Organization and Hub saved views share a definition but remain in separate tenant-owned and
+    personal tables.
+- **Dependencies**: Imports the completed `PROJECT-DETAIL-001` dependency/editor foundation from
+  `feat/project-detail-revision` before new work.
+- **Baseline**: `origin/main` has one unrelated tooling failure because the provider catalog test
+  still expects retired Slack configuration. The shared main checkout already contains the
+  one-line pending correction; feature validation will keep that unrelated edit out of this branch.
+- **Blockers**: None.
+
+---
+
 ### [PROJECT-DETAIL-001] Focus project detail on work and dependencies
 
 - **Status**: COMPLETED

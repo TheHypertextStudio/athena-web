@@ -9,7 +9,7 @@
 
 ### [BUILD-REPAIR-001] Restore clean repository build contracts
 
-- **Status**: REVIEW
+- **Status**: COMPLETED
 - **Started**: 2026-07-13
 - **Priority**: P1
 - **Description**: Repair the API, integration, error-taxonomy, and export-client contracts that
@@ -17,8 +17,8 @@
 - **Implementation**: Added export-scope normalization, legacy provider compatibility, public
   problem-catalog exports, authentication error aliases, and typed export requests. Added focused
   regression coverage for export scopes and Slack observer exports.
-- **Validation**: Focused API and integrations tests pass; production build is being rerun after
-  the final web contract repair.
+- **Validation**: API export tests pass 8/8, Slack observer tests pass 21/21, and the production
+  build passes API, admin, and web targets including TypeScript and static generation.
 
 ### [PROD-RUNTIME-001] Eliminate live production 500s
 

@@ -98,7 +98,7 @@ export function AppShellFrame({ children }: { children: ReactNode }): JSX.Elemen
         activeOrgId={shellLoading ? null : routeOrgId}
         orgsError={orgsError}
       >
-        <CommandPaletteProvider>
+        <CommandPaletteProvider enabled={!shellLoading}>
           <OpenDocumentsProvider userId={userId}>
             <AppShellInner
               loading={shellLoading}

@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -92,8 +92,12 @@ beforeEach(() => {
   pathnameState.value = '/today';
   orgsGet.mockReset().mockImplementation(() => new Promise(() => undefined));
   requireAuthentication.mockReset();
-  resolveTabTitle.mockClear();
+  resolveTabTitle.mockReset().mockResolvedValue('Project Atlas');
   window.history.replaceState({}, '', '/today?view=week');
+  Object.defineProperty(Element.prototype, 'scrollIntoView', {
+    configurable: true,
+    value: vi.fn(),
+  });
   vi.stubGlobal('matchMedia', (query: string) => ({
     matches: false,
     media: query,
@@ -108,6 +112,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  Reflect.deleteProperty(Element.prototype, 'scrollIntoView');
   vi.unstubAllGlobals();
 });
 
@@ -193,5 +198,64 @@ describe('AppShellFrame session loading', () => {
 
     await act(async () => Promise.resolve());
     expect(resolveTabTitle).not.toHaveBeenCalled();
+  });
+
+  it('keeps the global command shortcut inert until authenticated context resolves', () => {
+    renderFrame();
+
+    fireEvent.keyDown(document, { key: 'k', metaKey: true });
+
+    expect(screen.queryByRole('dialog', { name: 'Command palette' })).not.toBeInTheDocument();
+  });
+
+  it('scopes document title resolution to the authenticated user', async () => {
+    pathnameState.value = '/orgs/01HZX5K3QJ9F8B7C6D5E4F3G2H/projects/01HZX5K3QJ9F8B7C6D5E4F3G2J';
+    sessionState.data = {
+      user: { id: 'user_1', name: 'Ada Lovelace', email: 'ada@example.com' },
+    };
+    sessionState.isPending = false;
+    orgsGet.mockResolvedValue(
+      new Response(JSON.stringify({ items: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    let resolveFirstTitle: ((title: string) => void) | undefined;
+    let resolveSecondTitle: ((title: string) => void) | undefined;
+    resolveTabTitle
+      .mockImplementationOnce(
+        () =>
+          new Promise<string>((resolve) => {
+            resolveFirstTitle = resolve;
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise<string>((resolve) => {
+            resolveSecondTitle = resolve;
+          }),
+      );
+    const { rerenderFrame } = renderFrame();
+    await waitFor(() => {
+      expect(resolveTabTitle).toHaveBeenCalledOnce();
+    });
+
+    sessionState.data = {
+      user: { id: 'user_2', name: 'Grace Hopper', email: 'grace@example.com' },
+    };
+    rerenderFrame();
+
+    await waitFor(() => {
+      expect(resolveTabTitle).toHaveBeenCalledTimes(2);
+    });
+    await act(async () => {
+      resolveFirstTitle?.('Ada project');
+    });
+    expect(screen.queryByText('Ada project')).not.toBeInTheDocument();
+
+    await act(async () => {
+      resolveSecondTitle?.('Grace project');
+    });
+    expect(await screen.findByText('Grace project')).toBeVisible();
   });
 });

@@ -28,6 +28,14 @@ export interface CommandPaletteValue {
 /** Internal context; consumed only through {@link useCommandPalette}. */
 const CommandPaletteContext = createContext<CommandPaletteValue | null>(null);
 
+/** Props for the shell-persistent {@link CommandPaletteProvider}. */
+export interface CommandPaletteProviderProps {
+  /** Whether shortcuts and palette actions may run for the resolved authenticated context. */
+  readonly enabled?: boolean;
+  /** The persistent app-shell subtree. */
+  readonly children: ReactNode;
+}
+
 /**
  * Whether a keydown event is the palette's open shortcut (Cmd+K on macOS, Ctrl+K elsewhere).
  *
@@ -49,22 +57,29 @@ function isPaletteShortcut(event: KeyboardEvent): boolean {
  * while open, and renders the {@link CommandPalette} overlay. Descendants — including the
  * shell's rail Search entry and the visible trigger — drive it through {@link useCommandPalette}.
  */
-export function CommandPaletteProvider({ children }: { children: ReactNode }): JSX.Element {
+export function CommandPaletteProvider({
+  enabled = true,
+  children,
+}: CommandPaletteProviderProps): JSX.Element {
   const [open, setOpen] = useState(false);
 
   const openPalette = useCallback(() => {
-    setOpen(true);
-  }, []);
+    if (enabled) setOpen(true);
+  }, [enabled]);
   const closePalette = useCallback(() => {
     setOpen(false);
   }, []);
   const togglePalette = useCallback(() => {
-    setOpen((o) => !o);
-  }, []);
+    if (enabled) setOpen((o) => !o);
+  }, [enabled]);
 
   // The global shortcut listener: Cmd/Ctrl+K toggles the palette. (Cmd/Ctrl+J summons the
   // Athena panel — see `AthenaPanelProvider`, which owns that shortcut independently.)
   useEffect(() => {
+    if (!enabled) {
+      setOpen(false);
+      return undefined;
+    }
     const onKeyDown = (event: KeyboardEvent): void => {
       if (!isPaletteShortcut(event)) return;
       event.preventDefault();
@@ -74,27 +89,29 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }): J
     return () => {
       document.removeEventListener('keydown', onKeyDown);
     };
-  }, []);
+  }, [enabled]);
+
+  const visibleOpen = enabled && open;
 
   // Lock body scroll while the overlay is open.
   useEffect(() => {
-    if (!open) return;
+    if (!visibleOpen) return;
     const previous = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
       document.body.style.overflow = previous;
     };
-  }, [open]);
+  }, [visibleOpen]);
 
   const value = useMemo<CommandPaletteValue>(
-    () => ({ open, openPalette, closePalette, togglePalette }),
-    [open, openPalette, closePalette, togglePalette],
+    () => ({ open: visibleOpen, openPalette, closePalette, togglePalette }),
+    [visibleOpen, openPalette, closePalette, togglePalette],
   );
 
   return (
     <CommandPaletteContext.Provider value={value}>
       {children}
-      <CommandPalette open={open} onClose={closePalette} />
+      <CommandPalette open={visibleOpen} onClose={closePalette} />
     </CommandPaletteContext.Provider>
   );
 }

@@ -162,12 +162,20 @@ export function OpenDocumentsProvider({
   // title in the background.
   //
   // The effect keys off the stable `pathname` string (not the freshly-built `activeRef`
-  // object, whose identity changes every render). Resolution is fired at most once per key
-  // via `resolvedRef`, and the result is applied without an abort flag: a late title only ever
-  // patches the tab whose key is *still open*, so a closed/replaced tab is never resurrected,
-  // and React 19's StrictMode double-mount (which would cancel an abort-flagged fetch on the
-  // throwaway first mount) still lands the title.
+  // object, whose identity changes every render). Resolution is fired at most once per key and
+  // authenticated-user scope. Late results are ignored after the user changes, so work started
+  // for one account cannot patch another account's tab state. Within the same scope, a late title
+  // only patches a tab whose key is still open and never resurrects a closed tab.
   const resolvedRef = useRef(new Set<string>());
+  const resolvedUserRef = useRef(userId);
+  const resolutionEpochRef = useRef(0);
+  useEffect(() => {
+    if (resolvedUserRef.current === userId) return;
+    resolvedUserRef.current = userId;
+    resolutionEpochRef.current += 1;
+    resolvedRef.current.clear();
+  }, [userId]);
+
   useEffect(() => {
     if (!userId) return;
     const ref = tabRefFromPath(pathname);
@@ -179,7 +187,9 @@ export function OpenDocumentsProvider({
 
     if (resolvedRef.current.has(key)) return;
     resolvedRef.current.add(key);
+    const resolutionEpoch = resolutionEpochRef.current;
     void resolveTabTitle(ref).then((title) => {
+      if (resolutionEpochRef.current !== resolutionEpoch) return;
       setTabs((current) => current.map((t) => (t.key === key ? { ...t, title } : t)));
     });
   }, [pathname, userId]);

@@ -74,8 +74,9 @@
   complete; unrelated root-suite failures are recorded above rather than absorbed into this task.
 ### [APP-SHELL-LAYOUT-001] Make the app shell the persistent shared layout
 
-- **Status**: IN_PROGRESS
+- **Status**: COMPLETED
 - **Started**: 2026-07-13
+- **Completed**: 2026-07-13
 - **Priority**: P1
 - **Description**: Replace the duplicate provisional shell and full-layout Suspense boundary with
   one shared `(app)` layout whose shell instance remains mounted through session and organization
@@ -85,6 +86,25 @@
   context becomes available.
 - **Validation**: Add a shell-identity regression, preserve interlock and protected-content tests,
   then run focused tests and the repository typecheck, lint, test, build, and browser checks.
+- **Implementation**: Removed the route-group Suspense wrapper, deleted the duplicate loading shell,
+  and made `AppShellFrame` mount one stable provider and `AppShell` tree. Session and organization
+  state now switch only the sidebar, account, tab bar, mobile action, agenda, banner, and main-content
+  slots. The sign-in return path reads the browser query string inside the resolved signed-out
+  effect, so query-string preservation no longer suspends the layout. The persistent open-document
+  provider now waits for a user id before resolving protected route titles, scopes asynchronous
+  title work to that user, and ignores stale results after account changes. Command-palette actions
+  and shortcuts remain inert until the authenticated shell context resolves.
+- **Validation Results**: The focused shell, sign-in, and route-tab suites pass 16/16, including an
+  identity assertion proving the same `<main>` element survives session and organization
+  resolution. The complete UI package passes 256/256 tests. Root typecheck and lint pass 17/17
+  tasks, and the API/admin/web production build passes. Desktop and 390x844 browser checks show the
+  shared shell filling the viewport with scoped loading regions, zero Suspense markers, and no
+  browser console errors. Root tests still stop at the independently reproduced baseline Slack
+  catalog expectation (31/32 tooling tests pass), which is unrelated to this slice.
+- **Retrospective**: Visual equivalence is not layout persistence. A shell-shaped Suspense fallback
+  still replaces the shell and resets its local drawer, rail, and responsive state. Keeping one
+  shell mounted makes loading a data-state concern and requires every persistent provider to gate
+  its own authenticated side effects explicitly.
 
 ---
 

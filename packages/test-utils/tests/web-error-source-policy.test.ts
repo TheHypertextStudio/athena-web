@@ -47,14 +47,39 @@ function propertyName(node: ts.Node): string | undefined {
   return undefined;
 }
 
-function bindingPropertyName(node: ts.Node): string | undefined {
-  if (!ts.isBindingElement(node)) return undefined;
-  const property = node.propertyName ?? node.name;
-  if (ts.isIdentifier(property) || ts.isStringLiteralLike(property)) return property.text;
-  if (ts.isComputedPropertyName(property) && ts.isStringLiteralLike(property.expression)) {
-    return property.expression.text;
+function staticPropertyName(node: ts.Node): string | undefined {
+  if (ts.isIdentifier(node) || ts.isStringLiteralLike(node)) return node.text;
+  if (ts.isComputedPropertyName(node) && ts.isStringLiteralLike(node.expression)) {
+    return node.expression.text;
   }
   return undefined;
+}
+
+function bindingPropertyName(node: ts.Node): string | undefined {
+  if (!ts.isBindingElement(node)) return undefined;
+  return staticPropertyName(node.propertyName ?? node.name);
+}
+
+function isAssignmentTarget(node: ts.ObjectLiteralExpression): boolean {
+  let expression: ts.Expression = node;
+  let parent = node.parent;
+  while (ts.isParenthesizedExpression(parent)) {
+    expression = parent;
+    parent = parent.parent;
+  }
+  return (
+    ts.isBinaryExpression(parent) &&
+    parent.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+    parent.left === expression
+  );
+}
+
+function assignmentBindingPropertyName(node: ts.Node): string | undefined {
+  if (!ts.isShorthandPropertyAssignment(node) && !ts.isPropertyAssignment(node)) return undefined;
+  if (!ts.isObjectLiteralExpression(node.parent) || !isAssignmentTarget(node.parent)) {
+    return undefined;
+  }
+  return ts.isShorthandPropertyAssignment(node) ? node.name.text : staticPropertyName(node.name);
 }
 
 function describeNode(node: ts.Node, sourceFile: ts.SourceFile): string {
@@ -85,7 +110,7 @@ function scanSource(filePath: string, sourceText: string): ErrorSourceViolation[
 
   function visit(node: ts.Node): void {
     const name = propertyName(node);
-    const diagnosticName = name ?? bindingPropertyName(node);
+    const diagnosticName = name ?? bindingPropertyName(node) ?? assignmentBindingPropertyName(node);
 
     if (name === 'message' && !RAW_MESSAGE_BOUNDARIES.has(relativePath)) {
       report(node, 'raw-error-message');
@@ -132,6 +157,17 @@ describe('web error source policy', () => {
       const { error_description: providerDescription } = body;
       const { ['error_description']: computedProviderDescription } = body;
       const { message } = applicationCopy;
+      ({ lastError } = provider);
+      ({ lastError: assignedDiagnostic } = provider);
+      ({ ['lastError']: computedAssignedDiagnostic } = provider);
+      ({ error_description } = body);
+      ({ error_description: assignedProviderDescription } = body);
+      ({ ['error_description']: computedAssignedProviderDescription } = body);
+      ({ message } = applicationCopy);
+      const applicationRecord = {
+        lastError: safeDiagnostic,
+        error_description: safeProviderDescription,
+      };
       readProblem(response, 'fallback');
       readError(caught, 'fallback');
     `;
@@ -160,11 +196,40 @@ describe('web error source policy', () => {
           rule: 'provider-diagnostic',
           text: "['error_description']: computedProviderDescription",
         }),
+        expect.objectContaining({
+          rule: 'provider-diagnostic',
+          text: 'lastError: assignedDiagnostic',
+        }),
+        expect.objectContaining({
+          rule: 'provider-diagnostic',
+          text: "['lastError']: computedAssignedDiagnostic",
+        }),
+        expect.objectContaining({
+          rule: 'provider-diagnostic',
+          text: 'error_description: assignedProviderDescription',
+        }),
+        expect.objectContaining({
+          rule: 'provider-diagnostic',
+          text: "['error_description']: computedAssignedProviderDescription",
+        }),
       ]),
     );
-    expect(violations).toHaveLength(12);
+    expect(violations).toHaveLength(18);
+    expect(violations.filter((violation) => violation.text === 'lastError')).toHaveLength(2);
+    expect(violations.filter((violation) => violation.text === 'error_description')).toHaveLength(
+      2,
+    );
     expect(violations).not.toContainEqual(
       expect.objectContaining({ rule: 'raw-error-message', text: 'message' }),
+    );
+    expect(violations).not.toContainEqual(
+      expect.objectContaining({ rule: 'provider-diagnostic', text: 'lastError: safeDiagnostic' }),
+    );
+    expect(violations).not.toContainEqual(
+      expect.objectContaining({
+        rule: 'provider-diagnostic',
+        text: 'error_description: safeProviderDescription',
+      }),
     );
   });
 

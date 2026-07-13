@@ -36,9 +36,33 @@ function defaultSelection(displayTimezone: string): CalendarRegionSelection {
   const now = new Date().toISOString();
   const position = scheduleWallPositionForInstant(now, displayTimezone);
   const roundedMinutes = position ? Math.floor(position.wallMinutes / 30) * 30 + 30 : 0;
-  const startsAt = position
-    ? (scheduleInstantAt(position.date, roundedMinutes, displayTimezone) ?? now)
-    : now;
+  let startsAt = now;
+  if (position) {
+    const nowEpoch = Date.parse(now);
+    for (let wallMinutes = roundedMinutes; wallMinutes <= 24 * 60; wallMinutes += 30) {
+      const candidates = new Set(
+        (['earlier', 'later'] as const)
+          .map((disambiguation) =>
+            scheduleInstantAt(position.date, wallMinutes, displayTimezone, disambiguation),
+          )
+          .filter((candidate): candidate is string => candidate !== null),
+      );
+      const nextCandidate = [...candidates]
+        .filter((candidate) => {
+          const roundTrip = scheduleWallPositionForInstant(candidate, displayTimezone);
+          const matchesRequestedWall =
+            wallMinutes === 24 * 60
+              ? roundTrip?.wallMinutes === 0
+              : roundTrip?.date === position.date && roundTrip.wallMinutes === wallMinutes;
+          return Date.parse(candidate) > nowEpoch && matchesRequestedWall;
+        })
+        .sort((left, right) => Date.parse(left) - Date.parse(right))[0];
+      if (nextCandidate) {
+        startsAt = nextCandidate;
+        break;
+      }
+    }
+  }
   return {
     startsAt,
     endsAt: new Date(Date.parse(startsAt) + 30 * 60_000).toISOString(),

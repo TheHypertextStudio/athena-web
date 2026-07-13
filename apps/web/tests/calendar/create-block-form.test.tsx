@@ -28,6 +28,32 @@ describe('CreateBlockForm display timezone', () => {
     expect(screen.getByLabelText('Ends')).toHaveValue('2026-07-01T22:30');
   });
 
+  it('chooses the later future occurrence when rounding inside a repeated hour', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-01T09:10:00Z'));
+    render(<CreateBlockForm displayTimezone="America/Los_Angeles" rangeKeys={[]} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'New' }));
+    expect(screen.getByLabelText('Starts')).toHaveValue('2026-11-01T01:30');
+    fireEvent.change(screen.getByPlaceholderText('Event title'), {
+      target: { value: 'Later fold planning' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create event' }));
+
+    expect(mutate).toHaveBeenCalledWith(
+      {
+        input: {
+          intent: 'event',
+          title: 'Later fold planning',
+          startsAt: '2026-11-01T09:30:00Z',
+          endsAt: '2026-11-01T10:00:00.000Z',
+        },
+        rangeKeys: [],
+      },
+      expect.any(Object),
+    );
+  });
+
   it('shows and submits a selected region without changing its instants', async () => {
     render(
       <CreateBlockForm
